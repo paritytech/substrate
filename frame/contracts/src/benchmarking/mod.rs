@@ -278,7 +278,7 @@ benchmarks! {
 		let endowment = Config::<T>::subsistence_threshold_uncached();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
-		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
+		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_mem();
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = T::DetermineContractAddress::contract_address_for(&hash, &data, &caller);
 		Contracts::<T>::put_code_raw(code)?;
@@ -300,7 +300,7 @@ benchmarks! {
 	call {
 		let data = vec![42u8; 1024];
 		let instance = Contract::<T>::with_caller(
-			whitelisted_caller(), WasmModule::dummy(), vec![], Endow::CollectRent
+			whitelisted_caller(), WasmModule::dummy_with_mem(), vec![], Endow::CollectRent
 		)?;
 		let value = T::Currency::minimum_balance() * 100.into();
 		let origin = RawOrigin::Signed(instance.caller.clone());
@@ -1154,7 +1154,7 @@ benchmarks! {
 	// We call unique accounts.
 	seal_call {
 		let r in 0 .. API_BENCHMARK_BATCHES;
-		let dummy_code = WasmModule::<T>::dummy();
+		let dummy_code = WasmModule::<T>::dummy_with_mem();
 		let callees = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| Contract::with_index(i + 1, dummy_code.clone(), vec![], Endow::Max))
 			.collect::<Result<Vec<_>, _>>()?;
@@ -1300,7 +1300,10 @@ benchmarks! {
 		let hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
 				let code = WasmModule::<T>::from(ModuleDefinition {
+					memory: Some(ImportedMemory::max::<T>()),
 					call_body: Some(body::plain(vec![
+						// we need to add this in order to make contracts unique
+						// so that they can be deployed from the same sender
 						Instruction::I32Const(i as i32),
 						Instruction::Drop,
 						Instruction::End,

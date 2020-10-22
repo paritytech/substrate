@@ -222,6 +222,15 @@ impl<T: Trait> WasmModule<T> {
 		ModuleDefinition::default().into()
 	}
 
+	/// Same as `dummy` but with maximum sized linear memory.
+	pub fn dummy_with_mem() -> Self {
+		ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			.. Default::default()
+		}
+		.into()
+	}
+
 	/// Creates a wasm module of `target_bytes` size. Used to benchmark the performance of
 	/// `put_code` for different sizes of wasm modules. The generated module maximizes
 	/// instrumentation runtime by nesting blocks as deeply as possible given the byte budget.
