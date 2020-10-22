@@ -1,39 +1,39 @@
 error: Invalid call fn name: `on_finalize`, name is reserved and doesn't match expected signature, please refer to `decl_module!` documentation to see the appropriate usage, or rename it to an unreserved keyword.
-  --> $DIR/on_initialize.rs:31:1
+  --> $DIR/on_initialize.rs:28:1
    |
-31 | reserved!(on_finalize on_initialize on_runtime_upgrade offchain_worker deposit_event);
+28 | reserved!(on_finalize on_initialize on_runtime_upgrade offchain_worker deposit_event);
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: Invalid call fn name: `on_initialize`, name is reserved and doesn't match expected signature, please refer to `decl_module!` documentation to see the appropriate usage, or rename it to an unreserved keyword.
-  --> $DIR/on_initialize.rs:31:1
+  --> $DIR/on_initialize.rs:28:1
    |
-31 | reserved!(on_finalize on_initialize on_runtime_upgrade offchain_worker deposit_event);
+28 | reserved!(on_finalize on_initialize on_runtime_upgrade offchain_worker deposit_event);
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: Invalid call fn name: `on_runtime_upgrade`, name is reserved and doesn't match expected signature, please refer to `decl_module!` documentation to see the appropriate usage, or rename it to an unreserved keyword.
-  --> $DIR/on_initialize.rs:31:1
+  --> $DIR/on_initialize.rs:28:1
    |
-31 | reserved!(on_finalize on_initialize on_runtime_upgrade offchain_worker deposit_event);
+28 | reserved!(on_finalize on_initialize on_runtime_upgrade offchain_worker deposit_event);
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: Invalid call fn name: `offchain_worker`, name is reserved and doesn't match expected signature, please refer to `decl_module!` documentation to see the appropriate usage, or rename it to an unreserved keyword.
-  --> $DIR/on_initialize.rs:31:1
+  --> $DIR/on_initialize.rs:28:1
    |
-31 | reserved!(on_finalize on_initialize on_runtime_upgrade offchain_worker deposit_event);
+28 | reserved!(on_finalize on_initialize on_runtime_upgrade offchain_worker deposit_event);
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error: Invalid call fn name: `deposit_event`, name is reserved and doesn't match expected signature, please refer to `decl_module!` documentation to see the appropriate usage, or rename it to an unreserved keyword.
-  --> $DIR/on_initialize.rs:31:1
+  --> $DIR/on_initialize.rs:28:1
    |
-31 | reserved!(on_finalize on_initialize on_runtime_upgrade offchain_worker deposit_event);
+28 | reserved!(on_finalize on_initialize on_runtime_upgrade offchain_worker deposit_event);
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)

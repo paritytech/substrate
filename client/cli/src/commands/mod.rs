@@ -30,7 +30,7 @@ mod generate_node_key;
 mod generate;
 mod insert;
 mod inspect_node_key;
-mod inspect;
+mod inspect_key;
 mod key;
 pub mod utils;
 
@@ -44,7 +44,7 @@ pub use self::{
 	sign::SignCmd,
 	generate::GenerateCmd,
 	insert::InsertCmd,
-	inspect::InspectKeyCmd,
+	inspect_key::InspectKeyCmd,
 	generate_node_key::GenerateNodeKeyCmd,
 	inspect_node_key::InspectNodeKeyCmd,
 	key::KeySubcommand,
