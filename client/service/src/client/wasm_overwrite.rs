@@ -189,6 +189,17 @@ mod tests {
 	use super::*;
 	use sc_executor::{NativeExecutor, WasmExecutionMethod};
 	use substrate_test_runtime_client::LocalExecutor;
+	use std::{fs::File, io::Write};
+
+	fn dummy_wasm_dir<F>(fun: F)
+	where
+		F: Fn(&Path, &[u8])
+	{
+		let bytes = substrate_test_runtime::wasm_binary_unwrap();
+		let dir = tempfile::tempdir().expect("Create a temporary directory");
+		fun(dir.path(), bytes);
+		dir.close().expect("Temporary Directory should close");
+	}
 
 	#[test]
 	fn should_get_runtime_version() {
@@ -208,9 +219,32 @@ mod tests {
 			Some(128),
 			1,
 		);
-		let overwrites = WasmOverwrite::new(substrate_test_runtime::WASM_DIR, exec)
-			.expect("Creates WasmOverwrite");
-		let wasm = overwrites.overwrites.get(&2).expect("WASM binary");
-		assert_eq!(wasm.code, substrate_test_runtime::wasm_binary_unwrap().to_vec())
+		dummy_wasm_dir(move |dir, wasm_bytes| {
+			let mut file = File::create(dir.join("test.wasm")).expect("Create test file");
+			file.write_all(wasm_bytes).expect("Writes bytes to a file");
+			let overwrites = WasmOverwrite::scrape_overwrites(dir, &exec)
+				.expect("HashMap of u32 and WasmBlob");
+			let wasm = overwrites.get(&2).expect("WASM binary");
+			assert_eq!(wasm.code, substrate_test_runtime::wasm_binary_unwrap().to_vec())
+		});
+	}
+
+	#[test]
+	fn should_check_for_duplicates() {
+		let exec = NativeExecutor::<substrate_test_runtime_client::LocalExecutor>::new(
+			WasmExecutionMethod::Interpreted,
+			Some(128),
+			1,
+		);
+
+		dummy_wasm_dir(|dir, wasm_bytes| {
+			let mut file0 = File::create(dir.join("test0.wasm")).expect("Create test file");
+			file0.write_all(wasm_bytes).expect("Writes bytes to a file");
+			let mut file1 = File::create(dir.join("test1.wasm")).expect("Create test file");
+			file1.write_all(wasm_bytes).expect("Writes bytes to a file");
+
+			let scraped = WasmOverwrite::scrape_overwrites(dir, &exec);
+			assert!(matches!(scraped, Err(sp_blockchain::Error::Msg(_))));
+		});
 	}
 }
