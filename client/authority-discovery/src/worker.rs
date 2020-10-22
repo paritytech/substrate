@@ -27,6 +27,7 @@ use futures::{FutureExt, Stream, StreamExt, stream::Fuse};
 use futures_timer::Delay;
 
 use addr_cache::AddrCache;
+use async_trait::async_trait;
 use codec::Decode;
 use libp2p::{core::multiaddr, multihash::Multihash};
 use log::{debug, error, log_enabled};
@@ -233,7 +234,7 @@ where
 				},
 				// Set peerset priority group to a new random set of addresses.
 				_ = self.priority_group_set_interval.next().fuse() => {
-					if let Err(e) = self.set_priority_group() {
+					if let Err(e) = self.set_priority_group().await {
 						error!(
 							target: LOG_TARGET,
 							"Failed to set priority group: {:?}", e,
@@ -585,7 +586,7 @@ where
 
 	/// Set the peer set 'authority' priority group to a new random set of
 	/// [`Multiaddr`]s.
-	fn set_priority_group(&self) -> Result<()> {
+	async fn set_priority_group(&self) -> Result<()> {
 		let addresses = self.addr_cache.get_random_subset();
 
 		if addresses.is_empty() {
@@ -609,7 +610,7 @@ where
 			.set_priority_group(
 				AUTHORITIES_PRIORITY_GROUP_NAME.to_string(),
 				addresses.into_iter().collect(),
-			)
+			).await
 			.map_err(Error::SettingPeersetPriorityGroup)?;
 
 		Ok(())
@@ -619,9 +620,10 @@ where
 /// NetworkProvider provides [`Worker`] with all necessary hooks into the
 /// underlying Substrate networking. Using this trait abstraction instead of [`NetworkService`]
 /// directly is necessary to unit test [`Worker`].
+#[async_trait]
 pub trait NetworkProvider: NetworkStateInfo {
 	/// Modify a peerset priority group.
-	fn set_priority_group(
+	async fn set_priority_group(
 		&self,
 		group_id: String,
 		peers: HashSet<libp2p::Multiaddr>,
@@ -634,17 +636,18 @@ pub trait NetworkProvider: NetworkStateInfo {
 	fn get_value(&self, key: &libp2p::kad::record::Key);
 }
 
+#[async_trait::async_trait]
 impl<B, H> NetworkProvider for sc_network::NetworkService<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
 {
-	fn set_priority_group(
+	async fn set_priority_group(
 		&self,
 		group_id: String,
 		peers: HashSet<libp2p::Multiaddr>,
 	) -> std::result::Result<(), String> {
-		self.set_priority_group(group_id, peers)
+		self.set_priority_group(group_id, peers).await
 	}
 	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>) {
 		self.put_value(key, value)

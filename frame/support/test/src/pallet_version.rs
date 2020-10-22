@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,17 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub trait Trait: frame_support_test::Trait {}
+use frame_support::{crate_to_pallet_version, traits::PalletVersion};
 
-frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=frame_support_test {}
+#[test]
+fn ensure_that_current_pallet_version_is_correct() {
+	let expected = PalletVersion {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
+	};
+
+	assert_eq!(
+		expected,
+		crate_to_pallet_version!(),
+	)
 }
-
-frame_support::decl_storage!{
-	trait Store for Module<T: Trait> as FinalKeysNone {
-		pub Value config(value): u32;
-		pub Value2 config(value): u32;
-	}
-}
-
-fn main() {}
