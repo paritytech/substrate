@@ -1708,8 +1708,8 @@ impl<T> IsType<T> for T {
 /// E.g. for module MyModule default instance will have prefix "MyModule" and other instances
 /// "InstanceNMyModule".
 pub trait Instance: 'static {
-    /// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
-    const PREFIX: &'static str ;
+	/// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
+	const PREFIX: &'static str;
 }
 
 /// A trait similar to `Convert` to convert values from `B` an abstract balance type
@@ -1779,6 +1779,143 @@ impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> 
 	}
 }
 
+/// Something that can be checked to be a of sub type `T`.
+///
+/// This is useful for enums where each variant encapsulates a different sub type, and
+/// you need access to these sub types.
+///
+/// For example, in FRAME, this trait is implemented for the runtime `Call` enum. Pallets use this
+/// to check if a certain call is an instance of the local pallet's `Call` enum.
+///
+/// # Example
+///
+/// ```
+/// # use frame_support::traits::IsSubType;
+///
+/// enum Test {
+///     String(String),
+///     U32(u32),
+/// }
+///
+/// impl IsSubType<String> for Test {
+///     fn is_sub_type(&self) -> Option<&String> {
+///         match self {
+///             Self::String(ref r) => Some(r),
+///             _ => None,
+///         }
+///     }
+/// }
+///
+/// impl IsSubType<u32> for Test {
+///     fn is_sub_type(&self) -> Option<&u32> {
+///         match self {
+///             Self::U32(ref r) => Some(r),
+///             _ => None,
+///         }
+///     }
+/// }
+///
+/// fn main() {
+///     let data = Test::String("test".into());
+///
+///     assert_eq!("test", IsSubType::<String>::is_sub_type(&data).unwrap().as_str());
+/// }
+/// ```
+pub trait IsSubType<T> {
+	/// Returns `Some(_)` if `self` is an instance of sub type `T`.
+	fn is_sub_type(&self) -> Option<&T>;
+}
+
+/// The storage key postfix that is used to store the [`PalletVersion`] per pallet.
+///
+/// The full storage key is built by using:
+/// Twox128([`PalletInfo::name`]) ++ Twox128([`PALLET_VERSION_STORAGE_KEY_POSTFIX`])
+pub const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
+
+/// The version of a pallet.
+///
+/// Each pallet version is stored in the state under a fixed key. See
+/// [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] for how this key is built.
+#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord)]
+pub struct PalletVersion {
+	/// The major version of the pallet.
+	pub major: u16,
+	/// The minor version of the pallet.
+	pub minor: u8,
+	/// The patch version of the pallet.
+	pub patch: u8,
+}
+
+impl PalletVersion {
+	/// Creates a new instance of `Self`.
+	pub fn new(major: u16, minor: u8, patch: u8) -> Self {
+		Self {
+			major,
+			minor,
+			patch,
+		}
+	}
+
+	/// Returns the storage key for a pallet version.
+	///
+	/// See [`PALLET_VERSION_STORAGE_KEY_POSTIFX`] on how this key is built.
+	///
+	/// Returns `None` if the given `PI` returned a `None` as name for the given
+	/// `Pallet`.
+	pub fn storage_key<PI: PalletInfo, Pallet: 'static>() -> Option<[u8; 32]> {
+		let pallet_name = PI::name::<Pallet>()?;
+
+		let pallet_name = sp_io::hashing::twox_128(pallet_name.as_bytes());
+		let postfix = sp_io::hashing::twox_128(PALLET_VERSION_STORAGE_KEY_POSTFIX);
+
+		let mut final_key = [0u8; 32];
+		final_key[..16].copy_from_slice(&pallet_name);
+		final_key[16..].copy_from_slice(&postfix);
+
+		Some(final_key)
+	}
+}
+
+impl sp_std::cmp::PartialOrd for PalletVersion {
+	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
+		let res = self.major
+			.cmp(&other.major)
+			.then_with(||
+				self.minor
+					.cmp(&other.minor)
+					.then_with(|| self.patch.cmp(&other.patch)
+			));
+
+		Some(res)
+	}
+}
+
+/// Provides version information about a pallet.
+///
+/// This trait provides two functions for returning the version of a
+/// pallet. There is a state where both functions can return distinct versions.
+/// See [`GetPalletVersion::storage_version`] for more information about this.
+pub trait GetPalletVersion {
+	/// Returns the current version of the pallet.
+	fn current_version() -> PalletVersion;
+
+	/// Returns the version of the pallet that is stored in storage.
+	///
+	/// Most of the time this will return the exact same version as
+	/// [`GetPalletVersion::current_version`]. Only when being in
+	/// a state after a runtime upgrade happened and the pallet did
+	/// not yet updated its version in storage, this will return a
+	/// different(the previous, seen from the time of calling) version.
+	///
+	/// See [`PalletVersion`] for more information.
+	///
+	/// # Note
+	///
+	/// If there was no previous version of the pallet stored in the state,
+	/// this function returns `None`.
+	fn storage_version() -> Option<PalletVersion>;
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -1799,5 +1936,19 @@ mod tests {
 
 		assert_eq!(<(Test, Test)>::on_initialize(0), 20);
 		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), 40);
+	}
+
+	#[test]
+	fn check_pallet_version_ordering() {
+		let version = PalletVersion::new(1, 0, 0);
+		assert!(version > PalletVersion::new(0, 1, 2));
+		assert!(version == PalletVersion::new(1, 0, 0));
+		assert!(version < PalletVersion::new(1, 0, 1));
+		assert!(version < PalletVersion::new(1, 1, 0));
+
+		let version = PalletVersion::new(2, 50, 50);
+		assert!(version < PalletVersion::new(2, 50, 51));
+		assert!(version > PalletVersion::new(2, 49, 51));
+		assert!(version < PalletVersion::new(3, 49, 51));
 	}
 }
