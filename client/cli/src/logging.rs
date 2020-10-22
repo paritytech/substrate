@@ -298,7 +298,7 @@ where
 
 		for name in scope
 			.map(|span| span.metadata().name())
-			.filter(|&x| x != PREFIX_LOG_SPAN)
+			.filter(|&x| x != "substrate-node")
 		{
 			seen = true;
 			write!(f, "{}:", bold.paint(name))?;
