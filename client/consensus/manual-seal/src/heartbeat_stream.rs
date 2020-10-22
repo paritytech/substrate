@@ -87,19 +87,19 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 
 			Poll::Ready(Some(ec)) => {
 				// An engine command comes in, meaning a transaction in `tx_pool` now
-				let cooldown = self.options.cooldown;
+				let Options { cooldown, .. } = self.options;
 				match (self.last_blocktime, cooldown) {
 					(Some(last_blocktime), Some(cooldown)) => {
 						// Illustration on variables used below:
-						//      |------time_passed-------+------wait_further------|
+						//      |---since_last_block ----+------wait_further------|
 						//   last blocktime           current                  cooldown
 						//
-						let time_passed = Instant::now() - last_blocktime;
-						if time_passed < cooldown {
-							let wait_further = cooldown - time_passed;
-							self.delay_for = Some(Delay::new(wait_further));
-							// Since we set the `Delay` future above, we call `self.poll_next(cx)`, so it eventually
-							//   polls the delay future.
+						let since_last_block = Instant::now().saturating_duration_since(last_blocktime);
+						if since_last_block < cooldown {
+							self.delay_for = Some(Delay::new(
+								cooldown.checked_sub(since_last_block).unwrap_or(cooldown)
+							));
+							// We call `self.poll_next(cx)` to polls the delay future eventually.
 							return self.poll_next(cx);
 						}
 
@@ -122,25 +122,26 @@ impl<Hash> Stream for HeartbeatStream<Hash> {
 			// `delay_for` is set when either heartbeat duration is specified, or some txs has come
 			// but the stream was still cooling down.
 			Poll::Pending => {
-				let finalize = self.options.finalize;
+				let Options { finalize, .. } = self.options;
+
 				match &mut self.delay_for {
 					Some(delay_for) => {
 						if let Poll::Ready(_) = delay_for.poll_unpin(cx) {
 							self.create_block_now_and_reset_delay();
-							return Poll::Ready(Some(EngineCommand::SealNewBlock {
+							Poll::Ready(Some(EngineCommand::SealNewBlock {
 								// New blocks created can be empty as it may just be an empty heartbeat block.
 								create_empty: true,
 								finalize,
 								parent_hash: None,
 								sender: None,
-							}));
+							}))
+						} else {
+							Poll::Pending
 						}
-
-						Poll::Pending
 					},
-					None => Poll::Pending,
+					_ => Poll::Pending,
 				}
-			}, // End of `Poll::Pending`
+			},
 
 			// The `EngineCommand` stream comes to an end
 			Poll::Ready(None) => Poll::Ready(None),
