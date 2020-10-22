@@ -241,4 +241,17 @@ mod tests {
 			assert!(matches!(scraped, Err(sp_blockchain::Error::Msg(_))));
 		});
 	}
+
+	#[test]
+	fn should_ignore_non_wasm() {
+		wasm_test(|dir, wasm_bytes, exec| {
+			File::create(dir.join("README.md")).expect("Create test file");
+			File::create(dir.join("LICENSE")).expect("Create a test file");
+			let mut file1 = File::create(dir.join("test0.wasm")).expect("Create test file");
+			file1.write_all(wasm_bytes).expect("Writes bytes to a file");
+			let scraped = WasmOverwrite::scrape_overwrites(dir, exec)
+				.expect("HashMap of u32 and WasmBlob");
+			assert_eq!(scraped.len(), 1);
+		});
+	}
 }
