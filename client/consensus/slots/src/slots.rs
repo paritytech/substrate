@@ -91,7 +91,7 @@ pub struct SlotInfo<B: BlockT> {
 }
 
 /// Chain data that can be appended to `SlotInfo` if it's available.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AppendedChainInfo<B: BlockT> {
 	/// The block number for the head of the chain.
 	pub chain_head_number: NumberFor<B>,

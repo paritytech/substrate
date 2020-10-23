@@ -147,6 +147,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
+	backoff_authoring_blocks: Option<sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy<NumberFor<B>>>,
 	keystore: SyncCryptoStorePtr,
 	can_author_with: CAW,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
@@ -171,6 +172,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 		keystore,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
+		backoff_authoring_blocks,
 		_key_type: PhantomData::<P>,
 	};
 	register_aura_inherent_data_provider(
@@ -188,17 +190,18 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	))
 }
 
-struct AuraWorker<C, E, I, P, SO> {
+struct AuraWorker<B: BlockT, C, E, I, P, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
 	keystore: SyncCryptoStorePtr,
 	sync_oracle: SO,
 	force_authoring: bool,
+	backoff_authoring_blocks: Option<sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy<NumberFor<B>>>,
 	_key_type: PhantomData<P>,
 }
 
-impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraWorker<C, E, I, P, SO> where
+impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraWorker<B, C, E, I, P, SO> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
@@ -316,6 +319,10 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		self.force_authoring
 	}
 
+	fn backoff_authoring_blocks_strategy(&self) -> Option<&Self::BackoffAuthoringBlocksStrategy> {
+		self.backoff_authoring_blocks.as_ref()
+	}
+
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle {
 		&mut self.sync_oracle
 	}
@@ -354,7 +361,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 	}
 }
 
-impl<B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
+impl<B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<B, C, E, I, P, SO> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync + Send + HeaderBackend<B>,
 	C::Api: AuraApi<B, AuthorityId<P>>,
