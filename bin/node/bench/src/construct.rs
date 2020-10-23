@@ -151,6 +151,7 @@ impl core::Benchmark for ConstructionBenchmark {
 			context.client.clone(),
 			self.transactions.clone().into(),
 			None,
+			None,
 		);
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 		inherent_data_providers

@@ -190,6 +190,8 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	pub transaction_pool: Arc<TransactionPool>,
 	/// A registry of all providers of `InherentData`.
 	pub inherent_data_providers: sp_inherents::InherentDataProviders,
+	/// Telemetry object.
+	pub telemetry: Option<sc_telemetry::Telemetry>,
 	/// Everything else that needs to be passed into the main build function.
 	pub other: Other,
 }

@@ -63,7 +63,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		),
 	)
 >, ServiceError> {
-	let (client, backend, keystore_container, task_manager) =
+	let (client, backend, keystore_container, task_manager, telemetry) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
 
@@ -77,7 +77,10 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	);
 
 	let (grandpa_block_import, grandpa_link) = grandpa::block_import(
-		client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
+		client.clone(),
+		&(client.clone() as Arc<_>),
+		select_chain.clone(),
+		telemetry.as_ref().map(|x| x.logger.clone()),
 	)?;
 	let justification_import = grandpa_block_import.clone();
 
@@ -100,6 +103,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
+		telemetry.as_ref().map(|x| x.logger.clone()),
 	)?;
 
 	let import_setup = (block_import, grandpa_link, babe_link);
@@ -152,9 +156,16 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	};
 
 	Ok(sc_service::PartialComponents {
-		client, backend, task_manager, keystore_container,
-		select_chain, import_queue, transaction_pool, inherent_data_providers,
-		other: (rpc_extensions_builder, import_setup, rpc_setup)
+		client,
+		backend,
+		task_manager,
+		keystore_container,
+		select_chain,
+		import_queue,
+		transaction_pool,
+		inherent_data_providers,
+		telemetry,
+		other: (rpc_extensions_builder, import_setup, rpc_setup),
 	})
 }
 
@@ -176,8 +187,15 @@ pub fn new_full_base(
 	)
 ) -> Result<NewFullBase, ServiceError> {
 	let sc_service::PartialComponents {
-		client, backend, mut task_manager, import_queue, keystore_container,
-		select_chain, transaction_pool, inherent_data_providers,
+		client,
+		backend,
+		mut task_manager,
+		import_queue,
+		keystore_container,
+		select_chain,
+		transaction_pool,
+		inherent_data_providers,
+		telemetry,
 		other: (rpc_extensions_builder, import_setup, rpc_setup),
 	} = new_partial(&config)?;
 
@@ -223,6 +241,7 @@ pub fn new_full_base(
 		telemetry_connection_sinks: telemetry_connection_sinks.clone(),
 		network_status_sinks: network_status_sinks.clone(),
 		system_rpc_tx,
+		telemetry: telemetry.clone(),
 	})?;
 
 	let (block_import, grandpa_link, babe_link) = import_setup;
@@ -235,6 +254,7 @@ pub fn new_full_base(
 			client.clone(),
 			transaction_pool.clone(),
 			prometheus_registry.as_ref(),
+			telemetry.as_ref().map(|x| x.logger.clone()),
 		);
 
 		let can_author_with =
@@ -251,6 +271,7 @@ pub fn new_full_base(
 			force_authoring,
 			babe_link,
 			can_author_with,
+			logger: telemetry.as_ref().map(|x| x.logger.clone()),
 		};
 
 		let babe = sc_consensus_babe::start_babe(babe_config)?;
@@ -323,6 +344,7 @@ pub fn new_full_base(
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
 			shared_voter_state,
+			logger: telemetry.as_ref().map(|x| x.logger.clone()),
 		};
 
 		// the GRANDPA voter task is considered infallible, i.e.
@@ -373,8 +395,11 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	));
 
 	let grandpa_block_import = grandpa::light_block_import(
-		client.clone(), backend.clone(), &(client.clone() as Arc<_>),
+		client.clone(),
+		backend.clone(),
+		&(client.clone() as Arc<_>),
 		Arc::new(on_demand.checker().clone()),
+		telemetry.as_ref().map(|x| x.logger.clone()),
 	)?;
 
 	let finality_proof_import = grandpa_block_import.clone();
@@ -400,6 +425,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::NeverCanAuthor,
+		telemetry.as_ref().map(|x| x.logger.clone()),
 	)?;
 
 	let finality_proof_provider =
