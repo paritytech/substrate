@@ -99,7 +99,7 @@ parameter_types! {
 	pub const ClaimPeriod: BlockNumber = 5;
 	pub const OwnershipPeriod: BlockNumber = 100;
 	pub const MinBid: Balance = 5;
-	pub ExtensionsOn: ExtensionConfig<Balance, BlockNumber> = ExtensionConfig {
+	pub ExtensionsOn: ExtensionConfig<BlockNumber, Balance> = ExtensionConfig {
 		enabled: true,
 		extension_period: 100,
 		extension_fee: 5,
