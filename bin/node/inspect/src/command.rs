@@ -34,7 +34,7 @@ impl InspectCmd {
 		RA: Send + Sync + 'static,
 		EX: NativeExecutionDispatch + 'static,
 	{
-		let client = new_full_client::<B, RA, EX>(&config, None)?;
+		let client = new_full_client::<B, RA, EX>(&config)?;
 		let inspect = Inspector::<B>::new(client);
 
 		match &self.command {
