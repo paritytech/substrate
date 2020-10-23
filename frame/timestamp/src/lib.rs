@@ -107,7 +107,7 @@ use frame_support::{
 use sp_runtime::{
 	RuntimeString,
 	traits::{
-		AtLeast32Bit, Zero, SaturatedConversion, Scale
+		AtLeast32Bit, Zero, SaturatedConversion, Scale,
 	}
 };
 use frame_system::ensure_none;
@@ -159,9 +159,9 @@ decl_module! {
 		/// The dispatch origin for this call must be `Inherent`.
 		///
 		/// # <weight>
-		/// - `O(T)` where `T` complexity of `on_timestamp_set`
+		/// - `O(1)` (Note that implementations of `OnTimestampSet` must also be `O(1)`)
 		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in `on_finalize`)
-		/// - 1 event handler `on_timestamp_set` `O(T)`.
+		/// - 1 event handler `on_timestamp_set`. Must be `O(1)`.
 		/// # </weight>
 		#[weight = (
 			T::WeightInfo::set(),

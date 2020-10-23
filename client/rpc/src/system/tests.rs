@@ -104,6 +104,13 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 				Request::NodeRoles(sender) => {
 					let _ = sender.send(vec![NodeRole::Authority]);
 				}
+				Request::SyncState(sender) => {
+					let _ = sender.send(SyncState {
+						starting_block: 1,
+						current_block: 2,
+						highest_block: Some(3),
+					});
+				}
 			};
 
 			future::ready(())
@@ -288,6 +295,18 @@ fn system_node_roles() {
 	assert_eq!(
 		wait_receiver(api(None).system_node_roles()),
 		vec![NodeRole::Authority]
+	);
+}
+
+#[test]
+fn system_sync_state() {
+	assert_eq!(
+		wait_receiver(api(None).system_sync_state()),
+		SyncState {
+			starting_block: 1,
+			current_block: 2,
+			highest_block: Some(3),
+		}
 	);
 }
 

@@ -34,7 +34,6 @@ use sc_network::{Event, NetworkService};
 use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
-use sp_core::traits::BareCryptoStorePtr;
 use node_executor::Executor;
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
@@ -64,7 +63,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		),
 	)
 >, ServiceError> {
-	let (client, backend, keystore, task_manager) =
+	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
 
@@ -122,13 +121,15 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		let client = client.clone();
 		let pool = transaction_pool.clone();
 		let select_chain = select_chain.clone();
-		let keystore = keystore.clone();
+		let keystore = keystore_container.sync_keystore();
+		let chain_spec = config.chain_spec.cloned_box();
 
 		let rpc_extensions_builder = move |deny_unsafe, subscription_executor| {
 			let deps = node_rpc::FullDeps {
 				client: client.clone(),
 				pool: pool.clone(),
 				select_chain: select_chain.clone(),
+				chain_spec: chain_spec.cloned_box(),
 				deny_unsafe,
 				babe: node_rpc::BabeDeps {
 					babe_config: babe_config.clone(),
@@ -151,8 +152,8 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	};
 
 	Ok(sc_service::PartialComponents {
-		client, backend, task_manager, keystore, select_chain, import_queue, transaction_pool,
-		inherent_data_providers,
+		client, backend, task_manager, keystore_container,
+		select_chain, import_queue, transaction_pool, inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup)
 	})
 }
@@ -175,8 +176,8 @@ pub fn new_full_base(
 	)
 ) -> Result<NewFullBase, ServiceError> {
 	let sc_service::PartialComponents {
-		client, backend, mut task_manager, import_queue, keystore, select_chain, transaction_pool,
-		inherent_data_providers,
+		client, backend, mut task_manager, import_queue, keystore_container,
+		select_chain, transaction_pool, inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup),
 	} = new_partial(&config)?;
 
@@ -212,7 +213,7 @@ pub fn new_full_base(
 		config,
 		backend: backend.clone(),
 		client: client.clone(),
-		keystore: keystore.clone(),
+		keystore: keystore_container.sync_keystore(),
 		network: network.clone(),
 		rpc_extensions_builder: Box::new(rpc_extensions_builder),
 		transaction_pool: transaction_pool.clone(),
@@ -230,6 +231,7 @@ pub fn new_full_base(
 
 	if let sc_service::config::Role::Authority { .. } = &role {
 		let proposer = sc_basic_authorship::ProposerFactory::new(
+			task_manager.spawn_handle(),
 			client.clone(),
 			transaction_pool.clone(),
 			prometheus_registry.as_ref(),
@@ -239,7 +241,7 @@ pub fn new_full_base(
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
 		let babe_config = sc_consensus_babe::BabeParams {
-			keystore: keystore.clone(),
+			keystore: keystore_container.sync_keystore(),
 			client: client.clone(),
 			select_chain,
 			env: proposer,
@@ -261,7 +263,7 @@ pub fn new_full_base(
 			sc_service::config::Role::Authority { ref sentry_nodes } => (
 				sentry_nodes.clone(),
 				sc_authority_discovery::Role::Authority (
-					keystore.clone(),
+					keystore_container.keystore(),
 				),
 			),
 			sc_service::config::Role::Sentry {..} => (
@@ -275,23 +277,23 @@ pub fn new_full_base(
 			.filter_map(|e| async move { match e {
 				Event::Dht(e) => Some(e),
 				_ => None,
-			}}).boxed();
+			}});
 		let (authority_discovery_worker, _service) = sc_authority_discovery::new_worker_and_service(
 			client.clone(),
 			network.clone(),
 			sentries,
-			dht_event_stream,
+			Box::pin(dht_event_stream),
 			authority_discovery_role,
 			prometheus_registry.clone(),
 		);
 
-		task_manager.spawn_handle().spawn("authority-discovery-worker", authority_discovery_worker);
+		task_manager.spawn_handle().spawn("authority-discovery-worker", authority_discovery_worker.run());
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't
 	// need a keystore, regardless of which protocol we use below.
 	let keystore = if role.is_authority() {
-		Some(keystore as BareCryptoStorePtr)
+		Some(keystore_container.sync_keystore())
 	} else {
 		None
 	};
@@ -317,7 +319,6 @@ pub fn new_full_base(
 			config,
 			link: grandpa_link,
 			network: network.clone(),
-			inherent_data_providers: inherent_data_providers.clone(),
 			telemetry_on_connect: Some(telemetry_connection_sinks.on_connect_stream()),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
@@ -331,16 +332,16 @@ pub fn new_full_base(
 			grandpa::run_grandpa_voter(grandpa_config)?
 		);
 	} else {
-		grandpa::setup_disabled_grandpa(
-			client.clone(),
-			&inherent_data_providers,
-			network.clone(),
-		)?;
+		grandpa::setup_disabled_grandpa(network.clone())?;
 	}
 
 	network_starter.start_network();
 	Ok(NewFullBase {
-		task_manager, inherent_data_providers, client, network, network_status_sinks,
+		task_manager,
+		inherent_data_providers,
+		client,
+		network,
+		network_status_sinks,
 		transaction_pool,
 	})
 }
@@ -358,7 +359,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
-	let (client, backend, keystore, mut task_manager, on_demand) =
+	let (client, backend, keystore_container, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
@@ -440,7 +441,8 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
-			config, keystore, backend, network_status_sinks, system_rpc_tx,
+			keystore: keystore_container.sync_keystore(),
+			config, backend, network_status_sinks, system_rpc_tx,
 			network: network.clone(),
 			telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
 			task_manager: &mut task_manager,
@@ -458,7 +460,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 
 #[cfg(test)]
 mod tests {
-	use std::{sync::Arc, borrow::Cow, any::Any};
+	use std::{sync::Arc, borrow::Cow, any::Any, convert::TryInto};
 	use sc_consensus_babe::{CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY};
 	use sc_consensus_epochs::descendent_query;
 	use sp_consensus::{
@@ -469,20 +471,25 @@ mod tests {
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use codec::Encode;
-	use sp_core::{crypto::Pair as CryptoPair, H256};
+	use sp_core::{
+		crypto::Pair as CryptoPair,
+		H256,
+		Public
+	};
+	use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 	use sp_runtime::{
 		generic::{BlockId, Era, Digest, SignedPayload},
 		traits::{Block as BlockT, Header as HeaderT},
 		traits::Verify,
 	};
 	use sp_timestamp;
-	use sp_finality_tracker;
 	use sp_keyring::AccountKeyring;
 	use sc_service_test::TestNetNode;
 	use crate::service::{new_full_base, new_light_base, NewFullBase};
-	use sp_runtime::traits::IdentifyAccount;
+	use sp_runtime::{key_types::BABE, traits::IdentifyAccount, RuntimeAppPublic};
 	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 	use sc_client_api::BlockBackend;
+	use sc_keystore::LocalKeystore;
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
@@ -492,10 +499,10 @@ mod tests {
 	#[ignore]
 	fn test_sync() {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore = sc_keystore::Store::open(keystore_path.path(), None)
-			.expect("Creates keystore");
-		let alice = keystore.write().insert_ephemeral_from_seed::<sc_consensus_babe::AuthorityPair>("//Alice")
-			.expect("Creates authority pair");
+		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+			.expect("Creates keystore"));
+		let alice: sp_consensus_babe::AuthorityId = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
+			.expect("Creates authority pair").into();
 
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
 
@@ -535,7 +542,6 @@ mod tests {
 				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
 					.expect("Creates inherent data.");
-				inherent_data.replace_data(sp_finality_tracker::INHERENT_IDENTIFIER, &1u64);
 
 				let parent_id = BlockId::number(service.client().chain_info().best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
@@ -552,6 +558,7 @@ mod tests {
 				);
 
 				let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
+					service.spawn_handle(),
 					service.client(),
 					service.transaction_pool(),
 					None,
@@ -574,7 +581,7 @@ mod tests {
 						slot_num,
 						&parent_header,
 						&*service.client(),
-						&keystore,
+						keystore.clone(),
 						&babe_link,
 					) {
 						break babe_pre_digest;
@@ -600,9 +607,16 @@ mod tests {
 				// sign the pre-sealed hash of the block and then
 				// add it to a digest item.
 				let to_sign = pre_hash.encode();
-				let signature = alice.sign(&to_sign[..]);
+				let signature = SyncCryptoStore::sign_with(
+					&*keystore,
+					sp_consensus_babe::AuthorityId::ID,
+					&alice.to_public_crypto_pair(),
+					&to_sign,
+				).unwrap()
+				 .try_into()
+				 .unwrap();
 				let item = <DigestItem as CompatibleDigestItem>::babe_seal(
-					signature.into(),
+					signature,
 				);
 				slot_num += 1;
 
