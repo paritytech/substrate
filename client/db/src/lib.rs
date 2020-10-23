@@ -1842,20 +1842,60 @@ impl<Block: BlockT> Backend<Block> {
 		Ok(())
 	}
 
-	fn historied_pruning(&self, hash: &Block::Hash, number: NumberFor<Block>, force: bool)
+	fn historied_pruning(&self, hash: &Block::Hash, number: NumberFor<Block>)
 		-> ClientResult<()> {
-		let do_finalize = force && &number > &self.historied_next_finalizable.read().as_ref().unwrap_or(&0.into());
+		let do_finalize = &number > &self.historied_next_finalizable.read().as_ref().unwrap_or(&0.into());
 		if !do_finalize {
 			return Ok(())
 		}
 
+		let prune_index = None; // TODO calculate this from pruning configuration mode.
+
+		// TODO large mgmt lock
 		let switch_index = self.historied_management.write().get_db_state_for_fork(hash);
+		let path = {
+			use historied_db::ManagementRef;
+			self.historied_management.write().get_db_state(hash)
+		};
 		
-		// TODO current canonicalize is broken (uses a path, but remove all that is afterward too), we just need to change composite treshold
-		// and migrate. Or we canonicallize over ptha to hash and only ever migrate less often
-		// (composite index).
-		//self.historied_management.canonicalize(switch_index);
-		// TODO EMCH do migrate data
+		if let (Some(switch_index), Some(path)) = (switch_index, path) {
+			// TODO current canonicalize is broken (uses a path, but remove all that is afterward too), we just need to change composite treshold
+			// and migrate. Or we canonicallize over ptha to hash and only ever migrate less often
+			// (composite index).
+			// TODO need recheck
+			self.historied_management.write().canonicalize(path, switch_index, prune_index);
+			// TODO EMCH do migrate data
+
+
+		} else {
+			return Err(ClientError::UnknownBlock("Missing in historied management".to_string()));
+		}
+
+		// flush historied management changes
+		let pending = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
+		let mut transaction = Transaction::new();
+		// TODO this is duplicated code: put in a function
+		for (col, (mut changes, dropped)) in pending {
+			if dropped {
+				use historied_db::simple_db::SerializeDB;
+				for (key, _v) in self.historied_management.read().ser_ref().iter(col) {
+					changes.insert(key, None);
+				}
+			}
+			if let Some((col, p)) = resolve_collection(col) {
+				for (key, change) in changes {
+					subcollection_prefixed_key!(p, key);
+					match change {
+						Some(value) => transaction.set_from_vec(col, key, value),
+						None => transaction.remove(col, key),
+					}
+				}
+			} else {
+				warn!("Unknown collection for tree management pending transaction {:?}", col);
+			}
+		}
+
+		self.storage.db.commit(transaction)?;
 		*self.historied_next_finalizable.write() = Some(number + HISTORIED_FINALIZATION_WINDOWS.into());
 		Ok(())
 	}
@@ -1962,7 +2002,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					let block = latest_final.0;
 					if let (Some(number), Some(hash)) = (self.blockchain.block_number_from_id(&block)?,
 						self.blockchain.block_hash_from_id(&block)?) {
-						self.historied_pruning(&hash, number, false)?;
+						self.historied_pruning(&hash, number)?;
 					}
 				}
 	
@@ -1999,7 +2039,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		self.blockchain.update_meta(hash, number, is_best, is_finalized);
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 		if let Some(number) = self.blockchain.block_number_from_id(&block)? {
-			self.historied_pruning(&hash, number, true)?;
+			self.historied_pruning(&hash, number)?;
 		}
 		Ok(())
 	}
