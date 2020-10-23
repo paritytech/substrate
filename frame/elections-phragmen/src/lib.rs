@@ -895,7 +895,7 @@ impl<T: Trait> Module<T> {
 			let old_members_ids = <Members<T>>::take().into_iter()
 				.map(|(m, _)| m)
 				.collect::<Vec<T::AccountId>>();
-			let old_runners_up_ids = <RunnersUp<T>>::take().into_iter()
+			let mut old_runners_up_ids = <RunnersUp<T>>::take().into_iter()
 				.map(|(r, _)| r)
 				.collect::<Vec<T::AccountId>>();
 
@@ -952,7 +952,7 @@ impl<T: Trait> Module<T> {
 				.rev()
 				.collect::<Vec<(T::AccountId, BalanceOf<T>)>>();
 			// new_runners_up remains sorted by desirability.
-			let new_runners_up_ids = new_runners_up
+			let mut new_runners_up_ids = new_runners_up
 				.iter()
 				.map(|(r, _)| r.clone())
 				.collect::<Vec<T::AccountId>>();
@@ -974,6 +974,8 @@ impl<T: Trait> Module<T> {
 
 			// compute the outgoing of runners up as well and append them to the `to_burn_bond`
 			{
+				new_runners_up_ids.sort();
+				old_runners_up_ids.sort();
 				let (_, outgoing) = T::ChangeMembers::compute_members_diff(
 					&new_runners_up_ids,
 					&old_runners_up_ids,
