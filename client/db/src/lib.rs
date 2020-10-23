@@ -1197,6 +1197,7 @@ pub struct Backend<Block: BlockT> {
 		<HashFor<Block> as Hasher>::Out,
 		TreeManagementPersistence,
 	>>>,
+	historied_next_finalizable: Arc<RwLock<Option<NumberFor<Block>>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1295,6 +1296,7 @@ impl<Block: BlockT> Backend<Block> {
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: Arc::new(StateUsageStats::new()),
 			historied_management,
+			historied_next_finalizable: Arc::new(RwLock::new(None)),
 		})
 	}
 
@@ -1465,6 +1467,17 @@ impl<Block: BlockT> Backend<Block> {
 		});
 
 		let mut historied_db = if let Some((hash, parent_hash)) = hashes {
+			// lazy init, not that this can lead to no finalization
+			// if the node get close to often, with current windows
+			// size, this is fine, otherwhise this value will need
+			// to persist.
+			if self.historied_next_finalizable.read().is_none() {
+				let parent_block = BlockId::Hash(parent_hash.clone());
+				if let Some(nb) = self.blockchain.block_number_from_id(&parent_block)? {
+					*self.historied_next_finalizable.write() = Some(nb + HISTORIED_FINALIZATION_WINDOWS.into());
+				}
+			}
+
 			let update_plan = {
 				// lock does notinclude update of value as we do not have concurrent block creation
 				let mut management = self.historied_management.write();
@@ -1828,7 +1841,28 @@ impl<Block: BlockT> Backend<Block> {
 
 		Ok(())
 	}
+
+	fn historied_pruning(&self, hash: &Block::Hash, number: NumberFor<Block>, force: bool)
+		-> ClientResult<()> {
+		let do_finalize = force && &number > &self.historied_next_finalizable.read().as_ref().unwrap_or(&0.into());
+		if !do_finalize {
+			return Ok(())
+		}
+
+		let switch_index = self.historied_management.write().get_db_state_for_fork(hash);
+		
+		// TODO current canonicalize is broken (uses a path, but remove all that is afterward too), we just need to change composite treshold
+		// and migrate. Or we canonicallize over ptha to hash and only ever migrate less often
+		// (composite index).
+		//self.historied_management.canonicalize(switch_index);
+		// TODO EMCH do migrate data
+		*self.historied_next_finalizable.write() = Some(number + HISTORIED_FINALIZATION_WINDOWS.into());
+		Ok(())
+	}
 }
+
+/// Avoid finalizing at every block.
+const HISTORIED_FINALIZATION_WINDOWS: u8 = 101;
 
 fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db::CommitSet<Vec<u8>>) {
 	for (key, val) in commit.data.inserted.into_iter() {
@@ -1918,9 +1952,20 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	) -> ClientResult<()> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
+		let last_final = operation.finalized_blocks.last().cloned();
 		match self.try_commit_operation(operation) {
 			Ok(_) => {
 				self.storage.state_db.apply_pending();
+
+				// call historied pruning
+				if let Some(latest_final) = last_final {
+					let block = latest_final.0;
+					if let (Some(number), Some(hash)) = (self.blockchain.block_number_from_id(&block)?,
+						self.blockchain.block_hash_from_id(&block)?) {
+						self.historied_pruning(&hash, number, false)?;
+					}
+				}
+	
 				Ok(())
 			},
 			e @ Err(_) => {
@@ -1953,6 +1998,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		self.storage.db.commit(transaction)?;
 		self.blockchain.update_meta(hash, number, is_best, is_finalized);
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
+		if let Some(number) = self.blockchain.block_number_from_id(&block)? {
+			self.historied_pruning(&hash, number, true)?;
+		}
 		Ok(())
 	}
 
