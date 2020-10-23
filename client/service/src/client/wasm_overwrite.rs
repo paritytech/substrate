@@ -246,7 +246,6 @@ mod tests {
 								.matches("Duplicate WASM Runtimes found")
 								.map(ToString::to_string)
 								.collect::<Vec<String>>();
-							println!("{:?}", is_match);
 							assert!(is_match.len() >= 1)
 						},
 						_ => panic!("Test should end with Msg Error Variant")
