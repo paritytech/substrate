@@ -18,21 +18,21 @@
 
 //! # WASM Local Blob-Overwrite
 //!
-//! WASM Local blob overwrite provides tools to replace on-chain WASM with locally-built WASM.
-//! These locally-built WASM blobs may include functionality that is not included in the
+//! WASM Local blob overwrite provides tools to replace on-chain WASM with custom WASM.
+//! These customized WASM blobs may include functionality that is not included in the
 //! on-chain WASM, such as tracing or debugging information. This extra information is especially
 //! useful in external scenarios, like exchanges or archive nodes.
 //!
 //! ## Usage
 //!
 //! WASM overwrites may be enabled with the `--wasm-runtimes-overwrite` argument. The argument
-//! expects a path to a directory that holds locally-built WASM.
+//! expects a path to a directory that holds custom WASM.
 //!
 //! Any file ending in '.wasm' will be scraped and instantiated as a WASM blob. WASM can be built by
 //! compiling the required runtime with the changes needed. For example, compiling a runtime with
 //! tracing enabled would produce a WASM blob that can used.
 //!
-//! A locally-built WASM blob will override on-chain WASM if the spec version matches. If it is
+//! A custom WASM blob will override on-chain WASM if the spec version matches. If it is
 //! required to overwrite multiple runtimes, multiple WASM blobs matching each of the spec versions
 //! needed must be provided in the given directory.
 //!
