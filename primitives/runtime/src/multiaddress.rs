@@ -35,9 +35,9 @@ pub enum MultiAddress<AccountId, AccountIndex> where
 	/// It's some arbitrary raw bytes.
 	Raw(Vec<u8>),
 	/// It's a 32 byte representation.
-	Account32([u8; 32]),
+	Address32([u8; 32]),
 	/// Its a 20 byte representation.
-	Account20([u8; 20]),
+	Address20([u8; 20]),
 }
 
 #[cfg(feature = "std")]
