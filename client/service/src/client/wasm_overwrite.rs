@@ -189,7 +189,7 @@ mod tests {
 	use super::*;
 	use sc_executor::{NativeExecutor, WasmExecutionMethod};
 	use substrate_test_runtime_client::LocalExecutor;
-	use std::{fs::File, io::Write};
+	use std::{fs::{self, File}, io::Write};
 
 	fn wasm_test<F>(fun: F)
 	where
