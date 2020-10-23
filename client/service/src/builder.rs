@@ -754,13 +754,18 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 			subscriptions.clone(),
 			remote_blockchain.clone(),
 			on_demand,
+			deny_unsafe,
 		);
 		(chain, state, child_state)
 
 	} else {
 		// Full nodes
 		let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
-		let (state, child_state) = sc_rpc::state::new_full(client.clone(), subscriptions.clone());
+		let (state, child_state) = sc_rpc::state::new_full(
+			client.clone(),
+			subscriptions.clone(),
+			deny_unsafe,
+		);
 		(chain, state, child_state)
 	};
 

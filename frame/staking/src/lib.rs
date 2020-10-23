@@ -294,12 +294,12 @@ use frame_support::{
 	weights::{Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	storage::IterableStorageMap,
 	dispatch::{
-		IsSubType, DispatchResult, DispatchResultWithPostInfo, DispatchErrorWithPostInfo,
+		DispatchResult, DispatchResultWithPostInfo, DispatchErrorWithPostInfo,
 		WithPostDispatchInfo,
 	},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		UnixTime, EstimateNextNewSession, EnsureOrigin, CurrencyToVote,
+		UnixTime, EstimateNextNewSession, EnsureOrigin, CurrencyToVote, IsSubType,
 	}
 };
 use pallet_session::historical;
