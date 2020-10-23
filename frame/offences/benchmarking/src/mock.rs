@@ -31,7 +31,6 @@ use sp_runtime::{
 };
 use pallet_session::historical as pallet_session_historical;
 
-
 type AccountId = u64;
 type AccountIndex = u32;
 type BlockNumber = u64;

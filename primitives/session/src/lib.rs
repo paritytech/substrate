@@ -108,9 +108,9 @@ impl GetValidatorCount for MembershipProof {
 	}
 }
 
-/// Trait for retrieving the session info needed for online node inspection.
+/// A trait for online node inspection in a session.
 ///
-/// This trait is used for decouple the pallet-session dependency from im-online
+/// This trait is used to decouple the pallet-session dependency from im-online
 /// module so that the user of im-online & offences modules can pass any list of
 /// validators that are considered to be online in each session, particularly useful
 /// for the Substrate-based projects having their own staking implementation
