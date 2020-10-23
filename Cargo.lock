@@ -1441,9 +1441,9 @@ dependencies = [
 
 [[package]]
 name = "evm-core"
-version = "0.18.0"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec9baaa39ec260b950bd0ac0b742a3e871a2730ce763ac5f0c38e0dd6fea2373"
+checksum = "dbee099367c75a129a59b9c5f7269812910949329df25defe2cbca4371eb8ba8"
 dependencies = [
  "log",
  "parity-scale-codec",
@@ -9756,7 +9756,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.7.3",
+ "rand 0.3.23",
 ]
 
 [[package]]
