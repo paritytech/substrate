@@ -2210,7 +2210,7 @@ checksum = "b07f60793ff0a4d9cef0f18e63b5357e06209987153a64648c972c1e5aff336f"
 [[package]]
 name = "historied-db"
 version = "0.8.0"
-source = "git+https://github.com/cheme/substrate?branch=historied-db#84761ff87116dcab6add67cb566ed0e8a8e2341d"
+source = "git+https://github.com/cheme/substrate?branch=historied-db#180ec130a8008b5abf94f246035f29d8a5cda9d9"
 dependencies = [
  "derivative",
  "hash-db",
@@ -5725,7 +5725,7 @@ checksum = "def50a86306165861203e7f84ecffbbdfdea79f0e51039b33de1e952358c47ac"
 [[package]]
 name = "radix-tree"
 version = "0.8.0"
-source = "git+https://github.com/cheme/substrate?branch=historied-db#84761ff87116dcab6add67cb566ed0e8a8e2341d"
+source = "git+https://github.com/cheme/substrate?branch=historied-db#180ec130a8008b5abf94f246035f29d8a5cda9d9"
 dependencies = [
  "derivative",
  "hashbrown 0.8.1",

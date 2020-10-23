@@ -44,7 +44,7 @@ type ChangesJournal = historied_db::management::JournalForMigrationBasis<
 	(u32, u32),
 	Vec<u8>,
 	historied_db::simple_db::SerializeDBDyn,
-	crate::historied_tree_bindings::JournalDelete,
+	crate::historied_tree_bindings::LocalOffchainDelete,
 >;
 
 pub(crate) type ChangesJournalSync = Arc<Mutex<ChangesJournal>>;

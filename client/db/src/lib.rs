@@ -632,6 +632,7 @@ pub mod historied_tree_bindings {
 	static_instance_variable!(LastIndex, CST, b"tree_mgmt/last_index", false);
 	static_instance_variable!(NeutralElt,CST, b"tree_mgmt/neutral_elt", false);
 	static_instance_variable!(TreeMeta, CST, b"tree_mgmt/tree_meta", true);
+	static_instance!(LocalOffchainDelete, b"\x08\x00\x00\x00offchain/journal_delete");
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -936,7 +937,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 			// Note that this is safe because we import a new block.
 			// Otherwhise we would need to share cache with a single journal instance.
 			let mut journals = historied_db::management::JournalForMigrationBasis
-				::<_, _, _, crate::historied_tree_bindings::JournalDelete>
+				::<_, _, _, crate::historied_tree_bindings::LocalOffchainDelete>
 				::from_db(ordered_db);
 			journals.add_changes(
 				ordered_db,
