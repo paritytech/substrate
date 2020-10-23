@@ -209,6 +209,22 @@ impl<T> Lookup for IdentityLookup<T> {
 	fn lookup(&self, x: T) -> Result<T, LookupError> { Ok(x) }
 }
 
+/// A lookup implementation returning the `AccountId` from a `MultiAddress`.
+pub struct AccountIdLookup<AccountId>(PhantomData<AccountId>);
+impl<AccountId: Codec + Clone + PartialEq + Debug + Member> StaticLookup for AccountIdLookup<AccountId> {
+	type Source = crate::MultiAddress<AccountId, ()>;
+	type Target = AccountId;
+	fn lookup(x: Self::Source) -> Result<Self::Target, LookupError> {
+		match x {
+			crate::MultiAddress::Id(i) => Ok(i),
+			_ => Err(LookupError),
+		}
+	}
+	fn unlookup(x: Self::Target) -> Self::Source {
+		crate::MultiAddress::Id(x)
+	}
+}
+
 /// Extensible conversion trait. Generic over both source and destination types.
 pub trait Convert<A, B> {
 	/// Make conversion.
