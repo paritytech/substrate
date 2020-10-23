@@ -425,6 +425,7 @@ impl BenchDb {
 			Box::new(task_executor.clone()),
 			None,
 			Default::default(),
+			None,
 		).expect("Should not fail");
 
 		(client, backend, task_executor)

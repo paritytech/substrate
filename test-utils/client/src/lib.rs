@@ -220,6 +220,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			),
 			None,
 			ClientConfig::default(),
+			None,
 		).expect("Creates new client");
 
 		let longest_chain = sc_consensus::LongestChain::new(self.backend);
