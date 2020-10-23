@@ -59,7 +59,7 @@ use sp_core::crypto::Public;
 use sp_application_crypto::{AppKey, AppPublic};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	Justification,
+	traits::NumberFor, Justification,
 };
 use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
@@ -219,7 +219,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 	type Proposer = E::Proposer;
 	type Claim = P::Public;
 	type EpochData = Vec<AuthorityId<P>>;
-	type BackoffAuthoringBlocksStrategy = sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy<B>;
+	type BackoffAuthoringBlocksStrategy = sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy<NumberFor<B>>;
 
 	fn logging_target(&self) -> &'static str {
 		"aura"

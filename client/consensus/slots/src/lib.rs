@@ -29,18 +29,21 @@ pub use slots::{SignedDuration, SlotInfo, AppendedChainInfo};
 use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
+use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
 use codec::{Decode, Encode};
-use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData, RecordProof};
 use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
-use sp_inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor, Saturating, UniqueSaturatedInto};
-use sp_api::{ProvideRuntimeApi, ApiRef};
-use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
-use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use parking_lot::Mutex;
+use sp_api::{ProvideRuntimeApi, ApiRef};
+use sp_arithmetic::traits::BaseArithmetic;
+use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData, RecordProof};
+use sp_inherents::{InherentData, InherentDataProviders};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header, HashFor, NumberFor}
+};
+use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
@@ -83,7 +86,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	type EpochData: Send + 'static;
 
 	/// Strategy for deciding if and when to backoff authoring new blocks if finality starts to lag.
-	type BackoffAuthoringBlocksStrategy: BackoffAuthoringBlocksStrategy<B>;
+	type BackoffAuthoringBlocksStrategy: BackoffAuthoringBlocksStrategy<NumberFor<B>>;
 
 	/// The logging target to use when logging messages.
 	fn logging_target(&self) -> &'static str;
@@ -240,7 +243,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					chain_info.finalized_number,
 					slot_number,
 				) {
-					info!("Backing off authoring new new blocks");
+					info!("Backing off authoring new blocks due to lagging finality.");
 					return Box::pin(future::ready(Ok(())));
 				}
 			}
@@ -584,16 +587,16 @@ pub fn slot_lenience_linear<B: BlockT>(parent_slot: u64, slot_info: &SlotInfo<B>
 }
 
 /// Trait for providing the strategy for when to backoff block authoring.
-pub trait BackoffAuthoringBlocksStrategy<B>
+pub trait BackoffAuthoringBlocksStrategy<N>
 where
-	B: BlockT
+	N: BaseArithmetic
 {
 	/// Returns true if we should backoff authoring new blocks.
 	fn should_backoff(
 		&self,
-		chain_head_number: NumberFor<B>,
+		chain_head_number: N,
 		chain_head_slot: u64,
-		finalized_number: NumberFor<B>,
+		finalized_number: N,
 		slow_now: u64,
 	) -> bool;
 }
@@ -601,28 +604,39 @@ where
 /// A simple default strategy for how to decide backing off authoring blocks if the number of
 /// unfinalized blocks grows too large.
 #[derive(Clone)]
-pub struct SimpleBackoffAuthoringBlocksStrategy<B: BlockT> {
+pub struct SimpleBackoffAuthoringBlocksStrategy<N: BaseArithmetic> {
 	/// The max interval to backoff when authoring blocks, regardless of delay in finality.
-	pub max_interval: NumberFor<B>,
+	pub max_interval: N,
 	/// The number of unfinalized blocks allowed before starting to consider to backoff authoring
 	/// blocks. Note that depending on the value for `authoring_bias`, there might still be an
 	/// additional wait until block authorships starts getting declined.
-	pub unfinalized_slack: NumberFor<B>,
+	pub unfinalized_slack: N,
 	/// How persistant block authorship is in the face of a growing unfinalized chain of blocks. A
 	/// small value for `authoring_bias` means to quickly start backing off block authorship as the
 	/// length of the unfinalized blocks grows.
-	pub authoring_bias: NumberFor<B>,
+	pub authoring_bias: N,
 }
 
-impl<B> BackoffAuthoringBlocksStrategy<B> for SimpleBackoffAuthoringBlocksStrategy<B>
+/// These parameters is supposed to be some form of sensible defaults.
+impl<N: BaseArithmetic> Default for SimpleBackoffAuthoringBlocksStrategy<N> {
+	fn default() -> Self {
+		Self {
+			max_interval: 100.into(),
+			unfinalized_slack: 5.into(),
+			authoring_bias: 2.into(),
+		}
+	}
+}
+
+impl<N> BackoffAuthoringBlocksStrategy<N> for SimpleBackoffAuthoringBlocksStrategy<N>
 where
-	B: BlockT
+	N: BaseArithmetic + Copy
 {
 	fn should_backoff(
 		&self,
-		chain_head_number: NumberFor<B>,
+		chain_head_number: N,
 		chain_head_slot: u64,
-		finalized_number: NumberFor<B>,
+		finalized_number: N,
 		slot_now: u64,
 	) -> bool {
 		let unfinalized_block_length = chain_head_number - finalized_number;
@@ -631,11 +645,11 @@ where
 		let interval = interval.min(self.max_interval);
 
 		// We're doing arithmetic between block and slot numbers.
-		let interval = interval.unique_saturated_into();
+		let interval: u64 = interval.unique_saturated_into();
 
 		// If interval is nonzero we backoff if the current slot isn't far enough ahead of the chain
 		// head.
-		u128::from(slot_now) <= u128::from(chain_head_slot) + interval
+		slot_now <= chain_head_slot + interval
 	}
 }
 
@@ -740,7 +754,7 @@ mod test {
 		};
 
 		let should_backoff = |head_state: &HeadState| -> bool {
-			<dyn BackoffAuthoringBlocksStrategy<Block>>::should_backoff(
+			<dyn BackoffAuthoringBlocksStrategy<NumberFor<Block>>>::should_backoff(
 				&param,
 				head_state.head_number,
 				head_state.head_slot,

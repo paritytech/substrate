@@ -237,11 +237,8 @@ pub fn new_full_base(
 		let can_author_with =
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
-		let backoff_authoring_blocks = Some(sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy {
-			max_interval: 100,
-			unfinalized_slack: 5,
-			authoring_bias: 2,
-		});
+		let backoff_authoring_blocks =
+			Some(sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy::default());
 
 		let babe_config = sc_consensus_babe::BabeParams {
 			keystore: keystore_container.sync_keystore(),
