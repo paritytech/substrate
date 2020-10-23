@@ -236,9 +236,24 @@ mod tests {
 			file0.write_all(wasm_bytes).expect("Writes bytes to a file");
 			let mut file1 = File::create(dir.join("test1.wasm")).expect("Create test file");
 			file1.write_all(wasm_bytes).expect("Writes bytes to a file");
-
 			let scraped = WasmOverwrite::scrape_overwrites(dir, exec);
-			assert!(matches!(scraped, Err(sp_blockchain::Error::Msg(_))));
+
+			match scraped {
+				Err(e) => {
+					match e {
+						sp_blockchain::Error::Msg(msg) => {
+							let is_match = msg
+								.matches("Duplicate WASM Runtimes found")
+								.map(ToString::to_string)
+								.collect::<Vec<String>>();
+							println!("{:?}", is_match);
+							assert!(is_match.len() >= 1)
+						},
+						_ => panic!("Test should end with Msg Error Variant")
+					}
+				},
+				_ => panic!("Test should end in error")
+			}
 		});
 	}
 
