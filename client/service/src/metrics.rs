@@ -318,7 +318,7 @@ impl MetricsService {
 			if let Some(metrics) = self.metrics.as_ref() {
 				let best_seen_block: Option<u64> = net_status
 					.best_seen_block
-					.map(|num: NumberFor<T>| num.unique_saturated_into());
+					.map(|num: NumberFor<T>| UniqueSaturatedInto::<u64>::unique_saturated_into(num));
 
 				if let Some(best_seen_block) = best_seen_block {
 					metrics.block_height.with_label_values(&["sync_target"]).set(best_seen_block);
