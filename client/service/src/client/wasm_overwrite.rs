@@ -220,8 +220,7 @@ mod tests {
 	#[test]
 	fn should_scrape_wasm() {
 		wasm_test(|dir, wasm_bytes, exec| {
-			let mut file = File::create(dir.join("test.wasm")).expect("Create test file");
-			file.write_all(wasm_bytes).expect("Writes bytes to a file");
+			fs::write(dir.join("test.wasm"), wasm_bytes).expect("Create test file");
 			let overwrites = WasmOverwrite::scrape_overwrites(dir, exec)
 				.expect("HashMap of u32 and WasmBlob");
 			let wasm = overwrites.get(&2).expect("WASM binary");
