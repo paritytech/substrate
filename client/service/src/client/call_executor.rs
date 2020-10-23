@@ -343,14 +343,14 @@ mod tests {
 		let backend = Arc::new(in_mem::Backend::<runtime::Block>::new());
 
 		// wasm_runtime_overwrites is `None` here because we construct the
-		// LocalCallExecutor directly later on, and the client is just used for the convenience
-		// of creating a block.
+		// LocalCallExecutor directly later on
 		let client_config = ClientConfig {
 			offchain_worker_enabled: false,
 			offchain_indexing_api: false,
 			wasm_runtime_overwrites: None,
 		};
 
+		// client is just used for the convenience of creating and inserting a block.
 		let _client = substrate_test_runtime_client::client::new_with_backend::<
 			_,
 			_,
