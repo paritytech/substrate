@@ -112,6 +112,7 @@ ord_parameter_types! {
 }
 
 impl Trait for Test {
+	type AccountIndex = ();
 	type Currency = Balances;
 	type Event = Event;
 	type ManagerOrigin = EnsureSignedBy<Manager, u64>;

@@ -60,6 +60,7 @@ pallet-indices = { version = "2.0.0", default-features = false, path = "../../..
 pallet-identity = { version = "2.0.0", default-features = false, path = "../../../frame/identity" }
 pallet-membership = { version = "2.0.0", default-features = false, path = "../../../frame/membership" }
 pallet-multisig = { version = "2.0.0", default-features = false, path = "../../../frame/multisig" }
+pallet-name-service = { version = "2.0.0", default-features = false, path = "../../../frame/name-service" }
 pallet-offences = { version = "2.0.0", default-features = false, path = "../../../frame/offences" }
 pallet-offences-benchmarking = { version = "2.0.0", path = "../../../frame/offences/benchmarking", default-features = false, optional = true }
 pallet-proxy = { version = "2.0.0", default-features = false, path = "../../../frame/proxy" }

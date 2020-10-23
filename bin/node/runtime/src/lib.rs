@@ -169,7 +169,7 @@ impl frame_system::Trait for Runtime {
 	type Hash = Hash;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
-	type Lookup = Indices;
+	type Lookup = NameService;
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
@@ -895,6 +895,29 @@ impl pallet_vesting::Trait for Runtime {
 	type WeightInfo = weights::pallet_vesting::WeightInfo<Runtime>;
 }
 
+parameter_types! {
+	pub const BiddingPeriod: BlockNumber = 1 * DAYS;
+	pub const ClaimPeriod: BlockNumber = 1 * DAYS;
+	pub const OwnershipPeriod: BlockNumber = 365 * DAYS;
+	pub const MinBid: Balance = 10 * DOLLARS;
+}
+
+impl pallet_name_service::Trait for Runtime {
+	type AccountIndex = AccountIndex;
+	type Currency = Balances;
+	type Event = Event;
+	type ManagerOrigin = EnsureRoot<AccountId>;
+	type PermanenceOrigin = EnsureRoot<AccountId>;
+	type BiddingPeriod = BiddingPeriod;
+	type ClaimPeriod = ClaimPeriod;
+	type OwnershipPeriod = OwnershipPeriod;
+	type PaymentDestination = Treasury;
+	type MinBid = MinBid;
+	// Extensions off
+	type ExtensionConfig = ();
+	type WeightInfo = ();
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -932,6 +955,7 @@ construct_runtime!(
 		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
 		Proxy: pallet_proxy::{Module, Call, Storage, Event<T>},
 		Multisig: pallet_multisig::{Module, Call, Storage, Event<T>},
+		NameService: pallet_name_service::{Module, Call, Storage, Event<T>},
 	}
 );
 

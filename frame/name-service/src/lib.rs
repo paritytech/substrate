@@ -21,15 +21,15 @@
 
 use sp_std::prelude::*;
 use sp_runtime::MultiAddress;
-use sp_runtime::traits::{LookupError, Saturating, StaticLookup};
-use frame_support::{decl_module, decl_error, decl_event, decl_storage, ensure, RuntimeDebug};
+use sp_runtime::traits::{LookupError, Saturating, StaticLookup, Member};
+use frame_support::{decl_module, decl_error, decl_event, decl_storage, ensure, RuntimeDebug, Parameter};
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Get, EnsureOrigin, OnUnbalanced,
 	WithdrawReason, ExistenceRequirement::KeepAlive, Imbalance,
 };
 use frame_system::ensure_signed;
-use codec::{Encode, Decode};
+use codec::{Codec, Encode, Decode};
 
 mod mock;
 mod tests;
@@ -42,6 +42,8 @@ impl WeightInfo for () {}
 
 /// The module's config trait.
 pub trait Trait: frame_system::Trait {
+	/// An optional `AccountIndex` type for backwards compatibility.
+	type AccountIndex: Parameter + Member + Codec + Default + Copy;
 
 	/// The currency trait.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -397,7 +399,7 @@ decl_module! {
 impl<T: Trait> Module<T> {}
 
 impl<T: Trait> StaticLookup for Module<T> {
-	type Source = MultiAddress<T::AccountId, ()>;
+	type Source = MultiAddress<T::AccountId, u32>;
 	type Target = T::AccountId;
 
 	fn lookup(a: Self::Source) -> Result<Self::Target, LookupError> {

@@ -3954,6 +3954,7 @@ dependencies = [
  "pallet-indices",
  "pallet-membership",
  "pallet-multisig",
+ "pallet-name-service",
  "pallet-offences",
  "pallet-offences-benchmarking",
  "pallet-proxy",
