@@ -1175,6 +1175,15 @@ pub type TreeManagement<H, S> = historied_db::management::tree::TreeManagement<
 	S,
 >;
 
+/// Register tree management consumer.
+pub type RegisteredConsumer<H, S> = historied_db::management::tree::RegisteredConsumer<
+	H,
+	u32,
+	u32,
+	Vec<u8>,
+	S,
+>;
+
 /// Disk backend.
 ///
 /// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
@@ -1199,6 +1208,10 @@ pub struct Backend<Block: BlockT> {
 		TreeManagementPersistence,
 	>>>,
 	historied_next_finalizable: Arc<RwLock<Option<NumberFor<Block>>>>,
+	historied_management_consumer: RegisteredConsumer<
+		<HashFor<Block> as Hasher>::Out,
+		TreeManagementPersistence,
+	>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1281,6 +1294,11 @@ impl<Block: BlockT> Backend<Block> {
 			historied_management.clone(),
 			ordered_db_2,
 		);
+		let mut historied_management_consumer: RegisteredConsumer<
+			<HashFor<Block> as Hasher>::Out,
+			TreeManagementPersistence,
+		> = Default::default();
+		historied_management_consumer.register_consumer(Box::new(offchain_local_storage.clone()));
 		Ok(Backend {
 			storage: Arc::new(storage_db),
 			offchain_storage,
@@ -1298,6 +1316,7 @@ impl<Block: BlockT> Backend<Block> {
 			state_usage: Arc::new(StateUsageStats::new()),
 			historied_management,
 			historied_next_finalizable: Arc::new(RwLock::new(None)),
+			historied_management_consumer,
 		})
 	}
 
@@ -1479,6 +1498,8 @@ impl<Block: BlockT> Backend<Block> {
 				}
 			}
 
+			// Ensure pending layer is clean
+			let _ = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
 			let update_plan = {
 				// lock does notinclude update of value as we do not have concurrent block creation
 				let mut management = self.historied_management.write();
@@ -1851,6 +1872,9 @@ impl<Block: BlockT> Backend<Block> {
 		}
 
 		let prune_index = None; // TODO calculate this from pruning configuration mode.
+
+		// Ensure pending layer is clean
+		let _ = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
 
 		// TODO large mgmt lock
 		let switch_index = self.historied_management.write().get_db_state_for_fork(hash);

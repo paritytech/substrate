@@ -59,6 +59,28 @@ pub struct BlockChainLocalStorage<H: Ord, S: TreeManagementStorage> {
 	changes_journals: ChangesJournalSync,
 }
 
+
+impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement<H, S>> for BlockChainLocalStorage<H, S>
+	where
+		H: Ord + Clone + Codec + Send + Sync + 'static,
+		S: TreeManagementStorage + 'static,
+{
+	fn migrate(&self, migrate: &mut historied_db::Migrate<H, crate::TreeManagement<H, S>>) -> Option<Vec<Vec<u8>>> {
+		let mut keys = std::collections::BTreeSet::new();
+		for state in migrate.touched_state() {
+			// this db is transactional.
+			let db = migrate.inner_storage();
+			for key in self.changes_journals.lock().remove_changes_at(db, state) {
+				keys.insert(key);
+			}
+		}
+		unimplemented!();
+		for key in keys {
+			// do migrate
+		}
+	}
+}
+
 /// Offchain local storage for a given block.
 #[derive(Clone)]
 pub struct BlockChainLocalAt {
