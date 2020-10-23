@@ -15,13 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub trait Trait {
-	type Origin;
-	type BlockNumber: codec::Codec + codec::EncodeLike + Default + Clone;
-}
+pub trait Trait: frame_support_test::Trait {}
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=frame_support_test {}
 }
 
 frame_support::decl_storage!{

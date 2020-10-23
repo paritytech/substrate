@@ -15,50 +15,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! MultiAddress type that is union of index and id for an account.
+//! MultiAddress type is a wrapper for multiple downstream account formats.
 
-use crate::traits::Member;
 use codec::{Encode, Decode};
+use sp_std::vec::Vec;
 
-/// An indices-aware address, which can be either a direct `AccountId` or
-/// an index.
+/// A multi-format address wrapper for on-chain accounts.
 #[derive(Encode, Decode, PartialEq, Eq, Clone, crate::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Hash))]
-pub enum MultiAddress<AccountId, AccountIndex> where
-	AccountId: Member,
-	AccountIndex: Member,
-{
+pub enum MultiAddress<AccountId, AccountIndex> {
 	/// It's an account ID (pubkey).
 	Id(AccountId),
 	/// It's an account index.
 	Index(#[codec(compact)] AccountIndex),
-	/// It's a 256 bit hash.
-	Hash256([u8; 32]),
+	/// It's some arbitrary raw bytes.
+	Raw(Vec<u8>),
+	/// It's a 32 byte representation.
+	Address32([u8; 32]),
+	/// Its a 20 byte representation.
+	Address20([u8; 20]),
 }
 
 #[cfg(feature = "std")]
-impl<AccountId, AccountIndex> std::fmt::Display for MultiAddress<AccountId, AccountIndex> where
-	AccountId: Member,
-	AccountIndex: Member,
+impl<AccountId, AccountIndex> std::fmt::Display for MultiAddress<AccountId, AccountIndex>
+where
+	AccountId: std::fmt::Debug,
+	AccountIndex: std::fmt::Debug,
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{:?}", self)
 	}
 }
 
-impl<AccountId, AccountIndex> From<AccountId> for MultiAddress<AccountId, AccountIndex> where
-	AccountId: Member,
-	AccountIndex: Member,
-{
+impl<AccountId, AccountIndex> From<AccountId> for MultiAddress<AccountId, AccountIndex> {
 	fn from(a: AccountId) -> Self {
 		MultiAddress::Id(a)
 	}
 }
 
-impl<AccountId, AccountIndex> Default for MultiAddress<AccountId, AccountIndex> where
-	AccountId: Member + Default,
-	AccountIndex: Member,
-{
+impl<AccountId: Default, AccountIndex> Default for MultiAddress<AccountId, AccountIndex> {
 	fn default() -> Self {
 		MultiAddress::Id(Default::default())
 	}
