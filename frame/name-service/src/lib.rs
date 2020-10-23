@@ -403,7 +403,7 @@ impl<T: Trait> StaticLookup for Module<T> {
 	fn lookup(a: Self::Source) -> Result<Self::Target, LookupError> {
 		match a {
 			MultiAddress::Id(id) => Ok(id),
-			MultiAddress::Hash256(hash) => {
+			MultiAddress::Address32(hash) => {
 				Lookup::<T>::get(hash).ok_or(LookupError)
 			},
 			_ => Err(LookupError),
