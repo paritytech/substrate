@@ -178,6 +178,7 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 	Arc<TFullBackend<TBl>>,
 	KeystoreContainer,
 	TaskManager,
+	Option<sc_telemetry::Telemetry>,
 );
 
 type TLightParts<TBl, TRtApi, TExecDisp> = (
@@ -186,6 +187,7 @@ type TLightParts<TBl, TRtApi, TExecDisp> = (
 	KeystoreContainer,
 	TaskManager,
 	Arc<OnDemand<TBl>>,
+	Option<sc_telemetry::Telemetry>,
 );
 
 /// Light client backend type with a specific hash type.
@@ -243,22 +245,21 @@ impl KeystoreContainer {
 /// Creates a new full client for the given config.
 pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
-	logger: Option<Logger>,
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	new_full_parts(config, logger).map(|parts| parts.0)
+	new_full_parts(config).map(|parts| parts.0)
 }
 
 /// Create the initial parts of a full node.
 pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
-	logger: Option<Logger>,
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
+	let (telemetry, logger) = init_telemetry(&config);
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
 	let task_manager = {
@@ -308,7 +309,6 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 				offchain_worker_enabled : config.offchain_worker.enabled ,
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
 			},
-			// TODO: maybe pass by ref
 			logger,
 		)?
 	};
@@ -318,17 +318,18 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		backend,
 		keystore_container,
 		task_manager,
+		telemetry,
 	))
 }
 
 /// Create the initial parts of a light node.
 pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
-	logger: Option<Logger>,
 ) -> Result<TLightParts<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
+	let (telemetry, logger) = init_telemetry(&config);
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
@@ -367,11 +368,10 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 		executor,
 		Box::new(task_manager.spawn_handle()),
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
-		// TODO: maybe pass by ref?
 		logger,
 	)?);
 
-	Ok((client, backend, keystore_container, task_manager, on_demand))
+	Ok((client, backend, keystore_container, task_manager, on_demand, telemetry))
 }
 
 /// Create an instance of db-backed client.
@@ -450,6 +450,8 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	/// Shared Telemetry connection sinks,
 	pub telemetry_connection_sinks: TelemetryConnectionSinks,
+	/// Telemetry object.
+	pub telemetry: Option<sc_telemetry::Telemetry>,
 }
 
 /// Build a shared offchain workers instance.
@@ -530,6 +532,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		network_status_sinks,
 		system_rpc_tx,
 		telemetry_connection_sinks,
+		telemetry,
 	} = params;
 
 	let chain_info = client.usage_info().chain;
@@ -540,14 +543,17 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 	)?;
 
-	// Telemetry
-	let (telemetry, logger) = build_telemetry(
-		&mut config,
-		telemetry_connection_sinks.clone(),
-		network.clone(),
-		task_manager.spawn_handle(),
-		client.clone(),
-	);
+	let logger = telemetry.as_ref().map(|x| x.logger.clone());
+	if let Some(telemetry) = telemetry.clone() {
+		spawn_telemetry_worker(
+			telemetry,
+			&mut config,
+			telemetry_connection_sinks.clone(),
+			network.clone(),
+			task_manager.spawn_handle(),
+			client.clone(),
+		);
+	}
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
 	telemetry!(
@@ -651,19 +657,29 @@ async fn transaction_notifications<TBl, TExPool>(
 		.await;
 }
 
-fn build_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
-	config: &mut Configuration,
-	telemetry_connection_sinks: TelemetryConnectionSinks,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	spawn_handle: SpawnTaskHandle,
-	client: Arc<TCl>,
-) -> (Option<sc_telemetry::Telemetry>, Option<Logger>) {
+fn init_telemetry(config: &Configuration) -> (Option<sc_telemetry::Telemetry>, Option<Logger>) {
 	let endpoints = match config.telemetry_endpoints.clone() {
 		Some(endpoints) if !endpoints.is_empty() => endpoints,
 		// we don't want the telemetry to be initialized if telemetry_endpoints == Some([])
 		_ => return (None, None),
 	};
+	let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
+		endpoints,
+		wasm_external_transport: config.telemetry_external_transport.clone(),
+	});
+	let logger = telemetry.logger.clone();
 
+	(Some(telemetry), Some(logger))
+}
+
+fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(
+	telemetry: sc_telemetry::Telemetry,
+	config: &mut Configuration,
+	telemetry_connection_sinks: TelemetryConnectionSinks,
+	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	spawn_handle: SpawnTaskHandle,
+	client: Arc<TCl>,
+) {
 	let genesis_hash = match client.block_hash(Zero::zero()) {
 		Ok(Some(hash)) => hash,
 		_ => Default::default(),
@@ -675,10 +691,6 @@ fn build_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	let impl_name = config.impl_name.clone();
 	let impl_version = config.impl_version.clone();
 	let chain_name = config.chain_spec.name().to_owned();
-	let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
-		endpoints,
-		wasm_external_transport: config.telemetry_external_transport.take(),
-	});
 	let startup_time = SystemTime::UNIX_EPOCH.elapsed()
 		.map(|dur| dur.as_millis())
 		.unwrap_or(0);
@@ -686,7 +698,7 @@ fn build_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 
 	spawn_handle.spawn(
 		"telemetry-worker",
-		telemetry.clone()
+		telemetry
 			.for_each(move |event| {
 				// Safe-guard in case we add more events in the future.
 				let sc_telemetry::TelemetryEvent::Connected = event;
@@ -709,11 +721,6 @@ fn build_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 				ready(())
 			})
 	);
-
-	let logger = telemetry.logger.clone();
-
-	// TODO probably don't need the telemetry object anymore
-	(Some(telemetry), Some(logger))
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(

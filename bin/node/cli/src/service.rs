@@ -359,7 +359,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
-	let (client, backend, keystore_container, mut task_manager, on_demand) =
+	let (client, backend, keystore_container, mut task_manager, on_demand, telemetry) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
@@ -446,6 +446,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			network: network.clone(),
 			telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
 			task_manager: &mut task_manager,
+			telemetry,
 		})?;
 
 	Ok((task_manager, rpc_handlers, client, network, transaction_pool))

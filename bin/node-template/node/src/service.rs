@@ -224,7 +224,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
-	let (client, backend, keystore_container, mut task_manager, on_demand) =
+	let (client, backend, keystore_container, mut task_manager, on_demand, telemetry) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
 	let transaction_pool = Arc::new(sc_transaction_pool::BasicPool::new_light(
@@ -253,6 +253,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::NeverCanAuthor,
+		telemetry.as_ref().map(|x| x.logger.clone()),
 	)?;
 
 	let finality_proof_provider =
@@ -291,6 +292,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		network,
 		network_status_sinks,
 		system_rpc_tx,
+		telemetry,
 	 })?;
 
 	 network_starter.start_network();
