@@ -231,10 +231,8 @@ mod tests {
 	#[test]
 	fn should_check_for_duplicates() {
 		wasm_test(|dir, wasm_bytes, exec| {
-			let mut file0 = File::create(dir.join("test0.wasm")).expect("Create test file");
-			file0.write_all(wasm_bytes).expect("Writes bytes to a file");
-			let mut file1 = File::create(dir.join("test1.wasm")).expect("Create test file");
-			file1.write_all(wasm_bytes).expect("Writes bytes to a file");
+			fs::write(dir.join("test0.wasm"), wasm_bytes).expect("Create test file");
+			fs::write(dir.join("test1.wasm"), wasm_bytes).expect("Create test file");
 			let scraped = WasmOverwrite::scrape_overwrites(dir, exec);
 
 			match scraped {
