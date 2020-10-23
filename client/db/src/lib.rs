@@ -897,13 +897,14 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 		&mut self,
 		transaction: &mut Transaction<DbHash>,
 		historied: Option<&mut HistoriedDBMut>,
+		journals: Option<&mut TransactionalSerializeDB<historied_db::simple_db::SerializeDBDyn>>,
 	) {
-
 		let mut historied = historied.map(|historied_db| {
 			let block_nodes = BlockNodes::new(historied_db.db.clone());
 			let branch_nodes = BranchNodes::new(historied_db.db.clone());
 			(historied_db, block_nodes, branch_nodes)
 		});
+		let mut journal_keys = journals.as_ref().map(|_| Vec::new());
 		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain() {
 			let key: Vec<u8> = prefix
 				.into_iter()
@@ -917,14 +918,34 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 					historied.as_mut().map(|(historied_db, block_nodes, branch_nodes)|
 						historied_db.update_single_offchain(&key, Some(val), transaction, branch_nodes, block_nodes)
 					);
+					journal_keys.as_mut().map(|journal| journal.push(key));
 				},
 				OffchainOverlayedChange::RemoveLocal => {
 					historied.as_mut().map(|(historied_db, block_nodes, branch_nodes)|
 						historied_db.update_single_offchain(&key, None, transaction, branch_nodes, block_nodes)
 					);
+					journal_keys.as_mut().map(|journal| journal.push(key));
 				},
 			}
 		}
+		if let (
+			Some(journal_keys),
+			Some(ordered_db),
+			Some(historied),
+		) = (journal_keys, journals, historied.as_ref()) {
+			// Note that this is safe because we import a new block.
+			// Otherwhise we would need to share cache with a single journal instance.
+			let mut journals = historied_db::management::JournalForMigrationBasis
+				::<_, _, _, crate::historied_tree_bindings::JournalDelete>
+				::from_db(ordered_db);
+			journals.add_changes(
+				ordered_db,
+				historied.0.current_state.latest().clone(),
+				journal_keys,
+				true, // New block, no need for fetch
+			)
+		}
+
 		historied.as_mut().map(|(_historied_db, block_nodes, branch_nodes)| {
 			block_nodes.apply_transaction(transaction);
 			branch_nodes.apply_transaction(transaction);
@@ -1183,11 +1204,11 @@ impl<Block: BlockT> Backend<Block> {
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		let (db, ordered) = crate::utils::open_database_and_historied::<Block>(
+		let (db, ordered, ordered_2) = crate::utils::open_database_and_historied::<Block>(
 			&config,
 			DatabaseType::Full,
 		)?;
-		Self::from_database(db as Arc<_>, ordered, canonicalization_delay, &config)
+		Self::from_database(db as Arc<_>, ordered, ordered_2, canonicalization_delay, &config)
 	}
 
 	/// Create new memory-backed client backend for tests.
@@ -1211,6 +1232,7 @@ impl<Block: BlockT> Backend<Block> {
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
 		ordered_db: historied_db::simple_db::SerializeDBDyn,
+		ordered_db_2: historied_db::simple_db::SerializeDBDyn,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
 	) -> ClientResult<Self> {
@@ -1252,7 +1274,11 @@ impl<Block: BlockT> Backend<Block> {
 			pending: Default::default(),
 		};
 		let historied_management = Arc::new(RwLock::new(TreeManagement::from_ser(historied_persistence)));
-		let offchain_local_storage = offchain::BlockChainLocalStorage::new(db, historied_management.clone());
+		let offchain_local_storage = offchain::BlockChainLocalStorage::new(
+			db,
+			historied_management.clone(),
+			ordered_db_2,
+		);
 		Ok(Backend {
 			storage: Arc::new(storage_db),
 			offchain_storage,
@@ -1467,6 +1493,19 @@ impl<Block: BlockT> Backend<Block> {
 			None
 		};
 
+		{
+			use historied_db::management::tree::TreeManagementStorage;
+			let mut management;
+			let journals = if TreeManagementPersistence::JOURNAL_DELETE {
+				management = self.historied_management.write();
+				Some(management.ser())
+			} else {
+				None
+			};
+		
+			operation.apply_offchain(&mut transaction, historied_db.as_mut(), journals);
+		}
+
 		// write management state changes
 		let pending = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
 		for (col, (mut changes, dropped)) in pending {
@@ -1488,8 +1527,6 @@ impl<Block: BlockT> Backend<Block> {
 				warn!("Unknown collection for tree management pending transaction {:?}", col);
 			}
 		}
-
-		operation.apply_offchain(&mut transaction, historied_db.as_mut());
 
 		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;

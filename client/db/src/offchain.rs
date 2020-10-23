@@ -40,12 +40,23 @@ pub struct LocalStorage {
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
 }
 
+type ChangesJournal = historied_db::management::JournalForMigrationBasis<
+	(u32, u32),
+	Vec<u8>,
+	historied_db::simple_db::SerializeDBDyn,
+	crate::historied_tree_bindings::JournalDelete,
+>;
+
+pub(crate) type ChangesJournalSync = Arc<Mutex<ChangesJournal>>;
+
 /// Offchain local storage with blockchain historied storage.
 #[derive(Clone)]
 pub struct BlockChainLocalStorage<H: Ord, S: TreeManagementStorage> {
 	historied_management: Arc<RwLock<crate::TreeManagement<H, S>>>,
 	db: Arc<dyn Database<DbHash>>,
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
+	ordered_db: Arc<Mutex<historied_db::simple_db::SerializeDBDyn>>,
+	changes_journals: ChangesJournalSync,
 }
 
 /// Offchain local storage for a given block.
@@ -57,6 +68,9 @@ pub struct BlockChainLocalAt {
 	at_read: ForkPlan<u32, u32>,
 	at_write: Option<Latest<(u32, u32)>>,
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
+	ordered_db: Arc<Mutex<historied_db::simple_db::SerializeDBDyn>>,
+	changes_journals: ChangesJournalSync,
+	skip_journalize: bool,
 }
 
 /// Offchain local storage for a given block,
@@ -101,14 +115,17 @@ impl<H: Ord, S: TreeManagementStorage> BlockChainLocalStorage<H, S> {
 	pub fn new(
 		db: Arc<dyn Database<DbHash>>,
 		historied_management: Arc<RwLock<crate::TreeManagement<H, S>>>,
+		journals_db: historied_db::simple_db::SerializeDBDyn,
 	) -> Self {
+		let journals = historied_db::management::JournalForMigrationBasis::from_db(&journals_db);
 		Self {
 			historied_management,
 			db,
 			locks: Default::default(),
+			ordered_db: Arc::new(Mutex::new(journals_db)),
+			changes_journals: Arc::new(Mutex::new(journals)),
 		}
 	}
-
 }
 
 impl<H: Ord> BlockChainLocalStorage<H, ()> {
@@ -116,9 +133,11 @@ impl<H: Ord> BlockChainLocalStorage<H, ()> {
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test() -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
-		let db = sp_database::as_database(db);
+		let db: Arc<dyn Database<DbHash>> = sp_database::as_database(db);
 		let historied_management = Arc::new(RwLock::new(crate::TreeManagement::default()));
-		Self::new(db as _, historied_management)
+		let ordered = sp_database::RadixTreeDatabase::new(db.clone());
+		let ordered = Box::new(crate::DatabaseStorage(ordered));
+		Self::new(db as _, historied_management, ordered)
 	}
 }
 
@@ -205,6 +224,9 @@ impl<H, S> sp_core::offchain::BlockChainOffchainStorage for BlockChainLocalStora
 				at_read,
 				at_write,
 				locks: self.locks.clone(),
+				ordered_db: self.ordered_db.clone(),
+				changes_journals: self.changes_journals.clone(),
+				skip_journalize: !S::JOURNAL_DELETE,
 			})
 		} else {
 			None
@@ -225,12 +247,24 @@ impl BlockChainLocalAt {
 	pub fn can_update(&self) -> bool {
 		true
 	}
+
+	/// When doing batch update we can skip journalize,
+	/// and produce the journalize item at once later.
+	pub fn skip_journalize(&mut self) {
+		self.skip_journalize = true;
+	}
 }
 
 impl BlockChainLocalAtNew {
 	/// Does the current state allows chain update attempt.
 	pub fn can_update(&self) -> bool {
 		self.0.at_write.is_some()
+	}
+
+	/// When doing batch update we can skip journalize,
+	/// and produce the journalize item at once later.
+	pub fn skip_journalize(&mut self) {
+		self.0.skip_journalize = true;
 	}
 }
 
@@ -505,7 +539,24 @@ impl BlockChainLocalAt {
 						},
 						UpdateResult::Unchanged => (),
 					}
+					match update_result {
+						UpdateResult::Unchanged => (),
+						UpdateResult::Changed(())
+						| UpdateResult::Cleared(()) => {
+							if !self.skip_journalize {
+								use std::ops::DerefMut;
+								self.changes_journals.lock().add_changes(
+									self.ordered_db.lock().deref_mut(),
+									at_write.latest().clone(),
+									vec![key.clone()],
+									false,
+								)
+							}
+						},
+					}
+
 				}
+
 			}
 			Ok(is_set)
 		}();

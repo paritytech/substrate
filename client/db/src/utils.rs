@@ -222,6 +222,7 @@ pub fn open_database_and_historied<Block: BlockT>(
 ) -> sp_blockchain::Result<(
 	Arc<dyn Database<DbHash>>,
 	historied_db::simple_db::SerializeDBDyn,
+	historied_db::simple_db::SerializeDBDyn,
 )> {
 	#[allow(unused)]
 	fn db_open_error(feat: &'static str) -> sp_blockchain::Error {
@@ -230,7 +231,12 @@ pub fn open_database_and_historied<Block: BlockT>(
 		)
 	}
 
-	let db: (Arc<dyn Database<DbHash>>, historied_db::simple_db::SerializeDBDyn) = match &config.source {
+	// if we need more than 2 instance, we could also return the conversion method from the first db.
+	let db: (
+		Arc<dyn Database<DbHash>>,
+		historied_db::simple_db::SerializeDBDyn,
+		historied_db::simple_db::SerializeDBDyn,
+	) = match &config.source {
 		#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 		DatabaseSettingsSrc::RocksDb { path, cache_size } => {
 			// first upgrade database to required version
@@ -283,7 +289,8 @@ pub fn open_database_and_historied<Block: BlockT>(
 
 			let rocks_db = Arc::new(db);
 			let ordered = Box::new(crate::RocksdbStorage(rocks_db.clone()));
-			(sp_database::arc_as_database(rocks_db), ordered)
+			let ordered_2 = Box::new(crate::RocksdbStorage(rocks_db.clone()));
+			(sp_database::arc_as_database(rocks_db), ordered, ordered_2)
 		},
 		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
 		DatabaseSettingsSrc::RocksDb { .. } => {
@@ -295,7 +302,9 @@ pub fn open_database_and_historied<Block: BlockT>(
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?;
 			let ordered = sp_database::RadixTreeDatabase::new(parity_db.clone());
 			let ordered = Box::new(crate::DatabaseStorage(ordered));
-			(parity_db, ordered)
+			let ordered_2 = sp_database::RadixTreeDatabase::new(parity_db.clone());
+			let ordered_2 = Box::new(crate::DatabaseStorage(ordered_2));
+			(parity_db, ordered, ordered_2)
 		},
 		#[cfg(not(feature = "with-parity-db"))]
 		DatabaseSettingsSrc::ParityDb { .. } => {
@@ -304,7 +313,9 @@ pub fn open_database_and_historied<Block: BlockT>(
 		DatabaseSettingsSrc::Custom(db) => {
 			let ordered = sp_database::RadixTreeDatabase::new(db.clone());
 			let ordered = Box::new(crate::DatabaseStorage(ordered));
-			(db.clone(), ordered)
+			let ordered_2 = sp_database::RadixTreeDatabase::new(db.clone());
+			let ordered_2 = Box::new(crate::DatabaseStorage(ordered_2));
+			(db.clone(), ordered, ordered_2)
 		},
 	};
 
