@@ -211,7 +211,7 @@ impl<T> Lookup for IdentityLookup<T> {
 
 /// A lookup implementation returning the `AccountId` from a `MultiAddress`.
 pub struct AccountIdLookup<AccountId>(PhantomData<AccountId>);
-impl<AccountId: Codec + Clone + PartialEq + Debug + Member> StaticLookup for AccountIdLookup<AccountId> {
+impl<AccountId: Codec + Clone + PartialEq + Debug> StaticLookup for AccountIdLookup<AccountId> {
 	type Source = crate::MultiAddress<AccountId, ()>;
 	type Target = AccountId;
 	fn lookup(x: Self::Source) -> Result<Self::Target, LookupError> {
