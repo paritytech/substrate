@@ -243,7 +243,7 @@ benchmarks! {
 	verify {
 		// make sure the report was not deferred
 		assert!(Offences::<T>::deferred_offences().is_empty());
-		let bond_amount: u32 = bond_amount::<T>().unique_saturated_into();
+		let bond_amount: u32 = UniqueSaturatedInto::<u32>::unique_saturated_into(bond_amount::<T>());
 		let slash_amount = slash_fraction * bond_amount;
 		let reward_amount = slash_amount * (1 + n) / 2;
 		let mut slash_events = raw_offenders.into_iter()
