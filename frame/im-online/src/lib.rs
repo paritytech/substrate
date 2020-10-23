@@ -240,10 +240,7 @@ pub type IdentificationTuple<T> = (
 	<<T as Trait>::ValidatorSet as ValidatorSetWithIdentification<<T as frame_system::Trait>::AccountId>>::Identification,
 );
 
-pub trait Trait:
-	SendTransactionTypes<Call<Self>>
-	+ frame_system::Trait
-{
+pub trait Trait: SendTransactionTypes<Call<Self>> + frame_system::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
