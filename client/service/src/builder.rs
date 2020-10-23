@@ -541,23 +541,13 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	)?;
 
 	// Telemetry
-	let telemetry = config.telemetry_endpoints.clone().and_then(|endpoints| {
-		if endpoints.is_empty() {
-			// we don't want the telemetry to be initialized if telemetry_endpoints == Some([])
-			return None;
-		}
-
-		let genesis_hash = match client.block_hash(Zero::zero()) {
-			Ok(Some(hash)) => hash,
-			_ => Default::default(),
-		};
-
-		Some(build_telemetry(
-			&mut config, endpoints, telemetry_connection_sinks.clone(), network.clone(),
-			task_manager.spawn_handle(), genesis_hash,
-		))
-	});
-	let logger = telemetry.as_ref().map(|x| x.logger.clone());
+	let (telemetry, logger) = build_telemetry(
+		&mut config,
+		telemetry_connection_sinks.clone(),
+		network.clone(),
+		task_manager.spawn_handle(),
+		client.clone(),
+	);
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
 	telemetry!(
@@ -661,14 +651,24 @@ async fn transaction_notifications<TBl, TExPool>(
 		.await;
 }
 
-fn build_telemetry<TBl: BlockT>(
+fn build_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	config: &mut Configuration,
-	endpoints: sc_telemetry::TelemetryEndpoints,
 	telemetry_connection_sinks: TelemetryConnectionSinks,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	spawn_handle: SpawnTaskHandle,
-	genesis_hash: <TBl as BlockT>::Hash,
-) -> sc_telemetry::Telemetry {
+	client: Arc<TCl>,
+) -> (Option<sc_telemetry::Telemetry>, Option<Logger>) {
+	let endpoints = match config.telemetry_endpoints.clone() {
+		Some(endpoints) if !endpoints.is_empty() => endpoints,
+		// we don't want the telemetry to be initialized if telemetry_endpoints == Some([])
+		_ => return (None, None),
+	};
+
+	let genesis_hash = match client.block_hash(Zero::zero()) {
+		Ok(Some(hash)) => hash,
+		_ => Default::default(),
+	};
+
 	let is_authority = config.role.is_authority();
 	let network_id = network.local_peer_id().to_base58();
 	let name = config.network.node_name.clone();
@@ -710,7 +710,10 @@ fn build_telemetry<TBl: BlockT>(
 			})
 	);
 
-	telemetry
+	let logger = telemetry.logger.clone();
+
+	// TODO probably don't need the telemetry object anymore
+	(Some(telemetry), Some(logger))
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
