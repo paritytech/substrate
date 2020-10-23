@@ -225,6 +225,29 @@ impl<AccountId: Codec + Clone + PartialEq + Debug> StaticLookup for AccountIdLoo
 	}
 }
 
+/// Perform a StaticLookup where there are two lookup sources of the same type.
+pub struct TwoStaticLookup<A, B>(PhantomData<(A, B)>);
+impl<A, B> StaticLookup for TwoStaticLookup<A, B>
+where
+	A: StaticLookup,
+	B: StaticLookup<Source = A::Source, Target = A::Target>,
+{
+	type Source = A::Source;
+	type Target = A::Target;
+
+	fn lookup(x: Self::Source) -> Result<Self::Target, LookupError> {
+		let a = A::lookup(x.clone());
+		if a.is_ok() {
+			return a
+		} else {
+			B::lookup(x)
+		}
+	}
+	fn unlookup(x: Self::Target) -> Self::Source {
+		A::unlookup(x)
+	}
+}
+
 /// Extensible conversion trait. Generic over both source and destination types.
 pub trait Convert<A, B> {
 	/// Make conversion.
