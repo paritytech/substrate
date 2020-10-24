@@ -62,6 +62,9 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 			ensure!(Module::<T>::account_basic(&source).nonce == nonce, Error::<T>::InvalidNonce);
 		}
 
+		let account_id = T::AddressMapping::into_account_id(source);
+		frame_system::Module::<T>::inc_account_nonce(&account_id);
+
 		frame_support::storage::with_transaction(|| {
 			let vicinity = Vicinity {
 				gas_price,
@@ -120,6 +123,9 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 		if let Some(nonce) = nonce {
 			ensure!(Module::<T>::account_basic(&source).nonce == nonce, Error::<T>::InvalidNonce);
 		}
+
+		let account_id = T::AddressMapping::into_account_id(source);
+		frame_system::Module::<T>::inc_account_nonce(&account_id);
 
 		frame_support::storage::with_transaction(|| {
 			let vicinity = Vicinity {
@@ -191,6 +197,9 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 		if let Some(nonce) = nonce {
 			ensure!(Module::<T>::account_basic(&source).nonce == nonce, Error::<T>::InvalidNonce);
 		}
+
+		let account_id = T::AddressMapping::into_account_id(source);
+		frame_system::Module::<T>::inc_account_nonce(&account_id);
 
 		frame_support::storage::with_transaction(|| {
 			let vicinity = Vicinity {
