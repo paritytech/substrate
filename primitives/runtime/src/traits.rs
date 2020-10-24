@@ -225,6 +225,23 @@ impl<AccountId: Codec + Clone + PartialEq + Debug> StaticLookup for AccountIdLoo
 	}
 }
 
+/// Perform a StaticLookup where there are multiple lookup sources of the same type.
+impl<A, B> StaticLookup for (A, B)
+where
+	A: StaticLookup,
+	B: StaticLookup<Source = A::Source, Target = A::Target>,
+{
+	type Source = A::Source;
+	type Target = A::Target;
+
+	fn lookup(x: Self::Source) -> Result<Self::Target, LookupError> {
+		A::lookup(x.clone()).or_else(|_| B::lookup(x))
+	}
+	fn unlookup(x: Self::Target) -> Self::Source {
+		A::unlookup(x)
+	}
+}
+
 /// Extensible conversion trait. Generic over both source and destination types.
 pub trait Convert<A, B> {
 	/// Make conversion.
