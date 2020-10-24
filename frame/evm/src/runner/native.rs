@@ -92,7 +92,7 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 			let logs = substate.logs.clone();
 
 			let call_info = CallInfo {
-				exit_reason: reason.into(),
+				exit_reason: reason.clone().into(),
 				value: out,
 				used_gas,
 				logs,
@@ -151,7 +151,7 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 			let logs = substate.logs.clone();
 
 			let mut create_info = CreateInfo {
-				exit_reason: reason.into(),
+				exit_reason: reason.clone().into(),
 				value: address,
 				used_gas,
 				logs,
@@ -225,7 +225,7 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 			let logs = substate.logs.clone();
 
 			let mut create_info = CreateInfo {
-				exit_reason: reason.into(),
+				exit_reason: reason.clone().into(),
 				value: address,
 				used_gas,
 				logs,
