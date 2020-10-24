@@ -46,3 +46,9 @@ pub struct ExecutionInfo<T> {
 
 pub type CallInfo = ExecutionInfo<Vec<u8>>;
 pub type CreateInfo = ExecutionInfo<H160>;
+
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+pub enum CallOrCreateInfo {
+	Call(CallInfo),
+	Create(CreateInfo),
+}
