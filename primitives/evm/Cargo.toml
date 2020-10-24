@@ -28,4 +28,5 @@ std = [
 	"serde",
 	"codec/std",
 	"evm/std",
+	"evm/with-serde",
 ]
