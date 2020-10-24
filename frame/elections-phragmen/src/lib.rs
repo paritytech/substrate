@@ -892,13 +892,15 @@ impl<T: Trait> Module<T> {
 			voters_and_votes.clone(),
 			None,
 		).map(|ElectionResult { winners, assignments: _ }| {
-			let old_members_ids_sorted_by_id = <Members<T>>::take().into_iter()
+			// this is already sorted by id.
+			let old_members_ids_sorted = <Members<T>>::take().into_iter()
 				.map(|(m, _)| m)
 				.collect::<Vec<T::AccountId>>();
-			let mut old_runners_up_ids_sorted_by_id = <RunnersUp<T>>::take().into_iter()
+			// this one needs a sort by id.
+			let mut old_runners_up_ids_sorted = <RunnersUp<T>>::take().into_iter()
 				.map(|(r, _)| r)
 				.collect::<Vec<T::AccountId>>();
-			old_runners_up_ids_sorted_by_id.sort();
+			old_runners_up_ids_sorted.sort();
 
 			// filter out those who end up with no backing stake.
 			let new_set_with_stake = winners
@@ -941,8 +943,8 @@ impl<T: Trait> Module<T> {
 			// the person with the "highest" account id based on the sort above.
 			let prime = prime_votes.into_iter().max_by_key(|x| x.1).map(|x| x.0.clone());
 
-			// new_members_ids is sorted by account id.
-			let new_members_ids_sorted_by_id = new_members_sorted_by_id
+			// new_members_sorted_by_id is sorted by account id.
+			let new_members_ids_sorted = new_members_sorted_by_id
 				.iter()
 				.map(|(m, _)| m.clone())
 				.collect::<Vec<T::AccountId>>();
@@ -953,21 +955,21 @@ impl<T: Trait> Module<T> {
 				.rev()
 				.collect::<Vec<(T::AccountId, BalanceOf<T>)>>();
 			// new_runners_up remains sorted by desirability.
-			let mut new_runners_up_ids_sorted_by_id = new_runners_up_sorted_by_rank
+			let mut new_runners_up_ids_sorted = new_runners_up_sorted_by_rank
 				.iter()
 				.map(|(r, _)| r.clone())
 				.collect::<Vec<T::AccountId>>();
-			new_runners_up_ids_sorted_by_id.sort();
+			new_runners_up_ids_sorted.sort();
 
 			// report member changes. We compute diff because we need the outgoing list.
 			let (incoming, outgoing) = T::ChangeMembers::compute_members_diff(
-				&new_members_ids_sorted_by_id,
-				&old_members_ids_sorted_by_id,
+				&new_members_ids_sorted,
+				&old_members_ids_sorted,
 			);
 			T::ChangeMembers::change_members_sorted(
 				&incoming,
 				&outgoing,
-				&new_members_ids_sorted_by_id,
+				&new_members_ids_sorted,
 			);
 			T::ChangeMembers::set_prime(prime);
 
@@ -977,21 +979,22 @@ impl<T: Trait> Module<T> {
 			// compute the outgoing of runners up as well and append them to the `to_burn_bond`
 			{
 				let (_, outgoing) = T::ChangeMembers::compute_members_diff(
-					&new_runners_up_ids_sorted_by_id,
-					&old_runners_up_ids_sorted_by_id,
+					&new_runners_up_ids_sorted,
+					&old_runners_up_ids_sorted,
 				);
 				// none of the ones computed to be outgoing must still be in the list.
-				debug_assert!(outgoing.iter().all(|o| !new_runners_up_ids_sorted_by_id.contains(o)));
+				debug_assert!(outgoing.iter().all(|o| !new_runners_up_ids_sorted.contains(o)));
 				to_burn_bond.extend(outgoing);
 			}
 
 			// Burn loser bond. members list is sorted. O(NLogM) (N candidates, M members)
-			// runner up list is not sorted. O(K*N) given K runner ups. Overall: O(NLogM + N*K)
+			// runner up list is also sorted. O(NLogK) given K runner ups. Overall: O(NLogM + N*K)
 			// both the member and runner counts are bounded.
 			exposed_candidates.into_iter().for_each(|c| {
 				// any candidate who is not a member and not a runner up.
-				if new_members_sorted_by_id.binary_search_by_key(&c, |(m, _)| m.clone()).is_err()
-					&& new_runners_up_ids_sorted_by_id.binary_search(&c).is_err()
+				if
+					new_members_ids_sorted.binary_search(&c).is_err() &&
+					new_runners_up_ids_sorted.binary_search(&c).is_err()
 				{
 					let (imbalance, _) = T::Currency::slash_reserved(&c, T::CandidacyBond::get());
 					T::LoserCandidate::on_unbalanced(imbalance);
