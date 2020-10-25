@@ -159,7 +159,6 @@ macro_rules! within_span {
 		)
 	};
 	(
-		$lvl:expr,
 		$name:expr;
 		$( $code:tt )*
 	) => {
@@ -179,7 +178,6 @@ macro_rules! within_span {
 		$( $code )*
 	};
 	(
-		$lvl:expr,
 		$name:expr;
 		$( $code:tt )*
 	) => {
@@ -192,7 +190,6 @@ macro_rules! within_span {
 #[cfg(all(not(feature = "std"), not(feature = "with-tracing")))]
 #[macro_export]
 macro_rules! enter_span {
-	( $lvl:expr, $name:expr ) => ( );
 	( $name:expr ) => ( ) // no-op
 }
 
@@ -232,7 +229,7 @@ macro_rules! enter_span {
 		let __within_span__ = $span;
 		let __tracing_guard__ = __within_span__.enter();
 	};
-	( $lvl:expr, $name:expr ) => {
+	( $name:expr ) => {
 		$crate::enter_span!($crate::span!($crate::Level::TRACE, $name))
 	};
 }
