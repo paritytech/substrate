@@ -38,6 +38,7 @@ struct TemplateData {
 	version: String,
 	pallet: String,
 	header: String,
+	cmd: CmdData,
 	// Map from benchmark name to benchmark data
 	benchmarks: HashMap<String, BenchmarkData>,
 }
@@ -53,6 +54,19 @@ struct BenchmarkData {
 	component_weight: Vec<ComponentSlope>,
 	component_reads: Vec<ComponentSlope>,
 	component_writes: Vec<ComponentSlope>,
+}
+
+// This forwards some specific metadata from the `BenchmarkCmd`
+#[derive(Serialize, Default, Debug, Clone)]
+struct CmdData {
+	steps: Vec<u32>,
+	repeat: u32,
+	lowest_range_values: Vec<u32>,
+	highest_range_values: Vec<u32>,
+	execution: String,
+	wasm_execution: String,
+	chain: String,
+	db_cache: u32,
 }
 
 // This encodes the component name and whether that component is used.
@@ -195,15 +209,28 @@ pub fn write_results(
 	let header_text = match &cmd.header {
 		Some(header_file) => {
 			let text = fs::read_to_string(header_file)?;
-			Some(text)
+			text
 		},
-		None => None,
+		None => String::new(),
 	};
 
-	let date = chrono::Utc::now();
+	// Date string metadata
+	let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
 
 	// Full CLI args passed to trigger the benchmark.
 	let args = std::env::args().collect::<Vec<String>>();
+
+	// Capture individual args
+	let cmd_data = CmdData {
+		steps: cmd.steps.clone(),
+		repeat: cmd.repeat.clone(),
+		lowest_range_values: cmd.lowest_range_values.clone(),
+		highest_range_values: cmd.highest_range_values.clone(),
+		execution: format!("{:?}", cmd.execution),
+		wasm_execution: cmd.wasm_method.to_string(),
+		chain: format!("{:?}", cmd.shared_params.chain),
+		db_cache: cmd.database_cache_size,
+	};
 
 	// New Handlebars instance with helpers.
 	let mut handlebars = handlebars::Handlebars::new();
@@ -212,27 +239,25 @@ pub fn write_results(
 
 	// Organize results by pallet into a JSON map
 	let all_results = map_results(batches)?;
-	for (pallet, results) in all_results.iter() {
+	for (pallet, results) in all_results.into_iter() {
 		// Create new file: "path/to/pallet_name.rs".
 		let mut file_path = path.clone();
-		file_path.push(pallet);
+		file_path.push(&pallet);
 		file_path.set_extension("rs");
-
 
 		let hbs_data = TemplateData {
 			args: args.clone(),
-			date: date.format("%Y-%m-%d").to_string(),
+			date: date.clone(),
 			version: VERSION.to_string(),
-			pallet: pallet.clone(),
-			header: header_text.clone().unwrap_or(String::new()),
-			benchmarks: results.clone(),
+			pallet: pallet,
+			header: header_text.clone(),
+			cmd: cmd_data.clone(),
+			benchmarks: results,
 		};
 
 		let mut output_file = fs::File::create(file_path)?;
-		match handlebars.render_template_to_write(&template, &hbs_data, &mut output_file){
-			Ok(_)  => println!("Write file using template"),
-			Err(e) => println!("Error: {}", e),
-		};
+		handlebars.render_template_to_write(&template, &hbs_data, &mut output_file)
+			.map_err(|e| io_error(&e.to_string()))?;
 	}
 	Ok(())
 }
