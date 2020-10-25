@@ -625,7 +625,7 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type MaxLocks = ();
-		type WeightInfo = ();
+		type WeightInfo = pallet_balances::weights::SubstrateWeight<Self>;
 	}
 
 	parameter_types! {

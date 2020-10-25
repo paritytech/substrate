@@ -460,7 +460,7 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type MaxLocks = MaxLocks;
-		type WeightInfo = ();
+		type WeightInfo = pallet_balances::weights::SubstrateWeight<Self>;
 	}
 	parameter_types! {
 		pub const MinVestedTransfer: u64 = 256 * 2;

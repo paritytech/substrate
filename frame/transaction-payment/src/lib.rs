@@ -672,7 +672,7 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type MaxLocks = ();
-		type WeightInfo = ();
+		type WeightInfo = pallet_balances::weights::SubstrateWeight<Self>;
 	}
 	thread_local! {
 		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);

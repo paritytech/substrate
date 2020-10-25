@@ -158,7 +158,7 @@ impl pallet_balances::Trait for Test {
 	type Event = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
-	type WeightInfo = ();
+	type WeightInfo = pallet_balances::weights::SubstrateWeight<Self>;
 }
 
 pallet_staking_reward_curve::build! {
