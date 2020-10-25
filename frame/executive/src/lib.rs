@@ -208,7 +208,7 @@ where
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
 		sp_io::init_tracing();
-		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
+		sp_tracing::enter_span!("init_block");
 		let digests = Self::extract_pre_digest(&header);
 		Self::initialize_block_impl(
 			header.number(),
@@ -272,7 +272,7 @@ where
 	}
 
 	fn initial_checks(block: &Block) {
-		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
+		sp_tracing::enter_span!("initial_checks");
 		let header = block.header();
 
 		// Check that `parent_hash` is correct.
@@ -329,7 +329,7 @@ where
 	/// except state-root.
 	pub fn finalize_block() -> System::Header {
 		sp_io::init_tracing();
-		sp_tracing::enter_span!( sp_tracing::Level::TRACE, "finalize_block" );
+		sp_tracing::enter_span!( "finalize_block" );
 		<frame_system::Module<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Module<System>>::block_number();
 		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
@@ -392,7 +392,7 @@ where
 	}
 
 	fn final_checks(header: &System::Header) {
-		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "final_checks");
+		sp_tracing::enter_span!("final_checks");
 		// remove temporaries
 		let new_header = <frame_system::Module<System>>::finalize();
 
@@ -425,22 +425,22 @@ where
 		sp_io::init_tracing();
 		use sp_tracing::{enter_span, within_span};
 
-		enter_span!{ sp_tracing::Level::TRACE, "validate_transaction" };
+		enter_span!{ "validate_transaction" };
 
-		let encoded_len = within_span!{ sp_tracing::Level::TRACE, "using_encoded";
+		let encoded_len = within_span!{ "using_encoded";
 			uxt.using_encoded(|d| d.len())
 		};
 
-		let xt = within_span!{ sp_tracing::Level::TRACE, "check";
+		let xt = within_span!{ "check";
 			uxt.check(&Default::default())
 		}?;
 
-		let dispatch_info = within_span!{ sp_tracing::Level::TRACE, "dispatch_info";
+		let dispatch_info = within_span!{ "dispatch_info";
 			xt.get_dispatch_info()
 		};
 
 		within_span! {
-			sp_tracing::Level::TRACE, "validate";
+			"validate";
 			xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
 		}
 	}
