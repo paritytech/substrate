@@ -50,8 +50,8 @@ impl BenchmarkCmd {
 			if !header_file.is_file() { return Err("Header file is invalid!".into()) };
 		}
 
-		if let Some(handlebar_template_file) = &self.template {
-			if !handlebar_template_file.is_file() { return Err("Handlebar Template file is invalid!".into()) };
+		if let Some(handlebars_template_file) = &self.template {
+			if !handlebars_template_file.is_file() { return Err("Handlebars template file is invalid!".into()) };
 		}
 
 		let spec = config.chain_spec;

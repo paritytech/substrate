@@ -116,9 +116,14 @@ need to move into your node's binary folder. For example, with the Substrate rep
 you would test the Balances pallet's benchmarks:
 
 ```bash
-cd bin/node/cli
 cargo test -p pallet-balances --features runtime-benchmarks
 ```
+
+> NOTE: Substrate uses a virtual workspace which does not allow you to compile with feature flags.
+> ```
+> error: --features is not allowed in the root of a virtual workspace`
+> ```
+> To solve this, navigate to the folder of the node (`cd bin/node/cli`) or pallet (`cd frame/pallet`) and run the command there.
 
 ## Adding Benchmarks
 
@@ -163,15 +168,14 @@ Then you can run a benchmark like so:
 
 ```bash
 ./target/release/substrate benchmark \
-    --chain dev \                                     # Configurable Chain Spec
-    --execution=wasm \                                # Always test with Wasm
-    --wasm-execution=compiled \                       # Always used `wasm-time`
-    --pallet pallet_balances \                        # Select the pallet
-    --extrinsic transfer \                            # Select the extrinsic
-    --steps 50 \                                      # Number of samples across component ranges
-    --repeat 20 \                                     # Number of times we repeat a benchmark
-    --output \                                        # Output benchmark results into a Rust file
-    --handlebar-template .\\handlebar_test.hbs        # Path to Handlebar template file for benchmark results (Optional)
+    --chain dev \                      # Configurable Chain Spec
+    --execution=wasm \                 # Always test with Wasm
+    --wasm-execution=compiled \        # Always used `wasm-time`
+    --pallet pallet_balances \         # Select the pallet
+    --extrinsic transfer \             # Select the extrinsic
+    --steps 50 \                       # Number of samples across component ranges
+    --repeat 20 \                      # Number of times we repeat a benchmark
+    --output path/to/folder \          # Output benchmark results into a Rust file
 ```
 
 This will output a file `pallet_name.rs` which implements the `WeightInfo` trait you should include
@@ -179,6 +183,12 @@ in your pallet. Each blockchain should generate their own benchmark file with th
 implementation of the `WeightInfo` trait. This means that you will be able to use these modular
 Substrate pallets while still keeping your network safe for your specific configuration and
 requirements.
+
+The benchmarking CLI uses a Handlebars template to format the final output file. You can optionally
+pass the flag `--template` pointing to a custom template that can be used instead. Within the
+template, you have access to all the data provided by the `TemplateData` struct in the
+[benchmarking CLI writer](../../utils/frame/benchmarking-cli/src/writer.rs). You can find the default
+template used [here](../../utils/frame/benchmarking-cli/src/template.hbs).
 
 To get a full list of available options when running benchmarks, run:
 
