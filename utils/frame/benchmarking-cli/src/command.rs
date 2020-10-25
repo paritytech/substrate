@@ -50,7 +50,7 @@ impl BenchmarkCmd {
 			if !header_file.is_file() { return Err("Header file is invalid!".into()) };
 		}
 
-		if let Some(handlebar_template_file) = &self.handlebar_template {
+		if let Some(handlebar_template_file) = &self.template {
 			if !handlebar_template_file.is_file() { return Err("Handlebar Template file is invalid!".into()) };
 		}
 
@@ -104,11 +104,7 @@ impl BenchmarkCmd {
 		match results {
 			Ok(batches) => {
 				if let Some(output_path) = &self.output {
-					if self.trait_def {
-						crate::writer::write_trait(&batches, output_path, self)?;
-					} else {
-						crate::writer::write_results(&batches, output_path, self)?;
-					}
+					crate::writer::write_results(&batches, output_path, self)?;
 				}
 
 				for batch in batches.into_iter() {

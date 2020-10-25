@@ -17,30 +17,37 @@
 
 // Outputs benchmark results to Rust files that can be ingested by the runtime.
 
-use crate::BenchmarkCmd;
-use std::fs::{self, File, OpenOptions};
-use std::io::prelude::*;
+use std::collections::HashMap;
+use std::fs;
 use std::path::PathBuf;
-use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis};
-use sp_runtime::traits::Zero;
 
 use serde::Serialize;
-use serde_json::value::Map;
-use handlebars::{to_json, Handlebars};
+
+use crate::BenchmarkCmd;
+use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis};
+use sp_runtime::traits::Zero;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const TEMPLATE: &str = include_str!("./template.hbs");
 
-#[derive(Serialize)]
-struct AllData {
-	benchmark_results: Vec<BenchmarkData>
+// This is the final structure we will pass to the Handlebars template.
+#[derive(Serialize, Default, Debug)]
+struct TemplateData {
+	args: Vec<String>,
+	date: String,
+	version: String,
+	pallet: String,
+	header: String,
+	// Map from benchmark name to benchmark data
+	benchmarks: HashMap<String, BenchmarkData>,
 }
 
-#[derive(Serialize, Default, Debug)]
+// This was the final data we have about each benchmark.
+#[derive(Serialize, Default, Debug, Clone)]
 struct BenchmarkData {
 	name: String,
 	components: Vec<Component>,
-	base_extrinsic_weight: u128,
+	base_weight: u128,
 	base_reads: u128,
 	base_writes: u128,
 	component_weight: Vec<ComponentSlope>,
@@ -48,40 +55,42 @@ struct BenchmarkData {
 	component_writes: Vec<ComponentSlope>,
 }
 
-#[derive(Serialize, Debug)]
+// This encodes the component name and whether that component is used.
+#[derive(Serialize, Debug, Clone, Eq, PartialEq)]
 struct Component {
 	name: String,
 	is_used: bool,
 }
 
-#[derive(Serialize, Debug)]
+// This encodes the slope of some benchmark related to a component.
+#[derive(Serialize, Debug, Clone, Eq, PartialEq)]
 struct ComponentSlope {
 	name: String,
 	slope: u128,
 }
 
-pub fn open_file(path: PathBuf) -> Result<File, std::io::Error> {
-	OpenOptions::new()
-		.create(true)
-		.write(true)
-		.truncate(true)
-		.open(path)
-}
-
-fn error(s: &str) -> std::io::Error {
+// Small helper to create an `io::Error` from a string.
+fn io_error(s: &str) -> std::io::Error {
 	use std::io::{Error, ErrorKind};
 	Error::new(ErrorKind::Other, s)
 }
 
-fn consolidate_results(batches: &[BenchmarkBatch]) -> Result<Map<String, serde_json::Value>, std::io::Error> {
-	let mut all_benchmarks = Map::new();
-	let mut pallet_map = Map::new();
-
+// This function takes a list of `BenchmarkBatch` and organizes them by pallet into a `HashMap`.
+// So this: `[(p1, b1), (p1, b2), (p1, b3), (p2, b1), (p2, b2)]`
+// Becomes:
+//
+// ```
+// p1 -> [b1, b2, b3]
+// p2 -> [b1, b2]
+// ```
+fn map_results(batches: &[BenchmarkBatch]) -> Result<HashMap<String, HashMap<String, BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
-	if batches.is_empty() { return Err(error("empty batches")) }
+	if batches.is_empty() { return Err(io_error("empty batches")) }
+
+	let mut all_benchmarks = HashMap::new();
+	let mut pallet_map = HashMap::new();
 
 	let mut batches_iter = batches.iter().peekable();
-
 	while let Some(batch) = batches_iter.next() {
 		// Skip if there are no results
 		if batch.results.is_empty() { continue }
@@ -90,26 +99,27 @@ fn consolidate_results(batches: &[BenchmarkBatch]) -> Result<Map<String, serde_j
 		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
 
 		let benchmark_data = get_benchmark_data(batch);
-		pallet_map.insert(benchmark_string, serde_json::to_value(&benchmark_data)?);
+		pallet_map.insert(benchmark_string, benchmark_data);
 
 		// Check if this is the end of the iterator
 		if let Some(next) = batches_iter.peek() {
 			// Next pallet is different than current pallet, save and create new data.
 			let next_pallet = String::from_utf8(next.pallet.clone()).unwrap();
 			if next_pallet != pallet_string {
-				all_benchmarks.insert(pallet_string, pallet_map.clone().into());
-				pallet_map = Map::new();
+				all_benchmarks.insert(pallet_string, pallet_map.clone());
+				pallet_map = HashMap::new();
 			}
 		} else {
 			// This is the end of the iterator, so push the final data.
-			all_benchmarks.insert(pallet_string, pallet_map.clone().into());
+			all_benchmarks.insert(pallet_string, pallet_map.clone());
 		}
 	}
 	Ok(all_benchmarks)
 }
 
+// Analyze and return the relevant results for a given benchmark.
 fn get_benchmark_data(batch: &BenchmarkBatch) -> BenchmarkData {
-	// Analysis results
+	// Analyze benchmarks to get the linear regression.
 	let extrinsic_time = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
 	let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
 	let writes = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes).unwrap();
@@ -142,6 +152,7 @@ fn get_benchmark_data(batch: &BenchmarkBatch) -> BenchmarkData {
 		}
 	});
 
+	// This puts a marker on any component which is entirely unused in the weight formula.
 	let components = batch.results[0].components
 		.iter()
 		.map(|(name, _)| -> Component {
@@ -154,7 +165,7 @@ fn get_benchmark_data(batch: &BenchmarkBatch) -> BenchmarkData {
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
 		components,
-		base_extrinsic_weight: extrinsic_time.base.saturating_mul(1000),
+		base_weight: extrinsic_time.base.saturating_mul(1000),
 		base_reads: reads.base,
 		base_writes: writes.base,
 		component_weight: used_extrinsic_time,
@@ -163,70 +174,24 @@ fn get_benchmark_data(batch: &BenchmarkBatch) -> BenchmarkData {
 	}
 }
 
-
-
-pub fn write_trait(
-	batches: &[BenchmarkBatch],
-	path: &PathBuf,
-	cmd: &BenchmarkCmd,
-) -> Result<(), std::io::Error> {
-	let mut file_path = path.clone();
-	file_path.push("trait");
-	file_path.set_extension("rs");
-	let mut file = crate::writer::open_file(file_path)?;
-
-	let indent = if cmd.spaces {"    "} else {"\t"};
-
-	let mut current_pallet = Vec::<u8>::new();
-
-	// Skip writing if there are no batches
-	if batches.is_empty() { return Ok(()) }
-
-	for batch in batches {
-		// Skip writing if there are no results
-		if batch.results.is_empty() { continue }
-
-		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
-		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
-
-		// only create new trait definitions when we go to a new pallet
-		if batch.pallet != current_pallet {
-			if !current_pallet.is_empty() {
-				// close trait
-				write!(file, "}}\n")?;
-			}
-
-			// trait wrapper
-			write!(file, "// {}\n", pallet_string)?;
-			write!(file, "pub trait {} {{\n", cmd.r#trait)?;
-
-			current_pallet = batch.pallet.clone()
-		}
-
-		// function name
-		write!(file, "{}fn {}(", indent, benchmark_string)?;
-
-		// params
-		let components = &batch.results[0].components;
-		for component in components {
-			write!(file, "{:?}: u32, ", component.0)?;
-		}
-		// return value
-		write!(file, ") -> Weight;\n")?;
-	}
-
-	// final close trait
-	write!(file, "}}\n")?;
-
-	Ok(())
-}
-
+// Create weight file from benchmark data and Handlebars template.
 pub fn write_results(
 	batches: &[BenchmarkBatch],
 	path: &PathBuf,
 	cmd: &BenchmarkCmd,
 ) -> Result<(), std::io::Error> {
+	// Use custom template if provided.
+	let template: String = match &cmd.template {
+		Some(template_file) => {
+			fs::read_to_string(template_file)?
+		},
+		None => {
+			println!("Trying default template");
+			TEMPLATE.to_string()
+		},
+	};
 
+	// Use header if provided
 	let header_text = match &cmd.header {
 		Some(header_file) => {
 			let text = fs::read_to_string(header_file)?;
@@ -237,54 +202,42 @@ pub fn write_results(
 
 	let date = chrono::Utc::now();
 
-	let all_results = consolidate_results(batches)?;
+	// Full CLI args passed to trigger the benchmark.
+	let args = std::env::args().collect::<Vec<String>>();
 
+	// New Handlebars instance with helpers.
+	let mut handlebars = handlebars::Handlebars::new();
+	handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
+	handlebars.register_helper("join", Box::new(JoinHelper));
+
+	// Organize results by pallet into a JSON map
+	let all_results = map_results(batches)?;
 	for (pallet, results) in all_results.iter() {
-
-		// Write File Using Template
+		// Create new file: "path/to/pallet_name.rs".
 		let mut file_path = path.clone();
 		file_path.push(pallet);
 		file_path.set_extension("rs");
 
-		let mut handlebars = Handlebars::new();
-		// Helper to add underscore separation to numbers
-		handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
-		let mut template: String = match &cmd.handlebar_template {
-			Some(template_file) => {
-				fs::read_to_string(template_file)?
-			},
-			None => {
-				println!("Trying default template");
-				TEMPLATE.to_string()
-			},
+
+		let hbs_data = TemplateData {
+			args: args.clone(),
+			date: date.format("%Y-%m-%d").to_string(),
+			version: VERSION.to_string(),
+			pallet: pallet.clone(),
+			header: header_text.clone().unwrap_or(String::new()),
+			benchmarks: results.clone(),
 		};
 
-		let mut hbs_data = Map::new();
-		hbs_data.insert("args".to_string(), to_json(args_strings()));
-		hbs_data.insert("date".to_string(), to_json(date.format("%Y-%m-%d").to_string()));
-		hbs_data.insert("version".to_string(), to_json(VERSION.to_string()));
-		hbs_data.insert("pallet".to_string(), to_json(pallet));
-		hbs_data.insert("header".to_string(), to_json(header_text.clone()));
-		hbs_data.insert("benchmark_results".to_string(), results.clone());
-
-
-		let mut output_file = File::create(file_path)?;
-		println!("{:#?}", hbs_data);
-		match handlebars.render_template_to_write(&mut template, &hbs_data, &mut output_file){
+		let mut output_file = fs::File::create(file_path)?;
+		match handlebars.render_template_to_write(&template, &hbs_data, &mut output_file){
 			Ok(_)  => println!("Write file using template"),
 			Err(e) => println!("Error: {}", e),
 		};
 	}
-
 	Ok(())
 }
 
-// Return the exact CLI arguments as a vector of strings.
-fn args_strings() -> Vec<String> {
-	std::env::args().collect::<Vec<String>>()
-}
-
-// Add an underscore after every 3rd character, i.e. separator for large numbers.
+// Add an underscore after every 3rd character, i.e. a separator for large numbers.
 fn underscore<Number>(i: Number) -> String
 	where Number: std::string::ToString
 {
@@ -300,7 +253,8 @@ fn underscore<Number>(i: Number) -> String
 	s
 }
 
-// implement by a structure impls HelperDef
+// A Handlebars helper to add an underscore after every 3rd character,
+// i.e. a separator for large numbers.
 #[derive(Clone, Copy)]
 struct UnderscoreHelper;
 impl handlebars::HelperDef for UnderscoreHelper {
@@ -311,9 +265,38 @@ impl handlebars::HelperDef for UnderscoreHelper {
 		_rc: &mut handlebars::RenderContext,
 		out: &mut dyn handlebars::Output
 	) -> handlebars::HelperResult {
+		use handlebars::JsonRender;
 		let param = h.param(0).unwrap();
-		let underscore_param = underscore(param.value());
+		let underscore_param = underscore(param.value().render());
 		out.write(&underscore_param)?;
+		Ok(())
+	}
+}
+
+// A helper to join a string of vectors.
+#[derive(Clone, Copy)]
+struct JoinHelper;
+impl handlebars::HelperDef for JoinHelper {
+	fn call<'reg: 'rc, 'rc>(
+		&self, h: &handlebars::Helper,
+		_: &handlebars::Handlebars,
+		_: &handlebars::Context,
+		_rc: &mut handlebars::RenderContext,
+		out: &mut dyn handlebars::Output
+	) -> handlebars::HelperResult {
+		use handlebars::JsonRender;
+		let param = h.param(0).unwrap();
+		let value = param.value();
+		let joined = if value.is_array() {
+			value.as_array().unwrap()
+				.iter()
+				.map(|v| v.render())
+				.collect::<Vec<String>>()
+				.join(" ")
+		} else {
+			value.render()
+		};
+		out.write(&joined)?;
 		Ok(())
 	}
 }
@@ -348,10 +331,66 @@ mod test {
 	}
 
 	#[test]
-	fn consolidate_results_works() {
-		assert!(consolidate_results(&[
+	fn map_results_works() {
+		let mapped_results = map_results(&[
 			test_data(b"first".to_vec(), BenchmarkParameter::a, 10, 3),
 			test_data(b"second".to_vec(), BenchmarkParameter::b, 3, 4),
-		]).is_ok());
+		]).unwrap();
+
+		let first_benchmark = mapped_results.get("first_pallet").unwrap().get("first_name").unwrap();
+
+		assert_eq!(first_benchmark.name, "first_name");
+		assert_eq!(
+			first_benchmark.components,
+			vec![
+				Component { name: "a".to_string(), is_used: true },
+				Component { name: "z".to_string(), is_used: false},
+			],
+		);
+		// Weights multiplied by 1,000
+		assert_eq!(first_benchmark.base_weight, 10_000);
+		assert_eq!(
+			first_benchmark.component_weight,
+			vec![ComponentSlope { name: "a".to_string(), slope: 3_000 }]
+		);
+		// DB Reads/Writes are untouched
+		assert_eq!(first_benchmark.base_reads, 10);
+		assert_eq!(
+			first_benchmark.component_reads,
+			vec![ComponentSlope { name: "a".to_string(), slope: 3 }]
+		);
+		assert_eq!(first_benchmark.base_writes, 10);
+		assert_eq!(
+			first_benchmark.component_writes,
+			vec![ComponentSlope { name: "a".to_string(), slope: 3 }]
+		);
+
+		let second_benchmark = mapped_results.get("second_pallet").unwrap().get("second_name").unwrap();
+
+		assert_eq!(second_benchmark.name, "second_name");
+		assert_eq!(
+			second_benchmark.components,
+			vec![
+				Component { name: "b".to_string(), is_used: true },
+				Component { name: "z".to_string(), is_used: false},
+			],
+		);
+		// Weights multiplied by 1,000
+		assert_eq!(second_benchmark.base_weight, 3_000);
+		assert_eq!(
+			second_benchmark.component_weight,
+			vec![ComponentSlope { name: "b".to_string(), slope: 4_000 }]
+		);
+		// DB Reads/Writes are untouched
+		assert_eq!(second_benchmark.base_reads, 3);
+		assert_eq!(
+			second_benchmark.component_reads,
+			vec![ComponentSlope { name: "b".to_string(), slope: 4 }]
+		);
+		assert_eq!(second_benchmark.base_writes, 3);
+		assert_eq!(
+			second_benchmark.component_writes,
+			vec![ComponentSlope { name: "b".to_string(), slope: 4 }]
+		);
 	}
 }

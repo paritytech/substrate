@@ -1,6 +1,6 @@
-{{header}}
+{{{header}}}
 //! Weights for {{pallet}}
-//! {{{args}}}
+//! {{join args}}
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {{version}}
 //! DATE: {{date}}, STEPS: {{steps}}, REPEAT: {{repeat}}, LOW RANGE: {{lowest_range_values}}, HIGH RANGE: {{highest_range_values}}
 
@@ -10,28 +10,38 @@
 use frame_support::{traits::Get, weights::Weight};
 use sp_std::marker::PhantomData;
 
-pub struct {{struct_name}}<T>(PhantomData<T>);
-impl<T: frame_system::Trait> {{pallet_string}}::{{trait_name}} for {{struct_name}}<T> {
-	{{#each benchmark_results as |br| ~}}
-	fn {{br.name~}}
+pub trait WeightInfo {
+	{{#each benchmarks as |benchmark| ~}}
+	fn {{benchmark.name~}}
 	(
-		{{~#each br.components as |c| ~}}
-		{{~#if (not c.is_used)}}_{{/if}}{{c.name}} :u32, {{/each~}}
+		{{~#each benchmark.components as |c| ~}}
+		_{{c.name}}: u32, {{/each~}}
+	) -> Weight;
+	{{/each}}
+}
+
+pub struct WeightInfo<T>(PhantomData<T>);
+impl<T: frame_system::Trait> {{pallet}}::WeightInfo for WeightInfo<T> {
+	{{#each benchmarks as |benchmark| ~}}
+	fn {{benchmark.name~}}
+	(
+		{{~#each benchmark.components as |c| ~}}
+		{{~#if (not c.is_used)}}_{{/if}}{{c.name}}: u32, {{/each~}}
 	) -> Weight {
-		({{underscore br.base_extrinsic_weight}} as Weight)
-			{{#each br.component_weight as |cw| ~}}
+		({{underscore benchmark.base_weight}} as Weight)
+			{{#each benchmark.component_weight as |cw| ~}}
 			.saturating_add(({{underscore cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight))
 			{{/each}}
-			{{~#if (ne br.base_reads 0) ~}}
-			.saturating_add(T::DbWeight::get().reads({{br.base_reads}} as Weight))
+			{{~#if (ne benchmark.base_reads 0) ~}}
+			.saturating_add(T::DbWeight::get().reads({{benchmark.base_reads}} as Weight))
 			{{/if}}
-			{{~#each br.component_reads as |cr| ~}}
+			{{~#each benchmark.component_reads as |cr| ~}}
 			.saturating_add(T::DbWeight::get().reads(({{cr.slope}} as Weight).saturating_mul({{cr.name}} as Weight)))
 			{{/each}}
-			{{~#if (ne br.base_writes 0) ~}}
-			.saturating_add(T::DbWeight::get().writes({{br.base_writes}} as Weight))
+			{{~#if (ne benchmark.base_writes 0) ~}}
+			.saturating_add(T::DbWeight::get().writes({{benchmark.base_writes}} as Weight))
 			{{/if}}
-			{{~#each br.component_writes as |cw| ~}}
+			{{~#each benchmark.component_writes as |cw| ~}}
 			.saturating_add(T::DbWeight::get().writes(({{cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight)))
 			{{~/each}}
 	}
