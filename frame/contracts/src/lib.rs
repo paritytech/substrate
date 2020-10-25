@@ -118,7 +118,7 @@ use frame_support::{
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 };
 use frame_system::{ensure_signed, ensure_root};
-use pallet_contracts_primitives::{RentProjection, ContractAccessError};
+use pallet_contracts_primitives::{RentProjectionResult, GetStorageResult, ContractAccessError};
 use frame_support::weights::Weight;
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
@@ -650,10 +650,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Query storage of a specified contract under a specified key.
-	pub fn get_storage(
-		address: T::AccountId,
-		key: [u8; 32],
-	) -> sp_std::result::Result<Option<Vec<u8>>, ContractAccessError> {
+	pub fn get_storage(address: T::AccountId, key: [u8; 32]) -> GetStorageResult {
 		let contract_info = ContractInfoOf::<T>::get(&address)
 			.ok_or(ContractAccessError::DoesntExist)?
 			.get_alive()
@@ -663,9 +660,7 @@ impl<T: Trait> Module<T> {
 		Ok(maybe_value)
 	}
 
-	pub fn rent_projection(
-		address: T::AccountId,
-	) -> sp_std::result::Result<RentProjection<T::BlockNumber>, ContractAccessError> {
+	pub fn rent_projection(address: T::AccountId) -> RentProjectionResult<T::BlockNumber> {
 		rent::compute_rent_projection::<T>(&address)
 	}
 
