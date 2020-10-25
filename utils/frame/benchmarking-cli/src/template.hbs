@@ -11,16 +11,6 @@
 use frame_support::{traits::Get, weights::Weight};
 use sp_std::marker::PhantomData;
 
-pub trait WeightInfo {
-	{{#each benchmarks as |benchmark| ~}}
-	fn {{benchmark.name~}}
-	(
-		{{~#each benchmark.components as |c| ~}}
-		_{{c.name}}: u32, {{/each~}}
-	) -> Weight;
-	{{/each}}
-}
-
 pub struct WeightInfo<T>(PhantomData<T>);
 impl<T: frame_system::Trait> {{pallet}}::WeightInfo for WeightInfo<T> {
 	{{#each benchmarks as |benchmark| ~}}
