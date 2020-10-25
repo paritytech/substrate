@@ -57,7 +57,6 @@ where
 		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
 		enable_mdns: false,
-		use_yamux_flow_control: true,
 	};
 
 	let config = Configuration {
@@ -105,7 +104,6 @@ where
 		base_path: None,
 		informant_output_format: sc_informant::OutputFormat {
 			enable_color: false,
-			prefix: String::new(),
 		},
 	};
 

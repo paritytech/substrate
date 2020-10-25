@@ -20,6 +20,7 @@ use crate::worker::schema;
 
 use std::{iter::FromIterator, sync::{Arc, Mutex}, task::Poll};
 
+use async_trait::async_trait;
 use futures::channel::mpsc::{self, channel};
 use futures::executor::{block_on, LocalPool};
 use futures::future::FutureExt;
@@ -213,8 +214,9 @@ impl Default for TestNetwork {
 	}
 }
 
+#[async_trait]
 impl NetworkProvider for TestNetwork {
-	fn set_priority_group(
+	async fn set_priority_group(
 		&self,
 		group_id: String,
 		peers: HashSet<Multiaddr>,
@@ -424,7 +426,7 @@ fn publish_discover_cycle() {
 		// Make authority discovery handle the event.
 		worker.handle_dht_event(dht_event).await;
 
-		worker.set_priority_group().unwrap();
+		worker.set_priority_group().await.unwrap();
 
 		// Expect authority discovery to set the priority set.
 		assert_eq!(network.set_priority_group_call.lock().unwrap().len(), 1);
@@ -623,7 +625,7 @@ fn never_add_own_address_to_priority_group() {
 	sentry_worker.start_new_lookups();
 
 	sentry_worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
-	sentry_worker.set_priority_group().unwrap();
+	block_on(sentry_worker.set_priority_group()).unwrap();
 
 	assert_eq!(
 		sentry_network.set_priority_group_call.lock().unwrap().len(), 1,
