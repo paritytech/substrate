@@ -97,7 +97,6 @@ use crate::exec::ExecutionContext;
 use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
-pub use crate::exec::{ExecResult, ExecReturnValue};
 pub use crate::wasm::ReturnCode as RuntimeReturnCode;
 pub use crate::weight_info::WeightInfo;
 pub use crate::schedule::{Schedule, HostFnWeights, InstructionWeights};
@@ -118,7 +117,9 @@ use frame_support::{
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 };
 use frame_system::{ensure_signed, ensure_root};
-use pallet_contracts_primitives::{RentProjectionResult, GetStorageResult, ContractAccessError};
+use pallet_contracts_primitives::{
+	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult, ExecResult,
+};
 use frame_support::weights::Weight;
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
@@ -639,14 +640,16 @@ impl<T: Trait> Module<T> {
 		value: BalanceOf<T>,
 		gas_limit: Gas,
 		input_data: Vec<u8>,
-	) -> (ExecResult, Gas) {
+	) -> ContractExecResult {
 		let mut gas_meter = GasMeter::new(gas_limit);
-		(
-			Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
-				ctx.call(dest, value, gas_meter, input_data)
-			}),
-			gas_meter.gas_spent(),
-		)
+		let exec_result = Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
+			ctx.call(dest, value, gas_meter, input_data)
+		});
+		let gas_consumed = gas_meter.gas_spent();
+		ContractExecResult {
+			exec_result,
+			gas_consumed,
+		}
 	}
 
 	/// Query storage of a specified contract under a specified key.

@@ -19,7 +19,6 @@ use crate::{
 	TrieId, BalanceOf, ContractInfo, TrieIdGenerator,
 	gas::GasMeter, rent, storage, Error, ContractInfoOf
 };
-use bitflags::bitflags;
 use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, Zero, Convert, Saturating};
 use frame_support::{
@@ -28,6 +27,7 @@ use frame_support::{
 	weights::Weight,
 	ensure, StorageMap,
 };
+use pallet_contracts_primitives::{ErrorOrigin, ExecError, ExecReturnValue, ExecResult, ReturnFlags};
 
 pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
 pub type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
@@ -38,14 +38,6 @@ pub type StorageKey = [u8; 32];
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as frame_system::Trait>::Hash;
 
-bitflags! {
-	/// Flags used by a contract to customize exit behaviour.
-	pub struct ReturnFlags: u32 {
-		/// If this bit is set all changes made by the contract exection are rolled back.
-		const REVERT = 0x0000_0001;
-	}
-}
-
 /// Describes whether we deal with a contract or a plain account.
 pub enum TransactorKind {
 	/// Transaction was initiated from a plain account. That can be either be through a
@@ -54,56 +46,6 @@ pub enum TransactorKind {
 	/// The call was initiated by a contract account.
 	Contract,
 }
-
-/// Output of a contract call or instantiation which ran to completion.
-#[cfg_attr(test, derive(PartialEq, Eq, Debug))]
-pub struct ExecReturnValue {
-	/// Flags passed along by `seal_return`. Empty when `seal_return` was never called.
-	pub flags: ReturnFlags,
-	/// Buffer passed along by `seal_return`. Empty when `seal_return` was never called.
-	pub data: Vec<u8>,
-}
-
-impl ExecReturnValue {
-	/// We understand the absense of a revert flag as success.
-	pub fn is_success(&self) -> bool {
-		!self.flags.contains(ReturnFlags::REVERT)
-	}
-}
-
-/// Call or instantiate both call into other contracts and pass through errors happening
-/// in those to the caller. This enum is for  the caller to distinguish whether the error
-/// happened during the execution of the callee or in the current execution context.
-#[cfg_attr(test, derive(PartialEq, Eq, Debug))]
-pub enum ErrorOrigin {
-	/// The error happened in the current exeuction context rather than in the one
-	/// of the contract that is called into.
-	Caller,
-	/// The error happened during execution of the called contract.
-	Callee,
-}
-
-/// Error returned by contract exection.
-#[cfg_attr(test, derive(PartialEq, Eq, Debug))]
-pub struct ExecError {
-	/// The reason why the execution failed.
-	pub error: DispatchError,
-	/// Origin of the error.
-	pub origin: ErrorOrigin,
-}
-
-impl<T: Into<DispatchError>> From<T> for ExecError {
-	fn from(error: T) -> Self {
-		Self {
-			error: error.into(),
-			origin: ErrorOrigin::Caller,
-		}
-	}
-}
-
-/// The result that is returned from contract execution. It either contains the output
-/// buffer or an error describing the reason for failure.
-pub type ExecResult = Result<ExecReturnValue, ExecError>;
 
 /// An interface that provides access to the external environment in which the
 /// smart-contract is executed.
