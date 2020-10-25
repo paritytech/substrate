@@ -45,7 +45,7 @@ impl BenchmarkCmd {
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
 				return Err("Output file or path is invalid!".into())
-			};
+			}
 		}
 
 		if let Some(header_file) = &self.header {

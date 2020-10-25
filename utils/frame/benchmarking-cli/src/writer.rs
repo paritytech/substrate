@@ -242,7 +242,7 @@ pub fn write_results(
 	for (pallet, results) in all_results.into_iter() {
 		// Create new file: "path/to/pallet_name.rs".
 		let mut file_path = path.clone();
-		if file_path.file_name().is_none() {
+		if file_path.is_dir() {
 			file_path.push(&pallet);
 			file_path.set_extension("rs");
 		}
