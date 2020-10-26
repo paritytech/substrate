@@ -774,7 +774,7 @@ impl BranchNodes {
 }
 
 impl NodeStorage<Option<Vec<u8>>, u64, LinearBackendInner, MetaBlocks> for BlockNodes {
-	fn get_node(&self, reference_key: &[u8], relative_index: u64) -> Option<LinearNode> {
+	fn get_node(&self, reference_key: &[u8], relative_index: u32) -> Option<LinearNode> {
 		let key = Self::vec_address(reference_key, relative_index);
 		self.0.read(crate::columns::AUX, &key).and_then(|value| {
 			// use encoded len as size (this is bigger than the call to estimate size
@@ -791,12 +791,12 @@ impl NodeStorage<Option<Vec<u8>>, u64, LinearBackendInner, MetaBlocks> for Block
 }
 
 impl NodeStorageMut<Option<Vec<u8>>, u64, LinearBackendInner, MetaBlocks> for BlockNodes {
-	fn set_node(&mut self, reference_key: &[u8], relative_index: u64, node: &LinearNode) {
+	fn set_node(&mut self, reference_key: &[u8], relative_index: u32, node: &LinearNode) {
 		let key = Self::vec_address(reference_key, relative_index);
 		let encoded = node.inner().encode();
 		self.0.write(key, encoded);
 	}
-	fn remove_node(&mut self, reference_key: &[u8], relative_index: u64) {
+	fn remove_node(&mut self, reference_key: &[u8], relative_index: u32) {
 		let key = Self::vec_address(reference_key, relative_index);
 		self.0.remove(key);
 	}
