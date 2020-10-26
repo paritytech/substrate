@@ -1171,7 +1171,6 @@ pub type TreeManagement<H, S> = historied_db::management::tree::TreeManagement<
 	H,
 	u32,
 	u32,
-	Option<Vec<u8>>, // TODO really need removal from type (only for neutral elt).
 	S,
 >;
 
@@ -1180,7 +1179,6 @@ pub type RegisteredConsumer<H, S> = historied_db::management::tree::RegisteredCo
 	H,
 	u32,
 	u32,
-	Option<Vec<u8>>,
 	S,
 >;
 

@@ -73,8 +73,7 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 		H: Ord + Clone + Codec + Send + Sync + 'static,
 		S: TreeManagementStorage + 'static,
 {
-	// TODO remove result?
-	fn migrate(&self, migrate: &mut historied_db::Migrate<H, crate::TreeManagement<H, S>>) -> Option<Vec<Vec<u8>>> {
+	fn migrate(&self, migrate: &mut historied_db::Migrate<H, crate::TreeManagement<H, S>>) {
 		let mut keys = std::collections::BTreeSet::<Vec<u8>>::new();
 		let (prune, changes) = migrate.migrate().touched_state();
 		// this db is transactional.
@@ -97,7 +96,7 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 		}
 
 		if keys.is_empty() {
-			return None;
+			return;
 		}
 
 		let block_nodes = BlockNodes::new(self.storage.db.clone());
@@ -127,7 +126,8 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 
 			let mut new_value = histo;
 			use historied_db::historied::Value;
-			match new_value.migrate(migrate.migrate()) {
+			let neutral = None;
+			match new_value.migrate(migrate.migrate(), Some(&neutral)) {
 				historied_db::UpdateResult::Changed(()) => {
 					use historied_db::Trigger;
 					new_value.trigger_flush();
@@ -144,7 +144,6 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 
 		block_nodes.apply_transaction(&mut pending);
 		branch_nodes.apply_transaction(&mut pending);
-		None
 	}
 }
 

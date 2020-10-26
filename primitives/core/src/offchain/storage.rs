@@ -54,7 +54,7 @@ pub type InMemHValue = Tree<u32, u32, Option<Vec<u8>>, InMemTreeBackend, InMemLi
 pub struct BlockChainInMemOffchainStorage<Hash: Ord> {
 	// Note that we could parameterized over historied management here.
 	// Also could remove inner mutability if changing historied db simple db trait.
-	historied_management: Arc<RwLock<TreeManagement<Hash, u32, u32, Option<Vec<u8>>, ()>>>,
+	historied_management: Arc<RwLock<TreeManagement<Hash, u32, u32, ()>>>,
 	storage: Arc<RwLock<HashMap<Vec<u8>, InMemHValue>>>,
 }
 
