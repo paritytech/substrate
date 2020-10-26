@@ -40,14 +40,14 @@ pub struct LocalStorage {
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
 }
 
-type ChangesJournal = historied_db::management::JournalForMigrationBasis<
+type ChangesJournal<Db> = historied_db::management::JournalForMigrationBasis<
 	(u32, u32),
 	Vec<u8>,
-	historied_db::simple_db::SerializeDBDyn,
+	Db,
 	crate::historied_tree_bindings::LocalOffchainDelete,
 >;
 
-pub(crate) type ChangesJournalSync = Arc<Mutex<ChangesJournal>>;
+pub(crate) type ChangesJournalSync = Arc<Mutex<ChangesJournal<historied_db::simple_db::SerializeDBDyn>>>;
 
 /// Offchain local storage with blockchain historied storage.
 #[derive(Clone)]
@@ -59,25 +59,92 @@ pub struct BlockChainLocalStorage<H: Ord, S: TreeManagementStorage> {
 	changes_journals: ChangesJournalSync,
 }
 
+/// For migration this will update a pending change layer to support
+/// transaction.
+pub struct TransactionalConsumer<H: Ord, S: TreeManagementStorage> {
+	/// Storage to use.
+	pub storage: BlockChainLocalStorage<H, S>,
+	/// Transaction to update on migrate.
+	pub pending: Arc<RwLock<Transaction<DbHash>>>,
+}
 
-impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement<H, S>> for BlockChainLocalStorage<H, S>
+impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement<H, S>> for TransactionalConsumer<H, S>
 	where
 		H: Ord + Clone + Codec + Send + Sync + 'static,
 		S: TreeManagementStorage + 'static,
 {
+	// TODO remove result?
 	fn migrate(&self, migrate: &mut historied_db::Migrate<H, crate::TreeManagement<H, S>>) -> Option<Vec<Vec<u8>>> {
-		let mut keys = std::collections::BTreeSet::new();
-		for state in migrate.touched_state() {
-			// this db is transactional.
-			let db = migrate.inner_storage();
-			for key in self.changes_journals.lock().remove_changes_at(db, state) {
-				keys.insert(key);
+		let mut keys = std::collections::BTreeSet::<Vec<u8>>::new();
+		let (prune, changes) = migrate.migrate().touched_state();
+		// this db is transactional.
+		let db = migrate.management().ser();
+		// using a new instance (transactional db is a different type).
+		// This means some ununsed cache state can remain.
+		let mut journals = ChangesJournal::from_db(db);
+		if let Some(pruning) = prune {
+			journals.remove_changes_before(db, &(pruning, Default::default()), &mut keys);
+		}
+
+		for state in changes {
+			let state = state.clone();
+			let state = (state.1, state.0);
+			if let Some(removed) = journals.remove_changes_at(db, &state) {
+				for key in removed {
+					keys.insert(key);
+				}
 			}
 		}
-		unimplemented!();
-		for key in keys {
-			// do migrate
+
+		if keys.is_empty() {
+			return None;
 		}
+
+		let block_nodes = BlockNodes::new(self.storage.db.clone());
+		let branch_nodes = BranchNodes::new(self.storage.db.clone());
+
+		let mut pending = self.pending.write();
+		for k in keys {
+			let column = crate::columns::OFFCHAIN;
+			let init_nodes = ContextHead {
+				key: k.clone(),
+				backend: block_nodes.clone(),
+				node_init_from: (),
+			};
+			let init = ContextHead {
+				key: k.clone(),
+				backend: branch_nodes.clone(),
+				node_init_from: init_nodes.clone(),
+			};
+
+			let k = k.as_slice();
+			let histo: HValue = if let Some(histo) = self.storage.db.get(column, k) {
+				historied_db::DecodeWithContext::decode_with_context(&mut &histo[..], &(init.clone(), init_nodes.clone()))
+					.expect("Bad encoded value in db, closing")
+			} else {
+				continue;
+			};
+
+			let mut new_value = histo;
+			use historied_db::historied::Value;
+			match new_value.migrate(migrate.migrate()) {
+				historied_db::UpdateResult::Changed(()) => {
+					use historied_db::Trigger;
+					new_value.trigger_flush();
+					pending.set_from_vec(column, k, new_value.encode());
+				},
+				historied_db::UpdateResult::Cleared(()) => {
+					use historied_db::Trigger;
+					new_value.trigger_flush();
+					pending.remove(column, k);
+				},
+				historied_db::UpdateResult::Unchanged => (),
+			}
+		}
+
+		block_nodes.apply_transaction(&mut pending);
+		branch_nodes.apply_transaction(&mut pending);
+		None
 	}
 }
 
@@ -567,9 +634,12 @@ impl BlockChainLocalAt {
 						| UpdateResult::Cleared(()) => {
 							if !self.skip_journalize {
 								use std::ops::DerefMut;
+								let at_write = at_write.latest().clone();
+								// Needed for encoded ordering against block index
+								let at_write = (at_write.1, at_write.0);
 								self.changes_journals.lock().add_changes(
 									self.ordered_db.lock().deref_mut(),
-									at_write.latest().clone(),
+									at_write,
 									vec![key.clone()],
 									false,
 								)

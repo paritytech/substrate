@@ -1171,7 +1171,7 @@ pub type TreeManagement<H, S> = historied_db::management::tree::TreeManagement<
 	H,
 	u32,
 	u32,
-	Vec<u8>,
+	Option<Vec<u8>>, // TODO really need removal from type (only for neutral elt).
 	S,
 >;
 
@@ -1180,7 +1180,7 @@ pub type RegisteredConsumer<H, S> = historied_db::management::tree::RegisteredCo
 	H,
 	u32,
 	u32,
-	Vec<u8>,
+	Option<Vec<u8>>,
 	S,
 >;
 
@@ -1212,6 +1212,7 @@ pub struct Backend<Block: BlockT> {
 		<HashFor<Block> as Hasher>::Out,
 		TreeManagementPersistence,
 	>,
+	historied_management_consumer_transaction: Arc<RwLock<Transaction<DbHash>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1298,7 +1299,14 @@ impl<Block: BlockT> Backend<Block> {
 			<HashFor<Block> as Hasher>::Out,
 			TreeManagementPersistence,
 		> = Default::default();
-		historied_management_consumer.register_consumer(Box::new(offchain_local_storage.clone()));
+		let historied_management_consumer_transaction = Arc::new(RwLock::new(
+			Default::default()
+		));
+		historied_management_consumer.register_consumer(Box::new(
+			offchain::TransactionalConsumer {
+				storage: offchain_local_storage.clone(),
+				pending: historied_management_consumer_transaction.clone(),
+			}));
 		Ok(Backend {
 			storage: Arc::new(storage_db),
 			offchain_storage,
@@ -1317,6 +1325,7 @@ impl<Block: BlockT> Backend<Block> {
 			historied_management,
 			historied_next_finalizable: Arc::new(RwLock::new(None)),
 			historied_management_consumer,
+			historied_management_consumer_transaction,
 		})
 	}
 
@@ -1889,16 +1898,15 @@ impl<Block: BlockT> Backend<Block> {
 			// (composite index).
 			// TODO need recheck
 			self.historied_management.write().canonicalize(path, switch_index, prune_index);
-			// TODO EMCH do migrate data
-
-
+			// do migrate data
+			self.historied_management_consumer.migrate(&mut *self.historied_management.write());
 		} else {
 			return Err(ClientError::UnknownBlock("Missing in historied management".to_string()));
 		}
 
 		// flush historied management changes
 		let pending = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
-		let mut transaction = Transaction::new();
+		let mut transaction = std::mem::replace(&mut *self.historied_management_consumer_transaction.write(), Default::default());
 		// TODO this is duplicated code: put in a function
 		for (col, (mut changes, dropped)) in pending {
 			if dropped {
