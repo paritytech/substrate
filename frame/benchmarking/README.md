@@ -168,14 +168,14 @@ Then you can run a benchmark like so:
 
 ```bash
 ./target/release/substrate benchmark \
-    --chain dev \                      # Configurable Chain Spec
-    --execution=wasm \                 # Always test with Wasm
-    --wasm-execution=compiled \        # Always used `wasm-time`
-    --pallet pallet_balances \         # Select the pallet
-    --extrinsic transfer \             # Select the extrinsic
-    --steps 50 \                       # Number of samples across component ranges
-    --repeat 20 \                      # Number of times we repeat a benchmark
-    --output path/to/folder \          # Output benchmark results into a Rust file
+    --chain dev \                  # Configurable Chain Spec
+    --execution=wasm \             # Always test with Wasm
+    --wasm-execution=compiled \    # Always used `wasm-time`
+    --pallet pallet_balances \     # Select the pallet
+    --extrinsic transfer \         # Select the extrinsic
+    --steps 50 \                   # Number of samples across component ranges
+    --repeat 20 \                  # Number of times we repeat a benchmark
+    --output <path> \              # Output benchmark results into a folder or file
 ```
 
 This will output a file `pallet_name.rs` which implements the `WeightInfo` trait you should include
@@ -187,8 +187,15 @@ requirements.
 The benchmarking CLI uses a Handlebars template to format the final output file. You can optionally
 pass the flag `--template` pointing to a custom template that can be used instead. Within the
 template, you have access to all the data provided by the `TemplateData` struct in the
-[benchmarking CLI writer](../../utils/frame/benchmarking-cli/src/writer.rs). You can find the default
-template used [here](../../utils/frame/benchmarking-cli/src/template.hbs).
+[benchmarking CLI writer](../../utils/frame/benchmarking-cli/src/writer.rs). You can find the
+default template used [here](../../utils/frame/benchmarking-cli/src/template.hbs).
+
+There are some custom Handlebars helpers included with our output generation:
+
+* `underscore`: Add an underscore to every 3rd character from the right of a string. Primarily to be
+used for delimiting large numbers.
+* `join`: Join an array of strings into a space-separated string for the template. Primarily to be
+used for joining all the arguments passed to the CLI.
 
 To get a full list of available options when running benchmarks, run:
 
