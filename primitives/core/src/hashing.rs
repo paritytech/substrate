@@ -147,7 +147,7 @@ pub fn keccak_256(data: &[u8]) -> [u8; 32] {
 }
 
 /// Do a keccak 512-bit hash and return result.
-pub fn keccak_512(data: &[u8]) -> [u8; 32] {
+pub fn keccak_512(data: &[u8]) -> [u8; 64] {
 	let mut keccak = Keccak::v512();
 	keccak.update(data);
 	let mut output = [0u8; 64];
