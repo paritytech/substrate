@@ -331,7 +331,7 @@ mod test {
 	use super::*;
 	use frame_benchmarking::{BenchmarkBatch, BenchmarkParameter, BenchmarkResults};
 
-	fn test_data(name: Vec<u8>, param: BenchmarkParameter, base: u32, slope: u32) -> BenchmarkBatch {
+	fn test_data(pallet: &[u8], benchmark: &[u8], param: BenchmarkParameter, base: u32, slope: u32) -> BenchmarkBatch {
 		let mut results = Vec::new();
 		for i in 0 .. 5 {
 			results.push(
@@ -348,74 +348,57 @@ mod test {
 		}
 
 		return BenchmarkBatch {
-			pallet: [name.clone(), b"_pallet".to_vec()].concat(),
-			benchmark: [name, b"_name".to_vec()].concat(),
+			pallet: [pallet.to_vec(), b"_pallet".to_vec()].concat(),
+			benchmark: [benchmark.to_vec(), b"_benchmark".to_vec()].concat(),
 			results,
 		}
+	}
 
+	fn check_data(benchmark: &BenchmarkData, component: &str, base: u128, slope: u128) {
+		assert_eq!(
+			benchmark.components,
+			vec![
+				Component { name: component.to_string(), is_used: true },
+				Component { name: "z".to_string(), is_used: false},
+			],
+		);
+		// Weights multiplied by 1,000
+		assert_eq!(benchmark.base_weight, base * 1_000);
+		assert_eq!(
+			benchmark.component_weight,
+			vec![ComponentSlope { name: component.to_string(), slope: slope * 1_000 }]
+		);
+		// DB Reads/Writes are untouched
+		assert_eq!(benchmark.base_reads, base);
+		assert_eq!(
+			benchmark.component_reads,
+			vec![ComponentSlope { name: component.to_string(), slope: slope }]
+		);
+		assert_eq!(benchmark.base_writes, base);
+		assert_eq!(
+			benchmark.component_writes,
+			vec![ComponentSlope { name: component.to_string(), slope: slope }]
+		);
 	}
 
 	#[test]
 	fn map_results_works() {
 		let mapped_results = map_results(&[
-			test_data(b"first".to_vec(), BenchmarkParameter::a, 10, 3),
-			test_data(b"second".to_vec(), BenchmarkParameter::b, 3, 4),
+			test_data(b"first", b"first", BenchmarkParameter::a, 10, 3),
+			test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
+			test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
 		]).unwrap();
 
-		let first_benchmark = mapped_results.get("first_pallet").unwrap().get("first_name").unwrap();
+		let first_benchmark = &mapped_results.get("first_pallet").unwrap()[0];
+		assert_eq!(first_benchmark.name, "first_benchmark");
+		check_data(first_benchmark, "a", 10, 3);
 
-		assert_eq!(first_benchmark.name, "first_name");
-		assert_eq!(
-			first_benchmark.components,
-			vec![
-				Component { name: "a".to_string(), is_used: true },
-				Component { name: "z".to_string(), is_used: false},
-			],
-		);
-		// Weights multiplied by 1,000
-		assert_eq!(first_benchmark.base_weight, 10_000);
-		assert_eq!(
-			first_benchmark.component_weight,
-			vec![ComponentSlope { name: "a".to_string(), slope: 3_000 }]
-		);
-		// DB Reads/Writes are untouched
-		assert_eq!(first_benchmark.base_reads, 10);
-		assert_eq!(
-			first_benchmark.component_reads,
-			vec![ComponentSlope { name: "a".to_string(), slope: 3 }]
-		);
-		assert_eq!(first_benchmark.base_writes, 10);
-		assert_eq!(
-			first_benchmark.component_writes,
-			vec![ComponentSlope { name: "a".to_string(), slope: 3 }]
-		);
+		let second_benchmark = &mapped_results.get("first_pallet").unwrap()[1];
+		assert_eq!(second_benchmark.name, "second_benchmark");
+		check_data(second_benchmark, "b", 9, 2);
 
-		let second_benchmark = mapped_results.get("second_pallet").unwrap().get("second_name").unwrap();
-
-		assert_eq!(second_benchmark.name, "second_name");
-		assert_eq!(
-			second_benchmark.components,
-			vec![
-				Component { name: "b".to_string(), is_used: true },
-				Component { name: "z".to_string(), is_used: false},
-			],
-		);
-		// Weights multiplied by 1,000
-		assert_eq!(second_benchmark.base_weight, 3_000);
-		assert_eq!(
-			second_benchmark.component_weight,
-			vec![ComponentSlope { name: "b".to_string(), slope: 4_000 }]
-		);
-		// DB Reads/Writes are untouched
-		assert_eq!(second_benchmark.base_reads, 3);
-		assert_eq!(
-			second_benchmark.component_reads,
-			vec![ComponentSlope { name: "b".to_string(), slope: 4 }]
-		);
-		assert_eq!(second_benchmark.base_writes, 3);
-		assert_eq!(
-			second_benchmark.component_writes,
-			vec![ComponentSlope { name: "b".to_string(), slope: 4 }]
-		);
+		let second_pallet_benchmark = &mapped_results.get("second_pallet").unwrap()[0];
+		assert_eq!(second_pallet_benchmark.name, "first_benchmark");
+		check_data(second_pallet_benchmark, "c", 3, 4);
 	}
 }
