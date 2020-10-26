@@ -41,6 +41,7 @@ use tracing_subscriber::{CurrentSpan, layer::{Layer, Context}};
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
+
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 
 /// Responsible for assigning ids to new spans, which are not re-used.
@@ -352,21 +353,10 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 /// TraceHandler for sending span data to the logger
 pub struct LogTraceHandler;
 
-fn log_level(level: Level) -> log::Level {
-	match level {
-		Level::TRACE => log::Level::Trace,
-		Level::DEBUG => log::Level::Debug,
-		Level::INFO => log::Level::Info,
-		Level::WARN => log::Level::Warn,
-		Level::ERROR => log::Level::Error,
-	}
-}
-
 impl TraceHandler for LogTraceHandler {
 	fn handle_span(&self, span_datum: SpanDatum) {
 		if span_datum.values.is_empty() {
-			log::log!(
-				log_level(span_datum.level),
+			println!(
 				"{}: {}, time: {}, id: {}, parent_id: {:?}",
 				span_datum.target,
 				span_datum.name,
@@ -375,8 +365,7 @@ impl TraceHandler for LogTraceHandler {
 				span_datum.parent_id.map(|s| s.into_u64()),
 			);
 		} else {
-			log::log!(
-				log_level(span_datum.level),
+			println!(
 				"{}: {}, time: {}, id: {}, parent_id: {:?}, values: {}",
 				span_datum.target,
 				span_datum.name,
@@ -389,8 +378,7 @@ impl TraceHandler for LogTraceHandler {
 	}
 
 	fn handle_event(&self, event: TraceEvent) {
-		log::log!(
-			log_level(event.level),
+		println!(
 			"{}, parent_id: {:?}, {}",
 			event.target,
 			event.parent_id.map(|s| s.into_u64()),
