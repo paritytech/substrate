@@ -176,6 +176,51 @@ impl<H: Hasher<Out=H256>> AddressMapping<AccountId32> for HashedAddressMapping<H
 	}
 }
 
+pub trait AccountBasicMapping {
+	fn account_basic(address: &H160) -> Account;
+	fn mutate_account_basic(address: &H160, new: Account);
+}
+
+pub struct RawAccountBasicMapping<T> (sp_std::marker::PhantomData<T>);
+
+
+impl<T: Trait> AccountBasicMapping for RawAccountBasicMapping<T> {
+    /// Get the account basic in EVM format.
+    fn account_basic(address: &H160) -> Account {
+        let account_id = T::AddressMapping::into_account_id(*address);
+
+        let nonce = frame_system::Module::<T>::account_nonce(&account_id);
+        let balance = T::Currency::free_balance(&account_id);
+
+        Account {
+            nonce: U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(nonce)),
+            balance: U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(balance)),
+        }
+    }
+
+    fn mutate_account_basic(address: &H160, new: Account) {
+        let account_id = T::AddressMapping::into_account_id(*address);
+        let current = T::AccountBasicMapping::account_basic(address);
+
+        if current.nonce < new.nonce {
+            // ASSUME: in one single EVM transaction, the nonce will not increase more than
+            // `u128::max_value()`.
+            for _ in 0..(new.nonce - current.nonce).low_u128() {
+                frame_system::Module::<T>::inc_account_nonce(&account_id);
+            }
+        }
+
+        if current.balance > new.balance {
+            let diff = current.balance - new.balance;
+            T::Currency::slash(&account_id, diff.low_u128().unique_saturated_into());
+        } else if current.balance < new.balance {
+            let diff = new.balance - current.balance;
+            T::Currency::deposit_creating(&account_id, diff.low_u128().unique_saturated_into());
+        }
+    }
+}
+
+
 /// Substrate system chain ID.
 pub struct SystemChainId;
 
@@ -208,6 +253,8 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	type Precompiles: Precompiles;
 	/// Chain ID of EVM.
 	type ChainId: Get<u64>;
+	/// The account basic mapping way
+	type AccountBasicMapping: AccountBasicMapping;
 
 	/// EVM config used in the module.
 	fn config() -> &'static Config {
@@ -240,7 +287,7 @@ decl_storage! {
 		config(accounts): std::collections::BTreeMap<H160, GenesisAccount>;
 		build(|config: &GenesisConfig| {
 			for (address, account) in &config.accounts {
-				Module::<T>::mutate_account_basic(&address, Account {
+				T::AccountBasicMapping::mutate_account_basic(&address, Account {
 					balance: account.balance,
 					nonce: account.nonce,
 				});
@@ -425,30 +472,9 @@ impl<T: Trait> Module<T> {
 		AccountStorages::remove_prefix(address);
 	}
 
-	fn mutate_account_basic(address: &H160, new: Account) {
-		let account_id = T::AddressMapping::into_account_id(*address);
-		let current = Self::account_basic(address);
-
-		if current.nonce < new.nonce {
-			// ASSUME: in one single EVM transaction, the nonce will not increase more than
-			// `u128::max_value()`.
-			for _ in 0..(new.nonce - current.nonce).low_u128() {
-				frame_system::Module::<T>::inc_account_nonce(&account_id);
-			}
-		}
-
-		if current.balance > new.balance {
-			let diff = current.balance - new.balance;
-			T::Currency::slash(&account_id, diff.low_u128().unique_saturated_into());
-		} else if current.balance < new.balance {
-			let diff = new.balance - current.balance;
-			T::Currency::deposit_creating(&account_id, diff.low_u128().unique_saturated_into());
-		}
-	}
-
 	/// Check whether an account is empty.
 	pub fn is_account_empty(address: &H160) -> bool {
-		let account = Self::account_basic(address);
+		let account = T::AccountBasicMapping::account_basic(address);
 		let code_len = AccountCodes::decode_len(address).unwrap_or(0);
 
 		account.nonce == U256::zero() &&
@@ -460,19 +486,6 @@ impl<T: Trait> Module<T> {
 	pub fn remove_account_if_empty(address: &H160) {
 		if Self::is_account_empty(address) {
 			Self::remove_account(address);
-		}
-	}
-
-	/// Get the account basic in EVM format.
-	pub fn account_basic(address: &H160) -> Account {
-		let account_id = T::AddressMapping::into_account_id(*address);
-
-		let nonce = frame_system::Module::<T>::account_nonce(&account_id);
-		let balance = T::Currency::free_balance(&account_id);
-
-		Account {
-			nonce: U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(nonce)),
-			balance: U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(balance)),
 		}
 	}
 
@@ -603,7 +616,7 @@ impl<T: Trait> Module<T> {
 		let total_fee = gas_price.checked_mul(U256::from(gas_limit))
 			.ok_or(Error::<T>::FeeOverflow)?;
 		let total_payment = value.checked_add(total_fee).ok_or(Error::<T>::PaymentOverflow)?;
-		let source_account = Self::account_basic(&source);
+		let source_account = T::AccountBasicMapping::account_basic(&source);
 		ensure!(source_account.balance >= total_payment, Error::<T>::BalanceLow);
 		executor.withdraw(source, total_fee).map_err(|_| Error::<T>::WithdrawFailed)?;
 

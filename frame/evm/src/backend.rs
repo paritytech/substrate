@@ -9,7 +9,7 @@ use frame_support::traits::Get;
 use frame_support::{debug, storage::{StorageMap, StorageDoubleMap}};
 use sha3::{Keccak256, Digest};
 use evm::backend::{Backend as BackendT, ApplyBackend, Apply};
-use crate::{Trait, AccountStorages, AccountCodes, Module, Event};
+use crate::{Trait, AccountStorages, AccountCodes, Module, Event, AccountBasicMapping};
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -100,7 +100,7 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 	}
 
 	fn basic(&self, address: H160) -> evm::backend::Basic {
-		let account = Module::<T>::account_basic(&address);
+		let account = T::AccountBasicMapping::account_basic(&address);
 
 		evm::backend::Basic {
 			balance: account.balance,
@@ -141,7 +141,7 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 				Apply::Modify {
 					address, basic, code, storage, reset_storage,
 				} => {
-					Module::<T>::mutate_account_basic(&address, Account {
+					T::AccountBasicMapping::mutate_account_basic(&address, Account {
 						nonce: basic.nonce,
 						balance: basic.balance,
 					});

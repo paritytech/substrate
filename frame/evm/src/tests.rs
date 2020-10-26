@@ -103,6 +103,7 @@ impl Trait for Test {
 	type Event = Event<Test>;
 	type Precompiles = ();
 	type ChainId = SystemChainId;
+	type AccountBasicMapping = RawAccountBasicMapping<Test>;
 }
 
 type System = frame_system::Module<Test>;
@@ -171,7 +172,7 @@ fn fail_call_return_ok() {
 #[test]
 fn mutate_account_works() {
 	new_test_ext().execute_with(|| {
-		EVM::mutate_account_basic(
+		<Test as Trait>::AccountBasicMapping::mutate_account_basic(
 			&H160::from_str("1000000000000000000000000000000000000001").unwrap(),
 			Account {
 				nonce: U256::from(10),
@@ -179,7 +180,7 @@ fn mutate_account_works() {
 			},
 		);
 
-		assert_eq!(EVM::account_basic(
+		assert_eq!(<Test as Trait>::AccountBasicMapping::account_basic(
 			&H160::from_str("1000000000000000000000000000000000000001").unwrap()
 		), Account {
 			nonce: U256::from(10),
