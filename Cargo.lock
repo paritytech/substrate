@@ -7421,7 +7421,6 @@ name = "sc-tracing"
 version = "2.0.0"
 dependencies = [
  "erased-serde",
- "log",
  "parking_lot 0.10.2",
  "rustc-hash",
  "sc-telemetry",

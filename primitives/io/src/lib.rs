@@ -106,24 +106,22 @@ pub trait Storage {
 
 	/// Set `key` to `value` in the storage.
 	fn set(&mut self, key: &[u8], value: &[u8]) {
-		#[cfg(feature = "std")]
-		tracing::event!(
-			tracing::Level::INFO,
-			?key,
-			?value,
-			"set"
-		);
+		sp_tracing::enter_span!(
+			sp_tracing::debug_span!(
+				"set",
+				?key,
+				?value
+		));
 		self.set_storage(key.to_vec(), value.to_vec());
 	}
 
 	/// Clear the storage of the given `key` and its value.
 	fn clear(&mut self, key: &[u8]) {
-		#[cfg(feature = "std")]
-		tracing::event!(
-			tracing::Level::INFO,
-			?key,
-			"clear"
-		);
+		sp_tracing::enter_span!(
+			sp_tracing::debug_span!(
+				"clear",
+				?key
+		));
 		self.clear_storage(key)
 	}
 
@@ -134,12 +132,11 @@ pub trait Storage {
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		#[cfg(feature = "std")]
-		tracing::event!(
-			tracing::Level::INFO,
-			?prefix,
-			"clear_prefix"
-		);
+		sp_tracing::enter_span!(
+			sp_tracing::debug_span!(
+				"clear_prefix",
+				?prefix
+		));
 		Externalities::clear_prefix(*self, prefix)
 	}
 
@@ -152,13 +149,12 @@ pub trait Storage {
 	/// If the storage item does not support [`EncodeAppend`](codec::EncodeAppend) or
 	/// something else fails at appending, the storage item will be set to `[value]`.
 	fn append(&mut self, key: &[u8], value: Vec<u8>) {
-		#[cfg(feature = "std")]
-		tracing::event!(
-			tracing::Level::INFO,
-			?key,
-			?value,
-			"append"
-		);
+		sp_tracing::enter_span!(
+			sp_tracing::debug_span!(
+				"append",
+				?key,
+				?value
+		));
 		self.storage_append(key.to_vec(), value);
 	}
 
@@ -168,11 +164,10 @@ pub trait Storage {
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
-		#[cfg(feature = "std")]
-		tracing::event!(
-			tracing::Level::INFO,
-			"root"
-		);
+		sp_tracing::enter_span!(
+			sp_tracing::debug_span!(
+				"root"
+		));
 		self.storage_root()
 	}
 
@@ -184,12 +179,11 @@ pub trait Storage {
 	/// Returns `Some(Vec<u8>)` which holds the SCALE encoded hash or `None` when
 	/// changes trie is disabled.
 	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
-		#[cfg(feature = "std")]
-		tracing::event!(
-			tracing::Level::INFO,
-			?parent_hash,
-			"changes_root"
-		);
+		sp_tracing::enter_span!(
+			sp_tracing::debug_span!(
+				"changes_root",
+				?parent_hash
+		));
 		self.storage_changes_root(parent_hash)
 			.expect("Invalid `parent_hash` given to `changes_root`.")
 	}
@@ -214,7 +208,7 @@ pub trait Storage {
 	fn start_transaction(&mut self) {
 		#[cfg(feature = "std")]
 		tracing::event!(
-			tracing::Level::INFO,
+			tracing::Level::DEBUG,
 			"start_transaction"
 		);
 		self.storage_start_transaction();
@@ -230,7 +224,7 @@ pub trait Storage {
 	fn rollback_transaction(&mut self) {
 		#[cfg(feature = "std")]
 		tracing::event!(
-			tracing::Level::INFO,
+			tracing::Level::DEBUG,
 			"rollback_transaction"
 		);
 		self.storage_rollback_transaction()
@@ -247,7 +241,7 @@ pub trait Storage {
 	fn commit_transaction(&mut self) {
 		#[cfg(feature = "std")]
 		tracing::event!(
-			tracing::Level::INFO,
+			tracing::Level::DEBUG,
 			"commit_transaction"
 		);
 		self.storage_commit_transaction()
@@ -306,13 +300,12 @@ pub trait DefaultChildStorage {
 		key: &[u8],
 		value: &[u8],
 	) {
-		#[cfg(feature = "std")]
-		tracing::event!(
-			tracing::Level::INFO,
-			?key,
-			?value,
-			"set"
-		);
+		sp_tracing::enter_span!(
+			sp_tracing::debug_span!(
+				"set",
+				?key,
+				?value
+		));
 		let child_info = ChildInfo::new_default(storage_key);
 		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
 	}
@@ -325,12 +318,11 @@ pub trait DefaultChildStorage {
 		storage_key: &[u8],
 		key: &[u8],
 	) {
-		#[cfg(feature = "std")]
-		tracing::event!(
-			tracing::Level::INFO,
-			?key,
-			"clear"
-		);
+		sp_tracing::enter_span!(
+			sp_tracing::debug_span!(
+				"clear",
+				?key
+		));
 		let child_info = ChildInfo::new_default(storage_key);
 		self.clear_child_storage(&child_info, key);
 	}
@@ -343,12 +335,11 @@ pub trait DefaultChildStorage {
 		&mut self,
 		storage_key: &[u8],
 	) {
-		#[cfg(feature = "std")]
-		tracing::event!(
-			tracing::Level::INFO,
-			?key,
-			"kill"
-		);
+		sp_tracing::enter_span!(
+			sp_tracing::debug_span!(
+				"kill",
+				?storage_key
+		));
 		let child_info = ChildInfo::new_default(storage_key);
 		self.kill_child_storage(&child_info);
 	}
@@ -373,12 +364,11 @@ pub trait DefaultChildStorage {
 		storage_key: &[u8],
 		prefix: &[u8],
 	) {
-		#[cfg(feature = "std")]
-		tracing::event!(
-			tracing::Level::INFO,
-			?prefix,
-			"clear_prefix"
-		);
+		sp_tracing::enter_span!(
+			sp_tracing::debug_span!(
+				"clear_prefix",
+				?prefix
+		));
 		let child_info = ChildInfo::new_default(storage_key);
 		self.clear_child_prefix(&child_info, prefix);
 	}
@@ -393,11 +383,11 @@ pub trait DefaultChildStorage {
 		&mut self,
 		storage_key: &[u8],
 	) -> Vec<u8> {
-		#[cfg(feature = "std")]
-		tracing::event!(
-			tracing::Level::INFO,
-			"root"
-		);
+		sp_tracing::enter_span!(
+			sp_tracing::debug_span!(
+				"root",
+				?storage_key
+		));
 		let child_info = ChildInfo::new_default(storage_key);
 		self.child_storage_root(&child_info)
 	}
