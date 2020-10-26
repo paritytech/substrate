@@ -1606,7 +1606,6 @@ dependencies = [
  "sc-executor",
  "sc-service",
  "serde",
- "serde_json",
  "sp-core",
  "sp-externalities",
  "sp-keystore",

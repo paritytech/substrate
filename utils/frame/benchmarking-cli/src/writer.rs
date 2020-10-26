@@ -47,8 +47,11 @@ struct TemplateData {
 struct BenchmarkData {
 	name: String,
 	components: Vec<Component>,
+	#[serde(serialize_with = "string_serialize")]
 	base_weight: u128,
+	#[serde(serialize_with = "string_serialize")]
 	base_reads: u128,
+	#[serde(serialize_with = "string_serialize")]
 	base_writes: u128,
 	component_weight: Vec<ComponentSlope>,
 	component_reads: Vec<ComponentSlope>,
@@ -79,6 +82,7 @@ struct Component {
 #[derive(Serialize, Debug, Clone, Eq, PartialEq)]
 struct ComponentSlope {
 	name: String,
+	#[serde(serialize_with = "string_serialize")]
 	slope: u128,
 }
 
@@ -233,6 +237,8 @@ pub fn write_results(
 	let mut handlebars = handlebars::Handlebars::new();
 	handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
 	handlebars.register_helper("join", Box::new(JoinHelper));
+	// Don't HTML escape any characters.
+	handlebars.register_escape_fn(|s| -> String { s.to_string() });
 
 	// Organize results by pallet into a JSON map
 	let all_results = map_results(batches)?;
@@ -324,6 +330,14 @@ impl handlebars::HelperDef for JoinHelper {
 		out.write(&joined)?;
 		Ok(())
 	}
+}
+
+// u128 does not serialize well into JSON for `handlebars`, so we represent it as a string.
+fn string_serialize<S>(x: &u128, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    s.serialize_str(&x.to_string())
 }
 
 #[cfg(test)]
