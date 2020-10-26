@@ -342,7 +342,7 @@ decl_module! {
 				input,
 				value,
 				gas_limit,
-				gas_price,
+				Some(gas_price),
 				nonce,
 			)? {
 				CallInfo {
@@ -378,7 +378,7 @@ decl_module! {
 				init,
 				value,
 				gas_limit,
-				gas_price,
+				Some(gas_price),
 				nonce,
 			)? {
 				CreateInfo {
@@ -420,7 +420,7 @@ decl_module! {
 				salt,
 				value,
 				gas_limit,
-				gas_price,
+				Some(gas_price),
 				nonce,
 			)? {
 				CreateInfo {

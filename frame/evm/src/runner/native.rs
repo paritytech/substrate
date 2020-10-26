@@ -53,10 +53,16 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 		input: Vec<u8>,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 	) -> Result<CallInfo, Self::Error> {
-		ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+		let gas_price = match gas_price {
+			Some(gas_price) => {
+				ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+				gas_price
+			},
+			None => Default::default(),
+		};
 
 		if let Some(nonce) = nonce {
 			ensure!(Module::<T>::account_basic(&source).nonce == nonce, Error::<T>::InvalidNonce);
@@ -115,10 +121,16 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 		init: Vec<u8>,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 	) -> Result<CreateInfo, Self::Error> {
-		ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+		let gas_price = match gas_price {
+			Some(gas_price) => {
+				ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+				gas_price
+			},
+			None => Default::default(),
+		};
 
 		if let Some(nonce) = nonce {
 			ensure!(Module::<T>::account_basic(&source).nonce == nonce, Error::<T>::InvalidNonce);
@@ -189,10 +201,16 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 		salt: H256,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 	) -> Result<CreateInfo, Self::Error> {
-		ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+		let gas_price = match gas_price {
+			Some(gas_price) => {
+				ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+				gas_price
+			},
+			None => Default::default(),
+		};
 
 		if let Some(nonce) = nonce {
 			ensure!(Module::<T>::account_basic(&source).nonce == nonce, Error::<T>::InvalidNonce);

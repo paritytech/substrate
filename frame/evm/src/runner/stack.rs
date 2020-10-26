@@ -42,17 +42,20 @@ impl<T: Trait> Runner<T> {
 		source: H160,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
-		apply_state: bool,
 		f: F,
 	) -> Result<ExecutionInfo<R>, Error<T>> where
 		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (ExitReason, R),
 	{
 		// Gas price check is skipped when performing a gas estimation.
-		if apply_state {
-			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
-		}
+		let gas_price = match gas_price {
+			Some(gas_price) => {
+				ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+				gas_price
+			},
+			None => Default::default(),
+		};
 
 		let vicinity = Vicinity {
 			gas_price,
@@ -95,9 +98,7 @@ impl<T: Trait> Runner<T> {
 
 		let (values, logs) = executor.deconstruct();
 		let logs_data = logs.into_iter().map(|x| x).collect::<Vec<_>>();
-		if apply_state {
-			backend.apply(values, logs_data.clone(), true);
-		}
+		backend.apply(values, logs_data.clone(), true);
 
 		Ok(ExecutionInfo {
 			value: retv,
@@ -117,7 +118,7 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 		input: Vec<u8>,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 	) -> Result<CallInfo, Self::Error> {
 		Self::execute(
@@ -126,7 +127,6 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 			gas_limit,
 			gas_price,
 			nonce,
-			true,
 			|executor| executor.transact_call(
 				source,
 				target,
@@ -142,7 +142,7 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 		init: Vec<u8>,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 	) -> Result<CreateInfo, Self::Error> {
 		Self::execute(
@@ -151,7 +151,6 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 			gas_limit,
 			gas_price,
 			nonce,
-			true,
 			|executor| {
 				let address = executor.create_address(
 					evm::CreateScheme::Legacy { caller: source },
@@ -172,7 +171,7 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 		salt: H256,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 	) -> Result<CreateInfo, Self::Error> {
 		let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
@@ -182,7 +181,6 @@ impl<T: Trait> RunnerT<T> for Runner<T> {
 			gas_limit,
 			gas_price,
 			nonce,
-			true,
 			|executor| {
 				let address = executor.create_address(
 					evm::CreateScheme::Create2 { caller: source, code_hash, salt },

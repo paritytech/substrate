@@ -32,7 +32,7 @@ pub trait Runner<T: Trait> {
 		input: Vec<u8>,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 	) -> Result<CallInfo, Self::Error>;
 
@@ -41,7 +41,7 @@ pub trait Runner<T: Trait> {
 		init: Vec<u8>,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 	) -> Result<CreateInfo, Self::Error>;
 
@@ -51,7 +51,7 @@ pub trait Runner<T: Trait> {
 		salt: H256,
 		value: U256,
 		gas_limit: u32,
-		gas_price: U256,
+		gas_price: Option<U256>,
 		nonce: Option<U256>,
 	) -> Result<CreateInfo, Self::Error>;
 }
