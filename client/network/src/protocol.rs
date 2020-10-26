@@ -1369,10 +1369,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn on_finality_proof_response(
 		&mut self,
 		who: PeerId,
-		response: message::FinalityProofResponse<B::Hash>,
+		request_id: libp2p::request_response::RequestId,
+		proof: Vec<u8>,
 	) -> CustomMessageOutcome<B> {
-		trace!(target: "sync", "Finality proof response from {} for {}", who, response.block);
-		match self.sync.on_block_finality_proof(who, response) {
+		match self.sync.on_block_finality_proof(who, request_id, proof) {
 			Ok(sync::OnBlockFinalityProof::Nothing) => CustomMessageOutcome::None,
 			Ok(sync::OnBlockFinalityProof::Import { peer, hash, number, proof }) =>
 				CustomMessageOutcome::FinalityProofImport(peer, hash, number, proof),
@@ -1382,6 +1382,17 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				CustomMessageOutcome::None
 			}
 		}
+	}
+
+	// TODO: Comment
+	// Informs sync of the request id.
+	pub fn on_finality_proof_request_started(
+		&mut self,
+		who: PeerId,
+		block_hash: B::Hash,
+		request_id: libp2p::request_response::RequestId,
+	) {
+		self.sync.on_finality_proof_request_started(who, block_hash, request_id)
 	}
 
 	fn format_stats(&self) -> String {

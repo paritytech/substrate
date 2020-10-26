@@ -51,6 +51,7 @@ use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent, protocols_handle
 use log::{error, info, trace, warn};
 use metrics::{Metrics, MetricSources, Histogram, HistogramVec};
 use parking_lot::Mutex;
+use prost::Message;
 use sc_peerset::PeersetHandle;
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
 use sp_runtime::{
@@ -117,7 +118,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
+	pub fn new(mut params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
 		// Ensure the listen addresses are consistent with the transport.
 		ensure_addresses_consistent_with_transport(
 			params.network_config.listen_addresses.iter(),
@@ -286,6 +287,44 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				)
 			};
 
+			// TODO: Should finality request protocol be added here?
+			let mut request_response_protocols = params.network_config.request_response_protocols;
+			let (tx, mut rx) = futures::channel::mpsc::channel(10);
+			request_response_protocols.push(crate::request_responses::ProtocolConfig {
+				name: std::borrow::Cow::Borrowed(&"abc"),
+				// TODO: Change.
+				max_request_size: 4096,
+				// TODO: Change.
+				max_response_size: 4096,
+				request_timeout: std::time::Duration::from_secs(10),
+				inbound_queue: Some(tx),
+			});
+
+			let finality_proof_provider = params.finality_proof_provider.clone();
+			let finality_proof_server = async move {
+				let finality_proof_provider = finality_proof_provider.unwrap();
+				while let Some(crate::request_responses::IncomingRequest { peer, payload, pending_response }) = rx.next().await {
+					let req = crate::schema::v1::finality::FinalityProofRequest::decode(&payload[..]).unwrap();
+
+					let block_hash = codec::Decode::decode(&mut req.block_hash.as_ref()).unwrap();
+
+					log::trace!(target: "sync", "Finality proof request from {} for {}", peer, block_hash);
+
+					let finality_proof = finality_proof_provider
+						.prove_finality(block_hash, &req.request)
+						.unwrap()
+						.unwrap_or_default();
+
+					let resp = crate::schema::v1::finality::FinalityProofResponse { proof: finality_proof };
+					let mut data = Vec::with_capacity(resp.encoded_len());
+					resp.encode(&mut data).unwrap();
+
+					pending_response.send(data);
+				}
+			}.boxed();
+
+			params.executor.as_mut().unwrap()(finality_proof_server);
+
 			let discovery_config = {
 				let mut config = DiscoveryConfig::new(local_public.clone());
 				config.with_user_defined(known_addresses);
@@ -318,7 +357,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					finality_proof_requests,
 					light_client_handler,
 					discovery_config,
-					params.network_config.request_response_protocols,
+					request_response_protocols,
 				);
 
 				match result {

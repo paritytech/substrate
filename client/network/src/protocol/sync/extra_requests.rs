@@ -46,13 +46,20 @@ pub(crate) struct ExtraRequests<B: BlockT> {
 	/// requests which have been queued for later processing
 	pending_requests: VecDeque<ExtraRequest<B>>,
 	/// requests which are currently underway to some peer
-	active_requests: HashMap<PeerId, ExtraRequest<B>>,
+	active_requests: HashMap<PeerId, ActiveRequest<B>>,
 	/// previous requests without response
 	failed_requests: HashMap<ExtraRequest<B>, Vec<(PeerId, Instant)>>,
 	/// successful requests
 	importing_requests: HashSet<ExtraRequest<B>>,
 	/// the name of this type of extra request (useful for logging.)
 	request_type_name: &'static str,
+}
+
+#[derive(Debug)]
+struct ActiveRequest<B: BlockT> {
+	request_id: Option<libp2p::request_response::RequestId>,
+	block_hash: <B as BlockT>::Hash,
+	number: NumberFor<B>,
 }
 
 #[derive(Debug)]
@@ -114,8 +121,21 @@ impl<B: BlockT> ExtraRequests<B> {
 
 	/// Retry any pending request if a peer disconnected.
 	pub(crate) fn peer_disconnected(&mut self, who: &PeerId) {
-		if let Some(request) = self.active_requests.remove(who) {
-			self.pending_requests.push_front(request);
+		if let Some(ActiveRequest { block_hash, number, ..}) = self.active_requests.remove(who) {
+			self.pending_requests.push_front((block_hash, number));
+		}
+	}
+
+	pub(crate) fn on_request_started(
+		&mut self,
+		who: PeerId,
+		block_hash: B::Hash,
+		request_id: libp2p::request_response::RequestId,
+	) {
+		if let Some(req) = self.active_requests.get_mut(&who) {
+			if req.block_hash == block_hash {
+				req.request_id = Some(request_id);
+			}
 		}
 	}
 
@@ -124,25 +144,69 @@ impl<B: BlockT> ExtraRequests<B> {
 		// we assume that the request maps to the given response, this is
 		// currently enforced by the outer network protocol before passing on
 		// messages to chain sync.
-		if let Some(request) = self.active_requests.remove(&who) {
+		if let Some(ActiveRequest { block_hash, number, ..}) = self.active_requests.remove(&who) {
 			if let Some(r) = resp {
 				trace!(target: "sync", "Queuing import of {} from {:?} for {:?}",
 					self.request_type_name,
 					who,
-					request,
+					(block_hash, number),
 				);
 
-				self.importing_requests.insert(request);
-				return Some((who, request.0, request.1, r))
+				self.importing_requests.insert((block_hash, number));
+				return Some((who, block_hash, number, r))
 			} else {
 				trace!(target: "sync", "Empty {} response from {:?} for {:?}",
 					self.request_type_name,
 					who,
-					request,
+					(block_hash, number),
 				);
 			}
-			self.failed_requests.entry(request).or_default().push((who, Instant::now()));
-			self.pending_requests.push_front(request);
+			self.failed_requests.entry((block_hash, number)).or_default().push((who, Instant::now()));
+			self.pending_requests.push_front((block_hash, number));
+		} else {
+			trace!(target: "sync", "No active {} request to {:?}",
+				self.request_type_name,
+				who,
+			);
+		}
+		None
+	}
+
+	/// Processes the response for the request previously sent to the given peer.
+	pub(crate) fn on_response_with_request_id<R>(
+		&mut self,
+		who: PeerId,
+		request_id: libp2p::request_response::RequestId,
+		// TODO: Is it needed to send the response through this function?
+		resp: Option<R>,
+		// TODO: Why return the peer id once more?
+	) -> Option<(PeerId, B::Hash, NumberFor<B>, R)> {
+		if let Some(req) = self.active_requests.get(&who) {
+			if req.request_id != Some(request_id) {
+				// TODO: Should we log something?
+				return None;
+			}
+		}
+
+		if let Some(ActiveRequest { request_id, block_hash, number }) = self.active_requests.remove(&who) {
+			if let Some(r) = resp {
+				trace!(target: "sync", "Queuing import of {} from {:?} for {:?}",
+					self.request_type_name,
+					who,
+					(block_hash, number),
+				);
+
+				self.importing_requests.insert((block_hash, number));
+				return Some((who, block_hash, number, r))
+			} else {
+				trace!(target: "sync", "Empty {} response from {:?} for {:?}",
+					self.request_type_name,
+					who,
+					(block_hash, number),
+				);
+			}
+			self.failed_requests.entry((block_hash, number)).or_default().push((who, Instant::now()));
+			self.pending_requests.push_front((block_hash, number));
 		} else {
 			trace!(target: "sync", "No active {} request to {:?}",
 				self.request_type_name,
@@ -190,7 +254,7 @@ impl<B: BlockT> ExtraRequests<B> {
 		let roots = self.tree.roots().collect::<HashSet<_>>();
 
 		self.pending_requests.retain(|(h, n)| roots.contains(&(h, n, &())));
-		self.active_requests.retain(|_, (h, n)| roots.contains(&(h, n, &())));
+		self.active_requests.retain(|_, ActiveRequest { block_hash, number, ..}| roots.contains(&(block_hash, number, &())));
 		self.failed_requests.retain(|(h, n), _| roots.contains(&(h, n, &())));
 
 		Ok(())
@@ -240,7 +304,7 @@ impl<B: BlockT> ExtraRequests<B> {
 
 	/// Returns an iterator over all active (in-flight) requests and associated peer id.
 	#[cfg(test)]
-	pub(crate) fn active_requests(&self) -> impl Iterator<Item = (&PeerId, &ExtraRequest<B>)> {
+	pub(crate) fn active_requests(&self) -> impl Iterator<Item = (&PeerId, &ActiveRequest<B>)> {
 		self.active_requests.iter()
 	}
 
@@ -318,7 +382,11 @@ impl<'a, B: BlockT> Matcher<'a, B> {
 				if self.extras.failed_requests.get(&request).map(|rr| rr.iter().any(|i| &i.0 == peer)).unwrap_or(false) {
 					continue
 				}
-				self.extras.active_requests.insert(peer.clone(), request);
+				self.extras.active_requests.insert(peer.clone(), ActiveRequest{
+					request_id: None,
+					block_hash: request.0,
+					number: request.1,
+				});
 
 				trace!(target: "sync", "Sending {} request to {:?} for {:?}",
 					self.extras.request_type_name,

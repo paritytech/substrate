@@ -29,6 +29,7 @@ use libp2p::identify::IdentifyInfo;
 use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters};
 use log::debug;
+use prost::Message;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId, Justification};
 use std::{
@@ -359,7 +360,23 @@ Behaviour<B, H> {
 				}
 			},
 			CustomMessageOutcome::FinalityProofRequest { target, block_hash, request } => {
-				self.finality_proof_requests.send_request(&target, block_hash, request);
+				let protobuf_rq = crate::schema::v1::finality::FinalityProofRequest {
+					block_hash: block_hash.encode(),
+					request,
+				};
+
+				let mut buf = Vec::with_capacity(protobuf_rq.encoded_len());
+				if let Err(err) = protobuf_rq.encode(&mut buf) {
+					log::warn!("failed to encode finality proof request {:?}: {:?}", protobuf_rq, err);
+					return;
+				}
+				self.request_responses.send_request(&target, "abc", buf).unwrap();
+
+
+
+
+
+				// self.finality_proof_requests.send_request(&target, block_hash, request);
 			},
 			CustomMessageOutcome::NotificationStreamOpened { remote, protocols, roles, notifications_sink } => {
 				let role = reported_roles_to_observed_role(&self.role, &remote, roles);
@@ -408,12 +425,18 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Even
 					result,
 				});
 			}
-
-			request_responses::Event::RequestFinished { request_id, result } => {
-				self.events.push_back(BehaviourOut::RequestFinished {
-					request_id,
-					result,
-				});
+			request_responses::Event::RequestFinished { peer, protocol, request_id, result } => {
+				if protocol == "abc" {
+					let proof_response = crate::schema::v1::finality::FinalityProofResponse::decode(&result.unwrap()[..])
+						.unwrap();
+					let ev = self.substrate.on_finality_proof_response(peer, request_id, proof_response.proof);
+					self.inject_event(ev);
+				} else {
+					self.events.push_back(BehaviourOut::RequestFinished {
+						request_id,
+						result,
+					});
+				}
 			},
 		}
 	}
@@ -466,8 +489,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<finality_requests::Even
 						None
 					},
 				};
-				let ev = self.substrate.on_finality_proof_response(peer, response);
-				self.inject_event(ev);
+				// let ev = self.substrate.on_finality_proof_response(peer, response);
+				// self.inject_event(ev);
 			}
 		}
 	}

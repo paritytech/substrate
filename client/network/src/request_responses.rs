@@ -134,6 +134,9 @@ pub enum Event {
 	/// A request initiated using [`RequestResponsesBehaviour::send_request`] has succeeded or
 	/// failed.
 	RequestFinished {
+		peer: PeerId,
+		/// Name of the protocol in question.
+		protocol: Cow<'static, str>,
 		/// Request that has succeeded.
 		request_id: RequestId,
 		/// Response sent by the remote or reason for failure.
@@ -445,6 +448,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 
 						// Received a response from a remote to one of our requests.
 						RequestResponseEvent::Message {
+							peer,
 							message:
 								RequestResponseMessage::Response {
 									request_id,
@@ -453,6 +457,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							..
 						} => {
 							let out = Event::RequestFinished {
+								peer,
+								protocol: protocol.clone(),
 								request_id,
 								result: response.map_err(|()| RequestFailure::Refused),
 							};
@@ -461,11 +467,14 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 
 						// One of our requests has failed.
 						RequestResponseEvent::OutboundFailure {
+							peer,
 							request_id,
 							error,
 							..
 						} => {
 							let out = Event::RequestFinished {
+								peer,
+								protocol: protocol.clone(),
 								request_id,
 								result: Err(RequestFailure::Network(error)),
 							};
