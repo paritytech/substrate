@@ -1061,7 +1061,7 @@ impl<B: BlockT> ChainSync<B> {
 		if let PeerSyncState::DownloadingFinalityProof(state_hash) = peer.state {
 			peer.state = PeerSyncState::Available;
 
-			if let Some((peer, hash, number, p)) = self.extra_finality_proofs.on_response(who, if proof.is_empty() { None } else { Some(proof) }) {
+			if let Some((peer, hash, number, p)) = self.extra_finality_proofs.on_response_with_request_id(who, request_id, if proof.is_empty() { None } else { Some(proof) }) {
 				trace!(target: "sync", "Finality proof response from {} for {}", peer, hash);
 				// TODO: Safe assumption to make?
 				assert_eq!(hash, state_hash);

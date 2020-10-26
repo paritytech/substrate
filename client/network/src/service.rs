@@ -38,7 +38,7 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	on_demand_layer::AlwaysBadChecker,
-	light_client_handler, block_requests, finality_requests,
+	light_client_handler, block_requests,
 	protocol::{self, event::Event, NotifsHandlerError, LegacyConnectionKillError, NotificationsSink, Ready, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
@@ -273,10 +273,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let config = block_requests::Config::new(&params.protocol_id);
 				block_requests::BlockRequests::new(config, params.chain.clone())
 			};
-			let finality_proof_requests = {
-				let config = finality_requests::Config::new(&params.protocol_id);
-				finality_requests::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
-			};
 			let light_client_handler = {
 				let config = light_client_handler::Config::new(&params.protocol_id);
 				light_client_handler::LightClientHandler::new(
@@ -319,7 +315,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					let mut data = Vec::with_capacity(resp.encoded_len());
 					resp.encode(&mut data).unwrap();
 
-					pending_response.send(data);
+					pending_response.send(data).unwrap();
 				}
 			}.boxed();
 
@@ -354,7 +350,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					user_agent,
 					local_public,
 					block_requests,
-					finality_proof_requests,
 					light_client_handler,
 					discovery_config,
 					request_response_protocols,
@@ -1621,14 +1616,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
-								EitherError::A(PingFailure::Timeout)))))))))) => "ping-timeout",
+								EitherError::A(EitherError::A(EitherError::B(EitherError::A(
+								PingFailure::Timeout))))))))) => "ping-timeout",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::Legacy(LegacyConnectionKillError)))))))))) => "force-closed",
+								EitherError::A(EitherError::A(EitherError::A(
+								NotifsHandlerError::Legacy(LegacyConnectionKillError))))))))) => "force-closed",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged))))))))) => "sync-notifications-clogged",
+								EitherError::A(EitherError::A(EitherError::A(
+								NotifsHandlerError::SyncNotificationsClogged)))))))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) => "protocol-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout)) => "keep-alive-timeout",
 							None => "actively-closed",

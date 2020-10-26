@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	config::{ProtocolId, Role}, block_requests, light_client_handler, finality_requests,
-	peer_info, request_responses, discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
+	config::{ProtocolId, Role}, block_requests, light_client_handler, peer_info, request_responses,
+	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	protocol::{message::{self, Roles}, CustomMessageOutcome, NotificationsSink, Protocol},
 	ObservedRole, DhtEvent, ExHashT,
 };
@@ -59,8 +59,6 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	request_responses: request_responses::RequestResponsesBehaviour,
 	/// Block request handling.
 	block_requests: block_requests::BlockRequests<B>,
-	/// Finality proof request handling.
-	finality_proof_requests: finality_requests::FinalityProofRequests<B>,
 	/// Light client request handling.
 	light_client_handler: light_client_handler::LightClientHandler<B>,
 
@@ -183,7 +181,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		user_agent: String,
 		local_public_key: PublicKey,
 		block_requests: block_requests::BlockRequests<B>,
-		finality_proof_requests: finality_requests::FinalityProofRequests<B>,
 		light_client_handler: light_client_handler::LightClientHandler<B>,
 		disco_config: DiscoveryConfig,
 		request_response_protocols: Vec<request_responses::ProtocolConfig>,
@@ -195,7 +192,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 			request_responses:
 				request_responses::RequestResponsesBehaviour::new(request_response_protocols.into_iter())?,
 			block_requests,
-			finality_proof_requests,
 			light_client_handler,
 			events: VecDeque::new(),
 			role,
@@ -471,26 +467,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 					request_duration,
 				});
 				self.substrate.on_block_request_failed(&peer);
-			}
-		}
-	}
-}
-
-impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<finality_requests::Event<B>> for Behaviour<B, H> {
-	fn inject_event(&mut self, event: finality_requests::Event<B>) {
-		match event {
-			finality_requests::Event::Response { peer, block_hash, proof } => {
-				let response = message::FinalityProofResponse {
-					id: 0,
-					block: block_hash,
-					proof: if !proof.is_empty() {
-						Some(proof)
-					} else {
-						None
-					},
-				};
-				// let ev = self.substrate.on_finality_proof_response(peer, response);
-				// self.inject_event(ev);
 			}
 		}
 	}
