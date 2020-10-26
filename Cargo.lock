@@ -2210,10 +2210,11 @@ checksum = "b07f60793ff0a4d9cef0f18e63b5357e06209987153a64648c972c1e5aff336f"
 [[package]]
 name = "historied-db"
 version = "0.8.0"
-source = "git+https://github.com/cheme/substrate?branch=historied-db#0e357fc6d5265be7d05dc26af456fc2acd246f0d"
+source = "git+https://github.com/cheme/substrate?branch=historied-db#3564f932f9ac43508b7c68bdfcc27c71f2dc31c2"
 dependencies = [
  "derivative",
  "hash-db",
+ "num-traits",
  "parity-scale-codec",
  "smallvec 1.4.2",
  "sp-std 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5725,7 +5726,7 @@ checksum = "def50a86306165861203e7f84ecffbbdfdea79f0e51039b33de1e952358c47ac"
 [[package]]
 name = "radix-tree"
 version = "0.8.0"
-source = "git+https://github.com/cheme/substrate?branch=historied-db#0e357fc6d5265be7d05dc26af456fc2acd246f0d"
+source = "git+https://github.com/cheme/substrate?branch=historied-db#3564f932f9ac43508b7c68bdfcc27c71f2dc31c2"
 dependencies = [
  "derivative",
  "hashbrown 0.8.1",
