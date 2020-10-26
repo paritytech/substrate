@@ -191,7 +191,7 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
 	/// Weight information for the extrinsics in this pallet.
-	type WeightInfo: weights::WeightInfo;
+	type WeightInfo: WeightInfo;
 
 	/// The maximum number of locks that should exist on an account.
 	/// Not strictly enforced, but used for weight estimation.
@@ -216,7 +216,7 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
 	/// Weight information for extrinsics in this pallet.
-	type WeightInfo: weights::WeightInfo;
+	type WeightInfo: WeightInfo;
 
 	/// The maximum number of locks that should exist on an account.
 	/// Not strictly enforced, but used for weight estimation.
