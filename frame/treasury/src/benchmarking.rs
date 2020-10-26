@@ -36,7 +36,7 @@ fn setup_proposal<T: Trait<I>, I: Instance>(u: u32) -> (
 	<T::Lookup as StaticLookup>::Source,
 ) {
 	let caller = account("caller", u, SEED);
-	let value: BalanceOf<T, I> = T::ProposalBondMinimum::get().saturating_mul(100.into());
+	let value: BalanceOf<T, I> = T::ProposalBondMinimum::get().saturating_mul(100u32.into());
 	let _ = T::Currency::make_free_balance_be(&caller, value);
 	let beneficiary = account("beneficiary", u, SEED);
 	let beneficiary_lookup = T::Lookup::unlookup(beneficiary);
@@ -71,7 +71,7 @@ fn setup_tip<T: Trait<I>, I: Instance>(r: u32, t: u32) ->
 	let caller = account("member", t - 1, SEED);
 	let reason = vec![0; r as usize];
 	let beneficiary = account("beneficiary", t, SEED);
-	let value = T::Currency::minimum_balance().saturating_mul(100.into());
+	let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 	Ok((caller, reason, beneficiary, value))
 }
 
@@ -130,12 +130,12 @@ fn setup_bounty<T: Trait<I>, I: Instance>(u: u32, d: u32) -> (
 	Vec<u8>,
 ) {
 	let caller = account("caller", u, SEED);
-	let value: BalanceOf<T, I> = T::BountyValueMinimum::get().saturating_mul(100.into());
-	let fee = value / 2.into();
+	let value: BalanceOf<T, I> = T::BountyValueMinimum::get().saturating_mul(100u32.into());
+	let fee = value / 2u32.into();
 	let deposit = T::BountyDepositBase::get() + T::DataDepositPerByte::get() * MAX_BYTES.into();
 	let _ = T::Currency::make_free_balance_be(&caller, deposit);
 	let curator = account("curator", u, SEED);
-	let _ = T::Currency::make_free_balance_be(&curator, fee / 2.into());
+	let _ = T::Currency::make_free_balance_be(&curator, fee / 2u32.into());
 	let reason = vec![0; d as usize];
 	(caller, curator, fee, value, reason)
 }
@@ -157,7 +157,7 @@ fn create_bounty<T: Trait<I>, I: Instance>() -> Result<(
 
 fn setup_pod_account<T: Trait<I>, I: Instance>() {
 	let pot_account = Treasury::<T, I>::account_id();
-	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000.into());
+	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
@@ -230,7 +230,7 @@ benchmarks_instance! {
 	tip {
 		let t in 1 .. MAX_TIPPERS;
 		let (member, reason, beneficiary, value) = setup_tip::<T, _>(0, t)?;
-		let value = T::Currency::minimum_balance().saturating_mul(100.into());
+		let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 		Treasury::<T, _>::tip_new(
 			RawOrigin::Signed(member).into(),
 			reason.clone(),
@@ -255,7 +255,7 @@ benchmarks_instance! {
 
 		// Set up a new tip proposal
 		let (member, reason, beneficiary, value) = setup_tip::<T, _>(0, t)?;
-		let value = T::Currency::minimum_balance().saturating_mul(100.into());
+		let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 		Treasury::<T, _>::tip_new(
 			RawOrigin::Signed(member).into(),
 			reason.clone(),
@@ -303,7 +303,7 @@ benchmarks_instance! {
 		let (curator_lookup, bounty_id) = create_bounty::<T, _>()?;
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 		let bounty_id = BountyCount::<I>::get() - 1;
-		frame_system::Module::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1.into());
+		frame_system::Module::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), bounty_id)
 
