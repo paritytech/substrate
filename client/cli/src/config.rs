@@ -278,12 +278,12 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.unwrap_or_default())
 	}
 
-	/// Get the path where WASM overwrites live.
+	/// Get the path where WASM overrides live.
 	///
 	/// By default this is `None`.
-	fn wasm_runtime_overwrites(&self) -> Option<PathBuf> {
+	fn wasm_runtime_overrides(&self) -> Option<PathBuf> {
 		self.import_params()
-			.map(|x| x.wasm_runtime_overwrites())
+			.map(|x| x.wasm_runtime_overrides())
 			.unwrap_or_default()
 	}
 
@@ -501,7 +501,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			pruning: self.pruning(unsafe_pruning, &role)?,
 			wasm_method: self.wasm_method()?,
-			wasm_runtime_overwrites: self.wasm_runtime_overwrites(),
+			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
 			rpc_http: self.rpc_http(DCV::rpc_http_listen_port())?,
 			rpc_ws: self.rpc_ws(DCV::rpc_ws_listen_port())?,

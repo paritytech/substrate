@@ -182,8 +182,8 @@ pub struct ClientConfig {
 	pub offchain_worker_enabled: bool,
 	/// If true, allows access from the runtime to write into offchain worker db.
 	pub offchain_indexing_api: bool,
-	/// Path where WASM files exist to overwrite the on-chain WASM.
-	pub wasm_runtime_overwrites: Option<PathBuf>,
+	/// Path where WASM files exist to override the on-chain WASM.
+	pub wasm_runtime_overrides: Option<PathBuf>,
 }
 
 /// Create a client with the explicitly provided backend.

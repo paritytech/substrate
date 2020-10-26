@@ -65,7 +65,7 @@ pub struct Configuration {
 	/// Directory where local WASM runtimes live. These runtimes take precedence
 	/// over on-chain runtimes when the spec version matches. Set to `None` to
 	/// disable overrides (default).
-	pub wasm_runtime_overwrites: Option<PathBuf>,
+	pub wasm_runtime_overrides: Option<PathBuf>,
 	/// Execution strategies.
 	pub execution_strategies: ExecutionStrategies,
 	/// RPC over HTTP binding address. `None` if disabled.

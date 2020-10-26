@@ -33,14 +33,14 @@ use sp_core::{
 };
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor};
-use super::{client::ClientConfig, wasm_overwrite::WasmOverwrite};
+use super::{client::ClientConfig, wasm_override::WasmOverride};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
 pub struct LocalCallExecutor<B, E> {
 	backend: Arc<B>,
 	executor: E,
-	wasm_overwrite: Option<WasmOverwrite<E>>,
+	wasm_override: Option<WasmOverride<E>>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	client_config: ClientConfig,
 }
@@ -56,15 +56,15 @@ where
 		spawn_handle: Box<dyn SpawnNamed>,
 		client_config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
-		let wasm_overwrite = client_config.wasm_runtime_overwrites
+		let wasm_override = client_config.wasm_runtime_overrides
 			.as_ref()
-			.map(|p| WasmOverwrite::new(p.clone(), executor.clone()))
+			.map(|p| WasmOverride::new(p.clone(), executor.clone()))
 			.transpose()?;
 
 		Ok(LocalCallExecutor {
 			backend,
 			executor,
-			wasm_overwrite,
+			wasm_override,
 			spawn_handle,
 			client_config,
 		})
@@ -73,7 +73,7 @@ where
 	/// Check if local runtime code overrides are enabled and one is available
 	/// for the given `BlockId`. If yes, return it; otherwise return the same
 	/// `RuntimeCode` instance that was passed.
-	fn check_overwrite<'a, Block>(
+	fn check_override<'a, Block>(
 		&'a self,
 		onchain_code: RuntimeCode<'a>,
 		id: &BlockId<Block>,
@@ -82,7 +82,7 @@ where
 		Block: BlockT,
 		B: backend::Backend<Block>,
 	{
-		let code = self.wasm_overwrite
+		let code = self.wasm_override
 			.as_ref()
 			.map::<sp_blockchain::Result<Option<RuntimeCode>>, _>(|o| {
 				let spec = self.runtime_version(id)?.spec_version;
@@ -101,7 +101,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
 			executor: self.executor.clone(),
-			wasm_overwrite: self.wasm_overwrite.clone(),
+			wasm_override: self.wasm_override.clone(),
 			spawn_handle: self.spawn_handle.clone(),
 			client_config: self.client_config.clone(),
 		}
@@ -137,7 +137,7 @@ where
 		)?;
 		let state = self.backend.state_at(*id)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-		let runtime_code = self.check_overwrite(state_runtime_code.runtime_code()?, id)?;
+		let runtime_code = self.check_override(state_runtime_code.runtime_code()?, id)?;
 
 		let return_data = StateMachine::new(
 			&state,
@@ -211,7 +211,7 @@ where
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_state);
 				// It is important to extract the runtime code here before we create the proof
 				// recorder.
-				let runtime_code = self.check_overwrite(state_runtime_code.runtime_code()?, at)?;
+				let runtime_code = self.check_override(state_runtime_code.runtime_code()?, at)?;
 
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
@@ -236,7 +236,7 @@ where
 			},
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-				let runtime_code = self.check_overwrite(state_runtime_code.runtime_code()?, at)?;
+				let runtime_code = self.check_override(state_runtime_code.runtime_code()?, at)?;
 
 				let mut state_machine = StateMachine::new(
 					&state,
@@ -328,11 +328,11 @@ mod tests {
 	use sc_client_api::in_mem;
 
 	#[test]
-	fn should_get_overwrite_if_exists() {
+	fn should_get_override_if_exists() {
 		let executor =
 			NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
 
-		let overwrites = crate::client::wasm_overwrite::dummy_overwrites(&executor);
+		let overrides = crate::client::wasm_override::dummy_overrides(&executor);
 		let onchain_code = WrappedRuntimeCode(substrate_test_runtime::wasm_binary_unwrap().into());
 		let onchain_code = RuntimeCode {
 			code_fetcher: &onchain_code,
@@ -342,12 +342,12 @@ mod tests {
 
 		let backend = Arc::new(in_mem::Backend::<runtime::Block>::new());
 
-		// wasm_runtime_overwrites is `None` here because we construct the
+		// wasm_runtime_overrides is `None` here because we construct the
 		// LocalCallExecutor directly later on
 		let client_config = ClientConfig {
 			offchain_worker_enabled: false,
 			offchain_indexing_api: false,
-			wasm_runtime_overwrites: None,
+			wasm_runtime_overrides: None,
 		};
 
 		// client is used for the convenience of creating and inserting the genesis block.
@@ -370,13 +370,13 @@ mod tests {
 		let call_executor = LocalCallExecutor {
 			backend: backend.clone(),
 			executor,
-			wasm_overwrite: Some(overwrites),
+			wasm_override: Some(overrides),
 			spawn_handle: Box::new(TaskExecutor::new()),
 			client_config,
 		};
 
-		let check = call_executor.check_overwrite(onchain_code, &BlockId::Number(Default::default()))
-			.expect("RuntimeCode overwrite");
+		let check = call_executor.check_override(onchain_code, &BlockId::Number(Default::default()))
+			.expect("RuntimeCode override");
 
 		assert_eq!(Some(vec![2, 2, 2, 2, 2, 2, 2, 2]), check.fetch_runtime_code().map(Into::into));
 	}

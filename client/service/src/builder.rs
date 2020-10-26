@@ -305,7 +305,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			ClientConfig {
 				offchain_worker_enabled : config.offchain_worker.enabled,
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
-				wasm_runtime_overwrites: config.wasm_runtime_overwrites.clone(),
+				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 			},
 		)?
 	};

@@ -60,7 +60,7 @@ pub struct ImportParams {
 	///
 	/// These runtimes will override on-chain runtimes when the version matches.
 	#[structopt(long, value_name = "PATH", parse(from_os_str))]
-	pub wasm_runtime_overwrites: Option<PathBuf>,
+	pub wasm_runtime_overrides: Option<PathBuf>,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -110,10 +110,10 @@ impl ImportParams {
 		self.wasm_method.into()
 	}
 
-	/// Enable overwriting on-chain WASM with locally-stored WASM
+	/// Enable overriding on-chain WASM with locally-stored WASM
 	/// by specifying the path where local WASM is stored.
-	pub fn wasm_runtime_overwrites(&self) -> Option<PathBuf> {
-		self.wasm_runtime_overwrites.clone()
+	pub fn wasm_runtime_overrides(&self) -> Option<PathBuf> {
+		self.wasm_runtime_overrides.clone()
 	}
 
 	/// Get execution strategies for the parameters
