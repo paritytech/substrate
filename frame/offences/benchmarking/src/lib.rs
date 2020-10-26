@@ -87,7 +87,7 @@ struct Offender<T: Trait> {
 }
 
 fn bond_amount<T: Trait>() -> BalanceOf<T> {
-	T::Currency::minimum_balance().saturating_mul(10_000.into())
+	T::Currency::minimum_balance().saturating_mul(10_000u32.into())
 }
 
 fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<Offender<T>, &'static str> {
@@ -97,7 +97,7 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<Offender<T>, &'s
 	let reward_destination = RewardDestination::Staked;
 	let raw_amount = bond_amount::<T>();
 	// add twice as much balance to prevent the account from being killed.
-	let free_amount = raw_amount.saturating_mul(2.into());
+	let free_amount = raw_amount.saturating_mul(2u32.into());
 	T::Currency::make_free_balance_be(&stash, free_amount);
 	let amount: BalanceOf<T> = raw_amount.into();
 	Staking::<T>::bond(
@@ -243,7 +243,8 @@ benchmarks! {
 	verify {
 		// make sure the report was not deferred
 		assert!(Offences::<T>::deferred_offences().is_empty());
-		let slash_amount = slash_fraction * bond_amount::<T>().unique_saturated_into() as u32;
+		let bond_amount: u32 = UniqueSaturatedInto::<u32>::unique_saturated_into(bond_amount::<T>());
+		let slash_amount = slash_fraction * bond_amount;
 		let reward_amount = slash_amount * (1 + n) / 2;
 		let mut slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {
@@ -379,7 +380,7 @@ benchmarks! {
 		Offences::<T>::set_deferred_offences(deferred_offences);
 		assert!(!Offences::<T>::deferred_offences().is_empty());
 	}: {
-		Offences::<T>::on_initialize(0.into());
+		Offences::<T>::on_initialize(0u32.into());
 	}
 	verify {
 		// make sure that all deferred offences were reported with Ok status.
