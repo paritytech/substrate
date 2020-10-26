@@ -495,6 +495,9 @@ mod tests {
 	use hex_literal::hex;
 	const TEST_KEY: &[u8] = &*b":test:key:";
 
+	const ON_INITIALIZE_WEIGHT: Weight = 175;
+	const ON_RUNTIME_UPGRADE_WEIGHT: Weight = 42;
+
 	mod custom {
 		use frame_support::weights::{Weight, DispatchClass};
 		use sp_runtime::transaction_validity::{
@@ -533,7 +536,7 @@ mod tests {
 				// one with block number arg and one without
 				fn on_initialize(n: T::BlockNumber) -> Weight {
 					println!("on_initialize({})", n);
-					175
+					super::ON_INITIALIZE_WEIGHT
 				}
 
 				fn on_finalize() {
@@ -542,7 +545,7 @@ mod tests {
 
 				fn on_runtime_upgrade() -> Weight {
 					sp_io::storage::set(super::TEST_KEY, "module".as_bytes());
-					0
+					super::ON_RUNTIME_UPGRADE_WEIGHT
 				}
 			}
 		}
@@ -669,13 +672,14 @@ mod tests {
 
 	// Will contain `true` when the custom runtime logic was called.
 	const CUSTOM_ON_RUNTIME_KEY: &[u8] = &*b":custom:on_runtime";
+	const CUSTOM_ON_RUNTIME_UPGRADE_WEIGHT: Weight = 23;
 
 	struct CustomOnRuntimeUpgrade;
 	impl OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
 		fn on_runtime_upgrade() -> Weight {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
-			0
+			CUSTOM_ON_RUNTIME_UPGRADE_WEIGHT
 		}
 	}
 
@@ -811,7 +815,8 @@ mod tests {
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as Weight;
 		// Block execution weight + on_initialize weight
-		let base_block_weight = 175 + <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
+		let base_block_weight = ON_INITIALIZE_WEIGHT
+			+ <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
 		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get() - base_block_weight;
 		let num_to_exhaust_block = limit / (encoded_len + 5);
 		t.execute_with(|| {
@@ -854,7 +859,8 @@ mod tests {
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
 			// Block execution weight + on_initialize weight from custom module
-			let base_block_weight = 175 + <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
+			let base_block_weight = ON_INITIALIZE_WEIGHT
+				 + <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
 
 			Executive::initialize_block(&Header::new(
 				1,
@@ -976,7 +982,7 @@ mod tests {
 			// NOTE: might need updates over time if new weights are introduced.
 			// For now it only accounts for the base block execution weight and
 			// the `on_initialize` weight defined in the custom test module.
-			assert_eq!(<frame_system::Module<Runtime>>::block_weight().total(), 175 + 10);
+			assert_eq!(<frame_system::Module<Runtime>>::block_weight().total(), ON_INITIALIZE_WEIGHT + 10);
 		})
 	}
 
@@ -1071,6 +1077,32 @@ mod tests {
 
 			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
 			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());
+		});
+	}
+
+	#[test]
+	fn runtime_upgrade_weight_is_included() {
+		new_test_ext(1).execute_with(|| {
+			// Make sure `on_runtime_upgrade` is called.
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				..Default::default()
+			});
+
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
+			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());
+
+			let expected_weight = ON_RUNTIME_UPGRADE_WEIGHT + CUSTOM_ON_RUNTIME_UPGRADE_WEIGHT
+				+ ON_INITIALIZE_WEIGHT;
+			assert_eq!(frame_system::Module::<Runtime>::block_weight().total(), expected_weight);
 		});
 	}
 }
