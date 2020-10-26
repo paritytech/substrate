@@ -1259,8 +1259,9 @@ impl<Block: BlockT> Backend<Block> {
 		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(
 			format!("State database error: {:?}", e)
 		);
-		let historied_pruning_window = match config.pruning {
+		let historied_pruning_window = match &config.pruning {
 			PruningMode::Constrained(constraint) => constraint.max_blocks.map(|nb| nb.into()),
+			_ => None,
 		};
 		let state_db: StateDb<_, _> = StateDb::new(
 			config.pruning.clone(),

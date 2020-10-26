@@ -41,7 +41,7 @@ pub struct LocalStorage {
 }
 
 type ChangesJournal<Db> = historied_db::management::JournalForMigrationBasis<
-	(u32, u32),
+	(u64, u32),
 	Vec<u8>,
 	Db,
 	crate::historied_tree_bindings::LocalOffchainDelete,
