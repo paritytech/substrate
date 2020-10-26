@@ -24,7 +24,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::Weight};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 pub trait WeightInfo {
@@ -60,6 +60,34 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 			{{/if}}
 			{{~#each benchmark.component_writes as |cw| ~}}
 			.saturating_add(T::DbWeight::get().writes(({{cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight)))
+			{{~/each}}
+	}
+	{{/each}}
+}
+
+// For backwards compatibility and tests
+impl WeightInfo for () {
+	{{#each benchmarks as |benchmark| ~}}
+	fn {{benchmark.name~}}
+	(
+		{{~#each benchmark.components as |c| ~}}
+		{{~#if (not c.is_used)}}_{{/if}}{{c.name}}: u32, {{/each~}}
+	) -> Weight {
+		({{underscore benchmark.base_weight}} as Weight)
+			{{#each benchmark.component_weight as |cw| ~}}
+			.saturating_add(({{underscore cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight))
+			{{/each}}
+			{{~#if (ne benchmark.base_reads 0) ~}}
+			.saturating_add(RocksDbWeight::get().reads({{benchmark.base_reads}} as Weight))
+			{{/if}}
+			{{~#each benchmark.component_reads as |cr| ~}}
+			.saturating_add(RocksDbWeight::get().reads(({{cr.slope}} as Weight).saturating_mul({{cr.name}} as Weight)))
+			{{/each}}
+			{{~#if (ne benchmark.base_writes 0) ~}}
+			.saturating_add(RocksDbWeight::get().writes({{benchmark.base_writes}} as Weight))
+			{{/if}}
+			{{~#each benchmark.component_writes as |cw| ~}}
+			.saturating_add(RocksDbWeight::get().writes(({{cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight)))
 			{{~/each}}
 	}
 	{{/each}}

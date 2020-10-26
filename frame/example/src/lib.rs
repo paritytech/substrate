@@ -780,7 +780,7 @@ mod tests {
 		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
-		type WeightInfo = pallet_balances::weights::SubstrateWeight<Self>;
+		type WeightInfo = ();
 	}
 	impl Trait for Test {
 		type Event = ();

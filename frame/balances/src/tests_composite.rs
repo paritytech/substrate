@@ -111,7 +111,7 @@ impl Trait for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = system::Module<Test>;
 	type MaxLocks = ();
-	type WeightInfo = crate::weights::SubstrateWeight<Self>;
+	type WeightInfo = crate::weights::();
 }
 
 pub struct ExtBuilder {
