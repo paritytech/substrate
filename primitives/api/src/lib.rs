@@ -241,20 +241,18 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 
 /// Mocks given trait implementations as runtime apis.
 ///
-/// Accepts similar syntax as [`impl_runtime_apis!`](macro.impl_runtime_apis.html) and generates
+/// Accepts similar syntax as [`impl_runtime_apis!`] and generates
 /// simplified mock implementations of the given runtime apis. The difference in syntax is that the
 /// trait does not need to be referenced by a qualified path, methods accept the `&self` parameter
-/// and the error type can be specified as associated type. If no error type is specified `String`
+/// and the error type can be specified as associated type. If no error type is specified [`String`]
 /// is used as error type.
 ///
-/// Besides implementing the given traits, the [`Core`], [`ApiExt`] and [`ApiErrorExt`] are
-/// implemented automatically.
+/// Besides implementing the given traits, the [`Core`](sp_api::Core), [`ApiExt`](sp_api::ApiExt)
+/// and [`ApiErrorExt`](sp_api::ApiErrorExt) are implemented automatically.
 ///
 /// # Example
 ///
 /// ```rust
-/// use sp_version::create_runtime_str;
-/// #
 /// # use sp_runtime::traits::Block as BlockT;
 /// # use sp_test_primitives::Block;
 /// #
@@ -270,7 +268,6 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 /// #        fn build_block() -> Block;
 /// #     }
 /// # }
-///
 /// struct MockApi {
 ///     balance: u64,
 /// }
@@ -295,6 +292,59 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 ///
 ///         fn build_block() -> Block {
 ///              unimplemented!("Not Required in tests")
+///         }
+///     }
+/// }
+///
+/// # fn main() {}
+/// ```
+///
+/// # `advanced` attribute
+///
+/// This attribute can be placed above individual function in the mock implementation to request
+/// more control over the function declaration. From the client side each runtime api function is
+/// called with the `at` parameter that is a [`BlockId`](sp_api::BlockId). When using the `advanced`
+/// attribute, the macro expects that the first parameter of the function is this `at` parameter.
+/// Besides that the macro also doesn't do the automatic return value rewrite, which means that full
+/// return value must be specified. The full return value is constructed like
+/// [`Result`]`<`[`NativeOrEncoded`](sp_api::NativeOrEncoded)`<ReturnValue>, Error>` while
+/// `ReturnValue` being the return value that is specified in the trait declaration.
+///
+/// ## Example
+/// ```rust
+/// # use sp_runtime::{traits::Block as BlockT, generic::BlockId};
+/// # use sp_test_primitives::Block;
+/// # use sp_core::NativeOrEncoded;
+/// #
+/// # sp_api::decl_runtime_apis! {
+/// #     /// Declare the api trait.
+/// #     pub trait Balance {
+/// #         /// Get the balance.
+/// #         fn get_balance() -> u64;
+/// #         /// Set the balance.
+/// #         fn set_balance(val: u64);
+/// #     }
+/// # }
+/// struct MockApi {
+///     balance: u64,
+/// }
+///
+/// sp_api::mock_impl_runtime_apis! {
+///     impl Balance<Block> for MockApi {
+///         type Error = String;
+///         #[advanced]
+///         fn get_balance(&self, at: &BlockId<Block>) -> Result<NativeOrEncoded<u64>, String> {
+///             println!("Being called at: {}", at);
+///
+///             Ok(self.balance.into())
+///         }
+///         #[advanced]
+///         fn set_balance(at: &BlockId<Block>, val: u64) -> Result<NativeOrEncoded<()>, String> {
+///             if let BlockId::Number(1) = at {
+///                 println!("Being called to set balance to: {}", val);
+///             }
+///
+///             Ok(().into())
 ///         }
 ///     }
 /// }
