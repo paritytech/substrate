@@ -43,12 +43,12 @@ impl Service {
 	/// Returns `None` if no entry was present or connection to the
 	/// [`crate::Worker`] failed.
 	///
-	/// [`Multiaddr`]s returned always include a [`PeerId`] via a
-	/// [`libp2p::core::multiaddr:Protocol::P2p`] component. [`Multiaddr`]s
-	/// might differ in their [`PeerId`], e.g. when each [`Multiaddr`]
-	/// represents a different sentry node. This might change once support for
-	/// sentry nodes is removed (see
-	/// https://github.com/paritytech/substrate/issues/6845).
+	/// Note: [`Multiaddr`]s returned always include a [`PeerId`] via a
+	/// [`libp2p::core::multiaddr:Protocol::P2p`] component. Equality of
+	/// [`PeerId`]s across [`Multiaddr`]s returned by a single call is not
+	/// enforced today, given that there are still authorities out there
+	/// publishing the addresses of their sentry nodes on the DHT. In the future
+	/// this guarantee can be provided.
 	pub async fn get_addresses_by_authority_id(&mut self, authority: AuthorityId) -> Option<Vec<Multiaddr>> {
 		let (tx, rx) = oneshot::channel();
 

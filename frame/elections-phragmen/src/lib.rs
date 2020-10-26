@@ -973,10 +973,15 @@ impl<T: Trait> Module<T> {
 			);
 			T::ChangeMembers::set_prime(prime);
 
-			// outgoing members lose their bond.
-			let mut to_burn_bond = outgoing.to_vec();
+			// outgoing members who are no longer a runner-up lose their bond.
+			let mut to_burn_bond = outgoing
+				.iter()
+				.filter(|o| new_runners_up_ids_sorted.binary_search(o).is_err())
+				.cloned()
+				.collect::<Vec<_>>();
 
-			// compute the outgoing of runners up as well and append them to the `to_burn_bond`
+			// compute the outgoing of runners up as well and append them to the `to_burn_bond`, if
+			// they are not members.
 			{
 				let (_, outgoing) = T::ChangeMembers::compute_members_diff(
 					&new_runners_up_ids_sorted,
@@ -984,7 +989,13 @@ impl<T: Trait> Module<T> {
 				);
 				// none of the ones computed to be outgoing must still be in the list.
 				debug_assert!(outgoing.iter().all(|o| !new_runners_up_ids_sorted.contains(o)));
-				to_burn_bond.extend(outgoing);
+				to_burn_bond.extend(
+					outgoing
+						.iter()
+						.filter(|o| new_members_ids_sorted.binary_search(o).is_err())
+						.cloned()
+						.collect::<Vec<_>>()
+				);
 			}
 
 			// Burn loser bond. members list is sorted. O(NLogM) (N candidates, M members)
@@ -2875,5 +2886,87 @@ mod tests {
 			// 3 stays.
 			assert_eq!(balances(&3), (25, 5));
 		})
+	}
+
+	#[test]
+	fn member_to_runner_up_wont_slash() {
+		ExtBuilder::default().desired_runners_up(2).desired_members(1).build_and_execute(|| {
+			assert_ok!(submit_candidacy(Origin::signed(4)));
+			assert_ok!(submit_candidacy(Origin::signed(3)));
+			assert_ok!(submit_candidacy(Origin::signed(2)));
+
+
+			assert_ok!(vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(vote(Origin::signed(2), vec![2], 20));
+
+			System::set_block_number(5);
+			Elections::end_block(System::block_number());
+
+			assert_eq!(Elections::members_ids(), vec![4]);
+			assert_eq!(Elections::runners_up_ids(), vec![2, 3]);
+
+			assert_eq!(balances(&4), (35, 5));
+			assert_eq!(balances(&3), (25, 5));
+			assert_eq!(balances(&2), (15, 5));
+
+			// this guy will shift everyone down.
+			assert_ok!(submit_candidacy(Origin::signed(5)));
+			assert_ok!(vote(Origin::signed(5), vec![5], 50));
+
+			System::set_block_number(10);
+			Elections::end_block(System::block_number());
+
+			assert_eq!(Elections::members_ids(), vec![5]);
+			assert_eq!(Elections::runners_up_ids(), vec![3, 4]);
+
+			// 4 went from member to runner-up -- don't slash.
+			assert_eq!(balances(&4), (35, 5));
+			// 3 stayed runner-up -- don't slash.
+			assert_eq!(balances(&3), (25, 5));
+			// 2 was removed -- slash.
+			assert_eq!(balances(&2), (15, 2));
+		});
+	}
+
+	#[test]
+	fn runner_up_to_member_wont_slash() {
+		ExtBuilder::default().desired_runners_up(2).desired_members(1).build_and_execute(|| {
+			assert_ok!(submit_candidacy(Origin::signed(4)));
+			assert_ok!(submit_candidacy(Origin::signed(3)));
+			assert_ok!(submit_candidacy(Origin::signed(2)));
+
+
+			assert_ok!(vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(vote(Origin::signed(2), vec![2], 20));
+
+			System::set_block_number(5);
+			Elections::end_block(System::block_number());
+
+			assert_eq!(Elections::members_ids(), vec![4]);
+			assert_eq!(Elections::runners_up_ids(), vec![2, 3]);
+
+			assert_eq!(balances(&4), (35, 5));
+			assert_eq!(balances(&3), (25, 5));
+			assert_eq!(balances(&2), (15, 5));
+
+			// swap some votes.
+			assert_ok!(vote(Origin::signed(4), vec![2], 40));
+			assert_ok!(vote(Origin::signed(2), vec![4], 20));
+
+			System::set_block_number(10);
+			Elections::end_block(System::block_number());
+
+			assert_eq!(Elections::members_ids(), vec![2]);
+			assert_eq!(Elections::runners_up_ids(), vec![4, 3]);
+
+			// 2 went from runner to member, don't slash
+			assert_eq!(balances(&2), (15, 5));
+			// 4 went from member to runner, don't slash
+			assert_eq!(balances(&4), (35, 5));
+			// 3 stayed the same
+			assert_eq!(balances(&3), (25, 5));
+		});
 	}
 }
