@@ -38,7 +38,7 @@ use tracing;
 #[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
-	traits::{CallInWasmExt, TaskExecutorExt},
+	traits::{CallInWasmExt, TaskExecutorExt, RuntimeSpawnExt},
 	offchain::{OffchainExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
 	storage::ChildInfo,
@@ -520,7 +520,6 @@ pub trait Crypto {
 	fn start_batch_verify(&mut self) {
 		let scheduler = self.extension::<TaskExecutorExt>()
 			.expect("No task executor associated with the current context!")
-			.0
 			.clone();
 
 		self.register_extension(VerificationExt(BatchVerifier::new(scheduler)))
@@ -755,7 +754,7 @@ pub trait OffchainIndex {
 
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
-	/// The keystore extension to register/retrieve from the externalities.
+	/// Batch verification extension to register/retrieve from the externalities.
 	pub struct VerificationExt(BatchVerifier);
 }
 
@@ -1239,6 +1238,34 @@ pub trait Sandbox {
 	}
 }
 
+/// Wasm host functions for managing tasks.
+///
+/// This should not be used directly. Use `sp_tasks` for running parallel tasks instead.
+#[runtime_interface(wasm_only)]
+pub trait RuntimeTasks {
+	/// Wasm host function for spawning task.
+	///
+	/// This should not be used directly. Use `sp_tasks::spawn` instead.
+	fn spawn(dispatcher_ref: u32, entry: u32, payload: Vec<u8>) -> u64 {
+		sp_externalities::with_externalities(|mut ext|{
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
+			runtime_spawn.spawn_call(dispatcher_ref, entry, payload)
+		}).expect("`RuntimeTasks::spawn`: called outside of externalities context")
+	}
+
+	/// Wasm host function for joining a task.
+	///
+	/// This should not be used directly. Use `join` of `sp_tasks::spawn` result instead.
+	fn join(handle: u64) -> Vec<u8> {
+		sp_externalities::with_externalities(|mut ext| {
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
+			runtime_spawn.join(handle)
+		}).expect("`RuntimeTasks::join`: called outside of externalities context")
+	}
+ }
+
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(not(feature = "std"))]
 struct WasmAllocator;
@@ -1306,6 +1333,7 @@ pub type SubstrateHostFunctions = (
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
+	runtime_tasks::HostFunctions,
 );
 
 #[cfg(test)]

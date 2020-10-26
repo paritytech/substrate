@@ -44,7 +44,6 @@ use frame_support::{
 	storage, traits::KeyOwnerProofSystem, weights::{Pays, Weight}, Parameter,
 };
 use frame_system::{ensure_none, ensure_root, ensure_signed};
-use pallet_finality_tracker::OnFinalizationStalled;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::Zero,
@@ -447,7 +446,7 @@ impl<T: Trait> Module<T> {
 
 				// only allow the next forced change when twice the window has passed since
 				// this one.
-				<NextForced<T>>::put(scheduled_at + in_blocks * 2.into());
+				<NextForced<T>>::put(scheduled_at + in_blocks * 2u32.into());
 			}
 
 			<PendingChange<T>>::put(StoredPendingChange {
@@ -575,6 +574,13 @@ impl<T: Trait> Module<T> {
 		)
 		.ok()
 	}
+
+	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {
+		// when we record old authority sets we could try to figure out _who_
+		// failed. until then, we can't meaningfully guard against
+		// `next == last` the way that normal session changes do.
+		<Stalled<T>>::put((further_wait, median));
+	}
 }
 
 impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
@@ -633,14 +639,5 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 
 	fn on_disabled(i: usize) {
 		Self::deposit_log(ConsensusLog::OnDisabled(i as u64))
-	}
-}
-
-impl<T: Trait> OnFinalizationStalled<T::BlockNumber> for Module<T> {
-	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {
-		// when we record old authority sets, we can use `pallet_finality_tracker::median`
-		// to figure out _who_ failed. until then, we can't meaningfully guard
-		// against `next == last` the way that normal session changes do.
-		<Stalled<T>>::put((further_wait, median));
 	}
 }
