@@ -113,7 +113,7 @@ pub type DbState<B> = sp_state_machine::TrieBackend<
 /// Key value db change for at a given block of an historied DB.
 pub struct HistoriedDBMut {
 	/// Branch head indexes to change values of a latest block.
-	pub current_state: historied_db::Latest<(u32, u32)>,
+	pub current_state: historied_db::Latest<(u32, u64)>,
 	/// Inner database to modify historied values.
 	pub db: Arc<dyn Database<DbHash>>,
 }
@@ -147,7 +147,8 @@ impl HistoriedDBMut {
 		};
 
 		let histo = if let Some(histo) = self.db.get(column, k) {
-			Some(HValue::decode_with_context(&mut &histo[..], &(init.clone(), init_nodes.clone())).expect("Bad encoded value in db, closing"))
+			Some(HValue::decode_with_context(&mut &histo[..], &(init.clone(), init_nodes.clone()))
+				.expect("Bad encoded value in db, closing"))
 		} else {
 			if change.is_none() {
 				return;
@@ -179,6 +180,7 @@ impl HistoriedDBMut {
 }
 
 const DB_HASH_LEN: usize = 32;
+
 /// Hash type that this backend uses for the database.
 pub type DbHash = [u8; DB_HASH_LEN];
 
@@ -1170,7 +1172,7 @@ impl<T: Clone> FrozenForDuration<T> {
 pub type TreeManagement<H, S> = historied_db::management::tree::TreeManagement<
 	H,
 	u32,
-	u32,
+	u64,
 	S,
 >;
 
@@ -1178,7 +1180,7 @@ pub type TreeManagement<H, S> = historied_db::management::tree::TreeManagement<
 pub type RegisteredConsumer<H, S> = historied_db::management::tree::RegisteredConsumer<
 	H,
 	u32,
-	u32,
+	u64,
 	S,
 >;
 
@@ -1205,6 +1207,7 @@ pub struct Backend<Block: BlockT> {
 		<HashFor<Block> as Hasher>::Out,
 		TreeManagementPersistence,
 	>>>,
+	historied_pruning_window: Option<NumberFor<Block>>,
 	historied_next_finalizable: Arc<RwLock<Option<NumberFor<Block>>>>,
 	historied_management_consumer: RegisteredConsumer<
 		<HashFor<Block> as Hasher>::Out,
@@ -1256,6 +1259,9 @@ impl<Block: BlockT> Backend<Block> {
 		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(
 			format!("State database error: {:?}", e)
 		);
+		let historied_pruning_window = match config.pruning {
+			PruningMode::Constrained(constraint) => constraint.max_blocks.map(|nb| nb.into()),
+		};
 		let state_db: StateDb<_, _> = StateDb::new(
 			config.pruning.clone(),
 			!config.source.supports_ref_counting(),
@@ -1323,6 +1329,7 @@ impl<Block: BlockT> Backend<Block> {
 			historied_management,
 			historied_next_finalizable: Arc::new(RwLock::new(None)),
 			historied_management_consumer,
+			historied_pruning_window,
 			historied_management_consumer_transaction,
 		})
 	}
@@ -1878,7 +1885,9 @@ impl<Block: BlockT> Backend<Block> {
 			return Ok(())
 		}
 
-		let prune_index = None; // TODO calculate this from pruning configuration mode.
+		let prune_index = self.historied_pruning_window.map(|nb| {
+			number.saturating_sub(nb).saturated_into::<u64>()
+		});
 
 		// Ensure pending layer is clean
 		let _ = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
@@ -1891,10 +1900,6 @@ impl<Block: BlockT> Backend<Block> {
 		};
 		
 		if let (Some(switch_index), Some(path)) = (switch_index, path) {
-			// TODO current canonicalize is broken (uses a path, but remove all that is afterward too), we just need to change composite treshold
-			// and migrate. Or we canonicallize over ptha to hash and only ever migrate less often
-			// (composite index).
-			// TODO need recheck
 			self.historied_management.write().canonicalize(path, switch_index, prune_index);
 			// do migrate data
 			self.historied_management_consumer.migrate(&mut *self.historied_management.write());

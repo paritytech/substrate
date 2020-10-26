@@ -773,8 +773,8 @@ impl BranchNodes {
 	}
 }
 
-impl NodeStorage<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for BlockNodes {
-	fn get_node(&self, reference_key: &[u8], relative_index: u32) -> Option<LinearNode> {
+impl NodeStorage<Option<Vec<u8>>, u64, LinearBackendInner, MetaBlocks> for BlockNodes {
+	fn get_node(&self, reference_key: &[u8], relative_index: u64) -> Option<LinearNode> {
 		let key = Self::vec_address(reference_key, relative_index);
 		self.0.read(crate::columns::AUX, &key).and_then(|value| {
 			// use encoded len as size (this is bigger than the call to estimate size
@@ -790,13 +790,13 @@ impl NodeStorage<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for Block
 	}
 }
 
-impl NodeStorageMut<Option<Vec<u8>>, u32, LinearBackendInner, MetaBlocks> for BlockNodes {
-	fn set_node(&mut self, reference_key: &[u8], relative_index: u32, node: &LinearNode) {
+impl NodeStorageMut<Option<Vec<u8>>, u64, LinearBackendInner, MetaBlocks> for BlockNodes {
+	fn set_node(&mut self, reference_key: &[u8], relative_index: u64, node: &LinearNode) {
 		let key = Self::vec_address(reference_key, relative_index);
 		let encoded = node.inner().encode();
 		self.0.write(key, encoded);
 	}
-	fn remove_node(&mut self, reference_key: &[u8], relative_index: u32) {
+	fn remove_node(&mut self, reference_key: &[u8], relative_index: u64) {
 		let key = Self::vec_address(reference_key, relative_index);
 		self.0.remove(key);
 	}
@@ -843,13 +843,13 @@ impl NodeStorageMut<BranchLinear, u32, TreeBackendInner, MetaBranches> for Branc
 // Values are stored in memory in Vec like structure
 type LinearBackendInner = historied_db::backend::in_memory::MemoryOnly<
 	Option<Vec<u8>>,
-	u32,
+	u64,
 >;
 
 // A multiple nodes wraps multiple vec like structure
 type LinearBackend = historied_db::backend::nodes::Head<
 	Option<Vec<u8>>,
-	u32,
+	u64,
 	LinearBackendInner,
 	MetaBlocks,
 	BlockNodes,
@@ -859,13 +859,13 @@ type LinearBackend = historied_db::backend::nodes::Head<
 // Nodes storing these
 type LinearNode = historied_db::backend::nodes::Node<
 	Option<Vec<u8>>,
-	u32,
+	u64,
 	LinearBackendInner,
 	MetaBlocks,
 >;
 
 // Branch
-type BranchLinear = historied_db::historied::linear::Linear<Option<Vec<u8>>, u32, LinearBackend>;
+type BranchLinear = historied_db::historied::linear::Linear<Option<Vec<u8>>, u64, LinearBackend>;
 
 // Branch are stored in memory
 type TreeBackendInner = historied_db::backend::in_memory::MemoryOnly<
@@ -896,7 +896,7 @@ type TreeNode = historied_db::backend::nodes::Node<
 /// Indexed by u32 for both branches and value into branches.
 /// Value are in memory but serialized as splitted node.
 /// Each node contains multiple values or multiple branch head of nodes.
-pub type HValue = Tree<u32, u32, Option<Vec<u8>>, TreeBackend, LinearBackend>;
+pub type HValue = Tree<u32, u64, Option<Vec<u8>>, TreeBackend, LinearBackend>;
 
 #[cfg(test)]
 mod tests {
