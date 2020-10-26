@@ -25,7 +25,7 @@
 //!
 //! ## Usage
 //!
-//! WASM overrides may be enabled with the `--wasm-runtimes-overrides` argument. The argument
+//! WASM overrides may be enabled with the `--wasm-runtime-overrides` argument. The argument
 //! expects a path to a directory that holds custom WASM.
 //!
 //! Any file ending in '.wasm' will be scraped and instantiated as a WASM blob. WASM can be built by
