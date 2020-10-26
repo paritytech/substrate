@@ -112,11 +112,11 @@ impl<T: Trait> Contract<T> {
 				// Endowment should be large but not as large to inhibit rent payments.
 				let endowment = T::RentDepositOffset::get()
 					.saturating_mul(storage_size + T::StorageSizeOffset::get().into())
-					.saturating_sub(1.into());
+					.saturating_sub(1u32.into());
 
 				(storage_size, endowment)
 			},
-			Endow::Max => (0.into(), Endow::max::<T>()),
+			Endow::Max => (0u32.into(), Endow::max::<T>()),
 		};
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let addr = T::DetermineContractAddress::contract_address_for(&module.hash, &data, &caller);
@@ -126,7 +126,7 @@ impl<T: Trait> Contract<T> {
 		// undesired implicit bump (which messes with rent collection), wo do the bump ourselfs
 		// in the setup closure so that both the instantiate and subsequent call are run with the
 		// same block number.
-		System::<T>::set_block_number(1.into());
+		System::<T>::set_block_number(1u32.into());
 
 		Contracts::<T>::put_code_raw(module.code)?;
 		Contracts::<T>::instantiate(
@@ -214,7 +214,7 @@ impl<T: Trait> Tombstone<T> {
 		let storage_items = create_storage::<T>(stor_num, stor_size)?;
 		contract.store(&storage_items)?;
 		System::<T>::set_block_number(
-			contract.eviction_at()? + T::SignedClaimHandicap::get() + 5.into()
+			contract.eviction_at()? + T::SignedClaimHandicap::get() + 5u32.into()
 		);
 		crate::rent::collect_rent::<T>(&contract.account_id);
 		contract.ensure_tombstone()?;
@@ -242,7 +242,7 @@ fn create_storage<T: Trait>(
 
 /// The funding that each account that either calls or instantiates contracts is funded with.
 fn caller_funding<T: Trait>() -> BalanceOf<T> {
-	BalanceOf::<T>::max_value() / 2.into()
+	BalanceOf::<T>::max_value() / 2u32.into()
 }
 
 benchmarks! {
@@ -302,12 +302,12 @@ benchmarks! {
 		let instance = Contract::<T>::with_caller(
 			whitelisted_caller(), WasmModule::dummy_with_mem(), vec![], Endow::CollectRent
 		)?;
-		let value = T::Currency::minimum_balance() * 100.into();
+		let value = T::Currency::minimum_balance() * 100u32.into();
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let callee = instance.addr.clone();
 
 		// trigger rent collection for worst case performance of call
-		System::<T>::set_block_number(instance.eviction_at()? - 5.into());
+		System::<T>::set_block_number(instance.eviction_at()? - 5u32.into());
 		let before = T::Currency::free_balance(&instance.account_id);
 	}: _(origin, callee, value, Weight::max_value(), data)
 	verify {
@@ -340,7 +340,7 @@ benchmarks! {
 
 		// generate enough rent so that the contract is evicted
 		System::<T>::set_block_number(
-			instance.eviction_at()? + T::SignedClaimHandicap::get() + 5.into()
+			instance.eviction_at()? + T::SignedClaimHandicap::get() + 5u32.into()
 		);
 	}: _(origin, account_id, None)
 	verify {
@@ -360,7 +360,7 @@ benchmarks! {
 			"seal_caller", r * API_BENCHMARK_BATCH_SIZE
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_address {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -368,7 +368,7 @@ benchmarks! {
 			"seal_address", r * API_BENCHMARK_BATCH_SIZE
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_gas_left {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -376,7 +376,7 @@ benchmarks! {
 			"seal_gas_left", r * API_BENCHMARK_BATCH_SIZE
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_balance {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -384,7 +384,7 @@ benchmarks! {
 			"seal_balance", r * API_BENCHMARK_BATCH_SIZE
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_value_transferred {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -392,7 +392,7 @@ benchmarks! {
 			"seal_value_transferred", r * API_BENCHMARK_BATCH_SIZE
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_minimum_balance {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -400,7 +400,7 @@ benchmarks! {
 			"seal_minimum_balance", r * API_BENCHMARK_BATCH_SIZE
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_tombstone_deposit {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -408,7 +408,7 @@ benchmarks! {
 			"seal_tombstone_deposit", r * API_BENCHMARK_BATCH_SIZE
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_rent_allowance {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -416,7 +416,7 @@ benchmarks! {
 			"seal_rent_allowance", r * API_BENCHMARK_BATCH_SIZE
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_block_number {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -424,7 +424,7 @@ benchmarks! {
 			"seal_block_number", r * API_BENCHMARK_BATCH_SIZE
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_now {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -432,7 +432,7 @@ benchmarks! {
 			"seal_now", r * API_BENCHMARK_BATCH_SIZE
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_weight_to_fee {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -458,7 +458,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_gas {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -477,7 +477,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// We cannot call seal_input multiple times. Therefore our weight determination is not
 	// as precise as with other APIs. Because this function can only be called once per
@@ -506,7 +506,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_input_per_kb {
 		let n in 0 .. code::max_pages::<T>() * 64;
@@ -536,7 +536,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let data = vec![42u8; (n * 1024).min(buffer_size) as usize];
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), data)
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), data)
 
 	// The same argument as for `seal_input` is true here.
 	seal_return {
@@ -558,7 +558,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_return_per_kb {
 		let n in 0 .. code::max_pages::<T>() * 64;
@@ -580,7 +580,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// The same argument as for `seal_input` is true here.
 	seal_terminate {
@@ -610,12 +610,12 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-		assert_eq!(T::Currency::total_balance(&beneficiary), 0.into());
+		assert_eq!(T::Currency::total_balance(&beneficiary), 0u32.into());
 		assert_eq!(T::Currency::total_balance(&instance.account_id), Endow::max::<T>());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 	verify {
 		if r > 0 {
-			assert_eq!(T::Currency::total_balance(&instance.account_id), 0.into());
+			assert_eq!(T::Currency::total_balance(&instance.account_id), 0u32.into());
 			assert_eq!(T::Currency::total_balance(&beneficiary), Endow::max::<T>());
 		}
 	}
@@ -687,10 +687,10 @@ benchmarks! {
 			account("origin", 0, 0), code, vec![], Endow::Max
 		)?;
 		instance.store(&tombstone.storage)?;
-		System::<T>::set_block_number(System::<T>::block_number() + 1.into());
+		System::<T>::set_block_number(System::<T>::block_number() + 1u32.into());
 
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 	verify {
 		if r > 0 {
 			tombstone.contract.alive_info()?;
@@ -769,10 +769,10 @@ benchmarks! {
 		)?;
 		instance.store(&tombstone.storage)?;
 		instance.store(&delta)?;
-		System::<T>::set_block_number(System::<T>::block_number() + 1.into());
+		System::<T>::set_block_number(System::<T>::block_number() + 1u32.into());
 
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 	verify {
 		tombstone.contract.alive_info()?;
 	}
@@ -809,7 +809,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// Overhead of calling the function without any topic.
 	// We benchmark for the worst case (largest event).
@@ -833,7 +833,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// Benchmark the overhead that topics generate.
 	// `t`: Number of topics
@@ -871,7 +871,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_set_rent_allowance {
 		let r in 0 .. API_BENCHMARK_BATCHES;
@@ -899,7 +899,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	// The contract is a bit more complex because I needs to use different keys in order
@@ -935,7 +935,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_set_storage_per_kb {
 		let n in 0 .. T::MaxValueSize::get() / 1024;
@@ -964,7 +964,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// Similar to seal_set_storage. However, we store all the keys that we are about to
 	// delete beforehand in order to prevent any optimizations that could occur when
@@ -1008,7 +1008,7 @@ benchmarks! {
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// We make sure that all storage accesses are to unique keys.
 	seal_get_storage {
@@ -1054,7 +1054,7 @@ benchmarks! {
 			.map_err(|_| "Failed to write to storage during setup.")?;
 		}
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_get_storage_per_kb {
 		let n in 0 .. T::MaxValueSize::get() / 1024;
@@ -1097,7 +1097,7 @@ benchmarks! {
 		)
 		.map_err(|_| "Failed to write to storage during setup.")?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// We transfer to unique accounts.
 	seal_transfer {
@@ -1108,7 +1108,7 @@ benchmarks! {
 		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
 		let account_bytes = accounts.iter().flat_map(|x| x.encode()).collect();
 		let value = Config::<T>::subsistence_threshold_uncached();
-		assert!(value > 0.into());
+		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
 		use body::DynInstr::{Counter, Regular};
@@ -1142,9 +1142,9 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		for account in &accounts {
-			assert_eq!(T::Currency::total_balance(account), 0.into());
+			assert_eq!(T::Currency::total_balance(account), 0u32.into());
 		}
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 	verify {
 		for account in &accounts {
 			assert_eq!(T::Currency::total_balance(account), value);
@@ -1160,7 +1160,7 @@ benchmarks! {
 			.collect::<Result<Vec<_>, _>>()?;
 		let callee_len = callees.get(0).map(|i| i.account_id.encode().len()).unwrap_or(0);
 		let callee_bytes = callees.iter().flat_map(|x| x.account_id.encode()).collect();
-		let value: BalanceOf<T> = 0.into();
+		let value: BalanceOf<T> = 0u32.into();
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
 		use body::DynInstr::{Counter, Regular};
@@ -1208,7 +1208,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	seal_call_per_transfer_input_output_kb {
 		let t in 0 .. 1;
@@ -1292,7 +1292,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// We assume that every instantiate sends at least the subsistence amount.
 	seal_instantiate {
@@ -1318,7 +1318,7 @@ benchmarks! {
 		let hashes_bytes = hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
 		let hashes_len = hashes_bytes.len();
 		let value = Config::<T>::subsistence_threshold_uncached();
-		assert!(value > 0.into());
+		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
 		let addr_len = sp_std::mem::size_of::<T::AccountId>();
@@ -1395,7 +1395,7 @@ benchmarks! {
 				return Err("Expected that contract does not exist at this point.");
 			}
 		}
-	}: call(origin, callee, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, callee, 0u32.into(), Weight::max_value(), vec![])
 	verify {
 		for addr in &addresses {
 			instance.alive_info()?;
@@ -1434,7 +1434,7 @@ benchmarks! {
 		let input_bytes = inputs.iter().cloned().flatten().collect::<Vec<_>>();
 		let inputs_len = input_bytes.len();
 		let value = Config::<T>::subsistence_threshold_uncached();
-		assert!(value > 0.into());
+		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
 		let addr_len = sp_std::mem::size_of::<T::AccountId>();
@@ -1513,7 +1513,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_sha2_256 {
@@ -1522,7 +1522,7 @@ benchmarks! {
 			"seal_hash_sha2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// `n`: Input to hash in kilobytes
 	seal_hash_sha2_256_per_kb {
@@ -1531,7 +1531,7 @@ benchmarks! {
 			"seal_hash_sha2_256", API_BENCHMARK_BATCH_SIZE, n * 1024,
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_keccak_256 {
@@ -1540,7 +1540,7 @@ benchmarks! {
 			"seal_hash_keccak_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// `n`: Input to hash in kilobytes
 	seal_hash_keccak_256_per_kb {
@@ -1549,7 +1549,7 @@ benchmarks! {
 			"seal_hash_keccak_256", API_BENCHMARK_BATCH_SIZE, n * 1024,
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_blake2_256 {
@@ -1558,7 +1558,7 @@ benchmarks! {
 			"seal_hash_blake2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// `n`: Input to hash in kilobytes
 	seal_hash_blake2_256_per_kb {
@@ -1567,7 +1567,7 @@ benchmarks! {
 			"seal_hash_blake2_256", API_BENCHMARK_BATCH_SIZE, n * 1024,
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_blake2_128 {
@@ -1576,7 +1576,7 @@ benchmarks! {
 			"seal_hash_blake2_128", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// `n`: Input to hash in kilobytes
 	seal_hash_blake2_128_per_kb {
@@ -1585,7 +1585,7 @@ benchmarks! {
 			"seal_hash_blake2_128", API_BENCHMARK_BATCH_SIZE, n * 1024,
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0.into(), Weight::max_value(), vec![])
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
 	// We make the assumption that pushing a constant and dropping a value takes roughly
 	// the same amount of time. We follow that `t.load` and `drop` both have the weight

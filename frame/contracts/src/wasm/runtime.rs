@@ -717,7 +717,7 @@ define_env!(Env, <E: Ext>,
 		let value: BalanceOf<<E as Ext>::T> = read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
-		if value > 0.into() {
+		if value > 0u32.into() {
 			charge_gas(ctx, RuntimeToken::CallSurchargeTransfer)?;
 		}
 
