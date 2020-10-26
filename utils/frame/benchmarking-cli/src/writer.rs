@@ -39,8 +39,7 @@ struct TemplateData {
 	pallet: String,
 	header: String,
 	cmd: CmdData,
-	// Map from benchmark name to benchmark data
-	benchmarks: HashMap<String, BenchmarkData>,
+	benchmarks: Vec<BenchmarkData>,
 }
 
 // This was the final data we have about each benchmark.
@@ -97,12 +96,12 @@ fn io_error(s: &str) -> std::io::Error {
 // p1 -> [b1, b2, b3]
 // p2 -> [b1, b2]
 // ```
-fn map_results(batches: &[BenchmarkBatch]) -> Result<HashMap<String, HashMap<String, BenchmarkData>>, std::io::Error> {
+fn map_results(batches: &[BenchmarkBatch]) -> Result<HashMap<String, Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
 	if batches.is_empty() { return Err(io_error("empty batches")) }
 
 	let mut all_benchmarks = HashMap::new();
-	let mut pallet_map = HashMap::new();
+	let mut pallet_benchmarks = Vec::new();
 
 	let mut batches_iter = batches.iter().peekable();
 	while let Some(batch) = batches_iter.next() {
@@ -110,22 +109,20 @@ fn map_results(batches: &[BenchmarkBatch]) -> Result<HashMap<String, HashMap<Str
 		if batch.results.is_empty() { continue }
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
-		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
-
 		let benchmark_data = get_benchmark_data(batch);
-		pallet_map.insert(benchmark_string, benchmark_data);
+		pallet_benchmarks.push(benchmark_data);
 
 		// Check if this is the end of the iterator
 		if let Some(next) = batches_iter.peek() {
 			// Next pallet is different than current pallet, save and create new data.
 			let next_pallet = String::from_utf8(next.pallet.clone()).unwrap();
 			if next_pallet != pallet_string {
-				all_benchmarks.insert(pallet_string, pallet_map.clone());
-				pallet_map = HashMap::new();
+				all_benchmarks.insert(pallet_string, pallet_benchmarks.clone());
+				pallet_benchmarks = Vec::new();
 			}
 		} else {
 			// This is the end of the iterator, so push the final data.
-			all_benchmarks.insert(pallet_string, pallet_map.clone());
+			all_benchmarks.insert(pallet_string, pallet_benchmarks.clone());
 		}
 	}
 	Ok(all_benchmarks)
@@ -240,9 +237,10 @@ pub fn write_results(
 	// Organize results by pallet into a JSON map
 	let all_results = map_results(batches)?;
 	for (pallet, results) in all_results.into_iter() {
-		// Create new file: "path/to/pallet_name.rs".
 		let mut file_path = path.clone();
+		// If a user only specified a directory...
 		if file_path.is_dir() {
+			// Create new file: "path/to/pallet_name.rs".
 			file_path.push(&pallet);
 			file_path.set_extension("rs");
 		}
