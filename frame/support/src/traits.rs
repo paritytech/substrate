@@ -1268,8 +1268,8 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
 	}
 
-	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
-	/// call `change_members_sorted`.
+	/// Compute diff between new and old members; they **must already be sorted**. Returns incoming
+	/// and outgoing members.
 	fn compute_members_diff(
 		new_members: &[AccountId],
 		old_members: &[AccountId]
