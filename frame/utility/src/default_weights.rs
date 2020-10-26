@@ -29,7 +29,6 @@ impl crate::WeightInfo for () {
 		(20_803_000 as Weight)
 			.saturating_add((1_984_000 as Weight).saturating_mul(c as Weight))
 	}
-	// WARNING! Some components were not used: ["u"]
 	fn as_derivative() -> Weight {
 		(5_853_000 as Weight)
 	}

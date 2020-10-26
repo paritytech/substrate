@@ -194,7 +194,7 @@ where F: Clone + Send + 'static, L: Clone + Send +'static, U: Clone + Send + 'st
 	}
 }
 
-fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'static + Send> (
+fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'static + Send + Sync> (
 	index: usize,
 	spec: &GenericChainSpec<G, E>,
 	role: Role,
@@ -225,7 +225,6 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		enable_mdns: false,
 		allow_private_ipv4: true,
 		wasm_external_transport: None,
-		use_yamux_flow_control: true,
 	};
 
 	Configuration {
@@ -275,7 +274,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	F: TestNetNode,
 	L: TestNetNode,
-	E: ChainSpecExtension + Clone + 'static + Send,
+	E: ChainSpecExtension + Clone + 'static + Send + Sync,
 	G: RuntimeGenesis + 'static,
 {
 	fn new(
@@ -389,7 +388,7 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	full_builder: Fb,
 	light_builder: Lb,
 ) where
-	E: ChainSpecExtension + Clone + 'static + Send,
+	E: ChainSpecExtension + Clone + 'static + Send + Sync,
 	G: RuntimeGenesis + 'static,
 	Fb: Fn(Configuration) -> Result<F, Error>,
 	F: TestNetNode,
@@ -509,7 +508,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	B: FnMut(&F, &mut U),
 	ExF: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
 	U: Clone + Send + 'static,
-	E: ChainSpecExtension + Clone + 'static + Send,
+	E: ChainSpecExtension + Clone + 'static + Send + Sync,
 	G: RuntimeGenesis + 'static,
 {
 	const NUM_FULL_NODES: usize = 10;
@@ -584,7 +583,7 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	F: TestNetNode,
 	Lb: Fn(Configuration) -> Result<L, Error>,
 	L: TestNetNode,
-	E: ChainSpecExtension + Clone + 'static + Send,
+	E: ChainSpecExtension + Clone + 'static + Send + Sync,
 	G: RuntimeGenesis + 'static,
 {
 	const NUM_FULL_NODES: usize = 10;

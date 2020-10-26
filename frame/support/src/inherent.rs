@@ -74,7 +74,7 @@ macro_rules! impl_outer_inherent {
 
 			fn check_extrinsics(&self, block: &$block) -> $crate::inherent::CheckInherentsResult {
 				use $crate::inherent::{ProvideInherent, IsFatalError};
-				use $crate::dispatch::IsSubType;
+				use $crate::traits::IsSubType;
 
 				let mut result = $crate::inherent::CheckInherentsResult::new();
 				for xt in block.extrinsics() {
@@ -141,7 +141,7 @@ macro_rules! impl_outer_inherent {
 mod tests {
 	use super::*;
 	use sp_runtime::{traits, testing::{Header, self}};
-	use crate::dispatch::IsSubType;
+	use crate::traits::IsSubType;
 
 	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
 	enum Call {
