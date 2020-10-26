@@ -164,7 +164,7 @@ macro_rules! within_span {
 		$( $code:tt )*
 	) => {
 		{
-			$crate::within_span!($crate::span!($crate::Level::TRACE, $name); $( $code )*)
+			$crate::within_span!($crate::span!($lvl, $name); $( $code )*)
 		}
 	};
 }
