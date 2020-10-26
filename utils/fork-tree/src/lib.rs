@@ -1711,7 +1711,9 @@ mod test {
 		);
 	}
 
-	fn test_fork_tree_with_values<'a>() -> (ForkTree<&'a str, u64, u64>, impl Fn(&&str, &&str) -> Result<bool, TestError>)  {
+	fn test_fork_tree_with_values<'a>() -> (ForkTree<&'a str, u64, u64>, impl Fn(&&str, &&str)
+		-> Result<bool, TestError>)
+	{
 		let mut tree = ForkTree::new();
 
 		//
