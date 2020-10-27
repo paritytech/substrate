@@ -1070,22 +1070,22 @@ mod test {
 
 		assert_eq!(
 			tree.find_node_index_where(&"I", &4, &is_descendent_of, &|_| true),
-			Ok(Some(vec![1, 1, 0]))
+			Ok(Some(vec![0, 1, 0]))
 		);
 
 		assert_eq!(
 			tree.find_node_index_where(&"L", &4, &is_descendent_of, &|_| true),
-			Ok(Some(vec![1, 1, 0]))
+			Ok(Some(vec![0, 1, 0]))
 		);
 
 		assert_eq!(
 			tree.find_node_index_where(&"M", &5, &is_descendent_of, &|_| true),
-			Ok(Some(vec![1, 1, 1, 0]))
+			Ok(Some(vec![0, 0, 1, 0]))
 		);
 
 		assert_eq!(
 			tree.find_node_index_where(&"O", &5, &is_descendent_of, &|_| true),
-			Ok(Some(vec![1, 1, 1, 0]))
+			Ok(Some(vec![0, 0, 1, 0]))
 		);
 
 		assert_eq!(
@@ -1262,7 +1262,7 @@ mod test {
 
 		assert_eq!(
 			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
-			vec![("I", 4), ("L", 4)],
+			vec![("L", 4), ("I", 4)],
 		);
 
 		// finalizing a node from another fork that isn't part of the tree clears the tree
@@ -1310,7 +1310,7 @@ mod test {
 
 		assert_eq!(
 			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
-			vec![("I", 4), ("L", 4)],
+			vec![("L", 4), ("I", 4)],
 		);
 
 		assert_eq!(
@@ -1483,12 +1483,19 @@ mod test {
 			tree.iter().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 			vec![
 				("A", 1),
-				("B", 2), ("C", 3), ("D", 4), ("E", 5),
-				("F", 2),
-				("G", 3),
-				("H", 3), ("I", 4),
-				("L", 4), ("M", 5), ("O", 5),
-				("J", 2), ("K", 3)
+					("B", 2),
+						("C", 3),
+							("D", 4),
+								("E", 5),
+					("F", 2),
+						("H", 3),
+							("L", 4),
+								("M", 5),
+								("O", 5),
+							("I", 4),
+						("G", 3),
+					("J", 2),
+						("K", 3),
 			],
 		);
 	}
@@ -1610,7 +1617,7 @@ mod test {
 
 		assert_eq!(
 			removed.map(|(hash, _, _)| hash).collect::<Vec<_>>(),
-			vec!["A", "F", "G", "H", "I", "L", "M", "O", "J", "K"]
+			vec!["A", "F", "H", "L", "M", "O", "I", "G", "J", "K"]
 		);
 
 		let removed = tree.prune(
@@ -1677,7 +1684,7 @@ mod test {
 
 		assert_eq!(
 			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
-			vec!["A", "B", "C", "D", "E", "F", "G", "H", "I", "L", "M", "O", "J", "K"],
+			vec!["A", "B", "C", "D", "E", "F", "H", "L", "M", "O", "I", "G", "J", "K"],
 		);
 
 		// after rebalancing the tree we should iterate in preorder exploring
@@ -1703,36 +1710,7 @@ mod test {
 	}
 
 	#[test]
-	fn find_node_where_returns_none_on_bad_is_descendent_of() {
-		let mut tree = ForkTree::new();
-
-		//
-		// A - B
-		//  \
-		//   — C
-		//
-		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
-			match (*base, *block) {
-				("A", b) => Ok(b == "B" || b == "C" || b == "D"),
-				("B", b) | ("C", b) => Ok(b == "D"),
-				("0", _) => Ok(true),
-				_ => Ok(false),
-			}
-		};
-
-		tree.import("A", 1, 1, &is_descendent_of).unwrap();
-		tree.import("B", 2, 2, &is_descendent_of).unwrap();
-		tree.import("C", 2, 4, &is_descendent_of).unwrap();
-
-		assert_eq!(
-			tree.find_node_where(&"D", &3, &is_descendent_of, &|&n| n == 4)
-				.map(|opt| opt.map(|node| node.hash)),
-			Ok(None)
-		);
-	}
-
-	#[test]
-	fn find_node_where_returns_none_on_bad_is_descendent_of_2() {
+	fn find_node_where_value_2() {
 		let mut tree = ForkTree::new();
 
 		//
