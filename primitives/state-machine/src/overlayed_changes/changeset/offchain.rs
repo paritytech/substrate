@@ -19,7 +19,7 @@
 
 use sp_core::offchain::OffchainOverlayedChange;
 use sp_std::prelude::Vec;
-use super::changeset::OverlayedMap;
+use super::OverlayedMap;
 
 /// In-memory storage for offchain workers recoding changes for the actual offchain storage implementation.
 #[derive(Debug, Clone)]

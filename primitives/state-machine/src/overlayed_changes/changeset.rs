@@ -17,6 +17,9 @@
 
 //! Houses the code that implements the transactional overlay storage.
 
+mod offchain;
+
+pub use offchain::OffchainOverlayedChanges;
 use super::{StorageKey, StorageValue, Extrinsics};
 
 #[cfg(feature = "std")]
@@ -98,7 +101,7 @@ pub type OverlayedChangeSet = OverlayedMap<StorageKey, Option<StorageValue>>;
 #[derive(Debug, Clone)]
 pub struct OverlayedMap<K: Ord + Hash, V> {
 	/// Stores the changes that this overlay constitutes.
-	pub(super) changes: BTreeMap<K, OverlayedEntry<V>>,
+	changes: BTreeMap<K, OverlayedEntry<V>>,
 	/// Stores which keys are dirty per transaction. Needed in order to determine which
 	/// values to merge into the parent transaction on commit. The length of this vector
 	/// therefore determines how many nested transactions are currently open (depth).

@@ -18,15 +18,14 @@
 //! The overlayed changes to state.
 
 mod changeset;
-pub(crate) mod offchain;
 
+pub use changeset::OffchainOverlayedChanges;
 use crate::{
 	backend::Backend,
 	stats::StateMachineStats,
 };
 use sp_std::{vec::Vec, any::{TypeId, Any}, boxed::Box};
 use self::changeset::OverlayedChangeSet;
-use self::offchain::OffchainOverlayedChanges;
 
 #[cfg(feature = "std")]
 use crate::{
