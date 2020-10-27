@@ -406,6 +406,9 @@ where
 
 	/// Handle incoming Dht events.
 	async fn handle_dht_event(&mut self, event: DhtEvent) {
+		// Simulate some long running operation.
+		std::thread::sleep(std::time::Duration::from_secs(3));
+
 		match event {
 			DhtEvent::ValueFound(v) => {
 				if let Some(metrics) = &self.metrics {
@@ -475,6 +478,9 @@ where
 		&mut self,
 		values: Vec<(libp2p::kad::record::Key, Vec<u8>)>,
 	) -> Result<()> {
+		// Make every value found event fail.
+		return Err(Error::ReceivingDhtValueFoundEventWithNoRecords);
+
 		// Ensure `values` is not empty and all its keys equal.
 		let remote_key = values.iter().fold(Ok(None), |acc, (key, _)| {
 			match acc {
