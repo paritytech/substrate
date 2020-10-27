@@ -2,12 +2,11 @@ use frame_support::construct_runtime;
 
 construct_runtime! {
 	pub enum Runtime where
+		UncheckedExtrinsic = UncheckedExtrinsic,
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module},
-		Balance: balances::<Instance1>::{Pallet, Origin},
+		System: system::{Pallet, Module},
 	}
 }
 

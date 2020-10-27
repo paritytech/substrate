@@ -39,6 +39,9 @@ mod module1 {
 
 	pub trait Trait<I>: system::Trait {}
 
+	// Test that pallet can be used instead of module.
+	pub type Pallet<T, I = DefaultInstance> = Module<T, I>;
+
 	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call
 			where origin: <T as system::Config>::Origin, system=system
@@ -76,6 +79,9 @@ mod module2 {
 	use super::*;
 
 	pub trait Trait: system::Trait {}
+
+	// Test that pallet can be used instead of module.
+	pub type Pallet<T> = Module<T>;
 
 	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call
@@ -140,15 +146,15 @@ frame_support::construct_runtime!(
 	{
 		System: system::{Module, Call, Event<T>, Origin<T>} = 30,
 		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T>, Origin<T>},
-		Module2: module2::{Module, Call, Storage, Event, Origin},
+		Module2: module2::{Pallet, Call, Storage, Event, Origin},
 		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T>, Origin<T>},
-		Module1_3: module1::<Instance3>::{Module, Storage} = 6,
-		Module1_4: module1::<Instance4>::{Module, Call} = 3,
-		Module1_5: module1::<Instance5>::{Module, Event<T>},
-		Module1_6: module1::<Instance6>::{Module, Call, Storage, Event<T>, Origin<T>} = 1,
-		Module1_7: module1::<Instance7>::{Module, Call, Storage, Event<T>, Origin<T>},
-		Module1_8: module1::<Instance8>::{Module, Call, Storage, Event<T>, Origin<T>} = 12,
-		Module1_9: module1::<Instance9>::{Module, Call, Storage, Event<T>, Origin<T>},
+		Module1_3: module1::<Instance3>::{Pallet, Storage} = 6,
+		Module1_4: module1::<Instance4>::{Pallet, Call} = 3,
+		Module1_5: module1::<Instance5>::{Pallet, Event<T>},
+		Module1_6: module1::<Instance6>::{Pallet, Call, Storage, Event<T>, Origin<T>} = 1,
+		Module1_7: module1::<Instance7>::{Pallet, Call, Storage, Event<T>, Origin<T>},
+		Module1_8: module1::<Instance8>::{Pallet, Call, Storage, Event<T>, Origin<T>} = 12,
+		Module1_9: module1::<Instance9>::{Pallet, Call, Storage, Event<T>, Origin<T>},
 	}
 );
 

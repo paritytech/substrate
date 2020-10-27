@@ -1,0 +1,11 @@
+error: `Module` cannot be defined when `Pallet` is defined
+ --> $DIR/conflicting_module_pallet_parts.rs:9:28
+  |
+9 |         System: system::{Pallet, Module},
+  |                                  ^^^^^^
+
+error: `Module` cannot be defined when `Pallet` is defined
+ --> $DIR/conflicting_module_pallet_parts.rs:9:20
+  |
+9 |         System: system::{Pallet, Module},
+  |                          ^^^^^^

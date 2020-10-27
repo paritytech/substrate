@@ -7,7 +7,7 @@ construct_runtime! {
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module},
-		Balance: balances::<Instance1>::{Event},
+		Balance: balances::<Instance1>::{Pallet, Event},
 	}
 }
 

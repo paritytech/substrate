@@ -1,0 +1,5 @@
+error: Cannot find part `Module` nor `Pallet`, one must be defined
+ --> $DIR/no_part.rs:9:3
+  |
+9 |         System: system::{},
+  |         ^^^^^^

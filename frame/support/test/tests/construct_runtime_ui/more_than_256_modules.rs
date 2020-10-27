@@ -6,8 +6,8 @@ construct_runtime! {
 		Block = Block,
 		NodeBlock = Block,
 	{
-		System: system::{} = 255,
-		Pallet256: pallet256::{},
+		System: system::{Pallet} = 255,
+		Pallet256: pallet256::{Pallet},
 	}
 }
 

@@ -6,10 +6,10 @@ construct_runtime! {
 		Block = Block,
 		NodeBlock = Block,
 	{
-		System: system::{} = 5,
-		Pallet1: pallet1::{} = 3,
-		Pallet2: pallet2::{},
-		Pallet3: pallet3::{},
+		System: system::{Pallet} = 5,
+		Pallet1: pallet1::{Pallet} = 3,
+		Pallet2: pallet2::{Pallet},
+		Pallet3: pallet3::{Pallet},
 	}
 }
 
