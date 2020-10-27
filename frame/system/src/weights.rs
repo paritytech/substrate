@@ -50,26 +50,26 @@ pub trait WeightInfo {
 	fn kill_storage(_i: u32, ) -> Weight;
 	fn kill_prefix(_p: u32, ) -> Weight;
 	fn suicide() -> Weight;
-	
+
 }
 
 /// Weights for frame_system using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
+impl<T: crate::Trait> WeightInfo for SubstrateWeight<T> {
 	fn remark(_b: u32, ) -> Weight {
 		(1_906_000 as Weight)
-			
+
 	}
 	fn set_heap_pages() -> Weight {
 		(2_792_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-			
+
 	}
 	fn set_changes_trie_config() -> Weight {
 		(12_029_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			
+
 	}
 	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
@@ -88,9 +88,9 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 	}
 	fn suicide() -> Weight {
 		(38_469_000 as Weight)
-			
+
 	}
-	
+
 }
 
 // For backwards compatibility and tests
@@ -99,19 +99,19 @@ impl WeightInfo for () {
 		(1_906_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(0 as Weight))
-			
+
 	}
 	fn set_heap_pages() -> Weight {
 		(2_792_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-			
+
 	}
 	fn set_changes_trie_config() -> Weight {
 		(12_029_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-			
+
 	}
 	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
@@ -138,7 +138,7 @@ impl WeightInfo for () {
 		(38_469_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(0 as Weight))
-			
+
 	}
-	
+
 }

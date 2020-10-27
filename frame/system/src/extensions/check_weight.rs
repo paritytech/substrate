@@ -90,7 +90,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	/// Upon successes, it returns the new block weight as a `Result`.
 	fn check_block_weight(
 		info: &DispatchInfoOf<T::Call>,
-	) -> Result<crate::weights::ExtrinsicsWeight, TransactionValidityError> {
+	) -> Result<crate::weight::ExtrinsicsWeight, TransactionValidityError> {
 		let maximum_weight = T::MaximumBlockWeight::get();
 		let mut all_weight = Module::<T>::block_weight();
 		match info.class {
