@@ -17,9 +17,6 @@
 
 //! Houses the code that implements the transactional overlay storage.
 
-mod offchain;
-
-pub use offchain::OffchainOverlayedChanges;
 use super::{StorageKey, StorageValue, Extrinsics};
 
 #[cfg(feature = "std")]
@@ -249,6 +246,12 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 	/// Get a list of all changes as seen by current transaction.
 	pub fn changes(&self) -> impl Iterator<Item=(&K, &OverlayedEntry<V>)> {
 		self.changes.iter()
+	}
+
+	/// Get a list of all changes as seen by current transaction, consumes
+	/// the overlay.
+	pub fn into_changes(self) -> impl Iterator<Item=(K, OverlayedEntry<V>)> {
+		self.changes.into_iter()
 	}
 
 	/// Consume this changeset and return all committed changes.

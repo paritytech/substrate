@@ -18,8 +18,9 @@
 //! The overlayed changes to state.
 
 mod changeset;
+mod offchain;
 
-pub use changeset::OffchainOverlayedChanges;
+pub use offchain::OffchainOverlayedChanges;
 use crate::{
 	backend::Backend,
 	stats::StateMachineStats,
