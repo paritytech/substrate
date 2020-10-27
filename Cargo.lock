@@ -6514,26 +6514,18 @@ dependencies = [
  "atty",
  "bip39",
  "chrono",
- "derive_more",
  "fdlimit",
  "futures 0.3.5",
  "hex",
- "lazy_static",
  "libp2p",
  "log",
  "names",
- "nix",
  "parity-scale-codec",
- "parity-util-mem",
  "rand 0.7.3",
  "regex",
  "rpassword",
  "sc-cli-proc-macro",
  "sc-client-api",
- "sc-consensus-babe",
- "sc-consensus-epochs",
- "sc-finality-grandpa",
- "sc-informant",
  "sc-keystore",
  "sc-network",
  "sc-service",
@@ -6541,21 +6533,17 @@ dependencies = [
  "sc-tracing",
  "serde",
  "serde_json",
- "sp-application-crypto",
  "sp-blockchain",
  "sp-core",
- "sp-io",
  "sp-keyring",
  "sp-keystore",
  "sp-panic-handler",
  "sp-runtime",
- "sp-state-machine",
  "sp-utils",
  "sp-version",
  "structopt",
- "substrate-prometheus-endpoint",
  "tempfile",
- "time",
+ "thiserror",
  "tokio 0.2.22",
  "tracing",
  "tracing-log",
@@ -9219,18 +9207,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.20"
+version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dfdd070ccd8ccb78f4ad66bf1982dc37f620ef696c6b5028fe2ed83dd3d0d08"
+checksum = "318234ffa22e0920fe9a40d7b8369b5f649d490980cf7aadcf1eb91594869b42"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.20"
+version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd80fc12f73063ac132ac92aceea36734f04a1d93c1240c6944e23a3b8841793"
+checksum = "cae2447b6282786c3493999f40a9be2a6ad20cb8bd268b0a0dbf5a065535c0ab"
 dependencies = [
  "proc-macro2",
  "quote",

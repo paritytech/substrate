@@ -38,6 +38,10 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod tests;
+mod benchmarking;
+pub mod weights;
+
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_io::hashing::blake2_256;
@@ -49,25 +53,9 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed};
 use frame_support::dispatch::DispatchError;
-
-mod tests;
-mod benchmarking;
-mod default_weight;
+pub use weights::WeightInfo;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-
-pub trait WeightInfo {
-	fn proxy_announced(a: u32, p: u32, ) -> Weight;
-	fn remove_announcement(a: u32, p: u32, ) -> Weight;
-	fn reject_announcement(a: u32, p: u32, ) -> Weight;
-	fn announce(a: u32, p: u32, ) -> Weight;
-	fn proxy(p: u32, ) -> Weight;
-	fn add_proxy(p: u32, ) -> Weight;
-	fn remove_proxy(p: u32, ) -> Weight;
-	fn remove_proxies(p: u32, ) -> Weight;
-	fn anonymous(p: u32, ) -> Weight;
-	fn kill_anonymous(p: u32, ) -> Weight;
-}
 
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
