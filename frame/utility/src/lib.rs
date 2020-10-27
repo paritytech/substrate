@@ -55,6 +55,10 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod tests;
+mod benchmarking;
+pub mod weights;
+
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_core::TypeId;
@@ -66,15 +70,7 @@ use frame_support::{
 };
 use frame_system::{ensure_signed, ensure_root};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
-
-mod tests;
-mod benchmarking;
-mod default_weights;
-
-pub trait WeightInfo {
-	fn batch(c: u32, ) -> Weight;
-	fn as_derivative() -> Weight;
-}
+pub use weights::WeightInfo;
 
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {

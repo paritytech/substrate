@@ -191,7 +191,7 @@ impl frame_system::Trait for Runtime {
 impl pallet_utility::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
-	type WeightInfo = weights::pallet_utility::WeightInfo<Runtime>;
+	type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
