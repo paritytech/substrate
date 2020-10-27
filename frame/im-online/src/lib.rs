@@ -72,7 +72,7 @@
 mod mock;
 mod tests;
 mod benchmarking;
-mod default_weight;
+pub mod weights;
 
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
@@ -96,13 +96,13 @@ use sp_staking::{
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
 	traits::Get,
-	weights::Weight,
 };
 use frame_system::ensure_none;
 use frame_system::offchain::{
 	SendTransactionTypes,
 	SubmitTransaction,
 };
+pub use weights::WeightInfo;
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -225,10 +225,6 @@ pub struct Heartbeat<BlockNumber>
 	pub authority_index: AuthIndex,
 	/// The length of session validator set
 	pub validators_len: u32,
-}
-
-pub trait WeightInfo {
-	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
 }
 
 pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
