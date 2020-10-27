@@ -72,7 +72,7 @@ use sp_timestamp::{
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
-	CheckedHeader, SlotWorker, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
+	CheckedHeader, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
 };
 
 use sp_api::ApiExt;
@@ -127,7 +127,7 @@ struct AuraSlotCompatible;
 impl SlotCompatible for AuraSlotCompatible {
 	fn extract_timestamp_and_slot(
 		&self,
-		data: &InherentData
+		data: &InherentData,
 	) -> Result<(TimestampInherent, AuraInherent, std::time::Duration), sp_consensus::Error> {
 		data.timestamp_inherent_data()
 			.and_then(|t| data.aura_inherent_data().map(|a| (t, a)))
@@ -198,7 +198,8 @@ struct AuraWorker<C, E, I, P, SO> {
 	_key_type: PhantomData<P>,
 }
 
-impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraWorker<C, E, I, P, SO> where
+impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraWorker<C, E, I, P, SO>
+where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
@@ -350,26 +351,6 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		} else {
 			Some(slot_remaining)
 		}
-	}
-}
-
-impl<B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
-	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync + Send,
-	C::Api: AuraApi<B, AuthorityId<P>>,
-	E: Environment<B, Error = Error> + Send + Sync,
-	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	P: Pair + Send + Sync,
-	P::Public: AppPublic + Member + Encode + Decode + Hash,
-	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
-	SO: SyncOracle + Send + Sync + Clone,
-	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
-{
-	type OnSlot = Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>>;
-
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
-		<Self as sc_consensus_slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
 	}
 }
 
@@ -886,18 +867,11 @@ mod tests {
 	use std::task::Poll;
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_runtime::traits::Header as _;
-	use substrate_test_runtime_client::runtime::{Header, H256};
+	use substrate_test_runtime_client::{TestClient, runtime::{Header, H256}};
 	use sc_keystore::LocalKeystore;
 	use sp_application_crypto::key_types::AURA;
 
 	type Error = sp_blockchain::Error;
-
-	type TestClient = substrate_test_runtime_client::client::Client<
-		substrate_test_runtime_client::Backend,
-		substrate_test_runtime_client::Executor,
-		TestBlock,
-		substrate_test_runtime_client::runtime::RuntimeApi
-	>;
 
 	struct DummyFactory(Arc<TestClient>);
 	struct DummyProposer(u64, Arc<TestClient>);

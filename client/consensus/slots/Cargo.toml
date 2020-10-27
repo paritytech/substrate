@@ -17,6 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "1.3.4" }
 sc-client-api = { version = "2.0.0", path = "../../api" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
+sp-trie = { version = "2.0.0", path = "../../../primitives/trie" }
 sp-application-crypto = { version = "2.0.0", path = "../../../primitives/application-crypto" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 sp-consensus-slots = { version = "0.8.0", path = "../../../primitives/consensus/slots" }
