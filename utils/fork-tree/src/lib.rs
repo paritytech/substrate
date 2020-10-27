@@ -22,6 +22,7 @@
 
 use std::cmp::Reverse;
 use std::fmt;
+use std::hash::Hash;
 use codec::{Decode, Encode};
 
 /// Error occurred when iterating with the tree.
@@ -84,7 +85,7 @@ pub struct ForkTree<H, N, V> {
 }
 
 impl<H, N, V> ForkTree<H, N, V> where
-	H: PartialEq + Clone,
+	H: Eq + Clone + Hash,
 	N: Ord + Clone,
 	V: Clone,
 {
@@ -169,7 +170,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 }
 
 impl<H, N, V> ForkTree<H, N, V> where
-	H: PartialEq,
+	H: Eq + Hash + Clone,
 	N: Ord,
 {
 	/// Create a new empty tree.
@@ -190,9 +191,52 @@ impl<H, N, V> ForkTree<H, N, V> where
 	/// for at any point will likely be in one of the deepest chains (i.e. the
 	/// longest ones).
 	pub fn rebalance(&mut self) {
-		self.roots.sort_by_key(|n| Reverse(n.max_depth()));
-		for root in &mut self.roots {
-			root.rebalance();
+		use std::collections::HashMap;
+		use std::iter::FromIterator;
+
+		let mut current_max_depth = 1;
+		let mut max_depths = HashMap::new();
+		let mut stack = Vec::from_iter(self.roots.iter().map(|n| (n, 1, false)));
+
+		while let Some((node, depth, expanded)) = stack.pop() {
+			// we've reached a leaf, record the max depth for this branch
+			if node.children.is_empty() {
+				current_max_depth = depth;
+				max_depths.insert(node.hash.clone(), depth);
+				continue;
+			}
+
+			// this is not a leaf node and it has not been expanded yet
+			// we should reset the current max depth to the current depth
+			// since we will begin exploring a new branch
+			if !expanded {
+				for child in &node.children {
+					stack.push((node, depth, true));
+					stack.push((child, depth + 1, false));
+				}
+				stack.push((node, depth, true));
+				current_max_depth = depth;
+				continue;
+			}
+
+			// we are backtracking so we need to update our depth with
+			// the maximum from all our children
+			let max_depth = max_depths.entry(node.hash.clone()).or_default();
+			if current_max_depth > *max_depth {
+				*max_depth = current_max_depth;
+			}
+		}
+
+		// iterate the tree in depth-first search and use the max depths
+		// map to sort each intermediary node
+		let mut stack = Vec::from_iter(self.roots.iter_mut());
+		while let Some(node) = stack.pop() {
+			node.children.sort_by_key(|n| {
+				let max_depth = max_depths.get(&n.hash).expect("");
+				Reverse(max_depth)
+			});
+
+			stack.extend(node.children.iter_mut())
 		}
 	}
 
@@ -204,9 +248,9 @@ impl<H, N, V> ForkTree<H, N, V> where
 	/// Returns `true` if the imported node is a root.
 	pub fn import<F, E>(
 		&mut self,
-		mut hash: H,
-		mut number: N,
-		mut data: V,
+		hash: H,
+		number: N,
+		data: V,
 		is_descendent_of: &F,
 	) -> Result<bool, Error<E>>
 		where E: std::error::Error,
@@ -218,31 +262,40 @@ impl<H, N, V> ForkTree<H, N, V> where
 			}
 		}
 
-		for root in self.roots.iter_mut() {
-			if root.hash == hash {
-				return Err(Error::Duplicate);
-			}
+		let is_descendent_of = |base: &H, target: &H| {
+			Ok(base == target || is_descendent_of(base, target)?)
+		};
 
-			match root.import(hash, number, data, is_descendent_of)? {
-				Some((h, n, d)) => {
-					hash = h;
-					number = n;
-					data = d;
-				},
-				None => return Ok(false),
-			}
-		}
+		let is_root = match self.find_node_where_mut(&hash, &number, &is_descendent_of, &|_| true)? {
+			Some(node) => {
+				if node.hash == hash {
+					return Err(Error::Duplicate)
+				}
 
-		self.roots.push(Node {
-			data,
-			hash: hash,
-			number: number,
-			children: Vec::new(),
-		});
+				node.children.push(Node {
+					hash,
+					number,
+					data,
+					children: Vec::new(),
+				});
+
+				false
+			}
+			None => {
+				self.roots.push(Node {
+					hash,
+					number,
+					data,
+					children: Vec::new(),
+				});
+
+				true
+			}
+		};
 
 		self.rebalance();
 
-		Ok(true)
+		Ok(is_root)
 	}
 
 	/// Iterates over the existing roots in the tree.
@@ -689,25 +742,6 @@ mod node_implementation {
 	}
 
 	impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
-		/// Rebalance the tree, i.e. sort child nodes by max branch depth (decreasing).
-		pub fn rebalance(&mut self) {
-			self.children.sort_by_key(|n| Reverse(n.max_depth()));
-			for child in &mut self.children {
-				child.rebalance();
-			}
-		}
-
-		/// Finds the max depth among all branches descendent from this node.
-		pub fn max_depth(&self) -> usize {
-			let mut max = 0;
-
-			for node in &self.children {
-				max = node.max_depth().max(max)
-			}
-
-			max + 1
-		}
-
 		/// Map node data into values of new types.
 		pub fn map<VT, F>(
 			self,
@@ -731,60 +765,6 @@ mod node_implementation {
 			}
 		}
 
-		pub fn import<F, E: std::error::Error>(
-			&mut self,
-			hash: H,
-			number: N,
-			data: V,
-			is_descendent_of: &F,
-		) -> Result<Option<(H, N, V)>, Error<E>>
-			where E: fmt::Debug,
-				  F: Fn(&H, &H) -> Result<bool, E>,
-		{
-			let mut stack: Vec<(&Self, bool)> = vec![(&self, true)];
-
-			while let Some((node, first_time)) = stack.pop() {
-				if first_time {
-					if node.hash == hash {
-						return Err(Error::Duplicate);
-					}
-
-					if number <= node.number {
-						continue;
-					}
-
-					if !node.children.is_empty() {
-						// We want to check all children depth-first.
-
-						stack.push((node, false));
-
-						for child in node.children.iter().rev() {
-							stack.push((child, true));
-						}
-
-						continue;
-					}
-				}
-
-				if is_descendent_of(&node.hash, &hash)? {
-					let node = &mut (node as *const Self as *mut Self);
-
-					unsafe {
-						(**node).children.push(Node {
-							data,
-							hash: hash,
-							number: number,
-							children: Vec::new(),
-						});
-					}
-
-					return Ok(None);
-				}
-			}
-
-			Ok(Some((hash, number, data)))
-		}
-
 		/// Find a node in the tree that is the deepest ancestor of the given
 		/// block hash which also passes the given predicate, backtracking
 		/// when the predicate fails.
@@ -801,68 +781,68 @@ mod node_implementation {
 			is_descendent_of: &F,
 			predicate: &P,
 		) -> Result<FindOutcome<Vec<usize>>, Error<E>>
-			where E: std::error::Error,
-				  F: Fn(&H, &H) -> Result<bool, E>,
-				  P: Fn(&V) -> bool,
+		where E: std::error::Error,
+			  F: Fn(&H, &H) -> Result<bool, E>,
+			  P: Fn(&V) -> bool,
 		{
-			let mut stack: Vec<(&Self, Option<usize>, bool)> = vec![(self, None, true)];
+			let mut stack = vec![(self, None, false)];
+			let mut indices = Vec::new();
 
-			let mut found = false;
-			let mut indices: Option<Vec<usize>> = None;
+			while let Some((node, index, expanded)) = stack.pop() {
+				// if we have already expanded this node we drop the index
+				// for the tree path
+				if expanded {
+					indices.pop();
+				}
 
-			while let Some((node, index, first_time)) = stack.pop() {
-				// stop searching this branch
+				// skip to the next node as we have traveled too deep
 				if *number < node.number {
 					continue;
 				}
 
-				if first_time && !found && !node.children.is_empty() {
-					stack.push((node, index, false));
+				// if we haven't expanded this node yet and it has children
+				// let's keep traversing in depth
+				if !expanded && !node.children.is_empty() {
+					// we re-add this node to the stack
+					// noting that it has already been expanded
+					stack.push((node, index, true));
 
-					for (i, child) in node.children.iter().enumerate().rev() {
-						stack.push((child, Some(i), true));
+					// we also need add the index of this node
+					// in the tree path
+					if let Some(idx) = index {
+						indices.push(idx);
 					}
+
+					// add all children to the stack
+					stack.extend(node.children.iter().enumerate().map(|(i, n)| (n, Some(i), false)));
 
 					continue;
 				}
 
-				let is_descendent_of = is_descendent_of(&node.hash, hash)?;
+				// there's nothing left to expand in this branch, so before we backtrack
+				// we need to test the current node.
+				if is_descendent_of(&node.hash, hash)? {
+					// we're in the right branch
+					// and this node passes the predicate
+					if predicate(&node.data) {
+						// we must re-add its index (if any) since it was popped
+						// in the beginning of this iteration, and we also need
+						// to reverse the tree path
+						if let Some(idx) = index {
+							indices.push(idx);
+							indices.reverse();
 
-				if is_descendent_of {
-					found |= predicate(&node.data);
-
-					if !found {
-						while stack.last().map(|(.., first)| *first).unwrap_or(false) {
-							stack.pop();
+							return Ok(FindOutcome::Found(indices));
+						} else {
+							// if there's no index it means that the found node
+							// is `self` so we return an empty tree path
+							return Ok(FindOutcome::Found(Vec::new()));
 						}
-					}
-
-					if found {
-						indices = match indices.take() {
-							Some(mut vec) => {
-								if let Some(index) = index {
-									vec.push(index);
-								}
-								Some(vec)
-							},
-							_ => Some(if let Some(index) = index {
-								vec![index]
-							} else {
-								vec![]
-							})
-						};
-						found = true;
-					}
-				}
-
-				if found {
-					while stack.last().map(|(.., first)| *first).unwrap_or(false) {
-						stack.pop();
 					}
 				}
 			}
 
-			Ok(indices.map(FindOutcome::Found).unwrap_or(FindOutcome::Failure(false)))
+			Ok(FindOutcome::Failure(false))
 		}
 
 		/// Find a node in the tree that is the deepest ancestor of the given
