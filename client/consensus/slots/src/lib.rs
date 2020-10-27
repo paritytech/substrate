@@ -621,8 +621,15 @@ pub struct SimpleBackoffAuthoringBlocksStrategy<N: BaseArithmetic> {
 impl<N: BaseArithmetic> Default for SimpleBackoffAuthoringBlocksStrategy<N> {
 	fn default() -> Self {
 		Self {
+			// Never wait more than 100 slots before authoring blocks, regardless of delay in
+			// finality.
 			max_interval: 100.into(),
+			// Start to consider backing off block authorship once we have 5 or more unfinalized
+			// blocks at the head of the chain.
 			unfinalized_slack: 5.into(),
+			// A reasonable default for the authoring bias, or reciprocal interval scaling, is 2.
+			// Effectively meaning that consider the unfinalized head suffix length to grow half as
+			// fast as in actuality.
 			authoring_bias: 2.into(),
 		}
 	}
