@@ -23,7 +23,7 @@ use super::code::WasmModule;
 use super::Trait;
 use sp_sandbox::{EnvironmentDefinitionBuilder, Instance, Memory};
 
-/// Minimal execution environment without any imported functions.
+/// Minimal execution environment without any exported functions.
 pub struct Sandbox {
 	instance: Instance<()>,
 	_memory: Option<Memory>,
