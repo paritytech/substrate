@@ -201,7 +201,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Some(r) if r.as_secs() == 0 && r.as_nanos() == 0 => {
 				debug!(
 					target: self.logging_target(),
-					"Skipping proposal slot {} since no time left to propose!",
+					"Skipping proposal slot {} since there's no time left to propose",
 					slot_number,
 				);
 
