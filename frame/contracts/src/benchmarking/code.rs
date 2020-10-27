@@ -174,7 +174,7 @@ impl<T: Trait> From<ModuleDefinition> for WasmModule<T> {
 		// Add global variables
 		if def.num_globals > 0 {
 			use rand::{prelude::*, distributions::Standard};
-			let rng = SmallRng::seed_from_u64(3112244599778833558);
+			let rng = rand_pcg::Pcg32::seed_from_u64(3112244599778833558);
 			for val in rng.sample_iter(Standard).take(def.num_globals as usize) {
 				contract = contract
 					.global()
@@ -409,7 +409,7 @@ pub mod body {
 		use rand::{prelude::*, distributions::Standard};
 
 		// We do not need to be secure here.
-		let mut rng = SmallRng::seed_from_u64(8446744073709551615);
+		let mut rng = rand_pcg::Pcg32::seed_from_u64(8446744073709551615);
 
 		// We need to iterate over indices because we cannot cycle over mutable references
 		let body = (0..instructions.len())
