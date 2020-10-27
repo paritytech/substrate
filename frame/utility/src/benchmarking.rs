@@ -56,6 +56,19 @@ benchmarks! {
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), SEED as u16, call)
+
+	batch_all {
+		let c in 0 .. 1000;
+		let mut calls: Vec<<T as Trait>::Call> = Vec::new();
+		for i in 0 .. c {
+			let call = frame_system::Call::remark(vec![]).into();
+			calls.push(call);
+		}
+		let caller = whitelisted_caller();
+	}: _(RawOrigin::Signed(caller), calls)
+	verify {
+		assert_last_event::<T>(Event::BatchCompleted.into())
+	}
 }
 
 #[cfg(test)]
@@ -69,6 +82,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_batch::<Test>());
 			assert_ok!(test_benchmark_as_derivative::<Test>());
+			assert_ok!(test_benchmark_batch_all::<Test>());
 		});
 	}
 }
