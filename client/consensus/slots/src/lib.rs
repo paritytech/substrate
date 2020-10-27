@@ -69,7 +69,7 @@ pub trait SlotWorker<B: BlockT> {
 
 	/// Called when a new slot is triggered.
 	///
-	/// Returns a future that resolves to a [`SlotResult`] iff a block was successfuly build in
+	/// Returns a future that resolves to a [`SlotResult`] iff a block was successfully built in
 	/// the slot. Otherwise `None` is returned.
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot;
 }
