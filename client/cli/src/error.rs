@@ -45,7 +45,7 @@ pub enum Error {
 	InvalidListenMultiaddress,
 	/// Other uncategorized error.
 	#[from(ignore)]
-	Other(String),
+	Other(Box<dyn std::error::Error>),
 }
 
 /// Must be implemented explicitly because `derive_more` won't generate this
