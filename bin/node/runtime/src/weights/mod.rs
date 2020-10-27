@@ -16,7 +16,6 @@
 //! A list of the different weight modules for our runtime.
 
 pub mod pallet_contracts;
-pub mod pallet_democracy;
 pub mod pallet_elections_phragmen;
 pub mod pallet_im_online;
 pub mod pallet_indices;
