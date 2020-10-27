@@ -97,6 +97,14 @@ pub struct NetworkParams {
 	/// By default this option is true for `--dev` and false otherwise.
 	#[structopt(long)]
 	pub discover_local: bool,
+
+	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in the
+	/// presence of potentially adversarial nodes.
+	///
+	/// See the S/Kademlia paper for more information on the high level design as well as its
+	/// security improvements.
+	#[structopt(long)]
+	pub kademlia_disjoint_query_paths: bool,
 }
 
 impl NetworkParams {
@@ -156,6 +164,7 @@ impl NetworkParams {
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
 			allow_non_globals_in_dht: self.discover_local || is_dev,
+			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,
 		}
 	}
 }

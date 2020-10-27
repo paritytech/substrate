@@ -57,6 +57,7 @@ serde = "1.0.111"
 tracing = "0.1.10"
 tracing-log = "0.1.1"
 tracing-subscriber = "0.2.10"
+sc-cli-proc-macro = { version = "2.0.0", path = "./proc-macro" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "4.0.1"

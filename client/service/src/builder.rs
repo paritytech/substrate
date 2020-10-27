@@ -303,8 +303,9 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			Box::new(task_manager.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 			ClientConfig {
-				offchain_worker_enabled : config.offchain_worker.enabled ,
+				offchain_worker_enabled : config.offchain_worker.enabled,
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
+				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 			},
 		)?
 	};
@@ -396,7 +397,7 @@ pub fn new_client<E, Block, RA>(
 	const CANONICALIZATION_DELAY: u64 = 4096;
 
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = crate::client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
+	let executor = crate::client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
 	Ok((
 		crate::client::Client::new(
 			backend.clone(),

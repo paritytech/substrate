@@ -373,7 +373,12 @@ impl BenchDb {
 			"Created seed db at {}",
 			dir.path().to_string_lossy(),
 		);
-		let (_client, _backend) = Self::bench_client(database_type, dir.path(), Profile::Native, &keyring);
+		let (_client, _backend, _task_executor) = Self::bench_client(
+			database_type,
+			dir.path(),
+			Profile::Native,
+			&keyring,
+		);
 		let directory_guard = Guard(dir);
 
 		BenchDb { keyring, directory_guard, database_type }
@@ -401,13 +406,14 @@ impl BenchDb {
 		dir: &std::path::Path,
 		profile: Profile,
 		keyring: &BenchKeyring,
-	) -> (Client, std::sync::Arc<Backend>) {
+	) -> (Client, std::sync::Arc<Backend>, TaskExecutor) {
 		let db_config = sc_client_db::DatabaseSettings {
 			state_cache_size: 16*1024*1024,
 			state_cache_child_ratio: Some((0, 100)),
 			pruning: PruningMode::ArchiveAll,
 			source: database_type.into_settings(dir.into()),
 		};
+		let task_executor = TaskExecutor::new();
 
 		let (client, backend) = sc_service::new_client(
 			db_config,
@@ -416,12 +422,12 @@ impl BenchDb {
 			None,
 			None,
 			ExecutionExtensions::new(profile.into_execution_strategies(), None),
-			Box::new(TaskExecutor::new()),
+			Box::new(task_executor.clone()),
 			None,
 			Default::default(),
 		).expect("Should not fail");
 
-		(client, backend)
+		(client, backend, task_executor)
 	}
 
 	/// Generate list of required inherents.
@@ -450,7 +456,7 @@ impl BenchDb {
 
 	/// Get cliet for this database operations.
 	pub fn client(&mut self) -> Client {
-		let (client, _backend) = Self::bench_client(
+		let (client, _backend, _task_executor) = Self::bench_client(
 			self.database_type,
 			self.directory_guard.path(),
 			Profile::Wasm,
@@ -504,7 +510,7 @@ impl BenchDb {
 	/// Clone this database and create context for testing/benchmarking.
 	pub fn create_context(&self, profile: Profile) -> BenchContext {
 		let BenchDb { directory_guard, keyring, database_type } = self.clone();
-		let (client, backend) = Self::bench_client(
+		let (client, backend, task_executor) = Self::bench_client(
 			database_type,
 			directory_guard.path(),
 			profile,
@@ -515,6 +521,7 @@ impl BenchDb {
 			client: Arc::new(client),
 			db_guard: directory_guard,
 			backend,
+			spawn_handle: Box::new(task_executor),
 		}
 	}
 }
@@ -649,6 +656,8 @@ pub struct BenchContext {
 	pub client: Arc<Client>,
 	/// Node backend.
 	pub backend: Arc<Backend>,
+	/// Spawn handle.
+	pub spawn_handle: Box<dyn SpawnNamed>,
 
 	db_guard: Guard,
 }
