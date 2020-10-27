@@ -83,7 +83,8 @@ fn derive_debug(
 	tokens.into()
 }
 
-#[allow(dead_code)]
+/// This is only used then the `full` feature is activated.
+#[cfg_attr(not(feature = "full"), allow(dead_code))]
 fn iterate_fields(data: &DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -> TokenStream {
 	match &data.fields {
 		Fields::Named(fields) => {
