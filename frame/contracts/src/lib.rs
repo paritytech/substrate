@@ -88,18 +88,18 @@ mod wasm;
 mod rent;
 mod benchmarking;
 mod schedule;
-mod weight_info;
+pub mod weights;
 
 #[cfg(test)]
 mod tests;
 
 use crate::exec::ExecutionContext;
 use crate::wasm::{WasmLoader, WasmVm};
+use crate::weights::WeightInfo;
 
 pub use crate::gas::{Gas, GasMeter};
 pub use crate::exec::{ExecResult, ExecReturnValue};
 pub use crate::wasm::ReturnCode as RuntimeReturnCode;
-pub use crate::weight_info::WeightInfo;
 pub use crate::schedule::{Schedule, HostFnWeights, InstructionWeights, Limits};
 
 use sp_core::crypto::UncheckedFrom;
@@ -379,7 +379,7 @@ pub trait Trait: frame_system::Trait {
 
 	/// Describes the weights of the dispatchables of this module and is also used to
 	/// construct a default cost schedule.
-	type WeightInfo: WeightInfo;
+	type WeightInfo: crate::weights::WeightInfo;
 }
 
 /// Simple contract address determiner.

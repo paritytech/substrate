@@ -17,7 +17,7 @@
 //! This module contains the cost schedule and supporting code that constructs a
 //! sane default schedule from a `WeightInfo` implementation.
 
-use crate::{Trait, WeightInfo};
+use crate::{Trait, weights::WeightInfo};
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};

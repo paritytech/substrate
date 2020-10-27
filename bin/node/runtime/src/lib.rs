@@ -88,9 +88,6 @@ pub mod constants;
 use constants::{time::*, currency::*};
 use sp_runtime::generic::Era;
 
-/// Weights for pallets used in the runtime.
-mod weights;
-
 // Make the WASM binary available.
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
@@ -699,7 +696,7 @@ impl pallet_contracts::Trait for Runtime {
 	type MaxDepth = pallet_contracts::DefaultMaxDepth;
 	type MaxValueSize = pallet_contracts::DefaultMaxValueSize;
 	type WeightPrice = pallet_transaction_payment::Module<Self>;
-	type WeightInfo = weights::pallet_contracts::WeightInfo<Self>;
+	type WeightInfo = pallet_contracts::weights::WeightInfo<Self>;
 }
 
 impl pallet_sudo::Trait for Runtime {
