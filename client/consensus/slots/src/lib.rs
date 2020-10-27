@@ -791,6 +791,18 @@ mod test {
 
 		// Back off again
 		assert!(should_backoff(&head_state));
+
+		// Plow ahead and author blocks despite the halted finality
+		while head_state.slot_now < 1000 {
+			head_state.author_block();
+		}
+
+		// Even though we have a very long unfinalized head suffix length, block authorship should
+		// never entirely stop.
+		while should_backoff(&head_state) && head_state.slot_now < 2000 {
+			head_state.dont_author_block();
+		}
+		assert!(head_state.slot_now < 1100);
 	}
 }
 
