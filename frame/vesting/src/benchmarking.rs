@@ -34,18 +34,18 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trai
 fn add_locks<T: Trait>(who: &T::AccountId, n: u8) {
 	for id in 0..n {
 		let lock_id = [id; 8];
-		let locked = 100;
+		let locked = 100u32;
 		let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
 		T::Currency::set_lock(lock_id, who, locked.into(), reasons);
 	}
 }
 
 fn add_vesting_schedule<T: Trait>(who: &T::AccountId) -> Result<(), &'static str> {
-	let locked = 100;
-	let per_block = 10;
-	let starting_block = 1;
+	let locked = 100u32;
+	let per_block = 10u32;
+	let starting_block = 1u32;
 
-	System::<T>::set_block_number(0.into());
+	System::<T>::set_block_number(0u32.into());
 
 	// Add schedule to avoid `NotVesting` error.
 	Vesting::<T>::add_vesting_schedule(
@@ -71,7 +71,7 @@ benchmarks! {
 		System::<T>::set_block_number(T::BlockNumber::zero());
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&caller),
-			Some(100.into()),
+			Some(100u32.into()),
 			"Vesting schedule not added",
 		);
 	}: vest(RawOrigin::Signed(caller.clone()))
@@ -79,7 +79,7 @@ benchmarks! {
 		// Nothing happened since everything is still vested.
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&caller),
-			Some(100.into()),
+			Some(100u32.into()),
 			"Vesting schedule was removed",
 		);
 	}
@@ -92,7 +92,7 @@ benchmarks! {
 		add_locks::<T>(&caller, l as u8);
 		add_vesting_schedule::<T>(&caller)?;
 		// At block 20, everything is unvested.
-		System::<T>::set_block_number(20.into());
+		System::<T>::set_block_number(20u32.into());
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&caller),
 			Some(BalanceOf::<T>::zero()),
@@ -120,7 +120,7 @@ benchmarks! {
 		System::<T>::set_block_number(T::BlockNumber::zero());
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&other),
-			Some(100.into()),
+			Some(100u32.into()),
 			"Vesting schedule not added",
 		);
 
@@ -130,7 +130,7 @@ benchmarks! {
 		// Nothing happened since everything is still vested.
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&other),
-			Some(100.into()),
+			Some(100u32.into()),
 			"Vesting schedule was removed",
 		);
 	}
@@ -144,7 +144,7 @@ benchmarks! {
 		add_locks::<T>(&other, l as u8);
 		add_vesting_schedule::<T>(&other)?;
 		// At block 20, everything is unvested.
-		System::<T>::set_block_number(20.into());
+		System::<T>::set_block_number(20u32.into());
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&other),
 			Some(BalanceOf::<T>::zero()),
@@ -176,8 +176,8 @@ benchmarks! {
 
 		let vesting_schedule = VestingInfo {
 			locked: transfer_amount,
-			per_block: 10.into(),
-			starting_block: 1.into(),
+			per_block: 10u32.into(),
+			starting_block: 1u32.into(),
 		};
 	}: _(RawOrigin::Signed(caller), target_lookup, vesting_schedule)
 	verify {
@@ -208,8 +208,8 @@ benchmarks! {
 
 		let vesting_schedule = VestingInfo {
 			locked: transfer_amount,
-			per_block: 10.into(),
-			starting_block: 1.into(),
+			per_block: 10u32.into(),
+			starting_block: 1u32.into(),
 		};
 	}: _(RawOrigin::Root, source_lookup, target_lookup, vesting_schedule)
 	verify {

@@ -31,7 +31,7 @@ const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const TEMPLATE: &str = include_str!("./template.hbs");
 
 // This is the final structure we will pass to the Handlebars template.
-#[derive(Serialize, Default, Debug)]
+#[derive(Serialize, Default, Debug, Clone)]
 struct TemplateData {
 	args: Vec<String>,
 	date: String,
@@ -201,7 +201,6 @@ pub fn write_results(
 			fs::read_to_string(template_file)?
 		},
 		None => {
-			println!("Trying default template");
 			TEMPLATE.to_string()
 		},
 	};
