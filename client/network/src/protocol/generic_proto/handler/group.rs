@@ -22,28 +22,34 @@
 //!
 //! # Usage
 //!
-//! The handler can be in one of the following states: `Initial`, `Enabled`, `Disabled`.
+//! From an API perspective, the [`NotifsHandler`] is always in one of the following state:
 //!
-//! The `Initial` state is the state that the handler initially is in. It is a temporary state
-//! during which the user must either enable or disable the handler. After that, the handler stays
-//! either enabled or disabled.
+//! - Closed substreams. This is the initial state.
+//! - Closed substreams, but remote desires them to be open.
+//! - Open substreams.
+//! - Open substreams, but remote desires them to be closed.
 //!
-//! On the wire, we try to open the following substreams:
+//! The [`NotifsHandler`] can spontaneously switch between these states:
 //!
-//! - One substream for each notification protocol passed as parameter to the
-//!   `NotifsHandlerProto::new` function.
-//! - One "legacy" substream used for anything non-related to gossiping, and used as a fallback
-//!   in case the notification protocol can't be opened.
+//! - "Closed substreams" to "Closed substreams but open desired". When that happens, a
+//! [`NotifsHandlerOut::OpenDesired`] is emitted.
+//! - "Closed substreams but open desired" to "Closed substreams" (i.e. the remote has cancelled
+//! their request). When that happens, a [`NotifsHandlerOut::CloseDesired`] is emitted.
+//! - "Open substreams" to "Open substreams but close desired". When that happens, a
+//! [`NotifsHandlerOut::CloseDesired`] is emitted.
 //!
-//! When the handler is in the `Enabled` state, we immediately open and try to maintain all the
-//! aforementioned substreams. When the handler is in the `Disabled` state, we immediately close
-//! (or abort opening) all these substreams. It is intended that in the future we allow states in
-//! which some protocols are open and not others. Symmetrically, we allow incoming
-//! Substrate-related substreams if and only if we are in the `Enabled` state.
+//! The user can instruct the `NotifsHandler` to switch from "closed" to "open" or vice-versa by
+//! sending either a [`NotifsHandlerIn::Open`] or a [`NotifsHandlerIn::Close`]. The `NotifsHandler`
+//! must answer with [`NotifsHandlerOut::OpenResultOk`] or [`NotifsHandlerOut::OpenResultErr`], or
+//! with [`NotifsHandlerOut::CloseResult`].
 //!
-//! The user has the choice between sending a message with `SendNotification`, to send a
-//! notification, and `SendLegacy`, to send any other kind of message.
+//! When a [`NotifsHandlerOut::OpenResultOk`] is emitted, the `NotifsHandler` is now in the open
+//! state. When a [`NotifsHandlerOut::OpenResultErr`] or [`NotifsHandlerOut::CloseResult`] is
+//! emitted, the `NotifsHandler` is now (or remains) in the closed state.
 //!
+//! When a [`NotifsHandlerOut::OpenDesired`] is emitted, the user should always send back either a
+//! [`NotifsHandlerIn::Open`] or a [`NotifsHandlerIn::Close`].If this isn't done, the remote will
+//! be left in a pending state.
 
 use crate::protocol::generic_proto::{
 	handler::legacy::{LegacyProtoHandler, LegacyProtoHandlerProto, LegacyProtoHandlerIn, LegacyProtoHandlerOut},
@@ -68,9 +74,9 @@ use futures::{
 	lock::{Mutex as FuturesMutex, MutexGuard as FuturesMutexGuard},
 	prelude::*
 };
-use log::{debug, error};
+use log::error;
 use parking_lot::{Mutex, RwLock};
-use std::{borrow::Cow, str, sync::Arc, task::{Context, Poll}};
+use std::{borrow::Cow, collections::VecDeque, mem, str, sync::Arc, task::{Context, Poll}};
 
 /// Number of pending notifications in asynchronous contexts.
 /// See [`NotificationsSink::reserve_notification`] for context.
@@ -113,41 +119,59 @@ pub struct NotifsHandler {
 	/// Handler for backwards-compatibility.
 	legacy: LegacyProtoHandler,
 
-	/// In the situation where either the legacy substream has been opened or the handshake-bearing
-	/// notifications protocol is open, but we haven't sent out any [`NotifsHandlerOut::Open`]
-	/// event yet, this contains the received handshake waiting to be reported through the
-	/// external API.
-	pending_handshake: Option<Vec<u8>>,
-
 	/// State of this handler.
-	enabled: EnabledState,
+	state: State,
 
-	/// If we receive inbound substream requests while in initialization mode,
-	/// we push the corresponding index here and process them when the handler
-	/// gets enabled/disabled.
-	pending_in: Vec<usize>,
-
-	/// If `Some`, contains the two `Receiver`s connected to the [`NotificationsSink`] that has
-	/// been sent out. The notifications to send out can be pulled from this receivers.
-	/// We use two different channels in order to have two different channel sizes, but from the
-	/// receiving point of view, the two channels are the same.
-	/// The receivers are fused in case the user drops the [`NotificationsSink`] entirely.
-	///
-	/// Contains `Some` if and only if it has been reported to the user that the substreams are
-	/// open.
-	notifications_sink_rx: Option<
-		stream::Select<
-			stream::Fuse<mpsc::Receiver<NotificationsSinkMessage>>,
-			stream::Fuse<mpsc::Receiver<NotificationsSinkMessage>>
-		>
+	/// Events to return in priority from `poll`.
+	events_queue: VecDeque<
+		ProtocolsHandlerEvent<NotificationsOut, usize, NotifsHandlerOut, NotifsHandlerError>
 	>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum EnabledState {
-	Initial,
-	Enabled,
-	Disabled,
+/// See the module-level documentation to learn about the meaning of these variants.
+#[derive(Debug)]
+enum State {
+	/// Handler is in the "Closed" state.
+	Closed {
+		/// When we receive inbound substream requests, we push here the index within
+		/// [`NotisHandler::in_handlers`], and process them when an `Open` or `Close` request is
+		/// received.
+		///
+		/// If this is non-empty, a [`NotifsHandlerOut::OpenDesired`] has been emitted. If this
+		/// transitions from non-empty to empty, a [`NotisHandlerOut::CloseDesired`] or a
+		/// [`NotisHandlerOut::CloseResult`] is emitted.
+		pending_in: Vec<usize>,
+	},
+
+	/// Handler is in the "Closed" state, but has received a [`NotifsHandlerIn::Open`] and is
+	/// consequently trying to open the various notifications substreams.
+	///
+	/// A [`NotifsHandlerOut::OpenResultOk`] or a [`NotifsHandlerOut::OpenResultErr`] event must
+	/// be emitted when transitionning to respectively [`State::Open`] or [`State::Closed`].
+	Opening {
+		/// In the situation where either the legacy substream has been opened or the
+		/// handshake-bearing notifications protocol is open, but we haven't sent out any
+		/// [`NotifsHandlerOut::Open`] event yet, this contains the received handshake waiting to
+		/// be reported through the external API.
+		pending_handshake: Option<Vec<u8>>,
+	},
+
+	/// Handler is in the "Open" state.
+	Open {
+		/// Contains the two `Receiver`s connected to the [`NotificationsSink`] that has been
+		/// sent out. The notifications to send out can be pulled from this receivers.
+		/// We use two different channels in order to have two different channel sizes, but from
+		/// the receiving point of view, the two channels are the same.
+		/// The receivers are fused in case the user drops the [`NotificationsSink`] entirely.
+		notifications_sink_rx: stream::Select<
+			stream::Fuse<mpsc::Receiver<NotificationsSinkMessage>>,
+			stream::Fuse<mpsc::Receiver<NotificationsSinkMessage>>
+		>,
+
+		/// If true, at least one substream has been closed and a
+		/// [`NotifsHandlerOut::CloseDesired`] message has been sent out.
+		want_closed: bool,
+	},
 }
 
 impl IntoProtocolsHandler for NotifsHandlerProto {
@@ -173,10 +197,10 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 				.collect(),
 			endpoint: connected_point.clone(),
 			legacy: self.legacy.into_handler(remote_peer_id, connected_point),
-			pending_handshake: None,
-			enabled: EnabledState::Initial,
-			pending_in: Vec::new(),
-			notifications_sink_rx: None,
+			state: State::Closed {
+				pending_in: Vec::new(),
+			},
+			events_queue: VecDeque::with_capacity(16),
 		}
 	}
 }
@@ -184,18 +208,27 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 /// Event that can be received by a `NotifsHandler`.
 #[derive(Debug, Clone)]
 pub enum NotifsHandlerIn {
-	/// The node should start using custom protocols.
-	Enable,
+	/// Instruct the handler to open the notification substreams.
+	///
+	/// Must always be answered by a [`NotifsHandlerOut::OpenResultOk`] or a
+	/// [`NotifsHandlerOut::OpenResultErr`] event.
+	///
+	/// Importantly, it is forbidden to send a [`NotifsHandlerIn::Open`] while a previous one is
+	/// already in the fly. It is however possible if a `Close` is still in the fly.
+	Open,
 
-	/// The node should stop using custom protocols.
-	Disable,
+	/// Instruct the handler to close the notification substreams, or reject any pending incoming
+	/// substream request.
+	///
+	/// Must always be answered by a [`NotifsHandlerOut::CloseResult`] event.
+	Close,
 }
 
 /// Event that can be emitted by a `NotifsHandler`.
 #[derive(Debug)]
 pub enum NotifsHandlerOut {
-	/// The connection is open for custom protocols.
-	Open {
+	/// Acknowledges a [`NotifsHandlerIn::Open`].
+	OpenResultOk {
 		/// The endpoint of the connection that is open for custom protocols.
 		endpoint: ConnectedPoint,
 		/// Handshake that was sent to us.
@@ -205,15 +238,29 @@ pub enum NotifsHandlerOut {
 		notifications_sink: NotificationsSink,
 	},
 
-	/// The connection is closed for custom protocols.
-	Closed {
-		/// The reason for closing, for diagnostic purposes.
-		reason: Cow<'static, str>,
-		/// The endpoint of the connection that closed for custom protocols.
-		endpoint: ConnectedPoint,
-	},
+	/// Acknowledges a [`NotifsHandlerIn::Open`]. The remote has refused the attempt to open
+	/// notification substreams.
+	OpenResultErr,
+
+	/// Acknowledges a [`NotifsHandlerIn::Close`].
+	CloseResult,
+
+	/// The remote would like the substreams to be open. Send a [`NotifsHandlerIn::Open`] or a
+	/// [`NotifsHandlerIn::Close`] in order to either accept or deny this request. If a
+	/// [`NotifsHandlerIn::Open`] or [`NotifsHandlerIn::Close`] has been sent before and has not
+	/// yet been acknowledged by a matching [`NotifsHandlerOut`], then you don't need to a send
+	/// another [`NotifsHandlerIn`].
+	OpenDesired,
+
+	/// The remote would like the substreams to be closed. Send a [`NotifsHandlerIn::Close`] in
+	/// order to close them. If a [`NotifsHandlerIn::Close`] has been sent before and has not yet
+	/// been acknowledged by a [`NotifsHandlerOut::CloseResult`], then you don't need to a send
+	/// another one.
+	CloseDesired,
 
 	/// Received a non-gossiping message on the legacy substream.
+	///
+	/// Can only happen when the handler is in the open state.
 	CustomMessage {
 		/// Message that has been received.
 		///
@@ -223,6 +270,8 @@ pub enum NotifsHandlerOut {
 	},
 
 	/// Received a message on a custom protocol substream.
+	///
+	/// Can only happen when the handler is in the open state.
 	Notification {
 		/// Name of the protocol of the message.
 		protocol_name: Cow<'static, str>,
@@ -430,44 +479,64 @@ impl ProtocolsHandler for NotifsHandler {
 
 	fn inject_event(&mut self, message: NotifsHandlerIn) {
 		match message {
-			NotifsHandlerIn::Enable => {
-				if let EnabledState::Enabled = self.enabled {
-					debug!("enabling already-enabled handler");
-				}
-				self.enabled = EnabledState::Enabled;
-				self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
-				for (handler, initial_message) in &mut self.out_handlers {
-					// We create `initial_message` on a separate line to be sure that the lock
-					// is released as soon as possible.
-					let initial_message = initial_message.read().clone();
-					handler.inject_event(NotifsOutHandlerIn::Enable {
-						initial_message,
-					});
-				}
-				for num in self.pending_in.drain(..) {
-					// We create `handshake_message` on a separate line to be sure
-					// that the lock is released as soon as possible.
-					let handshake_message = self.in_handlers[num].1.read().clone();
-					self.in_handlers[num].0
-						.inject_event(NotifsInHandlerIn::Accept(handshake_message));
+			NotifsHandlerIn::Open => {
+				match &mut self.state {
+					State::Closed { pending_in } => {
+						self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
+
+						for (handler, initial_message) in &mut self.out_handlers {
+							// We create `initial_message` on a separate line to be sure that the
+							// lock is released as soon as possible.
+							let initial_message = initial_message.read().clone();
+							handler.inject_event(NotifsOutHandlerIn::Enable {
+								initial_message,
+							});
+						}
+
+						for num in pending_in.drain(..) {
+							// We create `handshake_message` on a separate line to be sure
+							// that the lock is released as soon as possible.
+							let handshake_message = self.in_handlers[num].1.read().clone();
+							self.in_handlers[num].0
+								.inject_event(NotifsInHandlerIn::Accept(handshake_message));
+						}
+
+						self.state = State::Opening {
+							pending_handshake: None,
+						};
+					},
+					State::Opening { .. } |
+					State::Open { .. } => {
+						// As documented, it is forbidden to send an `Open` while there is already
+						// one in the fly.
+						error!(target: "sub-libp2p", "opening already-opened handler");
+					},
 				}
 			},
-			NotifsHandlerIn::Disable => {
-				if let EnabledState::Disabled = self.enabled {
-					debug!("disabling already-disabled handler");
+
+			NotifsHandlerIn::Close => {
+				match &mut self.state {
+					State::Open { .. } |
+					State::Opening { .. } => {
+						self.legacy.inject_event(LegacyProtoHandlerIn::Disable);
+						for (handler, _) in &mut self.out_handlers {
+							handler.inject_event(NotifsOutHandlerIn::Disable);
+						}
+
+						self.state = State::Closed {
+							pending_in: Vec::new(),
+						};
+					},
+					State::Closed { pending_in } => {
+						for num in pending_in.drain(..) {
+							self.in_handlers[num].0.inject_event(NotifsInHandlerIn::Refuse);
+						}
+					},
 				}
-				self.legacy.inject_event(LegacyProtoHandlerIn::Disable);
-				// The notifications protocols start in the disabled state. If we were in the
-				// "Initial" state, then we shouldn't disable the notifications protocols again.
-				if self.enabled != EnabledState::Initial {
-					for (handler, _) in &mut self.out_handlers {
-						handler.inject_event(NotifsOutHandlerIn::Disable);
-					}
-				}
-				self.enabled = EnabledState::Disabled;
-				for num in self.pending_in.drain(..) {
-					self.in_handlers[num].0.inject_event(NotifsInHandlerIn::Refuse);
-				}
+
+				self.events_queue.push_back(
+					ProtocolsHandlerEvent::Custom(NotifsHandlerOut::CloseResult)
+				);
 			},
 		}
 	}
@@ -534,7 +603,11 @@ impl ProtocolsHandler for NotifsHandler {
 	) -> Poll<
 		ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent, Self::Error>
 	> {
-		if let Some(notifications_sink_rx) = &mut self.notifications_sink_rx {
+		if let Some(ev) = self.events_queue.pop_front() {
+			return Poll::Ready(ev);
+		}
+
+		if let State::Open { notifications_sink_rx, .. } = &mut self.state {
 			'poll_notifs_sink: loop {
 				// Before we poll the notifications sink receiver, check that all the notification
 				// channels are ready to send a message.
@@ -589,7 +662,9 @@ impl ProtocolsHandler for NotifsHandler {
 						}
 					}
 					NotificationsSinkMessage::ForceClose => {
-						return Poll::Ready(ProtocolsHandlerEvent::Close(NotifsHandlerError::SyncNotificationsClogged));
+						return Poll::Ready(
+							ProtocolsHandlerEvent::Close(NotifsHandlerError::SyncNotificationsClogged)
+						);
 					}
 				}
 			}
@@ -600,7 +675,7 @@ impl ProtocolsHandler for NotifsHandler {
 		// handshake) is open but the user isn't aware yet of the substreams being open.
 		// When that is the case, neither the legacy substream nor the incoming notifications
 		// substreams should be polled, otherwise there is a risk of receiving messages from them.
-		if self.pending_handshake.is_none() {
+		if !matches!(self.state, State::Opening { pending_handshake: Some(_) }) {
 			while let Poll::Ready(ev) = self.legacy.poll(cx) {
 				match ev {
 					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, .. } =>
@@ -609,23 +684,32 @@ impl ProtocolsHandler for NotifsHandler {
 						received_handshake,
 						..
 					}) => {
-						if self.notifications_sink_rx.is_none() {
-							debug_assert!(self.pending_handshake.is_none());
-							self.pending_handshake = Some(received_handshake);
+						match &mut self.state {
+							State::Opening { pending_handshake } => {
+								debug_assert!(pending_handshake.is_none());
+								*pending_handshake = Some(received_handshake);
+							}
+							_ => debug_assert!(false),
 						}
+
 						cx.waker().wake_by_ref();
 						return Poll::Pending;
 					},
-					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { reason, .. }) => {
-						// We consciously drop the receivers despite notifications being potentially
-						// still buffered up.
-						self.notifications_sink_rx = None;
-
-						return Poll::Ready(ProtocolsHandlerEvent::Custom(
-							NotifsHandlerOut::Closed { endpoint: self.endpoint.clone(), reason }
-						))
+					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { .. }) => {
+						match &mut self.state {
+							State::Open { want_closed, .. } if *want_closed == false => {
+								*want_closed = true;
+								return Poll::Ready(ProtocolsHandlerEvent::Custom(
+									NotifsHandlerOut::CloseDesired
+								));
+							}
+							State::Open { .. } => {}
+							State::Opening { .. } => {}
+							State::Closed { .. } => debug_assert!(false),
+						}
 					},
 					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) => {
+						debug_assert!(!matches!(self.state, State::Open { .. }));
 						return Poll::Ready(ProtocolsHandlerEvent::Custom(
 							NotifsHandlerOut::CustomMessage { message }
 						))
@@ -638,7 +722,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 		for (handler_num, (handler, handshake_message)) in self.in_handlers.iter_mut().enumerate() {
 			loop {
-				let poll = if self.notifications_sink_rx.is_some() {
+				let poll = if matches!(self.state, State::Open { .. }) {
 					handler.poll(cx)
 				} else {
 					handler.poll_process(cx)
@@ -654,26 +738,45 @@ impl ProtocolsHandler for NotifsHandler {
 						error!("Incoming substream handler tried to open a substream"),
 					ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest(_)) =>
-						match self.enabled {
-							EnabledState::Initial => self.pending_in.push(handler_num),
-							EnabledState::Enabled => {
+						match &mut self.state {
+							State::Closed { pending_in } => {
+								let was_empty = pending_in.is_empty();
+								pending_in.push(handler_num);
+								if was_empty {
+									return Poll::Ready(ProtocolsHandlerEvent::Custom(
+										NotifsHandlerOut::OpenDesired
+									));
+								}
+							},
+							State::Opening { .. } | State::Open { .. } => {
 								// We create `handshake_message` on a separate line to be sure
 								// that the lock is released as soon as possible.
 								let handshake_message = handshake_message.read().clone();
 								handler.inject_event(NotifsInHandlerIn::Accept(handshake_message))
 							},
-							EnabledState::Disabled =>
-								handler.inject_event(NotifsInHandlerIn::Refuse),
 						},
-					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => {},
+					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => {
+						match &mut self.state {
+							State::Open { want_closed, .. } if *want_closed == false => {
+								*want_closed = true;
+								return Poll::Ready(ProtocolsHandlerEvent::Custom(
+									NotifsHandlerOut::CloseDesired
+								));
+							}
+							State::Open { .. } => {}
+							State::Opening { .. } => {}
+							State::Closed { .. } => debug_assert!(false),
+						}
+					},
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(message)) => {
-						debug_assert!(self.pending_handshake.is_none());
-						if self.notifications_sink_rx.is_some() {
+						if matches!(self.state, State::Open { .. }) {
 							let msg = NotifsHandlerOut::Notification {
 								message,
 								protocol_name: handler.protocol_name().clone(),
 							};
 							return Poll::Ready(ProtocolsHandlerEvent::Custom(msg));
+						} else {
+							debug_assert!(false);
 						}
 					},
 				}
@@ -682,34 +785,67 @@ impl ProtocolsHandler for NotifsHandler {
 
 		for (handler_num, (handler, _)) in self.out_handlers.iter_mut().enumerate() {
 			while let Poll::Ready(ev) = handler.poll(cx) {
-				match ev {
-					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol } =>
+				match (ev, &mut self.state) {
+					(ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol }, _) =>
 						return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 							protocol: protocol
 								.map_info(|()| handler_num),
 						}),
-					ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
+					(ProtocolsHandlerEvent::Close(err), _) => void::unreachable(err),
 
 					// Opened substream on the handshake-bearing notification protocol.
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake })
-						if handler_num == 0 =>
+					(
+						ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }),
+						State::Opening { pending_handshake }
+					) if handler_num == 0 && pending_handshake.is_none() =>
 					{
-						if self.notifications_sink_rx.is_none() && self.pending_handshake.is_none() {
-							self.pending_handshake = Some(handshake);
+						*pending_handshake = Some(handshake);
+					},
+
+					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }), _)
+						if handler_num == 0 => debug_assert!(false),
+					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { .. }), _) => {},
+
+					(
+						ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed),
+						State::Open { want_closed, .. }
+					) => {
+						if *want_closed == false {
+							*want_closed = true;
+							return Poll::Ready(ProtocolsHandlerEvent::Custom(
+								NotifsHandlerOut::CloseDesired
+							));
 						}
 					},
 
-					// Nothing to do in response to other notification substreams being opened
-					// or closed.
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { .. }) => {},
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) => {},
-					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) => {},
+					// Remote has denied an opening attempt for this notifications protocol.
+					// This fails the entire opening attempt.
+					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused), State::Opening { .. }) |
+					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed), State::Opening { .. }) => {
+						self.legacy.inject_event(LegacyProtoHandlerIn::Disable);
+						for (handler, _) in &mut self.out_handlers {
+							handler.inject_event(NotifsOutHandlerIn::Disable);
+						}
+
+						self.state = State::Closed {
+							pending_in: Vec::new(),
+						};
+
+						return Poll::Ready(ProtocolsHandlerEvent::Custom(
+							NotifsHandlerOut::OpenResultErr
+						));
+					},
+
+
+					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused), _) |
+					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed), _) =>
+						debug_assert!(false),
 				}
 			}
 		}
 
-		if self.out_handlers.iter().all(|(h, _)| h.is_open() || h.is_refused()) {
-			if let Some(handshake) = self.pending_handshake.take() {
+		if let State::Opening { pending_handshake: Some(pending_handshake), .. } = &mut self.state {
+			if self.out_handlers.iter().all(|(h, _)| h.is_open() || h.is_refused()) {
 				let (async_tx, async_rx) = mpsc::channel(ASYNC_NOTIFICATIONS_BUFFER_SIZE);
 				let (sync_tx, sync_rx) = mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
 				let notifications_sink = NotificationsSink {
@@ -719,13 +855,16 @@ impl ProtocolsHandler for NotifsHandler {
 					}),
 				};
 
-				debug_assert!(self.notifications_sink_rx.is_none());
-				self.notifications_sink_rx = Some(stream::select(async_rx.fuse(), sync_rx.fuse()));
+				let pending_handshake = mem::replace(pending_handshake, Vec::new());
+				self.state = State::Open {
+					notifications_sink_rx: stream::select(async_rx.fuse(), sync_rx.fuse()),
+					want_closed: false,
+				};
 
 				return Poll::Ready(ProtocolsHandlerEvent::Custom(
-					NotifsHandlerOut::Open {
+					NotifsHandlerOut::OpenResultOk {
 						endpoint: self.endpoint.clone(),
-						received_handshake: handshake,
+						received_handshake: pending_handshake,
 						notifications_sink
 					}
 				))

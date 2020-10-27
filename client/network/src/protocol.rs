@@ -1668,7 +1668,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					notifications_sink,
 				}
 			},
-			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
+			GenericProtoOut::CustomProtocolClosed { peer_id } => {
 				self.on_peer_disconnected(peer_id)
 			},
 			GenericProtoOut::LegacyMessage { peer_id, message } =>
