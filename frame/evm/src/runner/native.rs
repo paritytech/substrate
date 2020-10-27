@@ -24,7 +24,7 @@ use sp_std::{
 use sp_core::{H160, U256, H256};
 use sp_runtime::{TransactionOutcome, traits::UniqueSaturatedInto};
 use frame_support::{
-	ensure, traits::{Get, Currency, ExistenceRequirement},
+	ensure, traits::{Currency, ExistenceRequirement},
 	storage::{StorageMap, StorageDoubleMap},
 };
 use sha3::{Keccak256, Digest};
@@ -491,7 +491,7 @@ impl<'vicinity, 'config, T: Trait> HandlerT for Handler<'vicinity, 'config, T> {
 	}
 
 	fn chain_id(&self) -> U256 {
-		U256::from(T::ChainId::get())
+		U256::from(<Module<T>>::chain_id())
 	}
 
 	fn exists(&self, _address: H160) -> bool {

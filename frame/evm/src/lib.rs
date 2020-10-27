@@ -204,8 +204,6 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// Precompiles associated with this EVM engine.
 	type Precompiles: Precompiles;
-	/// Chain ID of EVM.
-	type ChainId: Get<u64>;
 	/// EVM execution runner.
 	type Runner: Runner<Self>;
 
@@ -231,6 +229,8 @@ pub struct GenesisAccount {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as EVM {
+		ChainId get(fn chain_id): u64;
+		GasPrice get(fn gas_price): U256;
 		AccountCodes get(fn account_codes): map hasher(blake2_128_concat) H160 => Vec<u8>;
 		AccountStorages get(fn account_storages):
 			double_map hasher(blake2_128_concat) H160, hasher(blake2_128_concat) H256 => H256;

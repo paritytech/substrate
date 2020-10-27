@@ -21,7 +21,7 @@ use sp_std::marker::PhantomData;
 use sp_std::vec::Vec;
 use sp_core::{U256, H256, H160};
 use sp_runtime::traits::UniqueSaturatedInto;
-use frame_support::{debug, ensure, traits::{Get, Currency}, storage::{StorageMap, StorageDoubleMap}};
+use frame_support::{debug, ensure, traits::Currency, storage::{StorageMap, StorageDoubleMap}};
 use sha3::{Keccak256, Digest};
 use sp_evm::{ExecutionInfo, CallInfo, CreateInfo, Account, Log, Vicinity};
 use evm::ExitReason;
@@ -267,7 +267,7 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 	}
 
 	fn chain_id(&self) -> U256 {
-		U256::from(T::ChainId::get())
+		U256::from(<Module<T>>::chain_id())
 	}
 
 	fn exists(&self, _address: H160) -> bool {
