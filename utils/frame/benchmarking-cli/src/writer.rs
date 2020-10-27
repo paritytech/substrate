@@ -17,23 +17,257 @@
 
 // Outputs benchmark results to Rust files that can be ingested by the runtime.
 
-use crate::BenchmarkCmd;
-use std::fs::{self, File, OpenOptions};
-use std::io::prelude::*;
+use std::collections::HashMap;
+use std::fs;
 use std::path::PathBuf;
+
+use serde::Serialize;
+
+use crate::BenchmarkCmd;
 use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis};
 use sp_runtime::traits::Zero;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const TEMPLATE: &str = include_str!("./template.hbs");
 
-pub fn open_file(path: PathBuf) -> Result<File, std::io::Error> {
-	OpenOptions::new()
-		.create(true)
-		.write(true)
-		.truncate(true)
-		.open(path)
+// This is the final structure we will pass to the Handlebars template.
+#[derive(Serialize, Default, Debug, Clone)]
+struct TemplateData {
+	args: Vec<String>,
+	date: String,
+	version: String,
+	pallet: String,
+	header: String,
+	cmd: CmdData,
+	benchmarks: Vec<BenchmarkData>,
 }
 
+// This was the final data we have about each benchmark.
+#[derive(Serialize, Default, Debug, Clone)]
+struct BenchmarkData {
+	name: String,
+	components: Vec<Component>,
+	#[serde(serialize_with = "string_serialize")]
+	base_weight: u128,
+	#[serde(serialize_with = "string_serialize")]
+	base_reads: u128,
+	#[serde(serialize_with = "string_serialize")]
+	base_writes: u128,
+	component_weight: Vec<ComponentSlope>,
+	component_reads: Vec<ComponentSlope>,
+	component_writes: Vec<ComponentSlope>,
+}
+
+// This forwards some specific metadata from the `BenchmarkCmd`
+#[derive(Serialize, Default, Debug, Clone)]
+struct CmdData {
+	steps: Vec<u32>,
+	repeat: u32,
+	lowest_range_values: Vec<u32>,
+	highest_range_values: Vec<u32>,
+	execution: String,
+	wasm_execution: String,
+	chain: String,
+	db_cache: u32,
+}
+
+// This encodes the component name and whether that component is used.
+#[derive(Serialize, Debug, Clone, Eq, PartialEq)]
+struct Component {
+	name: String,
+	is_used: bool,
+}
+
+// This encodes the slope of some benchmark related to a component.
+#[derive(Serialize, Debug, Clone, Eq, PartialEq)]
+struct ComponentSlope {
+	name: String,
+	#[serde(serialize_with = "string_serialize")]
+	slope: u128,
+}
+
+// Small helper to create an `io::Error` from a string.
+fn io_error(s: &str) -> std::io::Error {
+	use std::io::{Error, ErrorKind};
+	Error::new(ErrorKind::Other, s)
+}
+
+// This function takes a list of `BenchmarkBatch` and organizes them by pallet into a `HashMap`.
+// So this: `[(p1, b1), (p1, b2), (p1, b3), (p2, b1), (p2, b2)]`
+// Becomes:
+//
+// ```
+// p1 -> [b1, b2, b3]
+// p2 -> [b1, b2]
+// ```
+fn map_results(batches: &[BenchmarkBatch]) -> Result<HashMap<String, Vec<BenchmarkData>>, std::io::Error> {
+	// Skip if batches is empty.
+	if batches.is_empty() { return Err(io_error("empty batches")) }
+
+	let mut all_benchmarks = HashMap::new();
+	let mut pallet_benchmarks = Vec::new();
+
+	let mut batches_iter = batches.iter().peekable();
+	while let Some(batch) = batches_iter.next() {
+		// Skip if there are no results
+		if batch.results.is_empty() { continue }
+
+		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
+		let benchmark_data = get_benchmark_data(batch);
+		pallet_benchmarks.push(benchmark_data);
+
+		// Check if this is the end of the iterator
+		if let Some(next) = batches_iter.peek() {
+			// Next pallet is different than current pallet, save and create new data.
+			let next_pallet = String::from_utf8(next.pallet.clone()).unwrap();
+			if next_pallet != pallet_string {
+				all_benchmarks.insert(pallet_string, pallet_benchmarks.clone());
+				pallet_benchmarks = Vec::new();
+			}
+		} else {
+			// This is the end of the iterator, so push the final data.
+			all_benchmarks.insert(pallet_string, pallet_benchmarks.clone());
+		}
+	}
+	Ok(all_benchmarks)
+}
+
+// Analyze and return the relevant results for a given benchmark.
+fn get_benchmark_data(batch: &BenchmarkBatch) -> BenchmarkData {
+	// Analyze benchmarks to get the linear regression.
+	let extrinsic_time = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
+	let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
+	let writes = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes).unwrap();
+
+	// Analysis data may include components that are not used, this filters out anything whose value is zero.
+	let mut used_components = Vec::new();
+	let mut used_extrinsic_time = Vec::new();
+	let mut used_reads = Vec::new();
+	let mut used_writes = Vec::new();
+
+	extrinsic_time.slopes.into_iter().zip(extrinsic_time.names.iter()).for_each(|(slope, name)| {
+		if !slope.is_zero() {
+			if !used_components.contains(&name) { used_components.push(name); }
+			used_extrinsic_time.push(ComponentSlope {
+				name: name.clone(),
+				slope: slope.saturating_mul(1000),
+			});
+		}
+	});
+	reads.slopes.into_iter().zip(reads.names.iter()).for_each(|(slope, name)| {
+		if !slope.is_zero() {
+			if !used_components.contains(&name) { used_components.push(name); }
+			used_reads.push(ComponentSlope { name: name.clone(), slope });
+		}
+	});
+	writes.slopes.into_iter().zip(writes.names.iter()).for_each(|(slope, name)| {
+		if !slope.is_zero() {
+			if !used_components.contains(&name) { used_components.push(name); }
+			used_writes.push(ComponentSlope { name: name.clone(), slope });
+		}
+	});
+
+	// This puts a marker on any component which is entirely unused in the weight formula.
+	let components = batch.results[0].components
+		.iter()
+		.map(|(name, _)| -> Component {
+			let name_string = name.to_string();
+			let is_used = used_components.contains(&&name_string);
+			Component { name: name_string, is_used }
+		})
+		.collect::<Vec<_>>();
+
+	BenchmarkData {
+		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
+		components,
+		base_weight: extrinsic_time.base.saturating_mul(1000),
+		base_reads: reads.base,
+		base_writes: writes.base,
+		component_weight: used_extrinsic_time,
+		component_reads: used_reads,
+		component_writes: used_writes,
+	}
+}
+
+// Create weight file from benchmark data and Handlebars template.
+pub fn write_results(
+	batches: &[BenchmarkBatch],
+	path: &PathBuf,
+	cmd: &BenchmarkCmd,
+) -> Result<(), std::io::Error> {
+	// Use custom template if provided.
+	let template: String = match &cmd.template {
+		Some(template_file) => {
+			fs::read_to_string(template_file)?
+		},
+		None => {
+			TEMPLATE.to_string()
+		},
+	};
+
+	// Use header if provided
+	let header_text = match &cmd.header {
+		Some(header_file) => {
+			let text = fs::read_to_string(header_file)?;
+			text
+		},
+		None => String::new(),
+	};
+
+	// Date string metadata
+	let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+	// Full CLI args passed to trigger the benchmark.
+	let args = std::env::args().collect::<Vec<String>>();
+
+	// Capture individual args
+	let cmd_data = CmdData {
+		steps: cmd.steps.clone(),
+		repeat: cmd.repeat.clone(),
+		lowest_range_values: cmd.lowest_range_values.clone(),
+		highest_range_values: cmd.highest_range_values.clone(),
+		execution: format!("{:?}", cmd.execution),
+		wasm_execution: cmd.wasm_method.to_string(),
+		chain: format!("{:?}", cmd.shared_params.chain),
+		db_cache: cmd.database_cache_size,
+	};
+
+	// New Handlebars instance with helpers.
+	let mut handlebars = handlebars::Handlebars::new();
+	handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
+	handlebars.register_helper("join", Box::new(JoinHelper));
+	// Don't HTML escape any characters.
+	handlebars.register_escape_fn(|s| -> String { s.to_string() });
+
+	// Organize results by pallet into a JSON map
+	let all_results = map_results(batches)?;
+	for (pallet, results) in all_results.into_iter() {
+		let mut file_path = path.clone();
+		// If a user only specified a directory...
+		if file_path.is_dir() {
+			// Create new file: "path/to/pallet_name.rs".
+			file_path.push(&pallet);
+			file_path.set_extension("rs");
+		}
+
+		let hbs_data = TemplateData {
+			args: args.clone(),
+			date: date.clone(),
+			version: VERSION.to_string(),
+			pallet: pallet,
+			header: header_text.clone(),
+			cmd: cmd_data.clone(),
+			benchmarks: results,
+		};
+
+		let mut output_file = fs::File::create(file_path)?;
+		handlebars.render_template_to_write(&template, &hbs_data, &mut output_file)
+			.map_err(|e| io_error(&e.to_string()))?;
+	}
+	Ok(())
+}
+
+// Add an underscore after every 3rd character, i.e. a separator for large numbers.
 fn underscore<Number>(i: Number) -> String
 	where Number: std::string::ToString
 {
@@ -49,282 +283,135 @@ fn underscore<Number>(i: Number) -> String
 	s
 }
 
-pub fn write_trait(
-	batches: &[BenchmarkBatch],
-	path: &PathBuf,
-	cmd: &BenchmarkCmd,
-) -> Result<(), std::io::Error> {
-	let mut file_path = path.clone();
-	file_path.push("trait");
-	file_path.set_extension("rs");
-	let mut file = crate::writer::open_file(file_path)?;
-
-	let indent = if cmd.spaces {"    "} else {"\t"};
-
-	let mut current_pallet = Vec::<u8>::new();
-
-	// Skip writing if there are no batches
-	if batches.is_empty() { return Ok(()) }
-
-	for batch in batches {
-		// Skip writing if there are no results
-		if batch.results.is_empty() { continue }
-
-		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
-		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
-
-		// only create new trait definitions when we go to a new pallet
-		if batch.pallet != current_pallet {
-			if !current_pallet.is_empty() {
-				// close trait
-				write!(file, "}}\n")?;
-			}
-
-			// trait wrapper
-			write!(file, "// {}\n", pallet_string)?;
-			write!(file, "pub trait {} {{\n", cmd.r#trait)?;
-
-			current_pallet = batch.pallet.clone()
-		}
-
-		// function name
-		write!(file, "{}fn {}(", indent, benchmark_string)?;
-
-		// params
-		let components = &batch.results[0].components;
-		for component in components {
-			write!(file, "{:?}: u32, ", component.0)?;
-		}
-		// return value
-		write!(file, ") -> Weight;\n")?;
+// A Handlebars helper to add an underscore after every 3rd character,
+// i.e. a separator for large numbers.
+#[derive(Clone, Copy)]
+struct UnderscoreHelper;
+impl handlebars::HelperDef for UnderscoreHelper {
+	fn call<'reg: 'rc, 'rc>(
+		&self, h: &handlebars::Helper,
+		_: &handlebars::Handlebars,
+		_: &handlebars::Context,
+		_rc: &mut handlebars::RenderContext,
+		out: &mut dyn handlebars::Output
+	) -> handlebars::HelperResult {
+		use handlebars::JsonRender;
+		let param = h.param(0).unwrap();
+		let underscore_param = underscore(param.value().render());
+		out.write(&underscore_param)?;
+		Ok(())
 	}
-
-	// final close trait
-	write!(file, "}}\n")?;
-
-	Ok(())
 }
 
-pub fn write_results(
-	batches: &[BenchmarkBatch],
-	path: &PathBuf,
-	cmd: &BenchmarkCmd,
-) -> Result<(), std::io::Error> {
-
-	let header_text = match &cmd.header {
-		Some(header_file) => {
-			let text = fs::read_to_string(header_file)?;
-			Some(text)
-		},
-		None => None,
-	};
-
-	let indent = if cmd.spaces {"    "} else {"\t"};
-	let date = chrono::Utc::now();
-
-	let mut current_pallet = Vec::<u8>::new();
-
-	// Skip writing if there are no batches
-	if batches.is_empty() { return Ok(()) }
-
-	let mut batches_iter = batches.iter().peekable();
-
-	let first_pallet = String::from_utf8(
-		batches_iter.peek().expect("we checked that batches is not empty").pallet.clone()
-	).unwrap();
-
-	let mut file_path = path.clone();
-	file_path.push(first_pallet);
-	file_path.set_extension("rs");
-
-	let mut file = open_file(file_path)?;
-
-	while let Some(batch) = batches_iter.next() {
-		// Skip writing if there are no results
-		if batch.results.is_empty() { continue }
-
-		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
-		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
-
-		// only create new trait definitions when we go to a new pallet
-		if batch.pallet != current_pallet {
-			// optional header and copyright
-			if let Some(header) = &header_text {
-				write!(file, "{}\n", header)?;
-			}
-
-			// title of file
-			write!(file, "//! Weights for {}\n", pallet_string)?;
-
-			// auto-generation note
-			write!(
-				file,
-				"//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {}\n",
-				VERSION,
-			)?;
-
-			// date of generation + some settings
-			write!(
-				file,
-				"//! DATE: {}, STEPS: {:?}, REPEAT: {}, LOW RANGE: {:?}, HIGH RANGE: {:?}\n",
-				date.format("%Y-%m-%d"),
-				cmd.steps,
-				cmd.repeat,
-				cmd.lowest_range_values,
-				cmd.highest_range_values,
-			)?;
-
-			// more settings
-			write!(
-				file,
-				"//! EXECUTION: {:?}, WASM-EXECUTION: {}, CHAIN: {:?}, DB CACHE: {}\n",
-				cmd.execution,
-				cmd.wasm_method,
-				cmd.shared_params.chain,
-				cmd.database_cache_size,
-			)?;
-
-			// allow statements
-			write!(
-				file,
-				"#![allow(unused_parens)]\n#![allow(unused_imports)]\n\n",
-			)?;
-
-			// general imports
-			write!(
-				file,
-				"use frame_support::{{traits::Get, weights::Weight}};\nuse sp_std::marker::PhantomData;\n\n"
-			)?;
-
-			// struct for weights
-			write!(file, "pub struct {}<T>(PhantomData<T>);\n", cmd.r#struct)?;
-
-			// trait wrapper
-			write!(
-				file,
-				"impl<T: frame_system::Trait> {}::{} for {}<T> {{\n",
-				pallet_string,
-				cmd.r#trait,
-				cmd.r#struct,
-			)?;
-
-			current_pallet = batch.pallet.clone()
-		}
-
-		// Analysis results
-		let extrinsic_time = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
-		let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
-		let writes = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes).unwrap();
-
-		// Analysis data may include components that are not used, this filters out anything whose value is zero.
-		let mut used_components = Vec::new();
-		let mut used_extrinsic_time = Vec::new();
-		let mut used_reads = Vec::new();
-		let mut used_writes = Vec::new();
-		extrinsic_time.slopes.iter().zip(extrinsic_time.names.iter()).for_each(|(slope, name)| {
-			if !slope.is_zero() {
-				if !used_components.contains(&name) { used_components.push(name); }
-				used_extrinsic_time.push((slope, name));
-			}
-		});
-		reads.slopes.iter().zip(reads.names.iter()).for_each(|(slope, name)| {
-			if !slope.is_zero() {
-				if !used_components.contains(&name) { used_components.push(name); }
-				used_reads.push((slope, name));
-			}
-		});
-		writes.slopes.iter().zip(writes.names.iter()).for_each(|(slope, name)| {
-			if !slope.is_zero() {
-				if !used_components.contains(&name) { used_components.push(name); }
-				used_writes.push((slope, name));
-			}
-		});
-
-		let all_components = batch.results[0].components
-			.iter()
-			.map(|(name, _)| -> String { return name.to_string() })
-			.collect::<Vec<String>>();
-
-		// function name
-		write!(file, "{}fn {}(", indent, benchmark_string)?;
-		// params
-		for component in all_components {
-			if used_components.contains(&&component) {
-				write!(file, "{}: u32, ", component)?;
-			} else {
-				write!(file, "_{}: u32, ", component)?;
-			}
-		}
-		// return value
-		write!(file, ") -> Weight {{\n")?;
-
-		write!(file, "{}{}({} as Weight)\n", indent, indent, underscore(extrinsic_time.base.saturating_mul(1000)))?;
-		used_extrinsic_time.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
-			write!(
-				file,
-				"{}{}{}.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
-				indent, indent, indent,
-				underscore(slope.saturating_mul(1000)),
-				name,
-			)
-		})?;
-
-		if !reads.base.is_zero() {
-			write!(
-				file,
-				"{}{}{}.saturating_add(T::DbWeight::get().reads({} as Weight))\n",
-				indent, indent, indent,
-				reads.base,
-			)?;
-		}
-		used_reads.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
-			write!(
-				file,
-				"{}{}{}.saturating_add(T::DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
-				indent, indent, indent,
-				slope,
-				name,
-			)
-		})?;
-
-		if !writes.base.is_zero() {
-			write!(
-				file,
-				"{}{}{}.saturating_add(T::DbWeight::get().writes({} as Weight))\n",
-				indent, indent, indent,
-				writes.base,
-			)?;
-		}
-		used_writes.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
-			write!(
-				file,
-				"{}{}{}.saturating_add(T::DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
-				indent, indent, indent,
-				slope,
-				name,
-			)
-		})?;
-
-		// close function
-		write!(file, "{}}}\n", indent)?;
-
-		// Check if this is the end of the iterator
-		if let Some(next) = batches_iter.peek() {
-			// Next pallet is different than current pallet, so we close up the file and open a new one.
-			if next.pallet != current_pallet {
-				write!(file, "}}\n")?;
-				let next_pallet = String::from_utf8(next.pallet.clone()).unwrap();
-
-				let mut file_path = path.clone();
-				file_path.push(next_pallet);
-				file_path.set_extension("rs");
-				file = open_file(file_path)?;
-			}
+// A helper to join a string of vectors.
+#[derive(Clone, Copy)]
+struct JoinHelper;
+impl handlebars::HelperDef for JoinHelper {
+	fn call<'reg: 'rc, 'rc>(
+		&self, h: &handlebars::Helper,
+		_: &handlebars::Handlebars,
+		_: &handlebars::Context,
+		_rc: &mut handlebars::RenderContext,
+		out: &mut dyn handlebars::Output
+	) -> handlebars::HelperResult {
+		use handlebars::JsonRender;
+		let param = h.param(0).unwrap();
+		let value = param.value();
+		let joined = if value.is_array() {
+			value.as_array().unwrap()
+				.iter()
+				.map(|v| v.render())
+				.collect::<Vec<String>>()
+				.join(" ")
 		} else {
-			// This is the end of the iterator, so we close up the final file.
-			write!(file, "}}\n")?;
+			value.render()
+		};
+		out.write(&joined)?;
+		Ok(())
+	}
+}
+
+// u128 does not serialize well into JSON for `handlebars`, so we represent it as a string.
+fn string_serialize<S>(x: &u128, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    s.serialize_str(&x.to_string())
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use frame_benchmarking::{BenchmarkBatch, BenchmarkParameter, BenchmarkResults};
+
+	fn test_data(pallet: &[u8], benchmark: &[u8], param: BenchmarkParameter, base: u32, slope: u32) -> BenchmarkBatch {
+		let mut results = Vec::new();
+		for i in 0 .. 5 {
+			results.push(
+				BenchmarkResults {
+					components: vec![(param, i), (BenchmarkParameter::z, 0)],
+					extrinsic_time: (base + slope * i).into(),
+					storage_root_time: (base + slope * i).into(),
+					reads: (base + slope * i).into(),
+					repeat_reads: 0,
+					writes: (base + slope * i).into(),
+					repeat_writes: 0,
+				}
+			)
+		}
+
+		return BenchmarkBatch {
+			pallet: [pallet.to_vec(), b"_pallet".to_vec()].concat(),
+			benchmark: [benchmark.to_vec(), b"_benchmark".to_vec()].concat(),
+			results,
 		}
 	}
 
-	Ok(())
+	fn check_data(benchmark: &BenchmarkData, component: &str, base: u128, slope: u128) {
+		assert_eq!(
+			benchmark.components,
+			vec![
+				Component { name: component.to_string(), is_used: true },
+				Component { name: "z".to_string(), is_used: false},
+			],
+		);
+		// Weights multiplied by 1,000
+		assert_eq!(benchmark.base_weight, base * 1_000);
+		assert_eq!(
+			benchmark.component_weight,
+			vec![ComponentSlope { name: component.to_string(), slope: slope * 1_000 }]
+		);
+		// DB Reads/Writes are untouched
+		assert_eq!(benchmark.base_reads, base);
+		assert_eq!(
+			benchmark.component_reads,
+			vec![ComponentSlope { name: component.to_string(), slope: slope }]
+		);
+		assert_eq!(benchmark.base_writes, base);
+		assert_eq!(
+			benchmark.component_writes,
+			vec![ComponentSlope { name: component.to_string(), slope: slope }]
+		);
+	}
+
+	#[test]
+	fn map_results_works() {
+		let mapped_results = map_results(&[
+			test_data(b"first", b"first", BenchmarkParameter::a, 10, 3),
+			test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
+			test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
+		]).unwrap();
+
+		let first_benchmark = &mapped_results.get("first_pallet").unwrap()[0];
+		assert_eq!(first_benchmark.name, "first_benchmark");
+		check_data(first_benchmark, "a", 10, 3);
+
+		let second_benchmark = &mapped_results.get("first_pallet").unwrap()[1];
+		assert_eq!(second_benchmark.name, "second_benchmark");
+		check_data(second_benchmark, "b", 9, 2);
+
+		let second_pallet_benchmark = &mapped_results.get("second_pallet").unwrap()[0];
+		assert_eq!(second_pallet_benchmark.name, "first_benchmark");
+		check_data(second_pallet_benchmark, "c", 3, 4);
+	}
 }

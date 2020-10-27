@@ -246,8 +246,7 @@ pub fn decode_hex<T: AsRef<[u8]>>(message: T) -> Result<Vec<u8>, Error> {
 	if message[..2] == [b'0', b'x'] {
 		message = &message[2..]
 	}
-	hex::decode(message)
-		.map_err(|e| Error::Other(format!("Invalid hex ({})", e)))
+	Ok(hex::decode(message)?)
 }
 
 /// checks if message is Some, otherwise reads message from stdin and optionally decodes hex
