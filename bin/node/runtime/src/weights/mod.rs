@@ -16,7 +16,6 @@
 //! A list of the different weight modules for our runtime.
 
 pub mod pallet_contracts;
-pub mod pallet_timestamp;
 pub mod pallet_treasury;
 pub mod pallet_utility;
 pub mod pallet_vesting;
