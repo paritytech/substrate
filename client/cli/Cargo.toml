@@ -55,8 +55,6 @@ rpassword = "4.0.1"
 
 [dev-dependencies]
 tempfile = "3.1.0"
-sp-io = { version = "2.0.0-rc3", path = "../../primitives/io" }
-sp-application-crypto = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/application-crypto" }
 
 [features]
 wasmtime = [
