@@ -52,7 +52,7 @@ pub fn crate_to_pallet_version(input: proc_macro::TokenStream) -> Result<TokenSt
 	let patch_version = get_version::<u8>("CARGO_PKG_VERSION_PATCH")
 		.map_err(|_| create_error("Patch version needs to fit into `u8`"))?;
 
-	let crate_ = generate_crate_access_2018()?;
+	let crate_ = generate_crate_access_2018("frame-support")?;
 
 	Ok(quote::quote! {
 		#crate_::traits::PalletVersion {

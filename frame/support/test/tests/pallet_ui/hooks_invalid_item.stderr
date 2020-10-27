@@ -1,0 +1,5 @@
+error[E0107]: wrong number of type arguments: expected 1, found 0
+  --> $DIR/hooks_invalid_item.rs:12:18
+   |
+12 |     impl<T: Config> Hooks for Pallet<T> {}
+   |                     ^^^^^ expected 1 type argument

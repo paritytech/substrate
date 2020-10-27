@@ -517,6 +517,11 @@ decl_error! {
 	}
 }
 
+/// Pallet struct placeholder on which is implemented the pallet logic.
+///
+/// It is currently an alias for `Module` as old macros still generate/use old name.
+pub type Pallet<T> = Module<T>;
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
 		type Error = Error<T>;
@@ -1370,4 +1375,12 @@ impl<T: Trait> Lookup for ChainContext<T> {
 	fn lookup(&self, s: Self::Source) -> Result<Self::Target, LookupError> {
 		<T::Lookup as StaticLookup>::lookup(s)
 	}
+}
+
+pub mod pallet_prelude {
+	pub use crate::ensure_signed;
+	pub use crate::ensure_none;
+	pub use crate::ensure_root;
+	pub type OriginFor<T> = <T as crate::Config>::Origin;
+	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;
 }

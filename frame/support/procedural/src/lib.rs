@@ -21,12 +21,14 @@
 
 mod storage;
 mod construct_runtime;
+mod pallet;
 mod pallet_version;
 mod transactional;
 mod debug_no_bound;
 mod clone_no_bound;
 mod partial_eq_no_bound;
 
+pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use proc_macro::TokenStream;
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
@@ -274,7 +276,8 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///
 /// We provide support for the following module parts in a pallet:
 ///
-/// - `Module`
+/// - `Pallet` or `Module`, mandatory. (one or the other must be provided depending if pallet use
+/// 	pallet attribute macro or old decl_module macro
 /// - `Call`
 /// - `Storage`
 /// - `Event` or `Event<T>` (if the event is generic)
@@ -303,6 +306,12 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
+}
+
+/// Macro to define a pallet. Docs are at `frame_support::pallet`.
+#[proc_macro_attribute]
+pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
+	pallet::pallet(attr, item)
 }
 
 /// Execute the annotated function in a new storage transaction.

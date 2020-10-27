@@ -1,0 +1,5 @@
+error: expected `Event`
+  --> $DIR/event_wrong_item_name.rs:19:11
+   |
+19 |     pub enum Foo {}
+   |              ^^^

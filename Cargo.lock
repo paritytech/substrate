@@ -1743,6 +1743,7 @@ version = "2.0.0"
 dependencies = [
  "frame-metadata",
  "frame-support",
+ "frame-system",
  "parity-scale-codec",
  "pretty_assertions",
  "rustversion",
