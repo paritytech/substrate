@@ -23,6 +23,7 @@ use crate::exec::Ext;
 use crate::gas::GasMeter;
 
 use sp_std::prelude::*;
+use sp_core::crypto::UncheckedFrom;
 use codec::{Encode, Decode};
 use sp_sandbox;
 
@@ -32,7 +33,7 @@ mod code_cache;
 mod prepare;
 mod runtime;
 
-use self::runtime::{to_execution_result, Runtime};
+use self::runtime::Runtime;
 use self::code_cache::load as load_code;
 use pallet_contracts_primitives::ExecResult;
 
@@ -71,13 +72,16 @@ pub struct WasmLoader<'a, T: Trait> {
 	schedule: &'a Schedule<T>,
 }
 
-impl<'a, T: Trait> WasmLoader<'a, T> {
+impl<'a, T: Trait> WasmLoader<'a, T> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
 	pub fn new(schedule: &'a Schedule<T>) -> Self {
 		WasmLoader { schedule }
 	}
 }
 
-impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a, T> {
+impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a, T>
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+{
 	type Executable = WasmExecutable;
 
 	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
@@ -97,17 +101,20 @@ impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a, T> {
 }
 
 /// Implementation of `Vm` that takes `WasmExecutable` and executes it.
-pub struct WasmVm<'a, T: Trait> {
+pub struct WasmVm<'a, T: Trait> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
 	schedule: &'a Schedule<T>,
 }
 
-impl<'a, T: Trait> WasmVm<'a, T> {
+impl<'a, T: Trait> WasmVm<'a, T> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
 	pub fn new(schedule: &'a Schedule<T>) -> Self {
 		WasmVm { schedule }
 	}
 }
 
-impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T> {
+impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T>
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+{
 	type Executable = WasmExecutable;
 
 	fn execute<E: Ext<T = T>>(
@@ -147,7 +154,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T> {
 		// entrypoint.
 		let result = sp_sandbox::Instance::new(&exec.prefab_module.code, &imports, &mut runtime)
 			.and_then(|mut instance| instance.invoke(exec.entrypoint_name, &[], &mut runtime));
-		to_execution_result(runtime, result)
+		runtime.to_execution_result(result)
 	}
 }
 

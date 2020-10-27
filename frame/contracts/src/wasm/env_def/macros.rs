@@ -127,7 +127,10 @@ macro_rules! define_func {
 		fn $name< E: $seal_ty >(
 			$ctx: &mut $crate::wasm::Runtime<E>,
 			args: &[sp_sandbox::Value],
-		) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> {
+		) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>
+			where
+				<E::T as frame_system::Trait>::AccountId: sp_core::crypto::UncheckedFrom<<E::T as frame_system::Trait>::Hash> + AsRef<[u8]>
+		{
 			#[allow(unused)]
 			let mut args = args.iter();
 
@@ -183,7 +186,10 @@ macro_rules! define_env {
 			}
 		}
 
-		impl<E: Ext> $crate::wasm::env_def::FunctionImplProvider<E> for $init_name {
+		impl<E: Ext> $crate::wasm::env_def::FunctionImplProvider<E> for $init_name
+		where
+			<E::T as frame_system::Trait>::AccountId: sp_core::crypto::UncheckedFrom<<E::T as frame_system::Trait>::Hash> + AsRef<[u8]>
+		{
 			fn impls<F: FnMut(&[u8], $crate::wasm::env_def::HostFunc<E>)>(f: &mut F) {
 				register_func!(f, < E: $seal_ty > ; $( $name ( $ctx $( , $names : $params )* ) $( -> $returns)* => $body )* );
 			}
