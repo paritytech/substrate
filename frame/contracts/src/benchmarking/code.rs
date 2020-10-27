@@ -70,7 +70,7 @@ pub struct ModuleDefinition {
 pub struct TableSegment {
 	/// How many elements should be created inside the table.
 	pub num_elements: u32,
-	/// The function index with which all tablee elements should be initialized.
+	/// The function index with which all table elements should be initialized.
 	pub function_index: u32,
 }
 
