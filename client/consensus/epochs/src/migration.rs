@@ -32,7 +32,7 @@ pub struct EpochChangesV0<Hash, Number, E: Epoch> {
 pub type EpochChangesForV0<Block, Epoch> = EpochChangesV0<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
 
 impl<Hash, Number, E: Epoch> EpochChangesV0<Hash, Number, E> where
-	Hash: PartialEq + Ord + Copy,
+	Hash: Eq + Ord + Copy + std::hash::Hash,
 	Number: Ord + Copy,
 {
 	/// Create a new value of this type from raw.

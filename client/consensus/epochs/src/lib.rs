@@ -312,7 +312,7 @@ fn fake_head_hash<H: AsRef<[u8]> + AsMut<[u8]> + Clone>(parent_hash: &H) -> H {
 }
 
 impl<Hash, Number, E: Epoch> Default for EpochChanges<Hash, Number, E> where
-	Hash: PartialEq + Ord,
+	Hash: Eq + Ord + Clone + std::hash::Hash,
 	Number: Ord,
 {
 	fn default() -> Self {
@@ -321,7 +321,7 @@ impl<Hash, Number, E: Epoch> Default for EpochChanges<Hash, Number, E> where
 }
 
 impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
-	Hash: PartialEq + Ord + AsRef<[u8]> + AsMut<[u8]> + Copy,
+	Hash: Eq + Ord + AsRef<[u8]> + AsMut<[u8]> + Copy + std::hash::Hash,
 	Number: Ord + One + Zero + Add<Output=Number> + Copy,
 {
 	/// Create a new epoch change.

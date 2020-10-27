@@ -20,6 +20,7 @@ use std::{
 	collections::{BTreeSet, HashSet},
 	fmt::Debug,
 	ops::Add,
+	hash::Hash,
 };
 
 use serde::{Deserialize, Serialize};
@@ -41,7 +42,7 @@ pub trait ReportVoterState {
 impl<H, N> ReportAuthoritySet for SharedAuthoritySet<H, N>
 where
 	N: Add<Output = N> + Ord + Clone + Debug,
-	H: Clone + Debug + Eq,
+	H: Clone + Debug + Eq + Hash,
 {
 	fn get(&self) -> (u64, HashSet<AuthorityId>) {
 		let current_voters: HashSet<AuthorityId> = self

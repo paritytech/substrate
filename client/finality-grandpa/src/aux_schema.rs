@@ -18,6 +18,7 @@
 
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::hash::Hash;
 use parity_scale_codec::{Encode, Decode};
 use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
@@ -70,7 +71,7 @@ struct V0AuthoritySet<H, N> {
 }
 
 impl<H, N> Into<AuthoritySet<H, N>> for V0AuthoritySet<H, N>
-where H: Clone + Debug + PartialEq,
+where H: Clone + Debug + Eq + Hash,
 	  N: Clone + Debug + Ord,
 {
 	fn into(self) -> AuthoritySet<H, N> {

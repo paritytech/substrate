@@ -30,6 +30,7 @@ use std::cmp::Ord;
 use std::fmt::Debug;
 use std::ops::Add;
 use std::sync::Arc;
+use std::hash::Hash;
 
 /// Error type returned on operations on the `AuthoritySet`.
 #[derive(Debug, derive_more::Display)]
@@ -88,7 +89,7 @@ impl<H, N> SharedAuthoritySet<H, N> {
 
 impl<H: Eq, N> SharedAuthoritySet<H, N>
 where N: Add<Output=N> + Ord + Clone + Debug,
-	  H: Clone + Debug
+	  H: Clone + Debug + Hash,
 {
 	/// Get the earliest limit-block number that's higher or equal to the given
 	/// min number, if any.
@@ -156,7 +157,7 @@ pub struct AuthoritySet<H, N> {
 
 impl<H, N> AuthoritySet<H, N>
 where
-	H: PartialEq,
+	H: Eq + Hash + Clone,
 	N: Ord,
 {
 	// authority sets must be non-empty and all weights must be greater than 0
@@ -206,7 +207,7 @@ where
 impl<H: Eq, N> AuthoritySet<H, N>
 where
 	N: Add<Output = N> + Ord + Clone + Debug,
-	H: Clone + Debug,
+	H: Clone + Debug + Hash,
 {
 	/// Returns the block hash and height at which the next pending change in
 	/// the given chain (i.e. it includes `best_hash`) was signalled, `None` if
