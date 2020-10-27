@@ -32,7 +32,7 @@ use frame_system::ensure_signed;
 
 pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Required origin for adding a member (though can always be Root).
 	type AddOrigin: EnsureOrigin<Self::Origin>;
@@ -80,7 +80,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::AccountId,
 		<T as Trait<I>>::Event,
 	{
 		/// The given member was added; see the transaction for who.
@@ -299,7 +299,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;

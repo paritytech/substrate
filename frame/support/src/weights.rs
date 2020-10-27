@@ -701,7 +701,10 @@ mod tests {
 	use crate::{decl_module, parameter_types, traits::Get};
 	use super::*;
 
-	pub trait Trait: 'static {
+	/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
+	pub trait Trait: Config {}
+	impl<T: Config> Trait for T {}
+	pub trait Config: 'static {
 		type Origin;
 		type Balance;
 		type BlockNumber;
@@ -718,7 +721,7 @@ mod tests {
 		};
 	}
 
-	impl Trait for TraitImpl {
+	impl Config for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type Balance = u32;

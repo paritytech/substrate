@@ -199,13 +199,13 @@ pub type PropIndex = u32;
 /// A referendum index.
 pub type ReferendumIndex = u32;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: frame_system::Trait + Sized {
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + From<Call<Self>>;
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Currency type for this module.
 	type Currency: ReservableCurrency<Self::AccountId>
@@ -413,9 +413,9 @@ decl_storage! {
 decl_event! {
 	pub enum Event<T> where
 		Balance = BalanceOf<T>,
-		<T as frame_system::Trait>::AccountId,
-		<T as frame_system::Trait>::Hash,
-		<T as frame_system::Trait>::BlockNumber,
+		<T as frame_system::Config>::AccountId,
+		<T as frame_system::Config>::Hash,
+		<T as frame_system::Config>::BlockNumber,
 	{
 		/// A motion has been proposed by a public account. \[proposal_index, deposit\]
 		Proposed(PropIndex, Balance),

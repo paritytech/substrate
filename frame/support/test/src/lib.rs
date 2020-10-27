@@ -25,8 +25,12 @@
 #[cfg(test)]
 mod pallet_version;
 
+/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
+pub trait Trait: Config {}
+impl<T: Config> Trait for T {}
+
 /// The configuration trait
-pub trait Trait: 'static {
+pub trait Config: 'static {
 	/// The runtime origin type.
 	type Origin: codec::Codec + codec::EncodeLike + Default;
 	/// The block number type.

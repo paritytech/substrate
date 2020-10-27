@@ -65,7 +65,7 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
@@ -109,7 +109,7 @@ impl_opaque_keys! {
 
 impl pallet_session::Trait for Test {
 	type Event = ();
-	type ValidatorId = <Self as frame_system::Trait>::AccountId;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Self>;
 	type ShouldEndSession = Babe;
 	type NextSessionRotation = Babe;

@@ -43,7 +43,7 @@ use sc_rpc_api::state::StateClient;
 /// # use frame_system::Trait;
 /// # use sc_rpc_api::state::StateClient;
 /// #
-/// # // Hash would normally be <TestRuntime as frame_system::Trait>::Hash, but we don't have
+/// # // Hash would normally be <TestRuntime as frame_system::Config>::Hash, but we don't have
 /// # // frame_system::Trait implemented for TestRuntime. Here we just pretend.
 /// # type Hash = ();
 /// #

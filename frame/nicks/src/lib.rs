@@ -51,12 +51,12 @@ use frame_support::{
 };
 use frame_system::ensure_signed;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The currency trait.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -85,7 +85,7 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
+	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId, Balance = BalanceOf<T> {
 		/// A name was set. \[who\]
 		NameSet(AccountId),
 		/// A name was forcibly set. \[target\]
@@ -262,7 +262,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;

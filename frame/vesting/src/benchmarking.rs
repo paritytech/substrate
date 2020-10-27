@@ -29,7 +29,7 @@ use crate::Module as Vesting;
 
 const SEED: u32 = 0;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 fn add_locks<T: Trait>(who: &T::AccountId, n: u8) {
 	for id in 0..n {

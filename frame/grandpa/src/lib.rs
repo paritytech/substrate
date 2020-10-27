@@ -69,7 +69,7 @@ pub use equivocation::{
 
 pub trait Trait: frame_system::Trait {
 	/// The event type of this module.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The function call.
 	type Call: From<Call<Self>>;

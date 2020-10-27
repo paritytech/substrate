@@ -268,13 +268,13 @@ use frame_support::traits::{
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
-type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// The module's configuration trait.
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 
 	/// The societies's module id
 	type ModuleId: Get<ModuleId>;
@@ -1108,7 +1108,7 @@ decl_error! {
 decl_event! {
 	/// Events for this module.
 	pub enum Event<T, I=DefaultInstance> where
-		AccountId = <T as system::Trait>::AccountId,
+		AccountId = <T as system::Config>::AccountId,
 		Balance = BalanceOf<T, I>
 	{
 		/// The society is founded by the given identity. \[founder\]

@@ -41,8 +41,8 @@ mod module1 {
 	use super::*;
 	use sp_std::ops::Add;
 
-	pub trait Trait<I>: system::Trait where <Self as system::Trait>::BlockNumber: From<u32> {
-		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+	pub trait Trait<I>: system::Trait where <Self as system::Config>::BlockNumber: From<u32> {
+		type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
 		type GenericType: Default + Clone + Codec + EncodeLike;
@@ -50,7 +50,7 @@ mod module1 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance> for enum Call where
-			origin: <T as system::Trait>::Origin,
+			origin: <T as system::Config>::Origin,
 			system = system,
 			T::BlockNumber: From<u32>
 		{
@@ -133,7 +133,7 @@ mod module2 {
 
 	pub trait Trait<I=DefaultInstance>: system::Trait {
 		type Amount: Parameter + Default;
-		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+		type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 		type Origin: From<Origin<Self, I>>;
 	}
 
@@ -141,7 +141,7 @@ mod module2 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
-			origin: <T as system::Trait>::Origin,
+			origin: <T as system::Config>::Origin,
 			system = system
 		{
 			fn deposit_event() = default;
@@ -196,7 +196,7 @@ mod module3 {
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin, system=system {}
+		pub struct Module<T: Trait> for enum Call where origin: <T as system::Config>::Origin, system=system {}
 	}
 }
 
@@ -246,7 +246,7 @@ pub type AccountId = <Signature as Verify>::Signer;
 pub type BlockNumber = u64;
 pub type Index = u64;
 
-impl system::Trait for Runtime {
+impl system::Config for Runtime {
 	type BaseCallFilter= ();
 	type Hash = H256;
 	type Origin = Origin;

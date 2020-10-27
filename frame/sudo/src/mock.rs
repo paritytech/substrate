@@ -34,7 +34,7 @@ pub mod logger {
 	use frame_system::ensure_root;
 
 	pub trait Trait: frame_system::Trait {
-		type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+		type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 	}
 
 	decl_storage! {
@@ -45,14 +45,14 @@ pub mod logger {
 	}
 
 	decl_event! {
-		pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
+		pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId {
 			AppendI32(i32, Weight),
 			AppendI32AndAccount(AccountId, i32, Weight),
 		}
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Trait>::Origin {
+		pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Config>::Origin {
 			fn deposit_event() = default;
 
 			#[weight = *weight]
@@ -118,7 +118,7 @@ impl Filter<Call> for BlockEverything {
 	}
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = BlockEverything;
 	type Origin = Origin;
 	type Call = Call;

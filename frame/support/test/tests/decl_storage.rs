@@ -81,7 +81,7 @@ mod tests {
 
 	struct TraitImpl {}
 
-	impl frame_support_test::Trait for TraitImpl {
+	impl frame_support_test::Config for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
@@ -438,7 +438,7 @@ mod test2 {
 
 	struct TraitImpl {}
 
-	impl frame_support_test::Trait for TraitImpl {
+	impl frame_support_test::Config for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
@@ -466,7 +466,7 @@ mod test3 {
 
 	struct TraitImpl {}
 
-	impl frame_support_test::Trait for TraitImpl {
+	impl frame_support_test::Config for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
@@ -511,7 +511,7 @@ mod test_append_and_len {
 
 	struct Test {}
 
-	impl frame_support_test::Trait for Test {
+	impl frame_support_test::Config for Test {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();

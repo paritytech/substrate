@@ -660,7 +660,7 @@ define_env!(Env, <E: Ext>,
 		value_len: u32
 	) -> ReturnCode => {
 		charge_gas(ctx, RuntimeToken::Transfer)?;
-		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
+		let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
 			read_sandbox_memory_as(ctx, account_ptr, account_len)?;
 		let value: BalanceOf<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
@@ -713,7 +713,7 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> ReturnCode => {
 		charge_gas(ctx, RuntimeToken::CallBase(input_data_len))?;
-		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
+		let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
 			read_sandbox_memory_as(ctx, callee_ptr, callee_len)?;
 		let value: BalanceOf<<E as Ext>::T> = read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
@@ -867,7 +867,7 @@ define_env!(Env, <E: Ext>,
 		beneficiary_len: u32
 	) => {
 		charge_gas(ctx, RuntimeToken::Terminate)?;
-		let beneficiary: <<E as Ext>::T as frame_system::Trait>::AccountId =
+		let beneficiary: <<E as Ext>::T as frame_system::Config>::AccountId =
 			read_sandbox_memory_as(ctx, beneficiary_ptr, beneficiary_len)?;
 
 		if let Ok(_) = ctx.ext.terminate(&beneficiary) {
@@ -1118,7 +1118,7 @@ define_env!(Env, <E: Ext>,
 		delta_count: u32
 	) => {
 		charge_gas(ctx, RuntimeToken::RestoreTo(delta_count))?;
-		let dest: <<E as Ext>::T as frame_system::Trait>::AccountId =
+		let dest: <<E as Ext>::T as frame_system::Config>::AccountId =
 			read_sandbox_memory_as(ctx, dest_ptr, dest_len)?;
 		let code_hash: CodeHash<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, code_hash_ptr, code_hash_len)?;

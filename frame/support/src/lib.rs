@@ -499,7 +499,10 @@ mod tests {
 	use sp_std::{marker::PhantomData, result};
 	use sp_io::TestExternalities;
 
-	pub trait Trait: 'static {
+	/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
+	pub trait Trait: Config {}
+	impl<T: Config> Trait for T {}
+	pub trait Config: 'static {
 		type BlockNumber: Codec + EncodeLike + Default;
 		type Origin;
 		type PalletInfo: crate::traits::PalletInfo;
@@ -509,7 +512,7 @@ mod tests {
 	mod module {
 		#![allow(dead_code)]
 
-		use super::Trait;
+		use super::{Trait, Config};
 
 		decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self  {}
@@ -540,7 +543,7 @@ mod tests {
 	}
 
 	struct Test;
-	impl Trait for Test {
+	impl Config for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
 		type PalletInfo = ();

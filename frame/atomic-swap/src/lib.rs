@@ -138,7 +138,7 @@ impl<T: Trait, AccountId, C> SwapAction<AccountId, T> for BalanceSwapAction<Acco
 /// Atomic swap's pallet configuration trait.
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 	/// Swap action.
 	type SwapAction: SwapAction<Self::AccountId, Self> + Parameter;
 	/// Limit of proof size.
@@ -186,7 +186,7 @@ decl_error! {
 decl_event!(
 	/// Event of atomic swap pallet.
 	pub enum Event<T> where
-		AccountId = <T as system::Trait>::AccountId,
+		AccountId = <T as system::Config>::AccountId,
 		PendingSwap = PendingSwap<T>,
 	{
 		/// Swap created. \[account, proof, swap\]

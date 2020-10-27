@@ -132,7 +132,7 @@ pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 		+ GetDispatchInfo;
 
 	/// The outer event type.
-	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The time-out for council motions.
 	type MotionDuration: Get<Self::BlockNumber>;
@@ -166,7 +166,7 @@ pub enum RawOrigin<AccountId, I> {
 }
 
 /// Origin for the collective module.
-pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as frame_system::Trait>::AccountId, I>;
+pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as frame_system::Config>::AccountId, I>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// Info for keeping track of a motion being voted on.
@@ -209,8 +209,8 @@ decl_storage! {
 
 decl_event! {
 	pub enum Event<T, I=DefaultInstance> where
-		<T as frame_system::Trait>::Hash,
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::Hash,
+		<T as frame_system::Config>::AccountId,
 	{
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given
 		/// `MemberCount`).
@@ -276,7 +276,7 @@ fn get_result_weight(result: DispatchResultWithPostInfo) -> Option<Weight> {
 
 // Note that councillor operations are assigned to the operational class.
 decl_module! {
-	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as frame_system::Trait>::Origin {
+	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as frame_system::Config>::Origin {
 		type Error = Error<T, I>;
 
 		fn deposit_event() = default;
@@ -952,7 +952,7 @@ mod tests {
 		pub const MaxProposals: u32 = 100;
 		pub const MaxMembers: u32 = 100;
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;

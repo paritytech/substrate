@@ -41,7 +41,7 @@ mod module1 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where
-			origin: <T as system::Trait>::Origin,
+			origin: <T as system::Config>::Origin,
 			system = system,
 		{}
 	}
@@ -56,7 +56,7 @@ mod module2 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
-			origin: <T as system::Trait>::Origin,
+			origin: <T as system::Config>::Origin,
 			system = system
 		{
 			fn on_runtime_upgrade() -> Weight {
@@ -92,7 +92,7 @@ pub type AccountId = <Signature as Verify>::Signer;
 pub type BlockNumber = u64;
 pub type Index = u64;
 
-impl system::Trait for Runtime {
+impl system::Config for Runtime {
 	type BaseCallFilter= ();
 	type Hash = H256;
 	type Origin = Origin;

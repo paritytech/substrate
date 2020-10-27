@@ -42,11 +42,11 @@ use codec::{Encode, Decode};
 type OpaqueTimeSlot = Vec<u8>;
 
 /// A type alias for a report identifier.
-type ReportIdOf<T> = <T as frame_system::Trait>::Hash;
+type ReportIdOf<T> = <T as frame_system::Config>::Hash;
 
 /// Type of data stored as a deferred offence
 pub type DeferredOffenceOf<T> = (
-	Vec<OffenceDetails<<T as frame_system::Trait>::AccountId, <T as Trait>::IdentificationTuple>>,
+	Vec<OffenceDetails<<T as frame_system::Config>::AccountId, <T as Trait>::IdentificationTuple>>,
 	Vec<Perbill>,
 	SessionIndex,
 );
@@ -68,7 +68,7 @@ impl WeightInfo for () {
 /// Offences trait
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
 	/// Full identification of the validator.
 	type IdentificationTuple: Parameter + Ord;
 	/// A handler called for every offence report.

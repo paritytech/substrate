@@ -311,7 +311,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> RandomnessT<<T as frame_system::Trait>::Hash> for Module<T> {
+impl<T: Trait> RandomnessT<<T as frame_system::Config>::Hash> for Module<T> {
 	/// Some BABE blocks have VRF outputs where the block producer has exactly one bit of influence,
 	/// either they make the block or they do not make the block and thus someone else makes the
 	/// next block. Yet, this randomness is not fresh in all BABE blocks.
@@ -332,7 +332,7 @@ impl<T: Trait> RandomnessT<<T as frame_system::Trait>::Hash> for Module<T> {
 		subject.reserve(VRF_OUTPUT_LENGTH);
 		subject.extend_from_slice(&Self::randomness()[..]);
 
-		<T as frame_system::Trait>::Hashing::hash(&subject[..])
+		<T as frame_system::Config>::Hashing::hash(&subject[..])
 	}
 }
 

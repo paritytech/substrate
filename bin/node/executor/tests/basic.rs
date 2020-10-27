@@ -581,7 +581,7 @@ const CODE_TRANSFER: &str = r#"
 #[test]
 fn deploying_wasm_contract_should_work() {
 	let transfer_code = wat::parse_str(CODE_TRANSFER).unwrap();
-	let transfer_ch = <Runtime as frame_system::Trait>::Hashing::hash(&transfer_code);
+	let transfer_ch = <Runtime as frame_system::Config>::Hashing::hash(&transfer_code);
 
 	let addr = <Runtime as pallet_contracts::Trait>::DetermineContractAddress::contract_address_for(
 		&transfer_ch,

@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Trait, Module};
+use crate::{Trait, Config, Module};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::SignedExtension,
@@ -47,7 +47,7 @@ impl<T: Trait + Send + Sync> CheckSpecVersion<T> {
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckSpecVersion<T> {
 	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
+	type Call = <T as Config>::Call;
 	type AdditionalSigned = u32;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckSpecVersion";

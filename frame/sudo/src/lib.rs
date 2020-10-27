@@ -107,7 +107,7 @@ mod tests;
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// A sudo-able call.
 	type Call: Parameter + UnfilteredDispatchable<Origin=Self::Origin> + GetDispatchInfo;
@@ -230,7 +230,7 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
+	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId {
 		/// A sudo just took place. \[result\]
 		Sudid(DispatchResult),
 		/// The \[sudoer\] just switched identity; the old key is supplied.

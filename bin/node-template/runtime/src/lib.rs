@@ -140,7 +140,7 @@ parameter_types! {
 
 // Configure FRAME pallets to include in runtime.
 
-impl frame_system::Trait for Runtime {
+impl frame_system::Config for Runtime {
 	/// The basic call filter to use in dispatchable.
 	type BaseCallFilter = ();
 	/// The identifier used to distinguish between accounts.

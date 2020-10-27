@@ -12,7 +12,7 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, marker::PhantomData};
 
 type NegativeImbalanceOf<C, T> =
-	<C as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<C as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeTransaction<T: Trait> {
@@ -56,16 +56,16 @@ pub struct CurrencyAdapter<C, OU>(PhantomData<(C, OU)>);
 impl<T, C, OU> OnChargeTransaction<T> for CurrencyAdapter<C, OU>
 where
 	T: Trait,
-	T::TransactionByteFee: Get<<C as Currency<<T as frame_system::Trait>::AccountId>>::Balance>,
-	C: Currency<<T as frame_system::Trait>::AccountId>,
+	T::TransactionByteFee: Get<<C as Currency<<T as frame_system::Config>::AccountId>>::Balance>,
+	C: Currency<<T as frame_system::Config>::AccountId>,
 	C::PositiveImbalance:
-		Imbalance<<C as Currency<<T as frame_system::Trait>::AccountId>>::Balance, Opposite = C::NegativeImbalance>,
+		Imbalance<<C as Currency<<T as frame_system::Config>::AccountId>>::Balance, Opposite = C::NegativeImbalance>,
 	C::NegativeImbalance:
-		Imbalance<<C as Currency<<T as frame_system::Trait>::AccountId>>::Balance, Opposite = C::PositiveImbalance>,
+		Imbalance<<C as Currency<<T as frame_system::Config>::AccountId>>::Balance, Opposite = C::PositiveImbalance>,
 	OU: OnUnbalanced<NegativeImbalanceOf<C, T>>,
 {
 	type LiquidityInfo = Option<NegativeImbalanceOf<C, T>>;
-	type Balance = <C as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	type Balance = <C as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 	/// Withdraw the predicted fee from the transaction origin.
 	///

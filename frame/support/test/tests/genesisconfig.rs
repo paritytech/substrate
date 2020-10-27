@@ -29,7 +29,7 @@ frame_support::decl_storage! {
 
 struct Test;
 
-impl frame_support_test::Trait for Test {
+impl frame_support_test::Config for Test {
 	type BlockNumber = u32;
 	type Origin = ();
 	type PalletInfo = ();

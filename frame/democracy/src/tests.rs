@@ -93,7 +93,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
 	type Origin = Origin;
 	type Index = u64;
@@ -252,7 +252,7 @@ fn set_balance_proposal(value: u64) -> Vec<u8> {
 fn set_balance_proposal_is_correctly_filtered_out() {
 	for i in 0..10 {
 		let call = Call::decode(&mut &set_balance_proposal(i)[..]).unwrap();
-		assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+		assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 	}
 }
 

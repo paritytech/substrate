@@ -139,9 +139,9 @@ pub const VOTER_SET_SIZE: usize = 64;
 /// NUmber of approvals grouped in one chunk.
 pub const APPROVAL_SET_SIZE: usize = 8;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// Index used to access chunks.
 type SetIndex = u32;
@@ -153,7 +153,7 @@ type ApprovalFlag = u32;
 const APPROVAL_FLAG_LEN: usize = 32;
 
 pub trait Trait: frame_system::Trait {
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Identifier for the elections pallet's lock
 	type ModuleId: Get<LockIdentifier>;
@@ -706,7 +706,7 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T> where <T as frame_system::Trait>::AccountId {
+	pub enum Event<T> where <T as frame_system::Config>::AccountId {
 		/// Reaped \[voter, reaper\].
 		VoterReaped(AccountId, AccountId),
 		/// Slashed \[reaper\].

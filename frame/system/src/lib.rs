@@ -160,7 +160,12 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::ordered_trie_root(xts)
 }
 
-pub trait Trait: 'static + Eq + Clone {
+/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
+pub trait Trait: Config {}
+impl<T: Config> Trait for T {}
+
+/// System configuration trait. Implemented by runtime.
+pub trait Config: 'static + Eq + Clone {
 	/// The basic call filter to use in Origin. All origins are built with this filter as base,
 	/// except Root.
 	type BaseCallFilter: Filter<Self::Call>;
@@ -270,8 +275,8 @@ pub trait Trait: 'static + Eq + Clone {
 	type SystemWeightInfo: WeightInfo;
 }
 
-pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
-pub type DigestItemOf<T> = generic::DigestItem<<T as Trait>::Hash>;
+pub type DigestOf<T> = generic::Digest<<T as Config>::Hash>;
+pub type DigestItemOf<T> = generic::DigestItem<<T as Config>::Hash>;
 
 pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
@@ -329,7 +334,7 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 }
 
 /// Exposed trait-generic origin type.
-pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
+pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 
 // Create a Hash with 69 for each byte,
 // only used to build genesis config.
@@ -478,7 +483,7 @@ decl_storage! {
 
 decl_event!(
 	/// Event for the System module.
-	pub enum Event<T> where AccountId = <T as Trait>::AccountId {
+	pub enum Event<T> where AccountId = <T as Config>::AccountId {
 		/// An extrinsic completed successfully. \[info\]
 		ExtrinsicSuccess(DispatchInfo),
 		/// An extrinsic failed. \[error, info\]
@@ -1268,7 +1273,7 @@ impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 
 impl<T: Trait> BlockNumberProvider for Module<T>
 {
-	type BlockNumber = <T as Trait>::BlockNumber;
+	type BlockNumber = <T as Config>::BlockNumber;
 
 	fn current_block_number() -> Self::BlockNumber {
 		Module::<T>::block_number()

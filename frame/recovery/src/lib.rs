@@ -172,12 +172,12 @@ mod mock;
 mod tests;
 
 type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> + GetDispatchInfo;
@@ -262,7 +262,7 @@ decl_storage! {
 decl_event! {
 	/// Events type.
 	pub enum Event<T> where
-		AccountId = <T as system::Trait>::AccountId,
+		AccountId = <T as system::Config>::AccountId,
 	{
 		/// A recovery process has been set up for an \[account\].
 		RecoveryCreated(AccountId),

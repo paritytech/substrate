@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use codec::{Encode, Decode};
-use crate::{Trait, Module};
+use crate::{Trait, Config, Module};
 use sp_runtime::{
 	traits::{SignedExtension, Zero},
 	transaction_validity::TransactionValidityError,
@@ -47,7 +47,7 @@ impl<T: Trait + Send + Sync> CheckGenesis<T> {
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
+	type Call = <T as Config>::Call;
 	type AdditionalSigned = T::Hash;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckGenesis";

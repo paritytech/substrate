@@ -112,9 +112,9 @@ pub use weights::WeightInfo;
 pub const MAXIMUM_VOTE: usize = 16;
 
 type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// An indication that the renouncing account currently has which of the below roles.
 #[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug)]
@@ -142,7 +142,7 @@ pub struct DefunctVoter<AccountId> {
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.c
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Identifier for the elections-phragmen pallet's lock
 	type ModuleId: Get<LockIdentifier>;
@@ -667,7 +667,7 @@ decl_module! {
 decl_event!(
 	pub enum Event<T> where
 		Balance = BalanceOf<T>,
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::AccountId,
 	{
 		/// A new term with \[new_members\]. This indicates that enough candidates existed to run the
 		/// election, not that enough have has been elected. The inner value must be examined for
@@ -1077,7 +1077,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;

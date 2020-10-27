@@ -122,7 +122,7 @@ use pallet_contracts_primitives::{
 };
 use frame_support::weights::Weight;
 
-pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
+pub type CodeHash<T> = <T as frame_system::Config>::Hash;
 pub type TrieId = Vec<u8>;
 
 /// A function that generates an `AccountId` for a contract upon instantiation.
@@ -191,7 +191,7 @@ impl<T: Trait> ContractInfo<T> {
 }
 
 pub type AliveContractInfo<T> =
-	RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as frame_system::Trait>::BlockNumber>;
+	RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
@@ -231,7 +231,7 @@ pub(crate) fn child_trie_info(trie_id: &[u8]) -> ChildInfo {
 }
 
 pub type TombstoneContractInfo<T> =
-	RawTombstoneContractInfo<<T as frame_system::Trait>::Hash, <T as frame_system::Trait>::Hashing>;
+	RawTombstoneContractInfo<<T as frame_system::Config>::Hash, <T as frame_system::Config>::Hashing>;
 
 #[derive(Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
@@ -294,9 +294,9 @@ where
 }
 
 pub type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 pub type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 parameter_types! {
 	/// A reasonable default value for [`Trait::SignedClaimedHandicap`].
@@ -325,7 +325,7 @@ pub trait Trait: frame_system::Trait {
 	type Currency: Currency<Self::AccountId>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// A function type to get the contract address given the instantiator.
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
@@ -460,7 +460,7 @@ decl_error! {
 
 decl_module! {
 	/// Contracts module.
-	pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Trait>::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Config>::Origin {
 		type Error = Error<T>;
 
 		/// Number of block delay an extrinsic claim surcharge has.
@@ -694,8 +694,8 @@ decl_event! {
 	pub enum Event<T>
 	where
 		Balance = BalanceOf<T>,
-		<T as frame_system::Trait>::AccountId,
-		<T as frame_system::Trait>::Hash
+		<T as frame_system::Config>::AccountId,
+		<T as frame_system::Config>::Hash
 	{
 		/// Contract deployed by address at the specified address. \[owner, contract\]
 		Instantiated(AccountId, AccountId),

@@ -50,7 +50,7 @@ frame_support::decl_storage!{
 
 struct Runtime;
 
-impl frame_support_test::Trait for Runtime {
+impl frame_support_test::Config for Runtime {
 	type Origin = u32;
 	type BlockNumber = u32;
 	type PalletInfo = ();

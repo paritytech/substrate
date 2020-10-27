@@ -19,7 +19,11 @@ use frame_support::{
 	codec::{Encode, Decode, EncodeLike}, traits::Get, weights::RuntimeDbWeight,
 };
 
-pub trait Trait: 'static + Eq + Clone {
+/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
+pub trait Trait: Config {}
+impl<T: Config> Trait for T {}
+
+pub trait Config: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 		+ From<RawOrigin<Self::AccountId>>;
 
@@ -45,7 +49,7 @@ impl<T: Trait> Module<T> {
 }
 
 frame_support::decl_event!(
-	pub enum Event<T> where BlockNumber = <T as Trait>::BlockNumber {
+	pub enum Event<T> where BlockNumber = <T as Config>::BlockNumber {
 		ExtrinsicSuccess,
 		ExtrinsicFailed,
 		Ignore(BlockNumber),
@@ -79,7 +83,7 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 	}
 }
 
-pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
+pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 
 #[allow(dead_code)]
 pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>

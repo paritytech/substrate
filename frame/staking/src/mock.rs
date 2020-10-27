@@ -187,7 +187,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 	pub const MaxLocks: u32 = 1024;
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = AccountIndex;

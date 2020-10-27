@@ -24,7 +24,7 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_system::{RawOrigin, Module as System, Trait as SystemTrait};
+use frame_system::{RawOrigin, Module as System, Config as SystemConfig};
 use frame_benchmarking::{benchmarks, account};
 use frame_support::traits::{Currency, OnInitialize};
 
@@ -77,8 +77,8 @@ impl<T: HistoricalTrait + OffencesTrait> IdTupleConvert<T> for T where
 	}
 }
 
-type LookupSourceOf<T> = <<T as SystemTrait>::Lookup as StaticLookup>::Source;
-type BalanceOf<T> = <<T as StakingTrait>::Currency as Currency<<T as SystemTrait>::AccountId>>::Balance;
+type LookupSourceOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
+type BalanceOf<T> = <<T as StakingTrait>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 
 struct Offender<T: Trait> {
 	pub controller: T::AccountId,
@@ -176,7 +176,7 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<
 }
 
 #[cfg(test)]
-fn check_events<T: Trait, I: Iterator<Item = <T as SystemTrait>::Event>>(expected: I) {
+fn check_events<T: Trait, I: Iterator<Item = <T as SystemConfig>::Event>>(expected: I) {
 	let events = System::<T>::events() .into_iter()
 		.map(|frame_system::EventRecord { event, .. }| event).collect::<Vec<_>>();
 	let expected = expected.collect::<Vec<_>>();

@@ -325,7 +325,10 @@ mod test_iterators {
 		storage::{generator::StorageMap, IterableStorageMap, unhashed},
 	};
 
-	pub trait Trait: 'static {
+	/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
+	pub trait Trait: Config {}
+	impl<T: Config> Trait for T {}
+	pub trait Config: 'static {
 		type Origin;
 		type BlockNumber;
 		type PalletInfo: crate::traits::PalletInfo;

@@ -38,8 +38,8 @@ use frame_system::{ensure_signed, ensure_root};
 use self::address::Address as RawAddress;
 pub use weights::WeightInfo;
 
-pub type Address<T> = RawAddress<<T as frame_system::Trait>::AccountId, <T as Trait>::AccountIndex>;
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+pub type Address<T> = RawAddress<<T as frame_system::Config>::AccountId, <T as Trait>::AccountIndex>;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// The module's config trait.
 pub trait Trait: frame_system::Trait {
@@ -54,7 +54,7 @@ pub trait Trait: frame_system::Trait {
 	type Deposit: Get<BalanceOf<Self>>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -77,7 +77,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::AccountId,
 		<T as Trait>::AccountIndex
 	{
 		/// A account index was assigned. \[index, who\]

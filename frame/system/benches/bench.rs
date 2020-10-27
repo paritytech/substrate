@@ -25,7 +25,7 @@ mod module {
 	use super::*;
 
 	pub trait Trait: system::Trait {
-		type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+		type Event: From<Event> + Into<<Self as system::Config>::Event>;
 	}
 
 	decl_module! {
@@ -60,7 +60,7 @@ frame_support::parameter_types! {
 }
 #[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
-impl system::Trait for Runtime {
+impl system::Config for Runtime {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;

@@ -79,7 +79,7 @@ use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
 
 /// Type alias for currency balance.
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// Trait that outputs the current transaction gas price.
 pub trait FeeCalculator {
@@ -236,7 +236,7 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	type Currency: Currency<Self::AccountId>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 	/// Precompiles associated with this EVM engine.
 	type Precompiles: Precompiles;
 	/// Chain ID of EVM.
@@ -290,7 +290,7 @@ decl_storage! {
 decl_event! {
 	/// EVM events
 	pub enum Event<T> where
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::AccountId,
 	{
 		/// Ethereum events from contracts.
 		Log(Log),

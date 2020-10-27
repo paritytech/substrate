@@ -27,7 +27,10 @@ pub use frame_metadata::{
 /// Example:
 /// ```
 ///# mod module0 {
-///#    pub trait Trait: 'static {
+///#    // Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
+///#    pub trait Trait: Config {}
+///#    impl<T: Config> Trait for T {}
+///#    pub trait Config: 'static {
 ///#        type Origin;
 ///#        type BlockNumber;
 ///#        type PalletInfo: frame_support::traits::PalletInfo;
@@ -43,7 +46,7 @@ pub use frame_metadata::{
 ///# }
 ///# use module0 as module1;
 ///# use module0 as module2;
-///# impl module0::Trait for Runtime {
+///# impl module0::Config for Runtime {
 ///#     type Origin = u32;
 ///#     type BlockNumber = u32;
 ///#     type PalletInfo = ();
@@ -297,7 +300,10 @@ mod tests {
 	mod system {
 		use super::*;
 
-		pub trait Trait: 'static {
+		/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
+		pub trait Trait: Config {}
+		impl<T: Config> Trait for T {}
+		pub trait Config: 'static {
 			type BaseCallFilter;
 			const ASSOCIATED_CONST: u64 = 500;
 			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
@@ -341,7 +347,7 @@ mod tests {
 			}
 		}
 
-		pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
+		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 	}
 
 	mod event_module {
@@ -445,7 +451,7 @@ mod tests {
 		pub const SystemValue: u32 = 600;
 	}
 
-	impl system::Trait for TestRuntime {
+	impl system::Config for TestRuntime {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type AccountId = u32;
@@ -480,7 +486,7 @@ mod tests {
 	struct ConstantAssociatedConstByteGetter;
 	impl DefaultByte for ConstantAssociatedConstByteGetter {
 		fn default_byte(&self) -> Vec<u8> {
-			<TestRuntime as system::Trait>::ASSOCIATED_CONST.encode()
+			<TestRuntime as system::Config>::ASSOCIATED_CONST.encode()
 		}
 	}
 

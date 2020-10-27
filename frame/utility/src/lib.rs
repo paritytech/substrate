@@ -76,7 +76,7 @@ pub use weights::WeightInfo;
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>

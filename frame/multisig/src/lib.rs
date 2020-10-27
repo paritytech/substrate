@@ -62,14 +62,14 @@ use frame_system::{self as system, ensure_signed, RawOrigin};
 use sp_runtime::{DispatchError, DispatchResult, traits::{Dispatchable, Zero}};
 pub use weights::WeightInfo;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 /// Just a bunch of bytes, but they should decode to a valid `Call`.
 pub type OpaqueCall = Vec<u8>;
 
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
@@ -169,8 +169,8 @@ decl_error! {
 decl_event! {
 	/// Events type.
 	pub enum Event<T> where
-		AccountId = <T as system::Trait>::AccountId,
-		BlockNumber = <T as system::Trait>::BlockNumber,
+		AccountId = <T as system::Config>::AccountId,
+		BlockNumber = <T as system::Config>::BlockNumber,
 		CallHash = [u8; 32]
 	{
 		/// A new multisig operation has begun. \[approving, multisig, call_hash\]

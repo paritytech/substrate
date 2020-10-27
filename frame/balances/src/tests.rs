@@ -55,7 +55,7 @@ macro_rules! decl_tests {
 		pub type System = frame_system::Module<$test>;
 		pub type Balances = Module<$test>;
 
-		pub const CALL: &<$test as frame_system::Trait>::Call = &$crate::tests::CallWithDispatchInfo;
+		pub const CALL: &<$test as frame_system::Config>::Call = &$crate::tests::CallWithDispatchInfo;
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {

@@ -27,9 +27,9 @@ mod module {
 	use super::*;
 
 	pub type Request<T> = (
-		<T as system::Trait>::AccountId,
+		<T as system::Config>::AccountId,
 		Role,
-		<T as system::Trait>::BlockNumber,
+		<T as system::Config>::BlockNumber,
 	);
 	pub type Requests<T> = Vec<Request<T>>;
 
@@ -157,7 +157,7 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
-impl system::Trait for Runtime {
+impl system::Config for Runtime {
 	type BaseCallFilter = ();
 	type Hash = H256;
 	type Origin = Origin;

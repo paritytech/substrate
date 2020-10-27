@@ -40,7 +40,7 @@ pub mod example {
 	pub trait Trait: frame_system::Trait { }
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Trait>::Origin {
+		pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Config>::Origin {
 			#[weight = *weight]
 			fn noop(_origin, weight: Weight) { }
 
@@ -97,7 +97,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = TestBaseCallFilter;
 	type Origin = Origin;
 	type Index = u64;

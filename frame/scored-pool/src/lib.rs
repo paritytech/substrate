@@ -103,8 +103,8 @@ use frame_support::{
 use frame_system::{ensure_root, ensure_signed};
 use sp_runtime::traits::{AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup};
 
-type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-type PoolT<T, I> = Vec<(<T as frame_system::Trait>::AccountId, Option<<T as Trait<I>>::Score>)>;
+type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type PoolT<T, I> = Vec<(<T as frame_system::Config>::AccountId, Option<<T as Trait<I>>::Score>)>;
 
 /// The enum is supplied when refreshing the members set.
 /// Depending on the enum variant the corresponding associated
@@ -125,7 +125,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 		AtLeast32Bit + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
 
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 
 	// The deposit which is reserved from candidates if they want to
 	// start a candidacy. The deposit gets returned when the candidacy is
@@ -204,7 +204,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::AccountId,
 	{
 		/// The given member was removed. See the transaction for who.
 		MemberRemoved,

@@ -160,8 +160,8 @@ impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S,
 
 		// the computed ratio is only among the normal class.
 		let normal_max_weight =
-			<T as frame_system::Trait>::AvailableBlockRatio::get() *
-			<T as frame_system::Trait>::MaximumBlockWeight::get();
+			<T as frame_system::Config>::AvailableBlockRatio::get() *
+			<T as frame_system::Config>::MaximumBlockWeight::get();
 		let normal_block_weight =
 			<frame_system::Module<T>>::block_weight()
 			.get(frame_support::weights::DispatchClass::Normal)
@@ -263,7 +263,7 @@ decl_module! {
 			assert!(
 				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
 				Multiplier::checked_from_integer(
-					<T as frame_system::Trait>::MaximumBlockWeight::get().try_into().unwrap()
+					<T as frame_system::Config>::MaximumBlockWeight::get().try_into().unwrap()
 				).unwrap(),
 			);
 
@@ -407,7 +407,7 @@ impl<T: Trait> Module<T> where
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
-		let capped_weight = weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
+		let capped_weight = weight.min(<T as frame_system::Config>::MaximumBlockWeight::get());
 		T::WeightToFee::calc(&capped_weight)
 	}
 }
@@ -574,7 +574,7 @@ mod tests {
 	use std::cell::RefCell;
 	use smallvec::smallvec;
 
-	const CALL: &<Runtime as frame_system::Trait>::Call =
+	const CALL: &<Runtime as frame_system::Config>::Call =
 		&Call::Balances(BalancesCall::transfer(2, 69));
 
 	impl_outer_dispatch! {
@@ -615,7 +615,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
-	impl frame_system::Trait for Runtime {
+	impl frame_system::Config for Runtime {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
@@ -858,7 +858,7 @@ mod tests {
 			// fee will be proportional to what is the actual maximum weight in the runtime.
 			assert_eq!(
 				Balances::free_balance(&1),
-				(10000 - <Runtime as frame_system::Trait>::MaximumBlockWeight::get()) as u64
+				(10000 - <Runtime as frame_system::Config>::MaximumBlockWeight::get()) as u64
 			);
 		});
 	}

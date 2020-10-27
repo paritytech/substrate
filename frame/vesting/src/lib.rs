@@ -64,12 +64,12 @@ use frame_support::traits::{
 use frame_system::{ensure_signed, ensure_root};
 pub use weights::WeightInfo;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-type MaxLocksOf<T> = <<T as Trait>::Currency as LockableCurrency<<T as frame_system::Trait>::AccountId>>::MaxLocks;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type MaxLocksOf<T> = <<T as Trait>::Currency as LockableCurrency<<T as frame_system::Config>::AccountId>>::MaxLocks;
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The currency trait.
 	type Currency: LockableCurrency<Self::AccountId>;
@@ -156,7 +156,7 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
+	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId, Balance = BalanceOf<T> {
 		/// The amount vested has been updated. This could indicate more funds are available. The
 		/// balance given is the amount which is left unvested (and thus locked).
 		/// \[account, unvested\]
@@ -415,7 +415,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;

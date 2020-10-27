@@ -31,7 +31,7 @@ const SEED: u32 = 0;
 
 fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
 	let events = frame_system::Module::<T>::events();
-	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
+	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	// compare to the last event record
 	let EventRecord { event, .. } = &events[events.len() - 1];
 	assert_eq!(event, &system_event);
@@ -121,7 +121,7 @@ benchmarks! {
 			// Create their main identity with x additional fields
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
-			let caller_origin = <T as frame_system::Trait>::Origin::from(RawOrigin::Signed(caller));
+			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
 			Identity::<T>::set_identity(caller_origin, info)?;
 		};
 	}
@@ -143,7 +143,7 @@ benchmarks! {
 			// The target user
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
-			let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
+			let caller_origin: <T as frame_system::Config>::Origin = RawOrigin::Signed(caller.clone()).into();
 			let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 			// Add an initial identity
@@ -200,7 +200,7 @@ benchmarks! {
 
 	clear_identity {
 		let caller: T::AccountId = whitelisted_caller();
-		let caller_origin = <T as frame_system::Trait>::Origin::from(RawOrigin::Signed(caller.clone()));
+		let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller.clone()));
 		let caller_lookup = <T::Lookup as StaticLookup>::unlookup(caller.clone());
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
@@ -237,7 +237,7 @@ benchmarks! {
 
 	cancel_request {
 		let caller: T::AccountId = whitelisted_caller();
-		let caller_origin = <T as frame_system::Trait>::Origin::from(RawOrigin::Signed(caller.clone()));
+		let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller.clone()));
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let r in ...;
@@ -300,7 +300,7 @@ benchmarks! {
 	provide_judgement {
 		// The user
 		let user: T::AccountId = account("user", r, SEED);
-		let user_origin = <T as frame_system::Trait>::Origin::from(RawOrigin::Signed(user.clone()));
+		let user_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(user.clone()));
 		let user_lookup = <T::Lookup as StaticLookup>::unlookup(user.clone());
 		let _ = T::Currency::make_free_balance_be(&user, BalanceOf::<T>::max_value());
 
@@ -328,7 +328,7 @@ benchmarks! {
 		let x in _ .. _ => {};
 
 		let target: T::AccountId = account("target", 0, SEED);
-		let target_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(target.clone()).into();
+		let target_origin: <T as frame_system::Config>::Origin = RawOrigin::Signed(target.clone()).into();
 		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
 		let _ = T::Currency::make_free_balance_be(&target, BalanceOf::<T>::max_value());
 

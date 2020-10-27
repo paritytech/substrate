@@ -16,7 +16,7 @@ mod tests;
 /// Configure the pallet by specifying the parameters and types on which it depends.
 pub trait Trait: frame_system::Trait {
 	/// Because this pallet emits events, it depends on the runtime's definition of an event.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 }
 
 // The pallet's runtime storage items.
@@ -35,7 +35,7 @@ decl_storage! {
 // Pallets use events to inform users when important changes are made.
 // https://substrate.dev/docs/en/knowledgebase/runtime/events
 decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
+	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId {
 		/// Event documentation should end with an array that provides descriptive names for event
 		/// parameters. [something, who]
 		SomethingStored(u32, AccountId),

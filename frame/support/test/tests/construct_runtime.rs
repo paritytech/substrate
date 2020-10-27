@@ -41,7 +41,7 @@ mod module1 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call
-			where origin: <T as system::Trait>::Origin, system=system
+			where origin: <T as system::Config>::Origin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -55,7 +55,7 @@ mod module1 {
 
 	frame_support::decl_event! {
 		pub enum Event<T, I: Instance = DefaultInstance> where
-			<T as system::Trait>::AccountId
+			<T as system::Config>::AccountId
 		{
 			A(AccountId),
 		}
@@ -79,7 +79,7 @@ mod module2 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call
-			where origin: <T as system::Trait>::Origin, system=system
+			where origin: <T as system::Config>::Origin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -120,7 +120,7 @@ pub type AccountId = <Signature as Verify>::Signer;
 pub type BlockNumber = u64;
 pub type Index = u64;
 
-impl system::Trait for Runtime {
+impl system::Config for Runtime {
 	type BaseCallFilter = ();
 	type Hash = H256;
 	type Origin = Origin;

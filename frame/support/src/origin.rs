@@ -186,7 +186,7 @@ macro_rules! impl_outer_origin {
 		#[derive(Clone)]
 		pub struct $name {
 			caller: $caller_name,
-			filter: $crate::sp_std::rc::Rc<Box<dyn Fn(&<$runtime as $system::Trait>::Call) -> bool>>,
+			filter: $crate::sp_std::rc::Rc<Box<dyn Fn(&<$runtime as $system::Config>::Call) -> bool>>,
 		}
 
 		#[cfg(not(feature = "std"))]
@@ -213,9 +213,9 @@ macro_rules! impl_outer_origin {
 		}
 
 		impl $crate::traits::OriginTrait for $name {
-			type Call = <$runtime as $system::Trait>::Call;
+			type Call = <$runtime as $system::Config>::Call;
 			type PalletsOrigin = $caller_name;
-			type AccountId = <$runtime as $system::Trait>::AccountId;
+			type AccountId = <$runtime as $system::Config>::AccountId;
 
 			fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static) {
 				let f = self.filter.clone();
@@ -227,8 +227,8 @@ macro_rules! impl_outer_origin {
 
 			fn reset_filter(&mut self) {
 				let filter = <
-					<$runtime as $system::Trait>::BaseCallFilter
-					as $crate::traits::Filter<<$runtime as $system::Trait>::Call>
+					<$runtime as $system::Config>::BaseCallFilter
+					as $crate::traits::Filter<<$runtime as $system::Config>::Call>
 				>::filter;
 
 				self.filter = $crate::sp_std::rc::Rc::new(Box::new(filter));
@@ -255,7 +255,7 @@ macro_rules! impl_outer_origin {
 				$system::RawOrigin::Root.into()
 			}
 			/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
-			fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
+			fn signed(by: <$runtime as $system::Config>::AccountId) -> Self {
 				$system::RawOrigin::Signed(by).into()
 			}
 		}
@@ -289,7 +289,7 @@ macro_rules! impl_outer_origin {
 				<$name as $crate::traits::OriginTrait>::root()
 			}
 			/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
-			pub fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
+			pub fn signed(by: <$runtime as $system::Config>::AccountId) -> Self {
 				<$name as $crate::traits::OriginTrait>::signed(by)
 			}
 		}
@@ -335,10 +335,10 @@ macro_rules! impl_outer_origin {
 				}
 			}
 		}
-		impl From<Option<<$runtime as $system::Trait>::AccountId>> for $name {
+		impl From<Option<<$runtime as $system::Config>::AccountId>> for $name {
 			/// Convert to runtime origin with caller being system signed or none and use filter
 			/// `frame-system::Trait::BaseCallFilter`.
-			fn from(x: Option<<$runtime as $system::Trait>::AccountId>) -> Self {
+			fn from(x: Option<<$runtime as $system::Config>::AccountId>) -> Self {
 				<$system::Origin<$runtime>>::from(x).into()
 			}
 		}
@@ -388,7 +388,7 @@ mod tests {
 	mod frame_system {
 		use super::*;
 
-		pub trait Trait {
+		pub trait Config {
 			type AccountId;
 			type Call;
 			type BaseCallFilter;
@@ -410,7 +410,7 @@ mod tests {
 			}
 		}
 
-		pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
+		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 	}
 
 	mod origin_without_generic {
@@ -439,7 +439,7 @@ mod tests {
 		}
 	}
 
-	impl frame_system::Trait for TestRuntime {
+	impl frame_system::Config for TestRuntime {
 		type AccountId = u32;
 		type Call = u32;
 		type BaseCallFilter = BaseCallFilter;

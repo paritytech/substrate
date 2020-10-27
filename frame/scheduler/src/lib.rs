@@ -73,11 +73,11 @@ pub use weights::WeightInfo;
 /// `system::Trait` should always be included in our implied traits.
 pub trait Trait: system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 
 	/// The aggregated origin which the dispatch will take.
 	type Origin: OriginTrait<PalletsOrigin =
-		Self::PalletsOrigin> + From<Self::PalletsOrigin> + IsType<<Self as system::Trait>::Origin>;
+		Self::PalletsOrigin> + From<Self::PalletsOrigin> + IsType<<Self as system::Config>::Origin>;
 
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq;
@@ -90,7 +90,7 @@ pub trait Trait: system::Trait {
 	type MaximumWeight: Get<Weight>;
 
 	/// Required origin to schedule or cancel calls.
-	type ScheduleOrigin: EnsureOrigin<<Self as system::Trait>::Origin>;
+	type ScheduleOrigin: EnsureOrigin<<Self as system::Config>::Origin>;
 
 	/// The maximum number of scheduled calls in the queue for a single block.
 	/// Not strictly enforced, but used for weight estimation.
@@ -166,7 +166,7 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where <T as system::Trait>::BlockNumber {
+	pub enum Event<T> where <T as system::Config>::BlockNumber {
 		/// Scheduled some task. \[when, index\]
 		Scheduled(BlockNumber, u32),
 		/// Canceled some task. \[when, index\]
@@ -191,7 +191,7 @@ decl_error! {
 
 decl_module! {
 	/// Scheduler module declaration.
-	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: <T as system::Config>::Origin {
 		type Error = Error<T>;
 		fn deposit_event() = default;
 
@@ -747,7 +747,7 @@ mod tests {
 			LOG.with(|log| log.borrow().clone())
 		}
 		pub trait Trait: system::Trait {
-			type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+			type Event: From<Event> + Into<<Self as system::Config>::Event>;
 		}
 		decl_event! {
 			pub enum Event {
@@ -757,8 +757,8 @@ mod tests {
 		decl_module! {
 			pub struct Module<T: Trait> for enum Call
 			where
-				origin: <T as system::Trait>::Origin,
-				<T as system::Trait>::Origin: OriginTrait<PalletsOrigin = OriginCaller>
+				origin: <T as system::Config>::Origin,
+				<T as system::Config>::Origin: OriginTrait<PalletsOrigin = OriginCaller>
 			{
 				fn deposit_event() = default;
 
@@ -816,7 +816,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl system::Config for Test {
 		type BaseCallFilter = BaseFilter;
 		type Origin = Origin;
 		type Call = Call;
@@ -889,7 +889,7 @@ mod tests {
 	fn basic_scheduling_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(logger::Call::log(42, 1000));
-			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -905,7 +905,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			run_to_block(2);
 			let call = Call::Logger(logger::Call::log(42, 1000));
-			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			// This will schedule the call 3 blocks after the next block... so block 3 + 3 = 6
 			assert_ok!(Scheduler::do_schedule(DispatchTime::After(3), None, 127, root(), call));
 			run_to_block(5);
@@ -922,7 +922,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			run_to_block(2);
 			let call = Call::Logger(logger::Call::log(42, 1000));
-			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			assert_ok!(Scheduler::do_schedule(DispatchTime::After(0), None, 127, root(), call));
 			// Will trigger on the next block.
 			run_to_block(3);
@@ -960,7 +960,7 @@ mod tests {
 	fn reschedule_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(logger::Call::log(42, 1000));
-			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			assert_eq!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call).unwrap(), (4, 0));
 
 			run_to_block(3);
@@ -985,7 +985,7 @@ mod tests {
 	fn reschedule_named_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(logger::Call::log(42, 1000));
-			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			assert_eq!(Scheduler::do_schedule_named(
 				1u32.encode(), DispatchTime::At(4), None, 127, root(), call
 			).unwrap(), (4, 0));
@@ -1012,7 +1012,7 @@ mod tests {
 	fn reschedule_named_perodic_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(logger::Call::log(42, 1000));
-			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			assert_eq!(Scheduler::do_schedule_named(
 				1u32.encode(), DispatchTime::At(4), Some((3, 3)), 127, root(), call
 			).unwrap(), (4, 0));
@@ -1203,10 +1203,10 @@ mod tests {
 	#[test]
 	fn on_initialize_weight_is_correct() {
 		new_test_ext().execute_with(|| {
-			let base_weight: Weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 2);
+			let base_weight: Weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(1, 2);
 			let base_multiplier = 0;
-			let named_multiplier = <Test as frame_system::Trait>::DbWeight::get().writes(1);
-			let periodic_multiplier = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 1);
+			let named_multiplier = <Test as frame_system::Config>::DbWeight::get().writes(1);
+			let periodic_multiplier = <Test as frame_system::Config>::DbWeight::get().reads_writes(1, 1);
 
 			// Named
 			assert_ok!(

@@ -29,14 +29,14 @@ use frame_support::{
 };
 use pallet_contracts_primitives::{ErrorOrigin, ExecError, ExecReturnValue, ExecResult, ReturnFlags};
 
-pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
+pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
-pub type SeedOf<T> = <T as frame_system::Trait>::Hash;
-pub type BlockNumberOf<T> = <T as frame_system::Trait>::BlockNumber;
+pub type SeedOf<T> = <T as frame_system::Config>::Hash;
+pub type BlockNumberOf<T> = <T as frame_system::Config>::BlockNumber;
 pub type StorageKey = [u8; 32];
 
 /// A type that represents a topic of an event. At the moment a hash is used.
-pub type TopicOf<T> = <T as frame_system::Trait>::Hash;
+pub type TopicOf<T> = <T as frame_system::Config>::Hash;
 
 /// Describes whether we deal with a contract or a plain account.
 pub enum TransactorKind {
@@ -770,7 +770,7 @@ mod tests {
 
 		fn insert(&mut self, f: impl Fn(MockCtx) -> ExecResult + 'a) -> CodeHash<Test> {
 			// Generate code hashes as monotonically increasing values.
-			let code_hash = <Test as frame_system::Trait>::Hash::from_low_u64_be(self.counter);
+			let code_hash = <Test as frame_system::Config>::Hash::from_low_u64_be(self.counter);
 
 			self.counter += 1;
 			self.map.insert(code_hash, MockExecutable::new(f));

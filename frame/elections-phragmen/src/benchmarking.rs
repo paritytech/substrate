@@ -30,7 +30,7 @@ const BALANCE_FACTOR: u32 = 250;
 const MAX_VOTERS: u32 = 500;
 const MAX_CANDIDATES: u32 = 200;
 
-type Lookup<T> = <<T as frame_system::Trait>::Lookup as StaticLookup>::Source;
+type Lookup<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 macro_rules! whitelist {
 	($acc:ident) => {

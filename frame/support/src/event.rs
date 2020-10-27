@@ -551,7 +551,10 @@ mod tests {
 	use codec::{Encode, Decode};
 
 	mod system {
-		pub trait Trait: 'static {
+		/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
+		pub trait Trait: Config {}
+		impl<T: Config> Trait for T {}
+		pub trait Config: 'static {
 			type Origin;
 			type BlockNumber;
 			type PalletInfo: crate::traits::PalletInfo;
@@ -570,7 +573,10 @@ mod tests {
 	}
 
 	mod system_renamed {
-		pub trait Trait: 'static {
+		/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
+		pub trait Trait: Config {}
+		impl<T: Config> Trait for T {}
+		pub trait Config: 'static {
 			type Origin;
 			type BlockNumber;
 			type PalletInfo: crate::traits::PalletInfo;
@@ -601,7 +607,7 @@ mod tests {
 
 		decl_event!(
 			/// Event without renaming the generic parameter `Balance` and `Origin`.
-			pub enum Event<T> where <T as Trait>::Balance, <T as system::Trait>::Origin
+			pub enum Event<T> where <T as Trait>::Balance, <T as system::Config>::Origin
 			{
 				/// Hi, I am a comment.
 				TestEvent(Balance, Origin),
@@ -626,7 +632,7 @@ mod tests {
 			/// Event with renamed generic parameter
 			pub enum Event<T> where
 				BalanceRenamed = <T as Trait>::Balance,
-				OriginRenamed = <T as system::Trait>::Origin
+				OriginRenamed = <T as system::Config>::Origin
 			{
 				TestEvent(BalanceRenamed),
 				TestOrigin(OriginRenamed),
@@ -657,7 +663,7 @@ mod tests {
 			/// Event finish formatting on an unnamed one with trailing comma
 			pub enum Event<T> where
 				<T as Trait>::Balance,
-				<T as system::Trait>::Origin,
+				<T as system::Config>::Origin,
 			{
 				TestEvent(Balance, Origin),
 			}
@@ -679,7 +685,7 @@ mod tests {
 			/// Event finish formatting on an named one with trailing comma
 			pub enum Event<T> where
 				BalanceRenamed = <T as Trait>::Balance,
-				OriginRenamed = <T as system::Trait>::Origin,
+				OriginRenamed = <T as system::Config>::Origin,
 			{
 				TestEvent(BalanceRenamed, OriginRenamed),
 				TrailingCommaInArgs(
@@ -722,7 +728,7 @@ mod tests {
 		type Balance = u32;
 	}
 
-	impl system::Trait for TestRuntime {
+	impl system::Config for TestRuntime {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
@@ -737,14 +743,14 @@ mod tests {
 		type Balance = u32;
 	}
 
-	impl system_renamed::Trait for TestRuntime2 {
+	impl system_renamed::Config for TestRuntime2 {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
 		type DbWeight = ();
 	}
 
-	impl system::Trait for TestRuntime2 {
+	impl system::Config for TestRuntime2 {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();

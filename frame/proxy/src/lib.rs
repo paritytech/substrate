@@ -55,17 +55,17 @@ use frame_system::{self as system, ensure_signed};
 use frame_support::dispatch::DispatchError;
 pub use weights::WeightInfo;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
 		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Call<Self>>
-		+ IsType<<Self as frame_system::Trait>::Call>;
+		+ IsType<<Self as frame_system::Config>::Call>;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -174,7 +174,7 @@ decl_error! {
 decl_event! {
 	/// Events type.
 	pub enum Event<T> where
-		AccountId = <T as frame_system::Trait>::AccountId,
+		AccountId = <T as frame_system::Config>::AccountId,
 		ProxyType = <T as Trait>::ProxyType,
 		Hash = CallHashOf<T>,
 	{
@@ -684,7 +684,7 @@ impl<T: Trait> Module<T> {
 	) {
 		// This is a freshly authenticated new account, the origin restrictions doesn't apply.
 		let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
-		origin.add_filter(move |c: &<T as frame_system::Trait>::Call| {
+		origin.add_filter(move |c: &<T as frame_system::Config>::Call| {
 			let c = <T as Trait>::Call::from_ref(c);
 			// We make sure the proxy call does access this pallet to change modify proxies.
 			match c.is_sub_type() {

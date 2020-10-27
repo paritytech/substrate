@@ -78,7 +78,7 @@ impl WeightInfo for () {
 
 pub trait Trait: frame_system::Trait {
 	/// The event type of this module.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The maximum number of well known nodes that are allowed to set
 	type MaxWellKnownNodes: Get<u32>;
@@ -123,7 +123,7 @@ decl_storage! {
 
 decl_event! {
 	pub enum Event<T> where
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::AccountId,
 	{
 		/// The given well known node was added.
 		NodeAdded(PeerId, AccountId),
@@ -453,7 +453,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;

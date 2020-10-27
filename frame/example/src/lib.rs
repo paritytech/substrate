@@ -322,7 +322,7 @@ type BalanceOf<T> = <T as pallet_balances::Trait>::Balance;
 /// `frame_system::Trait` should always be included in our implied traits.
 pub trait Trait: pallet_balances::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 }
 
 decl_storage! {
@@ -612,11 +612,11 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 
 impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T>
 where
-	<T as frame_system::Trait>::Call: IsSubType<Call<T>>,
+	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
 {
 	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;
-	type Call = <T as frame_system::Trait>::Call;
+	type Call = <T as frame_system::Config>::Call;
 	type AdditionalSigned = ();
 	type Pre = ();
 
@@ -744,7 +744,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
