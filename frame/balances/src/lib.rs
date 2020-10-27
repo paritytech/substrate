@@ -177,7 +177,7 @@ use sp_runtime::{
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
-use weights::WeightInfo;
+pub use weights::WeightInfo;
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
