@@ -137,6 +137,15 @@
 			"website": "https://www.substratee.com"
 		},
 		{
+			"prefix": 14,
+			"network": "totem",
+			"displayName": "Totem",
+			"symbols": ["XTX"],
+			"decimals": [0],
+			"standardAccount": "*25519",
+			"website": "https://totemaccounting.com"
+		},
+		{
 			"prefix": 16,
 			"network": "kulupu",
 			"displayName": "Kulupu",
