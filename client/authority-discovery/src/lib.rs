@@ -32,7 +32,7 @@ use futures::channel::{mpsc, oneshot};
 use futures::Stream;
 
 use sc_client_api::blockchain::HeaderBackend;
-use sc_network::{config::MultiaddrWithPeerId, DhtEvent,	Multiaddr, PeerId};
+use sc_network::{DhtEvent, Multiaddr, PeerId};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId};
 use sp_runtime::traits::Block as BlockT;
 use sp_api::ProvideRuntimeApi;
@@ -44,10 +44,11 @@ mod tests;
 mod worker;
 
 /// Create a new authority discovery [`Worker`] and [`Service`].
+///
+/// See the struct documentation of each for more details.
 pub fn new_worker_and_service<Client, Network, Block, DhtEventStream>(
 	client: Arc<Client>,
 	network: Arc<Network>,
-	sentry_nodes: Vec<MultiaddrWithPeerId>,
 	dht_event_rx: DhtEventStream,
 	role: Role,
 	prometheus_registry: Option<prometheus_endpoint::Registry>,
@@ -62,7 +63,7 @@ where
 	let (to_worker, from_service) = mpsc::channel(0);
 
 	let worker = Worker::new(
-		from_service, client, network, sentry_nodes, dht_event_rx, role, prometheus_registry,
+		from_service, client, network, dht_event_rx, role, prometheus_registry,
 	);
 	let service = Service::new(to_worker);
 
