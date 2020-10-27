@@ -93,6 +93,10 @@ pub use either::Either;
 /// bypasses this problem.
 pub type Justification = Vec<u8>;
 
+/// Execution traces
+// TODO dp: not sure what the best storage format is for traces. Investigate (but for now just serialzie JSON to bytes and move on?).
+pub type Traces = Vec<u8>;
+
 use traits::{Verify, Lazy};
 
 /// A module identifier. These are per module and should be stored in a registry somewhere.

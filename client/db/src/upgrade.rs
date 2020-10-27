@@ -27,6 +27,7 @@ use crate::utils::DatabaseType;
 const VERSION_FILE_NAME: &'static str = "db_version";
 
 /// Current db version.
+// TODO dp: need bump?
 const CURRENT_VERSION: u32 = 1;
 
 /// Upgrade database to current version.

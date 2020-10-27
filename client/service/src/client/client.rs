@@ -1904,7 +1904,15 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	{
 		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
 			(Some(header), Some(extrinsics), justification) =>
-				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
+				Some(SignedBlock { block: Block::new(header, extrinsics), justification, traces: None }),
+			_ => None,
+		})
+	}
+
+	fn block_with_traces(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
+		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?, self.traces(id)?) {
+			(Some(header), Some(extrinsics), justification, traces) =>
+				Some(SignedBlock { block: Block::new(header, extrinsics), justification, traces }),
 			_ => None,
 		})
 	}
@@ -1934,6 +1942,10 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 
 	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
 		self.backend.blockchain().justification(*id)
+	}
+
+	fn traces(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
+		self.backend.blockchain().traces(*id)
 	}
 
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {

@@ -198,12 +198,12 @@ macro_rules! enter_span {
 
 /// Enter a span.
 ///
-/// The span will be valid, until the scope is left. Use either level and name
-/// or pass in any valid `sp_tracing::Span` for extended usage. The span will
-/// be exited on drop – which is at the end of the block or to the next
-/// `enter_span!` calls, as this overwrites the local variable. For nested
-/// usage or to ensure the span closes at certain time either put it into a block
-/// or use `within_span!`
+/// The span will be valid for the duration of the current scope. Use either
+/// level and name or pass in any valid `sp_tracing::Span` for extended usage.
+/// The span will be exited on drop – which is at the end of the block or to the
+/// next `enter_span!` calls, as this overwrites the local variable. For nested
+/// usage or to ensure the span closes at certain time either put it into a
+/// block or use `within_span!`
 ///
 /// # Example
 ///

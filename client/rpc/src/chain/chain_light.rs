@@ -105,6 +105,7 @@ impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client,
 					.map(move |body| Some(SignedBlock {
 						block: Block::new(header, body),
 						justification: None,
+						traces: None,
 					}))
 					.map_err(client_err)
 				),
@@ -112,5 +113,12 @@ impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client,
 			});
 
 		Box::new(block)
+	}
+
+	fn block_with_traces(&self, _hash: Option<Block::Hash>)
+		-> FutureResult<Option<SignedBlock<Block>>>
+	{
+		// TODO dp: what's the policy for Light Clients? I guess  they could get traces from their remote node, but... is that useful?
+		todo!("fetch from remote node?")
 	}
 }

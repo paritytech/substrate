@@ -68,7 +68,7 @@ use sp_core::ChangesTrieConfiguration;
 use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::{generic::{DigestItem, BlockId}, Justification, Storage};
+use sp_runtime::{generic::{DigestItem, BlockId}, Justification, Storage, Traces};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion, HashFor,
 };
@@ -332,6 +332,7 @@ pub(crate) mod columns {
 	/// Offchain workers local storage
 	pub const OFFCHAIN: u32 = 9;
 	pub const CACHE: u32 = 10;
+	pub const TRACES: u32 = 11;
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -469,6 +470,18 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 				Ok(justification) => Ok(Some(justification)),
 				Err(err) => return Err(sp_blockchain::Error::Backend(
 					format!("Error decoding justification: {}", err)
+				)),
+			}
+			None => Ok(None),
+		}
+	}
+
+	fn traces(&self, id: BlockId<Block>) -> ClientResult<Option<Traces>> {
+		match read_db(&*self.db, columns::KEY_LOOKUP, columns::TRACES, id)? {
+			Some(traces) => match Decode::decode(&mut &traces[..]) {
+				Ok(traces) => Ok(Some(traces)),
+				Err(err) => return Err(sp_blockchain::Error::Backend(
+					format!("Error decoding traces: {}", err)
 				)),
 			}
 			None => Ok(None),

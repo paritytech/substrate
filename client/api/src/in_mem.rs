@@ -27,7 +27,7 @@ use sp_core::{
 };
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor};
-use sp_runtime::{Justification, Storage};
+use sp_runtime::{Justification, Storage, Traces};
 use sp_state_machine::{
 	ChangesTrieTransaction, InMemoryBackend, Backend as StateBackend, StorageCollection,
 	ChildStorageCollection,
@@ -52,13 +52,14 @@ struct PendingBlock<B: BlockT> {
 #[derive(PartialEq, Eq, Clone)]
 enum StoredBlock<B: BlockT> {
 	Header(B::Header, Option<Justification>),
-	Full(B, Option<Justification>),
+	Full(B, Option<Justification>, Option<Traces>),
 }
 
 impl<B: BlockT> StoredBlock<B> {
+	// TODO dp: plug in traces here
 	fn new(header: B::Header, body: Option<Vec<B::Extrinsic>>, just: Option<Justification>) -> Self {
 		match body {
-			Some(body) => StoredBlock::Full(B::new(header, body), just),
+			Some(body) => StoredBlock::Full(B::new(header, body), just, None),
 			None => StoredBlock::Header(header, just),
 		}
 	}
@@ -66,29 +67,36 @@ impl<B: BlockT> StoredBlock<B> {
 	fn header(&self) -> &B::Header {
 		match *self {
 			StoredBlock::Header(ref h, _) => h,
-			StoredBlock::Full(ref b, _) => b.header(),
+			StoredBlock::Full(ref b, _, _) => b.header(),
 		}
 	}
 
 	fn justification(&self) -> Option<&Justification> {
 		match *self {
-			StoredBlock::Header(_, ref j) | StoredBlock::Full(_, ref j) => j.as_ref()
+			StoredBlock::Header(_, ref j) | StoredBlock::Full(_, ref j, _) => j.as_ref()
+		}
+	}
+
+	fn traces(&self) -> Option<&Traces> {
+		match *self {
+			StoredBlock::Header(_, _) => None,
+			StoredBlock::Full(_, _, ref t) => t.as_ref()
 		}
 	}
 
 	fn extrinsics(&self) -> Option<&[B::Extrinsic]> {
 		match *self {
 			StoredBlock::Header(_, _) => None,
-			StoredBlock::Full(ref b, _) => Some(b.extrinsics()),
+			StoredBlock::Full(ref b, _, _) => Some(b.extrinsics()),
 		}
 	}
 
-	fn into_inner(self) -> (B::Header, Option<Vec<B::Extrinsic>>, Option<Justification>) {
+	fn into_inner(self) -> (B::Header, Option<Vec<B::Extrinsic>>, Option<Justification>, Option<Traces>) {
 		match self {
-			StoredBlock::Header(header, just) => (header, None, just),
-			StoredBlock::Full(block, just) => {
+			StoredBlock::Header(header, just) => (header, None, just, None),
+			StoredBlock::Full(block, just, traces) => {
 				let (header, body) = block.deconstruct();
-				(header, Some(body), just)
+				(header, Some(body), just, traces)
 			}
 		}
 	}
@@ -286,7 +294,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				.expect("hash was fetched from a block in the db; qed");
 
 			let block_justification = match block {
-				StoredBlock::Header(_, ref mut j) | StoredBlock::Full(_, ref mut j) => j
+				StoredBlock::Header(_, ref mut j) | StoredBlock::Full(_, ref mut j, _) => j
 			};
 
 			*block_justification = justification;
@@ -368,6 +376,12 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	fn justification(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
 		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b|
 			b.justification().map(|x| x.clone()))
+		))
+	}
+
+	fn traces(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
+		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b|
+			b.traces().map(|x| x.clone()))
 		))
 	}
 
@@ -660,7 +674,8 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 
 		if let Some(pending_block) = operation.pending_block {
 			let old_state = &operation.old_state;
-			let (header, body, justification) = pending_block.block.into_inner();
+			// TODO dp: use traces and store them in the db. Is this the right place for that?
+			let (header, body, justification, _traces) = pending_block.block.into_inner();
 
 			let hash = header.hash();
 

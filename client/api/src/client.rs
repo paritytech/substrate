@@ -21,7 +21,7 @@ use sp_core::storage::StorageKey;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	generic::{BlockId, SignedBlock},
-	Justification,
+	Justification, Traces,
 };
 use sp_consensus::BlockOrigin;
 
@@ -85,11 +85,17 @@ pub trait BlockBackend<Block: BlockT> {
 	/// Get full block by id.
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
 
+	/// Get full block by id including traces.
+	fn block_with_traces(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
+
 	/// Get block status.
 	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<sp_consensus::BlockStatus>;
 
 	/// Get block justification set by id.
 	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>>;
+
+	/// Get block traces set by id.
+	fn traces(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Traces>>;
 
 	/// Get block hash by number.
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>>;

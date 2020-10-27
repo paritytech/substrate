@@ -42,6 +42,10 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[rpc(name = "chain_getBlock")]
 	fn block(&self, hash: Option<Hash>) -> FutureResult<Option<SignedBlock>>;
 
+	/// Get header and body of a relay chain block, including tracing data.
+	#[rpc(name = "chain_getBlockWithTraces")]
+	fn block_with_traces(&self, hash: Option<Hash>) -> FutureResult<Option<SignedBlock>>;
+
 	/// Get hash of the n-th block in the canon chain.
 	///
 	/// By default returns latest block hash.

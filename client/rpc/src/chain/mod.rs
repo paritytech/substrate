@@ -72,6 +72,9 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	/// Get header and body of a relay chain block.
 	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>>;
 
+	/// Get header and body of a relay chain block complete with all tracing data.
+	fn block_with_traces(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>>;
+
 	/// Get hash of the n-th block in the canon chain.
 	///
 	/// By default returns latest block hash.
@@ -239,6 +242,11 @@ impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Signe
 	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>>
 	{
 		self.backend.block(hash)
+	}
+
+	fn block_with_traces(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>>
+	{
+		self.backend.block_with_traces(hash)
 	}
 
 	fn block_hash(

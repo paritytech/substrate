@@ -21,7 +21,7 @@
 
 use std::sync::Arc;
 
-use sp_runtime::{Justification, generic::BlockId};
+use sp_runtime::{Justification, generic::BlockId, Traces};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use sp_blockchain::{
@@ -110,6 +110,10 @@ impl<S, Block> BlockchainBackend<Block> for Blockchain<S> where Block: BlockT, S
 	}
 
 	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justification>> {
+		Err(ClientError::NotAvailableOnLightClient)
+	}
+
+	fn traces(&self, _id: BlockId<Block>) -> ClientResult<Option<Traces>> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 

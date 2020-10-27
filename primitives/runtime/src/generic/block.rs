@@ -30,7 +30,7 @@ use crate::traits::{
 	self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize, MaybeMallocSizeOf,
 	NumberFor,
 };
-use crate::Justification;
+use crate::{Justification, Traces};
 
 /// Something to identify a block.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
@@ -113,4 +113,7 @@ pub struct SignedBlock<Block> {
 	pub block: Block,
 	/// Block justification.
 	pub justification: Option<Justification>,
+	/// Execution traces.
+	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Option::is_none"))]
+	pub traces: Option<Traces>,
 }

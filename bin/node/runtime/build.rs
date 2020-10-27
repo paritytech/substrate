@@ -23,5 +23,7 @@ fn main() {
 		.with_wasm_builder_from_crates_or_path("2.0.1", "../../../utils/wasm-builder")
 		.export_heap_base()
 		.import_memory()
+		// TODO dp: uncomment to turn traces collection on. Need to hook up to CLI?
+		// .append_to_rust_flags("--cfg feature=\\\"with-tracing\\\"")
 		.build()
 }

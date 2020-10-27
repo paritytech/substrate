@@ -75,4 +75,13 @@ impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client> whe
 			.map_err(client_err)
 		))
 	}
+
+	fn block_with_traces(&self, hash: Option<Block::Hash>)
+		-> FutureResult<Option<SignedBlock<Block>>>
+	{
+		let block = self.client
+			.block_with_traces(&BlockId::Hash(self.unwrap_or_best(hash)))
+			.map_err(client_err);
+		Box::new(result(block))
+	}
 }
