@@ -68,6 +68,8 @@ use sc_client_api::{
 	execution_extensions::ExecutionExtensions
 };
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
+
+#[cfg(feature = "with-ssrs")]
 use sc_jsonrpc_remote_signer::client::RemoteKeystore as SSRSRemoteKeystore;
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
@@ -216,22 +218,22 @@ impl KeystoreContainer {
 	/// Construct KeystoreContainer
 	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
 		match config {
+			#[cfg(feature = "with-ssrs")]
+			KeystoreConfig::Remote { uri } if uri.starts_with("ssrs+") => {
+				// this is a Simple Substrate Remote Signer protocol
+				let keystore = Arc::new(SSRSRemoteKeystore::open(uri[5..].to_string(), None)?);
+				let sync_keystore = keystore.clone() as SyncCryptoStorePtr;
+
+				Ok(Self {
+					keystore,
+					sync_keystore,
+				})
+			}
 			KeystoreConfig::Remote { uri } => {
-				if uri.starts_with("ssrs+") {
-					// this is a Simple Substrate Remote Signer protocol
-					let keystore = Arc::new(SSRSRemoteKeystore::open(uri[5..].to_string(), None)?);
-					let sync_keystore = keystore.clone() as SyncCryptoStorePtr;
+				Err(Error::Other(
+					format!("Don't know how to connect to {}. Protocol not supported",uri)))
 
-					Ok(Self {
-						keystore,
-						sync_keystore,
-					})
-
-				} else {
-					return Err(Error::Other(
-						format!("Don't know how to connect to {}. Did you mean ssrs+{}", uri, uri)))
-				}
-			},
+			}
 			KeystoreConfig::Path { path, password } => {
 				let keystore = Arc::new(LocalKeystore::open(
 					path.clone(),
