@@ -37,7 +37,7 @@ pub trait WeightInfo {
 	fn {{benchmark.name~}}
 	(
 		{{~#each benchmark.components as |c| ~}}
-		_{{c.name}}: u32, {{/each~}}
+		{{c.name}}: u32, {{/each~}}
 	) -> Weight;
 	{{/each}}
 }

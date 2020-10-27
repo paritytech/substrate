@@ -105,7 +105,8 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 mod benchmarking;
-mod default_weights;
+pub mod weights;
+pub use weights::WeightInfo;
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
@@ -137,20 +138,6 @@ pub struct DefunctVoter<AccountId> {
 	/// The number of current active candidates.
 	#[codec(compact)]
 	pub candidate_count: u32
-}
-
-pub trait WeightInfo {
-	fn vote(v: u32, ) -> Weight;
-	fn vote_update(v: u32, ) -> Weight;
-	fn remove_voter() -> Weight;
-	fn report_defunct_voter_correct(c: u32, v: u32, ) -> Weight;
-	fn report_defunct_voter_incorrect(c: u32, v: u32, ) -> Weight;
-	fn submit_candidacy(c: u32, ) -> Weight;
-	fn renounce_candidacy_candidate(c: u32, ) -> Weight;
-	fn renounce_candidacy_members() -> Weight;
-	fn renounce_candidacy_runners_up() -> Weight;
-	fn remove_member_with_replacement() -> Weight;
-	fn remove_member_wrong_refund() -> Weight;
 }
 
 pub trait Trait: frame_system::Trait {
