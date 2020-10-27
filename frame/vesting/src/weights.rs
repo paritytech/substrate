@@ -49,7 +49,7 @@ pub trait WeightInfo {
 	fn vest_other_unlocked(l: u32, ) -> Weight;
 	fn vested_transfer(l: u32, ) -> Weight;
 	fn force_vested_transfer(l: u32, ) -> Weight;
-	
+
 }
 
 /// Weights for pallet_vesting using the Substrate node and recommended hardware.
@@ -60,44 +60,44 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((155_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-			
+
 	}
 	fn vest_unlocked(l: u32, ) -> Weight {
 		(61_681_000 as Weight)
 			.saturating_add((138_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			
+
 	}
 	fn vest_other_locked(l: u32, ) -> Weight {
 		(56_910_000 as Weight)
 			.saturating_add((160_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			
+
 	}
 	fn vest_other_unlocked(l: u32, ) -> Weight {
 		(61_319_000 as Weight)
 			.saturating_add((144_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-			
+
 	}
 	fn vested_transfer(l: u32, ) -> Weight {
 		(124_996_000 as Weight)
 			.saturating_add((209_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-			
+
 	}
 	fn force_vested_transfer(l: u32, ) -> Weight {
 		(123_911_000 as Weight)
 			.saturating_add((213_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
-			
+
 	}
-	
+
 }
 
 // For backwards compatibility and tests
@@ -107,42 +107,42 @@ impl WeightInfo for () {
 			.saturating_add((155_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-			
+
 	}
 	fn vest_unlocked(l: u32, ) -> Weight {
 		(61_681_000 as Weight)
 			.saturating_add((138_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-			
+
 	}
 	fn vest_other_locked(l: u32, ) -> Weight {
 		(56_910_000 as Weight)
 			.saturating_add((160_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-			
+
 	}
 	fn vest_other_unlocked(l: u32, ) -> Weight {
 		(61_319_000 as Weight)
 			.saturating_add((144_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-			
+
 	}
 	fn vested_transfer(l: u32, ) -> Weight {
 		(124_996_000 as Weight)
 			.saturating_add((209_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-			
+
 	}
 	fn force_vested_transfer(l: u32, ) -> Weight {
 		(123_911_000 as Weight)
 			.saturating_add((213_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
-			
+
 	}
-	
+
 }
