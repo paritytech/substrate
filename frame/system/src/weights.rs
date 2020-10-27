@@ -97,13 +97,10 @@ impl<T: crate::Trait> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	fn remark(_b: u32, ) -> Weight {
 		(1_906_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(0 as Weight))
 
 	}
 	fn set_heap_pages() -> Weight {
 		(2_792_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 
 	}
@@ -116,28 +113,20 @@ impl WeightInfo for () {
 	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
 			.saturating_add((842_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(0 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	fn kill_storage(i: u32, ) -> Weight {
 		(1_120_000 as Weight)
 			.saturating_add((599_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(0 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	fn kill_prefix(p: u32, ) -> Weight {
 		(9_470_000 as Weight)
 			.saturating_add((861_000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(0 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
 	}
 	fn suicide() -> Weight {
 		(38_469_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(0 as Weight))
 
 	}
 

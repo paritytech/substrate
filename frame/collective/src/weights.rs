@@ -53,7 +53,7 @@ pub trait WeightInfo {
 	fn close_disapproved(_m: u32, _p: u32, ) -> Weight;
 	fn close_approved(_b: u32, _m: u32, _p: u32, ) -> Weight;
 	fn disapprove_proposal(_p: u32, ) -> Weight;
-	
+
 }
 
 /// Weights for pallet_collective using the Substrate node and recommended hardware.
@@ -74,14 +74,14 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((4_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add((115_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			
+
 	}
 	fn propose_execute(b: u32, m: u32, ) -> Weight {
 		(38_774_000 as Weight)
 			.saturating_add((4_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add((226_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			
+
 	}
 	fn propose_proposed(b: u32, m: u32, p: u32, ) -> Weight {
 		(64_230_000 as Weight)
@@ -90,14 +90,14 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((637_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
-			
+
 	}
 	fn vote(m: u32, ) -> Weight {
 		(57_051_000 as Weight)
 			.saturating_add((220_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-			
+
 	}
 	fn close_early_disapproved(m: u32, p: u32, ) -> Weight {
 		(61_406_000 as Weight)
@@ -105,7 +105,7 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((630_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-			
+
 	}
 	fn close_early_approved(b: u32, m: u32, p: u32, ) -> Weight {
 		(92_864_000 as Weight)
@@ -114,7 +114,7 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((597_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-			
+
 	}
 	fn close_disapproved(m: u32, p: u32, ) -> Weight {
 		(67_942_000 as Weight)
@@ -122,7 +122,7 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((636_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-			
+
 	}
 	fn close_approved(b: u32, m: u32, p: u32, ) -> Weight {
 		(99_742_000 as Weight)
@@ -131,16 +131,16 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((598_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-			
+
 	}
 	fn disapprove_proposal(p: u32, ) -> Weight {
 		(36_628_000 as Weight)
 			.saturating_add((640_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-			
+
 	}
-	
+
 }
 
 // For backwards compatibility and tests
@@ -160,16 +160,14 @@ impl WeightInfo for () {
 			.saturating_add((4_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add((115_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(0 as Weight))
-			
+
 	}
 	fn propose_execute(b: u32, m: u32, ) -> Weight {
 		(38_774_000 as Weight)
 			.saturating_add((4_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add((226_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(0 as Weight))
-			
+
 	}
 	fn propose_proposed(b: u32, m: u32, p: u32, ) -> Weight {
 		(64_230_000 as Weight)
@@ -178,14 +176,14 @@ impl WeightInfo for () {
 			.saturating_add((637_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
-			
+
 	}
 	fn vote(m: u32, ) -> Weight {
 		(57_051_000 as Weight)
 			.saturating_add((220_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-			
+
 	}
 	fn close_early_disapproved(m: u32, p: u32, ) -> Weight {
 		(61_406_000 as Weight)
@@ -193,7 +191,7 @@ impl WeightInfo for () {
 			.saturating_add((630_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-			
+
 	}
 	fn close_early_approved(b: u32, m: u32, p: u32, ) -> Weight {
 		(92_864_000 as Weight)
@@ -202,7 +200,7 @@ impl WeightInfo for () {
 			.saturating_add((597_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-			
+
 	}
 	fn close_disapproved(m: u32, p: u32, ) -> Weight {
 		(67_942_000 as Weight)
@@ -210,7 +208,7 @@ impl WeightInfo for () {
 			.saturating_add((636_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-			
+
 	}
 	fn close_approved(b: u32, m: u32, p: u32, ) -> Weight {
 		(99_742_000 as Weight)
@@ -219,14 +217,14 @@ impl WeightInfo for () {
 			.saturating_add((598_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-			
+
 	}
 	fn disapprove_proposal(p: u32, ) -> Weight {
 		(36_628_000 as Weight)
 			.saturating_add((640_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-			
+
 	}
-	
+
 }
