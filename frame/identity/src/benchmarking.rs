@@ -47,6 +47,7 @@ fn add_registrars<T: Trait>(r: u32) -> Result<(), &'static str> {
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
 			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter
+			| IdentityField::Totem
 		);
 		Identity::<T>::set_fields(RawOrigin::Signed(registrar.clone()).into(), i.into(), fields)?;
 	}
@@ -101,6 +102,7 @@ fn create_identity_info<T: Trait>(num_fields: u32) -> IdentityInfo {
 		pgp_fingerprint: Some([0; 20]),
 		image: data.clone(),
 		twitter: data.clone(),
+		totem: data.clone(),
 	};
 
 	return info
@@ -287,7 +289,8 @@ benchmarks! {
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
-			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter
+			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter 
+			| IdentityField::Totem
 		);
 		let registrars = Registrars::<T>::get();
 		ensure!(registrars[r as usize].as_ref().unwrap().fields == Default::default(), "fields already set.");

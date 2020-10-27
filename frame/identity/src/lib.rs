@@ -291,6 +291,7 @@ pub enum IdentityField {
 	PgpFingerprint = 0b0000000000000000000000000000000000000000000000000000000000100000,
 	Image          = 0b0000000000000000000000000000000000000000000000000000000001000000,
 	Twitter        = 0b0000000000000000000000000000000000000000000000000000000010000000,
+	Totem          = 0b0000000000000000000000000000000000000000000000000000000100000000,
 }
 
 /// Wrapper type for `BitFlags<IdentityField>` that implements `Codec`.
@@ -360,6 +361,9 @@ pub struct IdentityInfo {
 
 	/// The Twitter identity. The leading `@` character may be elided.
 	pub twitter: Data,
+
+	/// The Totem Live Accounting network messaging user identity. The leading `@` character may be elided.
+	pub totem: Data,
 }
 
 /// Information concerning the identity of the controller of an account.
