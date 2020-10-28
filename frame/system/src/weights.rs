@@ -17,7 +17,7 @@
 
 //! Weights for frame_system
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 2.0.0
-//! DATE: 2020-10-27, STEPS: [50, ], REPEAT: 20, LOW RANGE: [], HIGH RANGE: []
+//! DATE: 2020-10-28, STEPS: [50, ], REPEAT: 20, LOW RANGE: [], HIGH RANGE: []
 //! EXECUTION: Some(Wasm), WASM-EXECUTION: Compiled, CHAIN: Some("dev"), DB CACHE: 128
 
 // Executed Command:
@@ -43,91 +43,80 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for frame_system.
 pub trait WeightInfo {
-	fn remark(_b: u32, ) -> Weight;
+	fn remark(b: u32, ) -> Weight;
 	fn set_heap_pages() -> Weight;
 	fn set_changes_trie_config() -> Weight;
-	fn set_storage(_i: u32, ) -> Weight;
-	fn kill_storage(_i: u32, ) -> Weight;
-	fn kill_prefix(_p: u32, ) -> Weight;
+	fn set_storage(i: u32, ) -> Weight;
+	fn kill_storage(i: u32, ) -> Weight;
+	fn kill_prefix(p: u32, ) -> Weight;
 	fn suicide() -> Weight;
-
 }
 
 /// Weights for frame_system using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: crate::Trait> WeightInfo for SubstrateWeight<T> {
+impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 	fn remark(_b: u32, ) -> Weight {
-		(1_906_000 as Weight)
-
+		(1_973_000 as Weight)
 	}
 	fn set_heap_pages() -> Weight {
-		(2_792_000 as Weight)
+		(2_816_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-
 	}
 	fn set_changes_trie_config() -> Weight {
-		(12_029_000 as Weight)
+		(11_539_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-
 	}
 	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
-			.saturating_add((842_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add((833_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	fn kill_storage(i: u32, ) -> Weight {
-		(1_120_000 as Weight)
-			.saturating_add((599_000 as Weight).saturating_mul(i as Weight))
+		(2_131_000 as Weight)
+			.saturating_add((597_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	fn kill_prefix(p: u32, ) -> Weight {
-		(9_470_000 as Weight)
-			.saturating_add((861_000 as Weight).saturating_mul(p as Weight))
+		(11_844_000 as Weight)
+			.saturating_add((857_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
 	}
 	fn suicide() -> Weight {
-		(38_469_000 as Weight)
-
+		(37_209_000 as Weight)
 	}
-
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn remark(_b: u32, ) -> Weight {
-		(1_906_000 as Weight)
-
+		(1_973_000 as Weight)
 	}
 	fn set_heap_pages() -> Weight {
-		(2_792_000 as Weight)
+		(2_816_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-
 	}
 	fn set_changes_trie_config() -> Weight {
-		(12_029_000 as Weight)
+		(11_539_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-
 	}
 	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
-			.saturating_add((842_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add((833_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	fn kill_storage(i: u32, ) -> Weight {
-		(1_120_000 as Weight)
-			.saturating_add((599_000 as Weight).saturating_mul(i as Weight))
+		(2_131_000 as Weight)
+			.saturating_add((597_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	fn kill_prefix(p: u32, ) -> Weight {
-		(9_470_000 as Weight)
-			.saturating_add((861_000 as Weight).saturating_mul(p as Weight))
+		(11_844_000 as Weight)
+			.saturating_add((857_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
 	}
 	fn suicide() -> Weight {
-		(38_469_000 as Weight)
-
+		(37_209_000 as Weight)
 	}
-
 }
