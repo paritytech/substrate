@@ -379,7 +379,7 @@ pub trait Trait: frame_system::Trait {
 
 	/// Describes the weights of the dispatchables of this module and is also used to
 	/// construct a default cost schedule.
-	type WeightInfo: crate::weights::WeightInfo;
+	type WeightInfo: WeightInfo;
 }
 
 /// Simple contract address determiner.
