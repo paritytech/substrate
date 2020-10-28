@@ -667,7 +667,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 	fn proposing_remaining_duration(
 		&self,
 		head: &B::Header,
-		slot_info: &SlotInfo<B>,
+		slot_info: &SlotInfo,
 	) -> Option<std::time::Duration> {
 		let slot_remaining = self.slot_remaining_duration(slot_info);
 

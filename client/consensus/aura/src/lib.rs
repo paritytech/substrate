@@ -348,7 +348,7 @@ where
 	fn proposing_remaining_duration(
 		&self,
 		head: &B::Header,
-		slot_info: &SlotInfo<B>,
+		slot_info: &SlotInfo,
 	) -> Option<std::time::Duration> {
 		let slot_remaining = self.slot_remaining_duration(slot_info);
 
@@ -1040,7 +1040,7 @@ mod tests {
 				DummyOracle,
 				inherent_data_providers,
 				false,
-				None,
+				Some(SimpleBackoffAuthoringBlocksStrategy::default()),
 				keystore,
 				sp_consensus::AlwaysCanAuthor,
 			).expect("Starts aura"));

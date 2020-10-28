@@ -25,7 +25,6 @@
 mod slots;
 mod aux_schema;
 
-// pub use slots::{SignedDuration, SlotInfo, AppendedChainInfo};
 pub use slots::SlotInfo;
 use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
@@ -75,7 +74,7 @@ pub trait SlotWorker<B: BlockT> {
 	///
 	/// Returns a future that resolves to a [`SlotResult`] iff a block was successfully built in
 	/// the slot. Otherwise `None` is returned.
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo<B>) -> Self::OnSlot;
+	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot;
 }
 
 /// A skeleton implementation for `SlotWorker` which tries to claim a slot at
@@ -178,7 +177,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer;
 
 	/// Remaining duration of the slot.
-	fn slot_remaining_duration(&self, slot_info: &SlotInfo<B>) -> Duration {
+	fn slot_remaining_duration(&self, slot_info: &SlotInfo) -> Duration {
 		let now = Instant::now();
 		if now < slot_info.ends_at {
 			slot_info.ends_at.duration_since(now)
@@ -191,7 +190,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn proposing_remaining_duration(
 		&self,
 		_head: &B::Header,
-		slot_info: &SlotInfo<B>
+		slot_info: &SlotInfo,
 	) -> Option<Duration> {
 		Some(self.slot_remaining_duration(slot_info))
 	}
@@ -200,7 +199,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn on_slot(
 		&mut self,
 		chain_head: B::Header,
-		slot_info: SlotInfo<B>,
+		slot_info: SlotInfo,
 	) -> Pin<Box<dyn Future<Output = Option<SlotResult<B>>> + Send>>
 	where
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
@@ -375,7 +374,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 impl<B: BlockT, T: SimpleSlotWorker<B>> SlotWorker<B> for T {
 	type OnSlot = Pin<Box<dyn Future<Output = Option<SlotResult<B>>> + Send>>;
 
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo<B>) -> Self::OnSlot {
+	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
 		SimpleSlotWorker::on_slot(self, chain_head, slot_info)
 	}
 }
@@ -415,7 +414,7 @@ where
 	let SlotDuration(slot_duration) = slot_duration;
 
 	// rather than use a timer interval, we schedule our waits ourselves
-	Slots::<SC, B>::new(
+	Slots::<SC>::new(
 		slot_duration.slot_duration(),
 		inherent_data_providers,
 		timestamp_extractor,
@@ -552,7 +551,7 @@ impl<T: Clone> SlotDuration<T> {
 /// to parent. If the number of skipped slots is greated than 0 this method will apply
 /// an exponential backoff of at most `2^7 * slot_duration`, if no slots were skipped
 /// this method will return `None.`
-pub fn slot_lenience_exponential<B: BlockT>(parent_slot: u64, slot_info: &SlotInfo<B>) -> Option<Duration> {
+pub fn slot_lenience_exponential(parent_slot: u64, slot_info: &SlotInfo) -> Option<Duration> {
 	// never give more than 2^this times the lenience.
 	const BACKOFF_CAP: u64 = 7;
 
@@ -581,7 +580,7 @@ pub fn slot_lenience_exponential<B: BlockT>(parent_slot: u64, slot_info: &SlotIn
 /// to parent. If the number of skipped slots is greated than 0 this method will apply
 /// a linear backoff of at most `20 * slot_duration`, if no slots were skipped
 /// this method will return `None.`
-pub fn slot_lenience_linear<B: BlockT>(parent_slot: u64, slot_info: &SlotInfo<B>) -> Option<Duration> {
+pub fn slot_lenience_linear(parent_slot: u64, slot_info: &SlotInfo) -> Option<Duration> {
 	// never give more than 20 times more lenience.
 	const BACKOFF_CAP: u64 = 20;
 
@@ -684,14 +683,13 @@ mod test {
 
 	const SLOT_DURATION: Duration = Duration::from_millis(6000);
 
-	fn slot(n: u64) -> super::slots::SlotInfo<Block> {
+	fn slot(n: u64) -> super::slots::SlotInfo {
 		super::slots::SlotInfo {
 			number: n,
 			duration: SLOT_DURATION.as_millis() as u64,
 			timestamp: Default::default(),
 			inherent_data: Default::default(),
 			ends_at: Instant::now(),
-			chain_info: None,
 		}
 	}
 
