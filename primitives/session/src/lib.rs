@@ -116,10 +116,11 @@ impl GetValidatorCount for MembershipProof {
 /// for the Substrate-based projects having their own staking implementation
 /// instead of using pallet-staking directly.
 pub trait ValidatorSet<AccountId> {
-	// TODO [ToDr] This could use `frame_support::Parameter` instead,although don't know if such
-	// import is legal.
+	/// Type for representing validator id in a session.
+	///
+	/// This could be `frame_support::Parameter`, but such import is not allowed in primitives.
 	type ValidatorId: codec::Codec + codec::EncodeLike + Clone + Eq + sp_std::fmt::Debug;
-	// TODO [ToDr] This is most likely not needed along with `AccountId`
+	/// A type for converting `AccountId` to `ValidatorId`.
 	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
 
 	/// Returns current session index.
@@ -133,7 +134,9 @@ pub trait ValidatorSet<AccountId> {
 
 /// `ValidatorSet` combined with identification type for pallet-session-historical module.
 pub trait ValidatorSetWithIdentification<AccountId>: ValidatorSet<AccountId> {
+	/// Full identification of `ValidatorId`.
 	type Identification: codec::Codec + codec::EncodeLike + Clone + Eq + sp_std::fmt::Debug;
+	/// A type for converting `ValidatorId` to `Identification`.
 	type IdentificationOf: Convert<Self::ValidatorId, Option<Self::Identification>>;
 }
 
@@ -142,6 +145,10 @@ pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	/// The key type expected.
 	type Key: Decode + Default + RuntimeAppPublic;
 
+	/// The given validator set will be used for the genesis session.
+	/// It is guaranteed that the given validator set will also be used
+	/// for the second session, therefore the first call to `on_new_session`
+	/// should provide the same validator set.
 	fn on_genesis_session<'a, I: 'a>(validators: I)
 		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
 
