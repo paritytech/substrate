@@ -71,6 +71,8 @@ use slog::Logger;
 
 pub use libp2p::wasm_ext::ExtTransport;
 pub use slog;
+pub use slog_json;
+pub use tracing;
 
 mod async_record;
 mod worker;
@@ -166,6 +168,7 @@ pub struct Telemetry {
 	inner: Arc<Mutex<TelemetryInner>>,
 	/// Logger used to report telemetry.
 	pub logger: Logger,
+	span: tracing::Span,
 }
 
 /// Behind the `Mutex` in `Telemetry`.
@@ -209,12 +212,15 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 		}
 	};
 
+	let span = tracing::info_span!("telemetry-logger");
+
 	Telemetry {
 		inner: Arc::new(Mutex::new(TelemetryInner {
 			worker,
 			receiver,
 		})),
 		logger,
+		span,
 	}
 }
 
@@ -313,11 +319,60 @@ impl slog::Drain for TelemetryDrain {
 /// parameter is added to the record as a key-value pair.
 #[macro_export]
 macro_rules! telemetry {
-	( $l:expr; $a:expr; $b:expr; $( $t:tt )* ) => {
+	( $l:expr; $a:expr; $b:expr; $( $t:tt )* ) => {{
+		// TODO: drop $l
+		/*
+		// NOTE: didn't work
+		let record_static = $crate::slog::record_static!($crate::slog::Level::Info, $a);
+		let format_args = format_args!("");
+		let record = $crate::slog::Record::new(&record_static, &format_args, $crate::slog::b!());
+
+		let mut v = vec![];
+		let mut cur = std::io::Cursor::new(&mut v);
+		let json = $crate::slog_json::Json::default(&mut cur);
+		use $crate::slog::Drain;
+		let kv = $crate::slog::o!($($t)*);
+		let kvl = $crate::slog::OwnedKVList::from(kv);
+		json.log(&record, &kvl).unwrap();
+		let s = String::from_utf8(v).unwrap();
+		*/
+		/*
+		// NOTE: old code
 		if let Some(ref l) = $l {
 			$crate::slog::slog_info!(l, #$a, $b; $($t)* )
 		}
-	}
+		*/
+		$crate::tracing::info!(target: "telemetry-logger",
+			message_verbosity = $a,
+			message = $b,
+			//json = s.as_str()
+			json = $crate::format_fields_to_json!($($t)*).as_str()
+		);
+	}};
+}
+
+#[macro_export]
+macro_rules! format_fields_to_json {
+	( $k:literal => $v:expr $(,)? ) => {
+		format!("{} = {}", $k, $v)
+	};
+	( $k:literal => ? $v:expr $(,)? ) => {
+		format!("{} = {:?}", $k, $v)
+	};
+	( $k:literal => : $v:expr $(,)? ) => {
+		$v
+			.map(|x| $crate::format_fields_to_json!($k => x))
+			.unwrap_or_else(|| "null".to_string())
+	};
+	( $k:literal => $v:expr, $($t:tt)* ) => {
+		format!("{}, {}", $crate::format_fields_to_json!($k => $v), $crate::format_fields_to_json!($($t)*))
+	};
+	( $k:literal => ? $v:expr, $($t:tt)* ) => {
+		format!("{}, {}", $crate::format_fields_to_json!($k => ? $v), $crate::format_fields_to_json!($($t)*))
+	};
+	( $k:literal => : $v:expr, $($t:tt)* ) => {
+		format!("{}, {}", $crate::format_fields_to_json!($k => : $v), $crate::format_fields_to_json!($($t)*))
+	};
 }
 
 #[cfg(test)]

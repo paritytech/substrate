@@ -7407,9 +7407,11 @@ dependencies = [
  "pin-project",
  "rand 0.7.3",
  "serde",
+ "serde_json",
  "slog",
  "slog-json",
  "take_mut",
+ "tracing",
  "void",
  "wasm-timer",
 ]

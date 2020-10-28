@@ -217,7 +217,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			telemetry!(
 				logger; CONSENSUS_DEBUG;
 				"slots.skipping_proposal_slot";
-				"authorities_len" => authorities_len,
+				"authorities_len" => : authorities_len,
 			);
 
 			return Box::pin(future::ready(Ok(())));

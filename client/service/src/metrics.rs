@@ -338,7 +338,8 @@ impl MetricsService {
 				self.logger;
 				SUBSTRATE_INFO;
 				"system.network_state";
-				"state" => net_state,
+				// TODO: not sure why I need `?` all of a sudden?
+				"state" => ? net_state,
 			);
 		}
 	}
