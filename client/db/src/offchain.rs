@@ -359,12 +359,6 @@ impl BlockChainLocalAtNew {
 
 impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		if !self.set_if_possible(prefix, key, value) {
-			panic!("Concurrency failure for sequential write of offchain storage");
-		}
-	}
-
-	fn set_if_possible(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> bool {
 		let test: Option<fn(Option<&[u8]>) -> bool> = None;
 		match self.modify(
 			prefix,
@@ -373,8 +367,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 			Some(value),
 			false,
 		) {
-			Ok(_) => true,
-			Err(ModifyError::AlreadyWritten) => false,
+			Ok(_) => (),
 			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
 			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
 		}
@@ -382,13 +375,17 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
 		let test: Option<fn(Option<&[u8]>) -> bool> = None;
-		self.modify(
+		match self.modify(
 			prefix,
 			key,
 			test,
 			None,
 			false,
-		).expect("Concurrency failure for sequential write of offchain storage");
+		) {
+			Ok(_) => (),
+			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
+			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
+		}
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
@@ -427,24 +424,22 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 		new_value: &[u8],
 	) -> bool {
 		let test = |v: Option<&[u8]>| old_value == v;
-		self.modify(
+		match self.modify(
 			prefix,
 			item_key,
 			Some(test),
 			Some(new_value),
 			false,
-		).expect("Concurrency failure for sequential write of offchain storage")
+		) {
+			Ok(b) => b,
+			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
+			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
+		}
 	}
 }
 
 impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		if !self.set_if_possible(prefix, key, value) {
-			panic!("Concurrency failure for sequential write of offchain storage");
-		}
-	}
-
-	fn set_if_possible(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> bool {
 		let test: Option<fn(Option<&[u8]>) -> bool> = None;
 		match self.0.modify(
 			prefix,
@@ -453,8 +448,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
 			Some(value),
 			true,
 		) {
-			Ok(_) => true,
-			Err(ModifyError::AlreadyWritten) => false,
+			Ok(_) => (),
 			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
 			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
 		}
@@ -462,13 +456,17 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
 		let test: Option<fn(Option<&[u8]>) -> bool> = None;
-		self.0.modify(
+		match self.0.modify(
 			prefix,
 			key,
 			test,
 			None,
 			true,
-		).expect("Concurrency failure for sequential write of offchain storage");
+		) {
+			Ok(_) => (),
+			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
+			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
+		}
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
@@ -483,20 +481,23 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
 		new_value: &[u8],
 	) -> bool {
 		let test = |v: Option<&[u8]>| old_value == v;
-		self.0.modify(
+		match self.0.modify(
 			prefix,
 			item_key,
 			Some(test),
 			Some(new_value),
 			true,
-		).expect("Concurrency failure for sequential write of offchain storage")
+		) {
+			Ok(_) => true,
+			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
+			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
+		}
 	}
 }
 
 #[derive(Debug)]
 enum ModifyError {
 	NoWriteState,
-	AlreadyWritten,
 	DbWrite,
 }
 
@@ -567,16 +568,12 @@ impl BlockChainLocalAt {
 						let update_result = if is_new {
 							histo.set(new_value, at_write)
 						} else {
-							use historied_db::historied::ConditionalValueMut;
+							use historied_db::historied::ForceValueMut;
 							use historied_db::historied::StateIndex;
-							if let Some(update_result) = histo.set_if_possible_no_overwrite(
+							histo.force_set(
 								new_value,
 								at_write.index_ref(),
-							) {
-								update_result
-							} else {
-								return Err(ModifyError::AlreadyWritten);
-							}
+							)
 						};
 						if let &UpdateResult::Unchanged = &update_result {
 							(Vec::new(), update_result)

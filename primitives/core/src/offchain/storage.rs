@@ -290,12 +290,12 @@ impl BlockChainInMemOffchainStorageAt {
 				if is_new {
 					let _update_result = histo.set_mut(new_value, at_write);
 				} else {
-					use historied_db::historied::ConditionalValueMut;
+					use historied_db::historied::ForceValueMut;
 					use historied_db::historied::StateIndex;
-					let _update_result = histo.set_if_possible_no_overwrite(
+					let _update_result = histo.force_set(
 						new_value,
 						at_write.index_ref(),
-					).expect("Concurrency failure for sequential write of offchain storage");
+					);
 				}
 			} else {
 				if is_insert {

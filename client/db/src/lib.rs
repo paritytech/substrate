@@ -3083,23 +3083,6 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Concurrency failure for sequential write of offchain storage")]
-	fn offchain_backends_change_current_existing() {
-		use sp_core::offchain::{BlockChainOffchainStorage, OffchainStorage};
-
-		let backend = Backend::<Block>::new_test(10, 10);
-
-		let mut ooc = OffchainOverlayedChanges::enabled();
-		ooc.set(b"prefix1", b"key1", b"value1", true);
-		let block0 = insert_block(&backend, 0, Default::default(), None, Some(ooc), Default::default());
-		let offchain_local_storage = backend.offchain_local_storage().unwrap();
-		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
-		let mut offchain_local_storage = offchain_local_storage.at(block0).unwrap();
-		assert!(offchain_local_storage.can_update());
-		offchain_local_storage.set(b"prefix1", b"key1", b"test");
-	}
-
-	#[test]
 	fn offchain_backends_change_current_new_value() {
 		use sp_core::offchain::{BlockChainOffchainStorage, OffchainStorage};
 
@@ -3122,15 +3105,19 @@ pub(crate) mod tests {
 		let mut offchain_local_storage = offchain_local.at(block1).unwrap();
 		assert!(offchain_local_storage.can_update());
 		offchain_local_storage.set(b"prefix1", b"key3", b"test3");
-		assert!(offchain_local_storage.set_if_possible(b"prefix1", b"key1", b"test1"));
-		assert!(!offchain_local_storage.set_if_possible(b"prefix1", b"key2", b"test1"));
+		offchain_local_storage.set(b"prefix1", b"key1", b"test1");
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key3"), Some(b"test3".to_vec()));
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"test1".to_vec()));
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key2"), Some(b"test2".to_vec()));
 		let mut offchain_local_storage = offchain_local.at(block0).unwrap();
+		// actual force set backward
+		offchain_local_storage.set(b"prefix1", b"key1", b"test11");
+		offchain_local_storage.set(b"prefix1", b"key2", b"test12");
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"test11".to_vec()));
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key2"), Some(b"test12".to_vec()));
 		assert!(offchain_local_storage.can_update());
-		assert!(!offchain_local_storage.set_if_possible(b"prefix1", b"key1", b"test1"));
-		assert!(!offchain_local_storage.set_if_possible(b"prefix1", b"key2", b"test1"));
-		assert!(!offchain_local_storage.set_if_possible(b"prefix1", b"key3", b"test1"));
-		assert!(offchain_local_storage.set_if_possible(b"prefix1", b"key4", b"test1"));
+		let offchain_local_storage = offchain_local.at(block1).unwrap();
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"test1".to_vec()));
+		assert_eq!(offchain_local_storage.get(b"prefix1", b"key2"), Some(b"test2".to_vec()));
 	}
 }
