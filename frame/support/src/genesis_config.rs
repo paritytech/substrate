@@ -132,9 +132,10 @@ macro_rules! impl_outer_config {
 		$extra:ident;
 		$storage:ident;
 	) => {
-		$crate::sp_runtime::BuildModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
-			$extra,
-			$storage,
-		)?;
+		$crate::sp_runtime::BuildModuleGenesisStorage::
+			<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
+				$extra,
+				$storage,
+			)?;
 	}
 }
