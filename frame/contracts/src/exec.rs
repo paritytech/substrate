@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
+	CodeHash, Config, Event, RawEvent, Trait, Module as Contracts,
 	TrieId, BalanceOf, ContractInfo, TrieIdGenerator,
 	gas::GasMeter, rent::Rent, storage::{self, Storage}, Error, ContractInfoOf
 };
@@ -76,6 +76,7 @@ pub trait Ext {
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		input_data: Vec<u8>,
+		salt: &[u8],
 	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError>;
 
 	/// Transfer some amount of funds into the specified account.
@@ -310,6 +311,7 @@ where
 		gas_meter: &mut GasMeter<T>,
 		code_hash: &CodeHash<T>,
 		input_data: Vec<u8>,
+		salt: &[u8],
 	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
 		if self.depth == self.config.max_depth as usize {
 			Err(Error::<T>::MaxCallDepthReached)?
@@ -317,11 +319,7 @@ where
 
 		let transactor_kind = self.transactor_kind();
 		let caller = self.self_account.clone();
-		let dest = T::DetermineContractAddress::contract_address_for(
-			code_hash,
-			&input_data,
-			&caller,
-		);
+		let dest = Contracts::<T>::contract_address(&caller, code_hash, salt);
 
 		// TrieId has not been generated yet and storage is empty since contract is new.
 		//
@@ -537,8 +535,9 @@ where
 		endowment: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		input_data: Vec<u8>,
+		salt: &[u8],
 	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
-		self.ctx.instantiate(endowment, gas_meter, code_hash, input_data)
+		self.ctx.instantiate(endowment, gas_meter, code_hash, input_data, salt)
 	}
 
 	fn transfer(
