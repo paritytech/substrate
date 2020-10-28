@@ -229,8 +229,8 @@ pub struct GenesisAccount {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as EVM {
-		ChainId get(fn chain_id): u64;
-		GasPrice get(fn gas_price): U256;
+		ChainId get(fn chain_id) config(): u64 = 42;
+		GasPrice get(fn gas_price) config(): U256;
 		AccountCodes get(fn account_codes): map hasher(blake2_128_concat) H160 => Vec<u8>;
 		AccountStorages get(fn account_storages):
 			double_map hasher(blake2_128_concat) H160, hasher(blake2_128_concat) H256 => H256;
@@ -238,17 +238,7 @@ decl_storage! {
 
 	add_extra_genesis {
 		config(accounts): std::collections::BTreeMap<H160, GenesisAccount>;
-		config(chain_id): Option<u64>;
-		config(gas_price): Option<U256>;
 		build(|config: &GenesisConfig| {
-			match &config.chain_id {
-				Some(chain_id) => ChainId::put(chain_id),
-				_ => ChainId::put(42)
-			};
-			match &config.gas_price {
-				Some(gas_price) => GasPrice::put(gas_price),
-				_ => GasPrice::put(U256::zero())
-			};
 			for (address, account) in &config.accounts {
 				let account_id = T::AddressMapping::into_account_id(*address);
 
