@@ -141,7 +141,6 @@ impl From<String> for Error {
 	}
 }
 
-
 impl From<Box<dyn sp_state_machine::Error + Send + Sync>> for Error {
 	fn from(e: Box<dyn sp_state_machine::Error + Send + Sync>) -> Self {
 		Self::from_state(e)
