@@ -240,7 +240,7 @@ benchmarks! {
 		let n in 0 .. MAX_NOMINATORS.min(MAX_NOMINATIONS as u32);
 
 		// Make r reporters
-		let mut reporters: Vec<T::AccountId> = vec![];
+		let mut reporters = vec![];
 		for i in 0 .. r {
 			let reporter = account("reporter", i, SEED);
 			reporters.push(reporter);
