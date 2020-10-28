@@ -39,7 +39,7 @@ pub trait WeightInfo {
 		{{~#each benchmark.components as |c| ~}}
 		{{c.name}}: u32, {{/each~}}
 	) -> Weight;
-	{{/each}}
+	{{~/each}}
 }
 
 /// Weights for {{pallet}} using the Substrate node and recommended hardware.
@@ -54,21 +54,21 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 		({{underscore benchmark.base_weight}} as Weight)
 			{{#each benchmark.component_weight as |cw| ~}}
 			.saturating_add(({{underscore cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight))
-			{{/each}}
+			{{~/each}}
 			{{~#if (ne benchmark.base_reads "0") ~}}
 			.saturating_add(T::DbWeight::get().reads({{benchmark.base_reads}} as Weight))
-			{{/if}}
+			{{~/if}}
 			{{~#each benchmark.component_reads as |cr| ~}}
 			.saturating_add(T::DbWeight::get().reads(({{cr.slope}} as Weight).saturating_mul({{cr.name}} as Weight)))
-			{{/each}}
+			{{~/each}}
 			{{~#if (ne benchmark.base_writes "0") ~}}
 			.saturating_add(T::DbWeight::get().writes({{benchmark.base_writes}} as Weight))
-			{{/if}}
+			{{~/if}}
 			{{~#each benchmark.component_writes as |cw| ~}}
 			.saturating_add(T::DbWeight::get().writes(({{cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight)))
 			{{~/each}}
 	}
-	{{/each}}
+	{{~/each}}
 }
 
 // For backwards compatibility and tests
@@ -82,19 +82,19 @@ impl WeightInfo for () {
 		({{underscore benchmark.base_weight}} as Weight)
 			{{#each benchmark.component_weight as |cw| ~}}
 			.saturating_add(({{underscore cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight))
-			{{/each}}
+			{{~/each}}
 			{{~#if (ne benchmark.base_reads "0") ~}}
 			.saturating_add(RocksDbWeight::get().reads({{benchmark.base_reads}} as Weight))
-			{{/if}}
+			{{~/if}}
 			{{~#each benchmark.component_reads as |cr| ~}}
 			.saturating_add(RocksDbWeight::get().reads(({{cr.slope}} as Weight).saturating_mul({{cr.name}} as Weight)))
-			{{/each}}
+			{{~/each}}
 			{{~#if (ne benchmark.base_writes "0") ~}}
 			.saturating_add(RocksDbWeight::get().writes({{benchmark.base_writes}} as Weight))
-			{{/if}}
+			{{~/if}}
 			{{~#each benchmark.component_writes as |cw| ~}}
 			.saturating_add(RocksDbWeight::get().writes(({{cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight)))
 			{{~/each}}
 	}
-	{{/each}}
+	{{~/each}}
 }
