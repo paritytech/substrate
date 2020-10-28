@@ -17,7 +17,7 @@
 
 //! Substrate client possible errors.
 
-use std::{self, error, result};
+use std::{self, result};
 use sp_state_machine;
 use sp_runtime::transaction_validity::TransactionValidityError;
 use sp_consensus;
