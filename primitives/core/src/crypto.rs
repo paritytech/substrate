@@ -470,6 +470,8 @@ ss58_address_format!(
 		(12, "polymath", "Polymath network, standard account (*25519).")
 	SubstraTeeAccount =>
 		(13, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
+	TotemAccount =>
+		(14, "totem", "Any Totem Live Accounting network standard account (*25519).")
 	KulupuAccount =>
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
 	DarkAccount =>
