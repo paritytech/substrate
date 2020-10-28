@@ -19,6 +19,7 @@
 use crate::{
 	exec::{AccountIdOf, StorageKey},
 	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Trait, TrieId,
+	AccountCounter,
 };
 use sp_std::prelude::*;
 use sp_std::marker::PhantomData;
@@ -195,6 +196,25 @@ where
 	pub fn destroy_contract(address: &AccountIdOf<T>, trie_id: &TrieId) {
 		<ContractInfoOf<T>>::remove(address);
 		child::kill_storage(&crate::child_trie_info(&trie_id));
+	}
+
+	/// This generator uses inner counter for account id and applies the hash over `AccountId +
+	/// accountid_counter`.
+	pub fn generate_trie_id(account_id: &AccountIdOf<T>) -> TrieId {
+		use frame_support::StorageValue;
+		use sp_runtime::traits::Hash;
+		// Note that skipping a value due to error is not an issue here.
+		// We only need uniqueness, not sequence.
+		let new_seed = AccountCounter::mutate(|v| {
+			*v = v.wrapping_add(1);
+			*v
+		});
+
+		let buf: Vec<_> = account_id.as_ref().iter()
+			.chain(&new_seed.to_le_bytes())
+			.cloned()
+			.collect();
+		T::Hashing::hash(&buf).as_ref().into()
 	}
 
 	/// Returns the code hash of the contract specified by `account` ID.

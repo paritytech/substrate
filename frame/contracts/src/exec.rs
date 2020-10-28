@@ -16,8 +16,8 @@
 
 use crate::{
 	CodeHash, Config, Event, RawEvent, Trait, Module as Contracts,
-	TrieId, BalanceOf, ContractInfo, TrieIdGenerator,
-	gas::GasMeter, rent::Rent, storage::{self, Storage}, Error, ContractInfoOf
+	TrieId, BalanceOf, ContractInfo, gas::GasMeter, rent::Rent, storage::{self, Storage},
+	Error, ContractInfoOf
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_std::prelude::*;
@@ -324,7 +324,7 @@ where
 		// TrieId has not been generated yet and storage is empty since contract is new.
 		//
 		// Generate it now.
-		let dest_trie_id = <T as Trait>::TrieIdGenerator::trie_id(&dest);
+		let dest_trie_id = Storage::<T>::generate_trie_id(&dest);
 
 		let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
 			Storage::<T>::place_contract(

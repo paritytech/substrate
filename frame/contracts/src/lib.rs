@@ -256,42 +256,6 @@ impl<T: Trait> From<AliveContractInfo<T>> for ContractInfo<T> {
 	}
 }
 
-/// Get a trie id (trie id must be unique and collision resistant depending upon its context).
-/// Note that it is different than encode because trie id should be collision resistant
-/// (being a proper unique identifier).
-pub trait TrieIdGenerator<AccountId> {
-	/// Get a trie id for an account, using reference to parent account trie id to ensure
-	/// uniqueness of trie id.
-	///
-	/// The implementation must ensure every new trie id is unique: two consecutive calls with the
-	/// same parameter needs to return different trie id values.
-	fn trie_id(account_id: &AccountId) -> TrieId;
-}
-
-/// Get trie id from `account_id`.
-pub struct TrieIdFromParentCounter<T: Trait>(PhantomData<T>);
-
-/// This generator uses inner counter for account id and applies the hash over `AccountId +
-/// accountid_counter`.
-impl<T: Trait> TrieIdGenerator<T::AccountId> for TrieIdFromParentCounter<T>
-where
-	T::AccountId: AsRef<[u8]>
-{
-	fn trie_id(account_id: &T::AccountId) -> TrieId {
-		// Note that skipping a value due to error is not an issue here.
-		// We only need uniqueness, not sequence.
-		let new_seed = AccountCounter::mutate(|v| {
-			*v = v.wrapping_add(1);
-			*v
-		});
-
-		let mut buf = Vec::new();
-		buf.extend_from_slice(account_id.as_ref());
-		buf.extend_from_slice(&new_seed.to_le_bytes()[..]);
-		T::Hashing::hash(&buf[..]).as_ref().into()
-	}
-}
-
 pub type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 pub type NegativeImbalanceOf<T> =
@@ -325,9 +289,6 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-
-	/// trie id generator
-	type TrieIdGenerator: TrieIdGenerator<Self::AccountId>;
 
 	/// Handler for rent payments.
 	type RentPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
