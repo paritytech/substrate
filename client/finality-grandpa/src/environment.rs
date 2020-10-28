@@ -42,8 +42,8 @@ use sp_runtime::traits::{
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use crate::{
-	CommandOrError, Commit, Config, Error, Precommit, Prevote,
-	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
+	local_authority_id, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
+	PrimaryPropose, SignedMessage, VoterCommand,
 };
 
 use sp_consensus::SelectChain;
@@ -467,10 +467,18 @@ where
 	/// extrinsic to report the equivocation. In particular, the session membership
 	/// proof must be generated at the block at which the given set was active which
 	/// isn't necessarily the best block if there are pending authority set changes.
-	fn report_equivocation(
+	pub(crate) fn report_equivocation(
 		&self,
 		equivocation: Equivocation<Block::Hash, NumberFor<Block>>,
 	) -> Result<(), Error> {
+		if let Some(local_id) = local_authority_id(&self.voters, self.config.keystore.as_ref()) {
+			if *equivocation.offender() == local_id {
+				return Err(Error::Safety(
+					"Refraining from sending equivocation report for our own equivocation.".into(),
+				));
+			}
+		}
+
 		let is_descendent_of = is_descendent_of(&*self.client, None);
 
 		let best_header = self.select_chain
@@ -724,7 +732,7 @@ where
 		let prevote_timer = Delay::new(self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(self.config.gossip_duration * 4);
 
-		let local_id = crate::local_authority_id(&self.voters, self.config.keystore.as_ref());
+		let local_id = local_authority_id(&self.voters, self.config.keystore.as_ref());
 
 		let has_voted = match self.voter_set_state.has_voted(round) {
 			HasVoted::Yes(id, vote) => {
@@ -776,7 +784,7 @@ where
 	}
 
 	fn proposed(&self, round: RoundNumber, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::local_authority_id(&self.voters, self.config.keystore.as_ref());
+		let local_id = local_authority_id(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
 			Some(id) => id,
@@ -815,7 +823,7 @@ where
 	}
 
 	fn prevoted(&self, round: RoundNumber, prevote: Prevote<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::local_authority_id(&self.voters, self.config.keystore.as_ref());
+		let local_id = local_authority_id(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
 			Some(id) => id,
@@ -876,7 +884,7 @@ where
 		round: RoundNumber,
 		precommit: Precommit<Block>,
 	) -> Result<(), Self::Error> {
-		let local_id = crate::local_authority_id(&self.voters, self.config.keystore.as_ref());
+		let local_id = local_authority_id(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
 			Some(id) => id,

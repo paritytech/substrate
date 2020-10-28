@@ -113,7 +113,8 @@ use futures::prelude::*;
 use log::{debug, info, log, trace, warn};
 use prometheus_endpoint::Registry;
 use sc_consensus_slots::{
-	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
+	// SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
+	SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
 	SimpleBackoffAuthoringBlocksStrategy,
 };
 use sc_consensus_epochs::{
@@ -677,39 +678,6 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 		} else {
 			Some(slot_remaining)
 		}
-	}
-}
-
-impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> where
-	B: BlockT,
-	C: ProvideRuntimeApi<B> +
-		ProvideCache<B> +
-		HeaderBackend<B> +
-		HeaderMetadata<B, Error = ClientError> + Send + Sync,
-	C::Api: BabeApi<B>,
-	E: Environment<B, Error = Error> + Send + Sync,
-	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	SO: SyncOracle + Send + Sync + Clone,
-	Error: std::error::Error + Send + From<sp_consensus::Error> + From<I::Error> + 'static,
-{
-	type OnSlot = Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>>;
-
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo<B>) -> Self::OnSlot {
-		// Append SlotInfo with chain info
-		let mut slot_info = slot_info.clone();
-		slot_info.chain_info = find_pre_digest::<B>(&chain_head)
-			.map(|digest| digest.slot_number())
-			.map(|chain_head_slot| {
-				sc_consensus_slots::AppendedChainInfo::<B> {
-					chain_head_number: *chain_head.number(),
-					chain_head_slot,
-					finalized_number: self.client.info().finalized_number,
-				}
-			})
-			.ok();
-
-		<Self as sc_consensus_slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
 	}
 }
 

@@ -241,7 +241,7 @@ impl<Block, B> Default for VotingRulesBuilder<Block, B> where
 {
 	fn default() -> Self {
 		VotingRulesBuilder::new()
-			.add(BeforeBestBlockBy(2.into()))
+			.add(BeforeBestBlockBy(2u32.into()))
 			.add(ThreeQuartersOfTheUnfinalizedChain)
 	}
 }

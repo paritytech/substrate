@@ -39,30 +39,6 @@ pub fn duration_now() -> Duration {
 	))
 }
 
-
-/// A `Duration` with a sign (before or after).  Immutable.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct SignedDuration {
-	offset: Duration,
-	is_positive: bool,
-}
-
-impl SignedDuration {
-	/// Construct a `SignedDuration`
-	pub fn new(offset: Duration, is_positive: bool) -> Self {
-		Self { offset, is_positive }
-	}
-
-	/// Get the slot for now.  Panics if `slot_duration` is 0.
-	pub fn slot_now(&self, slot_duration: u64) -> u64 {
-		(if self.is_positive {
-			duration_now() + self.offset
-		} else {
-			duration_now() - self.offset
-		}.as_millis() as u64) / slot_duration
-	}
-}
-
 /// Returns the duration until the next slot, based on current duration since
 pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 	let remaining_full_millis = slot_duration - (now.as_millis() as u64 % slot_duration) - 1;
@@ -74,8 +50,6 @@ pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 pub struct SlotInfo<B: BlockT> {
 	/// The slot number.
 	pub number: u64,
-	/// The last slot number produced.
-	pub last_number: u64,
 	/// Current timestamp.
 	pub timestamp: u64,
 	/// The instant at which the slot ends.
@@ -170,13 +144,11 @@ impl<SC: SlotCompatible, B: BlockT> Stream for Slots<SC, B> {
 
 			// never yield the same slot twice.
 			if slot_num > self.last_slot {
-				let last_slot = self.last_slot;
 				self.last_slot = slot_num;
 
 				break Poll::Ready(Some(Ok(SlotInfo {
 					number: slot_num,
 					duration: self.slot_duration,
-					last_number: last_slot,
 					timestamp,
 					ends_at,
 					inherent_data,
@@ -187,5 +159,4 @@ impl<SC: SlotCompatible, B: BlockT> Stream for Slots<SC, B> {
 	}
 }
 
-impl<SC, B> Unpin for Slots<SC, B> {
-}
+impl<SC, B> Unpin for Slots<SC, B> {}
