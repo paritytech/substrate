@@ -73,6 +73,7 @@ use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
 	CheckedHeader, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
+	BackoffAuthoringBlocksStrategy, SimpleBackoffAuthoringBlocksStrategy,
 };
 
 use sp_api::ApiExt;
@@ -147,7 +148,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
-	backoff_authoring_blocks: Option<sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy<NumberFor<B>>>,
+	backoff_authoring_blocks: Option<SimpleBackoffAuthoringBlocksStrategy<NumberFor<B>>>,
 	keystore: SyncCryptoStorePtr,
 	can_author_with: CAW,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
@@ -204,7 +205,7 @@ struct AuraWorker<B: BlockT, C, E, I, P, SO> {
 impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraWorker<B, C, E, I, P, SO>
 where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + HeaderBackend<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error = Error>,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -320,8 +321,18 @@ where
 		self.force_authoring
 	}
 
-	fn backoff_authoring_blocks_strategy(&self) -> Option<&Self::BackoffAuthoringBlocksStrategy> {
-		self.backoff_authoring_blocks.as_ref()
+	fn should_backoff(&self, slot_number: u64, chain_head: &B::Header) -> bool {
+		if let Some(ref strategy) = self.backoff_authoring_blocks {
+			if let Ok(chain_head_slot) = find_pre_digest::<B, P>(chain_head) {
+				return strategy.should_backoff(
+					*chain_head.number(),
+					chain_head_slot,
+					self.client.info().finalized_number,
+					slot_number,
+				);
+			}
+		}
+		false
 	}
 
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle {
@@ -1029,6 +1040,7 @@ mod tests {
 				DummyOracle,
 				inherent_data_providers,
 				false,
+				None,
 				keystore,
 				sp_consensus::AlwaysCanAuthor,
 			).expect("Starts aura"));
@@ -1089,6 +1101,7 @@ mod tests {
 			keystore: keystore.into(),
 			sync_oracle: DummyOracle.clone(),
 			force_authoring: false,
+			backoff_authoring_blocks: Some(SimpleBackoffAuthoringBlocksStrategy::default()),
 			_key_type: PhantomData::<AuthorityPair>,
 		};
 

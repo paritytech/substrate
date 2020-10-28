@@ -113,9 +113,8 @@ use futures::prelude::*;
 use log::{debug, info, log, trace, warn};
 use prometheus_endpoint::Registry;
 use sc_consensus_slots::{
-	// SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
 	SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
-	SimpleBackoffAuthoringBlocksStrategy,
+	BackoffAuthoringBlocksStrategy, SimpleBackoffAuthoringBlocksStrategy,
 };
 use sc_consensus_epochs::{
 	descendent_query, SharedEpochChanges, EpochChangesFor, Epoch as EpochT, ViableEpochDescriptor,
@@ -639,8 +638,20 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 		self.force_authoring
 	}
 
-	fn backoff_authoring_blocks_strategy(&self) -> Option<&Self::BackoffAuthoringBlocksStrategy> {
-		self.backoff_authoring_blocks.as_ref()
+	fn should_backoff(&self, slot_number: u64, chain_head: &B::Header) -> bool {
+		if let Some(ref strategy) = self.backoff_authoring_blocks {
+			if let Ok(chain_head_slot) = find_pre_digest::<B>(chain_head)
+				.map(|digest| digest.slot_number())
+			{
+				return strategy.should_backoff(
+					*chain_head.number(),
+					chain_head_slot,
+					self.client.info().finalized_number,
+					slot_number,
+				);
+			}
+		}
+		false
 	}
 
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle {

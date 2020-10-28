@@ -167,8 +167,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	/// The strategy for backing off block authorship is not set by default, since it usually
 	/// requires state that we do don't have here.
-	fn backoff_authoring_blocks_strategy(&self) -> Option<&Self::BackoffAuthoringBlocksStrategy> {
-		None
+	fn should_backoff(&self, _slot_number: u64, _chain_head: &B::Header) -> bool {
+		false
 	}
 
 	/// Returns a handle to a `SyncOracle`.
@@ -262,18 +262,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Some(claim) => claim,
 		};
 
-		if let Some(strategy) = self.backoff_authoring_blocks_strategy() {
-			if let Some(ref chain_info) = slot_info.chain_info {
-				if strategy.should_backoff(
-					chain_info.chain_head_number,
-					chain_info.chain_head_slot,
-					chain_info.finalized_number,
-					slot_number,
-				) {
-					info!("Backing off authoring new blocks due to lagging finality.");
-					return Box::pin(future::ready(None));
-				}
-			}
+		if self.should_backoff(slot_number, &chain_head) {
+			info!("Backing off authoring new blocks due to lagging finality.");
+			return Box::pin(future::ready(None));
 		}
 
 		debug!(
