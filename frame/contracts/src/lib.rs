@@ -116,7 +116,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
-	parameter_types, storage::child::ChildInfo,
+	storage::child::ChildInfo,
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 };
@@ -260,25 +260,6 @@ pub type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 pub type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
-
-parameter_types! {
-	/// A reasonable default value for [`Trait::SignedClaimedHandicap`].
-	pub const DefaultSignedClaimHandicap: u32 = 2;
-	/// A reasonable default value for [`Trait::TombstoneDeposit`].
-	pub const DefaultTombstoneDeposit: u32 = 16;
-	/// A reasonable default value for [`Trait::StorageSizeOffset`].
-	pub const DefaultStorageSizeOffset: u32 = 8;
-	/// A reasonable default value for [`Trait::RentByteFee`].
-	pub const DefaultRentByteFee: u32 = 4;
-	/// A reasonable default value for [`Trait::RentDepositOffset`].
-	pub const DefaultRentDepositOffset: u32 = 1000;
-	/// A reasonable default value for [`Trait::SurchargeReward`].
-	pub const DefaultSurchargeReward: u32 = 150;
-	/// A reasonable default value for [`Trait::MaxDepth`].
-	pub const DefaultMaxDepth: u32 = 32;
-	/// A reasonable default value for [`Trait::MaxValueSize`].
-	pub const DefaultMaxValueSize: u32 = 16_384;
-}
 
 pub trait Trait: frame_system::Trait {
 	type Time: Time;
