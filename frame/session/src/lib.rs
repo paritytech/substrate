@@ -740,7 +740,7 @@ impl<T: Trait> sp_session::ValidatorSet<T::AccountId> for Module<T> {
 	type ValidatorId = T::ValidatorId;
 	type ValidatorIdOf = T::ValidatorIdOf;
 
-	fn current_index() -> sp_staking::SessionIndex {
+	fn session_index() -> sp_staking::SessionIndex {
 		Module::<T>::current_index()
 	}
 

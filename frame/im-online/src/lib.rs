@@ -227,10 +227,12 @@ pub struct Heartbeat<BlockNumber>
 	pub validators_len: u32,
 }
 
+/// A type for representing the validator id in a session.
 pub type ValidatorId<T> = <
 	<T as Trait>::ValidatorSet as ValidatorSet<<T as frame_system::Trait>::AccountId>
 >::ValidatorId;
 
+/// A tuple of (ValidatorId, Identification) where `Identification` is the full identification of `ValidatorId`.
 pub type IdentificationTuple<T> = (
 	ValidatorId<T>,
 	<<T as Trait>::ValidatorSet as ValidatorSetWithIdentification<<T as frame_system::Trait>::AccountId>>::Identification,
@@ -254,7 +256,7 @@ pub trait Trait: SendTransactionTypes<Call<Self>> + frame_system::Trait {
 	/// A type for retrieving the validators supposed to be online in a session.
 	///
 	/// This is used for decoupling the pallet-session dependency since the user of this
-	/// module might have their own defintion for the set of expected online validators
+	/// module might have their own definition for the set of expected online validators
 	/// in a session.
 	type ValidatorSet: ValidatorSetWithIdentification<Self::AccountId>;
 
@@ -361,7 +363,7 @@ decl_module! {
 		) {
 			ensure_none(origin)?;
 
-			let current_session = T::ValidatorSet::current_index();
+			let current_session = T::ValidatorSet::session_index();
 			let exists = <ReceivedHeartbeats>::contains_key(
 				&current_session,
 				&heartbeat.authority_index
@@ -442,7 +444,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn is_online_aux(authority_index: AuthIndex, authority: &ValidatorId<T>) -> bool {
-		let current_session = T::ValidatorSet::current_index();
+		let current_session = T::ValidatorSet::session_index();
 
 		<ReceivedHeartbeats>::contains_key(&current_session, &authority_index) ||
 			<AuthoredBlocks<T>>::get(
@@ -454,13 +456,13 @@ impl<T: Trait> Module<T> {
 	/// Returns `true` if a heartbeat has been received for the authority at `authority_index` in
 	/// the authorities series, during the current session. Otherwise `false`.
 	pub fn received_heartbeat_in_current_session(authority_index: AuthIndex) -> bool {
-		let current_session = T::ValidatorSet::current_index();
+		let current_session = T::ValidatorSet::session_index();
 		<ReceivedHeartbeats>::contains_key(&current_session, &authority_index)
 	}
 
 	/// Note that the given authority has authored a block in the current session.
 	fn note_authorship(author: ValidatorId<T>) {
-		let current_session = T::ValidatorSet::current_index();
+		let current_session = T::ValidatorSet::session_index();
 
 		<AuthoredBlocks<T>>::mutate(
 			&current_session,
@@ -477,7 +479,7 @@ impl<T: Trait> Module<T> {
 			return Err(OffchainErr::TooEarly(heartbeat_after))
 		}
 
-		let session_index = T::ValidatorSet::current_index();
+		let session_index = T::ValidatorSet::session_index();
 		let validators_len = T::ValidatorSet::validators().len() as u32;
 
 		Ok(Self::local_authority_keys()
@@ -656,7 +658,7 @@ impl<T: Trait> sp_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 
 	fn on_before_session_ending() {
-		let session_index = T::ValidatorSet::current_index();
+		let session_index = T::ValidatorSet::session_index();
 		let keys = Keys::<T>::get();
 		let current_validators = T::ValidatorSet::validators();
 
@@ -672,8 +674,8 @@ impl<T: Trait> sp_session::OneSessionHandler<T::AccountId> for Module<T> {
 		// Remove all received heartbeats and number of authored blocks from the
 		// current session, they have already been processed and won't be needed
 		// anymore.
-		<ReceivedHeartbeats>::remove_prefix(&T::ValidatorSet::current_index());
-		<AuthoredBlocks<T>>::remove_prefix(&T::ValidatorSet::current_index());
+		<ReceivedHeartbeats>::remove_prefix(&T::ValidatorSet::session_index());
+		<AuthoredBlocks<T>>::remove_prefix(&T::ValidatorSet::session_index());
 
 		if offenders.is_empty() {
 			Self::deposit_event(RawEvent::AllGood);
@@ -710,7 +712,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			// check if session index from heartbeat is recent
-			let current_session = T::ValidatorSet::current_index();
+			let current_session = T::ValidatorSet::session_index();
 			if heartbeat.session_index != current_session {
 				return InvalidTransaction::Stale.into();
 			}

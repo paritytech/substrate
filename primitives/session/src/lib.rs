@@ -123,7 +123,7 @@ pub trait ValidatorSet<AccountId> {
 	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
 
 	/// Returns current session index.
-	fn current_index() -> SessionIndex;
+	fn session_index() -> SessionIndex;
 
 	/// Returns all the validators ought to be online in a session.
 	///

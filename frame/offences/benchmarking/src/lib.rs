@@ -190,11 +190,13 @@ fn make_offenders_im_online<T: Trait>(num_offenders: u32, num_nominators: u32) -
 	Staking::<T>::start_session(0);
 
 	let id_tuples = offenders.iter()
-		.map(|offender|
-			<<T as ImOnlineTrait>::ValidatorSet as sp_session::ValidatorSet<T::AccountId>>::ValidatorIdOf::convert(offender.controller.clone())
-				.expect("failed to get validator id from account id"))
-		.map(|validator_id|
-			<<T as ImOnlineTrait>::ValidatorSet as sp_session::ValidatorSetWithIdentification<T::AccountId>>::IdentificationOf::convert(validator_id.clone())
+		.map(|offender| <
+				<T as ImOnlineTrait>::ValidatorSet as sp_session::ValidatorSet<T::AccountId>
+			>::ValidatorIdOf::convert(offender.controller.clone())
+			.expect("failed to get validator id from account id"))
+		.map(|validator_id| <
+				<T as ImOnlineTrait>::ValidatorSet as sp_session::ValidatorSetWithIdentification<T::AccountId>
+			>::IdentificationOf::convert(validator_id.clone())
 			.map(|full_id| (validator_id, full_id))
 			.expect("failed to convert validator id to full identification"))
 		.collect::<Vec<pallet_im_online::IdentificationTuple<T>>>();
