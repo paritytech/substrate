@@ -8088,7 +8088,6 @@ dependencies = [
 name = "sp-blockchain"
 version = "2.0.0"
 dependencies = [
- "derive_more",
  "log",
  "lru 0.4.3",
  "parity-scale-codec",
@@ -8098,6 +8097,7 @@ dependencies = [
  "sp-database",
  "sp-runtime",
  "sp-state-machine",
+ "thiserror",
 ]
 
 [[package]]
@@ -8112,7 +8112,6 @@ dependencies = [
 name = "sp-consensus"
 version = "0.8.0"
 dependencies = [
- "derive_more",
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",
@@ -8131,6 +8130,7 @@ dependencies = [
  "sp-utils",
  "sp-version",
  "substrate-prometheus-endpoint",
+ "thiserror",
  "wasm-timer",
 ]
 
@@ -8237,6 +8237,7 @@ dependencies = [
  "sp-std",
  "sp-storage",
  "substrate-bip39",
+ "thiserror",
  "tiny-bip39",
  "tiny-keccak",
  "twox-hash",
@@ -8291,11 +8292,11 @@ dependencies = [
 name = "sp-inherents"
 version = "2.0.0"
 dependencies = [
- "derive_more",
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sp-core",
  "sp-std",
+ "thiserror",
 ]
 
 [[package]]
@@ -8566,6 +8567,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sp-trie",
+ "thiserror",
  "trie-db",
  "trie-root",
 ]

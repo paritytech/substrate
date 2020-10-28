@@ -22,9 +22,9 @@ use sp_std::fmt;
 /// State Machine Error bound.
 ///
 /// This should reflect Wasm error type bound for future compatibility.
-pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
+pub trait Error: 'static + fmt::Debug + fmt::Display + Send + Sync {}
 
-impl<T: 'static + fmt::Debug + fmt::Display + Send> Error for T {}
+impl<T: 'static + fmt::Debug + fmt::Display + Send + Sync> Error for T {}
 
 /// Externalities Error.
 ///
@@ -32,17 +32,18 @@ impl<T: 'static + fmt::Debug + fmt::Display + Send> Error for T {}
 /// would not be executed unless externalities were available. This is included for completeness,
 /// and as a transition away from the pre-existing framework.
 #[derive(Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum ExecutionError {
 	/// Backend error.
+	#[cfg_attr(feature = "std", error("Backend error {0:?}"))]
 	Backend(crate::DefaultError),
 	/// The entry `:code` doesn't exist in storage so there's no way we can execute anything.
+	#[cfg_attr(feature = "std", error("`:code` entry does not exist in storage"))]
 	CodeEntryDoesNotExist,
 	/// Backend is incompatible with execution proof generation process.
+	#[cfg_attr(feature = "std", error("Unable to generate proof"))]
 	UnableToGenerateProof,
 	/// Invalid execution proof.
+	#[cfg_attr(feature = "std", error("Invalid execution proof"))]
 	InvalidProof,
-}
-
-impl fmt::Display for ExecutionError {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "Externalities Error") }
 }
