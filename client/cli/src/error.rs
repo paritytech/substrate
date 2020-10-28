@@ -49,7 +49,7 @@ pub enum Error {
 	InvalidListenMultiaddress,
 	/// Application specific error chain sequence forwarder.
 	#[error(transparent)]
-	Application(#[from] Box<dyn std::error::Error>),
+	Application(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
 	/// URI error.
 	#[error("Invalid URI; expecting either a secret URI or a public URI.")]
 	InvalidUri(crypto::PublicError),
