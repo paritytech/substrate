@@ -126,7 +126,7 @@ pub(crate) fn write_block_weight<H: Encode, F, R>(
 }
 
 /// Load the cumulative chain-weight associated with a block.
-pub(crate) fn load_block_weight<H: Encode, B: AuxStore>(
+pub fn load_block_weight<H: Encode, B: AuxStore>(
 	backend: &B,
 	block_hash: H,
 ) -> ClientResult<Option<BabeBlockWeight>> {

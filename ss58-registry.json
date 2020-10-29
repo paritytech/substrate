@@ -98,7 +98,7 @@
 			"symbols": ["REY"],
 			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": ["http://laminar.network/"]
+			"website": "http://laminar.network/"
 		},
 		{
 			"prefix": 10,
@@ -116,7 +116,7 @@
 			"symbols": ["LAMI"],
 			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": ["http://laminar.network/"]
+			"website": "http://laminar.network/"
 		},
 		{
 			"prefix": 12,
@@ -135,6 +135,15 @@
 			"decimals": null,
 			"standardAccount": "*25519",
 			"website": "https://www.substratee.com"
+		},
+		{
+			"prefix": 14,
+			"network": "totem",
+			"displayName": "Totem",
+			"symbols": ["XTX"],
+			"decimals": [0],
+			"standardAccount": "*25519",
+			"website": "https://totemaccounting.com"
 		},
 		{
 			"prefix": 16,
@@ -157,11 +166,11 @@
 		{
 			"prefix": 18,
 			"network": "darwinia",
-			"displayName": "Darwinia Chain",
-			"symbols": null,
-			"decimals": null,
+			"displayName": "Darwinia Network",
+			"symbols": ["RING", "KTON"],
+			"decimals": [9, 9],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://darwinia.network/"
 		},
 		{
 			"prefix": 19,
@@ -207,6 +216,24 @@
 			"decimals": null,
 			"standardAccount": "*25519",
 			"website": null
+		},
+		{
+			"prefix": 24,
+			"network": "zero",
+			"displayName": "ZERO",
+			"symbols": ["PLAY"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://zero.io"
+		},
+		{
+			"prefix": 25,
+			"network": "zero-alphaville",
+			"displayName": "ZERO Alphaville",
+			"symbols": ["PLAY"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://zero.io"
 		},
 		{
 			"prefix": 28,
@@ -302,10 +329,10 @@
 			"prefix": 44,
 			"network": "chainx",
 			"displayName": "ChainX",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["PCX"],
+			"decimals": [8],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://chainx.org/"
 		},
 		{
 			"prefix": 46,

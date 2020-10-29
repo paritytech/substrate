@@ -1,13 +1,13 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,62 +15,108 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode};
-use frame_support::weights::{Weight, DispatchClass};
-use sp_runtime::RuntimeDebug;
+//! Weights for frame_system
+//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 2.0.0
+//! DATE: 2020-10-28, STEPS: [50, ], REPEAT: 20, LOW RANGE: [], HIGH RANGE: []
+//! EXECUTION: Some(Wasm), WASM-EXECUTION: Compiled, CHAIN: Some("dev"), DB CACHE: 128
 
-/// An object to track the currently used extrinsic weight in a block.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
-pub struct ExtrinsicsWeight {
-	normal: Weight,
-	operational: Weight,
+// Executed Command:
+// target/release/substrate
+// benchmark
+// --chain=dev
+// --steps=50
+// --repeat=20
+// --pallet=frame_system
+// --extrinsic=*
+// --execution=wasm
+// --wasm-execution=compiled
+// --heap-pages=4096
+// --output=./frame/system/src/weights.rs
+// --template=./.maintain/frame-weight-template.hbs
+
+
+#![allow(unused_parens)]
+#![allow(unused_imports)]
+
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use sp_std::marker::PhantomData;
+
+/// Weight functions needed for frame_system.
+pub trait WeightInfo {
+	fn remark(b: u32, ) -> Weight;
+	fn set_heap_pages() -> Weight;
+	fn set_changes_trie_config() -> Weight;
+	fn set_storage(i: u32, ) -> Weight;
+	fn kill_storage(i: u32, ) -> Weight;
+	fn kill_prefix(p: u32, ) -> Weight;
+	fn suicide() -> Weight;
 }
 
-impl ExtrinsicsWeight {
-	/// Returns the total weight consumed by all extrinsics in the block.
-	pub fn total(&self) -> Weight {
-		self.normal.saturating_add(self.operational)
+/// Weights for frame_system using the Substrate node and recommended hardware.
+pub struct SubstrateWeight<T>(PhantomData<T>);
+impl<T: crate::Trait> WeightInfo for SubstrateWeight<T> {
+	fn remark(_b: u32, ) -> Weight {
+		(1_973_000 as Weight)
 	}
-
-	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
-	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
-		let value = self.get_mut(class);
-		*value = value.saturating_add(weight);
+	fn set_heap_pages() -> Weight {
+		(2_816_000 as Weight)
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-
-	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would
-	/// occur.
-	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
-		let value = self.get_mut(class);
-		*value = value.checked_add(weight).ok_or(())?;
-		Ok(())
+	fn set_changes_trie_config() -> Weight {
+		(11_539_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-
-	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of
-	/// `Weight`.
-	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
-		let value = self.get_mut(class);
-		*value = value.saturating_sub(weight);
+	fn set_storage(i: u32, ) -> Weight {
+		(0 as Weight)
+			.saturating_add((833_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
-
-	/// Get the current weight of a specific dispatch class.
-	pub fn get(&self, class: DispatchClass) -> Weight {
-		match class {
-			DispatchClass::Operational => self.operational,
-			DispatchClass::Normal | DispatchClass::Mandatory => self.normal,
-		}
+	fn kill_storage(i: u32, ) -> Weight {
+		(2_131_000 as Weight)
+			.saturating_add((597_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
-
-	/// Get a mutable reference to the current weight of a specific dispatch class.
-	fn get_mut(&mut self, class: DispatchClass) -> &mut Weight {
-		match class {
-			DispatchClass::Operational => &mut self.operational,
-			DispatchClass::Normal | DispatchClass::Mandatory => &mut self.normal,
-		}
+	fn kill_prefix(p: u32, ) -> Weight {
+		(11_844_000 as Weight)
+			.saturating_add((857_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
 	}
+	fn suicide() -> Weight {
+		(37_209_000 as Weight)
+	}
+}
 
-	/// Set the weight of a specific dispatch class.
-	pub fn put(&mut self, new: Weight, class: DispatchClass) {
-		*self.get_mut(class) = new;
+// For backwards compatibility and tests
+impl WeightInfo for () {
+	fn remark(_b: u32, ) -> Weight {
+		(1_973_000 as Weight)
+	}
+	fn set_heap_pages() -> Weight {
+		(2_816_000 as Weight)
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn set_changes_trie_config() -> Weight {
+		(11_539_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+	}
+	fn set_storage(i: u32, ) -> Weight {
+		(0 as Weight)
+			.saturating_add((833_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+	}
+	fn kill_storage(i: u32, ) -> Weight {
+		(2_131_000 as Weight)
+			.saturating_add((597_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+	}
+	fn kill_prefix(p: u32, ) -> Weight {
+		(11_844_000 as Weight)
+			.saturating_add((857_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
+	}
+	fn suicide() -> Weight {
+		(37_209_000 as Weight)
 	}
 }

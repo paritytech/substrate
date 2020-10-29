@@ -1429,7 +1429,7 @@ mod tests {
 			_: ChangesProof<B::Header>
 		) -> Result<Vec<(NumberFor<B>, u32)>, ClientError> {
 			match self.ok {
-				true => Ok(vec![(100.into(), 2)]),
+				true => Ok(vec![(100u32.into(), 2)]),
 				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}

@@ -555,13 +555,13 @@ fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 	).expect("Creates runtime");
 
 	let instance = runtime.new_instance().unwrap();
-	let res = instance.call("returns_mutable_static", &[0]).unwrap();
+	let res = instance.call_export("returns_mutable_static", &[0]).unwrap();
 	assert_eq!(33, u64::decode(&mut &res[..]).unwrap());
 
 	// We expect that every invocation will need to return the initial
 	// value plus one. If the value increases more than that then it is
 	// a sign that the wasm runtime preserves the memory content.
-	let res = instance.call("returns_mutable_static", &[0]).unwrap();
+	let res = instance.call_export("returns_mutable_static", &[0]).unwrap();
 	assert_eq!(33, u64::decode(&mut &res[..]).unwrap());
 }
 
@@ -590,11 +590,11 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	let instance = runtime.new_instance().unwrap();
 
 	// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
-	let res = instance.call("allocates_huge_stack_array", &true.encode());
+	let res = instance.call_export("allocates_huge_stack_array", &true.encode());
 	assert!(res.is_err());
 
 	// On the second invocation we allocate yet another 768KB (75%) of stack
-	let res = instance.call("allocates_huge_stack_array", &false.encode());
+	let res = instance.call_export("allocates_huge_stack_array", &false.encode());
 	assert!(res.is_ok());
 }
 
@@ -616,10 +616,10 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 		.expect("`__heap_base` is an `i32`");
 
 	let params = (heap_base as u32, 512u32 * 64 * 1024).encode();
-	instance.call("check_and_set_in_heap", &params).unwrap();
+	instance.call_export("check_and_set_in_heap", &params).unwrap();
 
 	// Cal it a second time to check that the heap was freed.
-	instance.call("check_and_set_in_heap", &params).unwrap();
+	instance.call_export("check_and_set_in_heap", &params).unwrap();
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
@@ -719,4 +719,52 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	assert_eq!(span_datum.target, "default");
 	assert_eq!(span_datum.name, "");
 	assert_eq!(values.bool_values.get("wasm").unwrap(), &true);
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn spawning_runtime_instance_should_work(wasm_method: WasmExecutionMethod) {
+
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	call_in_wasm(
+		"test_spawn",
+		&[],
+		wasm_method,
+		&mut ext,
+	).unwrap();
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn spawning_runtime_instance_nested_should_work(wasm_method: WasmExecutionMethod) {
+
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	call_in_wasm(
+		"test_nested_spawn",
+		&[],
+		wasm_method,
+		&mut ext,
+	).unwrap();
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecutionMethod) {
+
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	let error_result = call_in_wasm(
+		"test_panic_in_spawned",
+		&[],
+		wasm_method,
+		&mut ext,
+	).unwrap_err();
+
+	dbg!(&error_result);
+	assert!(format!("{}", error_result).contains("Spawned task"));
 }
