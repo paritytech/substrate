@@ -90,6 +90,8 @@ impl ExecReturnValue {
 /// happened during the execution of the callee or in the current execution context.
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub enum ErrorOrigin {
+	/// Caller error origin.
+	///
 	/// The error happened in the current exeuction context rather than in the one
 	/// of the contract that is called into.
 	Caller,
