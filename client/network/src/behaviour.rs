@@ -333,27 +333,66 @@ Behaviour<B, H> {
 			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
 				self.events.push_back(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)),
 			CustomMessageOutcome::BlockRequest { target, request } => {
-				match self.block_requests.send_request(&target, request) {
-					block_requests::SendRequestOutcome::Ok => {
-						self.events.push_back(BehaviourOut::OpaqueRequestStarted {
-							peer: target,
-							protocol: self.block_requests.protocol_name().to_owned(),
-						});
+
+				let protobuf_req = crate::schema::v1::BlockRequest {
+					fields: request.fields.to_be_u32(),
+					from_block: match request.from {
+						message::FromBlock::Hash(h) =>
+							Some(crate::schema::v1::block_request::FromBlock::Hash(h.encode())),
+						message::FromBlock::Number(n) =>
+							Some(crate::schema::v1::block_request::FromBlock::Number(n.encode())),
 					},
-					block_requests::SendRequestOutcome::Replaced { request_duration, .. } => {
-						self.events.push_back(BehaviourOut::OpaqueRequestFinished {
-							peer: target.clone(),
-							protocol: self.block_requests.protocol_name().to_owned(),
-							request_duration,
-						});
-						self.events.push_back(BehaviourOut::OpaqueRequestStarted {
-							peer: target,
-							protocol: self.block_requests.protocol_name().to_owned(),
-						});
-					}
-					block_requests::SendRequestOutcome::NotConnected |
-					block_requests::SendRequestOutcome::EncodeError(_) => {},
+					to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
+					direction: match request.direction {
+						message::Direction::Ascending => crate::schema::v1::Direction::Ascending as i32,
+						message::Direction::Descending => crate::schema::v1::Direction::Descending as i32,
+					},
+					max_blocks: request.max.unwrap_or(0),
+				};
+
+				let mut buf = Vec::with_capacity(protobuf_req.encoded_len());
+				if let Err(err) = protobuf_req.encode(&mut buf) {
+					log::warn!(
+						target: "sync",
+						"Failed to encode block request {:?}: {:?}",
+						protobuf_req,
+						err
+					);
+					panic!();
+					// return SendRequestOutcome::EncodeError(err);
 				}
+
+				let request_id = self.request_responses.send_request(&target, "def", buf).unwrap();
+				// TODO: differentiate between the two ids.
+				self.substrate.on_block_request_started(target, request.id, request_id);
+
+
+
+
+
+
+				// TODO: Entirely ignoring any previous requests now. Fine?
+				// match self.block_requests.send_request(&target, request) {
+				// 	block_requests::SendRequestOutcome::Ok => {
+				// 		self.events.push_back(BehaviourOut::OpaqueRequestStarted {
+				// 			peer: target,
+				// 			protocol: self.block_requests.protocol_name().to_owned(),
+				// 		});
+				// 	},
+				// 	block_requests::SendRequestOutcome::Replaced { request_duration, .. } => {
+				// 		self.events.push_back(BehaviourOut::OpaqueRequestFinished {
+				// 			peer: target.clone(),
+				// 			protocol: self.block_requests.protocol_name().to_owned(),
+				// 			request_duration,
+				// 		});
+				// 		self.events.push_back(BehaviourOut::OpaqueRequestStarted {
+				// 			peer: target,
+				// 			protocol: self.block_requests.protocol_name().to_owned(),
+				// 		});
+				// 	}
+				// 	block_requests::SendRequestOutcome::NotConnected |
+				// 	block_requests::SendRequestOutcome::EncodeError(_) => {},
+				// }
 			},
 			CustomMessageOutcome::FinalityProofRequest { target, block_hash, request } => {
 				let protobuf_rq = crate::schema::v1::finality::FinalityProofRequest {
@@ -418,16 +457,25 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Even
 				});
 			}
 			request_responses::Event::RequestFinished { peer, protocol, request_id, result } => {
-				if protocol == "abc" {
-					let proof_response = crate::schema::v1::finality::FinalityProofResponse::decode(&result.unwrap()[..])
-						.unwrap();
-					let ev = self.substrate.on_finality_proof_response(peer, request_id, proof_response.proof);
-					self.inject_event(ev);
-				} else {
-					self.events.push_back(BehaviourOut::RequestFinished {
-						request_id,
-						result,
-					});
+				match protocol {
+					Cow::Borrowed("abc") => {
+						let proof_response = crate::schema::v1::finality::FinalityProofResponse::decode(&result.unwrap()[..])
+							.unwrap();
+						let ev = self.substrate.on_finality_proof_response(peer, request_id, proof_response.proof);
+						self.inject_event(ev);
+					}
+					Cow::Borrowed("def") => {
+						let protobuf_response = crate::schema::v1::BlockResponse::decode(&result.unwrap()[..]).unwrap();
+
+						let ev = self.substrate.on_block_response(peer, request_id,  protobuf_response);
+						self.inject_event(ev);
+					}
+					_ => {
+						self.events.push_back(BehaviourOut::RequestFinished {
+							request_id,
+							result,
+						});
+					}
 				}
 			},
 		}
@@ -445,13 +493,14 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 				});
 			},
 			block_requests::Event::Response { peer, response, request_duration } => {
-				self.events.push_back(BehaviourOut::OpaqueRequestFinished {
-					peer: peer.clone(),
-					protocol: self.block_requests.protocol_name().to_owned(),
-					request_duration,
-				});
-				let ev = self.substrate.on_block_response(peer, response);
-				self.inject_event(ev);
+				panic!();
+				// self.events.push_back(BehaviourOut::OpaqueRequestFinished {
+				// 	peer: peer.clone(),
+				// 	protocol: self.block_requests.protocol_name().to_owned(),
+				// 	request_duration,
+				// });
+				// let ev = self.substrate.on_block_response(peer, response);
+				// self.inject_event(ev);
 			}
 			block_requests::Event::RequestCancelled { peer, request_duration, .. } |
 			block_requests::Event::RequestTimeout { peer, request_duration, .. } => {

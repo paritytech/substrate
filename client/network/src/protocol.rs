@@ -257,8 +257,9 @@ struct PacketStats {
 struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any.
-	block_request: Option<(Instant, message::BlockRequest<B>)>,
+	block_request: Option<(Instant, message::BlockRequest<B>, Option<libp2p::request_response::RequestId>)>,
 	/// Requests we are no longer interested in.
+	// TODO: Do we still need this at all?
 	obsolete_requests: HashMap<message::RequestId, Instant>,
 	/// Holds a set of transactions known to this peer.
 	known_transactions: LruHashSet<H>,
@@ -701,52 +702,120 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Must contain the same `PeerId` and request that have been emitted.
 	pub fn on_block_response(
 		&mut self,
-		peer: PeerId,
-		response: message::BlockResponse<B>,
+		peer_id: PeerId,
+		request_id: libp2p::request_response::RequestId,
+		response: crate::schema::v1::BlockResponse,
 	) -> CustomMessageOutcome<B> {
-		let request = if let Some(ref mut p) = self.context_data.peers.get_mut(&peer) {
-			if p.obsolete_requests.remove(&response.id).is_some() {
-				trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", peer, response.id);
+		let peer = match self.context_data.peers.get_mut(&peer_id) {
+			Some(peer) => peer,
+			None => {
+				// TODO: Bring back.
+				// trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", peer, response.id);
 				return CustomMessageOutcome::None;
 			}
-			// Clear the request. If the response is invalid peer will be disconnected anyway.
-			match p.block_request.take() {
-				Some((_, request)) if request.id == response.id => request,
-				Some(_) =>  {
-					trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", peer, response.id);
-					return CustomMessageOutcome::None;
-				}
-				None => {
-					trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer);
-					self.behaviour.disconnect_peer(&peer);
-					self.peerset_handle.report_peer(peer, rep::UNEXPECTED_RESPONSE);
-					return CustomMessageOutcome::None;
-				}
-			}
-		} else {
-			trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer);
-			self.behaviour.disconnect_peer(&peer);
-			self.peerset_handle.report_peer(peer, rep::UNEXPECTED_RESPONSE);
-			return CustomMessageOutcome::None;
 		};
 
+		let block_request = match peer.block_request.take() {
+			Some(req) => req,
+			None =>  {
+				trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer_id);
+				self.behaviour.disconnect_peer(&peer_id);
+				self.peerset_handle.report_peer(peer_id, rep::UNEXPECTED_RESPONSE);
+				return CustomMessageOutcome::None;
+			}
+		};
+
+		if block_request.2 != Some(request_id) {
+			// TODO: Properly handle this.
+			panic!("request id didn't match or was none");
+			return CustomMessageOutcome::None;
+		}
+
+		let block_request = block_request.1;
+
+		let blocks = response.blocks.into_iter().map(|block_data| {
+			Ok(message::BlockData::<B> {
+				hash: Decode::decode(&mut block_data.hash.as_ref())?,
+				header: if !block_data.header.is_empty() {
+					Some(Decode::decode(&mut block_data.header.as_ref())?)
+				} else {
+					None
+				},
+				body: if block_request.fields.contains(message::BlockAttributes::BODY) {
+					Some(block_data.body.iter().map(|body| {
+						Decode::decode(&mut body.as_ref())
+					}).collect::<Result<Vec<_>, _>>()?)
+				} else {
+					None
+				},
+				receipt: if !block_data.message_queue.is_empty() {
+					Some(block_data.receipt)
+				} else {
+					None
+				},
+				message_queue: if !block_data.message_queue.is_empty() {
+					Some(block_data.message_queue)
+				} else {
+					None
+				},
+				justification: if !block_data.justification.is_empty() {
+					Some(block_data.justification)
+				} else if block_data.is_empty_justification {
+					Some(Vec::new())
+				} else {
+					None
+				},
+			})
+		}).collect::<Result<Vec<_>, codec::Error>>().unwrap();
+
+		let block_response = message::BlockResponse::<B> {
+			id: block_request.id,
+			blocks,
+		};
+
+		// let request = if let Some(ref mut p) = self.context_data.peers.get_mut(&peer) {
+		// 	if p.obsolete_requests.remove(&response.id).is_some() {
+		// 		trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", peer, response.id);
+		// 		return CustomMessageOutcome::None;
+		// 	}
+		// 	// Clear the request. If the response is invalid peer will be disconnected anyway.
+		// 	match p.block_request.take() {
+		// 		Some((_, request)) if request.id == response.id => request,
+		// 		Some(_) =>  {
+		// 			trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", peer, response.id);
+		// 			return CustomMessageOutcome::None;
+		// 		}
+		// 		None => {
+		// 			trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer);
+		// 			self.behaviour.disconnect_peer(&peer);
+		// 			self.peerset_handle.report_peer(peer, rep::UNEXPECTED_RESPONSE);
+		// 			return CustomMessageOutcome::None;
+		// 		}
+		// 	}
+		// } else {
+		// 	trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer);
+		// 	self.behaviour.disconnect_peer(&peer);
+		// 	self.peerset_handle.report_peer(peer, rep::UNEXPECTED_RESPONSE);
+		// 	return CustomMessageOutcome::None;
+		// };
+
 		let blocks_range = || match (
-			response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
-			response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
+			block_response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
+			block_response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
 		) {
 			(Some(first), Some(last)) if first != last => format!(" ({}..{})", first, last),
 			(Some(first), Some(_)) => format!(" ({})", first),
 			_ => Default::default(),
 		};
 		trace!(target: "sync", "BlockResponse {} from {} with {} blocks {}",
-			response.id,
-			peer,
-			response.blocks.len(),
+			block_response.id,
+			peer_id,
+			block_response.blocks.len(),
 			blocks_range(),
 		);
 
-		if request.fields == message::BlockAttributes::JUSTIFICATION {
-			match self.sync.on_block_justification(peer, response) {
+		if block_request.fields == message::BlockAttributes::JUSTIFICATION {
+			match self.sync.on_block_justification(peer_id, block_response) {
 				Ok(sync::OnBlockJustification::Nothing) => CustomMessageOutcome::None,
 				Ok(sync::OnBlockJustification::Import { peer, hash, number, justification }) =>
 					CustomMessageOutcome::JustificationImport(peer, hash, number, justification),
@@ -758,26 +827,26 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			}
 		} else {
 			// Validate fields against the request.
-			if request.fields.contains(message::BlockAttributes::HEADER) && response.blocks.iter().any(|b| b.header.is_none()) {
-				self.behaviour.disconnect_peer(&peer);
-				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
+			if block_request.fields.contains(message::BlockAttributes::HEADER) && block_response.blocks.iter().any(|b| b.header.is_none()) {
+				self.behaviour.disconnect_peer(&peer_id);
+				self.peerset_handle.report_peer(peer_id, rep::BAD_RESPONSE);
 				trace!(target: "sync", "Missing header for a block");
 				return CustomMessageOutcome::None
 			}
-			if request.fields.contains(message::BlockAttributes::BODY) && response.blocks.iter().any(|b| b.body.is_none()) {
-				self.behaviour.disconnect_peer(&peer);
-				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
+			if block_request.fields.contains(message::BlockAttributes::BODY) && block_response.blocks.iter().any(|b| b.body.is_none()) {
+				self.behaviour.disconnect_peer(&peer_id);
+				self.peerset_handle.report_peer(peer_id, rep::BAD_RESPONSE);
 				trace!(target: "sync", "Missing body for a block");
 				return CustomMessageOutcome::None
 			}
 
-			match self.sync.on_block_data(&peer, Some(request), response) {
+			match self.sync.on_block_data(&peer_id, Some(block_request), block_response) {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
 				Ok(sync::OnBlockData::Request(peer, mut req)) => {
-					self.update_peer_request(&peer, &mut req);
+					self.update_peer_request(&peer_id, &mut req);
 					CustomMessageOutcome::BlockRequest {
-						target: peer,
+						target: peer_id,
 						request: req,
 					}
 				}
@@ -812,7 +881,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let mut aborting = Vec::new();
 		{
 			for (who, peer) in self.context_data.peers.iter() {
-				if peer.block_request.as_ref().map_or(false, |(t, _)| (tick - *t).as_secs() > REQUEST_TIMEOUT_SEC) {
+				if peer.block_request.as_ref().map_or(false, |(t, _, _request_id)| (tick - *t).as_secs() > REQUEST_TIMEOUT_SEC) {
 					log!(
 						target: "sync",
 						if self.important_peers.contains(who) { Level::Warn } else { Level::Trace },
@@ -1395,6 +1464,22 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.on_finality_proof_request_started(who, block_hash, request_id)
 	}
 
+	pub fn on_block_request_started(
+		&mut self,
+		who: PeerId,
+		request_id: u64,
+		request_response_request_id: libp2p::request_response::RequestId,
+	) {
+		let peer = self.context_data.peers.get_mut(&who).unwrap();
+
+		if peer.block_request.as_mut().unwrap().1.id != request_id {
+			// TODO: Handle. likely fine. Some other request replaced the current one.
+			panic!();
+		}
+
+		peer.block_request.as_mut().unwrap().2 = Some(request_response_request_id);
+	}
+
 	fn format_stats(&self) -> String {
 		let mut out = String::new();
 		for (id, stats) in &self.context_data.stats {
@@ -1501,11 +1586,11 @@ fn update_peer_request<B: BlockT, H: ExHashT>(
 	if let Some(ref mut peer) = peers.get_mut(who) {
 		request.id = peer.next_request_id;
 		peer.next_request_id += 1;
-		if let Some((timestamp, request)) = peer.block_request.take() {
+		if let Some((timestamp, request, _request_id)) = peer.block_request.take() {
 			trace!(target: "sync", "Request {} for {} is now obsolete.", request.id, who);
 			peer.obsolete_requests.insert(request.id, timestamp);
 		}
-		peer.block_request = Some((Instant::now(), request.clone()));
+		peer.block_request = Some((Instant::now(), request.clone(), None));
 	}
 }
 
