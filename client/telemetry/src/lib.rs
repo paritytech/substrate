@@ -156,13 +156,13 @@ fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
 }
 
 /// Log levels.
-pub const SUBSTRATE_DEBUG: &str = "9";
-pub const SUBSTRATE_INFO: &str = "0";
+pub const SUBSTRATE_DEBUG: u8 = 9;
+pub const SUBSTRATE_INFO: u8 = 0;
 
-pub const CONSENSUS_TRACE: &str = "9";
-pub const CONSENSUS_DEBUG: &str = "5";
-pub const CONSENSUS_WARN: &str = "4";
-pub const CONSENSUS_INFO: &str = "1";
+pub const CONSENSUS_TRACE: u8 = 9;
+pub const CONSENSUS_DEBUG: u8 = 5;
+pub const CONSENSUS_WARN: u8 = 4;
+pub const CONSENSUS_INFO: u8 = 1;
 
 /// Telemetry object. Implements `Future` and must be polled regularly.
 /// Contains an `Arc` and can be cloned and pass around. Only one clone needs to be polled
@@ -171,9 +171,23 @@ pub const CONSENSUS_INFO: &str = "1";
 #[derive(Clone)]
 pub struct Telemetry {
 	inner: Arc<Mutex<TelemetryInner>>,
-	/// Logger used to report telemetry.
-	pub logger: Logger,
 	span: tracing::Span,
+	sender: mpsc::Sender<(u8, String)>,
+}
+
+impl Telemetry {
+	/// TODO
+	pub fn push_sender(&self, mut senders: Senders) {
+		senders.insert(
+			self.span.id().expect("the span is enabled; qed").into_u64(),
+			self.sender.clone(),
+		)
+	}
+
+	/// TODO
+	pub fn enter(&self) -> tracing::span::Entered {
+		self.span.enter()
+	}
 }
 
 /// Behind the `Mutex` in `Telemetry`.
@@ -186,7 +200,7 @@ struct TelemetryInner {
 	/// Worker for the telemetry. `None` if it failed to initialize.
 	worker: Option<worker::TelemetryWorker>,
 	/// Receives log entries for them to be dispatched to the worker.
-	receiver: mpsc::Receiver<async_record::AsyncRecord>,
+	receiver: mpsc::Receiver<(u8, String)>,
 }
 
 /// Implements `slog::Drain`.
@@ -204,10 +218,12 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 	let (endpoints, wasm_external_transport) = (config.endpoints.0, config.wasm_external_transport);
 
 	let (sender, receiver) = mpsc::channel(16);
+	/*
 	let logger = {
 		let logger = TelemetryDrain { sender: std::panic::AssertUnwindSafe(sender) };
 		slog::Logger::root(slog::Drain::fuse(logger), slog::o!())
 	};
+	*/
 
 	let worker = match worker::TelemetryWorker::new(endpoints, wasm_external_transport) {
 		Ok(w) => Some(w),
@@ -217,15 +233,16 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 		}
 	};
 
-	let span = tracing::info_span!("telemetry-logger");
+	let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
+	let id = span.id();
 
 	Telemetry {
 		inner: Arc::new(Mutex::new(TelemetryInner {
 			worker,
 			receiver,
 		})),
-		logger,
 		span,
+		sender,
 	}
 }
 
@@ -278,7 +295,8 @@ impl Stream for Telemetry {
 
 			if let Poll::Ready(Some(log_entry)) = Stream::poll_next(Pin::new(&mut inner.receiver), cx) {
 				if let Some(worker) = inner.worker.as_mut() {
-					log_entry.as_record_values(|rec, val| { let _ = worker.log(rec, val); });
+					todo!();
+					//log_entry.as_record_values(|rec, val| { let _ = worker.log(rec, val); });
 				}
 			} else {
 				break;
@@ -348,12 +366,13 @@ macro_rules! telemetry {
 			$crate::slog::slog_info!(l, #$a, $b; $($t)* )
 		}
 		*/
+		let message_verbosity: u8 = $a;
 		let mut json = format_fields_to_json!($($t)*);
 		json.insert("level".into(), "INFO".into());
 		json.insert("msg".into(), $b.into());
 		json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
 		$crate::tracing::info!(target: "telemetry-logger",
-			message_verbosity = $a,
+			message_verbosity,
 			//json = s.as_str()
 			json = $crate::serde_json::to_string(&json)
 				.expect("contains only string keys; qed").as_str()

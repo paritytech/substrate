@@ -7466,7 +7466,7 @@ dependencies = [
  "futures-timer 3.0.2",
  "libp2p",
  "log",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.0",
  "pin-project",
  "rand 0.7.3",
  "serde",

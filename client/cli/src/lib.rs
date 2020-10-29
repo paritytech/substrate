@@ -243,7 +243,7 @@ pub fn init_logger(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
 	profiling_targets: Option<String>,
-) -> std::result::Result<(), String> {
+) -> std::result::Result<sc_telemetry::Senders, String> {
 	fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
 		dirs.as_ref()
 			.split(',')
@@ -316,6 +316,8 @@ pub fn init_logger(
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
+	let telemetry_layer = sc_telemetry::TelemetryLayer::new();
+	let senders = telemetry_layer.senders();
 	let subscriber = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
 		.with_writer(std::io::stderr)
@@ -328,7 +330,7 @@ pub fn init_logger(
 		})
 		.finish()
 		.with(logging::NodeNameLayer)
-		.with(sc_telemetry::TelemetryLayer::new());
+		.with(telemetry_layer);
 
 	if let Some(profiling_targets) = profiling_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &profiling_targets);
@@ -345,7 +347,7 @@ pub fn init_logger(
 			))
 		}
 	}
-	Ok(())
+	Ok(senders)
 }
 
 #[cfg(test)]
