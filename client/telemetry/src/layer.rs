@@ -47,34 +47,32 @@ where
 			return;
 		}
 
-		for span in ctx.scope() {
-			if span.name() == TELEMETRY_LOG_SPAN {
-				let id = span.id().into_u64();
-				if let Some(sender) = (self.0).0.lock().get_mut(&id) {
-					let mut attrs = (None, None);
-					let mut vis = TelemetryAttrsVisitor(&mut attrs);
-					event.record(&mut vis);
+		if let Some(span) = ctx.scope().find(|x| x.name() == TELEMETRY_LOG_SPAN) {
+			let id = span.id().into_u64();
+			if let Some(sender) = (self.0).0.lock().get_mut(&id) {
+				let mut attrs = (None, None);
+				let mut vis = TelemetryAttrsVisitor(&mut attrs);
+				event.record(&mut vis);
 
-					match attrs {
-						(Some(message_verbosity), Some(json)) => {
-							if let Err(err) = sender.try_send((
-								message_verbosity
-									.try_into()
-									.expect("telemetry log message verbosity are u8; qed"),
-								json,
-							)) {
-								log::warn!(
-									target: "telemetry",
-									"Ignored telemetry message because of error on channel: {:?}",
-									err,
-								);
-							}
+				match attrs {
+					(Some(message_verbosity), Some(json)) => {
+						if let Err(err) = sender.try_send((
+							message_verbosity
+								.try_into()
+								.expect("telemetry log message verbosity are u8; qed"),
+							json,
+						)) {
+							log::warn!(
+								target: "telemetry",
+								"Ignored telemetry message because of error on channel: {:?}",
+								err,
+							);
 						}
-						_ => panic!("missing fields in telemetry log: {:?}", event),
 					}
-				} else {
-					log::trace!(target: "telemetry", "Telemetry not set");
+					_ => panic!("missing fields in telemetry log: {:?}", event),
 				}
+			} else {
+				log::trace!(target: "telemetry", "Telemetry not set");
 			}
 		}
 	}
