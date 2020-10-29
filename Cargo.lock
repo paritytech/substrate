@@ -4438,7 +4438,6 @@ name = "pallet-contracts"
 version = "2.0.0"
 dependencies = [
  "assert_matches",
- "bitflags",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -4466,6 +4465,7 @@ dependencies = [
 name = "pallet-contracts-primitives"
 version = "2.0.0"
 dependencies = [
+ "bitflags",
  "parity-scale-codec",
  "sp-runtime",
  "sp-std",
