@@ -33,6 +33,7 @@ use sp_runtime::{
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
 use crate::weights::Weight;
+use bitflags::bitflags;
 use impl_trait_for_tuples::impl_for_tuples;
 
 /// Re-expected for the macro.
@@ -1184,24 +1185,39 @@ pub trait VestingSchedule<AccountId> {
 	fn remove_vesting_schedule(who: &AccountId);
 }
 
-bitmask! {
+bitflags! {
 	/// Reasons for moving funds out of an account.
 	#[derive(Encode, Decode)]
-	pub mask WithdrawReasons: i8 where
-
-	/// Reason for moving funds out of an account.
-	#[derive(Encode, Decode)]
-	flags WithdrawReason {
+	pub struct WithdrawReasons: i8 {
 		/// In order to pay for (system) transaction costs.
-		TransactionPayment = 0b00000001,
+		const TRANSACTION_PAYMENT = 0b00000001;
 		/// In order to transfer ownership.
-		Transfer = 0b00000010,
+		const TRANSFER = 0b00000010;
 		/// In order to reserve some funds for a later return or repatriation.
-		Reserve = 0b00000100,
+		const RESERVE = 0b00000100;
 		/// In order to pay some other (higher-level) fees.
-		Fee = 0b00001000,
+		const FEE = 0b00001000;
 		/// In order to tip a validator for transaction inclusion.
-		Tip = 0b00010000,
+		const TIP = 0b00010000;
+	}
+}
+
+impl WithdrawReasons {
+	/// Choose all variants except for `one`.
+	///
+	/// ```rust
+	/// # use frame_support::traits::WithdrawReasons;
+	/// # fn main() {
+	/// assert_eq!(
+	/// 	WithdrawReasons::FEE | WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE | WithdrawReasons::TIP,
+	/// 	WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT),
+	///	);
+	/// # }
+	/// ```
+	pub fn except(one: WithdrawReasons) -> WithdrawReasons {
+		let mut flags = Self::all();
+		flags.toggle(one);
+		flags
 	}
 }
 
@@ -1215,25 +1231,6 @@ pub trait Time {
 pub trait UnixTime {
 	/// Return duration since `SystemTime::UNIX_EPOCH`.
 	fn now() -> core::time::Duration;
-}
-
-impl WithdrawReasons {
-	/// Choose all variants except for `one`.
-	///
-	/// ```rust
-	/// # use frame_support::traits::{WithdrawReason, WithdrawReasons};
-	/// # fn main() {
-	/// assert_eq!(
-	/// 	WithdrawReason::Fee | WithdrawReason::Transfer | WithdrawReason::Reserve | WithdrawReason::Tip,
-	/// 	WithdrawReasons::except(WithdrawReason::TransactionPayment),
-	///	);
-	/// # }
-	/// ```
-	pub fn except(one: WithdrawReason) -> WithdrawReasons {
-		let mut mask = Self::all();
-		mask.toggle(one);
-		mask
-	}
 }
 
 /// Trait for type that can handle incremental changes to a set of account IDs.
