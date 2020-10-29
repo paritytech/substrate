@@ -425,6 +425,11 @@ mod tests {
 
 	#[test]
 	fn prefix_in_log_lines() {
+		let re = regex::Regex::new(&format!(
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  \[{}\] {}$",
+			EXPECTED_NODE_NAME,
+			EXPECTED_LOG_MESSAGE,
+		)).unwrap();
 		let executable = env::current_exe().unwrap();
 		let output = Command::new(executable)
 			.env("ENABLE_LOGGING", "1")
@@ -433,7 +438,10 @@ mod tests {
 			.unwrap();
 
 		let output = String::from_utf8(output.stderr).unwrap();
-		assert!(output.contains(&format!(" [{}] ", EXPECTED_NODE_NAME)));
+		assert!(
+			re.is_match(output.trim()),
+			format!("Expected:\n{}\nGot:\n{}", re, output),
+		);
 	}
 
 	/// This is no actual test, it will be used by the `prefix_in_log_lines` test.
@@ -450,6 +458,6 @@ mod tests {
 
 	#[crate::prefix_logs_with(EXPECTED_NODE_NAME)]
 	fn prefix_in_log_lines_process() {
-		log::info!("Hello World!");
+		log::info!("{}", EXPECTED_LOG_MESSAGE);
 	}
 }
