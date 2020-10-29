@@ -103,8 +103,6 @@
 //!
 //! General spending/proposal protocol:
 //! - `propose_spend` - Make a spending proposal and stake the required deposit.
-//! - `set_pot` - Set the spendable balance of funds.
-//! - `configure` - Configure the module's proposal requirements.
 //! - `reject_proposal` - Reject a proposal, slashing the deposit.
 //! - `approve_proposal` - Accept the proposal, returning the deposit.
 //!

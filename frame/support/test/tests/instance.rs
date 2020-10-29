@@ -39,6 +39,7 @@ pub trait Currency {}
 // * Origin, Inherent, Event
 mod module1 {
 	use super::*;
+	use sp_std::ops::Add;
 
 	pub trait Trait<I>: system::Trait where <Self as system::Trait>::BlockNumber: From<u32> {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
@@ -82,7 +83,11 @@ mod module1 {
 	}
 
 	frame_support::decl_error! {
-		pub enum Error for Module<T: Trait<I>, I: Instance> where T::BlockNumber: From<u32> {
+		pub enum Error for Module<T: Trait<I>, I: Instance> where
+			T::BlockNumber: From<u32>,
+			T::BlockNumber: Add,
+			T::AccountId: AsRef<[u8]>,
+		{
 			/// Test
 			Test,
 		}
