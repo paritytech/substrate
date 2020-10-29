@@ -77,7 +77,10 @@ pub use serde_json;
 pub use chrono;
 
 mod async_record;
+mod layer;
 mod worker;
+
+pub use layer::*;
 
 /// Configuration for telemetry.
 pub struct TelemetryConfig {
@@ -351,7 +354,6 @@ macro_rules! telemetry {
 		json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
 		$crate::tracing::info!(target: "telemetry-logger",
 			message_verbosity = $a,
-			message = $b,
 			//json = s.as_str()
 			json = $crate::serde_json::to_string(&json)
 				.expect("contains only string keys; qed").as_str()

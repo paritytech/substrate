@@ -7413,6 +7413,7 @@ dependencies = [
  "slog-json",
  "take_mut",
  "tracing",
+ "tracing-subscriber",
  "void",
  "wasm-timer",
 ]

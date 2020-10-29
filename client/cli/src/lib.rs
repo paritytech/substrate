@@ -324,7 +324,9 @@ pub fn init_logger(
 			display_level: !simple,
 			display_thread_name: !simple,
 		})
-		.finish().with(logging::NodeNameLayer);
+		.finish()
+		.with(logging::NodeNameLayer)
+		.with(sc_telemetry::TelemetryLayer::new());
 
 	if let Some(profiling_targets) = profiling_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &profiling_targets);
