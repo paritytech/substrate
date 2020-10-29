@@ -61,7 +61,7 @@ pub fn new_light<B, S, RA, E>(
 		code_executor,
 		spawn_handle.clone(),
 		ClientConfig::default()
-	);
+	)?;
 	let executor = GenesisCallExecutor::new(backend.clone(), local_executor);
 	Client::new(
 		backend,
