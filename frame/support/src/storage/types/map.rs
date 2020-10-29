@@ -29,20 +29,13 @@ use crate::{
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_std::prelude::*;
 
-/// A type that implements StorageMap when generics are correctly set:
-/// * Prefix must implement StorageInstance
-/// * Hasher must implement StorageHasher
-/// * Key must implement FullCodec
-/// * Value must implement FullCodec
-/// * QueryKind must implmeent QueryKindTrait
-/// * OnEmpty must implement Get<QueryKindTrait::Query> + 'static
+/// A type that allow to store value for given key. Allowing to insert/remove/iterate on values.
 ///
-/// By default query kind is OptionQuery and OnEmpty returns Default Query (i.e. None for
-/// OptionQuery or default value for ValueQuery).
-///
-/// As StorageMap implementation, each key value is stored at:
+/// Each value is stored at:
 /// ```nocompile
-/// Twox128(PalletInfo::name()) ++ Twox128(storage_type_name) ++ Hasher(encode(key))
+/// Twox128(<Prefix::Pallet as PalletInfo>::name())
+///		++ Twox128(Prefix::STORAGE_PREFIX)
+///		++ Hasher1(encode(key))
 /// ```
 ///
 /// # Warning
