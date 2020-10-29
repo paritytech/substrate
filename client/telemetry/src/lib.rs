@@ -181,10 +181,12 @@ impl Telemetry {
 			self.sender.clone(),
 		)
 	}
+}
 
-	/// TODO
-	pub fn enter(&self) -> tracing::span::Entered {
-		self.span.enter()
+impl Drop for Telemetry {
+	fn drop(&mut self) {
+		let span_id = self.span.id().expect("the span is enabled; qed");
+		tracing::dispatcher::get_default(move |dispatch| dispatch.exit(&span_id));
 	}
 }
 
@@ -220,6 +222,8 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 	};
 
 	let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
+	let span_id = span.id().expect("the span is enabled; qed");
+	tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&span_id));
 
 	Telemetry {
 		inner: Arc::new(Mutex::new(TelemetryInner {
