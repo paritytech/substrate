@@ -32,7 +32,7 @@ pub struct ContractExecResult {
 	pub gas_consumed: u64,
 }
 
-/// A result type of a `get_storage` call.
+/// Result type of a `get_storage` call.
 pub type GetStorageResult = Result<Option<Vec<u8>>, ContractAccessError>;
 
 /// A result type of a `rent_projection` call.
