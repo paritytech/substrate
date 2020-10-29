@@ -142,7 +142,7 @@ use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error, Parameter};
 use frame_support::traits::{
 	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{KeepAlive, AllowDeath},
-	ReservableCurrency, WithdrawReason
+	ReservableCurrency, WithdrawReasons
 };
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, DispatchResult, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
@@ -1346,7 +1346,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		if let Err(problem) = T::Currency::settle(
 			&account_id,
 			imbalance,
-			WithdrawReason::Transfer.into(),
+			WithdrawReasons::TRANSFER,
 			KeepAlive
 		) {
 			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
