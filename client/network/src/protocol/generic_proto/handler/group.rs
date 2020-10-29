@@ -526,6 +526,12 @@ impl ProtocolsHandler for NotifsHandler {
 						self.state = State::Closed {
 							pending_in: Vec::new(),
 						};
+
+						if matches!(self.state, State::Opening { .. }) {
+							self.events_queue.push_back(
+								ProtocolsHandlerEvent::Custom(NotifsHandlerOut::OpenResultErr)
+							);
+						}
 					},
 					State::Closed { pending_in } => {
 						for num in pending_in.drain(..) {
