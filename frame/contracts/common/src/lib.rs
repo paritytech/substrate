@@ -23,8 +23,9 @@ use codec::{Decode, Encode};
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
-/// A result type of a `bare_call` call.
-/// The result of a contract exection together together with the consumed gas.
+/// Result type of a `bare_call` call.
+///
+/// The result of a contract execution along with a gas consumed.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub struct ContractExecResult {
 	pub exec_result: ExecResult,
