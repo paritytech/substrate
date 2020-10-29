@@ -661,6 +661,7 @@ fn init_telemetry(config: &Configuration) -> Option<sc_telemetry::Telemetry> {
 		endpoints,
 		wasm_external_transport: config.telemetry_external_transport.clone(),
 	});
+	telemetry.push_sender(&config.telemetry_senders);
 
 	Some(telemetry)
 }

@@ -180,7 +180,7 @@ pub struct Telemetry {
 
 impl Telemetry {
 	/// TODO
-	pub fn push_sender(&self, mut senders: Senders) {
+	pub fn push_sender(&self, senders: &Senders) {
 		senders.insert(
 			self.span.id().expect("the span is enabled; qed").into_u64(),
 			self.sender.clone(),

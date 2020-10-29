@@ -72,6 +72,8 @@ where
 						}
 						_ => panic!("missing fields in telemetry log: {:?}", event),
 					}
+				} else {
+					log::trace!(target: "telemetry", "Telemetry not set");
 				}
 			}
 		}
@@ -104,7 +106,7 @@ pub struct Senders(
 );
 
 impl Senders {
-	pub fn insert(&mut self, id: u64, sender: mpsc::Sender<(u8, String)>) {
+	pub fn insert(&self, id: u64, sender: mpsc::Sender<(u8, String)>) {
 		self.0
 			.lock()
 			.insert(id, std::panic::AssertUnwindSafe(sender));
