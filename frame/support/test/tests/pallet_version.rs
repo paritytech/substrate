@@ -20,9 +20,9 @@
 #![recursion_limit="128"]
 
 use codec::{Decode, Encode};
-use sp_runtime::{generic, traits::{BlakeTwo256, Block as _, Verify}};
+use sp_runtime::{generic, traits::{BlakeTwo256, Block as _, Verify}, BuildStorage};
 use frame_support::{
-	traits::{PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletVersion, OnRuntimeUpgrade},
+	traits::{PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletVersion, OnRuntimeUpgrade, GetPalletVersion},
 	crate_to_pallet_version, weights::Weight,
 };
 use sp_core::{H256, sr25519};
@@ -171,5 +171,20 @@ fn on_runtime_upgrade_overwrites_old_version() {
 		check_pallet_version("Module2");
 		check_pallet_version("Module2_1");
 		check_pallet_version("Module2_2");
+	});
+}
+
+#[test]
+fn genesis_init_puts_pallet_version_into_storage() {
+	let storage = GenesisConfig::default().build_storage().expect("Builds genesis storage");
+
+	sp_io::TestExternalities::new(storage).execute_with(|| {
+		check_pallet_version("Module1");
+		check_pallet_version("Module2");
+		check_pallet_version("Module2_1");
+		check_pallet_version("Module2_2");
+
+		let system_version = System::storage_version().expect("System version should be set");
+		assert_eq!(System::current_version(), system_version);
 	});
 }

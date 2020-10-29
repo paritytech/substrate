@@ -22,9 +22,6 @@
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;
 
-#[macro_use]
-extern crate bitmask;
-
 #[doc(hidden)]
 pub use sp_tracing;
 
@@ -60,6 +57,8 @@ mod hash;
 pub mod event;
 #[macro_use]
 pub mod metadata;
+#[macro_use]
+pub mod genesis_config;
 #[macro_use]
 pub mod inherent;
 #[macro_use]
