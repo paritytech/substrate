@@ -58,9 +58,6 @@ type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
 
 const LOG_TARGET: &'static str = "sub-authority-discovery";
 
-/// Upper bound estimation on how long one should wait before accessing the Kademlia DHT.
-const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
-
 /// Name of the Substrate peerset priority group for authorities discovered through the authority
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
@@ -154,30 +151,31 @@ where
 		dht_event_rx: DhtEventStream,
 		role: Role,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
+		config: crate::WorkerConfig,
 	) -> Self {
-		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h.
+		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 12h by default.
 		// Given that a node could restart at any point in time, one can not depend on the
 		// republishing process, thus publishing own external addresses should happen on an interval
 		// < 36h.
 		let publish_interval = interval_at(
-			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
-			Duration::from_secs(12 * 60 * 60),
+			Instant::now() + config.query_start_delay,
+			config.publish_interval,
 		);
 
 		// External addresses of remote authorities can change at any given point in time. The
 		// interval on which to trigger new queries for the current authorities is a trade off
 		// between efficiency and performance.
-		let query_interval_start = Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME;
-		let query_interval_duration = Duration::from_secs(10 * 60);
+		let query_interval_start = Instant::now() + config.query_start_delay;
+		let query_interval_duration = config.query_interval;
 		let query_interval = interval_at(query_interval_start, query_interval_duration);
 
 		// Querying 500 [`AuthorityId`]s takes ~1m on the Kusama DHT (10th of August 2020) when
 		// comparing `authority_discovery_authority_addresses_requested_total` and
 		// `authority_discovery_dht_event_received`. With that in mind set the peerset priority
-		// group on the same interval as the [`query_interval`] above, just delayed by 5 minutes.
+		// group on the same interval as the [`query_interval`] above, just delayed by 5 minutes by default.
 		let priority_group_set_interval = interval_at(
-			query_interval_start + Duration::from_secs(5 * 60),
-			query_interval_duration,
+			query_interval_start + config.priority_group_set_start_delay,
+			config.priority_group_set_interval,
 		);
 
 		let addr_cache = AddrCache::new();

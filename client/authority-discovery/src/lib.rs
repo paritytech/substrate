@@ -26,7 +26,7 @@
 
 pub use crate::{service::Service, worker::{NetworkProvider, Worker, Role}};
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use futures::channel::{mpsc, oneshot};
 use futures::Stream;
@@ -42,6 +42,48 @@ mod service;
 #[cfg(test)]
 mod tests;
 mod worker;
+
+/// Configuration of [`Worker`].
+pub struct WorkerConfig {
+	/// The interval in which the node will publish its own address on the DHT.
+	///
+	/// By default this is set to 12 hours.
+	pub publish_interval: Duration,
+	/// The interval in which the node will query the DHT for new entries.
+	///
+	/// By default this is set to 10 minutes.
+	pub query_interval: Duration,
+	/// The time the node will wait before doing the first query of the DTH interval.
+	///
+	/// By default this is set to 30 seconds.
+	///
+	/// This default is based on the rough boostrap time required by libp2p Kademlia.
+	pub query_start_delay: Duration,
+	/// The interval in which the worker will instruct the peerset to connect to a random subset
+	/// of discovered validators.
+	///
+	/// By default this is set to 10 minutes.
+	pub priority_group_set_interval: Duration,
+	/// The time the worker will wait before instructing the peerset the first time.
+	///
+	/// Be aware that the actual delay will be computed by [`Self::query_start_delay`] +
+	/// [`Self::priority_group_set_start_delay`]
+	///
+	/// By default this is set to 5 minutes.
+	pub priority_group_set_start_delay: Duration,
+}
+
+impl Default for WorkerConfig {
+	fn default() -> Self {
+		Self {
+			publish_interval: Duration::from_secs(12 * 60 * 60),
+			query_interval: Duration::from_secs(10 * 60),
+			query_start_delay: Duration::from_secs(30),
+			priority_group_set_interval: Duration::from_secs(10 * 60),
+			priority_group_set_start_delay: Duration::from_secs(5 * 60),
+		}
+	}
+}
 
 /// Create a new authority discovery [`Worker`] and [`Service`].
 ///
@@ -60,10 +102,44 @@ where
 	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
+	new_worker_and_service_with_config(
+		Default::default(),
+		client,
+		network,
+		dht_event_rx,
+		role,
+		prometheus_registry,
+	)
+}
+
+/// Same as [`new_worker_and_service`] but with support for providing the `config`.
+///
+/// When in doubt use [`new_worker_and_service`] as it will use the default configuration.
+pub fn new_worker_and_service_with_config<Client, Network, Block, DhtEventStream>(
+	config: WorkerConfig,
+	client: Arc<Client>,
+	network: Arc<Network>,
+	dht_event_rx: DhtEventStream,
+	role: Role,
+	prometheus_registry: Option<prometheus_endpoint::Registry>,
+) -> (Worker<Client, Network, Block, DhtEventStream>, Service)
+where
+	Block: BlockT + Unpin + 'static,
+	Network: NetworkProvider,
+	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
+	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
+{
 	let (to_worker, from_service) = mpsc::channel(0);
 
 	let worker = Worker::new(
-		from_service, client, network, dht_event_rx, role, prometheus_registry,
+		from_service,
+		client,
+		network,
+		dht_event_rx,
+		role,
+		prometheus_registry,
+		config,
 	);
 	let service = Service::new(to_worker);
 
