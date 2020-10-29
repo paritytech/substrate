@@ -7399,6 +7399,7 @@ dependencies = [
 name = "sc-telemetry"
 version = "2.0.0"
 dependencies = [
+ "chrono",
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",

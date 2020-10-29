@@ -73,6 +73,8 @@ pub use libp2p::wasm_ext::ExtTransport;
 pub use slog;
 pub use slog_json;
 pub use tracing;
+pub use serde_json;
+pub use chrono;
 
 mod async_record;
 mod worker;
@@ -314,10 +316,11 @@ impl slog::Drain for TelemetryDrain {
 	}
 }
 
+/// TODO doc
 /// Translates to `slog_scope::info`, but contains an additional verbosity
 /// parameter which the log record is tagged with. Additionally the verbosity
 /// parameter is added to the record as a key-value pair.
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! telemetry {
 	( $l:expr; $a:expr; $b:expr; $( $t:tt )* ) => {{
 		// TODO: drop $l
@@ -342,37 +345,57 @@ macro_rules! telemetry {
 			$crate::slog::slog_info!(l, #$a, $b; $($t)* )
 		}
 		*/
+		let mut json = format_fields_to_json!($($t)*);
+		json.insert("level".into(), "INFO".into());
+		json.insert("msg".into(), $b.into());
+		json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
 		$crate::tracing::info!(target: "telemetry-logger",
 			message_verbosity = $a,
 			message = $b,
 			//json = s.as_str()
-			json = $crate::format_fields_to_json!($($t)*).as_str()
+			json = $crate::serde_json::to_string(&json)
+				.expect("contains only string keys; qed").as_str()
 		);
 	}};
 }
 
-#[macro_export]
+#[macro_export(local_inner_macros)]
+#[doc(hidden)]
 macro_rules! format_fields_to_json {
-	( $k:literal => $v:expr $(,)? ) => {
-		format!("{} = {}", $k, $v)
-	};
-	( $k:literal => ? $v:expr $(,)? ) => {
-		format!("{} = {:?}", $k, $v)
-	};
-	( $k:literal => : $v:expr $(,)? ) => {
+	( $k:literal => $v:expr $(,)? ) => {{
+		let mut map = $crate::serde_json::Map::new();
+		map.insert($k.into(), $crate::serde_json::Value::from(std::format!("{}", $v)));
+		map
+	}};
+	( $k:literal => ? $v:expr $(,)? ) => {{
+		let mut map = $crate::serde_json::Map::new();
+		map.insert($k.into(), $crate::serde_json::Value::from(std::format!("{:?}", $v)));
+		map
+	}};
+	( $k:literal => : $v:expr $(,)? ) => {{
 		$v
-			.map(|x| $crate::format_fields_to_json!($k => x))
-			.unwrap_or_else(|| "null".to_string())
-	};
-	( $k:literal => $v:expr, $($t:tt)* ) => {
-		format!("{}, {}", $crate::format_fields_to_json!($k => $v), $crate::format_fields_to_json!($($t)*))
-	};
-	( $k:literal => ? $v:expr, $($t:tt)* ) => {
-		format!("{}, {}", $crate::format_fields_to_json!($k => ? $v), $crate::format_fields_to_json!($($t)*))
-	};
-	( $k:literal => : $v:expr, $($t:tt)* ) => {
-		format!("{}, {}", $crate::format_fields_to_json!($k => : $v), $crate::format_fields_to_json!($($t)*))
-	};
+			.map(|x| format_fields_to_json!($k => x))
+			.unwrap_or_else(|| {
+				let mut map = $crate::serde_json::Map::new();
+				map.insert($k.into(), $crate::serde_json::Value::Null);
+				map
+			})
+	}};
+	( $k:literal => $v:expr, $($t:tt)* ) => {{
+		let mut map = format_fields_to_json!($($t)*);
+		map.append(&mut format_fields_to_json!($k => $v));
+		map
+	}};
+	( $k:literal => ? $v:expr, $($t:tt)* ) => {{
+		let mut map = format_fields_to_json!($($t)*);
+		map.append(&mut format_fields_to_json!($k => ? $v));
+		map
+	}};
+	( $k:literal => : $v:expr, $($t:tt)* ) => {{
+		let mut map = format_fields_to_json!($($t)*);
+		map.append(&mut format_fields_to_json!($k => : $v));
+		map
+	}};
 }
 
 #[cfg(test)]
