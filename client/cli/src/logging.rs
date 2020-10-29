@@ -56,6 +56,10 @@ where
 		writer: &mut dyn fmt::Write,
 		event: &Event,
 	) -> fmt::Result {
+		if event.metadata().target() == sc_telemetry::TELEMETRY_LOG_SPAN {
+			return Ok(());
+		}
+
 		let normalized_meta = event.normalized_metadata();
 		let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());
 		time::write(&self.timer, writer, self.ansi)?;

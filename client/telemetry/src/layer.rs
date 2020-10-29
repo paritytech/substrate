@@ -17,12 +17,12 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::channel::mpsc;
-use std::sync::Arc;
-use tracing::{Subscriber, Event};
-use tracing_subscriber::{registry::LookupSpan, Layer, layer::Context};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::sync::Arc;
+use tracing::{Event, Subscriber};
+use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 pub const TELEMETRY_LOG_SPAN: &str = "telemetry-logger";
 
@@ -38,34 +38,40 @@ impl TelemetryLayer {
 	}
 }
 
-impl<S> Layer<S> for TelemetryLayer where S: Subscriber + for<'a> LookupSpan<'a> {
+impl<S> Layer<S> for TelemetryLayer
+where
+	S: Subscriber + for<'a> LookupSpan<'a>,
+{
 	fn on_event(&self, event: &Event<'_>, ctx: Context<S>) {
+		if event.metadata().target() != TELEMETRY_LOG_SPAN {
+			return;
+		}
+
 		for span in ctx.scope() {
 			if span.name() == TELEMETRY_LOG_SPAN {
-				let mut attrs = (None, None);
-				let mut vis = TelemetryAttrsVisitor(&mut attrs);
-				event.record(&mut vis);
+				let id = span.id().into_u64();
+				if let Some(sender) = (self.0).0.lock().get_mut(&id) {
+					let mut attrs = (None, None);
+					let mut vis = TelemetryAttrsVisitor(&mut attrs);
+					event.record(&mut vis);
 
-				match attrs {
-					(Some(message_verbosity), Some(json)) => {
-						let id = span.id().into_u64();
-						if let Err(err) = self.0.0.lock().get_mut(&id)
-							.expect("telemetry span has not been registered to the TelemetryLayer")
-							.try_send((
+					match attrs {
+						(Some(message_verbosity), Some(json)) => {
+							if let Err(err) = sender.try_send((
 								message_verbosity
 									.try_into()
 									.expect("telemetry log message verbosity are u8; qed"),
 								json,
-							))
-						{
-							log::warn!(
-								target: "telemetry",
-								"Ignored telemetry message because of error on channel: {:?}",
-								err,
-							);
+							)) {
+								log::warn!(
+									target: "telemetry",
+									"Ignored telemetry message because of error on channel: {:?}",
+									err,
+								);
+							}
 						}
-					},
-					_ => panic!("missing fields in telemetry log"),
+						_ => panic!("missing fields in telemetry log: {:?}", event),
+					}
 				}
 			}
 		}
@@ -93,10 +99,14 @@ impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct Senders(Arc<Mutex<HashMap<u64, std::panic::AssertUnwindSafe<mpsc::Sender<(u8, String)>>>>>);
+pub struct Senders(
+	Arc<Mutex<HashMap<u64, std::panic::AssertUnwindSafe<mpsc::Sender<(u8, String)>>>>>,
+);
 
 impl Senders {
 	pub fn insert(&mut self, id: u64, sender: mpsc::Sender<(u8, String)>) {
-		self.0.lock().insert(id, std::panic::AssertUnwindSafe(sender));
+		self.0
+			.lock()
+			.insert(id, std::panic::AssertUnwindSafe(sender));
 	}
 }

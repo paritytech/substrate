@@ -60,20 +60,25 @@
 //! ```
 //!
 
-use futures::{prelude::*, channel::mpsc};
-use libp2p::{Multiaddr, wasm_ext};
+use futures::{channel::mpsc, prelude::*};
+use libp2p::{wasm_ext, Multiaddr};
 use log::{error, warn};
 use parking_lot::Mutex;
-use serde::{Serialize, Deserialize, Deserializer};
-use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::Duration};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::{
+	pin::Pin,
+	sync::Arc,
+	task::{Context, Poll},
+	time::Duration,
+};
 use wasm_timer::Instant;
 
+pub use chrono;
 pub use libp2p::wasm_ext::ExtTransport;
+pub use serde_json;
 pub use slog;
 pub use slog_json;
 pub use tracing;
-pub use serde_json;
-pub use chrono;
 
 mod layer;
 mod worker;
@@ -340,7 +345,7 @@ macro_rules! telemetry {
 		json.insert("level".into(), "INFO".into());
 		json.insert("msg".into(), $b.into());
 		json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
-		$crate::tracing::info!(target: TELEMETRY_LOG_SPAN,
+		$crate::tracing::info!(target: $crate::TELEMETRY_LOG_SPAN,
 			message_verbosity,
 			//json = s.as_str()
 			json = $crate::serde_json::to_string(&json)
