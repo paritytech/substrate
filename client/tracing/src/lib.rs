@@ -40,7 +40,6 @@ use tracing::{
 	subscriber::Subscriber,
 };
 use tracing_subscriber::{CurrentSpan, layer::{Layer, Context}};
-use slog::Logger;
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};

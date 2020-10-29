@@ -67,7 +67,6 @@ use parking_lot::Mutex;
 use serde::{Serialize, Deserialize, Deserializer};
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
-use slog::Logger;
 
 pub use libp2p::wasm_ext::ExtTransport;
 pub use slog;
@@ -76,7 +75,6 @@ pub use tracing;
 pub use serde_json;
 pub use chrono;
 
-mod async_record;
 mod layer;
 mod worker;
 
@@ -203,12 +201,6 @@ struct TelemetryInner {
 	receiver: mpsc::Receiver<(u8, String)>,
 }
 
-/// Implements `slog::Drain`.
-struct TelemetryDrain {
-	/// Sends log entries.
-	sender: std::panic::AssertUnwindSafe<mpsc::Sender<async_record::AsyncRecord>>,
-}
-
 /// Initializes the telemetry. See the crate root documentation for more information.
 ///
 /// Please be careful to not call this function twice in the same program. The `slog` crate
@@ -218,12 +210,6 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 	let (endpoints, wasm_external_transport) = (config.endpoints.0, config.wasm_external_transport);
 
 	let (sender, receiver) = mpsc::channel(16);
-	/*
-	let logger = {
-		let logger = TelemetryDrain { sender: std::panic::AssertUnwindSafe(sender) };
-		slog::Logger::root(slog::Drain::fuse(logger), slog::o!())
-	};
-	*/
 
 	let worker = match worker::TelemetryWorker::new(endpoints, wasm_external_transport) {
 		Ok(w) => Some(w),
@@ -234,7 +220,6 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 	};
 
 	let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
-	let id = span.id();
 
 	Telemetry {
 		inner: Arc::new(Mutex::new(TelemetryInner {
@@ -299,7 +284,7 @@ impl Stream for Telemetry {
 			))) = Stream::poll_next(Pin::new(&mut inner.receiver), cx)
 			{
 				if let Some(worker) = inner.worker.as_mut() {
-					worker.log(message_verbosity, json.as_str());
+					let _ = worker.log(message_verbosity, json.as_str());
 				}
 			} else {
 				break;
@@ -315,28 +300,6 @@ impl Stream for Telemetry {
 		} else {
 			Poll::Pending
 		}
-	}
-}
-
-impl slog::Drain for TelemetryDrain {
-	type Ok = ();
-	type Err = ();
-
-	fn log(&self, record: &slog::Record, values: &slog::OwnedKVList) -> Result<Self::Ok, Self::Err> {
-		let before = Instant::now();
-
-		let serialized = async_record::AsyncRecord::from(record, values);
-		// Note: interestingly, `try_send` requires a `&mut` because it modifies some internal value, while `clone()`
-		// is lock-free.
-		if let Err(err) = self.sender.clone().try_send(serialized) {
-			warn!(target: "telemetry", "Ignored telemetry message because of error on channel: {:?}", err);
-		}
-
-		if before.elapsed() > Duration::from_millis(50) {
-			warn!(target: "telemetry", "Writing a telemetry log took more than 50ms");
-		}
-
-		Ok(())
 	}
 }
 

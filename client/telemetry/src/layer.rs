@@ -16,9 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use futures::{channel::mpsc, prelude::*};
-use std::sync::{Arc};
-use tracing::{Subscriber, Event, Id, span::Attributes};
+use futures::channel::mpsc;
+use std::sync::Arc;
+use tracing::{Subscriber, Event};
 use tracing_subscriber::{registry::LookupSpan, Layer, layer::Context};
 use parking_lot::Mutex;
 use std::collections::HashMap;
@@ -49,14 +49,21 @@ impl<S> Layer<S> for TelemetryLayer where S: Subscriber + for<'a> LookupSpan<'a>
 				match attrs {
 					(Some(message_verbosity), Some(json)) => {
 						let id = span.id().into_u64();
-						self.0.0.lock().get_mut(&id)
-							.expect("a telemetry span has not been registered to the TelemetryLayer")
-							.send((
+						if let Err(err) = self.0.0.lock().get_mut(&id)
+							.expect("telemetry span has not been registered to the TelemetryLayer")
+							.try_send((
 								message_verbosity
 									.try_into()
 									.expect("telemetry log message verbosity are u8; qed"),
 								json,
-							));
+							))
+						{
+							log::warn!(
+								target: "telemetry",
+								"Ignored telemetry message because of error on channel: {:?}",
+								err,
+							);
+						}
 					},
 					_ => panic!("missing fields in telemetry log"),
 				}
@@ -68,7 +75,7 @@ impl<S> Layer<S> for TelemetryLayer where S: Subscriber + for<'a> LookupSpan<'a>
 struct TelemetryAttrsVisitor<'a>(&'a mut (Option<u64>, Option<String>));
 
 impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
-	fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+	fn record_debug(&mut self, _field: &tracing::field::Field, _value: &dyn std::fmt::Debug) {
 		// noop
 	}
 
