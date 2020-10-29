@@ -1892,7 +1892,7 @@ impl PalletVersion {
 
 	/// Put this pallet version into the storage.
 	///
-	/// It will use the storage key that is associated to the given `Pallet`.
+	/// It will use the storage key that is associated with the given `Pallet`.
 	///
 	/// # Panics
 	///
