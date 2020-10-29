@@ -366,13 +366,9 @@ Behaviour<B, H> {
 					log::warn!("failed to encode finality proof request {:?}: {:?}", protobuf_rq, err);
 					return;
 				}
-				self.request_responses.send_request(&target, "abc", buf).unwrap();
+				let request_id = self.request_responses.send_request(&target, "abc", buf).unwrap();
 
-
-
-
-
-				// self.finality_proof_requests.send_request(&target, block_hash, request);
+				self.substrate.on_finality_proof_request_started(target, block_hash, request_id);
 			},
 			CustomMessageOutcome::NotificationStreamOpened { remote, protocols, roles, notifications_sink } => {
 				let role = reported_roles_to_observed_role(&self.role, &remote, roles);
