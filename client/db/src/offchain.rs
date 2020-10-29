@@ -126,8 +126,7 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 
 			let mut new_value = histo;
 			use historied_db::historied::Value;
-			let neutral = None;
-			match new_value.migrate(migrate.migrate(), Some(&neutral)) {
+			match new_value.migrate(migrate.migrate()) {
 				historied_db::UpdateResult::Changed(()) => {
 					use historied_db::Trigger;
 					new_value.trigger_flush();
