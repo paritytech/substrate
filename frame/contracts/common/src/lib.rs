@@ -35,7 +35,7 @@ pub struct ContractExecResult {
 /// Result type of a `get_storage` call.
 pub type GetStorageResult = Result<Option<Vec<u8>>, ContractAccessError>;
 
-/// A result type of a `rent_projection` call.
+/// Result type of a `rent_projection` call.
 pub type RentProjectionResult<BlockNumber> =
 	Result<RentProjection<BlockNumber>, ContractAccessError>;
 
