@@ -21,7 +21,7 @@ use std::{convert::TryFrom, time::SystemTime};
 use crate::{NetworkStatus, NetworkState, NetworkStatusSinks, config::Configuration};
 use futures_timer::Delay;
 use prometheus_endpoint::{register, Gauge, U64, Registry, PrometheusError, Opts, GaugeVec};
-use sc_telemetry::{slog::Logger, telemetry, SUBSTRATE_INFO};
+use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use sp_transaction_pool::{PoolStatus, MaintainedTransactionPool};
@@ -112,19 +112,17 @@ pub struct MetricsService {
 	last_update: Instant,
 	last_total_bytes_inbound: u64,
 	last_total_bytes_outbound: u64,
-	logger: Option<Logger>,
 }
 
 impl MetricsService {
 	/// Creates a `MetricsService` that only sends information
 	/// to the telemetry.
-	pub fn new(logger: Option<Logger>) -> Self {
+	pub fn new() -> Self {
 		MetricsService {
 			metrics: None,
 			last_total_bytes_inbound: 0,
 			last_total_bytes_outbound: 0,
 			last_update: Instant::now(),
-			logger,
 		}
 	}
 
@@ -133,7 +131,6 @@ impl MetricsService {
 	pub fn with_prometheus(
 		registry: &Registry,
 		config: &Configuration,
-		logger: Option<Logger>,
 	) -> Result<Self, PrometheusError> {
 		let role_bits = match config.role {
 			Role::Full => 1u64,
@@ -153,7 +150,6 @@ impl MetricsService {
 			last_total_bytes_inbound: 0,
 			last_total_bytes_outbound: 0,
 			last_update: Instant::now(),
-			logger,
 		})
 	}
 
@@ -250,7 +246,6 @@ impl MetricsService {
 
 		// Update/send metrics that are always available.
 		telemetry!(
-			self.logger;
 			SUBSTRATE_INFO;
 			"system.interval";
 			"height" => best_number,
@@ -313,7 +308,6 @@ impl MetricsService {
 				};
 
 			telemetry!(
-				self.logger;
 				SUBSTRATE_INFO;
 				"system.interval";
 				"peers" => num_peers,
@@ -335,7 +329,6 @@ impl MetricsService {
 		// Send network state information, if any.
 		if let Some(net_state) = net_state {
 			telemetry!(
-				self.logger;
 				SUBSTRATE_INFO;
 				"system.network_state";
 				// TODO: not sure why I need `?` all of a sudden?

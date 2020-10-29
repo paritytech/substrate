@@ -52,7 +52,7 @@ use sp_runtime::{
 	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
 use sp_core::storage::StorageKey;
-use sc_telemetry::{slog::Logger, telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
 
 use crate::justification::GrandpaJustification;
@@ -468,7 +468,6 @@ pub(crate) fn check_finality_proof<Block: BlockT, B, J>(
 	current_authorities: AuthorityList,
 	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	remote_proof: Vec<u8>,
-	logger: Option<&Logger>,
 ) -> ClientResult<FinalityEffects<Block::Header>>
 	where
 		NumberFor<Block>: BlockNumberOps,
@@ -511,7 +510,7 @@ pub(crate) fn check_finality_proof<Block: BlockT, B, J>(
 			check_finality_proof_fragment always returns FinalityEffects;\
 			qed");
 
-	telemetry!(logger; CONSENSUS_INFO; "afg.finality_proof_ok";
+	telemetry!(CONSENSUS_INFO; "afg.finality_proof_ok";
 		"set_id" => ?effects.new_set_id, "finalized_header_hash" => ?effects.block);
 
 	Ok(effects)

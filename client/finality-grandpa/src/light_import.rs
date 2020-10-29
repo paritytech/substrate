@@ -27,7 +27,6 @@ use sp_consensus::{
 	BlockCheckParams, Error as ConsensusError,
 };
 use sc_network::config::{BoxFinalityProofRequestBuilder, FinalityProofRequestBuilder};
-use sc_telemetry::slog::Logger;
 use sp_runtime::Justification;
 use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT, DigestFor};
 use sp_finality_grandpa::{self, AuthorityList};
@@ -53,7 +52,6 @@ pub fn light_block_import<BE, Block: BlockT, Client>(
 	backend: Arc<BE>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
-	logger: Option<Logger>,
 ) -> Result<GrandpaLightBlockImport<BE, Block, Client>, ClientError>
 	where
 		BE: Backend<Block>,
@@ -70,7 +68,6 @@ pub fn light_block_import<BE, Block: BlockT, Client>(
 		backend,
 		authority_set_provider,
 		data: Arc::new(RwLock::new(import_data)),
-		logger,
 	})
 }
 
@@ -84,7 +81,6 @@ pub struct GrandpaLightBlockImport<BE, Block: BlockT, Client> {
 	backend: Arc<BE>,
 	authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
 	data: Arc<RwLock<LightImportData<Block>>>,
-	logger: Option<Logger>,
 }
 
 impl<BE, Block: BlockT, Client> Clone for GrandpaLightBlockImport<BE, Block, Client> {
@@ -94,7 +90,6 @@ impl<BE, Block: BlockT, Client> Clone for GrandpaLightBlockImport<BE, Block, Cli
 			backend: self.backend.clone(),
 			authority_set_provider: self.authority_set_provider.clone(),
 			data: self.data.clone(),
-			logger: self.logger.clone(),
 		}
 	}
 }
@@ -197,7 +192,6 @@ impl<BE, Block: BlockT, Client> FinalityProofImport<Block>
 			number,
 			finality_proof,
 			verifier,
-			self.logger.as_ref(),
 		)
 	}
 }
@@ -309,7 +303,6 @@ fn do_import_finality_proof<B, C, Block: BlockT, J>(
 	_number: NumberFor<Block>,
 	finality_proof: Vec<u8>,
 	verifier: &mut dyn Verifier<Block>,
-	logger: Option<&Logger>,
 ) -> Result<(Block::Hash, NumberFor<Block>), ConsensusError>
 	where
 		C: HeaderBackend<Block>
@@ -330,7 +323,6 @@ fn do_import_finality_proof<B, C, Block: BlockT, J>(
 		authorities,
 		authority_set_provider,
 		finality_proof,
-		logger,
 	).map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 
 	// try to import all new headers
@@ -842,7 +834,7 @@ pub mod tests {
 		let initial_set = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
 		let updated_set = vec![(AuthorityId::from_slice(&[2; 32]), 2)];
 		let babe_set_signal = vec![AuthorityId::from_slice(&[42; 32])].encode();
-
+		
 		// import block #1 without justification
 		let mut cache = HashMap::new();
 		cache.insert(well_known_cache_keys::AUTHORITIES, babe_set_signal);

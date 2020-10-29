@@ -30,7 +30,7 @@ use prometheus_endpoint::Registry;
 use super::{call_executor::LocalCallExecutor, client::{Client, ClientConfig}};
 use sc_client_api::light::Storage as BlockchainStorage;
 use sc_light::{Backend, GenesisCallExecutor};
-use sc_telemetry::slog::Logger;
+
 
 /// Create an instance of light client.
 pub fn new_light<B, S, RA, E>(
@@ -39,7 +39,6 @@ pub fn new_light<B, S, RA, E>(
 	code_executor: E,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
-	logger: Option<Logger>,
 ) -> ClientResult<
 		Client<
 			Backend<S, HashFor<B>>,
@@ -72,6 +71,5 @@ pub fn new_light<B, S, RA, E>(
 		Default::default(),
 		prometheus_registry,
 		ClientConfig::default(),
-		logger,
 	)
 }

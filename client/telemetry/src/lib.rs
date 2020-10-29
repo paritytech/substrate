@@ -346,8 +346,7 @@ impl slog::Drain for TelemetryDrain {
 /// parameter is added to the record as a key-value pair.
 #[macro_export(local_inner_macros)]
 macro_rules! telemetry {
-	( $l:expr; $a:expr; $b:expr; $( $t:tt )* ) => {{
-		// TODO: drop $l
+	( $a:expr; $b:expr; $( $t:tt )* ) => {{
 		/*
 		// NOTE: didn't work
 		let record_static = $crate::slog::record_static!($crate::slog::Level::Info, $a);

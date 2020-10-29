@@ -69,7 +69,7 @@ use sp_inherents::{InherentDataProviders, InherentData};
 use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
 };
-use sc_telemetry::{slog::Logger, telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
 	CheckedHeader, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
@@ -149,7 +149,6 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	force_authoring: bool,
 	keystore: SyncCryptoStorePtr,
 	can_author_with: CAW,
-	logger: Option<Logger>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
@@ -172,7 +171,6 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 		keystore,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
-		logger,
 		_key_type: PhantomData::<P>,
 	};
 	register_aura_inherent_data_provider(
@@ -197,7 +195,6 @@ struct AuraWorker<C, E, I, P, SO> {
 	keystore: SyncCryptoStorePtr,
 	sync_oracle: SO,
 	force_authoring: bool,
-	logger: Option<Logger>,
 	_key_type: PhantomData<P>,
 }
 
@@ -355,10 +352,6 @@ where
 			Some(slot_remaining)
 		}
 	}
-
-	fn logger(&self) -> Option<Logger> {
-		self.logger.clone()
-	}
 }
 
 fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
@@ -488,7 +481,6 @@ pub struct AuraVerifier<C, P, CAW> {
 	phantom: PhantomData<P>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	can_author_with: CAW,
-	logger: Option<Logger>,
 }
 
 impl<C, P, CAW> AuraVerifier<C, P, CAW> where
@@ -540,7 +532,7 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 							"halting for block {} seconds in the future",
 							diff
 						);
-						telemetry!(self.logger; CONSENSUS_INFO; "aura.halting_for_future_block";
+						telemetry!(CONSENSUS_INFO; "aura.halting_for_future_block";
 							"diff" => ?diff
 						);
 						thread::sleep(Duration::from_secs(diff));
@@ -630,7 +622,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 				}
 
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
-				telemetry!(self.logger; CONSENSUS_TRACE; "aura.checked_and_importing"; "pre_header" => ?pre_header);
+				telemetry!(CONSENSUS_TRACE; "aura.checked_and_importing"; "pre_header" => ?pre_header);
 
 				// Look for an authorities-change log.
 				let maybe_keys = pre_header.digest()
@@ -657,7 +649,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
-				telemetry!(self.logger; CONSENSUS_DEBUG; "aura.header_too_far_in_future";
+				telemetry!(CONSENSUS_DEBUG; "aura.header_too_far_in_future";
 					"hash" => ?hash, "a" => ?a, "b" => ?b
 				);
 				Err(format!("Header {:?} rejected: too far in the future", hash))
@@ -828,7 +820,6 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 	spawner: &S,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
-	logger: Option<Logger>,
 ) -> Result<DefaultImportQueue<B, C>, sp_consensus::Error> where
 	B: BlockT,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
@@ -849,7 +840,6 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 		inherent_data_providers,
 		phantom: PhantomData,
 		can_author_with,
-		logger,
 	};
 
 	Ok(BasicQueue::new(

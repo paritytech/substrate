@@ -259,7 +259,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	let (telemetry, logger) = init_telemetry(&config);
+	let telemetry = init_telemetry(&config);
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
 	let task_manager = {
@@ -310,7 +310,6 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 			},
-			logger,
 		)?
 	};
 
@@ -330,7 +329,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	let (telemetry, logger) = init_telemetry(&config);
+	let telemetry = init_telemetry(&config);
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
@@ -369,7 +368,6 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 		executor,
 		Box::new(task_manager.spawn_handle()),
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
-		logger,
 	)?);
 
 	Ok((client, backend, keystore_container, task_manager, on_demand, telemetry))
@@ -386,7 +384,6 @@ pub fn new_client<E, Block, RA>(
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
-	logger: Option<Logger>,
 ) -> Result<(
 	crate::client::Client<
 		Backend<Block>,
@@ -416,7 +413,6 @@ pub fn new_client<E, Block, RA>(
 			execution_extensions,
 			prometheus_registry,
 			config,
-			logger,
 		)?,
 		backend,
 	))
@@ -544,7 +540,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 	)?;
 
-	let logger = telemetry.as_ref().map(|x| x.logger.clone());
 	if let Some(telemetry) = telemetry.clone() {
 		spawn_telemetry_worker(
 			telemetry,
@@ -558,7 +553,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
 	telemetry!(
-		logger;
 		SUBSTRATE_INFO;
 		"node.start";
 		"height" => chain_info.best_number.saturated_into::<u64>(),
@@ -575,7 +569,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	spawn_handle.spawn(
 		"on-transaction-imported",
-		transaction_notifications(transaction_pool.clone(), network.clone(), logger.clone()),
+		transaction_notifications(transaction_pool.clone(), network.clone()),
 	);
 
 	// Prometheus metrics.
@@ -583,7 +577,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.prometheus_config.clone()
 	{
 		// Set static metrics.
-		let metrics = MetricsService::with_prometheus(&registry, &config, logger)?;
+		let metrics = MetricsService::with_prometheus(&registry, &config)?;
 		spawn_handle.spawn(
 			"prometheus-endpoint",
 			prometheus_endpoint::init_prometheus(port, registry).map(drop)
@@ -591,7 +585,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 		metrics
 	} else {
-		MetricsService::new(logger)
+		MetricsService::new()
 	};
 
 	// Periodically updated metrics and telemetry updates.
@@ -638,7 +632,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 async fn transaction_notifications<TBl, TExPool>(
 	transaction_pool: Arc<TExPool>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	logger: Option<Logger>,
 )
 	where
 		TBl: BlockT,
@@ -649,7 +642,7 @@ async fn transaction_notifications<TBl, TExPool>(
 		.for_each(move |hash| {
 			network.propagate_transaction(hash);
 			let status = transaction_pool.status();
-			telemetry!(logger; SUBSTRATE_INFO; "txpool.import";
+			telemetry!(SUBSTRATE_INFO; "txpool.import";
 				"ready" => status.ready,
 				"future" => status.future
 			);
@@ -658,19 +651,18 @@ async fn transaction_notifications<TBl, TExPool>(
 		.await;
 }
 
-fn init_telemetry(config: &Configuration) -> (Option<sc_telemetry::Telemetry>, Option<Logger>) {
+fn init_telemetry(config: &Configuration) -> Option<sc_telemetry::Telemetry> {
 	let endpoints = match config.telemetry_endpoints.clone() {
 		Some(endpoints) if !endpoints.is_empty() => endpoints,
 		// we don't want the telemetry to be initialized if telemetry_endpoints == Some([])
-		_ => return (None, None),
+		_ => return None,
 	};
 	let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
 		endpoints,
 		wasm_external_transport: config.telemetry_external_transport.clone(),
 	});
-	let logger = telemetry.logger.clone();
 
-	(Some(telemetry), Some(logger))
+	Some(telemetry)
 }
 
 fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(
@@ -695,7 +687,6 @@ fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	let startup_time = SystemTime::UNIX_EPOCH.elapsed()
 		.map(|dur| dur.as_millis())
 		.unwrap_or(0);
-	let logger = Some(telemetry.logger.clone());
 
 	spawn_handle.spawn(
 		"telemetry-worker",
@@ -704,7 +695,7 @@ fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(
 				// Safe-guard in case we add more events in the future.
 				let sc_telemetry::TelemetryEvent::Connected = event;
 
-				telemetry!(logger; SUBSTRATE_INFO; "system.connected";
+				telemetry!(SUBSTRATE_INFO; "system.connected";
 					"name" => name.clone(),
 					"implementation" => impl_name.clone(),
 					"version" => impl_version.clone(),

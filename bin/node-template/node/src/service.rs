@@ -53,10 +53,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	);
 
 	let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
-		client.clone(),
-		&(client.clone() as Arc<_>),
-		select_chain.clone(),
-		telemetry.as_ref().map(|x| x.logger.clone()),
+		client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
 	)?;
 
 	let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
@@ -73,7 +70,6 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
-		telemetry.as_ref().map(|x| x.logger.clone()),
 	)?;
 
 	Ok(sc_service::PartialComponents {
@@ -172,7 +168,6 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			client.clone(),
 			transaction_pool,
 			prometheus_registry.as_ref(),
-			telemetry.as_ref().map(|x| x.logger.clone()),
 		);
 
 		let can_author_with =
@@ -189,7 +184,6 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			force_authoring,
 			keystore_container.sync_keystore(),
 			can_author_with,
-			telemetry.as_ref().map(|x| x.logger.clone()),
 		)?;
 
 		// the AURA authoring task is considered essential, i.e. if it
@@ -230,7 +224,6 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
 			shared_voter_state: SharedVoterState::empty(),
-			logger: telemetry.as_ref().map(|x| x.logger.clone()),
 		};
 
 		// the GRANDPA voter task is considered infallible, i.e.
@@ -261,11 +254,8 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 	));
 
 	let grandpa_block_import = sc_finality_grandpa::light_block_import(
-		client.clone(),
-		backend.clone(),
-		&(client.clone() as Arc<_>),
+		client.clone(), backend.clone(), &(client.clone() as Arc<_>),
 		Arc::new(on_demand.checker().clone()) as Arc<_>,
-		telemetry.as_ref().map(|x| x.logger.clone()),
 	)?;
 	let finality_proof_import = grandpa_block_import.clone();
 	let finality_proof_request_builder =
@@ -281,7 +271,6 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::NeverCanAuthor,
-		telemetry.as_ref().map(|x| x.logger.clone()),
 	)?;
 
 	let finality_proof_provider =
