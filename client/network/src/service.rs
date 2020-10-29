@@ -663,7 +663,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		} else {
 			log::error!(
 				target: "sub-libp2p",
-				"Attempted to send notification on unknown protocol: {}", engine_id
+				"Attempted to send notification on unknown protocol: {:?}", engine_id
 			);
 			return;
 		}
