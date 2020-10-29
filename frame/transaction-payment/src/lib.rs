@@ -36,7 +36,7 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use frame_support::{
 	decl_storage, decl_module,
-	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason, Imbalance},
+	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReasons, Imbalance},
 	weights::{
 		Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Pays, WeightToFeePolynomial,
 		WeightToFeeCoefficient,
@@ -457,9 +457,9 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 			who,
 			fee,
 			if tip.is_zero() {
-				WithdrawReason::TransactionPayment.into()
+				WithdrawReasons::TRANSACTION_PAYMENT
 			} else {
-				WithdrawReason::TransactionPayment | WithdrawReason::Tip
+				WithdrawReasons::TRANSACTION_PAYMENT | WithdrawReasons::TIP
 			},
 			ExistenceRequirement::KeepAlive,
 		) {
