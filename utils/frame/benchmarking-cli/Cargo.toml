@@ -26,6 +26,8 @@ sp-state-machine = { version = "0.8.0", path = "../../../primitives/state-machin
 structopt = "0.3.8"
 codec = { version = "1.3.1", package = "parity-scale-codec" }
 chrono = "0.4"
+serde = "1.0.116"
+handlebars = "3.5.0"
 
 [features]
 default = ["db"]
