@@ -54,7 +54,7 @@ pub enum RentProjection<BlockNumber> {
 	EvictionAt(BlockNumber),
 	/// No eviction is scheduled.
 	///
-	/// E.g. because the contract accumulated enough funds to offset the rent storage costs.
+	/// E.g. Contract accumulated enough funds to offset the rent storage costs.
 	NoEviction,
 }
 
@@ -85,8 +85,8 @@ impl ExecReturnValue {
 
 /// Origin of the error.
 ///
-/// Call or instantiate both call into other contracts and pass through errors happening
-/// in those to the caller. This enum is for  the caller to distinguish whether the error
+/// Call or instantiate both called into other contracts and pass through errors happening
+/// in those to the caller. This enum is for the caller to distinguish whether the error
 /// happened during the execution of the callee or in the current execution context.
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub enum ErrorOrigin {
