@@ -140,16 +140,7 @@ impl TelemetryWorker {
 	///
 	/// Keep in mind that you should call `TelemetryWorker::poll` in order to process the messages.
 	/// You should call this function right after calling `slog::Drain::log`.
-	pub fn log(&mut self, record: &slog::Record, values: &slog::OwnedKVList) -> Result<(), ()> {
-		let msg_verbosity = match record.tag().parse::<u8>() {
-			Ok(v) => v,
-			Err(err) => {
-				warn!(target: "telemetry", "Failed to parse telemetry tag {:?}: {:?}",
-					record.tag(), err);
-				return Err(())
-			}
-		};
-
+	pub fn log(&mut self, msg_verbosity: u8, json: &str) -> Result<(), ()> {
 		// None of the nodes want that verbosity, so just return without doing any serialization.
 		if self.nodes.iter().all(|(_, node_max_verbosity)| msg_verbosity > *node_max_verbosity) {
 			trace!(
@@ -160,13 +151,6 @@ impl TelemetryWorker {
 			return Ok(())
 		}
 
-		// Turn the message into JSON.
-		let serialized = {
-			let mut out = Vec::new();
-			slog_json::Json::default(&mut out).log(record, values).map_err(|_| ())?;
-			out
-		};
-
 		for (node, node_max_verbosity) in &mut self.nodes {
 			if msg_verbosity > *node_max_verbosity {
 				trace!(target: "telemetry", "Skipping {:?} for log entry with verbosity {:?}",
@@ -175,7 +159,7 @@ impl TelemetryWorker {
 			}
 
 			// `send_message` returns an error if we're not connected, which we silently ignore.
-			let _ = node.send_message(&serialized.clone()[..]);
+			let _ = node.send_message(json);
 		}
 
 		Ok(())

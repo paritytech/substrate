@@ -293,10 +293,13 @@ impl Stream for Telemetry {
 				}
 			}
 
-			if let Poll::Ready(Some(log_entry)) = Stream::poll_next(Pin::new(&mut inner.receiver), cx) {
+			if let Poll::Ready(Some((
+				message_verbosity,
+				json,
+			))) = Stream::poll_next(Pin::new(&mut inner.receiver), cx)
+			{
 				if let Some(worker) = inner.worker.as_mut() {
-					todo!();
-					//log_entry.as_record_values(|rec, val| { let _ = worker.log(rec, val); });
+					worker.log(message_verbosity, json.as_str());
 				}
 			} else {
 				break;
