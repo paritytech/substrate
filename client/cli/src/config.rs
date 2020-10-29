@@ -455,6 +455,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		&self,
 		cli: &C,
 		task_executor: TaskExecutor,
+		telemetry_senders: sc_telemetry::Senders,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
@@ -525,6 +526,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			role,
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
+			telemetry_senders,
 		})
 	}
 
@@ -545,28 +547,26 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// 1. Sets the panic handler
 	/// 2. Initializes the logger
 	/// 3. Raises the FD limit
-	fn init<C: SubstrateCli>(&self) -> Result<()> {
+	fn init<C: SubstrateCli>(&self) -> Result<sc_telemetry::Senders> {
 		let logger_pattern = self.log_filters()?;
 		let tracing_receiver = self.tracing_receiver()?;
 		let tracing_targets = self.tracing_targets()?;
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		if let Err(e) = init_logger(&logger_pattern, tracing_receiver, tracing_targets) {
-			log::warn!("💬 Problem initializing global logging framework: {:}", e)
-		}
+		let senders = init_logger(&logger_pattern, tracing_receiver, tracing_targets)?;
 
 		if let Some(new_limit) = fdlimit::raise_fd_limit() {
 			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {
 				warn!(
 					"Low open file descriptor limit configured for the process. \
-					 Current value: {:?}, recommended value: {:?}.",
+					Current value: {:?}, recommended value: {:?}.",
 					new_limit, RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT,
 				);
 			}
 		}
 
-		Ok(())
+		Ok(senders)
 	}
 }
 

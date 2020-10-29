@@ -87,6 +87,8 @@ pub struct Configuration {
 	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
 	/// endpoint, this transport will be tried in priority before all others.
 	pub telemetry_external_transport: Option<ExtTransport>,
+	/// Telemetry senders
+	pub telemetry_senders: sc_telemetry::Senders,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.

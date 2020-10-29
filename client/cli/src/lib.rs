@@ -221,15 +221,16 @@ pub trait SubstrateCli: Sized {
 		&self,
 		command: &T,
 		task_executor: TaskExecutor,
+		telemetry_senders: sc_telemetry::Senders,
 	) -> error::Result<Configuration> {
-		command.create_configuration(self, task_executor)
+		command.create_configuration(self, task_executor, telemetry_senders)
 	}
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
 	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
-		command.init::<Self>()?;
-		Runner::new(self, command)
+		let telemetry_senders = command.init::<Self>()?;
+		Runner::new(self, command, telemetry_senders)
 	}
 
 	/// Native runtime version.
