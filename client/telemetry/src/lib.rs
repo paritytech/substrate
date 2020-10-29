@@ -340,7 +340,7 @@ macro_rules! telemetry {
 		json.insert("level".into(), "INFO".into());
 		json.insert("msg".into(), $b.into());
 		json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
-		$crate::tracing::info!(target: "telemetry-logger",
+		$crate::tracing::info!(target: TELEMETRY_LOG_SPAN,
 			message_verbosity,
 			//json = s.as_str()
 			json = $crate::serde_json::to_string(&json)
