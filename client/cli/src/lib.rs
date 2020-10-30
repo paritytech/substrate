@@ -248,12 +248,7 @@ pub fn init_logger(
 	profiling_targets: Option<String>,
 ) -> std::result::Result<(), String>
 {
-	fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
-		dirs.as_ref()
-			.split(',')
-			.filter_map(|s| s.parse().ok())
-			.collect()
-	}
+	use sc_tracing::parse_directives;
 
 	if let Err(e) = tracing_log::LogTracer::init() {
 		return Err(format!(
