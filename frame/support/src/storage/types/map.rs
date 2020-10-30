@@ -217,13 +217,6 @@ where
 		<Self as crate::storage::StorageMap<Key, Value>>::migrate_key::<OldHasher, _>(key)
 	}
 
-	/// Migrate an item with the given `key` from a `blake2_256` hasher to the current hasher.
-	///
-	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
-	pub fn migrate_key_from_blake<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Option<Value> {
-		<Self as crate::storage::StorageMap<Key, Value>>::migrate_key_from_blake(key)
-	}
-
 	/// Remove all value of the storage.
 	pub fn remove_all() {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all()
