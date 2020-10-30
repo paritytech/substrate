@@ -357,25 +357,21 @@ macro_rules! telemetry {
 #[macro_export(local_inner_macros)]
 #[doc(hidden)]
 macro_rules! format_fields_to_json {
-	( $k:literal => $v:expr $(,)? ) => {{
+	( $k:literal => $v:expr $(,)? $(, $($t:tt)+ )? ) => {{
 		let mut map = $crate::serde_json::Map::new();
 		map.insert($k.into(), $crate::serde_json::to_value($v)
 			.expect("telemetry values must be serializable"));
+		$(
+			map.append(&mut format_fields_to_json!($($t)*));
+		)*
 		map
 	}};
-	( $k:literal => ? $v:expr $(,)? ) => {{
+	( $k:literal => ? $v:expr $(,)? $(, $($t:tt)+ )? ) => {{
 		let mut map = $crate::serde_json::Map::new();
 		map.insert($k.into(), std::format!("{:?}", $v).into());
-		map
-	}};
-	( $k:literal => $v:expr, $($t:tt)* ) => {{
-		let mut map = format_fields_to_json!($($t)*);
-		map.append(&mut format_fields_to_json!($k => $v));
-		map
-	}};
-	( $k:literal => ? $v:expr, $($t:tt)* ) => {{
-		let mut map = format_fields_to_json!($($t)*);
-		map.append(&mut format_fields_to_json!($k => ? $v));
+		$(
+			map.append(&mut format_fields_to_json!($($t)*));
+		)*
 		map
 	}};
 }
