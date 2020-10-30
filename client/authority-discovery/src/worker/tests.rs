@@ -306,6 +306,7 @@ fn new_registers_metrics() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(key_store.into()),
 		Some(registry.clone()),
+		Default::default(),
 	);
 
 	assert!(registry.gather().len() > 0);
@@ -334,6 +335,7 @@ fn triggers_dht_get_query() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(key_store.into()),
 		None,
+		Default::default(),
 	);
 
 	futures::executor::block_on(async {
@@ -382,6 +384,7 @@ fn publish_discover_cycle() {
 			Box::pin(dht_event_rx),
 			Role::PublishAndDiscover(key_store.into()),
 			None,
+			Default::default(),
 		);
 
 		worker.publish_ext_addresses().await.unwrap();
@@ -412,6 +415,7 @@ fn publish_discover_cycle() {
 			Box::pin(dht_event_rx),
 			Role::PublishAndDiscover(key_store.into()),
 			None,
+			Default::default(),
 		);
 
 		dht_event_tx.try_send(dht_event.clone()).unwrap();
@@ -458,6 +462,7 @@ fn terminate_when_event_stream_terminates() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(key_store.into()),
 		None,
+		Default::default(),
 	).run();
 	futures::pin_mut!(worker);
 
@@ -520,6 +525,7 @@ fn dont_stop_polling_dht_event_stream_after_bogus_event() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(Arc::new(key_store)),
 		None,
+		Default::default(),
 	);
 
 	// Spawn the authority discovery to make sure it is polled independently.
@@ -596,6 +602,7 @@ fn limit_number_of_addresses_added_to_cache_per_authority() {
 		Box::pin(dht_event_rx),
 		Role::Discover,
 		None,
+		Default::default(),
 	);
 
 	block_on(worker.refill_pending_lookups_queue()).unwrap();
@@ -648,6 +655,7 @@ fn do_not_cache_addresses_without_peer_id() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(Arc::new(local_key_store)),
 		None,
+		Default::default(),
 	);
 
 	block_on(local_worker.refill_pending_lookups_queue()).unwrap();
@@ -682,6 +690,7 @@ fn addresses_to_publish_adds_p2p() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(Arc::new(KeyStore::new())),
 		Some(prometheus_endpoint::Registry::new()),
+		Default::default(),
 	);
 
 	assert!(
@@ -716,6 +725,7 @@ fn addresses_to_publish_respects_existing_p2p_protocol() {
 		Box::pin(dht_event_rx),
 		Role::PublishAndDiscover(Arc::new(KeyStore::new())),
 		Some(prometheus_endpoint::Registry::new()),
+		Default::default(),
 	);
 
 	assert_eq!(
@@ -757,6 +767,7 @@ fn lookup_throttling() {
 		dht_event_rx.boxed(),
 		Role::Discover,
 		Some(default_registry().clone()),
+		Default::default(),
 	);
 
 	let mut pool = LocalPool::new();
