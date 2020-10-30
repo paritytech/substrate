@@ -221,16 +221,16 @@ pub trait SubstrateCli: Sized {
 		&self,
 		command: &T,
 		task_executor: TaskExecutor,
-		telemetry_senders: sc_telemetry::Senders,
+		telemetries: sc_telemetry::Telemetries,
 	) -> error::Result<Configuration> {
-		command.create_configuration(self, task_executor, telemetry_senders)
+		command.create_configuration(self, task_executor, telemetries)
 	}
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
 	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
-		let telemetry_senders = command.init::<Self>()?;
-		Runner::new(self, command, telemetry_senders)
+		let telemetries = command.init::<Self>()?;
+		Runner::new(self, command, telemetries)
 	}
 
 	/// Native runtime version.
@@ -244,7 +244,7 @@ pub fn init_logger(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
 	profiling_targets: Option<String>,
-) -> std::result::Result<sc_telemetry::Senders, String> {
+) -> std::result::Result<sc_telemetry::Telemetries, String> {
 	fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
 		dirs.as_ref()
 			.split(',')
@@ -317,8 +317,8 @@ pub fn init_logger(
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-	let telemetry_layer = sc_telemetry::TelemetryLayer::new();
-	let senders = telemetry_layer.senders();
+	let telemetry_layer = sc_telemetry::TelemetryLayer::default();
+	let telemetries = telemetry_layer.telemetries();
 	let subscriber = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
 		.with_writer(std::io::stderr)
@@ -348,7 +348,7 @@ pub fn init_logger(
 			))
 		}
 	}
-	Ok(senders)
+	Ok(telemetries)
 }
 
 #[cfg(test)]

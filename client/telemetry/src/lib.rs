@@ -80,33 +80,16 @@ pub use serde_json;
 pub use tracing;
 
 mod layer;
-mod worker;
+pub mod worker;
 
 pub use layer::*;
-
-/// Configuration for telemetry.
-pub struct TelemetryConfig {
-	/// Collection of telemetry WebSocket servers with a corresponding verbosity level.
-	pub endpoints: TelemetryEndpoints,
-
-	/// Optional external implementation of a libp2p transport. Used in WASM contexts where we need
-	/// some binding between the networking provided by the operating system or environment and
-	/// libp2p.
-	///
-	/// This parameter exists whatever the target platform is, but it is expected to be set to
-	/// `Some` only when compiling for WASM.
-	///
-	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
-	/// >                internal buffering going on. In the context of WebSockets, each `write`
-	/// >                must be one individual WebSockets frame.
-	pub wasm_external_transport: Option<wasm_ext::ExtTransport>,
-}
+use worker::node_pool::*;
 
 /// List of telemetry servers we want to talk to. Contains the URL of the server, and the
 /// maximum verbosity level.
 ///
 /// The URL string can be either a URL or a multiaddress.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TelemetryEndpoints(
 	#[serde(deserialize_with = "url_or_multiaddr_deser")]
 	Vec<(Multiaddr, u8)>
@@ -170,21 +153,10 @@ pub const CONSENSUS_INFO: u8 = 1;
 /// Contains an `Arc` and can be cloned and pass around. Only one clone needs to be polled
 /// regularly and should be polled regularly.
 /// Dropping all the clones unregisters the telemetry.
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct Telemetry {
 	inner: Arc<Mutex<TelemetryInner>>,
 	span: tracing::Span,
-	sender: mpsc::Sender<(u8, String)>,
-}
-
-impl Telemetry {
-	/// TODO
-	pub fn push_sender(&self, senders: &Senders) {
-		senders.insert(
-			self.span.id().expect("the span is enabled; qed").into_u64(),
-			self.sender.clone(),
-		)
-	}
 }
 
 impl Drop for Telemetry {
@@ -194,12 +166,14 @@ impl Drop for Telemetry {
 	}
 }
 
+/// TODO update doc as Telemetry isnt clonable anymore
 /// Behind the `Mutex` in `Telemetry`.
 ///
 /// Note that ideally we wouldn't have to make the `Telemetry` cloneable, as that would remove the
 /// need for a `Mutex`. However there is currently a weird hack in place in `sc-service`
 /// where we extract the telemetry registration so that it continues running during the shutdown
 /// process.
+#[derive(Debug)]
 struct TelemetryInner {
 	/// Worker for the telemetry. `None` if it failed to initialize.
 	worker: Option<worker::TelemetryWorker>,
@@ -207,35 +181,54 @@ struct TelemetryInner {
 	receiver: mpsc::Receiver<(u8, String)>,
 }
 
-/// Initializes the telemetry. See the crate root documentation for more information.
-///
-/// Please be careful to not call this function twice in the same program. The `slog` crate
-/// doesn't provide any way of knowing whether a global logger has already been registered.
-pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
-	// Build the list of telemetry endpoints.
-	let (endpoints, wasm_external_transport) = (config.endpoints.0, config.wasm_external_transport);
+impl Telemetry {
+	// TODO update doc
+	/// Initializes the telemetry. See the crate root documentation for more information.
+	///
+	/// Please be careful to not call this function twice in the same program. The `slog` crate
+	/// doesn't provide any way of knowing whether a global logger has already been registered.
+	pub fn new(
+		endpoints: TelemetryEndpoints,
+		wasm_external_transport: Option<wasm_ext::ExtTransport>,
+		node_pool: Option<&NodePool>,
+	) -> (Self, mpsc::Sender<(u8, String)>) {
+		let endpoints = endpoints.0;
 
-	let (sender, receiver) = mpsc::channel(16);
+		let (sender, receiver) = mpsc::channel(16);
 
-	let worker = match worker::TelemetryWorker::new(endpoints, wasm_external_transport) {
-		Ok(w) => Some(w),
-		Err(err) => {
-			error!(target: "telemetry", "Failed to initialize telemetry worker: {:?}", err);
-			None
+		let worker = match worker::TelemetryWorker::new(
+			endpoints,
+			wasm_external_transport,
+			node_pool,
+		) {
+			Ok(w) => Some(w),
+			Err(err) => {
+				error!(target: "telemetry", "Failed to initialize telemetry worker: {:?}", err);
+				None
+			}
+		};
+
+		let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
+		let span_id = span.id().expect("the span is enabled; qed");
+		tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&span_id));
+
+		(
+			Self {
+				inner: Arc::new(Mutex::new(TelemetryInner {
+					worker,
+					receiver,
+				})),
+				span,
+			},
+			sender,
+		)
+	}
+
+	/// TODO doc
+	pub fn stream(self) -> TelemetryStream {
+		TelemetryStream {
+			inner: self.inner.clone(),
 		}
-	};
-
-	let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
-	let span_id = span.id().expect("the span is enabled; qed");
-	tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&span_id));
-
-	Telemetry {
-		inner: Arc::new(Mutex::new(TelemetryInner {
-			worker,
-			receiver,
-		})),
-		span,
-		sender,
 	}
 }
 
@@ -247,7 +240,13 @@ pub enum TelemetryEvent {
 	Connected,
 }
 
-impl Stream for Telemetry {
+/// TODO doc
+#[derive(Debug)]
+pub struct TelemetryStream {
+	inner: Arc<Mutex<TelemetryInner>>,
+}
+
+impl Stream for TelemetryStream {
 	type Item = TelemetryEvent;
 
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -308,6 +307,53 @@ impl Stream for Telemetry {
 		} else {
 			Poll::Pending
 		}
+	}
+}
+
+/// TODO doc
+#[derive(Debug, Default, Clone)]
+pub struct Telemetries {
+	senders: Senders,
+	node_pool: Arc<Mutex<NodePool>>,
+	wasm_external_transport: Option<wasm_ext::ExtTransport>,
+}
+
+impl Telemetries {
+	/// TODO doc
+	pub fn with_wasm_external_transport(wasm_external_transport: wasm_ext::ExtTransport) -> Self {
+		Self {
+			wasm_external_transport: Some(wasm_external_transport),
+			..Default::default()
+		}
+	}
+
+	// TODO update doc / move to root
+	/// endpoints:
+	///
+	/// Collection of telemetry WebSocket servers with a corresponding verbosity level.
+	/// Optional external implementation of a libp2p transport. Used in WASM contexts where we need
+	/// some binding between the networking provided by the operating system or environment and
+	/// libp2p.
+	///
+	/// wasm_external_transport:
+	///
+	/// This parameter exists whatever the target platform is, but it is expected to be set to
+	/// `Some` only when compiling for WASM.
+	///
+	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
+	/// >                internal buffering going on. In the context of WebSockets, each `write`
+	/// >                must be one individual WebSockets frame.
+	pub fn get_or_create(&self, endpoints: TelemetryEndpoints) -> Telemetry {
+		let (telemetry, sender) = Telemetry::new(
+			endpoints.clone(),
+			self.wasm_external_transport.clone(),
+			Some(&self.node_pool.lock()),
+		);
+		let id = telemetry.span.id().expect("the span is enabled; qed").into_u64();
+
+		self.senders.insert(id, sender);
+
+		telemetry
 	}
 }
 

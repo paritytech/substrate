@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::Telemetries;
 use futures::channel::mpsc;
 use parking_lot::Mutex;
 use std::collections::HashMap;
@@ -26,14 +27,11 @@ use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 pub const TELEMETRY_LOG_SPAN: &str = "telemetry-logger";
 
-pub struct TelemetryLayer(Senders);
+#[derive(Debug, Default)]
+pub struct TelemetryLayer(Telemetries);
 
 impl TelemetryLayer {
-	pub fn new() -> Self {
-		Self(Default::default())
-	}
-
-	pub fn senders(&self) -> Senders {
+	pub fn telemetries(&self) -> Telemetries {
 		self.0.clone()
 	}
 }
@@ -49,7 +47,7 @@ where
 
 		if let Some(span) = ctx.scope().find(|x| x.name() == TELEMETRY_LOG_SPAN) {
 			let id = span.id().into_u64();
-			if let Some(sender) = (self.0).0.lock().get_mut(&id) {
+			if let Some(sender) = self.0.senders.0.lock().get_mut(&id) {
 				let mut attrs = (None, None);
 				let mut vis = TelemetryAttrsVisitor(&mut attrs);
 				event.record(&mut vis);

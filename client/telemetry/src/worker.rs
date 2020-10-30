@@ -31,9 +31,13 @@
 use futures::{prelude::*, ready};
 use libp2p::{core::transport::OptionalTransport, Multiaddr, Transport, wasm_ext};
 use log::{trace, error};
-use std::{io, pin::Pin, task::Context, task::Poll, time};
+use parking_lot::Mutex;
+use std::{io, pin::Pin, sync::Arc, task::Context, task::Poll, time};
 
 mod node;
+pub(crate) mod node_pool;
+
+use node_pool::NodePool;
 
 /// Timeout after which a connection attempt is considered failed. Includes the WebSocket HTTP
 /// upgrading.
@@ -51,13 +55,13 @@ pub enum TelemetryWorkerEvent {
 #[derive(Debug)]
 pub struct TelemetryWorker {
 	/// List of nodes with their maximum verbosity level.
-	nodes: Vec<(node::Node<WsTrans>, u8)>,
+	nodes: Vec<(Arc<Mutex<node::Node<WsTrans>>>, u8)>,
 }
 
-trait StreamAndSink<I>: Stream + Sink<I> {}
+pub trait StreamAndSink<I>: Stream + Sink<I> {}
 impl<T: ?Sized + Stream + Sink<I>, I> StreamAndSink<I> for T {}
 
-type WsTrans = libp2p::core::transport::boxed::Boxed<
+pub type WsTrans = libp2p::core::transport::boxed::Boxed<
 	Pin<Box<dyn StreamAndSink<
 		Vec<u8>,
 		Item = Result<Vec<u8>, io::Error>,
@@ -67,6 +71,7 @@ type WsTrans = libp2p::core::transport::boxed::Boxed<
 >;
 
 impl TelemetryWorker {
+	// TODO update doc
 	/// Builds a new `TelemetryWorker`.
 	///
 	/// The endpoints must be a list of targets, plus a verbosity level. When you send a message
@@ -74,7 +79,8 @@ impl TelemetryWorker {
 	/// message will receive it.
 	pub fn new(
 		endpoints: impl IntoIterator<Item = (Multiaddr, u8)>,
-		wasm_external_transport: impl Into<Option<wasm_ext::ExtTransport>>
+		wasm_external_transport: impl Into<Option<wasm_ext::ExtTransport>>,
+		node_pool: Option<&NodePool>,
 	) -> Result<Self, io::Error> {
 		let transport = match wasm_external_transport.into() {
 			Some(t) => OptionalTransport::some(t),
@@ -113,7 +119,11 @@ impl TelemetryWorker {
 
 		Ok(TelemetryWorker {
 			nodes: endpoints.into_iter().map(|(addr, verbosity)| {
-				let node = node::Node::new(transport.clone(), addr);
+				let node = if let Some(node_pool) = node_pool {
+					node_pool.get_or_create(transport.clone(), addr)
+				} else {
+					Arc::new(Mutex::new(node::Node::new(transport.clone(), addr)))
+				};
 				(node, verbosity)
 			}).collect()
 		})
@@ -123,7 +133,7 @@ impl TelemetryWorker {
 	pub fn poll(&mut self, cx: &mut Context) -> Poll<TelemetryWorkerEvent> {
 		for (node, _) in &mut self.nodes {
 			loop {
-				match node::Node::poll(Pin::new(node), cx) {
+				match node::Node::poll(Pin::new(&mut node.lock()), cx) {
 					Poll::Ready(node::NodeEvent::Connected) =>
 						return Poll::Ready(TelemetryWorkerEvent::Connected),
 					Poll::Ready(node::NodeEvent::Disconnected(_)) => continue,
@@ -152,6 +162,8 @@ impl TelemetryWorker {
 		}
 
 		for (node, node_max_verbosity) in &mut self.nodes {
+			let mut node = node.lock();
+
 			if msg_verbosity > *node_max_verbosity {
 				trace!(target: "telemetry", "Skipping {:?} for log entry with verbosity {:?}",
 					node.addr(), msg_verbosity);

@@ -120,7 +120,7 @@ impl<C: SubstrateCli> Runner<C> {
 	pub fn new<T: CliConfiguration>(
 		cli: &C,
 		command: &T,
-		telemetry_senders: sc_telemetry::Senders,
+		telemetries: sc_telemetry::Telemetries,
 	) -> Result<Runner<C>> {
 		let tokio_runtime = build_runtime()?;
 		let runtime_handle = tokio_runtime.handle().clone();
@@ -138,7 +138,7 @@ impl<C: SubstrateCli> Runner<C> {
 			config: command.create_configuration(
 				cli,
 				task_executor.into(),
-				telemetry_senders,
+				telemetries,
 			)?,
 			tokio_runtime,
 			phantom: PhantomData,

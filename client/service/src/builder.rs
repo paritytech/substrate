@@ -448,7 +448,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// Shared Telemetry connection sinks,
 	pub telemetry_connection_sinks: TelemetryConnectionSinks,
 	/// Telemetry object.
-	pub telemetry: Option<sc_telemetry::Telemetry>,
+	pub telemetry_stream: Option<sc_telemetry::TelemetryStream>,
 }
 
 /// Build a shared offchain workers instance.
@@ -529,7 +529,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		network_status_sinks,
 		system_rpc_tx,
 		telemetry_connection_sinks,
-		telemetry,
+		telemetry_stream,
 	} = params;
 
 	let chain_info = client.usage_info().chain;
@@ -540,9 +540,9 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 	)?;
 
-	if let Some(telemetry) = telemetry.clone() {
+	if let Some(telemetry_stream) = telemetry_stream {
 		spawn_telemetry_worker(
-			telemetry,
+			telemetry_stream,
 			&mut config,
 			telemetry_connection_sinks.clone(),
 			network.clone(),
@@ -623,8 +623,10 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.informant_output_format,
 	));
 
-	// TODO: probably dont need this anymore
-	task_manager.keep_alive((telemetry, config.base_path, rpc, rpc_handlers.clone()));
+	// TODO I'm not 100% sure I don't need the keep alive anymore. Well, not in all our use cases
+	//		but it is possible to call this function without having a telemetry coming from
+	//		`Telemetries`
+	task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
 
 	Ok(rpc_handlers)
 }
@@ -657,17 +659,17 @@ fn init_telemetry(config: &Configuration) -> Option<sc_telemetry::Telemetry> {
 		// we don't want the telemetry to be initialized if telemetry_endpoints == Some([])
 		_ => return None,
 	};
-	let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
+	let telemetry = config.telemetries.get_or_create(
 		endpoints,
-		wasm_external_transport: config.telemetry_external_transport.clone(),
-	});
-	telemetry.push_sender(&config.telemetry_senders);
+		// TODO
+		//config.telemetry_external_transport.clone(),
+	);
 
 	Some(telemetry)
 }
 
 fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(
-	telemetry: sc_telemetry::Telemetry,
+	telemetry_stream: sc_telemetry::TelemetryStream,
 	config: &mut Configuration,
 	telemetry_connection_sinks: TelemetryConnectionSinks,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
@@ -691,7 +693,7 @@ fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(
 
 	spawn_handle.spawn(
 		"telemetry-worker",
-		telemetry
+		telemetry_stream
 			.for_each(move |event| {
 				// Safe-guard in case we add more events in the future.
 				let sc_telemetry::TelemetryEvent::Connected = event;
