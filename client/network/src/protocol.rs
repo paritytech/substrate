@@ -728,7 +728,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		if block_request.2 != Some(request_id) {
 			// TODO: Properly handle this.
 			panic!("request id didn't match or was none");
-			return CustomMessageOutcome::None;
+			// return CustomMessageOutcome::None;
 		}
 
 		let block_request = block_request.1;
@@ -844,7 +844,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
 				Ok(sync::OnBlockData::Request(peer, mut req)) => {
-					self.update_peer_request(&peer_id, &mut req);
+					self.update_peer_request(&peer, &mut req);
 					CustomMessageOutcome::BlockRequest {
 						target: peer_id,
 						request: req,
@@ -859,14 +859,15 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	/// Must be called in response to a [`CustomMessageOutcome::BlockRequest`] if it has failed.
-	pub fn on_block_request_failed(
-		&mut self,
-		peer: &PeerId,
-	) {
-		self.peerset_handle.report_peer(peer.clone(), rep::TIMEOUT);
-		self.behaviour.disconnect_peer(peer);
-	}
+	// TODO: Bring back?
+	// /// Must be called in response to a [`CustomMessageOutcome::BlockRequest`] if it has failed.
+	// pub fn on_block_request_failed(
+	// 	&mut self,
+	// 	peer: &PeerId,
+	// ) {
+	// 	self.peerset_handle.report_peer(peer.clone(), rep::TIMEOUT);
+	// 	self.behaviour.disconnect_peer(peer);
+	// }
 
 	/// Perform time based maintenance.
 	///

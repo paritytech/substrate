@@ -27,7 +27,6 @@
 use bytes::Bytes;
 use codec::{self, Encode, Decode};
 use crate::{
-	block_requests::build_protobuf_block_request,
 	chain::Client,
 	config::ProtocolId,
 	protocol::message::{BlockAttributes, Direction, FromBlock},
@@ -1063,13 +1062,14 @@ fn retries<B: Block>(request: &Request<B>) -> usize {
 fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::EncodeError> {
 	let request = match request {
 		Request::Body { request, .. } => {
-			let rq = build_protobuf_block_request::<_, NumberFor<B>>(
-				BlockAttributes::BODY,
-				FromBlock::Hash(request.header.hash()),
-				None,
-				Direction::Ascending,
-				Some(1),
-			);
+			let rq = crate::schema::v1::BlockRequest {
+				fields: BlockAttributes::BODY.to_be_u32(),
+				from_block:	Some(crate::schema::v1::block_request::FromBlock::Hash(request.header.hash().encode())),
+				to_block: Default::default(),
+				direction:crate::schema::v1::Direction::Ascending as i32,
+				max_blocks: 1,
+			};
+
 			let mut buf = Vec::with_capacity(rq.encoded_len());
 			rq.encode(&mut buf)?;
 			return Ok(buf);

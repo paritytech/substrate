@@ -870,6 +870,20 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		Box::new(DefaultBlockAnnounceValidator)
 	};
 
+	let mut network_config = config.network.clone();
+
+	if let Some(proof_provider) = finality_proof_provider {
+		let (handler, protocol_config) = sc_network::finality_request_handler::FinalityRequestHandler::new(protocol_id.clone(), proof_provider);
+		network_config.request_response_protocols.push(protocol_config);
+		spawn_handle.spawn("finality_request_handler", handler.run());
+	}
+
+	{
+		let (handler, protocol_config) = sc_network::block_request_handler::BlockRequestHandler::new(protocol_id.clone(), client.clone());
+		network_config.request_response_protocols.push(protocol_config);
+		spawn_handle.spawn("block_request_handler", handler.run());
+	}
+
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
@@ -878,9 +892,8 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 				spawn_handle.spawn("libp2p-node", fut);
 			}))
 		},
-		network_config: config.network.clone(),
+		network_config,
 		chain: client.clone(),
-		finality_proof_provider,
 		finality_proof_request_builder,
 		on_demand: on_demand,
 		transaction_pool: transaction_pool_adapter as _,

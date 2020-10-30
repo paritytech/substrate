@@ -38,7 +38,7 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	on_demand_layer::AlwaysBadChecker,
-	light_client_handler, block_requests,
+	light_client_handler,
 	protocol::{self, event::Event, NotifsHandlerError, LegacyConnectionKillError, NotificationsSink, Ready, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
@@ -51,7 +51,6 @@ use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent, protocols_handle
 use log::{error, info, trace, warn};
 use metrics::{Metrics, MetricSources, Histogram, HistogramVec};
 use parking_lot::Mutex;
-use prost::Message;
 use sc_peerset::PeersetHandle;
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
 use sp_runtime::{
@@ -118,7 +117,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(mut params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
+	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
 		// Ensure the listen addresses are consistent with the transport.
 		ensure_addresses_consistent_with_transport(
 			params.network_config.listen_addresses.iter(),
@@ -269,10 +268,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				params.network_config.client_version,
 				params.network_config.node_name
 			);
-			let block_requests = {
-				let config = block_requests::Config::new(&params.protocol_id);
-				block_requests::BlockRequests::new(config, params.chain.clone())
-			};
 			let light_client_handler = {
 				let config = light_client_handler::Config::new(&params.protocol_id);
 				light_client_handler::LightClientHandler::new(
@@ -284,42 +279,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 
 			// TODO: Should finality request protocol be added here?
-			let mut request_response_protocols = params.network_config.request_response_protocols;
-			let (tx, mut rx) = futures::channel::mpsc::channel(10);
-			request_response_protocols.push(crate::request_responses::ProtocolConfig {
-				name: std::borrow::Cow::Borrowed(&"abc"),
-				// TODO: Change.
-				max_request_size: 4096,
-				// TODO: Change.
-				max_response_size: 4096,
-				request_timeout: std::time::Duration::from_secs(10),
-				inbound_queue: Some(tx),
-			});
+			// let mut request_response_protocols = params.network_config.request_response_protocols;
+			// request_response_protocols.push();
 
-			let finality_proof_provider = params.finality_proof_provider.clone();
-			let finality_proof_server = async move {
-				let finality_proof_provider = finality_proof_provider.unwrap();
-				while let Some(crate::request_responses::IncomingRequest { peer, payload, pending_response }) = rx.next().await {
-					let req = crate::schema::v1::finality::FinalityProofRequest::decode(&payload[..]).unwrap();
+			// let finality_proof_provider = params.finality_proof_provider.clone();
+			// let finality_proof_server = async move {
+			// }.boxed();
 
-					let block_hash = codec::Decode::decode(&mut req.block_hash.as_ref()).unwrap();
-
-					log::trace!(target: "sync", "Finality proof request from {} for {}", peer, block_hash);
-
-					let finality_proof = finality_proof_provider
-						.prove_finality(block_hash, &req.request)
-						.unwrap()
-						.unwrap_or_default();
-
-					let resp = crate::schema::v1::finality::FinalityProofResponse { proof: finality_proof };
-					let mut data = Vec::with_capacity(resp.encoded_len());
-					resp.encode(&mut data).unwrap();
-
-					pending_response.send(data).unwrap();
-				}
-			}.boxed();
-
-			params.executor.as_mut().unwrap()(finality_proof_server);
+			// params.executor.as_mut().unwrap()(finality_proof_server);
 
 			let discovery_config = {
 				let mut config = DiscoveryConfig::new(local_public.clone());
@@ -349,10 +316,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					params.role,
 					user_agent,
 					local_public,
-					block_requests,
 					light_client_handler,
 					discovery_config,
-					request_response_protocols,
+					params.network_config.request_response_protocols,
+					crate::block_request_handler::generate_protocol_name(params.protocol_id.clone()),
+					crate::finality_request_handler::generate_protocol_name(params.protocol_id.clone()),
 				);
 
 				match result {
@@ -1482,20 +1450,23 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						error!("Request not in pending_requests");
 					}
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestStarted { protocol, .. })) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.requests_out_started_total
-							.with_label_values(&[&protocol])
-							.inc();
-					}
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestFinished { protocol, request_duration, .. })) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.requests_out_success_total
-							.with_label_values(&[&protocol])
-							.observe(request_duration.as_secs_f64());
-					}
-				},
+				// TODO: Is this still needed? Can we not do this within the substrate
+				// requests_response behaviour?
+				//
+				// Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestStarted { protocol, .. })) => {
+				// 	if let Some(metrics) = this.metrics.as_ref() {
+				// 		metrics.requests_out_started_total
+				// 			.with_label_values(&[&protocol])
+				// 			.inc();
+				// 	}
+				// },
+				// Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestFinished { protocol, request_duration, .. })) => {
+				// 	if let Some(metrics) = this.metrics.as_ref() {
+				// 		metrics.requests_out_success_total
+				// 			.with_label_values(&[&protocol])
+				// 			.observe(request_duration.as_secs_f64());
+				// 	}
+				// },
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(protocol))) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.kademlia_random_queries_total
@@ -1616,14 +1587,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::B(EitherError::A(
-								PingFailure::Timeout))))))))) => "ping-timeout",
+								EitherError::A(EitherError::B(EitherError::A(
+								PingFailure::Timeout)))))))) => "ping-timeout",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::Legacy(LegacyConnectionKillError))))))))) => "force-closed",
+								EitherError::A(EitherError::A(
+								NotifsHandlerError::Legacy(LegacyConnectionKillError)))))))) => "force-closed",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged)))))))) => "sync-notifications-clogged",
+								EitherError::A(EitherError::A(
+								NotifsHandlerError::SyncNotificationsClogged))))))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) => "protocol-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout)) => "keep-alive-timeout",
 							None => "actively-closed",

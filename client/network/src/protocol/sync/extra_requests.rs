@@ -188,7 +188,7 @@ impl<B: BlockT> ExtraRequests<B> {
 			}
 		}
 
-		if let Some(ActiveRequest { request_id, block_hash, number }) = self.active_requests.remove(&who) {
+		if let Some(ActiveRequest { block_hash, number, .. }) = self.active_requests.remove(&who) {
 			if let Some(r) = resp {
 				trace!(target: "sync", "Queuing import of {} from {:?} for {:?}",
 					self.request_type_name,

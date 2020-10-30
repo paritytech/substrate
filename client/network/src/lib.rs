@@ -245,7 +245,6 @@
 //!
 
 mod behaviour;
-mod block_requests;
 mod chain;
 mod peer_info;
 mod discovery;
@@ -260,6 +259,8 @@ mod utils;
 
 pub mod config;
 pub mod error;
+pub mod finality_request_handler;
+pub mod block_request_handler;
 pub mod gossip;
 pub mod network_state;
 

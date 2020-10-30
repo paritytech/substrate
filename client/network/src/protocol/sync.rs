@@ -37,7 +37,7 @@ use sp_consensus::{BlockOrigin, BlockStatus,
 use crate::{
 	config::BoxFinalityProofRequestBuilder,
 	protocol::message::{self, generic::FinalityProofRequest, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse,
-	FinalityProofResponse, Roles},
+	Roles},
 };
 use either::Either;
 use extra_requests::ExtraRequests;
@@ -117,7 +117,8 @@ mod rep {
 	pub const BAD_JUSTIFICATION: Rep = Rep::new(-(1 << 16), "Bad justification");
 
 	/// Reputation change for peers which send us a block with bad finality proof.
-	pub const BAD_FINALITY_PROOF: Rep = Rep::new(-(1 << 16), "Bad finality proof");
+	// TODO: bring back?
+	// pub const BAD_FINALITY_PROOF: Rep = Rep::new(-(1 << 16), "Bad finality proof");
 
 	/// Reputation change when a peer sent us invlid ancestry result.
 	pub const UNKNOWN_ANCESTOR:Rep = Rep::new(-(1 << 16), "DB Error");
@@ -1870,7 +1871,7 @@ mod test {
 
 		// there's one in-flight extra request to the expected peer
 		assert!(
-			sync.extra_justifications.active_requests().any(|(who, (hash, number))| {
+			sync.extra_justifications.active_requests().any(|(who, ActiveRequest { block_hash, number, .. })| {
 				*who == peer_id && *hash == a1_hash && *number == a1_number
 			})
 		);

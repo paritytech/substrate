@@ -70,12 +70,6 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// Client that contains the blockchain.
 	pub chain: Arc<dyn Client<B>>,
 
-	/// Finality proof provider.
-	///
-	/// This object, if `Some`, is used when a node on the network requests a proof of finality
-	/// from us.
-	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
-
 	/// How to build requests for proofs of finality.
 	///
 	/// This object, if `Some`, is used when we need a proof of finality from another node.
