@@ -172,7 +172,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 			if let Some(max_number) = maybe_max_number {
 				loop {
 					let current_header = self.header(BlockId::Hash(current_hash.clone()))?
-						.ok_or_else(|| Error::from(format!("failed to get header for hash {}", current_hash)))?;
+						.ok_or_else(|| Error::MissingHashInHeader(current_hash.to_string()))?;
 
 					if current_header.number() <= &max_number {
 						best_hash = current_header.hash();
@@ -191,7 +191,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 				}
 
 				let current_header = self.header(BlockId::Hash(current_hash.clone()))?
-					.ok_or_else(|| Error::from(format!("failed to get header for hash {}", current_hash)))?;
+					.ok_or_else(|| Error::MissingHashInHeader(current_hash.to_string()))?;
 
 				// stop search in this chain once we go below the target's block number
 				if current_header.number() < target_header.number() {

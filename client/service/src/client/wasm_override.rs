@@ -119,16 +119,16 @@ where
 	/// Scrapes a folder for WASM runtimes.
 	/// Returns a hashmap of the runtime version and wasm runtime code.
 	fn scrape_overrides(dir: &Path, executor: &E) -> Result<HashMap<u32, WasmBlob>> {
-		let handle_err = |e: std::io::Error | -> sp_blockchain::Error {
-			sp_blockchain::Error::Msg(format!("{}", e.to_string()))
+
+		let handle_err = {
+			let dir = dir.to_owned();
+			move |e: std::io::Error | -> sp_blockchain::Error {
+				sp_blockchain::Error::WasmOverrideIo(dir, e)
+			}
 		};
 
 		if !dir.is_dir() {
-			return Err(sp_blockchain::Error::Msg(format!(
-				"Overwriting WASM requires a directory where \
-				 local WASM is stored. {:?} is not a directory",
-				 dir,
-			)));
+			return Err(sp_blockchain::Error::WasmOverrideNotADirectory(dir.to_owned()));
 		}
 
 		let mut overrides = HashMap::new();
@@ -149,9 +149,7 @@ where
 		}
 
 		if !duplicates.is_empty() {
-			let duplicate_file_list = duplicates.join("\n");
-			let msg = format!("Duplicate WASM Runtimes found: \n{}\n", duplicate_file_list);
-			return Err(sp_blockchain::Error::Msg(msg));
+			return Err(sp_blockchain::Error::DuplicateWasmRuntime(duplicates));
 		}
 
 		Ok(overrides)
