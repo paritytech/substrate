@@ -808,7 +808,7 @@ impl ProtocolsHandler for NotifsHandler {
 						*pending_handshake = Some(handshake);
 					},
 
-					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }), _)
+					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { .. }), _)
 						if handler_num == 0 => debug_assert!(false),
 					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { .. }), _) => {},
 

@@ -578,8 +578,13 @@ impl GenericProto {
 					closing.push(connec_id);
 				}
 
-				// TODO: interaction with `banned_until` above?
-				let banned_until = ban.map(|dur| Instant::now() + dur);
+				let banned_until = match (banned_until, ban) {
+					(Some(a), Some(b)) => Some(cmp::max(a, Instant::now() + b)),
+					(Some(a), None) => Some(a),
+					(None, Some(b)) => Some(Instant::now() + b),
+					(None, None) => None,
+				};
+
 				*entry.into_mut() = PeerState::Disabled {
 					opening_and_closing,
 					closing,
