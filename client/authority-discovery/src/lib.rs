@@ -53,7 +53,7 @@ pub struct WorkerConfig {
 	///
 	/// By default this is set to 10 minutes.
 	pub query_interval: Duration,
-	/// The time the node will wait before doing the first query of the DTH interval.
+	/// The time the node will wait before triggering the first DHT query or publish.
 	///
 	/// By default this is set to 30 seconds.
 	///
