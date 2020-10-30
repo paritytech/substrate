@@ -592,72 +592,7 @@ decl_module! {
 			#[compact] length_bound: u32
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-
-			let voting = Self::voting(&proposal_hash).ok_or(Error::<T, I>::ProposalMissing)?;
-			ensure!(voting.index == index, Error::<T, I>::WrongIndex);
-
-			let mut no_votes = voting.nays.len() as MemberCount;
-			let mut yes_votes = voting.ayes.len() as MemberCount;
-			let seats = Self::members().len() as MemberCount;
-			let approved = yes_votes >= voting.threshold;
-			let disapproved = seats.saturating_sub(no_votes) < voting.threshold;
-			// Allow (dis-)approving the proposal as soon as there are enough votes.
-			if approved {
-				let (proposal, len) = Self::validate_and_get_proposal(
-					&proposal_hash,
-					length_bound,
-					proposal_weight_bound
-				)?;
-				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
-				let (proposal_weight, proposal_count) =
-					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
-				return Ok(Some(
-					T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
-						.saturating_add(proposal_weight)
-				).into());
-			} else if disapproved {
-				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
-				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
-				return Ok(Some(
-					T::WeightInfo::close_early_disapproved(seats, proposal_count)
-				).into());
-			}
-
-			// Only allow actual closing of the proposal after the voting period has ended.
-			ensure!(system::Module::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
-
-			let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|a| a == &who));
-
-			// default voting strategy.
-			let default = T::DefaultVote::default_vote(prime_vote, yes_votes, no_votes, seats);
-
-			let abstentions = seats - (yes_votes + no_votes);
-			match default {
-				true => yes_votes += abstentions,
-				false => no_votes += abstentions,
-			}
-			let approved = yes_votes >= voting.threshold;
-
-			if approved {
-				let (proposal, len) = Self::validate_and_get_proposal(
-					&proposal_hash,
-					length_bound,
-					proposal_weight_bound
-				)?;
-				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
-				let (proposal_weight, proposal_count) =
-					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
-				return Ok(Some(
-					T::WeightInfo::close_approved(len as u32, seats, proposal_count)
-						.saturating_add(proposal_weight)
-				).into());
-			} else {
-				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
-				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
-				return Ok(Some(
-					T::WeightInfo::close_disapproved(seats, proposal_count)
-				).into());
-			}
+			Self::close_impl(proposal_hash, index, proposal_weight_bound, length_bound)
 		}
 
 		/// Disapprove a proposal, close, and remove it from the system, regardless of its current state.
@@ -761,6 +696,80 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			proposals.len() + 1 // calculate weight based on original length
 		});
 		num_proposals as u32
+	}
+
+	// Close a vote that is either approved, disapproved or whose voting period has ended.
+	fn close_impl(
+		proposal_hash: T::Hash,
+		index: ProposalIndex,
+		proposal_weight_bound: Weight,
+		length_bound: u32,
+	) -> DispatchResultWithPostInfo {
+		let voting = Self::voting(&proposal_hash).ok_or(Error::<T, I>::ProposalMissing)?;
+		ensure!(voting.index == index, Error::<T, I>::WrongIndex);
+
+		let mut no_votes = voting.nays.len() as MemberCount;
+		let mut yes_votes = voting.ayes.len() as MemberCount;
+		let seats = Self::members().len() as MemberCount;
+		let approved = yes_votes >= voting.threshold;
+		let disapproved = seats.saturating_sub(no_votes) < voting.threshold;
+		// Allow (dis-)approving the proposal as soon as there are enough votes.
+		if approved {
+			let (proposal, len) = Self::validate_and_get_proposal(
+				&proposal_hash,
+				length_bound,
+				proposal_weight_bound
+			)?;
+			Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
+			let (proposal_weight, proposal_count) =
+				Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
+			return Ok(Some(
+				T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
+					.saturating_add(proposal_weight)
+			).into());
+		} else if disapproved {
+			Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
+			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
+			return Ok(Some(
+				T::WeightInfo::close_early_disapproved(seats, proposal_count)
+			).into());
+		}
+
+		// Only allow actual closing of the proposal after the voting period has ended.
+		ensure!(system::Module::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
+
+		let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|a| a == &who));
+
+		// default voting strategy.
+		let default = T::DefaultVote::default_vote(prime_vote, yes_votes, no_votes, seats);
+
+		let abstentions = seats - (yes_votes + no_votes);
+		match default {
+			true => yes_votes += abstentions,
+			false => no_votes += abstentions,
+		}
+		let approved = yes_votes >= voting.threshold;
+
+		if approved {
+			let (proposal, len) = Self::validate_and_get_proposal(
+				&proposal_hash,
+				length_bound,
+				proposal_weight_bound
+			)?;
+			Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
+			let (proposal_weight, proposal_count) =
+				Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
+			return Ok(Some(
+				T::WeightInfo::close_approved(len as u32, seats, proposal_count)
+					.saturating_add(proposal_weight)
+			).into());
+		} else {
+			Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
+			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
+			return Ok(Some(
+				T::WeightInfo::close_disapproved(seats, proposal_count)
+			).into());
+		}
 	}
 }
 
