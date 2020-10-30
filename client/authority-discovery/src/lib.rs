@@ -70,7 +70,7 @@ pub struct WorkerConfig {
 	/// [`Self::priority_group_set_start_delay`]
 	///
 	/// By default this is set to 5 minutes.
-	pub priority_group_set_start_delay: Duration,
+	pub priority_group_set_offset: Duration,
 }
 
 impl Default for WorkerConfig {
