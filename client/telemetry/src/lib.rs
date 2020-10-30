@@ -365,8 +365,7 @@ macro_rules! format_fields_to_json {
 	}};
 	( $k:literal => ? $v:expr $(,)? ) => {{
 		let mut map = $crate::serde_json::Map::new();
-		map.insert($k.into(), $crate::serde_json::to_value($v)
-			.expect("telemetry values must be serializable"));
+		map.insert($k.into(), std::format!("{:?}", $v).into());
 		map
 	}};
 	( $k:literal => : $v:expr $(,)? ) => {{
