@@ -174,7 +174,7 @@ where
 		// `authority_discovery_dht_event_received`. With that in mind set the peerset priority
 		// group on the same interval as the [`query_interval`] above, just delayed by 5 minutes by default.
 		let priority_group_set_interval = interval_at(
-			query_interval_start + config.priority_group_set_start_delay,
+			query_interval_start + config.priority_group_set_offset,
 			config.priority_group_set_interval,
 		);
 

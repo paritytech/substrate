@@ -80,7 +80,7 @@ impl Default for WorkerConfig {
 			query_interval: Duration::from_secs(10 * 60),
 			query_start_delay: Duration::from_secs(30),
 			priority_group_set_interval: Duration::from_secs(10 * 60),
-			priority_group_set_start_delay: Duration::from_secs(5 * 60),
+			priority_group_set_offset: Duration::from_secs(5 * 60),
 		}
 	}
 }
