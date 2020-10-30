@@ -64,8 +64,6 @@ pub type Multiplier = FixedU128;
 
 type BalanceOf<T> =
 	<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::Balance;
-type NegativeImbalanceOf<C, T> =
-	<C as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// A struct to update the weight multiplier per block. It implements `Convert<Multiplier,
 /// Multiplier>`, meaning that it can convert the previous multiplier to the next one. This should

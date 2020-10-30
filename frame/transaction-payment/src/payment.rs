@@ -1,5 +1,5 @@
 ///! Traits and default implementation for paying transaction fees.
-use crate::{NegativeImbalanceOf, Trait};
+use crate::Trait;
 use codec::FullCodec;
 use frame_support::{
 	traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReasons},
@@ -10,6 +10,9 @@ use sp_runtime::{
 	transaction_validity::InvalidTransaction,
 };
 use sp_std::{fmt::Debug, marker::PhantomData};
+
+type NegativeImbalanceOf<C, T> =
+	<C as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeTransaction<T: Trait> {
