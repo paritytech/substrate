@@ -1151,6 +1151,56 @@ mod tests {
 	}
 
 	#[test]
+	fn close_operational_works() {
+		new_test_ext().execute_with(|| {
+			let proposal = make_proposal(42);
+			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+			let proposal_weight = proposal.get_dispatch_info().weight;
+			let hash = BlakeTwo256::hash_of(&proposal);
+
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+
+			System::set_block_number(4);
+			// Non-member cannot call
+			assert_noop!(
+				Collective::close_operational(Origin::signed(4), hash.clone(), 0, proposal_weight, proposal_len),
+				Error::<Test, Instance1>::NotMember,
+			);
+
+			// Member can call
+			assert_ok!(Collective::close_operational(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len));
+
+			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
+			assert_eq!(System::events(), vec![
+				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
+				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 2, 1))),
+				record(Event::collective_Instance1(RawEvent::Disapproved(hash.clone())))
+			]);
+		});
+	}
+
+	#[test]
+	fn close_class_is_right() {
+		let close = crate::Call::<Test, Instance1>::close(
+			Default::default(),
+			Default::default(),
+			Default::default(),
+			Default::default()
+		);
+		assert_eq!(close.get_dispatch_info().class, DispatchClass::Normal);
+
+		let close_operational = crate::Call::<Test, Instance1>::close_operational(
+			Default::default(),
+			Default::default(),
+			Default::default(),
+			Default::default()
+		);
+		assert_eq!(close_operational.get_dispatch_info().class, DispatchClass::Operational);
+	}
+
+	#[test]
 	fn proposal_weight_limit_works_on_approve() {
 		new_test_ext().execute_with(|| {
 			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MaxMembers::get()));
