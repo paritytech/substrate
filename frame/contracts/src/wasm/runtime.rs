@@ -16,12 +16,12 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{HostFnWeights, Schedule, Trait, CodeHash, BalanceOf, Error};
-use crate::exec::{
-	Ext, ExecResult, ExecReturnValue, StorageKey, TopicOf, ReturnFlags, ExecError
+use crate::{
+	HostFnWeights, Schedule, Trait, CodeHash, BalanceOf, Error,
+	exec::{Ext, StorageKey, TopicOf},
+	gas::{Gas, GasMeter, Token, GasMeterResult},
+	wasm::env_def::ConvertibleToWasm,
 };
-use crate::gas::{Gas, GasMeter, Token, GasMeterResult};
-use crate::wasm::env_def::ConvertibleToWasm;
 use sp_sandbox;
 use parity_wasm::elements::ValueType;
 use frame_system;
@@ -35,6 +35,7 @@ use sp_io::hashing::{
 	blake2_128,
 	sha2_256,
 };
+use pallet_contracts_primitives::{ExecResult, ExecReturnValue, ReturnFlags, ExecError};
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
 #[repr(u32)]
@@ -499,7 +500,7 @@ fn err_into_return_code<T: Trait>(from: DispatchError) -> Result<ReturnCode, Dis
 
 /// Fallible conversion of a `ExecResult` to `ReturnCode`.
 fn exec_into_return_code<T: Trait>(from: ExecResult) -> Result<ReturnCode, DispatchError> {
-	use crate::exec::ErrorOrigin::Callee;
+	use pallet_contracts_primitives::ErrorOrigin::Callee;
 
 	let ExecError { error, origin } = match from {
 		Ok(retval) => return Ok(retval.into()),
