@@ -1,5 +1,6 @@
 Telemetry utilities.
 
+TODO update doc
 Calling `init_telemetry` registers a global `slog` logger using `slog_scope::set_global_logger`.
 After that, calling `slog_scope::with_logger` will return a logger that sends information to
 the telemetry endpoints. The `telemetry!` macro is a short-cut for calling

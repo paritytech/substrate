@@ -135,6 +135,7 @@ impl TelemetryWorker {
 		Poll::Pending
 	}
 
+	// TODO update doc
 	/// Equivalent to `slog::Drain::log`, but takes `self` by `&mut` instead, which is more convenient.
 	///
 	/// Keep in mind that you should call `TelemetryWorker::poll` in order to process the messages.

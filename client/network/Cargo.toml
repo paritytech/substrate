@@ -48,8 +48,6 @@ sc-client-api = { version = "2.0.0", path = "../api" }
 sc-peerset = { version = "2.0.0", path = "../peerset" }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
-slog = { version = "2.5.2", features = ["nested-values"] }
-slog_derive = "0.2.0"
 smallvec = "0.6.10"
 sp-arithmetic = { version = "2.0.0", path = "../../primitives/arithmetic" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }

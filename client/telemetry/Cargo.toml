@@ -24,8 +24,6 @@ log = "0.4.8"
 pin-project = "0.4.6"
 rand = "0.7.2"
 serde = { version = "1.0.101", features = ["derive"] }
-slog = { version = "2.5.2", features = ["nested-values"] }
-slog-json = { version = "2.3.0", features = ["nested-values"] }
 take_mut = "0.2.2"
 void = "1.0.2"
 tracing = "0.1.10"

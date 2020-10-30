@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+// TODO update doc
 //! Telemetry utilities.
 //!
 //! Calling `init_telemetry` registers a global `slog` logger using `slog_scope::set_global_logger`.
@@ -76,8 +77,6 @@ use wasm_timer::Instant;
 pub use chrono;
 pub use libp2p::wasm_ext::ExtTransport;
 pub use serde_json;
-pub use slog;
-pub use slog_json;
 pub use tracing;
 
 mod layer;
@@ -319,27 +318,6 @@ impl Stream for Telemetry {
 #[macro_export(local_inner_macros)]
 macro_rules! telemetry {
 	( $a:expr; $b:expr; $( $t:tt )* ) => {{
-		/*
-		// NOTE: didn't work
-		let record_static = $crate::slog::record_static!($crate::slog::Level::Info, $a);
-		let format_args = format_args!("");
-		let record = $crate::slog::Record::new(&record_static, &format_args, $crate::slog::b!());
-
-		let mut v = vec![];
-		let mut cur = std::io::Cursor::new(&mut v);
-		let json = $crate::slog_json::Json::default(&mut cur);
-		use $crate::slog::Drain;
-		let kv = $crate::slog::o!($($t)*);
-		let kvl = $crate::slog::OwnedKVList::from(kv);
-		json.log(&record, &kvl).unwrap();
-		let s = String::from_utf8(v).unwrap();
-		*/
-		/*
-		// NOTE: old code
-		if let Some(ref l) = $l {
-			$crate::slog::slog_info!(l, #$a, $b; $($t)* )
-		}
-		*/
 		let message_verbosity: u8 = $a;
 		let mut json = format_fields_to_json!($($t)*);
 		json.insert("level".into(), "INFO".into());
@@ -347,7 +325,6 @@ macro_rules! telemetry {
 		json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
 		$crate::tracing::info!(target: $crate::TELEMETRY_LOG_SPAN,
 			message_verbosity,
-			//json = s.as_str()
 			json = $crate::serde_json::to_string(&json)
 				.expect("contains only string keys; qed").as_str()
 		);

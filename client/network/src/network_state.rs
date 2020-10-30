@@ -22,7 +22,6 @@
 
 use libp2p::{core::ConnectedPoint, Multiaddr};
 use serde::{Deserialize, Serialize};
-use slog_derive::SerdeValue;
 use std::{collections::{HashMap, HashSet}, time::Duration};
 
 /// Returns general information about the networking.
@@ -30,7 +29,7 @@ use std::{collections::{HashMap, HashSet}, time::Duration};
 /// Meant for general diagnostic purposes.
 ///
 /// **Warning**: This API is not stable.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, SerdeValue)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkState {
 	/// PeerId of the local node.

@@ -192,27 +192,6 @@ impl fmt::Display for Values {
 	}
 }
 
-impl slog::SerdeValue for Values {
-	fn as_serde(&self) -> &dyn erased_serde::Serialize {
-		self
-	}
-
-	fn to_sendable(&self) -> Box<dyn slog::SerdeValue + Send + 'static> {
-		Box::new(self.clone())
-	}
-}
-
-impl slog::Value for Values {
-	fn serialize(
-		&self,
-		_record: &slog::Record,
-		key: slog::Key,
-		ser: &mut dyn slog::Serializer,
-	) -> slog::Result {
-		ser.emit_serde(key, self)
-	}
-}
-
 impl ProfilingLayer {
 	/// Takes a `TracingReceiver` and a comma separated list of targets,
 	/// either with a level: "pallet=trace,frame=debug"
