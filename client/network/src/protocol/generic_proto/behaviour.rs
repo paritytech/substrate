@@ -1316,9 +1316,9 @@ impl NetworkBehaviour for GenericProto {
 					}
 
 				} else {
-					debug_assert!(false);
 					error!(target: "sub-libp2p",
 						"inject_connection_closed: State mismatch in the custom protos handler");
+					debug_assert!(false);
 				}
 
 				if opening_and_closing.is_empty() && closed.is_empty() && closing.is_empty()
@@ -1412,9 +1412,15 @@ impl NetworkBehaviour for GenericProto {
 				};
 
 				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
-					PeerState::Incoming { opening_and_closing, closing, closed, mut open_desired, banned_until } => {
+					PeerState::Incoming { opening_and_closing, closing, mut closed, mut open_desired, banned_until } => {
 						debug_assert!(!open_desired.is_empty());
-						open_desired.push(connection);
+						if let Some(pos) = closed.iter().position(|c| *c == connection) {
+							closed.remove(pos);
+							open_desired.push(connection);
+						} else {
+							debug_assert!(opening_and_closing.iter().any(|c| *c == connection));
+						}
+
 						*entry.into_mut() = PeerState::Incoming {
 							opening_and_closing,
 							closing,
@@ -1424,14 +1430,23 @@ impl NetworkBehaviour for GenericProto {
 						};
 					},
 
-					PeerState::Enabled { opening_and_closing, closing, closed, mut opening, open } => {
-						debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open", source, connection);
-						self.events.push_back(NetworkBehaviourAction::NotifyHandler {
-							peer_id: source,
-							handler: NotifyHandler::One(connection),
-							event: NotifsHandlerIn::Open,
-						});
-						opening.push(connection);
+					PeerState::Enabled { opening_and_closing, closing, mut closed, mut opening, open } => {
+						if let Some(pos) = closed.iter().position(|c| *c == connection) {
+							closed.remove(pos);
+							debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open", source, connection);
+							self.events.push_back(NetworkBehaviourAction::NotifyHandler {
+								peer_id: source,
+								handler: NotifyHandler::One(connection),
+								event: NotifsHandlerIn::Open,
+							});
+							opening.push(connection);
+
+						} else {
+							debug_assert!(
+								opening_and_closing.iter().any(|c| *c == connection) ||
+								opening.iter().any(|c| *c == connection)
+							);
+						}
 
 						*entry.into_mut() = PeerState::Enabled {
 							opening_and_closing,
@@ -1442,8 +1457,14 @@ impl NetworkBehaviour for GenericProto {
 						};
 					},
 
-					PeerState::DisabledPendingEnable { opening_and_closing, closed, closing, .. } |
-					PeerState::Disabled { opening_and_closing, closed, closing, .. } => {
+					PeerState::DisabledPendingEnable { opening_and_closing, mut closed, closing, .. } |
+					PeerState::Disabled { opening_and_closing, mut closed, closing, .. } => {
+						if let Some(pos) = closed.iter().position(|c| *c == connection) {
+							closed.remove(pos);
+						} else {
+							debug_assert!(opening_and_closing.iter().any(|c| *c == connection));
+						}
+
 						let incoming_id = self.next_incoming_index;
 						self.next_incoming_index.0 = match self.next_incoming_index.0.checked_add(1) {
 							Some(v) => v,
@@ -1565,7 +1586,7 @@ impl NetworkBehaviour for GenericProto {
 
 			NotifsHandlerOut::CloseResult => {
 				debug!(target: "sub-libp2p",
-					"Handler({}, {:?}) => Endpoint closed for notifications protocols",
+					"Handler({}, {:?}) => CloseResult",
 					source, connection);
 
 				match self.peers.get_mut(&source) {
