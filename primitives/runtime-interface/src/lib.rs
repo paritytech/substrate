@@ -43,7 +43,7 @@
 //! The traits are implemented for most of the common types like `[T]`, `Vec<T>`, arrays and
 //! primitive types.
 //!
-//! For custom types, we provide the [`PassBy`](pass_by::PassBy) trait and strategies that define
+//! For custom types, we provide the [`PassBy`](./pass_by#PassBy) trait and strategies that define
 //! how a type is passed between the wasm runtime and the node. Each strategy also provides a derive
 //! macro to simplify the implementation.
 //!
@@ -69,7 +69,7 @@
 //! ```
 //!
 //! For more information on declaring a runtime interface, see
-//! [`#[runtime_interface]`](attr.runtime_interface.html).
+//! [`#[runtime_interface]`](./attr.runtime_interface.html).
 //!
 //! # FFI type and conversion
 //!
@@ -97,8 +97,8 @@
 //! | `[u8; N]` | `u32` | `v.as_ptr()` |
 //! | `*const T` | `u32` | `Identity` |
 //! | `Option<T>` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
-//! | [`T where T: PassBy<PassBy=Inner>`](pass_by::Inner) | Depends on inner | Depends on inner |
-//! | [`T where T: PassBy<PassBy=Codec>`](pass_by::Codec) | `u64`| <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
+//! | [`T where T: PassBy<PassBy=Inner>`](./pass_by#Inner) | Depends on inner | Depends on inner |
+//! | [`T where T: PassBy<PassBy=Codec>`](./pass_by#Codec) | `u64`| <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
 //!
 //! `Identity` means that the value is converted directly into the corresponding FFI type.
 
