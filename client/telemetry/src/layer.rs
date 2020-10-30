@@ -18,6 +18,7 @@
 
 use crate::Telemetries;
 use futures::channel::mpsc;
+use libp2p::wasm_ext::ExtTransport;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -27,10 +28,22 @@ use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 pub const TELEMETRY_LOG_SPAN: &str = "telemetry-logger";
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TelemetryLayer(Telemetries);
 
 impl TelemetryLayer {
+	/// TODO
+	pub fn new(telemetry_external_transport: Option<ExtTransport>) -> Self {
+		if let Some(telemetry_external_transport) = telemetry_external_transport {
+			Self(Telemetries::with_wasm_external_transport(
+				telemetry_external_transport,
+			))
+		} else {
+			Self(Default::default())
+		}
+	}
+
+	/// TODO
 	pub fn telemetries(&self) -> Telemetries {
 		self.0.clone()
 	}

@@ -656,13 +656,7 @@ fn init_telemetry(config: &Configuration) -> Option<sc_telemetry::Telemetry> {
 		// we don't want the telemetry to be initialized if telemetry_endpoints == Some([])
 		_ => return None,
 	};
-	let telemetry = config.telemetries.get_or_create(
-		endpoints,
-		// TODO
-		//config.telemetry_external_transport.clone(),
-	);
-
-	Some(telemetry)
+	Some(config.telemetries.get_or_create(endpoints))
 }
 
 fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(

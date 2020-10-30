@@ -244,6 +244,7 @@ pub fn init_logger(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
 	profiling_targets: Option<String>,
+	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 ) -> std::result::Result<sc_telemetry::Telemetries, String> {
 	fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
 		dirs.as_ref()
@@ -317,7 +318,7 @@ pub fn init_logger(
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-	let telemetry_layer = sc_telemetry::TelemetryLayer::default();
+	let telemetry_layer = sc_telemetry::TelemetryLayer::new(telemetry_external_transport);
 	let telemetries = telemetry_layer.telemetries();
 	let subscriber = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
