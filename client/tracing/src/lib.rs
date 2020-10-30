@@ -23,6 +23,7 @@
 //! See `sp-tracing` for examples on how to use tracing.
 //!
 //! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
+pub mod logging;
 
 use rustc_hash::FxHashMap;
 use std::fmt;
@@ -46,17 +47,35 @@ use tracing_subscriber::fmt::Formatter;
 use tracing_subscriber::fmt::format::DefaultFields;
 use tracing_subscriber::fmt::time::ChronoLocal;
 use once_cell::sync::OnceCell;
+use tracing_subscriber::filter::Directive;
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 
-static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, Formatter<DefaultFields, EventFormat<ChronoLocal>, impl FnOnce() -> std::io::Stderr>>> = OnceCell::new();
+static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, Formatter<DefaultFields, logging::EventFormat<ChronoLocal>, fn() -> std::io::Stderr>>> = OnceCell::new();
 
-pub fn set_reload_handle(handle: Handle<EnvFilter, Formatter<DefaultFields, EventFormat<ChronoLocal>, impl FnOnce() -> std::io::Stderr>>) {
+/// Initialize FILTER_RELOAD_HANDLE, only possible once
+pub fn set_reload_handle(handle: Handle<EnvFilter, Formatter<DefaultFields, logging::EventFormat<ChronoLocal>, fn() -> std::io::Stderr>>) {
 	let _ = FILTER_RELOAD_HANDLE.set(handle);
 }
 
-pub fn get_Reload_handle() -> Option<&Handle<EnvFilter, Formatter<DefaultFields, EventFormat<ChronoLocal>, impl FnOnce() -> std::io::Stderr>>> {
+/// Reload the logging filter with the supplied directives
+pub fn reload_filter(directives: String) -> Result<(), String> {
+	let mut env_filter = tracing_subscriber::EnvFilter::default();
+	for directive in parse_directives(directives) {
+		env_filter = env_filter.add_directive(directive);
+	}
 	FILTER_RELOAD_HANDLE.get()
+		.ok_or("No reload handle present".to_string())?
+		.reload(env_filter)
+		.map_err(|e| format!("{}", e))
+}
+
+/// Parse the supplied text directives into `Vec<tracing_subscriber::filter::Directive>`
+pub fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
+	dirs.as_ref()
+		.split(',')
+		.filter_map(|s| s.parse().ok())
+		.collect()
 }
 
 /// Responsible for assigning ids to new spans, which are not re-used.

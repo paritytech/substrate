@@ -197,4 +197,8 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		let _ = self.send_back.unbounded_send(Request::SyncState(tx));
 		Receiver(Compat::new(rx))
 	}
+
+	fn system_reload_log_filter(&self, directives: String)-> std::result::Result<(), rpc::Error> {
+		sc_tracing::reload_filter(directives).map_err(|e| rpc::Error::internal_error())
+	}
 }

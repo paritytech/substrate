@@ -37,6 +37,7 @@ sc-block-builder = { version = "0.8.0", path = "../../client/block-builder" }
 sc-keystore = { version = "2.0.0", path = "../keystore" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
+sc-tracing = { version = "2.0.0", path = "../../client/tracing" }
 hash-db = { version = "0.15.2", default-features = false }
 parking_lot = "0.10.0"
 lazy_static = { version = "1.4.0", optional = true }

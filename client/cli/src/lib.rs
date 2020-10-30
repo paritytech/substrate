@@ -27,7 +27,6 @@ pub mod arg_enums;
 mod commands;
 mod config;
 mod error;
-mod logging;
 mod params;
 mod runner;
 
@@ -52,6 +51,7 @@ pub use tracing;
 use tracing_subscriber::{
 	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer, fmt::Formatter, reload::Handle, EnvFilter
 };
+pub use sc_tracing::logging;
 
 pub use logging::PREFIX_LOG_SPAN;
 use tracing_subscriber::layer::Layered;
