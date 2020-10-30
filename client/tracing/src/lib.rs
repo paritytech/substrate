@@ -24,8 +24,6 @@
 //!
 //! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
 
-#![recursion_limit="256"]
-
 use rustc_hash::FxHashMap;
 use std::fmt;
 use std::time::{Duration, Instant};
@@ -392,7 +390,7 @@ impl TraceHandler for TelemetryTraceHandler {
 			"target" => span_datum.target,
 			"time" => span_datum.overall_time.as_nanos(),
 			"id" => span_datum.id.into_u64(),
-			"parent_id" => span_datum.parent_id.as_ref().map(|i| i.into_u64()),
+			"parent_id" => span_datum.parent_id.map(|i| i.into_u64()),
 			"values" => span_datum.values
 		);
 	}
@@ -401,7 +399,7 @@ impl TraceHandler for TelemetryTraceHandler {
 		telemetry!(SUBSTRATE_INFO; "tracing.event";
 			"name" => event.name,
 			"target" => event.target,
-			"parent_id" => event.parent_id.as_ref().map(|i| i.into_u64()),
+			"parent_id" => event.parent_id.map(|i| i.into_u64()),
 			"values" => event.values
 		);
 	}
