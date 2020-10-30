@@ -58,7 +58,7 @@ use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
 }};
 use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
 use frame_support::traits::{
-	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier,
+	Currency, LockableCurrency, VestingSchedule, WithdrawReasons, LockIdentifier,
 	ExistenceRequirement, Get,
 };
 use frame_system::{ensure_signed, ensure_root};
@@ -148,7 +148,7 @@ decl_storage! {
 					per_block: per_block,
 					starting_block: begin
 				});
-				let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+				let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 				T::Currency::set_lock(VESTING_ID, who, locked, reasons);
 			}
 		})
@@ -322,7 +322,7 @@ impl<T: Trait> Module<T> {
 			Vesting::<T>::remove(&who);
 			Self::deposit_event(RawEvent::VestingCompleted(who));
 		} else {
-			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 			T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons);
 			Self::deposit_event(RawEvent::VestingUpdated(who, locked_now));
 		}
