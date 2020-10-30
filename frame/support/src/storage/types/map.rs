@@ -230,6 +230,7 @@ where
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	///
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.

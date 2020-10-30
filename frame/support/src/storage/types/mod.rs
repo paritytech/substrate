@@ -30,6 +30,7 @@ pub use map::{StorageMap, StorageMapMetadata};
 pub use double_map::{StorageDoubleMap, StorageDoubleMapMetadata};
 
 /// Trait implementing how the storage optional value is converted into the queried type.
+///
 /// It is implemented by:
 /// * `OptionQuery` which convert an optional value to an optional value, user when querying
 ///   storage will get an optional value.

@@ -115,8 +115,9 @@ where
 		<Self as crate::storage::StorageValue<Value>>::put(val)
 	}
 
-	/// Store a value under this key into the provided storage instance; this uses the query
-	/// type rather than the underlying value.
+	/// Store a value under this key into the provided storage instance.
+	///
+	/// this uses the query type rather than the underlying value.
 	pub fn set(val: QueryKind::Query) { <Self as crate::storage::StorageValue<Value>>::set(val) }
 
 	/// Mutate the value
