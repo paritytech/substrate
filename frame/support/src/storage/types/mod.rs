@@ -53,8 +53,7 @@ pub trait QueryKindTrait<Value> {
 
 /// Implement QueryKindTrait with query being `Option<Value>`
 pub struct OptionQuery;
-impl<Value: FullCodec + 'static> QueryKindTrait<Value> for OptionQuery where
-{
+impl<Value: FullCodec + 'static> QueryKindTrait<Value> for OptionQuery {
 	const METADATA: StorageEntryModifier = StorageEntryModifier::Optional;
 	type Query = Option<Value>;
 	fn from_optional_value_to_query<OnEmpty>(v: Option<Value>) -> Self::Query where

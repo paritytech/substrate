@@ -264,19 +264,22 @@ where
 	QueryKind: QueryKindTrait<Value>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 {
-	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
-	/// this, you'll get undefined results.
+	/// Enumerate all elements in the map in no particular order. 
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
 	pub fn iter() -> crate::storage::PrefixIterator<(Key, Value)> {
 		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter()
 	}
 
-	/// Remove all elements from the map and iterate through them in no particular order. If you
-	/// add elements to the map while doing this, you'll get undefined results.
+	/// Remove all elements from the map and iterate through them in no particular order. 
+	///
+	/// If you add elements to the map while doing this, you'll get undefined results.
 	pub fn drain() -> crate::storage::PrefixIterator<(Key, Value)> {
 		<Self as crate::storage::IterableStorageMap<Key, Value>>::drain()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	///
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.

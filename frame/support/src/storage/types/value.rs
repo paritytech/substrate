@@ -105,7 +105,7 @@ where
 	/// `on_runtime_upgrade`**. (More precisely prior initialized modules doesn't make use of this
 	/// storage).
 	pub fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<Value>>(
-		f: F
+		f: F,
 	) -> Result<Option<Value>, ()> {
 		<Self as crate::storage::StorageValue<Value>>::translate(f)
 	}
@@ -126,7 +126,7 @@ where
 
 	/// Mutate the value if closure returns `Ok`
 	pub fn try_mutate<R, E, F: FnOnce(&mut QueryKind::Query) -> Result<R, E>>(
-		f: F
+		f: F,
 	) -> Result<R, E> {
 		<Self as crate::storage::StorageValue<Value>>::try_mutate(f)
 	}
