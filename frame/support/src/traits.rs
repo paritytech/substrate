@@ -1421,16 +1421,19 @@ pub trait GetCallMetadata {
 	fn get_call_metadata(&self) -> CallMetadata;
 }
 
-/// The block finalization trait. Implementing this lets you express what should happen
-/// for your module when the block is ending.
+/// The block finalization trait.
+///
+/// Implementing this lets you express what should happen for your pallet when the block is ending.
 #[impl_for_tuples(30)]
 pub trait OnFinalize<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	fn on_finalize(_n: BlockNumber) {}
 }
 
-/// The block initialization trait. Implementing this lets you express what should happen
-/// for your module when the block is beginning (right before the first extrinsic is executed).
+/// The block initialization trait.
+///
+/// Implementing this lets you express what should happen for your pallet when the block is
+/// beginning (right before the first extrinsic is executed).
 pub trait OnInitialize<BlockNumber> {
 	/// The block is being initialized. Implement to have something happen.
 	///
@@ -1445,6 +1448,17 @@ impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(_n.clone())); )* );
 		weight
 	}
+}
+
+/// A trait that will be called at genesis.
+///
+/// Implementing this trait for a pallet let's you express operations that should
+/// happen at genesis. It will be called in an externalities provided environment and
+/// will see the genesis state after all pallets have written their genesis state.
+#[impl_for_tuples(30)]
+pub trait OnGenesis {
+	/// Something that should happen at genesis.
+	fn on_genesis() {}
 }
 
 /// The runtime upgrade trait.
@@ -1834,7 +1848,7 @@ pub const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
 ///
 /// Each pallet version is stored in the state under a fixed key. See
 /// [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] for how this key is built.
-#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord)]
+#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord, Clone, Copy)]
 pub struct PalletVersion {
 	/// The major version of the pallet.
 	pub major: u16,
@@ -1871,6 +1885,25 @@ impl PalletVersion {
 		final_key[16..].copy_from_slice(&postfix);
 
 		Some(final_key)
+	}
+
+	/// Put this pallet version into the storage.
+	///
+	/// It will use the storage key that is associated with the given `Pallet`.
+	///
+	/// # Panics
+	///
+	/// This function will panic iff `Pallet` can not be found by `PalletInfo`.
+	/// In a runtime that is put together using
+	/// [`construct_runtime!`](crate::construct_runtime) this should never happen.
+	///
+	/// It will also panic if this function isn't executed in an externalities
+	/// provided environment.
+	pub fn put_into_storage<PI: PalletInfo, Pallet: 'static>(&self) {
+		let key = Self::storage_key::<PI, Pallet>()
+			.expect("Every active pallet has a name in the runtime; qed");
+
+		crate::storage::unhashed::put(&key, self);
 	}
 }
 

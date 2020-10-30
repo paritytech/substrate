@@ -58,6 +58,8 @@ pub mod event;
 #[macro_use]
 pub mod metadata;
 #[macro_use]
+pub mod genesis_config;
+#[macro_use]
 pub mod inherent;
 #[macro_use]
 pub mod unsigned;
