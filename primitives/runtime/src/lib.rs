@@ -388,10 +388,10 @@ pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWith
 
 /// Reason why a dispatch call failed.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
-	Other(#[codec(skip)] &'static str),
+	Other(#[codec(skip)] #[cfg_attr(feature = "std", serde(skip_deserializing))] &'static str),
 	/// Failed to lookup some data.
 	CannotLookup,
 	/// A bad origin.
@@ -404,6 +404,7 @@ pub enum DispatchError {
 		error: u8,
 		/// Optional error message.
 		#[codec(skip)]
+		#[cfg_attr(feature = "std", serde(skip_deserializing))]
 		message: Option<&'static str>,
 	},
 }
