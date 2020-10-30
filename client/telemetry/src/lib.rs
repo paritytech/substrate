@@ -155,7 +155,7 @@ pub const CONSENSUS_INFO: u8 = 1;
 /// Dropping all the clones unregisters the telemetry.
 #[derive(Debug)]
 pub struct Telemetry {
-	inner: Arc<Mutex<TelemetryInner>>,
+	inner: TelemetryInner,
 	span: tracing::Span,
 }
 
@@ -214,21 +214,14 @@ impl Telemetry {
 
 		(
 			Self {
-				inner: Arc::new(Mutex::new(TelemetryInner {
+				inner: TelemetryInner {
 					worker,
 					receiver,
-				})),
+				},
 				span,
 			},
 			sender,
 		)
-	}
-
-	/// TODO doc
-	pub fn stream(self) -> TelemetryStream {
-		TelemetryStream {
-			inner: self.inner.clone(),
-		}
 	}
 }
 
@@ -240,43 +233,18 @@ pub enum TelemetryEvent {
 	Connected,
 }
 
-/// TODO doc
-#[derive(Debug)]
-pub struct TelemetryStream {
-	inner: Arc<Mutex<TelemetryInner>>,
-}
-
-impl Stream for TelemetryStream {
+impl Stream for Telemetry {
 	type Item = TelemetryEvent;
 
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let before = Instant::now();
-
-		// Because the `Telemetry` is cloneable, we need to put the actual fields behind a `Mutex`.
-		// However, the user is only ever supposed to poll from one instance of `Telemetry`, while
-		// the other instances are used only for RAII purposes.
-		// We assume that the user is following this advice and therefore that the `Mutex` is only
-		// ever locked once at a time.
-		let mut inner = match self.inner.try_lock() {
-			Some(l) => l,
-			None => {
-				warn!(
-					target: "telemetry",
-					"The telemetry seems to be polled multiple times simultaneously"
-				);
-				// Returning `Pending` here means that we may never get polled again, but this is
-				// ok because we're in a situation where something else is actually currently doing
-				// the polling.
-				return Poll::Pending;
-			}
-		};
 
 		let mut has_connected = false;
 
 		// The polling pattern is: poll the worker so that it processes its queue, then add one
 		// message from the receiver (if possible), then poll the worker again, and so on.
 		loop {
-			if let Some(worker) = inner.worker.as_mut() {
+			if let Some(worker) = self.inner.worker.as_mut() {
 				while let Poll::Ready(event) = worker.poll(cx) {
 					// Right now we only have one possible event. This line is here in order to not
 					// forget to handle any possible new event type.
@@ -288,9 +256,9 @@ impl Stream for TelemetryStream {
 			if let Poll::Ready(Some((
 				message_verbosity,
 				json,
-			))) = Stream::poll_next(Pin::new(&mut inner.receiver), cx)
+			))) = Stream::poll_next(Pin::new(&mut self.inner.receiver), cx)
 			{
-				if let Some(worker) = inner.worker.as_mut() {
+				if let Some(worker) = self.inner.worker.as_mut() {
 					let _ = worker.log(message_verbosity, json.as_str());
 				}
 			} else {

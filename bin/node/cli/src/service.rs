@@ -237,7 +237,7 @@ pub fn new_full_base(
 		telemetry_connection_sinks: telemetry_connection_sinks.clone(),
 		network_status_sinks: network_status_sinks.clone(),
 		system_rpc_tx,
-		telemetry_stream: telemetry.map(|x| x.stream()),
+		telemetry,
 	})?;
 
 	let (block_import, grandpa_link, babe_link) = import_setup;
@@ -449,7 +449,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			network: network.clone(),
 			telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
 			task_manager: &mut task_manager,
-			telemetry_stream: telemetry.map(|x| x.stream()),
+			telemetry,
 		})?;
 
 	Ok((task_manager, rpc_handlers, client, network, transaction_pool))
