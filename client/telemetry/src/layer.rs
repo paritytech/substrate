@@ -48,12 +48,16 @@ where
 		if let Some(span) = ctx.scope().find(|x| x.name() == TELEMETRY_LOG_SPAN) {
 			let id = span.id().into_u64();
 			if let Some(sender) = self.0.senders.0.lock().get_mut(&id) {
-				let mut attrs = (None, None);
+				let mut attrs = TelemetryAttrs::new(id);
 				let mut vis = TelemetryAttrsVisitor(&mut attrs);
 				event.record(&mut vis);
 
 				match attrs {
-					(Some(message_verbosity), Some(json)) => {
+					TelemetryAttrs {
+						message_verbosity: Some(message_verbosity),
+						json: Some(json),
+						..
+					} => {
 						if let Err(err) = sender.try_send((
 							message_verbosity
 								.try_into()
@@ -76,7 +80,25 @@ where
 	}
 }
 
-struct TelemetryAttrsVisitor<'a>(&'a mut (Option<u64>, Option<String>));
+#[derive(Debug)]
+struct TelemetryAttrs {
+	message_verbosity: Option<u64>,
+	json: Option<String>,
+	id: u64,
+}
+
+impl TelemetryAttrs {
+	fn new(id: u64) -> Self {
+		Self {
+			message_verbosity: None,
+			json: None,
+			id,
+		}
+	}
+}
+
+#[derive(Debug)]
+struct TelemetryAttrsVisitor<'a>(&'a mut TelemetryAttrs);
 
 impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
 	fn record_debug(&mut self, _field: &tracing::field::Field, _value: &dyn std::fmt::Debug) {
@@ -85,13 +107,16 @@ impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
 
 	fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
 		if field.name() == "message_verbosity" {
-			(*self.0).0 = Some(value)
+			(*self.0).message_verbosity = Some(value)
 		}
 	}
 
 	fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
 		if field.name() == "json" {
-			(*self.0).1 = Some(value.to_string())
+			// NOTE: this is a hack to inject the span id into the json
+			let mut message = format!(r#"{{"id":{},"#, (*self.0).id);
+			message.push_str(&value[1..]);
+			(*self.0).json = Some(message)
 		}
 	}
 }

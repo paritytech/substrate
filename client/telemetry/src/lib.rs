@@ -334,6 +334,7 @@ macro_rules! telemetry {
 	( $a:expr; $b:expr; $( $t:tt )* ) => {{
 		let message_verbosity: u8 = $a;
 		let mut json = format_fields_to_json!($($t)*);
+		// NOTE: the span id will be added later in the JSON for the greater good
 		json.insert("level".into(), "INFO".into());
 		json.insert("msg".into(), $b.into());
 		json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
