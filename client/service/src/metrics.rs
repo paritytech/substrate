@@ -331,8 +331,7 @@ impl MetricsService {
 			telemetry!(
 				SUBSTRATE_INFO;
 				"system.network_state";
-				// TODO: not sure why I need `?` all of a sudden?
-				"state" => ? net_state,
+				"state" => net_state,
 			);
 		}
 	}

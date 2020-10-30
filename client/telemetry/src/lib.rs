@@ -368,15 +368,6 @@ macro_rules! format_fields_to_json {
 		map.insert($k.into(), std::format!("{:?}", $v).into());
 		map
 	}};
-	( $k:literal => : $v:expr $(,)? ) => {{
-		$v
-			.map(|x| format_fields_to_json!($k => x))
-			.unwrap_or_else(|| {
-				let mut map = $crate::serde_json::Map::new();
-				map.insert($k.into(), $crate::serde_json::Value::Null);
-				map
-			})
-	}};
 	( $k:literal => $v:expr, $($t:tt)* ) => {{
 		let mut map = format_fields_to_json!($($t)*);
 		map.append(&mut format_fields_to_json!($k => $v));
@@ -385,11 +376,6 @@ macro_rules! format_fields_to_json {
 	( $k:literal => ? $v:expr, $($t:tt)* ) => {{
 		let mut map = format_fields_to_json!($($t)*);
 		map.append(&mut format_fields_to_json!($k => ? $v));
-		map
-	}};
-	( $k:literal => : $v:expr, $($t:tt)* ) => {{
-		let mut map = format_fields_to_json!($($t)*);
-		map.append(&mut format_fields_to_json!($k => : $v));
 		map
 	}};
 }

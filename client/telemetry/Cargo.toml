@@ -30,5 +30,5 @@ take_mut = "0.2.2"
 void = "1.0.2"
 tracing = "0.1.10"
 tracing-subscriber = "0.2.13"
-serde_json = "1.0.41"
+serde_json = { version = "1.0.41", features = ["arbitrary_precision"] }
 chrono = "0.4.13"
