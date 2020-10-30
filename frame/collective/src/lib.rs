@@ -544,9 +544,78 @@ decl_module! {
 			Ok(Some(T::WeightInfo::vote(members.len() as u32)).into())
 		}
 
-		/// Close a vote that is either approved, disapproved or whose voting period has ended.
+		/// Close a vote that is either approved, disapproved, or whose voting period has ended.
 		///
 		/// May be called by any signed account in order to finish voting and close the proposal.
+		///
+		/// If called before the end of the voting period it will only close the vote if it is
+		/// has enough votes to be approved or disapproved.
+		///
+		/// If called after the end of the voting period abstentions are counted as rejections
+		/// unless there is a prime member set and the prime member cast an approval.
+		///
+		/// + `proposal_weight_bound`: The maximum amount of weight consumed by executing the closed proposal.
+		/// + `length_bound`: The upper bound for the length of the proposal in storage. Checked via
+		///                   `storage::read` so it is `size_of::<u32>() == 4` larger than the pure length.
+		///
+		/// # <weight>
+		/// ## Weight
+		/// - `O(B + M + P1 + P2)` where:
+		///   - `B` is `proposal` size in bytes (length-fee-bounded)
+		///   - `M` is members-count (code- and governance-bounded)
+		///   - `P1` is the complexity of `proposal` preimage.
+		///   - `P2` is proposal-count (code-bounded)
+		/// - DB:
+		///  - 2 storage reads (`Members`: codec `O(M)`, `Prime`: codec `O(1)`)
+		///  - 3 mutations (`Voting`: codec `O(M)`, `ProposalOf`: codec `O(B)`, `Proposals`: codec `O(P2)`)
+		///  - any mutations done while executing `proposal` (`P1`)
+		/// - up to 3 events
+		/// # </weight>
+		#[weight = {
+			let b = *length_bound;
+			let m = T::MaxMembers::get();
+			let p1 = *proposal_weight_bound;
+			let p2 = T::MaxProposals::get();
+			T::WeightInfo::close_early_approved(b, m, p2)
+				.max(T::WeightInfo::close_early_disapproved(m, p2))
+				.max(T::WeightInfo::close_approved(b, m, p2))
+				.max(T::WeightInfo::close_disapproved(m, p2))
+				.saturating_add(p1)
+		}]
+		fn close(origin,
+			proposal_hash: T::Hash,
+			#[compact] index: ProposalIndex,
+			#[compact] proposal_weight_bound: Weight,
+			#[compact] length_bound: u32
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin)?;
+			Self::close_impl(proposal_hash, index, proposal_weight_bound, length_bound, None)
+		}
+
+		/// Disapprove a proposal, close, and remove it from the system, regardless of its current state.
+		///
+		/// Must be called by the Root origin.
+		///
+		/// Parameters:
+		/// * `proposal_hash`: The hash of the proposal that should be disapproved.
+		///
+		/// # <weight>
+		/// Complexity: O(P) where P is the number of max proposals
+		/// DB Weight:
+		/// * Reads: Proposals
+		/// * Writes: Voting, Proposals, ProposalOf
+		/// # </weight>
+		#[weight = T::WeightInfo::disapprove_proposal(T::MaxProposals::get())]
+		fn disapprove_proposal(origin, proposal_hash: T::Hash) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
+			Ok(Some(T::WeightInfo::disapprove_proposal(proposal_count)).into())
+		}
+
+		/// Close a vote that is either approved, disapproved, or whose voting period has ended
+		/// with operational transaction priority.
+		///
+		/// May be called only by an active member close the proposal with operational priority.
 		///
 		/// If called before the end of the voting period it will only close the vote if it is
 		/// has enough votes to be approved or disapproved.
@@ -585,35 +654,18 @@ decl_module! {
 			},
 			DispatchClass::Operational
 		)]
-		fn close(origin,
+		fn close_operational(origin,
 			proposal_hash: T::Hash,
 			#[compact] index: ProposalIndex,
 			#[compact] proposal_weight_bound: Weight,
 			#[compact] length_bound: u32
 		) -> DispatchResultWithPostInfo {
-			let _ = ensure_signed(origin)?;
-			Self::close_impl(proposal_hash, index, proposal_weight_bound, length_bound)
+			let who = ensure_signed(origin)?;
+			let members = Self::members();
+			ensure!(members.contains(&who), Error::<T, I>::NotMember);
+			Self::close_impl(proposal_hash, index, proposal_weight_bound, length_bound, Some(&members))
 		}
 
-		/// Disapprove a proposal, close, and remove it from the system, regardless of its current state.
-		///
-		/// Must be called by the Root origin.
-		///
-		/// Parameters:
-		/// * `proposal_hash`: The hash of the proposal that should be disapproved.
-		///
-		/// # <weight>
-		/// Complexity: O(P) where P is the number of max proposals
-		/// DB Weight:
-		/// * Reads: Proposals
-		/// * Writes: Voting, Proposals, ProposalOf
-		/// # </weight>
-		#[weight = T::WeightInfo::disapprove_proposal(T::MaxProposals::get())]
-		fn disapprove_proposal(origin, proposal_hash: T::Hash) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
-			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
-			Ok(Some(T::WeightInfo::disapprove_proposal(proposal_count)).into())
-		}
 	}
 }
 
@@ -704,13 +756,18 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		index: ProposalIndex,
 		proposal_weight_bound: Weight,
 		length_bound: u32,
+		maybe_members: Option<&[T::AccountId]>,
 	) -> DispatchResultWithPostInfo {
 		let voting = Self::voting(&proposal_hash).ok_or(Error::<T, I>::ProposalMissing)?;
 		ensure!(voting.index == index, Error::<T, I>::WrongIndex);
 
 		let mut no_votes = voting.nays.len() as MemberCount;
 		let mut yes_votes = voting.ayes.len() as MemberCount;
-		let seats = Self::members().len() as MemberCount;
+		let seats = if let Some(members) = maybe_members {
+			members.len() as MemberCount
+		} else {
+			Self::members().len() as MemberCount
+		};
 		let approved = yes_votes >= voting.threshold;
 		let disapproved = seats.saturating_sub(no_votes) < voting.threshold;
 		// Allow (dis-)approving the proposal as soon as there are enough votes.
