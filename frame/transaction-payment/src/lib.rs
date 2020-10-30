@@ -50,7 +50,7 @@ use sp_runtime::{
 		TransactionPriority, ValidTransaction, TransactionValidityError, TransactionValidity,
 	},
 	traits::{
-		Zero, Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
+		Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
 		DispatchInfoOf, PostDispatchInfoOf,
 	},
 };
@@ -458,13 +458,8 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 		let tip = self.0;
 		let fee = Module::<T>::compute_fee(len as u32, info, tip);
 
-		// Only mess with balances if fee is not zero.
-		if fee.is_zero() {
-			Ok((fee, Default::default()))
-		} else {
-			<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::withdraw_fee(who, call, info, fee, tip)
-				.map(|i| (fee, i))
-		}
+		<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::withdraw_fee(who, call, info, fee, tip)
+			.map(|i| (fee, i))
 	}
 
 	/// Get an appropriate priority for a transaction with the given length and info.
