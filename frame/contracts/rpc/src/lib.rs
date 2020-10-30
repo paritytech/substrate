@@ -33,11 +33,9 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
 };
 use std::convert::TryInto;
+use pallet_contracts_primitives::ContractExecResult;
 
-pub use self::gen_client::Client as ContractsClient;
-pub use pallet_contracts_rpc_runtime_api::{
-	self as runtime_api, ContractExecResult, ContractsApi as ContractsRuntimeApi,
-};
+pub use pallet_contracts_rpc_runtime_api::ContractsApi as ContractsRuntimeApi;
 
 const RUNTIME_ERROR: i64 = 1;
 const CONTRACT_DOESNT_EXIST: i64 = 2;
@@ -105,17 +103,13 @@ pub enum RpcContractExecResult {
 
 impl From<ContractExecResult> for RpcContractExecResult {
 	fn from(r: ContractExecResult) -> Self {
-		match r {
-			ContractExecResult::Success {
-				flags,
-				data,
-				gas_consumed
-			} => RpcContractExecResult::Success {
-				flags,
-				data: data.into(),
-				gas_consumed,
+		match r.exec_result {
+			Ok(val) => RpcContractExecResult::Success {
+				flags: val.flags.bits(),
+				data: val.data.into(),
+				gas_consumed: r.gas_consumed,
 			},
-			ContractExecResult::Error => RpcContractExecResult::Error(()),
+			_ => RpcContractExecResult::Error(()),
 		}
 	}
 }
@@ -233,7 +227,7 @@ where
 
 		let exec_result = api
 			.call(&at, origin, dest, value, gas_limit, input_data.to_vec())
-			.map_err(|e| runtime_error_into_rpc_err(e))?;
+			.map_err(runtime_error_into_rpc_err)?;
 
 		Ok(exec_result.into())
 	}
@@ -251,7 +245,7 @@ where
 
 		let result = api
 			.get_storage(&at, address, key.into())
-			.map_err(|e| runtime_error_into_rpc_err(e))?
+			.map_err(runtime_error_into_rpc_err)?
 			.map_err(ContractAccessError)?
 			.map(Bytes);
 
@@ -270,7 +264,7 @@ where
 
 		let result = api
 			.rent_projection(&at, address)
-			.map_err(|e| runtime_error_into_rpc_err(e))?
+			.map_err(runtime_error_into_rpc_err)?
 			.map_err(ContractAccessError)?;
 
 		Ok(match result {

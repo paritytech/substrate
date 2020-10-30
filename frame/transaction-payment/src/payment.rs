@@ -2,7 +2,7 @@
 use crate::{NegativeImbalanceOf, Trait};
 use codec::FullCodec;
 use frame_support::{
-	traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReason},
+	traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReasons},
 	unsigned::TransactionValidityError,
 };
 use sp_runtime::{
@@ -79,9 +79,9 @@ where
 		}
 
 		let withdraw_reason = if tip.is_zero() {
-			WithdrawReason::TransactionPayment.into()
+			WithdrawReasons::TRANSACTION_PAYMENT
 		} else {
-			WithdrawReason::TransactionPayment | WithdrawReason::Tip
+			WithdrawReasons::TRANSACTION_PAYMENT | WithdrawReasons::TIP
 		};
 
 		match C::withdraw(who, fee, withdraw_reason, ExistenceRequirement::KeepAlive) {

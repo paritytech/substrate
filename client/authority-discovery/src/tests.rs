@@ -55,9 +55,8 @@ fn get_addresses_and_authority_id() {
 	let (mut worker, mut service) = new_worker_and_service(
 		test_api,
 		network.clone(),
-		vec![],
 		Box::pin(dht_event_rx),
-		Role::Authority(key_store.into()),
+		Role::PublishAndDiscover(key_store.into()),
 		None,
 	);
 	worker.inject_addresses(remote_authority_id.clone(), vec![remote_addr.clone()]);
