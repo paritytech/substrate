@@ -224,7 +224,6 @@ where
 	type Proposer = E::Proposer;
 	type Claim = P::Public;
 	type EpochData = Vec<AuthorityId<P>>;
-	type BackoffAuthoringBlocksStrategy = sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy<NumberFor<B>>;
 
 	fn logging_target(&self) -> &'static str {
 		"aura"

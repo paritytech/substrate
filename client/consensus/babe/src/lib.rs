@@ -502,8 +502,6 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 	>>;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
-	type BackoffAuthoringBlocksStrategy =
-		sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy<NumberFor<B>>;
 
 	fn logging_target(&self) -> &'static str {
 		"babe"

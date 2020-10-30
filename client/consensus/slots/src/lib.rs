@@ -101,9 +101,6 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Epoch data necessary for authoring.
 	type EpochData: Send + 'static;
 
-	/// Strategy for deciding if and when to backoff authoring new blocks if finality starts to lag.
-	type BackoffAuthoringBlocksStrategy: BackoffAuthoringBlocksStrategy<NumberFor<B>>;
-
 	/// The logging target to use when logging messages.
 	fn logging_target(&self) -> &'static str;
 
@@ -601,10 +598,7 @@ pub fn slot_lenience_linear(parent_slot: u64, slot_info: &SlotInfo) -> Option<Du
 }
 
 /// Trait for providing the strategy for when to backoff block authoring.
-pub trait BackoffAuthoringBlocksStrategy<N>
-where
-	N: BaseArithmetic
-{
+pub trait BackoffAuthoringBlocksStrategy<N> {
 	/// Returns true if we should backoff authoring new blocks.
 	fn should_backoff(
 		&self,
@@ -618,7 +612,7 @@ where
 /// A simple default strategy for how to decide backing off authoring blocks if the number of
 /// unfinalized blocks grows too large.
 #[derive(Clone)]
-pub struct SimpleBackoffAuthoringBlocksStrategy<N: BaseArithmetic> {
+pub struct SimpleBackoffAuthoringBlocksStrategy<N> {
 	/// The max interval to backoff when authoring blocks, regardless of delay in finality.
 	pub max_interval: N,
 	/// The number of unfinalized blocks allowed before starting to consider to backoff authoring
