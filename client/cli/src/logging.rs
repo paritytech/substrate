@@ -33,7 +33,7 @@ use tracing_subscriber::{
 /// Span name used for the logging prefix. See macro `sc_cli::prefix_logs_with!`
 pub const PREFIX_LOG_SPAN: &str = "substrate-log-prefix";
 
-pub(crate) struct EventFormat<T = SystemTime> {
+pub struct EventFormat<T = SystemTime> {
 	pub(crate) timer: T,
 	pub(crate) ansi: bool,
 	pub(crate) display_target: bool,

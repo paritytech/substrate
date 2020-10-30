@@ -37,11 +37,27 @@ use tracing::{
 	span::{Attributes, Id, Record},
 	subscriber::Subscriber,
 };
-use tracing_subscriber::{CurrentSpan, layer::{Layer, Context}};
+use tracing_subscriber::{CurrentSpan, layer::{Layer, Context}, EnvFilter};
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
+use tracing_subscriber::reload::Handle;
+use tracing_subscriber::fmt::Formatter;
+use tracing_subscriber::fmt::format::DefaultFields;
+use tracing_subscriber::fmt::time::ChronoLocal;
+use once_cell::sync::OnceCell;
+
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
+
+static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, Formatter<DefaultFields, EventFormat<ChronoLocal>, impl FnOnce() -> std::io::Stderr>>> = OnceCell::new();
+
+pub fn set_reload_handle(handle: Handle<EnvFilter, Formatter<DefaultFields, EventFormat<ChronoLocal>, impl FnOnce() -> std::io::Stderr>>) {
+	let _ = FILTER_RELOAD_HANDLE.set(handle);
+}
+
+pub fn get_Reload_handle() -> Option<&Handle<EnvFilter, Formatter<DefaultFields, EventFormat<ChronoLocal>, impl FnOnce() -> std::io::Stderr>>> {
+	FILTER_RELOAD_HANDLE.get()
+}
 
 /// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingLayer {

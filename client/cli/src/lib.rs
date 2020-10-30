@@ -50,10 +50,13 @@ use structopt::{
 #[doc(hidden)]
 pub use tracing;
 use tracing_subscriber::{
-	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
+	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer, fmt::Formatter, reload::Handle, EnvFilter
 };
 
 pub use logging::PREFIX_LOG_SPAN;
+use tracing_subscriber::layer::Layered;
+use crate::logging::{NodeNameLayer, EventFormat};
+use tracing_subscriber::fmt::format::DefaultFields;
 
 /// Substrate client CLI
 ///
@@ -243,7 +246,8 @@ pub fn init_logger(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
 	profiling_targets: Option<String>,
-) -> std::result::Result<(), String> {
+) -> std::result::Result<(), String>
+{
 	fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
 		dirs.as_ref()
 			.split(',')
@@ -316,7 +320,7 @@ pub fn init_logger(
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-	let subscriber = FmtSubscriber::builder()
+	let subscriber_builder = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
 		.with_writer(std::io::stderr)
 		.event_format(logging::EventFormat {
@@ -326,8 +330,11 @@ pub fn init_logger(
 			display_level: !simple,
 			display_thread_name: !simple,
 		})
-		.finish().with(logging::NodeNameLayer);
-
+		// TODO: Q - There's a small cost to this, do we make it opt-in/out with cli flag?
+		.with_filter_reloading();
+		let handle = subscriber_builder.reload_handle();
+		let subscriber = subscriber_builder.finish().with(logging::NodeNameLayer);
+		sc_tracing::set_reload_handle(handle);
 	if let Some(profiling_targets) = profiling_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
