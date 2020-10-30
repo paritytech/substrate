@@ -64,7 +64,8 @@ pub struct WorkerConfig {
 	///
 	/// By default this is set to 10 minutes.
 	pub priority_group_set_interval: Duration,
-	/// The time the worker will wait after each query interval tick to pass a subset of the cached authority addresses down to the peerset.
+	/// The time the worker will wait after each query interval tick to pass a subset of
+	/// the cached authority addresses down to the peerset.
 	///
 	/// Be aware that the actual delay will be computed by [`Self::query_start_delay`] +
 	/// [`Self::priority_group_set_start_delay`]

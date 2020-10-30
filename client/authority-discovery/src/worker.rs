@@ -153,7 +153,8 @@ where
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 		config: crate::WorkerConfig,
 	) -> Self {
-		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h through libp2p-kad.
+		// Kademlia's default time-to-live for Dht records is 36h, republishing
+		// records every 24h through libp2p-kad.
 		// Given that a node could restart at any point in time, one can not depend on the
 		// republishing process, thus publishing own external addresses should happen on an interval
 		// < 36h.
@@ -172,7 +173,8 @@ where
 		// Querying 500 [`AuthorityId`]s takes ~1m on the Kusama DHT (10th of August 2020) when
 		// comparing `authority_discovery_authority_addresses_requested_total` and
 		// `authority_discovery_dht_event_received`. With that in mind set the peerset priority
-		// group on the same interval as the [`query_interval`] above, just delayed by 5 minutes by default.
+		// group on the same interval as the [`query_interval`] above,
+		// just delayed by 5 minutes by default.
 		let priority_group_set_interval = interval_at(
 			query_interval_start + config.priority_group_set_offset,
 			config.priority_group_set_interval,
