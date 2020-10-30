@@ -49,6 +49,7 @@ pub mod light;
 mod call_executor;
 mod client;
 mod block_rules;
+mod wasm_override;
 
 pub use self::{
 	call_executor::LocalCallExecutor,

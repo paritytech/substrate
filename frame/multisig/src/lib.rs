@@ -46,6 +46,10 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod tests;
+mod benchmarking;
+pub mod weights;
+
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_io::hashing::blake2_256;
@@ -56,27 +60,11 @@ use frame_support::{traits::{Get, ReservableCurrency, Currency},
 };
 use frame_system::{self as system, ensure_signed, RawOrigin};
 use sp_runtime::{DispatchError, DispatchResult, traits::{Dispatchable, Zero}};
-
-mod tests;
-mod benchmarking;
-mod default_weights;
+pub use weights::WeightInfo;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 /// Just a bunch of bytes, but they should decode to a valid `Call`.
 pub type OpaqueCall = Vec<u8>;
-
-pub trait WeightInfo {
-	fn as_multi_threshold_1(z: u32, ) -> Weight;
-	fn as_multi_create(s: u32, z: u32, ) -> Weight;
-	fn as_multi_create_store(s: u32, z: u32, ) -> Weight;
-	fn as_multi_approve(s: u32, z: u32, ) -> Weight;
-	fn as_multi_approve_store(s: u32, z: u32, ) -> Weight;
-	fn as_multi_complete(s: u32, z: u32, ) -> Weight;
-	fn approve_as_multi_create(s: u32, ) -> Weight;
-	fn approve_as_multi_approve(s: u32, ) -> Weight;
-	fn approve_as_multi_complete(s: u32, ) -> Weight;
-	fn cancel_as_multi(s: u32, ) -> Weight;
-}
 
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {

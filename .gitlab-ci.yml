@@ -531,7 +531,7 @@ build-chaos-docker:
     DOCKERFILE:                    $PRODUCT.Dockerfile
     CONTAINER_IMAGE:               paritypr/$PRODUCT
   environment:
-    name:                          parity-chaosnet
+    name:                          parity-simnet
   services:
     - docker:dind
   before_script:
@@ -564,11 +564,11 @@ chaos-test-singlenodeheight:
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
     - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
-  image:                           parity/chaostools:latest
+  image:                           paritypr/simnet:latest
   needs:
     - job:                         build-chaos-docker
   tags:
-    - parity-chaos
+    - parity-simnet
   variables:
     <<:                            *default-vars
     PRODUCT:                       substrate
@@ -579,14 +579,12 @@ chaos-test-singlenodeheight:
     VERSION:                       "ci-${CI_COMMIT_SHORT_SHA}"
   interruptible: true
   environment:
-    name:                          parity-chaosnet
+    name:                          parity-simnet
   script:
-    - cd ./.maintain/chaostest
-    - npm link
-    - chaostest spawn dev -i $CONTAINER_IMAGE:$VERSION
-    - chaostest singlenodeheight -h 30
+    - simnet spawn dev -i $CONTAINER_IMAGE:$VERSION
+    - simnet singlenodeheight -h 30
   after_script:
-    - chaostest clean
+    - simnet clean
 
 #### stage:                        publish
 

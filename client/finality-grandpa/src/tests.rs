@@ -371,7 +371,6 @@ fn run_to_completion_with<F>(
 			},
 			link: link,
 			network: net_service,
-			inherent_data_providers: InherentDataProviders::new(),
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
@@ -503,7 +502,6 @@ fn finalize_3_voters_1_full_observer() {
 			},
 			link: link,
 			network: net_service,
-			inherent_data_providers: InherentDataProviders::new(),
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
@@ -667,7 +665,6 @@ fn transition_3_voters_twice_1_full_observer() {
 			},
 			link: link,
 			network: net_service,
-			inherent_data_providers: InherentDataProviders::new(),
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
@@ -1092,7 +1089,6 @@ fn voter_persists_its_votes() {
 							},
 							link,
 							network: this.net.lock().peers[0].network_service().clone(),
-							inherent_data_providers: InherentDataProviders::new(),
 							telemetry_on_connect: None,
 							voting_rule: VotingRulesBuilder::default().build(),
 							prometheus_registry: None,
@@ -1438,7 +1434,6 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			},
 			link,
 			network: net.lock().peer(peer_id).network_service().clone(),
-			inherent_data_providers: InherentDataProviders::new(),
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
@@ -1819,4 +1814,50 @@ fn imports_justification_for_regular_blocks_on_import() {
 	assert!(
 		client.justification(&BlockId::Hash(block_hash)).unwrap().is_some(),
 	);
+}
+
+#[test]
+fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
+	let alice = Ed25519Keyring::Alice;
+	let voters = make_ids(&[alice]);
+
+	let environment = {
+		let mut net = GrandpaTestNet::new(TestApi::new(voters), 1);
+		let peer = net.peer(0);
+		let network_service = peer.network_service().clone();
+		let link = peer.data.lock().take().unwrap();
+		let (keystore, _keystore_path) = create_keystore(alice);
+		test_environment(&link, Some(keystore), network_service.clone(), ())
+	};
+
+	let signed_prevote = {
+		let prevote = finality_grandpa::Prevote {
+			target_hash: H256::random(),
+			target_number: 1,
+		};
+
+		let signed = alice.sign(&[]).into();
+		(prevote, signed)
+	};
+
+	let mut equivocation = finality_grandpa::Equivocation {
+		round_number: 1,
+		identity: alice.public().into(),
+		first: signed_prevote.clone(),
+		second: signed_prevote.clone(),
+	};
+
+	// reporting the equivocation should fail since the offender is a local
+	// authority (i.e. we have keys in our keystore for the given id)
+	let equivocation_proof = sp_finality_grandpa::Equivocation::Prevote(equivocation.clone());
+	assert!(matches!(
+		environment.report_equivocation(equivocation_proof),
+		Err(Error::Safety(_))
+	));
+
+	// if we set the equivocation offender to another id for which we don't have
+	// keys it should work
+	equivocation.identity = Default::default();
+	let equivocation_proof = sp_finality_grandpa::Equivocation::Prevote(equivocation);
+	assert!(environment.report_equivocation(equivocation_proof).is_ok());
 }

@@ -1655,7 +1655,7 @@ fn crypto_hashes() {
 					0,
 					GAS_LIMIT,
 					params,
-				).0.unwrap();
+				).exec_result.unwrap();
 				assert!(result.is_success());
 				let expected = hash_fn(input.as_ref());
 				assert_eq!(&result.data[..*expected_size], &*expected);
@@ -1688,7 +1688,7 @@ fn transfer_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
 
 		// Contract has enough total balance in order to not go below the subsistence
@@ -1702,7 +1702,7 @@ fn transfer_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 	});
 }
@@ -1735,7 +1735,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::NotCallable);
 
 		assert_ok!(
@@ -1755,7 +1755,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
 
 		// Contract has enough total balance in order to not go below the subsistence
@@ -1769,7 +1769,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough balance but callee reverts because "1" is passed.
@@ -1780,7 +1780,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![1],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeReverted);
 
 		// Contract has enough balance but callee traps because "2" is passed.
@@ -1790,7 +1790,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![2],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeTrapped);
 
 	});
@@ -1825,7 +1825,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0; 33],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
 
 		// Contract has enough total balance in order to not go below the subsistence
@@ -1839,7 +1839,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0; 33],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough balance but the passed code hash is invalid
@@ -1850,7 +1850,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0; 33],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CodeNotFound);
 
 		// Contract has enough balance but callee reverts because "1" is passed.
@@ -1860,7 +1860,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			callee_hash.iter().cloned().chain(sp_std::iter::once(1)).collect(),
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeReverted);
 
 		// Contract has enough balance but callee traps because "2" is passed.
@@ -1870,7 +1870,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			callee_hash.iter().cloned().chain(sp_std::iter::once(2)).collect(),
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeTrapped);
 
 	});

@@ -28,7 +28,7 @@ pub use sp_externalities::{Externalities, ExternalitiesExt};
 /// Code execution engine.
 pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	/// Externalities error type.
-	type Error: Display + Debug + Send + 'static;
+	type Error: Display + Debug + Send + Sync + 'static;
 
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
@@ -184,6 +184,25 @@ impl TaskExecutorExt {
 	pub fn new(spawn_handle: impl SpawnNamed + Send + 'static) -> Self {
 		Self(Box::new(spawn_handle))
 	}
+}
+
+/// Runtime spawn extension.
+pub trait RuntimeSpawn: Send {
+	/// Create new runtime instance and use dynamic dispatch to invoke with specified payload.
+	///
+	/// Returns handle of the spawned task.
+	///
+	/// Function pointers (`dispatcher_ref`, `func`) are WASM pointer types.
+	fn spawn_call(&self, dispatcher_ref: u32, func: u32, payload: Vec<u8>) -> u64;
+
+	/// Join the result of previously created runtime instance invocation.
+	fn join(&self, handle: u64) -> Vec<u8>;
+}
+
+#[cfg(feature = "std")]
+sp_externalities::decl_extension! {
+	/// Extension that supports spawning extra runtime instances in externalities.
+	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
 }
 
 /// Something that can spawn futures (blocking and non-blocking) with an assigned name.
