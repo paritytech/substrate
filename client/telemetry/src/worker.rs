@@ -29,7 +29,12 @@
 //!
 
 use futures::{prelude::*, ready};
-use libp2p::{core::transport::OptionalTransport, Multiaddr, Transport, wasm_ext};
+use libp2p::{
+	core::transport::{OptionalTransport, timeout::TransportTimeout},
+	Multiaddr,
+	Transport,
+	wasm_ext
+};
 use log::{trace, error};
 use parking_lot::Mutex;
 use std::{io, pin::Pin, sync::Arc, task::Context, task::Poll, time};
@@ -61,13 +66,12 @@ pub struct TelemetryWorker {
 pub trait StreamAndSink<I>: Stream + Sink<I> {}
 impl<T: ?Sized + Stream + Sink<I>, I> StreamAndSink<I> for T {}
 
-pub type WsTrans = libp2p::core::transport::boxed::Boxed<
+pub type WsTrans = libp2p::core::transport::Boxed<
 	Pin<Box<dyn StreamAndSink<
 		Vec<u8>,
 		Item = Result<Vec<u8>, io::Error>,
 		Error = io::Error
-	> + Send>>,
-	io::Error
+	> + Send>>
 >;
 
 impl TelemetryWorker {
@@ -106,16 +110,15 @@ impl TelemetryWorker {
 				})
 		});
 
-		let transport = transport
-			.timeout(CONNECT_TIMEOUT)
-			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-			.map(|out, _| {
+		let transport = TransportTimeout::new(
+			transport.map(|out, _| {
 				let out = out
 					.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 					.sink_map_err(|err| io::Error::new(io::ErrorKind::Other, err));
 				Box::pin(out) as Pin<Box<_>>
-			})
-			.boxed();
+			}),
+			CONNECT_TIMEOUT
+		).boxed();
 
 		Ok(TelemetryWorker {
 			nodes: endpoints.into_iter().map(|(addr, verbosity)| {
