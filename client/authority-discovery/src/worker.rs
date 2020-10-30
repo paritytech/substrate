@@ -153,7 +153,7 @@ where
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 		config: crate::WorkerConfig,
 	) -> Self {
-		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 12h by default.
+		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h through libp2p-kad.
 		// Given that a node could restart at any point in time, one can not depend on the
 		// republishing process, thus publishing own external addresses should happen on an interval
 		// < 36h.
