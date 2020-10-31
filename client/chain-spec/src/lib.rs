@@ -20,7 +20,7 @@
 //! a runtime-specific configuration file (a.k.a chain spec).
 //!
 //! Basic chain spec type containing all required parameters is
-//! [`ChainSpec`](./struct.GenericChainSpec.html). It can be extended with
+//! [`GenericChainSpec`]. It can be extended with
 //! additional options that contain configuration specific to your chain.
 //! Usually the extension is going to be an amalgamate of types exposed
 //! by Substrate core modules. To allow the core modules to retrieve
