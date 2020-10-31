@@ -631,29 +631,29 @@ pub(crate) fn setup_inputs<AccountId: IdentifierT>(
 
 	let voters = initial_voters.into_iter().filter_map(|(who, voter_stake, votes)| {
 		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
+		for v in votes {
+			if edges.iter().any(|e| e.who == v) {
+				// duplicate edge.
+				continue;
+			}
+			if let Some(idx) = c_idx_cache.get(&v) {
+				// This candidate is valid + already cached.
+				let mut candidate = candidates[*idx].borrow_mut();
+				candidate.approval_stake =
+					candidate.approval_stake.saturating_add(voter_stake.into());
+				edges.push(
+					Edge {
+						who: v.clone(),
+						candidate: Rc::clone(&candidates[*idx]),
+						..Default::default()
+					}
+				);
+			} // else {} would be wrong votes. We don't really care about it.
+		}
 		if edges.is_empty() {
 			None
 		}
 		else {
-			for v in votes {
-				if edges.iter().any(|e| e.who == v) {
-					// duplicate edge.
-					continue;
-				}
-				if let Some(idx) = c_idx_cache.get(&v) {
-					// This candidate is valid + already cached.
-					let mut candidate = candidates[*idx].borrow_mut();
-					candidate.approval_stake =
-						candidate.approval_stake.saturating_add(voter_stake.into());
-					edges.push(
-						Edge {
-							who: v.clone(),
-							candidate: Rc::clone(&candidates[*idx]),
-							..Default::default()
-						}
-					);
-				} // else {} would be wrong votes. We don't really care about it.
-			}
 			Some(Voter {
 				who,
 				edges: edges,
@@ -661,6 +661,7 @@ pub(crate) fn setup_inputs<AccountId: IdentifierT>(
 				load: Rational128::zero(),
 			})
 		}
+
 	}).collect::<Vec<_>>();
 
 	(candidates, voters,)
