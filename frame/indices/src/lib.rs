@@ -21,7 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod mock;
-pub mod address;
 mod tests;
 mod benchmarking;
 pub mod weights;
