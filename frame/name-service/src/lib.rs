@@ -26,7 +26,7 @@ use frame_support::{decl_module, decl_error, decl_event, decl_storage, ensure, R
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Get, EnsureOrigin, OnUnbalanced,
-	WithdrawReason, ExistenceRequirement::KeepAlive, Imbalance,
+	WithdrawReasons, ExistenceRequirement::KeepAlive, Imbalance,
 };
 use frame_system::ensure_signed;
 use codec::{Codec, Encode, Decode};
@@ -266,7 +266,7 @@ decl_module! {
 							T::Currency::withdraw(
 								current_bidder,
 								withdraw_amount,
-								WithdrawReason::Fee.into(),
+								WithdrawReasons::FEE,
 								KeepAlive
 							)?
 						};
@@ -380,7 +380,7 @@ decl_module! {
 							let credit = T::Currency::withdraw(
 								&caller,
 								extension_fee,
-								WithdrawReason::Fee.into(),
+								WithdrawReasons::FEE,
 								KeepAlive
 							)?;
 							T::PaymentDestination::on_unbalanced(credit);
@@ -398,8 +398,11 @@ decl_module! {
 
 impl<T: Trait> Module<T> {}
 
-impl<T: Trait> StaticLookup for Module<T> {
-	type Source = MultiAddress<T::AccountId, u32>;
+impl<T: Trait> StaticLookup for Module<T>
+where
+	MultiAddress<T::AccountId, T::AccountIndex>: Codec,
+{
+	type Source = MultiAddress<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
 
 	fn lookup(a: Self::Source) -> Result<Self::Target, LookupError> {
