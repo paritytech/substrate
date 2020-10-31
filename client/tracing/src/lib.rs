@@ -44,17 +44,15 @@ use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 use tracing_subscriber::reload::Handle;
 use tracing_subscriber::fmt::Formatter;
-use tracing_subscriber::fmt::format::DefaultFields;
-use tracing_subscriber::fmt::time::ChronoLocal;
 use once_cell::sync::OnceCell;
 use tracing_subscriber::filter::Directive;
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 
-static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, Formatter<DefaultFields, logging::EventFormat<ChronoLocal>, fn() -> std::io::Stderr>>> = OnceCell::new();
+static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, Formatter>> = OnceCell::new();
 
 /// Initialize FILTER_RELOAD_HANDLE, only possible once
-pub fn set_reload_handle(handle: Handle<EnvFilter, Formatter<DefaultFields, logging::EventFormat<ChronoLocal>, fn() -> std::io::Stderr>>) {
+pub fn set_reload_handle(handle: Handle<EnvFilter, Formatter>) {
 	let _ = FILTER_RELOAD_HANDLE.set(handle);
 }
 

@@ -256,7 +256,7 @@ pub fn init_logger(
 		))
 	}
 
-	let mut env_filter = tracing_subscriber::EnvFilter::default()
+	let mut env_filter: EnvFilter = tracing_subscriber::EnvFilter::default()
 		// Disable info logging by default for some modules.
 		.add_directive("ws=off".parse().expect("provided directive is valid"))
 		.add_directive("yamux=off".parse().expect("provided directive is valid"))
@@ -317,18 +317,21 @@ pub fn init_logger(
 
 	let subscriber_builder = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
-		.with_writer(std::io::stderr)
-		.event_format(logging::EventFormat {
-			timer,
-			ansi: enable_color,
-			display_target: !simple,
-			display_level: !simple,
-			display_thread_name: !simple,
-		})
 		// TODO: Q - There's a small cost to this, do we make it opt-in/out with cli flag?
 		.with_filter_reloading();
-		let handle = subscriber_builder.reload_handle();
-		let subscriber = subscriber_builder.finish().with(logging::NodeNameLayer);
+	let handle = subscriber_builder.reload_handle();
+	let subscriber = subscriber_builder
+		// TODO: re-enable this
+		// .with_writer(std::io::stderr)
+		// .event_format(logging::EventFormat {
+		// 	timer,
+		// 	ansi: enable_color,
+		// 	display_target: !simple,
+		// 	display_level: !simple,
+		// 	display_thread_name: !simple,
+		// })
+		.finish()
+		.with(logging::NodeNameLayer);
 		sc_tracing::set_reload_handle(handle);
 	if let Some(profiling_targets) = profiling_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &profiling_targets);
