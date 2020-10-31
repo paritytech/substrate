@@ -93,7 +93,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-mod default_weights;
+pub mod weights;
 
 use sp_std::{result, cmp};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
@@ -115,11 +115,7 @@ use sp_timestamp::{
 	InherentError, INHERENT_IDENTIFIER, InherentType,
 	OnTimestampSet,
 };
-
-pub trait WeightInfo {
-	fn set() -> Weight;
-	fn on_finalize() -> Weight;
-}
+pub use weights::WeightInfo;
 
 /// The module configuration trait
 pub trait Trait: frame_system::Trait {

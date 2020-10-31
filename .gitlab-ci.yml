@@ -531,7 +531,7 @@ build-chaos-docker:
     DOCKERFILE:                    $PRODUCT.Dockerfile
     CONTAINER_IMAGE:               paritypr/$PRODUCT
   environment:
-    name:                          parity-chaosnet
+    name:                          parity-simnet
   services:
     - docker:dind
   before_script:
@@ -568,7 +568,7 @@ chaos-test-singlenodeheight:
   needs:
     - job:                         build-chaos-docker
   tags:
-    - parity-chaos
+    - parity-simnet
   variables:
     <<:                            *default-vars
     PRODUCT:                       substrate
@@ -579,7 +579,7 @@ chaos-test-singlenodeheight:
     VERSION:                       "ci-${CI_COMMIT_SHORT_SHA}"
   interruptible: true
   environment:
-    name:                          parity-chaosnet
+    name:                          parity-simnet
   script:
     - simnet spawn dev -i $CONTAINER_IMAGE:$VERSION
     - simnet singlenodeheight -h 30

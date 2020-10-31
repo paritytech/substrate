@@ -162,7 +162,7 @@ use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
 	weights::{Weight, DispatchClass, Pays},
 	traits::{
-		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
+		Currency, ReservableCurrency, LockableCurrency, WithdrawReasons, LockIdentifier, Get,
 		OnUnbalanced, BalanceStatus, schedule::{Named as ScheduleNamed, DispatchTime}, EnsureOrigin
 	},
 	dispatch::DispatchResultWithPostInfo,
@@ -173,7 +173,8 @@ mod vote_threshold;
 mod vote;
 mod conviction;
 mod types;
-mod default_weight;
+pub mod weights;
+pub use weights::WeightInfo;
 pub use vote_threshold::{Approved, VoteThreshold};
 pub use vote::{Vote, AccountVote, Voting};
 pub use conviction::Conviction;
@@ -201,34 +202,6 @@ pub type ReferendumIndex = u32;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
-
-pub trait WeightInfo {
-	fn propose() -> Weight;
-	fn second(s: u32, ) -> Weight;
-	fn vote_new(r: u32, ) -> Weight;
-	fn vote_existing(r: u32, ) -> Weight;
-	fn emergency_cancel() -> Weight;
-	fn blacklist(p: u32, ) -> Weight;
-	fn external_propose(v: u32, ) -> Weight;
-	fn external_propose_majority() -> Weight;
-	fn external_propose_default() -> Weight;
-	fn fast_track() -> Weight;
-	fn veto_external(v: u32, ) -> Weight;
-	fn cancel_referendum() -> Weight;
-	fn cancel_proposal(p: u32, ) -> Weight;
-	fn cancel_queued(r: u32, ) -> Weight;
-	fn on_initialize_base(r: u32, ) -> Weight;
-	fn delegate(r: u32, ) -> Weight;
-	fn undelegate(r: u32, ) -> Weight;
-	fn clear_public_proposals() -> Weight;
-	fn note_preimage(b: u32, ) -> Weight;
-	fn note_imminent_preimage(b: u32, ) -> Weight;
-	fn reap_preimage(b: u32, ) -> Weight;
-	fn unlock_remove(r: u32, ) -> Weight;
-	fn unlock_set(r: u32, ) -> Weight;
-	fn remove_vote(r: u32, ) -> Weight;
-	fn remove_other_vote(r: u32, ) -> Weight;
-}
 
 pub trait Trait: frame_system::Trait + Sized {
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + From<Call<Self>>;
@@ -1305,7 +1278,7 @@ impl<T: Trait> Module<T> {
 			DEMOCRACY_ID,
 			who,
 			vote.balance(),
-			WithdrawReason::Transfer.into()
+			WithdrawReasons::TRANSFER
 		);
 		ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
 		Ok(())
@@ -1437,7 +1410,7 @@ impl<T: Trait> Module<T> {
 				DEMOCRACY_ID,
 				&who,
 				balance,
-				WithdrawReason::Transfer.into()
+				WithdrawReasons::TRANSFER
 			);
 			Ok(votes)
 		})?;
@@ -1488,7 +1461,7 @@ impl<T: Trait> Module<T> {
 		if lock_needed.is_zero() {
 			T::Currency::remove_lock(DEMOCRACY_ID, who);
 		} else {
-			T::Currency::set_lock(DEMOCRACY_ID, who, lock_needed, WithdrawReason::Transfer.into());
+			T::Currency::set_lock(DEMOCRACY_ID, who, lock_needed, WithdrawReasons::TRANSFER);
 		}
 	}
 
