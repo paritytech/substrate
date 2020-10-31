@@ -171,7 +171,11 @@ impl TestNetFactory for GrandpaTestNet {
 	) -> Option<Arc<dyn sc_network::config::FinalityProofProvider<Block>>> {
 		match client {
 			PeersClient::Full(_, ref backend)  => {
-				Some(Arc::new(FinalityProofProvider::new(backend.clone(), self.test_config.clone())))
+				Some(Arc::new(FinalityProofProvider::new(
+					backend.clone(),
+					self.test_config.clone(),
+					None,
+				)))
 			},
 			PeersClient::Light(_, _) => None,
 		}
@@ -1542,7 +1546,6 @@ where
 {
 	let PersistentData {
 		ref authority_set,
-		ref authority_set_changes,
 		ref consensus_changes,
 		ref set_state,
 		..
@@ -1566,7 +1569,6 @@ where
 
 	Environment {
 		authority_set: authority_set.clone(),
-		authority_set_changes: authority_set_changes.clone(),
 		config: config.clone(),
 		consensus_changes: consensus_changes.clone(),
 		client: link.client.clone(),

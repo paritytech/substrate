@@ -83,7 +83,7 @@ pub trait GrandpaApi<Notification, Hash, N> {
 	) -> jsonrpc_core::Result<bool>;
 
 	/// Prove finality for the given block number.
-	/// WIP: expand this
+	/// WIP(JON): expand this
 	#[rpc(name = "grandpa_proveFinality")]
 	fn prove_finality(
 		&self,
@@ -172,9 +172,7 @@ where
 		&self,
 		block: NumberFor<Block>,
 	) -> FutureResult<Option<EncodedFinalityProofs>> {
-		let result = self
-			.finality_proof_provider
-			.rpc_prove_finality(block);
+		let result = self.finality_proof_provider.rpc_prove_finality(block);
 		let future = async move { result }.boxed();
 		Box::new(
 			future

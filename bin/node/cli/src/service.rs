@@ -110,8 +110,11 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		let justification_stream = grandpa_link.justification_stream();
 		let shared_authority_set = grandpa_link.shared_authority_set().clone();
 		let shared_voter_state = grandpa::SharedVoterState::empty();
-		let finality_proof_provider =
-			GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
+		let finality_proof_provider = GrandpaFinalityProofProvider::new_for_service(
+			backend.clone(),
+			client.clone(),
+			Some(shared_authority_set.clone()),
+		);
 
 		let rpc_setup = (shared_voter_state.clone(), finality_proof_provider.clone());
 
@@ -390,8 +393,11 @@ pub fn new_light_base(config: Configuration) -> Result<(
 		sp_consensus::NeverCanAuthor,
 	)?;
 
-	let finality_proof_provider =
-		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
+	let finality_proof_provider = GrandpaFinalityProofProvider::new_for_service(
+		backend.clone(),
+		client.clone(),
+		None,
+	);
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {

@@ -59,6 +59,7 @@ use sp_finality_grandpa::{AuthorityId, AuthorityList, VersionedAuthorityList, GR
 
 use crate::justification::GrandpaJustification;
 use crate::VoterSet;
+use crate::SharedAuthoritySet;
 
 /// Maximum number of fragments that we want to return in a single prove_finality call.
 const MAX_FRAGMENTS_IN_PROOF: usize = 8;
@@ -154,6 +155,7 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 pub struct FinalityProofProvider<B, Block: BlockT> {
 	backend: Arc<B>,
 	authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
+	shared_authority_set: Option<SharedAuthoritySet<Block::Hash, NumberFor<Block>>>,
 }
 
 impl<B, Block: BlockT> FinalityProofProvider<B, Block>
@@ -166,10 +168,15 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	pub fn new<P>(
 		backend: Arc<B>,
 		authority_provider: P,
+		shared_authority_set: Option<SharedAuthoritySet<Block::Hash, NumberFor<Block>>>,
 	) -> Self
 		where P: AuthoritySetForFinalityProver<Block> + 'static,
 	{
-		FinalityProofProvider { backend, authority_provider: Arc::new(authority_provider) }
+		FinalityProofProvider {
+			backend,
+			authority_provider: Arc::new(authority_provider),
+			shared_authority_set,
+		}
 	}
 
 	/// Create new finality proof provider for the service using:
@@ -179,8 +186,13 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	pub fn new_for_service(
 		backend: Arc<B>,
 		storage_and_proof_provider: Arc<dyn StorageAndProofProvider<Block, B>>,
+		shared_authority_set: Option<SharedAuthoritySet<Block::Hash, NumberFor<Block>>>,
 	) -> Arc<Self> {
-		Arc::new(Self::new(backend, storage_and_proof_provider))
+		Arc::new(Self::new(
+			backend,
+			storage_and_proof_provider,
+			shared_authority_set,
+		))
 	}
 }
 
@@ -191,21 +203,30 @@ impl<B, Block> FinalityProofProvider<B, Block>
 		B: Backend<Block> + Send + Sync + 'static,
 {
 	/// Prove finality for the given block number.
-	/// WIP: expand this description
+	/// WIP(JON): expand this description
 	pub fn prove_finality(
 		&self,
 		block: NumberFor<Block>,
 	) -> Result<Option<Vec<u8>>, ClientError> {
-		let blocks_where_set_changes =
-			match crate::aux_schema::load_authority_set_changes::<_, Block>(&*self.backend)? {
-				Some(blocks) => blocks,
-				None => return Ok(None),
-			};
-		let (set_id, last_block_for_set) = blocks_where_set_changes.get_set_id(block);
+		let (last_block_for_set, set_id) = match self.shared_authority_set
+			.as_ref()
+			.map(SharedAuthoritySet::authority_set_changes)
+			.and_then(|changes| changes.get_set_id(block))
+		{
+			Some((last_block_for_set, set_id)) => (last_block_for_set, set_id),
+			None => return Ok(None),
+		};
 
 		// Convert from block numbers to hashes
-		let last_block_for_set = self.backend.blockchain().hash(last_block_for_set).unwrap().unwrap();
-		let block = self.backend.blockchain().hash(block).unwrap().unwrap();
+		let block = match self.backend.blockchain().hash(block)? {
+			Some(block) => block,
+			None => return Ok(None),
+		};
+
+		let last_block_for_set = match self.backend.blockchain().hash(last_block_for_set)? {
+			Some(block) => block,
+			None => return Ok(None),
+		};
 
 		prove_finality::<_, _, GrandpaJustification<Block>>(
 			&*self.backend.blockchain(),

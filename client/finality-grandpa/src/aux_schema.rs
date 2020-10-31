@@ -27,8 +27,9 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
 use sp_finality_grandpa::{AuthorityList, SetId, RoundNumber};
 
-use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
-use crate::authority_set_changes::{AuthoritySetChanges, SharedAuthoritySetChanges};
+use crate::authorities::{
+	AuthoritySet, AuthoritySetChanges, SharedAuthoritySet, PendingChange, DelayKind,
+};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
 use crate::environment::{
 	CompletedRound, CompletedRounds, CurrentRounds, HasVoted, SharedVoterSetState, VoterSetState,
@@ -40,7 +41,6 @@ const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
 const CONCLUDED_ROUNDS: &[u8] = b"grandpa_concluded_rounds";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
-const AUTHORITY_SET_CHANGES_KEY: &[u8] = b"grandpa_authority_set_changes";
 
 const CURRENT_VERSION: u32 = 2;
 
@@ -104,6 +104,7 @@ where H: Clone + Debug + PartialEq,
 			self.set_id,
 			pending_standard_changes,
 			Vec::new(),
+			AuthoritySetChanges::empty(),
 		);
 
 		authority_set.expect("current_authorities is non-empty and weights are non-zero; qed.")
@@ -124,7 +125,6 @@ pub(crate) fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> Cl
 /// Persistent data kept between runs.
 pub(crate) struct PersistentData<Block: BlockT> {
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	pub(crate) authority_set_changes: SharedAuthoritySetChanges<NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	pub(crate) set_state: SharedVoterSetState<Block>,
 }
@@ -277,8 +277,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	let version: Option<u32> = load_decode(backend, VERSION_KEY)?;
 	let consensus_changes = load_decode(backend, CONSENSUS_CHANGES_KEY)?
 		.unwrap_or_else(ConsensusChanges::<Block::Hash, NumberFor<Block>>::empty);
-	let authority_set_changes = load_decode(backend, AUTHORITY_SET_CHANGES_KEY)?
-		.unwrap_or_else(AuthoritySetChanges::<NumberFor<Block>>::empty);
 
 	let make_genesis_round = move || RoundState::genesis((genesis_hash, genesis_number));
 
@@ -287,7 +285,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 			if let Some((new_set, set_state)) = migrate_from_version0::<Block, _, _>(backend, &make_genesis_round)? {
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
-					authority_set_changes: Arc::new(authority_set_changes.into()),
 					consensus_changes: Arc::new(consensus_changes.into()),
 					set_state: set_state.into(),
 				});
@@ -297,7 +294,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 			if let Some((new_set, set_state)) = migrate_from_version1::<Block, _, _>(backend, &make_genesis_round)? {
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
-					authority_set_changes: Arc::new(authority_set_changes.into()),
 					consensus_changes: Arc::new(consensus_changes.into()),
 					set_state: set_state.into(),
 				});
@@ -328,7 +324,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 
 				return Ok(PersistentData {
 					authority_set: set.into(),
-					authority_set_changes: Arc::new(authority_set_changes.into()),
 					consensus_changes: Arc::new(consensus_changes.into()),
 					set_state: set_state.into(),
 				});
@@ -366,7 +361,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 
 	Ok(PersistentData {
 		authority_set: genesis_set.into(),
-		authority_set_changes: Arc::new(authority_set_changes.into()),
 		set_state: genesis_state.into(),
 		consensus_changes: Arc::new(consensus_changes.into()),
 	})
@@ -430,20 +424,6 @@ pub(crate) fn write_concluded_round<Block: BlockT, B: AuxStore>(
 	backend.insert_aux(&[(&key[..], round_data.encode().as_slice())], &[])
 }
 
-pub(crate) fn update_authority_set_changes<N, F, R>(
-	authority_set_changes: &AuthoritySetChanges<N>,
-	write_aux: F,
-) -> R
-where
-	N: Encode,
-	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
-{
-	write_aux(&[(
-		AUTHORITY_SET_CHANGES_KEY,
-		authority_set_changes.encode().as_slice()
-	)])
-}
-
 /// Update the consensus changes.
 pub(crate) fn update_consensus_changes<H, N, F, R>(
 	set: &ConsensusChanges<H, N>,
@@ -454,12 +434,6 @@ pub(crate) fn update_consensus_changes<H, N, F, R>(
 	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
 {
 	write_aux(&[(CONSENSUS_CHANGES_KEY, set.encode().as_slice())])
-}
-
-pub(crate) fn load_authority_set_changes<B: AuxStore, Block: BlockT>(backend: &B)
-	-> ClientResult<Option<AuthoritySetChanges<NumberFor<Block>>>>
-{
-	load_decode(backend, AUTHORITY_SET_CHANGES_KEY)
 }
 
 #[cfg(test)]
@@ -540,6 +514,7 @@ mod test {
 				set_id,
 				ForkTree::new(),
 				Vec::new(),
+				AuthoritySetChanges::empty(),
 			).unwrap(),
 		);
 
@@ -584,6 +559,7 @@ mod test {
 				set_id,
 				ForkTree::new(),
 				Vec::new(),
+				AuthoritySetChanges::empty(),
 			).unwrap();
 
 			let voter_set_state = V1VoterSetState::Live(round_number, round_state.clone());
@@ -630,6 +606,7 @@ mod test {
 				set_id,
 				ForkTree::new(),
 				Vec::new(),
+				AuthoritySetChanges::empty(),
 			).unwrap(),
 		);
 

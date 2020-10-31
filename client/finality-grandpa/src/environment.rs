@@ -48,7 +48,6 @@ use crate::{
 use sp_consensus::SelectChain;
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
-use crate::authority_set_changes::SharedAuthoritySetChanges;
 use crate::communication::Network as NetworkT;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::notification::GrandpaJustificationSender;
@@ -417,7 +416,6 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) config: Config,
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-	pub(crate) authority_set_changes: SharedAuthoritySetChanges<NumberFor<Block>>,
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
@@ -1080,7 +1078,6 @@ where
 		finalize_block(
 			self.client.clone(),
 			&self.authority_set,
-			&self.authority_set_changes,
 			&self.consensus_changes,
 			Some(self.config.justification_period.into()),
 			hash,
@@ -1146,7 +1143,6 @@ impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<
 pub(crate) fn finalize_block<BE, Block, Client>(
 	client: Arc<Client>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	authority_set_changes: &SharedAuthoritySetChanges<NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	justification_period: Option<NumberFor<Block>>,
 	hash: Block::Hash,
@@ -1185,8 +1181,6 @@ where
 	// holds the old consensus changes in case it is changed below, needed for
 	// reverting in case of failure
 	let mut old_consensus_changes = None;
-
-	let mut authority_set_changes = authority_set_changes.lock();
 
 	let mut consensus_changes = consensus_changes.lock();
 	let canon_at_height = |canon_number| {
@@ -1304,23 +1298,6 @@ where
 		let new_authorities = if let Some((canon_hash, canon_number)) = status.new_set_block {
 			// the authority set has changed.
 			let (new_id, set_ref) = authority_set.current();
-
-			// Persist the number of the last block of the session
-			if number > NumberFor::<Block>::zero() {
-				let parent_number = number - NumberFor::<Block>::one();
-				authority_set_changes.append(parent_number);
-				let write_result = crate::aux_schema::update_authority_set_changes(
-					&*authority_set_changes,
-					|insert| apply_aux(import_op, insert, &[]),
-				);
-				if let Err(e) = write_result {
-					warn!(
-						target: "afg",
-						"Failed to write updated authority set changes to disk: {}",
-						e
-					);
-				}
-			}
 
 			if set_ref.len() > 16 {
 				afg_log!(initial_sync,

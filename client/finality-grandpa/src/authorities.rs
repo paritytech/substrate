@@ -114,6 +114,11 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 	pub fn clone_inner(&self) -> AuthoritySet<H, N> {
 		self.inner.read().clone()
 	}
+
+	/// WIP(JON)
+	pub fn authority_set_changes(&self) -> AuthoritySetChanges<N> {
+		self.inner.read().authority_set_changes.clone()
+	}
 }
 
 impl<H, N> From<AuthoritySet<H, N>> for SharedAuthoritySet<H, N> {
@@ -152,12 +157,14 @@ pub struct AuthoritySet<H, N> {
 	/// is lower than the last finalized block (as signaled in the forced
 	/// change) must be applied beforehand.
 	pending_forced_changes: Vec<PendingChange<H, N>>,
+	// WIP(JON)
+	pub(crate) authority_set_changes: AuthoritySetChanges<N>,
 }
 
 impl<H, N> AuthoritySet<H, N>
 where
 	H: PartialEq,
-	N: Ord,
+	N: Ord + Clone,
 {
 	// authority sets must be non-empty and all weights must be greater than 0
 	fn invalid_authority_list(authorities: &AuthorityList) -> bool {
@@ -175,6 +182,7 @@ where
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		})
 	}
 
@@ -184,6 +192,7 @@ where
 		set_id: u64,
 		pending_standard_changes: ForkTree<H, N, PendingChange<H, N>>,
 		pending_forced_changes: Vec<PendingChange<H, N>>,
+		authority_set_changes: AuthoritySetChanges<N>,
 	) -> Option<Self> {
 		if Self::invalid_authority_list(&authorities) {
 			return None;
@@ -194,6 +203,7 @@ where
 			set_id,
 			pending_standard_changes,
 			pending_forced_changes,
+			authority_set_changes,
 		})
 	}
 
@@ -461,6 +471,7 @@ where
 						set_id: self.set_id + 1,
 						pending_standard_changes: ForkTree::new(), // new set, new changes.
 						pending_forced_changes: Vec::new(),
+						authority_set_changes: AuthoritySetChanges::empty(),
 					},
 				));
 
@@ -531,6 +542,10 @@ where
 					telemetry!(CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
 						"block" => ?change.canon_height
 					);
+
+					// WIP(JON)
+					// Store the set_id together with the last block_number
+					self.authority_set_changes.append(finalized_number.clone(), self.set_id);
 
 					self.current_authorities = change.next_authorities;
 					self.set_id += 1;
@@ -631,6 +646,43 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 	}
 }
 
+// Tracks authority set changes. We store the block numbers for the first block of each authority
+// set.
+#[derive(Debug, Encode, Decode, Clone, PartialEq)]
+pub struct AuthoritySetChanges<N> {
+    // WIP(JON): reconsider this choice of container
+    // (block_number, set_id)
+    authority_set_changes: Vec<(N, u64)>,
+}
+
+impl<N: Ord + Clone> AuthoritySetChanges<N> {
+    pub(crate) fn empty() -> Self {
+        Self {
+            authority_set_changes: Default::default(),
+        }
+    }
+
+    pub(crate) fn append(&mut self, block_number: N, set_id: u64) {
+        println!("JON: AuthoritySetChanges::append()");
+        // dbg!(&number);
+        // self.authority_set_changes.insert(block_number, set_id);
+        self.authority_set_changes.push((block_number, set_id));
+    }
+
+    pub(crate) fn get_set_id(&self, block_number: N) -> Option<(N, u64)> {
+        // self.authority_set_changes.range(block_number..).next()
+        // WIP(JON): just happy unwrap
+        let idx = self.authority_set_changes
+            .binary_search_by_key(&block_number, |(b, _n)| b.clone())
+			.unwrap_or_else(|b| b);
+		if idx < self.authority_set_changes.len() {
+			Some(self.authority_set_changes[idx].clone())
+		} else {
+			None
+		}
+    }
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -657,6 +709,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let change = |height| {
@@ -704,6 +757,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let change_a = PendingChange {
@@ -771,6 +825,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
@@ -846,6 +901,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
@@ -924,6 +980,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
@@ -990,6 +1047,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
@@ -1073,6 +1131,7 @@ mod tests {
 					set_id: 1,
 					pending_standard_changes: ForkTree::new(),
 					pending_forced_changes: Vec::new(),
+					authority_set_changes: AuthoritySetChanges::empty(),
 				},
 			)
 		);
@@ -1086,6 +1145,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
@@ -1124,6 +1184,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		// effective at #15
@@ -1210,6 +1271,7 @@ mod tests {
 					set_id: 3,
 					pending_standard_changes: ForkTree::new(),
 					pending_forced_changes: Vec::new(),
+					authority_set_changes: AuthoritySetChanges::empty(),
 				}
 			),
 		);
@@ -1224,6 +1286,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let new_set = current_authorities.clone();
@@ -1342,7 +1405,13 @@ mod tests {
 		// empty authority lists are invalid
 		assert_eq!(AuthoritySet::<(), ()>::genesis(vec![]), None);
 		assert_eq!(
-			AuthoritySet::<(), ()>::new(vec![], 0, ForkTree::new(), Vec::new()),
+			AuthoritySet::<(), ()>::new(
+				vec![],
+				0,
+				ForkTree::new(),
+				Vec::new(),
+				AuthoritySetChanges::empty(),
+			),
 			None,
 		);
 
@@ -1361,7 +1430,8 @@ mod tests {
 				invalid_authorities_weight.clone(),
 				0,
 				ForkTree::new(),
-				Vec::new()
+				Vec::new(),
+				AuthoritySetChanges::empty(),
 			),
 			None,
 		);
@@ -1416,6 +1486,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let new_set = current_authorities.clone();

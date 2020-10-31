@@ -41,7 +41,6 @@ use sp_runtime::traits::{
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
-use crate::authority_set_changes::SharedAuthoritySetChanges;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::finalize_block;
 use crate::justification::GrandpaJustification;
@@ -61,7 +60,6 @@ pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	inner: Arc<Client>,
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	authority_set_changes: SharedAuthoritySetChanges<NumberFor<Block>>,
 	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	authority_set_hard_forks: HashMap<Block::Hash, PendingChange<Block::Hash, NumberFor<Block>>>,
@@ -77,7 +75,6 @@ impl<Backend, Block: BlockT, Client, SC: Clone> Clone for
 			inner: self.inner.clone(),
 			select_chain: self.select_chain.clone(),
 			authority_set: self.authority_set.clone(),
-			authority_set_changes: self.authority_set_changes.clone(),
 			send_voter_commands: self.send_voter_commands.clone(),
 			consensus_changes: self.consensus_changes.clone(),
 			authority_set_hard_forks: self.authority_set_hard_forks.clone(),
@@ -563,7 +560,6 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 		inner: Arc<Client>,
 		select_chain: SC,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-		authority_set_changes: SharedAuthoritySetChanges<NumberFor<Block>>,
 		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 		authority_set_hard_forks: Vec<(SetId, PendingChange<Block::Hash, NumberFor<Block>>)>,
@@ -608,7 +604,6 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 			inner,
 			select_chain,
 			authority_set,
-			authority_set_changes,
 			send_voter_commands,
 			consensus_changes,
 			authority_set_hard_forks,
@@ -651,7 +646,6 @@ where
 		let result = finalize_block(
 			self.inner.clone(),
 			&self.authority_set,
-			&self.authority_set_changes,
 			&self.consensus_changes,
 			None,
 			hash,
