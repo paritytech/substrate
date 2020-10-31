@@ -28,7 +28,7 @@ pub use sp_externalities::{Externalities, ExternalitiesExt};
 /// Code execution engine.
 pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	/// Externalities error type.
-	type Error: Display + Debug + Send + 'static;
+	type Error: Display + Debug + Send + Sync + 'static;
 
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.

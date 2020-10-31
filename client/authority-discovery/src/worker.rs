@@ -29,7 +29,6 @@ use futures_timer::Delay;
 use addr_cache::AddrCache;
 use async_trait::async_trait;
 use codec::Decode;
-use either::Either;
 use libp2p::{core::multiaddr, multihash::Multihash};
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
@@ -37,7 +36,6 @@ use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network::{
-	config::MultiaddrWithPeerId,
 	DhtEvent,
 	ExHashT,
 	Multiaddr,
@@ -60,9 +58,6 @@ type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
 
 const LOG_TARGET: &'static str = "sub-authority-discovery";
 
-/// Upper bound estimation on how long one should wait before accessing the Kademlia DHT.
-const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
-
 /// Name of the Substrate peerset priority group for authorities discovered through the authority
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
@@ -73,68 +68,47 @@ const MAX_ADDRESSES_PER_AUTHORITY: usize = 10;
 /// Maximum number of in-flight DHT lookups at any given point in time.
 const MAX_IN_FLIGHT_LOOKUPS: usize = 8;
 
-/// Role an authority discovery module can run as.
+/// Role an authority discovery [`Worker`] can run as.
 pub enum Role {
-	/// Actual authority as well as a reference to its key store.
-	Authority(Arc<dyn CryptoStore>),
-	/// Sentry node that guards an authority.
-	///
-	/// No reference to its key store needed, as sentry nodes don't have an identity to sign
-	/// addresses with in the first place.
-	Sentry,
+	/// Publish own addresses and discover addresses of others.
+	PublishAndDiscover(Arc<dyn CryptoStore>),
+	/// Discover addresses of others.
+	Discover,
 }
 
-/// A [`Worker`] makes a given authority discoverable and discovers other
-/// authorities.
+
+/// An authority discovery [`Worker`] can publish the local node's addresses as well as discover
+/// those of other nodes via a Kademlia DHT.
 ///
-/// The [`Worker`] implements the Future trait. By
-/// polling [`Worker`] an authority:
+/// When constructed with [`Role::PublishAndDiscover`] a [`Worker`] will
 ///
-/// 1. **Makes itself discoverable**
+///    1. Retrieve its external addresses (including peer id).
 ///
-///    1. Retrieves its external addresses (including peer id) or the ones of
-///    its sentry nodes.
+///    2. Get the list of keys owned by the local node participating in the current authority set.
 ///
-///    2. Signs the above.
+///    3. Sign the addresses with the keys.
 ///
-///    3. Puts the signature and the addresses on the libp2p Kademlia DHT.
+///    4. Put addresses and signature as a record with the authority id as a key on a Kademlia DHT.
 ///
+/// When constructed with either [`Role::PublishAndDiscover`] or [`Role::Publish`] a [`Worker`] will
 ///
-/// 2. **Discovers other authorities**
+///    1. Retrieve the current and next set of authorities.
 ///
-///    1. Retrieves the current and next set of authorities.
+///    2. Start DHT queries for the ids of the authorities.
 ///
-///    2. Starts DHT queries for the ids of the authorities.
+///    3. Validate the signatures of the retrieved key value pairs.
 ///
-///    3. Validates the signatures of the retrieved key value pairs.
+///    4. Add the retrieved external addresses as priority nodes to the
+///    network peerset.
 ///
-///    4. Adds the retrieved external addresses as priority nodes to the
-///    peerset.
-///
-/// When run as a sentry node, the [`Worker`] does not publish
-/// any addresses to the DHT but still discovers validators and sentry nodes of
-/// validators, i.e. only step 2 (Discovers other authorities) is executed.
-pub struct Worker<Client, Network, Block, DhtEventStream>
-where
-	Block: BlockT + 'static,
-	Network: NetworkProvider,
-	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
-{
-	/// Channel receiver for messages send by an [`Service`].
+///    5. Allow querying of the collected addresses via the [`crate::Service`].
+pub struct Worker<Client, Network, Block, DhtEventStream> {
+	/// Channel receiver for messages send by a [`Service`].
 	from_service: Fuse<mpsc::Receiver<ServicetoWorkerMsg>>,
 
 	client: Arc<Client>,
 
 	network: Arc<Network>,
-	/// List of sentry node public addresses.
-	//
-	// There are 3 states:
-	//   - None: No addresses were specified.
-	//   - Some(vec![]): Addresses were specified, but none could be parsed as proper
-	//     Multiaddresses.
-	//   - Some(vec![a, b, c, ...]): Valid addresses were specified.
-	sentry_nodes: Option<Vec<Multiaddr>>,
 	/// Channel we receive Dht events on.
 	dht_event_rx: DhtEventStream,
 
@@ -169,49 +143,42 @@ where
 		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
-	/// Return a new [`Worker`].
-	///
-	/// Note: When specifying `sentry_nodes` this module will not advertise the public addresses of
-	/// the node itself but only the public addresses of its sentry nodes.
+	/// Construct a [`Worker`].
 	pub(crate) fn new(
 		from_service: mpsc::Receiver<ServicetoWorkerMsg>,
 		client: Arc<Client>,
 		network: Arc<Network>,
-		sentry_nodes: Vec<MultiaddrWithPeerId>,
 		dht_event_rx: DhtEventStream,
 		role: Role,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
+		config: crate::WorkerConfig,
 	) -> Self {
-		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h.
+		// Kademlia's default time-to-live for Dht records is 36h, republishing
+		// records every 24h through libp2p-kad.
 		// Given that a node could restart at any point in time, one can not depend on the
 		// republishing process, thus publishing own external addresses should happen on an interval
 		// < 36h.
 		let publish_interval = interval_at(
-			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
-			Duration::from_secs(12 * 60 * 60),
+			Instant::now() + config.query_start_delay,
+			config.publish_interval,
 		);
 
 		// External addresses of remote authorities can change at any given point in time. The
 		// interval on which to trigger new queries for the current authorities is a trade off
 		// between efficiency and performance.
-		let query_interval_start = Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME;
-		let query_interval_duration = Duration::from_secs(10 * 60);
+		let query_interval_start = Instant::now() + config.query_start_delay;
+		let query_interval_duration = config.query_interval;
 		let query_interval = interval_at(query_interval_start, query_interval_duration);
 
 		// Querying 500 [`AuthorityId`]s takes ~1m on the Kusama DHT (10th of August 2020) when
 		// comparing `authority_discovery_authority_addresses_requested_total` and
 		// `authority_discovery_dht_event_received`. With that in mind set the peerset priority
-		// group on the same interval as the [`query_interval`] above, just delayed by 5 minutes.
+		// group on the same interval as the [`query_interval`] above,
+		// just delayed by 5 minutes by default.
 		let priority_group_set_interval = interval_at(
-			query_interval_start + Duration::from_secs(5 * 60),
-			query_interval_duration,
+			query_interval_start + config.priority_group_set_offset,
+			config.priority_group_set_interval,
 		);
-
-		let sentry_nodes = if !sentry_nodes.is_empty() {
-			Some(sentry_nodes.into_iter().map(|ma| ma.concat()).collect::<Vec<_>>())
-		} else {
-			None
-		};
 
 		let addr_cache = AddrCache::new();
 
@@ -232,7 +199,6 @@ where
 			from_service: from_service.fuse(),
 			client,
 			network,
-			sentry_nodes,
 			dht_event_rx,
 			publish_interval,
 			query_interval,
@@ -313,33 +279,23 @@ where
 	}
 
 	fn addresses_to_publish(&self) -> impl ExactSizeIterator<Item = Multiaddr> {
-		match &self.sentry_nodes {
-			Some(addrs) => Either::Left(addrs.clone().into_iter()),
-			None => {
-				let peer_id: Multihash = self.network.local_peer_id().into();
-				Either::Right(
-					self.network.external_addresses()
-						.into_iter()
-						.map(move |a| {
-							if a.iter().any(|p| matches!(p, multiaddr::Protocol::P2p(_))) {
-								a
-							} else {
-								a.with(multiaddr::Protocol::P2p(peer_id.clone()))
-							}
-						}),
-				)
-			}
-		}
+		let peer_id: Multihash = self.network.local_peer_id().into();
+		self.network.external_addresses()
+			.into_iter()
+			.map(move |a| {
+				if a.iter().any(|p| matches!(p, multiaddr::Protocol::P2p(_))) {
+					a
+				} else {
+					a.with(multiaddr::Protocol::P2p(peer_id.clone()))
+				}
+			})
 	}
 
-	/// Publish either our own or if specified the public addresses of our sentry nodes.
+	/// Publish own public addresses.
 	async fn publish_ext_addresses(&mut self) -> Result<()> {
 		let key_store = match &self.role {
-			Role::Authority(key_store) => key_store,
-			// Only authority nodes can put addresses (their own or the ones of their sentry nodes)
-			// on the Dht. Sentry nodes don't have a known identity to authenticate such addresses,
-			// thus `publish_ext_addresses` becomes a no-op.
-			Role::Sentry => return Ok(()),
+			Role::PublishAndDiscover(key_store) => key_store,
+			Role::Discover => return Ok(()),
 		};
 
 		let addresses = self.addresses_to_publish();
@@ -394,12 +350,12 @@ where
 		let id = BlockId::hash(self.client.info().best_hash);
 
 		let local_keys = match &self.role {
-			Role::Authority(key_store) => {
+			Role::PublishAndDiscover(key_store) => {
 				key_store.sr25519_public_keys(
 					key_types::AUTHORITY_DISCOVERY
 				).await.into_iter().collect::<HashSet<_>>()
 			},
-			Role::Sentry => HashSet::new(),
+			Role::Discover => HashSet::new(),
 		};
 
 		let mut authorities = self
@@ -798,13 +754,7 @@ impl Metrics {
 
 // Helper functions for unit testing.
 #[cfg(test)]
-impl<Block, Client, Network, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
-where
-	Block: BlockT + 'static,
-	Network: NetworkProvider,
-	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
-{
+impl<Block, Client, Network, DhtEventStream> Worker<Client, Network, Block, DhtEventStream> {
 	pub(crate) fn inject_addresses(&mut self, authority: AuthorityId, addresses: Vec<Multiaddr>) {
 		self.addr_cache.insert(authority, addresses);
 	}
