@@ -92,7 +92,7 @@ use frame_support::{
 	traits::{
 		BalanceStatus, ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
 		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		WithdrawReason, WithdrawReasons,
+		WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -365,7 +365,7 @@ decl_module! {
 				T::ModuleId::get(),
 				&who,
 				locked_balance,
-				WithdrawReasons::except(WithdrawReason::TransactionPayment),
+				WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT),
 			);
 
 			Voting::<T>::insert(&who, (locked_balance, votes));
