@@ -17,9 +17,8 @@
 
 //! Test implementation for Externalities.
 
-use std::any::{Any, TypeId};
-use codec::Decode;
-use hash_db::Hasher;
+use std::{any::{Any, TypeId}, panic::{AssertUnwindSafe, UnwindSafe}};
+
 use crate::{
 	backend::Backend, OverlayedChanges, StorageTransactionCache, ext::Ext, InMemoryBackend,
 	StorageKey, StorageValue,
@@ -30,6 +29,9 @@ use crate::{
 		State as ChangesTrieState,
 	},
 };
+
+use codec::{Decode, Encode};
+use hash_db::Hasher;
 use sp_core::{
 	offchain::{
 		testing::TestPersistentOffchainDB,
@@ -42,7 +44,6 @@ use sp_core::{
 	traits::TaskExecutorExt,
 	testing::TaskExecutor,
 };
-use codec::Encode;
 use sp_externalities::{Extensions, Extension};
 
 /// Simple HashMap-based Externalities impl.
@@ -178,6 +179,19 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		let mut ext = self.ext();
 		sp_externalities::set_and_run_with_externalities(&mut ext, execute)
 	}
+
+	/// Execute the given closure while `self` is set as externalities.
+	///
+	/// Returns the result of the given closure, if no panics occured.
+	/// Otherwise, returns `Err`.
+	pub fn execute_with_safe<R>(&mut self, f: impl FnOnce() -> R + UnwindSafe) -> Result<R, String> {
+		let mut ext = AssertUnwindSafe(self.ext());
+		std::panic::catch_unwind(move ||
+			sp_externalities::set_and_run_with_externalities(&mut *ext, f)
+		).map_err(|e| {
+			format!("Closure panicked: {:?}", e)
+		})
+	}
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N>
@@ -233,10 +247,11 @@ impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N> where
 	}
 
 	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
-		self.extensions
-			.deregister(type_id)
-			.expect("There should be an extension we try to remove in TestExternalities");
-		Ok(())
+		if self.extensions.deregister(type_id) {
+			Ok(())
+		} else {
+			Err(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
+		}
 	}
 }
 

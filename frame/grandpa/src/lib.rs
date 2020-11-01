@@ -41,10 +41,9 @@ use fg_primitives::{
 };
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResultWithPostInfo,
-	storage, traits::KeyOwnerProofSystem, weights::Pays, Parameter,
+	storage, traits::KeyOwnerProofSystem, weights::{Pays, Weight}, Parameter,
 };
 use frame_system::{ensure_none, ensure_root, ensure_signed};
-use pallet_finality_tracker::OnFinalizationStalled;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::Zero,
@@ -54,6 +53,7 @@ use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
 
 mod equivocation;
+mod default_weights;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -97,6 +97,14 @@ pub trait Trait: frame_system::Trait {
 	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 	/// definition.
 	type HandleEquivocation: HandleEquivocation<Self>;
+
+	/// Weights for this pallet.
+	type WeightInfo: WeightInfo;
+}
+
+pub trait WeightInfo {
+	fn report_equivocation(validator_count: u32) -> Weight;
+	fn note_stalled() -> Weight;
 }
 
 /// A stored pending change, old format.
@@ -242,7 +250,7 @@ decl_module! {
 		/// equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
-		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		#[weight = T::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
 		fn report_equivocation(
 			origin,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
@@ -266,7 +274,7 @@ decl_module! {
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
-		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		#[weight = T::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
 		fn report_equivocation_unsigned(
 			origin,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
@@ -288,7 +296,7 @@ decl_module! {
 		/// forced change will not be re-orged (e.g. 1000 blocks). The GRANDPA voters
 		/// will start the new authority set using the given finalized block as base.
 		/// Only callable by root.
-		#[weight = weight_for::note_stalled::<T>()]
+		#[weight = T::WeightInfo::note_stalled()]
 		fn note_stalled(
 			origin,
 			delay: T::BlockNumber,
@@ -361,45 +369,6 @@ decl_module! {
 				_ => {},
 			}
 		}
-	}
-}
-
-mod weight_for {
-	use frame_support::{
-		traits::Get,
-		weights::{
-			constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
-			Weight,
-		},
-	};
-
-	pub fn report_equivocation<T: super::Trait>(validator_count: u32) -> Weight {
-		// we take the validator set count from the membership proof to
-		// calculate the weight but we set a floor of 100 validators.
-		let validator_count = validator_count.max(100) as u64;
-
-		// worst case we are considering is that the given offender
-		// is backed by 200 nominators
-		const MAX_NOMINATORS: u64 = 200;
-
-		// checking membership proof
-		(35 * WEIGHT_PER_MICROS)
-			.saturating_add((175 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
-			.saturating_add(T::DbWeight::get().reads(5))
-			// check equivocation proof
-			.saturating_add(95 * WEIGHT_PER_MICROS)
-			// report offence
-			.saturating_add(110 * WEIGHT_PER_MICROS)
-			.saturating_add(25 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
-			.saturating_add(T::DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
-			.saturating_add(T::DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
-			// fetching set id -> session index mappings
-			.saturating_add(T::DbWeight::get().reads(2))
-	}
-
-	pub fn note_stalled<T: super::Trait>() -> Weight {
-		(3 * WEIGHT_PER_MICROS)
-			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
 
@@ -477,7 +446,7 @@ impl<T: Trait> Module<T> {
 
 				// only allow the next forced change when twice the window has passed since
 				// this one.
-				<NextForced<T>>::put(scheduled_at + in_blocks * 2.into());
+				<NextForced<T>>::put(scheduled_at + in_blocks * 2u32.into());
 			}
 
 			<PendingChange<T>>::put(StoredPendingChange {
@@ -605,6 +574,13 @@ impl<T: Trait> Module<T> {
 		)
 		.ok()
 	}
+
+	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {
+		// when we record old authority sets we could try to figure out _who_
+		// failed. until then, we can't meaningfully guard against
+		// `next == last` the way that normal session changes do.
+		<Stalled<T>>::put((further_wait, median));
+	}
 }
 
 impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
@@ -663,14 +639,5 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 
 	fn on_disabled(i: usize) {
 		Self::deposit_log(ConsensusLog::OnDisabled(i as u64))
-	}
-}
-
-impl<T: Trait> OnFinalizationStalled<T::BlockNumber> for Module<T> {
-	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {
-		// when we record old authority sets, we can use `pallet_finality_tracker::median`
-		// to figure out _who_ failed. until then, we can't meaningfully guard
-		// against `next == last` the way that normal session changes do.
-		<Stalled<T>>::put((further_wait, median));
 	}
 }

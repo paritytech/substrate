@@ -207,6 +207,8 @@ where
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
+		sp_io::init_tracing();
+		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
 		let digests = Self::extract_pre_digest(&header);
 		Self::initialize_block_impl(
 			header.number(),
@@ -270,6 +272,7 @@ where
 	}
 
 	fn initial_checks(block: &Block) {
+		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
 
 		// Check that `parent_hash` is correct.
@@ -288,23 +291,28 @@ where
 
 	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
-		Self::initialize_block(block.header());
+		sp_io::init_tracing();
+		sp_tracing::within_span! {
+			sp_tracing::info_span!( "execute_block", ?block);
+		{
+			Self::initialize_block(block.header());
 
-		// any initial checks
-		Self::initial_checks(&block);
+			// any initial checks
+			Self::initial_checks(&block);
 
-		let signature_batching = sp_runtime::SignatureBatching::start();
+			let signature_batching = sp_runtime::SignatureBatching::start();
 
-		// execute extrinsics
-		let (header, extrinsics) = block.deconstruct();
-		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+			// execute extrinsics
+			let (header, extrinsics) = block.deconstruct();
+			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
-		if !signature_batching.verify() {
-			panic!("Signature verification failed.");
-		}
+			if !signature_batching.verify() {
+				panic!("Signature verification failed.");
+			}
 
-		// any final checks
-		Self::final_checks(&header);
+			// any final checks
+			Self::final_checks(&header);
+		} };
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
@@ -320,6 +328,8 @@ where
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
 	pub fn finalize_block() -> System::Header {
+		sp_io::init_tracing();
+		sp_tracing::enter_span!( sp_tracing::Level::TRACE, "finalize_block" );
 		<frame_system::Module<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Module<System>>::block_number();
 		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
@@ -335,6 +345,7 @@ where
 	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
 	/// hashes.
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
+		sp_io::init_tracing();
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
 		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded))
@@ -355,6 +366,10 @@ where
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
 	) -> ApplyExtrinsicResult {
+		sp_tracing::enter_span!(
+			sp_tracing::info_span!("apply_extrinsic",
+				ext=?sp_core::hexdisplay::HexDisplay::from(&uxt.encode()))
+		);
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 
@@ -377,6 +392,7 @@ where
 	}
 
 	fn final_checks(header: &System::Header) {
+		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "final_checks");
 		// remove temporaries
 		let new_header = <frame_system::Module<System>>::finalize();
 
@@ -406,24 +422,32 @@ where
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
 	) -> TransactionValidity {
-		use sp_tracing::tracing_span;
+		sp_io::init_tracing();
+		use sp_tracing::{enter_span, within_span};
 
-		sp_tracing::enter_span!("validate_transaction");
+		enter_span!{ sp_tracing::Level::TRACE, "validate_transaction" };
 
-		let encoded_len = tracing_span!{ "using_encoded"; uxt.using_encoded(|d| d.len()) };
+		let encoded_len = within_span!{ sp_tracing::Level::TRACE, "using_encoded";
+			uxt.using_encoded(|d| d.len())
+		};
 
-		let xt = tracing_span!{ "check"; uxt.check(&Default::default())? };
+		let xt = within_span!{ sp_tracing::Level::TRACE, "check";
+			uxt.check(&Default::default())
+		}?;
 
-		let dispatch_info = tracing_span!{ "dispatch_info"; xt.get_dispatch_info() };
+		let dispatch_info = within_span!{ sp_tracing::Level::TRACE, "dispatch_info";
+			xt.get_dispatch_info()
+		};
 
-		tracing_span! {
-			"validate";
+		within_span! {
+			sp_tracing::Level::TRACE, "validate";
 			xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
 		}
 	}
 
 	/// Start an offchain worker and generate extrinsics.
 	pub fn offchain_worker(header: &System::Header) {
+		sp_io::init_tracing();
 		// We need to keep events available for offchain workers,
 		// hence we initialize the block manually.
 		// OffchainWorker RuntimeApi should skip initialization.
@@ -444,7 +468,7 @@ where
 		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(
 			// to maintain backward compatibility we call module offchain workers
 			// with parent block number.
-			header.number().saturating_sub(1.into())
+			header.number().saturating_sub(1u32.into())
 		)
 	}
 }
@@ -457,20 +481,26 @@ mod tests {
 	use sp_runtime::{
 		generic::Era, Perbill, DispatchError, testing::{Digest, Header, Block},
 		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup},
-		transaction_validity::{InvalidTransaction, UnknownTransaction, TransactionValidityError},
+		transaction_validity::{
+			InvalidTransaction, ValidTransaction, TransactionValidityError, UnknownTransaction
+		},
 	};
 	use frame_support::{
-		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
+		parameter_types,
 		weights::{Weight, RuntimeDbWeight, IdentityFee, WeightToFeePolynomial},
-		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason},
+		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons},
 	};
-	use frame_system::{self as system, Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
+	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
+	use pallet_transaction_payment::CurrencyAdapter;
 	use pallet_balances::Call as BalancesCall;
 	use hex_literal::hex;
 	const TEST_KEY: &[u8] = &*b":test:key:";
 
 	mod custom {
 		use frame_support::weights::{Weight, DispatchClass};
+		use sp_runtime::transaction_validity::{
+			UnknownTransaction, TransactionSource, TransactionValidity
+		};
 
 		pub trait Trait: frame_system::Trait {}
 
@@ -490,6 +520,16 @@ mod tests {
 					let _ = frame_system::ensure_none(origin);
 				}
 
+				#[weight = 0]
+				fn allowed_unsigned(origin) {
+					let _ = frame_system::ensure_root(origin)?;
+				}
+
+				#[weight = 0]
+				fn unallowed_unsigned(origin) {
+					let _ = frame_system::ensure_root(origin)?;
+				}
+
 				// module hooks.
 				// one with block number arg and one without
 				fn on_initialize(n: T::BlockNumber) -> Weight {
@@ -507,33 +547,34 @@ mod tests {
 				}
 			}
 		}
-	}
 
-	type System = frame_system::Module<Runtime>;
-	type Balances = pallet_balances::Module<Runtime>;
-	type Custom = custom::Module<Runtime>;
+		impl<T: Trait> sp_runtime::traits::ValidateUnsigned for Module<T> {
+			type Call = Call<T>;
 
-	use pallet_balances as balances;
-
-	impl_outer_origin! {
-		pub enum Origin for Runtime { }
-	}
-
-	impl_outer_event!{
-		pub enum MetaEvent for Runtime {
-			system<T>,
-			balances<T>,
-		}
-	}
-	impl_outer_dispatch! {
-		pub enum Call for Runtime where origin: Origin {
-			frame_system::System,
-			pallet_balances::Balances,
+			fn validate_unsigned(
+				_source: TransactionSource,
+				call: &Self::Call,
+			) -> TransactionValidity {
+				match call {
+					Call::allowed_unsigned(..) => Ok(Default::default()),
+					_ => UnknownTransaction::NoUnsignedValidator.into(),
+				}
+			}
 		}
 	}
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Runtime;
+	frame_support::construct_runtime!(
+		pub enum Runtime where
+			Block = TestBlock,
+			NodeBlock = TestBlock,
+			UncheckedExtrinsic = TestUncheckedExtrinsic
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+			Custom: custom::{Module, Call, ValidateUnsigned},
+		}
+	);
+
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: Weight = 1024;
@@ -557,7 +598,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
-		type Event = MetaEvent;
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = DbWeight;
@@ -567,7 +608,7 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = RuntimeVersion;
-		type ModuleToIndex = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<Balance>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -580,10 +621,11 @@ mod tests {
 	}
 	impl pallet_balances::Trait for Runtime {
 		type Balance = Balance;
-		type Event = MetaEvent;
+		type Event = Event;
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type MaxLocks = ();
 		type WeightInfo = ();
 	}
 
@@ -591,31 +633,12 @@ mod tests {
 		pub const TransactionByteFee: Balance = 0;
 	}
 	impl pallet_transaction_payment::Trait for Runtime {
-		type Currency = Balances;
-		type OnTransactionPayment = ();
+		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = IdentityFee<Balance>;
 		type FeeMultiplierUpdate = ();
 	}
 	impl custom::Trait for Runtime {}
-
-	impl ValidateUnsigned for Runtime {
-		type Call = Call;
-
-		fn pre_dispatch(_call: &Self::Call) -> Result<(), TransactionValidityError> {
-			Ok(())
-		}
-
-		fn validate_unsigned(
-			_source: TransactionSource,
-			call: &Self::Call,
-		) -> TransactionValidity {
-			match call {
-				Call::Balances(BalancesCall::set_balance(_, _, _)) => Ok(Default::default()),
-				_ => UnknownTransaction::NoUnsignedValidator.into(),
-			}
-		}
-	}
 
 	pub struct RuntimeVersion;
 	impl frame_support::traits::Get<sp_version::RuntimeVersion> for RuntimeVersion {
@@ -635,8 +658,14 @@ mod tests {
 		frame_system::CheckWeight<Runtime>,
 		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 	);
-	type AllModules = (System, Balances, Custom);
 	type TestXt = sp_runtime::testing::TestXt<Call, SignedExtra>;
+	type TestBlock = Block<TestXt>;
+	type TestUncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<
+		<Runtime as frame_system::Trait>::AccountId,
+		<Runtime as frame_system::Trait>::Call,
+		(),
+		SignedExtra,
+	>;
 
 	// Will contain `true` when the custom runtime logic was called.
 	const CUSTOM_ON_RUNTIME_KEY: &[u8] = &*b":custom:on_runtime";
@@ -713,7 +742,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("e8ff7b3dd4375f6f3a76e24a1999e2a7be2d15b353e49ac94ace1eae3e80eb87").into(),
+					state_root: hex!("465a1569d309039bdf84b0479d28064ea29e6584584dc7d788904bb14489c6f6").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -870,15 +899,26 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned() {
-		let xt = TestXt::new(Call::Balances(BalancesCall::set_balance(33, 69, 69)), None);
+		let valid = TestXt::new(Call::Custom(custom::Call::allowed_unsigned()), None);
+		let invalid = TestXt::new(Call::Custom(custom::Call::unallowed_unsigned()), None);
 		let mut t = new_test_ext(1);
 
+		let mut default_with_prio_3 = ValidTransaction::default();
+		default_with_prio_3.priority = 3;
 		t.execute_with(|| {
 			assert_eq!(
-				Executive::validate_transaction(TransactionSource::InBlock, xt.clone()),
-				Ok(Default::default()),
+				Executive::validate_transaction(TransactionSource::InBlock, valid.clone()),
+				Ok(default_with_prio_3),
 			);
-			assert_eq!(Executive::apply_extrinsic(xt), Ok(Err(DispatchError::BadOrigin)));
+			assert_eq!(
+				Executive::validate_transaction(TransactionSource::InBlock, invalid.clone()),
+				Err(TransactionValidityError::Unknown(UnknownTransaction::NoUnsignedValidator)),
+			);
+			assert_eq!(Executive::apply_extrinsic(valid), Ok(Err(DispatchError::BadOrigin)));
+			assert_eq!(
+				Executive::apply_extrinsic(invalid),
+				Err(TransactionValidityError::Unknown(UnknownTransaction::NoUnsignedValidator))
+			);
 		});
 	}
 
@@ -910,7 +950,7 @@ mod tests {
 					Digest::default(),
 				));
 
-				if lock == WithdrawReasons::except(WithdrawReason::TransactionPayment) {
+				if lock == WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT) {
 					assert!(Executive::apply_extrinsic(xt).unwrap().is_ok());
 					// tx fee has been deducted.
 					assert_eq!(<pallet_balances::Module<Runtime>>::total_balance(&1), 111 - fee);
@@ -925,7 +965,7 @@ mod tests {
 		};
 
 		execute_with_lock(WithdrawReasons::all());
-		execute_with_lock(WithdrawReasons::except(WithdrawReason::TransactionPayment));
+		execute_with_lock(WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT));
 	}
 
 	#[test]

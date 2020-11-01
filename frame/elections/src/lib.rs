@@ -15,6 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # WARNING: NOT ACTIVELY MAINTAINED
+//!
+//! This pallet is currently not maintained and should not be used in production until further
+//! notice.
+//!
+//! ---
+//!
 //! Election module for stake-weighted membership selection of a collective.
 //!
 //! The composition of a set of account IDs works according to one or more approval votes
@@ -34,7 +41,7 @@ use frame_support::{
 	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
-		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers,
+		OnUnbalanced, ReservableCurrency, WithdrawReasons, ChangeMembers,
 	}
 };
 use codec::{Encode, Decode};
@@ -864,7 +871,7 @@ impl<T: Trait> Module<T> {
 						let imbalance = T::Currency::withdraw(
 							&who,
 							T::VotingFee::get(),
-							WithdrawReason::Fee.into(),
+							WithdrawReasons::FEE,
 							ExistenceRequirement::KeepAlive,
 						)?;
 						T::BadVoterIndex::on_unbalanced(imbalance);

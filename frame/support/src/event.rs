@@ -346,7 +346,7 @@ macro_rules! impl_outer_event {
 			$name;
 			$runtime;
 			Modules { $( $rest_events )* };
-			;
+			{};
 		);
 	};
 	// Generic + Instance
@@ -355,17 +355,17 @@ macro_rules! impl_outer_event {
 		$name:ident;
 		$runtime:ident;
 		Modules {
-			$module:ident $instance:ident<T>,
+			$( #[codec(index = $index:tt)] )? $module:ident $instance:ident<T>,
 			$( $rest_event_generic_instance:tt )*
 		};
-		$( $module_name:ident::Event $( <$generic_param:ident> )? $( { $generic_instance:ident } )?, )*;
+		{ $( $parsed:tt )* };
 	) => {
 		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
 			Modules { $( $rest_event_generic_instance )* };
-			$( $module_name::Event $( <$generic_param> )? $( { $generic_instance } )?, )* $module::Event<$runtime>{ $instance },;
+			{ $( $parsed )* $module::Event<$runtime>{ $instance } index { $( $index )? }, };
 		);
 	};
 	// Instance
@@ -374,17 +374,17 @@ macro_rules! impl_outer_event {
 		$name:ident;
 		$runtime:ident;
 		Modules {
-			$module:ident $instance:ident,
+			$( #[codec(index = $index:tt)] )? $module:ident $instance:ident,
 			$( $rest_event_instance:tt )*
 		};
-		$( $module_name:ident::Event $( <$generic_param:ident> )? $( { $generic_instance:ident } )?, )*;
+		{ $( $parsed:tt )* };
 	) => {
 		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
 			Modules { $( $rest_event_instance )* };
-			$( $module_name::Event $( <$generic_param> )* $( { $generic_instance } )?, )* $module::Event { $instance },;
+			{ $( $parsed )* $module::Event { $instance } index { $( $index )? }, };
 		);
 	};
 	// Generic
@@ -393,17 +393,17 @@ macro_rules! impl_outer_event {
 		$name:ident;
 		$runtime:ident;
 		Modules {
-			$module:ident<T>,
+			$( #[codec(index = $index:tt)] )? $module:ident<T>,
 			$( $rest_event_generic:tt )*
 		};
-		$( $module_name:ident::Event $( <$generic_param:ident> )? $( { $generic_instance:ident } )?, )*;
+		{ $( $parsed:tt )* };
 	) => {
 		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
 			Modules { $( $rest_event_generic )* };
-			$( $module_name::Event $( <$generic_param> )? $( { $generic_instance } )?, )* $module::Event<$runtime>,;
+			{ $( $parsed )* $module::Event<$runtime> index { $( $index )? }, };
 		);
 	};
 	// No Generic and no Instance
@@ -412,17 +412,17 @@ macro_rules! impl_outer_event {
 		$name:ident;
 		$runtime:ident;
 		Modules {
-			$module:ident,
+			$( #[codec(index = $index:tt)] )? $module:ident,
 			$( $rest_event_no_generic_no_instance:tt )*
 		};
-		$( $module_name:ident::Event $( <$generic_param:ident> )? $( { $generic_instance:ident } )?, )*;
+		{ $( $parsed:tt )* };
 	) => {
 		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
 			Modules { $( $rest_event_no_generic_no_instance )* };
-			$( $module_name::Event $( <$generic_param> )? $( { $generic_instance } )?, )* $module::Event,;
+			{ $( $parsed )* $module::Event index { $( $index )? }, };
 		);
 	};
 
@@ -432,7 +432,14 @@ macro_rules! impl_outer_event {
 		$name:ident;
 		$runtime:ident;
 		Modules {};
-		$( $module_name:ident::Event $( <$generic_param:ident> )? $( { $generic_instance:ident } )?, )*;
+		{
+			$(
+				$module_name:ident::Event
+				$( <$generic_param:ident> )?
+				$( { $generic_instance:ident } )?
+				index { $( $index:tt )? },
+			)*
+		};
 	) => {
 		$crate::paste::item! {
 			#[derive(
@@ -445,6 +452,7 @@ macro_rules! impl_outer_event {
 			#[allow(non_camel_case_types)]
 			pub enum $name {
 				$(
+					$( #[codec(index = $index)] )?
 					[< $module_name $(_ $generic_instance )? >](
 						$module_name::Event < $( $generic_param )? $(, $module_name::$generic_instance )? >
 					),
@@ -543,13 +551,15 @@ mod tests {
 	use codec::{Encode, Decode};
 
 	mod system {
-		pub trait Trait {
+		pub trait Trait: 'static {
 			type Origin;
 			type BlockNumber;
+			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
 		}
 
 		decl_event!(
@@ -560,13 +570,15 @@ mod tests {
 	}
 
 	mod system_renamed {
-		pub trait Trait {
+		pub trait Trait: 'static {
 			type Origin;
 			type BlockNumber;
+			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
 		}
 
 		decl_event!(
@@ -577,19 +589,19 @@ mod tests {
 	}
 
 	mod event_module {
-		pub trait Trait {
-			type Origin;
+		use super::system;
+
+		pub trait Trait: system::Trait {
 			type Balance;
-			type BlockNumber;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=system {}
 		}
 
 		decl_event!(
 			/// Event without renaming the generic parameter `Balance` and `Origin`.
-			pub enum Event<T> where <T as Trait>::Balance, <T as Trait>::Origin
+			pub enum Event<T> where <T as Trait>::Balance, <T as system::Trait>::Origin
 			{
 				/// Hi, I am a comment.
 				TestEvent(Balance, Origin),
@@ -600,21 +612,21 @@ mod tests {
 	}
 
 	mod event_module2 {
-		pub trait Trait {
-			type Origin;
+		use super::system;
+
+		pub trait Trait: system::Trait {
 			type Balance;
-			type BlockNumber;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=system {}
 		}
 
 		decl_event!(
 			/// Event with renamed generic parameter
 			pub enum Event<T> where
 				BalanceRenamed = <T as Trait>::Balance,
-				OriginRenamed = <T as Trait>::Origin
+				OriginRenamed = <T as system::Trait>::Origin
 			{
 				TestEvent(BalanceRenamed),
 				TestOrigin(OriginRenamed),
@@ -631,21 +643,21 @@ mod tests {
 	}
 
 	mod event_module4 {
-		pub trait Trait {
-			type Origin;
+		use super::system;
+
+		pub trait Trait: system::Trait {
 			type Balance;
-			type BlockNumber;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=system {}
 		}
 
 		decl_event!(
 			/// Event finish formatting on an unnamed one with trailing comma
 			pub enum Event<T> where
 				<T as Trait>::Balance,
-				<T as Trait>::Origin,
+				<T as system::Trait>::Origin,
 			{
 				TestEvent(Balance, Origin),
 			}
@@ -653,21 +665,21 @@ mod tests {
 	}
 
 	mod event_module5 {
-		pub trait Trait {
-			type Origin;
+		use super::system;
+
+		pub trait Trait: system::Trait {
 			type Balance;
-			type BlockNumber;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=system {}
 		}
 
 		decl_event!(
 			/// Event finish formatting on an named one with trailing comma
 			pub enum Event<T> where
 				BalanceRenamed = <T as Trait>::Balance,
-				OriginRenamed = <T as Trait>::Origin,
+				OriginRenamed = <T as system::Trait>::Origin,
 			{
 				TestEvent(BalanceRenamed, OriginRenamed),
 				TrailingCommaInArgs(
@@ -697,43 +709,46 @@ mod tests {
 		pub enum TestEventSystemRenamed for TestRuntime2 {
 			system_renamed,
 			event_module<T>,
-			event_module2<T>,
+			#[codec(index = "5")] event_module2<T>,
 			event_module3,
 		}
 	}
 
 	impl event_module::Trait for TestRuntime {
-		type Origin = u32;
 		type Balance = u32;
-		type BlockNumber = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime {
-		type Origin = u32;
 		type Balance = u32;
-		type BlockNumber = u32;
 	}
 
 	impl system::Trait for TestRuntime {
 		type Origin = u32;
 		type BlockNumber = u32;
+		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	impl event_module::Trait for TestRuntime2 {
-		type Origin = u32;
 		type Balance = u32;
-		type BlockNumber = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime2 {
-		type Origin = u32;
 		type Balance = u32;
-		type BlockNumber = u32;
 	}
 
 	impl system_renamed::Trait for TestRuntime2 {
 		type Origin = u32;
 		type BlockNumber = u32;
+		type PalletInfo = ();
+		type DbWeight = ();
+	}
+
+	impl system::Trait for TestRuntime2 {
+		type Origin = u32;
+		type BlockNumber = u32;
+		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	const EXPECTED_METADATA: OuterEventMetadata = OuterEventMetadata {
@@ -795,5 +810,23 @@ mod tests {
 	#[test]
 	fn outer_event_metadata() {
 		assert_eq!(EXPECTED_METADATA, TestRuntime::outer_event_metadata());
+	}
+
+	#[test]
+	fn test_codec() {
+		let runtime_1_event_module_2 = TestEvent::event_module2(
+			event_module2::Event::<TestRuntime>::TestEvent(3)
+		);
+		assert_eq!(runtime_1_event_module_2.encode()[0], 2);
+
+		let runtime_2_event_module_2 = TestEventSystemRenamed::event_module2(
+			event_module2::Event::<TestRuntime2>::TestEvent(3)
+		);
+		assert_eq!(runtime_2_event_module_2.encode()[0], 5);
+		
+		let runtime_2_event_module_3 = TestEventSystemRenamed::event_module3(
+			event_module3::Event::HiEvent
+		);
+		assert_eq!(runtime_2_event_module_3.encode()[0], 3);
 	}
 }

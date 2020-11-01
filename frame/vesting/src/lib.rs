@@ -47,38 +47,25 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
+pub mod weights;
+
 use sp_std::prelude::*;
 use sp_std::fmt::Debug;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
 	StaticLookup, Zero, AtLeast32BitUnsigned, MaybeSerializeDeserialize, Convert
 }};
-use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure, weights::Weight};
+use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
 use frame_support::traits::{
-	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier,
+	Currency, LockableCurrency, VestingSchedule, WithdrawReasons, LockIdentifier,
 	ExistenceRequirement, Get,
 };
 use frame_system::{ensure_signed, ensure_root};
-
-mod benchmarking;
+pub use weights::WeightInfo;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-
-pub trait WeightInfo {
-	fn vest_locked(l: u32, ) -> Weight;
-	fn vest_unlocked(l: u32, ) -> Weight;
-	fn vest_other_locked(l: u32, ) -> Weight;
-	fn vest_other_unlocked(l: u32, ) -> Weight;
-	fn vested_transfer(l: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn vest_locked(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn vest_unlocked(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn vest_other_locked(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn vest_other_unlocked(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn vested_transfer(_l: u32, ) -> Weight { 1_000_000_000 }
-}
+type MaxLocksOf<T> = <<T as Trait>::Currency as LockableCurrency<<T as frame_system::Trait>::AccountId>>::MaxLocks;
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -161,7 +148,7 @@ decl_storage! {
 					per_block: per_block,
 					starting_block: begin
 				});
-				let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+				let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 				T::Currency::set_lock(VESTING_ID, who, locked, reasons);
 			}
 		})
@@ -171,7 +158,7 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
 		/// The amount vested has been updated. This could indicate more funds are available. The
-		/// balance given is the amount which is left unvested (and thus locked). 
+		/// balance given is the amount which is left unvested (and thus locked).
 		/// \[account, unvested\]
 		VestingUpdated(AccountId, Balance),
 		/// An \[account\] has become fully vested. No further vesting can happen.
@@ -213,12 +200,10 @@ decl_module! {
 		/// - DbWeight: 2 Reads, 2 Writes
 		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
-		/// - Benchmark:
-		///     - Unlocked: 48.76 + .048 * l µs (min square analysis)
-		///     - Locked: 44.43 + .284 * l µs (min square analysis)
-		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 50_000_000 + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = T::WeightInfo::vest_locked(MaxLocksOf::<T>::get())
+			.max(T::WeightInfo::vest_unlocked(MaxLocksOf::<T>::get()))
+		]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
@@ -238,12 +223,10 @@ decl_module! {
 		/// - DbWeight: 3 Reads, 3 Writes
 		///     - Reads: Vesting Storage, Balances Locks, Target Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account
-		/// - Benchmark:
-		///     - Unlocked: 44.3 + .294 * l µs (min square analysis)
-		///     - Locked: 48.16 + .103 * l µs (min square analysis)
-		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 50_000_000 + T::DbWeight::get().reads_writes(3, 3)]
+		#[weight = T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get())
+			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get()))
+		]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
@@ -264,10 +247,8 @@ decl_module! {
 		/// - DbWeight: 3 Reads, 3 Writes
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
-		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
-		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(3, 3)]
+		#[weight = T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get())]
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -303,10 +284,8 @@ decl_module! {
 		/// - DbWeight: 4 Reads, 4 Writes
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, Source Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
-		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
-		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(4, 4)]
+		#[weight = T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get())]
 		pub fn force_vested_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -343,7 +322,7 @@ impl<T: Trait> Module<T> {
 			Vesting::<T>::remove(&who);
 			Self::deposit_event(RawEvent::VestingCompleted(who));
 		} else {
-			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 			T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons);
 			Self::deposit_event(RawEvent::VestingUpdated(who, locked_now));
 		}
@@ -457,11 +436,14 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
-		type ModuleToIndex = ();
+		type PalletInfo = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+	}
+	parameter_types! {
+		pub const MaxLocks: u32 = 10;
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
@@ -469,6 +451,7 @@ mod tests {
 		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type MaxLocks = MaxLocks;
 		type WeightInfo = ();
 	}
 	parameter_types! {

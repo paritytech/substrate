@@ -72,6 +72,7 @@
 mod mock;
 mod tests;
 mod benchmarking;
+pub mod weights;
 
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
@@ -95,13 +96,13 @@ use sp_staking::{
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
 	traits::Get,
-	weights::Weight,
 };
 use frame_system::ensure_none;
 use frame_system::offchain::{
 	SendTransactionTypes,
 	SubmitTransaction,
 };
+pub use weights::WeightInfo;
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -226,18 +227,6 @@ pub struct Heartbeat<BlockNumber>
 	pub validators_len: u32,
 }
 
-pub trait WeightInfo {
-	fn heartbeat(k: u32, e: u32, ) -> Weight;
-	fn validate_unsigned(k: u32, e: u32, ) -> Weight;
-	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn heartbeat(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
-	fn validate_unsigned(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
-	fn validate_unsigned_and_then_heartbeat(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
-}
-
 pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
@@ -333,23 +322,20 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// # <weight>
-		/// - Complexity: `O(K + E)` where K is length of `Keys` and E is length of
-		///   `Heartbeat.network_state.external_address`
-		///
+		/// - Complexity: `O(K + E)` where K is length of `Keys` (heartbeat.validators_len)
+		///   and E is length of `heartbeat.network_state.external_address`
 		///   - `O(K)`: decoding of length `K`
 		///   - `O(E)`: decoding/encoding of length `E`
 		/// - DbReads: pallet_session `Validators`, pallet_session `CurrentIndex`, `Keys`,
 		///   `ReceivedHeartbeats`
 		/// - DbWrites: `ReceivedHeartbeats`
 		/// # </weight>
-		// NOTE: the weight include cost of validate_unsigned as it is part of the cost to import
-		// block with such an extrinsic.
-		#[weight = (310_000_000 + T::DbWeight::get().reads_writes(4, 1))
-			.saturating_add(750_000.saturating_mul(heartbeat.validators_len as Weight))
-			.saturating_add(
-				1_200_000.saturating_mul(heartbeat.network_state.external_addresses.len() as Weight)
-			)
-		]
+		// NOTE: the weight includes the cost of validate_unsigned as it is part of the cost to
+		// import block with such an extrinsic.
+		#[weight = <T as Trait>::WeightInfo::validate_unsigned_and_then_heartbeat(
+			heartbeat.validators_len as u32,
+			heartbeat.network_state.external_addresses.len() as u32,
+		)]
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
@@ -604,7 +590,7 @@ impl<T: Trait> Module<T> {
 
 		// clear the lock in case we have failed to send transaction.
 		if res.is_err() {
-			new_status.sent_at = 0.into();
+			new_status.sent_at = 0u32.into();
 			storage.set(&new_status);
 		}
 
@@ -645,7 +631,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 		// Since we consider producing blocks as being online,
 		// the heartbeat is deferred a bit to prevent spamming.
 		let block_number = <frame_system::Module<T>>::block_number();
-		let half_session = T::SessionDuration::get() / 2.into();
+		let half_session = T::SessionDuration::get() / 2u32.into();
 		<HeartbeatAfter<T>>::put(block_number + half_session);
 
 		// Remember who the authorities are for the new session.
@@ -733,7 +719,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				.priority(T::UnsignedPriority::get())
 				.and_provides((current_session, authority_id))
 				.longevity(TryInto::<u64>::try_into(
-					T::SessionDuration::get() / 2.into()
+					T::SessionDuration::get() / 2u32.into()
 				).unwrap_or(64_u64))
 				.propagate(true)
 				.build()

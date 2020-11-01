@@ -46,49 +46,25 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod tests;
+mod benchmarking;
+pub mod weights;
+
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency},
-	weights::{Weight, GetDispatchInfo, constants::{WEIGHT_PER_NANOS, WEIGHT_PER_MICROS}},
+	weights::{Weight, GetDispatchInfo},
 	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed, RawOrigin};
 use sp_runtime::{DispatchError, DispatchResult, traits::{Dispatchable, Zero}};
-
-mod tests;
-mod benchmarking;
+pub use weights::WeightInfo;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 /// Just a bunch of bytes, but they should decode to a valid `Call`.
 pub type OpaqueCall = Vec<u8>;
-
-pub trait WeightInfo {
-	fn as_multi_threshold_1(z: u32, ) -> Weight;
-	fn as_multi_create(s: u32, z: u32, ) -> Weight;
-	fn as_multi_create_store(s: u32, z: u32, ) -> Weight;
-	fn as_multi_approve(s: u32, z: u32, ) -> Weight;
-	fn as_multi_complete(s: u32, z: u32, ) -> Weight;
-	fn approve_as_multi_create(s: u32, z: u32, ) -> Weight;
-	fn approve_as_multi_approve(s: u32, z: u32, ) -> Weight;
-	fn approve_as_multi_complete(s: u32, z: u32, ) -> Weight;
-	fn cancel_as_multi(s: u32, z: u32, ) -> Weight;
-	fn cancel_as_multi_store(s: u32, z: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn as_multi_threshold_1(_z: u32, ) -> Weight { 1_000_000_000 }
-	fn as_multi_create(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
-	fn as_multi_create_store(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
-	fn as_multi_approve(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
-	fn as_multi_complete(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
-	fn approve_as_multi_create(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
-	fn approve_as_multi_approve(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
-	fn approve_as_multi_complete(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
-	fn cancel_as_multi(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
-	fn cancel_as_multi_store(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
-}
 
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
@@ -209,48 +185,6 @@ decl_event! {
 	}
 }
 
-mod weight_of {
-	use super::*;
-
-	/// - Base Weight: 33.72 + 0.002 * Z µs
-	/// - DB Weight: None
-	/// - Plus Call Weight
-	pub fn as_multi_threshold_1<T: Trait>(
-		call_len: usize,
-		call_weight: Weight,
-	 ) -> Weight {
-		(34 * WEIGHT_PER_MICROS)
-			.saturating_add((2 * WEIGHT_PER_NANOS).saturating_mul(call_len as Weight))
-			.saturating_add(call_weight)
-	}
-
-	/// - Base Weight:
-	///     - Create:          38.82 + 0.121 * S + .001 * Z µs
-	///     - Create w/ Store: 54.22 + 0.120 * S + .003 * Z µs
-	///     - Approve:         29.86 + 0.143 * S + .001 * Z µs
-	///     - Complete:        39.55 + 0.267 * S + .002 * Z µs
-	/// - DB Weight:
-	///     - Reads: Multisig Storage, [Caller Account], Calls, Depositor Account
-	///     - Writes: Multisig Storage, [Caller Account], Calls, Depositor Account
-	/// - Plus Call Weight
-	pub fn as_multi<T: Trait>(
-		sig_len: usize,
-		call_len: usize,
-		call_weight: Weight,
-		calls_write: bool,
-		refunded: bool,
-	 ) -> Weight {
-		call_weight
-			.saturating_add(55 * WEIGHT_PER_MICROS)
-			.saturating_add((250 * WEIGHT_PER_NANOS).saturating_mul(sig_len as Weight))
-			.saturating_add((3 * WEIGHT_PER_NANOS).saturating_mul(call_len as Weight))
-			.saturating_add(T::DbWeight::get().reads_writes(1, 1)) // Multisig read/write
-			.saturating_add(T::DbWeight::get().reads(1)) // Calls read
-			.saturating_add(T::DbWeight::get().writes(calls_write.into())) // Calls write
-			.saturating_add(T::DbWeight::get().reads_writes(refunded.into(), refunded.into())) // Deposit refunded
-	}
-}
-
 enum CallOrHash {
 	Call(OpaqueCall, bool),
 	Hash([u8; 32]),
@@ -286,15 +220,14 @@ decl_module! {
 		/// # <weight>
 		/// O(Z + C) where Z is the length of the call and C its execution weight.
 		/// -------------------------------
-		/// - Base Weight: 33.72 + 0.002 * Z µs
 		/// - DB Weight: None
 		/// - Plus Call Weight
 		/// # </weight>
 		#[weight = (
-			weight_of::as_multi_threshold_1::<T>(
-				call.using_encoded(|c| c.len()),
-				call.get_dispatch_info().weight
-			),
+			T::WeightInfo::as_multi_threshold_1(call.using_encoded(|c| c.len() as u32))
+				.saturating_add(call.get_dispatch_info().weight)
+				 // AccountData for inner call origin accountdata.
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 			call.get_dispatch_info().class,
 		)]
 		fn as_multi_threshold_1(origin,
@@ -314,17 +247,14 @@ decl_module! {
 			let result = call.dispatch(RawOrigin::Signed(id).into());
 
 			result.map(|post_dispatch_info| post_dispatch_info.actual_weight
-				.map(|actual_weight| weight_of::as_multi_threshold_1::<T>(
-					call_len,
-					actual_weight,
-				))
-				.into()
+				.map(|actual_weight|
+					T::WeightInfo::as_multi_threshold_1(call_len as u32)
+						.saturating_add(actual_weight)
+				).into()
 			).map_err(|err| match err.post_info.actual_weight {
 				Some(actual_weight) => {
-					let weight_used = weight_of::as_multi_threshold_1::<T>(
-						call_len,
-						actual_weight,
-					);
+					let weight_used = T::WeightInfo::as_multi_threshold_1(call_len as u32)
+						.saturating_add(actual_weight);
 					let post_info = Some(weight_used).into();
 					let error = err.error.into();
 					DispatchErrorWithPostInfo { post_info, error }
@@ -374,23 +304,21 @@ decl_module! {
 		///   deposit taken for its lifetime of
 		///   `DepositBase + threshold * DepositFactor`.
 		/// -------------------------------
-		/// - Base Weight:
-		///     - Create:          41.89 + 0.118 * S + .002 * Z µs
-		///     - Create w/ Store: 53.57 + 0.119 * S + .003 * Z µs
-		///     - Approve:         31.39 + 0.136 * S + .002 * Z µs
-		///     - Complete:        39.94 + 0.26  * S + .002 * Z µs
 		/// - DB Weight:
 		///     - Reads: Multisig Storage, [Caller Account], Calls (if `store_call`)
 		///     - Writes: Multisig Storage, [Caller Account], Calls (if `store_call`)
 		/// - Plus Call Weight
 		/// # </weight>
-		#[weight = weight_of::as_multi::<T>(
-			other_signatories.len(),
-			call.len(),
-			*max_weight,
-			true, // assume worst case: calls write
-			true, // assume worst case: refunded
-		)]
+		#[weight = {
+			let s = other_signatories.len() as u32;
+			let z = call.len() as u32;
+
+			T::WeightInfo::as_multi_create(s, z)
+			.max(T::WeightInfo::as_multi_create_store(s, z))
+			.max(T::WeightInfo::as_multi_approve(s, z))
+			.max(T::WeightInfo::as_multi_complete(s, z))
+			.saturating_add(*max_weight)
+		}]
 		fn as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -435,20 +363,18 @@ decl_module! {
 		///   deposit taken for its lifetime of
 		///   `DepositBase + threshold * DepositFactor`.
 		/// ----------------------------------
-		/// - Base Weight:
-		///     - Create: 44.71 + 0.088 * S
-		///     - Approve: 31.48 + 0.116 * S
 		/// - DB Weight:
 		///     - Read: Multisig Storage, [Caller Account]
 		///     - Write: Multisig Storage, [Caller Account]
 		/// # </weight>
-		#[weight = weight_of::as_multi::<T>(
-			other_signatories.len(),
-			0, // call_len is zero in this case
-			*max_weight,
-			true, // assume worst case: calls write
-			true, // assume worst case: refunded
-		)]
+		#[weight = {
+			let s = other_signatories.len() as u32;
+
+			T::WeightInfo::approve_as_multi_create(s)
+			.max(T::WeightInfo::approve_as_multi_approve(s))
+			.max(T::WeightInfo::approve_as_multi_complete(s))
+			.saturating_add(*max_weight)
+		}]
 		fn approve_as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -482,15 +408,11 @@ decl_module! {
 		/// - I/O: 1 read `O(S)`, one remove.
 		/// - Storage: removes one item.
 		/// ----------------------------------
-		/// - Base Weight: 36.07 + 0.124 * S
 		/// - DB Weight:
 		///     - Read: Multisig Storage, [Caller Account], Refund Account, Calls
 		///     - Write: Multisig Storage, [Caller Account], Refund Account, Calls
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(3, 3)
-			.saturating_add(36 * WEIGHT_PER_MICROS)
-			.saturating_add((other_signatories.len() as Weight).saturating_mul(100 * WEIGHT_PER_NANOS))
-		]
+		#[weight = T::WeightInfo::cancel_as_multi(other_signatories.len() as u32)]
 		fn cancel_as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -576,7 +498,7 @@ impl<T: Trait> Module<T> {
 				Self::get_call(&call_hash, maybe_call.as_ref().map(|c| c.as_ref()))
 			} else { None };
 
-			if let Some(call) = maybe_approved_call {
+			if let Some((call, call_len)) = maybe_approved_call {
 				// verify weight
 				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::WeightTooLow);
 
@@ -590,13 +512,12 @@ impl<T: Trait> Module<T> {
 				Self::deposit_event(RawEvent::MultisigExecuted(
 					who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
 				));
-				Ok(get_result_weight(result).map(|actual_weight| weight_of::as_multi::<T>(
-					other_signatories_len,
-					call_len,
-					actual_weight,
-					true, // Call is removed
-					true, // User is refunded
-				)).into())
+				Ok(get_result_weight(result).map(|actual_weight|
+					T::WeightInfo::as_multi_complete(
+						other_signatories_len as u32,
+						call_len as u32
+					).saturating_add(actual_weight)
+				).into())
 			} else {
 				// We cannot dispatch the call now; either it isn't available, or it is, but we
 				// don't have threshold approvals even with our signature.
@@ -620,14 +541,19 @@ impl<T: Trait> Module<T> {
 					ensure!(stored, Error::<T>::AlreadyApproved);
 				}
 
+				let final_weight = if stored {
+					T::WeightInfo::as_multi_approve_store(
+						other_signatories_len as u32,
+						call_len as u32,
+					)
+				} else {
+					T::WeightInfo::as_multi_approve(
+						other_signatories_len as u32,
+						call_len as u32,
+					)
+				};
 				// Call is not made, so the actual weight does not include call
-				Ok(Some(weight_of::as_multi::<T>(
-					other_signatories_len,
-					call_len,
-					0,
-					stored, // Call stored?
-					false, // No refund
-				)).into())
+				Ok(Some(final_weight).into())
 			}
 		} else {
 			// Not yet started; there should be no timepoint given.
@@ -652,14 +578,20 @@ impl<T: Trait> Module<T> {
 				approvals: vec![who.clone()],
 			});
 			Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
-			// Call is not made, so we can return that weight
-			return Ok(Some(weight_of::as_multi::<T>(
-				other_signatories_len,
-				call_len,
-				0,
-				stored, // Call stored?
-				false, // No refund
-			)).into())
+
+			let final_weight = if stored {
+				T::WeightInfo::as_multi_create_store(
+					other_signatories_len as u32,
+					call_len as u32,
+				)
+			} else {
+				T::WeightInfo::as_multi_create(
+					other_signatories_len as u32,
+					call_len as u32,
+				)
+			};
+			// Call is not made, so the actual weight does not include call
+			Ok(Some(final_weight).into())
 		}
 	}
 
@@ -683,13 +615,13 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Attempt to decode and return the call, provided by the user or from storage.
-	fn get_call(hash: &[u8; 32], maybe_known: Option<&[u8]>) -> Option<<T as Trait>::Call> {
+	fn get_call(hash: &[u8; 32], maybe_known: Option<&[u8]>) -> Option<(<T as Trait>::Call, usize)> {
 		maybe_known.map_or_else(|| {
 			Calls::<T>::get(hash).and_then(|(data, ..)| {
-				Decode::decode(&mut &data[..]).ok()
+				Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
 			})
 		}, |data| {
-			Decode::decode(&mut &data[..]).ok()
+			Decode::decode(&mut &data[..]).ok().map(|d| (d, data.len()))
 		})
 	}
 

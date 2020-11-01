@@ -154,17 +154,16 @@ mod tests;
 mod tests_local;
 mod tests_composite;
 mod benchmarking;
-mod default_weight;
+pub mod weights;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
-	weights::Weight,
 	traits::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
-		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
+		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
 		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status,
 	}
@@ -178,14 +177,7 @@ use sp_runtime::{
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
-
-pub trait WeightInfo {
-	fn transfer() -> Weight;
-	fn transfer_keep_alive() -> Weight;
-	fn set_balance_creating() -> Weight;
-	fn set_balance_killing() -> Weight;
-	fn force_transfer() -> Weight;
-}
+pub use weights::WeightInfo;
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
@@ -200,6 +192,10 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 	/// Weight information for the extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// The maximum number of locks that should exist on an account.
+	/// Not strictly enforced, but used for weight estimation.
+	type MaxLocks: Get<u32>;
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
@@ -221,6 +217,10 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// The maximum number of locks that should exist on an account.
+	/// Not strictly enforced, but used for weight estimation.
+	type MaxLocks: Get<u32>;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
@@ -228,6 +228,7 @@ impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
 	type WeightInfo = <T as Trait<I>>::WeightInfo;
+	type MaxLocks = T::MaxLocks;
 }
 
 decl_event!(
@@ -291,9 +292,9 @@ pub enum Reasons {
 
 impl From<WithdrawReasons> for Reasons {
 	fn from(r: WithdrawReasons) -> Reasons {
-		if r == WithdrawReasons::from(WithdrawReason::TransactionPayment) {
+		if r == WithdrawReasons::from(WithdrawReasons::TRANSACTION_PAYMENT) {
 			Reasons::Fee
-		} else if r.contains(WithdrawReason::TransactionPayment) {
+		} else if r.contains(WithdrawReasons::TRANSACTION_PAYMENT) {
 			Reasons::All
 		} else {
 			Reasons::Misc
@@ -663,6 +664,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
+		if locks.len() as u32 > T::MaxLocks::get() {
+			frame_support::debug::warn!(
+				"Warning: A user has more currency locks than expected. \
+				A runtime configuration adjustment may be needed."
+			);
+		}
 		Self::mutate_account(who, |b| {
 			b.misc_frozen = Zero::zero();
 			b.fee_frozen = Zero::zero();
@@ -887,7 +894,7 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;
-	type ModuleToIndex = T::ModuleToIndex;
+	type PalletInfo = T::PalletInfo;
 	type OnNewAccount = T::OnNewAccount;
 	type OnKilledAccount = T::OnKilledAccount;
 	type AccountData = T::AccountData;
@@ -900,6 +907,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
 	type WeightInfo = <T as Subtrait<I>>::WeightInfo;
+	type MaxLocks = T::MaxLocks;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
@@ -1003,7 +1011,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 				Self::ensure_can_withdraw(
 					transactor,
 					value,
-					WithdrawReason::Transfer.into(),
+					WithdrawReasons::TRANSFER,
 					from_account.free,
 				)?;
 
@@ -1162,7 +1170,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 		Self::account(who).free
 			.checked_sub(&value)
 			.map_or(false, |new_balance|
-				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance).is_ok()
+				Self::ensure_can_withdraw(who, value, WithdrawReasons::RESERVE, new_balance).is_ok()
 			)
 	}
 
@@ -1179,7 +1187,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 		Self::try_mutate_account(who, |account, _| -> DispatchResult {
 			account.free = account.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
 			account.reserved = account.reserved.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
-			Self::ensure_can_withdraw(&who, value.clone(), WithdrawReason::Reserve.into(), account.free)
+			Self::ensure_can_withdraw(&who, value.clone(), WithdrawReasons::RESERVE, account.free)
 		})?;
 
 		Self::deposit_event(RawEvent::Reserved(who.clone(), value));
@@ -1285,6 +1293,8 @@ where
 {
 	type Moment = T::BlockNumber;
 
+	type MaxLocks = T::MaxLocks;
+
 	// Set a lock on the balance of `who`.
 	// Is a no-op if lock amount is zero or `reasons` `is_none()`.
 	fn set_lock(
@@ -1293,7 +1303,7 @@ where
 		amount: T::Balance,
 		reasons: WithdrawReasons,
 	) {
-		if amount.is_zero() || reasons.is_none() { return }
+		if amount.is_zero() || reasons.is_empty() { return }
 		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
 		let mut locks = Self::locks(who).into_iter()
 			.filter_map(|l| if l.id == id { new_lock.take() } else { Some(l) })
@@ -1312,7 +1322,7 @@ where
 		amount: T::Balance,
 		reasons: WithdrawReasons,
 	) {
-		if amount.is_zero() || reasons.is_none() { return }
+		if amount.is_zero() || reasons.is_empty() { return }
 		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
 		let mut locks = Self::locks(who).into_iter().filter_map(|l|
 			if l.id == id {

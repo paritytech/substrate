@@ -569,7 +569,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 				let next_action = self.revalidation_strategy.lock().next(
 					block_number,
 					Some(std::time::Duration::from_secs(60)),
-					Some(20.into()),
+					Some(20u32.into()),
 				);
 				let revalidation_strategy = self.revalidation_strategy.clone();
 				let revalidation_queue = self.revalidation_queue.clone();
