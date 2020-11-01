@@ -185,10 +185,10 @@
 			"prefix": 20,
 			"network": "stafi",
 			"displayName": "Stafi",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["FIS"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://stafi.io"
 		},
 		{
 			"prefix": 21,
