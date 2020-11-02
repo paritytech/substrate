@@ -36,7 +36,7 @@ pub use double_map::{StorageDoubleMap, StorageDoubleMapMetadata};
 ///   storage will get an optional value.
 /// * `ValueQuery` which convert an optional value to a value, user when querying storage will get
 ///   a value.
-pub trait QueryKindTrait<Value> {
+pub trait QueryKindTrait<Value, OnEmpty> {
 	/// Metadata for the storage kind.
 	const METADATA: StorageEntryModifier;
 
@@ -45,27 +45,31 @@ pub trait QueryKindTrait<Value> {
 
 	/// Convert an optional value (i.e. some if trie contains the value or none otherwise) to the
 	/// query.
-	fn from_optional_value_to_query<OnEmpty>(v: Option<Value>) -> Self::Query where
-		OnEmpty: crate::traits::Get<Self::Query>;
+	fn from_optional_value_to_query(v: Option<Value>) -> Self::Query;
 
 	/// Convert a query to an optional value.
 	fn from_query_to_optional_value(v: Self::Query) -> Option<Value>;
 }
 
 /// Implement QueryKindTrait with query being `Option<Value>`
+///
+/// NOTE: it doesn't support a generic `OnEmpty`. This means only `None` can be
+/// returned when no value is found. To use another `OnEmpty` implementation, `ValueQuery` can be
+/// used instead.
 pub struct OptionQuery;
-impl<Value: FullCodec + 'static> QueryKindTrait<Value> for OptionQuery {
+impl<Value> QueryKindTrait<Value, crate::traits::GetDefault> for OptionQuery
+where
+	Value: FullCodec + 'static,
+{
 	const METADATA: StorageEntryModifier = StorageEntryModifier::Optional;
+
 	type Query = Option<Value>;
-	fn from_optional_value_to_query<OnEmpty>(v: Option<Value>) -> Self::Query where
-		OnEmpty: crate::traits::Get<Self::Query>
-	{
-		if v.is_none() {
-			OnEmpty::get()
-		} else {
-			v
-		}
+
+	fn from_optional_value_to_query(v: Option<Value>) -> Self::Query {
+		// NOTE: OnEmpty is fixed to GetDefault, thus it returns `None` on no value.
+		v
 	}
+
 	fn from_query_to_optional_value(v: Self::Query) -> Option<Value> {
 		v
 	}
@@ -73,15 +77,19 @@ impl<Value: FullCodec + 'static> QueryKindTrait<Value> for OptionQuery {
 
 /// Implement QueryKindTrait with query being `Value`
 pub struct ValueQuery;
-impl<Value: FullCodec + 'static> QueryKindTrait<Value> for ValueQuery where
+impl<Value, OnEmpty> QueryKindTrait<Value, OnEmpty> for ValueQuery
+where
+	Value: FullCodec + 'static,
+	OnEmpty: crate::traits::Get<Value>,
 {
 	const METADATA: StorageEntryModifier = StorageEntryModifier::Default;
+
 	type Query = Value;
-	fn from_optional_value_to_query<OnEmpty>(v: Option<Value>) -> Self::Query where
-		OnEmpty: crate::traits::Get<Self::Query>
-	{
+
+	fn from_optional_value_to_query(v: Option<Value>) -> Self::Query {
 		v.unwrap_or_else(|| OnEmpty::get())
 	}
+
 	fn from_query_to_optional_value(v: Self::Query) -> Option<Value> {
 		Some(v)
 	}

@@ -61,7 +61,7 @@ where
 	Key1: FullCodec,
 	Key2: FullCodec,
 	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value>,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
 {
 	type Query = QueryKind::Query;
@@ -75,7 +75,7 @@ where
 		Prefix::STORAGE_PREFIX.as_bytes()
 	}
 	fn from_optional_value_to_query(v: Option<Value>) -> Self::Query {
-		QueryKind::from_optional_value_to_query::<OnEmpty>(v)
+		QueryKind::from_optional_value_to_query(v)
 	}
 	fn from_query_to_optional_value(v: Self::Query) -> Option<Value> {
 		QueryKind::from_query_to_optional_value(v)
@@ -92,7 +92,7 @@ where
 	Key1: FullCodec,
 	Key2: FullCodec,
 	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value>,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
 {
 	fn module_prefix() -> &'static [u8] {
@@ -112,7 +112,7 @@ where
 	Key1: FullCodec,
 	Key2: FullCodec,
 	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value>,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
 {
 	/// Get the storage key used to fetch a value corresponding to a specific key.
@@ -331,7 +331,7 @@ where
 	Key1: FullCodec,
 	Key2: FullCodec,
 	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value>,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
 {
 	/// Enumerate all elements in the map with first key `k1` in no particular order.
@@ -394,7 +394,7 @@ impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty> StorageDou
 	Key1: FullCodec,
 	Key2: FullCodec,
 	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value>,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
 {
 	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
@@ -421,19 +421,19 @@ mod test {
 	}
 
 	struct ADefault;
-	impl crate::traits::Get<Option<u32>> for ADefault {
-		fn get() -> Option<u32> {
-			Some(97)
+	impl crate::traits::Get<u32> for ADefault {
+		fn get() -> u32 {
+			97
 		}
 	}
 
 	#[test]
 	fn test() {
 		type A = StorageDoubleMap<
-			Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32, OptionQuery, ADefault
+			Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32, OptionQuery
 		>;
-		type AValueQueryDefaultEmpty = StorageDoubleMap<
-			Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32, ValueQuery
+		type AValueQueryWithAnOnEmpty = StorageDoubleMap<
+			Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32, ValueQuery, ADefault
 		>;
 		type B = StorageDoubleMap<Prefix, Blake2_256, u16, Twox128, u8, u32, ValueQuery>;
 		type C = StorageDoubleMap<Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u8, ValueQuery>;
@@ -448,69 +448,75 @@ mod test {
 			assert_eq!(A::hashed_key_for(3, 30).to_vec(), k);
 
 			assert_eq!(A::contains_key(3, 30), false);
-			assert_eq!(A::get(3, 30), Some(97));
-			assert_eq!(AValueQueryDefaultEmpty::get(3, 30), 0);
+			assert_eq!(A::get(3, 30), None);
+			assert_eq!(AValueQueryWithAnOnEmpty::get(3, 30), 97);
 
 			A::insert(3, 30, 10);
 			assert_eq!(A::contains_key(3, 30), true);
 			assert_eq!(A::get(3, 30), Some(10));
-			assert_eq!(AValueQueryDefaultEmpty::get(3, 30), 10);
+			assert_eq!(AValueQueryWithAnOnEmpty::get(3, 30), 10);
 
 			A::swap(3, 30, 2, 20);
 			assert_eq!(A::contains_key(3, 30), false);
 			assert_eq!(A::contains_key(2, 20), true);
-			assert_eq!(A::get(3, 30), Some(97));
-			assert_eq!(AValueQueryDefaultEmpty::get(3, 30), 0);
+			assert_eq!(A::get(3, 30), None);
+			assert_eq!(AValueQueryWithAnOnEmpty::get(3, 30), 97);
 			assert_eq!(A::get(2, 20), Some(10));
-			assert_eq!(AValueQueryDefaultEmpty::get(2, 20), 10);
+			assert_eq!(AValueQueryWithAnOnEmpty::get(2, 20), 10);
 
 			A::remove(2, 20);
 			assert_eq!(A::contains_key(2, 20), false);
-			assert_eq!(A::get(2, 20), Some(97));
+			assert_eq!(A::get(2, 20), None);
 
-			A::mutate(2, 20, |v| *v = Some(v.unwrap() * 2));
-			A::mutate(2, 20, |v| *v = Some(v.unwrap() * 2));
+			AValueQueryWithAnOnEmpty::mutate(2, 20, |v| *v = *v * 2);
+			AValueQueryWithAnOnEmpty::mutate(2, 20, |v| *v = *v * 2);
 			assert_eq!(A::contains_key(2, 20), true);
 			assert_eq!(A::get(2, 20), Some(97 * 4));
 
 			A::remove(2, 20);
-			let _: Result<(), ()> = A::try_mutate(2, 20, |v| { *v = Some(v.unwrap() * 2); Ok(()) });
-			let _: Result<(), ()> = A::try_mutate(2, 20, |v| { *v = Some(v.unwrap() * 2); Ok(()) });
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(2, 20, |v| {
+				*v = *v * 2; Ok(())
+			});
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(2, 20, |v| {
+				*v = *v * 2; Ok(())
+			});
 			assert_eq!(A::contains_key(2, 20), true);
 			assert_eq!(A::get(2, 20), Some(97 * 4));
 
 			A::remove(2, 20);
-			let _: Result<(), ()> = A::try_mutate(2, 20, |v| { *v = Some(v.unwrap() * 2); Err(()) });
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(2, 20, |v| {
+				*v = *v * 2; Err(())
+			});
 			assert_eq!(A::contains_key(2, 20), false);
 
 			A::remove(2, 20);
-			A::mutate_exists(2, 20, |v| {
+			AValueQueryWithAnOnEmpty::mutate_exists(2, 20, |v| {
 				assert!(v.is_none());
 				*v = Some(10);
 			});
 			assert_eq!(A::contains_key(2, 20), true);
 			assert_eq!(A::get(2, 20), Some(10));
-			A::mutate_exists(2, 20, |v| {
+			AValueQueryWithAnOnEmpty::mutate_exists(2, 20, |v| {
 				*v = Some(v.unwrap() * 10);
 			});
 			assert_eq!(A::contains_key(2, 20), true);
 			assert_eq!(A::get(2, 20), Some(100));
 
 			A::remove(2, 20);
-			let _: Result<(), ()> = A::try_mutate_exists(2, 20, |v| {
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists(2, 20, |v| {
 				assert!(v.is_none());
 				*v = Some(10);
 				Ok(())
 			});
 			assert_eq!(A::contains_key(2, 20), true);
 			assert_eq!(A::get(2, 20), Some(10));
-			let _: Result<(), ()> = A::try_mutate_exists(2, 20, |v| {
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists(2, 20, |v| {
 				*v = Some(v.unwrap() * 10);
 				Ok(())
 			});
 			assert_eq!(A::contains_key(2, 20), true);
 			assert_eq!(A::get(2, 20), Some(100));
-			let _: Result<(), ()> = A::try_mutate_exists(2, 20, |v| {
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists(2, 20, |v| {
 				*v = Some(v.unwrap() * 10);
 				Err(())
 			});
@@ -521,7 +527,7 @@ mod test {
 			A::insert(2, 20, 10);
 			assert_eq!(A::take(2, 20), Some(10));
 			assert_eq!(A::contains_key(2, 20), false);
-			assert_eq!(A::take(2, 20), Some(97));
+			assert_eq!(AValueQueryWithAnOnEmpty::take(2, 20), 97);
 			assert_eq!(A::contains_key(2, 20), false);
 
 			B::insert(2, 20, 10);
@@ -556,20 +562,20 @@ mod test {
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40, 1600), (3, 30, 900)]);
 
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(AValueQueryDefaultEmpty::MODIFIER, StorageEntryModifier::Default);
+			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
 			assert_eq!(A::HASHER1, frame_metadata::StorageHasher::Blake2_128Concat);
 			assert_eq!(A::HASHER2, frame_metadata::StorageHasher::Twox64Concat);
 			assert_eq!(
-				AValueQueryDefaultEmpty::HASHER1,
+				AValueQueryWithAnOnEmpty::HASHER1,
 				frame_metadata::StorageHasher::Blake2_128Concat
 			);
 			assert_eq!(
-				AValueQueryDefaultEmpty::HASHER2,
+				AValueQueryWithAnOnEmpty::HASHER2,
 				frame_metadata::StorageHasher::Twox64Concat
 			);
 			assert_eq!(A::NAME, "foo");
-			assert_eq!(A::DEFAULT.0.default_byte(), Some(97u32).encode());
-			assert_eq!(AValueQueryDefaultEmpty::DEFAULT.0.default_byte(), 0.encode());
+			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
+			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
 			WithLen::remove_all();
 			assert_eq!(WithLen::decode_len(3, 30), None);

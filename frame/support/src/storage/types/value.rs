@@ -42,7 +42,7 @@ impl<Prefix, Value, QueryKind, OnEmpty> crate::storage::generator::StorageValue<
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value>,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 {
 	type Query = QueryKind::Query;
@@ -54,7 +54,7 @@ where
 		Prefix::STORAGE_PREFIX.as_bytes()
 	}
 	fn from_optional_value_to_query(v: Option<Value>) -> Self::Query {
-		QueryKind::from_optional_value_to_query::<OnEmpty>(v)
+		QueryKind::from_optional_value_to_query(v)
 	}
 	fn from_query_to_optional_value(v: Self::Query) -> Option<Value> {
 		QueryKind::from_query_to_optional_value(v)
@@ -65,7 +65,7 @@ impl<Prefix, Value, QueryKind, OnEmpty> StorageValue<Prefix, Value, QueryKind, O
 where
 	Prefix: StorageInstance,
 	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value>,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 {
 	/// Get the storage key.
@@ -183,7 +183,7 @@ impl<Prefix, Value, QueryKind, OnEmpty> StorageValueMetadata
 	for StorageValue<Prefix, Value, QueryKind, OnEmpty> where
 	Prefix: StorageInstance,
 	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value>,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 {
 	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
@@ -207,30 +207,30 @@ mod test {
 	}
 
 	struct ADefault;
-	impl crate::traits::Get<Option<u32>> for ADefault {
-		fn get() -> Option<u32> {
-			Some(97)
+	impl crate::traits::Get<u32> for ADefault {
+		fn get() -> u32 {
+			97
 		}
 	}
 
 	#[test]
 	fn test() {
-		type A = StorageValue<Prefix, u32, OptionQuery, ADefault>;
-		type AValueQueryDefaultEmpty = StorageValue<Prefix, u32, ValueQuery>;
+		type A = StorageValue<Prefix, u32, OptionQuery>;
+		type AValueQueryWithAnOnEmpty = StorageValue<Prefix, u32, ValueQuery, ADefault>;
 		type B = StorageValue<Prefix, u16, ValueQuery>;
 		type WithLen = StorageValue<Prefix, Vec<u32>>;
 
 		TestExternalities::default().execute_with(|| {
 			assert_eq!(A::hashed_key().to_vec(), [twox_128(b"test"), twox_128(b"foo")].concat());
 			assert_eq!(A::exists(), false);
-			assert_eq!(A::get(), Some(97));
-			assert_eq!(AValueQueryDefaultEmpty::get(), 0);
+			assert_eq!(A::get(), None);
+			assert_eq!(AValueQueryWithAnOnEmpty::get(), 97);
 			assert_eq!(A::try_get(), Err(()));
 
 			A::put(2);
 			assert_eq!(A::exists(), true);
 			assert_eq!(A::get(), Some(2));
-			assert_eq!(AValueQueryDefaultEmpty::get(), 2);
+			assert_eq!(AValueQueryWithAnOnEmpty::get(), 2);
 			assert_eq!(A::try_get(), Ok(2));
 			assert_eq!(A::try_get(), Ok(2));
 
@@ -255,21 +255,23 @@ mod test {
 			assert_eq!(A::try_get(), Ok(8));
 
 			A::kill();
-			A::mutate(|v| *v = Some(v.unwrap() * 2));
-			assert_eq!(A::try_get(), Ok(97 * 2));
+			AValueQueryWithAnOnEmpty::mutate(|v| *v = *v * 2);
+			assert_eq!(AValueQueryWithAnOnEmpty::try_get(), Ok(97 * 2));
 
-			A::kill();
-			let _: Result<(), ()> = A::try_mutate(|v| { *v = Some(v.unwrap() * 2); Ok(()) });
-			assert_eq!(A::try_get(), Ok(97 * 2));
+			AValueQueryWithAnOnEmpty::kill();
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(|v| {
+				*v = *v * 2; Ok(())
+			});
+			assert_eq!(AValueQueryWithAnOnEmpty::try_get(), Ok(97 * 2));
 
 			A::kill();
 			assert_eq!(A::try_get(), Err(()));
 
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(AValueQueryDefaultEmpty::MODIFIER, StorageEntryModifier::Default);
+			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
 			assert_eq!(A::NAME, "foo");
-			assert_eq!(A::DEFAULT.0.default_byte(), Some(97u32).encode());
-			assert_eq!(AValueQueryDefaultEmpty::DEFAULT.0.default_byte(), 0.encode());
+			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
+			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
 
 			WithLen::kill();
 			assert_eq!(WithLen::decode_len(), None);
