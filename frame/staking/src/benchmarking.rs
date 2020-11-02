@@ -288,7 +288,6 @@ benchmarks! {
 
 	payout_stakers_dead_controller {
 		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
-		// Clean up existing validators
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
@@ -322,7 +321,6 @@ benchmarks! {
 
 	payout_stakers_alive_staked {
 		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
-		// Clean up existing validators
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
