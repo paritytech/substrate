@@ -53,6 +53,8 @@ pub fn create_validator_with_nominators<T: Trait>(
 	dead: bool,
 	destination: RewardDestination<T::AccountId>
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
+	// Clean up any existing validators.
+	Validators::<T>::remove_all();
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
@@ -287,7 +289,6 @@ benchmarks! {
 	payout_stakers_dead_controller {
 		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
 		// Clean up existing validators
-		Validators::<T>::remove_all();
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
@@ -322,7 +323,6 @@ benchmarks! {
 	payout_stakers_alive_staked {
 		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
 		// Clean up existing validators
-		Validators::<T>::remove_all();
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
