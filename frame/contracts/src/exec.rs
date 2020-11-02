@@ -118,7 +118,7 @@ pub trait Ext {
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> Result<(), &'static str>;
+	) -> Result<(), DispatchError>;
 
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
@@ -558,9 +558,7 @@ where
 		let value = T::Currency::free_balance(&self_id);
 		if let Some(caller_ctx) = self.ctx.caller {
 			if caller_ctx.is_live(&self_id) {
-				return Err(DispatchError::Other(
-					"Cannot terminate a contract that is present on the call stack",
-				));
+				return Err(Error::<T>::ReentranceDenied.into());
 			}
 		}
 		transfer(
@@ -596,12 +594,10 @@ where
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> Result<(), &'static str> {
+	) -> Result<(), DispatchError> {
 		if let Some(caller_ctx) = self.ctx.caller {
 			if caller_ctx.is_live(&self.ctx.self_account) {
-				return Err(
-					"Cannot perform restoration of a contract that is present on the call stack",
-				);
+				return Err(Error::<T>::ReentranceDenied.into());
 			}
 		}
 

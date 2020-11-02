@@ -870,7 +870,7 @@ define_env!(Env, <E: Ext>,
 		let beneficiary: <<E as Ext>::T as frame_system::Trait>::AccountId =
 			read_sandbox_memory_as(ctx, beneficiary_ptr, beneficiary_len)?;
 
-		if let Ok(_) = ctx.ext.terminate(&beneficiary) {
+		if let Ok(_) = ctx.ext.terminate(&beneficiary).map_err(|e| ctx.store_err(e)) {
 			ctx.trap_reason = Some(TrapReason::Termination);
 		}
 		Err(sp_sandbox::HostError)
@@ -1149,7 +1149,7 @@ define_env!(Env, <E: Ext>,
 			code_hash,
 			rent_allowance,
 			delta,
-		) {
+		).map_err(|e| ctx.store_err(e)) {
 			ctx.trap_reason = Some(TrapReason::Restoration);
 		}
 		Err(sp_sandbox::HostError)

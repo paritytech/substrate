@@ -18,7 +18,7 @@
 
 use crate::{
 	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, RawEvent,
-	TombstoneContractInfo, Trait, CodeHash, Config
+	TombstoneContractInfo, Trait, CodeHash, Config, Error,
 };
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
@@ -26,7 +26,10 @@ use frame_support::storage::child;
 use frame_support::traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReasons};
 use frame_support::StorageMap;
 use pallet_contracts_primitives::{ContractAccessError, RentProjection, RentProjectionResult};
-use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul, SaturatedConversion, Saturating, Zero};
+use sp_runtime::{
+	DispatchError,
+	traits::{Bounded, CheckedDiv, CheckedMul, SaturatedConversion, Saturating, Zero},
+};
 
 /// The amount to charge.
 ///
@@ -415,22 +418,22 @@ pub fn restore_to<T: Trait>(
 	code_hash: CodeHash<T>,
 	rent_allowance: BalanceOf<T>,
 	delta: Vec<crate::exec::StorageKey>,
-) -> Result<(), &'static str> {
+) -> Result<(), DispatchError> {
 	let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 		.and_then(|c| c.get_alive())
-		.ok_or("Cannot restore from inexisting or tombstone contract")?;
+		.ok_or(Error::<T>::InvalidSourceContract)?;
 
 	let child_trie_info = origin_contract.child_trie_info();
 
 	let current_block = <frame_system::Module<T>>::block_number();
 
 	if origin_contract.last_write == Some(current_block) {
-		return Err("Origin TrieId written in the current block");
+		return Err(Error::<T>::InvalidContractOrigin.into());
 	}
 
 	let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
 		.and_then(|c| c.get_tombstone())
-		.ok_or("Cannot restore to inexisting or alive contract")?;
+		.ok_or(Error::<T>::InvalidDestinationContract)?;
 
 	let last_write = if !delta.is_empty() {
 		Some(current_block)
@@ -458,8 +461,7 @@ pub fn restore_to<T: Trait>(
 		for (key, value) in key_values_taken {
 			child::put_raw(&child_trie_info, &blake2_256(key), &value);
 		}
-
-		return Err("Tombstones don't match");
+		return Err(Error::<T>::InvalidTombstone.into());
 	}
 
 	origin_contract.storage_size -= key_values_taken.iter()

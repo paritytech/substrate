@@ -289,7 +289,7 @@ mod tests {
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) -> Result<(), &'static str> {
+		) -> Result<(), DispatchError> {
 			self.restores.push(RestoreEntry {
 				dest,
 				code_hash,
@@ -394,7 +394,7 @@ mod tests {
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) -> Result<(), &'static str> {
+		) -> Result<(), DispatchError> {
 			(**self).restore_to(
 				dest,
 				code_hash,

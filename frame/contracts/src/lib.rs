@@ -455,6 +455,10 @@ decl_error! {
 		ContractTrapped,
 		/// The size defined in `T::MaxValueSize` was exceeded.
 		ValueTooLarge,
+		/// The action performed is not allowed while the contract performing it is already
+		/// on the call stack. Those actions are contract self destruction and restoration
+		/// of a tombstone.
+		ReentranceDenied,
 	}
 }
 
