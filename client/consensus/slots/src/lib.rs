@@ -733,6 +733,7 @@ mod test {
 		);
 	}
 
+	#[derive(PartialEq, Debug)]
 	struct HeadState {
 		head_number: NumberFor<Block>,
 		head_slot: u64,
@@ -741,8 +742,10 @@ mod test {
 
 	impl HeadState {
 		fn author_block(&mut self) {
+			// Add a block to the head, and set latest slot to the current
 			self.head_number += 1;
-			self.head_slot += 1;
+			self.head_slot = self.slot_now;
+			// Advance slot to next
 			self.slot_now += 1;
 		}
 
@@ -752,7 +755,57 @@ mod test {
 	}
 
 	#[test]
-	fn should_backoff_authoring_when_finality_lags() {
+	fn should_never_backoff_when_head_not_advancing() {
+		let strategy = SimpleBackoffAuthoringBlocksStrategy::<NumberFor<Block>> {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
+
+		let head_number = 1;
+		let head_slot = 1;
+		let finalized_number = 1;
+		let slot_now = 2;
+
+		let should_backoff: Vec<bool> = (slot_now..100)
+			.map(|s| strategy.should_backoff(head_number, head_slot, finalized_number, s))
+			.collect();
+
+		// Should always be false, since the head isn't advancing
+		let expected: Vec<bool> = (slot_now..100).map(|_| false).collect();
+		assert_eq!(should_backoff, expected);
+	}
+
+	#[test]
+	fn should_stop_authoring_if_blocks_are_still_produced_when_finality_stalled() {
+		let strategy = SimpleBackoffAuthoringBlocksStrategy::<NumberFor<Block>> {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
+
+		let mut head_number = 1;
+		let mut head_slot = 1;
+		let finalized_number = 1;
+		let slot_now = 2;
+
+		let should_backoff: Vec<bool> = (slot_now..100)
+			.map(move |s| {
+				let b = strategy.should_backoff(head_number, head_slot, finalized_number, s);
+				// Chain is still advancing (by someone else)
+				head_number += 1;
+				head_slot = s;
+				b
+			})
+			.collect();
+
+		// Should always be true after a short while, since the chain is advancing but finality is stalled
+		let expected: Vec<bool> = (slot_now..100).map(|s| s > 8).collect();
+		assert_eq!(should_backoff, expected);
+	}
+
+	#[test]
+	fn should_backoff_authoring_when_finality_stalled() {
 		let param = SimpleBackoffAuthoringBlocksStrategy {
 			max_interval: 100,
 			unfinalized_slack: 5,
@@ -761,7 +814,7 @@ mod test {
 
 		let finalized_number = 2;
 		let mut head_state = HeadState {
-			head_number: 3,
+			head_number: 4,
 			head_slot: 10,
 			slot_now: 11,
 		};
@@ -776,39 +829,48 @@ mod test {
 			)
 		};
 
-		while head_state.slot_now < 17 {
-			assert!(!should_backoff(&head_state));
-			head_state.author_block();
-		}
+		let backoff: Vec<bool> = (head_state.slot_now..200)
+			.map(|_| {
+				if should_backoff(&head_state) {
+					head_state.dont_author_block();
+					true
+				} else {
+					head_state.author_block();
+					false
+				}
+			})
+			.collect();
 
-		// Once the unfinalized head of the chain grows too long we start backing off block
-		// production
-		assert_eq!(head_state.head_number, 9);
-		assert_eq!(head_state.head_slot, 16);
-		assert_eq!(head_state.slot_now, 17);
-		assert!(should_backoff(&head_state));
-		head_state.dont_author_block();
-
-		// But we don't stop entirely
-		while head_state.slot_now < 20 {
-			assert!(!should_backoff(&head_state));
-			head_state.author_block();
-		}
-
-		// Back off again
-		assert!(should_backoff(&head_state));
-
-		// Plow ahead and author blocks despite the halted finality
-		while head_state.slot_now < 1000 {
-			head_state.author_block();
-		}
-
-		// Even though we have a very long unfinalized head suffix length, block authorship should
-		// never entirely stop.
-		while should_backoff(&head_state) && head_state.slot_now < 2000 {
-			head_state.dont_author_block();
-		}
-		assert!(head_state.slot_now < 1100);
+		// Gradually start to backoff more and more frequently
+		#[rustfmt::skip]
+		let expected = [
+			false, false, false, false, false, // no effect
+			true, false,
+			true, false, // 1:1
+			true, true, false,
+			true, true, false, // 2:1
+			true, true, true, false,
+			true, true, true, false, // 3:1
+			true, true, true, true, false,
+			true, true, true, true, false, // 4:1
+			true, true, true, true, true, false,
+			true, true, true, true, true, false, // 5:1
+			true, true, true, true, true, true, false,
+			true, true, true, true, true, true, false, // 6:1
+			true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, false, // 7:1
+			true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, false, // 8:1
+			true, true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, true, false, // 9:1
+			true, true, true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, true, true, false, // 10:1
+			true, true, true, true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, true, true, true, false, // 11:1
+			true, true, true, true, true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, true, true, true, true, false, // 12:1
+			true, true, true, true];
+		assert_eq!(backoff, expected);
 	}
 }
 
