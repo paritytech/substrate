@@ -47,24 +47,29 @@ use wasm_timer::Instant;
 /// The role of the `GenericProto` is to synchronize the following components:
 ///
 /// - The libp2p swarm that opens new connections and reports disconnects.
-/// - The connection handler (see `handler.rs`) that handles individual connections.
+/// - The connection handler (see `group.rs`) that handles individual connections.
 /// - The peerset manager (PSM) that requests links to peers to be established or broken.
 /// - The external API, that requires knowledge of the links that have been established.
 ///
-/// Each connection handler can be in four different states: Enabled+Open, Enabled+Closed,
-/// Disabled+Open, or Disabled+Closed. The Enabled/Disabled component must be in sync with the
-/// peerset manager. For example, if the peerset manager requires a disconnection, we disable the
-/// connection handlers of that peer. The Open/Closed component must be in sync with the external
-/// API.
+/// In the state machine below, each `PeerId` is attributed one of these states:
 ///
-/// However, a connection handler for a peer only exists if we are actually connected to that peer.
-/// What this means is that there are six possible states for each peer: Disconnected, Dialing
-/// (trying to connect), Enabled+Open, Enabled+Closed, Disabled+Open, Disabled+Closed.
-/// Most notably, the Dialing state must correspond to a "link established" state in the peerset
-/// manager. In other words, the peerset manager doesn't differentiate whether we are dialing a
-/// peer or connected to it.
+/// - No open connection, but requested by the peerset. Currently dialing.
+/// - Has open TCP connection(s) unbeknownst to the peerset. No substream is open.
+/// - Has open TCP connection(s), acknowledged by the peerset.
+///   - Notifications substreams are open on at least one connection, and external
+///     API has been notified.
+///   - Notifications substreams aren't open.
+/// - Has open TCP connection(s) and remote would like to open substreams. Peerset has
+///   been asked to attribute an inbound slot.
 ///
-/// There may be multiple connections to a peer. However, the status of a peer on
+/// In addition to these states, there also exists a "banning" system. If we fail to dial a peer,
+/// we "ban" it for a few seconds. If the PSM requests connecting to a peer that is currently
+/// "banned", the next dialing attempt is delayed until after the ban expires. However, the PSM
+/// will still consider the peer to be connected. This "ban" is thus not a ban in a strict sense:
+/// if a "banned" peer tries to connect, the connection is accepted. A ban only delays dialing
+/// attempts.
+///
+/// There may be multiple connections to a peer. The status of a peer on
 /// the API of this behaviour and towards the peerset manager is aggregated in
 /// the following way:
 ///
@@ -78,21 +83,15 @@ use wasm_timer::Instant;
 ///      in terms of potential reordering and dropped messages. Messages can
 ///      be received on any connection.
 ///   3. The behaviour reports `GenericProtoOut::CustomProtocolOpen` when the
-///      first connection reports `NotifsHandlerOut::Open`.
+///      first connection reports `NotifsHandlerOut::OpenResultOk`.
 ///   4. The behaviour reports `GenericProtoOut::CustomProtocolClosed` when the
-///      last connection reports `NotifsHandlerOut::Closed`.
+///      last connection reports `NotifsHandlerOut::ClosedResult`.
 ///
 /// In this way, the number of actual established connections to the peer is
 /// an implementation detail of this behaviour. Note that, in practice and at
 /// the time of this writing, there may be at most two connections to a peer
 /// and only as a result of simultaneous dialing. However, the implementation
 /// accommodates for any number of connections.
-///
-/// Additionally, there also exists a "banning" system. If we fail to dial a peer, we "ban" it for
-/// a few seconds. If the PSM requests connecting to a peer that is currently "banned", the next
-/// dialing attempt is delayed until after the ban expires. However, the PSM will still consider
-/// the peer to be connected. This "ban" is thus not a ban in a strict sense: If a "banned" peer
-/// tries to connect, the connection is accepted. A ban only delays dialing attempts.
 ///
 pub struct GenericProto {
 	/// `PeerId` of the local node.
