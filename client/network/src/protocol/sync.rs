@@ -37,7 +37,7 @@ use sp_consensus::{BlockOrigin, BlockStatus,
 use crate::{
 	config::BoxFinalityProofRequestBuilder,
 	protocol::message::{self, generic::FinalityProofRequest, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse,
-	Roles},
+	FinalityProofResponse, Roles},
 };
 use either::Either;
 use extra_requests::ExtraRequests;
@@ -117,8 +117,7 @@ mod rep {
 	pub const BAD_JUSTIFICATION: Rep = Rep::new(-(1 << 16), "Bad justification");
 
 	/// Reputation change for peers which send us a block with bad finality proof.
-	// TODO: bring back?
-	// pub const BAD_FINALITY_PROOF: Rep = Rep::new(-(1 << 16), "Bad finality proof");
+	pub const BAD_FINALITY_PROOF: Rep = Rep::new(-(1 << 16), "Bad finality proof");
 
 	/// Reputation change when a peer sent us invlid ancestry result.
 	pub const UNKNOWN_ANCESTOR:Rep = Rep::new(-(1 << 16), "DB Error");
@@ -1034,22 +1033,10 @@ impl<B: BlockT> ChainSync<B> {
 		Ok(OnBlockJustification::Nothing)
 	}
 
-	pub fn on_finality_proof_request_started(
-		&mut self,
-		who: PeerId,
-		block_hash: B::Hash,
-		request_id: libp2p::request_response::RequestId,
-	) {
-		self.extra_finality_proofs.on_request_started(who, block_hash, request_id)
-	}
-
 	/// Handle new finality proof data.
-	pub fn on_block_finality_proof(
-		&mut self,
-		who: PeerId,
-		request_id: libp2p::request_response::RequestId,
-		proof: Vec<u8>,
-	) -> Result<OnBlockFinalityProof<B>, BadPeer> {
+	pub fn on_block_finality_proof
+		(&mut self, who: PeerId, resp: FinalityProofResponse<B::Hash>) -> Result<OnBlockFinalityProof<B>, BadPeer>
+	{
 		let peer =
 			if let Some(peer) = self.peers.get_mut(&who) {
 				peer
@@ -1059,14 +1046,22 @@ impl<B: BlockT> ChainSync<B> {
 			};
 
 		self.pending_requests.add(&who);
-		if let PeerSyncState::DownloadingFinalityProof(state_hash) = peer.state {
+		if let PeerSyncState::DownloadingFinalityProof(hash) = peer.state {
 			peer.state = PeerSyncState::Available;
 
-			if let Some((peer, hash, number, p)) = self.extra_finality_proofs.on_response_with_request_id(who, request_id, if proof.is_empty() { None } else { Some(proof) }) {
-				trace!(target: "sync", "Finality proof response from {} for {}", peer, hash);
-				// TODO: Safe assumption to make?
-				assert_eq!(hash, state_hash);
-				return Ok(OnBlockFinalityProof::Import { peer, hash, number, proof: p})
+			// We only request one finality proof at a time.
+			if hash != resp.block {
+				info!(
+					target: "sync",
+					"💔 Invalid block finality proof provided: requested: {:?} got: {:?}",
+					hash,
+					resp.block
+				);
+				return Err(BadPeer(who, rep::BAD_FINALITY_PROOF));
+			}
+
+			if let Some((peer, hash, number, p)) = self.extra_finality_proofs.on_response(who, resp.proof) {
+				return Ok(OnBlockFinalityProof::Import { peer, hash, number, proof: p })
 			}
 		}
 
@@ -1871,7 +1866,7 @@ mod test {
 
 		// there's one in-flight extra request to the expected peer
 		assert!(
-			sync.extra_justifications.active_requests().any(|(who, ActiveRequest { block_hash, number, .. })| {
+			sync.extra_justifications.active_requests().any(|(who, (hash, number))| {
 				*who == peer_id && *hash == a1_hash && *number == a1_number
 			})
 		);

@@ -461,10 +461,6 @@ Behaviour<B, H> {
 
 impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Event> for Behaviour<B, H> {
 	fn inject_event(&mut self, event: request_responses::Event) {
-		// Can we do prettier?
-		let finality_request_protocol_name = Cow::Borrowed(&self.finality_request_protocol_name);
-		let block_request_protocol_name = Cow::Borrowed(&self.block_request_protocol_name);
-
 		match event {
 			request_responses::Event::InboundRequest { peer, protocol, result } => {
 				self.events.push_back(BehaviourOut::InboundRequest {
@@ -480,7 +476,18 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Even
 					let ev = self.substrate.on_finality_proof_response(peer, request_id, proof_response.proof);
 					self.inject_event(ev);
 				} else if protocol == self.block_request_protocol_name {
-					let protobuf_response = crate::schema::v1::BlockResponse::decode(&result.unwrap()[..]).unwrap();
+					let resp = match result {
+						Ok(resp) => resp,
+						Err(e) => {
+							debug!(
+								target: "sub-libp2p",
+								"Block request to {:?} failed with: {:?}",
+								peer, e,
+							);
+							return
+						}
+					};
+					let protobuf_response = crate::schema::v1::BlockResponse::decode(&resp[..]).unwrap();
 
 					let ev = self.substrate.on_block_response(peer, request_id,  protobuf_response);
 					self.inject_event(ev);

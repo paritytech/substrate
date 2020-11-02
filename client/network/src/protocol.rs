@@ -257,7 +257,10 @@ struct PacketStats {
 struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any.
+	// TODO: Is Instant stil needed?
 	block_request: Option<(Instant, message::BlockRequest<B>, Option<libp2p::request_response::RequestId>)>,
+	// TODO: Document
+	finality_request: Option<(message::FinalityProofRequest<B::Hash>, Option<libp2p::request_response::RequestId>)>,
 	/// Requests we are no longer interested in.
 	// TODO: Do we still need this at all?
 	obsolete_requests: HashMap<message::RequestId, Instant>,
@@ -976,6 +979,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				best_number: status.best_number
 			},
 			block_request: None,
+			finality_request: None,
 			known_transactions: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_TRANSACTIONS)
 				.expect("Constant is nonzero")),
 			known_blocks: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_BLOCKS)
@@ -1442,7 +1446,25 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		request_id: libp2p::request_response::RequestId,
 		proof: Vec<u8>,
 	) -> CustomMessageOutcome<B> {
-		match self.sync.on_block_finality_proof(who, request_id, proof) {
+		let peer = match self.context_data.peers.get_mut(&who) {
+			Some(peer) => peer,
+			None => return CustomMessageOutcome::None,
+		};
+
+		let req = match &peer.finality_request {
+			Some((_req, Some(id))) if *id != request_id => peer.finality_request.take().unwrap().0,
+			Some(_) => return CustomMessageOutcome::None,
+			None => return CustomMessageOutcome::None,
+		};
+
+		let resp = message::FinalityProofResponse::<B::Hash> {
+			// TODO: correct?
+			id: 0,
+			block: req.block,
+			proof: if proof.is_empty() { None } else { Some(proof) },
+		};
+
+		match self.sync.on_block_finality_proof(who, resp) {
 			Ok(sync::OnBlockFinalityProof::Nothing) => CustomMessageOutcome::None,
 			Ok(sync::OnBlockFinalityProof::Import { peer, hash, number, proof }) =>
 				CustomMessageOutcome::FinalityProofImport(peer, hash, number, proof),
@@ -1462,7 +1484,12 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		block_hash: B::Hash,
 		request_id: libp2p::request_response::RequestId,
 	) {
-		self.sync.on_finality_proof_request_started(who, block_hash, request_id)
+		if let Some(Peer { finality_request: Some(req), ..}) = self.context_data.peers.get_mut(&who) {
+			if req.0.block == block_hash {
+				debug_assert!(req.1.is_none());
+				req.1 = Some(request_id);
+			}
+		}
 	}
 
 	pub fn on_block_request_started(
@@ -1671,6 +1698,12 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			self.pending_messages.push_back(event);
 		}
 		for (id, r) in self.sync.finality_proof_requests() {
+			match self.context_data.peers.get_mut(&id) {
+				Some(peer) => {
+					peer.finality_request = Some((r.clone(), None))
+				},
+				None => unimplemented!(),
+			}
 			let event = CustomMessageOutcome::FinalityProofRequest {
 				target: id,
 				block_hash: r.block,
