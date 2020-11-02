@@ -100,7 +100,7 @@
 //! | `*const T` | `u32` | `Identity` |
 //! | `Option<T>` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
 //! | [`T where T: PassBy<PassBy=Inner>`](./pass_by#Inner) | Depends on inner | Depends on inner |
-//! | [`T where T: PassBy<PassBy=Codec>`](./pass_by#Codec) | `u64`| <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
+//! |[`T where T:PassBy<PassBy=Codec>`](./pass_by#Codec)|`u64`|<code>v.len() 32bit << 32 &#124;v.as_ptr() 32bit</code>|
 //!
 //! `Identity` means that the value is converted directly into the corresponding FFI type.
 
