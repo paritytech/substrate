@@ -1,3 +1,22 @@
+// Copyright 2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Helper for handling (i.e. answering) finality requests from a remote peer via the
+//! [`crate::request_responses::RequestResponsesBehaviour`].
+
 use crate::request_responses::ProtocolConfig;
 use futures::channel::mpsc;
 use futures::stream::StreamExt;
@@ -9,6 +28,7 @@ use sp_runtime::{traits::Block as BlockT};
 use crate::request_responses::IncomingRequest;
 use prost::Message;
 
+/// Generate the finality proof protocol name from chain specific protocol identifier.
 pub fn generate_protocol_name(protocol_id: ProtocolId) -> String {
 	let mut s = String::new();
 	s.push_str("/");
@@ -17,12 +37,14 @@ pub fn generate_protocol_name(protocol_id: ProtocolId) -> String {
 	s
 }
 
+/// Handler for incoming finality requests from a remote peer.
 pub struct FinalityRequestHandler<B> {
 	proof_provider: Arc<dyn FinalityProofProvider<B>>,
 	request_receiver: mpsc::Receiver<IncomingRequest>,
 }
 
 impl<B: BlockT> FinalityRequestHandler<B> {
+	/// Create a new [`FinalityRequestHandler`].
 	pub fn new(protocol_id: ProtocolId, proof_provider: Arc<dyn FinalityProofProvider<B>>) -> (Self, ProtocolConfig){
 		let (tx, rx) = mpsc::channel(0);
 
@@ -44,6 +66,7 @@ impl<B: BlockT> FinalityRequestHandler<B> {
 		(handler, protocol_config)
 	}
 
+	/// Run [`FinalityRequestHandler`].
 	pub async fn run(mut self) {
 		while let Some(crate::request_responses::IncomingRequest { peer, payload, pending_response }) = self.request_receiver.next().await {
 			let req = crate::schema::v1::finality::FinalityProofRequest::decode(&payload[..]).unwrap();

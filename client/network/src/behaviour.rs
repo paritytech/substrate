@@ -106,31 +106,6 @@ pub enum BehaviourOut<B: BlockT> {
 		result: Result<Vec<u8>, RequestFailure>,
 	},
 
-	// TODO: Do we still need these? Can we not just depend on the request reponse behaviour to
-	// provide these metrics?
-	//
-	// /// Started a new request with the given node.
-	// ///
-	// /// This event is for statistics purposes only. The request and response handling are entirely
-	// /// internal to the behaviour.
-	// OpaqueRequestStarted {
-	// 	peer: PeerId,
-	// 	/// Protocol name of the request.
-	// 	protocol: String,
-	// },
-	// /// Finished, successfully or not, a previously-started request.
-	// ///
-	// /// This event is for statistics purposes only. The request and response handling are entirely
-	// /// internal to the behaviour.
-	// OpaqueRequestFinished {
-	// 	/// Who we were requesting.
-	// 	peer: PeerId,
-	// 	/// Protocol name of the request.
-	// 	protocol: String,
-	// 	/// How long before the response came or the request got cancelled.
-	// 	request_duration: Duration,
-	// },
-
 	/// Opened a substream with the given node with the given notifications protocol.
 	///
 	/// The protocol is always one of the notification protocols that have been registered.
@@ -378,34 +353,6 @@ Behaviour<B, H> {
 				let request_id = self.request_responses.send_request(&target, &self.block_request_protocol_name, buf).unwrap();
 				// TODO: differentiate between the two ids.
 				self.substrate.on_block_request_started(target, request.id, request_id);
-
-
-
-
-
-
-				// TODO: Entirely ignoring any previous requests now. Fine?
-				// match self.block_requests.send_request(&target, request) {
-				// 	block_requests::SendRequestOutcome::Ok => {
-				// 		self.events.push_back(BehaviourOut::OpaqueRequestStarted {
-				// 			peer: target,
-				// 			protocol: self.block_requests.protocol_name().to_owned(),
-				// 		});
-				// 	},
-				// 	block_requests::SendRequestOutcome::Replaced { request_duration, .. } => {
-				// 		self.events.push_back(BehaviourOut::OpaqueRequestFinished {
-				// 			peer: target.clone(),
-				// 			protocol: self.block_requests.protocol_name().to_owned(),
-				// 			request_duration,
-				// 		});
-				// 		self.events.push_back(BehaviourOut::OpaqueRequestStarted {
-				// 			peer: target,
-				// 			protocol: self.block_requests.protocol_name().to_owned(),
-				// 		});
-				// 	}
-				// 	block_requests::SendRequestOutcome::NotConnected |
-				// 	block_requests::SendRequestOutcome::EncodeError(_) => {},
-				// }
 			},
 			CustomMessageOutcome::FinalityProofRequest { target, block_hash, request } => {
 				let protobuf_rq = crate::schema::v1::finality::FinalityProofRequest {
@@ -470,6 +417,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Even
 				});
 			}
 			request_responses::Event::RequestFinished { peer, protocol, request_id, result } => {
+				// TODO: Make sure to get these responses captured in metrics.
 				if protocol == self.finality_request_protocol_name {
 					let proof_response = crate::schema::v1::finality::FinalityProofResponse::decode(&result.unwrap()[..])
 						.unwrap();
