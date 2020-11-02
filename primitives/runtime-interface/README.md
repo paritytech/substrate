@@ -9,7 +9,7 @@ and they map to the same implementation as the native calls.
 # Using a type in a runtime interface
 
 Any type that should be used in a runtime interface as argument or return value needs to
-implement [`RIType`]. The associated type [`FFIType`](https://docs.rs/sp-runtime-interface/latest/sp_runtime_interface/RIType::FFIType) is the type that is used
+implement [`RIType`]. The associated type [`FFIType`](https:/docs.rs/sp-runtime-interface/latest/sp_runtime_interface/trait.RIType.html#associatedtype.FFIType) is the type that is used
 in the FFI function to represent the actual type. For example `[T]` is represented by an `u64`.
 The slice pointer and the length will be mapped to an `u64` value. For more information see
 this [table](https://docs.rs/sp-runtime-interface/latest/sp_runtime_interface/#ffi-type-and-conversion). The FFI function definition is used when calling from
