@@ -62,7 +62,7 @@ impl InsertCmd {
 	pub fn run(&self) -> Result<(), Error> {
 		let suri = utils::read_uri(self.suri.as_ref())?;
 		let base_path = self.shared_params.base_path.as_ref()
-			.ok_or_else(|| Error::Other("please supply base path".into()))?;
+			.ok_or_else(|| Error::MissingBasePath)?;
 
 		let (keystore, public) = match self.keystore_params.keystore_config(base_path)? {
 			KeystoreConfig::Path { path, password } => {
@@ -70,20 +70,19 @@ impl InsertCmd {
 					self.crypto_scheme.scheme,
 					to_vec(&suri, password.clone())
 				)?;
-				let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(path, password)
-					.map_err(|e| format!("{}", e))?);
+				let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(path, password)?);
 				(keystore, public)
 			},
 			_ => unreachable!("keystore_config always returns path and password; qed")
 		};
 
 		let key_type = KeyTypeId::try_from(self.key_type.as_str())
-			.map_err(|_| {
-				Error::Other("Cannot convert argument to keytype: argument should be 4-character string".into())
+			.map_err(|_e| {
+				Error::KeyTypeInvalid
 			})?;
 
 		SyncCryptoStore::insert_unknown(&*keystore, key_type, &suri, &public[..])
-			.map_err(|e| Error::Other(format!("{:?}", e)))?;
+			.map_err(|_| Error::KeyStoreOperation)?;
 
 		Ok(())
 	}
