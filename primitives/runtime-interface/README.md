@@ -53,7 +53,7 @@ trait RuntimeInterface {
 ```
 
 For more information on declaring a runtime interface, see
-[`#[runtime_interface]`](./attr.runtime_interface.html).
+[`#[runtime_interface]`](https://docs.rs/sp-runtime-interface/latest/sp_runtime_interface/attr.runtime_interface.html).
 
 # FFI type and conversion
 
