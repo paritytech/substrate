@@ -278,16 +278,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				)
 			};
 
-			// TODO: Should finality request protocol be added here?
-			// let mut request_response_protocols = params.network_config.request_response_protocols;
-			// request_response_protocols.push();
-
-			// let finality_proof_provider = params.finality_proof_provider.clone();
-			// let finality_proof_server = async move {
-			// }.boxed();
-
-			// params.executor.as_mut().unwrap()(finality_proof_server);
-
 			let discovery_config = {
 				let mut config = DiscoveryConfig::new(local_public.clone());
 				config.with_user_defined(known_addresses);
