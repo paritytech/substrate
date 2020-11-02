@@ -43,7 +43,7 @@ fn add_registrars<T: Trait>(r: u32) -> Result<(), &'static str> {
 		let registrar: T::AccountId = account("registrar", i, SEED);
 		let _ = T::Currency::make_free_balance_be(&registrar, BalanceOf::<T>::max_value());
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), registrar.clone())?;
-		Identity::<T>::set_fee(RawOrigin::Signed(registrar.clone()).into(), i.into(), 10.into())?;
+		Identity::<T>::set_fee(RawOrigin::Signed(registrar.clone()).into(), i.into(), 10u32.into())?;
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
 			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter
@@ -152,7 +152,7 @@ benchmarks! {
 
 			// User requests judgement from all the registrars, and they approve
 			for i in 0..r {
-				Identity::<T>::request_judgement(caller_origin.clone(), i, 10.into())?;
+				Identity::<T>::request_judgement(caller_origin.clone(), i, 10u32.into())?;
 				Identity::<T>::provide_judgement(
 					RawOrigin::Signed(account("registrar", i, SEED)).into(),
 					i,
@@ -210,7 +210,7 @@ benchmarks! {
 
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
-			Identity::<T>::request_judgement(caller_origin.clone(), i, 10.into())?;
+			Identity::<T>::request_judgement(caller_origin.clone(), i, 10u32.into())?;
 			Identity::<T>::provide_judgement(
 				RawOrigin::Signed(account("registrar", i, SEED)).into(),
 				i,
@@ -230,7 +230,7 @@ benchmarks! {
 
 		let r in ...;
 		let x in ...;
-	}: _(RawOrigin::Signed(caller.clone()), r - 1, 10.into())
+	}: _(RawOrigin::Signed(caller.clone()), r - 1, 10u32.into())
 	verify {
 		assert_last_event::<T>(Event::<T>::JudgementRequested(caller, r-1).into());
 	}
@@ -243,7 +243,7 @@ benchmarks! {
 		let r in ...;
 		let x in ...;
 
-		Identity::<T>::request_judgement(caller_origin, r - 1, 10.into())?;
+		Identity::<T>::request_judgement(caller_origin, r - 1, 10u32.into())?;
 	}: _(RawOrigin::Signed(caller.clone()), r - 1)
 	verify {
 		assert_last_event::<T>(Event::<T>::JudgementUnrequested(caller, r-1).into());
@@ -256,11 +256,11 @@ benchmarks! {
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 		let registrars = Registrars::<T>::get();
-		ensure!(registrars[r as usize].as_ref().unwrap().fee == 0.into(), "Fee already set.");
-	}: _(RawOrigin::Signed(caller), r, 100.into())
+		ensure!(registrars[r as usize].as_ref().unwrap().fee == 0u32.into(), "Fee already set.");
+	}: _(RawOrigin::Signed(caller), r, 100u32.into())
 	verify {
 		let registrars = Registrars::<T>::get();
-		ensure!(registrars[r as usize].as_ref().unwrap().fee == 100.into(), "Fee not changed.");
+		ensure!(registrars[r as usize].as_ref().unwrap().fee == 100u32.into(), "Fee not changed.");
 	}
 
 	set_account_id {
@@ -315,7 +315,7 @@ benchmarks! {
 		};
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
-		Identity::<T>::request_judgement(user_origin.clone(), r, 10.into())?;
+		Identity::<T>::request_judgement(user_origin.clone(), r, 10u32.into())?;
 	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable)
 	verify {
 		assert_last_event::<T>(Event::<T>::JudgementGiven(user, r).into())
@@ -338,7 +338,7 @@ benchmarks! {
 
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
-			Identity::<T>::request_judgement(target_origin.clone(), i, 10.into())?;
+			Identity::<T>::request_judgement(target_origin.clone(), i, 10u32.into())?;
 			Identity::<T>::provide_judgement(
 				RawOrigin::Signed(account("registrar", i, SEED)).into(),
 				i,

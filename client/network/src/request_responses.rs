@@ -689,7 +689,8 @@ mod tests {
 				let transport = MemoryTransport
 					.upgrade(upgrade::Version::V1)
 					.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-					.multiplex(libp2p::yamux::Config::default());
+					.multiplex(libp2p::yamux::Config::default())
+					.boxed();
 
 				let behaviour = {
 					let (tx, mut rx) = mpsc::channel(64);
@@ -791,7 +792,8 @@ mod tests {
 				let transport = MemoryTransport
 					.upgrade(upgrade::Version::V1)
 					.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-					.multiplex(libp2p::yamux::Config::default());
+					.multiplex(libp2p::yamux::Config::default())
+					.boxed();
 
 				let behaviour = {
 					let (tx, mut rx) = mpsc::channel(64);

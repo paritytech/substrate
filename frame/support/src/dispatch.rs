@@ -1325,11 +1325,8 @@ macro_rules! decl_module {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
 				let result: $return = (|| { $( $impl )* })();
 
-				let key = $crate::traits::PalletVersion::storage_key::<
-						<$trait_instance as $system::Trait>::PalletInfo, Self
-					>().expect("Every active pallet has a name in the runtime; qed");
-				let version = $crate::crate_to_pallet_version!();
-				$crate::storage::unhashed::put(&key, &version);
+				$crate::crate_to_pallet_version!()
+					.put_into_storage::<<$trait_instance as $system::Trait>::PalletInfo, Self>();
 
 				let additional_write = <
 					<$trait_instance as $system::Trait>::DbWeight as $crate::traits::Get<_>
@@ -1352,11 +1349,8 @@ macro_rules! decl_module {
 			fn on_runtime_upgrade() -> $crate::dispatch::Weight {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
 
-				let key = $crate::traits::PalletVersion::storage_key::<
-						<$trait_instance as $system::Trait>::PalletInfo, Self
-					>().expect("Every active pallet has a name in the runtime; qed");
-				let version = $crate::crate_to_pallet_version!();
-				$crate::storage::unhashed::put(&key, &version);
+				$crate::crate_to_pallet_version!()
+					.put_into_storage::<<$trait_instance as $system::Trait>::PalletInfo, Self>();
 
 				<
 					<$trait_instance as $system::Trait>::DbWeight as $crate::traits::Get<_>
@@ -1834,6 +1828,16 @@ macro_rules! decl_module {
 					>().expect("Every active pallet has a name in the runtime; qed");
 
 				$crate::storage::unhashed::get(&key)
+			}
+		}
+
+		// Implement `OnGenesis` for `Module`
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::OnGenesis
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn on_genesis() {
+				$crate::crate_to_pallet_version!()
+					.put_into_storage::<<$trait_instance as $system::Trait>::PalletInfo, Self>();
 			}
 		}
 
