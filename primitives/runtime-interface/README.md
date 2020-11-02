@@ -9,6 +9,7 @@ and they map to the same implementation as the native calls.
 # Using a type in a runtime interface
 
 Any type that should be used in a runtime interface as argument or return value needs to
+<!-- markdown-link-check-disable-next-line -->
 implement [`RIType`]. The associated type [`FFIType`](https:/docs.rs/sp-runtime-interface/latest/sp_runtime_interface/trait.RIType.html#associatedtype.FFIType) is the type that is used
 in the FFI function to represent the actual type. For example `[T]` is represented by an `u64`.
 The slice pointer and the length will be mapped to an `u64` value. For more information see
@@ -16,7 +17,8 @@ this [table](https://docs.rs/sp-runtime-interface/latest/sp_runtime_interface/#f
 the wasm runtime into the node.
 
 Traits are used to convert from a type to the corresponding
-[`RIType::FFIType`](https://docs.rs/sp-runtime-interface/latest/sp_runtime_interface/trait.RIType.html#associatedtype.FFIType).
+<!-- markdown-link-check-disable-next-line -->
+[`RIType::FFIType`](https:/docs.rs/sp-runtime-interface/latest/sp_runtime_interface/trait.RIType.html#associatedtype.FFIType).
 Depending on where and how a type should be used in a function signature, a combination of the
 following traits need to be implemented:
 
