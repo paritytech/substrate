@@ -22,9 +22,6 @@
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;
 
-#[macro_use]
-extern crate bitmask;
-
 #[doc(hidden)]
 pub use sp_tracing;
 
@@ -60,6 +57,8 @@ mod hash;
 pub mod event;
 #[macro_use]
 pub mod metadata;
+#[macro_use]
+pub mod genesis_config;
 #[macro_use]
 pub mod inherent;
 #[macro_use]
@@ -375,6 +374,21 @@ pub use frame_support_procedural::DebugNoBound;
 /// ```
 pub use frame_support_procedural::require_transactional;
 
+/// Convert the current crate version into a [`PalletVersion`](crate::traits::PalletVersion).
+///
+/// It uses the `CARGO_PKG_VERSION_MAJOR`, `CARGO_PKG_VERSION_MINOR` and
+/// `CARGO_PKG_VERSION_PATCH` environment variables to fetch the crate version.
+/// This means that the [`PalletVersion`](crate::traits::PalletVersion)
+/// object will correspond to the version of the crate the macro is called in!
+///
+/// # Example
+///
+/// ```
+/// # use frame_support::{traits::PalletVersion, crate_to_pallet_version};
+/// const Version: PalletVersion = crate_to_pallet_version!();
+/// ```
+pub use frame_support_procedural::crate_to_pallet_version;
+
 /// Return Err of the expression: `return Err($expression);`.
 ///
 /// Used as `fail!(expression)`.
@@ -485,9 +499,11 @@ mod tests {
 	use sp_std::{marker::PhantomData, result};
 	use sp_io::TestExternalities;
 
-	pub trait Trait {
+	pub trait Trait: 'static {
 		type BlockNumber: Codec + EncodeLike + Default;
 		type Origin;
+		type PalletInfo: crate::traits::PalletInfo;
+		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
 
 	mod module {
@@ -496,7 +512,7 @@ mod tests {
 		use super::Trait;
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self  {}
 		}
 	}
 	use self::module::Module;
@@ -527,6 +543,8 @@ mod tests {
 	impl Trait for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
+		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	fn new_test_ext() -> TestExternalities {

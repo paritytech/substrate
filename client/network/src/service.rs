@@ -292,6 +292,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
 				config.add_protocol(params.protocol_id.clone());
 				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
+				config.use_kademlia_disjoint_query_paths(params.network_config.kademlia_disjoint_query_paths);
 
 				match params.network_config.transport {
 					TransportConfig::MemoryOnly => {
@@ -660,6 +661,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		if let Some(protocol_name) = protocol_name {
 			sink.send_sync_notification(protocol_name, message);
 		} else {
+			log::error!(
+				target: "sub-libp2p",
+				"Attempted to send notification on unknown protocol: {:?}",
+				engine_id,
+			);
 			return;
 		}
 
@@ -972,7 +978,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	//
+	// NOTE: even though this function is currently sync, it's marked as async for
+	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
+	pub async fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();

@@ -137,6 +137,15 @@
 			"website": "https://www.substratee.com"
 		},
 		{
+			"prefix": 14,
+			"network": "totem",
+			"displayName": "Totem",
+			"symbols": ["XTX"],
+			"decimals": [0],
+			"standardAccount": "*25519",
+			"website": "https://totemaccounting.com"
+		},
+		{
 			"prefix": 16,
 			"network": "kulupu",
 			"displayName": "Kulupu",
@@ -176,10 +185,10 @@
 			"prefix": 20,
 			"network": "stafi",
 			"displayName": "Stafi",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["FIS"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://stafi.io"
 		},
 		{
 			"prefix": 21,
