@@ -268,7 +268,6 @@ benchmarks! {
 			offence
 		);
 	}
-
 	verify {
 		// make sure the report was not deferred
 		assert!(Offences::<T>::deferred_offences().is_empty());
