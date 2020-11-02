@@ -26,17 +26,18 @@
 //! # Using a type in a runtime interface
 //!
 //! Any type that should be used in a runtime interface as argument or return value needs to
-//! implement [`RIType`]. The associated type [`FFIType`](./trait.RIType.html#associatedtype.FFIType) is the type that is used
-//! in the FFI function to represent the actual type. For example `[T]` is represented by an `u64`.
-//! The slice pointer and the length will be mapped to an `u64` value. For more information see
-//! this [table](#ffi-type-and-conversion). The FFI function definition is used when calling from
-//! the wasm runtime into the node.
+//! <!-- markdown-link-check-disable -->
+//! implement [`RIType`]. The associated type [`FFIType`](./trait.RIType.html#associatedtype.FFIType)
+//! is the type that is used in the FFI function to represent the actual type. For example `[T]` is
+//! represented by an `u64`. The slice pointer and the length will be mapped to an `u64` value.
+//! For more information see this [table](#ffi-type-and-conversion).
+//! The FFI function definition is used when calling from the wasm runtime into the node.
 //!
 //! Traits are used to convert from a type to the corresponding
 //! [`RIType::FFIType`](./trait.RIType.html#associatedtype.FFIType).
 //! Depending on where and how a type should be used in a function signature, a combination of the
 //! following traits need to be implemented:
-//!
+//! <!-- markdown-link-check-enable -->
 //! 1. Pass as function argument: [`wasm::IntoFFIValue`] and [`host::FromFFIValue`]
 //! 2. As function return value: [`wasm::FromFFIValue`] and [`host::IntoFFIValue`]
 //! 3. Pass as mutable function argument: [`host::IntoPreallocatedFFIValue`]
