@@ -15,9 +15,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 derive_more = "0.99.2"
 futures = "0.3.4"
-jsonrpc-core = "15.0.0"
-jsonrpc-core-client = "15.0.0"
-jsonrpc-derive = "15.0.0"
+jsonrpc-core = "15.1.0"
+jsonrpc-core-client = "15.1.0"
+jsonrpc-derive = "15.1.0"
 log = "0.4.8"
 parking_lot = "0.10.0"
 codec = { package = "parity-scale-codec", version = "1.3.1" }
@@ -36,6 +36,7 @@ sp-inherents = { path = "../../../primitives/inherents", version = "2.0.0" }
 sp-runtime = {  path = "../../../primitives/runtime", version = "2.0.0" }
 sp-core = {  path = "../../../primitives/core", version = "2.0.0" }
 sp-keystore = {  path = "../../../primitives/keystore", version = "0.8.0" }
+sp-keyring = {  path = "../../../primitives/keyring", version = "2.0.0" }
 sp-api = {  path = "../../../primitives/api", version = "2.0.0" }
 sp-transaction-pool = { path = "../../../primitives/transaction-pool", version = "2.0.0" }
 sp-timestamp = { path = "../../../primitives/timestamp", version = "2.0.0" }

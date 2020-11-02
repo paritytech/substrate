@@ -115,7 +115,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 			strategies,
 			keystore,
 			extensions_factory: RwLock::new(extensions_factory),
-			transaction_pool,
+			transaction_pool
 		}
 	}
 

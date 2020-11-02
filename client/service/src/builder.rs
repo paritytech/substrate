@@ -55,11 +55,7 @@ use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::MaintainedTransactionPool;
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
-use sp_core::traits::{
-	CodeExecutor,
-	SpawnNamed,
-};
-use sp_keystore::{CryptoStore, SyncCryptoStorePtr};
+use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_runtime::BuildStorage;
 use sc_client_api::{
 	BlockBackend, BlockchainEvents,
@@ -68,6 +64,7 @@ use sc_client_api::{
 	execution_extensions::ExecutionExtensions
 };
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
+use sp_keystore::{SyncCryptoStorePtr, CryptoStore};
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
