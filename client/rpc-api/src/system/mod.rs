@@ -109,8 +109,8 @@ pub trait SystemApi<Hash, Number> {
 	#[rpc(name = "system_syncState", returns = "SyncState<Number>")]
 	fn system_sync_state(&self) -> Receiver<SyncState<Number>>;
 
-	/// Reloads the logging filter, replacing current with the supplied directives
-	#[rpc(name = "system_reloadLogFilter", returns = "()")]
+	/// Sets the logging filter, replacing current with the supplied directives
+	#[rpc(name = "system_setLogFilter", returns = "()")]
 	fn system_reload_log_filter(&self, directives: String)
 		-> Result<(), jsonrpc_core::Error>;
 }
