@@ -1,3 +1,4 @@
+<!-- markdown-link-check-disable -->
 # Offchain Worker Example Module
 
 The Offchain Worker Example: A simple pallet demonstrating

@@ -15,7 +15,8 @@ The slice pointer and the length will be mapped to an `u64` value. For more info
 this [table](https://docs.rs/sp-runtime-interface/latest/sp_runtime_interface/#ffi-type-and-conversion). The FFI function definition is used when calling from
 the wasm runtime into the node.
 
-Traits are used to convert from a type to the corresponding [`RIType::FFIType`].
+Traits are used to convert from a type to the corresponding
+[`RIType::FFIType`](https://docs.rs/sp-runtime-interface/latest/sp_runtime_interface/trait.RIType.html#associatedtype.FFIType).
 Depending on where and how a type should be used in a function signature, a combination of the
 following traits need to be implemented:
 

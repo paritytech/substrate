@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! <!-- markdown-link-check-disable -->
 //! # Offchain Worker Example Module
 //!
 //! The Offchain Worker Example: A simple pallet demonstrating
