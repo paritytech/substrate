@@ -538,7 +538,8 @@ impl crate::RemoteSignerApi for GenericRemoteSignerServer {
 mod tests {
 	use tokio;
 	use serde_json;
-	use sp_core::traits::CryptoStore;
+	use futures::StreamExt;
+	use sp_keystore::CryptoStore;
 	use jsonrpc_test;
 	use sc_keystore::LocalKeystore;
 
