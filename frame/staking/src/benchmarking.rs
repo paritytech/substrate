@@ -45,14 +45,17 @@ fn add_slashing_spans<T: Trait>(who: &T::AccountId, spans: u32) {
 	SlashingSpans::<T>::insert(who, slashing_spans);
 }
 
-// This function generates one validator being nominated by n nominators, and returns the validator
-// stash account and the nominators' stash and controller. It also starts an era and creates pending payouts.
+// This function clears all existing validators and nominators from the set, and generates one new
+// validator being nominated by n nominators, and returns the validator stash account and the
+// nominators' stash and controller. It also starts an era and creates pending payouts.
 pub fn create_validator_with_nominators<T: Trait>(
 	n: u32,
 	upper_bound: u32,
 	dead: bool,
 	destination: RewardDestination<T::AccountId>
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
+	// Clean up any existing state.
+	clear_validators_and_nominators::<T>();
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
@@ -286,8 +289,6 @@ benchmarks! {
 
 	payout_stakers_dead_controller {
 		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
-		// Clean up existing validators
-		Validators::<T>::remove_all();
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
@@ -321,8 +322,6 @@ benchmarks! {
 
 	payout_stakers_alive_staked {
 		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
-		// Clean up existing validators
-		Validators::<T>::remove_all();
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
@@ -708,7 +707,7 @@ mod tests {
 
 	#[test]
 	fn create_validators_with_nominators_for_era_works() {
-		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
 			let v = 10;
 			let n = 100;
 
@@ -725,7 +724,7 @@ mod tests {
 
 	#[test]
 	fn create_validator_with_nominators_works() {
-		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
 			let n = 10;
 
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
@@ -749,7 +748,7 @@ mod tests {
 
 	#[test]
 	fn add_slashing_spans_works() {
-		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
 			let n = 10;
 
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
@@ -780,7 +779,7 @@ mod tests {
 
 	#[test]
 	fn test_payout_all() {
-		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
 			let v = 10;
 			let n = 100;
 
@@ -799,7 +798,7 @@ mod tests {
 
 	#[test]
 	fn test_benchmarks() {
-		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
 			assert_ok!(test_benchmark_bond::<Test>());
 			assert_ok!(test_benchmark_bond_extra::<Test>());
 			assert_ok!(test_benchmark_unbond::<Test>());
