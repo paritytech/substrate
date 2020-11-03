@@ -138,7 +138,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 
 	/// Based on the execution context and capabilities it produces
 	/// the extensions object to support desired set of APIs.
-	pub fn extensions(&self, at: &BlockId<Block>, context: ExecutionContext,) -> Extensions {
+	pub fn extensions(&self, at: &BlockId<Block>, context: ExecutionContext) -> Extensions {
 		let capabilities = context.capabilities();
 
 		let mut extensions = self.extensions_factory.read().extensions_for(capabilities);

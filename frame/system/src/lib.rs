@@ -424,7 +424,7 @@ decl_storage! {
 		Digest get(fn digest): DigestOf<T>;
 
 		/// Events deposited for the current block.
-		pub Events get(fn events): Vec<EventRecord<T::Event, T::Hash>>;
+		Events get(fn events): Vec<EventRecord<T::Event, T::Hash>>;
 
 		/// The number of events in the `Events<T>` list.
 		EventCount get(fn event_count): EventIndex;
