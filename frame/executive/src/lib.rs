@@ -1096,10 +1096,10 @@ mod tests {
 			));
 
 			// All weights that show up in the `initialize_block_impl`
-			let frame_system_upgrade_weight = <frame_system::Module::<Runtime> as OnRuntimeUpgrade>::on_runtime_upgrade();
+			let frame_system_upgrade_weight = frame_system::Module::<Runtime>::on_runtime_upgrade();
 			let custom_runtime_upgrade_weight = CustomOnRuntimeUpgrade::on_runtime_upgrade();
 			let runtime_upgrade_weight = <AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
-			let frame_system_on_initialize_weight = <frame_system::Module<Runtime> as OnInitialize<u64>>::on_initialize(block_number);
+			let frame_system_on_initialize_weight = frame_system::Module::<Runtime>::on_initialize(block_number);
 			let on_initialize_weight = <AllModules as OnInitialize<u64>>::on_initialize(block_number);
 			let base_block_weight = <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
 
