@@ -34,7 +34,10 @@ use tokio;
 use env_logger;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "substrate-remote-sign-server", about = "keystore Server for Substrate's JSON-RPC Remote Signing Protocol")]
+#[structopt(
+    name="substrate-remote-sign-server",
+    about="keystore Server for Substrate's JSON-RPC Remote Signing Protocol"
+)]
 struct Opt {
     #[structopt(flatten)]
     keystore: KeystoreParams,
