@@ -28,7 +28,8 @@ use futures::channel::{mpsc, oneshot};
 use futures::stream::StreamExt;
 use log::debug;
 use prost::Message;
-use sp_runtime::{traits::Block as BlockT, generic::BlockId, traits::{Header, One, Zero}};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, Header, One, Zero};
 use std::cmp::min;
 use std::sync::{Arc};
 use std::time::Duration;
@@ -76,7 +77,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 	) -> Result<(), HandleRequestError> {
 		let request = crate::schema::v1::BlockRequest::decode(&payload[..])?;
 
-		let from_block_id =	match request.from_block.ok_or(HandleRequestError::MissingFromField)? {
+		let from_block_id = match request.from_block.ok_or(HandleRequestError::MissingFromField)? {
 			FromBlock::Hash(ref h) => {
 				let h = Decode::decode(&mut h.as_ref())?;
 				BlockId::<B>::Hash(h)

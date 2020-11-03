@@ -1412,6 +1412,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						}
 					}
 				},
+				// TODO: Retrieve started and Protocol from `RequestFinished` and make result
+				// optional. That way we can also return `RequestFinished` for internal requests
+				// (block, finality and light-client) thus tracking metrics for them as well.
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { request_id, result })) => {
 					if let Some((send_back, started, protocol)) = this.pending_requests.remove(&request_id) {
 						if let Some(metrics) = this.metrics.as_ref() {

@@ -417,7 +417,9 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Even
 				});
 			}
 			request_responses::Event::RequestFinished { peer, protocol, request_id, result } => {
-				// TODO: Make sure to get these responses captured in metrics.
+				// TODO: Make sure to get these responses captured in metrics by emitting a
+				// `RequestFinished` event without a result. Then the NetworkWorker can capture this
+				// in a metric.
 				if protocol == self.finality_request_protocol_name {
 					let proof_response = crate::schema::v1::finality::FinalityProofResponse::decode(&result.unwrap()[..])
 						.unwrap();

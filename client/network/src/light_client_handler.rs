@@ -1062,11 +1062,13 @@ fn retries<B: Block>(request: &Request<B>) -> usize {
 fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::EncodeError> {
 	let request = match request {
 		Request::Body { request, .. } => {
-			let rq = crate::schema::v1::BlockRequest {
+			let rq = schema::v1::BlockRequest {
 				fields: BlockAttributes::BODY.to_be_u32(),
-				from_block:	Some(crate::schema::v1::block_request::FromBlock::Hash(request.header.hash().encode())),
+				from_block: Some(schema::v1::block_request::FromBlock::Hash(
+					request.header.hash().encode(),
+				)),
 				to_block: Default::default(),
-				direction:crate::schema::v1::Direction::Ascending as i32,
+				direction: schema::v1::Direction::Ascending as i32,
 				max_blocks: 1,
 			};
 
