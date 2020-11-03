@@ -18,7 +18,7 @@
 //! Basic implementation for Externalities.
 
 use std::{
-	collections::BTreeMap, any::{TypeId, Any}, iter::FromIterator, ops::Bound
+	collections::BTreeMap, any::{TypeId, Any}, iter::FromIterator, ops::Bound,
 };
 use crate::{Backend, StorageKey, StorageValue};
 use hash_db::Hasher;

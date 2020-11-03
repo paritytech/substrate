@@ -13,7 +13,6 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-bitflags = "1.0"
 codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
 frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }

@@ -25,7 +25,8 @@ use std::{
 
 use crate::{columns, Database, DbHash, Transaction};
 use parking_lot::{Mutex, RwLock};
-use historied_db::{Latest, Management, ManagementRef, UpdateResult,
+use historied_db::{Latest, UpdateResult,
+	management::{Management, ManagementMut},
 	management::tree::{TreeManagementStorage, ForkPlan},
 	historied::tree::Tree,
 	backend::nodes::{NodesMeta, NodeStorage, NodeStorageMut, Node, ContextHead},
@@ -47,7 +48,7 @@ type ChangesJournal<Db> = historied_db::management::JournalForMigrationBasis<
 	crate::historied_tree_bindings::LocalOffchainDelete,
 >;
 
-pub(crate) type ChangesJournalSync = Arc<Mutex<ChangesJournal<historied_db::simple_db::SerializeDBDyn>>>;
+pub(crate) type ChangesJournalSync = Arc<Mutex<ChangesJournal<historied_db::mapped_db::MappedDBDyn>>>;
 
 /// Offchain local storage with blockchain historied storage.
 #[derive(Clone)]
@@ -55,7 +56,7 @@ pub struct BlockChainLocalStorage<H: Ord, S: TreeManagementStorage> {
 	historied_management: Arc<RwLock<crate::TreeManagement<H, S>>>,
 	db: Arc<dyn Database<DbHash>>,
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
-	ordered_db: Arc<Mutex<historied_db::simple_db::SerializeDBDyn>>,
+	ordered_db: Arc<Mutex<historied_db::mapped_db::MappedDBDyn>>,
 	changes_journals: ChangesJournalSync,
 }
 
@@ -73,7 +74,7 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 		H: Ord + Clone + Codec + Send + Sync + 'static,
 		S: TreeManagementStorage + 'static,
 {
-	fn migrate(&self, migrate: &mut historied_db::Migrate<H, crate::TreeManagement<H, S>>) {
+	fn migrate(&self, migrate: &mut historied_db::management::Migrate<H, crate::TreeManagement<H, S>>) {
 		let mut keys = std::collections::BTreeSet::<Vec<u8>>::new();
 		let (prune, changes) = migrate.migrate().touched_state();
 		// this db is transactional.
@@ -125,7 +126,7 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 			};
 
 			let mut new_value = histo;
-			use historied_db::historied::Value;
+			use historied_db::historied::DataMut;
 			match new_value.migrate(migrate.migrate()) {
 				historied_db::UpdateResult::Changed(()) => {
 					use historied_db::Trigger;
@@ -155,7 +156,7 @@ pub struct BlockChainLocalAt {
 	at_read: ForkPlan<u32, u64>,
 	at_write: Option<Latest<(u32, u64)>>,
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
-	ordered_db: Arc<Mutex<historied_db::simple_db::SerializeDBDyn>>,
+	ordered_db: Arc<Mutex<historied_db::mapped_db::MappedDBDyn>>,
 	changes_journals: ChangesJournalSync,
 	skip_journalize: bool,
 }
@@ -202,7 +203,7 @@ impl<H: Ord, S: TreeManagementStorage> BlockChainLocalStorage<H, S> {
 	pub fn new(
 		db: Arc<dyn Database<DbHash>>,
 		historied_management: Arc<RwLock<crate::TreeManagement<H, S>>>,
-		journals_db: historied_db::simple_db::SerializeDBDyn,
+		journals_db: historied_db::mapped_db::MappedDBDyn,
 	) -> Self {
 		let journals = historied_db::management::JournalForMigrationBasis::from_db(&journals_db);
 		Self {
@@ -410,7 +411,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 				let v: Option<HValue> = historied_db::DecodeWithContext::decode_with_context(&mut &v[..], &(init, init_nodes));
 				v
 			}.and_then(|h| {
-				use historied_db::historied::ValueRef;
+				use historied_db::historied::Data;
 				h.get(&self.at_read).flatten()
 			}))
 	}
@@ -553,22 +554,22 @@ impl BlockChainLocalAt {
 						v
 					});
 				let val = histo.as_ref().and_then(|h| {
-					use historied_db::historied::ValueRef;
+					use historied_db::historied::Data;
 					h.get(&self.at_read).flatten()
 				});
 
 				is_set = condition.map(|c| c(val.as_ref().map(|v| v.as_slice()))).unwrap_or(true);
 
 				if is_set {
-					use historied_db::historied::Value;
+					use historied_db::historied::DataMut;
 					let is_insert = new_value.is_some();
 					let new_value = new_value.map(|v| v.to_vec());
 					let (new_value, update_result) = if let Some(mut histo) = histo {
 						let update_result = if is_new {
 							histo.set(new_value, at_write)
 						} else {
-							use historied_db::historied::ForceValueMut;
-							use historied_db::historied::StateIndex;
+							use historied_db::historied::force::ForceDataMut;
+							use historied_db::StateIndex;
 							histo.force_set(
 								new_value,
 								at_write.index_ref(),

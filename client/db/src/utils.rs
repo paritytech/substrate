@@ -221,8 +221,8 @@ pub fn open_database_and_historied<Block: BlockT>(
 	db_type: DatabaseType,
 ) -> sp_blockchain::Result<(
 	Arc<dyn Database<DbHash>>,
-	historied_db::simple_db::SerializeDBDyn,
-	historied_db::simple_db::SerializeDBDyn,
+	historied_db::mapped_db::MappedDBDyn,
+	historied_db::mapped_db::MappedDBDyn,
 )> {
 	#[allow(unused)]
 	fn db_open_error(feat: &'static str) -> sp_blockchain::Error {
@@ -234,8 +234,8 @@ pub fn open_database_and_historied<Block: BlockT>(
 	// if we need more than 2 instance, we could also return the conversion method from the first db.
 	let db: (
 		Arc<dyn Database<DbHash>>,
-		historied_db::simple_db::SerializeDBDyn,
-		historied_db::simple_db::SerializeDBDyn,
+		historied_db::mapped_db::MappedDBDyn,
+		historied_db::mapped_db::MappedDBDyn,
 	) = match &config.source {
 		#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 		DatabaseSettingsSrc::RocksDb { path, cache_size } => {

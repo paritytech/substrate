@@ -52,7 +52,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-mod default_weights;
+pub mod weights;
 
 use sp_std::{prelude::*, marker::PhantomData, borrow::Borrow};
 use codec::{Encode, Decode, Codec};
@@ -64,13 +64,7 @@ use frame_support::{
 	weights::{GetDispatchInfo, Weight},
 };
 use frame_system::{self as system, ensure_signed};
-
-pub trait WeightInfo {
-	fn schedule(s: u32, ) -> Weight;
-	fn cancel(s: u32, ) -> Weight;
-	fn schedule_named(s: u32, ) -> Weight;
-	fn cancel_named(s: u32, ) -> Weight;
-}
+pub use weights::WeightInfo;
 
 /// Our pallet's configuration trait. All our types and constants go in here. If the
 /// pallet is dependent on specific other pallets, then their configuration traits
@@ -474,7 +468,9 @@ impl<T: Trait> Module<T> {
 
 		let when = match when {
 			DispatchTime::At(x) => x,
-			DispatchTime::After(x) => now.saturating_add(x)
+			// The current block has already completed it's scheduled tasks, so
+			// Schedule the task at lest one block after this current block.
+			DispatchTime::After(x) => now.saturating_add(x).saturating_add(One::one())
 		};
 
 		if when <= now {
@@ -894,7 +890,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(logger::Call::log(42, 1000));
 			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
-			let _ = Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call);
+			assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
@@ -910,10 +906,26 @@ mod tests {
 			run_to_block(2);
 			let call = Call::Logger(logger::Call::log(42, 1000));
 			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
-			let _ = Scheduler::do_schedule(DispatchTime::After(3), None, 127, root(), call);
-			run_to_block(4);
-			assert!(logger::log().is_empty());
+			// This will schedule the call 3 blocks after the next block... so block 3 + 3 = 6
+			assert_ok!(Scheduler::do_schedule(DispatchTime::After(3), None, 127, root(), call));
 			run_to_block(5);
+			assert!(logger::log().is_empty());
+			run_to_block(6);
+			assert_eq!(logger::log(), vec![(root(), 42u32)]);
+			run_to_block(100);
+			assert_eq!(logger::log(), vec![(root(), 42u32)]);
+		});
+	}
+
+	#[test]
+	fn schedule_after_zero_works() {
+		new_test_ext().execute_with(|| {
+			run_to_block(2);
+			let call = Call::Logger(logger::Call::log(42, 1000));
+			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert_ok!(Scheduler::do_schedule(DispatchTime::After(0), None, 127, root(), call));
+			// Will trigger on the next block.
+			run_to_block(3);
 			assert_eq!(logger::log(), vec![(root(), 42u32)]);
 			run_to_block(100);
 			assert_eq!(logger::log(), vec![(root(), 42u32)]);
@@ -924,9 +936,9 @@ mod tests {
 	fn periodic_scheduling_works() {
 		new_test_ext().execute_with(|| {
 			// at #4, every 3 blocks, 3 times.
-			let _ = Scheduler::do_schedule(
+			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4), Some((3, 3)), 127, root(), Call::Logger(logger::Call::log(42, 1000))
-			);
+			));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
@@ -1091,19 +1103,19 @@ mod tests {
 	#[test]
 	fn scheduler_respects_weight_limits() {
 		new_test_ext().execute_with(|| {
-			let _ = Scheduler::do_schedule(
+			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				127,
 				root(),
 				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
-			);
-			let _ = Scheduler::do_schedule(
+			));
+			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				127,
 				root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
-			);
+			));
 			// 69 and 42 do not fit together
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![(root(), 42u32)]);
@@ -1115,20 +1127,20 @@ mod tests {
 	#[test]
 	fn scheduler_respects_hard_deadlines_more() {
 		new_test_ext().execute_with(|| {
-			let _ = Scheduler::do_schedule(
+			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				0,
 				root(),
 				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
-			);
-			let _ = Scheduler::do_schedule(
+			));
+			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				0,
 				root(),
 				Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
-			);
+			));
 			// With base weights, 69 and 42 should not fit together, but do because of hard deadlines
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 69u32)]);
@@ -1138,20 +1150,20 @@ mod tests {
 	#[test]
 	fn scheduler_respects_priority_ordering() {
 		new_test_ext().execute_with(|| {
-			let _ = Scheduler::do_schedule(
+			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				1,
 				root(),
 				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
-			);
-			let _ = Scheduler::do_schedule(
+			));
+			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				0,
 				root(),
 				Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
-			);
+			));
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![(root(), 69u32), (root(), 42u32)]);
 		});
@@ -1160,24 +1172,24 @@ mod tests {
 	#[test]
 	fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 		new_test_ext().execute_with(|| {
-			let _ = Scheduler::do_schedule(
+			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				255,
 				root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
-			);
-			let _ = Scheduler::do_schedule(
+			));
+			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				127,
 				root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
-			);
-			let _ = Scheduler::do_schedule(
+			));
+			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(4),
 				None,
 				126,
 				root(), Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2))
-			);
+			));
 
 			// 2600 does not fit with 69 or 42, but has higher priority, so will go through
 			run_to_block(4);
@@ -1204,21 +1216,21 @@ mod tests {
 				)
 			);
 			// Anon Periodic
-			let _ = Scheduler::do_schedule(
+			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(1),
 				Some((1000, 3)),
 				128,
 				root(),
 				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
-			);
+			));
 			// Anon
-			let _ = Scheduler::do_schedule(
+			assert_ok!(Scheduler::do_schedule(
 				DispatchTime::At(1),
 				None,
 				127,
 				root(),
 				Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
-			);
+			));
 			// Named Periodic
 			assert_ok!(Scheduler::do_schedule_named(
 				2u32.encode(), DispatchTime::At(1), Some((1000, 3)), 126, root(),

@@ -46,9 +46,10 @@ mod stats;
 mod parity_db;
 
 use historied_db::{
-	Management, ForkableManagement, DecodeWithContext,
-	historied::Value,
-	simple_db::TransactionalSerializeDB,
+	DecodeWithContext,
+	management::{ManagementMut, ForkableManagement},
+	historied::DataMut,
+	mapped_db::TransactionalMappedDB,
 	backend::nodes::ContextHead,
 };
 
@@ -432,7 +433,7 @@ pub struct DatabaseStorage<H: Clone + PartialEq + std::fmt::Debug>(RadixTreeData
 impl historied_db::management::tree::TreeManagementStorage for TreeManagementPersistence {
 	const JOURNAL_DELETE: bool = true;
 	// Use pointer to serialize db with a transactional layer.
-	type Storage = TransactionalSerializeDB<historied_db::simple_db::SerializeDBDyn>;
+	type Storage = TransactionalMappedDB<historied_db::mapped_db::MappedDBDyn>;
 	type Mapping = historied_tree_bindings::Mapping;
 	type JournalDelete = historied_tree_bindings::JournalDelete;
 	type TouchedGC = historied_tree_bindings::TouchedGC;
@@ -488,7 +489,7 @@ const fn resolve_collection_inner<'a>(c: &'a [u8]) -> u32 {
 }
 
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
-impl historied_db::simple_db::SerializeDB for RocksdbStorage {
+impl historied_db::mapped_db::MappedDB for RocksdbStorage {
 	#[inline(always)]
 	fn is_active(&self) -> bool {
 		true
@@ -531,7 +532,7 @@ impl historied_db::simple_db::SerializeDB for RocksdbStorage {
 		})
 	}
 
-	fn iter<'a>(&'a self, c: &'static [u8]) -> historied_db::simple_db::SerializeDBIter<'a> {
+	fn iter<'a>(&'a self, c: &'static [u8]) -> historied_db::mapped_db::MappedDBIter<'a> {
 		let iter = resolve_collection(c).map(|(c, p)| {
 			use kvdb::KeyValueDB;
 			if let Some(p) = p {
@@ -549,7 +550,7 @@ impl historied_db::simple_db::SerializeDB for RocksdbStorage {
 	}
 }
 
-impl<H> historied_db::simple_db::SerializeDB for DatabaseStorage<H>
+impl<H> historied_db::mapped_db::MappedDB for DatabaseStorage<H>
 	where H: Clone + PartialEq + std::fmt::Debug + Default + 'static,
 {
 	#[inline(always)]
@@ -588,7 +589,7 @@ impl<H> historied_db::simple_db::SerializeDB for DatabaseStorage<H>
 		})
 	}
 
-	fn iter<'a>(&'a self, c: &'static [u8]) -> historied_db::simple_db::SerializeDBIter<'a> {
+	fn iter<'a>(&'a self, c: &'static [u8]) -> historied_db::mapped_db::MappedDBIter<'a> {
 		let iter = resolve_collection(c).map(|(c, p)| {
 			if let Some(p) = p {
 				self.0.prefix_iter(c, p, true)
@@ -613,14 +614,14 @@ pub mod historied_tree_bindings {
 		/// Simple db map or instance definition for $name.
 		#[derive(Default, Clone)]
 		pub struct $name;
-		impl historied_db::simple_db::SerializeInstanceMap for $name {
+		impl historied_db::mapped_db::MapInfo for $name {
 			const STATIC_COL: &'static [u8] = $col;
 		}
 	}}
 	macro_rules! static_instance_variable {
 		($name: ident, $col: expr, $path: expr, $lazy: expr) => {
 			static_instance!($name, $col);
-		impl historied_db::simple_db::SerializeInstanceVariable for $name {
+		impl historied_db::mapped_db::VariableInfo for $name {
 			const PATH: &'static [u8] = $path;
 			const LAZY: bool = $lazy;
 		}
@@ -900,7 +901,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 		&mut self,
 		transaction: &mut Transaction<DbHash>,
 		historied: Option<&mut HistoriedDBMut>,
-		journals: Option<&mut TransactionalSerializeDB<historied_db::simple_db::SerializeDBDyn>>,
+		journals: Option<&mut TransactionalMappedDB<historied_db::mapped_db::MappedDBDyn>>,
 	) {
 		let mut historied = historied.map(|historied_db| {
 			let block_nodes = BlockNodes::new(historied_db.db.clone());
@@ -1248,8 +1249,8 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
-		ordered_db: historied_db::simple_db::SerializeDBDyn,
-		ordered_db_2: historied_db::simple_db::SerializeDBDyn,
+		ordered_db: historied_db::mapped_db::MappedDBDyn,
+		ordered_db_2: historied_db::mapped_db::MappedDBDyn,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
 	) -> ClientResult<Self> {
@@ -1290,7 +1291,7 @@ impl<Block: BlockT> Backend<Block> {
 			},
 		)?;
 
-		let historied_persistence = TransactionalSerializeDB {
+		let historied_persistence = TransactionalMappedDB {
 			db: ordered_db,
 			pending: Default::default(),
 		};
@@ -1560,7 +1561,7 @@ impl<Block: BlockT> Backend<Block> {
 		let pending = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
 		for (col, (mut changes, dropped)) in pending {
 			if dropped {
-				use historied_db::simple_db::SerializeDB;
+				use historied_db::mapped_db::MappedDB;
 				for (key, _v) in self.historied_management.read().ser_ref().iter(col) {
 					changes.insert(key, None);
 				}
@@ -1896,7 +1897,7 @@ impl<Block: BlockT> Backend<Block> {
 		// TODO large mgmt lock
 		let switch_index = self.historied_management.write().get_db_state_for_fork(hash);
 		let path = {
-			use historied_db::ManagementRef;
+			use historied_db::management::Management;
 			self.historied_management.write().get_db_state(hash)
 		};
 		
@@ -1914,7 +1915,7 @@ impl<Block: BlockT> Backend<Block> {
 		// TODO this is duplicated code: put in a function
 		for (col, (mut changes, dropped)) in pending {
 			if dropped {
-				use historied_db::simple_db::SerializeDB;
+				use historied_db::mapped_db::MappedDB;
 				for (key, _v) in self.historied_management.read().ser_ref().iter(col) {
 					changes.insert(key, None);
 				}

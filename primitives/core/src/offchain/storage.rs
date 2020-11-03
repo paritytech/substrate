@@ -21,9 +21,9 @@ use std::collections::hash_map::{HashMap, Entry};
 use crate::offchain::OffchainStorage;
 use std::iter::Iterator;
 use historied_db::management::tree::{TreeManagement, ForkPlan};
-use historied_db::{Latest, Management, ManagementRef};
+use historied_db::{Latest, management::{Management, ManagementMut}};
 use historied_db::historied::tree::Tree;
-use historied_db::historied::{InMemoryValueRef, InMemoryValue};
+use historied_db::historied::{DataRef, DataRefMut};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use codec::Codec;
@@ -283,15 +283,15 @@ impl BlockChainInMemOffchainStorageAt {
 		is_set = condition.map(|c| c(val.as_ref().map(|v| v.as_slice()))).unwrap_or(true);
 
 		if is_set {
-			use historied_db::historied::Value;
+			use historied_db::historied::DataMut;
 			let is_insert = new_value.is_some();
 			let new_value = new_value.map(|v| v.to_vec());
 			if let Some(histo) = histo {
 				if is_new {
 					let _update_result = histo.set_mut(new_value, at_write);
 				} else {
-					use historied_db::historied::ForceValueMut;
-					use historied_db::historied::StateIndex;
+					use historied_db::historied::force::ForceDataMut;
+					use historied_db::StateIndex;
 					let _update_result = histo.force_set(
 						new_value,
 						at_write.index_ref(),

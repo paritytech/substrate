@@ -26,7 +26,7 @@ use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
-	config::{Role, Configuration}, error::{Error as ServiceError},
+	config::{Configuration}, error::{Error as ServiceError},
 	RpcHandlers, TaskManager,
 };
 use sp_inherents::InherentDataProviders;
@@ -122,12 +122,14 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		let pool = transaction_pool.clone();
 		let select_chain = select_chain.clone();
 		let keystore = keystore_container.sync_keystore();
+		let chain_spec = config.chain_spec.cloned_box();
 
 		let rpc_extensions_builder = move |deny_unsafe, subscription_executor| {
 			let deps = node_rpc::FullDeps {
 				client: client.clone(),
 				pool: pool.clone(),
 				select_chain: select_chain.clone(),
+				chain_spec: chain_spec.cloned_box(),
 				deny_unsafe,
 				babe: node_rpc::BabeDeps {
 					babe_config: babe_config.clone(),
@@ -229,6 +231,7 @@ pub fn new_full_base(
 
 	if let sc_service::config::Role::Authority { .. } = &role {
 		let proposer = sc_basic_authorship::ProposerFactory::new(
+			task_manager.spawn_handle(),
 			client.clone(),
 			transaction_pool.clone(),
 			prometheus_registry.as_ref(),
@@ -255,21 +258,10 @@ pub fn new_full_base(
 	}
 
 	// Spawn authority discovery module.
-	if matches!(role, Role::Authority{..} | Role::Sentry {..}) {
-		let (sentries, authority_discovery_role) = match role {
-			sc_service::config::Role::Authority { ref sentry_nodes } => (
-				sentry_nodes.clone(),
-				sc_authority_discovery::Role::Authority (
-					keystore_container.keystore(),
-				),
-			),
-			sc_service::config::Role::Sentry {..} => (
-				vec![],
-				sc_authority_discovery::Role::Sentry,
-			),
-			_ => unreachable!("Due to outer matches! constraint; qed.")
-		};
-
+	if role.is_authority() {
+		let authority_discovery_role = sc_authority_discovery::Role::PublishAndDiscover(
+			keystore_container.keystore(),
+		);
 		let dht_event_stream = network.event_stream("authority-discovery")
 			.filter_map(|e| async move { match e {
 				Event::Dht(e) => Some(e),
@@ -278,7 +270,6 @@ pub fn new_full_base(
 		let (authority_discovery_worker, _service) = sc_authority_discovery::new_worker_and_service(
 			client.clone(),
 			network.clone(),
-			sentries,
 			Box::pin(dht_event_stream),
 			authority_discovery_role,
 			prometheus_registry.clone(),
@@ -316,7 +307,6 @@ pub fn new_full_base(
 			config,
 			link: grandpa_link,
 			network: network.clone(),
-			inherent_data_providers: inherent_data_providers.clone(),
 			telemetry_on_connect: Some(telemetry_connection_sinks.on_connect_stream()),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
@@ -330,16 +320,16 @@ pub fn new_full_base(
 			grandpa::run_grandpa_voter(grandpa_config)?
 		);
 	} else {
-		grandpa::setup_disabled_grandpa(
-			client.clone(),
-			&inherent_data_providers,
-			network.clone(),
-		)?;
+		grandpa::setup_disabled_grandpa(network.clone())?;
 	}
 
 	network_starter.start_network();
 	Ok(NewFullBase {
-		task_manager, inherent_data_providers, client, network, network_status_sinks,
+		task_manager,
+		inherent_data_providers,
+		client,
+		network,
+		network_status_sinks,
 		transaction_pool,
 	})
 }
@@ -481,7 +471,6 @@ mod tests {
 		traits::Verify,
 	};
 	use sp_timestamp;
-	use sp_finality_tracker;
 	use sp_keyring::AccountKeyring;
 	use sc_service_test::TestNetNode;
 	use crate::service::{new_full_base, new_light_base, NewFullBase};
@@ -541,7 +530,6 @@ mod tests {
 				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
 					.expect("Creates inherent data.");
-				inherent_data.replace_data(sp_finality_tracker::INHERENT_IDENTIFIER, &1u64);
 
 				let parent_id = BlockId::number(service.client().chain_info().best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
@@ -558,6 +546,7 @@ mod tests {
 				);
 
 				let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
+					service.spawn_handle(),
 					service.client(),
 					service.transaction_pool(),
 					None,

@@ -19,7 +19,7 @@
 
 use crate::{CodeHash, Schedule, Trait};
 use crate::wasm::env_def::FunctionImplProvider;
-use crate::exec::{Ext, ExecResult};
+use crate::exec::Ext;
 use crate::gas::GasMeter;
 
 use sp_std::prelude::*;
@@ -34,6 +34,7 @@ mod runtime;
 
 use self::runtime::{to_execution_result, Runtime};
 use self::code_cache::load as load_code;
+use pallet_contracts_primitives::ExecResult;
 
 pub use self::code_cache::save as save_code;
 #[cfg(feature = "runtime-benchmarks")]
@@ -155,7 +156,7 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use sp_core::H256;
-	use crate::exec::{Ext, StorageKey, ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
+	use crate::exec::{Ext, StorageKey};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
@@ -163,6 +164,7 @@ mod tests {
 	use hex_literal::hex;
 	use sp_runtime::DispatchError;
 	use frame_support::weights::Weight;
+	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
 
 	const GAS_LIMIT: Gas = 10_000_000_000;
 
@@ -1361,7 +1363,7 @@ mod tests {
 
 	;; size of our buffer is 128 bytes
 	(data (i32.const 160) "\80")
-	
+
 	(func $assert (param i32)
 		(block $ok
 			(br_if $ok
