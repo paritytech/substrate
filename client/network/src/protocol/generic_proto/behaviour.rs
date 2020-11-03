@@ -141,7 +141,7 @@ struct DelayId(u64);
 
 /// State of a peer we're connected to.
 ///
-/// The various variants correspond to the state that are relevant to the peerset.
+/// The variants correspond to the state of the peer w.r.t. the peerset.
 #[derive(Debug)]
 enum PeerState {
 	/// State is poisoned. This is a temporary state for a peer and we should always switch back
@@ -1389,7 +1389,7 @@ impl NetworkBehaviour for GenericProto {
 			PeerState::Banned { .. } => {
 				// This is a serious bug either in this state machine or in libp2p.
 				error!(target: "sub-libp2p",
-					"`inject_disconnected` called for unknown peer {}",
+					"`inject_connection_closed` called for unknown peer {}",
 					peer_id);
 				debug_assert!(false);
 			},
@@ -1502,7 +1502,7 @@ impl NetworkBehaviour for GenericProto {
 							opening.push(connection);
 
 						} else {
-							// Connections in `opening_and_closing` `opening` are in a Closed
+							// Connections in `opening_and_closing` and `opening` are in a Closed
 							// phase, and as such can emit `OpenDesired` messages.
 							// Since an `Open` message haS already been sent, there is nothing
 							// more to do.
@@ -1558,7 +1558,7 @@ impl NetworkBehaviour for GenericProto {
 							};
 
 						} else {
-							// Connections in `opening_and_closing` `opening` are in a Closed
+							// Connections in `opening_and_closing` are in a Closed
 							// phase, and as such can emit `OpenDesired` messages.
 							// We ignore them.
 							debug_assert!(opening_and_closing.iter().any(|c| *c == connection));
@@ -1608,7 +1608,7 @@ impl NetworkBehaviour for GenericProto {
 							};
 
 						} else {
-							// Connections in `opening_and_closing` `opening` are in a Closed
+							// Connections in `opening_and_closing` are in a Closed
 							// phase, and as such can emit `OpenDesired` messages.
 							// We ignore them.
 							debug_assert!(opening_and_closing.iter().any(|c| *c == connection));
