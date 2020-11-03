@@ -870,7 +870,71 @@ mod test {
 			true, true, true, true, true, true, true, true, true, true, true, true, false,
 			true, true, true, true, true, true, true, true, true, true, true, true, false, // 12:1
 			true, true, true, true];
+
 		assert_eq!(backoff, expected);
+	}
+
+	#[test]
+	fn should_never_wait_more_than_max_interval() {
+		let param = SimpleBackoffAuthoringBlocksStrategy {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
+
+		let finalized_number = 2;
+		let starting_slot = 11;
+		let mut head_state = HeadState {
+			head_number: 4,
+			head_slot: 10,
+			slot_now: starting_slot,
+		};
+
+		let should_backoff = |head_state: &HeadState| -> bool {
+			<dyn BackoffAuthoringBlocksStrategy<NumberFor<Block>>>::should_backoff(
+				&param,
+				head_state.head_number,
+				head_state.head_slot,
+				finalized_number,
+				head_state.slot_now,
+			)
+		};
+
+		let backoff: Vec<bool> = (head_state.slot_now..40000)
+			.map(|_| {
+				if should_backoff(&head_state) {
+					head_state.dont_author_block();
+					true
+				} else {
+					head_state.author_block();
+					false
+				}
+			})
+			.collect();
+
+		let slots_claimed: Vec<usize> = backoff
+			.iter()
+			.enumerate()
+			.filter(|&(_i, x)| x == &false)
+			.map(|(i, _x)| i + starting_slot as usize)
+			.collect();
+
+		let last_slot = backoff.len() + starting_slot as usize;
+		let mut last_two_claimed = slots_claimed.iter().rev().take(2);
+
+		// Check that we claimed all the way to the end. Check two slots for when we have an uneven
+		// number of slots_claimed.
+		let expected_distance = param.max_interval as usize + 1;
+		assert_eq!(last_slot - last_two_claimed.next().unwrap(), 92);
+		assert_eq!(last_slot - last_two_claimed.next().unwrap(), 92 + expected_distance);
+
+		let max_interval = slots_claimed
+			.windows(2)
+			.map(|x| x[1] - x[0])
+			.max();
+
+		// Check that distance between claimed slots is capped
+		assert_eq!(max_interval, Some(expected_distance));
 	}
 }
 
