@@ -1094,20 +1094,20 @@ mod tests {
 			));
 
 			// All weights that show up in the `initialize_block_impl`
+			let frame_system_upgrade_weight = <frame_system::Module::<Runtime> as OnRuntimeUpgrade>::on_runtime_upgrade();
 			let custom_runtime_upgrade_weight = CustomOnRuntimeUpgrade::on_runtime_upgrade();
 			let runtime_upgrade_weight = <AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
-			let on_initialize = <AllModules as OnInitialize<u64>>::on_initialize(block_number);
+			let on_initialize_weight = <AllModules as OnInitialize<u64>>::on_initialize(block_number);
 			let base_block_weight = <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
-			let frame_system_initialize_weight = <frame_system::Module::<Runtime> as OnRuntimeUpgrade>::on_runtime_upgrade();
 
 			// Weights are recorded correctly
 			assert_eq!(
 				frame_system::Module::<Runtime>::block_weight().total(),
+				frame_system_upgrade_weight +
 				custom_runtime_upgrade_weight +
 				runtime_upgrade_weight +
-				on_initialize +
-				base_block_weight +
-				frame_system_initialize_weight,
+				on_initialize_weight +
+				base_block_weight,
 			);
 		});
 	}
