@@ -102,13 +102,6 @@ impl<Store: CryptoStore + 'static> KeystoreReceiver<Store> {
 	fn process_request(store: Store, request: KeystoreRequest) -> Pin<Box<dyn Future<Output = Store> + Send>> {
 		let sender = request.sender;
 		match request.method {
-			RequestMethod::SignWith(id, key, msg) => {
-				Box::pin(async move {
-					let result = store.sign_with(id, &key, &msg).await;
-					let _ = sender.send(KeystoreResponse::SignWith(result));
-					return store;
-				})
-			},
 			RequestMethod::Sr25519PublicKeys(id) => {
 				Box::pin(async move {
 					let result = store.sr25519_public_keys(id).await;
@@ -190,7 +183,28 @@ impl<Store: CryptoStore + 'static> KeystoreReceiver<Store> {
 					let _ = sender.send(KeystoreResponse::InsertUnknown(result));
 					return store;
 				})
-			}
+			},
+			RequestMethod::SignWith(id, key, msg) => {
+				Box::pin(async move {
+					let result = store.sign_with(id, &key, &msg).await;
+					let _ = sender.send(KeystoreResponse::SignWith(result));
+					return store;
+				})
+			},
+			RequestMethod::SignWithAny(id, keys, msg) => {
+				Box::pin(async move {
+					let result = store.sign_with_any(id, keys, &msg).await;
+					let _ = sender.send(KeystoreResponse::SignWithAny(result));
+					return store;
+				})
+			},
+			RequestMethod::SignWithAll(id, keys, msg) => {
+				Box::pin(async move {
+					let result = store.sign_with_all(id, keys, &msg).await;
+					let _ = sender.send(KeystoreResponse::SignWithAll(result));
+					return store;
+				})
+			},
 		}
 	}
 }
@@ -254,6 +268,8 @@ enum RequestMethod {
 	Keys(KeyTypeId,),
 	HasKeys(Vec<(Vec<u8>, KeyTypeId)>),
 	SignWith(KeyTypeId, CryptoTypePublicPair, Vec<u8>),
+	SignWithAny(KeyTypeId, Vec<CryptoTypePublicPair>, Vec<u8>),
+	SignWithAll(KeyTypeId, Vec<CryptoTypePublicPair>, Vec<u8>),
 }
 
 struct KeystoreRequest {
@@ -282,6 +298,8 @@ enum KeystoreResponse {
 	Keys(Result<Vec<CryptoTypePublicPair>, CryptoStoreError>),
 	HasKeys(bool),
 	SignWith(Result<Vec<u8>, CryptoStoreError>),
+	SignWithAny(Result<(CryptoTypePublicPair, Vec<u8>), CryptoStoreError>),
+	SignWithAll(Result<Vec<Result<Vec<u8>, CryptoStoreError>>, ()>),
 }
 
 
@@ -467,7 +485,13 @@ impl crate::RemoteSignerApi for GenericRemoteSignerServer {
 		keys: Vec<CryptoTypePublicPair>,
 		msg: Vec<u8>
 	) -> BoxFuture<(CryptoTypePublicPair, Vec<u8>)> {
-		todo!{}
+		Box::new(self.send_request(RequestMethod::SignWithAny(id, keys, msg)).map(|response|
+			if let Ok(KeystoreResponse::SignWithAny(result)) =  response {
+				result.map_err(|_| RpcError::internal_error())
+			} else {
+				Err(RpcError::internal_error())
+			}
+		).boxed().compat())
 	}
 
 	fn sign_with_all(
@@ -476,7 +500,14 @@ impl crate::RemoteSignerApi for GenericRemoteSignerServer {
 		keys: Vec<CryptoTypePublicPair>,
 		msg: Vec<u8>,
 	) -> BoxFuture<Vec<Result<Vec<u8>, String>>> {
-		todo!{}
+		Box::new(self.send_request(RequestMethod::SignWithAll(id, keys, msg)).map(|response|
+			if let Ok(KeystoreResponse::SignWithAll(result)) =  response {
+				result.map_err(|_| RpcError::internal_error())
+				.map(|v| v.into_iter().map(|i| i.map_err(|e| e.to_string())).collect())
+			} else {
+				Err(RpcError::internal_error())
+			}
+		).boxed().compat())
 	}
 
     fn sr25519_vrf_sign(
