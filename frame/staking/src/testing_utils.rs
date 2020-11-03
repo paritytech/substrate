@@ -28,6 +28,12 @@ use sp_npos_elections::*;
 
 const SEED: u32 = 0;
 
+/// This function removes all validators and nominators from storage.
+pub fn clear_validators_and_nominators<T: Trait>() {
+	Validators::<T>::remove_all();
+	Nominators::<T>::remove_all();
+}
+
 /// Grab a funded user.
 pub fn create_funded_user<T: Trait>(
 	string: &'static str,
@@ -97,6 +103,9 @@ pub fn create_validators<T: Trait>(
 /// This function generates validators and nominators who are randomly nominating
 /// `edge_per_nominator` random validators (until `to_nominate` if provided).
 ///
+/// NOTE: This function will remove any existing validators or nominators to ensure
+/// we are working with a clean state.
+///
 /// Parameters:
 /// - `validators`: number of bonded validators
 /// - `nominators`: number of bonded nominators.
@@ -113,6 +122,8 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(
 	randomize_stake: bool,
 	to_nominate: Option<u32>,
 ) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
+	clear_validators_and_nominators::<T>();
+
 	let mut validators_stash: Vec<<T::Lookup as StaticLookup>::Source>
 		= Vec::with_capacity(validators as usize);
 	let mut rng = ChaChaRng::from_seed(SEED.using_encoded(blake2_256));
