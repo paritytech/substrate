@@ -762,6 +762,8 @@ mod tests {
 						sent_request_id = Some(id);
 					}
 					SwarmEvent::Behaviour(super::Event::RequestFinished {
+						peer: _,
+						protocol: _,
 						request_id,
 						result,
 					}) => {
@@ -865,6 +867,8 @@ mod tests {
 						sent_request_id = Some(id);
 					}
 					SwarmEvent::Behaviour(super::Event::RequestFinished {
+						peer: _,
+						protocol: _,
 						request_id,
 						result,
 					}) => {
