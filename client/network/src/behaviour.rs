@@ -434,6 +434,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Even
 								"Block request to {:?} failed with: {:?}",
 								peer, e,
 							);
+							self.substrate.on_block_request_failed(&peer);
 							return
 						}
 					};

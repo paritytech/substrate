@@ -65,7 +65,6 @@ pub mod sync;
 
 pub use generic_proto::{NotificationsSink, Ready, NotifsHandlerError, LegacyConnectionKillError};
 
-const REQUEST_TIMEOUT_SEC: u64 = 40;
 /// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 /// Interval at which we propagate transactions;
@@ -862,51 +861,21 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	// TODO: Bring back?
-	// /// Must be called in response to a [`CustomMessageOutcome::BlockRequest`] if it has failed.
-	// pub fn on_block_request_failed(
-	// 	&mut self,
-	// 	peer: &PeerId,
-	// ) {
-	// 	self.peerset_handle.report_peer(peer.clone(), rep::TIMEOUT);
-	// 	self.behaviour.disconnect_peer(peer);
-	// }
+	/// Must be called in response to a [`CustomMessageOutcome::BlockRequest`] if it has failed.
+	pub fn on_block_request_failed(
+		&mut self,
+		peer: &PeerId,
+	) {
+		// TODO: This can not only happen due to timeouts. Should the `rep::TIMEOUT` be used?
+		self.peerset_handle.report_peer(peer.clone(), rep::TIMEOUT);
+		self.behaviour.disconnect_peer(peer);
+	}
 
 	/// Perform time based maintenance.
 	///
 	/// > **Note**: This method normally doesn't have to be called except for testing purposes.
 	pub fn tick(&mut self) {
-		self.maintain_peers();
 		self.report_metrics()
-	}
-
-	fn maintain_peers(&mut self) {
-		let tick = Instant::now();
-		let mut aborting = Vec::new();
-		{
-			for (who, peer) in self.context_data.peers.iter() {
-				if peer.block_request.as_ref().map_or(false, |(t, _, _request_id)| (tick - *t).as_secs() > REQUEST_TIMEOUT_SEC) {
-					log!(
-						target: "sync",
-						if self.important_peers.contains(who) { Level::Warn } else { Level::Trace },
-						"Request timeout {}", who
-					);
-					aborting.push(who.clone());
-				} else if peer.obsolete_requests.values().any(|t| (tick - *t).as_secs() > REQUEST_TIMEOUT_SEC) {
-					log!(
-						target: "sync",
-						if self.important_peers.contains(who) { Level::Warn } else { Level::Trace },
-						"Obsolete timeout {}", who
-					);
-					aborting.push(who.clone());
-				}
-			}
-		}
-
-		for p in aborting {
-			self.behaviour.disconnect_peer(&p);
-			self.peerset_handle.report_peer(p, rep::TIMEOUT);
-		}
 	}
 
 	/// Called on the first connection between two peers, after their exchange of handshake.
