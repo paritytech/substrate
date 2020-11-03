@@ -152,8 +152,10 @@ enum PeerState {
 	/// The peer misbehaved. If the PSM wants us to connect to this peer, we will add an artificial
 	/// delay to the connection.
 	Banned {
+		/// When the ban expires. For clean-up purposes. References an entry in `delays`.
+		timer: DelayId,
 		/// Until when the peer is banned.
-		until: Instant,
+		timer_deadline: Instant,
 	},
 
 	/// The peerset requested that we connect to this peer. We are currently not connected.
@@ -712,22 +714,13 @@ impl GenericProto {
 
 		match mem::replace(occ_entry.get_mut(), PeerState::Poisoned) {
 			// Banned (not expired) => PendingRequest
-			PeerState::Banned { ref until } if *until > now => {
+			PeerState::Banned { ref timer, ref timer_deadline } if *timer_deadline > now => {
 				let peer_id = occ_entry.key().clone();
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
-					until {:?}", peer_id, until);
-
-				let delay_id = self.next_delay_id;
-				self.next_delay_id.0 += 1;
-				let delay = futures_timer::Delay::new(*until - now);
-				self.delays.push(async move {
-					delay.await;
-					(delay_id, peer_id)
-				}.boxed());
-
+					until {:?}", peer_id, timer_deadline);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
-					timer: delay_id,
-					timer_deadline: *until,
+					timer: *timer,
+					timer_deadline: *timer_deadline,
 				};
 			},
 
@@ -979,9 +972,9 @@ impl GenericProto {
 			},
 
 			// PendingRequest => Banned
-			PeerState::PendingRequest { timer_deadline, .. } => {
+			PeerState::PendingRequest { timer, timer_deadline } => {
 				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Not yet connected", entry.key());
-				*entry.into_mut() = PeerState::Banned { until: timer_deadline }
+				*entry.into_mut() = PeerState::Banned { timer, timer_deadline }
 			},
 
 			// Invalid state transitions.
@@ -1164,8 +1157,8 @@ impl NetworkBehaviour for GenericProto {
 			// Ø | Banned => Disabled
 			st @ &mut PeerState::Poisoned |
 			st @ &mut PeerState::Banned { .. } => {
-				let banned_until = if let PeerState::Banned { until } = st {
-					Some(*until)
+				let banned_until = if let PeerState::Banned { timer_deadline, .. } = st {
+					Some(*timer_deadline)
 				} else {
 					None
 				};
@@ -1226,7 +1219,24 @@ impl NetworkBehaviour for GenericProto {
 
 				if opening_and_closing.is_empty() && closed.is_empty() && closing.is_empty() {
 					if let Some(until) = banned_until {
-						*entry.get_mut() = PeerState::Banned { until };
+						let now = Instant::now();
+						if until > now {
+							let delay_id = self.next_delay_id;
+							self.next_delay_id.0 += 1;
+							let delay = futures_timer::Delay::new(until - now);
+							let peer_id = peer_id.clone();
+							self.delays.push(async move {
+								delay.await;
+								(delay_id, peer_id)
+							}.boxed());
+
+							*entry.get_mut() = PeerState::Banned {
+								timer: delay_id,
+								timer_deadline: until,
+							};
+						} else {
+							entry.remove();
+						}
 					} else {
 						entry.remove();
 					}
@@ -1260,7 +1270,7 @@ impl NetworkBehaviour for GenericProto {
 				if opening_and_closing.is_empty() && closed.is_empty() && closing.is_empty() {
 					debug!(target: "sub-libp2p", "PSM <= Dropped({})", peer_id);
 					self.peerset.dropped(peer_id.clone());
-					*entry.get_mut() = PeerState::Banned { until: timer_deadline };
+					*entry.get_mut() = PeerState::Banned { timer, timer_deadline };
 
 				} else {
 					*entry.get_mut() = PeerState::DisabledPendingEnable {
@@ -1308,7 +1318,24 @@ impl NetworkBehaviour for GenericProto {
 					open_desired.is_empty()
 				{
 					if let Some(until) = banned_until {
-						*entry.get_mut() = PeerState::Banned { until };
+						let now = Instant::now();
+						if until > now {
+							let delay_id = self.next_delay_id;
+							self.next_delay_id.0 += 1;
+							let delay = futures_timer::Delay::new(until - now);
+							let peer_id = peer_id.clone();
+							self.delays.push(async move {
+								delay.await;
+								(delay_id, peer_id)
+							}.boxed());
+
+							*entry.get_mut() = PeerState::Banned {
+								timer: delay_id,
+								timer_deadline: until,
+							};
+						} else {
+							entry.remove();
+						}
 					} else {
 						entry.remove();
 					}
@@ -1373,8 +1400,19 @@ impl NetworkBehaviour for GenericProto {
 					debug!(target: "sub-libp2p", "PSM <= Dropped({})", peer_id);
 					self.peerset.dropped(peer_id.clone());
 					let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
+
+					let delay_id = self.next_delay_id;
+					self.next_delay_id.0 += 1;
+					let delay = futures_timer::Delay::new(Duration::from_secs(ban_dur));
+					let peer_id = peer_id.clone();
+					self.delays.push(async move {
+						delay.await;
+						(delay_id, peer_id)
+					}.boxed());
+
 					*entry.get_mut() = PeerState::Banned {
-						until: Instant::now() + Duration::from_secs(ban_dur)
+						timer: delay_id,
+						timer_deadline: Instant::now() + Duration::from_secs(ban_dur),
 					};
 
 				} else {
@@ -1417,13 +1455,33 @@ impl NetworkBehaviour for GenericProto {
 				},
 
 				// "Basic" situation: we failed to reach a peer that the peerset requested.
-				PeerState::Requested | PeerState::PendingRequest { .. } => {
+				st @ PeerState::Requested |
+				st @ PeerState::PendingRequest { .. } => {
 					debug!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
-					*entry.into_mut() = PeerState::Banned {
-						until: Instant::now() + Duration::from_secs(5)
-					};
+
 					debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-					self.peerset.dropped(peer_id.clone())
+					self.peerset.dropped(peer_id.clone());
+
+					let now = Instant::now();
+					let ban_duration = match st {
+						PeerState::PendingRequest { timer_deadline, .. } if timer_deadline > now =>
+							cmp::max(timer_deadline - now, Duration::from_secs(5)),
+						_ => Duration::from_secs(5)
+					};
+
+					let delay_id = self.next_delay_id;
+					self.next_delay_id.0 += 1;
+					let delay = futures_timer::Delay::new(ban_duration);
+					let peer_id = peer_id.clone();
+					self.delays.push(async move {
+						delay.await;
+						(delay_id, peer_id)
+					}.boxed());
+
+					*entry.into_mut() = PeerState::Banned {
+						timer: delay_id,
+						timer_deadline: now + ban_duration,
+					};
 				},
 
 				// We can still get dial failures even if we are already connected to the peer,
@@ -1963,6 +2021,11 @@ impl NetworkBehaviour for GenericProto {
 			};
 
 			match peer_state {
+				PeerState::Banned { timer, .. } if *timer == delay_id => {
+					debug!(target: "sub-libp2p", "Libp2p <= Clean up ban of {:?} from the state", peer_id);
+					self.peers.remove(&peer_id);
+				}
+
 				PeerState::PendingRequest { timer, .. } if *timer == delay_id => {
 					debug!(target: "sub-libp2p", "Libp2p <= Dial {:?} now that ban has expired", peer_id);
 					self.events.push_back(NetworkBehaviourAction::DialPeer {
