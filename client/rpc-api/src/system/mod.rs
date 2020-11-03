@@ -111,6 +111,6 @@ pub trait SystemApi<Hash, Number> {
 
 	/// Sets the logging filter, replacing current with the supplied directives
 	#[rpc(name = "system_setLogFilter", returns = "()")]
-	fn system_reload_log_filter(&self, directives: String)
+	fn system_set_log_filter(&self, directives: String)
 		-> Result<(), jsonrpc_core::Error>;
 }
