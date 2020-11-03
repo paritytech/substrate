@@ -47,9 +47,6 @@ pub enum Error {
 	/// Invalid listen multiaddress
 	#[error("Invalid listen multiaddress")]
 	InvalidListenMultiaddress,
-	/// Application specific error chain sequence forwarder.
-	#[error(transparent)]
-	Application(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
 	/// URI error.
 	#[error("Invalid URI; expecting either a secret URI or a public URI.")]
 	InvalidUri(crypto::PublicError),
@@ -79,10 +76,9 @@ pub enum Error {
 	/// Bytes are not decodable when interpreted as hexadecimal string.
 	#[error("Invalid hex base data")]
 	HexDataConversion(#[from] hex::FromHexError),
-	/// Shortcut type to specify types on the fly, discouraged.
-	#[deprecated = "Use `Forwarded` with an error type instead."]
-	#[error("Other: {0}")]
-	Other(String),
+	/// Application specific error chain sequence forwarder.
+	#[error(transparent)]
+	Application(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
 impl std::convert::From<&str> for Error {
@@ -93,7 +89,7 @@ impl std::convert::From<&str> for Error {
 
 impl std::convert::From<String> for Error {
 	fn from(s: String) -> Error {
-		Error::Input(s.to_string())
+		Error::Input(s)
 	}
 }
 

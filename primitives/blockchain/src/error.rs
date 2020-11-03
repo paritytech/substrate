@@ -17,7 +17,7 @@
 
 //! Substrate client possible errors.
 
-use std::{self, result};
+use std::{self, result, path::PathBuf};
 use sp_state_machine;
 use sp_runtime::transaction_validity::TransactionValidityError;
 use sp_consensus;
@@ -65,6 +65,7 @@ pub enum Error {
 	ApplyExtrinsicFailed(#[from] ApplyExtrinsicFailed),
 
 	/// Execution error.
+	// `inner` cannot be made member, since it lacks `std::error::Error` trait bounds.
 	#[error("Execution failed: {0:?}")]
 	Execution(Box<dyn sp_state_machine::Error>),
 
@@ -166,14 +167,16 @@ pub enum Error {
 	WasmOverrideIo(PathBuf, #[source] std::io::Error),
 
 	#[error("Overwriting WASM requires a directory where local \
-	WASM is stored. {0} is not a directory", .0.display())]
+	WASM is stored. {} is not a directory", .0.display())]
 	WasmOverrideNotADirectory(PathBuf),
 
 	#[error("Duplicate WASM Runtimes found: \n{}\n", .0.join("\n") )]
 	DuplicateWasmRuntime(Vec<String>),
 
-	/// A convenience variant for String
-	#[deprecated(note = "Introduce more typed error variants as needed")]
+	#[error(transparent)]
+	Foreign(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+
+	/// Should be avoided if possible, use `Foreign` instead.
 	#[error("{0}")]
 	Msg(String),
 }
@@ -189,6 +192,18 @@ impl From<Box<dyn sp_state_machine::Error>> for Error {
 		Self::from_state(e)
 	}
 }
+
+impl From<String> for Error {
+	fn from(msg: String) -> Self {
+		Self::Msg(msg)
+	}
+}
+impl From<&str> for Error {
+	fn from(msg: &str) -> Self {
+		Self::Msg(msg.to_owned())
+	}
+}
+
 
 impl Error {
 	/// Chain a blockchain error.
