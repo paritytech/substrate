@@ -104,9 +104,8 @@ impl<B: BlockT> InformantDisplay<B> {
 		if self.format.enable_color {
 			info!(
 				target: "substrate",
-				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
+				"{} {}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
 				level,
-				self.format.prefix,
 				Colour::White.bold().paint(&status),
 				target,
 				Colour::White.bold().paint(format!("{}", num_connected_peers)),
@@ -120,9 +119,8 @@ impl<B: BlockT> InformantDisplay<B> {
 		} else {
 			info!(
 				target: "substrate",
-				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
+				"{} {}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
 				level,
-				self.format.prefix,
 				status,
 				target,
 				num_connected_peers,
@@ -168,7 +166,7 @@ fn speed<B: BlockT>(
 	} else {
 		// If the number of blocks can't be converted to a regular integer, then we need a more
 		// algebraic approach and we stay within the realm of integers.
-		let one_thousand = NumberFor::<B>::from(1_000);
+		let one_thousand = NumberFor::<B>::from(1_000u32);
 		let elapsed = NumberFor::<B>::from(
 			<u32 as TryFrom<_>>::try_from(elapsed_ms).unwrap_or(u32::max_value())
 		);

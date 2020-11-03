@@ -18,6 +18,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false }
 hash-db = { version = "0.15.2", default-features = false }
 sp-core = { version = "2.0.0", default-features = false, path = "../core" }
+sp-keystore = { version = "0.8.0", default-features = false, optional = true, path = "../keystore" }
 sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 libsecp256k1 = { version = "0.3.4", optional = true }
 sp-state-machine = { version = "0.8.0", optional = true, path = "../../primitives/state-machine" }
@@ -30,12 +31,13 @@ log = { version = "0.4.8", optional = true }
 futures = { version = "0.3.1", features = ["thread-pool"], optional = true }
 parking_lot = { version = "0.10.0", optional = true }
 tracing = { version = "0.1.19", default-features = false }
-tracing-core = { version = "0.1.15", default-features = false}
+tracing-core = { version = "0.1.17", default-features = false}
 
 [features]
 default = ["std"]
 std = [
 	"sp-core/std",
+	"sp-keystore",
 	"codec/std",
 	"sp-std/std",
 	"hash-db/std",

@@ -1312,30 +1312,11 @@ impl NetworkBehaviour for GenericProto {
 					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 
 				} else {
-					// In normal situations, the handshake is supposed to be a Status message, and
-					// we would discard Status messages received from secondary connections.
-					// However, in Polkadot 0.8.10 and below, nodes don't send a Status message
-					// when opening secondary connections and instead directly consider the
-					// substream as open. When connecting to such a node, the first message sent
-					// by the remote will always be considered by our local node as the handshake,
-					// even when it is a regular message.
-					// In order to maintain backwards compatibility, we therefore report the
-					// handshake as if it was a regular message, and the upper layer will ignore
-					// any superfluous Status message.
-					// The code below should be removed once Polkadot 0.8.10 and below are no
-					// longer widely in use, and should be replaced with simply printing a log
-					// entry.
 					debug!(
 						target: "sub-libp2p",
 						"Handler({:?}) => Secondary connection opened custom protocol",
 						source
 					);
-					trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
-					let event = GenericProtoOut::LegacyMessage {
-						peer_id: source,
-						message: From::from(&received_handshake[..]),
-					};
-					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 				}
 			}
 
@@ -1367,27 +1348,6 @@ impl NetworkBehaviour for GenericProto {
 				};
 
 				self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
-			}
-
-			// Don't do anything for non-severe errors except report them.
-			NotifsHandlerOut::ProtocolError { is_severe, ref error } if !is_severe => {
-				debug!(target: "sub-libp2p", "Handler({:?}) => Benign protocol error: {:?}",
-					source, error)
-			}
-
-			NotifsHandlerOut::ProtocolError { error, .. } => {
-				debug!(target: "sub-libp2p",
-					"Handler({:?}) => Severe protocol error: {:?}",
-					source, error);
-				// A severe protocol error happens when we detect a "bad" peer, such as a peer on
-				// a different chain, or a peer that doesn't speak the same protocol(s). We
-				// decrease the peer's reputation, hence lowering the chances we try this peer
-				// again in the short term.
-				self.peerset.report_peer(
-					source.clone(),
-					sc_peerset::ReputationChange::new(i32::min_value(), "Protocol error")
-				);
-				self.disconnect_peer_inner(&source, Some(Duration::from_secs(5)));
 			}
 		}
 	}

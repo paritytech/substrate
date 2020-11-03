@@ -59,7 +59,7 @@ use sp_runtime::{
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
-	borrow::{Borrow, Cow},
+	borrow::Cow,
 	collections::{HashMap, HashSet},
 	fs,
 	marker::PhantomData,
@@ -233,12 +233,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.clone().into_peer_id();
-		let local_peer_id_legacy = bs58::encode(Borrow::<[u8]>::borrow(&local_peer_id)).into_string();
 		info!(
 			target: "sub-libp2p",
-			"🏷  Local node identity is: {} (legacy representation: {})",
+			"🏷 Local node identity is: {}",
 			local_peer_id.to_base58(),
-			local_peer_id_legacy
 		);
 
 		let checker = params.on_demand.as_ref()
@@ -294,6 +292,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
 				config.add_protocol(params.protocol_id.clone());
 				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
+				config.use_kademlia_disjoint_query_paths(params.network_config.kademlia_disjoint_query_paths);
 
 				match params.network_config.transport {
 					TransportConfig::MemoryOnly => {
@@ -336,12 +335,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				behaviour.register_notifications_protocol(*engine_id, protocol_name.clone());
 			}
 			let (transport, bandwidth) = {
-				let (config_mem, config_wasm, flowctrl) = match params.network_config.transport {
-					TransportConfig::MemoryOnly => (true, None, false),
-					TransportConfig::Normal { wasm_external_transport, use_yamux_flow_control, .. } =>
-						(false, wasm_external_transport, use_yamux_flow_control)
+				let (config_mem, config_wasm) = match params.network_config.transport {
+					TransportConfig::MemoryOnly => (true, None),
+					TransportConfig::Normal { wasm_external_transport, .. } =>
+						(false, wasm_external_transport)
 				};
-				transport::build_transport(local_identity, config_mem, config_wasm, flowctrl)
+				transport::build_transport(local_identity, config_mem, config_wasm)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
 				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER)
@@ -662,6 +661,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		if let Some(protocol_name) = protocol_name {
 			sink.send_sync_notification(protocol_name, message);
 		} else {
+			log::error!(
+				target: "sub-libp2p",
+				"Attempted to send notification on unknown protocol: {:?}",
+				engine_id,
+			);
 			return;
 		}
 
@@ -974,24 +978,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
-		let peers = peers.into_iter()
-			.map(|mut addr| {
-				let peer = match addr.pop() {
-					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
-						.map_err(|_| "Invalid PeerId format".to_string())?,
-					_ => return Err("Missing PeerId from address".to_string()),
-				};
-
-				// Make sure the local peer ID is never added to the PSM
-				// or added as a "known address", even if given.
-				if peer == self.local_peer_id {
-					Err("Local peer ID in priority group.".to_string())
-				} else {
-					Ok((peer, addr))
-				}
-			})
-			.collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()?;
+	//
+	// NOTE: even though this function is currently sync, it's marked as async for
+	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
+	pub async fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
 
@@ -1003,6 +994,47 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 				.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 		}
 
+		Ok(())
+	}
+
+	/// Add peers to a peerset priority group.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	//
+	// NOTE: even though this function is currently sync, it's marked as async for
+	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
+	pub async fn add_to_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+		let peers = self.split_multiaddr_and_peer_id(peers)?;
+
+		for (peer_id, addr) in peers.into_iter() {
+			self.peerset.add_to_priority_group(group_id.clone(), peer_id.clone());
+
+			let _ = self
+				.to_worker
+				.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+		}
+
+		Ok(())
+	}
+
+	/// Remove peers from a peerset priority group.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	//
+	// NOTE: even though this function is currently sync, it's marked as async for
+	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
+	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
+	pub async fn remove_from_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+		let peers = self.split_multiaddr_and_peer_id(peers)?;
+		for (peer_id, _) in peers.into_iter() {
+			self.peerset.remove_from_priority_group(group_id.clone(), peer_id);
+		}
 		Ok(())
 	}
 
@@ -1026,6 +1058,30 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
+	}
+
+	/// Utility function to extract `PeerId` from each `Multiaddr` for priority group updates.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	fn split_multiaddr_and_peer_id(&self, peers: HashSet<Multiaddr>) -> Result<Vec<(PeerId, Multiaddr)>, String> {
+		peers.into_iter()
+			.map(|mut addr| {
+				let peer = match addr.pop() {
+					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
+						.map_err(|_| "Invalid PeerId format".to_string())?,
+					_ => return Err("Missing PeerId from address".to_string()),
+				};
+
+				// Make sure the local peer ID is never added to the PSM
+				// or added as a "known address", even if given.
+				if peer == self.local_peer_id {
+					Err("Local peer ID in priority group.".to_string())
+				} else {
+					Ok((peer, addr))
+				}
+			})
+			.collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()
 	}
 }
 

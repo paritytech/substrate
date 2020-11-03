@@ -51,9 +51,9 @@ grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path 
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "2.0.0", default-features = false, path = "../../../primitives/timestamp" }
-sp-finality-tracker = { version = "2.0.0", default-features = false, path = "../../../primitives/finality-tracker" }
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
 sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
+sp-keystore = { version = "0.8.0", path = "../../../primitives/keystore" }
 sp-io = { version = "2.0.0", path = "../../../primitives/io" }
 sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
 sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
