@@ -109,8 +109,6 @@ mod rep {
 	pub const BAD_TRANSACTION: Rep = Rep::new(-(1 << 12), "Bad transaction");
 	/// We received a message that failed to decode.
 	pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
-	/// We received an unexpected response.
-	pub const UNEXPECTED_RESPONSE: Rep = Rep::new_fatal("Unexpected response packet");
 	/// We received an unexpected transaction packet.
 	pub const UNEXPECTED_TRANSACTIONS: Rep = Rep::new_fatal("Unexpected transactions packet");
 	/// Peer has different genesis.
@@ -711,29 +709,17 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let peer = match self.context_data.peers.get_mut(&peer_id) {
 			Some(peer) => peer,
 			None => {
-				// TODO: Bring back.
-				// trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", peer, response.id);
+				debug!(target: "sync", "Ignoring obsolete block response packet from {}", peer_id);
 				return CustomMessageOutcome::None;
 			}
 		};
 
-		let block_request = match peer.block_request.take() {
-			Some(req) => req,
-			None =>  {
-				trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer_id);
-				self.behaviour.disconnect_peer(&peer_id);
-				self.peerset_handle.report_peer(peer_id, rep::UNEXPECTED_RESPONSE);
-				return CustomMessageOutcome::None;
-			}
+		let block_request = match &peer.block_request {
+			Some((_, _req, Some(id))) if *id == request_id => peer.block_request
+				.take()
+				.expect("id to be Some").1,
+			Some(_) | None => return CustomMessageOutcome::None,
 		};
-
-		if block_request.2 != Some(request_id) {
-			// TODO: Properly handle this.
-			panic!("request id didn't match or was none");
-			// return CustomMessageOutcome::None;
-		}
-
-		let block_request = block_request.1;
 
 		let blocks = response.blocks.into_iter().map(|block_data| {
 			Ok(message::BlockData::<B> {
@@ -768,38 +754,21 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					None
 				},
 			})
-		}).collect::<Result<Vec<_>, codec::Error>>().unwrap();
+		}).collect::<Result<Vec<_>, codec::Error>>();
+
+		let blocks = match blocks {
+			Ok(blocks) => blocks,
+			Err(err) => {
+				debug!(target: "sync", "Failed to decode block response from {}: {}", peer_id, err);
+				// TODO: Reduce reputation of peer?
+				return CustomMessageOutcome::None;
+			}
+		};
 
 		let block_response = message::BlockResponse::<B> {
 			id: block_request.id,
 			blocks,
 		};
-
-		// let request = if let Some(ref mut p) = self.context_data.peers.get_mut(&peer) {
-		// 	if p.obsolete_requests.remove(&response.id).is_some() {
-		// 		trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", peer, response.id);
-		// 		return CustomMessageOutcome::None;
-		// 	}
-		// 	// Clear the request. If the response is invalid peer will be disconnected anyway.
-		// 	match p.block_request.take() {
-		// 		Some((_, request)) if request.id == response.id => request,
-		// 		Some(_) =>  {
-		// 			trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", peer, response.id);
-		// 			return CustomMessageOutcome::None;
-		// 		}
-		// 		None => {
-		// 			trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer);
-		// 			self.behaviour.disconnect_peer(&peer);
-		// 			self.peerset_handle.report_peer(peer, rep::UNEXPECTED_RESPONSE);
-		// 			return CustomMessageOutcome::None;
-		// 		}
-		// 	}
-		// } else {
-		// 	trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer);
-		// 	self.behaviour.disconnect_peer(&peer);
-		// 	self.peerset_handle.report_peer(peer, rep::UNEXPECTED_RESPONSE);
-		// 	return CustomMessageOutcome::None;
-		// };
 
 		let blocks_range = || match (
 			block_response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
@@ -1421,9 +1390,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		};
 
 		let req = match &peer.finality_request {
-			Some((_req, Some(id))) if *id != request_id => peer.finality_request.take().unwrap().0,
-			Some(_) => return CustomMessageOutcome::None,
-			None => return CustomMessageOutcome::None,
+			Some((_req, Some(id))) if *id == request_id => peer.finality_request.take().unwrap().0,
+			Some(_) | None => return CustomMessageOutcome::None,
 		};
 
 		let resp = message::FinalityProofResponse::<B::Hash> {
