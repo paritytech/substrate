@@ -22,12 +22,50 @@
 use super::*;
 
 use frame_support::{
-	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
-	weights::Weight, impl_outer_event, dispatch::DispatchError, traits::Filter, storage,
+	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch, impl_outer_event,
+	assert_err_ignore_postinfo,
+	weights::{Weight, Pays},
+	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
+	traits::Filter,
+	storage,
 };
 use sp_core::H256;
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use crate as utility;
+
+// example module to test behaviors.
+pub mod example {
+	use super::*;
+	use frame_support::dispatch::WithPostDispatchInfo;
+	pub trait Trait: frame_system::Trait { }
+
+	decl_module! {
+		pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Trait>::Origin {
+			#[weight = *weight]
+			fn noop(_origin, weight: Weight) { }
+
+			#[weight = *start_weight]
+			fn foobar(
+				origin,
+				err: bool,
+				start_weight: Weight,
+				end_weight: Option<Weight>,
+			) -> DispatchResultWithPostInfo {
+				let _ = ensure_signed(origin)?;
+				if err {
+					let error: DispatchError = "The cake is a lie.".into();
+					if let Some(weight) = end_weight {
+						Err(error.with_weight(weight))
+					} else {
+						Err(error)?
+					}
+				} else {
+					Ok(end_weight.into())
+				}
+			}
+		}
+	}
+}
 
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
@@ -44,6 +82,7 @@ impl_outer_dispatch! {
 		frame_system::System,
 		pallet_balances::Balances,
 		utility::Utility,
+		example::Example,
 	}
 }
 
@@ -102,13 +141,19 @@ parameter_types! {
 	pub const MultisigDepositFactor: u64 = 1;
 	pub const MaxSignatories: u16 = 3;
 }
+
+impl example::Trait for Test {}
+
 pub struct TestBaseCallFilter;
 impl Filter<Call> for TestBaseCallFilter {
 	fn filter(c: &Call) -> bool {
 		match *c {
 			Call::Balances(_) => true,
+			Call::Utility(_) => true,
 			// For benchmarking, this acts as a noop call
 			Call::System(frame_system::Call::remark(..)) => true,
+			// For tests
+			Call::Example(_) => true,
 			_ => false,
 		}
 	}
@@ -120,7 +165,11 @@ impl Trait for Test {
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
+type Example = example::Module<Test>;
 type Utility = Module<Test>;
+
+type ExampleCall = example::Call<Test>;
+type UtilityCall = crate::Call<Test>;
 
 use frame_system::Call as SystemCall;
 use pallet_balances::Call as BalancesCall;
@@ -149,7 +198,7 @@ fn as_derivative_works() {
 	new_test_ext().execute_with(|| {
 		let sub_1_0 = Utility::derivative_account_id(1, 0);
 		assert_ok!(Balances::transfer(Origin::signed(1), sub_1_0, 5));
-		assert_noop!(Utility::as_derivative(
+		assert_err_ignore_postinfo!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
 			Box::new(Call::Balances(BalancesCall::transfer(6, 3))),
@@ -165,9 +214,69 @@ fn as_derivative_works() {
 }
 
 #[test]
+fn as_derivative_handles_weight_refund() {
+	new_test_ext().execute_with(|| {
+		let start_weight = 100;
+		let end_weight = 75;
+		let diff = start_weight - end_weight;
+
+		// Full weight when ok
+		let inner_call = Call::Example(ExampleCall::foobar(false, start_weight, None));
+		let call = Call::Utility(UtilityCall::as_derivative(0, Box::new(inner_call)));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_ok!(result);
+		assert_eq!(extract_actual_weight(&result, &info), info.weight);
+
+		// Refund weight when ok
+		let inner_call = Call::Example(ExampleCall::foobar(false, start_weight, Some(end_weight)));
+		let call = Call::Utility(UtilityCall::as_derivative(0, Box::new(inner_call)));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_ok!(result);
+		// Diff is refunded
+		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff);
+
+		// Full weight when err
+		let inner_call = Call::Example(ExampleCall::foobar(true, start_weight, None));
+		let call = Call::Utility(UtilityCall::as_derivative(0, Box::new(inner_call)));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_noop!(
+			result,
+			DispatchErrorWithPostInfo {
+				post_info: PostDispatchInfo {
+					// No weight is refunded
+					actual_weight: Some(info.weight),
+					pays_fee: Pays::Yes,
+				},
+				error: DispatchError::Other("The cake is a lie."),
+			}
+		);
+
+		// Refund weight when err
+		let inner_call = Call::Example(ExampleCall::foobar(true, start_weight, Some(end_weight)));
+		let call = Call::Utility(UtilityCall::as_derivative(0, Box::new(inner_call)));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_noop!(
+			result,
+			DispatchErrorWithPostInfo {
+				post_info: PostDispatchInfo {
+					// Diff is refunded
+					actual_weight: Some(info.weight - diff),
+					pays_fee: Pays::Yes,
+				},
+				error: DispatchError::Other("The cake is a lie."),
+			}
+		);
+	});
+}
+
+#[test]
 fn as_derivative_filters() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Utility::as_derivative(
+		assert_err_ignore_postinfo!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
 			Box::new(Call::System(frame_system::Call::suicide())),
@@ -253,5 +362,181 @@ fn batch_weight_calculation_doesnt_overflow() {
 		]));
 
 		assert_eq!(batch_call.get_dispatch_info().weight, Weight::max_value());
+	});
+}
+
+#[test]
+fn batch_handles_weight_refund() {
+	new_test_ext().execute_with(|| {
+		let start_weight = 100;
+		let end_weight = 75;
+		let diff = start_weight - end_weight;
+		let batch_len: Weight = 4;
+
+		// Full weight when ok
+		let inner_call = Call::Example(ExampleCall::foobar(false, start_weight, None));
+		let batch_calls = vec![inner_call; batch_len as usize];
+		let call = Call::Utility(UtilityCall::batch(batch_calls));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_ok!(result);
+		assert_eq!(extract_actual_weight(&result, &info), info.weight);
+
+		// Refund weight when ok
+		let inner_call = Call::Example(ExampleCall::foobar(false, start_weight, Some(end_weight)));
+		let batch_calls = vec![inner_call; batch_len as usize];
+		let call = Call::Utility(UtilityCall::batch(batch_calls));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_ok!(result);
+		// Diff is refunded
+		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
+
+		// Full weight when err
+		let good_call = Call::Example(ExampleCall::foobar(false, start_weight, None));
+		let bad_call = Call::Example(ExampleCall::foobar(true, start_weight, None));
+		let batch_calls = vec![good_call, bad_call];
+		let call = Call::Utility(UtilityCall::batch(batch_calls));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_ok!(result);
+		expect_event(Event::BatchInterrupted(1, DispatchError::Other("")));
+		// No weight is refunded
+		assert_eq!(extract_actual_weight(&result, &info), info.weight);
+
+		// Refund weight when err
+		let good_call = Call::Example(ExampleCall::foobar(false, start_weight, Some(end_weight)));
+		let bad_call = Call::Example(ExampleCall::foobar(true, start_weight, Some(end_weight)));
+		let batch_calls = vec![good_call, bad_call];
+		let batch_len = batch_calls.len() as Weight;
+		let call = Call::Utility(UtilityCall::batch(batch_calls));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_ok!(result);
+		expect_event(Event::BatchInterrupted(1, DispatchError::Other("")));
+		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
+
+		// Partial batch completion
+		let good_call = Call::Example(ExampleCall::foobar(false, start_weight, Some(end_weight)));
+		let bad_call = Call::Example(ExampleCall::foobar(true, start_weight, Some(end_weight)));
+		let batch_calls = vec![good_call, bad_call.clone(), bad_call];
+		let call = Call::Utility(UtilityCall::batch(batch_calls));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_ok!(result);
+		expect_event(Event::BatchInterrupted(1, DispatchError::Other("")));
+		assert_eq!(
+			extract_actual_weight(&result, &info),
+			// Real weight is 2 calls at end_weight
+			<Test as Trait>::WeightInfo::batch(2) + end_weight * 2,
+		);
+	});
+}
+
+#[test]
+fn batch_all_works() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Balances::free_balance(1), 10);
+		assert_eq!(Balances::free_balance(2), 10);
+		assert_ok!(
+			Utility::batch_all(Origin::signed(1), vec![
+				Call::Balances(BalancesCall::transfer(2, 5)),
+				Call::Balances(BalancesCall::transfer(2, 5))
+			]),
+		);
+		assert_eq!(Balances::free_balance(1), 0);
+		assert_eq!(Balances::free_balance(2), 20);
+	});
+}
+
+#[test]
+fn batch_all_revert() {
+	new_test_ext().execute_with(|| {
+		let call = Call::Balances(BalancesCall::transfer(2, 5));
+		let info = call.get_dispatch_info();
+
+		assert_eq!(Balances::free_balance(1), 10);
+		assert_eq!(Balances::free_balance(2), 10);
+		assert_noop!(
+			Utility::batch_all(Origin::signed(1), vec![
+				Call::Balances(BalancesCall::transfer(2, 5)),
+				Call::Balances(BalancesCall::transfer(2, 10)),
+				Call::Balances(BalancesCall::transfer(2, 5)),
+			]),
+			DispatchErrorWithPostInfo {
+				post_info: PostDispatchInfo {
+					actual_weight: Some(<Test as Trait>::WeightInfo::batch_all(2) + info.weight * 2),
+					pays_fee: Pays::Yes
+				},
+				error: pallet_balances::Error::<Test, _>::InsufficientBalance.into()
+			}
+		);
+		assert_eq!(Balances::free_balance(1), 10);
+		assert_eq!(Balances::free_balance(2), 10);
+	});
+}
+
+#[test]
+fn batch_all_handles_weight_refund() {
+	new_test_ext().execute_with(|| {
+		let start_weight = 100;
+		let end_weight = 75;
+		let diff = start_weight - end_weight;
+		let batch_len: Weight = 4;
+
+		// Full weight when ok
+		let inner_call = Call::Example(ExampleCall::foobar(false, start_weight, None));
+		let batch_calls = vec![inner_call; batch_len as usize];
+		let call = Call::Utility(UtilityCall::batch_all(batch_calls));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_ok!(result);
+		assert_eq!(extract_actual_weight(&result, &info), info.weight);
+
+		// Refund weight when ok
+		let inner_call = Call::Example(ExampleCall::foobar(false, start_weight, Some(end_weight)));
+		let batch_calls = vec![inner_call; batch_len as usize];
+		let call = Call::Utility(UtilityCall::batch_all(batch_calls));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_ok!(result);
+		// Diff is refunded
+		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
+
+		// Full weight when err
+		let good_call = Call::Example(ExampleCall::foobar(false, start_weight, None));
+		let bad_call = Call::Example(ExampleCall::foobar(true, start_weight, None));
+		let batch_calls = vec![good_call, bad_call];
+		let call = Call::Utility(UtilityCall::batch_all(batch_calls));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_err_ignore_postinfo!(result, "The cake is a lie.");
+		// No weight is refunded
+		assert_eq!(extract_actual_weight(&result, &info), info.weight);
+
+		// Refund weight when err
+		let good_call = Call::Example(ExampleCall::foobar(false, start_weight, Some(end_weight)));
+		let bad_call = Call::Example(ExampleCall::foobar(true, start_weight, Some(end_weight)));
+		let batch_calls = vec![good_call, bad_call];
+		let batch_len = batch_calls.len() as Weight;
+		let call = Call::Utility(UtilityCall::batch_all(batch_calls));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_err_ignore_postinfo!(result, "The cake is a lie.");
+		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
+
+		// Partial batch completion
+		let good_call = Call::Example(ExampleCall::foobar(false, start_weight, Some(end_weight)));
+		let bad_call = Call::Example(ExampleCall::foobar(true, start_weight, Some(end_weight)));
+		let batch_calls = vec![good_call, bad_call.clone(), bad_call];
+		let call = Call::Utility(UtilityCall::batch_all(batch_calls));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(1));
+		assert_err_ignore_postinfo!(result, "The cake is a lie.");
+		assert_eq!(
+			extract_actual_weight(&result, &info),
+			// Real weight is 2 calls at end_weight
+			<Test as Trait>::WeightInfo::batch_all(2) + end_weight * 2,
+		);
 	});
 }

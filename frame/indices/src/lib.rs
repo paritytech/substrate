@@ -20,6 +20,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod mock;
+pub mod address;
+mod tests;
+mod benchmarking;
+pub mod weights;
+
 use sp_std::prelude::*;
 use codec::Codec;
 use sp_runtime::traits::{
@@ -28,26 +34,12 @@ use sp_runtime::traits::{
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
-use frame_support::weights::Weight;
 use frame_system::{ensure_signed, ensure_root};
 use self::address::Address as RawAddress;
-
-mod mock;
-pub mod address;
-mod tests;
-mod benchmarking;
-mod default_weights;
+pub use weights::WeightInfo;
 
 pub type Address<T> = RawAddress<<T as frame_system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-
-pub trait WeightInfo {
-	fn claim() -> Weight;
-	fn transfer() -> Weight;
-	fn free() -> Weight;
-	fn force_transfer() -> Weight;
-	fn freeze() -> Weight;
-}
 
 /// The module's config trait.
 pub trait Trait: frame_system::Trait {

@@ -123,6 +123,13 @@ impl RecordProof {
 	}
 }
 
+/// Will return [`RecordProof::No`] as default value.
+impl Default for RecordProof {
+	fn default() -> Self {
+		Self::No
+	}
+}
+
 impl From<bool> for RecordProof {
 	fn from(val: bool) -> Self {
 		if val {
