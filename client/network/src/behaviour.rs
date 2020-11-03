@@ -68,8 +68,8 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	#[behaviour(ignore)]
 	role: Role,
 
-	// TODO: Does this really belong here? Why require matching on these in the first place? Why not
-	// offer a oneshot when sending a request?
+	// TODO: Does this really belong here? Why require matching on these when reponses come in? Why
+	// not offer a oneshot when sending a request?
 	#[behaviour(ignore)]
 	block_request_protocol_name: String,
 	#[behaviour(ignore)]
@@ -285,6 +285,48 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	pub fn light_client_request(&mut self, r: light_client_handler::Request<B>) -> Result<(), light_client_handler::Error> {
 		self.light_client_handler.request(r)
 	}
+
+	fn on_block_response(
+		&mut self,
+		peer: &PeerId,
+		// TODO: shorten
+		request_id: libp2p::request_response::RequestId,
+		result: Result<Vec<u8>, request_responses::RequestFailure>,
+	) -> Result<CustomMessageOutcome<B>, OnBlockResponseError>{
+		let protobuf_response = schema::v1::BlockResponse::decode(&result?[..])?;
+		let ev = self.substrate.on_block_response(peer.clone(), request_id,  protobuf_response);
+		Ok(ev)
+	}
+
+	fn on_finality_response(
+		&mut self,
+		peer: &PeerId,
+		// TODO: shorten
+		request_id: libp2p::request_response::RequestId,
+		result: Result<Vec<u8>, request_responses::RequestFailure>,
+	) -> Result<CustomMessageOutcome<B>, OnFinalityResponseError>{
+		let protobuf_response = schema::v1::finality::FinalityProofResponse::decode(
+			&result?[..],
+		)?;
+		let ev = self.substrate.on_finality_proof_response(
+			peer.clone(),
+			request_id,
+			protobuf_response.proof,
+		);
+		Ok(ev)
+	}
+}
+
+#[derive(derive_more::Display, derive_more::From)]
+enum OnBlockResponseError {
+	Request(request_responses::RequestFailure),
+	Decode(prost::DecodeError),
+}
+
+#[derive(derive_more::Display, derive_more::From)]
+enum OnFinalityResponseError {
+	Request(request_responses::RequestFailure),
+	Decode(prost::DecodeError),
 }
 
 fn reported_roles_to_observed_role(local_role: &Role, remote: &PeerId, roles: Roles) -> ObservedRole {
@@ -441,27 +483,31 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Even
 				// `RequestFinished` event without a result. Then the NetworkWorker can capture this
 				// in a metric.
 				if protocol == self.finality_request_protocol_name {
-					let proof_response = crate::schema::v1::finality::FinalityProofResponse::decode(&result.unwrap()[..])
-						.unwrap();
-					let ev = self.substrate.on_finality_proof_response(peer, request_id, proof_response.proof);
-					self.inject_event(ev);
-				} else if protocol == self.block_request_protocol_name {
-					let resp = match result {
-						Ok(resp) => resp,
-						Err(e) => {
+					match self.on_finality_response(&peer, request_id, result) {
+						Ok(ev) => self.inject_event(ev),
+						Err(err) => {
 							debug!(
-								target: "sub-libp2p",
-								"Block request to {:?} failed with: {:?}",
-								peer, e,
+								target: "sync",
+								"Handling finality response from {} failed with: {}",
+								peer, err,
 							);
-							self.substrate.on_block_request_failed(&peer);
-							return
-						}
-					};
-					let protobuf_response = crate::schema::v1::BlockResponse::decode(&resp[..]).unwrap();
 
-					let ev = self.substrate.on_block_response(peer, request_id,  protobuf_response);
-					self.inject_event(ev);
+							// TODO: Should protocol.rs be notified of the failure?
+						}
+					}
+				} else if protocol == self.block_request_protocol_name {
+					match self.on_block_response(&peer, request_id, result) {
+						Ok(ev) => self.inject_event(ev),
+						Err(err) => {
+							debug!(
+								target: "sync",
+								"Handling block response from {} failed with: {}",
+								peer, err,
+							);
+
+							self.substrate.on_block_request_failed(&peer);
+						}
+					}
 				} else {
 					self.events.push_back(BehaviourOut::RequestFinished {
 						request_id,
