@@ -389,7 +389,6 @@ impl<T: SigningTypes> Clone for Account<T> where
 /// type Public = MultiSigner: From<sr25519::Public>;
 /// type Signature = MulitSignature: From<sr25519::Signature>;
 /// ```
-
 // TODO [#5662] Potentially use `IsWrappedBy` types, or find some other way to make it easy to
 // obtain unwrapped crypto (and wrap it back).
 pub trait AppCrypto<Public, Signature> {
