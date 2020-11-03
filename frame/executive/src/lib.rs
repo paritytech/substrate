@@ -248,7 +248,7 @@ where
 			digest,
 			frame_system::InitKind::Full,
 		);
-		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
+		weight = weight.saturating_add(<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number));
 		weight = weight.saturating_add(<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number))
 			.saturating_add(<System::BlockExecutionWeight as frame_support::traits::Get<_>>::get());
 		<frame_system::Module::<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
@@ -1097,6 +1097,7 @@ mod tests {
 			let frame_system_upgrade_weight = <frame_system::Module::<Runtime> as OnRuntimeUpgrade>::on_runtime_upgrade();
 			let custom_runtime_upgrade_weight = CustomOnRuntimeUpgrade::on_runtime_upgrade();
 			let runtime_upgrade_weight = <AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
+			let frame_system_on_initialize_weight = <frame_system::Module<Runtime> as OnInitialize<u64>>::on_initialize(block_number);
 			let on_initialize_weight = <AllModules as OnInitialize<u64>>::on_initialize(block_number);
 			let base_block_weight = <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
 
@@ -1106,6 +1107,7 @@ mod tests {
 				frame_system_upgrade_weight +
 				custom_runtime_upgrade_weight +
 				runtime_upgrade_weight +
+				frame_system_on_initialize_weight +
 				on_initialize_weight +
 				base_block_weight,
 			);
