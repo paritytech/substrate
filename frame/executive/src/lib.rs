@@ -248,7 +248,9 @@ where
 			digest,
 			frame_system::InitKind::Full,
 		);
-		weight = weight.saturating_add(<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number));
+		weight = weight.saturating_add(
+			<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number)
+		);
 		weight = weight.saturating_add(<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number))
 			.saturating_add(<System::BlockExecutionWeight as frame_support::traits::Get<_>>::get());
 		<frame_system::Module::<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
