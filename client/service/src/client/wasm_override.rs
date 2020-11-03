@@ -233,12 +233,9 @@ mod tests {
 			match scraped {
 				Err(e) => {
 					match e {
-						sp_blockchain::Error::Msg(msg) => {
-							let is_match = msg
-								.matches("Duplicate WASM Runtimes found")
-								.map(ToString::to_string)
-								.collect::<Vec<String>>();
-							assert!(is_match.len() >= 1)
+						sp_blockchain::Error::DuplicateWasmRuntime(duplicates) => {
+							assert_eq!(duplicates.get(0).map(|x| x.as_str()), Some("test0.wasm"));
+							assert_eq!(duplicates.get(1).map(|x| x.as_str()), Some("test1.wasm"));
 						},
 						_ => panic!("Test should end with Msg Error Variant")
 					}
