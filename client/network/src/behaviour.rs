@@ -18,7 +18,7 @@ use crate::{
 	config::{ProtocolId, Role}, light_client_handler, peer_info, request_responses,
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	protocol::{message::{self, Roles}, CustomMessageOutcome, NotificationsSink, Protocol},
-	ObservedRole, DhtEvent, ExHashT,
+	ObservedRole, DhtEvent, ExHashT, schema,
 };
 
 use bytes::Bytes;
@@ -321,20 +321,16 @@ Behaviour<B, H> {
 			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
 				self.events.push_back(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)),
 			CustomMessageOutcome::BlockRequest { target, request } => {
-
-				let protobuf_req = crate::schema::v1::BlockRequest {
+				let protobuf_req = schema::v1::BlockRequest {
 					fields: request.fields.to_be_u32(),
 					from_block: match request.from {
 						message::FromBlock::Hash(h) =>
-							Some(crate::schema::v1::block_request::FromBlock::Hash(h.encode())),
+							Some(schema::v1::block_request::FromBlock::Hash(h.encode())),
 						message::FromBlock::Number(n) =>
-							Some(crate::schema::v1::block_request::FromBlock::Number(n.encode())),
+							Some(schema::v1::block_request::FromBlock::Number(n.encode())),
 					},
 					to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
-					direction: match request.direction {
-						message::Direction::Ascending => crate::schema::v1::Direction::Ascending as i32,
-						message::Direction::Descending => crate::schema::v1::Direction::Descending as i32,
-					},
+					direction: request.direction as i32,
 					max_blocks: request.max.unwrap_or(0),
 				};
 
@@ -343,31 +339,55 @@ Behaviour<B, H> {
 					log::warn!(
 						target: "sync",
 						"Failed to encode block request {:?}: {:?}",
-						protobuf_req,
-						err
+						protobuf_req, err
 					);
-					panic!();
-					// return SendRequestOutcome::EncodeError(err);
+
+					// TODO: Should we notify protocol.rs or sync.rs?
+					return
 				}
 
-				let request_id = self.request_responses.send_request(&target, &self.block_request_protocol_name, buf).unwrap();
-				// TODO: differentiate between the two ids.
-				self.substrate.on_block_request_started(target, request.id, request_id);
+				match self.request_responses.send_request(
+					&target, &self.block_request_protocol_name, buf,
+				) {
+					Ok(request_id) => self.substrate.on_block_request_started(
+						target, request.id, request_id,
+					),
+					// TODO: Should we notify protocol.rs or sync.rs?
+					Err(err) => log::warn!(
+						target: "sync",
+						"Failed to send block request {:?}: {:?}",
+						protobuf_req, err
+					),
+				};
 			},
 			CustomMessageOutcome::FinalityProofRequest { target, block_hash, request } => {
-				let protobuf_rq = crate::schema::v1::finality::FinalityProofRequest {
+				let protobuf_req = crate::schema::v1::finality::FinalityProofRequest {
 					block_hash: block_hash.encode(),
 					request,
 				};
 
-				let mut buf = Vec::with_capacity(protobuf_rq.encoded_len());
-				if let Err(err) = protobuf_rq.encode(&mut buf) {
-					log::warn!("failed to encode finality proof request {:?}: {:?}", protobuf_rq, err);
+				let mut buf = Vec::with_capacity(protobuf_req.encoded_len());
+				if let Err(err) = protobuf_req.encode(&mut buf) {
+					log::warn!(
+						target: "sync",
+						"Failed to encode finality proof request {:?}: {:?}",
+						protobuf_req, err,
+					);
 					return;
 				}
-				let request_id = self.request_responses.send_request(&target, &self.finality_request_protocol_name, buf).unwrap();
 
-				self.substrate.on_finality_proof_request_started(target, block_hash, request_id);
+				match self.request_responses.send_request(
+					&target, &self.finality_request_protocol_name, buf,
+				) {
+					Ok(request_id) => self.substrate.on_finality_proof_request_started(
+						target, block_hash, request_id,
+					),
+					Err(err) => log::warn!(
+						target: "sync",
+						"Failed to send block request {:?}: {:?}",
+						protobuf_req, err
+					),
+				}
 			},
 			CustomMessageOutcome::NotificationStreamOpened { remote, protocols, roles, notifications_sink } => {
 				let role = reported_roles_to_observed_role(&self.role, &remote, roles);
