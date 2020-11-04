@@ -21,3 +21,5 @@ Observable differences include:
 We currently do not aim to make unobservable behaviors, such as state root, to be the same. We also don't aim to follow the exact same transaction / receipt format. However, given one Ethereum transaction and one Substrate account's private key, one should be able to convert any Ethereum transaction into a transaction compatible with this module.
 
 The gas configurations are currently hard-coded to the Istanbul hard fork. It can later be expanded to support earlier hard fork configurations.
+
+License: Apache-2.0
