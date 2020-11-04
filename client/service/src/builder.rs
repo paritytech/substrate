@@ -210,7 +210,7 @@ enum KeystoreContainerInner {
 }
 
 /// Construct and hold different layers of Keystore wrappers
-pub enum KeystoreContainer(KeystoreContainerInner);
+pub struct KeystoreContainer(KeystoreContainerInner);
 
 impl KeystoreContainer {
 	/// Construct KeystoreContainer
@@ -245,7 +245,7 @@ impl KeystoreContainer {
 	/// The function will return None if the available keystore is not a local keystore.
 	pub fn local_keystore(&self) -> Option<LocalKeystore> {
 		match self.0 {
-			KeystoreContainerInner::Local(ref keystore) => Some(self.keystore.clone()),
+			KeystoreContainerInner::Local(ref keystore) => Some(keystore.clone()),
 		}
 	}
 }

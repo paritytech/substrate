@@ -38,7 +38,7 @@ use sp_keystore::{
 	SyncCryptoStore,
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
-use sp_application_crypto::{ed25519, sr25519, ecdsa, AppPublic, AppPair, AppKey, IsWrappedBy};
+use sp_application_crypto::{ed25519, sr25519, ecdsa, AppPair, AppKey, IsWrappedBy};
 
 use crate::{Result, Error};
 
@@ -63,23 +63,6 @@ impl LocalKeystore {
 	/// Places it into the file system store.
 	pub fn generate<Pair: AppPair>(&self) -> Result<Pair> {
 		self.0.read().generate::<Pair>()
-	}
-
-	/// Create a new key from seed.
-	///
-	/// Does not place it into the file system store.
-	pub fn insert_ephemeral_from_seed<Pair: AppPair>(&self, seed: &str) -> Result<Pair> {
-		self.0.write().insert_ephemeral_from_seed::<Pair>(seed)
-	}
-
-	/// Get public keys of all stored keys that match the key type.
-	///
-	/// This will just use the type of the public key (a list of which to be returned) in order
-	/// to determine the key type. Unless you use a specialized application-type public key, then
-	/// this only give you keys registered under generic cryptography, and will not return keys
-	/// registered under the application type.
-	pub fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {
-		self.0.read().public_keys::<Public>()
 	}
 
 	/// Get a key pair for the given public key.
@@ -514,28 +497,6 @@ impl KeystoreInner {
 		self.generate_by_type::<Pair::Generic>(Pair::ID).map(Into::into)
 	}
 
-	/// Create a new key from seed.
-	///
-	/// Does not place it into the file system store.
-	pub fn insert_ephemeral_from_seed<Pair: AppPair>(&mut self, seed: &str) -> Result<Pair> {
-		self.insert_ephemeral_from_seed_by_type::<Pair::Generic>(seed, Pair::ID).map(Into::into)
-	}
-
-	/// Get public keys of all stored keys that match the key type.
-	///
-	/// This will just use the type of the public key (a list of which to be returned) in order
-	/// to determine the key type. Unless you use a specialized application-type public key, then
-	/// this only give you keys registered under generic cryptography, and will not return keys
-	/// registered under the application type.
-	pub fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {
-		self.raw_public_keys(Public::ID)
-			.map(|v| {
-				v.into_iter()
-				 .map(|k| Public::from_slice(k.as_slice()))
-				 .collect()
-			})
-	}
-
 	/// Get a key pair for the given public key.
 	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Pair> {
 		self.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID).map(Into::into)
@@ -569,11 +530,26 @@ mod tests {
 		crypto::Ss58Codec,
 		testing::SR25519,
 	};
-	use sp_application_crypto::{ed25519, sr25519};
+	use sp_application_crypto::{ed25519, sr25519, AppPublic};
 	use std::{
 		fs,
 		str::FromStr,
 	};
+
+	impl KeystoreInner {
+		fn insert_ephemeral_from_seed<Pair: AppPair>(&mut self, seed: &str) -> Result<Pair> {
+			self.insert_ephemeral_from_seed_by_type::<Pair::Generic>(seed, Pair::ID).map(Into::into)
+		}
+
+		fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {
+			self.raw_public_keys(Public::ID)
+				.map(|v| {
+					v.into_iter()
+						.map(|k| Public::from_slice(k.as_slice()))
+						.collect()
+				})
+		}
+	}
 
 	#[test]
 	fn basic_store() {
