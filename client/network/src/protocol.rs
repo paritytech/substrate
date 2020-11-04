@@ -55,7 +55,6 @@ use std::sync::Arc;
 use std::fmt::Write;
 use std::{io, iter, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
-use wasm_timer::Instant;
 
 mod generic_proto;
 
@@ -250,7 +249,7 @@ struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any.
 	// TODO: Is Instant stil needed?
-	block_request: Option<(Instant, message::BlockRequest<B>, Option<libp2p::request_response::RequestId>)>,
+	block_request: Option<(message::BlockRequest<B>, Option<libp2p::request_response::RequestId>)>,
 	// TODO: Document
 	finality_request: Option<(message::FinalityProofRequest<B::Hash>, Option<libp2p::request_response::RequestId>)>,
 	/// Holds a set of transactions known to this peer.
@@ -707,9 +706,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		};
 
 		let block_request = match &peer.block_request {
-			Some((_, _req, Some(id))) if *id == request_id => peer.block_request
+			Some((_req, Some(id))) if *id == request_id => peer.block_request
 				.take()
-				.expect("id to be Some").1,
+				.expect("id to be Some").0,
 			Some(_) | None => return CustomMessageOutcome::None,
 		};
 
@@ -1428,12 +1427,12 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	) {
 		let peer = self.context_data.peers.get_mut(&who).unwrap();
 
-		if peer.block_request.as_mut().unwrap().1.id != request_id {
+		if peer.block_request.as_mut().unwrap().0.id != request_id {
 			// TODO: Handle. likely fine. Some other request replaced the current one.
 			panic!();
 		}
 
-		peer.block_request.as_mut().unwrap().2 = Some(request_response_request_id);
+		peer.block_request.as_mut().unwrap().1 = Some(request_response_request_id);
 	}
 
 	fn format_stats(&self) -> String {
@@ -1536,7 +1535,7 @@ fn update_peer_request<B: BlockT, H: ExHashT>(
 	if let Some(ref mut peer) = peers.get_mut(who) {
 		request.id = peer.next_request_id;
 		peer.next_request_id += 1;
-		peer.block_request = Some((Instant::now(), request.clone(), None));
+		peer.block_request = Some((request.clone(), None));
 	}
 }
 
