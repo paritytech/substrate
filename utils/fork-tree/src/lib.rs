@@ -720,12 +720,21 @@ mod node_implementation {
 			let mut stack = Vec::new();
 
 			// Loop until we've got a single completely decoded node on the stack.
-			while !(stack.len() == 1 && stack.last().map(complete).unwrap_or(false)) {
+			while stack.len() != 1 || !stack.last().map(complete).unwrap_or(false) {
 				// If the top-most node is complete, pop it and push it as a child of the node
 				// beneath it.
 				if stack.last().map(complete).unwrap_or(false) {
-					let last = stack.pop().expect("We already checked this");
-					let latest = stack.last_mut().expect("We know there were 2 items on the stack");
+					let last = stack.pop().expect(
+						"If the stack was empty, the above statement would have returned none; qed"
+					);
+					let latest = stack.last_mut().expect(
+						"In the above while statment, we check if the stack contains a number of \
+						 items different fron 1 OR if the top item is not complete; \
+						 In the above if statement, we check that the top item is complete; \
+						 Therefore, the number of items has to be different fron 1; \
+						 The only case where there are 0 items on the stack is at the start; \
+						 Therefore theremust be 2 or more items on the stack; QED" 
+					);
 					latest.children.push(last);
 					continue;
 				}
