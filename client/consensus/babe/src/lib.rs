@@ -200,58 +200,86 @@ impl Epoch {
 	}
 }
 
+/// Errors encountered by the babe authorship task.
 #[derive(derive_more::Display, Debug)]
-enum Error<B: BlockT> {
+pub enum Error<B: BlockT> {
+	/// Multiple BABE pre-runtime digests
 	#[display(fmt = "Multiple BABE pre-runtime digests, rejecting!")]
 	MultiplePreRuntimeDigests,
+	/// No BABE pre-runtime digest found
 	#[display(fmt = "No BABE pre-runtime digest found")]
 	NoPreRuntimeDigest,
+	/// Multiple BABE epoch change digests
 	#[display(fmt = "Multiple BABE epoch change digests, rejecting!")]
 	MultipleEpochChangeDigests,
+	/// Multiple BABE config change digests
 	#[display(fmt = "Multiple BABE config change digests, rejecting!")]
 	MultipleConfigChangeDigests,
+	/// Could not extract timestamp and slot
 	#[display(fmt = "Could not extract timestamp and slot: {:?}", _0)]
 	Extraction(sp_consensus::Error),
+	/// Could not fetch epoch
 	#[display(fmt = "Could not fetch epoch at {:?}", _0)]
 	FetchEpoch(B::Hash),
+	/// Header rejected: too far in the future
 	#[display(fmt = "Header {:?} rejected: too far in the future", _0)]
 	TooFarInFuture(B::Hash),
+	/// Parent unavailable. Cannot import
 	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
 	ParentUnavailable(B::Hash, B::Hash),
+	/// Slot number must increase
 	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
 	SlotNumberMustIncrease(u64, u64),
+	/// Header has a bad seal
 	#[display(fmt = "Header {:?} has a bad seal", _0)]
 	HeaderBadSeal(B::Hash),
+	/// Header is unsealed
 	#[display(fmt = "Header {:?} is unsealed", _0)]
 	HeaderUnsealed(B::Hash),
+	/// Slot author not found
 	#[display(fmt = "Slot author not found")]
 	SlotAuthorNotFound,
+	/// Secondary slot assignments are disabled for the current epoch.
 	#[display(fmt = "Secondary slot assignments are disabled for the current epoch.")]
 	SecondarySlotAssignmentsDisabled,
+	/// Bad signature
 	#[display(fmt = "Bad signature on {:?}", _0)]
 	BadSignature(B::Hash),
+	/// Invalid author: Expected secondary author
 	#[display(fmt = "Invalid author: Expected secondary author: {:?}, got: {:?}.", _0, _1)]
 	InvalidAuthor(AuthorityId, AuthorityId),
+	/// No secondary author expected.
 	#[display(fmt = "No secondary author expected.")]
 	NoSecondaryAuthorExpected,
+	/// VRF verification of block by author failed
 	#[display(fmt = "VRF verification of block by author {:?} failed: threshold {} exceeded", _0, _1)]
 	VRFVerificationOfBlockFailed(AuthorityId, u128),
+	/// VRF verification failed
 	#[display(fmt = "VRF verification failed: {:?}", _0)]
 	VRFVerificationFailed(SignatureError),
+	/// Could not fetch parent header
 	#[display(fmt = "Could not fetch parent header: {:?}", _0)]
 	FetchParentHeader(sp_blockchain::Error),
+	/// Expected epoch change to happen.
 	#[display(fmt = "Expected epoch change to happen at {:?}, s{}", _0, _1)]
 	ExpectedEpochChange(B::Hash, u64),
+	/// Unexpected config change.
 	#[display(fmt = "Unexpected config change")]
 	UnexpectedConfigChange,
+	/// Unexpected epoch change
 	#[display(fmt = "Unexpected epoch change")]
 	UnexpectedEpochChange,
+	/// Parent block has no associated weight
 	#[display(fmt = "Parent block of {} has no associated weight", _0)]
 	ParentBlockNoAssociatedWeight(B::Hash),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
+	/// Check Inherents error
 	CheckInherents(String),
+	/// Client error
 	Client(sp_blockchain::Error),
+	/// Runtime error
 	Runtime(sp_inherents::Error),
+	/// Fork tree error
 	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
 }
 
@@ -692,7 +720,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 
 /// Extract the BABE pre digest from the given header. Pre-runtime digests are
 /// mandatory, the function will return `Err` if none is found.
-fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
+pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 {
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
