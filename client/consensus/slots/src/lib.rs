@@ -970,13 +970,21 @@ mod test {
 		assert_eq!(last_slot - last_two_claimed.next().unwrap(), 92);
 		assert_eq!(last_slot - last_two_claimed.next().unwrap(), 92 + expected_distance);
 
-		let max_interval = slots_claimed
+		let intervals: Vec<_> = slots_claimed
 			.windows(2)
 			.map(|x| x[1] - x[0])
-			.max();
+			.collect();
 
-		// Check that distance between claimed slots is capped
-		assert_eq!(max_interval, Some(expected_distance));
+		// The key thing is that the distance between claimed slots is capped to `max_interval + 1`
+		// assert_eq!(max_observed_interval, Some(&expected_distance));
+		assert_eq!(intervals.iter().max(), Some(&expected_distance));
+
+		// But lets assert all distances, which we expect to grow linearly until `max_interval + 1`
+		let expected_intervals: Vec<_> = (0..497)
+			.map(|i| (i/2).max(1).min(expected_distance) )
+			.collect();
+
+		assert_eq!(intervals, expected_intervals);
 	}
 }
 
