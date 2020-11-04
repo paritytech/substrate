@@ -1310,8 +1310,6 @@ impl NetworkBehaviour for GenericProto {
 					debug_assert!(false);
 				}
 
-				// TODO: need to pick another connection as a replacement
-
 				if connections.is_empty() {
 					debug!(target: "sub-libp2p", "PSM <= Dropped({})", peer_id);
 					self.peerset.dropped(peer_id.clone());
@@ -1329,6 +1327,17 @@ impl NetworkBehaviour for GenericProto {
 					*entry.get_mut() = PeerState::Banned {
 						timer: delay_id,
 						timer_deadline: Instant::now() + Duration::from_secs(ban_dur),
+					};
+
+				} else if !connections.iter().any(|(_, s)|
+					matches!(s, ConnectionState::Opening | ConnectionState::Open(_)))
+				{
+					debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
+					self.peerset.dropped(peer_id.clone());
+
+					*entry.get_mut() = PeerState::Disabled {
+						connections,
+						banned_until: None
 					};
 
 				} else {
