@@ -146,6 +146,15 @@
 			"website": "https://totemaccounting.com"
 		},
 		{
+			"prefix": 15,
+			"network": "synesthesia",
+			"displayName": "Synesthesia",
+			"symbols": ["SYN"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://synesthesia.network/"
+		},
+		{
 			"prefix": 16,
 			"network": "kulupu",
 			"displayName": "Kulupu",
