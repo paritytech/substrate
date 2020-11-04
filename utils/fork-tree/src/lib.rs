@@ -971,6 +971,7 @@ impl<H, N, V> Iterator for RemovedIterator<H, N, V> {
 #[cfg(test)]
 mod test {
 	use super::{FinalizationResult, ForkTree, Error};
+	use codec::{Encode, Decode};
 
 	#[derive(Debug, PartialEq)]
 	struct TestError;
@@ -1750,5 +1751,73 @@ mod test {
 				.map(|opt| opt.map(|node| node.hash)),
 			Ok(Some("A"))
 		);
+	}
+
+	#[test]
+	fn encoding_and_decoding_works() {
+		let	tree = {
+			let mut tree = ForkTree::<String, u64, u64>::new();
+	
+			//
+			//     - B - C - D - E
+			//    /
+			//   /   - G
+			//  /   /
+			// A - F - H - I
+			//          \
+			//           - L - M
+			//              \
+			//               - O
+			//  \
+			//   — J - K
+			//
+			// (where N is not a part of fork tree)
+			let is_descendent_of = |base: &String, block: &String| -> Result<bool, TestError> {
+				let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "O"];
+				match (&base[..], &block[..]) {
+					("A", b) => Ok(letters.into_iter().any(|n| n == b)),
+					("B", b) => Ok(b == "C" || b == "D" || b == "E"),
+					("C", b) => Ok(b == "D" || b == "E"),
+					("D", b) => Ok(b == "E"),
+					("E", _) => Ok(false),
+					("F", b) => Ok(b == "G" || b == "H" || b == "I" || b == "L" || b == "M" || b == "O"),
+					("G", _) => Ok(false),
+					("H", b) => Ok(b == "I" || b == "L" || b == "M" || b == "O"),
+					("I", _) => Ok(false),
+					("J", b) => Ok(b == "K"),
+					("K", _) => Ok(false),
+					("L", b) => Ok(b == "M" || b == "O"),
+					("M", _) => Ok(false),
+					("O", _) => Ok(false),
+					("0", _) => Ok(true),
+					_ => Ok(false),
+				}
+			};
+	
+			tree.import("A".into(), 1, 10, &is_descendent_of).unwrap();
+	
+			tree.import("B".into(), 2, 9, &is_descendent_of).unwrap();
+			tree.import("C".into(), 3, 8, &is_descendent_of).unwrap();
+			tree.import("D".into(), 4, 7, &is_descendent_of).unwrap();
+			tree.import("E".into(), 5, 6, &is_descendent_of).unwrap();
+	
+			tree.import("F".into(), 2, 5, &is_descendent_of).unwrap();
+			tree.import("G".into(), 3, 4, &is_descendent_of).unwrap();
+	
+			tree.import("H".into(), 3, 3, &is_descendent_of).unwrap();
+			tree.import("I".into(), 4, 2, &is_descendent_of).unwrap();
+			tree.import("L".into(), 4, 1, &is_descendent_of).unwrap();
+			tree.import("M".into(), 5, 2, &is_descendent_of).unwrap();
+			tree.import("O".into(), 5, 3, &is_descendent_of).unwrap();
+	
+			tree.import("J".into(), 2, 4, &is_descendent_of).unwrap();
+			tree.import("K".into(), 3, 11, &is_descendent_of).unwrap();
+	
+			tree
+		};
+
+		let encoded = tree.encode();
+		let decoded = ForkTree::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(tree, decoded);
 	}
 }
