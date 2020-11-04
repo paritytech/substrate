@@ -798,7 +798,7 @@ mod test {
 		let finalized_number = 1;
 		let slot_now = 2;
 
-		let should_backoff: Vec<bool> = (slot_now..100)
+		let should_backoff: Vec<bool> = (slot_now..300)
 			.map(move |s| {
 				let b = strategy.should_backoff(head_number, head_slot, finalized_number, s);
 				// Chain is still advancing (by someone else)
@@ -809,7 +809,40 @@ mod test {
 			.collect();
 
 		// Should always be true after a short while, since the chain is advancing but finality is stalled
-		let expected: Vec<bool> = (slot_now..100).map(|s| s > 8).collect();
+		let expected: Vec<bool> = (slot_now..300).map(|s| s > 8).collect();
+		assert_eq!(should_backoff, expected);
+	}
+
+	#[test]
+	fn should_never_backoff_if_max_interval_is_reached() {
+		let strategy = SimpleBackoffAuthoringBlocksStrategy::<NumberFor<Block>> {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
+
+		// The limit `max_interval` is used when the unfinalized chain grows to
+		// 	`max_interval * authoring_bias + unfinalized_slack`,
+		// which for the above parameters becomes
+		// 	100 * 2 + 5 = 205.
+		// Hence we trigger this with head_number > finalized_number + 205.
+		let head_number = 207;
+		let finalized_number = 1;
+
+		// The limit is then used once the current slot is `max_interval` ahead of slot of the head.
+		let head_slot = 1;
+		let slot_now = 2;
+
+		// let starting_slot = slot_now;
+		let max_interval = strategy.max_interval;
+
+		let should_backoff: Vec<bool> = (slot_now..200)
+			.map(|s| strategy.should_backoff(head_number, head_slot, finalized_number, s))
+			.collect();
+
+		// Should backoff (true) until we are `max_interval` number of slots ahead of the chain
+		// head slot, then we never backoff (false).
+		let expected: Vec<bool> = (slot_now..200).map(|s| s <= max_interval + head_slot).collect();
 		assert_eq!(should_backoff, expected);
 	}
 
