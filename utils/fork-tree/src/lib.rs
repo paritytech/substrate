@@ -211,10 +211,12 @@ impl<H, N, V> ForkTree<H, N, V> where
 			// since we will begin exploring a new branch
 			if !expanded {
 				for child in &node.children {
+					// we always backtrack to the parent after exploring one branch
+					// so that we can update its max depth before exploring the rest of
+					// the branches
 					stack.push((node, depth, true));
 					stack.push((child, depth + 1, false));
 				}
-				stack.push((node, depth, true));
 				current_max_depth = depth;
 				continue;
 			}
@@ -232,7 +234,11 @@ impl<H, N, V> ForkTree<H, N, V> where
 		let mut stack = Vec::from_iter(self.roots.iter_mut());
 		while let Some(node) = stack.pop() {
 			node.children.sort_by_key(|n| {
-				let max_depth = max_depths.get(&n.hash).expect("");
+				let max_depth = max_depths.get(&n.hash).expect(
+					"fails on unknown hash; \
+					 all tree node hashes have been added previously; \
+					 we only fetch tree node hashes; qed"
+				);
 				Reverse(max_depth)
 			});
 
@@ -737,7 +743,7 @@ mod node_implementation {
 				});
 			}
 
-			Ok(stack.pop().expect("checked"))
+			Ok(stack.pop().expect("fails if stack is empty; exit condition of loop above ensures stack has one element; qed"))
 		}
 	}
 
@@ -1111,7 +1117,6 @@ mod test {
 			Ok(None),
 		);
 	}
-
 
 	#[test]
 	fn import_doesnt_revert() {
@@ -1737,5 +1742,4 @@ mod test {
 			Ok(Some("A"))
 		);
 	}
-
 }
