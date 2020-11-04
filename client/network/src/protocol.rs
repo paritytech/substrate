@@ -1403,36 +1403,61 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	// TODO: Comment
-	// Informs sync of the request id.
+	/// Notify [`Protocol`] that the finality proof request for the given block hash has been
+	/// started and that the response for this request will be identified with the given request id.
+	//
+	// TODO: This could be simplified by having `RequestResponses::send_request` take a
+	// `oneshot::Sender` to send the response into.
 	pub fn on_finality_proof_request_started(
 		&mut self,
 		who: PeerId,
 		block_hash: B::Hash,
 		request_id: libp2p::request_response::RequestId,
 	) {
-		if let Some(Peer { finality_request: Some(req), ..}) = self.context_data.peers.get_mut(&who) {
-			if req.0.block == block_hash {
-				debug_assert!(req.1.is_none());
-				req.1 = Some(request_id);
+		let peer = match self.context_data.peers.get_mut(&who) {
+			Some(peer) => peer,
+			None => return,
+		};
+
+		if let Peer { finality_request: Some((req, id)), ..} = peer {
+			if req.block == block_hash {
+				debug_assert!(
+					id.is_none(),
+					"Expect `on_finality_proof_request_started` not to be called twice for the \
+					 same request.",
+				);
+				*id = Some(request_id);
 			}
 		}
 	}
 
+	/// Notify [`Protocol`] that the block request with the block request id `request_id` has been
+	/// started and that the response for this request will be identified with the given request
+	/// responses request id.
+	//
+	// TODO: This could be simplified by having `RequestResponses::send_request` take a
+	// `oneshot::Sender` to send the response into.
 	pub fn on_block_request_started(
 		&mut self,
 		who: PeerId,
 		request_id: u64,
 		request_response_request_id: libp2p::request_response::RequestId,
 	) {
-		let peer = self.context_data.peers.get_mut(&who).unwrap();
+		let peer = match self.context_data.peers.get_mut(&who) {
+			Some(peer) => peer,
+			None => return,
+		};
 
-		if peer.block_request.as_mut().unwrap().0.id != request_id {
-			// TODO: Handle. likely fine. Some other request replaced the current one.
-			panic!();
+		if let Peer { block_request: Some((req, id)), ..} = peer {
+			if req.id == request_id {
+				debug_assert!(
+					id.is_none(),
+					"Expect `on_block_request_started` not to be called twice for the \
+					 same request.",
+				);
+				*id = Some(request_response_request_id);
+			}
 		}
-
-		peer.block_request.as_mut().unwrap().1 = Some(request_response_request_id);
 	}
 
 	fn format_stats(&self) -> String {
