@@ -19,7 +19,7 @@
 use crate::worker::{node::Node, WsTrans};
 use libp2p::Multiaddr;
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 use std::sync::Arc;
 
 #[derive(Debug, Default)]
@@ -28,11 +28,20 @@ pub struct NodePool {
 }
 
 impl NodePool {
-	pub fn get_or_create(&self, transport: WsTrans, addr: Multiaddr) -> Arc<Mutex<Node<WsTrans>>> {
-		self.nodes
-			.lock()
-			.entry(addr.clone())
-			.or_insert_with(|| Arc::new(Node::new(transport, addr).into()))
-			.clone()
+	pub fn get_or_create(
+		&self,
+		transport: WsTrans,
+		addr: Multiaddr,
+	) -> (Arc<Mutex<Node<WsTrans>>>, bool) {
+		let mut nodes = self.nodes.lock();
+		let entry = nodes.entry(addr.clone());
+		let new = matches!(entry, Entry::Vacant(..));
+
+		(
+			entry
+				.or_insert_with(|| Arc::new(Node::new(transport, addr).into()))
+				.clone(),
+			new,
+		)
 	}
 }

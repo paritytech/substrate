@@ -58,36 +58,49 @@ where
 			return;
 		}
 
-		if let Some(span) = ctx.scope().find(|x| x.name() == TELEMETRY_LOG_SPAN) {
-			let id = span.id().into_u64();
-			if let Some(sender) = self.0.senders.0.lock().get_mut(&id) {
-				let mut attrs = TelemetryAttrs::new(id);
-				let mut vis = TelemetryAttrsVisitor(&mut attrs);
-				event.record(&mut vis);
+		if let Some(span) = ctx.lookup_current() {
+			let parents = span.parents();
 
-				match attrs {
-					TelemetryAttrs {
-						message_verbosity: Some(message_verbosity),
-						json: Some(json),
-						..
-					} => {
-						if let Err(err) = sender.try_send((
-							message_verbosity
-								.try_into()
-								.expect("telemetry log message verbosity are u8; qed"),
-							json,
-						)) {
-							log::warn!(
-								target: "telemetry",
-								"Ignored telemetry message because of error on channel: {:?}",
-								err,
+			if let Some(span) = std::iter::once(span)
+				.chain(parents)
+				.find(|x| x.name() == TELEMETRY_LOG_SPAN)
+			{
+				let id = span.id().into_u64();
+				if let Some(sender) = self.0.senders.0.lock().get_mut(&id) {
+					let mut attrs = TelemetryAttrs::new(id);
+					let mut vis = TelemetryAttrsVisitor(&mut attrs);
+					event.record(&mut vis);
+
+					match attrs {
+						TelemetryAttrs {
+							message_verbosity: Some(message_verbosity),
+							json: Some(json),
+							..
+						} => {
+							eprintln!(
+								//target: "telemetry",
+								"###### sent message as {}: {}", id, json,
 							);
+							if let Err(err) = sender.try_send((
+								message_verbosity
+									.try_into()
+									.expect("telemetry log message verbosity are u8; qed"),
+								json.clone(),
+							)) {
+								// TODO logs dont work here
+								log::warn!(
+									target: "telemetry",
+									"Ignored telemetry message because of error on channel: {:?}",
+									err,
+								);
+							}
 						}
+						_ => panic!("missing fields in telemetry log: {:?}", event),
 					}
-					_ => panic!("missing fields in telemetry log: {:?}", event),
+				} else {
+					// TODO logs dont work here
+					log::trace!(target: "telemetry", "Telemetry not set");
 				}
-			} else {
-				log::trace!(target: "telemetry", "Telemetry not set");
 			}
 		}
 	}

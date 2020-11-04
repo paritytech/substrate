@@ -61,6 +61,8 @@ pub enum TelemetryWorkerEvent {
 pub struct TelemetryWorker {
 	/// List of nodes with their maximum verbosity level.
 	nodes: Vec<(Arc<Mutex<node::Node<WsTrans>>>, u8)>,
+	/// Force `poll()` to return `Connected`.
+	force_connected: bool,
 }
 
 pub trait StreamAndSink<I>: Stream + Sink<I> {}
@@ -120,20 +122,33 @@ impl TelemetryWorker {
 			CONNECT_TIMEOUT
 		).boxed();
 
+		let mut force_connected = false;
+		let nodes = endpoints.into_iter().map(|(addr, verbosity)| {
+			let node = if let Some(node_pool) = node_pool {
+				let (node, is_new) = node_pool.get_or_create(transport.clone(), addr);
+				if !is_new {
+					force_connected = true;
+				}
+				node
+			} else {
+				Arc::new(Mutex::new(node::Node::new(transport.clone(), addr)))
+			};
+			(node, verbosity)
+		}).collect();
+
 		Ok(TelemetryWorker {
-			nodes: endpoints.into_iter().map(|(addr, verbosity)| {
-				let node = if let Some(node_pool) = node_pool {
-					node_pool.get_or_create(transport.clone(), addr)
-				} else {
-					Arc::new(Mutex::new(node::Node::new(transport.clone(), addr)))
-				};
-				(node, verbosity)
-			}).collect()
+			nodes,
+			force_connected,
 		})
 	}
 
 	/// Polls the worker for events that happened.
 	pub fn poll(&mut self, cx: &mut Context) -> Poll<TelemetryWorkerEvent> {
+		if self.force_connected {
+			self.force_connected = false;
+			return Poll::Ready(TelemetryWorkerEvent::Connected);
+		}
+
 		for (node, _) in &mut self.nodes {
 			loop {
 				match node::Node::poll(Pin::new(&mut node.lock()), cx) {
