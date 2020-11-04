@@ -38,21 +38,35 @@ use tracing::{
 	span::{Attributes, Id, Record},
 	subscriber::Subscriber,
 };
-use tracing_subscriber::{CurrentSpan, layer::{Layer, Context}, EnvFilter};
+use tracing_subscriber::{
+	fmt::time::ChronoLocal,
+	CurrentSpan,
+	EnvFilter,
+	layer::{self, Layer, Context},
+	fmt as tracing_fmt,
+	Registry,
+};
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 use tracing_subscriber::reload::Handle;
-use tracing_subscriber::fmt::Formatter;
 use once_cell::sync::OnceCell;
 use tracing_subscriber::filter::Directive;
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 
-static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, Formatter>> = OnceCell::new();
+// The layered Subscriber as built up in `init_logger()`.
+// Used in the reload `Handle`.
+type SCSubscriber<
+	N = tracing_fmt::format::DefaultFields,
+	E = logging::EventFormat<ChronoLocal>,
+	W = fn() -> std::io::Stderr
+> = layer::Layered<tracing_fmt::Layer<Registry, N, E, W>, Registry>;
+
+static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, SCSubscriber>> = OnceCell::new();
 
 /// Initialize FILTER_RELOAD_HANDLE, only possible once
-pub fn set_reload_handle(handle: Handle<EnvFilter, Formatter>) {
+pub fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
 	let _ = FILTER_RELOAD_HANDLE.set(handle);
 }
 

@@ -16,7 +16,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 log = "0.4.11"
 atty = "0.2.13"
 regex = "1.3.4"
-ansi_term = "0.12.1"
 tokio = { version = "0.2.21", features = [ "signal", "rt-core", "rt-threaded", "blocking" ] }
 futures = "0.3.4"
 fdlimit = "0.2.1"
