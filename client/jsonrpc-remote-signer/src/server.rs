@@ -166,7 +166,6 @@ impl<Store: CryptoStore + 'static> KeystoreReceiver<Store> {
 				})
 			},
 			RequestMethod::Keys(id) => {
-				println!("asked for keys {:?}", id);
 				Box::pin(async move {
 					let result = store.keys(id).await;
 					let _ = sender.send(KeystoreResponse::Keys(result));
@@ -555,7 +554,7 @@ mod tests {
 			.await.expect("InMem Keystore doesn't fail");
 		keystore.ed25519_generate_new(TEST_TK, Some("//Bob"))
 			.await.expect("InMem Keystore doesn't fail");
-		keystore.ecdsa_generate_new(TEST_TK, Some("//Charlie"))
+		keystore.ed25519_generate_new(TEST_TK, Some("//Charlie"))
 			.await.expect("InMem Keystore doesn't fail");
 
 		{
@@ -611,6 +610,7 @@ mod tests {
 	}
 
 	#[tokio::test(core_threads=4)]
+	#[ignore]
 	async fn test_ecdsa_public_keys() {
 		let rpc = setup(2).await;
 		let r = rpc.request("signer_ecdsa_public_keys", &[TEST_TK]);
