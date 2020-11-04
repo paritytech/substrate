@@ -619,13 +619,8 @@ pub struct SimpleBackoffAuthoringBlocksStrategy<N> {
 	/// blocks. Note that depending on the value for `authoring_bias`, there might still be an
 	/// additional wait until block authorship starts getting declined.
 	pub unfinalized_slack: N,
-	/// If finality stalls we will increase the number of declined slots between claimed slots as the
-	/// unfinalized head grows. The `authoring_bias` controls for how many iterations we should stick
-	/// with a given number of declined slots between claimed slots before increasing it.
-	/// Example: with stalled finality and `authoring_bias` set to 1 (t=true, f=false)
-	/// 	slots declined: (t,f), (t,t,f), (t,t,t,f), (t,t,t,t,f), ...
-	/// Example: with stalled finality and `authoring_bias` set to 2
-	/// 	slots declined: (t,f, t,f), (t,t,f, t,t,f), (t,t,t,f, t,t,t,f), ...
+	/// Scales the backoff rate. A higher value effectively means we backoff slower, taking longer
+	/// time to reach the maximum backoff as the unfinalized head of chain grows.
 	pub authoring_bias: N,
 }
 
@@ -832,8 +827,6 @@ mod test {
 		// The limit is then used once the current slot is `max_interval` ahead of slot of the head.
 		let head_slot = 1;
 		let slot_now = 2;
-
-		// let starting_slot = slot_now;
 		let max_interval = strategy.max_interval;
 
 		let should_backoff: Vec<bool> = (slot_now..200)
