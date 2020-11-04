@@ -86,6 +86,13 @@ impl LocalKeystore {
 	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Pair> {
 		self.0.read().key_pair::<Pair>(public)
 	}
+
+	/// Insert a new key.
+	///
+	/// Places it into the file system store.
+	pub fn insert<Pair: AppPair>(&self, suri: &str) -> Result<Pair> {
+		self.0.read().insert(suri)
+	}
 }
 
 #[async_trait]
@@ -532,6 +539,23 @@ impl KeystoreInner {
 	/// Get a key pair for the given public key.
 	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Pair> {
 		self.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID).map(Into::into)
+	}
+
+	fn insert_by_type<Pair: PairT>(&self, key_type: KeyTypeId, suri: &str) -> Result<Pair> {
+		let pair = Pair::from_string(
+			suri,
+			self.password()
+		).map_err(|_| Error::InvalidSeed)?;
+		self.insert_unknown(key_type, suri, pair.public().as_slice())
+			.map_err(|_| Error::Unavailable)?;
+		Ok(pair)
+	}
+
+	/// Insert a new key.
+	///
+	/// Places it into the file system store.
+	pub fn insert<Pair: AppPair>(&self, suri: &str) -> Result<Pair> {
+		self.insert_by_type::<Pair::Generic>(Pair::ID, suri).map(Into::into)
 	}
 }
 
