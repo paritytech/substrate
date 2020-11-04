@@ -551,6 +551,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let logger_pattern = self.log_filters()?;
 		let tracing_receiver = self.tracing_receiver()?;
 		let tracing_targets = self.tracing_targets()?;
+		let telemetry_external_transport = self.telemetry_external_transport()?;
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
@@ -558,7 +559,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			&logger_pattern,
 			tracing_receiver,
 			tracing_targets,
-			self.telemetry_external_transport()?,
+			telemetry_external_transport,
 		)?;
 
 		if let Some(new_limit) = fdlimit::raise_fd_limit() {
