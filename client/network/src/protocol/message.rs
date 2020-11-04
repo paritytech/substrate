@@ -392,6 +392,7 @@ pub mod generic {
 	/// Request block data from a peer.
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct BlockRequest<Hash, Number> {
+		// TODO: Is this used anywhere?
 		/// Unique request id.
 		pub id: RequestId,
 		/// Bits of block data to request.

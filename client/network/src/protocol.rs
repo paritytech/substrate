@@ -124,7 +124,6 @@ mod rep {
 }
 
 struct Metrics {
-	obsolete_requests: Gauge<U64>,
 	peers: Gauge<U64>,
 	queued_blocks: Gauge<U64>,
 	fork_targets: Gauge<U64>,
@@ -136,10 +135,6 @@ struct Metrics {
 impl Metrics {
 	fn register(r: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Metrics {
-			obsolete_requests: {
-				let g = Gauge::new("sync_obsolete_requests", "Number of obsolete requests")?;
-				register(g, r)?
-			},
 			peers: {
 				let g = Gauge::new("sync_peers", "Number of peers we sync with")?;
 				register(g, r)?
@@ -258,9 +253,6 @@ struct Peer<B: BlockT, H: ExHashT> {
 	block_request: Option<(Instant, message::BlockRequest<B>, Option<libp2p::request_response::RequestId>)>,
 	// TODO: Document
 	finality_request: Option<(message::FinalityProofRequest<B::Hash>, Option<libp2p::request_response::RequestId>)>,
-	/// Requests we are no longer interested in.
-	// TODO: Do we still need this at all?
-	obsolete_requests: HashMap<message::RequestId, Instant>,
 	/// Holds a set of transactions known to this peer.
 	known_transactions: LruHashSet<H>,
 	/// Holds a set of blocks known to this peer.
@@ -923,7 +915,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			known_blocks: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_BLOCKS)
 				.expect("Constant is nonzero")),
 			next_request_id: 0,
-			obsolete_requests: HashMap::new(),
 		};
 		self.context_data.peers.insert(who.clone(), peer);
 
@@ -1465,13 +1456,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		use std::convert::TryInto;
 
 		if let Some(metrics) = &self.metrics {
-			let mut obsolete_requests: u64 = 0;
-			for peer in self.context_data.peers.values() {
-				let n = peer.obsolete_requests.len().try_into().unwrap_or(std::u64::MAX);
-				obsolete_requests = obsolete_requests.saturating_add(n);
-			}
-			metrics.obsolete_requests.set(obsolete_requests);
-
 			let n = self.context_data.peers.len().try_into().unwrap_or(std::u64::MAX);
 			metrics.peers.set(n);
 
@@ -1543,6 +1527,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	None,
 }
 
+// TODO: Should this be inlined?
 fn update_peer_request<B: BlockT, H: ExHashT>(
 	peers: &mut HashMap<PeerId, Peer<B, H>>,
 	who: &PeerId,
@@ -1551,10 +1536,6 @@ fn update_peer_request<B: BlockT, H: ExHashT>(
 	if let Some(ref mut peer) = peers.get_mut(who) {
 		request.id = peer.next_request_id;
 		peer.next_request_id += 1;
-		if let Some((timestamp, request, _request_id)) = peer.block_request.take() {
-			trace!(target: "sync", "Request {} for {} is now obsolete.", request.id, who);
-			peer.obsolete_requests.insert(request.id, timestamp);
-		}
 		peer.block_request = Some((Instant::now(), request.clone(), None));
 	}
 }
