@@ -26,6 +26,8 @@ use crate::{
 };
 use frame_support::{debug, RuntimeDebug};
 use sp_std::fmt;
+#[cfg(not(feature = "std"))]
+use sp_std::{vec, prelude::Vec};
 
 /// A wrapper around a MMR library to expose limited functionality.
 ///
