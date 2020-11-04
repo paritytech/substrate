@@ -243,7 +243,7 @@ impl KeystoreContainer {
 	/// Returns the local keystore if available
 	///
 	/// The function will return None if the available keystore is not a local keystore.
-	pub fn local_keystore(&self) -> Option<LocalKeystore> {
+	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
 		match self.0 {
 			KeystoreContainerInner::Local(ref keystore) => Some(keystore.clone()),
 		}
