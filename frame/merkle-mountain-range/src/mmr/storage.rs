@@ -21,6 +21,8 @@ use codec::Encode;
 use crate::mmr::{NodeOf, Node};
 use crate::{NumberOfLeaves, Nodes, Module, Trait, Instance, primitives};
 use frame_support::{StorageMap, StorageValue};
+#[cfg(not(feature = "std"))]
+use sp_std::prelude::Vec;
 
 /// A marker type for runtime-specific storage implementation.
 ///

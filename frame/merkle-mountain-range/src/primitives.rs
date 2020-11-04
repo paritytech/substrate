@@ -22,6 +22,8 @@ use frame_support::{
 };
 use sp_runtime::traits;
 use sp_std::fmt;
+#[cfg(not(feature = "std"))]
+use sp_std::prelude::Vec;
 
 /// A provider of the MMR's leaf data.
 pub trait LeafDataProvider {

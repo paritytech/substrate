@@ -171,7 +171,7 @@ type LeafOf<T, I> = <<T as Trait<I>>::LeafData as primitives::LeafDataProvider>:
 pub(crate) type HashingOf<T, I> = <T as Trait<I>>::Hashing;
 
 impl<T: Trait<I>, I: Instance> Module<T, I> {
-	fn offchain_key(pos: u64) -> Vec<u8> {
+	fn offchain_key(pos: u64) -> sp_std::prelude::Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
 	}
 
