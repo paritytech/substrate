@@ -309,8 +309,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					light_client_handler,
 					discovery_config,
 					params.network_config.request_response_protocols,
-					crate::block_request_handler::generate_protocol_name(params.protocol_id.clone()),
-					crate::finality_request_handler::generate_protocol_name(params.protocol_id.clone()),
+					params.block_request_protocol_config,
+					params.finality_request_protocol_config,
 				);
 
 				match result {

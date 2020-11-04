@@ -38,8 +38,19 @@ const LOG_TARGET: &str = "block-request-handler";
 const MAX_BLOCKS_IN_RESPONSE: usize = 128;
 const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 
+// TODO: Document that this is for clients not reponding only.
+pub fn generate_protocol_config(protocol_id: ProtocolId) -> ProtocolConfig {
+	ProtocolConfig {
+		name: generate_protocol_name(protocol_id).into(),
+		max_request_size: 1024 * 1024,
+		max_response_size: 16 * 1024 * 1024,
+		request_timeout: Duration::from_secs(40),
+		inbound_queue: None,
+	}
+}
+
 /// Generate the block protocol name from chain specific protocol identifier.
-pub fn generate_protocol_name(protocol_id: ProtocolId) -> String {
+fn generate_protocol_name(protocol_id: ProtocolId) -> String {
 	let mut s = String::new();
 	s.push_str("/");
 	s.push_str(protocol_id.as_ref());
@@ -59,13 +70,8 @@ impl <B: BlockT> BlockRequestHandler<B> {
 		// TODO: Likeley we want to allow more than 0 buffered requests. Rethink this value.
 		let (tx, request_receiver) = mpsc::channel(0);
 
-		let protocol_config = ProtocolConfig {
-			name: generate_protocol_name(protocol_id).into(),
-			max_request_size: 1024 * 1024,
-			max_response_size: 16 * 1024 * 1024,
-			request_timeout: Duration::from_secs(40),
-			inbound_queue: Some(tx),
-		};
+		let mut protocol_config = generate_protocol_config(protocol_id);
+		protocol_config.inbound_queue = Some(tx);
 
 		(Self { client, request_receiver }, protocol_config)
 	}

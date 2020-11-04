@@ -165,12 +165,18 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		local_public_key: PublicKey,
 		light_client_handler: light_client_handler::LightClientHandler<B>,
 		disco_config: DiscoveryConfig,
-		request_response_protocols: Vec<request_responses::ProtocolConfig>,
+		// TODO: Document that these are all others apart from block and finality.
+		mut request_response_protocols: Vec<request_responses::ProtocolConfig>,
 
 		// TODO: Not so fancy, see definition.
-		block_request_protocol_name: String,
-		finality_request_protocol_name: String,
+		block_request_protocol_config: request_responses::ProtocolConfig,
+		finality_request_protocol_config: request_responses::ProtocolConfig,
 	) -> Result<Self, request_responses::RegisterError> {
+		let block_request_protocol_name = block_request_protocol_config.name.to_string();
+		let finality_request_protocol_name = finality_request_protocol_config.name.to_string();
+		request_response_protocols.push(block_request_protocol_config);
+		request_response_protocols.push(finality_request_protocol_config);
+
 		Ok(Behaviour {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),

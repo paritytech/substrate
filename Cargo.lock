@@ -7182,6 +7182,7 @@ dependencies = [
 name = "sc-network-test"
 version = "0.8.0"
 dependencies = [
+ "async-std",
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",

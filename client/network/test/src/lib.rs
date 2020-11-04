@@ -30,6 +30,8 @@ use std::{
 use libp2p::build_multiaddr;
 use log::trace;
 use sc_network::config::FinalityProofProvider;
+use sc_network::block_request_handler::BlockRequestHandler;
+use sc_network::finality_request_handler::FinalityRequestHandler;
 use sp_blockchain::{
 	HeaderBackend, Result as ClientResult,
 	well_known_cache_keys::{self, Id as CacheKeyId},
@@ -50,6 +52,7 @@ use sp_consensus::block_import::{BlockImport, ImportResult};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
+use futures::future::BoxFuture;
 use sc_network::{NetworkWorker, NetworkService, config::ProtocolId};
 use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
@@ -670,22 +673,42 @@ pub trait TestNetFactory: Sized {
 		network_config.allow_non_globals_in_dht = true;
 		network_config.notifications_protocols = config.notifications_protocols;
 
+		let protocol_id = ProtocolId::from("test-protocol-name");
+
+		// Add block request handler.
+		let block_request_protocol_config = {
+			let (handler, protocol_config) = BlockRequestHandler::new(protocol_id.clone(), client.clone());
+			self.spawn_task(handler.run().boxed());
+			protocol_config
+		};
+
+		// Add finality request handler.
+		let finality_request_protocol_config = match self.make_finality_proof_provider(PeersClient::Full(client.clone(), backend.clone())) {
+			Some(provider) => {
+				let (handler, protocol_config) = FinalityRequestHandler::new(protocol_id.clone(), provider);
+				self.spawn_task(handler.run().boxed());
+				protocol_config
+			},
+			None => {
+				sc_network::finality_request_handler::generate_protocol_config(protocol_id.clone())
+			}
+		};
+
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Full,
 			executor: None,
 			network_config,
 			chain: client.clone(),
-			finality_proof_provider: self.make_finality_proof_provider(
-				PeersClient::Full(client.clone(), backend.clone()),
-			),
 			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
-			protocol_id: ProtocolId::from("test-protocol-name"),
+			protocol_id,
 			import_queue,
 			block_announce_validator: config.block_announce_validator
 				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
 			metrics_registry: None,
+			block_request_protocol_config,
+			finality_request_protocol_config,
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -750,21 +773,28 @@ pub trait TestNetFactory: Sized {
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
 
+		let protocol_id = ProtocolId::from("test-protocol-name");
+
+		// Add block request handler.
+		let block_request_protocol_config = sc_network::block_request_handler::generate_protocol_config(protocol_id.clone());
+
+		// Add finality request handler.
+		let finality_request_protocol_config = sc_network::finality_request_handler::generate_protocol_config(protocol_id.clone());
+
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
 			executor: None,
 			network_config,
 			chain: client.clone(),
-			finality_proof_provider: self.make_finality_proof_provider(
-				PeersClient::Light(client.clone(), backend.clone())
-			),
 			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
-			protocol_id: ProtocolId::from("test-protocol-name"),
+			protocol_id,
 			import_queue,
 			block_announce_validator: Box::new(DefaultBlockAnnounceValidator),
 			metrics_registry: None,
+			block_request_protocol_config,
+			finality_request_protocol_config,
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -787,6 +817,11 @@ pub trait TestNetFactory: Sized {
 				network,
 			});
 		});
+	}
+
+	// TODO: Not ideal. Can we do better?
+	fn spawn_task(&self, f: BoxFuture<'static, ()>) {
+		async_std::task::spawn(f);
 	}
 
 	/// Polls the testnet until all nodes are in sync.

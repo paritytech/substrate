@@ -33,7 +33,7 @@ type TestNetworkService = NetworkService<
 ///
 /// > **Note**: We return the events stream in order to not possibly lose events between the
 /// >			construction of the service and the moment the events stream is grabbed.
-fn build_test_full_node(config: config::NetworkConfiguration)
+fn build_test_full_node(mut network_config: config::NetworkConfiguration)
 	-> (Arc<TestNetworkService>, impl Stream<Item = Event>)
 {
 	let client = Arc::new(
@@ -91,10 +91,29 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		None,
 	));
 
+	let protocol_id = config::ProtocolId::from("/test-protocol-name");
+
+	// Add block request handler.
+	let block_request_protocol_name = {
+		let (handler, protocol_config) = crate::block_request_handler::BlockRequestHandler::new(protocol_id.clone(), client.clone());
+		let name = protocol_config.name.to_string();
+		network_config.request_response_protocols.push(protocol_config);
+		async_std::task::spawn(handler.run().boxed());
+		name
+	};
+
+	// Add finality protocol.
+	let finality_request_protocol_name = {
+		let protocol_config = crate::finality_request_handler::generate_protocol_config(protocol_id.clone());
+		let name = protocol_config.name.to_string();
+		network_config.request_response_protocols.push(protocol_config);
+		name
+	};
+
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
-		network_config: config,
+		network_config,
 		chain: client.clone(),
 		finality_proof_request_builder: None,
 		on_demand: None,
@@ -105,6 +124,8 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 			sp_consensus::block_validation::DefaultBlockAnnounceValidator,
 		),
 		metrics_registry: None,
+		block_request_protocol_name,
+		finality_request_protocol_name,
 	})
 	.unwrap();
 

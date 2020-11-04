@@ -100,6 +100,10 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
+
+	// TODO: Dcoument that you can only get these by creating a Protocol config or creating a whole handler.
+	pub block_request_protocol_config: RequestResponseConfig,
+	pub finality_request_protocol_config: RequestResponseConfig,
 }
 
 /// Role of the local node.

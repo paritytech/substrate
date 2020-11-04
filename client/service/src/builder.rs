@@ -871,19 +871,24 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		Box::new(DefaultBlockAnnounceValidator)
 	};
 
-	let mut network_config = config.network.clone();
-
-	if let Some(proof_provider) = finality_proof_provider {
-		let (handler, protocol_config) = sc_network::finality_request_handler::FinalityRequestHandler::new(protocol_id.clone(), proof_provider);
-		network_config.request_response_protocols.push(protocol_config);
-		spawn_handle.spawn("finality_request_handler", handler.run());
-	}
-
-	{
+	let block_request_protocol_config = {
+		// TODO: Only do this if we are not a light client.
 		let (handler, protocol_config) = sc_network::block_request_handler::BlockRequestHandler::new(protocol_id.clone(), client.clone());
-		network_config.request_response_protocols.push(protocol_config);
 		spawn_handle.spawn("block_request_handler", handler.run());
-	}
+		protocol_config
+	};
+
+	let finality_request_protocol_config = match finality_proof_provider {
+		Some(provider) => {
+			// TODO: Only do this if we are not a light client.
+			let (handler, protocol_config) = sc_network::finality_request_handler::FinalityRequestHandler::new(protocol_id.clone(), provider);
+			spawn_handle.spawn("finality_request_handler", handler.run());
+			protocol_config
+		},
+		None => {
+			sc_network::finality_request_handler::generate_protocol_config(protocol_id.clone())
+		}
+	};
 
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
@@ -893,7 +898,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 				spawn_handle.spawn("libp2p-node", fut);
 			}))
 		},
-		network_config,
+		network_config: config.network.clone(),
 		chain: client.clone(),
 		finality_proof_request_builder,
 		on_demand: on_demand,
@@ -901,7 +906,9 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		import_queue: Box::new(import_queue),
 		protocol_id,
 		block_announce_validator,
-		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone())
+		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+		block_request_protocol_config,
+		finality_request_protocol_config,
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
