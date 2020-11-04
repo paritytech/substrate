@@ -97,7 +97,6 @@ use crate::exec::ExecutionContext;
 use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
-pub use crate::exec::{ExecResult, ExecReturnValue};
 pub use crate::wasm::ReturnCode as RuntimeReturnCode;
 pub use crate::weight_info::WeightInfo;
 pub use crate::schedule::{Schedule, HostFnWeights, InstructionWeights};
@@ -118,7 +117,9 @@ use frame_support::{
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 };
 use frame_system::{ensure_signed, ensure_root};
-use pallet_contracts_primitives::{RentProjection, ContractAccessError};
+use pallet_contracts_primitives::{
+	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult, ExecResult,
+};
 use frame_support::weights::Weight;
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
@@ -639,21 +640,20 @@ impl<T: Trait> Module<T> {
 		value: BalanceOf<T>,
 		gas_limit: Gas,
 		input_data: Vec<u8>,
-	) -> (ExecResult, Gas) {
+	) -> ContractExecResult {
 		let mut gas_meter = GasMeter::new(gas_limit);
-		(
-			Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
-				ctx.call(dest, value, gas_meter, input_data)
-			}),
-			gas_meter.gas_spent(),
-		)
+		let exec_result = Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
+			ctx.call(dest, value, gas_meter, input_data)
+		});
+		let gas_consumed = gas_meter.gas_spent();
+		ContractExecResult {
+			exec_result,
+			gas_consumed,
+		}
 	}
 
 	/// Query storage of a specified contract under a specified key.
-	pub fn get_storage(
-		address: T::AccountId,
-		key: [u8; 32],
-	) -> sp_std::result::Result<Option<Vec<u8>>, ContractAccessError> {
+	pub fn get_storage(address: T::AccountId, key: [u8; 32]) -> GetStorageResult {
 		let contract_info = ContractInfoOf::<T>::get(&address)
 			.ok_or(ContractAccessError::DoesntExist)?
 			.get_alive()
@@ -663,9 +663,7 @@ impl<T: Trait> Module<T> {
 		Ok(maybe_value)
 	}
 
-	pub fn rent_projection(
-		address: T::AccountId,
-	) -> sp_std::result::Result<RentProjection<T::BlockNumber>, ContractAccessError> {
+	pub fn rent_projection(address: T::AccountId) -> RentProjectionResult<T::BlockNumber> {
 		rent::compute_rent_projection::<T>(&address)
 	}
 

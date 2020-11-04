@@ -92,7 +92,7 @@ use frame_support::{
 	traits::{
 		BalanceStatus, ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
 		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		WithdrawReason, WithdrawReasons,
+		WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -105,7 +105,8 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 mod benchmarking;
-mod default_weights;
+pub mod weights;
+pub use weights::WeightInfo;
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
@@ -137,20 +138,6 @@ pub struct DefunctVoter<AccountId> {
 	/// The number of current active candidates.
 	#[codec(compact)]
 	pub candidate_count: u32
-}
-
-pub trait WeightInfo {
-	fn vote(v: u32, ) -> Weight;
-	fn vote_update(v: u32, ) -> Weight;
-	fn remove_voter() -> Weight;
-	fn report_defunct_voter_correct(c: u32, v: u32, ) -> Weight;
-	fn report_defunct_voter_incorrect(c: u32, v: u32, ) -> Weight;
-	fn submit_candidacy(c: u32, ) -> Weight;
-	fn renounce_candidacy_candidate(c: u32, ) -> Weight;
-	fn renounce_candidacy_members() -> Weight;
-	fn renounce_candidacy_runners_up() -> Weight;
-	fn remove_member_with_replacement() -> Weight;
-	fn remove_member_wrong_refund() -> Weight;
 }
 
 pub trait Trait: frame_system::Trait {
@@ -378,7 +365,7 @@ decl_module! {
 				T::ModuleId::get(),
 				&who,
 				locked_balance,
-				WithdrawReasons::except(WithdrawReason::TransactionPayment),
+				WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT),
 			);
 
 			Voting::<T>::insert(&who, (locked_balance, votes));
@@ -2443,7 +2430,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, true),
 				Error::<Test>::InvalidReplacement,
-				Some(33777000), // only thing that matters for now is that it is NOT the full block.
+				Some(33489000), // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 
@@ -2465,7 +2452,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, false),
 				Error::<Test>::InvalidReplacement,
-				Some(33777000) // only thing that matters for now is that it is NOT the full block.
+				Some(33489000) // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 	}

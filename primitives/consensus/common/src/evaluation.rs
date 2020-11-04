@@ -30,26 +30,24 @@ type BlockNumber = Option<u128>;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type.
-#[derive(Debug, derive_more::Display)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Proposal provided not a block.
-	#[display(fmt="Proposal provided not a block: decoding error: {}", _0)]
-	BadProposalFormat(codec::Error),
+	#[error("Proposal provided not a block: decoding error: {0}")]
+	BadProposalFormat(#[from] codec::Error),
 	/// Proposal had wrong parent hash.
-	#[display(fmt="Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got)]
+	#[error("Proposal had wrong parent hash. Expected {expected:?}, got {got:?}")]
 	WrongParentHash { expected: String, got: String },
 	/// Proposal had wrong number.
-	#[display(fmt="Proposal had wrong number. Expected {:?}, got {:?}", expected, got)]
+	#[error("Proposal had wrong number. Expected {expected:?}, got {got:?}")]
 	WrongNumber { expected: BlockNumber, got: BlockNumber },
 	/// Proposal exceeded the maximum size.
-	#[display(
-		fmt="Proposal exceeded the maximum size of {} by {} bytes.",
-		"MAX_BLOCK_SIZE", "_0.saturating_sub(MAX_BLOCK_SIZE)"
+	#[error(
+		"Proposal exceeded the maximum size of {} by {} bytes.",
+		MAX_BLOCK_SIZE, .0.saturating_sub(MAX_BLOCK_SIZE)
 	)]
 	ProposalTooLarge(usize),
 }
-
-impl std::error::Error for Error {}
 
 /// Attempt to evaluate a substrate block as a node block, returning error
 /// upon any initial validity checks failing.
