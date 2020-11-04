@@ -35,7 +35,7 @@ fn add_locks<T: Trait>(who: &T::AccountId, n: u8) {
 	for id in 0..n {
 		let lock_id = [id; 8];
 		let locked = 100u32;
-		let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+		let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 		T::Currency::set_lock(lock_id, who, locked.into(), reasons);
 	}
 }
