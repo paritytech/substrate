@@ -146,6 +146,15 @@
 			"website": "https://totemaccounting.com"
 		},
 		{
+			"prefix": 15,
+			"network": "synesthesia",
+			"displayName": "Synesthesia",
+			"symbols": ["SYN"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://synesthesia.network/"
+		},
+		{
 			"prefix": 16,
 			"network": "kulupu",
 			"displayName": "Kulupu",
@@ -185,10 +194,10 @@
 			"prefix": 20,
 			"network": "stafi",
 			"displayName": "Stafi",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["FIS"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://stafi.io"
 		},
 		{
 			"prefix": 21,
