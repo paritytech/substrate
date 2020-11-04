@@ -234,7 +234,7 @@ mod tests {
 				Err(e) => {
 					match e {
 						sp_blockchain::Error::DuplicateWasmRuntime(duplicates) => {
-							assert_eq!(duplicates.len(), 2);
+							assert_eq!(duplicates.len(), 1);
 						},
 						_ => panic!("Test should end with Msg Error Variant")
 					}
