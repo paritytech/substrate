@@ -865,6 +865,7 @@ impl GenericProto {
 
 			// DisabledPendingEnable => Disabled
 			PeerState::DisabledPendingEnable { connections, timer_deadline, timer: _ } => {
+				debug_assert!(!connections.is_empty());
 				debug!(target: "sub-libp2p",
 					"PSM => Drop({:?}): Interrupting pending enabling.",
 					entry.key());
@@ -877,6 +878,9 @@ impl GenericProto {
 			// Enabled => Disabled
 			PeerState::Enabled { mut connections } => {
 				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Disabling connections.", entry.key());
+
+				debug_assert!(connections.iter().any(|(_, s)|
+					matches!(s, ConnectionState::Opening | ConnectionState::Open(_))));
 
 				if connections.iter().any(|(_, s)| matches!(s, ConnectionState::Open(_))) {
 					debug!(target: "sub-libp2p", "External API <= Closed({})", entry.key());
@@ -953,10 +957,16 @@ impl GenericProto {
 		};
 
 		if !incoming.alive {
-			debug!(target: "sub-libp2p", "PSM => Accept({:?}, {:?}): Obsolete incoming,
-				sending back dropped", index, incoming.peer_id);
-			debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", incoming.peer_id);
-			self.peerset.dropped(incoming.peer_id);  // TODO: is that correct?!
+			debug!(target: "sub-libp2p", "PSM => Accept({:?}, {:?}): Obsolete incoming",
+				index, incoming.peer_id);
+			match self.peers.get_mut(&incoming.peer_id) {
+				Some(PeerState::DisabledPendingEnable { .. }) |
+				Some(PeerState::Enabled { .. }) => {}
+				_ => {
+					debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", incoming.peer_id);
+					self.peerset.dropped(incoming.peer_id);
+				},
+			}
 			return
 		}
 
@@ -1273,6 +1283,9 @@ impl NetworkBehaviour for GenericProto {
 					peer_id, *conn
 				);
 
+				debug_assert!(connections.iter().any(|(_, s)|
+					matches!(s, ConnectionState::Opening | ConnectionState::Open(_))));
+
 				if let Some(pos) = connections.iter().position(|(c, _)| *c == *conn) {
 					let (_, state) = connections.remove(pos);
 					if let ConnectionState::Open(_) = state {
@@ -1477,6 +1490,9 @@ impl NetworkBehaviour for GenericProto {
 					},
 
 					PeerState::Enabled { mut connections } => {
+						debug_assert!(connections.iter().any(|(_, s)|
+							matches!(s, ConnectionState::Opening | ConnectionState::Open(_))));
+
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, _)| *c == connection) {
 							if let ConnectionState::Closed = *connec_state {
 								debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open", source, connection);
@@ -1629,6 +1645,9 @@ impl NetworkBehaviour for GenericProto {
 				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
 					// Enabled => Enabled | Disabled
 					PeerState::Enabled { mut connections } => {
+						debug_assert!(connections.iter().any(|(_, s)|
+							matches!(s, ConnectionState::Opening | ConnectionState::Open(_))));
+
 						let pos = if let Some(pos) = connections.iter().position(|(c, _)| *c == connection) {
 							pos
 						} else {
@@ -1747,6 +1766,8 @@ impl NetworkBehaviour for GenericProto {
 
 				match self.peers.get_mut(&source) {
 					Some(PeerState::Enabled { connections, .. }) => {
+						debug_assert!(connections.iter().any(|(_, s)|
+							matches!(s, ConnectionState::Opening | ConnectionState::Open(_))));
 						let any_open = connections.iter().any(|(_, s)| matches!(s, ConnectionState::Open(_)));
 
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
@@ -1811,7 +1832,7 @@ impl NetworkBehaviour for GenericProto {
 				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
 					PeerState::Enabled { mut connections } => {
 						debug_assert!(connections.iter().any(|(_, s)|
-						matches!(s, ConnectionState::Opening | ConnectionState::Open(_))));
+							matches!(s, ConnectionState::Opening | ConnectionState::Open(_))));
 
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
 							*c == connection && matches!(s, ConnectionState::Opening))
