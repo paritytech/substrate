@@ -617,11 +617,15 @@ pub struct SimpleBackoffAuthoringBlocksStrategy<N> {
 	pub max_interval: N,
 	/// The number of unfinalized blocks allowed before starting to consider to backoff authoring
 	/// blocks. Note that depending on the value for `authoring_bias`, there might still be an
-	/// additional wait until block authorships starts getting declined.
+	/// additional wait until block authorship starts getting declined.
 	pub unfinalized_slack: N,
-	/// How persistant block authorship is in the face of a growing unfinalized chain of blocks. A
-	/// small value for `authoring_bias` means to quickly start backing off block authorship as the
-	/// length of the unfinalized blocks grows.
+	/// If finality stalls we will increase the number of declined slots between claimed slots as the
+	/// unfinalized head grows. The `authoring_bias` controls for how many iterations we should stick
+	/// with a given number of declined slots between claimed slots before increasing it.
+	/// Example: with stalled finality and `authoring_bias` set to 1 (t=true, f=false)
+	/// 	slots declined: (t,f), (t,t,f), (t,t,t,f), (t,t,t,t,f), ...
+	/// Example: with stalled finality and `authoring_bias` set to 2
+	/// 	slots declined: (t,f, t,f), (t,t,f, t,t,f), (t,t,t,f, t,t,t,f), ...
 	pub authoring_bias: N,
 }
 
@@ -654,6 +658,11 @@ where
 		finalized_number: N,
 		slot_now: u64,
 	) -> bool {
+		// This should not happen, but we want to keep the previous behaviour if it does.
+		if slot_now <= chain_head_slot {
+			return false;
+		}
+
 		let unfinalized_block_length = chain_head_number - finalized_number;
 		let interval = unfinalized_block_length.saturating_sub(self.unfinalized_slack)
 			/ self.authoring_bias;
@@ -767,12 +776,12 @@ mod test {
 		let finalized_number = 1;
 		let slot_now = 2;
 
-		let should_backoff: Vec<bool> = (slot_now..100)
+		let should_backoff: Vec<bool> = (slot_now..1000)
 			.map(|s| strategy.should_backoff(head_number, head_slot, finalized_number, s))
 			.collect();
 
 		// Should always be false, since the head isn't advancing
-		let expected: Vec<bool> = (slot_now..100).map(|_| false).collect();
+		let expected: Vec<bool> = (slot_now..1000).map(|_| false).collect();
 		assert_eq!(should_backoff, expected);
 	}
 
