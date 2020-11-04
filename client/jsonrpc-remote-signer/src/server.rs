@@ -558,6 +558,10 @@ mod tests {
 		keystore.ecdsa_generate_new(TEST_TK, Some("//Charlie"))
 			.await.expect("InMem Keystore doesn't fail");
 
+		{
+			use sp_keystore::SyncCryptoStore;
+			assert_eq!(SyncCryptoStore::sr25519_public_keys(&keystore, TEST_TK).len(), 3);
+		}
 
 		let (server, mut runner) = GenericRemoteSignerServer::proxy(keystore);
 
