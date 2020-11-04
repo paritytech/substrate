@@ -1719,7 +1719,10 @@ impl NetworkBehaviour for GenericProto {
 					Some(PeerState::DisabledPendingEnable { connections, .. }) |
 					Some(PeerState::Disabled { connections, .. }) |
 					Some(PeerState::Enabled { connections, .. }) => {
-						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)| *c == connection && matches!(s, ConnectionState::Closing)) {
+						if let Some((_, connec_state)) = connections
+							.iter_mut()
+							.find(|(c, s)| *c == connection && matches!(s, ConnectionState::Closing))
+						{
 							*connec_state = ConnectionState::Closed;
 						} else {
 							debug_assert!(false);
