@@ -29,6 +29,7 @@ pub mod child;
 #[doc(hidden)]
 pub mod generator;
 pub mod migration;
+pub mod types;
 
 #[cfg(all(feature = "std", any(test, debug_assertions)))]
 mod debug_helper {
