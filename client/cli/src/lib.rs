@@ -50,7 +50,6 @@ use structopt::{
 pub use tracing;
 use tracing_subscriber::{
 	fmt::time::ChronoLocal,
-	EnvFilter,
 	FmtSubscriber,
 	Layer,
 	layer::SubscriberExt,
@@ -257,7 +256,7 @@ pub fn init_logger(
 		))
 	}
 
-	let mut env_filter: EnvFilter = tracing_subscriber::EnvFilter::default()
+	let mut env_filter = tracing_subscriber::EnvFilter::default()
 		// Disable info logging by default for some modules.
 		.add_directive("ws=off".parse().expect("provided directive is valid"))
 		.add_directive("yamux=off".parse().expect("provided directive is valid"))
@@ -315,6 +314,7 @@ pub fn init_logger(
 	} else {
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
+
 
 	let subscriber_builder = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
