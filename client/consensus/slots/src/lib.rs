@@ -884,7 +884,6 @@ mod test {
 			.collect();
 
 		// Gradually start to backoff more and more frequently
-		#[rustfmt::skip]
 		let expected = [
 			false, false, false, false, false, // no effect
 			true, false,
