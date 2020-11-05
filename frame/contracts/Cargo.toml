@@ -17,7 +17,6 @@ codec = { package = "parity-scale-codec", version = "1.3.4", default-features = 
 frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
-pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "common" }
 parity-wasm = { version = "0.41.0", default-features = false }
 pwasm-utils = { version = "0.14.0", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
@@ -27,6 +26,8 @@ sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 sp-sandbox = { version = "0.8.0", default-features = false, path = "../../primitives/sandbox" }
 wasmi-validation = { version = "0.3.0", default-features = false }
+
+pallet-contracts-primitives = { version = "3.0.0-rc1", default-features = false, path = "common" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
