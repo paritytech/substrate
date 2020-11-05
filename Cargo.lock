@@ -832,16 +832,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "console_log"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e7871d2947441b0fdd8e2bd1ce2a2f75304f896582c0d572162d48290683c48"
-dependencies = [
- "log",
- "web-sys",
-]
-
-[[package]]
 name = "const-random"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6519,8 +6509,6 @@ dependencies = [
 name = "sc-cli"
 version = "0.8.0"
 dependencies = [
- "ansi_term 0.12.1",
- "atty",
  "bip39",
  "chrono",
  "fdlimit",
@@ -6555,8 +6543,6 @@ dependencies = [
  "thiserror",
  "tokio 0.2.22",
  "tracing",
- "tracing-log",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -7354,7 +7340,9 @@ dependencies = [
 name = "sc-service"
 version = "0.8.0"
 dependencies = [
+ "ansi_term 0.12.1",
  "async-std",
+ "atty",
  "derive_more",
  "directories",
  "exit-future",
@@ -7416,6 +7404,8 @@ dependencies = [
  "tokio 0.2.22",
  "tracing",
  "tracing-futures",
+ "tracing-log",
+ "tracing-subscriber",
  "wasm-timer",
 ]
 
@@ -8835,7 +8825,6 @@ version = "0.8.0"
 dependencies = [
  "chrono",
  "console_error_panic_hook",
- "console_log",
  "futures 0.1.29",
  "futures 0.3.5",
  "futures-timer 3.0.2",
@@ -8849,7 +8838,11 @@ dependencies = [
  "sc-informant",
  "sc-network",
  "sc-service",
+ "sc-telemetry",
  "sp-database",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-wasm",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -9668,6 +9661,17 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-serde",
+]
+
+[[package]]
+name = "tracing-wasm"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd96394d3d2f119de6c1078fa065b99217db4377f9aac6e87f8393276a0d7962"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
+ "wasm-bindgen",
 ]
 
 [[package]]

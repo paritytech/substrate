@@ -558,7 +558,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let telemetries = init_logger(
 			&logger_pattern,
 			tracing_receiver,
-			tracing_targets,
+			tracing_targets.as_ref().map(|x| x.as_str()),
 			telemetry_external_transport,
 		)?;
 

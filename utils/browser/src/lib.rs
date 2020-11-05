@@ -30,15 +30,36 @@ use futures::{
 use std::pin::Pin;
 use sc_chain_spec::Extension;
 use libp2p_wasm_ext::{ExtTransport, ffi};
+use tracing_wasm::{WASMLayerConfig, WASMLayer};
+use tracing_subscriber::layer::SubscriberExt;
 
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
-pub use console_log::init_with_level as init_console_log;
+
+/// TODO doc
+pub fn init_console_log(pattern: &str, /* level: log::Level, TODO not needed anymore I think */) -> Result<sc_telemetry::Telemetries, String> {
+	// TODO move to lazy static?
+	let transport = ExtTransport::new(ffi::websocket_transport());
+	let (subscriber, telemetries) = sc_service::logging::get_default_subscriber_and_telemetries(
+		pattern,
+		Some(transport),
+	)?;
+
+	// TODO telemetry is working but WASMLayer bypasses FormatEvent
+	let subscriber = subscriber.with(WASMLayer::new(WASMLayerConfig::default()));
+
+	tracing::subscriber::set_global_default(subscriber)
+		.map_err(|e| format!("could not set global default subscriber: {}", e))?;
+
+	Ok(telemetries)
+}
 
 /// Create a service configuration from a chain spec.
 ///
 /// This configuration contains good defaults for a browser light client.
-pub async fn browser_configuration<G, E>(chain_spec: GenericChainSpec<G, E>)
-	-> Result<Configuration, Box<dyn std::error::Error>>
+pub async fn browser_configuration<G, E>(
+	chain_spec: GenericChainSpec<G, E>,
+	telemetries: sc_telemetry::Telemetries,
+) -> Result<Configuration, Box<dyn std::error::Error>>
 where
 	G: RuntimeGenesis + 'static,
 	E: Extension + 'static + Send + Sync,
@@ -68,8 +89,7 @@ where
 			async {}
 		}).into(),
 		telemetry_external_transport: Some(transport),
-		// TODO if telemetry is possible here then we need to call sc_cli::init_logger somehow
-		telemetries: Default::default(),
+		telemetries,
 		role: Role::Light,
 		database: {
 			info!("Opening Indexed DB database '{}'...", name);

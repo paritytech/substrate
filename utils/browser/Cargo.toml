@@ -18,8 +18,10 @@ futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
 libp2p-wasm-ext = { version = "0.23", features = ["websocket"] }
 console_error_panic_hook = "0.1.6"
-console_log = "0.1.2"
 js-sys = "0.3.34"
+tracing-wasm = "0.1.0"
+tracing = "0.1.10"
+tracing-subscriber = "0.2.10"
 wasm-bindgen = "0.2.57"
 wasm-bindgen-futures = "0.4.7"
 kvdb-web = "0.7"
@@ -28,6 +30,7 @@ sc-informant = { version = "0.8.0", path = "../../client/informant" }
 sc-service = { version = "0.8.0", path = "../../client/service", default-features = false }
 sc-network = { path = "../../client/network", version = "0.8.0"}
 sc-chain-spec = { path = "../../client/chain-spec", version = "2.0.0"}
+sc-telemetry = { path = "../../client/telemetry", version = "2.0.0"}
 
 # Imported just for the `wasm-bindgen` feature
 rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"] }

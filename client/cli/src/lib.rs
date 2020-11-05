@@ -27,7 +27,6 @@ pub mod arg_enums;
 mod commands;
 mod config;
 mod error;
-mod logging;
 mod params;
 mod runner;
 
@@ -49,11 +48,9 @@ use structopt::{
 };
 #[doc(hidden)]
 pub use tracing;
-use tracing_subscriber::{
-	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
-};
 
-pub use logging::PREFIX_LOG_SPAN;
+/// TODO used by the macro
+pub use sc_service::logging::PREFIX_LOG_SPAN;
 
 /// Substrate client CLI
 ///
@@ -243,113 +240,38 @@ pub trait SubstrateCli: Sized {
 pub fn init_logger(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
-	profiling_targets: Option<String>,
+	profiling_targets: Option<&str>,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 ) -> std::result::Result<sc_telemetry::Telemetries, String> {
-	fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
-		dirs.as_ref()
-			.split(',')
-			.filter_map(|s| s.parse().ok())
-			.collect()
-	}
+	Ok(if let Some(profiling_targets) = profiling_targets {
+		let (subscriber, telemetries) = sc_service::logging::get_default_subscriber_and_telemetries_with_profiling(
+			pattern,
+			telemetry_external_transport,
+			tracing_receiver,
+			profiling_targets,
+		)?;
 
-	if let Err(e) = tracing_log::LogTracer::init() {
-		return Err(format!(
-			"Registering Substrate logger failed: {:}!", e
-		))
-	}
-
-	let mut env_filter = tracing_subscriber::EnvFilter::default()
-		// Disable info logging by default for some modules.
-		.add_directive("ws=off".parse().expect("provided directive is valid"))
-		.add_directive("yamux=off".parse().expect("provided directive is valid"))
-		.add_directive("cranelift_codegen=off".parse().expect("provided directive is valid"))
-		// Set warn logging by default for some modules.
-		.add_directive("cranelift_wasm=warn".parse().expect("provided directive is valid"))
-		.add_directive("hyper=warn".parse().expect("provided directive is valid"))
-		// Enable info for others.
-		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
-
-	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		if lvl != "" {
-			// We're not sure if log or tracing is available at this moment, so silently ignore the
-			// parse error.
-			for directive in parse_directives(lvl) {
-				env_filter = env_filter.add_directive(directive);
-			}
-		}
-	}
-
-	if pattern != "" {
-		// We're not sure if log or tracing is available at this moment, so silently ignore the
-		// parse error.
-		for directive in parse_directives(pattern) {
-			env_filter = env_filter.add_directive(directive);
-		}
-	}
-
-	// If we're only logging `INFO` entries then we'll use a simplified logging format.
-	let simple = match Layer::<FmtSubscriber>::max_level_hint(&env_filter) {
-		Some(level) if level <= tracing_subscriber::filter::LevelFilter::INFO => true,
-		_ => false,
-	};
-
-	// Always log the special target `sc_tracing`, overrides global level.
-	// NOTE: this must be done after we check the `max_level_hint` otherwise
-	// it is always raised to `TRACE`.
-	env_filter = env_filter.add_directive(
-		"sc_tracing=trace"
-			.parse()
-			.expect("provided directive is valid"),
-	);
-
-	// Make sure to include profiling targets in the filter
-	if let Some(profiling_targets) = profiling_targets.clone() {
-		for directive in parse_directives(profiling_targets) {
-			env_filter = env_filter.add_directive(directive);
-		}
-	}
-
-	let isatty = atty::is(atty::Stream::Stderr);
-	let enable_color = isatty;
-	let timer = ChronoLocal::with_format(if simple {
-		"%Y-%m-%d %H:%M:%S".to_string()
-	} else {
-		"%Y-%m-%d %H:%M:%S%.3f".to_string()
-	});
-
-	let telemetry_layer = sc_telemetry::TelemetryLayer::new(telemetry_external_transport);
-	let telemetries = telemetry_layer.telemetries();
-	let subscriber = FmtSubscriber::builder()
-		.with_env_filter(env_filter)
-		.with_writer(std::io::stderr)
-		.event_format(logging::EventFormat {
-			timer,
-			ansi: enable_color,
-			display_target: !simple,
-			display_level: !simple,
-			display_thread_name: !simple,
-		})
-		.finish()
-		.with(logging::NodeNameLayer)
-		.with(telemetry_layer);
-
-	if let Some(profiling_targets) = profiling_targets {
-		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &profiling_targets);
-
-		if let Err(e) = tracing::subscriber::set_global_default(subscriber.with(profiling)) {
+		if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
 			return Err(format!(
 				"Registering Substrate tracing subscriber failed: {:}!", e
 			))
 		}
+
+		telemetries
 	} else {
+		let (subscriber, telemetries) = sc_service::logging::get_default_subscriber_and_telemetries(
+			pattern,
+			telemetry_external_transport,
+		)?;
+
 		if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
 			return Err(format!(
-				"Registering Substrate tracing subscriber  failed: {:}!", e
+				"Registering Substrate tracing subscriber failed: {:}!", e
 			))
 		}
-	}
-	Ok(telemetries)
+
+		telemetries
+	})
 }
 
 #[cfg(test)]
