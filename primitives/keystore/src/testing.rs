@@ -79,6 +79,14 @@ impl CryptoStore for KeyStore {
 		SyncCryptoStore::sr25519_public_keys(self, id)
 	}
 
+	async fn sr25519_key_pair(
+		&self,
+		id: KeyTypeId,
+		public: &sr25519::Public,
+	) -> Result<sr25519::Pair, Error> {
+		SyncCryptoStore::sr25519_key_pair(self, id, public)
+	}
+
 	async fn sr25519_generate_new(
 		&self,
 		id: KeyTypeId,
@@ -91,6 +99,14 @@ impl CryptoStore for KeyStore {
 		SyncCryptoStore::ed25519_public_keys(self, id)
 	}
 
+	async fn ed25519_key_pair(
+		&self,
+		id: KeyTypeId,
+		public: &ed25519::Public,
+	) -> Result<ed25519::Pair, Error> {
+		SyncCryptoStore::ed25519_key_pair(self, id, public)
+	}
+
 	async fn ed25519_generate_new(
 		&self,
 		id: KeyTypeId,
@@ -101,6 +117,14 @@ impl CryptoStore for KeyStore {
 
 	async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
 		SyncCryptoStore::ecdsa_public_keys(self, id)
+	}
+
+	async fn ecdsa_key_pair(
+		&self,
+		id: KeyTypeId,
+		public: &ecdsa::Public,
+	) -> Result<ecdsa::Pair, Error> {
+		SyncCryptoStore::ecdsa_key_pair(self, id, public)
 	}
 
 	async fn ecdsa_generate_new(
@@ -173,6 +197,19 @@ impl SyncCryptoStore for KeyStore {
 			.unwrap_or_default()
 	}
 
+	fn sr25519_key_pair(
+		&self,
+		id: KeyTypeId,
+		public: &sr25519::Public,
+	) -> Result<sr25519::Pair, Error> {
+		let p: &[u8] = public.as_ref();
+
+		self.keys.read().get(&id)
+			.and_then(|keys| keys.get(p))
+			.map(|pri| sr25519::Pair::from_string(pri, None).expect("`sr25519` seed slice is valid"))
+			.ok_or(Error::Unavailable)
+	}
+
 	fn sr25519_generate_new(
 		&self,
 		id: KeyTypeId,
@@ -204,6 +241,19 @@ impl SyncCryptoStore for KeyStore {
 			.unwrap_or_default()
 	}
 
+	fn ed25519_key_pair(
+		&self,
+		id: KeyTypeId,
+		public: &ed25519::Public,
+	) -> Result<ed25519::Pair, Error> {
+		let p: &[u8] = public.as_ref();
+
+		self.keys.read().get(&id)
+			.and_then(|keys| keys.get(p))
+			.map(|pri| ed25519::Pair::from_string(pri, None).expect("`ed25519` seed slice is valid"))
+			.ok_or(Error::Unavailable)
+	}
+
 	fn ed25519_generate_new(
 		&self,
 		id: KeyTypeId,
@@ -233,6 +283,19 @@ impl SyncCryptoStore for KeyStore {
 					.collect()
 			)
 			.unwrap_or_default()
+	}
+
+	fn ecdsa_key_pair(
+		&self,
+		id: KeyTypeId,
+		public: &ecdsa::Public,
+	) -> Result<ecdsa::Pair, Error> {
+		let p: &[u8] = public.as_ref();
+
+		self.keys.read().get(&id)
+			.and_then(|keys| keys.get(p))
+			.map(|pri| ecdsa::Pair::from_string(pri, None).expect("`ecdsa` seed slice is valid"))
+			.ok_or(Error::Unavailable)
 	}
 
 	fn ecdsa_generate_new(
