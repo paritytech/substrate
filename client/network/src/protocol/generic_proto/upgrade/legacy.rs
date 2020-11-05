@@ -20,7 +20,7 @@ use crate::config::ProtocolId;
 use bytes::BytesMut;
 use futures::prelude::*;
 use futures_codec::Framed;
-use libp2p::core::{Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
+use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use parking_lot::RwLock;
 use std::{collections::VecDeque, io, pin::Pin, sync::Arc, vec::IntoIter as VecIntoIter};
 use std::task::{Context, Poll};
@@ -85,9 +85,6 @@ impl Clone for RegisteredProtocol {
 pub struct RegisteredProtocolSubstream<TSubstream> {
 	/// If true, we are in the process of closing the sink.
 	is_closing: bool,
-	/// Whether the local node opened this substream (dialer), or we received this substream from
-	/// the remote (listener).
-	endpoint: Endpoint,
 	/// Buffer of packets to send.
 	send_queue: VecDeque<BytesMut>,
 	/// If true, we should call `poll_complete` on the inner sink.
@@ -105,12 +102,6 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 	/// Returns the version of the protocol that was negotiated.
 	pub fn protocol_version(&self) -> u8 {
 		self.protocol_version
-	}
-
-	/// Returns whether the local node opened this substream (dialer), or we received this
-	/// substream from the remote (listener).
-	pub fn endpoint(&self) -> Endpoint {
-		self.endpoint
 	}
 
 	/// Starts a graceful shutdown process on this substream.
@@ -262,7 +253,6 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			Ok((RegisteredProtocolSubstream {
 				is_closing: false,
-				endpoint: Endpoint::Listener,
 				send_queue: VecDeque::new(),
 				requires_poll_flush: false,
 				inner: framed.fuse(),
@@ -301,7 +291,6 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			Ok((RegisteredProtocolSubstream {
 				is_closing: false,
-				endpoint: Endpoint::Dialer,
 				send_queue: VecDeque::new(),
 				requires_poll_flush: false,
 				inner: framed.fuse(),

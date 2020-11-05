@@ -482,8 +482,6 @@ impl ProtocolsHandler for NotifsHandler {
 			NotifsHandlerIn::Open => {
 				match &mut self.state {
 					State::Closed { pending_in } => {
-						self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
-
 						for (handler, initial_message) in &mut self.out_handlers {
 							// We create `initial_message` on a separate line to be sure that the
 							// lock is released as soon as possible.
@@ -518,7 +516,7 @@ impl ProtocolsHandler for NotifsHandler {
 				match &mut self.state {
 					State::Open { .. } |
 					State::Opening { .. } => {
-						self.legacy.inject_event(LegacyProtoHandlerIn::Disable);
+						self.legacy.inject_event(LegacyProtoHandlerIn::Close);
 						for (handler, _) in &mut self.out_handlers {
 							handler.inject_event(NotifsOutHandlerIn::Disable);
 						}
@@ -828,7 +826,7 @@ impl ProtocolsHandler for NotifsHandler {
 					// This fails the entire opening attempt.
 					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused), State::Opening { .. }) |
 					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed), State::Opening { .. }) => {
-						self.legacy.inject_event(LegacyProtoHandlerIn::Disable);
+						self.legacy.inject_event(LegacyProtoHandlerIn::Close);
 						for (handler, _) in &mut self.out_handlers {
 							handler.inject_event(NotifsOutHandlerIn::Disable);
 						}
