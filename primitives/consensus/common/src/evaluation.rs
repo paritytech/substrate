@@ -58,7 +58,7 @@ pub fn evaluate_initial<Block: BlockT>(
 		.map_err(|e| Error::BadProposalFormat(e))?;
 
 	if encoded.len() > max_block_size {
-		return Err(Error::ProposalTooLarge{ max_block_size, block_size: encoded.len() })
+		return Err(Error::ProposalTooLarge { max_block_size, block_size: encoded.len() })
 	}
 
 	if *parent_hash != *proposal.header().parent_hash() {
