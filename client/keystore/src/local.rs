@@ -514,6 +514,10 @@ mod tests {
 						.collect()
 				})
 		}
+
+		fn generate<Pair: AppPair>(&self) -> Result<Pair> {
+			self.generate_by_type::<Pair::Generic>(Pair::ID).map(Into::into)
+		}
 	}
 
 	#[test]
