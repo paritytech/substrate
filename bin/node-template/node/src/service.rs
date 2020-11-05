@@ -159,7 +159,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		network_status_sinks,
 		system_rpc_tx,
 		config,
-		telemetry: telemetry.clone(),
+		telemetry,
 	})?;
 
 	if role.is_authority() {

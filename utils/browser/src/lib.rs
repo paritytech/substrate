@@ -69,7 +69,7 @@ where
 		}).into(),
 		telemetry_external_transport: Some(transport),
 		// TODO if telemetry is possible here then we need to call sc_cli::init_logger somehow
-		telemetry_senders: Default::default(),
+		telemetries: Default::default(),
 		role: Role::Light,
 		database: {
 			info!("Opening Indexed DB database '{}'...", name);
