@@ -61,11 +61,17 @@ impl LocalKeystore {
 	/// Generate a new key.
 	///
 	/// Places it into the file system store.
+	///
+	/// This function is only available for a local keystore. If your application plans to work with
+	/// remote keystores, you do not want to depend on it.
 	pub fn generate<Pair: AppPair>(&self) -> Result<Pair> {
 		self.0.read().generate::<Pair>()
 	}
 
 	/// Get a key pair for the given public key.
+	///
+	/// This function is only available for a local keystore. If your application plans to work with
+	/// remote keystores, you do not want to depend on it.
 	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Pair> {
 		self.0.read().key_pair::<Pair>(public)
 	}
@@ -73,6 +79,9 @@ impl LocalKeystore {
 	/// Insert a new key.
 	///
 	/// Places it into the file system store.
+	///
+	/// This function is only available for a local keystore. If your application plans to work with
+	/// remote keystores, you do not want to depend on it.
 	pub fn insert<Pair: AppPair>(&self, suri: &str) -> Result<Pair> {
 		self.0.read().insert(suri)
 	}
