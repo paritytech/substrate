@@ -26,7 +26,6 @@
 //! # Using a type in a runtime interface
 //!
 //! Any type that should be used in a runtime interface as argument or return value needs to
-//! <!-- markdown-link-check-disable -->
 //! implement [`RIType`]. The associated type [`FFIType`](./trait.RIType.html#associatedtype.FFIType)
 //! is the type that is used in the FFI function to represent the actual type. For example `[T]` is
 //! represented by an `u64`. The slice pointer and the length will be mapped to an `u64` value.
@@ -100,7 +99,7 @@
 //! | `*const T` | `u32` | `Identity` |
 //! | `Option<T>` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
 //! | [`T where T: PassBy<PassBy=Inner>`](./pass_by#Inner) | Depends on inner | Depends on inner |
-//! |[`T where T:PassBy<PassBy=Codec>`](./pass_by#Codec)|`u64`|<code>v.len() 32bit << 32 &#124;v.as_ptr() 32bit</code>|
+//! | [`T where T:PassBy<PassBy=Codec>`](./pass_by#Codec)|`u64`|<code>v.len() 32bit << 32 &#124;v.as_ptr() 32bit</code>|
 //!
 //! `Identity` means that the value is converted directly into the corresponding FFI type.
 
