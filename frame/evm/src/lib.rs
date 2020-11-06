@@ -41,7 +41,7 @@
 //!
 //! We currently do not aim to make unobservable behaviors, such as state root, to be the same. We also don't aim to follow the exact same transaction / receipt format. However, given one Ethereum transaction and one Substrate account's private key, one should be able to convert any Ethereum transaction into a transaction compatible with this module.
 //!
-//! The gas configurations are currently hard-coded to the Istanbul hard fork. It can later be expanded to support earlier hard fork configurations.
+//! The gas configurations are configurable. Right now, a pre-defined Istanbul hard fork configuration option is provided.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
