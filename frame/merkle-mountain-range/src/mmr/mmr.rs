@@ -102,9 +102,7 @@ impl<T, I, L> Mmr<RuntimeStorage, T, I, L> where
 	/// Returns element position (index) in the MMR.
 	pub fn push(&mut self, leaf: L) -> Option<u64> {
 		let position = self.mmr.push(Node::Data(leaf))
-			.map_err(|e| Error::Push.log_error(
-				format!("Error while pushing MMR node: {:?}", e)
-			))
+			.map_err(|e| Error::Push.log_error(e))
 			.ok()?;
 
 		self.leaves += 1;
