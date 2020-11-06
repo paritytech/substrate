@@ -22,7 +22,7 @@
 //!
 //! ## EVM Engine
 //!
-//! The EVM module uses [`SputnikVM`](https://github.com/rust-blockchain/evm) as the underlying EVM engine. The engine is overhauled so that it's [`modular`](https://github.com/corepaper/evm). In the future, we will want to allow users to swap out components like gasometer, and inject their own customized ones.
+//! The EVM module uses [`SputnikVM`](https://github.com/rust-blockchain/evm) as the underlying EVM engine. The engine is overhauled so that it's [`modular`](https://github.com/corepaper/evm).
 //!
 //! ## Execution Lifecycle
 //!
