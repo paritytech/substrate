@@ -32,7 +32,7 @@ use std::time::Duration;
 
 const LOG_TARGET: &str = "finality-request-handler";
 
-// TODO: Document that this is for clients not reponding only.
+/// Generates a [`ProtocolConfig`] for the finality request protocol, refusing incoming requests.
 pub fn generate_protocol_config(protocol_id: ProtocolId) -> ProtocolConfig {
 	ProtocolConfig {
 		name: generate_protocol_name(protocol_id).into(),

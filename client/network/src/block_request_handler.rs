@@ -38,7 +38,7 @@ const LOG_TARGET: &str = "block-request-handler";
 const MAX_BLOCKS_IN_RESPONSE: usize = 128;
 const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 
-// TODO: Document that this is for clients not reponding only.
+/// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.
 pub fn generate_protocol_config(protocol_id: ProtocolId) -> ProtocolConfig {
 	ProtocolConfig {
 		name: generate_protocol_name(protocol_id).into(),
