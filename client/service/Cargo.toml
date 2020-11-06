@@ -89,6 +89,7 @@ directories = "2.0.2"
 
 [target.'cfg(target_os = "unknown")'.dependencies]
 wasm-bindgen = "0.2.67"
+web-sys = "0.3.44"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

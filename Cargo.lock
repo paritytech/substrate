@@ -2601,9 +2601,9 @@ dependencies = [
 
 [[package]]
 name = "js-sys"
-version = "0.3.39"
+version = "0.3.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa5a448de267e7358beaf4a5d849518fe9a0c13fce7afd44b06e68550e5562a7"
+checksum = "85a7e2c92a4804dd459b86c339278d0fe87cf93757fae222c3fa3ae75458bc73"
 dependencies = [
  "wasm-bindgen",
 ]
@@ -7408,6 +7408,7 @@ dependencies = [
  "tracing-subscriber",
  "wasm-bindgen",
  "wasm-timer",
+ "web-sys",
 ]
 
 [[package]]
@@ -8842,7 +8843,6 @@ dependencies = [
  "sc-telemetry",
  "sp-database",
  "tracing",
- "tracing-subscriber",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -10297,9 +10297,9 @@ dependencies = [
 
 [[package]]
 name = "web-sys"
-version = "0.3.39"
+version = "0.3.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bc359e5dd3b46cb9687a051d50a2fdd228e4ba7cf6fcf861a5365c3d671a642"
+checksum = "dda38f4e5ca63eda02c059d243aa25b5f35ab98451e518c51612cd0f1bd19a47"
 dependencies = [
  "js-sys",
  "wasm-bindgen",

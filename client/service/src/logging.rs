@@ -321,12 +321,14 @@ mod time {
 	}
 }
 
+#[cfg(target_os = "unknown")]
 struct ConsoleLogLayer<S, N = format::DefaultFields, T = SystemTime> {
 	event_format: EventFormat<T>,
 	fmt_fields: N,
 	_inner: PhantomData<S>,
 }
 
+#[cfg(target_os = "unknown")]
 impl<S, T> ConsoleLogLayer<S, format::DefaultFields, T> {
 	fn new(event_format: EventFormat<T>) -> Self {
 		Self {
@@ -338,6 +340,7 @@ impl<S, T> ConsoleLogLayer<S, format::DefaultFields, T> {
 }
 
 // NOTE: the following code took inspiration from `EventFormat` (in this file)
+#[cfg(target_os = "unknown")]
 impl<S, N, T: FormatTime> ConsoleLogLayer<S, N, T>
 where
 	S: Subscriber + for<'a> LookupSpan<'a>,
@@ -396,11 +399,11 @@ where
 					//
 					//       https://github.com/iamcodemaker/console_log/blob/f13b5d6755/src/lib.rs#L149
 					match *level {
-						Level::ERROR => error(&buf),
-						Level::WARN => warn(&buf),
-						Level::INFO => info(&buf),
-						Level::DEBUG => log(&buf),
-						Level::TRACE => debug(&buf),
+						Level::ERROR => web_sys::console::error_1(&JsValue::from(buf.as_str())),
+						Level::WARN => web_sys::console::warn_1(&JsValue::from(buf.as_str())),
+						Level::INFO => web_sys::console::info_1(&JsValue::from(buf.as_str())),
+						Level::DEBUG => web_sys::console::log_1(&JsValue::from(buf.as_str())),
+						Level::TRACE => web_sys::console::debug_1(&JsValue::from(buf.as_str())),
 					}
 				}
 			}

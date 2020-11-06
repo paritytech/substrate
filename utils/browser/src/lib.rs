@@ -30,7 +30,6 @@ use futures::{
 use std::pin::Pin;
 use sc_chain_spec::Extension;
 use libp2p_wasm_ext::{ExtTransport, ffi};
-use tracing_subscriber::layer::SubscriberExt;
 
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 
