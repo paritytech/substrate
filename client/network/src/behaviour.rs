@@ -23,6 +23,7 @@ use crate::{
 
 use bytes::Bytes;
 use codec::Encode as _;
+use futures::channel::oneshot;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::identify::IdentifyInfo;
@@ -41,7 +42,7 @@ use std::{
 };
 
 pub use crate::request_responses::{
-	ResponseFailure, InboundFailure, RequestFailure, OutboundFailure, RequestId, SendRequestError
+	ResponseFailure, InboundFailure, RequestFailure, OutboundFailure, RequestId,
 };
 
 /// General behaviour of the network. Combines all protocols together.
@@ -68,8 +69,7 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	#[behaviour(ignore)]
 	role: Role,
 
-	// TODO: Does this really belong here? Why require matching on these when reponses come in? Why
-	// not offer a oneshot when sending a request?
+	// TODO: Document.
 	#[behaviour(ignore)]
 	block_request_protocol_name: String,
 	#[behaviour(ignore)]
@@ -102,8 +102,6 @@ pub enum BehaviourOut<B: BlockT> {
 	RequestFinished {
 		/// Request that has succeeded.
 		request_id: RequestId,
-		/// Response sent by the remote or reason for failure.
-		result: Result<Vec<u8>, RequestFailure>,
 	},
 
 	/// Opened a substream with the given node with the given notifications protocol.
@@ -229,14 +227,19 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		self.peer_info.node(peer_id)
 	}
 
+	// TODO Update comment.
 	/// Initiates sending a request.
 	///
 	/// An error is returned if we are not connected to the target peer of if the protocol doesn't
 	/// match one that has been registered.
-	pub fn send_request(&mut self, target: &PeerId, protocol: &str, request: Vec<u8>)
-		-> Result<RequestId, SendRequestError>
-	{
-		self.request_responses.send_request(target, protocol, request)
+	pub fn send_request(
+		&mut self,
+		target: &PeerId,
+		protocol: &str,
+		request: Vec<u8>,
+		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+	) {
+		self.request_responses.send_request(target, protocol, request, pending_response)
 	}
 
 	/// Registers a new notifications protocol.
@@ -291,36 +294,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	pub fn light_client_request(&mut self, r: light_client_handler::Request<B>) -> Result<(), light_client_handler::Error> {
 		self.light_client_handler.request(r)
 	}
-
-	fn on_block_response(
-		&mut self,
-		peer: &PeerId,
-		// TODO: shorten
-		request_id: libp2p::request_response::RequestId,
-		result: Result<Vec<u8>, request_responses::RequestFailure>,
-	) -> Result<CustomMessageOutcome<B>, OnBlockResponseError>{
-		let protobuf_response = schema::v1::BlockResponse::decode(&result?[..])?;
-		let ev = self.substrate.on_block_response(peer.clone(), request_id,  protobuf_response);
-		Ok(ev)
-	}
-
-	fn on_finality_response(
-		&mut self,
-		peer: &PeerId,
-		// TODO: shorten
-		request_id: libp2p::request_response::RequestId,
-		result: Result<Vec<u8>, request_responses::RequestFailure>,
-	) -> Result<CustomMessageOutcome<B>, OnFinalityResponseError>{
-		let protobuf_response = schema::v1::finality::FinalityProofResponse::decode(
-			&result?[..],
-		)?;
-		let ev = self.substrate.on_finality_proof_response(
-			peer.clone(),
-			request_id,
-			protobuf_response.proof,
-		);
-		Ok(ev)
-	}
 }
 
 #[derive(derive_more::Display, derive_more::From)]
@@ -368,7 +341,8 @@ Behaviour<B, H> {
 				self.events.push_back(BehaviourOut::JustificationImport(origin, hash, nb, justification)),
 			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
 				self.events.push_back(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)),
-			CustomMessageOutcome::BlockRequest { target, request } => {
+			CustomMessageOutcome::BlockRequest { target, request, pending_response } => {
+				// TODO: Move this logic into protocol.rs
 				let protobuf_req = schema::v1::BlockRequest {
 					fields: request.fields.to_be_u32(),
 					from_block: match request.from {
@@ -394,21 +368,11 @@ Behaviour<B, H> {
 					return
 				}
 
-				match self.request_responses.send_request(
-					&target, &self.block_request_protocol_name, buf,
-				) {
-					Ok(request_id) => self.substrate.on_block_request_started(
-						target, request.id, request_id,
-					),
-					// TODO: Should we notify protocol.rs or sync.rs?
-					Err(err) => log::warn!(
-						target: "sync",
-						"Failed to send block request {:?}: {:?}",
-						protobuf_req, err
-					),
-				};
+				self.request_responses.send_request(
+					&target, &self.block_request_protocol_name, buf, pending_response,
+				);
 			},
-			CustomMessageOutcome::FinalityProofRequest { target, block_hash, request } => {
+			CustomMessageOutcome::FinalityProofRequest { target, block_hash, request, pending_response } => {
 				let protobuf_req = crate::schema::v1::finality::FinalityProofRequest {
 					block_hash: block_hash.encode(),
 					request,
@@ -424,18 +388,9 @@ Behaviour<B, H> {
 					return;
 				}
 
-				match self.request_responses.send_request(
-					&target, &self.finality_request_protocol_name, buf,
-				) {
-					Ok(request_id) => self.substrate.on_finality_proof_request_started(
-						target, block_hash, request_id,
-					),
-					Err(err) => log::warn!(
-						target: "sync",
-						"Failed to send block request {:?}: {:?}",
-						protobuf_req, err
-					),
-				}
+				self.request_responses.send_request(
+					&target, &self.finality_request_protocol_name, buf, pending_response,
+				);
 			},
 			CustomMessageOutcome::NotificationStreamOpened { remote, protocols, roles, notifications_sink } => {
 				let role = reported_roles_to_observed_role(&self.role, &remote, roles);
@@ -484,42 +439,11 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Even
 					result,
 				});
 			}
-			request_responses::Event::RequestFinished { peer, protocol, request_id, result } => {
-				// TODO: Make sure to get these responses captured in metrics by emitting a
-				// `RequestFinished` event without a result. Then the NetworkWorker can capture this
-				// in a metric.
-				if protocol == self.finality_request_protocol_name {
-					match self.on_finality_response(&peer, request_id, result) {
-						Ok(ev) => self.inject_event(ev),
-						Err(err) => {
-							debug!(
-								target: "sync",
-								"Handling finality response from {} failed with: {}",
-								peer, err,
-							);
-
-							// TODO: Should protocol.rs be notified of the failure?
-						}
-					}
-				} else if protocol == self.block_request_protocol_name {
-					match self.on_block_response(&peer, request_id, result) {
-						Ok(ev) => self.inject_event(ev),
-						Err(err) => {
-							debug!(
-								target: "sync",
-								"Handling block response from {} failed with: {}",
-								peer, err,
-							);
-
-							self.substrate.on_block_request_failed(&peer);
-						}
-					}
-				} else {
-					self.events.push_back(BehaviourOut::RequestFinished {
-						request_id,
-						result,
-					});
-				}
+			request_responses::Event::RequestFinished { peer, protocol, request_id } => {
+				// TODO: Add everything here we need to capture the event in metrics. E.g. protocol.
+				self.events.push_back(BehaviourOut::RequestFinished {
+					request_id,
+				});
 			},
 		}
 	}

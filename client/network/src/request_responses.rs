@@ -133,14 +133,14 @@ pub enum Event {
 
 	/// A request initiated using [`RequestResponsesBehaviour::send_request`] has succeeded or
 	/// failed.
+	///
+	/// This event is generated for statistics purposes.
 	RequestFinished {
 		peer: PeerId,
 		/// Name of the protocol in question.
 		protocol: Cow<'static, str>,
 		/// Request that has succeeded.
 		request_id: RequestId,
-		/// Response sent by the remote or reason for failure.
-		result: Result<Vec<u8>, RequestFailure>,
 	},
 }
 
@@ -153,6 +153,9 @@ pub struct RequestResponsesBehaviour {
 		Cow<'static, str>,
 		(RequestResponse<GenericCodec>, Option<mpsc::Sender<IncomingRequest>>)
 	>,
+
+	// TODO: Document
+	pending_requests: HashMap<RequestId, oneshot::Sender<Result<Vec<u8>, RequestFailure>>>,
 
 	/// Whenever an incoming request arrives, a `Future` is added to this list and will yield the
 	/// response to send back to the remote.
@@ -204,7 +207,8 @@ impl RequestResponsesBehaviour {
 
 		Ok(Self {
 			protocols,
-			pending_responses: stream::FuturesUnordered::new(),
+			pending_requests: Default::default(),
+			pending_responses: Default::default(),
 		})
 	}
 
@@ -212,17 +216,22 @@ impl RequestResponsesBehaviour {
 	///
 	/// An error is returned if we are not connected to the target peer or if the protocol doesn't
 	/// match one that has been registered.
-	pub fn send_request(&mut self, target: &PeerId, protocol: &str, request: Vec<u8>)
-		-> Result<RequestId, SendRequestError>
-	{
+	pub fn send_request(
+		&mut self,
+		target: &PeerId,
+		protocol: &str,
+		request: Vec<u8>,
+		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+	) {
 		if let Some((protocol, _)) = self.protocols.get_mut(protocol) {
 			if protocol.is_connected(target) {
-				Ok(protocol.send_request(target, request))
+				let request_id = protocol.send_request(target, request);
+				self.pending_requests.insert(request_id, pending_response);
 			} else {
-				Err(SendRequestError::NotConnected)
+				pending_response.send(Err(RequestFailure::NotConnected));
 			}
 		} else {
-			Err(SendRequestError::UnknownProtocol)
+			pending_response.send(Err(RequestFailure::UnknownProtocol));
 		}
 	}
 }
@@ -456,11 +465,20 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								},
 							..
 						} => {
+							match self.pending_requests.remove(&request_id) {
+								Some(pending_response) => {
+									pending_response.send(
+										response.map_err(|()| RequestFailure::Refused),
+									).unwrap();
+								}
+								None => {
+									todo!("handle this");
+								}
+							}
 							let out = Event::RequestFinished {
 								peer,
 								protocol: protocol.clone(),
 								request_id,
-								result: response.map_err(|()| RequestFailure::Refused),
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}
@@ -472,11 +490,20 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							error,
 							..
 						} => {
+							match self.pending_requests.remove(&request_id) {
+								Some(pending_response) => {
+									pending_response.send(
+										Err(RequestFailure::Network(error)),
+									).unwrap();
+								}
+								None => {
+									todo!("handle this");
+								}
+							}
 							let out = Event::RequestFinished {
 								peer,
 								protocol: protocol.clone(),
 								request_id,
-								result: Err(RequestFailure::Network(error)),
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}
@@ -506,18 +533,13 @@ pub enum RegisterError {
 	DuplicateProtocol(#[error(ignore)] Cow<'static, str>),
 }
 
-/// Error when sending a request.
+/// Error in a request.
 #[derive(Debug, derive_more::Display, derive_more::Error)]
-pub enum SendRequestError {
+pub enum RequestFailure {
 	/// We are not currently connected to the requested peer.
 	NotConnected,
 	/// Given protocol hasn't been registered.
 	UnknownProtocol,
-}
-
-/// Error in a request.
-#[derive(Debug, derive_more::Display, derive_more::Error)]
-pub enum RequestFailure {
 	/// Remote has closed the substream before answering, thereby signaling that it considers the
 	/// request as valid, but refused to answer it.
 	Refused,

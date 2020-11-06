@@ -408,7 +408,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
-			pending_requests: HashMap::with_capacity(128),
 		})
 	}
 
@@ -1236,13 +1235,6 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: Arc<HashSet<PeerId>>,
-	/// Requests started using [`NetworkService::request`]. Includes the channel to send back the
-	/// response, when the request has started, and the name of the protocol for diagnostic
-	/// purposes.
-	pending_requests: HashMap<
-		behaviour::RequestId,
-		(oneshot::Sender<Result<Vec<u8>, RequestFailure>>, Instant, String)
-	>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ConsensusEngineId), NotificationsSink>>>,
@@ -1315,29 +1307,30 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				ServiceToWorkerMsg::EventStream(sender) =>
 					this.event_streams.push(sender),
 				ServiceToWorkerMsg::Request { target, protocol, request, pending_response } => {
-					// Calling `send_request` can fail immediately in some circumstances.
-					// This is handled by sending back an error on the channel.
-					match this.network_service.send_request(&target, &protocol, request) {
-						Ok(request_id) => {
-							if let Some(metrics) = this.metrics.as_ref() {
-								metrics.requests_out_started_total
-									.with_label_values(&[&protocol])
-									.inc();
-							}
-							this.pending_requests.insert(
-								request_id,
-								(pending_response, Instant::now(), protocol.to_string())
-							);
-						},
-						Err(behaviour::SendRequestError::NotConnected) => {
-							let err = RequestFailure::Network(OutboundFailure::ConnectionClosed);
-							let _ = pending_response.send(Err(err));
-						},
-						Err(behaviour::SendRequestError::UnknownProtocol) => {
-							let err = RequestFailure::Network(OutboundFailure::UnsupportedProtocols);
-							let _ = pending_response.send(Err(err));
-						},
-					}
+					this.network_service.send_request(&target, &protocol, request, pending_response);
+					// TODO: Should this be moved to NetworkService?
+					// {
+					// 	Ok(request_id) => {
+					// 		// TODO: Do this on a request started event to also track finality and block request events.
+					// 		if let Some(metrics) = this.metrics.as_ref() {
+					// 			metrics.requests_out_started_total
+					// 				.with_label_values(&[&protocol])
+					// 				.inc();
+					// 		}
+					// 		this.pending_requests.insert(
+					// 			request_id,
+					// 			(pending_response, Instant::now(), protocol.to_string())
+					// 		);
+					// 	},
+					// 	Err(behaviour::SendRequestError::NotConnected) => {
+					// 		let err = RequestFailure::Network(OutboundFailure::ConnectionClosed);
+					// 		let _ = pending_response.send(Err(err));
+					// 	},
+					// 	Err(behaviour::SendRequestError::UnknownProtocol) => {
+					// 		let err = RequestFailure::Network(OutboundFailure::UnsupportedProtocols);
+					// 		let _ = pending_response.send(Err(err));
+					// 	},
+					// }
 				},
 				ServiceToWorkerMsg::RegisterNotifProtocol { engine_id, protocol_name } => {
 					this.network_service
@@ -1415,38 +1408,38 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				// TODO: Retrieve started and Protocol from `RequestFinished` and make result
 				// optional. That way we can also return `RequestFinished` for internal requests
 				// (block, finality and light-client) thus tracking metrics for them as well.
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { request_id, result })) => {
-					if let Some((send_back, started, protocol)) = this.pending_requests.remove(&request_id) {
-						if let Some(metrics) = this.metrics.as_ref() {
-							match &result {
-								Ok(_) => {
-									metrics.requests_out_success_total
-										.with_label_values(&[&protocol])
-										.observe(started.elapsed().as_secs_f64());
-								}
-								Err(err) => {
-									let reason = match err {
-										RequestFailure::Refused => "refused",
-										RequestFailure::Network(OutboundFailure::DialFailure) =>
-											"dial-failure",
-										RequestFailure::Network(OutboundFailure::Timeout) =>
-											"timeout",
-										RequestFailure::Network(OutboundFailure::ConnectionClosed) =>
-											"connection-closed",
-										RequestFailure::Network(OutboundFailure::UnsupportedProtocols) =>
-											"unsupported",
-									};
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { request_id })) => {
+					// if let Some((send_back, started, protocol)) = this.pending_requests.remove(&request_id) {
+					// 	if let Some(metrics) = this.metrics.as_ref() {
+					// 		match &result {
+					// 			Ok(_) => {
+					// 				metrics.requests_out_success_total
+					// 					.with_label_values(&[&protocol])
+					// 					.observe(started.elapsed().as_secs_f64());
+					// 			}
+					// 			Err(err) => {
+					// 				let reason = match err {
+					// 					RequestFailure::Refused => "refused",
+					// 					RequestFailure::Network(OutboundFailure::DialFailure) =>
+					// 						"dial-failure",
+					// 					RequestFailure::Network(OutboundFailure::Timeout) =>
+					// 						"timeout",
+					// 					RequestFailure::Network(OutboundFailure::ConnectionClosed) =>
+					// 						"connection-closed",
+					// 					RequestFailure::Network(OutboundFailure::UnsupportedProtocols) =>
+					// 						"unsupported",
+					// 				};
 
-									metrics.requests_out_failure_total
-										.with_label_values(&[&protocol, reason])
-										.inc();
-								}
-							}
-						}
-						let _ = send_back.send(result);
-					} else {
-						error!("Request not in pending_requests");
-					}
+					// 				metrics.requests_out_failure_total
+					// 					.with_label_values(&[&protocol, reason])
+					// 					.inc();
+					// 			}
+					// 		}
+					// 	}
+					// 	let _ = send_back.send(result);
+					// } else {
+					// 	error!("Request not in pending_requests");
+					// }
 				},
 				// TODO: Is this still needed? Can we not do this within the substrate
 				// requests_response behaviour?
