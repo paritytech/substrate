@@ -360,6 +360,7 @@ where
 // NOTE: the following code took inspiration from tracing-subscriber
 //
 //       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/fmt_layer.rs#L717
+#[cfg(target_os = "unknown")]
 impl<S, N, T> Layer<S> for ConsoleLogLayer<S, N, T>
 where
 	S: Subscriber + for<'a> LookupSpan<'a>,
