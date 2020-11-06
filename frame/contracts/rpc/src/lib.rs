@@ -31,6 +31,7 @@ use sp_rpc::number;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
+	DispatchError,
 };
 use std::convert::TryInto;
 use pallet_contracts_primitives::ContractExecResult;
@@ -83,33 +84,47 @@ pub struct CallRequest<AccountId, Balance> {
 	input_data: Bytes,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+struct RpcContractExecSuccess {
+	/// The return flags. See `pallet_contracts_primitives::ReturnFlags`.
+	flags: u32,
+	/// Data as returned by the contract.
+	data: Bytes,
+}
+
 /// An RPC serializable result of contract execution
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-pub enum RpcContractExecResult {
-	/// Successful execution
-	Success {
-		/// The return flags
-		flags: u32,
-		/// Output data
-		data: Bytes,
-		/// How much gas was consumed by the call.
-		gas_consumed: u64,
-	},
-	/// Error execution
-	Error(()),
+pub struct RpcContractExecResult {
+	/// How much gas was consumed by the call. In case of an error this is the amount
+	/// that was used up until the error occurred.
+	gas_consumed: u64,
+	/// Additional dynamic human readable error information for debugging. An empty string
+	/// indicates that no additional information is available.
+	debug_message: String,
+	/// Indicates whether the contract execution was successful or not.
+	result: std::result::Result<RpcContractExecSuccess, DispatchError>,
 }
 
 impl From<ContractExecResult> for RpcContractExecResult {
 	fn from(r: ContractExecResult) -> Self {
 		match r.exec_result {
-			Ok(val) => RpcContractExecResult::Success {
-				flags: val.flags.bits(),
-				data: val.data.into(),
+			Ok(val) => RpcContractExecResult {
 				gas_consumed: r.gas_consumed,
+				debug_message: String::new(),
+				result: Ok(RpcContractExecSuccess {
+					flags: val.flags.bits(),
+					data: val.data.into(),
+				}),
 			},
-			_ => RpcContractExecResult::Error(()),
+			Err(err) => RpcContractExecResult {
+				gas_consumed: r.gas_consumed,
+				debug_message: String::new(),
+				result: Err(err.error),
+			},
 		}
 	}
 }
@@ -310,7 +325,7 @@ mod tests {
 			let actual = serde_json::to_string(&res).unwrap();
 			assert_eq!(actual, expected);
 		}
-		test(r#"{"success":{"flags":5,"data":"0x1234","gas_consumed":5000}}"#);
-		test(r#"{"error":null}"#);
+		test(r#"{"gasConsumed":5000,"debugMessage":"helpOk","result":{"Ok":{"flags":5,"data":"0x1234"}}}"#);
+		test(r#"{"gasConsumed":3400,"debugMessage":"helpErr","result":{"Err":"BadOrigin"}}"#);
 	}
 }
