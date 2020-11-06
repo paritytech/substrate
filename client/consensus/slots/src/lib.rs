@@ -978,5 +978,90 @@ mod test {
 
 		assert_eq!(intervals, expected_intervals);
 	}
-}
 
+	fn run_until_max_interval(param: SimpleBackoffAuthoringBlocksStrategy<u64>) -> (u64, u64) {
+		let finalized_number = 0;
+		let mut head_state = HeadState {
+			head_number: 0,
+			head_slot: 0,
+			slot_now: 1,
+		};
+
+		let should_backoff = |head_state: &HeadState| -> bool {
+			<dyn BackoffAuthoringBlocksStrategy<NumberFor<Block>>>::should_backoff(
+				&param,
+				head_state.head_number,
+				head_state.head_slot,
+				finalized_number,
+				head_state.slot_now,
+			)
+		};
+
+		// Number of blocks until we reach the max interval
+		let block_for_max_interval
+			= param.max_interval * param.authoring_bias + param.unfinalized_slack;
+
+		while head_state.head_number < block_for_max_interval {
+			if should_backoff(&head_state) {
+				head_state.dont_author_block();
+			} else {
+				head_state.author_block();
+			}
+		}
+
+		let slot_time = 6;
+		let time_to_reach_limit = slot_time * head_state.slot_now;
+		(block_for_max_interval, time_to_reach_limit)
+	}
+
+	// Denoting
+	// 	C: unfinalized_slack
+	//	M: authoring_bias
+	//	X: max_interval
+	// then the number of slots to reach the max interval can be computed from
+	// 	(start_slot + C) + M * sum(n, 1, X)
+	// or
+	//  (start_slot + C) + M * X*(X+1)/2
+	fn expected_time_to_reach_max_interval(
+		param: &SimpleBackoffAuthoringBlocksStrategy<u64>
+	) -> (u64, u64) {
+		let c = param.unfinalized_slack;
+		let m = param.authoring_bias;
+		let x = param.max_interval;
+		let slot_time = 6;
+
+		let block_for_max_interval = x * m + c;
+
+		let expected_number_of_slots = (1 + c) + m * x * (x + 1) / 2;
+		let time_to_reach = expected_number_of_slots * slot_time;
+
+		(block_for_max_interval, time_to_reach)
+	}
+
+	#[test]
+	fn time_to_reach_upper_bound_for_smaller_slack() {
+		let param = SimpleBackoffAuthoringBlocksStrategy {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
+		let expected = expected_time_to_reach_max_interval(&param);
+		let (block_for_max_interval, time_to_reach_limit) = run_until_max_interval(param);
+		assert_eq!((block_for_max_interval, time_to_reach_limit), expected);
+		// Note: 16 hours is 57600 sec
+		assert_eq!((block_for_max_interval, time_to_reach_limit), (205, 60636));
+	}
+
+	#[test]
+	fn time_to_reach_upper_bound_for_larger_slack() {
+		let param = SimpleBackoffAuthoringBlocksStrategy {
+			max_interval: 100,
+			unfinalized_slack: 50,
+			authoring_bias: 2,
+		};
+		let expected = expected_time_to_reach_max_interval(&param);
+		let (block_for_max_interval, time_to_reach_limit) = run_until_max_interval(param);
+		assert_eq!((block_for_max_interval, time_to_reach_limit), expected);
+		assert_eq!((block_for_max_interval, time_to_reach_limit), (250, 60906));
+	}
+}
