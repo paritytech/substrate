@@ -278,6 +278,8 @@ test-frame-examples-compile-to-wasm:
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - cd ../example
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
+    - cd ../merkle-mountain-range
+    - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - sccache -s
 
 test-linux-stable-int:
