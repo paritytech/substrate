@@ -42,8 +42,8 @@
 //!
 //!	Primary use case for this pallet is to generate MMR root hashes, that can later on be used by
 //!	BEEFY protocol (see https://github.com/paritytech/grandpa-bridge-gadget).
-//!	MMR root hashes along with BEEFY will make it possible to build Super Light Clients of
-//!	Substrate-based chains. The SLC will be able to follow finality and can be shown proves of more
+//!	MMR root hashes along with BEEFY will make it possible to build Super Light Clients (SLC) of
+//!	Substrate-based chains. The SLC will be able to follow finality and can be shown proofs of more
 //!	details that happened on the source chain.
 //!	In that case the chain which contains the pallet generates the Root Hashes and Proofs, which
 //!	are then presented to another chain acting as a light client which can verify them.
@@ -140,7 +140,7 @@ decl_module! {
 			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 			let (data, leaf_weight) = T::LeafData::leaf_data();
 			// append new leaf to MMR
-			let mut mmr: ModuleMMR<mmr::storage::RuntimeStorage, T, I> = mmr::MMR::new(leaves);
+			let mut mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(leaves);
 			mmr.push(data).expect("MMR push never fails.");
 
 			// update the size
@@ -162,7 +162,7 @@ decl_module! {
 }
 
 /// A MMR specific to the pallet.
-type ModuleMMR<StorageType, T, I> = mmr::MMR<StorageType, T, I, LeafOf<T, I>>;
+type ModuleMmr<StorageType, T, I> = mmr::Mmr<StorageType, T, I, LeafOf<T, I>>;
 
 /// Leaf data.
 type LeafOf<T, I> = <<T as Trait<I>>::LeafData as primitives::LeafDataProvider>::LeafData;
@@ -185,7 +185,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		(LeafOf<T, I>, primitives::Proof<<T as Trait<I>>::Hash>),
 		mmr::Error,
 	> {
-		let mmr: ModuleMMR<mmr::storage::OffchainStorage, T, I> = mmr::MMR::new(Self::mmr_leaves());
+		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(Self::mmr_leaves());
 		mmr.generate_proof(leaf_index)
 	}
 
@@ -203,10 +203,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			|| proof.leaf_count == 0
 			|| proof.items.len() as u32 > mmr::utils::NodesUtils::new(proof.leaf_count).depth()
 		{
-			return Err(mmr::Error::Verify.debug("Invalid leaf count."));
+			return Err(mmr::Error::Verify.debug(
+				"Proof has incorrect number of leaves or proof items."
+			));
 		}
 
-		let mmr: ModuleMMR<mmr::storage::RuntimeStorage, T, I> = mmr::MMR::new(proof.leaf_count);
+		let mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(proof.leaf_count);
 		let is_valid = mmr.verify_leaf_proof(leaf, proof)?;
 		if is_valid {
 			Ok(())

@@ -33,7 +33,7 @@ use sp_std::{vec, prelude::Vec};
 ///
 /// Available functions depend on the storage kind ([Runtime](crate::mmr::storage::RuntimeStorage)
 /// vs [Off-chain](crate::mmr::storage::OffchainStorage)).
-pub struct MMR<StorageType, T, I, L> where
+pub struct Mmr<StorageType, T, I, L> where
 	T: Trait<I>,
 	I: Instance,
 	L: primitives::FullLeaf,
@@ -47,7 +47,7 @@ pub struct MMR<StorageType, T, I, L> where
 	leaves: u64,
 }
 
-impl<StorageType, T, I, L> MMR<StorageType, T, I, L> where
+impl<StorageType, T, I, L> Mmr<StorageType, T, I, L> where
 	T: Trait<I>,
 	I: Instance,
 	L: primitives::FullLeaf,
@@ -91,7 +91,7 @@ impl<StorageType, T, I, L> MMR<StorageType, T, I, L> where
 }
 
 /// Runtime specific MMR functions.
-impl<T, I, L> MMR<RuntimeStorage, T, I, L> where
+impl<T, I, L> Mmr<RuntimeStorage, T, I, L> where
 	T: Trait<I>,
 	I: Instance,
 	L: primitives::FullLeaf,
@@ -121,7 +121,7 @@ impl<T, I, L> MMR<RuntimeStorage, T, I, L> where
 }
 
 /// Off-chain specific MMR functions.
-impl<T, I, L> MMR<OffchainStorage, T, I, L> where
+impl<T, I, L> Mmr<OffchainStorage, T, I, L> where
 	T: Trait<I>,
 	I: Instance,
 	L: primitives::FullLeaf,
