@@ -1296,10 +1296,14 @@ impl<Block: BlockT> Backend<Block> {
 			pending: Default::default(),
 		};
 		let historied_management = Arc::new(RwLock::new(TreeManagement::from_ser(historied_persistence)));
+		// TODO allow to skip those locks through config (putting in db config feels awkward but could
+		// do the job).
+		let safe_offchain_locks = true;
 		let offchain_local_storage = offchain::BlockChainLocalStorage::new(
 			db,
 			historied_management.clone(),
 			ordered_db_2,
+			safe_offchain_locks,
 		);
 		let mut historied_management_consumer: RegisteredConsumer<
 			<HashFor<Block> as Hasher>::Out,

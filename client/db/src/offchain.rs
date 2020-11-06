@@ -58,6 +58,20 @@ pub struct BlockChainLocalStorage<H: Ord, S: TreeManagementStorage> {
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
 	ordered_db: Arc<Mutex<historied_db::mapped_db::MappedDBDyn>>,
 	changes_journals: ChangesJournalSync,
+	// With blockchain local if concurrency is not
+	// handled correctly by the offchain workers
+	// the historied data stored will get in an
+	// inconsistent state.
+	// Eg a write creates a new head node, but another
+	// does not, then if the other write last we will
+	// got a loose backend node.
+	// Note that for access only this is rather safe
+	// since only a garbage collection can make
+	// the query invalid, but garbage collection
+	// does not run concurently with offchain workers.
+	// Therefore we allow to lock the state
+	// even when not modifying with `compare_and_set`.
+	safe_offchain_locks: bool,
 }
 
 /// For migration this will update a pending change layer to support
@@ -159,12 +173,16 @@ pub struct BlockChainLocalAt {
 	ordered_db: Arc<Mutex<historied_db::mapped_db::MappedDBDyn>>,
 	changes_journals: ChangesJournalSync,
 	skip_journalize: bool,
+	safe_offchain_locks: bool,
 }
 
 /// Offchain local storage for a given block,
 /// and for new state (without concurrency handling).
 #[derive(Clone)]
-pub struct BlockChainLocalAtNew(BlockChainLocalAt);
+pub struct BlockChainLocalAtNew {
+	inner: BlockChainLocalAt,
+	safe_offchain_locks: bool,
+}
 
 impl std::fmt::Debug for LocalStorage {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -204,6 +222,7 @@ impl<H: Ord, S: TreeManagementStorage> BlockChainLocalStorage<H, S> {
 		db: Arc<dyn Database<DbHash>>,
 		historied_management: Arc<RwLock<crate::TreeManagement<H, S>>>,
 		journals_db: historied_db::mapped_db::MappedDBDyn,
+		safe_offchain_locks: bool,
 	) -> Self {
 		let journals = historied_db::management::JournalForMigrationBasis::from_db(&journals_db);
 		Self {
@@ -212,6 +231,7 @@ impl<H: Ord, S: TreeManagementStorage> BlockChainLocalStorage<H, S> {
 			locks: Default::default(),
 			ordered_db: Arc::new(Mutex::new(journals_db)),
 			changes_journals: Arc::new(Mutex::new(journals)),
+			safe_offchain_locks,
 		}
 	}
 }
@@ -225,7 +245,7 @@ impl<H: Ord> BlockChainLocalStorage<H, ()> {
 		let historied_management = Arc::new(RwLock::new(crate::TreeManagement::default()));
 		let ordered = sp_database::RadixTreeDatabase::new(db.clone());
 		let ordered = Box::new(crate::DatabaseStorage(ordered));
-		Self::new(db as _, historied_management, ordered)
+		Self::new(db as _, historied_management, ordered, true)
 	}
 }
 
@@ -315,13 +335,17 @@ impl<H, S> sp_core::offchain::BlockChainOffchainStorage for BlockChainLocalStora
 				ordered_db: self.ordered_db.clone(),
 				changes_journals: self.changes_journals.clone(),
 				skip_journalize: !S::JOURNAL_DELETE,
+				safe_offchain_locks: self.safe_offchain_locks,
 			})
 		} else {
 			None
 		}
 	}
 	fn at_new(&self, id: Self::BlockId) -> Option<Self::OffchainStorageNew> {
-		self.at(id).map(|at| BlockChainLocalAtNew(at))
+		self.at(id).map(|at| BlockChainLocalAtNew {
+			inner: at,
+			safe_offchain_locks: self.safe_offchain_locks,
+		})
 	}
 	fn latest(&self) -> Option<Self::BlockId> {
 		self.historied_management.write().latest_external_state()
@@ -346,13 +370,13 @@ impl BlockChainLocalAt {
 impl BlockChainLocalAtNew {
 	/// Does the current state allows chain update attempt.
 	pub fn can_update(&self) -> bool {
-		self.0.at_write.is_some()
+		self.inner.at_write.is_some()
 	}
 
 	/// When doing batch update we can skip journalize,
 	/// and produce the journalize item at once later.
 	pub fn skip_journalize(&mut self) {
-		self.0.skip_journalize = true;
+		self.inner.skip_journalize = true;
 	}
 }
 
@@ -366,6 +390,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 			test,
 			Some(value),
 			false,
+			self.safe_offchain_locks,
 		) {
 			Ok(_) => (),
 			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
@@ -381,6 +406,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 			test,
 			None,
 			false,
+			self.safe_offchain_locks,
 		) {
 			Ok(_) => (),
 			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
@@ -430,6 +456,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 			Some(test),
 			Some(new_value),
 			false,
+			true,
 		) {
 			Ok(b) => b,
 			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
@@ -441,12 +468,13 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		let test: Option<fn(Option<&[u8]>) -> bool> = None;
-		match self.0.modify(
+		match self.inner.modify(
 			prefix,
 			key,
 			test,
 			Some(value),
 			true,
+			self.safe_offchain_locks,
 		) {
 			Ok(_) => (),
 			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
@@ -456,12 +484,13 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
 		let test: Option<fn(Option<&[u8]>) -> bool> = None;
-		match self.0.modify(
+		match self.inner.modify(
 			prefix,
 			key,
 			test,
 			None,
 			true,
+			self.safe_offchain_locks,
 		) {
 			Ok(_) => (),
 			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
@@ -470,7 +499,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		self.0.get(prefix, key)
+		self.inner.get(prefix, key)
 	}
 
 	fn compare_and_set(
@@ -481,11 +510,12 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
 		new_value: &[u8],
 	) -> bool {
 		let test = |v: Option<&[u8]>| old_value == v;
-		match self.0.modify(
+		match self.inner.modify(
 			prefix,
 			item_key,
 			Some(test),
 			Some(new_value),
+			true,
 			true,
 		) {
 			Ok(_) => true,
@@ -509,6 +539,7 @@ impl BlockChainLocalAt {
 		condition: Option<impl Fn(Option<&[u8]>) -> bool>,
 		new_value: Option<&[u8]>,
 		is_new: bool,
+		lock_assert: bool,
 	) -> Result<bool, ModifyError> {
 		if self.at_write.is_none() && is_new {
 			return Err(ModifyError::NoWriteState);
@@ -519,9 +550,11 @@ impl BlockChainLocalAt {
 			.chain(item_key)
 			.cloned()
 			.collect();
-		let key_lock = {
+		let key_lock = if lock_assert {
 			let mut locks = self.locks.lock();
-			locks.entry(key.clone()).or_default().clone()
+			Some(locks.entry(key.clone()).or_default().clone())
+		} else {
+			None
 		};
 
 		let result = || -> Result<bool, ModifyError> {
@@ -534,7 +567,7 @@ impl BlockChainLocalAt {
 			};
 			let is_set;
 			{
-				let _key_guard = key_lock.lock();
+				let _key_guard = key_lock.as_ref().map(|key_lock| key_lock.lock());
 				let histo = self.db.get(columns::OFFCHAIN, &key)
 					.and_then(|v| {
 						let init_nodes = ContextHead {
@@ -595,11 +628,14 @@ impl BlockChainLocalAt {
 								node_init_from: init_nodes.clone(),
 							};
 
-							(HValue::new(
+							(
+								HValue::new(
 									new_value,
 									at_write,
 									(init, init_nodes),
-								).encode(), UpdateResult::Changed(()))
+								).encode(),
+								UpdateResult::Changed(()),
+							)	
 						} else {
 							// nothing to delete
 							(Default::default(), UpdateResult::Unchanged)
@@ -642,20 +678,21 @@ impl BlockChainLocalAt {
 							}
 						},
 					}
-
 				}
-
 			}
 			Ok(is_set)
 		}();
 
-		// clean the lock map if we're the only entry
-		let mut locks = self.locks.lock();
-		{
-			drop(key_lock);
-			let key_lock = locks.get_mut(&key);
-			if let Some(_) = key_lock.and_then(Arc::get_mut) {
-				locks.remove(&key);
+	
+		if let Some(key_lock) = key_lock {
+			// clean the lock map if we're the only entry
+			let mut locks = self.locks.lock();
+			{
+				drop(key_lock);
+				let key_lock = locks.get_mut(&key);
+				if let Some(_) = key_lock.and_then(Arc::get_mut) {
+					locks.remove(&key);
+				}
 			}
 		}
 		result
