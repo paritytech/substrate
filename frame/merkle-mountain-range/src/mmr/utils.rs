@@ -111,7 +111,7 @@ mod tests {
 		let mut actual_sizes = vec![];
 		for s in &leaves[1..] {
 			crate::tests::new_test_ext().execute_with(|| {
-				let mut mmr = crate::mmr::MMR::<
+				let mut mmr = crate::mmr::Mmr::<
 					crate::mmr::storage::RuntimeStorage,
 					crate::tests::Test,
 					crate::DefaultInstance,
