@@ -126,7 +126,7 @@ pub struct Limits {
 ///    instruction.
 /// 4. We price both i64.const and drop as InstructionWeights.i64const / 2. The reason
 ///    for that is that we cannot benchmark either of them on its own but we need their
-///    individual values to derive (by substraction) the weight of all other instructions
+///    individual values to derive (by subtraction) the weight of all other instructions
 ///    that use them as supporting instructions. Supporting means mainly pushing arguments
 ///    and dropping return values in order to maintain a valid module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
