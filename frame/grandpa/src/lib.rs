@@ -373,6 +373,17 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+	/// Get the storage key for the `CurrentSetId` field.
+	///
+	/// NOTE: This was added as it was necessary by external modules (e.g.
+	/// bridge) to query storage directly for this field, but we didn't want to
+	/// make this field public so as to avoid any mutation happening from other
+	/// pallets (it could still happen by directly manipulating storage though).
+	pub fn current_set_id_storage_key() -> [u8; 32] {
+		use frame_support::storage::generator::StorageValue;
+		CurrentSetId::storage_value_final_key()
+	}
+
 	/// Get the current set of authorities, along with their respective weights.
 	pub fn grandpa_authorities() -> AuthorityList {
 		storage::unhashed::get_or_default::<VersionedAuthorityList>(GRANDPA_AUTHORITIES_KEY).into()
