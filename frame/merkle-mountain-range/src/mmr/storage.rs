@@ -69,7 +69,7 @@ impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T,
 	}
 
 	fn append(&mut self, _: u64, _: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
-		unimplemented!("MMR must not be altered in the off-chain context.")
+		panic!("MMR must not be altered in the off-chain context.")
  	}
 }
 

@@ -51,7 +51,6 @@ impl NodesUtils {
 
 		64 - self.no_of_leaves
 				.next_power_of_two()
-				.to_le()
 				.leading_zeros()
 	}
 }

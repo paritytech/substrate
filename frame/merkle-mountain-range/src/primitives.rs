@@ -48,6 +48,12 @@ impl LeafDataProvider for () {
 	}
 }
 
+/// The most common use case for MMRs is to store historical block hashes,
+/// so that any point in time in the future we can receive a proof about some past
+/// blocks without using excessive on-chain storage.
+/// Hence we implement the [LeafDataProvider] for [frame_system::Module], since the
+/// current block hash is not available (since the block is not finished yet),
+/// we use the `parent_hash` here.
 impl<T: frame_system::Trait> LeafDataProvider for frame_system::Module<T> {
 	type LeafData = <T as frame_system::Trait>::Hash;
 
@@ -72,18 +78,20 @@ impl<T: codec::Encode + codec::Decode + Clone + PartialEq + fmt::Debug> FullLeaf
 	}
 }
 
-/// An element representing either raw leaf data or a hash.
+/// An element representing either full data or it's hash.
 ///
 /// See [Compact] to see how it may be used in practice to reduce the size
 /// of proofs in case multiple [LeafDataProvider]s are composed together.
+/// This is also used internally by the MMR to differentiate leaf nodes (data)
+/// and inner nodes (hashes).
 ///
-/// [DataOrHash::hash] method is calculating the hash of this element in it's compact form,
+/// [DataOrHash::hash] method calculates the hash of this element in it's compact form,
 /// so should be used instead of hashing the encoded form (which will always be non-compact).
 #[derive(RuntimeDebug, Clone, PartialEq)]
 pub enum DataOrHash<H: traits::Hash, L> {
-	/// A terminal leaf node, storing arbitrary content.
+	/// Arbitrary data in it's full form.
 	Data(L),
-	/// An inner node - always just a hash.
+	/// A hash of some data.
 	Hash(H::Output),
 }
 

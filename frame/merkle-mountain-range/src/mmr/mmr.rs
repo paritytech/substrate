@@ -76,11 +76,11 @@ impl<StorageType, T, I, L> Mmr<StorageType, T, I, L> where
 			proof.items.into_iter().map(Node::Hash).collect(),
 		);
 		let position = mmr_lib::leaf_index_to_pos(proof.leaf_index);
-		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.debug(e))?;
+		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.log_error(e))?;
 		p.verify(
 			root,
 			vec![(position, Node::Data(leaf))],
-		).map_err(|e| Error::Verify.debug(e))
+		).map_err(|e| Error::Verify.log_debug(e))
 	}
 
 	/// Return the internal size of the MMR (number of nodes).
@@ -101,10 +101,11 @@ impl<T, I, L> Mmr<RuntimeStorage, T, I, L> where
 	///
 	/// Returns element position (index) in the MMR.
 	pub fn push(&mut self, leaf: L) -> Option<u64> {
-		let position = self.mmr.push(Node::Data(leaf)).map_err(|e| {
-			debug::native::error!("Error while pushing MMR node: {:?}", e);
-			()
-		}).map_err(|e| Error::Push.debug(e)).ok()?;
+		let position = self.mmr.push(Node::Data(leaf))
+			.map_err(|e| Error::Push.log_error(
+				format!("Error while pushing MMR node: {:?}", e)
+			))
+			.ok()?;
 
 		self.leaves += 1;
 
@@ -114,8 +115,8 @@ impl<T, I, L> Mmr<RuntimeStorage, T, I, L> where
 	/// Commit the changes to underlying storage, return current number of leaves and
 	/// calculate the new MMR's root hash.
 	pub fn finalize(self) -> Result<(u64, <T as Trait<I>>::Hash), Error> {
-		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.debug(e))?;
-		self.mmr.commit().map_err(|e| Error::Commit.debug(e))?;
+		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.log_error(e))?;
+		self.mmr.commit().map_err(|e| Error::Commit.log_error(e))?;
 		Ok((self.leaves, root.hash()))
 	}
 }
@@ -138,11 +139,11 @@ impl<T, I, L> Mmr<OffchainStorage, T, I, L> where
 		let store = <Storage<OffchainStorage, T, I, L>>::default();
 		let leaf = match mmr_lib::MMRStore::get_elem(&store, position) {
 			Ok(Some(Node::Data(leaf))) => leaf,
-			e => return Err(Error::LeafNotFound.debug(e)),
+			e => return Err(Error::LeafNotFound.log_debug(e)),
 		};
 		let leaf_count = self.leaves;
 		self.mmr.gen_proof(vec![position])
-			.map_err(|e| Error::GenerateProof.debug(e))
+			.map_err(|e| Error::GenerateProof.log_error(e))
 			.map(|p| primitives::Proof {
 				leaf_index,
 				leaf_count,
@@ -171,10 +172,17 @@ pub enum Error {
 }
 
 impl Error {
-	/// Replace given error `e` with `self` and generate a log entry with error details.
-	pub(crate) fn debug(self, e: impl fmt::Debug) -> Self {
+	/// Consume given error `e` with `self` and generate a native log entry with error details.
+	pub(crate) fn log_error(self, e: impl fmt::Debug) -> Self {
 		debug::native::error!("[{:?}] MMR error: {:?}", self, e);
 		self
 	}
+
+	/// Consume given error `e` with `self` and generate a native log entry with error details.
+	pub(crate) fn log_debug(self, e: impl fmt::Debug) -> Self {
+		debug::native::debug!("[{:?}] MMR error: {:?}", self, e);
+		self
+	}
+
 }
 

@@ -203,8 +203,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			|| proof.leaf_count == 0
 			|| proof.items.len() as u32 > mmr::utils::NodesUtils::new(proof.leaf_count).depth()
 		{
-			return Err(mmr::Error::Verify.debug(
-				"Proof has incorrect number of leaves or proof items."
+			return Err(mmr::Error::Verify.log_debug(
+				"The proof has incorrect number of leaves or proof items."
 			));
 		}
 
@@ -213,7 +213,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		if is_valid {
 			Ok(())
 		} else {
-			Err(mmr::Error::Verify.debug("Incorrect proof."))
+			Err(mmr::Error::Verify.log_debug("The proof is incorrect."))
 		}
 	}
 }
