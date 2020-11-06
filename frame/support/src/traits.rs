@@ -1724,6 +1724,24 @@ pub trait Instance: 'static {
 	const PREFIX: &'static str;
 }
 
+/// An instance of a storage.
+///
+/// It is required the the couple `(PalletInfo::name<Pallet>(), STORAGE_PREFIX)` is unique.
+/// Any storage with same couple will collide.
+pub trait StorageInstance {
+	type Pallet: 'static;
+	type PalletInfo: PalletInfo;
+	const STORAGE_PREFIX: &'static str;
+}
+
+/// Implement Get by returning Default for any type that implements Default.
+pub struct GetDefault;
+impl<T: Default> crate::traits::Get<T> for GetDefault {
+	fn get() -> T {
+		T::default()
+	}
+}
+
 /// A trait similar to `Convert` to convert values from `B` an abstract balance type
 /// into u64 and back from u128. (This conversion is used in election and other places where complex
 /// calculation over balance type is needed)
