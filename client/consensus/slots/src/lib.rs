@@ -631,7 +631,7 @@ impl<N: BaseArithmetic> Default for SimpleBackoffAuthoringBlocksStrategy<N> {
 			// Never wait more than 100 slots before authoring blocks, regardless of delay in
 			// finality.
 			max_interval: 100.into(),
-			// Start to consider backing off block authorship once we have 5 or more unfinalized
+			// Start to consider backing off block authorship once we have 50 or more unfinalized
 			// blocks at the head of the chain.
 			unfinalized_slack: 50.into(),
 			// A reasonable default for the authoring bias, or reciprocal interval scaling, is 2.
@@ -1015,13 +1015,13 @@ mod test {
 	}
 
 	// Denoting
-	// 	C: unfinalized_slack
+	//	C: unfinalized_slack
 	//	M: authoring_bias
 	//	X: max_interval
 	// then the number of slots to reach the max interval can be computed from
-	// 	(start_slot + C) + M * sum(n, 1, X)
+	//	(start_slot + C) + M * sum(n, 1, X)
 	// or
-	//  (start_slot + C) + M * X*(X+1)/2
+	//	(start_slot + C) + M * X*(X+1)/2
 	fn expected_time_to_reach_max_interval(
 		param: &SimpleBackoffAuthoringBlocksStrategy<u64>
 	) -> (u64, u64) {
