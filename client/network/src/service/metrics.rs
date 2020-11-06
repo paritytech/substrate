@@ -79,6 +79,7 @@ pub struct Metrics {
 	pub requests_in_success_total: HistogramVec,
 	pub requests_out_failure_total: CounterVec<U64>,
 	pub requests_out_success_total: HistogramVec,
+	// TODO: Is this still used anywhere?
 	pub requests_out_started_total: CounterVec<U64>,
 }
 

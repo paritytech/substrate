@@ -1575,6 +1575,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		}
 
 		// TODO: rework
+		// TODO: One could as well merge the block and finality loop.
 		let mut finished = Vec::new();
 		// Check for finished outgoing requests.
 		for (id, peer) in self.context_data.peers.iter_mut() {

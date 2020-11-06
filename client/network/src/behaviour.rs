@@ -100,8 +100,12 @@ pub enum BehaviourOut<B: BlockT> {
 
 	/// A request initiated using [`Behaviour::send_request`] has succeeded or failed.
 	RequestFinished {
-		/// Request that has succeeded.
-		request_id: RequestId,
+		peer: PeerId,
+		/// Name of the protocol in question.
+		protocol: Cow<'static, str>,
+		// TODO: Document.
+		duration: Duration,
+		result: Result<(), RequestFailure>,
 	},
 
 	/// Opened a substream with the given node with the given notifications protocol.
@@ -439,10 +443,10 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Even
 					result,
 				});
 			}
-			request_responses::Event::RequestFinished { peer, protocol, request_id } => {
+			request_responses::Event::RequestFinished { peer, protocol, duration, result } => {
 				// TODO: Add everything here we need to capture the event in metrics. E.g. protocol.
 				self.events.push_back(BehaviourOut::RequestFinished {
-					request_id,
+					peer, protocol, duration, result,
 				});
 			},
 		}

@@ -50,7 +50,8 @@ use libp2p::{
 };
 use std::{
 	borrow::Cow, collections::{hash_map::Entry, HashMap}, convert::TryFrom as _, io, iter,
-	pin::Pin, task::{Context, Poll}, time::Duration,
+	// TODO: Should we use wasm_timer instant here?
+	pin::Pin, task::{Context, Poll}, time::{Duration, Instant},
 };
 
 pub use libp2p::request_response::{InboundFailure, OutboundFailure, RequestId};
@@ -139,8 +140,10 @@ pub enum Event {
 		peer: PeerId,
 		/// Name of the protocol in question.
 		protocol: Cow<'static, str>,
-		/// Request that has succeeded.
-		request_id: RequestId,
+		// TODO: Document.
+		duration: Duration,
+		// TODO: Document.
+		result: Result<(), RequestFailure>
 	},
 }
 
@@ -155,7 +158,7 @@ pub struct RequestResponsesBehaviour {
 	>,
 
 	// TODO: Document
-	pending_requests: HashMap<RequestId, oneshot::Sender<Result<Vec<u8>, RequestFailure>>>,
+	pending_requests: HashMap<RequestId, (Instant, oneshot::Sender<Result<Vec<u8>, RequestFailure>>)>,
 
 	/// Whenever an incoming request arrives, a `Future` is added to this list and will yield the
 	/// response to send back to the remote.
@@ -226,7 +229,7 @@ impl RequestResponsesBehaviour {
 		if let Some((protocol, _)) = self.protocols.get_mut(protocol) {
 			if protocol.is_connected(target) {
 				let request_id = protocol.send_request(target, request);
-				self.pending_requests.insert(request_id, pending_response);
+				self.pending_requests.insert(request_id, (Instant::now(), pending_response));
 			} else {
 				pending_response.send(Err(RequestFailure::NotConnected));
 			}
@@ -465,20 +468,24 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								},
 							..
 						} => {
-							match self.pending_requests.remove(&request_id) {
-								Some(pending_response) => {
+							// TODO: Rework.
+							let started = match self.pending_requests.remove(&request_id) {
+								Some((started, pending_response)) => {
 									pending_response.send(
 										response.map_err(|()| RequestFailure::Refused),
 									).unwrap();
+									started
 								}
 								None => {
 									todo!("handle this");
 								}
-							}
+							};
 							let out = Event::RequestFinished {
 								peer,
 								protocol: protocol.clone(),
-								request_id,
+								duration: started.elapsed(),
+								// TODO: Don't send OK when the error was mapped above as refused.
+								result: Ok(()),
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}
@@ -490,20 +497,32 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							error,
 							..
 						} => {
-							match self.pending_requests.remove(&request_id) {
-								Some(pending_response) => {
+							// TODO: Remove hack
+							let error_clone = match &error {
+								OutboundFailure::ConnectionClosed => OutboundFailure::ConnectionClosed,
+								OutboundFailure::DialFailure => OutboundFailure::DialFailure,
+								OutboundFailure::Timeout => OutboundFailure::Timeout,
+								OutboundFailure::UnsupportedProtocols => OutboundFailure::UnsupportedProtocols,
+							};
+
+							// TODO: Rework.
+							let started = match self.pending_requests.remove(&request_id) {
+								Some((started, pending_response)) => {
 									pending_response.send(
 										Err(RequestFailure::Network(error)),
 									).unwrap();
+									started
 								}
 								None => {
 									todo!("handle this");
 								}
-							}
+							};
+
 							let out = Event::RequestFinished {
 								peer,
 								protocol: protocol.clone(),
-								request_id,
+								duration: started.elapsed(),
+								result: Err(RequestFailure::Network(error_clone)),
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}

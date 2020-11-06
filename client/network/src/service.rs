@@ -1405,59 +1405,36 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						}
 					}
 				},
-				// TODO: Retrieve started and Protocol from `RequestFinished` and make result
-				// optional. That way we can also return `RequestFinished` for internal requests
-				// (block, finality and light-client) thus tracking metrics for them as well.
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { request_id })) => {
-					// if let Some((send_back, started, protocol)) = this.pending_requests.remove(&request_id) {
-					// 	if let Some(metrics) = this.metrics.as_ref() {
-					// 		match &result {
-					// 			Ok(_) => {
-					// 				metrics.requests_out_success_total
-					// 					.with_label_values(&[&protocol])
-					// 					.observe(started.elapsed().as_secs_f64());
-					// 			}
-					// 			Err(err) => {
-					// 				let reason = match err {
-					// 					RequestFailure::Refused => "refused",
-					// 					RequestFailure::Network(OutboundFailure::DialFailure) =>
-					// 						"dial-failure",
-					// 					RequestFailure::Network(OutboundFailure::Timeout) =>
-					// 						"timeout",
-					// 					RequestFailure::Network(OutboundFailure::ConnectionClosed) =>
-					// 						"connection-closed",
-					// 					RequestFailure::Network(OutboundFailure::UnsupportedProtocols) =>
-					// 						"unsupported",
-					// 				};
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { peer, protocol, duration, result })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						match result {
+							Ok(_) => {
+								metrics.requests_out_success_total
+									.with_label_values(&[&protocol])
+									.observe(duration.as_secs_f64());
+							}
+							Err(err) => {
+								let reason = match err {
+									RequestFailure::NotConnected => "not-connected",
+									RequestFailure::UnknownProtocol => "unknown-protocol",
+									RequestFailure::Refused => "refused",
+									RequestFailure::Network(OutboundFailure::DialFailure) =>
+										"dial-failure",
+									RequestFailure::Network(OutboundFailure::Timeout) =>
+										"timeout",
+									RequestFailure::Network(OutboundFailure::ConnectionClosed) =>
+										"connection-closed",
+									RequestFailure::Network(OutboundFailure::UnsupportedProtocols) =>
+										"unsupported",
+								};
 
-					// 				metrics.requests_out_failure_total
-					// 					.with_label_values(&[&protocol, reason])
-					// 					.inc();
-					// 			}
-					// 		}
-					// 	}
-					// 	let _ = send_back.send(result);
-					// } else {
-					// 	error!("Request not in pending_requests");
-					// }
+								metrics.requests_out_failure_total
+									.with_label_values(&[&protocol, reason])
+									.inc();
+							}
+						}
+					}
 				},
-				// TODO: Is this still needed? Can we not do this within the substrate
-				// requests_response behaviour?
-				//
-				// Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestStarted { protocol, .. })) => {
-				// 	if let Some(metrics) = this.metrics.as_ref() {
-				// 		metrics.requests_out_started_total
-				// 			.with_label_values(&[&protocol])
-				// 			.inc();
-				// 	}
-				// },
-				// Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestFinished { protocol, request_duration, .. })) => {
-				// 	if let Some(metrics) = this.metrics.as_ref() {
-				// 		metrics.requests_out_success_total
-				// 			.with_label_values(&[&protocol])
-				// 			.observe(request_duration.as_secs_f64());
-				// 	}
-				// },
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(protocol))) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.kademlia_random_queries_total
