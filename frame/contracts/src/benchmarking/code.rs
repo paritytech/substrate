@@ -352,7 +352,7 @@ impl<T: Trait> WasmModule<T> {
 pub mod body {
 	use super::*;
 
-	/// When generating contract code by repeating a wasm sequence, it sometimes necessary
+	/// When generating contract code by repeating a wasm sequence, it's sometimes necessary
 	/// to change those instructions on each repetition. The variants of this enum describe
 	/// various ways in which this can happen.
 	pub enum DynInstr {
@@ -361,7 +361,7 @@ pub mod body {
 		/// Insert a I32Const with incrementing value for each insertion.
 		/// (start_at, increment_by)
 		Counter(u32, u32),
-		/// Insert a I32Const with a random value in [low, high) not devisable by two.
+		/// Insert a I32Const with a random value in [low, high) not divisible by two.
 		/// (low, high)
 		RandomUnaligned(u32, u32),
 		/// Insert a I32Const with a random value in [low, high).

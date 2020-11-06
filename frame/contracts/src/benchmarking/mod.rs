@@ -124,7 +124,7 @@ impl<T: Trait> Contract<T> {
 
 		// The default block number is zero. The benchmarking system bumps the block number
 		// to one for the benchmarking closure when it is set to zero. In order to prevent this
-		// undesired implicit bump (which messes with rent collection), wo do the bump ourselfs
+		// undesired implicit bump (which messes with rent collection), we do the bump ourselves
 		// in the setup closure so that both the instantiate and subsequent call are run with the
 		// same block number.
 		System::<T>::set_block_number(1u32.into());
@@ -2207,7 +2207,7 @@ benchmarks! {
 	instr_i64add {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64Eq,
+			Instruction::I64Add,
 			r * INSTR_BENCHMARK_BATCH_SIZE,
 		));
 	}: {
