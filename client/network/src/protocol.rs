@@ -247,11 +247,20 @@ struct PacketStats {
 #[derive(Debug, Clone)]
 struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
-	/// Current block request, if any.
-	// TODO: Is Instant stil needed?
+	/// Current block request, if any. Started by emitting [`CustomMessageOutcome::BlockRequest`].
+	///
+	/// [`libp2p::request_response::RequestId`] is [`Some`] once the block request is send off and
+	/// [`Protocol::on_block_request_started`] is called.
 	block_request: Option<(message::BlockRequest<B>, Option<libp2p::request_response::RequestId>)>,
-	// TODO: Document
-	finality_request: Option<(message::FinalityProofRequest<B::Hash>, Option<libp2p::request_response::RequestId>)>,
+	/// Current finality request, if any. Started by emitting
+	/// [`CustomMessageOutcome::FinalityProofRequest`].
+	///
+	/// [`libp2p::request_response::RequestId`] is [`Some`] once the finality request is send off
+	/// and [`Protocol::on_finality_proof_request_started`] is called.
+	finality_request: Option<(
+		message::FinalityProofRequest<B::Hash>,
+		Option<libp2p::request_response::RequestId>,
+	)>,
 	/// Holds a set of transactions known to this peer.
 	known_transactions: LruHashSet<H>,
 	/// Holds a set of blocks known to this peer.
