@@ -633,7 +633,7 @@ impl<N: BaseArithmetic> Default for SimpleBackoffAuthoringBlocksStrategy<N> {
 			max_interval: 100.into(),
 			// Start to consider backing off block authorship once we have 5 or more unfinalized
 			// blocks at the head of the chain.
-			unfinalized_slack: 5.into(),
+			unfinalized_slack: 50.into(),
 			// A reasonable default for the authoring bias, or reciprocal interval scaling, is 2.
 			// Effectively meaning that consider the unfinalized head suffix length to grow half as
 			// fast as in actuality.
