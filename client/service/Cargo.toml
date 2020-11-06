@@ -87,6 +87,9 @@ parity-util-mem = { version = "0.7.0", default-features = false, features = ["pr
 tempfile = "3.1.0"
 directories = "2.0.2"
 
+[target.'cfg(target_os = "unknown")'.dependencies]
+wasm-bindgen = "0.2.67"
+
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime/" }

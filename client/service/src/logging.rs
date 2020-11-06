@@ -19,23 +19,41 @@
 //! TODO doc
 
 use ansi_term::Colour;
-use std::fmt;
+use std::{fmt, marker::PhantomData, cell::RefCell};
 use tracing::{span::Attributes, Event, Id, Level, Subscriber};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
 	filter::Directive,
+	field::RecordFields,
 	fmt::{
-		time::{ChronoLocal, FormatTime, SystemTime},
+		format, time::{ChronoLocal, FormatTime, SystemTime},
 		FmtContext, FormatEvent, FormatFields,
 	},
 	layer::{Context, SubscriberExt},
-	registry::LookupSpan,
+	registry::{LookupSpan, SpanRef},
 	FmtSubscriber,
 	Layer,
 };
+#[cfg(target_os = "unknown")]
+use wasm_bindgen::prelude::*;
 
 /// Span name used for the logging prefix. See macro `sc_cli::prefix_logs_with!`
 pub const PREFIX_LOG_SPAN: &str = "substrate-log-prefix";
+
+#[cfg(target_os = "unknown")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console, js_name = error)]
+    fn error(message: &str);
+    #[wasm_bindgen(js_namespace = console, js_name = warn)]
+    fn warn(message: &str);
+    #[wasm_bindgen(js_namespace = console, js_name = info)]
+    fn info(message: &str);
+    #[wasm_bindgen(js_namespace = console, js_name = log)]
+    fn log(message: &str);
+    #[wasm_bindgen(js_namespace = console, js_name = debug)]
+    fn debug(message: &str);
+}
 
 /// TODO doc
 pub struct EventFormat<T = SystemTime> {
@@ -51,22 +69,23 @@ pub struct EventFormat<T = SystemTime> {
 	pub display_thread_name: bool,
 }
 
-// NOTE: the following code took inspiration from tracing-subscriber
-//
-//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L449
-impl<S, N, T> FormatEvent<S, N> for EventFormat<T>
+impl<T> EventFormat<T>
 where
-	S: Subscriber + for<'a> LookupSpan<'a>,
-	N: for<'a> FormatFields<'a> + 'static,
 	T: FormatTime,
 {
-	fn format_event(
+	// NOTE: the following code took inspiration from tracing-subscriber
+	//
+	//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L449
+	fn format_event_custom<'b, S, N>(
 		&self,
-		ctx: &FmtContext<S, N>,
+		ctx: CustomFmtContext<'b, S, N>,
 		writer: &mut dyn fmt::Write,
 		event: &Event,
-	) -> fmt::Result {
-		write!(writer, "############# boo");
+	) -> fmt::Result
+	where
+		S: Subscriber + for<'a> LookupSpan<'a>,
+		N: for<'a> FormatFields<'a> + 'static,
+	{
 		if event.metadata().target() == sc_telemetry::TELEMETRY_LOG_SPAN {
 			return Ok(());
 		}
@@ -110,6 +129,25 @@ where
 		}
 		ctx.format_fields(writer, event)?;
 		writeln!(writer)
+	}
+}
+
+// NOTE: the following code took inspiration from tracing-subscriber
+//
+//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L449
+impl<S, N, T> FormatEvent<S, N> for EventFormat<T>
+where
+	S: Subscriber + for<'a> LookupSpan<'a>,
+	N: for<'a> FormatFields<'a> + 'static,
+	T: FormatTime,
+{
+	fn format_event(
+		&self,
+		ctx: &FmtContext<S, N>,
+		writer: &mut dyn fmt::Write,
+		event: &Event,
+	) -> fmt::Result {
+		self.format_event_custom(CustomFmtContext::FmtContext(ctx), writer, event)
 	}
 }
 
@@ -283,6 +321,140 @@ mod time {
 	}
 }
 
+struct ConsoleLogLayer<S, N = format::DefaultFields, T = SystemTime> {
+	event_format: EventFormat<T>,
+	fmt_fields: N,
+	_inner: PhantomData<S>,
+}
+
+impl<S, T> ConsoleLogLayer<S, format::DefaultFields, T> {
+	fn new(event_format: EventFormat<T>) -> Self {
+		Self {
+			event_format,
+			fmt_fields: format::DefaultFields::default(),
+			_inner: PhantomData,
+		}
+	}
+}
+
+// NOTE: the following code took inspiration from `EventFormat` (in this file)
+impl<S, N, T: FormatTime> ConsoleLogLayer<S, N, T>
+where
+	S: Subscriber + for<'a> LookupSpan<'a>,
+	N: for<'writer> FormatFields<'writer> + 'static,
+{
+	fn format_event(
+		&self,
+		ctx: &Context<'_, S>,
+		writer: &mut dyn fmt::Write,
+		event: &Event,
+	) -> fmt::Result {
+		self.event_format.format_event_custom(
+			CustomFmtContext::ContextWithFormatFields(ctx, &self.fmt_fields),
+			writer,
+			event,
+		)
+	}
+}
+
+// NOTE: the following code took inspiration from tracing-subscriber
+//
+//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/fmt_layer.rs#L717
+impl<S, N, T> Layer<S> for ConsoleLogLayer<S, N, T>
+where
+	S: Subscriber + for<'a> LookupSpan<'a>,
+	N: for<'writer> FormatFields<'writer> + 'static,
+	T: FormatTime + 'static,
+{
+
+	fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
+		thread_local! {
+			static BUF: RefCell<String> = RefCell::new(String::new());
+		}
+
+		BUF.with(|buf| {
+			let borrow = buf.try_borrow_mut();
+			let mut a;
+			let mut b;
+			let mut buf = match borrow {
+				Ok(buf) => {
+					a = buf;
+					&mut *a
+				}
+				_ => {
+					b = String::new();
+					&mut b
+				}
+			};
+
+			if self.format_event(&ctx, &mut buf, event).is_ok() {
+				if !buf.is_empty() {
+					let meta = event.metadata();
+					let level = meta.level();
+					// NOTE: the following code took inspiration from tracing-subscriber
+					//
+					//       https://github.com/iamcodemaker/console_log/blob/f13b5d6755/src/lib.rs#L149
+					match *level {
+						Level::ERROR => error(&buf),
+						Level::WARN => warn(&buf),
+						Level::INFO => info(&buf),
+						Level::DEBUG => log(&buf),
+						Level::TRACE => debug(&buf),
+					}
+				}
+			}
+
+			buf.clear();
+		});
+	}
+}
+
+// NOTE: `FmtContext`'s fields are private. This enum allows us to make a `format_event` function
+//       that works with `FmtContext` or `Context` with `FormatFields`
+enum CustomFmtContext<'a, S, N>
+{
+	FmtContext(&'a FmtContext<'a, S, N>),
+	ContextWithFormatFields(&'a Context<'a, S>, &'a N),
+}
+
+impl<'a, S, N> FormatFields<'a> for CustomFmtContext<'a, S, N>
+where
+	S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+	N: for<'writer> FormatFields<'writer> + 'static,
+{
+	fn format_fields<R: RecordFields>(
+		&self,
+		writer: &'a mut dyn fmt::Write,
+		fields: R,
+	) -> fmt::Result {
+		match self {
+			CustomFmtContext::FmtContext(fmt_ctx) => fmt_ctx.format_fields(writer, fields),
+			CustomFmtContext::ContextWithFormatFields(_ctx, fmt_fields) =>
+				fmt_fields.format_fields(writer, fields),
+		}
+	}
+}
+
+// NOTE: the following code has been duplicated from tracing-subscriber
+//
+//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/fmt_layer.rs#L788
+impl<'a, S, N> CustomFmtContext<'a, S, N>
+where
+	S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+	N: for<'writer> FormatFields<'writer> + 'static,
+{
+	#[inline]
+	pub fn lookup_current(&self) -> Option<SpanRef<'_, S>>
+	where
+		S: for<'lookup> LookupSpan<'lookup>,
+	{
+		match self {
+			CustomFmtContext::FmtContext(fmt_ctx) => fmt_ctx.lookup_current(),
+			CustomFmtContext::ContextWithFormatFields(ctx, _) => ctx.lookup_current(),
+		}
+	}
+}
+
 /// Initialize the global logger TODO update doc
 ///
 /// This sets various global logging and tracing instances and thus may only be called once.
@@ -377,19 +549,32 @@ fn get_default_subscriber_and_telemetries_internal(
 
 	let telemetry_layer = sc_telemetry::TelemetryLayer::new(telemetry_external_transport);
 	let telemetries = telemetry_layer.telemetries();
-	let subscriber = FmtSubscriber::builder()
+	let event_format = EventFormat {
+		timer,
+		ansi: enable_color,
+		display_target: !simple,
+		display_level: !simple,
+		display_thread_name: !simple,
+	};
+	let builder = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
-		.with_writer(std::io::stderr)
-		.event_format(EventFormat {
-			timer,
-			ansi: enable_color,
-			display_target: !simple,
-			display_level: !simple,
-			display_thread_name: !simple,
-		})
+		.with_writer(
+			#[cfg(not(target_os = "unknown"))]
+			std::io::stderr,
+			#[cfg(target_os = "unknown")]
+			std::io::sink,
+		);
+
+	#[cfg(not(target_os = "unknown"))]
+	let builder = builder.event_format(event_format);
+
+	let subscriber = builder
 		.finish()
 		.with(NodeNameLayer)
 		.with(telemetry_layer);
+
+	#[cfg(target_os = "unknown")]
+	let subscriber = subscriber.with(ConsoleLogLayer::new(event_format));
 
 	Ok((subscriber, telemetries))
 }

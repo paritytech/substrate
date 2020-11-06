@@ -19,7 +19,6 @@ log = "0.4.8"
 libp2p-wasm-ext = { version = "0.23", features = ["websocket"] }
 console_error_panic_hook = "0.1.6"
 js-sys = "0.3.34"
-tracing-wasm = "0.1.0"
 tracing = "0.1.10"
 tracing-subscriber = "0.2.10"
 wasm-bindgen = "0.2.57"

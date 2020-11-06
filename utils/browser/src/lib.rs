@@ -30,7 +30,6 @@ use futures::{
 use std::pin::Pin;
 use sc_chain_spec::Extension;
 use libp2p_wasm_ext::{ExtTransport, ffi};
-use tracing_wasm::{WASMLayerConfig, WASMLayer};
 use tracing_subscriber::layer::SubscriberExt;
 
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
@@ -43,9 +42,6 @@ pub fn init_console_log(pattern: &str, /* level: log::Level, TODO not needed any
 		pattern,
 		Some(transport),
 	)?;
-
-	// TODO telemetry is working but WASMLayer bypasses FormatEvent
-	let subscriber = subscriber.with(WASMLayer::new(WASMLayerConfig::default()));
 
 	tracing::subscriber::set_global_default(subscriber)
 		.map_err(|e| format!("could not set global default subscriber: {}", e))?;
