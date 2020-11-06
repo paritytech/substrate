@@ -50,17 +50,21 @@
 //! When a [`NotifsHandlerOut::OpenDesired`] is emitted, the user should always send back either a
 //! [`NotifsHandlerIn::Open`] or a [`NotifsHandlerIn::Close`].If this isn't done, the remote will
 //! be left in a pending state.
+//!
+//! It is illegal to send a [`NotifsHandlerIn::Open`] before a previously-emitted
+//! [`NotifsHandlerIn::Open`] has gotten an answer.
 
 use crate::protocol::generic_proto::{
-	handler::legacy::{LegacyProtoHandler, LegacyProtoHandlerProto, LegacyProtoHandlerIn, LegacyProtoHandlerOut},
-	handler::notif_in::{NotifsInHandlerProto, NotifsInHandler, NotifsInHandlerIn, NotifsInHandlerOut},
-	handler::notif_out::{NotifsOutHandlerProto, NotifsOutHandler, NotifsOutHandlerIn, NotifsOutHandlerOut},
-	upgrade::{NotificationsIn, NotificationsOut, NotificationsHandshakeError, RegisteredProtocol, UpgradeCollec},
+	handler::legacy::{LegacyProtoHandler, LegacyProtoHandlerProto, LegacyProtoHandlerIn},
+	upgrade::{
+		NotificationsIn, NotificationsOut, NotificationsInSubstream, NotificationsOutSubstream,
+		NotificationsHandshakeError, RegisteredProtocol, UpgradeCollec
+	},
 };
 
 use bytes::BytesMut;
 use libp2p::core::{either::EitherOutput, ConnectedPoint, PeerId};
-use libp2p::core::upgrade::{UpgradeError, SelectUpgrade, InboundUpgrade, OutboundUpgrade};
+use libp2p::core::upgrade::{SelectUpgrade, InboundUpgrade, OutboundUpgrade};
 use libp2p::swarm::{
 	ProtocolsHandler, ProtocolsHandlerEvent,
 	IntoProtocolsHandler,
@@ -76,13 +80,24 @@ use futures::{
 };
 use log::error;
 use parking_lot::{Mutex, RwLock};
-use std::{borrow::Cow, collections::VecDeque, mem, str, sync::Arc, task::{Context, Poll}};
+use std::{borrow::Cow, collections::VecDeque, cmp, mem, pin::Pin, str, sync::Arc, task::{Context, Poll}, time::Duration};
+use wasm_timer::Instant;
 
 /// Number of pending notifications in asynchronous contexts.
 /// See [`NotificationsSink::reserve_notification`] for context.
 const ASYNC_NOTIFICATIONS_BUFFER_SIZE: usize = 8;
+
 /// Number of pending notifications in synchronous contexts.
 const SYNC_NOTIFICATIONS_BUFFER_SIZE: usize = 2048;
+
+/// Maximum duration to open a substream and receive the handshake message. After that, we
+/// consider that we failed to open the substream.
+const OPEN_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// After successfully establishing a connection with the remote, we keep the connection open for
+/// at least this amount of time in order to give the rest of the code the chance to notify us to
+/// open substreams.
+const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -92,12 +107,13 @@ const SYNC_NOTIFICATIONS_BUFFER_SIZE: usize = 2048;
 ///
 /// See the documentation at the module level for more information.
 pub struct NotifsHandlerProto {
-	/// Prototypes for handlers for inbound substreams, and the message we respond with in the
+	/// Prototypes for upgrades for inbound substreams, and the message we respond with in the
 	/// handshake.
-	in_handlers: Vec<(NotifsInHandlerProto, Arc<RwLock<Vec<u8>>>)>,
+	in_protocols: Vec<(NotificationsIn, Arc<RwLock<Vec<u8>>>)>,
 
-	/// Prototypes for handlers for outbound substreams, and the initial handshake message we send.
-	out_handlers: Vec<(NotifsOutHandlerProto, Arc<RwLock<Vec<u8>>>)>,
+	/// Name of protocols available for outbound substreams, and the initial handshake message we
+	/// send.
+	out_protocols: Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>,
 
 	/// Prototype for handler for backwards-compatibility.
 	legacy: LegacyProtoHandlerProto,
@@ -107,11 +123,16 @@ pub struct NotifsHandlerProto {
 ///
 /// See the documentation at the module level for more information.
 pub struct NotifsHandler {
-	/// Handlers for inbound substreams, and the message we respond with in the handshake.
-	in_handlers: Vec<(NotifsInHandler, Arc<RwLock<Vec<u8>>>)>,
+	/// Prototypes for upgrades for inbound substreams, and the message we respond with in the
+	/// handshake.
+	in_protocols: Vec<(NotificationsIn, Arc<RwLock<Vec<u8>>>)>,
 
-	/// Handlers for outbound substreams, and the initial handshake message we send.
-	out_handlers: Vec<(NotifsOutHandler, Arc<RwLock<Vec<u8>>>)>,
+	/// Name of protocols available for outbound substreams, and the initial handshake message we
+	/// send.
+	out_protocols: Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>,
+
+	/// When the connection with the remote has been successfully established.
+	when_connection_open: Instant,
 
 	/// Whether we are the connection dialer or listener.
 	endpoint: ConnectedPoint,
@@ -129,18 +150,25 @@ pub struct NotifsHandler {
 }
 
 /// See the module-level documentation to learn about the meaning of these variants.
-#[derive(Debug)]
 enum State {
 	/// Handler is in the "Closed" state.
 	Closed {
-		/// When we receive inbound substream requests, we push here the index within
-		/// [`NotisHandler::in_handlers`], and process them when an `Open` or `Close` request is
-		/// received.
+		/// Vec of the same length as [`NotifsHandler::out_protocols`]. For each protocol, contains
+		/// a boolean indicating whether an outgoing substream is still in the process of being
+		/// opened.
+		pending_opening: Vec<bool>,
+	},
+
+	/// Handler is in the "Closed" state. A [`NotifsHandlerOut::OpenDesired`] has been emitted.
+	OpenDesired {
+		/// Vec of the same length as [`NotifsHandler::in_protocols`]. For each protocol, contains
+		/// a substream opened by the remote and that hasn't been accepted/rejected yet.
 		///
-		/// If this is non-empty, a [`NotifsHandlerOut::OpenDesired`] has been emitted. If this
-		/// transitions from non-empty to empty, a [`NotisHandlerOut::CloseDesired`] or a
-		/// [`NotisHandlerOut::CloseResult`] is emitted.
-		pending_in: Vec<usize>,
+		/// Must always contain at least one `Some`.
+		in_substreams: Vec<Option<NotificationsInSubstream<NegotiatedSubstream>>>,
+
+		/// See [`State::Closed::pending_opening`].
+		pending_opening: Vec<bool>,
 	},
 
 	/// Handler is in the "Closed" state, but has received a [`NotifsHandlerIn::Open`] and is
@@ -154,6 +182,20 @@ enum State {
 		/// [`NotifsHandlerOut::Open`] event yet, this contains the received handshake waiting to
 		/// be reported through the external API.
 		pending_handshake: Option<Vec<u8>>,
+
+		/// Vec of the same length as [`NotifsHandler::in_protocols`]. For each protocol, contains
+		/// a substream opened by the remote and that has been accepted.
+		///
+		/// Contrary to [`State::OpenDesired::in_substreams`], it is possible for this to contain
+		/// only `None`s.
+		in_substreams: Vec<Option<NotificationsInSubstream<NegotiatedSubstream>>>,
+
+		/// Vec of the same length as [`NotifsHandler::out_protocols`]. For each protocol, contains
+		/// an outbound substream that has been accepted by the remote.
+		///
+		/// Items that contain `None` mean that a substream is still being opened. In other words,
+		/// this `Vec` is kind of a mirror version of [`State::Closed::pending_opening`].
+		out_substreams: Vec<Option<NotificationsOutSubstream<NegotiatedSubstream>>>,
 	},
 
 	/// Handler is in the "Open" state.
@@ -168,8 +210,24 @@ enum State {
 			stream::Fuse<mpsc::Receiver<NotificationsSinkMessage>>
 		>,
 
-		/// If true, at least one substream has been closed and a
-		/// [`NotifsHandlerOut::CloseDesired`] message has been sent out.
+		/// Vec of the same length as [`NotifsHandler::out_protocols`]. For each protocol, contains
+		/// an outbound substream that has been accepted by the remote.
+		///
+		/// On transition to [`State::Open`], all the elements must be `Some`. Elements are
+		/// switched to `None` only if the remote closes substreams, in which case `want_closed`
+		/// must be true.
+		out_substreams: Vec<Option<NotificationsOutSubstream<NegotiatedSubstream>>>,
+
+		/// Vec of the same length as [`NotifsHandler::in_protocols`]. For each protocol, contains
+		/// a substream opened by the remote and that has been accepted.
+		///
+		/// Contrary to [`State::OpenDesired::in_substreams`], it is possible for this to contain
+		/// only `None`s.
+		in_substreams: Vec<Option<NotificationsInSubstream<NegotiatedSubstream>>>,
+
+		/// If true, at least one substream in [`State::Open::out_substreams`] has been closed or
+		/// reset by the remote and a [`NotifsHandlerOut::CloseDesired`] message has been sent
+		/// out.
 		want_closed: bool,
 	},
 }
@@ -178,27 +236,24 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 	type Handler = NotifsHandler;
 
 	fn inbound_protocol(&self) -> SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol> {
-		let in_handlers = self.in_handlers.iter()
-			.map(|(h, _)| h.inbound_protocol())
+		let in_protocols = self.in_protocols.iter()
+			.map(|(h, _)| h.clone())
 			.collect::<UpgradeCollec<_>>();
 
-		SelectUpgrade::new(in_handlers, self.legacy.inbound_protocol())
+		SelectUpgrade::new(in_protocols, self.legacy.inbound_protocol())
 	}
 
 	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
+		let num_out_proto = self.out_protocols.len();
+
 		NotifsHandler {
-			in_handlers: self.in_handlers
-				.into_iter()
-				.map(|(proto, msg)| (proto.into_handler(remote_peer_id, connected_point), msg))
-				.collect(),
-			out_handlers: self.out_handlers
-				.into_iter()
-				.map(|(proto, msg)| (proto.into_handler(remote_peer_id, connected_point), msg))
-				.collect(),
+			in_protocols: self.in_protocols,
+			out_protocols: self.out_protocols,
 			endpoint: connected_point.clone(),
+			when_connection_open: Instant::now(),
 			legacy: self.legacy.into_handler(remote_peer_id, connected_point),
 			state: State::Closed {
-				pending_in: Vec::new(),
+				pending_opening: (0..num_out_proto).map(|_| false).collect(),
 			},
 			events_queue: VecDeque::with_capacity(16),
 		}
@@ -417,21 +472,19 @@ impl NotifsHandlerProto {
 		let list = list.into();
 		assert!(!list.is_empty());
 
-		let out_handlers = list
+		let out_protocols = list
 			.clone()
 			.into_iter()
-			.map(|(proto_name, initial_message)| {
-				(NotifsOutHandlerProto::new(proto_name), initial_message)
-			}).collect();
+			.collect();
 
-		let in_handlers = list.clone()
+		let in_protocols = list.clone()
 			.into_iter()
-			.map(|(proto_name, msg)| (NotifsInHandlerProto::new(proto_name), msg))
+			.map(|(proto_name, msg)| (NotificationsIn::new(proto_name), msg))
 			.collect();
 
 		NotifsHandlerProto {
-			in_handlers,
-			out_handlers,
+			in_protocols,
+			out_protocols,
 			legacy: LegacyProtoHandlerProto::new(legacy),
 		}
 	}
@@ -443,16 +496,16 @@ impl ProtocolsHandler for NotifsHandler {
 	type Error = NotifsHandlerError;
 	type InboundProtocol = SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol>;
 	type OutboundProtocol = NotificationsOut;
-	// Index within the `out_handlers`
+	// Index within the `out_protocols`.
 	type OutboundOpenInfo = usize;
 	type InboundOpenInfo = ();
 
 	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, ()> {
-		let in_handlers = self.in_handlers.iter()
-			.map(|(h, _)| h.listen_protocol().into_upgrade().1)
+		let in_protocols = self.in_protocols.iter()
+			.map(|(h, _)| h.clone())
 			.collect::<UpgradeCollec<_>>();
 
-		let proto = SelectUpgrade::new(in_handlers, self.legacy.listen_protocol().into_upgrade().1);
+		let proto = SelectUpgrade::new(in_protocols, self.legacy.listen_protocol().into_upgrade().1);
 		SubstreamProtocol::new(proto, ())
 	}
 
@@ -462,8 +515,50 @@ impl ProtocolsHandler for NotifsHandler {
 		(): ()
 	) {
 		match out {
-			EitherOutput::First((out, num)) =>
-				self.in_handlers[num].0.inject_fully_negotiated_inbound(out, ()),
+			EitherOutput::First(((_remote_handshake, mut proto), num)) => {
+				match &mut self.state {
+					State::Closed { pending_opening } => {
+						self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
+							NotifsHandlerOut::OpenDesired
+						));
+
+						let mut in_substreams = (0..self.in_protocols.len())
+							.map(|_| None)
+							.collect::<Vec<_>>();
+						in_substreams[num] = Some(proto);
+						self.state = State::OpenDesired {
+							in_substreams,
+							pending_opening: mem::replace(pending_opening, Vec::new()),
+						};
+					},
+					State::OpenDesired { in_substreams, .. } => {
+						if in_substreams[num].is_some() {
+							// If a substream already exists, silently drop the new one.
+							// Note that we drop the substream, which will send an equivalent to a
+							// TCP "RST" to the remote and force-close the substream. It might
+							// seem like an unclean way to get rid of a substream. However, keep
+							// in mind that it is invalid for the remote to open multiple such
+							// substreams, and therefore sending a "RST" is the most correct thing
+							// to do.
+							return;
+						}
+						in_substreams[num] = Some(proto);
+					},
+					State::Opening { in_substreams, .. } |
+					State::Open { in_substreams, .. } => {
+						if in_substreams[num].is_some() {
+							// Same remark as above.
+							return;
+						}
+
+						// We create `handshake_message` on a separate line to be sure
+						// that the lock is released as soon as possible.
+						let handshake_message = self.in_protocols[num].1.read().clone();
+						proto.send_handshake(handshake_message);
+						in_substreams[num] = Some(proto);
+					},
+				};
+			}
 			EitherOutput::Second(out) =>
 				self.legacy.inject_fully_negotiated_inbound(out, ()),
 		}
@@ -471,36 +566,108 @@ impl ProtocolsHandler for NotifsHandler {
 
 	fn inject_fully_negotiated_outbound(
 		&mut self,
-		out: <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
+		(handshake, substream): <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
 		num: Self::OutboundOpenInfo
 	) {
-		self.out_handlers[num].0.inject_fully_negotiated_outbound(out, ())
+		match &mut self.state {
+			State::Closed { pending_opening } |
+			State::OpenDesired { pending_opening, .. } => {
+				debug_assert!(pending_opening[num]);
+				pending_opening[num] = false;
+			}
+			State::Open { .. } => {
+				error!(target: "sub-libp2p", "☎️ State mismatch in notifications handler");
+				debug_assert!(false);
+			}
+			State::Opening { pending_handshake, in_substreams, out_substreams } => {
+				debug_assert!(out_substreams[num].is_none());
+				out_substreams[num] = Some(substream);
+
+				if num == 0 {
+					debug_assert!(pending_handshake.is_none());
+					*pending_handshake = Some(handshake);
+				}
+
+				if !out_substreams.iter().any(|s| s.is_none()) {
+					let (async_tx, async_rx) = mpsc::channel(ASYNC_NOTIFICATIONS_BUFFER_SIZE);
+					let (sync_tx, sync_rx) = mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
+					let notifications_sink = NotificationsSink {
+						inner: Arc::new(NotificationsSinkInner {
+							async_channel: FuturesMutex::new(async_tx),
+							sync_channel: Mutex::new(sync_tx),
+						}),
+					};
+
+					debug_assert!(pending_handshake.is_some());
+					let pending_handshake = pending_handshake.take().unwrap_or_default();
+
+					self.state = State::Open {
+						notifications_sink_rx: stream::select(async_rx.fuse(), sync_rx.fuse()),
+						out_substreams: mem::replace(out_substreams, Vec::new()),
+						in_substreams: mem::replace(in_substreams, Vec::new()),
+						want_closed: false,
+					};
+
+					self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::OpenResultOk {
+							endpoint: self.endpoint.clone(),
+							received_handshake: pending_handshake,
+							notifications_sink
+						}
+					));
+				}
+			}
+		}
 	}
 
 	fn inject_event(&mut self, message: NotifsHandlerIn) {
 		match message {
 			NotifsHandlerIn::Open => {
 				match &mut self.state {
-					State::Closed { pending_in } => {
-						for (handler, initial_message) in &mut self.out_handlers {
-							// We create `initial_message` on a separate line to be sure that the
-							// lock is released as soon as possible.
-							let initial_message = initial_message.read().clone();
-							handler.inject_event(NotifsOutHandlerIn::Enable {
-								initial_message,
+					State::Closed { .. } | State::OpenDesired { .. } => {
+						let (pending_opening, mut in_substreams) = match &mut self.state {
+							State::Closed { pending_opening } => (pending_opening, None),
+							State::OpenDesired { pending_opening, in_substreams } =>
+								(pending_opening, Some(mem::replace(in_substreams, Vec::new()))),
+							_ => unreachable!()
+						};
+
+						for (n, is_pending) in pending_opening.iter().enumerate() {
+							if *is_pending {
+								continue;
+							}
+
+							let proto = NotificationsOut::new(
+								self.out_protocols[n].0.clone(),
+								self.out_protocols[n].1.read().clone()
+							);
+
+							self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+								protocol: SubstreamProtocol::new(proto, n)
+									.with_timeout(OPEN_TIMEOUT),
 							});
 						}
 
-						for num in pending_in.drain(..) {
-							// We create `handshake_message` on a separate line to be sure
-							// that the lock is released as soon as possible.
-							let handshake_message = self.in_handlers[num].1.read().clone();
-							self.in_handlers[num].0
-								.inject_event(NotifsInHandlerIn::Accept(handshake_message));
+						if let Some(in_substreams) = in_substreams.as_mut() {
+							for (num, substream) in in_substreams.iter_mut().enumerate() {
+								let substream = match substream.as_mut() {
+									Some(s) => s,
+									None => continue,
+								};
+
+								let handshake_message = self.in_protocols[num].1.read().clone();
+								substream.send_handshake(handshake_message);
+							}
 						}
 
 						self.state = State::Opening {
 							pending_handshake: None,
+							in_substreams: if let Some(in_substreams) = in_substreams {
+								in_substreams
+							} else {
+								(0..self.in_protocols.len()).map(|_| None).collect()
+							},
+							out_substreams: (0..self.out_protocols.len()).map(|_| None).collect(),
 						};
 					},
 					State::Opening { .. } |
@@ -517,12 +684,9 @@ impl ProtocolsHandler for NotifsHandler {
 					State::Open { .. } |
 					State::Opening { .. } => {
 						self.legacy.inject_event(LegacyProtoHandlerIn::Close);
-						for (handler, _) in &mut self.out_handlers {
-							handler.inject_event(NotifsOutHandlerIn::Disable);
-						}
 
 						self.state = State::Closed {
-							pending_in: Vec::new(),
+							pending_opening: Vec::new(),
 						};
 
 						if matches!(self.state, State::Opening { .. }) {
@@ -531,11 +695,13 @@ impl ProtocolsHandler for NotifsHandler {
 							);
 						}
 					},
-					State::Closed { pending_in } => {
-						for num in pending_in.drain(..) {
-							self.in_handlers[num].0.inject_event(NotifsInHandlerIn::Refuse);
-						}
-					},
+					State::OpenDesired { pending_opening, .. } => {
+						// TODO: close in_substreams in a clean way
+						self.state = State::Closed {
+							pending_opening: mem::replace(pending_opening, Vec::new()),
+						};
+					}
+					State::Closed { .. } => {},
 				}
 
 				self.events_queue.push_back(
@@ -550,55 +716,40 @@ impl ProtocolsHandler for NotifsHandler {
 		num: usize,
 		err: ProtocolsHandlerUpgrErr<NotificationsHandshakeError>
 	) {
-		match err {
-			ProtocolsHandlerUpgrErr::Timeout =>
-				self.out_handlers[num].0.inject_dial_upgrade_error(
-					(),
-					ProtocolsHandlerUpgrErr::Timeout
-				),
-			ProtocolsHandlerUpgrErr::Timer =>
-				self.out_handlers[num].0.inject_dial_upgrade_error(
-					(),
-					ProtocolsHandlerUpgrErr::Timer
-				),
-			ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err)) =>
-				self.out_handlers[num].0.inject_dial_upgrade_error(
-					(),
-					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err))
-				),
-			ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(err)) =>
-				self.out_handlers[num].0.inject_dial_upgrade_error(
-					(),
-					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(err))
-				),
+		match &mut self.state {
+			State::Closed { pending_opening } | State::OpenDesired { pending_opening, .. } => {
+				debug_assert!(pending_opening[num]);
+				pending_opening[num] = false;
+			}
+
+			State::Opening { .. } => {
+				// TODO: close already-open substreams in a clean way?
+				let mut pending_opening = (0..self.out_protocols.len())
+					.map(|_| true)
+					.collect::<Vec<_>>();
+				pending_opening[num] = false;
+				self.state = State::Closed {
+					pending_opening,
+				};
+
+				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
+					NotifsHandlerOut::OpenResultErr
+				));
+			}
+
+			// No substream is being open when already `Open`.
+			State::Open { .. } => debug_assert!(false),
 		}
 	}
 
 	fn connection_keep_alive(&self) -> KeepAlive {
-		// Iterate over each handler and return the maximum value.
-
-		let mut ret = self.legacy.connection_keep_alive();
-		if ret.is_yes() {
-			return KeepAlive::Yes;
+		let legacy = self.legacy.connection_keep_alive();
+		match self.state {
+			State::Closed { .. } =>
+				cmp::max(legacy, KeepAlive::Until(self.when_connection_open + INITIAL_KEEPALIVE_TIME)),
+			State::OpenDesired { .. } | State::Opening { .. } | State::Open { .. } =>
+				KeepAlive::Yes,
 		}
-
-		for (handler, _) in &self.in_handlers {
-			let val = handler.connection_keep_alive();
-			if val.is_yes() {
-				return KeepAlive::Yes;
-			}
-			if ret < val { ret = val; }
-		}
-
-		for (handler, _) in &self.out_handlers {
-			let val = handler.connection_keep_alive();
-			if val.is_yes() {
-				return KeepAlive::Yes;
-			}
-			if ret < val { ret = val; }
-		}
-
-		ret
 	}
 
 	fn poll(
@@ -611,7 +762,91 @@ impl ProtocolsHandler for NotifsHandler {
 			return Poll::Ready(ev);
 		}
 
-		if let State::Open { notifications_sink_rx, .. } = &mut self.state {
+		// Poll inbound substreams.
+		// Inbound substreams being closed is always tolerated, except for the `OpenDesired` state
+		// which might need to be switched back to `Closed`.
+		match &mut self.state {
+			State::Closed { .. } => {}
+			State::Open { in_substreams, .. } => {
+				for (num, substream) in in_substreams.iter_mut().enumerate() {
+					match substream.as_mut().map(|s| Stream::poll_next(Pin::new(s), cx)) {
+						None | Some(Poll::Pending) => continue,
+						Some(Poll::Ready(Some(Ok(message)))) => {
+							let event = NotifsHandlerOut::Notification {
+								message,
+								protocol_name: self.in_protocols[num].0.protocol_name().clone(),
+							};
+							return Poll::Ready(ProtocolsHandlerEvent::Custom(event))
+						},
+						// TODO: close in a clean way?
+						Some(Poll::Ready(None)) | Some(Poll::Ready(Some(Err(_)))) =>
+							*substream = None,
+					}
+				}
+			}
+
+			State::OpenDesired { in_substreams, .. } |
+			State::Opening { in_substreams, .. } => {
+				for substream in in_substreams {
+					match substream.as_mut().map(|s| NotificationsInSubstream::poll_process(Pin::new(s), cx)) {
+						None | Some(Poll::Pending) => continue,
+						Some(Poll::Ready(Ok(void))) => match void {},
+						Some(Poll::Ready(Err(_))) => *substream = None,
+					}
+				}
+			}
+		}
+
+		// Since the previous block might have closed inbound substreams, make sure that we can
+		// stay in `OpenDesired` state.
+		if let State::OpenDesired { in_substreams, pending_opening } = &mut self.state {
+			if !in_substreams.iter().any(|s| s.is_some()) {
+				self.state = State::Closed {
+					pending_opening: mem::replace(pending_opening, Vec::new()),
+				};
+				return Poll::Ready(ProtocolsHandlerEvent::Custom(
+					NotifsHandlerOut::CloseDesired
+				))
+			}
+		}
+
+		// Poll outbound substreams.
+		match &mut self.state {
+			State::Open { out_substreams, .. } |
+			State::Opening { out_substreams, .. } => {
+				let mut any_closed = false;
+
+				for substream in out_substreams.iter_mut() {
+					match substream.as_mut().map(|s| Sink::poll_flush(Pin::new(s), cx)) {
+						None | Some(Poll::Pending) | Some(Poll::Ready(Ok(()))) => continue,
+						Some(Poll::Ready(Err(_))) => {}
+					};
+
+					// Reached if the substream has been closed.
+					*substream = None;
+					any_closed = true;
+				}
+
+				if any_closed {
+					if let State::Open { want_closed, .. } = &mut self.state {
+						if !*want_closed {
+							*want_closed = true;
+							return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsHandlerOut::CloseDesired));
+						}
+					} else if let State::Opening { out_substreams, .. } = &mut self.state {
+						// TODO: dispose of `in_substreams` in a clean way
+						let pending_opening = out_substreams.iter().map(|s| s.is_none()).collect();
+						self.state = State::Closed { pending_opening };
+						return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsHandlerOut::OpenResultErr));
+					}
+				}
+			}
+
+			State::Closed { .. } |
+			State::OpenDesired { .. } => {}
+		}
+
+		if let State::Open { notifications_sink_rx, out_substreams, .. } = &mut self.state {
 			'poll_notifs_sink: loop {
 				// Before we poll the notifications sink receiver, check that all the notification
 				// channels are ready to send a message.
@@ -619,13 +854,14 @@ impl ProtocolsHandler for NotifsHandler {
 				// protocol, in which case each sink should wait only for its corresponding handler
 				// to be ready, and not all handlers
 				// see https://github.com/paritytech/substrate/issues/5670
-				for (out_handler, _) in &mut self.out_handlers {
-					match out_handler.poll_ready(cx) {
-						Poll::Ready(_) => {},
-						Poll::Pending => break 'poll_notifs_sink,
+				for substream in out_substreams.iter_mut() {
+					match substream.as_mut().map(|s| s.poll_ready_unpin(cx)) {
+						None | Some(Poll::Ready(_)) => {},
+						Some(Poll::Pending) => break 'poll_notifs_sink
 					}
 				}
 
+				// Now that all substreams are ready for a message, grab what to send.
 				let message = match notifications_sink_rx.poll_next_unpin(cx) {
 					Poll::Ready(Some(msg)) => msg,
 					Poll::Ready(None) | Poll::Pending => break,
@@ -636,28 +872,13 @@ impl ProtocolsHandler for NotifsHandler {
 						protocol_name,
 						message
 					} => {
-						let mut found_any_with_name = false;
-
-						for (handler, _) in &mut self.out_handlers {
-							if *handler.protocol_name() == protocol_name {
-								found_any_with_name = true;
-								if handler.is_open() {
-									handler.send_or_discard(message);
-									continue 'poll_notifs_sink;
-								}
+						if let Some(pos) = self.out_protocols.iter().position(|(n, _)| *n == protocol_name) {
+							if let Some(substream) = out_substreams[pos].as_mut() {
+								let _ = substream.start_send_unpin(message);
+								continue 'poll_notifs_sink;
 							}
-						}
 
-						// This code can be reached via the following scenarios:
-						//
-						// - User tried to send a notification on a non-existing protocol. This
-						// most likely relates to https://github.com/paritytech/substrate/issues/6827
-						// - User tried to send a notification to a peer we're not or no longer
-						// connected to. This happens in a normal scenario due to the racy nature
-						// of connections and disconnections, and is benign.
-						//
-						// We print a warning in the former condition.
-						if !found_any_with_name {
+						} else {
 							log::warn!(
 								target: "sub-libp2p",
 								"Tried to send a notification on non-registered protocol: {:?}",
@@ -674,7 +895,8 @@ impl ProtocolsHandler for NotifsHandler {
 			}
 		}
 
-		// If `self.pending_handshake` is `Some`, we are in a state where the handshake-bearing
+		// TODO: legacy substream
+		/*// If `self.pending_handshake` is `Some`, we are in a state where the handshake-bearing
 		// substream (either the legacy substream or the one special-cased as providing the
 		// handshake) is open but the user isn't aware yet of the substreams being open.
 		// When that is the case, neither the legacy substream nor the incoming notifications
@@ -693,6 +915,7 @@ impl ProtocolsHandler for NotifsHandler {
 								debug_assert!(pending_handshake.is_none());
 								*pending_handshake = Some(received_handshake);
 							}
+							// TODO: wrong
 							_ => debug_assert!(false),
 						}
 
@@ -722,158 +945,7 @@ impl ProtocolsHandler for NotifsHandler {
 						return Poll::Ready(ProtocolsHandlerEvent::Close(NotifsHandlerError::Legacy(err))),
 				}
 			}
-		}
-
-		for (handler_num, (handler, handshake_message)) in self.in_handlers.iter_mut().enumerate() {
-			loop {
-				let poll = if matches!(self.state, State::Open { .. }) {
-					handler.poll(cx)
-				} else {
-					handler.poll_process(cx)
-				};
-
-				let ev = match poll {
-					Poll::Ready(e) => e,
-					Poll::Pending => break,
-				};
-
-				match ev {
-					ProtocolsHandlerEvent::OutboundSubstreamRequest { .. } =>
-						error!("Incoming substream handler tried to open a substream"),
-					ProtocolsHandlerEvent::Close(err) => void::unreachable(err),
-					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest(_)) =>
-						match &mut self.state {
-							State::Closed { pending_in } => {
-								let was_empty = pending_in.is_empty();
-								pending_in.push(handler_num);
-								if was_empty {
-									return Poll::Ready(ProtocolsHandlerEvent::Custom(
-										NotifsHandlerOut::OpenDesired
-									));
-								}
-							},
-							State::Opening { .. } | State::Open { .. } => {
-								// We create `handshake_message` on a separate line to be sure
-								// that the lock is released as soon as possible.
-								let handshake_message = handshake_message.read().clone();
-								handler.inject_event(NotifsInHandlerIn::Accept(handshake_message))
-							},
-						},
-					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed) => {
-						match &mut self.state {
-							State::Open { want_closed, .. } if *want_closed == false => {
-								*want_closed = true;
-								return Poll::Ready(ProtocolsHandlerEvent::Custom(
-									NotifsHandlerOut::CloseDesired
-								));
-							}
-							State::Open { .. } => {}
-							State::Opening { .. } => {}
-							State::Closed { .. } => debug_assert!(false),
-						}
-					},
-					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(message)) => {
-						if matches!(self.state, State::Open { .. }) {
-							let msg = NotifsHandlerOut::Notification {
-								message,
-								protocol_name: handler.protocol_name().clone(),
-							};
-							return Poll::Ready(ProtocolsHandlerEvent::Custom(msg));
-						} else {
-							debug_assert!(false);
-						}
-					},
-				}
-			}
-		}
-
-		for (handler_num, (handler, _)) in self.out_handlers.iter_mut().enumerate() {
-			while let Poll::Ready(ev) = handler.poll(cx) {
-				match (ev, &mut self.state) {
-					(ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol }, _) =>
-						return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-							protocol: protocol
-								.map_info(|()| handler_num),
-						}),
-					(ProtocolsHandlerEvent::Close(err), _) => void::unreachable(err),
-
-					// Opened substream on the handshake-bearing notification protocol.
-					(
-						ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { handshake }),
-						State::Opening { pending_handshake }
-					) if handler_num == 0 && pending_handshake.is_none() =>
-					{
-						*pending_handshake = Some(handshake);
-					},
-
-					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { .. }), _)
-						if handler_num == 0 => debug_assert!(false),
-					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Open { .. }), _) => {},
-
-					(
-						ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed),
-						State::Open { want_closed, .. }
-					) => {
-						if *want_closed == false {
-							*want_closed = true;
-							return Poll::Ready(ProtocolsHandlerEvent::Custom(
-								NotifsHandlerOut::CloseDesired
-							));
-						}
-					},
-
-					// Remote has denied an opening attempt for this notifications protocol.
-					// This fails the entire opening attempt.
-					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused), State::Opening { .. }) |
-					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed), State::Opening { .. }) => {
-						self.legacy.inject_event(LegacyProtoHandlerIn::Close);
-						for (handler, _) in &mut self.out_handlers {
-							handler.inject_event(NotifsOutHandlerIn::Disable);
-						}
-
-						self.state = State::Closed {
-							pending_in: Vec::new(),
-						};
-
-						return Poll::Ready(ProtocolsHandlerEvent::Custom(
-							NotifsHandlerOut::OpenResultErr
-						));
-					},
-
-
-					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused), _) |
-					(ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed), _) =>
-						debug_assert!(false),
-				}
-			}
-		}
-
-		if let State::Opening { pending_handshake: Some(pending_handshake), .. } = &mut self.state {
-			if self.out_handlers.iter().all(|(h, _)| h.is_open() || h.is_refused()) {
-				let (async_tx, async_rx) = mpsc::channel(ASYNC_NOTIFICATIONS_BUFFER_SIZE);
-				let (sync_tx, sync_rx) = mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
-				let notifications_sink = NotificationsSink {
-					inner: Arc::new(NotificationsSinkInner {
-						async_channel: FuturesMutex::new(async_tx),
-						sync_channel: Mutex::new(sync_tx),
-					}),
-				};
-
-				let pending_handshake = mem::replace(pending_handshake, Vec::new());
-				self.state = State::Open {
-					notifications_sink_rx: stream::select(async_rx.fuse(), sync_rx.fuse()),
-					want_closed: false,
-				};
-
-				return Poll::Ready(ProtocolsHandlerEvent::Custom(
-					NotifsHandlerOut::OpenResultOk {
-						endpoint: self.endpoint.clone(),
-						received_handshake: pending_handshake,
-						notifications_sink
-					}
-				))
-			}
-		}
+		}*/
 
 		Poll::Pending
 	}

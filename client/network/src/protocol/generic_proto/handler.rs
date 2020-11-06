@@ -23,5 +23,3 @@ pub use self::legacy::ConnectionKillError as LegacyConnectionKillError;
 
 mod group;
 mod legacy;
-mod notif_in;
-mod notif_out;

@@ -1218,27 +1218,32 @@ impl NetworkBehaviour for GenericProto {
 					peer_id, *conn
 				);
 
+				debug_assert!(connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesired)));
+
 				if let Some(pos) = connections.iter().position(|(c, _)| *c == *conn) {
-					let (_, state) = connections.remove(pos);
-
-					if let ConnectionState::OpenDesired = state {
-						// In the incoming state, we don't report "Dropped". Instead we will just
-						// ignore the corresponding Accept/Reject.
-						if let Some(state) = self.incoming.iter_mut()
-							.find(|i| i.alive && i.peer_id == *peer_id)
-						{
-							state.alive = false;
-						} else {
-							error!(target: "sub-libp2p", "State mismatch in libp2p: no entry in \
-								incoming corresponding to an incoming state in peers");
-							debug_assert!(false);
-						}
-					}
-
+					connections.remove(pos);
 				} else {
 					debug_assert!(false);
 					error!(target: "sub-libp2p",
 						"inject_connection_closed: State mismatch in the custom protos handler");
+				}
+
+				let no_desired_left = !connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesired));
+
+				// If no connection is `OpenDesired` anymore, clean up the peerset incoming
+				// request.
+				if no_desired_left {
+					// In the incoming state, we don't report "Dropped". Instead we will just
+					// ignore the corresponding Accept/Reject.
+					if let Some(state) = self.incoming.iter_mut()
+						.find(|i| i.alive && i.peer_id == *peer_id)
+					{
+						state.alive = false;
+					} else {
+						error!(target: "sub-libp2p", "State mismatch in libp2p: no entry in \
+							incoming corresponding to an incoming state in peers");
+						debug_assert!(false);
+					}
 				}
 
 				if connections.is_empty() {
@@ -1265,7 +1270,7 @@ impl NetworkBehaviour for GenericProto {
 						entry.remove();
 					}
 
-				} else if !connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesired)) {
+				} else if no_desired_left {
 					// If no connection is `OpenDesired` anymore, switch to `Disabled`.
 					*entry.get_mut() = PeerState::Disabled { connections, banned_until };
 
