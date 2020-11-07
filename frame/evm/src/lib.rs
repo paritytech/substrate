@@ -18,7 +18,7 @@
 //! # EVM Module
 //!
 //! The EVM module allows unmodified EVM code to be executed in a Substrate-based blockchain.
-//! - [`evm::Trait`](https://docs.rs/pallet-evm/2.0.0/pallet_evm/trait.Trait.html)
+//! - [`evm::Trait`]
 //!
 //! ## EVM Engine
 //!
