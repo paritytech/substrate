@@ -308,20 +308,18 @@ pub fn init_logger(
 	}
 
 	let isatty = atty::is(atty::Stream::Stderr);
-	let enable_color = isatty;
 	let timer = ChronoLocal::with_format(if simple {
 		"%Y-%m-%d %H:%M:%S".to_string()
 	} else {
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-
 	let subscriber_builder = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
 		.with_writer(std::io::stderr as _)
 		.event_format(logging::EventFormat {
 			timer,
-			ansi: enable_color,
+			ansi: isatty,
 			display_target: !simple,
 			display_level: !simple,
 			display_thread_name: !simple,
