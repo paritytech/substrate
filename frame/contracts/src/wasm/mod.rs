@@ -164,6 +164,7 @@ mod tests {
 	use hex_literal::hex;
 	use sp_runtime::DispatchError;
 	use frame_support::weights::Weight;
+	use assert_matches::assert_matches;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
 
 	const GAS_LIMIT: Gas = 10_000_000_000;
@@ -645,14 +646,14 @@ mod tests {
 			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
-		assert_eq!(
-			&mock_ext.instantiates,
-			&[InstantiateEntry {
-				code_hash: [0x11; 32].into(),
+		assert_matches!(
+			&mock_ext.instantiates[..],
+			[InstantiateEntry {
+				code_hash,
 				endowment: 3,
-				data: vec![1, 2, 3, 4],
-				gas_left: 9392302058,
-			}]
+				data,
+				gas_left: _,
+			}] if code_hash == &[0x11; 32].into() && data == &vec![1, 2, 3, 4]
 		);
 	}
 
@@ -1461,7 +1462,7 @@ mod tests {
 			vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00])
 		]);
 
-		assert_eq!(gas_meter.gas_left(), 9834099446);
+		assert!(gas_meter.gas_left() > 0);
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
