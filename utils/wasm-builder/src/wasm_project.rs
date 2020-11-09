@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::write_file_if_changed;
+use crate::{write_file_if_changed, CargoCommandVersioned};
 
 use std::{
 	fs, path::{Path, PathBuf}, borrow::ToOwned, process, env, collections::HashSet,
@@ -33,6 +33,17 @@ use walkdir::WalkDir;
 use fs2::FileExt;
 
 use itertools::Itertools;
+
+/// Colorize an info message.
+///
+/// Returns the colorized message.
+fn colorize_info_message(message: &str) -> String {
+	if super::color_output_enabled() {
+		ansi_term::Color::Yellow.bold().paint(message).to_string()
+	} else {
+		message.into()
+	}
+}
 
 /// Holds the path to the bloaty WASM binary.
 pub struct WasmBinaryBloaty(PathBuf);
@@ -110,9 +121,10 @@ fn crate_metadata(cargo_manifest: &Path) -> Metadata {
 ///
 /// # Returns
 /// The path to the compact WASM binary and the bloaty WASM binary.
-pub fn create_and_compile(
+pub(crate) fn create_and_compile(
 	cargo_manifest: &Path,
 	default_rustflags: &str,
+	cargo_cmd: CargoCommandVersioned,
 ) -> (Option<WasmBinary>, WasmBinaryBloaty) {
 	let wasm_workspace_root = get_wasm_workspace_root();
 	let wasm_workspace = wasm_workspace_root.join("wbuild");
@@ -125,7 +137,7 @@ pub fn create_and_compile(
 	let project = create_project(cargo_manifest, &wasm_workspace, &crate_metadata);
 	create_wasm_workspace_project(&wasm_workspace, &crate_metadata.workspace_root);
 
-	build_project(&project, default_rustflags);
+	build_project(&project, default_rustflags, cargo_cmd);
 	let (wasm_binary, bloaty) = compact_wasm_file(
 		&project,
 		cargo_manifest,
@@ -423,7 +435,7 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path, crate_metadata: 
 
 	write_file_if_changed(
 		project_folder.join("src/lib.rs"),
-		"#![no_std] pub use wasm_project::*;".into(),
+		"#![no_std] pub use wasm_project::*;",
 	);
 
 	if let Some(crate_lock_file) = find_cargo_lock(cargo_manifest) {
@@ -452,9 +464,9 @@ fn is_release_build() -> bool {
 }
 
 /// Build the project to create the WASM binary.
-fn build_project(project: &Path, default_rustflags: &str) {
+fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoCommandVersioned) {
 	let manifest_path = project.join("Cargo.toml");
-	let mut build_cmd = crate::get_nightly_cargo().command();
+	let mut build_cmd = cargo_cmd.command();
 
 	let rustflags = format!(
 		"-C link-arg=--export-table {} {}",
@@ -476,7 +488,9 @@ fn build_project(project: &Path, default_rustflags: &str) {
 		build_cmd.arg("--release");
 	};
 
-	println!("Executing build command: {:?}", build_cmd);
+	println!("{}", colorize_info_message("Information that should be included in a bug report."));
+	println!("{} {:?}", colorize_info_message("Executing build command:"), build_cmd);
+	println!("{} {}", colorize_info_message("Using rustc version:"), cargo_cmd.rustc_version());
 
 	match build_cmd.status().map(|s| s.success()) {
 		Ok(true) => {},
