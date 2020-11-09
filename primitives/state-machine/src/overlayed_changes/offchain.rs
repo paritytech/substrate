@@ -60,7 +60,7 @@ impl OffchainOverlayedChanges {
 	/// Consume the offchain storage and iterate over all key value pairs.
 	pub fn into_iter(self) -> impl Iterator<Item = OffchainOverlayedChangesItemOwned> {
 		let iter = match self {
-			OffchainOverlayedChanges::Enabled(inner) => Some(inner.changes.into_iter()
+			OffchainOverlayedChanges::Enabled(inner) => Some(inner.into_changes()
 				.map(|kv| (kv.0, kv.1.into_value()))),
 			OffchainOverlayedChanges::Disabled => None,
 		};
@@ -71,7 +71,7 @@ impl OffchainOverlayedChanges {
 	/// Iterate over all key value pairs by reference.
 	pub fn iter<'a>(&'a self) -> impl Iterator<Item = OffchainOverlayedChangesItem<'a>> {
 		let iter = match self {
-			OffchainOverlayedChanges::Enabled(inner) => Some(inner.changes.iter()
+			OffchainOverlayedChanges::Enabled(inner) => Some(inner.changes()
 				.map(|kv| (kv.0, kv.1.value_ref()))),
 			OffchainOverlayedChanges::Disabled => None,
 		};
@@ -84,7 +84,7 @@ impl OffchainOverlayedChanges {
 		let iter = match self {
 			OffchainOverlayedChanges::Enabled(inner) => {
 				let inner = sp_std::mem::replace(inner, Default::default());
-				Some(inner.changes.into_iter()
+				Some(inner.into_changes()
 					.map(|kv| (kv.0, kv.1.into_value())))
 			},
 			OffchainOverlayedChanges::Disabled => None,
