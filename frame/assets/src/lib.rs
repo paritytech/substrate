@@ -276,8 +276,8 @@ decl_error! {
 pub trait WeightInfo {
 	fn create() -> Weight;
 	fn force_create() -> Weight;
-	fn destroy(_z: u32, ) -> Weight;
-	fn force_destroy(_z: u32, ) -> Weight;
+	fn destroy(z: u32, ) -> Weight;
+	fn force_destroy(z: u32, ) -> Weight;
 	fn mint() -> Weight;
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
@@ -913,9 +913,24 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use frame_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, weights::Weight};
+	use frame_support::{
+		impl_outer_origin, impl_outer_event, assert_ok, assert_noop, parameter_types,
+		weights::Weight
+	};
 	use sp_core::H256;
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+
+	mod pallet_assets {
+		pub use crate::Event;
+	}
+
+	impl_outer_event! {
+		pub enum Event for Test {
+			frame_system<T>,
+			pallet_balances<T>,
+			pallet_assets<T>,
+		}
+	}
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = frame_system {}
@@ -940,7 +955,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
@@ -965,7 +980,7 @@ mod tests {
 		type MaxLocks = ();
 		type Balance = u64;
 		type DustRemoval = ();
-		type Event = ();
+		type Event = Event;
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type WeightInfo = ();
@@ -978,7 +993,7 @@ mod tests {
 
 	impl Trait for Test {
 		type Currency = Balances;
-		type Event = ();
+		type Event = Event;
 		type Balance = u64;
 		type AssetId = u32;
 		type ForceOrigin = frame_system::EnsureRoot<u64>;
@@ -1114,6 +1129,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 10));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
 
 			// Cannot create a new account with a balance that is below minimum...
 			assert_noop!(Assets::mint(Origin::signed(1), 0, 2, 9), Error::<Test>::BalanceLow);
@@ -1125,13 +1141,16 @@ mod tests {
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 91));
 			assert!(Assets::balance(0, 1).is_zero());
 			assert_eq!(Assets::balance(0, 2), 100);
+			assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
 
 			assert_ok!(Assets::force_transfer(Origin::signed(1), 0, 2, 1, 91));
 			assert!(Assets::balance(0, 2).is_zero());
 			assert_eq!(Assets::balance(0, 1), 100);
+			assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
 
 			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, 91));
 			assert!(Assets::balance(0, 1).is_zero());
+			assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 0);
 		});
 	}
 
@@ -1256,6 +1275,7 @@ mod tests {
 			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::max_value()));
 			assert_eq!(Assets::balance(0, 1), 0);
 			assert_noop!(Assets::transfer(Origin::signed(1), 0, 1, 50), Error::<Test>::BalanceLow);
+			assert_noop!(Assets::transfer(Origin::signed(2), 0, 1, 51), Error::<Test>::BalanceLow);
 		});
 	}
 
@@ -1286,6 +1306,7 @@ mod tests {
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::max_value()));
+			assert_eq!(Assets::balance(0, 1), 0);
 		});
 	}
 
