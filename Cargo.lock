@@ -5853,7 +5853,7 @@ version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c8ac87af529432d3a4f0e2b3bbf08af49f28f09cc73ed7e551161bdaef5f78d"
 dependencies = [
- "byteorder 1.3.4",
+ "byteorder",
  "log",
  "parity-wasm 0.41.0",
 ]
