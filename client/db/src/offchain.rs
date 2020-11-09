@@ -24,7 +24,7 @@ use std::{
 };
 
 use crate::{columns, Database, DbHash, Transaction};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex, MutexGuard, RwLock};
 use historied_db::{Latest, UpdateResult,
 	management::{Management, ManagementMut},
 	management::tree::{TreeManagementStorage, ForkPlan},
@@ -117,6 +117,8 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 		let block_nodes = BlockNodes::new(self.storage.db.clone());
 		let branch_nodes = BranchNodes::new(self.storage.db.clone());
 
+		// locking changed key until transaction applied.
+		let mut guards = Guards::new(self.storage.locks.as_ref());
 		let mut pending = self.pending.write();
 		for k in keys {
 			let column = crate::columns::OFFCHAIN;
@@ -131,7 +133,10 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 				node_init_from: init_nodes.clone(),
 			};
 
+			guards.add(k.clone());
+
 			let k = k.as_slice();
+
 			let histo: HValue = if let Some(histo) = self.storage.db.get(column, k) {
 				historied_db::DecodeWithContext::decode_with_context(&mut &histo[..], &(init.clone(), init_nodes.clone()))
 					.expect("Bad encoded value in db, closing")
@@ -152,12 +157,77 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 					new_value.trigger_flush();
 					pending.remove(column, k);
 				},
-				historied_db::UpdateResult::Unchanged => (),
+				historied_db::UpdateResult::Unchanged => {
+					// release lock.
+					guards.pop();
+				},
 			}
 		}
 
 		block_nodes.apply_transaction(&mut pending);
 		branch_nodes.apply_transaction(&mut pending);
+	}
+}
+
+/// Lock multiple guards and release on drop.
+struct Guards<'a>(
+	Vec<(Vec<u8>, MutexGuard<'static, ()>, Arc<Mutex<()>>)>,
+	&'a Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>,
+);
+
+impl<'a> Guards<'a> {
+	fn new(locks: &'a Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>) -> Self {
+		Guards(Vec::new(), locks)
+	}
+
+	fn add(&mut self, key: Vec<u8>) {
+		let key_lock = {
+			let mut locks = self.1.lock();
+			locks.entry(key.clone()).or_default().clone()
+		};
+		let key_lock_ref = key_lock.as_ref() as *const Mutex<()>;
+		// relying on Guards 'a lifetime.
+		let key_lock_ref = unsafe { key_lock_ref.as_ref().unwrap() };
+		let guard = key_lock_ref.lock();
+		// keep a copy of the arc so concurrent call will not remove it
+		// from map.
+		self.0.push((key, guard, key_lock));
+	}
+
+	fn pop(&mut self) {
+		let mut locks = self.1.lock();
+		Self::pop_inner(&mut self.0, &mut locks);
+	}
+
+	fn pop_inner(
+		guards: &mut Vec<(Vec<u8>, MutexGuard<'static, ()>, Arc<Mutex<()>>)>,
+		locks: &mut MutexGuard<HashMap<Vec<u8>, Arc<Mutex<()>>>>,
+	) -> bool {
+		if let Some((key, guard, key_lock)) = guards.pop() {
+			drop(guard);
+			drop(key_lock);
+			let key_lock = locks.get_mut(&key);
+			if let Some(_) = key_lock.and_then(Arc::get_mut) {
+				locks.remove(&key);
+			}
+			true
+		} else {
+			false
+		}
+	}
+
+	fn drop_all(&mut self) {
+		let mut locks = self.1.lock();
+		let guards = &mut self.0;
+		{
+			while Self::pop_inner(guards, &mut locks) { }
+		}
+	}
+}
+
+impl<'a> Drop for Guards<'a> {
+	fn drop(&mut self) {
+		self.drop_all()
 	}
 }
 
@@ -635,7 +705,7 @@ impl BlockChainLocalAt {
 									(init, init_nodes),
 								).encode(),
 								UpdateResult::Changed(()),
-							)	
+							)
 						} else {
 							// nothing to delete
 							(Default::default(), UpdateResult::Unchanged)
@@ -683,7 +753,6 @@ impl BlockChainLocalAt {
 			Ok(is_set)
 		}();
 
-	
 		if let Some(key_lock) = key_lock {
 			// clean the lock map if we're the only entry
 			let mut locks = self.locks.lock();
