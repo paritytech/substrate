@@ -48,7 +48,12 @@ use structopt::{
 };
 #[doc(hidden)]
 pub use tracing;
-use tracing_subscriber::{fmt::time::ChronoLocal, FmtSubscriber, Layer, layer::SubscriberExt};
+use tracing_subscriber::{
+	fmt::time::ChronoLocal,
+	FmtSubscriber,
+	Layer,
+	layer::SubscriberExt,
+};
 pub use sc_tracing::logging;
 
 pub use logging::PREFIX_LOG_SPAN;
