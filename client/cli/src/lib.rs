@@ -48,12 +48,7 @@ use structopt::{
 };
 #[doc(hidden)]
 pub use tracing;
-use tracing_subscriber::{
-	fmt::time::ChronoLocal,
-	FmtSubscriber,
-	Layer,
-	layer::SubscriberExt,
-};
+use tracing_subscriber::{fmt::time::ChronoLocal, FmtSubscriber, Layer, layer::SubscriberExt};
 pub use sc_tracing::logging;
 
 pub use logging::PREFIX_LOG_SPAN;
@@ -246,6 +241,7 @@ pub fn init_logger(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
 	profiling_targets: Option<String>,
+	disable_log_reloading: bool,
 ) -> std::result::Result<(), String>
 {
 	use sc_tracing::parse_directives;
@@ -323,15 +319,31 @@ pub fn init_logger(
 			display_target: !simple,
 			display_level: !simple,
 			display_thread_name: !simple,
-		})
-		// TODO: Q - There's a small cost to this, do we make it opt-in/out with cli flag?
-		.with_filter_reloading();
-	let handle = subscriber_builder.reload_handle();
-	let subscriber = subscriber_builder
-		.finish()
-		.with(logging::NodeNameLayer);
+		});
+	if disable_log_reloading {
+		let subscriber = subscriber_builder
+			.finish()
+			.with(logging::NodeNameLayer);
+		initialize_tracing(subscriber, tracing_receiver, profiling_targets)
+	} else {
+		let subscriber_builder = subscriber_builder.with_filter_reloading();
+		let handle = subscriber_builder.reload_handle();
+		sc_tracing::set_reload_handle(handle);
+		let subscriber = subscriber_builder
+			.finish()
+			.with(logging::NodeNameLayer);
+		initialize_tracing(subscriber, tracing_receiver, profiling_targets)
+	}
+}
 
-	sc_tracing::set_reload_handle(handle);
+fn initialize_tracing<S>(
+	subscriber: S,
+	tracing_receiver: sc_tracing::TracingReceiver,
+	profiling_targets: Option<String>,
+)  -> std::result::Result<(), String>
+where
+	S: tracing::Subscriber + Send + Sync + 'static,
+{
 	if let Some(profiling_targets) = profiling_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 

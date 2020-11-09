@@ -57,7 +57,7 @@ const ZERO_DURATION: Duration = Duration::from_nanos(0);
 
 // The layered Subscriber as built up in `init_logger()`.
 // Used in the reload `Handle`.
-type SCSubscriber<
+pub type SCSubscriber<
 	N = tracing_fmt::format::DefaultFields,
 	E = logging::EventFormat<ChronoLocal>,
 	W = fn() -> std::io::Stderr
