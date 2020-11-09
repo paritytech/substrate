@@ -27,7 +27,7 @@ use sp_runtime::{
 	traits::{
 		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
 		BadOrigin, AtLeast32BitUnsigned, UniqueSaturatedFrom, UniqueSaturatedInto,
-		SaturatedConversion,
+		SaturatedConversion, StoredMapError,
 	},
 };
 use crate::dispatch::Parameter;
@@ -295,15 +295,6 @@ mod test_impl_filter_stack {
 		assert!(IsCallable::filter(&42));
 		assert!(!IsCallable::filter(&43));
 	}
-}
-
-/// Error that can be returned by our impl of `StoredMap`.
-pub enum StoredMapError {
-	/// Attempt to create map value when it is a consumer and there are no providers in place.
-	NoProviders,
-	/// Attempt to anull/remove value when it is the last provider and there is still at
-	/// least one consumer left.
-	ConsumerRemaining,
 }
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite

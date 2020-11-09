@@ -92,7 +92,7 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::free_balance(1), 10);
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath));
 				// Check that the account is dead.
-				assert!(!frame_system::Account::<T>::contains_key(&1));
+				assert!(!frame_system::Account::<Test>::contains_key(&1));
 			});
 		}
 

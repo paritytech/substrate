@@ -113,9 +113,9 @@ impl Trait for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = StorageMapShim<
 		super::Account<Test>,
-		system::CallOnCreatedAccount<Test>,
-		system::CallKillAccount<Test>,
-		u64, super::AccountData<u64>
+		system::Provider<Test>,
+		u64,
+		super::AccountData<u64>,
 	>;
 	type MaxLocks = MaxLocks;
 	type WeightInfo = ();

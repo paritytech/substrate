@@ -166,14 +166,14 @@ use frame_support::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
-		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status,
+		ExistenceRequirement::AllowDeath, BalanceStatus as Status,
 	}
 };
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
 		Zero, AtLeast32BitUnsigned, StaticLookup, Member, CheckedAdd, CheckedSub,
-		MaybeSerializeDeserialize, Saturating, Bounded,
+		MaybeSerializeDeserialize, Saturating, Bounded, StoredMapError,
 	},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -526,7 +526,7 @@ decl_module! {
 				account.reserved = new_reserved;
 
 				(account.free, account.reserved)
-			});
+			})?;
 			Self::deposit_event(RawEvent::BalanceSet(who, free, reserved));
 		}
 
@@ -636,9 +636,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	pub fn mutate_account<R>(
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>) -> R
-	) -> R {
-		Self::try_mutate_account(who, |a, _| -> Result<R, Infallible> { Ok(f(a)) })
-			.expect("Error is infallible; qed")
+	) -> Result<R, StoredMapError> {
+		Self::try_mutate_account(who, |a, _| -> Result<R, StoredMapError> { Ok(f(a)) })
 	}
 
 	/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
@@ -650,7 +649,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn try_mutate_account<R, E>(
+	fn try_mutate_account<R, E: From<StoredMapError>>(
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>
 	) -> Result<R, E> {
@@ -1021,10 +1020,12 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 					value,
 					WithdrawReason::Transfer.into(),
 					from_account.free,
-				)?;
+				).map_err(|_| Error::<T, I>::LiquidityRestrictions)?;
 
+				// TODO: This is over-conservative. There may now be other providers, and this module
+				//   may not even be a provider.
 				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
-				let allow_death = allow_death && system::Module::<T>::allow_death(transactor);
+				let allow_death = allow_death && system::Module::<T>::is_provider_required(transactor);
 				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
 
 				Ok(())
@@ -1052,19 +1053,34 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
 
-		Self::mutate_account(who, |account| {
-			let free_slash = cmp::min(account.free, value);
-			account.free -= free_slash;
+		for attempt in 0..2 {
+			match Self::mutate_account(who, |account| -> Result<(Self::NegativeImbalance, Self::Balance), StoredMapError> {
+				let free_slash = cmp::min(account.free, value);
+				account.free -= free_slash;
 
-			let remaining_slash = value - free_slash;
-			if !remaining_slash.is_zero() {
-				let reserved_slash = cmp::min(account.reserved, remaining_slash);
-				account.reserved -= reserved_slash;
-				(NegativeImbalance::new(free_slash + reserved_slash), remaining_slash - reserved_slash)
-			} else {
-				(NegativeImbalance::new(value), Zero::zero())
+				let value = match attempt {
+					0 => value,
+					// If acting as a critical provider (i.e. first attempt failed), then ensure
+					// slash leaves at least the ED.
+					_ => value.min(account.free + account.reserved - T::ExistentialDeposit::get()),
+				};
+
+				let remaining_slash = value - free_slash;
+				if !remaining_slash.is_zero() {
+					let reserved_slash = cmp::min(account.reserved, remaining_slash);
+					account.reserved -= reserved_slash;
+					Ok((NegativeImbalance::new(free_slash + reserved_slash), remaining_slash - reserved_slash))
+				} else {
+					Ok((NegativeImbalance::new(value), Zero::zero()))
+				}
+			}) {
+				Ok(r) => return r,
+				Err(_) => (),
 			}
-		})
+		}
+
+		// Should never get here. But we'll be defensive anyway.
+		(Self::NegativeImbalance::zero(), value)
 	}
 
 	/// Deposit some `value` into the free balance of an existing target account `who`.
@@ -1230,6 +1246,9 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
+
+		// TODO: `mutate_account` may fail if it attempts to reduce the balance to the point that an
+		//   account is attempted to be illegally destroyed. In this case,
 
 		Self::mutate_account(who, |account| {
 			// underflow should never happen, but it if does, there's nothing to be done here.
