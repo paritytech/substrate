@@ -794,8 +794,8 @@ mod tests {
 			delay_kind: DelayKind::Finalized,
 		};
 
-		authorities.add_pending_change(change_a.clone(), &static_is_descendent_of(true)).unwrap();
-		authorities.add_pending_change(change_b.clone(), &static_is_descendent_of(true)).unwrap();
+		authorities.add_pending_change(change_a.clone(), &static_is_descendent_of(false)).unwrap();
+		authorities.add_pending_change(change_b.clone(), &static_is_descendent_of(false)).unwrap();
 
 		assert_eq!(
 			authorities.pending_changes().collect::<Vec<_>>(),
