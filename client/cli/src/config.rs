@@ -552,7 +552,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let logger_pattern = self.log_filters()?;
 		let tracing_receiver = self.tracing_receiver()?;
 		let tracing_targets = self.tracing_targets()?;
-		let disable_log_reloading = self.is_log_filter_reloading_disabled().unwrap_or_default();
+		let disable_log_reloading = self.is_log_filter_reloading_disabled()?;
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
@@ -560,7 +560,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			&logger_pattern,
 			tracing_receiver,
 			tracing_targets,
-			disable_log_reloading
+			disable_log_reloading,
 		) {
 			log::warn!("💬 Problem initializing global logging framework: {:}", e)
 		}

@@ -43,7 +43,9 @@ pub struct SharedParams {
 	#[structopt(short = "l", long, value_name = "LOG_PATTERN")]
 	pub log: Vec<String>,
 
-	/// Performance optimisation to disable setting the log filter at runtime.
+	/// Disable log reloading at runtime. 
+	///
+	/// By default this feature is enabled, however it leads to a small performance decrease. 
 	#[structopt(long = "disable-log-reloading")]
 	pub disable_log_reloading: bool,
 
@@ -96,6 +98,7 @@ impl SharedParams {
 	pub fn is_log_filter_reloading_disabled(&self) -> bool {
 		self.disable_log_reloading
 	}
+
 	/// Receiver to process tracing messages.
 	pub fn tracing_receiver(&self) -> sc_service::TracingReceiver {
 		self.tracing_receiver.clone().into()
