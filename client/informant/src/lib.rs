@@ -37,29 +37,12 @@ mod display;
 pub struct OutputFormat {
 	/// Enable color output in logs. True by default.
 	pub enable_color: bool,
-	/// Defines the informant's prefix for the logs. An empty string by default.
-	///
-	/// By default substrate will show logs without a prefix. Example:
-	///
-	/// ```text
-	/// 2020-05-28 15:11:06 ✨ Imported #2 (0xc21c…2ca8)
-	/// 2020-05-28 15:11:07 💤 Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
-	/// ```
-	///
-	/// But you can define a prefix by setting this string. This will output:
-	///
-	/// ```text
-	/// 2020-05-28 15:11:06 ✨ [Prefix] Imported #2 (0xc21c…2ca8)
-	/// 2020-05-28 15:11:07 💤 [Prefix] Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
-	/// ```
-	pub prefix: String,
 }
 
 impl Default for OutputFormat {
 	fn default() -> Self {
 		Self {
 			enable_color: true,
-			prefix: String::new(),
 		}
 	}
 }
@@ -118,14 +101,11 @@ where
 
 	future::join(
 		display_notifications,
-		display_block_import(client, format.prefix),
+		display_block_import(client),
 	).map(|_| ())
 }
 
-fn display_block_import<B: BlockT, C>(
-	client: Arc<C>,
-	prefix: String,
-) -> impl Future<Output = ()>
+fn display_block_import<B: BlockT, C>(client: Arc<C>) -> impl Future<Output = ()>
 where
 	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
 	<C as HeaderMetadata<B>>::Error: Display,
@@ -151,8 +131,7 @@ where
 
 				match maybe_ancestor {
 					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
-						"♻️  {}Reorg on #{},{} to #{},{}, common ancestor #{},{}",
-						prefix,
+						"♻️  Reorg on #{},{} to #{},{}, common ancestor #{},{}",
 						Colour::Red.bold().paint(format!("{}", last_num)), last_hash,
 						Colour::Green.bold().paint(format!("{}", n.header.number())), n.hash,
 						Colour::White.bold().paint(format!("{}", ancestor.number)), ancestor.hash,
@@ -179,8 +158,7 @@ where
 
 			info!(
 				target: "substrate",
-				"✨ {}Imported #{} ({})",
-				prefix,
+				"✨ Imported #{} ({})",
 				Colour::White.bold().paint(format!("{}", n.header.number())),
 				n.hash,
 			);
