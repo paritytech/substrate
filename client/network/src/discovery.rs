@@ -51,11 +51,11 @@ use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
 use libp2p::core::{connection::{ConnectionId, ListenerId}, ConnectedPoint, Multiaddr, PeerId, PublicKey};
-use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters, ProtocolsHandler};
-use libp2p::swarm::protocols_handler::multi::MultiHandler;
+use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters, ProtocolsHandler, IntoProtocolsHandler};
+use libp2p::swarm::protocols_handler::multi::IntoMultiHandler;
 use libp2p::kad::{Kademlia, KademliaBucketInserts, KademliaConfig, KademliaEvent, QueryResult, Quorum, Record};
 use libp2p::kad::GetClosestPeersError;
-use libp2p::kad::handler::KademliaHandler;
+use libp2p::kad::handler::KademliaHandlerProto;
 use libp2p::kad::QueryId;
 use libp2p::kad::record::{self, store::{MemoryStore, RecordStore}};
 #[cfg(not(target_os = "unknown"))]
@@ -444,14 +444,14 @@ pub enum DiscoveryOut {
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
-	type ProtocolsHandler = MultiHandler<ProtocolId, KademliaHandler<QueryId>>;
+	type ProtocolsHandler = IntoMultiHandler<ProtocolId, KademliaHandlerProto<QueryId>>;
 	type OutEvent = DiscoveryOut;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		let iter = self.kademlias.iter_mut()
 			.map(|(p, k)| (p.clone(), NetworkBehaviour::new_handler(k)));
 
-		MultiHandler::try_from_iter(iter)
+		IntoMultiHandler::try_from_iter(iter)
 			.expect("There can be at most one handler per `ProtocolId` and \
 				protocol names contain the `ProtocolId` so no two protocol \
 				names in `self.kademlias` can be equal which is the only error \
@@ -534,7 +534,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		&mut self,
 		peer_id: PeerId,
 		connection: ConnectionId,
-		(pid, event): <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent,
+		(pid, event): <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
 	) {
 		if let Some(kad) = self.kademlias.get_mut(&pid) {
 			return kad.inject_event(peer_id, connection, event)
@@ -598,7 +598,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		params: &mut impl PollParameters,
 	) -> Poll<
 		NetworkBehaviourAction<
-			<Self::ProtocolsHandler as ProtocolsHandler>::InEvent,
+			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
 			Self::OutEvent,
 		>,
 	> {
@@ -816,7 +816,7 @@ mod tests {
 			let transport = MemoryTransport
 				.upgrade(upgrade::Version::V1)
 				.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-				.multiplex(yamux::Config::default())
+				.multiplex(yamux::YamuxConfig::default())
 				.boxed();
 
 			let behaviour = {
