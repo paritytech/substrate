@@ -187,7 +187,7 @@ pub struct AssetDetails<
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
-pub struct AccountData<
+pub struct AssetBalance<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 > {
 	/// The balance.
@@ -211,7 +211,7 @@ decl_storage! {
 		Account: double_map
 			hasher(blake2_128_concat) T::AssetId,
 			hasher(blake2_128_concat) T::AccountId
-			=> AccountData<T::Balance>;
+			=> AssetBalance<T::Balance>;
 	}
 }
 
