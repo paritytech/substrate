@@ -42,7 +42,7 @@ impl<T: Trait> From<&WasmModule<T>> for Sandbox {
 	fn from(module: &WasmModule<T>) -> Self {
 		let mut env_builder = EnvironmentDefinitionBuilder::new();
 		let memory = module.add_memory(&mut env_builder);
-		let instance = Instance::new(&module.code, &env_builder, &mut ()).unwrap();
+		let instance = Instance::new(&module.code, &env_builder, &mut ()).expect("Failed to create benchmarking Sandbox instance");
 		Self {
 			instance,
 			_memory: memory,

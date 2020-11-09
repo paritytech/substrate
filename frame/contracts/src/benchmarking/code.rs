@@ -330,8 +330,7 @@ impl<T: Trait> WasmModule<T> {
 				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
-		}
-		.into()
+		}.into()
 	}
 
 	pub fn binary_instr(instr: Instruction, repeat: u32) -> Self {
@@ -343,8 +342,7 @@ impl<T: Trait> WasmModule<T> {
 				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
-		}
-		.into()
+		}.into()
 	}
 }
 

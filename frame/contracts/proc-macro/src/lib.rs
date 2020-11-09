@@ -45,8 +45,7 @@ pub fn derive_schedule_debug(input: proc_macro::TokenStream) -> proc_macro::Toke
 fn derive_debug(
 	input: proc_macro::TokenStream,
 	fmt: impl Fn(&Ident) -> TokenStream
-) -> proc_macro::TokenStream
-{
+) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 	let name = &input.ident;
 	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
@@ -84,7 +83,7 @@ fn derive_debug(
 }
 
 /// This is only used then the `full` feature is activated.
-#[cfg_attr(not(feature = "full"), allow(dead_code))]
+#[cfg(feature = "full")]
 fn iterate_fields(data: &DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -> TokenStream {
 	match &data.fields {
 		Fields::Named(fields) => {
