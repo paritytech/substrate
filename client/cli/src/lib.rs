@@ -324,7 +324,6 @@ pub fn init_logger(
 			display_level: !simple,
 			display_thread_name: !simple,
 		})
-		// TODO: Q - There's a small cost to this, do we make it opt-in/out with cli flag?
 		.with_filter_reloading();
 	let handle = subscriber_builder.reload_handle();
 	let subscriber = subscriber_builder
