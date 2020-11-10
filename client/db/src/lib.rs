@@ -49,6 +49,9 @@ use std::sync::Arc;
 use std::path::{Path, PathBuf};
 use std::io;
 use std::collections::{HashMap, HashSet};
+use parking_lot::{Mutex, RwLock};
+use linked_hash_map::LinkedHashMap;
+use log::{trace, debug, warn};
 
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
@@ -63,7 +66,6 @@ use codec::{Decode, Encode};
 use hash_db::Prefix;
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use sp_database::Transaction;
-use parking_lot::RwLock;
 use sp_core::ChangesTrieConfiguration;
 use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
@@ -83,7 +85,6 @@ use sc_state_db::StateDb;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SyncingCachingState, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
-use log::{trace, debug, warn};
 
 // Re-export the Database trait so that one can pass an implementation of it.
 pub use sp_database::Database;
@@ -93,6 +94,7 @@ pub use sc_state_db::PruningMode;
 pub use bench::BenchmarkingState;
 
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
+const CACHE_HEADERS: usize = 8;
 
 /// Default value for storage cache child ratio.
 const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
@@ -358,6 +360,7 @@ pub struct BlockchainDb<Block: BlockT> {
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
+	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
@@ -369,6 +372,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			leaves: RwLock::new(leaves),
 			meta: Arc::new(RwLock::new(meta)),
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
+			header_cache: Default::default(),
 		})
 	}
 
@@ -403,11 +407,38 @@ impl<Block: BlockT> BlockchainDb<Block> {
 				header.digest().log(DigestItem::as_changes_trie_root)
 					.cloned()))
 	}
+
+	fn cache_header(&self, hash: Block::Hash, header: Option<Block::Header>) {
+		let mut cache = self.header_cache.lock();
+		cache.insert(hash, header);
+		while cache.len() > CACHE_HEADERS {
+			cache.pop_front();
+		}
+	}
 }
 
 impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
-		utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
+		match &id {
+			BlockId::Hash(h) => {
+				{
+					let mut cache = self.header_cache.lock();
+					if let Some(result) = cache.get_refresh(h) {
+						return Ok(result.clone());
+					}
+				}
+				match utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id) {
+					Ok(header) => {
+						self.cache_header(h.clone(), header.clone());
+						Ok(header)
+					}
+					e @Err(_) => e,
+				}
+			}
+			BlockId::Number(_) => {
+				utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
+			}
+		}
 	}
 
 	fn info(&self) -> sc_client_api::blockchain::Info<Block> {
@@ -515,7 +546,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 	}
 
 	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
-		self.header_metadata_cache.insert_header_metadata(hash, metadata)
+		self.header_metadata_cache.insert_header_metadata(hash, metadata);
 	}
 
 	fn remove_header_metadata(&self, hash: Block::Hash) {
@@ -1117,12 +1148,6 @@ impl<Block: BlockT> Backend<Block> {
 				hash,
 			)?;
 
-			let header_metadata = CachedHeaderMetadata::from(&pending_block.header);
-			self.blockchain.insert_header_metadata(
-				header_metadata.hash,
-				header_metadata,
-			);
-
 			transaction.set_from_vec(columns::HEADER, &lookup_key, pending_block.header.encode());
 			if let Some(body) = &pending_block.body {
 				transaction.set_from_vec(columns::BODY, &lookup_key, body.encode());
@@ -1271,7 +1296,7 @@ impl<Block: BlockT> Backend<Block> {
 
 			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
 
-			Some((number, hash, enacted, retracted, displaced_leaf, is_best, cache))
+			Some((pending_block.header, number, hash, enacted, retracted, displaced_leaf, is_best, cache))
 		} else {
 			None
 		};
@@ -1297,7 +1322,11 @@ impl<Block: BlockT> Backend<Block> {
 
 		self.storage.db.commit(transaction)?;
 
+		// Apply all in-memory state shanges.
+		// Code beyond this point can't fail.
+
 		if let Some((
+			header,
 			number,
 			hash,
 			enacted,
@@ -1306,6 +1335,12 @@ impl<Block: BlockT> Backend<Block> {
 			is_best,
 			mut cache,
 		)) = imported {
+			let header_metadata = CachedHeaderMetadata::from(&header);
+			self.blockchain.insert_header_metadata(
+				header_metadata.hash,
+				header_metadata,
+			);
+			self.blockchain.cache_header(hash, Some(header));
 			cache.sync_cache(
 				&enacted,
 				&retracted,
