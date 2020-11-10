@@ -161,8 +161,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Whether to force authoring if offline.
 	fn force_authoring(&self) -> bool;
 
-	/// The strategy for backing off block authorship is not set by default, since it usually
-	/// requires state that we do don't have here.
+	/// Returns whether the block production should back off.
+	/// 
+	/// By default this function always returns `false`.
+	///
+	/// An example strategy that back offs if the finalized head is lagging too much behind the tip is
+	/// implemented by [`SimpleBackoffAuthoringBlocksStrategy`].
 	fn should_backoff(&self, _slot_number: u64, _chain_head: &B::Header) -> bool {
 		false
 	}
@@ -903,7 +907,8 @@ mod test {
 			true, true, true, true, true, true, true, true, true, true, true, false, // 11:1
 			true, true, true, true, true, true, true, true, true, true, true, true, false,
 			true, true, true, true, true, true, true, true, true, true, true, true, false, // 12:1
-			true, true, true, true];
+			true, true, true, true,
+	];
 
 		assert_eq!(backoff, expected);
 	}
