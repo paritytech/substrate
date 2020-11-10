@@ -105,7 +105,7 @@ where
 		informant_output_format: sc_informant::OutputFormat {
 			enable_color: false,
 		},
-		log_reloading_disabled: false,
+		disable_log_reloading: false,
 	};
 
 	Ok(config)

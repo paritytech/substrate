@@ -49,17 +49,17 @@ pub struct SharedParams {
 	#[structopt(long = "disable-log-reloading")]
 	pub disable_log_reloading: bool,
 
-	/// Comma separated list of targets for tracing.
+	/// Sets a custom profiling filter. Syntax is the same as for logging: <target>=<level>
 	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
 	pub tracing_targets: Option<String>,
 
 	/// Receiver to process tracing messages.
 	#[structopt(
-	long = "tracing-receiver",
-	value_name = "RECEIVER",
-	possible_values = &TracingReceiver::variants(),
-	case_insensitive = true,
-	default_value = "Log"
+		long = "tracing-receiver",
+		value_name = "RECEIVER",
+		possible_values = &TracingReceiver::variants(),
+		case_insensitive = true,
+		default_value = "Log"
 	)]
 	pub tracing_receiver: TracingReceiver,
 }

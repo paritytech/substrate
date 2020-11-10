@@ -515,7 +515,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			dev_key_seed: self.dev_key_seed(is_dev)?,
 			tracing_targets: self.tracing_targets()?,
 			tracing_receiver: self.tracing_receiver()?,
-			log_reloading_disabled: self.is_log_filter_reloading_disabled()?,
+			disable_log_reloading: self.is_log_filter_reloading_disabled()?,
 			chain_spec,
 			max_runtime_instances,
 			announce_block: self.announce_block()?,

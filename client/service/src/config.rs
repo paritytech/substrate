@@ -104,7 +104,7 @@ pub struct Configuration {
 	/// Tracing targets
 	pub tracing_targets: Option<String>,
 	/// Is log filter reloading disabled
-	pub log_reloading_disabled: bool,
+	pub disable_log_reloading: bool,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
 	/// The size of the instances cache.
