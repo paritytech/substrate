@@ -33,6 +33,7 @@ use sp_consensus_babe::{
 	make_transcript,
 	make_transcript_data,
 };
+use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
 	NoNetwork as DummyOracle, Proposal, RecordProof, AlwaysCanAuthor,

@@ -114,7 +114,7 @@ use log::{debug, info, log, trace, warn};
 use prometheus_endpoint::Registry;
 use sc_consensus_slots::{
 	SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
-	BackoffAuthoringBlocksStrategy, BackoffAuthoringOnFinalizedHeadLagging,
+	BackoffAuthoringBlocksStrategy,
 };
 use sc_consensus_epochs::{
 	descendent_query, SharedEpochChanges, EpochChangesFor, Epoch as EpochT, ViableEpochDescriptor,
@@ -355,7 +355,7 @@ impl std::ops::Deref for Config {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
+pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 	/// The keystore that manages the keys of the node.
 	pub keystore: SyncCryptoStorePtr,
 
@@ -383,7 +383,7 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	pub force_authoring: bool,
 
 	/// Strategy and parameters for backing off block production if finality starts to lag behind.
-	pub backoff_authoring_blocks: Option<BackoffAuthoringOnFinalizedHeadLagging<NumberFor<B>>>,
+	pub backoff_authoring_blocks: Option<BS>,
 
 	/// The source of timestamps for relative slots
 	pub babe_link: BabeLink<B>,
@@ -393,7 +393,7 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 }
 
 /// Start the babe worker.
-pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
+pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 	keystore,
 	client,
 	select_chain,
@@ -405,7 +405,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	backoff_authoring_blocks,
 	babe_link,
 	can_author_with,
-}: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
+}: BabeParams<B, C, E, I, SO, SC, CAW, BS>) -> Result<
 	BabeWorker<B>,
 	sp_consensus::Error,
 > where
@@ -421,6 +421,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 	CAW: CanAuthorWith<B> + Send + 'static,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
 	let config = babe_link.config;
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
@@ -496,20 +497,22 @@ impl<B: BlockT> futures::Future for BabeWorker<B> {
 /// Slot notification sinks.
 type SlotNotificationSinks<B> = Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>>;
 
-struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
+struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
 	sync_oracle: SO,
 	force_authoring: bool,
-	backoff_authoring_blocks: Option<BackoffAuthoringOnFinalizedHeadLagging<NumberFor<B>>>,
+	backoff_authoring_blocks: Option<BS>,
 	keystore: SyncCryptoStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
 }
 
-impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlotWorker<B, C, E, I, SO> where
+impl<B, C, E, I, Error, SO, BS> sc_consensus_slots::SimpleSlotWorker<B>
+	for BabeSlotWorker<B, C, E, I, SO, BS>
+where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> +
 		ProvideCache<B> +
@@ -520,6 +523,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>>,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;

@@ -73,7 +73,7 @@ use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
 	CheckedHeader, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
-	BackoffAuthoringBlocksStrategy, BackoffAuthoringOnFinalizedHeadLagging,
+	BackoffAuthoringBlocksStrategy,
 };
 
 use sp_api::ApiExt;
@@ -139,7 +139,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
-pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
+pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 	slot_duration: SlotDuration,
 	client: Arc<C>,
 	select_chain: SC,
@@ -148,7 +148,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
-	backoff_authoring_blocks: Option<BackoffAuthoringOnFinalizedHeadLagging<NumberFor<B>>>,
+	backoff_authoring_blocks: Option<BS>,
 	keystore: SyncCryptoStorePtr,
 	can_author_with: CAW,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
@@ -165,6 +165,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	CAW: CanAuthorWith<B> + Send,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
 	let worker = AuraWorker {
 		client,
@@ -191,18 +192,19 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	))
 }
 
-struct AuraWorker<B: BlockT, C, E, I, P, SO> {
+struct AuraWorker<C, E, I, P, SO, BS> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
 	keystore: SyncCryptoStorePtr,
 	sync_oracle: SO,
 	force_authoring: bool,
-	backoff_authoring_blocks: Option<sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging<NumberFor<B>>>,
+	backoff_authoring_blocks: Option<BS>,
 	_key_type: PhantomData<P>,
 }
 
-impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraWorker<B, C, E, I, P, SO>
+impl<B, C, E, I, P, Error, SO, BS> sc_consensus_slots::SimpleSlotWorker<B>
+	for AuraWorker<C, E, I, P, SO, BS>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + HeaderBackend<B> + Sync,
@@ -214,6 +216,7 @@ where
 	P::Public: AppPublic + Public + Member + Encode + Decode + Hash,
 	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Clone,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	type BlockImport = I;
@@ -881,7 +884,7 @@ mod tests {
 	use sp_keyring::sr25519::Keyring;
 	use sc_client_api::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
-	use sc_consensus_slots::SimpleSlotWorker;
+	use sc_consensus_slots::{SimpleSlotWorker, BackoffAuthoringOnFinalizedHeadLagging};
 	use std::task::Poll;
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_runtime::traits::Header as _;
@@ -1030,7 +1033,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			aura_futures.push(start_aura::<_, _, _, _, _, AuthorityPair, _, _, _>(
+			aura_futures.push(start_aura::<_, _, _, _, _, AuthorityPair, _, _, _, _>(
 				slot_duration,
 				client.clone(),
 				select_chain,
