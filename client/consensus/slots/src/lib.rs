@@ -166,7 +166,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// By default this function always returns `false`.
 	///
 	/// An example strategy that back offs if the finalized head is lagging too much behind the tip
-	/// is implemented by [`SimpleBackoffAuthoringBlocksStrategy`].
+	/// is implemented by [`BackoffAuthoringOnFinalizedHeadLagging`].
 	fn should_backoff(&self, _slot_number: u64, _chain_head: &B::Header) -> bool {
 		false
 	}
@@ -263,7 +263,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		};
 
 		if self.should_backoff(slot_number, &chain_head) {
-			info!("Backing off claiming new slot for block authorship.");
+			info!(
+				target: self.logging_target(),
+				"Backing off claiming new slot for block authorship.",
+			);
 			return Box::pin(future::ready(None));
 		}
 

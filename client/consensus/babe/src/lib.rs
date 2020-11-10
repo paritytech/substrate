@@ -382,7 +382,7 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 	/// Force authoring of blocks even if we are offline
 	pub force_authoring: bool,
 
-	/// Strategy and parameters for backing off block production if finality starts to lag behind.
+	/// Strategy and parameters for backing off block production.
 	pub backoff_authoring_blocks: Option<BS>,
 
 	/// The source of timestamps for relative slots
