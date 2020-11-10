@@ -445,8 +445,8 @@ pub trait AppCrypto<Public, Signature> {
 /// This trait adds extra bounds to `Public` and `Signature` types of the runtime
 /// that are necessary to use these types for signing.
 ///
-///	TODO [#5663] Could this be just `T::Signature as traits::Verify>::Signer`?
-/// Seems that this may cause issues with bounds resolution.
+// TODO [#5663] Could this be just `T::Signature as traits::Verify>::Signer`?
+// Seems that this may cause issues with bounds resolution.
 pub trait SigningTypes: crate::Trait {
 	/// A public key that is capable of identifing `AccountId`s.
 	///
