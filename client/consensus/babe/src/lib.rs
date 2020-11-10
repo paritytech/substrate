@@ -114,7 +114,7 @@ use log::{debug, info, log, trace, warn};
 use prometheus_endpoint::Registry;
 use sc_consensus_slots::{
 	SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
-	BackoffAuthoringBlocksStrategy, SimpleBackoffAuthoringBlocksStrategy,
+	BackoffAuthoringBlocksStrategy, BackoffAuthoringOnFinalizedHeadLagging,
 };
 use sc_consensus_epochs::{
 	descendent_query, SharedEpochChanges, EpochChangesFor, Epoch as EpochT, ViableEpochDescriptor,
@@ -383,7 +383,7 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	pub force_authoring: bool,
 
 	/// Strategy and parameters for backing off block production if finality starts to lag behind.
-	pub backoff_authoring_blocks: Option<SimpleBackoffAuthoringBlocksStrategy<NumberFor<B>>>,
+	pub backoff_authoring_blocks: Option<BackoffAuthoringOnFinalizedHeadLagging<NumberFor<B>>>,
 
 	/// The source of timestamps for relative slots
 	pub babe_link: BabeLink<B>,
@@ -502,7 +502,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	env: E,
 	sync_oracle: SO,
 	force_authoring: bool,
-	backoff_authoring_blocks: Option<SimpleBackoffAuthoringBlocksStrategy<NumberFor<B>>>,
+	backoff_authoring_blocks: Option<BackoffAuthoringOnFinalizedHeadLagging<NumberFor<B>>>,
 	keystore: SyncCryptoStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,

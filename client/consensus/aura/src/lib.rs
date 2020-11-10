@@ -73,7 +73,7 @@ use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
 	CheckedHeader, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
-	BackoffAuthoringBlocksStrategy, SimpleBackoffAuthoringBlocksStrategy,
+	BackoffAuthoringBlocksStrategy, BackoffAuthoringOnFinalizedHeadLagging,
 };
 
 use sp_api::ApiExt;
@@ -148,7 +148,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
-	backoff_authoring_blocks: Option<SimpleBackoffAuthoringBlocksStrategy<NumberFor<B>>>,
+	backoff_authoring_blocks: Option<BackoffAuthoringOnFinalizedHeadLagging<NumberFor<B>>>,
 	keystore: SyncCryptoStorePtr,
 	can_author_with: CAW,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
@@ -198,7 +198,7 @@ struct AuraWorker<B: BlockT, C, E, I, P, SO> {
 	keystore: SyncCryptoStorePtr,
 	sync_oracle: SO,
 	force_authoring: bool,
-	backoff_authoring_blocks: Option<sc_consensus_slots::SimpleBackoffAuthoringBlocksStrategy<NumberFor<B>>>,
+	backoff_authoring_blocks: Option<sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging<NumberFor<B>>>,
 	_key_type: PhantomData<P>,
 }
 
@@ -1039,7 +1039,7 @@ mod tests {
 				DummyOracle,
 				inherent_data_providers,
 				false,
-				Some(SimpleBackoffAuthoringBlocksStrategy::default()),
+				Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				keystore,
 				sp_consensus::AlwaysCanAuthor,
 			).expect("Starts aura"));
@@ -1100,7 +1100,7 @@ mod tests {
 			keystore: keystore.into(),
 			sync_oracle: DummyOracle.clone(),
 			force_authoring: false,
-			backoff_authoring_blocks: Some(SimpleBackoffAuthoringBlocksStrategy::default()),
+			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 			_key_type: PhantomData::<AuthorityPair>,
 		};
 

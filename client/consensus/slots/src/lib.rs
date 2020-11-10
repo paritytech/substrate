@@ -616,7 +616,7 @@ pub trait BackoffAuthoringBlocksStrategy<N> {
 /// A simple default strategy for how to decide backing off authoring blocks if the number of
 /// unfinalized blocks grows too large.
 #[derive(Clone)]
-pub struct SimpleBackoffAuthoringBlocksStrategy<N> {
+pub struct BackoffAuthoringOnFinalizedHeadLagging<N> {
 	/// The max interval to backoff when authoring blocks, regardless of delay in finality.
 	pub max_interval: N,
 	/// The number of unfinalized blocks allowed before starting to consider to backoff authoring
@@ -629,7 +629,7 @@ pub struct SimpleBackoffAuthoringBlocksStrategy<N> {
 }
 
 /// These parameters is supposed to be some form of sensible defaults.
-impl<N: BaseArithmetic> Default for SimpleBackoffAuthoringBlocksStrategy<N> {
+impl<N: BaseArithmetic> Default for BackoffAuthoringOnFinalizedHeadLagging<N> {
 	fn default() -> Self {
 		Self {
 			// Never wait more than 100 slots before authoring blocks, regardless of delay in
@@ -646,7 +646,7 @@ impl<N: BaseArithmetic> Default for SimpleBackoffAuthoringBlocksStrategy<N> {
 	}
 }
 
-impl<N> BackoffAuthoringBlocksStrategy<N> for SimpleBackoffAuthoringBlocksStrategy<N>
+impl<N> BackoffAuthoringBlocksStrategy<N> for BackoffAuthoringOnFinalizedHeadLagging<N>
 where
 	N: BaseArithmetic + Copy
 {
@@ -679,7 +679,7 @@ where
 #[cfg(test)]
 mod test {
 	use std::time::{Duration, Instant};
-	use crate::{SimpleBackoffAuthoringBlocksStrategy, BackoffAuthoringBlocksStrategy};
+	use crate::{BackoffAuthoringOnFinalizedHeadLagging, BackoffAuthoringBlocksStrategy};
 	use substrate_test_runtime_client::runtime::Block;
 	use sp_api::NumberFor;
 
@@ -764,7 +764,7 @@ mod test {
 
 	#[test]
 	fn should_never_backoff_when_head_not_advancing() {
-		let strategy = SimpleBackoffAuthoringBlocksStrategy::<NumberFor<Block>> {
+		let strategy = BackoffAuthoringOnFinalizedHeadLagging::<NumberFor<Block>> {
 			max_interval: 100,
 			unfinalized_slack: 5,
 			authoring_bias: 2,
@@ -786,7 +786,7 @@ mod test {
 
 	#[test]
 	fn should_stop_authoring_if_blocks_are_still_produced_when_finality_stalled() {
-		let strategy = SimpleBackoffAuthoringBlocksStrategy::<NumberFor<Block>> {
+		let strategy = BackoffAuthoringOnFinalizedHeadLagging::<NumberFor<Block>> {
 			max_interval: 100,
 			unfinalized_slack: 5,
 			authoring_bias: 2,
@@ -814,7 +814,7 @@ mod test {
 
 	#[test]
 	fn should_never_backoff_if_max_interval_is_reached() {
-		let strategy = SimpleBackoffAuthoringBlocksStrategy::<NumberFor<Block>> {
+		let strategy = BackoffAuthoringOnFinalizedHeadLagging::<NumberFor<Block>> {
 			max_interval: 100,
 			unfinalized_slack: 5,
 			authoring_bias: 2,
@@ -845,7 +845,7 @@ mod test {
 
 	#[test]
 	fn should_backoff_authoring_when_finality_stalled() {
-		let param = SimpleBackoffAuthoringBlocksStrategy {
+		let param = BackoffAuthoringOnFinalizedHeadLagging {
 			max_interval: 100,
 			unfinalized_slack: 5,
 			authoring_bias: 2,
@@ -915,7 +915,7 @@ mod test {
 
 	#[test]
 	fn should_never_wait_more_than_max_interval() {
-		let param = SimpleBackoffAuthoringBlocksStrategy {
+		let param = BackoffAuthoringOnFinalizedHeadLagging {
 			max_interval: 100,
 			unfinalized_slack: 5,
 			authoring_bias: 2,
@@ -984,7 +984,7 @@ mod test {
 		assert_eq!(intervals, expected_intervals);
 	}
 
-	fn run_until_max_interval(param: SimpleBackoffAuthoringBlocksStrategy<u64>) -> (u64, u64) {
+	fn run_until_max_interval(param: BackoffAuthoringOnFinalizedHeadLagging<u64>) -> (u64, u64) {
 		let finalized_number = 0;
 		let mut head_state = HeadState {
 			head_number: 0,
@@ -1028,7 +1028,7 @@ mod test {
 	// or
 	//	(start_slot + C) + M * X*(X+1)/2
 	fn expected_time_to_reach_max_interval(
-		param: &SimpleBackoffAuthoringBlocksStrategy<u64>
+		param: &BackoffAuthoringOnFinalizedHeadLagging<u64>
 	) -> (u64, u64) {
 		let c = param.unfinalized_slack;
 		let m = param.authoring_bias;
@@ -1046,7 +1046,7 @@ mod test {
 
 	#[test]
 	fn time_to_reach_upper_bound_for_smaller_slack() {
-		let param = SimpleBackoffAuthoringBlocksStrategy {
+		let param = BackoffAuthoringOnFinalizedHeadLagging {
 			max_interval: 100,
 			unfinalized_slack: 5,
 			authoring_bias: 2,
@@ -1060,7 +1060,7 @@ mod test {
 
 	#[test]
 	fn time_to_reach_upper_bound_for_larger_slack() {
-		let param = SimpleBackoffAuthoringBlocksStrategy {
+		let param = BackoffAuthoringOnFinalizedHeadLagging {
 			max_interval: 100,
 			unfinalized_slack: 50,
 			authoring_bias: 2,
