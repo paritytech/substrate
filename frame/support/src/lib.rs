@@ -22,6 +22,21 @@
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;
 
+pub mod prelude {
+    pub use crate::debug;
+    pub use crate::dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo};
+    pub use crate::storage;
+    pub use crate::traits::{
+        BalanceStatus, Currency, EnsureOrigin, ExistenceRequirement, Get, Randomness,
+        ReservableCurrency, WithdrawReasons,
+    };
+    pub use crate::weights::{DispatchClass, Pays, Weight};
+    pub use crate::{
+        decl_error, decl_event, decl_module, decl_storage, ensure, Parameter, RuntimeDebug,
+    };
+}
+
+
 #[doc(hidden)]
 pub use sp_tracing;
 
