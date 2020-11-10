@@ -129,7 +129,9 @@ macro_rules! define_func {
 			args: &[sp_sandbox::Value],
 		) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>
 			where
-				<E::T as frame_system::Trait>::AccountId: sp_core::crypto::UncheckedFrom<<E::T as frame_system::Trait>::Hash> + AsRef<[u8]>
+				<E::T as frame_system::Trait>::AccountId:
+					sp_core::crypto::UncheckedFrom<<E::T as frame_system::Trait>::Hash> +
+						AsRef<[u8]>
 		{
 			#[allow(unused)]
 			let mut args = args.iter();
