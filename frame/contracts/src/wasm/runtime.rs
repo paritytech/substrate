@@ -177,10 +177,10 @@ pub enum RuntimeToken {
 	CallSurchargeTransfer,
 	/// Weight of output received through `seal_call` for the given size.
 	CallCopyOut(u32),
-	/// Weight of calling `seal_instantiate` for the given input size without output weight.
+	/// Weight of calling `seal_instantiate` for the given input and salt without output weight.
 	/// This includes the transfer as an instantiate without a value will always be below
 	/// the existential deposit and is disregarded as corner case.
-	InstantiateBase(u32),
+	InstantiateBase{input_data_len: u32, salt_len: u32},
 	/// Weight of output received through `seal_instantiate` for the given size.
 	InstantiateCopyOut(u32),
 	/// Weight of calling `seal_hash_sha_256` for the given input size.
@@ -236,8 +236,9 @@ where
 				.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
 			CallSurchargeTransfer => s.call_transfer_surcharge,
 			CallCopyOut(len) => s.call_per_output_byte.saturating_mul(len.into()),
-			InstantiateBase(len) => s.instantiate
-				.saturating_add(s.instantiate_per_input_byte.saturating_mul(len.into())),
+			InstantiateBase{input_data_len, salt_len} => s.instantiate
+				.saturating_add(s.instantiate_per_input_byte.saturating_mul(input_data_len.into()))
+				.saturating_add(s.instantiate_per_salt_byte.saturating_mul(salt_len.into())),
 			InstantiateCopyOut(len) => s.instantiate_per_output_byte
 				.saturating_mul(len.into()),
 			HashSha256(len) => s.hash_sha2_256
@@ -860,7 +861,7 @@ define_env!(Env, <E: Ext>,
 		salt_ptr: u32,
 		salt_len: u32
 	) -> ReturnCode => {
-		ctx.charge_gas(RuntimeToken::InstantiateBase(input_data_len))?;
+		ctx.charge_gas(RuntimeToken::InstantiateBase {input_data_len, salt_len})?;
 		let code_hash: CodeHash<<E as Ext>::T> =
 			ctx.read_sandbox_memory_as(code_hash_ptr, code_hash_len)?;
 		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr, value_len)?;
