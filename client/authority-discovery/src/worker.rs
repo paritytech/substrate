@@ -307,12 +307,20 @@ where
 			);
 		}
 
+		if addresses.len() == 0 {
+			log::warn!(
+				target: LOG_TARGET,
+				"No external addresses available to publish. \
+				 Enable local discovery when running a local network.",
+			);
+		}
+
 		let mut serialized_addresses = vec![];
 		schema::AuthorityAddresses { addresses: addresses.map(|a| a.to_vec()).collect() }
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		let keys = Worker::<Client, Network, Block, DhtEventStream>::get_own_public_keys_within_authority_set(
+		let keys = Self::get_own_public_keys_within_authority_set(
 			key_store.clone(),
 			self.client.as_ref(),
 		).await?.into_iter().map(Into::into).collect::<Vec<_>>();
