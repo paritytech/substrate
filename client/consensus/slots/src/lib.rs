@@ -162,11 +162,11 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn force_authoring(&self) -> bool;
 
 	/// Returns whether the block production should back off.
-	/// 
+	///
 	/// By default this function always returns `false`.
 	///
-	/// An example strategy that back offs if the finalized head is lagging too much behind the tip is
-	/// implemented by [`SimpleBackoffAuthoringBlocksStrategy`].
+	/// An example strategy that back offs if the finalized head is lagging too much behind the tip
+	/// is implemented by [`SimpleBackoffAuthoringBlocksStrategy`].
 	fn should_backoff(&self, _slot_number: u64, _chain_head: &B::Header) -> bool {
 		false
 	}
@@ -263,7 +263,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		};
 
 		if self.should_backoff(slot_number, &chain_head) {
-			info!("Backing off authoring new blocks due to lagging finality.");
+			info!("Backing off claiming new slot for block authorship.");
 			return Box::pin(future::ready(None));
 		}
 
@@ -1037,6 +1037,7 @@ mod test {
 
 		let block_for_max_interval = x * m + c;
 
+		// The 1 is because we start at slot_now = 1.
 		let expected_number_of_slots = (1 + c) + m * x * (x + 1) / 2;
 		let time_to_reach = expected_number_of_slots * slot_time;
 
