@@ -121,7 +121,7 @@ where
 	fn scrape_overrides(dir: &Path, executor: &E) -> Result<HashMap<u32, WasmBlob>> {
 
 		let handle_err = |e: std::io::Error | -> sp_blockchain::Error {
-				sp_blockchain::Error::WasmOverrideIo(dir.to_owned(), e)
+			sp_blockchain::Error::WasmOverrideIo(dir.to_owned(), e)
 		};
 
 		if !dir.is_dir() {
