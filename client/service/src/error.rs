@@ -27,25 +27,34 @@ use sp_blockchain;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Service errors.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum Error {
-	/// Client error.
-	Client(sp_blockchain::Error),
-	/// IO error.
-	Io(std::io::Error),
-	/// Consensus error.
-	Consensus(sp_consensus::Error),
-	/// Network error.
-	Network(sc_network::error::Error),
-	/// Keystore error.
-	Keystore(sc_keystore::Error),
-	/// Best chain selection strategy is missing.
-	#[display(fmt="Best chain selection strategy (SelectChain) is not provided.")]
+	#[error(transparent)]
+	Client(#[from] sp_blockchain::Error),
+	
+	#[error(transparent)]
+	Io(#[from] std::io::Error),
+	
+	#[error(transparent)]
+	Consensus(#[from] sp_consensus::Error),
+	
+	#[error(transparent)]
+	Network(#[from] sc_network::error::Error),
+
+	#[error(transparent)]
+	Keystore(#[from] sc_keystore::Error),
+
+	#[error("Best chain selection strategy (SelectChain) is not provided.")]
 	SelectChainRequired,
-	/// Tasks executor is missing.
-	#[display(fmt="Tasks executor hasn't been provided.")]
+
+	#[error("Tasks executor hasn't been provided.")]
 	TaskExecutorRequired,
-	/// Other error.
+
+	#[error("Prometheus metrics error")]
+	Prometheus(#[from] prometheus_endpoint::PrometheusError),
+
+	#[error("Other: {0}")]
 	Other(String),
 }
 
@@ -55,21 +64,8 @@ impl<'a> From<&'a str> for Error {
 	}
 }
 
-impl From<prometheus_endpoint::PrometheusError> for Error {
-	fn from(e: prometheus_endpoint::PrometheusError) -> Self {
-		Error::Other(format!("Prometheus error: {}", e))
-	}
-}
-
-impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Error::Client(ref err) => Some(err),
-			Error::Io(ref err) => Some(err),
-			Error::Consensus(ref err) => Some(err),
-			Error::Network(ref err) => Some(err),
-			Error::Keystore(ref err) => Some(err),
-			_ => None,
-		}
+impl<'a> From<String> for Error {
+	fn from(s: String) -> Self {
+		Error::Other(s)
 	}
 }

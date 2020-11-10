@@ -24,7 +24,7 @@ wasmtime = [
 test-helpers = []
 
 [dependencies]
-derive_more = "0.99.2"
+thiserror = "1.0.21"
 futures01 = { package = "futures", version = "0.1.29" }
 futures = { version = "0.3.4", features = ["compat"] }
 jsonrpc-pubsub = "15.0"
@@ -32,7 +32,7 @@ jsonrpc-core = "15.0"
 rand = "0.7.3"
 parking_lot = "0.10.0"
 lazy_static = "1.4.0"
-log = "0.4.8"
+log = "0.4.11"
 slog = { version = "2.5.2", features = ["nested-values"] }
 futures-timer = "3.0.1"
 wasm-timer = "0.2"

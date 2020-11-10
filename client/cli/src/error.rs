@@ -25,32 +25,32 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type for the CLI.
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum Error {
-	/// Io error
 	#[error(transparent)]
 	Io(#[from] std::io::Error),
-	/// Cli error
+
 	#[error(transparent)]
 	Cli(#[from] structopt::clap::Error),
-	/// Service error
+
 	#[error(transparent)]
 	Service(#[from] sc_service::Error),
-	/// Client error
+
 	#[error(transparent)]
 	Client(#[from] sp_blockchain::Error),
-	/// scale codec error
+
 	#[error(transparent)]
 	Codec(#[from] parity_scale_codec::Error),
-	/// Input error
+
 	#[error("Invalid input: {0}")]
 	Input(String),
-	/// Invalid listen multiaddress
+
 	#[error("Invalid listen multiaddress")]
 	InvalidListenMultiaddress,
-	/// URI error.
+
 	#[error("Invalid URI; expecting either a secret URI or a public URI.")]
 	InvalidUri(crypto::PublicError),
-	/// Signature length mismatch.
+
 	#[error("Signature has an invalid length. Read {read} bytes, expected {expected} bytes")]
 	SignatureInvalidLength {
 		/// Amount of signature bytes read.
@@ -58,24 +58,25 @@ pub enum Error {
 		/// Expected number of signature bytes.
 		expected: usize,
 	},
-	/// Missing base path argument.
+
 	#[error("The base path is missing, please provide one")]
 	MissingBasePath,
-	/// Unknown key type specifier or missing key type specifier.
+
 	#[error("Unknown key type, must be a known 4-character sequence")]
 	KeyTypeInvalid,
-	/// Signature verification failed.
+
 	#[error("Signature verification failed")]
 	SignatureInvalid,
-	/// Storing a given key failed.
+
 	#[error("Key store operation failed")]
 	KeyStoreOperation,
-	/// An issue with the underlying key storage was encountered.
+
 	#[error("Key storage issue encountered")]
 	KeyStorage(#[from] sc_keystore::Error),
-	/// Bytes are not decodable when interpreted as hexadecimal string.
-	#[error("Invalid hex base data")]
+
+	#[error("Invalid hexadecimal string data")]
 	HexDataConversion(#[from] hex::FromHexError),
+
 	/// Application specific error chain sequence forwarder.
 	#[error(transparent)]
 	Application(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
