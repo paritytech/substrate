@@ -27,7 +27,6 @@ sc-transaction-pool = { version = "2.0.0", path = "../../../client/transaction-p
 sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
 sc-consensus-aura = { version = "0.8.0", path = "../../../client/consensus/aura" }
 sp-consensus-aura = { version = "0.8.0", path = "../../../primitives/consensus/aura" }
-sc-consensus-slots = { version = "0.8.0", path = "../../../client/consensus/slots" }
 sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.8.0", path = "../../../client/consensus/common" }
 sc-finality-grandpa = { version = "0.8.0", path = "../../../client/finality-grandpa" }

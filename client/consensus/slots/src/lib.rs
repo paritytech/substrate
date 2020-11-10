@@ -679,6 +679,18 @@ where
 	}
 }
 
+impl<N> BackoffAuthoringBlocksStrategy<N> for () {
+	fn should_backoff(
+		&self,
+		_chain_head_number: N,
+		_chain_head_slot: u64,
+		_finalized_number: N,
+		_slot_now: u64,
+	) -> bool {
+		false
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use std::time::{Duration, Instant};
