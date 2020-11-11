@@ -357,7 +357,7 @@ impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
 fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
 	cache: &mut LinkedHashMap<Hash, Option<Header>>,
 	hash: Hash,
-	header: Option<Header>
+	header: Option<Header>,
 ) {
 	cache.insert(hash, header);
 	while cache.len() > CACHE_HEADERS {
@@ -428,13 +428,9 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 				if let Some(result) = cache.get_refresh(h) {
 					return Ok(result.clone());
 				}
-				match utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id) {
-					Ok(header) => {
-						cache_header(&mut cache, h.clone(), header.clone());
-						Ok(header)
-					}
-					e @Err(_) => e,
-				}
+				let header = utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)?;
+				cache_header(&mut cache, h.clone(), header.clone());
+				Ok(header)
 			}
 			BlockId::Number(_) => {
 				utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
@@ -456,17 +452,7 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 
 	fn status(&self, id: BlockId<Block>) -> ClientResult<sc_client_api::blockchain::BlockStatus> {
 		let exists = match id {
-			BlockId::Hash(h) => match self.header_cache.lock().get(&h) {
-				Some(header) => header.is_some(),
-				None => {
-					read_db(
-						&*self.db,
-						columns::KEY_LOOKUP,
-						columns::HEADER,
-						id
-					)?.is_some()
-				}
-			}
+			BlockId::Hash(_) => self.header(id)?.is_some(),
 			BlockId::Number(n) => n <= self.meta.read().best_number,
 		};
 		match exists {
@@ -552,7 +538,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 	}
 
 	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
-		self.header_metadata_cache.insert_header_metadata(hash, metadata);
+		self.header_metadata_cache.insert_header_metadata(hash, metadata)
 	}
 
 	fn remove_header_metadata(&self, hash: Block::Hash) {
