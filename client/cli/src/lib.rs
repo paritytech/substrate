@@ -377,7 +377,7 @@ mod tests {
 	#[test]
 	fn test_logger_filters() {
 		let test_pattern = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
-		init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
+		init_logger(&test_pattern, Default::default(), Default::default(), false).unwrap();
 
 		tracing::dispatcher::get_default(|dispatcher| {
 			let test_filter = |target, level| {
@@ -436,7 +436,7 @@ mod tests {
 	fn log_something_with_dash_target_name() {
 		if env::var("ENABLE_LOGGING").is_ok() {
 			let test_pattern = "test-target=info";
-			init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
+			init_logger(&test_pattern, Default::default(), Default::default(), false).unwrap();
 
 			log::info!(target: "test-target", "{}", EXPECTED_LOG_MESSAGE);
 		}
@@ -472,7 +472,7 @@ mod tests {
 	fn prefix_in_log_lines_entrypoint() {
 		if env::var("ENABLE_LOGGING").is_ok() {
 			let test_pattern = "test-target=info";
-			init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
+			init_logger(&test_pattern, Default::default(), Default::default(), false).unwrap();
 			prefix_in_log_lines_process();
 		}
 	}
