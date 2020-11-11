@@ -2887,9 +2887,9 @@ checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 
 [[package]]
 name = "libp2p"
-version = "0.30.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21c0296f14e34658a0ecf431940a6fa35b94d96d67c1a05bd487d00c3ffdd807"
+checksum = "e3c2b4c99f8798be90746fc226acf95d3e6cff0655883634cc30dab1f64f438b"
 dependencies = [
  "atomic",
  "bytes 0.5.6",
@@ -3156,9 +3156,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-plaintext"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c97969e0fd5f98f8d097003de322e30927843d70c714f798df7c572578e522f0"
+checksum = "21026557c335d3639591f247b19b7536195772034ec7e9c463137227f95eaaa1"
 dependencies = [
  "bytes 0.5.6",
  "futures 0.3.5",
