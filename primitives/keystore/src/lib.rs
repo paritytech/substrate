@@ -53,14 +53,6 @@ pub enum Error {
 pub trait CryptoStore: Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
 	async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
-	/// Returns an sr25519 key pair given the public key, if available.
-	///
-	/// Note that if a key is available in the keystore, its private key may still not be retrivable.
-	async fn sr25519_key_pair(
-		&self,
-		id: KeyTypeId,
-		public: &sr25519::Public,
-	) -> Result<sr25519::Pair, Error>;
 	/// Generate a new sr25519 key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
@@ -73,14 +65,6 @@ pub trait CryptoStore: Send + Sync {
 	) -> Result<sr25519::Public, Error>;
 	/// Returns all ed25519 public keys for the given key type.
 	async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public>;
-	/// Returns an ed25519 key pair given the public key, if available.
-	///
-	/// Note that if a key is available in the keystore, its private key may still not be retrivable.
-	async fn ed25519_key_pair(
-		&self,
-		id: KeyTypeId,
-		public: &ed25519::Public,
-	) -> Result<ed25519::Pair, Error>;
 	/// Generate a new ed25519 key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
@@ -93,14 +77,6 @@ pub trait CryptoStore: Send + Sync {
 	) -> Result<ed25519::Public, Error>;
 	/// Returns all ecdsa public keys for the given key type.
 	async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public>;
-	/// Returns an ecdsa key pair given the public key, if available.
-	///
-	/// Note that if a key is available in the keystore, its private key may still not be retrivable.
-	async fn ecdsa_key_pair(
-		&self,
-		id: KeyTypeId,
-		public: &ecdsa::Public,
-	) -> Result<ecdsa::Pair, Error>;
 	/// Generate a new ecdsa key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
@@ -235,15 +211,6 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
 
-	/// Returns an sr25519 key pair given the public key, if available.
-	///
-	/// Note that if a key is available in the keystore, its private key may still not be retrivable.
-	fn sr25519_key_pair(
-		&self,
-		id: KeyTypeId,
-		public: &sr25519::Public,
-	) -> Result<sr25519::Pair, Error>;
-
 	/// Generate a new sr25519 key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
@@ -258,15 +225,6 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// Returns all ed25519 public keys for the given key type.
 	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public>;
 
-	/// Returns an ed25519 key pair given the public key, if available.
-	///
-	/// Note that if a key is available in the keystore, its private key may still not be retrivable.
-	fn ed25519_key_pair(
-		&self,
-		id: KeyTypeId,
-		public: &ed25519::Public,
-	) -> Result<ed25519::Pair, Error>;
-
 	/// Generate a new ed25519 key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
@@ -280,15 +238,6 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 
 	/// Returns all ecdsa public keys for the given key type.
 	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public>;
-
-	/// Returns an ecdsa key pair given the public key, if available.
-	///
-	/// Note that if a key is available in the keystore, its private key may still not be retrivable.
-	fn ecdsa_key_pair(
-		&self,
-		id: KeyTypeId,
-		public: &ecdsa::Public,
-	) -> Result<ecdsa::Pair, Error>;
 
 	/// Generate a new ecdsa key pair for the given key type and an optional seed.
 	///
