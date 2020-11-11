@@ -354,6 +354,17 @@ impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
 	}
 }
 
+fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
+	cache: &mut LinkedHashMap<Hash, Option<Header>>,
+	hash: Hash,
+	header: Option<Header>
+) {
+	cache.insert(hash, header);
+	while cache.len() > CACHE_HEADERS {
+		cache.pop_front();
+	}
+}
+
 /// Block database
 pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<dyn Database<DbHash>>,
@@ -407,29 +418,19 @@ impl<Block: BlockT> BlockchainDb<Block> {
 				header.digest().log(DigestItem::as_changes_trie_root)
 					.cloned()))
 	}
-
-	fn cache_header(&self, hash: Block::Hash, header: Option<Block::Header>) {
-		let mut cache = self.header_cache.lock();
-		cache.insert(hash, header);
-		while cache.len() > CACHE_HEADERS {
-			cache.pop_front();
-		}
-	}
 }
 
 impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
 		match &id {
 			BlockId::Hash(h) => {
-				{
-					let mut cache = self.header_cache.lock();
-					if let Some(result) = cache.get_refresh(h) {
-						return Ok(result.clone());
-					}
+				let mut cache = self.header_cache.lock();
+				if let Some(result) = cache.get_refresh(h) {
+					return Ok(result.clone());
 				}
 				match utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id) {
 					Ok(header) => {
-						self.cache_header(h.clone(), header.clone());
+						cache_header(&mut cache, h.clone(), header.clone());
 						Ok(header)
 					}
 					e @Err(_) => e,
@@ -455,12 +456,17 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 
 	fn status(&self, id: BlockId<Block>) -> ClientResult<sc_client_api::blockchain::BlockStatus> {
 		let exists = match id {
-			BlockId::Hash(_) => read_db(
-				&*self.db,
-				columns::KEY_LOOKUP,
-				columns::HEADER,
-				id
-			)?.is_some(),
+			BlockId::Hash(h) => match self.header_cache.lock().get(&h) {
+				Some(header) => header.is_some(),
+				None => {
+					read_db(
+						&*self.db,
+						columns::KEY_LOOKUP,
+						columns::HEADER,
+						id
+					)?.is_some()
+				}
+			}
 			BlockId::Number(n) => n <= self.meta.read().best_number,
 		};
 		match exists {
@@ -1340,7 +1346,7 @@ impl<Block: BlockT> Backend<Block> {
 				header_metadata.hash,
 				header_metadata,
 			);
-			self.blockchain.cache_header(hash, Some(header));
+			cache_header(&mut self.blockchain.header_cache.lock(), hash, Some(header));
 			cache.sync_cache(
 				&enacted,
 				&retracted,
