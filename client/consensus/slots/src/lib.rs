@@ -263,10 +263,6 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		};
 
 		if self.should_backoff(slot_number, &chain_head) {
-			info!(
-				target: self.logging_target(),
-				"Backing off claiming new slot for block authorship.",
-			);
 			return Box::pin(future::ready(None));
 		}
 
@@ -613,6 +609,7 @@ pub trait BackoffAuthoringBlocksStrategy<N> {
 		chain_head_slot: u64,
 		finalized_number: N,
 		slow_now: u64,
+		logging_target: &str,
 	) -> bool;
 }
 
@@ -659,6 +656,7 @@ where
 		chain_head_slot: u64,
 		finalized_number: N,
 		slot_now: u64,
+		logging_target: &str,
 	) -> bool {
 		// This should not happen, but we want to keep the previous behaviour if it does.
 		if slot_now <= chain_head_slot {
@@ -675,7 +673,15 @@ where
 
 		// If interval is nonzero we backoff if the current slot isn't far enough ahead of the chain
 		// head.
-		slot_now <= chain_head_slot + interval
+		if slot_now <= chain_head_slot + interval {
+			info!(
+				target: logging_target,
+				"Backing off claiming new slot for block authorship: finality is lagging.",
+			);
+			true
+		} else {
+			false
+		}
 	}
 }
 
@@ -686,6 +692,7 @@ impl<N> BackoffAuthoringBlocksStrategy<N> for () {
 		_chain_head_slot: u64,
 		_finalized_number: N,
 		_slot_now: u64,
+		_logging_target: &str,
 	) -> bool {
 		false
 	}
@@ -791,7 +798,7 @@ mod test {
 		let slot_now = 2;
 
 		let should_backoff: Vec<bool> = (slot_now..1000)
-			.map(|s| strategy.should_backoff(head_number, head_slot, finalized_number, s))
+			.map(|s| strategy.should_backoff(head_number, head_slot, finalized_number, s, "slots"))
 			.collect();
 
 		// Should always be false, since the head isn't advancing
@@ -814,7 +821,13 @@ mod test {
 
 		let should_backoff: Vec<bool> = (slot_now..300)
 			.map(move |s| {
-				let b = strategy.should_backoff(head_number, head_slot, finalized_number, s);
+				let b = strategy.should_backoff(
+					head_number,
+					head_slot,
+					finalized_number,
+					s,
+					"slots",
+				);
 				// Chain is still advancing (by someone else)
 				head_number += 1;
 				head_slot = s;
@@ -849,7 +862,7 @@ mod test {
 		let max_interval = strategy.max_interval;
 
 		let should_backoff: Vec<bool> = (slot_now..200)
-			.map(|s| strategy.should_backoff(head_number, head_slot, finalized_number, s))
+			.map(|s| strategy.should_backoff(head_number, head_slot, finalized_number, s, "slots"))
 			.collect();
 
 		// Should backoff (true) until we are `max_interval` number of slots ahead of the chain
@@ -880,6 +893,7 @@ mod test {
 				head_state.head_slot,
 				finalized_number,
 				head_state.slot_now,
+				"slots",
 			)
 		};
 
@@ -951,6 +965,7 @@ mod test {
 				head_state.head_slot,
 				finalized_number,
 				head_state.slot_now,
+				"slots",
 			)
 		};
 
@@ -1014,6 +1029,7 @@ mod test {
 				head_state.head_slot,
 				finalized_number,
 				head_state.slot_now,
+				"slots",
 			)
 		};
 
