@@ -368,7 +368,7 @@ fn create_project(
 
 	if let Some(crate_lock_file) = find_cargo_lock(cargo_manifest) {
 		// Use the `Cargo.lock` of the main project.
-		crate::copy_file_if_changed(crate_lock_file, wasm_workspace.join("Cargo.lock"));
+		crate::copy_file_if_changed(crate_lock_file, project_folder.join("Cargo.lock"));
 	}
 
 	project_folder
