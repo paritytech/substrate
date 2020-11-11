@@ -272,7 +272,7 @@ pub fn init_logger(
 		if lvl != "" {
 			// We're not sure if log or tracing is available at this moment, so silently ignore the
 			// parse error.
-			for directive in parse_directives(lvl) {
+			for directive in parse_directives(lvl)? {
 				env_filter = env_filter.add_directive(directive);
 			}
 		}
@@ -281,7 +281,7 @@ pub fn init_logger(
 	if pattern != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
 		// parse error.
-		for directive in parse_directives(pattern) {
+		for directive in parse_directives(pattern)? {
 			env_filter = env_filter.add_directive(directive);
 		}
 	}
@@ -303,7 +303,7 @@ pub fn init_logger(
 
 	// Make sure to include profiling targets in the filter
 	if let Some(profiling_targets) = profiling_targets.clone() {
-		for directive in parse_directives(profiling_targets) {
+		for directive in parse_directives(profiling_targets)? {
 			env_filter = env_filter.add_directive(directive);
 		}
 	}

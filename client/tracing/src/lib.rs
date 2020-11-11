@@ -74,7 +74,7 @@ pub fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
 /// Reload the logging filter with the supplied directives
 pub fn reload_filter(directives: String) -> Result<(), String> {
 	let mut env_filter = tracing_subscriber::EnvFilter::default();
-	for directive in parse_directives(directives) {
+	for directive in parse_directives(directives)? {
 		env_filter = env_filter.add_directive(directive);
 	}
 	FILTER_RELOAD_HANDLE.get()
@@ -82,12 +82,11 @@ pub fn reload_filter(directives: String) -> Result<(), String> {
 		.reload(env_filter)
 		.map_err(|e| format!("{}", e))
 }
-
-/// Parse the supplied text directives into `Vec<tracing_subscriber::filter::Directive>`
-pub fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
-	dirs.as_ref()
+/// Parse the supplied text directives into a vector of `Directive`s.
+pub fn parse_directives(directives: impl AsRef<str>) -> Result<Vec<Directive>, String> {
+	directives.as_ref()
 		.split(',')
-		.filter_map(|s| s.parse().ok())
+    	.map(|d| d.parse().map_err(|e| format!("Unparseable logging directive '{}': {:?}", d, e)))
 		.collect()
 }
 
