@@ -190,7 +190,9 @@ macro_rules! define_env {
 
 		impl<E: Ext> $crate::wasm::env_def::FunctionImplProvider<E> for $init_name
 		where
-			<E::T as frame_system::Trait>::AccountId: sp_core::crypto::UncheckedFrom<<E::T as frame_system::Trait>::Hash> + AsRef<[u8]>
+			<E::T as frame_system::Trait>::AccountId:
+				sp_core::crypto::UncheckedFrom<<E::T as frame_system::Trait>::Hash> +
+					AsRef<[u8]>
 		{
 			fn impls<F: FnMut(&[u8], $crate::wasm::env_def::HostFunc<E>)>(f: &mut F) {
 				register_func!(f, < E: $seal_ty > ; $( $name ( $ctx $( , $names : $params )* ) $( -> $returns)* => $body )* );
