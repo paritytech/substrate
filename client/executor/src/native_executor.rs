@@ -258,10 +258,10 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
 	) -> Self {
-		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions();
+		let mut host_functions = D::ExtendHostFunctions::host_functions();
 
 		// Add the custom host functions provided by the user.
-		host_functions.extend(D::ExtendHostFunctions::host_functions());
+		host_functions.extend(sp_io::SubstrateHostFunctions::host_functions());
 		let wasm_executor = WasmExecutor::new(
 			fallback_method,
 			default_heap_pages,
