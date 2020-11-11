@@ -697,12 +697,17 @@ where
 
 	fn proposing_remaining_duration(
 		&self,
-		head: &B::Header,
+		parent_head: &B::Header,
 		slot_info: &SlotInfo,
 	) -> Option<std::time::Duration> {
 		let slot_remaining = self.slot_remaining_duration(slot_info);
 
-		let parent_slot = match find_pre_digest::<B>(head) {
+		// If parent is genesis block, we don't require any lenience factor.
+		if parent_head.number().is_zero() {
+			return Some(slot_remaining)
+		}
+
+		let parent_slot = match find_pre_digest::<B>(parent_head) {
 			Err(_) => return Some(slot_remaining),
 			Ok(d) => d.slot_number(),
 		};
@@ -710,7 +715,8 @@ where
 		if let Some(slot_lenience) =
 			sc_consensus_slots::slot_lenience_exponential(parent_slot, slot_info)
 		{
-			debug!(target: "babe",
+			debug!(
+				target: "babe",
 				"No block for {} slots. Applying exponential lenience of {}s",
 				slot_info.number.saturating_sub(parent_slot + 1),
 				slot_lenience.as_secs(),
@@ -725,8 +731,7 @@ where
 
 /// Extract the BABE pre digest from the given header. Pre-runtime digests are
 /// mandatory, the function will return `Err` if none is found.
-pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
-{
+pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>> {
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
