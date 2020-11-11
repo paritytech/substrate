@@ -21,7 +21,7 @@
 use fork_tree::ForkTree;
 use parking_lot::RwLock;
 use finality_grandpa::voter_set::VoterSet;
-use parity_scale_codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode, Input};
 use log::debug;
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList};
@@ -137,8 +137,18 @@ pub(crate) struct Status<H, N> {
 	pub(crate) new_set_block: Option<(H, N)>,
 }
 
-/// A set of authorities.
+// Same as `AuthoritySet`, but without the last field `authority_set_changes`. Only used during
+// decoding.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
+struct LegacyAuthoritySet<H, N> {
+	current_authorities: AuthorityList,
+	set_id: u64,
+	pending_standard_changes: ForkTree<H, N, PendingChange<H, N>>,
+	pending_forced_changes: Vec<PendingChange<H, N>>,
+}
+
+/// A set of authorities.
+#[derive(Debug, Clone, Encode, PartialEq)]
 pub struct AuthoritySet<H, N> {
 	/// The current active authorities.
 	pub(crate) current_authorities: AuthorityList,
@@ -159,6 +169,35 @@ pub struct AuthoritySet<H, N> {
 	pending_forced_changes: Vec<PendingChange<H, N>>,
 	// WIP(JON)
 	pub(crate) authority_set_changes: AuthoritySetChanges<N>,
+}
+
+impl<H, N> Decode for AuthoritySet<H, N>
+where
+	H: Decode,
+	N: Decode + Clone + Ord
+{
+	fn decode<I: Input>(value: &mut I) -> Result<Self, parity_scale_codec::Error> {
+		let legacy = LegacyAuthoritySet::decode(value)?;
+		let authority_set_changes = match <AuthoritySetChanges<N>>::decode(value) {
+			Ok(v) => v,
+			Err(_) => AuthoritySetChanges::empty(),
+		};
+
+		let LegacyAuthoritySet {
+			current_authorities,
+			set_id,
+			pending_standard_changes,
+			pending_forced_changes,
+		} = legacy;
+
+		Ok(AuthoritySet {
+			current_authorities,
+			set_id,
+			pending_standard_changes,
+			pending_forced_changes,
+			authority_set_changes,
+		})
+	}
 }
 
 impl<H, N> AuthoritySet<H, N>
