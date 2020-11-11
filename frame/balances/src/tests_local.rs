@@ -190,12 +190,12 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 				]
 			);
 
-			let _ = Balances::slash(&1, 99);
+			let _ = Balances::slash(&1, 98);
 
 			// no events
-//			assert_eq!(events(), []);
+			assert_eq!(events(), []);
 
-			//assert_ok!(System::suicide(Origin::signed(1)));
+			let _ = Balances::slash(&1, 1);
 
 			assert_eq!(
 				events(),

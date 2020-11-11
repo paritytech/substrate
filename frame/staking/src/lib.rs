@@ -1451,7 +1451,7 @@ decl_module! {
 			<Bonded<T>>::insert(&stash, &controller);
 			<Payee<T>>::insert(&stash, payee);
 
-			system::Module::<T>::inc_ref(&stash);
+			system::Module::<T>::inc_consumers(&stash);
 
 			let current_era = CurrentEra::get().unwrap_or(0);
 			let history_depth = Self::history_depth();
@@ -3016,7 +3016,7 @@ impl<T: Trait> Module<T> {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 
-		system::Module::<T>::dec_ref(stash);
+		system::Module::<T>::dec_consumers(stash);
 
 		Ok(())
 	}

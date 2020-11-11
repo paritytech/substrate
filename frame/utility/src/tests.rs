@@ -106,7 +106,8 @@ pub struct TestBaseCallFilter;
 impl Filter<Call> for TestBaseCallFilter {
 	fn filter(c: &Call) -> bool {
 		match *c {
-			Call::Balances(_) => true,
+			// Use `transfer_keep_alive` for a call that doesn't pass the filter.
+			Call::Balances(pallet_balances::Call::transfer(..)) => true,
 			// For benchmarking, this acts as a noop call
 			Call::System(frame_system::Call::remark(..)) => true,
 			_ => false,
@@ -167,10 +168,12 @@ fn as_derivative_works() {
 #[test]
 fn as_derivative_filters() {
 	new_test_ext().execute_with(|| {
+		let sub_1_0 = Utility::derivative_account_id(1, 1);
+		assert_ok!(Balances::transfer(Origin::signed(1), sub_1_0, 5));
 		assert_noop!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
-			Box::new(Call::System(frame_system::Call::suicide())),
+			Box::new(Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))),
 		), DispatchError::BadOrigin);
 	});
 }
@@ -215,7 +218,7 @@ fn batch_with_signed_filters() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(
 			Utility::batch(Origin::signed(1), vec![
-				Call::System(frame_system::Call::suicide())
+				Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))
 			]),
 		);
 		expect_event(Event::BatchInterrupted(0, DispatchError::BadOrigin));

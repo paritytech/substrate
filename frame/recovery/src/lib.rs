@@ -585,7 +585,7 @@ decl_module! {
 			);
 			// Create the recovery storage item
 			Proxy::<T>::insert(&who, &account);
-			system::Module::<T>::inc_ref(&who);
+			system::Module::<T>::inc_consumers(&who);
 			Self::deposit_event(RawEvent::AccountRecovered(account, who));
 		}
 
@@ -672,7 +672,7 @@ decl_module! {
 			// Check `who` is allowed to make a call on behalf of `account`
 			ensure!(Self::proxy(&who) == Some(account), Error::<T>::NotAllowed);
 			Proxy::<T>::remove(&who);
-			system::Module::<T>::dec_ref(&who);
+			system::Module::<T>::dec_consumers(&who);
 		}
 	}
 }
