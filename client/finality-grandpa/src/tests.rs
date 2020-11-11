@@ -1717,6 +1717,10 @@ fn grandpa_environment_never_overwrites_round_voter_state() {
 
 	assert_eq!(get_current_round(2).unwrap(), HasVoted::No);
 
+	// we need to call `round_data` for the next round to pick up
+	// from the keystore which authority id we'll be using to vote
+	environment.round_data(2);
+
 	let info = peer.client().info();
 
 	let prevote = finality_grandpa::Prevote {
@@ -1820,6 +1824,8 @@ fn imports_justification_for_regular_blocks_on_import() {
 
 #[test]
 fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
+	use finality_grandpa::voter::Environment;
+
 	let alice = Ed25519Keyring::Alice;
 	let voters = make_ids(&[alice]);
 
@@ -1848,6 +1854,10 @@ fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 		first: signed_prevote.clone(),
 		second: signed_prevote.clone(),
 	};
+
+	// we need to call `round_data` to pick up from the keystore which
+	// authority id we'll be using to vote
+	environment.round_data(1);
 
 	// reporting the equivocation should fail since the offender is a local
 	// authority (i.e. we have keys in our keystore for the given id)
