@@ -64,8 +64,6 @@
 //! By using environment variables, you can configure which Wasm binaries are built and how:
 //!
 //! - `SKIP_WASM_BUILD` - Skips building any wasm binary. This is useful when only native should be recompiled.
-//! - `BUILD_DUMMY_WASM_BINARY` - Builds dummy wasm binaries. These dummy binaries are empty and useful
-//!                              for `cargo check` runs.
 //! - `WASM_BUILD_TYPE` - Sets the build type for building wasm binaries. Supported values are `release` or `debug`.
 //!                       By default the build type is equal to the build type used by the main build.
 //! - `FORCE_WASM_BUILD` - Can be set to force a wasm build. On subsequent calls the value of the variable
@@ -92,10 +90,13 @@
 //! as well. For example if installing the rust nightly from 20.02.2020 using `rustup install nightly-2020-02-20`,
 //! the wasm target needs to be installed as well `rustup target add wasm32-unknown-unknown --toolchain nightly-2020-02-20`.
 
-use std::{env, fs, path::{PathBuf, Path}, process::{Command, self}, io::BufRead};
+use std::{env, fs, path::{PathBuf, Path}, process::Command, io::BufRead};
 
+mod builder;
 mod prerequisites;
 mod wasm_project;
+
+pub use builder::{WasmBuilder, WasmBuilderSelectProject};
 
 /// Environment variable that tells us to skip building the wasm binary.
 const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
@@ -120,87 +121,8 @@ const WASM_BUILD_NO_COLOR: &str = "WASM_BUILD_NO_COLOR";
 /// Environment variable to set the toolchain used to compile the wasm binary.
 const WASM_BUILD_TOOLCHAIN: &str = "WASM_BUILD_TOOLCHAIN";
 
-/// Build the currently built project as wasm binary.
-///
-/// The current project is determined by using the `CARGO_MANIFEST_DIR` environment variable.
-///
-/// `file_name` - The name + path of the file being generated. The file contains the
-///               constant `WASM_BINARY`, which contains the built WASM binary.
-/// `cargo_manifest` - The path to the `Cargo.toml` of the project that should be built.
-pub fn build_project(file_name: &str, cargo_manifest: &str) {
-	build_project_with_default_rustflags(file_name, cargo_manifest, "");
-}
-
-/// Build the currently built project as wasm binary.
-///
-/// The current project is determined by using the `CARGO_MANIFEST_DIR` environment variable.
-///
-/// `file_name` - The name + path of the file being generated. The file contains the
-///               constant `WASM_BINARY`, which contains the built WASM binary.
-/// `cargo_manifest` - The path to the `Cargo.toml` of the project that should be built.
-/// `default_rustflags` - Default `RUSTFLAGS` that will always be set for the build.
-pub fn build_project_with_default_rustflags(
-	file_name: &str,
-	cargo_manifest: &str,
-	default_rustflags: &str,
-) {
-	if check_skip_build() {
-		return;
-	}
-
-	let cargo_manifest = PathBuf::from(cargo_manifest);
-
-	if !cargo_manifest.exists() {
-		panic!("'{}' does not exist!", cargo_manifest.display());
-	}
-
-	if !cargo_manifest.ends_with("Cargo.toml") {
-		panic!("'{}' no valid path to a `Cargo.toml`!", cargo_manifest.display());
-	}
-
-	let cargo_cmd = match prerequisites::check() {
-		Ok(cmd) => cmd,
-		Err(err_msg) => {
-			eprintln!("{}", err_msg);
-			process::exit(1);
-		},
-	};
-
-	let (wasm_binary, bloaty) = wasm_project::create_and_compile(
-		&cargo_manifest,
-		default_rustflags,
-		cargo_cmd,
-	);
-
-	let (wasm_binary, wasm_binary_bloaty) = if let Some(wasm_binary) = wasm_binary {
-		(
-			wasm_binary.wasm_binary_path_escaped(),
-			bloaty.wasm_binary_bloaty_path_escaped(),
-		)
-	} else {
-		(
-			bloaty.wasm_binary_bloaty_path_escaped(),
-			bloaty.wasm_binary_bloaty_path_escaped(),
-		)
-	};
-
-	write_file_if_changed(
-		file_name,
-		format!(
-			r#"
-				pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
-				pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
-			"#,
-			wasm_binary = wasm_binary,
-			wasm_binary_bloaty = wasm_binary_bloaty,
-		),
-	);
-}
-
-/// Checks if the build of the WASM binary should be skipped.
-fn check_skip_build() -> bool {
-	env::var(SKIP_BUILD_ENV).is_ok()
-}
+/// Environment variable that makes sure the WASM build is triggered.
+const FORCE_WASM_BUILD_ENV: &str = "FORCE_WASM_BUILD";
 
 /// Write to the given `file` if the `content` is different.
 fn write_file_if_changed(file: impl AsRef<Path>, content: impl AsRef<str>) {
@@ -217,7 +139,9 @@ fn copy_file_if_changed(src: PathBuf, dst: PathBuf) {
 
 	if src_file != dst_file {
 		fs::copy(&src, &dst)
-			.unwrap_or_else(|_| panic!("Copying `{}` to `{}` can not fail; qed", src.display(), dst.display()));
+			.unwrap_or_else(
+				|_| panic!("Copying `{}` to `{}` can not fail; qed", src.display(), dst.display())
+			);
 	}
 }
 

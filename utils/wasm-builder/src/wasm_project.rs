@@ -402,9 +402,13 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 		env::var(crate::WASM_BUILD_RUSTFLAGS_ENV).unwrap_or_default(),
 	);
 
-	build_cmd.args(&["rustc", "--target=wasm32-unknown-unknown"])
+	build_cmd.args(&["-Zfeatures=build_dep", "rustc", "--target=wasm32-unknown-unknown"])
 		.arg(format!("--manifest-path={}", manifest_path.display()))
 		.env("RUSTFLAGS", rustflags)
+		// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock (cargo locks a target dir exclusive).
+		// The runner project is created in `CARGO_TARGET_DIR` and executing it will create a sub target
+		// directory inside of `CARGO_TARGET_DIR`.
+		.env_remove("CARGO_TARGET_DIR")
 		// We don't want to call ourselves recursively
 		.env(crate::SKIP_BUILD_ENV, "");
 
