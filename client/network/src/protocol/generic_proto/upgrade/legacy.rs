@@ -91,19 +91,12 @@ pub struct RegisteredProtocolSubstream<TSubstream> {
 	requires_poll_flush: bool,
 	/// The underlying substream.
 	inner: stream::Fuse<Framed<TSubstream, UviBytes<BytesMut>>>,
-	/// Version of the protocol that was negotiated.
-	protocol_version: u8,
 	/// If true, we have sent a "remote is clogged" event recently and shouldn't send another one
 	/// unless the buffer empties then fills itself again.
 	clogged_fuse: bool,
 }
 
 impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
-	/// Returns the version of the protocol that was negotiated.
-	pub fn protocol_version(&self) -> u8 {
-		self.protocol_version
-	}
-
 	/// Starts a graceful shutdown process on this substream.
 	///
 	/// Note that "graceful" means that we sent a closing message. We don't wait for any
@@ -237,7 +230,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	fn upgrade_inbound(
 		self,
 		socket: TSubstream,
-		info: Self::Info,
+		_: Self::Info,
 	) -> Self::Future {
 		Box::pin(async move {
 			let mut framed = {
@@ -256,7 +249,6 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 				send_queue: VecDeque::new(),
 				requires_poll_flush: false,
 				inner: framed.fuse(),
-				protocol_version: info.version,
 				clogged_fuse: false,
 			}, received_handshake.to_vec()))
 		})
@@ -273,7 +265,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	fn upgrade_outbound(
 		self,
 		socket: TSubstream,
-		info: Self::Info,
+		_: Self::Info,
 	) -> Self::Future {
 		Box::pin(async move {
 			let mut framed = {
@@ -294,7 +286,6 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 				send_queue: VecDeque::new(),
 				requires_poll_flush: false,
 				inner: framed.fuse(),
-				protocol_version: info.version,
 				clogged_fuse: false,
 			}, received_handshake.to_vec()))
 		})

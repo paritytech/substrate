@@ -55,10 +55,10 @@
 //! [`NotifsHandlerIn::Open`] has gotten an answer.
 
 use crate::protocol::generic_proto::{
-	handler::legacy::{LegacyProtoHandler, LegacyProtoHandlerProto, LegacyProtoHandlerIn},
 	upgrade::{
 		NotificationsIn, NotificationsOut, NotificationsInSubstream, NotificationsOutSubstream,
-		NotificationsHandshakeError, RegisteredProtocol, UpgradeCollec
+		NotificationsHandshakeError, RegisteredProtocol, RegisteredProtocolSubstream,
+		RegisteredProtocolEvent, UpgradeCollec
 	},
 };
 
@@ -80,7 +80,8 @@ use futures::{
 };
 use log::error;
 use parking_lot::{Mutex, RwLock};
-use std::{borrow::Cow, collections::VecDeque, cmp, mem, pin::Pin, str, sync::Arc, task::{Context, Poll}, time::Duration};
+use smallvec::SmallVec;
+use std::{borrow::Cow, collections::VecDeque, mem, pin::Pin, str, sync::Arc, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
 
 /// Number of pending notifications in asynchronous contexts.
@@ -115,8 +116,8 @@ pub struct NotifsHandlerProto {
 	/// send.
 	out_protocols: Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>,
 
-	/// Prototype for handler for backwards-compatibility.
-	legacy: LegacyProtoHandlerProto,
+	/// Configuration for the legacy protocol upgrade.
+	legacy_protocol: RegisteredProtocol,
 }
 
 /// The actual handler once the connection has been established.
@@ -137,11 +138,17 @@ pub struct NotifsHandler {
 	/// Whether we are the connection dialer or listener.
 	endpoint: ConnectedPoint,
 
-	/// Handler for backwards-compatibility.
-	legacy: LegacyProtoHandler,
-
 	/// State of this handler.
 	state: State,
+
+	/// Configuration for the legacy protocol upgrade.
+	legacy_protocol: RegisteredProtocol,
+
+	/// The substreams where bidirectional communications happen.
+	legacy_substreams: SmallVec<[RegisteredProtocolSubstream<NegotiatedSubstream>; 4]>,
+
+	/// Contains substreams which are being shut down.
+	legacy_shutdown: SmallVec<[RegisteredProtocolSubstream<NegotiatedSubstream>; 4]>,
 
 	/// Events to return in priority from `poll`.
 	events_queue: VecDeque<
@@ -240,10 +247,10 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 			.map(|(h, _)| h.clone())
 			.collect::<UpgradeCollec<_>>();
 
-		SelectUpgrade::new(in_protocols, self.legacy.inbound_protocol())
+		SelectUpgrade::new(in_protocols, self.legacy_protocol.clone())
 	}
 
-	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
+	fn into_handler(self, _: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
 		let num_out_proto = self.out_protocols.len();
 
 		NotifsHandler {
@@ -251,10 +258,12 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 			out_protocols: self.out_protocols,
 			endpoint: connected_point.clone(),
 			when_connection_open: Instant::now(),
-			legacy: self.legacy.into_handler(remote_peer_id, connected_point),
 			state: State::Closed {
 				pending_opening: (0..num_out_proto).map(|_| false).collect(),
 			},
+			legacy_protocol: self.legacy_protocol,
+			legacy_substreams: SmallVec::new(),
+			legacy_shutdown: SmallVec::new(),
 			events_queue: VecDeque::with_capacity(16),
 		}
 	}
@@ -447,8 +456,6 @@ impl<'a> Ready<'a> {
 pub enum NotifsHandlerError {
 	/// Channel of synchronous notifications is full.
 	SyncNotificationsClogged,
-	/// Error in legacy protocol.
-	Legacy(<LegacyProtoHandler as ProtocolsHandler>::Error),
 }
 
 impl NotifsHandlerProto {
@@ -466,7 +473,7 @@ impl NotifsHandlerProto {
 	/// - Panics if `list` is empty.
 	///
 	pub fn new(
-		legacy: RegisteredProtocol,
+		legacy_protocol: RegisteredProtocol,
 		list: impl Into<Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>>,
 	) -> Self {
 		let list = list.into();
@@ -485,7 +492,7 @@ impl NotifsHandlerProto {
 		NotifsHandlerProto {
 			in_protocols,
 			out_protocols,
-			legacy: LegacyProtoHandlerProto::new(legacy),
+			legacy_protocol,
 		}
 	}
 }
@@ -505,7 +512,7 @@ impl ProtocolsHandler for NotifsHandler {
 			.map(|(h, _)| h.clone())
 			.collect::<UpgradeCollec<_>>();
 
-		let proto = SelectUpgrade::new(in_protocols, self.legacy.listen_protocol().into_upgrade().1);
+		let proto = SelectUpgrade::new(in_protocols, self.legacy_protocol.clone());
 		SubstreamProtocol::new(proto, ())
 	}
 
@@ -515,6 +522,7 @@ impl ProtocolsHandler for NotifsHandler {
 		(): ()
 	) {
 		match out {
+			// Received notifications substream.
 			EitherOutput::First(((_remote_handshake, mut proto), num)) => {
 				match &mut self.state {
 					State::Closed { pending_opening } => {
@@ -559,8 +567,19 @@ impl ProtocolsHandler for NotifsHandler {
 					},
 				};
 			}
-			EitherOutput::Second(out) =>
-				self.legacy.inject_fully_negotiated_inbound(out, ()),
+
+			// Received legacy substream.
+			EitherOutput::Second((substream, _handshake)) => {
+				// Note: while we awknowledge legacy substreams and handle incoming messages,
+				// it doesn't trigger any `OpenDesired` event as a way to simplify the logic of
+				// this code.
+				// Since mid-2019, legacy substreams are supposed to used at the same time as
+				// notifications substreams, and not in isolation. Nodes that open legacy
+				// substreams in isolation are considered deprecated.
+				if self.legacy_substreams.len() <= 4 {
+					self.legacy_substreams.push(substream);
+				}
+			},
 		}
 	}
 
@@ -680,11 +699,14 @@ impl ProtocolsHandler for NotifsHandler {
 			},
 
 			NotifsHandlerIn::Close => {
+				for mut substream in self.legacy_substreams.drain() {
+					substream.shutdown();
+					self.legacy_shutdown.push(substream);
+				}
+
 				match &mut self.state {
 					State::Open { .. } |
 					State::Opening { .. } => {
-						self.legacy.inject_event(LegacyProtoHandlerIn::Close);
-
 						self.state = State::Closed {
 							pending_opening: Vec::new(),
 						};
@@ -714,7 +736,7 @@ impl ProtocolsHandler for NotifsHandler {
 	fn inject_dial_upgrade_error(
 		&mut self,
 		num: usize,
-		err: ProtocolsHandlerUpgrErr<NotificationsHandshakeError>
+		_: ProtocolsHandlerUpgrErr<NotificationsHandshakeError>
 	) {
 		match &mut self.state {
 			State::Closed { pending_opening } | State::OpenDesired { pending_opening, .. } => {
@@ -743,10 +765,12 @@ impl ProtocolsHandler for NotifsHandler {
 	}
 
 	fn connection_keep_alive(&self) -> KeepAlive {
-		let legacy = self.legacy.connection_keep_alive();
+		if !self.legacy_substreams.is_empty() {
+			return KeepAlive::Yes;
+		}
+
 		match self.state {
-			State::Closed { .. } =>
-				cmp::max(legacy, KeepAlive::Until(self.when_connection_open + INITIAL_KEEPALIVE_TIME)),
+			State::Closed { .. } => KeepAlive::Until(self.when_connection_open + INITIAL_KEEPALIVE_TIME),
 			State::OpenDesired { .. } | State::Opening { .. } | State::Open { .. } =>
 				KeepAlive::Yes,
 		}
@@ -895,58 +919,62 @@ impl ProtocolsHandler for NotifsHandler {
 			}
 		}
 
-		// TODO: legacy substream
-		/*// If `self.pending_handshake` is `Some`, we are in a state where the handshake-bearing
-		// substream (either the legacy substream or the one special-cased as providing the
-		// handshake) is open but the user isn't aware yet of the substreams being open.
-		// When that is the case, neither the legacy substream nor the incoming notifications
-		// substreams should be polled, otherwise there is a risk of receiving messages from them.
-		if !matches!(self.state, State::Opening { pending_handshake: Some(_) }) {
-			while let Poll::Ready(ev) = self.legacy.poll(cx) {
-				match ev {
-					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, .. } =>
-						match *protocol.info() {},
-					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen {
-						received_handshake,
-						..
-					}) => {
-						match &mut self.state {
-							State::Opening { pending_handshake } => {
-								debug_assert!(pending_handshake.is_none());
-								*pending_handshake = Some(received_handshake);
-							}
-							// TODO: wrong
-							_ => debug_assert!(false),
-						}
-
-						cx.waker().wake_by_ref();
-						return Poll::Pending;
-					},
-					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { .. }) => {
-						match &mut self.state {
-							State::Open { want_closed, .. } if *want_closed == false => {
-								*want_closed = true;
-								return Poll::Ready(ProtocolsHandlerEvent::Custom(
-									NotifsHandlerOut::CloseDesired
-								));
-							}
-							State::Open { .. } => {}
-							State::Opening { .. } => {}
-							State::Closed { .. } => debug_assert!(false),
-						}
-					},
-					ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) => {
-						debug_assert!(!matches!(self.state, State::Open { .. }));
+		for n in (0..self.legacy_substreams.len()).rev() {
+			let mut substream = self.legacy_substreams.swap_remove(n);
+			let poll_outcome = Pin::new(&mut substream).poll_next(cx);
+			match poll_outcome {
+				Poll::Pending => self.legacy_substreams.push(substream),
+				Poll::Ready(Some(Ok(RegisteredProtocolEvent::Message(message)))) => {
+					self.legacy_substreams.push(substream);
+					if matches!(self.state, State::Open { .. }) {
 						return Poll::Ready(ProtocolsHandlerEvent::Custom(
 							NotifsHandlerOut::CustomMessage { message }
 						))
-					},
-					ProtocolsHandlerEvent::Close(err) =>
-						return Poll::Ready(ProtocolsHandlerEvent::Close(NotifsHandlerError::Legacy(err))),
+					}
+				},
+				Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged))) => {
+					return Poll::Ready(ProtocolsHandlerEvent::Close(
+						NotifsHandlerError::SyncNotificationsClogged
+					))
+				}
+				Poll::Ready(None) | Poll::Ready(Some(Err(_))) => {
+					if matches!(poll_outcome, Poll::Ready(None)) {
+						self.legacy_shutdown.push(substream);
+					}
+
+					if let State::Open { want_closed, .. } = &mut self.state {
+						if !*want_closed {
+							*want_closed = true;
+							return Poll::Ready(ProtocolsHandlerEvent::Custom(
+								NotifsHandlerOut::CloseDesired
+							))
+						}
+					}
 				}
 			}
-		}*/
+		}
+
+		shutdown_list(&mut self.legacy_shutdown, cx);
 
 		Poll::Pending
+	}
+}
+
+/// Given a list of substreams, tries to shut them down. The substreams that have been successfully
+/// shut down are removed from the list.
+fn shutdown_list
+	(list: &mut SmallVec<impl smallvec::Array<Item = RegisteredProtocolSubstream<NegotiatedSubstream>>>,
+	cx: &mut Context)
+{
+	'outer: for n in (0..list.len()).rev() {
+		let mut substream = list.swap_remove(n);
+		loop {
+			match substream.poll_next_unpin(cx) {
+				Poll::Ready(Some(Ok(_))) => {}
+				Poll::Pending => break,
+				Poll::Ready(Some(Err(_))) | Poll::Ready(None) => continue 'outer,
+			}
+		}
+		list.push(substream);
 	}
 }

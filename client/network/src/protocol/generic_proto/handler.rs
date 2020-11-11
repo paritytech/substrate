@@ -19,7 +19,5 @@
 pub use self::group::{
 	NotificationsSink, NotifsHandlerError, Ready, NotifsHandlerProto, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut
 };
-pub use self::legacy::ConnectionKillError as LegacyConnectionKillError;
 
 mod group;
-mod legacy;
