@@ -346,26 +346,12 @@ Behaviour<B, H> {
 			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
 				self.events.push_back(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)),
 			CustomMessageOutcome::BlockRequest { target, request, pending_response } => {
-				// TODO: Move this logic into protocol.rs
-				let protobuf_req = schema::v1::BlockRequest {
-					fields: request.fields.to_be_u32(),
-					from_block: match request.from {
-						message::FromBlock::Hash(h) =>
-							Some(schema::v1::block_request::FromBlock::Hash(h.encode())),
-						message::FromBlock::Number(n) =>
-							Some(schema::v1::block_request::FromBlock::Number(n.encode())),
-					},
-					to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
-					direction: request.direction as i32,
-					max_blocks: request.max.unwrap_or(0),
-				};
-
-				let mut buf = Vec::with_capacity(protobuf_req.encoded_len());
-				if let Err(err) = protobuf_req.encode(&mut buf) {
+				let mut buf = Vec::with_capacity(request.encoded_len());
+				if let Err(err) = request.encode(&mut buf) {
 					log::warn!(
 						target: "sync",
 						"Failed to encode block request {:?}: {:?}",
-						protobuf_req, err
+						request, err
 					);
 
 					// TODO: Should we notify protocol.rs or sync.rs?
@@ -376,19 +362,16 @@ Behaviour<B, H> {
 					&target, &self.block_request_protocol_name, buf, pending_response,
 				);
 			},
-			CustomMessageOutcome::FinalityProofRequest { target, block_hash, request, pending_response } => {
-				let protobuf_req = crate::schema::v1::finality::FinalityProofRequest {
-					block_hash: block_hash.encode(),
-					request,
-				};
-
-				let mut buf = Vec::with_capacity(protobuf_req.encoded_len());
-				if let Err(err) = protobuf_req.encode(&mut buf) {
+			CustomMessageOutcome::FinalityProofRequest { target, request, pending_response } => {
+				let mut buf = Vec::with_capacity(request.encoded_len());
+				if let Err(err) = request.encode(&mut buf) {
 					log::warn!(
 						target: "sync",
 						"Failed to encode finality proof request {:?}: {:?}",
-						protobuf_req, err,
+						request, err,
 					);
+
+					// TODO: Should we notify protocol.rs or sync.rs?
 					return;
 				}
 

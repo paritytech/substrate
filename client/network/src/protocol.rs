@@ -674,14 +674,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		CustomMessageOutcome::None
 	}
 
-	fn update_peer_request(
+	fn prepare_block_request(
 		&mut self,
-		who: &PeerId,
-		request: &mut message::BlockRequest<B>,
-		rx: oneshot::Receiver<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
-	) {
+		who: PeerId,
+		request: message::BlockRequest<B>,
+	) -> CustomMessageOutcome<B> {
 		// TODO: Can we not inline this?
-		update_peer_request::<B, H>(&mut self.context_data.peers, who, request, rx)
+		prepare_block_request::<B, H>(&mut self.context_data.peers, who, request)
 	}
 
 	/// Called by peer when it is disconnecting
@@ -812,13 +811,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
 				Ok(sync::OnBlockData::Request(peer, mut req)) => {
-					let (tx, rx) = oneshot::channel();
-					self.update_peer_request(&peer, &mut req, rx);
-					CustomMessageOutcome::BlockRequest {
-						target: peer_id,
-						request: req,
-						pending_response: tx,
-					}
+					self.prepare_block_request(peer, req)
 				}
 				Err(sync::BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id);
@@ -933,13 +926,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			match self.sync.new_peer(who.clone(), info.best_hash, info.best_number) {
 				Ok(None) => (),
 				Ok(Some(mut req)) => {
-					let (tx, rx) = oneshot::channel();
-					self.update_peer_request(&who, &mut req, rx);
-					self.pending_messages.push_back(CustomMessageOutcome::BlockRequest {
-						target: who.clone(),
-						request: req,
-						pending_response: tx,
-					});
+					let event = self.prepare_block_request(who.clone(), req);
+					self.pending_messages.push_back(event);
 				},
 				Err(sync::BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id);
@@ -1270,14 +1258,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				CustomMessageOutcome::BlockImport(origin, blocks)
 			},
 			Ok(sync::OnBlockData::Request(peer, mut req)) => {
-				// TODO: Dry out this logic as it is repeated quite often. How about a `prepare_block_request`?
-				let (tx, rx) = oneshot::channel();
-				self.update_peer_request(&peer, &mut req, rx);
-				CustomMessageOutcome::BlockRequest {
-					target: peer,
-					request: req,
-					pending_response: tx,
-				}
+				self.prepare_block_request(peer, req)
 			}
 			Err(sync::BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id);
@@ -1337,13 +1318,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		for result in results {
 			match result {
 				Ok((id, mut req)) => {
-					let (tx, rx) = oneshot::channel();
-					update_peer_request(&mut self.context_data.peers, &id, &mut req, rx);
-					self.pending_messages.push_back(CustomMessageOutcome::BlockRequest {
-						target: id,
-						request: req,
-						pending_response: tx,
-					});
+					self.pending_messages.push_back(
+						prepare_block_request(&mut self.context_data.peers, id, req)
+					);
 				}
 				Err(sync::BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id);
@@ -1457,6 +1434,65 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 }
 
+fn prepare_block_request<B: BlockT, H: ExHashT>(
+	peers: &mut HashMap<PeerId, Peer<B, H>>,
+	who: PeerId,
+	mut request: message::BlockRequest<B>,
+) -> CustomMessageOutcome<B> {
+	let (tx, rx) = oneshot::channel();
+
+	if let Some(ref mut peer) = peers.get_mut(&who) {
+		request.id = peer.next_request_id;
+		peer.next_request_id += 1;
+		peer.block_request = Some((request.clone(), rx));
+	}
+
+	let request = crate::schema::v1::BlockRequest {
+		fields: request.fields.to_be_u32(),
+		from_block: match request.from {
+			message::FromBlock::Hash(h) =>
+				Some(crate::schema::v1::block_request::FromBlock::Hash(h.encode())),
+			message::FromBlock::Number(n) =>
+				Some(crate::schema::v1::block_request::FromBlock::Number(n.encode())),
+		},
+		to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
+		direction: request.direction as i32,
+		max_blocks: request.max.unwrap_or(0),
+	};
+
+	CustomMessageOutcome::BlockRequest {
+		target: who,
+		request: request,
+		pending_response: tx,
+	}
+}
+
+fn prepare_finality_request<B: BlockT, H: ExHashT>(
+	peers: &mut HashMap<PeerId, Peer<B, H>>,
+	who: PeerId,
+	request: message::FinalityProofRequest<B::Hash>,
+) -> CustomMessageOutcome<B> {
+	let (tx, rx) = oneshot::channel();
+
+	match peers.get_mut(&who) {
+		Some(peer) => {
+			peer.finality_request = Some((request.clone(), rx))
+		},
+		None => unimplemented!(),
+	}
+
+	let request = crate::schema::v1::finality::FinalityProofRequest {
+		block_hash: request.block.encode(),
+		request: request.request,
+	};
+
+	CustomMessageOutcome::FinalityProofRequest {
+		target: who,
+		request: request,
+		pending_response: tx,
+	}
+}
+
 /// Outcome of an incoming custom message.
 #[derive(Debug)]
 #[must_use]
@@ -1490,9 +1526,10 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// It is the responsibility of the handler to ensure that a timeout exists.
 	BlockRequest {
 		target: PeerId,
-		request: message::BlockRequest<B>,
+		request: crate::schema::v1::BlockRequest,
 		pending_response: oneshot::Sender<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
 	},
+	// TODO: Maybe update?
 	/// A new finality proof request must be emitted.
 	/// Once you have the response, you must call `Protocol::on_finality_proof_response`.
 	/// It is the responsibility of the handler to ensure that a timeout exists.
@@ -1500,27 +1537,12 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// disconnect. This will inform the state machine that the request it has emitted is stale.
 	FinalityProofRequest {
 		target: PeerId,
-		block_hash: B::Hash,
-		request: Vec<u8>,
+		request: crate::schema::v1::finality::FinalityProofRequest,
 		pending_response: oneshot::Sender<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
 	},
 	/// Peer has a reported a new head of chain.
 	PeerNewBest(PeerId, NumberFor<B>),
 	None,
-}
-
-// TODO: Should this be inlined?
-fn update_peer_request<B: BlockT, H: ExHashT>(
-	peers: &mut HashMap<PeerId, Peer<B, H>>,
-	who: &PeerId,
-	request: &mut message::BlockRequest<B>,
-	rx: oneshot::Receiver<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
-) {
-	if let Some(ref mut peer) = peers.get_mut(who) {
-		request.id = peer.next_request_id;
-		peer.next_request_id += 1;
-		peer.block_request = Some((request.clone(), rx));
-	}
 }
 
 impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
@@ -1648,41 +1670,15 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		}
 
 		for (id, mut request) in self.sync.block_requests() {
-			let (tx, rx) = oneshot::channel();
-
-			update_peer_request(&mut self.context_data.peers, id, &mut request, rx);
-
-			let event = CustomMessageOutcome::BlockRequest {
-				target: id.clone(),
-				request: request,
-				pending_response: tx,
-			};
+			let event = prepare_block_request(&mut self.context_data.peers, id.clone(), request);
 			self.pending_messages.push_back(event);
 		}
-		for (id, mut r) in self.sync.justification_requests() {
-			let (tx, rx) = oneshot::channel();
-			update_peer_request(&mut self.context_data.peers, &id, &mut r, rx);
-			let event = CustomMessageOutcome::BlockRequest {
-				target: id,
-				request: r,
-				pending_response: tx,
-			};
+		for (id, mut request) in self.sync.justification_requests() {
+			let event = prepare_block_request(&mut self.context_data.peers, id, request);
 			self.pending_messages.push_back(event);
 		}
-		for (id, r) in self.sync.finality_proof_requests() {
-			let (tx, rx) = oneshot::channel();
-			match self.context_data.peers.get_mut(&id) {
-				Some(peer) => {
-					peer.finality_request = Some((r.clone(), rx))
-				},
-				None => unimplemented!(),
-			}
-			let event = CustomMessageOutcome::FinalityProofRequest {
-				target: id,
-				block_hash: r.block,
-				request: r.request,
-				pending_response: tx,
-			};
+		for (id, request) in self.sync.finality_proof_requests() {
+			let event = prepare_finality_request(&mut self.context_data.peers, id, request);
 			self.pending_messages.push_back(event);
 		}
 		if let Poll::Ready(Some((tx_hash, result))) = self.pending_transactions.poll_next_unpin(cx) {
