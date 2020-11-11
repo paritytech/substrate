@@ -499,7 +499,7 @@ trigger-contracts-ci:
     - job:                         test-linux-stable
       artifacts:                   false
   trigger:
-    project:                       parity/srml-contracts-waterfall
+    project:                       parity/pallet-contracts-waterfall
     branch:                        master
     strategy:                      depend
   rules:
