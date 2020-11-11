@@ -199,7 +199,7 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 	}
 
 	fn system_set_log_filter(&self, directives: String)-> std::result::Result<(), rpc::Error> {
-		bail_if_unsafe!(self.deny_unsafe);
+		self.deny_unsafe.check_if_safe()?;
 		sc_tracing::reload_filter(directives).map_err(|_e| rpc::Error::internal_error())
 	}
 }
