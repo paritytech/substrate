@@ -365,8 +365,8 @@ pub struct AccountInfo<Index, AccountData> {
 	/// The number of other modules that currently depend on this account's existence. The account
 	/// cannot be reaped until this is zero.
 	pub consumers: RefCount,
-	/// The number of other modules that currently depend on this account's existence. The account
-	/// cannot be reaped until this is zero.
+	/// The number of other modules that allow this account to exist. The account may not be reaped
+	/// until this is zero.
 	pub providers: RefCount,
 	/// The additional data that belongs to this account. Used to store the balance(s) in a lot of
 	/// chains.
@@ -1437,7 +1437,7 @@ impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 	) -> Result<R, E> {
 		let account = Account::<T>::get(k);
 		let was_providing = is_providing(&account.data);
-		let mut some_data = Some(account.data);
+		let mut some_data = if was_providing { Some(account.data) } else { None };
 		let result = f(&mut some_data)?;
 		let is_providing = some_data.is_some();
 		if !was_providing && is_providing {
@@ -1450,6 +1450,8 @@ impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 					// Update value as normal...
 				}
 			}
+		} else if !was_providing && !is_providing {
+			return Ok(result)
 		}
 		Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
 		Ok(result)

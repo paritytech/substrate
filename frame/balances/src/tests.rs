@@ -43,7 +43,7 @@ macro_rules! decl_tests {
 			assert_noop, assert_ok, assert_err,
 			traits::{
 				LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
-				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath, StoredMap
+				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath
 			}
 		};
 		use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier};
@@ -410,7 +410,7 @@ macro_rules! decl_tests {
 		fn refunding_balance_should_work() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 42);
-				Balances::mutate_account(&1, |a| a.reserved = 69);
+				assert!(Balances::mutate_account(&1, |a| a.reserved = 69).is_ok());
 				Balances::unreserve(&1, 69);
 				assert_eq!(Balances::free_balance(1), 111);
 				assert_eq!(Balances::reserved_balance(1), 0);
@@ -749,7 +749,7 @@ macro_rules! decl_tests {
 		#[test]
 		fn emit_events_with_no_existential_deposit_suicide() {
 			<$ext_builder>::default()
-				.existential_deposit(0)
+				.existential_deposit(1)
 				.build()
 				.execute_with(|| {
 					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
@@ -764,11 +764,6 @@ macro_rules! decl_tests {
 					);
 
 					let _ = Balances::slash(&1, 100);
-
-					// no events
-					assert_eq!(events(), []);
-
-					assert_ok!(System::suicide(Origin::signed(1)));
 
 					assert_eq!(
 						events(),
