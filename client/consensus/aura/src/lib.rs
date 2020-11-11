@@ -331,6 +331,7 @@ where
 					chain_head_slot,
 					self.client.info().finalized_number,
 					slot_number,
+					self.logging_target(),
 				);
 			}
 		}
