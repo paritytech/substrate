@@ -1596,68 +1596,57 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message));
 		}
 
-		// TODO: rework
-		// TODO: One could as well merge the block and finality loop.
-		let mut finished = Vec::new();
 		// Check for finished outgoing requests.
+		let mut finished_block_requests = Vec::new();
+		let mut finished_finality_requests = Vec::new();
 		for (id, peer) in self.context_data.peers.iter_mut() {
-			if let Peer { block_request: Some((req, pending_response)), .. } = peer {
+			if let Peer { block_request: Some((_, pending_response)), .. } = peer {
 				match pending_response.poll_unpin(cx) {
 					Poll::Ready(Ok(Ok(resp))) => {
 						let (req, _) = peer.block_request.take().unwrap();
 
 						let protobuf_response = match crate::schema::v1::BlockResponse::decode(&resp[..]) {
 							Ok(proto) => proto,
-							Err(e) => {
+							Err(_e) => {
 								todo!("log error");
 							}
 						};
 
 						let id = id.clone();
-						finished.push((id, req, protobuf_response));
+						finished_block_requests.push((id, req, protobuf_response));
 					},
-					Poll::Ready(Ok(Err(e))) => todo!("call on block request canceled"),
-					Poll::Ready(Err(e)) => todo!("handle"),
-					Poll::Pending => continue,
+					Poll::Ready(Ok(Err(_e))) => todo!("call on block request canceled"),
+					Poll::Ready(Err(_e)) => todo!("handle"),
+					Poll::Pending => {},
 				}
 			}
-		}
-		for (id, req, protobuf_response) in finished {
-			let ev = self.on_block_response(id, req, protobuf_response);
-			// TODO: Is this correct? Should we check at the very end once more whether
-			// there have been any events addedd to pending_messages?
-			self.pending_messages.push_back(ev);
-		}
-
-		// TODO: rework
-		let mut finished = Vec::new();
-		// Check for finished outgoing requests.
-		for (id, peer) in self.context_data.peers.iter_mut() {
-			if let Peer { finality_request: Some((req, pending_response)), .. } = peer {
+			if let Peer { finality_request: Some((_, pending_response)), .. } = peer {
 				match pending_response.poll_unpin(cx) {
 					Poll::Ready(Ok(Ok(resp))) => {
 						let (req, _) = peer.finality_request.take().unwrap();
 
 						let protobuf_response = match crate::schema::v1::finality::FinalityProofResponse::decode(&resp[..]) {
 							Ok(proto) => proto,
-							Err(e) => {
+							Err(_e) => {
 								todo!("log error");
 							}
 						};
 
 						let id = id.clone();
-						finished.push((id, req, protobuf_response));
+						finished_finality_requests.push((id, req, protobuf_response));
 					},
-					Poll::Ready(Ok(Err(e))) => todo!("call on block request canceled"),
-					Poll::Ready(Err(e)) => todo!("handle"),
-					Poll::Pending => continue,
+					Poll::Ready(Ok(Err(_e))) => todo!("call on block request canceled"),
+					Poll::Ready(Err(_e)) => todo!("handle"),
+					Poll::Pending => {},
 				}
 			}
 		}
-		for (id, req, protobuf_response) in finished {
+		for (id, req, protobuf_response) in finished_block_requests {
+			let ev = self.on_block_response(id, req, protobuf_response);
+			self.pending_messages.push_back(ev);
+		}
+		for (id, req, protobuf_response) in finished_finality_requests {
 			let ev = self.on_finality_proof_response(id, req, protobuf_response.proof);
-			// TODO: Is this correct? Should we check at the very end once more whether
-			// there have been any events addedd to pending_messages?
 			self.pending_messages.push_back(ev);
 		}
 
@@ -1812,11 +1801,15 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				}
 		};
 
-		if let CustomMessageOutcome::None = outcome {
-			Poll::Pending
-		} else {
-			Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome))
+		if !matches!(CustomMessageOutcome::<B>::None, outcome) {
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome));
 		}
+
+		if let Some(message) = self.pending_messages.pop_front() {
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message));
+		}
+
+		Poll::Pending
 	}
 
 	fn inject_addr_reach_failure(

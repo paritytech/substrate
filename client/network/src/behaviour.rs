@@ -427,7 +427,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Even
 				});
 			}
 			request_responses::Event::RequestFinished { peer, protocol, duration, result } => {
-				// TODO: Add everything here we need to capture the event in metrics. E.g. protocol.
 				self.events.push_back(BehaviourOut::RequestFinished {
 					peer, protocol, duration, result,
 				});
