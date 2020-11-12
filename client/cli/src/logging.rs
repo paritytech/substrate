@@ -34,7 +34,7 @@ use regex::Regex;
 /// Span name used for the logging prefix. See macro `sc_cli::prefix_logs_with!`
 pub const PREFIX_LOG_SPAN: &str = "substrate-log-prefix";
 
-/// A writer that may writes to `inner_writer` with colors.
+/// A writer that may write to `inner_writer` with colors.
 ///
 /// This is used by [`EventFormat`] to kill colors when `enable_color` is `false`.
 ///
