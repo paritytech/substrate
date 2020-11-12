@@ -279,10 +279,10 @@ impl Stream for Telemetry {
 }
 
 /// TODO doc
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub struct Telemetries {
 	senders: Senders,
-	node_pool: Arc<Mutex<NodePool>>,
+	node_pool: NodePool,
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
 }
 
@@ -315,13 +315,17 @@ impl Telemetries {
 		let (telemetry, sender) = Telemetry::new(
 			endpoints.clone(),
 			self.wasm_external_transport.clone(),
-			Some(&self.node_pool.lock()),
+			Some(&self.node_pool),
 		);
 		let id = telemetry.span.id().expect("the span is enabled; qed").into_u64();
 
 		self.senders.insert(id, sender);
 
 		telemetry
+	}
+
+	pub fn senders(&self) -> Senders {
+		self.senders.clone()
 	}
 }
 

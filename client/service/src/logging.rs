@@ -43,16 +43,16 @@ pub const PREFIX_LOG_SPAN: &str = "substrate-log-prefix";
 #[cfg(target_os = "unknown")]
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(js_namespace = console, js_name = error)]
-    fn error(message: &str);
-    #[wasm_bindgen(js_namespace = console, js_name = warn)]
-    fn warn(message: &str);
-    #[wasm_bindgen(js_namespace = console, js_name = info)]
-    fn info(message: &str);
-    #[wasm_bindgen(js_namespace = console, js_name = log)]
-    fn log(message: &str);
-    #[wasm_bindgen(js_namespace = console, js_name = debug)]
-    fn debug(message: &str);
+	#[wasm_bindgen(js_namespace = console, js_name = error)]
+	fn error(message: &str);
+	#[wasm_bindgen(js_namespace = console, js_name = warn)]
+	fn warn(message: &str);
+	#[wasm_bindgen(js_namespace = console, js_name = info)]
+	fn info(message: &str);
+	#[wasm_bindgen(js_namespace = console, js_name = log)]
+	fn log(message: &str);
+	#[wasm_bindgen(js_namespace = console, js_name = debug)]
+	fn debug(message: &str);
 }
 
 /// TODO doc
@@ -551,8 +551,13 @@ fn get_default_subscriber_and_telemetries_internal(
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-	let telemetry_layer = sc_telemetry::TelemetryLayer::new(telemetry_external_transport);
-	let telemetries = telemetry_layer.telemetries();
+	let telemetries = if let Some(telemetry_external_transport) = telemetry_external_transport {
+		sc_telemetry::Telemetries::with_wasm_external_transport(telemetry_external_transport)
+	} else {
+		Default::default()
+	};
+	let senders = telemetries.senders();
+	let telemetry_layer = sc_telemetry::TelemetryLayer::new(senders);
 	let event_format = EventFormat {
 		timer,
 		ansi: enable_color,

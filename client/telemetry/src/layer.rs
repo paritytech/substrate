@@ -29,23 +29,12 @@ use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 pub const TELEMETRY_LOG_SPAN: &str = "telemetry-logger";
 
 #[derive(Debug)]
-pub struct TelemetryLayer(Telemetries);
+pub struct TelemetryLayer(Senders);
 
 impl TelemetryLayer {
 	/// TODO
-	pub fn new(telemetry_external_transport: Option<ExtTransport>) -> Self {
-		if let Some(telemetry_external_transport) = telemetry_external_transport {
-			Self(Telemetries::with_wasm_external_transport(
-				telemetry_external_transport,
-			))
-		} else {
-			Self(Default::default())
-		}
-	}
-
-	/// TODO
-	pub fn telemetries(&self) -> Telemetries {
-		self.0.clone()
+	pub fn new(senders: Senders) -> Self {
+		Self(senders)
 	}
 }
 
@@ -66,7 +55,7 @@ where
 				.find(|x| x.name() == TELEMETRY_LOG_SPAN)
 			{
 				let id = span.id().into_u64();
-				if let Some(sender) = self.0.senders.0.lock().get_mut(&id) {
+				if let Some(sender) = (self.0).0.lock().get_mut(&id) {
 					let mut attrs = TelemetryAttrs::new(id);
 					let mut vis = TelemetryAttrsVisitor(&mut attrs);
 					event.record(&mut vis);
@@ -153,6 +142,7 @@ pub struct Senders(
 );
 
 impl Senders {
+	/// TODO doc
 	pub fn insert(&self, id: u64, sender: mpsc::Sender<(u8, String)>) {
 		self.0
 			.lock()
