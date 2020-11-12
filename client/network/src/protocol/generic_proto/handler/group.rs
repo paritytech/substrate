@@ -550,25 +550,10 @@ impl ProtocolsHandler for NotifsHandler {
 						};
 					},
 					State::OpenDesired { in_substreams, .. } => {
-						if in_substreams[num].is_some() {
-							// If a substream already exists, silently drop the new one.
-							// Note that we drop the substream, which will send an equivalent to a
-							// TCP "RST" to the remote and force-close the substream. It might
-							// seem like an unclean way to get rid of a substream. However, keep
-							// in mind that it is invalid for the remote to open multiple such
-							// substreams, and therefore sending a "RST" is the most correct thing
-							// to do.
-							return;
-						}
 						in_substreams[num] = Some(proto);
 					},
 					State::Opening { in_substreams, .. } |
 					State::Open { in_substreams, .. } => {
-						if in_substreams[num].is_some() {
-							// Same remark as above.
-							return;
-						}
-
 						// We create `handshake_message` on a separate line to be sure
 						// that the lock is released as soon as possible.
 						let handshake_message = self.in_protocols[num].1.read().clone();
