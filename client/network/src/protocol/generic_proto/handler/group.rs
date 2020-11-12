@@ -709,6 +709,7 @@ impl ProtocolsHandler for NotifsHandler {
 						// As documented, it is forbidden to send an `Open` while there is already
 						// one in the fly.
 						error!(target: "sub-libp2p", "opening already-opened handler");
+						debug_assert!(false);
 					},
 				}
 			},
@@ -731,11 +732,9 @@ impl ProtocolsHandler for NotifsHandler {
 							pending_opening,
 						};
 
-						if matches!(self.state, State::Opening { .. }) {
-							self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
-								NotifsHandlerOut::OpenResultErr
-							));
-						}
+						self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
+							NotifsHandlerOut::OpenResultErr
+						));
 					},
 					State::OpenDesired { pending_opening, .. } => {
 						self.state = State::Closed {
