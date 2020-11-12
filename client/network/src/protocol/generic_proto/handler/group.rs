@@ -919,35 +919,37 @@ impl ProtocolsHandler for NotifsHandler {
 			}
 		}
 
-		for n in (0..self.legacy_substreams.len()).rev() {
-			let mut substream = self.legacy_substreams.swap_remove(n);
-			let poll_outcome = Pin::new(&mut substream).poll_next(cx);
-			match poll_outcome {
-				Poll::Pending => self.legacy_substreams.push(substream),
-				Poll::Ready(Some(Ok(RegisteredProtocolEvent::Message(message)))) => {
-					self.legacy_substreams.push(substream);
-					if matches!(self.state, State::Open { .. }) {
+		// The legacy substreams are polled only if the state is `Open`. Otherwise, it would be
+		// possible to receive notifications that would need to get silently discarded.
+		if matches!(self.state, State::Open { .. }) {
+			for n in (0..self.legacy_substreams.len()).rev() {
+				let mut substream = self.legacy_substreams.swap_remove(n);
+				let poll_outcome = Pin::new(&mut substream).poll_next(cx);
+				match poll_outcome {
+					Poll::Pending => self.legacy_substreams.push(substream),
+					Poll::Ready(Some(Ok(RegisteredProtocolEvent::Message(message)))) => {
+						self.legacy_substreams.push(substream);
 						return Poll::Ready(ProtocolsHandlerEvent::Custom(
 							NotifsHandlerOut::CustomMessage { message }
 						))
+					},
+					Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged))) => {
+						return Poll::Ready(ProtocolsHandlerEvent::Close(
+							NotifsHandlerError::SyncNotificationsClogged
+						))
 					}
-				},
-				Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged))) => {
-					return Poll::Ready(ProtocolsHandlerEvent::Close(
-						NotifsHandlerError::SyncNotificationsClogged
-					))
-				}
-				Poll::Ready(None) | Poll::Ready(Some(Err(_))) => {
-					if matches!(poll_outcome, Poll::Ready(None)) {
-						self.legacy_shutdown.push(substream);
-					}
+					Poll::Ready(None) | Poll::Ready(Some(Err(_))) => {
+						if matches!(poll_outcome, Poll::Ready(None)) {
+							self.legacy_shutdown.push(substream);
+						}
 
-					if let State::Open { want_closed, .. } = &mut self.state {
-						if !*want_closed {
-							*want_closed = true;
-							return Poll::Ready(ProtocolsHandlerEvent::Custom(
-								NotifsHandlerOut::CloseDesired
-							))
+						if let State::Open { want_closed, .. } = &mut self.state {
+							if !*want_closed {
+								*want_closed = true;
+								return Poll::Ready(ProtocolsHandlerEvent::Custom(
+									NotifsHandlerOut::CloseDesired
+								))
+							}
 						}
 					}
 				}
