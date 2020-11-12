@@ -6549,7 +6549,6 @@ dependencies = [
  "fdlimit",
  "futures 0.3.5",
  "hex",
- "lazy_static",
  "libp2p",
  "log",
  "names",
@@ -7076,7 +7075,6 @@ name = "sc-informant"
 version = "0.8.0"
 dependencies = [
  "ansi_term 0.12.1",
- "atty",
  "futures 0.3.5",
  "log",
  "parity-util-mem",

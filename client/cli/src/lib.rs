@@ -319,7 +319,7 @@ pub fn init_logger(
 
 	let subscriber = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
-		.with_writer(MaybeColorWriter(enable_color))
+		.with_writer(MaybeColorWriter::new(enable_color))
 		.event_format(logging::EventFormat {
 			timer,
 			ansi: enable_color,
@@ -351,18 +351,27 @@ pub fn init_logger(
 ///
 /// This is used by the logging to kill colors when they are disabled.
 ///
-/// If the inner is `false`, the colors will be removed before writing to stderr.
+/// If the `enable_colors` is `false`, the colors will be removed before writing to stderr.
 #[derive(Clone)]
-struct MaybeColorWriter(bool);
+struct MaybeColorWriter{
+	enable_colors: bool,
+	remove_color_regex: Regex,
+}
+
+impl MaybeColorWriter {
+	fn new(enable_colors: bool) -> Self {
+		Self {
+			enable_colors,
+			remove_color_regex: Regex::new("\x1b\\[[^m]+m")
+				.expect("Error initializing color regex"),
+		}
+	}
+}
 
 impl std::io::Write for MaybeColorWriter {
 	fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-		lazy_static::lazy_static! {
-			static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
-		}
-
-		if !self.0 {
-			let replaced = RE.replace_all(buf, &b""[..]);
+		if !self.enable_colors {
+			let replaced = self.remove_color_regex.replace_all(buf, &b""[..]);
 			std::io::stderr().write(&replaced)?;
 			Ok(buf.len())
 		} else {
