@@ -6549,6 +6549,7 @@ dependencies = [
  "fdlimit",
  "futures 0.3.5",
  "hex",
+ "lazy_static",
  "libp2p",
  "log",
  "names",

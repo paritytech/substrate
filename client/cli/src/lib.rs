@@ -48,9 +48,8 @@ use structopt::{
 	StructOpt,
 };
 use tracing_subscriber::{
-	filter::Directive, fmt::{MakeWriter, time::ChronoLocal}, layer::SubscriberExt, FmtSubscriber, Layer,
+	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
 };
-use regex::bytes::Regex;
 
 pub use logging::PREFIX_LOG_SPAN;
 #[doc(hidden)]
@@ -309,8 +308,7 @@ pub fn init_logger(
 		}
 	}
 
-	let isatty = atty::is(atty::Stream::Stderr);
-	let enable_color = isatty;
+	let enable_color = atty::is(atty::Stream::Stderr);
 	let timer = ChronoLocal::with_format(if simple {
 		"%Y-%m-%d %H:%M:%S".to_string()
 	} else {
@@ -319,15 +317,16 @@ pub fn init_logger(
 
 	let subscriber = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
-		.with_writer(MaybeColorWriter::new(enable_color))
+		.with_writer(std::io::stderr)
 		.event_format(logging::EventFormat {
 			timer,
-			ansi: enable_color,
 			display_target: !simple,
 			display_level: !simple,
 			display_thread_name: !simple,
+			enable_color,
 		})
-		.finish().with(logging::NodeNameLayer);
+		.finish()
+		.with(logging::NodeNameLayer);
 
 	if let Some(profiling_targets) = profiling_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &profiling_targets);
@@ -345,51 +344,6 @@ pub fn init_logger(
 		}
 	}
 	Ok(())
-}
-
-/// A writer that may writes to `stderr` with colors.
-///
-/// This is used by the logging to kill colors when they are disabled.
-///
-/// If the `enable_colors` is `false`, the colors will be removed before writing to stderr.
-#[derive(Clone)]
-struct MaybeColorWriter{
-	enable_colors: bool,
-	remove_color_regex: Regex,
-}
-
-impl MaybeColorWriter {
-	fn new(enable_colors: bool) -> Self {
-		Self {
-			enable_colors,
-			remove_color_regex: Regex::new("\x1b\\[[^m]+m")
-				.expect("Error initializing color regex"),
-		}
-	}
-}
-
-impl std::io::Write for MaybeColorWriter {
-	fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-		if !self.enable_colors {
-			let replaced = self.remove_color_regex.replace_all(buf, &b""[..]);
-			std::io::stderr().write(&replaced)?;
-			Ok(buf.len())
-		} else {
-			std::io::stderr().write(buf)
-		}
-	}
-
-	fn flush(&mut self) -> std::io::Result<()> {
-		std::io::stderr().flush()
-	}
-}
-
-impl MakeWriter for MaybeColorWriter {
-	type Writer = Self;
-
-	fn make_writer(&self) -> Self {
-		self.clone()
-	}
 }
 
 #[cfg(test)]
