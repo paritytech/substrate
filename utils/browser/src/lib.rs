@@ -34,18 +34,18 @@ use libp2p_wasm_ext::{ExtTransport, ffi};
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 
 /// TODO doc
-pub fn init_console_log(pattern: &str, /* level: log::Level, TODO not needed anymore I think */) -> Result<sc_telemetry::Telemetries, String> {
-	// TODO move to lazy static?
+// TODO should probably renamed to "init()"?
+pub fn init_console_log(pattern: &str, /* level: log::Level, TODO not needed anymore I think */) -> Result<(sc_telemetry::Telemetries, ExtTransport), String> {
 	let transport = ExtTransport::new(ffi::websocket_transport());
 	let (subscriber, telemetries) = sc_service::logging::get_default_subscriber_and_telemetries(
 		pattern,
-		Some(transport),
+		Some(transport.clone()),
 	)?;
 
 	tracing::subscriber::set_global_default(subscriber)
 		.map_err(|e| format!("could not set global default subscriber: {}", e))?;
 
-	Ok(telemetries)
+	Ok((telemetries, transport))
 }
 
 /// Create a service configuration from a chain spec.
@@ -54,6 +54,7 @@ pub fn init_console_log(pattern: &str, /* level: log::Level, TODO not needed any
 pub async fn browser_configuration<G, E>(
 	chain_spec: GenericChainSpec<G, E>,
 	telemetries: sc_telemetry::Telemetries,
+	transport: ExtTransport,
 ) -> Result<Configuration, Box<dyn std::error::Error>>
 where
 	G: RuntimeGenesis + 'static,
@@ -61,7 +62,6 @@ where
 {
 	let name = chain_spec.name().to_string();
 
-	let transport = ExtTransport::new(ffi::websocket_transport());
 	let mut network = NetworkConfiguration::new(
 		format!("{} (Browser)", name),
 		"unknown",

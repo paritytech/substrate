@@ -34,14 +34,14 @@ pub async fn start_client(chain_spec: Option<String>, log_level: String) -> Resu
 
 async fn start_inner(chain_spec: Option<String>, log_level: String) -> Result<Client, Box<dyn std::error::Error>> {
 	set_console_error_panic_hook();
-	let telemetries = init_console_log(log_level.as_str())?;
+	let (telemetries, transport) = init_console_log(log_level.as_str())?;
 	let chain_spec = match chain_spec {
 		Some(chain_spec) => ChainSpec::from_json_bytes(chain_spec.as_bytes().to_vec())
 			.map_err(|e| format!("{:?}", e))?,
 		None => crate::chain_spec::development_config(),
 	};
 
-	let mut config = browser_configuration(chain_spec, telemetries).await?;
+	let mut config = browser_configuration(chain_spec, telemetries, transport).await?;
 	config.telemetry_endpoints = Some(sc_telemetry::TelemetryEndpoints::new(vec![("ws://127.0.0.1:8000/submit".to_string(), 10)]).unwrap());
 
 	info!("Substrate browser node");

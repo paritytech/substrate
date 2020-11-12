@@ -322,19 +322,23 @@ mod time {
 }
 
 #[cfg(target_os = "unknown")]
-struct ConsoleLogLayer<S, N = format::DefaultFields, T = SystemTime> {
+struct ConsoleLogLayer<
+	S,
+	N = tracing_subscriber::fmt::format::DefaultFields,
+	T = SystemTime,
+> {
 	event_format: EventFormat<T>,
 	fmt_fields: N,
-	_inner: PhantomData<S>,
+	_inner: std::marker::PhantomData<S>,
 }
 
 #[cfg(target_os = "unknown")]
-impl<S, T> ConsoleLogLayer<S, format::DefaultFields, T> {
+impl<S, T> ConsoleLogLayer<S, tracing_subscriber::fmt::format::DefaultFields, T> {
 	fn new(event_format: EventFormat<T>) -> Self {
 		Self {
 			event_format,
-			fmt_fields: format::DefaultFields::default(),
-			_inner: PhantomData,
+			fmt_fields: Default::default(),
+			_inner: std::marker::PhantomData,
 		}
 	}
 }
@@ -373,7 +377,7 @@ where
 
 	fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
 		thread_local! {
-			static BUF: RefCell<String> = RefCell::new(String::new());
+			static BUF: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
 		}
 
 		BUF.with(|buf| {
