@@ -152,8 +152,10 @@ use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
 
-type BalanceOf<T, I> =
-	<<T as pallet_treasury::Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+// type BalanceOf<T, I> =
+// 	<<T as pallet_treasury::Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
+type BalanceOf<T, I> = pallet_treasury::BalanceOf<T, I>;
 
 pub trait Trait<I=DefaultInstance>: frame_system::Trait + pallet_treasury::Trait<I> {
 
