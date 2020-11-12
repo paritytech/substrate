@@ -707,6 +707,11 @@ pub trait Hashing {
 		sp_core::hashing::keccak_256(data)
 	}
 
+	/// Conduct a 512-bit Keccak hash.
+	fn keccak_512(data: &[u8]) -> [u8; 64] {
+		sp_core::hashing::keccak_512(data)
+	}
+
 	/// Conduct a 256-bit Sha2 hash.
 	fn sha2_256(data: &[u8]) -> [u8; 32] {
 		sp_core::hashing::sha2_256(data)
