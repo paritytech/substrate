@@ -115,7 +115,7 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 		self.inner.read().clone()
 	}
 
-	/// WIP(JON)
+	/// WIP(JON) expand this description
 	pub fn authority_set_changes(&self) -> AuthoritySetChanges<N> {
 		self.inner.read().authority_set_changes.clone()
 	}
@@ -167,7 +167,7 @@ pub struct AuthoritySet<H, N> {
 	/// is lower than the last finalized block (as signaled in the forced
 	/// change) must be applied beforehand.
 	pending_forced_changes: Vec<PendingChange<H, N>>,
-	// WIP(JON)
+	// WIP(JON) expand this description
 	pub(crate) authority_set_changes: AuthoritySetChanges<N>,
 }
 
@@ -503,10 +503,10 @@ where
 					"block" => ?change.canon_height
 				);
 
-				// WIP(JON)
-				// We should store the set_id for this, but what do we use as finalized_number?
-				// Maybe none as it seems it wont be used for Justifications anyway?
-				//self.authority_set_changes.append(finalized_number.clone(), self.set_id);
+				// WIP(JON): We should store the set_id for this, but what do we use as
+				// finalized_number? Maybe none as it seems it wont be used for Justifications
+				// anyway?
+				//self.authority_set_changes.append(self.set_id, finalized_number.clone());
 
 				new_set = Some((
 					median_last_finalized,
@@ -587,9 +587,8 @@ where
 						"block" => ?change.canon_height
 					);
 
-					// WIP(JON)
-					// Store the set_id together with the last block_number
-					self.authority_set_changes.append(finalized_number.clone(), self.set_id);
+					// Store the set_id together with the last block_number for the set
+					self.authority_set_changes.append(self.set_id, finalized_number.clone());
 
 					self.current_authorities = change.next_authorities;
 					self.set_id += 1;
@@ -694,9 +693,7 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 // set.
 #[derive(Debug, Encode, Decode, Clone, PartialEq)]
 pub struct AuthoritySetChanges<N> {
-    // WIP(JON): reconsider this choice of container
-    // (block_number, set_id)
-    authority_set_changes: Vec<(N, u64)>,
+    authority_set_changes: Vec<(u64, N)>, // (set_id, block_number)
 }
 
 impl<N: Ord + Clone> AuthoritySetChanges<N> {
@@ -706,20 +703,17 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
         }
     }
 
-    pub(crate) fn append(&mut self, block_number: N, set_id: u64) {
-        println!("JON: AuthoritySetChanges::append()");
-        // dbg!(&number);
-        // self.authority_set_changes.insert(block_number, set_id);
-        self.authority_set_changes.push((block_number, set_id));
+    pub(crate) fn append(&mut self, set_id: u64, block_number: N) {
+        self.authority_set_changes.push((set_id, block_number));
     }
 
-    pub(crate) fn get_set_id(&self, block_number: N) -> Option<(N, u64)> {
-        // self.authority_set_changes.range(block_number..).next()
-        // WIP(JON): just happy unwrap
+    pub(crate) fn get_set_id(&self, block_number: N) -> Option<(u64, N)> {
         let idx = self.authority_set_changes
-            .binary_search_by_key(&block_number, |(b, _n)| b.clone())
+            .binary_search_by_key(&block_number, |(_set_id, n)| n.clone())
 			.unwrap_or_else(|b| b);
 		if idx < self.authority_set_changes.len() {
+			// WIP(JON) remove assert
+			assert!(self.authority_set_changes[idx].clone().1 > block_number);
 			Some(self.authority_set_changes[idx].clone())
 		} else {
 			None

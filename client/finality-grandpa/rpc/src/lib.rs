@@ -83,7 +83,7 @@ pub trait GrandpaApi<Notification, Hash, N> {
 	) -> jsonrpc_core::Result<bool>;
 
 	/// Prove finality for the given block number.
-	/// WIP(JON): expand this
+	/// WIP(JON): expand this description
 	#[rpc(name = "grandpa_proveFinality")]
 	fn prove_finality(
 		&self,

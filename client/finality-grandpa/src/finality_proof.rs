@@ -208,12 +208,12 @@ impl<B, Block> FinalityProofProvider<B, Block>
 		&self,
 		block: NumberFor<Block>,
 	) -> Result<Option<Vec<u8>>, ClientError> {
-		let (last_block_for_set, set_id) = match self.shared_authority_set
+		let (set_id, last_block_for_set) = match self.shared_authority_set
 			.as_ref()
 			.map(SharedAuthoritySet::authority_set_changes)
 			.and_then(|changes| changes.get_set_id(block))
 		{
-			Some((last_block_for_set, set_id)) => (last_block_for_set, set_id),
+			Some((set_id, last_block_for_set)) => (set_id, last_block_for_set),
 			None => return Ok(None),
 		};
 
