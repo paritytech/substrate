@@ -722,13 +722,11 @@ impl ProtocolsHandler for NotifsHandler {
 
 				match &mut self.state {
 					State::Open { .. } => {
-						println!("is open");
 						self.state = State::Closed {
 							pending_opening: Vec::new(),
 						};
 					},
 					State::Opening { out_substreams, .. } => {
-						println!("is opening");
 						let pending_opening = out_substreams.iter().map(|s| s.is_none()).collect();
 						self.state = State::Closed {
 							pending_opening,
@@ -739,13 +737,11 @@ impl ProtocolsHandler for NotifsHandler {
 						));
 					},
 					State::OpenDesired { pending_opening, .. } => {
-						println!("is opendesired");
 						self.state = State::Closed {
 							pending_opening: mem::replace(pending_opening, Vec::new()),
 						};
 					}
-					State::Closed { .. } => {
-						println!("is closed");},
+					State::Closed { .. } => {},
 				}
 
 				self.events_queue.push_back(
