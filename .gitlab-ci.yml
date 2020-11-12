@@ -314,3 +314,156 @@ publish-docker-substrate:
     - docker logout
     # only VERSION information is needed for the deployment
     - find ./artifacts/ -depth -not -name VERSION -type f -delete
+
+publish-docker-subkey:
+  stage:                           publish
+  <<:                              *build-push-docker-image
+  needs:
+    - job:                         build-linux-subkey
+      artifacts:                   true
+  variables:
+    <<:                            *docker-build-vars
+    PRODUCT:                       subkey
+  after_script:
+    - docker logout
+
+publish-s3-release:
+  stage:                           publish
+  <<:                              *build-refs
+  <<:                              *kubernetes-build
+  needs:
+    - job:                         build-linux-substrate
+      artifacts:                   true
+    - job:                         build-linux-subkey
+      artifacts:                   true
+  image:                           paritytech/awscli:latest
+  variables:
+    GIT_STRATEGY:                  none
+    BUCKET:                        "releases.parity.io"
+    PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
+  script:
+    - aws s3 sync ./artifacts/ s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/substrate/VERSION)/
+    - echo "update objects in latest path"
+    - aws s3 sync s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/substrate/VERSION)/ s3://${BUCKET}/${PREFIX}/latest/
+  after_script:
+    - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
+        --recursive --human-readable --summarize
+
+publish-s3-doc:
+  stage:                           publish
+  image:                           paritytech/awscli:latest
+  allow_failure:                   true
+  needs:
+    - job:                         build-rust-doc
+      artifacts:                   true
+  <<:                              *build-refs
+  <<:                              *kubernetes-build
+  variables:
+    GIT_STRATEGY:                  none
+    BUCKET:                        "releases.parity.io"
+    PREFIX:                        "substrate-rustdoc"
+  script:
+    - test -r ./crate-docs/index.html || (
+        echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
+        exit 1
+      )
+    - aws s3 sync --delete --size-only --only-show-errors
+        ./crate-docs/ s3://${BUCKET}/${PREFIX}/
+  after_script:
+    - aws s3 ls s3://${BUCKET}/${PREFIX}/
+        --human-readable --summarize
+
+publish-draft-release:
+  stage:                           publish
+  image:                           paritytech/tools:latest
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  script:
+    - ./.maintain/gitlab/publish_draft_release.sh
+  allow_failure:                   true
+
+publish-to-crates-io:
+  stage:                           publish
+  <<:                              *docker-env
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+  script:
+    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
+    - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
+  allow_failure:                   true
+
+deploy-kubernetes-alerting-rules:
+  stage:                           deploy
+  interruptible:                   true
+  retry:                           1
+  tags:
+    - kubernetes-parity-build
+  image:                           paritytech/kubetools:latest
+  environment:
+    name: parity-mgmt-polkadot-alerting
+  variables:
+    NAMESPACE:                     monitoring
+    PROMETHEUSRULE:                prometheus-k8s-rules-polkadot-alerting
+    RULES:                         .maintain/monitoring/alerting-rules/alerting-rules.yaml
+  script:
+    - echo "deploying prometheus alerting rules"
+    - kubectl -n ${NAMESPACE} patch prometheusrule ${PROMETHEUSRULE}
+        --type=merge --patch "$(sed 's/^/  /;1s/^/spec:\n/' ${RULES})"
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "master"
+      changes:
+        - .gitlab-ci.yml
+        - .maintain/monitoring/**/*
+
+.validator-deploy:                 &validator-deploy
+  stage:                           flaming-fir
+  rules:
+    # .build-refs, but manual
+    - if: $CI_COMMIT_REF_NAME == "master"
+      when: manual
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+      when: manual
+  needs:
+    # script will fail if there is no artifacts/substrate/VERSION
+    - job:                         publish-docker-substrate
+      artifacts:                   true
+  image:                           parity/azure-ansible:v1
+  allow_failure:                   true
+  interruptible:                   true
+  tags:
+    - linux-docker
+
+validator 1 4:
+  <<:                              *validator-deploy
+  script:
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator1
+
+validator 2 4:
+  <<:                              *validator-deploy
+  script:
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator2
+
+validator 3 4:
+  <<:                              *validator-deploy
+  script:
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator3
+
+validator 4 4:
+  <<:                              *validator-deploy
+  script:
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator4
+
+#### stage:                       .post
+
+check-labels:
+  stage:                          .post
+  image:                          paritytech/tools:latest
+  <<:                             *kubernetes-build
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+  script:
+    - ./.maintain/gitlab/check_labels.sh
