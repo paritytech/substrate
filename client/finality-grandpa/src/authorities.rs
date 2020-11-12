@@ -503,6 +503,11 @@ where
 					"block" => ?change.canon_height
 				);
 
+				// WIP(JON)
+				// We should store the set_id for this, but what do we use as finalized_number?
+				// Maybe none as it seems it wont be used for Justifications anyway?
+				//self.authority_set_changes.append(finalized_number.clone(), self.set_id);
+
 				new_set = Some((
 					median_last_finalized,
 					AuthoritySet {
