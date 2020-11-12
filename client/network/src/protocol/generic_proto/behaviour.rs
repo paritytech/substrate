@@ -1824,7 +1824,7 @@ impl NetworkBehaviour for GenericProto {
 
 			NotifsHandlerOut::OpenResultErr => {
 				debug!(target: "sub-libp2p",
-					"Handler({:?}, {:?}) => Failed to open substream with remote",
+					"Handler({:?}, {:?}) => OpenResultErr",
 					source, connection);
 
 				let mut entry = if let Entry::Occupied(entry) = self.peers.entry(source.clone()) {

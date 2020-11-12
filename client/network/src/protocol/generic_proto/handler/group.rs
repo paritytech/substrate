@@ -200,9 +200,19 @@ enum State {
 		/// Vec of the same length as [`NotifsHandler::out_protocols`]. For each protocol, contains
 		/// an outbound substream that has been accepted by the remote.
 		///
-		/// Items that contain `None` mean that a substream is still being opened. In other words,
-		/// this `Vec` is kind of a mirror version of [`State::Closed::pending_opening`].
-		out_substreams: Vec<Option<NotificationsOutSubstream<NegotiatedSubstream>>>,
+		/// Items that contain `None` mean that a substream is still being opened or has been
+		/// rejected by the remote. In other words, this `Vec` is kind of a mirror version of
+		/// [`State::Closed::pending_opening`].
+		///
+		/// Items that contain `Some(None)` have been rejected by the remote, most likely because
+		/// they don't support this protocol. At the time of writing, the external API doesn't
+		/// distinguish between the different protocols. From the external API's point of view,
+		/// either all protocols are open or none are open. In reality, light clients in particular
+		/// don't support for example the GrandPa protocol, and as such will refuse our outgoing
+		/// attempts. This is problematic in theory, but in practice this is handled properly at a
+		/// higher level. This flaw will fixed once the outer layers know to differentiate the
+		/// multiple protocols.
+		out_substreams: Vec<Option<Option<NotificationsOutSubstream<NegotiatedSubstream>>>>,
 	},
 
 	/// Handler is in the "Open" state.
@@ -600,7 +610,7 @@ impl ProtocolsHandler for NotifsHandler {
 			}
 			State::Opening { pending_handshake, in_substreams, out_substreams } => {
 				debug_assert!(out_substreams[num].is_none());
-				out_substreams[num] = Some(substream);
+				out_substreams[num] = Some(Some(substream));
 
 				if num == 0 {
 					debug_assert!(pending_handshake.is_none());
@@ -620,9 +630,14 @@ impl ProtocolsHandler for NotifsHandler {
 					debug_assert!(pending_handshake.is_some());
 					let pending_handshake = pending_handshake.take().unwrap_or_default();
 
+					let out_substreams = out_substreams
+						.drain(..)
+						.map(|s| s.expect("checked by the if above; qed"))
+						.collect();
+
 					self.state = State::Open {
 						notifications_sink_rx: stream::select(async_rx.fuse(), sync_rx.fuse()),
-						out_substreams: mem::replace(out_substreams, Vec::new()),
+						out_substreams,
 						in_substreams: mem::replace(in_substreams, Vec::new()),
 						want_closed: false,
 					};
@@ -712,9 +727,9 @@ impl ProtocolsHandler for NotifsHandler {
 						};
 
 						if matches!(self.state, State::Opening { .. }) {
-							self.events_queue.push_back(
-								ProtocolsHandlerEvent::Custom(NotifsHandlerOut::OpenResultErr)
-							);
+							self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
+								NotifsHandlerOut::OpenResultErr
+							));
 						}
 					},
 					State::OpenDesired { pending_opening, .. } => {
@@ -744,19 +759,61 @@ impl ProtocolsHandler for NotifsHandler {
 				pending_opening[num] = false;
 			}
 
-			State::Opening { .. } => {
-				// TODO: close already-open substreams in a clean way?
-				let mut pending_opening = (0..self.out_protocols.len())
-					.map(|_| true)
-					.collect::<Vec<_>>();
-				pending_opening[num] = false;
-				self.state = State::Closed {
-					pending_opening,
-				};
+			State::Opening { in_substreams, pending_handshake, out_substreams } => {
+				// Failing to open a substream isn't considered a failure. Instead, it is marked
+				// as `Some(None)` and the opening continues.
 
-				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
-					NotifsHandlerOut::OpenResultErr
-				));
+				out_substreams[num] = Some(None);
+
+				// Some substreams are still being opened. Nothing more to do.
+				if out_substreams.iter().any(|s| s.is_none()) {
+					return;
+				}
+
+				// All substreams have finished being open.
+				// If the handshake has been received, proceed and report the opening.
+
+				if let Some(pending_handshake) = pending_handshake.take() {
+					// Open!
+					let (async_tx, async_rx) = mpsc::channel(ASYNC_NOTIFICATIONS_BUFFER_SIZE);
+					let (sync_tx, sync_rx) = mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
+					let notifications_sink = NotificationsSink {
+						inner: Arc::new(NotificationsSinkInner {
+							async_channel: FuturesMutex::new(async_tx),
+							sync_channel: Mutex::new(sync_tx),
+						}),
+					};
+
+					let out_substreams = out_substreams
+						.drain(..)
+						.map(|s| s.expect("checked by the if above; qed"))
+						.collect();
+
+					self.state = State::Open {
+						notifications_sink_rx: stream::select(async_rx.fuse(), sync_rx.fuse()),
+						out_substreams,
+						in_substreams: mem::replace(in_substreams, Vec::new()),
+						want_closed: false,
+					};
+
+					self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::OpenResultOk {
+							endpoint: self.endpoint.clone(),
+							received_handshake: pending_handshake,
+							notifications_sink
+						}
+					));
+
+				} else {
+					// Open failure!
+					self.state = State::Closed {
+						pending_opening: (0..self.out_protocols.len()).map(|_| false).collect(),
+					};
+
+					self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::OpenResultErr
+					));
+				}
 			}
 
 			// No substream is being open when already `Open`.
@@ -836,8 +893,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 		// Poll outbound substreams.
 		match &mut self.state {
-			State::Open { out_substreams, .. } |
-			State::Opening { out_substreams, .. } => {
+			State::Open { out_substreams, want_closed, .. } => {
 				let mut any_closed = false;
 
 				for substream in out_substreams.iter_mut() {
@@ -852,16 +908,30 @@ impl ProtocolsHandler for NotifsHandler {
 				}
 
 				if any_closed {
-					if let State::Open { want_closed, .. } = &mut self.state {
-						if !*want_closed {
-							*want_closed = true;
-							return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsHandlerOut::CloseDesired));
+					if !*want_closed {
+						*want_closed = true;
+						return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsHandlerOut::CloseDesired));
+					}
+				}
+			}
+
+			State::Opening { out_substreams, pending_handshake, .. } => {
+				debug_assert!(out_substreams.iter().any(|s| s.is_none()));
+
+				for (num, substream) in out_substreams.iter_mut().enumerate() {
+					match substream {
+						None | Some(None) => continue,
+						Some(Some(substream)) => match Sink::poll_flush(Pin::new(substream), cx) {
+							Poll::Pending | Poll::Ready(Ok(())) => continue,
+							Poll::Ready(Err(_)) => {}
 						}
-					} else if let State::Opening { out_substreams, .. } = &mut self.state {
-						// TODO: dispose of `in_substreams` in a clean way
-						let pending_opening = out_substreams.iter().map(|s| s.is_none()).collect();
-						self.state = State::Closed { pending_opening };
-						return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsHandlerOut::OpenResultErr));
+					}
+
+					// Reached if the substream has been closed.
+					*substream = Some(None);
+					if num == 0 {
+						// Cancel the handshake.
+						*pending_handshake = None;
 					}
 				}
 			}
