@@ -67,6 +67,7 @@ use log::{error, warn};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{
 	pin::Pin,
+	sync::Arc,
 	task::{Context, Poll},
 	time::Duration,
 };
@@ -277,10 +278,10 @@ impl Stream for Telemetry {
 }
 
 /// TODO doc
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Telemetries {
 	senders: Senders,
-	node_pool: NodePool,
+	node_pool: Arc<NodePool>,
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
 }
 
