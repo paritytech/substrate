@@ -18,23 +18,17 @@
 
 //! TODO doc
 
-mod layers;
 mod event_format;
+mod layers;
 
-use tracing::{Subscriber};
+use tracing::Subscriber;
 use tracing_subscriber::{
-	filter::Directive,
-	fmt::{
-		time::{ChronoLocal},
-	},
-	layer::{SubscriberExt},
-	registry::{LookupSpan},
-	FmtSubscriber,
-	Layer,
+	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, registry::LookupSpan,
+	FmtSubscriber, Layer,
 };
 
-pub use layers::*;
 pub use event_format::*;
+pub use layers::*;
 
 /// Initialize the global logger TODO update doc
 ///
@@ -42,7 +36,13 @@ pub use event_format::*;
 pub fn get_default_subscriber_and_telemetries(
 	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
-) -> std::result::Result<(impl Subscriber + for<'a> LookupSpan<'a>, sc_telemetry::Telemetries), String> {
+) -> std::result::Result<
+	(
+		impl Subscriber + for<'a> LookupSpan<'a>,
+		sc_telemetry::Telemetries,
+	),
+	String,
+> {
 	get_default_subscriber_and_telemetries_internal(
 		parse_directives(pattern),
 		telemetry_external_transport,
@@ -57,9 +57,16 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 	tracing_receiver: sc_tracing::TracingReceiver,
 	profiling_targets: &str,
-) -> std::result::Result<(impl Subscriber + for<'a> LookupSpan<'a>, sc_telemetry::Telemetries), String> {
+) -> std::result::Result<
+	(
+		impl Subscriber + for<'a> LookupSpan<'a>,
+		sc_telemetry::Telemetries,
+	),
+	String,
+> {
 	let (subscriber, telemetries) = get_default_subscriber_and_telemetries_internal(
-		parse_directives(pattern).into_iter()
+		parse_directives(pattern)
+			.into_iter()
 			.chain(parse_directives(profiling_targets).into_iter()),
 		telemetry_external_transport,
 	)?;
@@ -71,20 +78,32 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 fn get_default_subscriber_and_telemetries_internal(
 	extra_directives: impl IntoIterator<Item = Directive>,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
-) -> std::result::Result<(impl Subscriber + for<'a> LookupSpan<'a>, sc_telemetry::Telemetries), String> {
+) -> std::result::Result<
+	(
+		impl Subscriber + for<'a> LookupSpan<'a>,
+		sc_telemetry::Telemetries,
+	),
+	String,
+> {
 	if let Err(e) = tracing_log::LogTracer::init() {
-		return Err(format!(
-			"Registering Substrate logger failed: {:}!", e
-		))
+		return Err(format!("Registering Substrate logger failed: {:}!", e));
 	}
 
 	let mut env_filter = tracing_subscriber::EnvFilter::default()
 		// Disable info logging by default for some modules.
 		.add_directive("ws=off".parse().expect("provided directive is valid"))
 		.add_directive("yamux=off".parse().expect("provided directive is valid"))
-		.add_directive("cranelift_codegen=off".parse().expect("provided directive is valid"))
+		.add_directive(
+			"cranelift_codegen=off"
+				.parse()
+				.expect("provided directive is valid"),
+		)
 		// Set warn logging by default for some modules.
-		.add_directive("cranelift_wasm=warn".parse().expect("provided directive is valid"))
+		.add_directive(
+			"cranelift_wasm=warn"
+				.parse()
+				.expect("provided directive is valid"),
+		)
 		.add_directive("hyper=warn".parse().expect("provided directive is valid"))
 		// Enable info for others.
 		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
@@ -154,10 +173,7 @@ fn get_default_subscriber_and_telemetries_internal(
 	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.event_format(event_format);
 
-	let subscriber = builder
-		.finish()
-		.with(PrefixLayer)
-		.with(telemetry_layer);
+	let subscriber = builder.finish().with(PrefixLayer).with(telemetry_layer);
 
 	#[cfg(target_os = "unknown")]
 	let subscriber = subscriber.with(ConsoleLogLayer::new(event_format));
@@ -172,7 +188,5 @@ fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
 		return Default::default();
 	}
 
-	dirs.split(',')
-		.filter_map(|s| s.parse().ok())
-		.collect()
+	dirs.split(',').filter_map(|s| s.parse().ok()).collect()
 }

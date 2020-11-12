@@ -26,7 +26,7 @@ use tracing_subscriber::{
 		time::{FormatTime, SystemTime},
 		FmtContext, FormatEvent, FormatFields,
 	},
-	layer::{Context},
+	layer::Context,
 	registry::{LookupSpan, SpanRef},
 };
 
@@ -239,8 +239,7 @@ mod time {
 // NOTE: `FmtContext`'s fields are private. This enum allows us to make a `format_event` function
 //       that works with `FmtContext` or `Context` with `FormatFields`
 #[allow(dead_code)]
-pub(crate) enum CustomFmtContext<'a, S, N>
-{
+pub(crate) enum CustomFmtContext<'a, S, N> {
 	FmtContext(&'a FmtContext<'a, S, N>),
 	ContextWithFormatFields(&'a Context<'a, S>, &'a N),
 }
@@ -257,8 +256,9 @@ where
 	) -> fmt::Result {
 		match self {
 			CustomFmtContext::FmtContext(fmt_ctx) => fmt_ctx.format_fields(writer, fields),
-			CustomFmtContext::ContextWithFormatFields(_ctx, fmt_fields) =>
-				fmt_fields.format_fields(writer, fields),
+			CustomFmtContext::ContextWithFormatFields(_ctx, fmt_fields) => {
+				fmt_fields.format_fields(writer, fields)
+			}
 		}
 	}
 }

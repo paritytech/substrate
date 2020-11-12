@@ -17,11 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use tracing::{span::Attributes, Id, Subscriber};
-use tracing_subscriber::{
-	layer::{Context},
-	registry::{LookupSpan},
-	Layer,
-};
+use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 /// Span name used for the logging prefix. See macro `sc_cli::prefix_logs_with!`
 pub const PREFIX_LOG_SPAN: &str = "substrate-log-prefix";

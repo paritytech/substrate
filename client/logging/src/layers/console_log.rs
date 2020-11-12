@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::event_format::{EventFormat, CustomFmtContext};
+use crate::event_format::{CustomFmtContext, EventFormat};
 use std::fmt;
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::{
@@ -24,17 +24,13 @@ use tracing_subscriber::{
 		time::{FormatTime, SystemTime},
 		FormatFields,
 	},
-	layer::{Context},
-	registry::{LookupSpan},
+	layer::Context,
+	registry::LookupSpan,
 	Layer,
 };
 use wasm_bindgen::prelude::*;
 
-pub struct ConsoleLogLayer<
-	S,
-	N = tracing_subscriber::fmt::format::DefaultFields,
-	T = SystemTime,
-> {
+pub struct ConsoleLogLayer<S, N = tracing_subscriber::fmt::format::DefaultFields, T = SystemTime> {
 	event_format: EventFormat<T>,
 	fmt_fields: N,
 	_inner: std::marker::PhantomData<S>,
@@ -79,7 +75,6 @@ where
 	N: for<'writer> FormatFields<'writer> + 'static,
 	T: FormatTime + 'static,
 {
-
 	fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
 		thread_local! {
 			static BUF: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
