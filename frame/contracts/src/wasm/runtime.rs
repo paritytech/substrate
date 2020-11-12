@@ -16,12 +16,12 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{HostFnWeights, Schedule, Trait, CodeHash, BalanceOf, Error};
-use crate::exec::{
-	Ext, ExecResult, ExecReturnValue, StorageKey, TopicOf, ReturnFlags, ExecError
+use crate::{
+	HostFnWeights, Schedule, Trait, CodeHash, BalanceOf, Error,
+	exec::{Ext, StorageKey, TopicOf},
+	gas::{Gas, GasMeter, Token, GasMeterResult},
+	wasm::env_def::ConvertibleToWasm,
 };
-use crate::gas::{Gas, GasMeter, Token, GasMeterResult};
-use crate::wasm::env_def::ConvertibleToWasm;
 use sp_sandbox;
 use parity_wasm::elements::ValueType;
 use frame_system;
@@ -35,6 +35,7 @@ use sp_io::hashing::{
 	blake2_128,
 	sha2_256,
 };
+use pallet_contracts_primitives::{ExecResult, ExecReturnValue, ReturnFlags, ExecError};
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
 #[repr(u32)]
@@ -278,7 +279,7 @@ pub enum RuntimeToken {
 }
 
 impl<T: Trait> Token<T> for RuntimeToken {
-	type Metadata = HostFnWeights;
+	type Metadata = HostFnWeights<T>;
 
 	fn calculate_amount(&self, s: &Self::Metadata) -> Gas {
 		use self::RuntimeToken::*;
@@ -339,7 +340,7 @@ impl<T: Trait> Token<T> for RuntimeToken {
 fn charge_gas<E, Tok>(ctx: &mut Runtime<E>, token: Tok) -> Result<(), sp_sandbox::HostError>
 where
 	E: Ext,
-	Tok: Token<E::T, Metadata=HostFnWeights>,
+	Tok: Token<E::T, Metadata=HostFnWeights<E::T>>,
 {
 	match ctx.gas_meter.charge(&ctx.schedule.host_fn_weights, token) {
 		GasMeterResult::Proceed => Ok(()),
@@ -499,7 +500,7 @@ fn err_into_return_code<T: Trait>(from: DispatchError) -> Result<ReturnCode, Dis
 
 /// Fallible conversion of a `ExecResult` to `ReturnCode`.
 fn exec_into_return_code<T: Trait>(from: ExecResult) -> Result<ReturnCode, DispatchError> {
-	use crate::exec::ErrorOrigin::Callee;
+	use pallet_contracts_primitives::ErrorOrigin::Callee;
 
 	let ExecError { error, origin } = match from {
 		Ok(retval) => return Ok(retval.into()),
@@ -717,7 +718,7 @@ define_env!(Env, <E: Ext>,
 		let value: BalanceOf<<E as Ext>::T> = read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
-		if value > 0.into() {
+		if value > 0u32.into() {
 			charge_gas(ctx, RuntimeToken::CallSurchargeTransfer)?;
 		}
 
@@ -1023,8 +1024,7 @@ define_env!(Env, <E: Ext>,
 	// The data is encoded as T::Hash.
 	seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		charge_gas(ctx, RuntimeToken::Random)?;
-		// The length of a subject can't exceed `max_subject_len`.
-		if subject_len > ctx.schedule.max_subject_len {
+		if subject_len > ctx.schedule.limits.subject_len {
 			return Err(sp_sandbox::HostError);
 		}
 		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
@@ -1156,7 +1156,7 @@ define_env!(Env, <E: Ext>,
 	},
 
 	// Deposit a contract event with the data buffer and optional list of topics. There is a limit
-	// on the maximum number of topics specified by `max_event_topics`.
+	// on the maximum number of topics specified by `event_topics`.
 	//
 	// - topics_ptr - a pointer to the buffer of topics encoded as `Vec<T::Hash>`. The value of this
 	//   is ignored if `topics_len` is set to 0. The topics list can't contain duplicates.
@@ -1180,8 +1180,8 @@ define_env!(Env, <E: Ext>,
 			_ => read_sandbox_memory_as(ctx, topics_ptr, topics_len)?,
 		};
 
-		// If there are more than `max_event_topics`, then trap.
-		if topics.len() > ctx.schedule.max_event_topics as usize {
+		// If there are more than `event_topics`, then trap.
+		if topics.len() > ctx.schedule.limits.event_topics as usize {
 			return Err(sp_sandbox::HostError);
 		}
 

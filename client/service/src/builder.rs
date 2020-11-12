@@ -205,11 +205,12 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 	TRtApi,
 >;
 
-/// Construct and hold different layers of Keystore wrappers
-pub struct KeystoreContainer {
-	keystore: Arc<dyn CryptoStore>,
-	sync_keystore: SyncCryptoStorePtr,
+enum KeystoreContainerInner {
+	Local(Arc<LocalKeystore>)
 }
+
+/// Construct and hold different layers of Keystore wrappers
+pub struct KeystoreContainer(KeystoreContainerInner);
 
 impl KeystoreContainer {
 	/// Construct KeystoreContainer
@@ -221,22 +222,36 @@ impl KeystoreContainer {
 			)?,
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
-		let sync_keystore = keystore.clone() as SyncCryptoStorePtr;
 
-		Ok(Self {
-			keystore,
-			sync_keystore,
-		})
+		Ok(Self(KeystoreContainerInner::Local(keystore)))
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
 	pub fn keystore(&self) -> Arc<dyn CryptoStore> {
-		self.keystore.clone()
+		match self.0 {
+			KeystoreContainerInner::Local(ref keystore) => keystore.clone(),
+		}
 	}
 
 	/// Returns the synchrnous keystore wrapper
 	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
-		self.sync_keystore.clone()
+		match self.0 {
+			KeystoreContainerInner::Local(ref keystore) => keystore.clone() as SyncCryptoStorePtr,
+		}
+	}
+
+	/// Returns the local keystore if available
+	///
+	/// The function will return None if the available keystore is not a local keystore.
+	///
+	/// # Note
+	///
+	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore implementation, like
+	/// a remote keystore for example. Only use this if you a certain that you require it!
+	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
+		match self.0 {
+			KeystoreContainerInner::Local(ref keystore) => Some(keystore.clone()),
+		}
 	}
 }
 
@@ -303,8 +318,9 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			Box::new(task_manager.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 			ClientConfig {
-				offchain_worker_enabled : config.offchain_worker.enabled ,
+				offchain_worker_enabled : config.offchain_worker.enabled,
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
+				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 			},
 		)?
 	};
@@ -396,7 +412,7 @@ pub fn new_client<E, Block, RA>(
 	const CANONICALIZATION_DELAY: u64 = 4096;
 
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = crate::client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
+	let executor = crate::client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
 	Ok((
 		crate::client::Client::new(
 			backend.clone(),

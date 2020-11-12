@@ -1,0 +1,27 @@
+[package]
+name = "pallet-contracts-proc-macro"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Procedural macros used in pallet_contracts"
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = "1"
+
+[dev-dependencies]
+
+[features]
+# If set the full output is generated. Do NOT set when generating for wasm runtime.
+full = []
