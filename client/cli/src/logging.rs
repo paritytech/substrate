@@ -40,7 +40,7 @@ pub const PREFIX_LOG_SPAN: &str = "substrate-log-prefix";
 ///
 /// It is required to call [`MaybeColorWriter::write`] after all writes are done,
 /// because the content of these writes is buffered and will only be written to the
-/// `inner_writer` at this point.
+/// `inner_writer` at that point.
 struct MaybeColorWriter<'a> {
 	enable_color: bool,
 	buffer: String,
