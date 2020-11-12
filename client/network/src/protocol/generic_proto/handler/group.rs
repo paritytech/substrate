@@ -720,10 +720,15 @@ impl ProtocolsHandler for NotifsHandler {
 				}
 
 				match &mut self.state {
-					State::Open { .. } |
-					State::Opening { .. } => {
+					State::Open { .. } => {
 						self.state = State::Closed {
 							pending_opening: Vec::new(),
+						};
+					},
+					State::Opening { out_substreams, .. } => {
+						let pending_opening = out_substreams.iter().map(|s| s.is_none()).collect();
+						self.state = State::Closed {
+							pending_opening,
 						};
 
 						if matches!(self.state, State::Opening { .. }) {
