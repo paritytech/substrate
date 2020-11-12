@@ -47,13 +47,14 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
-#[doc(hidden)]
-pub use tracing;
 use tracing_subscriber::{
-	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
+	filter::Directive, fmt::{MakeWriter, time::ChronoLocal}, layer::SubscriberExt, FmtSubscriber, Layer,
 };
+use regex::bytes::Regex;
 
 pub use logging::PREFIX_LOG_SPAN;
+#[doc(hidden)]
+pub use tracing;
 
 /// Substrate client CLI
 ///
@@ -318,7 +319,7 @@ pub fn init_logger(
 
 	let subscriber = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
-		.with_writer(std::io::stderr)
+		.with_writer(MaybeColorWriter(enable_color))
 		.event_format(logging::EventFormat {
 			timer,
 			ansi: enable_color,
@@ -344,6 +345,42 @@ pub fn init_logger(
 		}
 	}
 	Ok(())
+}
+
+/// A writer that may writes to `stderr` with colors.
+///
+/// This is used by the logging to kill colors when they are disabled.
+///
+/// If the inner is `false`, the colors will be removed before writing to stderr.
+#[derive(Clone)]
+struct MaybeColorWriter(bool);
+
+impl std::io::Write for MaybeColorWriter {
+	fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+		lazy_static::lazy_static! {
+			static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
+		}
+
+		if !self.0 {
+			let replaced = RE.replace_all(buf, &b""[..]);
+			std::io::stderr().write(&replaced)?;
+			Ok(buf.len())
+		} else {
+			std::io::stderr().write(buf)
+		}
+	}
+
+	fn flush(&mut self) -> std::io::Result<()> {
+		std::io::stderr().flush()
+	}
+}
+
+impl MakeWriter for MaybeColorWriter {
+	type Writer = Self;
+
+	fn make_writer(&self) -> Self {
+		self.clone()
+	}
 }
 
 #[cfg(test)]
@@ -450,8 +487,7 @@ mod tests {
 	#[test]
 	fn prefix_in_log_lines_entrypoint() {
 		if env::var("ENABLE_LOGGING").is_ok() {
-			let test_pattern = "test-target=info";
-			init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
+			init_logger("", Default::default(), Default::default()).unwrap();
 			prefix_in_log_lines_process();
 		}
 	}
@@ -459,5 +495,36 @@ mod tests {
 	#[crate::prefix_logs_with(EXPECTED_NODE_NAME)]
 	fn prefix_in_log_lines_process() {
 		log::info!("{}", EXPECTED_LOG_MESSAGE);
+	}
+
+	/// This is no actual test, it will be used by the `do_not_write_with_colors_on_tty` test.
+	/// The given test will call the test executable to only execute this test that
+	/// will only print a log line with some colors in it.
+	#[test]
+	fn do_not_write_with_colors_on_tty_entrypoint() {
+		if env::var("ENABLE_LOGGING").is_ok() {
+			init_logger("", Default::default(), Default::default()).unwrap();
+			log::info!("{}", ansi_term::Colour::Yellow.paint(EXPECTED_LOG_MESSAGE));
+		}
+	}
+
+	#[test]
+	fn do_not_write_with_colors_on_tty() {
+		let re = regex::Regex::new(&format!(
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  {}$",
+			EXPECTED_LOG_MESSAGE,
+		)).unwrap();
+		let executable = env::current_exe().unwrap();
+		let output = Command::new(executable)
+			.env("ENABLE_LOGGING", "1")
+			.args(&["--nocapture", "do_not_write_with_colors_on_tty_entrypoint"])
+			.output()
+			.unwrap();
+
+		let output = String::from_utf8(output.stderr).unwrap();
+		assert!(
+			re.is_match(output.trim()),
+			format!("Expected:\n{}\nGot:\n{}", re, output),
+		);
 	}
 }
