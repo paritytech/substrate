@@ -107,11 +107,13 @@ fn url_or_multiaddr_deser<'de, D>(deserializer: D) -> Result<Vec<(Multiaddr, u8)
 
 impl TelemetryEndpoints {
 	/// Create a `TelemetryEndpoints` based on a list of `(String, u8)`.
-	pub fn new(endpoints: Vec<(String, u8)>) -> Result<Self, libp2p::multiaddr::Error> {
-		let endpoints: Result<Vec<(Multiaddr, u8)>, libp2p::multiaddr::Error> = endpoints.iter()
-			.map(|e| Ok((url_to_multiaddr(&e.0)?, e.1)))
-			.collect();
-		endpoints.map(Self)
+	pub fn new<'a>(
+		endpoints: impl Iterator<Item = &'a (String, u8)>,
+	) -> Result<Self, libp2p::multiaddr::Error> {
+		endpoints
+			.map(|(url, max_verbosity)| Ok((url_to_multiaddr(&url)?, *max_verbosity)))
+			.collect::<Result<Vec<(Multiaddr, u8)>, libp2p::multiaddr::Error>>()
+			.map(Self)
 	}
 }
 

@@ -349,7 +349,7 @@ impl CliConfiguration for RunCmd {
 			None
 		} else if !self.telemetry_endpoints.is_empty() {
 			Some(
-				TelemetryEndpoints::new(self.telemetry_endpoints.clone())
+				TelemetryEndpoints::new(self.telemetry_endpoints.iter())
 					.map_err(|e| e.to_string())?,
 			)
 		} else {
