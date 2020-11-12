@@ -142,13 +142,18 @@ fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
 	Err(parse_error)
 }
 
-/// Log levels.
+/// Substrate DEBUG log level.
 pub const SUBSTRATE_DEBUG: u8 = 9;
+/// Substrate INFO log level.
 pub const SUBSTRATE_INFO: u8 = 0;
 
+/// Consensus TRACE log level.
 pub const CONSENSUS_TRACE: u8 = 9;
+/// Consensus DEBUG log level.
 pub const CONSENSUS_DEBUG: u8 = 5;
+/// Consensus WARN log level.
 pub const CONSENSUS_WARN: u8 = 4;
+/// Consensus INFO log level.
 pub const CONSENSUS_INFO: u8 = 1;
 
 /// Telemetry object. Implements `Future` and must be polled regularly.
