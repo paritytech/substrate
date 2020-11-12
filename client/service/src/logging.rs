@@ -19,14 +19,14 @@
 //! TODO doc
 
 use ansi_term::Colour;
-use std::{fmt, marker::PhantomData, cell::RefCell};
+use std::fmt;
 use tracing::{span::Attributes, Event, Id, Level, Subscriber};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
 	filter::Directive,
 	field::RecordFields,
 	fmt::{
-		format, time::{ChronoLocal, FormatTime, SystemTime},
+		time::{ChronoLocal, FormatTime, SystemTime},
 		FmtContext, FormatEvent, FormatFields,
 	},
 	layer::{Context, SubscriberExt},
@@ -415,6 +415,7 @@ where
 
 // NOTE: `FmtContext`'s fields are private. This enum allows us to make a `format_event` function
 //       that works with `FmtContext` or `Context` with `FormatFields`
+#[allow(dead_code)]
 enum CustomFmtContext<'a, S, N>
 {
 	FmtContext(&'a FmtContext<'a, S, N>),

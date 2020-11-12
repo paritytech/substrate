@@ -64,11 +64,9 @@
 use futures::{channel::mpsc, prelude::*};
 use libp2p::{wasm_ext, Multiaddr};
 use log::{error, warn};
-use parking_lot::Mutex;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{
 	pin::Pin,
-	sync::Arc,
 	task::{Context, Poll},
 	time::Duration,
 };

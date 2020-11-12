@@ -16,9 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::Telemetries;
 use futures::channel::mpsc;
-use libp2p::wasm_ext::ExtTransport;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::convert::TryInto;
