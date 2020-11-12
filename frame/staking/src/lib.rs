@@ -1219,6 +1219,8 @@ decl_error! {
 		IncorrectHistoryDepth,
 		/// Incorrect number of slashing spans provided.
 		IncorrectSlashingSpans,
+		/// Internal state has become somehow corrupted and the operation cannot continue.
+		BadState,
 	}
 }
 
@@ -1420,12 +1422,12 @@ decl_module! {
 				Err(Error::<T>::InsufficientValue)?
 			}
 
+			system::Module::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
+
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
 			<Bonded<T>>::insert(&stash, &controller);
 			<Payee<T>>::insert(&stash, payee);
-
-			system::Module::<T>::inc_consumers(&stash);
 
 			let current_era = CurrentEra::get().unwrap_or(0);
 			let history_depth = Self::history_depth();
