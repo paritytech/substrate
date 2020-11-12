@@ -115,7 +115,7 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 		self.inner.read().clone()
 	}
 
-	/// WIP(JON) expand this description
+	/// Clone the inner `AuthoritySetChanges`.
 	pub fn authority_set_changes(&self) -> AuthoritySetChanges<N> {
 		self.inner.read().authority_set_changes.clone()
 	}
@@ -167,8 +167,8 @@ pub struct AuthoritySet<H, N> {
 	/// is lower than the last finalized block (as signaled in the forced
 	/// change) must be applied beforehand.
 	pending_forced_changes: Vec<PendingChange<H, N>>,
-	// WIP(JON) expand this description
-	pub(crate) authority_set_changes: AuthoritySetChanges<N>,
+	/// Track at which blocks the set id changes. This is useful when we need to prove finality.
+	authority_set_changes: AuthoritySetChanges<N>,
 }
 
 impl<H, N> Decode for AuthoritySet<H, N>
@@ -712,8 +712,6 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
             .binary_search_by_key(&block_number, |(_set_id, n)| n.clone())
 			.unwrap_or_else(|b| b);
 		if idx < self.authority_set_changes.len() {
-			// WIP(JON) remove assert
-			assert!(self.authority_set_changes[idx].clone().1 > block_number);
 			Some(self.authority_set_changes[idx].clone())
 		} else {
 			None

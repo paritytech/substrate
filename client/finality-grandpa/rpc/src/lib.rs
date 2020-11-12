@@ -82,8 +82,8 @@ pub trait GrandpaApi<Notification, Hash, N> {
 		id: SubscriptionId
 	) -> jsonrpc_core::Result<bool>;
 
-	/// Prove finality for the given block number.
-	/// WIP(JON): expand this description
+	/// Prove finality for the given block number by returning the Justification for the last block
+	/// in the set.
 	#[rpc(name = "grandpa_proveFinality")]
 	fn prove_finality(
 		&self,

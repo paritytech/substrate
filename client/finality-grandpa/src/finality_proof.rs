@@ -202,8 +202,8 @@ impl<B, Block> FinalityProofProvider<B, Block>
 		NumberFor<Block>: BlockNumberOps,
 		B: Backend<Block> + Send + Sync + 'static,
 {
-	/// Prove finality for the given block number.
-	/// WIP(JON): expand this description
+	/// Prove finality for the given block number by returning a Justification for the last block of
+	/// the authority set.
 	pub fn prove_finality(
 		&self,
 		block: NumberFor<Block>,
