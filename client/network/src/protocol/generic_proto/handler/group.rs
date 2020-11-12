@@ -733,7 +733,6 @@ impl ProtocolsHandler for NotifsHandler {
 						}
 					},
 					State::OpenDesired { pending_opening, .. } => {
-						// TODO: close in_substreams in a clean way
 						self.state = State::Closed {
 							pending_opening: mem::replace(pending_opening, Vec::new()),
 						};
@@ -859,7 +858,6 @@ impl ProtocolsHandler for NotifsHandler {
 							};
 							return Poll::Ready(ProtocolsHandlerEvent::Custom(event))
 						},
-						// TODO: close in a clean way?
 						Some(Poll::Ready(None)) | Some(Poll::Ready(Some(Err(_)))) =>
 							*substream = None,
 					}
