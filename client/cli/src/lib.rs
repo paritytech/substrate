@@ -48,8 +48,6 @@ use structopt::{
 };
 #[doc(hidden)]
 pub use tracing;
-
-/// TODO used by the macro
 pub use sc_logging::PREFIX_LOG_SPAN;
 
 /// Substrate client CLI

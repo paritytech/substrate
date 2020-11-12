@@ -18,6 +18,8 @@
 
 //! TODO doc
 
+#![warn(missing_docs)]
+
 mod event_format;
 mod layers;
 

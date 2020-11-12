@@ -106,6 +106,7 @@ fn url_or_multiaddr_deser<'de, D>(deserializer: D) -> Result<Vec<(Multiaddr, u8)
 }
 
 impl TelemetryEndpoints {
+	/// Create a `TelemetryEndpoints` based on a list of `(String, u8)`.
 	pub fn new(endpoints: Vec<(String, u8)>) -> Result<Self, libp2p::multiaddr::Error> {
 		let endpoints: Result<Vec<(Multiaddr, u8)>, libp2p::multiaddr::Error> = endpoints.iter()
 			.map(|e| Ok((url_to_multiaddr(&e.0)?, e.1)))
@@ -165,13 +166,6 @@ impl Drop for Telemetry {
 	}
 }
 
-/// TODO update doc as Telemetry isnt clonable anymore
-/// Behind the `Mutex` in `Telemetry`.
-///
-/// Note that ideally we wouldn't have to make the `Telemetry` cloneable, as that would remove the
-/// need for a `Mutex`. However there is currently a weird hack in place in `sc-service`
-/// where we extract the telemetry registration so that it continues running during the shutdown
-/// process.
 #[derive(Debug)]
 struct TelemetryInner {
 	/// Worker for the telemetry. `None` if it failed to initialize.
@@ -181,11 +175,7 @@ struct TelemetryInner {
 }
 
 impl Telemetry {
-	// TODO update doc
 	/// Initializes the telemetry. See the crate root documentation for more information.
-	///
-	/// Please be careful to not call this function twice in the same program. The `slog` crate
-	/// doesn't provide any way of knowing whether a global logger has already been registered.
 	pub fn new(
 		endpoints: TelemetryEndpoints,
 		wasm_external_transport: Option<wasm_ext::ExtTransport>,
@@ -277,7 +267,9 @@ impl Stream for Telemetry {
 	}
 }
 
-/// TODO doc
+/// An object that keeps track of all the [`Telemetry`] created by its `build_telemetry()` method.
+///
+/// [`Telemetry`] created through this object re-use connections if possible.
 #[derive(Debug, Default, Clone)]
 pub struct Telemetries {
 	senders: Senders,
@@ -286,7 +278,16 @@ pub struct Telemetries {
 }
 
 impl Telemetries {
-	/// TODO doc
+	/// Create a [`Telemetries`] object using an `ExtTransport`.
+	///
+	/// This is used in WASM contexts where we need some binding between the networking provided by
+	/// the operating system or environment and libp2p.
+	///
+	/// This constructor is expected to be used only when compiling for WASM.
+	///
+	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
+	/// >                internal buffering going on. In the context of WebSockets, each `write`
+	/// >                must be one individual WebSockets frame.
 	pub fn with_wasm_external_transport(wasm_external_transport: wasm_ext::ExtTransport) -> Self {
 		Self {
 			wasm_external_transport: Some(wasm_external_transport),
@@ -294,22 +295,10 @@ impl Telemetries {
 		}
 	}
 
-	// TODO update doc / move to root
-	/// endpoints:
+	/// Create a new [`Telemetry`] for the endpoints provided in argument.
 	///
-	/// Collection of telemetry WebSocket servers with a corresponding verbosity level.
-	/// Optional external implementation of a libp2p transport. Used in WASM contexts where we need
-	/// some binding between the networking provided by the operating system or environment and
-	/// libp2p.
-	///
-	/// wasm_external_transport:
-	///
-	/// This parameter exists whatever the target platform is, but it is expected to be set to
-	/// `Some` only when compiling for WASM.
-	///
-	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
-	/// >                internal buffering going on. In the context of WebSockets, each `write`
-	/// >                must be one individual WebSockets frame.
+	/// The `endpoints` argument is a collection of telemetry WebSocket servers with a corresponding
+	/// verbosity level.
 	pub fn get_or_create(&self, endpoints: TelemetryEndpoints) -> Telemetry {
 		let (telemetry, sender) = Telemetry::new(
 			endpoints.clone(),
@@ -323,13 +312,13 @@ impl Telemetries {
 		telemetry
 	}
 
+	/// Get a clone of the channel's [`Senders`].
 	pub fn senders(&self) -> Senders {
 		self.senders.clone()
 	}
 }
 
-/// TODO doc
-/// Translates to `slog_scope::info`, but contains an additional verbosity
+/// Translates to `tracing::info!`, but contains an additional verbosity
 /// parameter which the log record is tagged with. Additionally the verbosity
 /// parameter is added to the record as a key-value pair.
 #[macro_export(local_inner_macros)]

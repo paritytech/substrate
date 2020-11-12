@@ -30,17 +30,17 @@ use tracing_subscriber::{
 	registry::{LookupSpan, SpanRef},
 };
 
-/// TODO doc
+/// A pre-configured event formatter.
 pub struct EventFormat<T = SystemTime> {
-	/// TODO doc
+	/// Use the given timer for log message timestamps.
 	pub timer: T,
-	/// TODO doc
+	/// Enable ANSI terminal colors for formatted output.
 	pub ansi: bool,
-	/// TODO doc
+	/// Sets whether or not an event's target is displayed.
 	pub display_target: bool,
-	/// TODO doc
+	/// Sets whether or not an event's level is displayed.
 	pub display_level: bool,
-	/// TODO doc
+	/// Sets whether or not the name of the current thread is displayed when formatting events.
 	pub display_thread_name: bool,
 }
 

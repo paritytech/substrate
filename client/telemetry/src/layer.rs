@@ -24,13 +24,15 @@ use std::sync::Arc;
 use tracing::{Event, Subscriber};
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
+/// Span name used to report the telemetry.
 pub const TELEMETRY_LOG_SPAN: &str = "telemetry-logger";
 
+/// `Layer` that handles the logs for telemetries.
 #[derive(Debug)]
 pub struct TelemetryLayer(Senders);
 
 impl TelemetryLayer {
-	/// TODO
+	/// Create a new [`TelemetryLayer`] using the [`Senders`] provided in argument.
 	pub fn new(senders: Senders) -> Self {
 		Self(senders)
 	}
@@ -134,6 +136,10 @@ impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
 	}
 }
 
+/// A collection of `futures::channel::mpsc::Sender` with their associated span's ID.
+///
+/// This is used by [`TelemetryLayer`] to route the log events to the correct channel based on the
+/// span's ID.
 #[derive(Default, Debug, Clone)]
 pub struct Senders(
 	Arc<Mutex<HashMap<u64, std::panic::AssertUnwindSafe<mpsc::Sender<(u8, String)>>>>>,

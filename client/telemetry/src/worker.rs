@@ -65,9 +65,11 @@ pub struct TelemetryWorker {
 	force_connected: bool,
 }
 
+/// A trait that implements `Stream` and `Sink`.
 pub trait StreamAndSink<I>: Stream + Sink<I> {}
 impl<T: ?Sized + Stream + Sink<I>, I> StreamAndSink<I> for T {}
 
+/// A type alias for the WebSocket transport.
 pub type WsTrans = libp2p::core::transport::Boxed<
 	Pin<Box<dyn StreamAndSink<
 		Vec<u8>,

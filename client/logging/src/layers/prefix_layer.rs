@@ -22,7 +22,10 @@ use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 /// Span name used for the logging prefix. See macro `sc_cli::prefix_logs_with!`
 pub const PREFIX_LOG_SPAN: &str = "substrate-log-prefix";
 
-/// TODO doc
+/// A `Layer` that captures the prefix span ([`PREFIX_LOG_SPAN`]) which is then used by
+/// [`EventFormat`] to prefix the log lines by customizable string.
+///
+/// See the macro `sc_cli::prefix_logs_with!` for more details.
 pub struct PrefixLayer;
 
 impl<S> Layer<S> for PrefixLayer
