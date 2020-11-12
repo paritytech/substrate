@@ -37,7 +37,7 @@ pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 // TODO should probably renamed to "init()"?
 pub fn init_console_log(pattern: &str, /* level: log::Level, TODO not needed anymore I think */) -> Result<(sc_telemetry::Telemetries, ExtTransport), String> {
 	let transport = ExtTransport::new(ffi::websocket_transport());
-	let (subscriber, telemetries) = sc_service::logging::get_default_subscriber_and_telemetries(
+	let (subscriber, telemetries) = sc_logging::get_default_subscriber_and_telemetries(
 		pattern,
 		Some(transport.clone()),
 	)?;

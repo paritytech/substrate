@@ -33,7 +33,6 @@ pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
 mod task_manager;
-pub mod logging;
 
 use std::{io, pin::Pin};
 use std::net::SocketAddr;

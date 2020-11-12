@@ -50,7 +50,7 @@ use structopt::{
 pub use tracing;
 
 /// TODO used by the macro
-pub use sc_service::logging::PREFIX_LOG_SPAN;
+pub use sc_logging::PREFIX_LOG_SPAN;
 
 /// Substrate client CLI
 ///
@@ -244,7 +244,7 @@ pub fn init_logger(
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 ) -> std::result::Result<sc_telemetry::Telemetries, String> {
 	Ok(if let Some(profiling_targets) = profiling_targets {
-		let (subscriber, telemetries) = sc_service::logging::get_default_subscriber_and_telemetries_with_profiling(
+		let (subscriber, telemetries) = sc_logging::get_default_subscriber_and_telemetries_with_profiling(
 			pattern,
 			telemetry_external_transport,
 			tracing_receiver,
@@ -259,7 +259,7 @@ pub fn init_logger(
 
 		telemetries
 	} else {
-		let (subscriber, telemetries) = sc_service::logging::get_default_subscriber_and_telemetries(
+		let (subscriber, telemetries) = sc_logging::get_default_subscriber_and_telemetries(
 			pattern,
 			telemetry_external_transport,
 		)?;

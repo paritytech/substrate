@@ -40,6 +40,7 @@ members = [
 	"client/finality-grandpa",
 	"client/informant",
 	"client/light",
+	"client/logging",
 	"client/tracing",
 	"client/keystore",
 	"client/network",

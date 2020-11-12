@@ -6524,6 +6524,7 @@ dependencies = [
  "sc-cli-proc-macro",
  "sc-client-api",
  "sc-keystore",
+ "sc-logging",
  "sc-network",
  "sc-service",
  "sc-telemetry",
@@ -7083,6 +7084,21 @@ dependencies = [
  "sp-externalities",
  "sp-runtime",
  "sp-state-machine",
+]
+
+[[package]]
+name = "sc-logging"
+version = "2.0.0"
+dependencies = [
+ "ansi_term 0.12.1",
+ "atty",
+ "sc-telemetry",
+ "sc-tracing",
+ "tracing",
+ "tracing-log",
+ "tracing-subscriber",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -8838,6 +8854,7 @@ dependencies = [
  "rand 0.7.3",
  "sc-chain-spec",
  "sc-informant",
+ "sc-logging",
  "sc-network",
  "sc-service",
  "sc-telemetry",
