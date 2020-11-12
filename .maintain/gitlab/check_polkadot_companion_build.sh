@@ -91,4 +91,4 @@ cd polkadot
 
 # Test Polkadot pr or master branch with this Substrate commit.
 cargo update -p sp-io
-time cargo test --all --release --verbose
+time cargo test --all --release --verbose --features=real-overseer

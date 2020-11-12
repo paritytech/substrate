@@ -234,12 +234,12 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
+		let mut weight = 0;
 		if Self::runtime_upgraded() {
 			// System is not part of `AllModules`, so we need to call this manually.
-			let mut weight = <frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
+			weight = weight.saturating_add(<frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade());
 			weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
 			weight = weight.saturating_add(<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade());
-			<frame_system::Module<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
 		}
 		<frame_system::Module<System>>::initialize(
 			block_number,
@@ -248,8 +248,10 @@ where
 			digest,
 			frame_system::InitKind::Full,
 		);
-		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
-		let weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number)
+		weight = weight.saturating_add(
+			<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number)
+		);
+		weight = weight.saturating_add(<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number))
 			.saturating_add(<System::BlockExecutionWeight as frame_support::traits::Get<_>>::get());
 		<frame_system::Module::<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
 
@@ -488,9 +490,10 @@ mod tests {
 	use frame_support::{
 		parameter_types,
 		weights::{Weight, RuntimeDbWeight, IdentityFee, WeightToFeePolynomial},
-		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason},
+		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
+	use pallet_transaction_payment::CurrencyAdapter;
 	use pallet_balances::Call as BalancesCall;
 	use hex_literal::hex;
 	const TEST_KEY: &[u8] = &*b":test:key:";
@@ -542,7 +545,7 @@ mod tests {
 
 				fn on_runtime_upgrade() -> Weight {
 					sp_io::storage::set(super::TEST_KEY, "module".as_bytes());
-					0
+					200
 				}
 			}
 		}
@@ -632,8 +635,7 @@ mod tests {
 		pub const TransactionByteFee: Balance = 0;
 	}
 	impl pallet_transaction_payment::Trait for Runtime {
-		type Currency = Balances;
-		type OnTransactionPayment = ();
+		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = IdentityFee<Balance>;
 		type FeeMultiplierUpdate = ();
@@ -675,7 +677,7 @@ mod tests {
 		fn on_runtime_upgrade() -> Weight {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
-			0
+			100
 		}
 	}
 
@@ -810,7 +812,7 @@ mod tests {
 		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as Weight;
-		// Block execution weight + on_initialize weight
+		// on_initialize weight + block execution weight
 		let base_block_weight = 175 + <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
 		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get() - base_block_weight;
 		let num_to_exhaust_block = limit / (encoded_len + 5);
@@ -950,7 +952,7 @@ mod tests {
 					Digest::default(),
 				));
 
-				if lock == WithdrawReasons::except(WithdrawReason::TransactionPayment) {
+				if lock == WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT) {
 					assert!(Executive::apply_extrinsic(xt).unwrap().is_ok());
 					// tx fee has been deducted.
 					assert_eq!(<pallet_balances::Module<Runtime>>::total_balance(&1), 111 - fee);
@@ -965,7 +967,7 @@ mod tests {
 		};
 
 		execute_with_lock(WithdrawReasons::all());
-		execute_with_lock(WithdrawReasons::except(WithdrawReason::TransactionPayment));
+		execute_with_lock(WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT));
 	}
 
 	#[test]
@@ -1071,6 +1073,46 @@ mod tests {
 
 			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
 			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());
+		});
+	}
+
+	#[test]
+	fn all_weights_are_recorded_correctly() {
+		new_test_ext(1).execute_with(|| {
+			// Make sure `on_runtime_upgrade` is called for maximum complexity
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				..Default::default()
+			});
+
+			let block_number = 1;
+
+			Executive::initialize_block(&Header::new(
+				block_number,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			// All weights that show up in the `initialize_block_impl`
+			let frame_system_upgrade_weight = frame_system::Module::<Runtime>::on_runtime_upgrade();
+			let custom_runtime_upgrade_weight = CustomOnRuntimeUpgrade::on_runtime_upgrade();
+			let runtime_upgrade_weight = <AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
+			let frame_system_on_initialize_weight = frame_system::Module::<Runtime>::on_initialize(block_number);
+			let on_initialize_weight = <AllModules as OnInitialize<u64>>::on_initialize(block_number);
+			let base_block_weight = <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
+
+			// Weights are recorded correctly
+			assert_eq!(
+				frame_system::Module::<Runtime>::block_weight().total(),
+				frame_system_upgrade_weight +
+				custom_runtime_upgrade_weight +
+				runtime_upgrade_weight +
+				frame_system_on_initialize_weight +
+				on_initialize_weight +
+				base_block_weight,
+			);
 		});
 	}
 }

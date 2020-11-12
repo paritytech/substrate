@@ -103,8 +103,6 @@
 //!
 //! General spending/proposal protocol:
 //! - `propose_spend` - Make a spending proposal and stake the required deposit.
-//! - `set_pot` - Set the spendable balance of funds.
-//! - `configure` - Configure the module's proposal requirements.
 //! - `reject_proposal` - Reject a proposal, slashing the deposit.
 //! - `approve_proposal` - Accept the proposal, returning the deposit.
 //!
@@ -134,13 +132,17 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod tests;
+mod benchmarking;
+pub mod weights;
+
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error, Parameter};
 use frame_support::traits::{
 	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{KeepAlive, AllowDeath},
-	ReservableCurrency, WithdrawReason
+	ReservableCurrency, WithdrawReasons
 };
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, DispatchResult, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
@@ -150,10 +152,7 @@ use frame_support::weights::{Weight, DispatchClass};
 use frame_support::traits::{Contains, ContainsLengthBound, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
-
-mod tests;
-mod benchmarking;
-mod default_weights;
+pub use weights::WeightInfo;
 
 type BalanceOf<T, I> =
 	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -161,29 +160,6 @@ type PositiveImbalanceOf<T, I> =
 	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T, I> =
 	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
-
-pub trait WeightInfo {
-	fn propose_spend() -> Weight;
-	fn reject_proposal() -> Weight;
-	fn approve_proposal() -> Weight;
-	fn report_awesome(r: u32, ) -> Weight;
-	fn retract_tip() -> Weight;
-	fn tip_new(r: u32, t: u32, ) -> Weight;
-	fn tip(t: u32, ) -> Weight;
-	fn close_tip(t: u32, ) -> Weight;
-	fn propose_bounty(r: u32, ) -> Weight;
-	fn approve_bounty() -> Weight;
-	fn propose_curator() -> Weight;
-	fn unassign_curator() -> Weight;
-	fn accept_curator() -> Weight;
-	fn award_bounty() -> Weight;
-	fn claim_bounty() -> Weight;
-	fn close_bounty_proposed() -> Weight;
-	fn close_bounty_active() -> Weight;
-	fn extend_bounty_expiry() -> Weight;
-	fn on_initialize_proposals(p: u32, ) -> Weight;
-	fn on_initialize_bounties(b: u32, ) -> Weight;
-}
 
 pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The treasury's module id, used for deriving its sovereign account ID.
@@ -1370,7 +1346,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		if let Err(problem) = T::Currency::settle(
 			&account_id,
 			imbalance,
-			WithdrawReason::Transfer.into(),
+			WithdrawReasons::TRANSFER,
 			KeepAlive
 		) {
 			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");

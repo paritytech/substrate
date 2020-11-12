@@ -52,7 +52,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-mod default_weights;
+pub mod weights;
 
 use sp_std::{prelude::*, marker::PhantomData, borrow::Borrow};
 use codec::{Encode, Decode, Codec};
@@ -64,13 +64,7 @@ use frame_support::{
 	weights::{GetDispatchInfo, Weight},
 };
 use frame_system::{self as system, ensure_signed};
-
-pub trait WeightInfo {
-	fn schedule(s: u32, ) -> Weight;
-	fn cancel(s: u32, ) -> Weight;
-	fn schedule_named(s: u32, ) -> Weight;
-	fn cancel_named(s: u32, ) -> Weight;
-}
+pub use weights::WeightInfo;
 
 /// Our pallet's configuration trait. All our types and constants go in here. If the
 /// pallet is dependent on specific other pallets, then their configuration traits

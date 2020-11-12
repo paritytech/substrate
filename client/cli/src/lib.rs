@@ -20,6 +20,8 @@
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
+#![warn(unused_imports)]
+#![warn(unused_crate_dependencies)]
 
 pub mod arg_enums;
 mod commands;
