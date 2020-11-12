@@ -661,6 +661,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		if let Some(protocol_name) = protocol_name {
 			sink.send_sync_notification(protocol_name, message);
 		} else {
+			log::error!(
+				target: "sub-libp2p",
+				"Attempted to send notification on unknown protocol: {:?}",
+				engine_id,
+			);
 			return;
 		}
 
