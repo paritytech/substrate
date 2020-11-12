@@ -1907,33 +1907,48 @@ impl NetworkBehaviour for GenericProto {
 			}
 
 			NotifsHandlerOut::CustomMessage { message } => {
-				debug_assert!(self.is_open(&source));
-				trace!(target: "sub-libp2p", "Handler({:?}) => Message", source);
-				trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
-				let event = GenericProtoOut::LegacyMessage {
-					peer_id: source,
-					message,
-				};
+				if self.is_open(&source) {
+					trace!(target: "sub-libp2p", "Handler({:?}) => Message", source);
+					trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
+					let event = GenericProtoOut::LegacyMessage {
+						peer_id: source,
+						message,
+					};
 
-				self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
+					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
+				} else {
+					trace!(
+						target: "sub-libp2p",
+						"Handler({:?}) => Post-close message",
+						source,
+					);
+				}
 			}
 
 			NotifsHandlerOut::Notification { protocol_name, message } => {
-				debug_assert!(self.is_open(&source));
-				trace!(
-					target: "sub-libp2p",
-					"Handler({:?}) => Notification({:?})",
-					source,
-					protocol_name,
-				);
-				trace!(target: "sub-libp2p", "External API <= Message({:?}, {:?})", protocol_name, source);
-				let event = GenericProtoOut::Notification {
-					peer_id: source,
-					protocol_name,
-					message,
-				};
+				if self.is_open(&source) {
+					trace!(
+						target: "sub-libp2p",
+						"Handler({:?}) => Notification({:?})",
+						source,
+						protocol_name,
+					);
+					trace!(target: "sub-libp2p", "External API <= Message({:?}, {:?})", protocol_name, source);
+					let event = GenericProtoOut::Notification {
+						peer_id: source,
+						protocol_name,
+						message,
+					};
 
-				self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
+					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
+				} else {
+					trace!(
+						target: "sub-libp2p",
+						"Handler({:?}) => Post-close notification({:?})",
+						source,
+						protocol_name,
+					);
+				}
 			}
 		}
 	}
