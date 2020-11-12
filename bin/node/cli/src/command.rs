@@ -73,18 +73,10 @@ pub fn run() -> Result<()> {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| async move {
-				// TODO revert after test
-				let config2 = cli.create_configuration(&cli.run, config.task_executor.clone(), config.telemetries.clone()).unwrap();
-				let mut task_manager = match config.role {
-					Role::Light => service::new_light(config).unwrap(),
-					_ => service::new_full(config).unwrap(),
-				};
-				let task_manager2 = match config2.role {
-					Role::Light => service::new_light(config2).unwrap(),
-					_ => service::new_full(config2).unwrap(),
-				};
-				task_manager.add_child(task_manager2);
-				Ok(task_manager)
+				match config.role {
+					Role::Light => service::new_light(config),
+					_ => service::new_full(config),
+				}
 			})
 		}
 		Some(Subcommand::Inspect(cmd)) => {
