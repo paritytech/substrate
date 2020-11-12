@@ -91,19 +91,20 @@ fn crate_metadata(cargo_manifest: &Path) -> Metadata {
 /// Creates the WASM project, compiles the WASM binary and compacts the WASM binary.
 ///
 /// # Returns
+///
 /// The path to the compact WASM binary and the bloaty WASM binary.
 pub(crate) fn create_and_compile(
-	cargo_manifest: &Path,
+	project_cargo_toml: &Path,
 	default_rustflags: &str,
 	cargo_cmd: CargoCommandVersioned,
 ) -> (Option<WasmBinary>, WasmBinaryBloaty) {
 	let wasm_workspace_root = get_wasm_workspace_root();
 	let wasm_workspace = wasm_workspace_root.join("wbuild");
 
-	let crate_metadata = crate_metadata(cargo_manifest);
+	let crate_metadata = crate_metadata(project_cargo_toml);
 
 	let project = create_project(
-		cargo_manifest,
+		project_cargo_toml,
 		&wasm_workspace,
 		&crate_metadata,
 		&crate_metadata.workspace_root,
@@ -112,14 +113,14 @@ pub(crate) fn create_and_compile(
 	build_project(&project, default_rustflags, cargo_cmd);
 	let (wasm_binary, bloaty) = compact_wasm_file(
 		&project,
-		cargo_manifest,
+		project_cargo_toml,
 	);
 
 	wasm_binary.as_ref().map(|wasm_binary|
-		copy_wasm_to_target_directory(cargo_manifest, wasm_binary)
+		copy_wasm_to_target_directory(project_cargo_toml, wasm_binary)
 	);
 
-	generate_rerun_if_changed_instructions(cargo_manifest, &project, &wasm_workspace);
+	generate_rerun_if_changed_instructions(project_cargo_toml, &project, &wasm_workspace);
 
 	(wasm_binary, bloaty)
 }
@@ -331,29 +332,30 @@ fn has_runtime_wasm_feature_declared(
 /// Create the project used to build the wasm binary.
 ///
 /// # Returns
-/// The path to the created project.
+///
+/// The path to the created wasm project.
 fn create_project(
-	cargo_manifest: &Path,
+	project_cargo_toml: &Path,
 	wasm_workspace: &Path,
 	crate_metadata: &Metadata,
 	workspace_root_path: &Path,
 ) -> PathBuf {
-	let crate_name = get_crate_name(cargo_manifest);
-	let crate_path = cargo_manifest.parent().expect("Parent path exists; qed");
-	let wasm_binary = get_wasm_binary_name(cargo_manifest);
-	let project_folder = wasm_workspace.join(&crate_name);
+	let crate_name = get_crate_name(project_cargo_toml);
+	let crate_path = project_cargo_toml.parent().expect("Parent path exists; qed");
+	let wasm_binary = get_wasm_binary_name(project_cargo_toml);
+	let wasm_project_folder = wasm_workspace.join(&crate_name);
 
-	fs::create_dir_all(project_folder.join("src"))
+	fs::create_dir_all(wasm_project_folder.join("src"))
 		.expect("Wasm project dir create can not fail; qed");
 
-	let mut enabled_features = project_enabled_features(&cargo_manifest, &crate_metadata);
+	let mut enabled_features = project_enabled_features(&project_cargo_toml, &crate_metadata);
 
-	if has_runtime_wasm_feature_declared(cargo_manifest, crate_metadata) {
+	if has_runtime_wasm_feature_declared(project_cargo_toml, crate_metadata) {
 		enabled_features.push("runtime-wasm".into());
 	}
 
 	create_project_cargo_toml(
-		&project_folder,
+		&wasm_project_folder,
 		workspace_root_path,
 		&crate_name,
 		&crate_path,
@@ -362,16 +364,16 @@ fn create_project(
 	);
 
 	write_file_if_changed(
-		project_folder.join("src/lib.rs"),
+		wasm_project_folder.join("src/lib.rs"),
 		"#![no_std] pub use wasm_project::*;",
 	);
 
-	if let Some(crate_lock_file) = find_cargo_lock(cargo_manifest) {
+	if let Some(crate_lock_file) = find_cargo_lock(project_cargo_toml) {
 		// Use the `Cargo.lock` of the main project.
-		crate::copy_file_if_changed(crate_lock_file, project_folder.join("Cargo.lock"));
+		crate::copy_file_if_changed(crate_lock_file, wasm_project_folder.join("Cargo.lock"));
 	}
 
-	project_folder
+	wasm_project_folder
 }
 
 /// Returns if the project should be built as a release.

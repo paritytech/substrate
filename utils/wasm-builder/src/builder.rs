@@ -198,11 +198,11 @@ fn generate_rerun_if_changed_instructions() {
 ///
 /// `file_name` - The name + path of the file being generated. The file contains the
 ///               constant `WASM_BINARY`, which contains the built WASM binary.
-/// `cargo_manifest` - The path to the `Cargo.toml` of the project that should be built.
+/// `project_cargo_toml` - The path to the `Cargo.toml` of the project that should be built.
 /// `default_rustflags` - Default `RUSTFLAGS` that will always be set for the build.
 fn build_project(
 	file_name: PathBuf,
-	cargo_manifest: PathBuf,
+	project_cargo_toml: PathBuf,
 	default_rustflags: String,
 ) {
 	let cargo_cmd = match crate::prerequisites::check() {
@@ -214,7 +214,7 @@ fn build_project(
 	};
 
 	let (wasm_binary, bloaty) = crate::wasm_project::create_and_compile(
-		&cargo_manifest,
+		&project_cargo_toml,
 		&default_rustflags,
 		cargo_cmd,
 	);
