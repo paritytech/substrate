@@ -7005,6 +7005,7 @@ dependencies = [
  "sc-network-gossip",
  "sc-network-test",
  "sc-telemetry",
+ "serde",
  "serde_json",
  "sp-api",
  "sp-application-crypto",
