@@ -63,10 +63,10 @@ use wasm_timer::Instant;
 ///   been asked to attribute an inbound slot.
 ///
 /// In addition to these states, there also exists a "banning" system. If we fail to dial a peer,
-/// we "ban" it for a few seconds. If the PSM requests connecting to a peer that is currently
-/// "banned", the next dialing attempt is delayed until after the ban expires. However, the PSM
+/// we back-off for a few seconds. If the PSM requests connecting to a peer that is currently
+/// backed-off, the next dialing attempt is delayed until after the ban expires. However, the PSM
 /// will still consider the peer to be connected. This "ban" is thus not a ban in a strict sense:
-/// if a "banned" peer tries to connect, the connection is accepted. A ban only delays dialing
+/// if a backed-off peer tries to connect, the connection is accepted. A ban only delays dialing
 /// attempts.
 ///
 /// There may be multiple connections to a peer. The status of a peer on
@@ -151,10 +151,10 @@ enum PeerState {
 
 	/// The peer misbehaved. If the PSM wants us to connect to this peer, we will add an artificial
 	/// delay to the connection.
-	Banned {
+	Backoff {
 		/// When the ban expires. For clean-up purposes. References an entry in `delays`.
 		timer: DelayId,
-		/// Until when the peer is banned.
+		/// Until when the peer is backed-off.
 		timer_deadline: Instant,
 	},
 
@@ -176,14 +176,14 @@ enum PeerState {
 	Disabled {
 		/// If `Some`, any connection request from the peerset to this peer is delayed until the
 		/// given `Instant`.
-		banned_until: Option<Instant>,
+		backoff_until: Option<Instant>,
 
 		/// List of connections with this peer, and their state.
 		connections: SmallVec<[(ConnectionId, ConnectionState); crate::MAX_CONNECTIONS_PER_PEER]>,
 	},
 
 	/// We are connected to this peer. The peerset has requested a connection to this peer, but
-	/// it is currently in a "banned" phase. The state will switch to `Enabled` once the timer
+	/// it is currently in a "backed-off" phase. The state will switch to `Enabled` once the timer
 	/// expires.
 	///
 	/// The handler is either in the closed state, or a `Close` message has been sent to it and
@@ -212,7 +212,7 @@ enum PeerState {
 	/// peer.
 	Incoming {
 		/// If `Some`, any dial attempts to this peer are delayed until the given `Instant`.
-		banned_until: Option<Instant>,
+		backoff_until: Option<Instant>,
 
 		/// List of connections with this peer, and their state.
 		connections: SmallVec<[(ConnectionId, ConnectionState); crate::MAX_CONNECTIONS_PER_PEER]>,
@@ -238,7 +238,7 @@ impl PeerState {
 				})
 				.next(),
 			PeerState::Poisoned => None,
-			PeerState::Banned { .. } => None,
+			PeerState::Backoff { .. } => None,
 			PeerState::PendingRequest { .. } => None,
 			PeerState::Requested => None,
 			PeerState::Disabled { .. } => None,
@@ -251,7 +251,7 @@ impl PeerState {
 	fn is_requested(&self) -> bool {
 		match self {
 			PeerState::Poisoned => false,
-			PeerState::Banned { .. } => false,
+			PeerState::Backoff { .. } => false,
 			PeerState::PendingRequest { .. } => true,
 			PeerState::Requested => true,
 			PeerState::Disabled { .. } => false,
@@ -469,7 +469,7 @@ impl GenericProto {
 			st @ PeerState::Disabled { .. } => *entry.into_mut() = st,
 			st @ PeerState::Requested => *entry.into_mut() = st,
 			st @ PeerState::PendingRequest { .. } => *entry.into_mut() = st,
-			st @ PeerState::Banned { .. } => *entry.into_mut() = st,
+			st @ PeerState::Backoff { .. } => *entry.into_mut() = st,
 
 			// DisabledPendingEnable => Disabled.
 			PeerState::DisabledPendingEnable {
@@ -479,14 +479,14 @@ impl GenericProto {
 			} => {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
 				self.peerset.dropped(peer_id.clone());
-				let banned_until = Some(if let Some(ban) = ban {
+				let backoff_until = Some(if let Some(ban) = ban {
 					cmp::max(timer_deadline, Instant::now() + ban)
 				} else {
 					timer_deadline
 				});
 				*entry.into_mut() = PeerState::Disabled {
 					connections,
-					banned_until
+					backoff_until
 				}
 			},
 
@@ -532,16 +532,16 @@ impl GenericProto {
 				debug_assert!(!connections.iter().any(|(_, s)| matches!(s, ConnectionState::Open(_))));
 				debug_assert!(!connections.iter().any(|(_, s)| matches!(s, ConnectionState::Opening)));
 
-				let banned_until = ban.map(|dur| Instant::now() + dur);
+				let backoff_until = ban.map(|dur| Instant::now() + dur);
 				*entry.into_mut() = PeerState::Disabled {
 					connections,
-					banned_until
+					backoff_until
 				}
 			},
 
 			// Incoming => Disabled.
 			// Ongoing opening requests from the remote are rejected.
-			PeerState::Incoming { mut connections, banned_until } => {
+			PeerState::Incoming { mut connections, backoff_until } => {
 				let inc = if let Some(inc) = self.incoming.iter_mut()
 					.find(|i| i.peer_id == *entry.key() && i.alive) {
 					inc
@@ -565,7 +565,7 @@ impl GenericProto {
 					*connec_state = ConnectionState::Closing;
 				}
 
-				let banned_until = match (banned_until, ban) {
+				let backoff_until = match (backoff_until, ban) {
 					(Some(a), Some(b)) => Some(cmp::max(a, Instant::now() + b)),
 					(Some(a), None) => Some(a),
 					(None, Some(b)) => Some(Instant::now() + b),
@@ -575,7 +575,7 @@ impl GenericProto {
 				debug_assert!(!connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesired)));
 				*entry.into_mut() = PeerState::Disabled {
 					connections,
-					banned_until
+					backoff_until
 				}
 			},
 
@@ -599,7 +599,7 @@ impl GenericProto {
 			Some(PeerState::Incoming { .. }) => false,
 			Some(PeerState::Requested) => false,
 			Some(PeerState::PendingRequest { .. }) => false,
-			Some(PeerState::Banned { .. }) => false,
+			Some(PeerState::Backoff { .. }) => false,
 			Some(PeerState::Poisoned) => false,
 		}
 	}
@@ -688,8 +688,8 @@ impl GenericProto {
 		let now = Instant::now();
 
 		match mem::replace(occ_entry.get_mut(), PeerState::Poisoned) {
-			// Banned (not expired) => PendingRequest
-			PeerState::Banned { ref timer, ref timer_deadline } if *timer_deadline > now => {
+			// Backoff (not expired) => PendingRequest
+			PeerState::Backoff { ref timer, ref timer_deadline } if *timer_deadline > now => {
 				let peer_id = occ_entry.key().clone();
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
 					until {:?}", peer_id, timer_deadline);
@@ -699,8 +699,8 @@ impl GenericProto {
 				};
 			},
 
-			// Banned (expired) => Requested
-			PeerState::Banned { .. } => {
+			// Backoff (expired) => Requested
+			PeerState::Backoff { .. } => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Starting to connect", occ_entry.key());
 				debug!(target: "sub-libp2p", "Libp2p <= Dial {:?}", occ_entry.key());
 				self.events.push_back(NetworkBehaviourAction::DialPeer {
@@ -713,15 +713,15 @@ impl GenericProto {
 			// Disabled (with non-expired ban) => DisabledPendingEnable
 			PeerState::Disabled {
 				connections,
-				banned_until: Some(ref banned)
-			} if *banned > now => {
+				backoff_until: Some(ref backoff)
+			} if *backoff > now => {
 				let peer_id = occ_entry.key().clone();
-				debug!(target: "sub-libp2p", "PSM => Connect({:?}): But peer is banned until {:?}",
-					peer_id, banned);
+				debug!(target: "sub-libp2p", "PSM => Connect({:?}): But peer is backed-off until {:?}",
+					peer_id, backoff);
 
 				let delay_id = self.next_delay_id;
 				self.next_delay_id.0 += 1;
-				let delay = futures_timer::Delay::new(*banned - now);
+				let delay = futures_timer::Delay::new(*backoff - now);
 				self.delays.push(async move {
 					delay.await;
 					(delay_id, peer_id)
@@ -730,12 +730,12 @@ impl GenericProto {
 				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
 					connections,
 					timer: delay_id,
-					timer_deadline: *banned,
+					timer_deadline: *backoff,
 				};
 			},
 
 			// Disabled => Enabled
-			PeerState::Disabled { mut connections, banned_until } => {
+			PeerState::Disabled { mut connections, backoff_until } => {
 				// The first element of `closed` is chosen to open the notifications substream.
 				if let Some((connec_id, connec_state)) = connections.iter_mut()
 					.find(|(_, s)| matches!(s, ConnectionState::Closed))
@@ -764,8 +764,8 @@ impl GenericProto {
 
 					let timer_deadline = {
 						let base = now + Duration::from_secs(5);
-						if let Some(banned_until) = banned_until {
-							cmp::max(base, banned_until)
+						if let Some(backoff_until) = backoff_until {
+							cmp::max(base, backoff_until)
 						} else {
 							base
 						}
@@ -857,7 +857,7 @@ impl GenericProto {
 		};
 
 		match mem::replace(entry.get_mut(), PeerState::Poisoned) {
-			st @ PeerState::Disabled { .. } | st @ PeerState::Banned { .. } => {
+			st @ PeerState::Disabled { .. } | st @ PeerState::Backoff { .. } => {
 				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Already disabled.", entry.key());
 				*entry.into_mut() = st;
 			},
@@ -870,7 +870,7 @@ impl GenericProto {
 					entry.key());
 				*entry.into_mut() = PeerState::Disabled {
 					connections,
-					banned_until: Some(timer_deadline),
+					backoff_until: Some(timer_deadline),
 				};
 			},
 
@@ -913,7 +913,7 @@ impl GenericProto {
 					*connec_state = ConnectionState::Closing;
 				}
 
-				*entry.into_mut() = PeerState::Disabled { connections, banned_until: None }
+				*entry.into_mut() = PeerState::Disabled { connections, backoff_until: None }
 			},
 
 			// Requested => Ø
@@ -925,10 +925,10 @@ impl GenericProto {
 				entry.remove();
 			},
 
-			// PendingRequest => Banned
+			// PendingRequest => Backoff
 			PeerState::PendingRequest { timer, timer_deadline } => {
 				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Not yet connected", entry.key());
-				*entry.into_mut() = PeerState::Banned { timer, timer_deadline }
+				*entry.into_mut() = PeerState::Backoff { timer, timer_deadline }
 			},
 
 			// Invalid state transitions.
@@ -1034,7 +1034,7 @@ impl GenericProto {
 
 		match mem::replace(state, PeerState::Poisoned) {
 			// Incoming => Disabled
-			PeerState::Incoming { mut connections, banned_until } => {
+			PeerState::Incoming { mut connections, backoff_until } => {
 				debug!(target: "sub-libp2p", "PSM => Reject({:?}, {:?}): Rejecting connections.",
 					index, incoming.peer_id);
 
@@ -1051,7 +1051,7 @@ impl GenericProto {
 					*connec_state = ConnectionState::Closing;
 				}
 
-				*state = PeerState::Disabled { connections, banned_until };
+				*state = PeerState::Disabled { connections, backoff_until };
 			}
 			peer => error!(target: "sub-libp2p",
 				"State mismatch in libp2p: Expected alive incoming. Got {:?}.",
@@ -1100,10 +1100,10 @@ impl NetworkBehaviour for GenericProto {
 			}
 
 			// Poisoned gets inserted above if the entry was missing.
-			// Ø | Banned => Disabled
+			// Ø | Backoff => Disabled
 			st @ &mut PeerState::Poisoned |
-			st @ &mut PeerState::Banned { .. } => {
-				let banned_until = if let PeerState::Banned { timer_deadline, .. } = st {
+			st @ &mut PeerState::Backoff { .. } => {
+				let backoff_until = if let PeerState::Backoff { timer_deadline, .. } = st {
 					Some(*timer_deadline)
 				} else {
 					None
@@ -1114,7 +1114,7 @@ impl NetworkBehaviour for GenericProto {
 
 				let mut connections = SmallVec::new();
 				connections.push((*conn, ConnectionState::Closed));
-				*st = PeerState::Disabled { connections, banned_until };
+				*st = PeerState::Disabled { connections, backoff_until };
 			}
 
 			// In all other states, add this new connection to the list of closed inactive
@@ -1141,8 +1141,8 @@ impl NetworkBehaviour for GenericProto {
 		};
 
 		match mem::replace(entry.get_mut(), PeerState::Poisoned) {
-			// Disabled => Disabled | Banned | Ø
-			PeerState::Disabled { mut connections, banned_until } => {
+			// Disabled => Disabled | Backoff | Ø
+			PeerState::Disabled { mut connections, backoff_until } => {
 				debug!(target: "sub-libp2p", "Libp2p => Disconnected({}, {:?}): Disabled.", peer_id, *conn);
 
 				if let Some(pos) = connections.iter().position(|(c, _)| *c == *conn) {
@@ -1154,7 +1154,7 @@ impl NetworkBehaviour for GenericProto {
 				}
 
 				if connections.is_empty() {
-					if let Some(until) = banned_until {
+					if let Some(until) = backoff_until {
 						let now = Instant::now();
 						if until > now {
 							let delay_id = self.next_delay_id;
@@ -1166,7 +1166,7 @@ impl NetworkBehaviour for GenericProto {
 								(delay_id, peer_id)
 							}.boxed());
 
-							*entry.get_mut() = PeerState::Banned {
+							*entry.get_mut() = PeerState::Backoff {
 								timer: delay_id,
 								timer_deadline: until,
 							};
@@ -1177,11 +1177,11 @@ impl NetworkBehaviour for GenericProto {
 						entry.remove();
 					}
 				} else {
-					*entry.get_mut() = PeerState::Disabled { connections, banned_until };
+					*entry.get_mut() = PeerState::Disabled { connections, backoff_until };
 				}
 			},
 
-			// DisabledPendingEnable => DisabledPendingEnable | Banned
+			// DisabledPendingEnable => DisabledPendingEnable | Backoff
 			PeerState::DisabledPendingEnable { mut connections, timer_deadline, timer } => {
 				debug!(
 					target: "sub-libp2p",
@@ -1200,7 +1200,7 @@ impl NetworkBehaviour for GenericProto {
 				if connections.is_empty() {
 					debug!(target: "sub-libp2p", "PSM <= Dropped({})", peer_id);
 					self.peerset.dropped(peer_id.clone());
-					*entry.get_mut() = PeerState::Banned { timer, timer_deadline };
+					*entry.get_mut() = PeerState::Backoff { timer, timer_deadline };
 
 				} else {
 					*entry.get_mut() = PeerState::DisabledPendingEnable {
@@ -1209,8 +1209,8 @@ impl NetworkBehaviour for GenericProto {
 				}
 			},
 
-			// Incoming => Incoming | Disabled | Banned | Ø
-			PeerState::Incoming { mut connections, banned_until } => {
+			// Incoming => Incoming | Disabled | Backoff | Ø
+			PeerState::Incoming { mut connections, backoff_until } => {
 				debug!(
 					target: "sub-libp2p",
 					"Libp2p => Disconnected({}, {:?}): OpenDesired.",
@@ -1246,7 +1246,7 @@ impl NetworkBehaviour for GenericProto {
 				}
 
 				if connections.is_empty() {
-					if let Some(until) = banned_until {
+					if let Some(until) = backoff_until {
 						let now = Instant::now();
 						if until > now {
 							let delay_id = self.next_delay_id;
@@ -1258,7 +1258,7 @@ impl NetworkBehaviour for GenericProto {
 								(delay_id, peer_id)
 							}.boxed());
 
-							*entry.get_mut() = PeerState::Banned {
+							*entry.get_mut() = PeerState::Backoff {
 								timer: delay_id,
 								timer_deadline: until,
 							};
@@ -1271,14 +1271,14 @@ impl NetworkBehaviour for GenericProto {
 
 				} else if no_desired_left {
 					// If no connection is `OpenDesired` anymore, switch to `Disabled`.
-					*entry.get_mut() = PeerState::Disabled { connections, banned_until };
+					*entry.get_mut() = PeerState::Disabled { connections, backoff_until };
 				} else {
-					*entry.get_mut() = PeerState::Incoming { connections, banned_until };
+					*entry.get_mut() = PeerState::Incoming { connections, backoff_until };
 				}
 			}
 
-			// Enabled => Enabled | Banned
-			// Peers are always banned when disconnecting while Enabled.
+			// Enabled => Enabled | Backoff
+			// Peers are always backed-off when disconnecting while Enabled.
 			PeerState::Enabled { mut connections } => {
 				debug!(
 					target: "sub-libp2p",
@@ -1340,7 +1340,7 @@ impl NetworkBehaviour for GenericProto {
 						(delay_id, peer_id)
 					}.boxed());
 
-					*entry.get_mut() = PeerState::Banned {
+					*entry.get_mut() = PeerState::Backoff {
 						timer: delay_id,
 						timer_deadline: Instant::now() + Duration::from_secs(ban_dur),
 					};
@@ -1353,7 +1353,7 @@ impl NetworkBehaviour for GenericProto {
 
 					*entry.get_mut() = PeerState::Disabled {
 						connections,
-						banned_until: None
+						backoff_until: None
 					};
 
 				} else {
@@ -1363,7 +1363,7 @@ impl NetworkBehaviour for GenericProto {
 
 			PeerState::Requested |
 			PeerState::PendingRequest { .. } |
-			PeerState::Banned { .. } => {
+			PeerState::Backoff { .. } => {
 				// This is a serious bug either in this state machine or in libp2p.
 				error!(target: "sub-libp2p",
 					"`inject_connection_closed` called for unknown peer {}",
@@ -1388,7 +1388,7 @@ impl NetworkBehaviour for GenericProto {
 		if let Entry::Occupied(mut entry) = self.peers.entry(peer_id.clone()) {
 			match mem::replace(entry.get_mut(), PeerState::Poisoned) {
 				// The peer is not in our list.
-				st @ PeerState::Banned { .. } => {
+				st @ PeerState::Backoff { .. } => {
 					trace!(target: "sub-libp2p", "Libp2p => Dial failure for {:?}", peer_id);
 					*entry.into_mut() = st;
 				},
@@ -1417,7 +1417,7 @@ impl NetworkBehaviour for GenericProto {
 						(delay_id, peer_id)
 					}.boxed());
 
-					*entry.into_mut() = PeerState::Banned {
+					*entry.into_mut() = PeerState::Backoff {
 						timer: delay_id,
 						timer_deadline: now + ban_duration,
 					};
@@ -1465,7 +1465,7 @@ impl NetworkBehaviour for GenericProto {
 
 				match mem::replace(entry.get_mut(), PeerState::Poisoned) {
 					// Incoming => Incoming
-					PeerState::Incoming { mut connections, banned_until } => {
+					PeerState::Incoming { mut connections, backoff_until } => {
 						debug_assert!(connections.iter().any(|(_, s)|
 							matches!(s, ConnectionState::OpenDesired)));
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, _)| *c == connection) {
@@ -1489,7 +1489,7 @@ impl NetworkBehaviour for GenericProto {
 							debug_assert!(false);
 						}
 
-						*entry.into_mut() = PeerState::Incoming { connections, banned_until };
+						*entry.into_mut() = PeerState::Incoming { connections, backoff_until };
 					},
 
 					PeerState::Enabled { mut connections } => {
@@ -1527,7 +1527,7 @@ impl NetworkBehaviour for GenericProto {
 					},
 
 					// Disabled => Disabled | Incoming
-					PeerState::Disabled { mut connections, banned_until } => {
+					PeerState::Disabled { mut connections, backoff_until } => {
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, _)| *c == connection) {
 							if let ConnectionState::Closed = *connec_state {
 								*connec_state = ConnectionState::OpenDesired;
@@ -1550,7 +1550,7 @@ impl NetworkBehaviour for GenericProto {
 									incoming_id,
 								});
 
-								*entry.into_mut() = PeerState::Incoming { connections, banned_until };
+								*entry.into_mut() = PeerState::Incoming { connections, backoff_until };
 
 							} else {
 								// Connections in `OpeningAndClosing` are in a Closed phase, and
@@ -1596,7 +1596,7 @@ impl NetworkBehaviour for GenericProto {
 
 								*entry.into_mut() = PeerState::Incoming {
 									connections,
-									banned_until: Some(timer_deadline),
+									backoff_until: Some(timer_deadline),
 								};
 
 							} else {
@@ -1701,7 +1701,7 @@ impl NetworkBehaviour for GenericProto {
 								debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", source);
 								self.peerset.dropped(source.clone());
 								*entry.into_mut() = PeerState::Disabled {
-									connections, banned_until: None
+									connections, backoff_until: None
 								};
 							} else {
 								*entry.into_mut() = PeerState::Enabled { connections };
@@ -1859,13 +1859,13 @@ impl NetworkBehaviour for GenericProto {
 
 							*entry.into_mut() = PeerState::Disabled {
 								connections,
-								banned_until: None
+								backoff_until: None
 							};
 						} else {
 							*entry.into_mut() = PeerState::Enabled { connections };
 						}
 					},
-					PeerState::Disabled { mut connections, banned_until } => {
+					PeerState::Disabled { mut connections, backoff_until } => {
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
 							*c == connection && matches!(s, ConnectionState::OpeningAndClosing))
 						{
@@ -1876,7 +1876,7 @@ impl NetworkBehaviour for GenericProto {
 							debug_assert!(false);
 						}
 
-						*entry.into_mut() = PeerState::Disabled { connections, banned_until };
+						*entry.into_mut() = PeerState::Disabled { connections, backoff_until };
 					},
 					PeerState::DisabledPendingEnable { mut connections, timer, timer_deadline } => {
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
@@ -1999,7 +1999,7 @@ impl NetworkBehaviour for GenericProto {
 			};
 
 			match peer_state {
-				PeerState::Banned { timer, .. } if *timer == delay_id => {
+				PeerState::Backoff { timer, .. } if *timer == delay_id => {
 					debug!(target: "sub-libp2p", "Libp2p <= Clean up ban of {:?} from the state", peer_id);
 					self.peers.remove(&peer_id);
 				}
