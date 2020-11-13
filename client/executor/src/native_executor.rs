@@ -405,35 +405,39 @@ impl RuntimeInstanceSpawn {
 				}
 			};
 
-			with_externalities_safe(
-				&mut async_ext,
-				move || {
-					// FIXME: Should be refactored to shared "instance factory".
-					// Instantiating wasm here every time is suboptimal at the moment, shared
-					// pool of instances should be used.
-					//
-					// https://github.com/paritytech/substrate/issues/7354
-					let instance = module.new_instance()
-						.expect("Failed to create new instance from module");
+			// FIXME: Should be refactored to shared "instance factory".
+			// Instantiating wasm here every time is suboptimal at the moment, shared
+			// pool of instances should be used.
+			//
+			// https://github.com/paritytech/substrate/issues/7354
+			let instance = module.new_instance()
+				.expect("Failed to create new instance from module");
 
-					while let PendingTask { dispatcher_ref, func, data, result_sender } = task_receiver.lock()
-						.recv().expect("Sender dropped, closing all instance.") {
-						let result = instance.call(
+			while let PendingTask { dispatcher_ref, func, data, result_sender } = task_receiver.lock()
+				.recv().expect("Sender dropped, closing all instance.") {
+				let result = with_externalities_safe(
+					&mut async_ext,
+					|| {
+						instance.call(
 							InvokeMethod::TableWithWrapper { dispatcher_ref, func },
 							&data[..],
-						);
-						match result {
-							Ok(output) => {
-								let _ = result_sender.send(Some(output));
-							},
-							Err(error) => {
-								log::error!("Call error in spawned task: {:?}", error);
-								let _ = result_sender.send(None);
-							},
-						}
-					}
+						)
+					},
+				);
+				match result {
+					Ok(Ok(output)) => {
+						let _ = result_sender.send(Some(output));
+					},
+					Ok(Err(error)) => {
+						log::error!("Call error in spawned task: {:?}", error);
+						let _ = result_sender.send(None);
+					},
+					Err(error) => {
+						log::error!("Panic in spawned task: {:?}", error);
+						let _ = result_sender.send(None);
+					},
 				}
-			);
+			}
 
 			tasks.lock().finished();
 		}));
