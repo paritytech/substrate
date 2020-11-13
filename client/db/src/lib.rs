@@ -868,9 +868,7 @@ impl<Block: BlockT> Backend<Block> {
 		let is_archive_pruning = config.pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let meta = blockchain.meta.clone();
-		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(
-			format!("State database error: {:?}", e)
-		);
+		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e);
 		let state_db: StateDb<_, _> = StateDb::new(
 			config.pruning.clone(),
 			!config.source.supports_ref_counting(),
@@ -1059,7 +1057,7 @@ impl<Block: BlockT> Backend<Block> {
 
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash)
-				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
+				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
 			apply_state_commit(transaction, commit);
 		};
 
@@ -1195,9 +1193,7 @@ impl<Block: BlockT> Backend<Block> {
 					number_u64,
 					&pending_block.header.parent_hash(),
 					changeset,
-				).map_err(|e: sc_state_db::Error<io::Error>|
-					sp_blockchain::Error::from(format!("State database error: {:?}", e))
-				)?;
+				).map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
 				apply_state_commit(&mut transaction, commit);
 
 				// Check if need to finalize. Genesis is always finalized instantly.
@@ -1352,7 +1348,7 @@ impl<Block: BlockT> Backend<Block> {
 			transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash)
-				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
+				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
 			apply_state_commit(transaction, commit);
 
 			if !f_num.is_zero() {

@@ -54,6 +54,9 @@ pub enum Error {
 	#[error("Prometheus metrics error")]
 	Prometheus(#[from] prometheus_endpoint::PrometheusError),
 
+	#[error("Application")]
+	Application(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+
 	#[error("Other: {0}")]
 	Other(String),
 }

@@ -79,13 +79,13 @@ impl<TBl, TCl> SyncStateRpcHandler<TBl, TCl>
 	fn build_sync_state(&self) -> Result<sc_chain_spec::LightSyncState<TBl>, sp_blockchain::Error> {
 		let finalized_hash = self.client.info().finalized_hash;
 		let finalized_header = self.client.header(BlockId::Hash(finalized_hash))?
-			.ok_or_else(|| sp_blockchain::Error::MissingHashInHeader(finalized_hash.to_string()))?;
+			.ok_or_else(|| sp_blockchain::Error::MissingHeader(finalized_hash.to_string()))?;
 
 		let finalized_block_weight = sc_consensus_babe::aux_schema::load_block_weight(
 				&*self.client,
 				finalized_hash,
 			)?
-			.ok_or_else(|| sp_blockchain::Error::MissingBlockWeightInHeader(finalized_hash.to_string()))?;
+			.ok_or_else(|| sp_blockchain::Error::LoadingBlockWeightFailed(finalized_hash.to_string()))?;
 
 		Ok(sc_chain_spec::LightSyncState {
 			finalized_block_header: finalized_header,
