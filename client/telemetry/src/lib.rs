@@ -40,14 +40,15 @@
 //! ```no_run
 //! use futures::prelude::*;
 //!
-//! let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
-//! 	endpoints: sc_telemetry::TelemetryEndpoints::new(vec![
+//! let (telemetry, _sender) = sc_telemetry::Telemetry::new(
+//! 	sc_telemetry::TelemetryEndpoints::new(vec![
 //! 		// The `0` is the maximum verbosity level of messages to send to this endpoint.
 //! 		("wss://example.com".into(), 0)
 //! 	]).expect("Invalid URL or multiaddr provided"),
 //! 	// Can be used to pass an external implementation of WebSockets.
-//! 	wasm_external_transport: None,
-//! });
+//! 	None,
+//! 	None,
+//! );
 //!
 //! // The `telemetry` object implements `Stream` and must be processed.
 //! std::thread::spawn(move || {

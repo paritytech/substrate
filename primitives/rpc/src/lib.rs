@@ -27,8 +27,9 @@ pub mod list;
 pub(crate) fn assert_deser<T>(s: &str, expected: T) where
 	T: std::fmt::Debug + serde::ser::Serialize + serde::de::DeserializeOwned + PartialEq
 {
+	let val: serde_json::Value = serde_json::from_str(s).unwrap();
 	assert_eq!(
-		serde_json::from_str::<T>(s).unwrap(),
+		T::deserialize(val).unwrap(),
 		expected
 	);
 	assert_eq!(
