@@ -94,7 +94,8 @@ pub struct NetworkParams {
 
 	/// Enable peer discovery on local networks.
 	///
-	/// By default this option is true for `--dev` and false otherwise.
+	/// By default this option is `true` for `--dev` or when the chain type is `Local`/`Development`
+	/// and false otherwise.
 	#[structopt(long)]
 	pub discover_local: bool,
 
