@@ -207,10 +207,10 @@ enum PeerState {
 		connections: SmallVec<[(ConnectionId, ConnectionState); crate::MAX_CONNECTIONS_PER_PEER]>,
 	},
 
-	/// We are connected to this peer. We have received an `OpenDesired` from one of the handlers
-	/// and forwarded that request to the peerset. The connection handlers are waiting for a
-	/// response, i.e. to be opened or closed based on whether the peerset accepts or rejects the
-	/// peer.
+	/// We are connected to this peer. We have received an `OpenDesiredByRemote` from one of the
+	/// handlers and forwarded that request to the peerset. The connection handlers are waiting for
+	/// a response, i.e. to be opened or closed based on whether the peerset accepts or rejects
+	/// the peer.
 	Incoming {
 		/// If `Some`, any dial attempts to this peer are delayed until the given `Instant`.
 		backoff_until: Option<Instant>,
@@ -283,9 +283,9 @@ enum ConnectionState {
 	/// followed with a `CloseResult` message are expected.
 	OpeningThenClosing,
 
-	/// Connection is in the `Closed` state, but a [`NotifsHandlerOut::OpenDesired`] message has
-	/// been received, meaning that the remote wants to open a substream.
-	OpenDesired,
+	/// Connection is in the `Closed` state, but a [`NotifsHandlerOut::OpenDesiredByRemote`]
+	/// message has been received, meaning that the remote wants to open a substream.
+	OpenDesiredByRemote,
 
 	/// Connection is in the `Open` state.
 	///
@@ -555,7 +555,7 @@ impl GenericProto {
 				inc.alive = false;
 
 				for (connec_id, connec_state) in connections.iter_mut()
-					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesired))
+					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote))
 				{
 					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close", peer_id, *connec_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
@@ -573,7 +573,7 @@ impl GenericProto {
 					(None, None) => None,
 				};
 
-				debug_assert!(!connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesired)));
+				debug_assert!(!connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote)));
 				*entry.into_mut() = PeerState::Disabled {
 					connections,
 					backoff_until
@@ -805,9 +805,9 @@ impl GenericProto {
 						incoming for incoming peer")
 				}
 
-				debug_assert!(connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesired)));
+				debug_assert!(connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote)));
 				for (connec_id, connec_state) in connections.iter_mut()
-					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesired))
+					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote))
 				{
 					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open", occ_entry.key(), *connec_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
@@ -988,9 +988,9 @@ impl GenericProto {
 				debug!(target: "sub-libp2p", "PSM => Accept({:?}, {:?}): Enabling connections.",
 					index, incoming.peer_id);
 
-				debug_assert!(connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesired)));
+				debug_assert!(connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote)));
 				for (connec_id, connec_state) in connections.iter_mut()
-					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesired))
+					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote))
 				{
 					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open", incoming.peer_id, *connec_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
@@ -1043,9 +1043,9 @@ impl GenericProto {
 				debug!(target: "sub-libp2p", "PSM => Reject({:?}, {:?}): Rejecting connections.",
 					index, incoming.peer_id);
 
-				debug_assert!(connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesired)));
+				debug_assert!(connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote)));
 				for (connec_id, connec_state) in connections.iter_mut()
-					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesired))
+					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote))
 				{
 					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close", incoming.peer_id, connec_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
@@ -1218,11 +1218,11 @@ impl NetworkBehaviour for GenericProto {
 			PeerState::Incoming { mut connections, backoff_until } => {
 				debug!(
 					target: "sub-libp2p",
-					"Libp2p => Disconnected({}, {:?}): OpenDesired.",
+					"Libp2p => Disconnected({}, {:?}): OpenDesiredByRemote.",
 					peer_id, *conn
 				);
 
-				debug_assert!(connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesired)));
+				debug_assert!(connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote)));
 
 				if let Some(pos) = connections.iter().position(|(c, _)| *c == *conn) {
 					connections.remove(pos);
@@ -1232,9 +1232,11 @@ impl NetworkBehaviour for GenericProto {
 						"inject_connection_closed: State mismatch in the custom protos handler");
 				}
 
-				let no_desired_left = !connections.iter().any(|(_, s)| matches!(s, ConnectionState::OpenDesired));
+				let no_desired_left = !connections.iter().any(|(_, s)| {
+					matches!(s, ConnectionState::OpenDesiredByRemote)
+				});
 
-				// If no connection is `OpenDesired` anymore, clean up the peerset incoming
+				// If no connection is `OpenDesiredByRemote` anymore, clean up the peerset incoming
 				// request.
 				if no_desired_left {
 					// In the incoming state, we don't report "Dropped". Instead we will just
@@ -1275,7 +1277,7 @@ impl NetworkBehaviour for GenericProto {
 					}
 
 				} else if no_desired_left {
-					// If no connection is `OpenDesired` anymore, switch to `Disabled`.
+					// If no connection is `OpenDesiredByRemote` anymore, switch to `Disabled`.
 					*entry.get_mut() = PeerState::Disabled { connections, backoff_until };
 				} else {
 					*entry.get_mut() = PeerState::Incoming { connections, backoff_until };
@@ -1455,15 +1457,15 @@ impl NetworkBehaviour for GenericProto {
 		event: NotifsHandlerOut,
 	) {
 		match event {
-			NotifsHandlerOut::OpenDesired => {
+			NotifsHandlerOut::OpenDesiredByRemote => {
 				debug!(target: "sub-libp2p",
-					"Handler({:?}, {:?}]) => OpenDesired",
+					"Handler({:?}, {:?}]) => OpenDesiredByRemote",
 					source, connection);
 
 				let mut entry = if let Entry::Occupied(entry) = self.peers.entry(source.clone()) {
 					entry
 				} else {
-					error!(target: "sub-libp2p", "OpenDesired: State mismatch in the custom protos handler");
+					error!(target: "sub-libp2p", "OpenDesiredByRemote: State mismatch in the custom protos handler");
 					debug_assert!(false);
 					return
 				};
@@ -1472,13 +1474,13 @@ impl NetworkBehaviour for GenericProto {
 					// Incoming => Incoming
 					PeerState::Incoming { mut connections, backoff_until } => {
 						debug_assert!(connections.iter().any(|(_, s)|
-							matches!(s, ConnectionState::OpenDesired)));
+							matches!(s, ConnectionState::OpenDesiredByRemote)));
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, _)| *c == connection) {
 							if let ConnectionState::Closed = *connec_state {
-								*connec_state = ConnectionState::OpenDesired;
+								*connec_state = ConnectionState::OpenDesiredByRemote;
 							} else {
 								// Connections in `OpeningThenClosing` state are in a Closed phase,
-								// and as such can emit `OpenDesired` messages.
+								// and as such can emit `OpenDesiredByRemote` messages.
 								// Since an `Open` and a `Close` messages have already been sent,
 								// there is nothing much that can be done about this anyway.
 								debug_assert!(matches!(
@@ -1489,7 +1491,7 @@ impl NetworkBehaviour for GenericProto {
 						} else {
 							error!(
 								target: "sub-libp2p",
-								"OpenDesired: State mismatch in the custom protos handler"
+								"OpenDesiredByRemote: State mismatch in the custom protos handler"
 							);
 							debug_assert!(false);
 						}
@@ -1512,18 +1514,18 @@ impl NetworkBehaviour for GenericProto {
 								*connec_state = ConnectionState::Opening;
 							} else {
 								// Connections in `OpeningThenClosing` and `Opening` are in a Closed
-								// phase, and as such can emit `OpenDesired` messages.
+								// phase, and as such can emit `OpenDesiredByRemote` messages.
 								// Since an `Open` message haS already been sent, there is nothing
 								// more to do.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpenDesired | ConnectionState::Opening
+									ConnectionState::OpenDesiredByRemote | ConnectionState::Opening
 								));
 							}
 						} else {
 							error!(
 								target: "sub-libp2p",
-								"OpenDesired: State mismatch in the custom protos handler"
+								"OpenDesiredByRemote: State mismatch in the custom protos handler"
 							);
 							debug_assert!(false);
 						}
@@ -1535,7 +1537,7 @@ impl NetworkBehaviour for GenericProto {
 					PeerState::Disabled { mut connections, backoff_until } => {
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, _)| *c == connection) {
 							if let ConnectionState::Closed = *connec_state {
-								*connec_state = ConnectionState::OpenDesired;
+								*connec_state = ConnectionState::OpenDesiredByRemote;
 
 								let incoming_id = self.next_incoming_index;
 								self.next_incoming_index.0 += 1;
@@ -1553,7 +1555,7 @@ impl NetworkBehaviour for GenericProto {
 
 							} else {
 								// Connections in `OpeningThenClosing` are in a Closed phase, and
-								// as such can emit `OpenDesired` messages.
+								// as such can emit `OpenDesiredByRemote` messages.
 								// We ignore them.
 								debug_assert!(matches!(
 									connec_state,
@@ -1563,7 +1565,7 @@ impl NetworkBehaviour for GenericProto {
 						} else {
 							error!(
 								target: "sub-libp2p",
-								"OpenDesired: State mismatch in the custom protos handler"
+								"OpenDesiredByRemote: State mismatch in the custom protos handler"
 							);
 							debug_assert!(false);
 						}
@@ -1573,7 +1575,7 @@ impl NetworkBehaviour for GenericProto {
 					PeerState::DisabledPendingEnable { mut connections, timer, timer_deadline } => {
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, _)| *c == connection) {
 							if let ConnectionState::Closed = *connec_state {
-								*connec_state = ConnectionState::OpenDesired;
+								*connec_state = ConnectionState::OpenDesiredByRemote;
 
 								let incoming_id = self.next_incoming_index;
 								self.next_incoming_index.0 = match self.next_incoming_index.0.checked_add(1) {
@@ -1600,7 +1602,7 @@ impl NetworkBehaviour for GenericProto {
 
 							} else {
 								// Connections in `OpeningThenClosing` are in a Closed phase, and
-								// as such can emit `OpenDesired` messages.
+								// as such can emit `OpenDesiredByRemote` messages.
 								// We ignore them.
 								debug_assert!(matches!(
 									connec_state,
@@ -1615,7 +1617,7 @@ impl NetworkBehaviour for GenericProto {
 						} else {
 							error!(
 								target: "sub-libp2p",
-								"OpenDesired: State mismatch in the custom protos handler"
+								"OpenDesiredByRemote: State mismatch in the custom protos handler"
 							);
 							debug_assert!(false);
 						}
@@ -1623,7 +1625,7 @@ impl NetworkBehaviour for GenericProto {
 
 					state => {
 						error!(target: "sub-libp2p",
-							   "OpenDesired: Unexpected state in the custom protos handler: {:?}",
+							   "OpenDesiredByRemote: Unexpected state in the custom protos handler: {:?}",
 							   state);
 						debug_assert!(false);
 						return

@@ -32,7 +32,7 @@
 //! The [`NotifsHandler`] can spontaneously switch between these states:
 //!
 //! - "Closed substreams" to "Closed substreams but open desired". When that happens, a
-//! [`NotifsHandlerOut::OpenDesired`] is emitted.
+//! [`NotifsHandlerOut::OpenDesiredByRemote`] is emitted.
 //! - "Closed substreams but open desired" to "Closed substreams" (i.e. the remote has cancelled
 //! their request). When that happens, a [`NotifsHandlerOut::CloseDesired`] is emitted.
 //! - "Open substreams" to "Open substreams but close desired". When that happens, a
@@ -47,7 +47,7 @@
 //! state. When a [`NotifsHandlerOut::OpenResultErr`] or [`NotifsHandlerOut::CloseResult`] is
 //! emitted, the `NotifsHandler` is now (or remains) in the closed state.
 //!
-//! When a [`NotifsHandlerOut::OpenDesired`] is emitted, the user should always send back either a
+//! When a [`NotifsHandlerOut::OpenDesiredByRemote`] is emitted, the user should always send back either a
 //! [`NotifsHandlerIn::Open`] or a [`NotifsHandlerIn::Close`].If this isn't done, the remote will
 //! be left in a pending state.
 //!
@@ -166,7 +166,7 @@ enum State {
 		pending_opening: Vec<bool>,
 	},
 
-	/// Handler is in the "Closed" state. A [`NotifsHandlerOut::OpenDesired`] has been emitted.
+	/// Handler is in the "Closed" state. A [`NotifsHandlerOut::OpenDesiredByRemote`] has been emitted.
 	OpenDesiredByRemote {
 		/// Vec of the same length as [`NotifsHandler::in_protocols`]. For each protocol, contains
 		/// a substream opened by the remote and that hasn't been accepted/rejected yet.
@@ -324,7 +324,7 @@ pub enum NotifsHandlerOut {
 	/// [`NotifsHandlerIn::Open`] or [`NotifsHandlerIn::Close`] has been sent before and has not
 	/// yet been acknowledged by a matching [`NotifsHandlerOut`], then you don't need to a send
 	/// another [`NotifsHandlerIn`].
-	OpenDesired,
+	OpenDesiredByRemote,
 
 	/// The remote would like the substreams to be closed. Send a [`NotifsHandlerIn::Close`] in
 	/// order to close them. If a [`NotifsHandlerIn::Close`] has been sent before and has not yet
@@ -537,7 +537,7 @@ impl ProtocolsHandler for NotifsHandler {
 				match &mut self.state {
 					State::Closed { pending_opening } => {
 						self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
-							NotifsHandlerOut::OpenDesired
+							NotifsHandlerOut::OpenDesiredByRemote
 						));
 
 						let mut in_substreams = (0..self.in_protocols.len())
@@ -581,8 +581,8 @@ impl ProtocolsHandler for NotifsHandler {
 			// Received legacy substream.
 			EitherOutput::Second((substream, _handshake)) => {
 				// Note: while we awknowledge legacy substreams and handle incoming messages,
-				// it doesn't trigger any `OpenDesired` event as a way to simplify the logic of
-				// this code.
+				// it doesn't trigger any `OpenDesiredByRemote` event as a way to simplify the
+				// logic of this code.
 				// Since mid-2019, legacy substreams are supposed to be used at the same time as
 				// notifications substreams, and not in isolation. Nodes that open legacy
 				// substreams in isolation are considered deprecated.
@@ -847,8 +847,8 @@ impl ProtocolsHandler for NotifsHandler {
 		}
 
 		// Poll inbound substreams.
-		// Inbound substreams being closed is always tolerated, except for the `OpenDesired` state
-		// which might need to be switched back to `Closed`.
+		// Inbound substreams being closed is always tolerated, except for the
+		// `OpenDesiredByRemote` state which might need to be switched back to `Closed`.
 		match &mut self.state {
 			State::Closed { .. } => {}
 			State::Open { in_substreams, .. } => {
@@ -881,7 +881,7 @@ impl ProtocolsHandler for NotifsHandler {
 		}
 
 		// Since the previous block might have closed inbound substreams, make sure that we can
-		// stay in `OpenDesired` state.
+		// stay in `OpenDesiredByRemote` state.
 		if let State::OpenDesiredByRemote { in_substreams, pending_opening } = &mut self.state {
 			if !in_substreams.iter().any(|s| s.is_some()) {
 				self.state = State::Closed {
