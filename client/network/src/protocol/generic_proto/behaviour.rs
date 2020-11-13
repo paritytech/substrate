@@ -737,6 +737,10 @@ impl GenericProto {
 
 			// Disabled => Enabled
 			PeerState::Disabled { mut connections, backoff_until } => {
+				debug_assert!(!connections.iter().any(|(_, s)| {
+					matches!(s, ConnectionState::Open(_))
+				}));
+
 				// The first element of `closed` is chosen to open the notifications substream.
 				if let Some((connec_id, connec_state)) = connections.iter_mut()
 					.find(|(_, s)| matches!(s, ConnectionState::Closed))
