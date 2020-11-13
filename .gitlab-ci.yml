@@ -222,7 +222,7 @@ test-deterministic-wasm:
     # build runtime
     - cargo build --verbose --release -p node-runtime
     # make checksum
-    - sha256sum target/release/wbuild/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
+    - sha256sum target/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
     # clean up – FIXME: can we reuse some of the artifacts?
     - cargo clean
     # build again
