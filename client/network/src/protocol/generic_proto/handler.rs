@@ -22,7 +22,7 @@
 //!
 //! # Usage
 //!
-//! From an API perspective, the [`NotifsHandler`] is always in one of the following state:
+//! From an API perspective, the [`NotifsHandler`] is always in one of the following state (see [`State`]):
 //!
 //! - Closed substreams. This is the initial state.
 //! - Closed substreams, but remote desires them to be open.
@@ -412,7 +412,7 @@ impl NotificationsSink {
 
 		if result.is_err() {
 			// Cloning the `mpsc::Sender` guarantees the allocation of an extra spot in the
-			// buffer, and therefore that `try_send` will succeed.
+			// buffer, and therefore `try_send` will succeed.
 			let _result2 = lock.clone().try_send(NotificationsSinkMessage::ForceClose);
 			debug_assert!(_result2.map(|()| true).unwrap_or_else(|err| err.is_disconnected()));
 		}
@@ -583,7 +583,7 @@ impl ProtocolsHandler for NotifsHandler {
 				// Note: while we awknowledge legacy substreams and handle incoming messages,
 				// it doesn't trigger any `OpenDesired` event as a way to simplify the logic of
 				// this code.
-				// Since mid-2019, legacy substreams are supposed to used at the same time as
+				// Since mid-2019, legacy substreams are supposed to be used at the same time as
 				// notifications substreams, and not in isolation. Nodes that open legacy
 				// substreams in isolation are considered deprecated.
 				if self.legacy_substreams.len() <= 4 {

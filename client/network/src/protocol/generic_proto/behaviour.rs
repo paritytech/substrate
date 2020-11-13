@@ -750,7 +750,6 @@ impl GenericProto {
 					});
 					*connec_state = ConnectionState::Opening;
 					*occ_entry.into_mut() = PeerState::Enabled { connections };
-
 				} else {
 					// If no connection is available, switch to `DisabledPendingEnable` in order
 					// to try again later.
@@ -1273,7 +1272,6 @@ impl NetworkBehaviour for GenericProto {
 				} else if no_desired_left {
 					// If no connection is `OpenDesired` anymore, switch to `Disabled`.
 					*entry.get_mut() = PeerState::Disabled { connections, banned_until };
-
 				} else {
 					*entry.get_mut() = PeerState::Incoming { connections, banned_until };
 				}
@@ -1698,7 +1696,7 @@ impl NetworkBehaviour for GenericProto {
 							}
 
 						} else {
-							// List of open connections wasn't empty before but not it is.
+							// List of open connections wasn't empty before but now it is.
 							if !connections.iter().any(|(_, s)| matches!(s, ConnectionState::Opening)) {
 								debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", source);
 								self.peerset.dropped(source.clone());
@@ -1749,9 +1747,9 @@ impl NetworkBehaviour for GenericProto {
 						{
 							*connec_state = ConnectionState::Closed;
 						} else {
-							debug_assert!(false);
 							error!(target: "sub-libp2p",
 								"CloseResult: State mismatch in the custom protos handler");
+							debug_assert!(false);
 						}
 					},
 
@@ -1806,9 +1804,9 @@ impl NetworkBehaviour for GenericProto {
 						{
 							*connec_state = ConnectionState::Closing;
 						} else {
-							debug_assert!(false);
 							error!(target: "sub-libp2p",
 								"OpenResultOk State mismatch in the custom protos handler");
+							debug_assert!(false);
 						}
 					}
 
@@ -1873,9 +1871,9 @@ impl NetworkBehaviour for GenericProto {
 						{
 							*connec_state = ConnectionState::Closing;
 						} else {
-							debug_assert!(false);
 							error!(target: "sub-libp2p",
 								"OpenResultErr: State mismatch in the custom protos handler");
+							debug_assert!(false);
 						}
 
 						*entry.into_mut() = PeerState::Disabled { connections, banned_until };
@@ -1886,9 +1884,9 @@ impl NetworkBehaviour for GenericProto {
 						{
 							*connec_state = ConnectionState::Closing;
 						} else {
-							debug_assert!(false);
 							error!(target: "sub-libp2p",
 								"OpenResultErr: State mismatch in the custom protos handler");
+							debug_assert!(false);
 						}
 
 						*entry.into_mut() = PeerState::DisabledPendingEnable {
@@ -1919,7 +1917,7 @@ impl NetworkBehaviour for GenericProto {
 				} else {
 					trace!(
 						target: "sub-libp2p",
-						"Handler({:?}) => Post-close message",
+						"Handler({:?}) => Post-close message. Dropping message.",
 						source,
 					);
 				}
