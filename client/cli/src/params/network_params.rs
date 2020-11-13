@@ -21,7 +21,7 @@ use sc_network::{
 	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, TransportConfig},
 	multiaddr::Protocol,
 };
-use sc_service::{ChainSpec, config::{Multiaddr, MultiaddrWithPeerId}};
+use sc_service::{ChainSpec, ChainType, config::{Multiaddr, MultiaddrWithPeerId}};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -139,6 +139,13 @@ impl NetworkParams {
 		let mut boot_nodes = chain_spec.boot_nodes().to_vec();
 		boot_nodes.extend(self.bootnodes.clone());
 
+		let chain_type = chain_spec.chain_type();
+		// Activate if the user explicitly requested local discovery, `--dev` is given or the
+		// chain type is `Local`/`Development`
+		let allow_non_globals_in_dht = self.discover_local
+			|| is_dev
+			|| matches!(chain_type, ChainType::Local | ChainType::Development);
+
 		NetworkConfiguration {
 			boot_nodes,
 			net_config_path,
@@ -163,7 +170,7 @@ impl NetworkParams {
 				wasm_external_transport: None,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
-			allow_non_globals_in_dht: self.discover_local || is_dev,
+			allow_non_globals_in_dht,
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,
 		}
 	}
