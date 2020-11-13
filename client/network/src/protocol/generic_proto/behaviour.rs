@@ -1828,6 +1828,7 @@ impl NetworkBehaviour for GenericProto {
 					entry
 				} else {
 					error!(target: "sub-libp2p", "OpenResultErr: State mismatch in the custom protos handler");
+					debug_assert!(false);
 					return
 				};
 
@@ -1845,9 +1846,9 @@ impl NetworkBehaviour for GenericProto {
 						{
 							*connec_state = ConnectionState::Closing;
 						} else {
-							debug_assert!(false);
 							error!(target: "sub-libp2p",
 								"OpenResultErr: State mismatch in the custom protos handler");
+							debug_assert!(false);
 						}
 
 						if !connections.iter().any(|(_, s)|
