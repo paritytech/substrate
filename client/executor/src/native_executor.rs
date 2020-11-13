@@ -300,20 +300,78 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 /// Helper inner struct to implement `RuntimeSpawn` extension.
 pub struct RuntimeInstanceSpawn {
 	module: Arc<dyn WasmModule>,
-	tasks: parking_lot::Mutex<HashMap<u64, mpsc::Receiver<Vec<u8>>>>,
+	tasks: Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
 	counter: AtomicU64,
 	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
+	task_receiver: Arc<parking_lot::Mutex<mpsc::Receiver<PendingTask>>>,
+	task_sender: mpsc::Sender<PendingTask>,
 }
 
-impl RuntimeSpawn for RuntimeInstanceSpawn {
-	fn spawn_call(&self, dispatcher_ref: u32, func: u32, data: Vec<u8>) -> u64 {
-		let new_handle = self.counter.fetch_add(1, Ordering::Relaxed);
+/// Task info for this instance.
+/// Instance is local to a wasm call.
+pub struct RuntimeInstanceSpawnInfo {
+	tasks: HashMap<u64, RuningTask>,
+	// consider atomic instead (depending on usefullness
+	// of this struct
+	nb_runing: usize,
+	capacity: usize,
+}
 
-		let (sender, receiver) = mpsc::channel();
-		self.tasks.lock().insert(new_handle, receiver);
+struct RuningTask {
+	// TODO condvar?
+	result_receiver: mpsc::Receiver<Option<Vec<u8>>>,
+}
 
+struct PendingTask {
+	dispatcher_ref: u32,
+	data: Vec<u8>,
+	func: u32,
+	result_sender: mpsc::Sender<Option<Vec<u8>>>,
+}
+
+impl RuntimeInstanceSpawnInfo {
+	fn start(&mut self) -> bool {
+		if self.nb_runing < self.capacity {
+			self.nb_runing += 1;
+			true
+		} else {
+			false
+		}
+	}
+
+	fn finished(&mut self) {
+		self.nb_runing -= 1;
+	}
+}
+
+impl RuntimeInstanceSpawn {
+	fn remove(&self, handle: u64) -> mpsc::Receiver<Option<Vec<u8>>> {
+		self.tasks.lock().tasks.remove(&handle)
+			.expect("Existing handle use for join")
+			.result_receiver
+	}
+
+	fn insert(
+		&self,
+		handle: u64,
+		task: PendingTask,
+		result_receiver: mpsc::Receiver<Option<Vec<u8>>>,
+	) {
+		let mut spawn_new = false;
+		if self.tasks.lock().start() {
+			self.spawn_new();
+		}
+		self.tasks.lock().tasks.insert(handle, RuningTask {
+			result_receiver,
+		});
+		self.task_sender.send(task).expect("TODO mgmt");
+	}
+
+	fn spawn_new(&self) {
 		let module = self.module.clone();
 		let scheduler = self.scheduler.clone();
+		let task_receiver = self.task_receiver.clone();
+		let tasks = self.tasks.clone();
 		self.scheduler.spawn("executor-extra-runtime-instance", Box::pin(async move {
 			let module = AssertUnwindSafe(module);
 
@@ -326,7 +384,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 						e,
 					);
 
-					// This will drop sender and receiver end will panic
+					tasks.lock().finished();
 					return;
 				}
 			};
@@ -342,15 +400,14 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 						e,
 					);
 
-					// This will drop sender and receiver end will panic
+					tasks.lock().finished();
 					return;
 				}
 			};
 
-			let result = with_externalities_safe(
+			with_externalities_safe(
 				&mut async_ext,
 				move || {
-
 					// FIXME: Should be refactored to shared "instance factory".
 					// Instantiating wasm here every time is suboptimal at the moment, shared
 					// pool of instances should be used.
@@ -359,33 +416,48 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					let instance = module.new_instance()
 						.expect("Failed to create new instance from module");
 
-					instance.call(
-						InvokeMethod::TableWithWrapper { dispatcher_ref, func },
-						&data[..],
-					).expect("Failed to invoke instance.")
+					while let PendingTask { dispatcher_ref, func, data, result_sender } = task_receiver.lock()
+						.recv().expect("Sender dropped, closing all instance.") {
+						let result = instance.call(
+							InvokeMethod::TableWithWrapper { dispatcher_ref, func },
+							&data[..],
+						);
+						match result {
+							Ok(output) => {
+								let _ = result_sender.send(Some(output));
+							},
+							Err(error) => {
+								log::error!("Call error in spawned task: {:?}", error);
+								let _ = result_sender.send(None);
+							},
+						}
+					}
 				}
 			);
 
-			match result {
-				Ok(output) => {
-					let _ = sender.send(output);
-				},
-				Err(error) => {
-					// If execution is panicked, the `join` in the original runtime code will panic as well,
-					// since the sender is dropped without sending anything.
-					log::error!("Call error in spawned task: {:?}", error);
-				},
-			}
+			tasks.lock().finished();
 		}));
+	}
+}
 
+impl RuntimeSpawn for RuntimeInstanceSpawn {
+	fn spawn_call(&self, dispatcher_ref: u32, func: u32, data: Vec<u8>) -> u64 {
+		let new_handle = self.counter.fetch_add(1, Ordering::Relaxed);
+
+		let (result_sender, result_receiver) = mpsc::channel();
+		let task = PendingTask {dispatcher_ref, func, data, result_sender};
+		self.insert(new_handle, task, result_receiver);
 
 		new_handle
 	}
 
 	fn join(&self, handle: u64) -> Vec<u8> {
-		let receiver = self.tasks.lock().remove(&handle).expect("No task for the handle");
-		let output = receiver.recv().expect("Spawned task panicked for the handle");
-		output
+		let receiver = self.remove(handle);
+		if let Some(output) = receiver.recv().expect("Spawned task panicked for the handle") {
+			output
+		} else {
+			panic!("Spawned task panicked for the handle");
+		}
 	}
 }
 
