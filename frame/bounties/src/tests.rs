@@ -175,7 +175,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100), (1, 98), (2, 1)],
 	}.assimilate_storage(&mut t).unwrap();
-	//GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+	pallet_treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
 	t.into()
 }
 
