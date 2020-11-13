@@ -307,6 +307,7 @@ pub struct RuntimeInstanceSpawn {
 	task_receiver: Arc<parking_lot::Mutex<mpsc::Receiver<PendingTask>>>,
 	task_sender: mpsc::Sender<PendingTask>,
 	recursive_level: usize,
+	instance: Arc<parking_lot::Mutex<Option<Box<dyn WasmInstance>>>>,
 }
 
 /// Task info for this instance.
@@ -319,15 +320,20 @@ pub struct RuntimeInstanceSpawnInfo {
 	capacity: usize,
 }
 
-struct RuningTask {
+enum RuningTask {
 	// TODO condvar?
-	result_receiver: mpsc::Receiver<Option<Vec<u8>>>,
+	Task(mpsc::Receiver<Option<Vec<u8>>>),
+	Inline(Task),
 }
 
-struct PendingTask {
+struct Task {
 	dispatcher_ref: u32,
 	data: Vec<u8>,
 	func: u32,
+}
+
+struct PendingTask {
+	task: Task,
 	result_sender: mpsc::Sender<Option<Vec<u8>>>,
 }
 
@@ -386,13 +392,14 @@ impl RuntimeInstanceSpawn {
 			scheduler: self.scheduler.clone(),
 			task_receiver: self.task_receiver.clone(),
 			task_sender: self.task_sender.clone(),
+			instance: Arc::new(parking_lot::Mutex::new(None)),
 			recursive_level: self.recursive_level + 1,
 		}
 	}
-	fn remove(&self, handle: u64) -> mpsc::Receiver<Option<Vec<u8>>> {
+
+	fn remove(&self, handle: u64) -> RuningTask {
 		self.tasks.lock().tasks.remove(&handle)
 			.expect("Existing handle use for join")
-			.result_receiver
 	}
 
 	fn insert(
@@ -401,20 +408,22 @@ impl RuntimeInstanceSpawn {
 		task: PendingTask,
 		result_receiver: mpsc::Receiver<Option<Vec<u8>>>,
 	) {
-		let mut spawn_new = false;
-		match self.tasks.lock().start(self.recursive_level) {
+		let mut tasks = self.tasks.lock();
+		match tasks.start(self.recursive_level) {
 			Processing::SpawnNew => {
+				// warning self.tasks is locked when calling spawn_new
 				self.spawn_new();
 			},
 			Processing::Queue => (),
 			Processing::RunInline => {
-				unimplemented!("TODO store in tasks in insert and run on lock");
+				// TODO in this case a useless channel was opened.
+				tasks.tasks.insert(handle, RuningTask::Inline(task.task));
 				return;
 			},
 		}
-		self.tasks.lock().tasks.insert(handle, RuningTask {
+		tasks.tasks.insert(handle, RuningTask::Task (
 			result_receiver,
-		});
+		));
 		self.task_sender.send(task).expect("TODO mgmt");
 	}
 
@@ -472,7 +481,7 @@ impl RuntimeInstanceSpawn {
 					let instance = module.new_instance()
 						.expect("Failed to create new instance from module");
 
-					while let PendingTask { dispatcher_ref, func, data, result_sender } =
+					while let PendingTask { task: Task { dispatcher_ref, func, data }, result_sender } =
 						{ 
 							let task_receiver_locked = task_receiver.lock();
 							task_receiver_locked.recv()
@@ -505,19 +514,40 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		let new_handle = self.counter.fetch_add(1, Ordering::Relaxed);
 
 		let (result_sender, result_receiver) = mpsc::channel();
-		let task = PendingTask {dispatcher_ref, func, data, result_sender};
+		let task = PendingTask { task: Task { dispatcher_ref, func, data }, result_sender};
 		self.insert(new_handle, task, result_receiver);
 
 		new_handle
 	}
 
 	fn join(&self, handle: u64) -> Vec<u8> {
-		let receiver = self.remove(handle);
-		if let Some(output) = receiver.recv()
-			.expect("Spawned task panicked for the handle") {
-			output
-		} else {
-			panic!("Spawned task panicked for the handle");
+		match self.remove(handle) {
+			RuningTask::Task(receiver) => {
+				if let Some(output) = receiver.recv()
+					.expect("Spawned task panicked for the handle") {
+					output
+				} else {
+					panic!("Spawned task panicked for the handle");
+				}
+			},
+			RuningTask::Inline(Task { dispatcher_ref, func, data }) => {
+				let mut instance = self.instance.lock();
+				if instance.is_none() {
+					*instance = Some(self.module.new_instance()
+						.expect("Failed to create new instance from module"));
+				}
+				let result = instance.as_ref().expect("lazy init above").call(
+					InvokeMethod::TableWithWrapper { dispatcher_ref, func },
+					&data[..],
+				);
+				match result {
+					Ok(output) => output,
+					Err(error) => {
+						log::error!("Call error in spawned task: {:?}", error);
+						panic!("Spawned task panicked for the handle");
+					},
+				}
+			},
 		}
 	}
 
@@ -545,6 +575,7 @@ impl RuntimeInstanceSpawn {
 			tasks: Arc::new(parking_lot::Mutex::new(infos)),
 			task_receiver: Arc::new(parking_lot::Mutex::new(task_receiver)),
 			task_sender,
+			instance: Arc::new(parking_lot::Mutex::new(None)),
 			recursive_level: 0,
 		}
 	}
