@@ -167,7 +167,7 @@ enum State {
 	},
 
 	/// Handler is in the "Closed" state. A [`NotifsHandlerOut::OpenDesired`] has been emitted.
-	OpenDesired {
+	OpenDesiredByRemote {
 		/// Vec of the same length as [`NotifsHandler::in_protocols`]. For each protocol, contains
 		/// a substream opened by the remote and that hasn't been accepted/rejected yet.
 		///
@@ -193,8 +193,8 @@ enum State {
 		/// Vec of the same length as [`NotifsHandler::in_protocols`]. For each protocol, contains
 		/// a substream opened by the remote and that has been accepted.
 		///
-		/// Contrary to [`State::OpenDesired::in_substreams`], it is possible for this to contain
-		/// only `None`s.
+		/// Contrary to [`State::OpenDesiredByRemote::in_substreams`], it is possible for this to
+		/// contain only `None`s.
 		in_substreams: Vec<Option<NotificationsInSubstream<NegotiatedSubstream>>>,
 
 		/// Vec of the same length as [`NotifsHandler::out_protocols`]. For each protocol, contains
@@ -238,8 +238,8 @@ enum State {
 		/// Vec of the same length as [`NotifsHandler::in_protocols`]. For each protocol, contains
 		/// a substream opened by the remote and that has been accepted.
 		///
-		/// Contrary to [`State::OpenDesired::in_substreams`], it is possible for this to contain
-		/// only `None`s.
+		/// Contrary to [`State::OpenDesiredByRemote::in_substreams`], it is possible for this to
+		/// contain only `None`s.
 		in_substreams: Vec<Option<NotificationsInSubstream<NegotiatedSubstream>>>,
 
 		/// If true, at least one substream in [`State::Open::out_substreams`] has been closed or
@@ -544,12 +544,12 @@ impl ProtocolsHandler for NotifsHandler {
 							.map(|_| None)
 							.collect::<Vec<_>>();
 						in_substreams[num] = Some(proto);
-						self.state = State::OpenDesired {
+						self.state = State::OpenDesiredByRemote {
 							in_substreams,
 							pending_opening: mem::replace(pending_opening, Vec::new()),
 						};
 					},
-					State::OpenDesired { in_substreams, .. } => {
+					State::OpenDesiredByRemote { in_substreams, .. } => {
 						if in_substreams[num].is_some() {
 							// If a substream already exists, silently drop the new one.
 							// Note that we drop the substream, which will send an equivalent to a
@@ -600,7 +600,7 @@ impl ProtocolsHandler for NotifsHandler {
 	) {
 		match &mut self.state {
 			State::Closed { pending_opening } |
-			State::OpenDesired { pending_opening, .. } => {
+			State::OpenDesiredByRemote { pending_opening, .. } => {
 				debug_assert!(pending_opening[num]);
 				pending_opening[num] = false;
 			}
@@ -658,10 +658,10 @@ impl ProtocolsHandler for NotifsHandler {
 		match message {
 			NotifsHandlerIn::Open => {
 				match &mut self.state {
-					State::Closed { .. } | State::OpenDesired { .. } => {
+					State::Closed { .. } | State::OpenDesiredByRemote { .. } => {
 						let (pending_opening, mut in_substreams) = match &mut self.state {
 							State::Closed { pending_opening } => (pending_opening, None),
-							State::OpenDesired { pending_opening, in_substreams } =>
+							State::OpenDesiredByRemote { pending_opening, in_substreams } =>
 								(pending_opening, Some(mem::replace(in_substreams, Vec::new()))),
 							_ => unreachable!()
 						};
@@ -736,7 +736,7 @@ impl ProtocolsHandler for NotifsHandler {
 							NotifsHandlerOut::OpenResultErr
 						));
 					},
-					State::OpenDesired { pending_opening, .. } => {
+					State::OpenDesiredByRemote { pending_opening, .. } => {
 						self.state = State::Closed {
 							pending_opening: mem::replace(pending_opening, Vec::new()),
 						};
@@ -757,7 +757,7 @@ impl ProtocolsHandler for NotifsHandler {
 		_: ProtocolsHandlerUpgrErr<NotificationsHandshakeError>
 	) {
 		match &mut self.state {
-			State::Closed { pending_opening } | State::OpenDesired { pending_opening, .. } => {
+			State::Closed { pending_opening } | State::OpenDesiredByRemote { pending_opening, .. } => {
 				debug_assert!(pending_opening[num]);
 				pending_opening[num] = false;
 			}
@@ -831,7 +831,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 		match self.state {
 			State::Closed { .. } => KeepAlive::Until(self.when_connection_open + INITIAL_KEEPALIVE_TIME),
-			State::OpenDesired { .. } | State::Opening { .. } | State::Open { .. } =>
+			State::OpenDesiredByRemote { .. } | State::Opening { .. } | State::Open { .. } =>
 				KeepAlive::Yes,
 		}
 	}
@@ -868,7 +868,7 @@ impl ProtocolsHandler for NotifsHandler {
 				}
 			}
 
-			State::OpenDesired { in_substreams, .. } |
+			State::OpenDesiredByRemote { in_substreams, .. } |
 			State::Opening { in_substreams, .. } => {
 				for substream in in_substreams {
 					match substream.as_mut().map(|s| NotificationsInSubstream::poll_process(Pin::new(s), cx)) {
@@ -882,7 +882,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 		// Since the previous block might have closed inbound substreams, make sure that we can
 		// stay in `OpenDesired` state.
-		if let State::OpenDesired { in_substreams, pending_opening } = &mut self.state {
+		if let State::OpenDesiredByRemote { in_substreams, pending_opening } = &mut self.state {
 			if !in_substreams.iter().any(|s| s.is_some()) {
 				self.state = State::Closed {
 					pending_opening: mem::replace(pending_opening, Vec::new()),
@@ -939,7 +939,7 @@ impl ProtocolsHandler for NotifsHandler {
 			}
 
 			State::Closed { .. } |
-			State::OpenDesired { .. } => {}
+			State::OpenDesiredByRemote { .. } => {}
 		}
 
 		if let State::Open { notifications_sink_rx, out_substreams, .. } = &mut self.state {
