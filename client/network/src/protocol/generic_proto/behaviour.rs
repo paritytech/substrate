@@ -1534,13 +1534,7 @@ impl NetworkBehaviour for GenericProto {
 								*connec_state = ConnectionState::OpenDesired;
 
 								let incoming_id = self.next_incoming_index;
-								self.next_incoming_index.0 = match self.next_incoming_index.0.checked_add(1) {
-									Some(v) => v,
-									None => {
-										error!(target: "sub-libp2p", "Overflow in next_incoming_index");
-										return
-									}
-								};
+								self.next_incoming_index.0 += 1;
 
 								debug!(target: "sub-libp2p", "PSM <= Incoming({}, {:?}).",
 									source, incoming_id);
