@@ -280,7 +280,7 @@ enum ConnectionState {
 	/// Connection is in the `Closed` state but a [`NotifsHandlerIn::Open`] message then a
 	/// [`NotifsHandlerIn::Close`] message has been sent. An `OpenResultOk`/`OpenResultErr` message
 	/// followed with a `CloseResult` message are expected.
-	OpeningAndClosing,
+	OpeningThenClosing,
 
 	/// Connection is in the `Closed` state, but a [`NotifsHandlerOut::OpenDesired`] message has
 	/// been received, meaning that the remote wants to open a substream.
@@ -526,7 +526,7 @@ impl GenericProto {
 						handler: NotifyHandler::One(*connec_id),
 						event: NotifsHandlerIn::Close,
 					});
-					*connec_state = ConnectionState::OpeningAndClosing;
+					*connec_state = ConnectionState::OpeningThenClosing;
 				}
 
 				debug_assert!(!connections.iter().any(|(_, s)| matches!(s, ConnectionState::Open(_))));
@@ -754,7 +754,7 @@ impl GenericProto {
 					// If no connection is available, switch to `DisabledPendingEnable` in order
 					// to try again later.
 					debug_assert!(connections.iter().any(|(_, s)| {
-						matches!(s, ConnectionState::OpeningAndClosing | ConnectionState::Closing)
+						matches!(s, ConnectionState::OpeningThenClosing | ConnectionState::Closing)
 					}));
 					debug!(
 						target: "sub-libp2p",
@@ -898,7 +898,7 @@ impl GenericProto {
 						handler: NotifyHandler::One(*connec_id),
 						event: NotifsHandlerIn::Close,
 					});
-					*connec_state = ConnectionState::OpeningAndClosing;
+					*connec_state = ConnectionState::OpeningThenClosing;
 				}
 
 				for (connec_id, connec_state) in connections.iter_mut()
@@ -1472,13 +1472,13 @@ impl NetworkBehaviour for GenericProto {
 							if let ConnectionState::Closed = *connec_state {
 								*connec_state = ConnectionState::OpenDesired;
 							} else {
-								// Connections in `OpeningAndClosing` state are in a Closed phase,
+								// Connections in `OpeningThenClosing` state are in a Closed phase,
 								// and as such can emit `OpenDesired` messages.
 								// Since an `Open` and a `Close` messages have already been sent,
 								// there is nothing much that can be done about this anyway.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpeningAndClosing
+									ConnectionState::OpeningThenClosing
 								));
 							}
 						} else {
@@ -1506,7 +1506,7 @@ impl NetworkBehaviour for GenericProto {
 								});
 								*connec_state = ConnectionState::Opening;
 							} else {
-								// Connections in `OpeningAndClosing` and `Opening` are in a Closed
+								// Connections in `OpeningThenClosing` and `Opening` are in a Closed
 								// phase, and as such can emit `OpenDesired` messages.
 								// Since an `Open` message haS already been sent, there is nothing
 								// more to do.
@@ -1553,12 +1553,12 @@ impl NetworkBehaviour for GenericProto {
 								*entry.into_mut() = PeerState::Incoming { connections, backoff_until };
 
 							} else {
-								// Connections in `OpeningAndClosing` are in a Closed phase, and
+								// Connections in `OpeningThenClosing` are in a Closed phase, and
 								// as such can emit `OpenDesired` messages.
 								// We ignore them.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpeningAndClosing
+									ConnectionState::OpeningThenClosing
 								));
 							}
 						} else {
@@ -1600,12 +1600,12 @@ impl NetworkBehaviour for GenericProto {
 								};
 
 							} else {
-								// Connections in `OpeningAndClosing` are in a Closed phase, and
+								// Connections in `OpeningThenClosing` are in a Closed phase, and
 								// as such can emit `OpenDesired` messages.
 								// We ignore them.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpeningAndClosing
+									ConnectionState::OpeningThenClosing
 								));
 								*entry.into_mut() = PeerState::DisabledPendingEnable {
 									connections,
@@ -1787,7 +1787,7 @@ impl NetworkBehaviour for GenericProto {
 							}
 							*connec_state = ConnectionState::Open(notifications_sink);
 						} else if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
-							*c == connection && matches!(s, ConnectionState::OpeningAndClosing))
+							*c == connection && matches!(s, ConnectionState::OpeningThenClosing))
 						{
 							*connec_state = ConnectionState::Closing;
 						} else {
@@ -1800,7 +1800,7 @@ impl NetworkBehaviour for GenericProto {
 					Some(PeerState::DisabledPendingEnable { connections, .. }) |
 					Some(PeerState::Disabled { connections, .. }) => {
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
-							*c == connection && matches!(s, ConnectionState::OpeningAndClosing))
+							*c == connection && matches!(s, ConnectionState::OpeningThenClosing))
 						{
 							*connec_state = ConnectionState::Closing;
 						} else {
@@ -1842,7 +1842,7 @@ impl NetworkBehaviour for GenericProto {
 						{
 							*connec_state = ConnectionState::Closed;
 						} else if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
-							*c == connection && matches!(s, ConnectionState::OpeningAndClosing))
+							*c == connection && matches!(s, ConnectionState::OpeningThenClosing))
 						{
 							*connec_state = ConnectionState::Closing;
 						} else {
@@ -1867,7 +1867,7 @@ impl NetworkBehaviour for GenericProto {
 					},
 					PeerState::Disabled { mut connections, backoff_until } => {
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
-							*c == connection && matches!(s, ConnectionState::OpeningAndClosing))
+							*c == connection && matches!(s, ConnectionState::OpeningThenClosing))
 						{
 							*connec_state = ConnectionState::Closing;
 						} else {
@@ -1880,7 +1880,7 @@ impl NetworkBehaviour for GenericProto {
 					},
 					PeerState::DisabledPendingEnable { mut connections, timer, timer_deadline } => {
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
-							*c == connection && matches!(s, ConnectionState::OpeningAndClosing))
+							*c == connection && matches!(s, ConnectionState::OpeningThenClosing))
 						{
 							*connec_state = ConnectionState::Closing;
 						} else {
