@@ -53,13 +53,14 @@ use wasm_timer::Instant;
 ///
 /// In the state machine below, each `PeerId` is attributed one of these states:
 ///
-/// - `Requested`: No open connection, but requested by the peerset. Currently dialing.
-/// - `Disabled`: Has open TCP connection(s) unbeknownst to the peerset. No substream is open.
-/// - `Enabled`: Has open TCP connection(s), acknowledged by the peerset.
+/// - [`PeerState::Requested`]: No open connection, but requested by the peerset. Currently dialing.
+/// - [`PeerState::Disabled`]: Has open TCP connection(s) unbeknownst to the peerset. No substream
+///   is open.
+/// - [`PeerState::Enabled`]: Has open TCP connection(s), acknowledged by the peerset.
 ///   - Notifications substreams are open on at least one connection, and external
 ///     API has been notified.
 ///   - Notifications substreams aren't open.
-/// - `Incoming`: Has open TCP connection(s) and remote would like to open substreams.
+/// - [`PeerState::Incoming`]: Has open TCP connection(s) and remote would like to open substreams.
 ///   Peerset has been asked to attribute an inbound slot.
 ///
 /// In addition to these states, there also exists a "banning" system. If we fail to dial a peer,
