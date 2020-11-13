@@ -723,6 +723,22 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn inline_runtime_call_should_work(wasm_method: WasmExecutionMethod) {
+
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	call_in_wasm(
+		"test_inline",
+		&[],
+		wasm_method,
+		&mut ext,
+	).unwrap();
+}
+
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn spawning_runtime_instance_should_work(wasm_method: WasmExecutionMethod) {
 
 	let mut ext = TestExternalities::default();

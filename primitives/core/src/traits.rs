@@ -197,6 +197,21 @@ pub trait RuntimeSpawn: Send {
 
 	/// Join the result of previously created runtime instance invocation.
 	fn join(&self, handle: u64) -> Vec<u8>;
+
+	/// Stop the previous created runtime instance invocation.
+	/// Note that kill can be more expensive than `join`, as
+	/// it involve spawning again the worker, when join just
+	/// release it.
+	fn kill(&self, handle: u64);
+
+	/// Change the number of runtime runing in the pool.
+	/// Note that this should only increase capacity (default value
+	/// being 0).
+	/// Also notice that this capacity increase may be noops when the
+	/// client limit the number of concurrent threads, but this is
+	/// not consensus critical, just a way to indicate a cost for
+	/// the runtime.
+	fn set_capacity(&self, capacity: u32);
 }
 
 #[cfg(feature = "std")]

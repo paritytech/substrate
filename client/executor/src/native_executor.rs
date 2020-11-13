@@ -298,13 +298,15 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 }
 
 /// Helper inner struct to implement `RuntimeSpawn` extension.
+/// TODO consider Arc outside of the spawn: to many here
 pub struct RuntimeInstanceSpawn {
 	module: Arc<dyn WasmModule>,
 	tasks: Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
-	counter: AtomicU64,
+	counter: Arc<AtomicU64>,
 	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 	task_receiver: Arc<parking_lot::Mutex<mpsc::Receiver<PendingTask>>>,
 	task_sender: mpsc::Sender<PendingTask>,
+	recursive_level: usize,
 }
 
 /// Task info for this instance.
@@ -330,21 +332,63 @@ struct PendingTask {
 }
 
 impl RuntimeInstanceSpawnInfo {
-	fn start(&mut self) -> bool {
+	fn new(
+		capacity: usize,
+	) -> Self {
+		RuntimeInstanceSpawnInfo {
+			tasks: HashMap::new(),
+			nb_runing: 0,
+			capacity,
+		}
+	}
+	
+	fn start(&mut self, depth: usize) -> Processing {
 		if self.nb_runing < self.capacity {
 			self.nb_runing += 1;
-			true
+			Processing::SpawnNew
 		} else {
-			false
+			// Note that this does not prevent
+			// from deadlocking in case there
+			// is multiple recursive call in paralell.
+			// TODO also consider model where recursive
+			// call must be declare first hand (depth replaced
+			// by recursive declared) or it run inline.
+			if self.capacity > depth {
+				Processing::Queue
+			} else {
+				Processing::RunInline
+			}
 		}
 	}
 
 	fn finished(&mut self) {
 		self.nb_runing -= 1;
 	}
-}
 
+	fn set_capacity(&mut self, capacity: u32) {
+		let capacity: usize = capacity as usize;
+		if capacity > self.capacity {
+			self.capacity = capacity;
+		}
+	}
+}
+enum Processing {
+	SpawnNew,
+	RunInline,
+	Queue,
+}
 impl RuntimeInstanceSpawn {
+	fn rec_clone(&self) -> Self {
+		RuntimeInstanceSpawn {
+			module: self.module.clone(),
+			tasks: self.tasks.clone(),
+			counter: self.counter.clone(),
+			scheduler: self.scheduler.clone(),
+			task_receiver: self.task_receiver.clone(),
+			task_sender: self.task_sender.clone(),
+			recursive_level: self.recursive_level + 1,
+		}
+	}
 	fn remove(&self, handle: u64) -> mpsc::Receiver<Option<Vec<u8>>> {
 		self.tasks.lock().tasks.remove(&handle)
 			.expect("Existing handle use for join")
@@ -358,8 +402,15 @@ impl RuntimeInstanceSpawn {
 		result_receiver: mpsc::Receiver<Option<Vec<u8>>>,
 	) {
 		let mut spawn_new = false;
-		if self.tasks.lock().start() {
-			self.spawn_new();
+		match self.tasks.lock().start(self.recursive_level) {
+			Processing::SpawnNew => {
+				self.spawn_new();
+			},
+			Processing::Queue => (),
+			Processing::RunInline => {
+				unimplemented!("TODO store in tasks in insert and run on lock");
+				return;
+			},
 		}
 		self.tasks.lock().tasks.insert(handle, RuningTask {
 			result_receiver,
@@ -372,6 +423,7 @@ impl RuntimeInstanceSpawn {
 		let scheduler = self.scheduler.clone();
 		let task_receiver = self.task_receiver.clone();
 		let tasks = self.tasks.clone();
+		let runtime_spawn = self.rec_clone();
 		self.scheduler.spawn("executor-extra-runtime-instance", Box::pin(async move {
 			let module = AssertUnwindSafe(module);
 
@@ -390,7 +442,7 @@ impl RuntimeInstanceSpawn {
 			};
 
 			let mut async_ext = match async_ext.with_runtime_spawn(
-				Box::new(RuntimeInstanceSpawn::new(module.clone(), scheduler))
+				Box::new(runtime_spawn)
 			) {
 				Ok(val) => val,
 				Err(e) => {
@@ -405,8 +457,9 @@ impl RuntimeInstanceSpawn {
 				}
 			};
 
-			// We allow ourselve to assert unwind safe because we do not panic under this lock
-			// otherwhise we can use std mutex that is unwind safe.
+			// We allow ourselve to assert unwind safe because we should not panic under this lock,
+			// otherwhise we can switch to using std mutex, but it would need to handle poisoning
+			// to restart a call.
 			let task_receiver = std::panic::AssertUnwindSafe(task_receiver.clone());
 			with_externalities_safe(
 				&mut async_ext,
@@ -419,8 +472,12 @@ impl RuntimeInstanceSpawn {
 					let instance = module.new_instance()
 						.expect("Failed to create new instance from module");
 
-					while let PendingTask { dispatcher_ref, func, data, result_sender } = task_receiver.lock()
-						.recv().expect("Sender dropped, closing all instance.") {
+					while let PendingTask { dispatcher_ref, func, data, result_sender } =
+						{ 
+							let task_receiver_locked = task_receiver.lock();
+							task_receiver_locked.recv()
+						}
+							.expect("Sender dropped, closing all instance.") {
 						let result = instance.call(
 							InvokeMethod::TableWithWrapper { dispatcher_ref, func },
 							&data[..],
@@ -456,11 +513,20 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 
 	fn join(&self, handle: u64) -> Vec<u8> {
 		let receiver = self.remove(handle);
-		if let Some(output) = receiver.recv().expect("Spawned task panicked for the handle") {
+		if let Some(output) = receiver.recv()
+			.expect("Spawned task panicked for the handle") {
 			output
 		} else {
 			panic!("Spawned task panicked for the handle");
 		}
+	}
+
+	fn kill(&self, handle: u64) {
+		unimplemented!()
+	}
+
+	fn set_capacity(&self, capacity: u32) {
+		self.tasks.lock().set_capacity(capacity);
 	}
 }
 
@@ -468,12 +534,18 @@ impl RuntimeInstanceSpawn {
 	pub fn new(
 		module: Arc<dyn WasmModule>,
 		scheduler: Box<dyn sp_core::traits::SpawnNamed>,
+		capacity: usize,
 	) -> Self {
+		let infos = RuntimeInstanceSpawnInfo::new(capacity);
+		let (task_sender, task_receiver) = mpsc::channel();
 		Self {
 			module,
 			scheduler,
-			counter: 0.into(),
-			tasks: HashMap::new().into(),
+			counter: Arc::new(0.into()),
+			tasks: Arc::new(parking_lot::Mutex::new(infos)),
+			task_receiver: Arc::new(parking_lot::Mutex::new(task_receiver)),
+			task_sender,
+			recursive_level: 0,
 		}
 	}
 
@@ -481,8 +553,10 @@ impl RuntimeInstanceSpawn {
 		module: Arc<dyn WasmModule>,
 		mut ext: &mut dyn Externalities,
 	) -> Option<Self> {
+		// Using 0 as capacity is only if we got the sp::io host
+		// function to change this capacity.
 		ext.extension::<sp_core::traits::TaskExecutorExt>()
-			.map(move |task_ext| Self::new(module, task_ext.clone()))
+			.map(move |task_ext| Self::new(module, task_ext.clone(), 0))
 	}
 
 	/// Register new `RuntimeSpawnExt` on current externalities.

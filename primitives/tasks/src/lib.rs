@@ -79,6 +79,16 @@ mod inner {
 		pub fn join(self) -> Vec<u8> {
 			self.receiver.recv().expect("Spawned runtime task terminated before sending result.")
 		}
+
+		/// TODO doc
+		pub fn kill(self) {
+			unimplemented!()
+		}
+	}
+
+	/// TODO doc
+	pub fn set_capacity(capacity: u32) {
+		unimplemented!() // TODO need a management object for native
 	}
 
 	/// Spawn new runtime task (native).
@@ -156,6 +166,11 @@ mod inner {
 		sp_runtime_interface::pack_ptr_and_len(output.as_ptr() as usize as _, output.len() as _)
 	}
 
+	/// TODO doc
+	pub fn set_capacity(capacity: u32) {
+		sp_io::runtime_tasks::set_capacity(capacity)
+	}
+
 	/// Spawn new runtime task (wasm).
 	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>) -> DataJoinHandle {
 		let func_ptr: usize = unsafe { mem::transmute(entry_point) };
@@ -182,10 +197,15 @@ mod inner {
 		pub fn join(self) -> Vec<u8> {
 			sp_io::runtime_tasks::join(self.handle)
 		}
+
+		/// TODO doc
+		pub fn kill(self) {
+			sp_io::runtime_tasks::kill(self.handle)
+		}
 	}
 }
 
-pub use inner::{DataJoinHandle, spawn};
+pub use inner::{DataJoinHandle, spawn, set_capacity};
 
 #[cfg(test)]
 mod tests {

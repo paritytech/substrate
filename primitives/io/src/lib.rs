@@ -1243,6 +1243,17 @@ pub trait Sandbox {
 /// This should not be used directly. Use `sp_tasks` for running parallel tasks instead.
 #[runtime_interface(wasm_only)]
 pub trait RuntimeTasks {
+	/// TODO doc
+	///
+	/// This should not be used directly. Use `sp_tasks::set_capacity` instead.
+	fn set_capacity(capacity: u32) {
+		sp_externalities::with_externalities(|mut ext|{
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Cannot set capacity without dynamic runtime dispatcher (RuntimeSpawnExt)");
+			runtime_spawn.set_capacity(capacity)
+		}).expect("`RuntimeTasks::set_capacity`: called outside of externalities context")
+	}
+
 	/// Wasm host function for spawning task.
 	///
 	/// This should not be used directly. Use `sp_tasks::spawn` instead.
@@ -1264,7 +1275,18 @@ pub trait RuntimeTasks {
 			runtime_spawn.join(handle)
 		}).expect("`RuntimeTasks::join`: called outside of externalities context")
 	}
- }
+
+	/// TODO doc
+	///
+	/// This should not be used directly. Use `kill` of `sp_tasks::spawn` result instead.
+	fn kill(handle: u64) {
+		sp_externalities::with_externalities(|mut ext| {
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Cannot kill without dynamic runtime dispatcher (RuntimeSpawnExt)");
+			runtime_spawn.kill(handle)
+		}).expect("`RuntimeTasks::kill`: called outside of externalities context")
+	}
+}
 
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(not(feature = "std"))]

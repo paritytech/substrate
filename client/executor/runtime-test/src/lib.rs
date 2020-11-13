@@ -310,7 +310,15 @@ sp_core::wasm_export_functions! {
 		message_slice.copy_from_slice(test_message);
 	}
 
+	fn test_inline() {
+		let data = vec![1u8, 2u8];
+		let data_new = sp_tasks::spawn(tasks::incrementer, data).join();
+
+		assert_eq!(data_new, vec![2u8, 3u8]);
+	}
+
 	fn test_spawn() {
+		sp_tasks::set_capacity(1);
 		let data = vec![1u8, 2u8];
 		let data_new = sp_tasks::spawn(tasks::incrementer, data).join();
 
@@ -318,6 +326,7 @@ sp_core::wasm_export_functions! {
 	}
 
 	fn test_nested_spawn() {
+		sp_tasks::set_capacity(2);
 		let data = vec![7u8, 13u8];
 		let data_new = sp_tasks::spawn(tasks::parallel_incrementer, data).join();
 
@@ -325,6 +334,7 @@ sp_core::wasm_export_functions! {
 	}
 
 	fn test_panic_in_spawned() {
+		sp_tasks::set_capacity(1);
 		sp_tasks::spawn(tasks::panicker, vec![]).join();
 	}
  }
