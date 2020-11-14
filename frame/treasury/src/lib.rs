@@ -324,7 +324,7 @@ decl_module! {
 		/// - DbWrites: `ProposalCount`, `Proposals`, `origin account`
 		/// # </weight>
 		#[weight = T::WeightInfo::propose_spend()]
-		fn propose_spend(
+		pub fn propose_spend(
 			origin,
 			#[compact] value: BalanceOf<T, I>,
 			beneficiary: <T::Lookup as StaticLookup>::Source
@@ -353,7 +353,7 @@ decl_module! {
 		/// - DbWrites: `Proposals`, `rejected proposer account`
 		/// # </weight>
 		#[weight = (T::WeightInfo::reject_proposal(), DispatchClass::Operational)]
-		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
+		pub fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
 
 			let proposal = <Proposals<T, I>>::take(&proposal_id).ok_or(Error::<T, I>::InvalidIndex)?;
@@ -375,7 +375,7 @@ decl_module! {
 		/// - DbWrite: `Approvals`
 		/// # </weight>
 		#[weight = (T::WeightInfo::approve_proposal(), DispatchClass::Operational)]
-		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
+		pub fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
 			ensure!(<Proposals<T, I>>::contains_key(proposal_id), Error::<T, I>::InvalidIndex);
@@ -529,7 +529,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 	/// Return the amount of money in the pot.
 	// The existential deposit is not part of the pot so treasury account never gets deleted.
-	fn pot() -> BalanceOf<T, I> {
+	pub fn pot() -> BalanceOf<T, I> {
 		T::Currency::free_balance(&Self::account_id())
 			// Must never be less than 0 but better be safe.
 			.saturating_sub(T::Currency::minimum_balance())
