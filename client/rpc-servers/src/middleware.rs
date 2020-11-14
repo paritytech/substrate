@@ -48,7 +48,7 @@ impl RpcMetrics {
 					&["protocol"]
 				).ok()?, r).ok()?,
 			})
-		}).ok_or(PrometheusError::Msg("Cannot register metric".to_string()))
+		}).ok_or(PrometheusError::RegisteringMetricFailed)
 	}
 }
 

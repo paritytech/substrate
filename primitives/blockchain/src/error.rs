@@ -45,6 +45,12 @@ pub enum ApplyExtrinsicFailed {
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum Error {
+	#[error("Cancelled oneshot channel {0}")]
+	OneShotCancelled(#[from] futures::channel::oneshot::Canceled),
+
+	#[error("JsonRpc error: {0}")]
+	JsonRpc(String),
+
 	#[error(transparent)]
 	Consensus(#[from] sp_consensus::Error),
 
@@ -69,6 +75,15 @@ pub enum Error {
 
 	#[error("Blockchain")]
 	Blockchain(#[source] Box<Error>),
+
+	/// A error used by various storage subsystems.
+	///
+	/// Eventually this will be replaced.
+	#[error("{0}")]
+	StorageChanges(sp_state_machine::DefaultError),
+
+	#[error("Invalid child storage key")]
+	InvalidChildStorageKey,
 
 	#[error("Current state of blockchain has invalid authorities set")]
 	InvalidAuthoritiesSet,

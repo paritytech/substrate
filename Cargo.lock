@@ -8154,6 +8154,7 @@ dependencies = [
 name = "sp-blockchain"
 version = "2.0.0"
 dependencies = [
+ "futures 0.3.5",
  "log",
  "lru 0.4.3",
  "parity-scale-codec",

@@ -627,7 +627,7 @@ where
 		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
 		let child_info = match ChildType::from_prefixed_key(prefixed_key) {
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
-			None => Err("Invalid child storage key".into()),
+			None => Err(sp_blockchain::Error::InvalidChildStorageKey),
 		};
 		let proof = match child_info.and_then(|child_info| self.chain.read_child_proof(
 			&BlockId::Hash(block),

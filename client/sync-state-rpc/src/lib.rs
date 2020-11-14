@@ -120,5 +120,5 @@ impl<TBl, TCl> SyncStateRpcApi for SyncStateRpcHandler<TBl, TCl>
 }
 
 fn map_error(error: String) -> jsonrpc_core::Error {
-	Error(sp_blockchain::Error::Msg(error)).into()
+	Error(sp_blockchain::Error::JsonRpc(error)).into()
 }
