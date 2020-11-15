@@ -288,16 +288,6 @@ decl_error! {
 		InvalidIndex,
 		/// The reason given is just too big.
 		ReasonTooBig,
-		/// The tip was already found/started.
-		AlreadyKnown,
-		/// The tip hash is unknown.
-		UnknownTip,
-		/// The account attempting to retract the tip is not the finder of the tip.
-		NotFinder,
-		/// The tip cannot be claimed/closed because there are not enough tippers yet.
-		StillOpen,
-		/// The tip cannot be claimed/closed because it's still in the countdown period.
-		Premature,
 		/// The bounty status is unexpected.
 		UnexpectedStatus,
 		/// Require bounty curator.
@@ -309,6 +299,8 @@ decl_error! {
 		/// A bounty payout is pending.
 		/// To cancel the bounty, you must unassign and slash the curator.
 		PendingPayout,
+		/// The tip cannot be claimed/closed because it's still in the countdown period.
+		Premature,
 	}
 }
 

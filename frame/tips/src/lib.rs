@@ -141,7 +141,7 @@ use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error, Parameter};
 use frame_support::traits::{
-	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{KeepAlive},
+	Currency, Get, Imbalance, ExistenceRequirement::{KeepAlive},
 	ReservableCurrency
 };
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
@@ -152,23 +152,10 @@ use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
 
-pub type BalanceOf<T, I> =
-	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-pub type NegativeImbalanceOf<T, I> =
-	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+pub type BalanceOf<T, I> = pallet_treasury::BalanceOf<T, I>;
+pub type NegativeImbalanceOf<T, I> = pallet_treasury::NegativeImbalanceOf<T, I>;
 
-pub trait Trait<I=DefaultInstance>: frame_system::Trait {
-	/// The treasury's module id, used for deriving its sovereign account ID.
-	type ModuleId: Get<ModuleId>;
-
-	/// The staking balance.
-	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
-
-	/// Origin from which approvals must come.
-	type ApproveOrigin: EnsureOrigin<Self::Origin>;
-
-	/// Origin from which rejections must come.
-	type RejectOrigin: EnsureOrigin<Self::Origin>;
+pub trait Trait<I=DefaultInstance>: frame_system::Trait + pallet_treasury::Trait<I> {
 
 	/// Origin from which tippers must come.
 	///
@@ -184,51 +171,11 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The amount held on deposit for placing a tip report.
 	type TipReportDepositBase: Get<BalanceOf<Self, I>>;
 
-	/// The amount held on deposit per byte within the tip report reason or bounty description.
-	type DataDepositPerByte: Get<BalanceOf<Self, I>>;
-
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
 
-	/// Handler for the unbalanced decrease when slashing for a rejected proposal or bounty.
-	type OnSlash: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
-
-	/// Fraction of a proposal's value that should be bonded in order to place the proposal.
-	/// An accepted proposal gets these back. A rejected proposal does not.
-	type ProposalBond: Get<Permill>;
-
-	/// Minimum amount of funds that should be placed in a deposit for making a proposal.
-	type ProposalBondMinimum: Get<BalanceOf<Self, I>>;
-
-	/// Period between successive spends.
-	type SpendPeriod: Get<Self::BlockNumber>;
-
-	/// Percentage of spare funds (if any) that are burnt per spend period.
-	type Burn: Get<Permill>;
-
-	/// The amount held on deposit for placing a bounty proposal.
-	type BountyDepositBase: Get<BalanceOf<Self, I>>;
-
-	/// The delay period for which a bounty beneficiary need to wait before claim the payout.
-	type BountyDepositPayoutDelay: Get<Self::BlockNumber>;
-
-	/// Bounty duration in blocks.
-	type BountyUpdatePeriod: Get<Self::BlockNumber>;
-
-	/// Percentage of the curator fee that will be reserved upfront as deposit for bounty curator.
-	type BountyCuratorDeposit: Get<Permill>;
-
-	/// Minimum value for a bounty.
-	type BountyValueMinimum: Get<BalanceOf<Self, I>>;
-
-	/// Maximum acceptable reason length.
-	type MaximumReasonLength: Get<u32>;
-
-	/// Handler for the unbalanced decrease when treasury funds are burned.
-	type BurnDestination: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
-
 	/// Weight information for extrinsics in this pallet.
-	type WeightInfo: WeightInfo;
+	type TipsWeightInfo: WeightInfo;
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -275,75 +222,13 @@ pub struct OpenTip<
 	finders_fee: bool,
 }
 
-/// An index of a bounty. Just a `u32`.
-pub type BountyIndex = u32;
-
-/// A bounty proposal.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct Bounty<AccountId, Balance, BlockNumber> {
-	/// The account proposing it.
-	proposer: AccountId,
-	/// The (total) amount that should be paid if the bounty is rewarded.
-	value: Balance,
-	/// The curator fee. Included in value.
-	fee: Balance,
-	/// The deposit of curator.
-	curator_deposit: Balance,
-	/// The amount held on deposit (reserved) for making this proposal.
-	bond: Balance,
-	/// The status of this bounty.
-	status: BountyStatus<AccountId, BlockNumber>,
-}
-
-/// The status of a bounty proposal.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum BountyStatus<AccountId, BlockNumber> {
-	/// The bounty is proposed and waiting for approval.
-	Proposed,
-	/// The bounty is approved and waiting to become active at next spend period.
-	Approved,
-	/// The bounty is funded and waiting for curator assignment.
-	Funded,
-	/// A curator has been proposed by the `ApproveOrigin`. Waiting for acceptance from the curator.
-	CuratorProposed {
-		/// The assigned curator of this bounty.
-		curator: AccountId,
-	},
-	/// The bounty is active and waiting to be awarded.
-	Active {
-		/// The curator of this bounty.
-		curator: AccountId,
-		/// An update from the curator is due by this block, else they are considered inactive.
-		update_due: BlockNumber,
-	},
-	/// The bounty is awarded and waiting to released after a delay.
-	PendingPayout {
-		/// The curator of this bounty.
-		curator: AccountId,
-		/// The beneficiary of the bounty.
-		beneficiary: AccountId,
-		/// When the bounty can be claimed.
-		unlock_at: BlockNumber,
-	},
-}
-
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Treasury {
-		/// Number of proposals that have been made.
-		ProposalCount get(fn proposal_count): ProposalIndex;
+	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Tips {
 
-		/// Proposals that have been made.
-		Proposals get(fn proposals):
-			map hasher(twox_64_concat) ProposalIndex
-			=> Option<Proposal<T::AccountId, BalanceOf<T, I>>>;
-
-		/// Proposal indices that have been approved but not yet awarded.
-		Approvals get(fn approvals): Vec<ProposalIndex>;
-
-		/// Tips that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
+		/// TipsMap that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
 		/// This has the insecure enumerable hash function since the key itself is already
 		/// guaranteed to be a secure hash.
-		pub Tips get(fn tips):
+		pub TipsMap get(fn tips):
 			map hasher(twox_64_concat) T::Hash
 			=> Option<OpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>>;
 
@@ -351,32 +236,6 @@ decl_storage! {
 		/// insecure enumerable hash since the key is guaranteed to be the result of a secure hash.
 		pub Reasons get(fn reasons): map hasher(identity) T::Hash => Option<Vec<u8>>;
 
-		/// Number of bounty proposals that have been made.
-		pub BountyCount get(fn bounty_count): BountyIndex;
-
-		/// Bounties that have been made.
-		pub Bounties get(fn bounties):
-			map hasher(twox_64_concat) BountyIndex
-			=> Option<Bounty<T::AccountId, BalanceOf<T, I>, T::BlockNumber>>;
-
-		/// The description of each bounty.
-		pub BountyDescriptions get(fn bounty_descriptions): map hasher(twox_64_concat) BountyIndex => Option<Vec<u8>>;
-
-		/// Bounty indices that have been approved but not yet funded.
-		pub BountyApprovals get(fn bounty_approvals): Vec<BountyIndex>;
-	}
-	add_extra_genesis {
-		build(|_config| {
-			// Create Treasury account
-			let account_id = <Module<T, I>>::account_id();
-			let min = T::Currency::minimum_balance();
-			if T::Currency::free_balance(&account_id) < min {
-				let _ = T::Currency::make_free_balance_be(
-					&account_id,
-					min,
-				);
-			}
-		});
 	}
 }
 
@@ -387,21 +246,6 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as frame_system::Trait>::Hash,
 	{
-		/// New proposal. \[proposal_index\]
-		Proposed(ProposalIndex),
-		/// We have ended a spend period and will now allocate funds. \[budget_remaining\]
-		Spending(Balance),
-		/// Some funds have been allocated. \[proposal_index, award, beneficiary\]
-		Awarded(ProposalIndex, Balance, AccountId),
-		/// A proposal was rejected; funds were slashed. \[proposal_index, slashed\]
-		Rejected(ProposalIndex, Balance),
-		/// Some of our funds have been burnt. \[burn\]
-		Burnt(Balance),
-		/// Spending has finished; this is the amount that rolls over until next spend.
-		/// \[budget_remaining\]
-		Rollover(Balance),
-		/// Some funds have been deposited. \[deposit\]
-		Deposit(Balance),
 		/// A new tip suggestion has been opened. \[tip_hash\]
 		NewTip(Hash),
 		/// A tip suggestion has reached threshold and is closing. \[tip_hash\]
@@ -410,30 +254,12 @@ decl_event!(
 		TipClosed(Hash, AccountId, Balance),
 		/// A tip suggestion has been retracted. \[tip_hash\]
 		TipRetracted(Hash),
-		/// New bounty proposal. [index]
-		BountyProposed(BountyIndex),
-		/// A bounty proposal was rejected; funds were slashed. [index, bond]
-		BountyRejected(BountyIndex, Balance),
-		/// A bounty proposal is funded and became active. [index]
-		BountyBecameActive(BountyIndex),
-		/// A bounty is awarded to a beneficiary. [index, beneficiary]
-		BountyAwarded(BountyIndex, AccountId),
-		/// A bounty is claimed by beneficiary. [index, payout, beneficiary]
-		BountyClaimed(BountyIndex, Balance, AccountId),
-		/// A bounty is cancelled. [index]
-		BountyCanceled(BountyIndex),
-		/// A bounty expiry is extended. [index]
-		BountyExtended(BountyIndex),
 	}
 );
 
 decl_error! {
 	/// Error for the treasury module.
 	pub enum Error for Module<T: Trait<I>, I: Instance> {
-		/// Proposer's balance is too low.
-		InsufficientProposersBalance,
-		/// No proposal or bounty at that index.
-		InvalidIndex,
 		/// The reason given is just too big.
 		ReasonTooBig,
 		/// The tip was already found/started.
@@ -446,17 +272,6 @@ decl_error! {
 		StillOpen,
 		/// The tip cannot be claimed/closed because it's still in the countdown period.
 		Premature,
-		/// The bounty status is unexpected.
-		UnexpectedStatus,
-		/// Require bounty curator.
-		RequireCurator,
-		/// Invalid bounty value.
-		InvalidValue,
-		/// Invalid bounty fee.
-		InvalidFee,
-		/// A bounty payout is pending.
-		/// To cancel the bounty, you must unassign and slash the curator.
-		PendingPayout,
 	}
 }
 
@@ -465,18 +280,6 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
-		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
-		/// An accepted proposal gets these back. A rejected proposal does not.
-		const ProposalBond: Permill = T::ProposalBond::get();
-
-		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
-		const ProposalBondMinimum: BalanceOf<T, I> = T::ProposalBondMinimum::get();
-
-		/// Period between successive spends.
-		const SpendPeriod: T::BlockNumber = T::SpendPeriod::get();
-
-		/// Percentage of spare funds (if any) that are burnt per spend period.
-		const Burn: Permill = T::Burn::get();
 
 		/// The period for which a tip remains open after is has achieved threshold tippers.
 		const TipCountdown: T::BlockNumber = T::TipCountdown::get();
@@ -492,17 +295,6 @@ decl_module! {
 
 		/// The treasury's module id, used for deriving its sovereign account ID.
 		const ModuleId: ModuleId = T::ModuleId::get();
-
-		/// The amount held on deposit for placing a bounty proposal.
-		const BountyDepositBase: BalanceOf<T, I> = T::BountyDepositBase::get();
-
-		/// The delay period for which a bounty beneficiary need to wait before claim the payout.
-		const BountyDepositPayoutDelay: T::BlockNumber = T::BountyDepositPayoutDelay::get();
-
-		/// Percentage of the curator fee that will be reserved upfront as deposit for bounty curator.
-		const BountyCuratorDeposit: Permill = T::BountyCuratorDeposit::get();
-
-		const BountyValueMinimum: BalanceOf<T, I> = T::BountyValueMinimum::get();
 
 		/// Maximum acceptable reason length.
 		const MaximumReasonLength: u32 = T::MaximumReasonLength::get();
@@ -530,7 +322,7 @@ decl_module! {
 		/// - DbReads: `Reasons`, `Tips`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = T::WeightInfo::report_awesome(reason.len() as u32)]
+		#[weight = T::TipsWeightInfo::report_awesome(reason.len() as u32)]
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
@@ -539,7 +331,7 @@ decl_module! {
 			let reason_hash = T::Hashing::hash(&reason[..]);
 			ensure!(!Reasons::<T, I>::contains_key(&reason_hash), Error::<T, I>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
-			ensure!(!Tips::<T, I>::contains_key(&hash), Error::<T, I>::AlreadyKnown);
+			ensure!(!TipsMap::<T, I>::contains_key(&hash), Error::<T, I>::AlreadyKnown);
 
 			let deposit = T::TipReportDepositBase::get()
 				+ T::DataDepositPerByte::get() * (reason.len() as u32).into();
@@ -555,7 +347,7 @@ decl_module! {
 				tips: vec![],
 				finders_fee: true
 			};
-			Tips::<T, I>::insert(&hash, tip);
+			TipsMap::<T, I>::insert(&hash, tip);
 			Self::deposit_event(RawEvent::NewTip(hash));
 		}
 
@@ -578,14 +370,14 @@ decl_module! {
 		/// - DbReads: `Tips`, `origin account`
 		/// - DbWrites: `Reasons`, `Tips`, `origin account`
 		/// # </weight>
-		#[weight = T::WeightInfo::retract_tip()]
+		#[weight = T::TipsWeightInfo::retract_tip()]
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
-			let tip = Tips::<T, I>::get(&hash).ok_or(Error::<T, I>::UnknownTip)?;
+			let tip = TipsMap::<T, I>::get(&hash).ok_or(Error::<T, I>::UnknownTip)?;
 			ensure!(tip.finder == who, Error::<T, I>::NotFinder);
 
 			Reasons::<T, I>::remove(&tip.reason);
-			Tips::<T, I>::remove(&hash);
+			TipsMap::<T, I>::remove(&hash);
 			if !tip.deposit.is_zero() {
 				let _ = T::Currency::unreserve(&who, tip.deposit);
 			}
@@ -614,7 +406,7 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Reasons`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = T::WeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32)]
+		#[weight = T::TipsWeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32)]
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, #[compact] tip_value: BalanceOf<T, I>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -634,7 +426,7 @@ decl_module! {
 				tips,
 				finders_fee: false,
 			};
-			Tips::<T, I>::insert(&hash, tip);
+			TipsMap::<T, I>::insert(&hash, tip);
 		}
 
 		/// Declare a tip value for an already-open tip.
@@ -662,16 +454,16 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Tips`
 		/// - DbWrites: `Tips`
 		/// # </weight>
-		#[weight = T::WeightInfo::tip(T::Tippers::max_len() as u32)]
+		#[weight = T::TipsWeightInfo::tip(T::Tippers::max_len() as u32)]
 		fn tip(origin, hash: T::Hash, #[compact] tip_value: BalanceOf<T, I>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 
-			let mut tip = Tips::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
+			let mut tip = TipsMap::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
 			if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
 				Self::deposit_event(RawEvent::TipClosing(hash.clone()));
 			}
-			Tips::<T, I>::insert(&hash, tip);
+			TipsMap::<T, I>::insert(&hash, tip);
 		}
 
 		/// Close and payout a tip.
@@ -691,16 +483,16 @@ decl_module! {
 		/// - DbReads: `Tips`, `Tippers`, `tip finder`
 		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
-		#[weight = T::WeightInfo::close_tip(T::Tippers::max_len() as u32)]
+		#[weight = T::TipsWeightInfo::close_tip(T::Tippers::max_len() as u32)]
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 
-			let tip = Tips::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
+			let tip = TipsMap::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
 			let n = tip.closes.as_ref().ok_or(Error::<T, I>::StillOpen)?;
 			ensure!(system::Module::<T>::block_number() >= *n, Error::<T, I>::Premature);
 			// closed.
 			Reasons::<T, I>::remove(&tip.reason);
-			Tips::<T, I>::remove(hash);
+			TipsMap::<T, I>::remove(hash);
 			Self::payout_tip(hash, tip);
 		}
 	}
@@ -715,13 +507,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
 		T::ModuleId::get().into_account()
-	}
-
-	/// The account ID of a bounty account
-	pub fn bounty_account_id(id: BountyIndex) -> T::AccountId {
-		// only use two byte prefix to support 16 byte account id (used by test)
-		// "modl" ++ "py/trsry" ++ "bt" is 14 bytes, and two bytes remaining for bounty index
-		T::ModuleId::get().into_sub_account(("bt", id))
 	}
 
 	/// Given a mutable reference to an `OpenTip`, insert the tip into it and check whether it
@@ -776,8 +561,10 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		let mut tips = tip.tips;
 		Self::retain_active_tips(&mut tips);
 		tips.sort_by_key(|i| i.1);
+
 		let treasury = Self::account_id();
-		let max_payout = Self::pot();
+		let max_payout = pallet_treasury::Module::<T,I>::pot();
+
 		let mut payout = tips[tips.len() / 2].1.min(max_payout);
 		if !tip.deposit.is_zero() {
 			let _ = T::Currency::unreserve(&tip.finder, tip.deposit);
@@ -795,14 +582,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		// same as above: best-effort only.
 		let _ = T::Currency::transfer(&treasury, &tip.who, payout, KeepAlive);
 		Self::deposit_event(RawEvent::TipClosed(hash, tip.who, payout));
-	}
-
-	/// Return the amount of money in the pot.
-	// The existential deposit is not part of the pot so treasury account never gets deleted.
-	fn pot() -> BalanceOf<T, I> {
-		T::Currency::free_balance(&Self::account_id())
-			// Must never be less than 0 but better be safe.
-			.saturating_sub(T::Currency::minimum_balance())
 	}
 
 	pub fn migrate_retract_tip_for_tip_new() {
@@ -850,18 +629,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				tips: old_tip.tips,
 				finders_fee
 			};
-			Tips::<T, I>::insert(hash, new_tip)
+			TipsMap::<T, I>::insert(hash, new_tip)
 		}
-	}
-}
-
-impl<T: Trait<I>, I: Instance> OnUnbalanced<NegativeImbalanceOf<T, I>> for Module<T, I> {
-	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T, I>) {
-		let numeric_amount = amount.peek();
-
-		// Must resolve into existing but better to be safe.
-		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
-
-		Self::deposit_event(RawEvent::Deposit(numeric_amount));
 	}
 }

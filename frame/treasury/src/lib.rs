@@ -237,8 +237,6 @@ decl_storage! {
 
 		/// Proposal indices that have been approved but not yet awarded.
 		Approvals get(fn approvals): Vec<ProposalIndex>;
-
-
 	}
 	add_extra_genesis {
 		build(|_config| {
