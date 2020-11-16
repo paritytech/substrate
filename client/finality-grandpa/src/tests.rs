@@ -25,7 +25,7 @@ use sc_network_test::{
 	Block, BlockImportAdapter, Hash, PassThroughVerifier, Peer, PeersClient, PeersFullClient,
 	TestClient, TestNetFactory, FullPeerConfig,
 };
-use sc_network::config::{ProtocolConfig, BoxFinalityProofRequestBuilder};
+use sc_network::config::ProtocolConfig;
 use parking_lot::{RwLock, Mutex};
 use futures_timer::Delay;
 use tokio::runtime::{Runtime, Handle};
@@ -36,7 +36,7 @@ use sp_api::{ApiRef, StorageProof, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
-	import_queue::{BoxJustificationImport, BoxFinalityProofImport},
+	import_queue::BoxJustificationImport,
 };
 use std::{collections::{HashMap, HashSet}, pin::Pin};
 use parity_scale_codec::Decode;
@@ -49,7 +49,7 @@ use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
 use finality_proof::{
-	FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker,
+	AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker,
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
@@ -118,8 +118,6 @@ impl TestNetFactory for GrandpaTestNet {
 		-> (
 			BlockImportAdapter<Transaction>,
 			Option<BoxJustificationImport<Block>>,
-			Option<BoxFinalityProofImport<Block>>,
-			Option<BoxFinalityProofRequestBuilder<Block>>,
 			PeerData,
 		)
 	{
@@ -134,26 +132,12 @@ impl TestNetFactory for GrandpaTestNet {
 				(
 					BlockImportAdapter::new_full(import),
 					Some(justification_import),
-					None,
-					None,
 					Mutex::new(Some(link)),
 				)
 			},
 			PeersClient::Light(..) => {
 				panic!("Light client is not used in tests.");
 			},
-		}
-	}
-
-	fn make_finality_proof_provider(
-		&self,
-		client: PeersClient
-	) -> Option<Arc<dyn sc_network::config::FinalityProofProvider<Block>>> {
-		match client {
-			PeersClient::Full(_, ref backend)  => {
-				Some(Arc::new(FinalityProofProvider::new(backend.clone(), self.test_config.clone())))
-			},
-			PeersClient::Light(_, _) => None,
 		}
 	}
 
@@ -889,7 +873,6 @@ fn allows_reimporting_change_blocks() {
 			needs_justification: true,
 			clear_justification_requests: false,
 			bad_justification: false,
-			needs_finality_proof: false,
 			is_new_best: true,
 			header_only: false,
 		}),
@@ -1014,7 +997,7 @@ fn voter_persists_its_votes() {
 					Poll::Pending => return Poll::Pending,
 					Poll::Ready(None) => return Poll::Ready(()),
 					Poll::Ready(Some(())) => {
-						let (_block_import, _, _, _, link) =
+						let (_block_import, _, link) =
 							this.net.lock()
 									.make_block_import::<
 										TransactionFor<substrate_test_runtime_client::Backend, Block>
@@ -1089,7 +1072,7 @@ fn voter_persists_its_votes() {
 		};
 
 		let set_state = {
-			let (_, _, _, _, link) = net.lock()
+			let (_, _, link) = net.lock()
 				.make_block_import::<
 					TransactionFor<substrate_test_runtime_client::Backend, Block>
 				>(client);

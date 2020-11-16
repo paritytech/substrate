@@ -209,34 +209,6 @@ impl<B, Block> FinalityProofProvider<B, Block>
 	}
 }
 
-impl<B, Block> sc_network::config::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
-	where
-		Block: BlockT,
-		NumberFor<Block>: BlockNumberOps,
-		B: Backend<Block> + Send + Sync + 'static,
-{
-	fn prove_finality(
-		&self,
-		for_block: Block::Hash,
-		request: &[u8],
-	) -> Result<Option<Vec<u8>>, ClientError> {
-		let request: FinalityProofRequest<Block::Hash> = Decode::decode(&mut &request[..])
-			.map_err(|e| {
-				warn!(target: "afg", "Unable to decode finality proof request: {}", e.what());
-				ClientError::Backend("Invalid finality proof request".to_string())
-			})?;
-		match request {
-			FinalityProofRequest::Original(request) => prove_finality::<_, _, GrandpaJustification<Block>>(
-				&*self.backend.blockchain(),
-				&*self.authority_provider,
-				request.authorities_set_id,
-				request.last_finalized,
-				for_block,
-			),
-		}
-	}
-}
-
 /// The effects of block finality.
 #[derive(Debug, PartialEq)]
 pub struct FinalityEffects<Header: HeaderT> {
@@ -291,14 +263,6 @@ struct OriginalFinalityProofRequest<H: Encode + Decode> {
 	pub authorities_set_id: u64,
 	/// Hash of the last known finalized block.
 	pub last_finalized: H,
-}
-
-/// Prepare data blob associated with finality proof request.
-pub(crate) fn make_finality_proof_request<H: Encode + Decode>(last_finalized: H, authorities_set_id: u64) -> Vec<u8> {
-	FinalityProofRequest::Original(OriginalFinalityProofRequest {
-		authorities_set_id,
-		last_finalized,
-	}).encode()
 }
 
 /// Prepare proof-of-finality for the best possible block in the range: (begin; end].

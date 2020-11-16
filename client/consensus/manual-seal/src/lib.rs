@@ -84,7 +84,6 @@ pub fn import_queue<Block, Transaction>(
 		ManualSealVerifier,
 		block_import,
 		None,
-		None,
 		spawner,
 		registry,
 	)
@@ -349,7 +348,6 @@ mod tests {
 					clear_justification_requests: false,
 					needs_justification: false,
 					bad_justification: false,
-					needs_finality_proof: false,
 					is_new_best: true,
 				}
 			}
@@ -416,7 +414,6 @@ mod tests {
 					clear_justification_requests: false,
 					needs_justification: false,
 					bad_justification: false,
-					needs_finality_proof: false,
 					is_new_best: true,
 				}
 			}
@@ -494,7 +491,6 @@ mod tests {
 					clear_justification_requests: false,
 					needs_justification: false,
 					bad_justification: false,
-					needs_finality_proof: false,
 					is_new_best: true
 				}
 			}

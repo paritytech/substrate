@@ -9,7 +9,7 @@ use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
-use sc_finality_grandpa::{FinalityProofProvider as GrandpaFinalityProofProvider, SharedVoterState};
+use sc_finality_grandpa::SharedVoterState;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -64,7 +64,6 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		sc_consensus_aura::slot_duration(&*client)?,
 		aura_block_import.clone(),
 		Some(Box::new(grandpa_block_import.clone())),
-		None,
 		client.clone(),
 		inherent_data_providers.clone(),
 		&task_manager.spawn_handle(),
@@ -87,9 +86,6 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		other: (block_import, grandpa_link),
 	} = new_partial(&config)?;
 
-	let finality_proof_provider =
-		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
-
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
@@ -99,8 +95,6 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			import_queue,
 			on_demand: None,
 			block_announce_validator_builder: None,
-			finality_proof_request_builder: None,
-			finality_proof_provider: Some(finality_proof_provider.clone()),
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -247,9 +241,8 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 
 	let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _, _>(
 		sc_consensus_aura::slot_duration(&*client)?,
-		grandpa_block_import,
-		None,
-		None,
+		grandpa_block_import.clone(),
+		Some(Box::new(grandpa_block_import)),
 		client.clone(),
 		InherentDataProviders::new(),
 		&task_manager.spawn_handle(),
@@ -266,8 +259,6 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 			import_queue,
 			on_demand: Some(on_demand.clone()),
 			block_announce_validator_builder: None,
-			finality_proof_request_builder: None,
-			finality_proof_provider: None,
 		})?;
 
 	if config.offchain_worker.enabled {
