@@ -133,15 +133,12 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 	pub const MaxLocks: u32 = 1024;
-}
-
-frame_support::parameter_types_thread_local! {
-	static SessionsPerEra: SessionIndex = 3;
-	static ExistentialDeposit: Balance = 0;
-	static SlashDeferDuration: EraIndex = 0;
-	static ElectionLookahead: BlockNumber = 0;
-	static Period: BlockNumber = 1;
-	static MaxIterations: u32 = 0;
+	pub static SessionsPerEra: SessionIndex = 3;
+	pub static ExistentialDeposit: Balance = 0;
+	pub static SlashDeferDuration: EraIndex = 0;
+	pub static ElectionLookahead: BlockNumber = 0;
+	pub static Period: BlockNumber = 1;
+	pub static MaxIterations: u32 = 0;
 }
 
 impl frame_system::Trait for Test {

@@ -98,10 +98,6 @@ pub mod test_utils {
 	}
 }
 
-frame_support::parameter_types_thread_local! {
-	static ExistentialDeposit: u64 = 0;
-}
-
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
 parameter_types! {
@@ -109,6 +105,7 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Trait for Test {
 	type BaseCallFilter = ();

@@ -19,6 +19,7 @@
 
 use super::*;
 
+use std::cell::RefCell;
 use frame_support::{impl_outer_origin, parameter_types, weights::Weight, ord_parameter_types};
 use sp_core::H256;
 use sp_runtime::{
@@ -86,8 +87,8 @@ impl pallet_balances::Trait for Test {
 	type WeightInfo = ();
 }
 
-frame_support::parameter_types_thread_local! {
-	static Members: Vec<u64> = vec![];
+thread_local! {
+	pub static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 }
 
 pub struct TestChangeMembers;

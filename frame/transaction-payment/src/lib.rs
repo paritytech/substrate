@@ -598,17 +598,14 @@ mod tests {
 		pub enum Origin for Runtime {}
 	}
 
-	frame_support::parameter_types_thread_local! {
-		static ExtrinsicBaseWeight: u64 = 0;
-		static TransactionByteFee: u64 = 1;
-		static WeightToFee: u64 = 1;
-	}
-
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub static ExtrinsicBaseWeight: u64 = 0;
+		pub static TransactionByteFee: u64 = 1;
+		pub static WeightToFee: u64 = 1;
 	}
 
 	impl frame_system::Trait for Runtime {

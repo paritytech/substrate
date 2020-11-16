@@ -1116,13 +1116,13 @@ mod tests {
 		pub const CandidacyBond: u64 = 3;
 	}
 
-	frame_support::parameter_types_thread_local! {
-		static VotingBond: u64 = 2;
-		static DesiredMembers: u32 = 2;
-		static DesiredRunnersUp: u32 = 2;
-		static TermDuration: u64 = 5;
-		static Members: Vec<u64> = vec![];
-		static Prime: Option<u64> = None;
+	frame_support::parameter_types! {
+		pub static VotingBond: u64 = 2;
+		pub static DesiredMembers: u32 = 2;
+		pub static DesiredRunnersUp: u32 = 2;
+		pub static TermDuration: u64 = 5;
+		pub static Members: Vec<u64> = vec![];
+		pub static Prime: Option<u64> = None;
 	}
 
 	pub struct TestChangeMembers;

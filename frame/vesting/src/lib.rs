@@ -454,6 +454,7 @@ mod tests {
 	}
 	parameter_types! {
 		pub const MinVestedTransfer: u64 = 256 * 2;
+		pub static ExistentialDeposit: u64 = 0;
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -466,9 +467,6 @@ mod tests {
 	type Balances = pallet_balances::Module<Test>;
 	type Vesting = Module<Test>;
 
-	frame_support::parameter_types_thread_local! {
-		static ExistentialDeposit: u64 = 0;
-	}
 
 	pub struct ExtBuilder {
 		existential_deposit: u64,

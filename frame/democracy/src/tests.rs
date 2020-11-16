@@ -153,6 +153,8 @@ parameter_types! {
 	pub const CooloffPeriod: u64 = 2;
 	pub const MaxVotes: u32 = 100;
 	pub const MaxProposals: u32 = MAX_PROPOSALS;
+	pub static PreimageByteDeposit: u64 = 0;
+	pub static InstantAllowed: bool = false;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -169,11 +171,6 @@ impl Contains<u64> for OneToFive {
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add(_m: &u64) {}
-}
-
-frame_support::parameter_types_thread_local! {
-	static PreimageByteDeposit: u64 = 0;
-	static InstantAllowed: bool = false;
 }
 
 impl super::Trait for Test {

@@ -47,10 +47,6 @@ impl_outer_event! {
 	}
 }
 
-frame_support::parameter_types_thread_local! {
-	static ExistentialDeposit: u64 = 0;
-}
-
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
@@ -59,6 +55,7 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Trait for Test {
 	type BaseCallFilter = ();

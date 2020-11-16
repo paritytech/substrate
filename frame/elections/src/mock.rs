@@ -84,14 +84,11 @@ parameter_types! {
 	pub const InactiveGracePeriod: u32 = 1;
 	pub const VotingPeriod: u64 = 4;
 	pub const MinimumVotingLock: u64 = 5;
-}
-
-frame_support::parameter_types_thread_local! {
-	static VotingBond: u64 = 0;
-	static VotingFee: u64 = 0;
-	static PresentSlashPerVoter: u64 = 0;
-	static DecayRatio: u32 = 0;
-	static Members: Vec<u64> = vec![];
+	pub static VotingBond: u64 = 0;
+	pub static VotingFee: u64 = 0;
+	pub static PresentSlashPerVoter: u64 = 0;
+	pub static DecayRatio: u32 = 0;
+	pub static Members: Vec<u64> = vec![];
 }
 
 pub struct TestChangeMembers;

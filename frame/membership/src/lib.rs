@@ -297,6 +297,8 @@ mod tests {
 		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub static Members: Vec<u64> = vec![];
+		pub static Prime: Option<u64> = None;
 	}
 	impl frame_system::Trait for Test {
 		type BaseCallFilter = ();
@@ -331,11 +333,6 @@ mod tests {
 		pub const Three: u64 = 3;
 		pub const Four: u64 = 4;
 		pub const Five: u64 = 5;
-	}
-
-	frame_support::parameter_types_thread_local! {
-		static Members: Vec<u64> = vec![];
-		static Prime: Option<u64> = None;
 	}
 
 	pub struct TestChangeMembers;
