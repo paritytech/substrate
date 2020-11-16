@@ -260,6 +260,16 @@ macro_rules! parameter_types {
 /// MY_CONFIG.with(|v| *v.borrow_mut() = 1);
 /// // Or use the setter function provided:
 /// MyConfig::set(2);
+///
+/// // Can be passed as `Get<_>` as well.
+/// trait Config {
+///    type Parameter: Get<u32>;
+/// }
+///
+/// struct Runtime;
+/// impl Config for Runtime {
+/// 	type Parameter = MyConfig;
+/// }
 /// ```
 #[macro_export]
 #[cfg(feature = "std")]
