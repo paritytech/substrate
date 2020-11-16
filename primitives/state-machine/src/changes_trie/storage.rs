@@ -206,7 +206,6 @@ impl<'a, H, Number> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number>
 		H: Hasher,
 {
 	type Overlay = MemoryDB<H>;
-	type AsyncStorage = Self;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.storage.get(key, prefix)

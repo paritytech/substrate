@@ -163,7 +163,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 	for ProofRecorderBackend<'a, S, H>
 {
 	type Overlay = S::Overlay;
-	type AsyncStorage = Self;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		if let Some(v) = self.proof_recorder.read().get(key) {

@@ -80,7 +80,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	type Error = crate::DefaultError;
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
-	type AsyncBackend = TrieBackend<S::AsyncStorage, H>;
+	type AsyncBackend = TrieBackend<S, H>;
 	const AllowsAsync: bool = true;
 
 

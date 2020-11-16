@@ -279,7 +279,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	}
 
 	/// TODO (clone would be easier)
-	pub fn async_backend(&self) -> Option<TrieBackendEssence<S::AsyncStorage, H>> {
+	pub fn async_backend(&self) -> Option<TrieBackendEssence<S, H>> {
 		self.storage.async_storage().map(|storage| TrieBackendEssence {
 			storage,
 			root: self.root.clone(),
@@ -356,29 +356,26 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue
 }
 
 /// Key-value pairs storage that is used by trie backend essence.
-pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
-	/// TODO Here we got very few inner mutability (ProvingBackend (is it still use?)).
-	/// Consider just making this storage Clone.
-	type AsyncStorage: TrieBackendStorage<H>;
+pub trait TrieBackendStorage<H: Hasher>: Send + Sync + Sized {
 	/// Type of in-memory overlay.
 	type Overlay: hash_db::HashDB<H, DBValue> + Default + Consolidate;
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 
-	/// TODO
-	fn async_storage(&self) -> Option<Self::AsyncStorage>;
+	/// TODO this is only usefull to avoid thread for some backend
+	/// (memory only)
+	fn async_storage(&self) -> Option<Self>;
 }
 
 // This implementation is used by normal storage trie clients.
 #[cfg(feature = "std")]
 impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	type Overlay = PrefixedMemoryDB<H>;
-	type AsyncStorage = Self;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Storage::<H>::get(self.deref(), key, prefix)
 	}
-	fn async_storage(&self) -> Option<Self::AsyncStorage> {
+	fn async_storage(&self) -> Option<Self> {
 		Some(self.clone())
 	}
 }
@@ -386,12 +383,11 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 // This implementation is used by test storage trie clients.
 impl<H: Hasher> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
 	type Overlay = PrefixedMemoryDB<H>;
-	type AsyncStorage = Self;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
-	fn async_storage(&self) -> Option<Self::AsyncStorage> {
+	fn async_storage(&self) -> Option<Self> {
 		// TODO could also make sense to avoid cloning and force runing single thread
 		Some(self.clone())
 	}
@@ -399,12 +395,11 @@ impl<H: Hasher> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
 
 impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 	type Overlay = MemoryDB<H>;
-	type AsyncStorage = Self;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
-	fn async_storage(&self) -> Option<Self::AsyncStorage> {
+	fn async_storage(&self) -> Option<Self> {
 		// TODO could also make sense to avoid cloning and force runing single thread
 		Some(self.clone())
 	}
