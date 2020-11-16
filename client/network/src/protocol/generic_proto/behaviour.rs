@@ -1831,6 +1831,7 @@ impl NetworkBehaviour for GenericProto {
 				} else {
 					error!(target: "sub-libp2p", "OpenResultErr: State mismatch in the custom protos handler");
 					debug_assert!(false);
+					debug_assert!(false);
 					return
 				};
 
