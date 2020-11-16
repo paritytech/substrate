@@ -87,7 +87,7 @@ parameter_types! {
 }
 
 frame_support::parameter_types_thread_local! {
-	static VoterBond: u64 = 0;
+	static VotingBond: u64 = 0;
 	static VotingFee: u64 = 0;
 	static PresentSlashPerVoter: u64 = 0;
 	static DecayRatio: u32 = 0;
@@ -122,7 +122,7 @@ impl elections::Trait for Test {
 	type LoserCandidate = ();
 	type ChangeMembers = TestChangeMembers;
 	type CandidacyBond = CandidacyBond;
-	type VotingBond = VoterBond;
+	type VotingBond = VotingBond;
 	type VotingFee = VotingFee;
 	type MinimumVotingLock = MinimumVotingLock;
 	type PresentSlashPerVoter = PresentSlashPerVoter;
@@ -154,7 +154,7 @@ pub struct ExtBuilder {
 	decay_ratio: u32,
 	desired_seats: u32,
 	voting_fee: u64,
-	voter_bond: u64,
+	voting_bond: u64,
 	bad_presentation_punishment: u64,
 }
 
@@ -165,7 +165,7 @@ impl Default for ExtBuilder {
 			decay_ratio: 24,
 			desired_seats: 2,
 			voting_fee: 0,
-			voter_bond: 0,
+			voting_bond: 0,
 			bad_presentation_punishment: 1,
 		}
 	}
@@ -188,8 +188,8 @@ impl ExtBuilder {
 		self.bad_presentation_punishment = fee;
 		self
 	}
-	pub fn voter_bond(mut self, fee: u64) -> Self {
-		self.voter_bond = fee;
+	pub fn voting_bond(mut self, fee: u64) -> Self {
+		self.voting_bond = fee;
 		self
 	}
 	pub fn desired_seats(mut self, seats: u32) -> Self {
@@ -197,7 +197,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
-		VOTER_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
+		VOTING_BOND.with(|v| *v.borrow_mut() = self.voting_bond);
 		VOTING_FEE.with(|v| *v.borrow_mut() = self.voting_fee);
 		PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
 		DECAY_RATIO.with(|v| *v.borrow_mut() = self.decay_ratio);
