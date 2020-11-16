@@ -19,6 +19,7 @@ sp-core = { version = "2.0.0", default-features = false, path = "../core" }
 sp-externalities = { version = "0.8.0", optional = true, path = "../externalities" }
 sp-io = { version = "2.0.0", default-features = false, path = "../io" }
 sp-runtime-interface = { version = "2.0.0", default-features = false, path = "../runtime-interface" }
+sp-state-machine = { version = "0.8.0", default-features = false, path = "../state-machine" }
 sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
@@ -32,5 +33,6 @@ std = [
 	"sp-externalities",
 	"sp-io/std",
 	"sp-runtime-interface/std",
+	"sp-state-machine/std",
 	"sp-std/std",
 ]

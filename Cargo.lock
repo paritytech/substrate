@@ -8664,6 +8664,7 @@ dependencies = [
  "sp-externalities",
  "sp-io",
  "sp-runtime-interface",
+ "sp-state-machine",
  "sp-std",
 ]
 

@@ -25,12 +25,62 @@ use sp_core::{
 };
 use sp_externalities::{Extensions, ExternalitiesExt as _};
 
+
+/// TODO doc
+#[defive(Default)]
+pub enum AsyncState {
+	/// Externalities do not access state, so we join
+	None,
+	/// Externalities access read only the backend unmodified state.
+	ReadBefore(AsyncExt),
+	/// Externalities access read only the backend unmodified state,
+	/// and the change at the time of spawn.
+	/// In this case when joining we return an identifier of the
+	/// state at launch.
+	ReadAtSpawn(AsyncExt),
+}
+
+/// Type for `AsyncState`.
+#[defive(Default)]
+enum AsyncStateType {
+	None,
+	ReadBefore,
+	ReadAtSpawn,
+}
+
+pub type CheckpointState = u64;
+
+pub enum AsyncStateResult {
+	/// Result is always valid, for `AsyncState::None`
+	/// and `AsyncState::ReadBefore`.
+	StateLess(Vec<u8>),
+	ReadOnly(Vec<u8>, CheckpointState),
+}
+
+/// Async view on state machine Ext.
+/// It contains its own set of state and rules,
+/// and returns its changes on `join`.
+/// TODO consider moving in state-machine crate
+/// and have just `dyn Ext + Send + Sync`
+pub struct AsyncExt<B> {
+	kind: AsyncStateType,
+	overlay: sp_state_machine::OverlayedChanges,
+	spawn_id: Option<CheckpointState>,
+	backend: B,
+}
+/*	where
+		H: Hasher,
+		B: 'a + Backend<H>,
+		N: crate::changes_trie::BlockNumber,
+{*/
+
 /// Simple state-less externalities for use in async context.
 ///
 /// Will panic if anything is accessing the storage.
 #[derive(Debug)]
 pub struct AsyncExternalities {
 	extensions: Extensions,
+	state: AsyncExt,
 }
 
 /// New Async externalities.

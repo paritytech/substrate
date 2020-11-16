@@ -163,6 +163,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 	for ProofRecorderBackend<'a, S, H>
 {
 	type Overlay = S::Overlay;
+	type AsyncStorage = Self;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		if let Some(v) = self.proof_recorder.read().get(key) {
@@ -171,6 +172,12 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 		let backend_value =  self.backend.get(key, prefix)?;
 		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
 		Ok(backend_value)
+	}
+	fn async_storage(&self) -> Option<Self> {
+		Some(ProofRecorderBackend {
+			backend: self.backend,
+			proof_recorder: self.proof_recorder.clone(),
+		})
 	}
 }
 
@@ -191,6 +198,10 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	type Error = String;
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
+	// TODO probably easy to get trie backend storage
+	// (just need clone)
+	type AsyncBackend = Self;
+	const AllowsAsync: bool = false;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.0.storage(key)
@@ -276,6 +287,10 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn usage_info(&self) -> crate::stats::UsageInfo {
 		self.0.usage_info()
+	}
+
+	fn async_backend(&self) -> Option<Self::AsyncBackend> {
+		None
 	}
 }
 

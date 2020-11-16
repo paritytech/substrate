@@ -45,6 +45,15 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;
 
+	/// Backend to use with `async_backend`.
+	type AsyncBackend: Backend<H>;
+
+	/// If the backend support Sync, Send and clone, then
+	/// it can be uses as result of `async_backend` method.
+	/// TODO consider default to false?
+	const AllowsAsync: bool;
+
+	/// Associated async backend.
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error>;
 
@@ -244,12 +253,19 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Update the whitelist for tracking db reads/writes
 	fn set_whitelist(&self, _: Vec<TrackedStorageKey>) {}
+
+	/// Get backend to use with threads.
+	/// The return backend must have `AllowsAsync` set to `true`, otherwhise
+	/// returning `None` is fine.
+	fn async_backend(&self) -> Option<Self::AsyncBackend>;
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	type Error = T::Error;
 	type Transaction = T::Transaction;
 	type TrieBackendStorage = T::TrieBackendStorage;
+	type AsyncBackend = T::AsyncBackend;
+	const AllowsAsync: bool = T::AllowsAsync;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
 		(*self).storage(key)
@@ -323,6 +339,10 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn usage_info(&self) -> UsageInfo {
 		(*self).usage_info()
+	}
+
+	fn async_backend(&self) -> Option<Self::AsyncBackend> {
+		(*self).async_backend()
 	}
 }
 
