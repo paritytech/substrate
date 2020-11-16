@@ -87,8 +87,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	type Error = crate::DefaultError;
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
-	type AsyncBackend = TrieBackend<S, H>;
-	const AllowsAsync: bool = true;
+	type AsyncBackend = Self;
+	const ALLOW_ASYNC: bool = true;
 
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {

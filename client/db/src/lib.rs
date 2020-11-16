@@ -144,6 +144,8 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	type Error =  <DbState<B> as StateBackend<HashFor<B>>>::Error;
 	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
 	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
+	type AsyncBackend = <DbState<B> as StateBackend<HashFor<B>>>::AsyncBackend;
+	const ALLOW_ASYNC: bool = <DbState<B> as StateBackend<HashFor<B>>>::ALLOW_ASYNC;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.storage(key)
@@ -253,6 +255,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 	fn usage_info(&self) -> StateUsageInfo {
 		self.state.usage_info()
+	}
+
+	fn async_backend(&self) -> Option<Self::AsyncBackend> {
+		self.state.async_backend()
 	}
 }
 

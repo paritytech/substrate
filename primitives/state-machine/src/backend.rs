@@ -51,7 +51,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// If the backend support Sync, Send and clone, then
 	/// it can be uses as result of `async_backend` method.
 	/// TODO consider default to false?
-	const AllowsAsync: bool;
+	const ALLOW_ASYNC: bool;
 
 	/// Associated async backend.
 	/// Get keyed storage or None if there is nothing associated.
@@ -255,9 +255,26 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn set_whitelist(&self, _: Vec<TrackedStorageKey>) {}
 
 	/// Get backend to use with threads.
-	/// The return backend must have `AllowsAsync` set to `true`, otherwhise
+	/// The return backend must have `ALLOW_ASYNC` set to `true`, otherwhise
 	/// returning `None` is fine.
 	fn async_backend(&self) -> Option<Self::AsyncBackend>;
+}
+
+/// Backend to use with thread.
+/// This trait must be usable as `dyn AsyncBackend`,
+/// which is not the case for Backend trait.
+pub trait AsyncBackend {
+}
+
+pub struct AsyncBackendAdapter<H, B>(B, sp_std::marker::PhantomData<H>);
+
+impl<H: Hasher, B: Backend<H>> AsyncBackend for AsyncBackendAdapter<H, B> {
+}
+
+impl<H, B> AsyncBackendAdapter<H, B> {
+	pub fn new(backend: B) -> Self {
+		AsyncBackendAdapter(backend, sp_std::marker::PhantomData)
+	}
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
@@ -265,7 +282,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	type Transaction = T::Transaction;
 	type TrieBackendStorage = T::TrieBackendStorage;
 	type AsyncBackend = T::AsyncBackend;
-	const AllowsAsync: bool = T::AllowsAsync;
+	const ALLOW_ASYNC: bool = T::ALLOW_ASYNC;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
 		(*self).storage(key)

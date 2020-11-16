@@ -138,7 +138,7 @@ fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParti
 	event_id.encode_to(&mut async_payload);
 	participants[..participants.len() / 2].encode_to(&mut async_payload);
 
-	let handle = sp_tasks::spawn(spawn_verify, async_payload);
+	let handle = sp_tasks::spawn(spawn_verify, async_payload, None);
 	let mut result = true;
 
 	for participant in &participants[participants.len()/2+1..] {

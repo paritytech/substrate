@@ -27,7 +27,7 @@
 //!        unimplemented!()
 //!    }
 //!    fn test(dynamic_variable: i32) {
-//!        for _ in 0..dynamic_variable { sp_tasks::spawn(my_parallel_computator, vec![]); }
+//!        for _ in 0..dynamic_variable { sp_tasks::spawn(my_parallel_computator, vec![], None); }
 //!    }
 //! ```
 //!
@@ -41,9 +41,11 @@
 //!    }
 //!
 //!    fn test(computation_payload: Vec<u8>) {
-//!        let parallel_tasks = (0..STATIC_VARIABLE).map(|idx|
-//!            sp_tasks::spawn(my_parallel_computator, computation_payload.chunks(10).nth(idx as _).encode())
-//!        );
+//!        let parallel_tasks = (0..STATIC_VARIABLE).map(|idx| sp_tasks::spawn(
+//!            my_parallel_computator,
+//!            computation_payload.chunks(10).nth(idx as _).encode(),
+//!            None,
+//!        ));
 //!    }
 //! ```
 //!
@@ -57,7 +59,7 @@
 mod async_externalities;
 
 #[cfg(feature = "std")]
-pub use async_externalities::{new_async_externalities, AsyncExternalities};
+pub use async_externalities::{new_async_externalities, AsyncExternalities, AsyncBackend};
 
 #[cfg(feature = "std")]
 mod inner {
@@ -92,7 +94,11 @@ mod inner {
 	}
 
 	/// Spawn new runtime task (native).
-	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, data: Vec<u8>) -> DataJoinHandle {
+	pub fn spawn(
+		entry_point: fn(Vec<u8>) -> Vec<u8>,
+		data: Vec<u8>,
+		backend: Option<Box<dyn crate::AsyncBackend>>,
+	) -> DataJoinHandle {
 		let scheduler = sp_externalities::with_externalities(|mut ext| ext.extension::<TaskExecutorExt>()
 			.expect("No task executor associated with the current context!")
 			.clone()
@@ -101,7 +107,7 @@ mod inner {
 		let (sender, receiver) = mpsc::channel();
 		let extra_scheduler = scheduler.clone();
 		scheduler.spawn("parallel-runtime-spawn", Box::pin(async move {
-			let result = match crate::new_async_externalities(extra_scheduler) {
+			let result = match crate::new_async_externalities(extra_scheduler, backend) {
 				Ok(mut ext) => {
 					let mut ext = AssertUnwindSafe(&mut ext);
 					match std::panic::catch_unwind(move || {
@@ -224,7 +230,7 @@ mod tests {
 	#[test]
 	fn basic() {
 		sp_io::TestExternalities::default().execute_with(|| {
-			let a1 = spawn(async_runner, vec![5, 2, 1]).join();
+			let a1 = spawn(async_runner, vec![5, 2, 1], None).join();
 			assert_eq!(a1, vec![1, 2, 5]);
 		})
 	}
@@ -232,7 +238,7 @@ mod tests {
 	#[test]
 	fn panicking() {
 		let res = sp_io::TestExternalities::default().execute_with_safe(||{
-			spawn(async_panicker, vec![5, 2, 1]).join();
+			spawn(async_panicker, vec![5, 2, 1], None).join();
 		});
 
 		assert!(res.unwrap_err().contains("Closure panicked"));
@@ -252,7 +258,7 @@ mod tests {
 						3 * running_val + 1
 					};
 					data.push(running_val as u8);
-					(spawn(async_runner, data.clone()), data.clone())
+					(spawn(async_runner, data.clone(), None), data.clone())
 				}
 			).collect::<Vec<_>>();
 

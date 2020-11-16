@@ -496,6 +496,8 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
+	type AsyncBackend = S::AsyncBackend;
+	const ALLOW_ASYNC: bool = S::ALLOW_ASYNC;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let local_cache = self.cache.local_cache.upgradable_read();
@@ -665,6 +667,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		info.include_state_machine_states(&self.overlay_stats);
 		info
 	}
+
+	fn async_backend(&self) -> Option<Self::AsyncBackend> {
+		self.state.async_backend()
+	}
 }
 
 /// Extended [`CachingState`] that will sync the caches on drop.
@@ -737,6 +743,8 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
+	type AsyncBackend = S::AsyncBackend;
+	const ALLOW_ASYNC: bool = S::ALLOW_ASYNC;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.caching_state().storage(key)
@@ -847,6 +855,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		self.caching_state().usage_info()
+	}
+
+	fn async_backend(&self) -> Option<Self::AsyncBackend> {
+		self.caching_state().async_backend()
 	}
 }
 

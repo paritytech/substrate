@@ -18,7 +18,9 @@
 
 //! Async externalities.
 
+pub use sp_state_machine::AsyncBackend;
 use std::any::{TypeId, Any};
+use sp_std::boxed::Box;
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	traits::{Externalities, SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
@@ -27,7 +29,6 @@ use sp_externalities::{Extensions, ExternalitiesExt as _};
 
 
 /// TODO doc
-#[defive(Default)]
 pub enum AsyncState {
 	/// Externalities do not access state, so we join
 	None,
@@ -40,12 +41,24 @@ pub enum AsyncState {
 	ReadAtSpawn(AsyncExt),
 }
 
+impl Default for AsyncState {
+	fn default() -> Self {
+		AsyncState::None
+	}
+}
+
 /// Type for `AsyncState`.
-#[defive(Default)]
+#[derive(Debug)]
 enum AsyncStateType {
 	None,
 	ReadBefore,
 	ReadAtSpawn,
+}
+
+impl Default for AsyncStateType {
+	fn default() -> Self {
+		AsyncStateType::None
+	}
 }
 
 pub type CheckpointState = u64;
@@ -62,17 +75,12 @@ pub enum AsyncStateResult {
 /// and returns its changes on `join`.
 /// TODO consider moving in state-machine crate
 /// and have just `dyn Ext + Send + Sync`
-pub struct AsyncExt<B> {
+pub struct AsyncExt {
 	kind: AsyncStateType,
 	overlay: sp_state_machine::OverlayedChanges,
 	spawn_id: Option<CheckpointState>,
-	backend: B,
+	backend: Option<Box<dyn AsyncBackend>>,
 }
-/*	where
-		H: Hasher,
-		B: 'a + Backend<H>,
-		N: crate::changes_trie::BlockNumber,
-{*/
 
 /// Simple state-less externalities for use in async context.
 ///
@@ -83,9 +91,29 @@ pub struct AsyncExternalities {
 	state: AsyncExt,
 }
 
+#[cfg(feature = "std")]
+impl std::fmt::Debug for AsyncExt
+{
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "AsyncExt {:?} at {:?}", self.kind, self.spawn_id)
+	}
+}
+
 /// New Async externalities.
-pub fn new_async_externalities(scheduler: Box<dyn SpawnNamed>) -> Result<AsyncExternalities, &'static str> {
-	let mut res = AsyncExternalities { extensions: Default::default() };
+pub fn new_async_externalities(
+	scheduler: Box<dyn SpawnNamed>,
+	backend: Option<Box<dyn AsyncBackend>>,
+) -> Result<AsyncExternalities, &'static str> {
+	let mut res = AsyncExternalities {
+		extensions: Default::default(),
+		// TODO as param
+		state: AsyncExt {
+			kind: Default::default(),
+			overlay: Default::default(),
+			spawn_id: None,
+			backend,
+		},
+	};
 	let mut ext = &mut res as &mut dyn Externalities;
 	ext.register_extension::<TaskExecutorExt>(TaskExecutorExt(scheduler.clone()))
 		.map_err(|_| "Failed to register task executor extension.")?;

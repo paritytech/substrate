@@ -41,7 +41,7 @@ use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
 use sp_externalities::ExternalitiesExt as _;
-use sp_tasks::new_async_externalities;
+use sp_tasks::{new_async_externalities, AsyncBackend};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -427,16 +427,15 @@ impl RuntimeInstanceSpawn {
 		self.task_sender.send(task).expect("TODO mgmt");
 	}
 
-	fn spawn_new(&self) {
+	fn spawn_new(&self, backend: Option<Box<dyn AsyncBackend>>) {
 		let module = self.module.clone();
 		let scheduler = self.scheduler.clone();
 		let task_receiver = self.task_receiver.clone();
 		let tasks = self.tasks.clone();
-		let runtime_spawn = self.rec_clone();
 		self.scheduler.spawn("executor-extra-runtime-instance", Box::pin(async move {
 			let module = AssertUnwindSafe(module);
 
-			let async_ext = match new_async_externalities(scheduler.clone()) {
+			let async_ext = match new_async_externalities(scheduler.clone(), backend) {
 				Ok(val) => val,
 				Err(e) => {
 					log::error!(
