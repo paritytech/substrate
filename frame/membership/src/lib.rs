@@ -278,7 +278,6 @@ impl<T: Trait<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
 mod tests {
 	use super::*;
 
-	use std::cell::RefCell;
 	use frame_support::{
 		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
 		ord_parameter_types
@@ -334,9 +333,9 @@ mod tests {
 		pub const Five: u64 = 5;
 	}
 
-	thread_local! {
-		static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-		static PRIME: RefCell<Option<u64>> = RefCell::new(None);
+	frame_support::parameter_types_thread_local! {
+		static Members: Vec<u64> = vec![];
+		static Prime: Option<u64> = None;
 	}
 
 	pub struct TestChangeMembers;

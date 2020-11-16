@@ -571,7 +571,6 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup},
 		Perbill,
 	};
-	use std::cell::RefCell;
 	use smallvec::smallvec;
 
 	const CALL: &<Runtime as frame_system::Trait>::Call =
@@ -599,13 +598,10 @@ mod tests {
 		pub enum Origin for Runtime {}
 	}
 
-	thread_local! {
-		static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
-	}
-
-	pub struct ExtrinsicBaseWeight;
-	impl Get<u64> for ExtrinsicBaseWeight {
-		fn get() -> u64 { EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()) }
+	frame_support::parameter_types_thread_local! {
+		static ExtrinsicBaseWeight: u64 = 0;
+		static TransactionByteFee: u64 = 1;
+		static WeightToFee: u64 = 1;
 	}
 
 	parameter_types! {
@@ -656,17 +652,7 @@ mod tests {
 		type MaxLocks = ();
 		type WeightInfo = ();
 	}
-	thread_local! {
-		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
-		static WEIGHT_TO_FEE: RefCell<u64> = RefCell::new(1);
-	}
 
-	pub struct TransactionByteFee;
-	impl Get<u64> for TransactionByteFee {
-		fn get() -> u64 { TRANSACTION_BYTE_FEE.with(|v| *v.borrow()) }
-	}
-
-	pub struct WeightToFee;
 	impl WeightToFeePolynomial for WeightToFee {
 		type Balance = u64;
 

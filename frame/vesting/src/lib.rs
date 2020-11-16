@@ -390,10 +390,8 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 mod tests {
 	use super::*;
 
-	use std::cell::RefCell;
 	use frame_support::{
 		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
-		traits::Get
 	};
 	use sp_core::H256;
 	use sp_runtime::{
@@ -468,12 +466,8 @@ mod tests {
 	type Balances = pallet_balances::Module<Test>;
 	type Vesting = Module<Test>;
 
-	thread_local! {
-		static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
-	}
-	pub struct ExistentialDeposit;
-	impl Get<u64> for ExistentialDeposit {
-		fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
+	frame_support::parameter_types_thread_local! {
+		static ExistentialDeposit: u64 = 0;
 	}
 
 	pub struct ExtBuilder {

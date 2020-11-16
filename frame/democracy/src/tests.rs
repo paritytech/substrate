@@ -18,7 +18,6 @@
 //! The crate's tests.
 
 use super::*;
-use std::cell::RefCell;
 use codec::Encode;
 use frame_support::{
 	impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
@@ -171,18 +170,12 @@ impl Contains<u64> for OneToFive {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add(_m: &u64) {}
 }
-thread_local! {
-	static PREIMAGE_BYTE_DEPOSIT: RefCell<u64> = RefCell::new(0);
-	static INSTANT_ALLOWED: RefCell<bool> = RefCell::new(false);
+
+frame_support::parameter_types_thread_local! {
+	static PreimageByteDeposit: u64 = 0;
+	static InstantAllowed: bool = false;
 }
-pub struct PreimageByteDeposit;
-impl Get<u64> for PreimageByteDeposit {
-	fn get() -> u64 { PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow()) }
-}
-pub struct InstantAllowed;
-impl Get<bool> for InstantAllowed {
-	fn get() -> bool { INSTANT_ALLOWED.with(|v| *v.borrow()) }
-}
+
 impl super::Trait for Test {
 	type Proposal = Call;
 	type Event = Event;

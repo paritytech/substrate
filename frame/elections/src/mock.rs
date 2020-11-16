@@ -19,10 +19,9 @@
 
 #![cfg(test)]
 
-use std::cell::RefCell;
 use frame_support::{
 	StorageValue, StorageMap, parameter_types, assert_ok,
-	traits::{Get, ChangeMembers, Currency, LockIdentifier},
+	traits::{ChangeMembers, Currency, LockIdentifier},
 	weights::Weight,
 };
 use sp_core::H256;
@@ -87,32 +86,12 @@ parameter_types! {
 	pub const MinimumVotingLock: u64 = 5;
 }
 
-thread_local! {
-	static VOTER_BOND: RefCell<u64> = RefCell::new(0);
-	static VOTING_FEE: RefCell<u64> = RefCell::new(0);
-	static PRESENT_SLASH_PER_VOTER: RefCell<u64> = RefCell::new(0);
-	static DECAY_RATIO: RefCell<u32> = RefCell::new(0);
-	static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-}
-
-pub struct VotingBond;
-impl Get<u64> for VotingBond {
-	fn get() -> u64 { VOTER_BOND.with(|v| *v.borrow()) }
-}
-
-pub struct VotingFee;
-impl Get<u64> for VotingFee {
-	fn get() -> u64 { VOTING_FEE.with(|v| *v.borrow()) }
-}
-
-pub struct PresentSlashPerVoter;
-impl Get<u64> for PresentSlashPerVoter {
-	fn get() -> u64 { PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow()) }
-}
-
-pub struct DecayRatio;
-impl Get<u32> for DecayRatio {
-	fn get() -> u32 { DECAY_RATIO.with(|v| *v.borrow()) }
+frame_support::parameter_types_thread_local! {
+	static VoterBond: u64 = 0;
+	static VotingFee: u64 = 0;
+	static PresentSlashPerVoter: u64 = 0;
+	static DecayRatio: u32 = 0;
+	static Members: Vec<u64> = vec![];
 }
 
 pub struct TestChangeMembers;
@@ -143,7 +122,7 @@ impl elections::Trait for Test {
 	type LoserCandidate = ();
 	type ChangeMembers = TestChangeMembers;
 	type CandidacyBond = CandidacyBond;
-	type VotingBond = VotingBond;
+	type VotingBond = VoterBond;
 	type VotingFee = VotingFee;
 	type MinimumVotingLock = MinimumVotingLock;
 	type PresentSlashPerVoter = PresentSlashPerVoter;

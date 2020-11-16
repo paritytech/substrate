@@ -142,7 +142,6 @@ pub enum Never {}
 ///    pub const Argument: u64 = non_const_expression();
 /// }
 /// ```
-
 #[macro_export]
 macro_rules! parameter_types {
 	(
@@ -234,6 +233,78 @@ macro_rules! parameter_types {
 			fn get() -> I {
 				I::from(Self::get())
 			}
+		}
+	}
+}
+
+/// An implementation of [`traits::Get`] with thread local variables.
+///
+/// **Useful for testing only**. A mock externalities builder can change these value on the fly.
+///
+/// Accepts a syntax similar to that of [`parameter_types`], and provides an additional `set`
+/// function.
+///
+/// ## Example
+///
+/// ```
+/// # use frame_support::traits::Get;
+/// # use frame_support::parameter_types_thread_local;
+///
+/// parameter_types_thread_local! {
+///     static MyConfig: u32 = 10;
+///     static OtherConfig: u32 = 10;
+/// }
+///
+/// // Generates a static variable with name `MY_CONFIG` and `OTHER_CONFIG`.
+/// // Manually altering them works:
+/// MY_CONFIG.with(|v| *v.borrow_mut() = 1);
+/// // Or use the setter function provided:
+/// MyConfig::set(2);
+/// ```
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! parameter_types_thread_local {
+	(
+		$(
+			static $name:ident : $type:ty = $default:expr;
+		)*
+	) => {
+		$crate::parameter_types_thread_local! {
+			@THREAD_LOCAL($(
+				$name, $type, $default,
+			)*)
+		}
+
+		$crate::parameter_types_thread_local! {
+			@GETTER_STRUCT($(
+				$name, $type,
+			)*)
+		}
+	};
+	(@THREAD_LOCAL($($name:ident, $type:ty, $default:expr,)*)) => {
+		$crate::paste::item! {
+			std::thread_local! {
+				$(
+					pub static [<$name:snake:upper>]: std::cell::RefCell<$type> = std::cell::RefCell::new($default);
+				)*
+			}
+		}
+	};
+	(@GETTER_STRUCT($($name:ident, $type:ty,)*)) => {
+		$crate::paste::item! {
+			$(
+				/// A struct that implements [`traits::Get`] via static variables.
+				pub struct $name;
+				impl $crate::traits::Get<$type> for $name {
+					fn get() -> $type { [<$name:snake:upper>].with(|v| v.borrow().clone() )}
+				}
+				impl $name {
+					/// Set the internal value.
+					pub fn set(t: $type) {
+						[<$name:snake:upper>].with(|v| *v.borrow_mut() = t);
+					}
+				}
+			)*
 		}
 	}
 }
