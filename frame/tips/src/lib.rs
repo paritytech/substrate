@@ -138,6 +138,10 @@ pub mod weights;
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
+
+#[cfg(feature = "std")]
+use sp_std::if_std;
+
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error, Parameter};
 use frame_support::traits::{
@@ -610,15 +614,38 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 		use frame_support::{Twox64Concat, migration::StorageKeyIterator};
 
+		if_std! {
+			println!("Inside migrate_retract_tip_for_tip_new()!");
+		}
+
 		for (hash, old_tip) in StorageKeyIterator::<
 			T::Hash,
 			OldOpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>,
 			Twox64Concat,
 		>::new(I::PREFIX.as_bytes(), b"Tips").drain()
 		{
+
+			if_std! {
+				println!("Inside loop migrate_retract_tip_for_tip_new()!");
+			}
+
 			let (finder, deposit, finders_fee) = match old_tip.finder {
-				Some((finder, deposit)) => (finder, deposit, true),
-				None => (T::AccountId::default(), Zero::zero(), false),
+				Some((finder, deposit)) => {
+					if_std! {
+						// This code is only being compiled and executed when the `std` feature is enabled.
+						println!("OK case!");
+						println!("value is: {:#?},{:#?}", finder, deposit);
+					}
+					(finder, deposit, true)
+				},
+				None => {
+					if_std! {
+						// This code is only being compiled and executed when the `std` feature is enabled.
+						println!("None case!");
+						// println!("value is: {:#?},{:#?}", T::AccountId::default(), Zero::zero());
+					}
+					(T::AccountId::default(), Zero::zero(), false)
+				},
 			};
 			let new_tip = OpenTip {
 				reason: old_tip.reason,
@@ -631,5 +658,10 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			};
 			TipsMap::<T, I>::insert(hash, new_tip)
 		}
+
+		if_std! {
+			println!("Exit migrate_retract_tip_for_tip_new()!");
+		}
+
 	}
 }

@@ -417,7 +417,13 @@ fn test_last_reward_migration() {
 	];
 
 	s.top = data.into_iter().collect();
+
+	println!("Executing the test!");
+
 	sp_io::TestExternalities::new(s).execute_with(|| {
+
+		println!("Calling migrate_retract_tip_for_tip_new()!");
+
 		TipsModTestInst::migrate_retract_tip_for_tip_new();
 
 		// Test w/ finder
