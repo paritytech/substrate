@@ -419,7 +419,6 @@ decl_module! {
 				// 	BountyStatus::Funded | BountyStatus::CuratorProposed { .. } => {},
 				// 	_ => return Err(Error::<T, I>::UnexpectedStatus.into()),
 				// };
-
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 				match bounty.status {
 					BountyStatus::Proposed | BountyStatus::Approved | BountyStatus::Funded => {},
