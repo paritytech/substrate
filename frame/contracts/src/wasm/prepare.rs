@@ -18,10 +18,11 @@
 //! wasm module before execution. It also extracts some essential information
 //! from a module.
 
-use crate::wasm::env_def::ImportSatisfyCheck;
-use crate::wasm::PrefabWasmModule;
-use crate::{Schedule, Trait};
-
+use crate::{
+	Schedule, Trait,
+	chain_extension::ChainExtension,
+	wasm::{PrefabWasmModule, env_def::ImportSatisfyCheck},
+};
 use parity_wasm::elements::{self, Internal, External, MemoryType, Type, ValueType};
 use pwasm_utils;
 use sp_std::prelude::*;
@@ -352,6 +353,12 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 			// which should only be allowed on a dev chain
 			if !self.schedule.enable_println && import.field().as_bytes() == b"seal_println" {
 				return Err("module imports `seal_println` but debug features disabled");
+			}
+
+			if !T::ChainExtension::enabled() &&
+				import.field().as_bytes() == b"seal_call_chain_extension"
+			{
+				return Err("module uses chain extensions but chain extensions are disabled");
 			}
 
 			if import_fn_banlist.iter().any(|f| import.field().as_bytes() == *f)

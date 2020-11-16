@@ -33,14 +33,13 @@ mod code_cache;
 mod prepare;
 mod runtime;
 
-use self::runtime::Runtime;
 use self::code_cache::load as load_code;
 use pallet_contracts_primitives::ExecResult;
 
 pub use self::code_cache::save as save_code;
 #[cfg(feature = "runtime-benchmarks")]
 pub use self::code_cache::save_raw as save_code_raw;
-pub use self::runtime::ReturnCode;
+pub use self::runtime::{ReturnCode, Runtime, RuntimeToken};
 
 /// A prepared wasm module ready for execution.
 #[derive(Clone, Encode, Decode)]

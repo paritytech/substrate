@@ -192,6 +192,7 @@ impl Trait for Test {
 	type MaxValueSize = MaxValueSize;
 	type WeightPrice = Self;
 	type WeightInfo = ();
+	type ChainExtension = ();
 }
 
 type Balances = pallet_balances::Module<Test>;
