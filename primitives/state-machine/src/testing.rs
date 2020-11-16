@@ -47,8 +47,9 @@ use sp_core::{
 use sp_externalities::{Extensions, Extension};
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber = u64>
+pub struct TestExternalities<H, N: ChangesTrieBlockNumber = u64>
 where
+	H: Hasher + 'static,
 	H::Out: codec::Codec + Ord,
 {
 	overlay: OverlayedChanges,

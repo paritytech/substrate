@@ -81,15 +81,15 @@ impl<S: TrieBackendStorage<H>, H: Hasher> sp_std::fmt::Debug for TrieBackend<S, 
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
+impl<S, H> Backend<H> for TrieBackend<S, H> where
+	S: TrieBackendStorage<H>,
+	H: Hasher,
 	H::Out: Ord + Codec,
 {
 	type Error = crate::DefaultError;
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
-	type AsyncBackend = Self;
 	const ALLOW_ASYNC: bool = true;
-
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
 		self.essence.storage(key)

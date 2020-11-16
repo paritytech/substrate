@@ -290,6 +290,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	}
 
 	/// TODO (clone would be easier)
+	/// TODO may be useless
 	pub fn async_backend(&self) -> Option<TrieBackendEssence<S, H>> {
 		Some(self.clone())
 	}

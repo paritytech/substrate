@@ -119,15 +119,31 @@ pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> (
 	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
 );
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> Clone for ProvingBackend<'a, S, H> {
+/// TODO
+pub struct AsyncProvingBackend<S: TrieBackendStorage<H>, H: Hasher> (
+	TrieBackend<AsyncProofRecorderBackend<S, H>, H>,
+);
+
+impl<'a, S: TrieBackendStorage<H>, H: Hasher> Clone for ProvingBackend<'a, S, H> {
 	fn clone(&self) -> Self {
 		ProvingBackend(self.0.clone())
+	}
+}
+
+impl<S: TrieBackendStorage<H>, H: Hasher> Clone for AsyncProvingBackend<S, H> {
+	fn clone(&self) -> Self {
+		AsyncProvingBackend(self.0.clone())
 	}
 }
 
 /// Trie backend storage with its proof recorder.
 pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	backend: &'a S,
+	proof_recorder: ProofRecorder<H>,
+}
+
+pub struct AsyncProofRecorderBackend<S: TrieBackendStorage<H>, H: Hasher> {
+	backend: S,
 	proof_recorder: ProofRecorder<H>,
 }
 
@@ -165,6 +181,40 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	}
 }
 
+impl<S: TrieBackendStorage<H>, H: Hasher> AsyncProvingBackend<S, H>
+	where H::Out: Codec
+{
+	/// Create new proving backend.
+	/// TODO maybe not all new are used??
+	pub fn new(backend: TrieBackend<S, H>) -> Self {
+		let proof_recorder = Default::default();
+		Self::new_with_recorder(backend, proof_recorder)
+	}
+
+	/// Create new proving backend with the given recorder.
+	pub fn new_with_recorder(
+		backend: TrieBackend<S, H>,
+		proof_recorder: ProofRecorder<H>,
+	) -> Self {
+		let root = backend.essence().root().clone();
+		let recorder = AsyncProofRecorderBackend {
+			backend: backend.into_storage(),
+			proof_recorder,
+		};
+		AsyncProvingBackend(TrieBackend::new(recorder, root))
+	}
+
+	/// Extracting the gathered unordered proof.
+	pub fn extract_proof(&self) -> StorageProof {
+		let trie_nodes = self.0.essence().backend_storage().proof_recorder
+			.read()
+			.iter()
+			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
+			.collect();
+		StorageProof::new(trie_nodes)
+	}
+}
+
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 	for ProofRecorderBackend<'a, S, H>
 {
@@ -180,7 +230,23 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> Clone
+// TODO check if use
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendStorage<H>
+	for AsyncProofRecorderBackend<S, H>
+{
+	type Overlay = S::Overlay;
+
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+		if let Some(v) = self.proof_recorder.read().get(key) {
+			return Ok(v.clone());
+		}
+		let backend_value =  self.backend.get(key, prefix)?;
+		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
+		Ok(backend_value)
+	}
+}
+
+impl<'a, S: TrieBackendStorage<H>, H: Hasher> Clone
 	for ProofRecorderBackend<'a, S, H>
 {
 	fn clone(&self) -> Self {
@@ -191,7 +257,18 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> Clone
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug
+// TODO check if used
+impl<S: TrieBackendStorage<H>, H: Hasher> Clone for AsyncProofRecorderBackend<S, H>
+{
+	fn clone(&self) -> Self {
+		AsyncProofRecorderBackend {
+			backend: self.backend.clone(),
+			proof_recorder: self.proof_recorder.clone(),
+		}
+	}
+}
+
+impl<'a, S: TrieBackendStorage<H>, H: Hasher> std::fmt::Debug
 	for ProvingBackend<'a, S, H>
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -199,18 +276,134 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug
 	}
 }
 
+// TODO check if used
+impl<S: TrieBackendStorage<H>, H: Hasher> std::fmt::Debug for AsyncProvingBackend<S, H>
+{
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "ProvingBackend")
+	}
+}
+
+
 impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	where
-		S: 'a + TrieBackendStorage<H>,
-		H: 'a + Hasher,
+		S: TrieBackendStorage<H>,
+		H: Hasher,
 		H::Out: Ord + Codec,
 {
 	type Error = String;
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
-	// TODO probably easy to get trie backend storage
-	// (just need clone)
-	type AsyncBackend = Self;
+	const ALLOW_ASYNC: bool = false;
+
+	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.0.storage(key)
+	}
+
+	fn child_storage(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.0.child_storage(child_info, key)
+	}
+
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+		&self,
+		child_info: &ChildInfo,
+		f: F,
+	) {
+		self.0.for_keys_in_child_storage(child_info, f)
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.0.next_storage_key(key)
+	}
+
+	fn next_child_storage_key(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.0.next_child_storage_key(child_info, key)
+	}
+
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
+		self.0.for_keys_with_prefix(prefix, f)
+	}
+
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+		self.0.for_key_values_with_prefix(prefix, f)
+	}
+
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		child_info: &ChildInfo,
+		prefix: &[u8],
+		f: F,
+	) {
+		self.0.for_child_keys_with_prefix( child_info, prefix, f)
+	}
+
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.0.pairs()
+	}
+
+	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
+		self.0.keys(prefix)
+	}
+
+	fn child_keys(
+		&self,
+		child_info: &ChildInfo,
+		prefix: &[u8],
+	) -> Vec<Vec<u8>> {
+		self.0.child_keys(child_info, prefix)
+	}
+
+	fn storage_root<'b>(
+		&self,
+		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+	) -> (H::Out, Self::Transaction) where H::Out: Ord {
+		self.0.storage_root(delta)
+	}
+
+	fn child_storage_root<'b>(
+		&self,
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
+		self.0.child_storage_root(child_info, delta)
+	}
+
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+
+	fn usage_info(&self) -> crate::stats::UsageInfo {
+		self.0.usage_info()
+	}
+
+	fn async_backend(&self) -> Option<Box<dyn crate::AsyncBackend>> {
+		None
+/*		Some(Box::new(crate::backend::AsyncBackendAdapter::new(AsyncProvingBackend(
+			TrieBackend::new(AsyncProofRecorderBackend {
+					backend: self.0.essence().backend_storage().backend.clone(),
+					proof_recorder: self.0.essence().backend_storage().proof_recorder.clone(),
+				},
+				self.0.essence().root().clone(),
+			)
+		))))*/
+	}
+}
+
+impl<S, H> Backend<H> for AsyncProvingBackend<S, H>
+	where
+		S: TrieBackendStorage<H> + 'static,
+		H: Hasher + 'static,
+		H::Out: Ord + Codec,
+{
+	type Error = String;
+	type Transaction = S::Overlay;
+	type TrieBackendStorage = S;
 	const ALLOW_ASYNC: bool = true;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -299,8 +492,9 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.usage_info()
 	}
 
-	fn async_backend(&self) -> Option<Self::AsyncBackend> {
-		Some(self.clone())
+	fn async_backend(&self) -> Option<Box<dyn crate::AsyncBackend>> {
+		let inner: AsyncProvingBackend<S, H> = self.clone();
+		Some(Box::new(crate::backend::AsyncBackendAdapter::new(inner)))
 	}
 }
 

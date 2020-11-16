@@ -45,9 +45,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;
 
-	/// Backend to use with `async_backend`.
-	type AsyncBackend: Backend<H>;
-
 	/// If the backend support Sync, Send and clone, then
 	/// it can be uses as result of `async_backend` method.
 	/// TODO consider default to false?
@@ -257,7 +254,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Get backend to use with threads.
 	/// The return backend must have `ALLOW_ASYNC` set to `true`, otherwhise
 	/// returning `None` is fine.
-	fn async_backend(&self) -> Option<Self::AsyncBackend>;
+	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>>;
 }
 
 /// Backend to use with thread.
@@ -281,7 +278,6 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	type Error = T::Error;
 	type Transaction = T::Transaction;
 	type TrieBackendStorage = T::TrieBackendStorage;
-	type AsyncBackend = T::AsyncBackend;
 	const ALLOW_ASYNC: bool = T::ALLOW_ASYNC;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
@@ -358,7 +354,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).usage_info()
 	}
 
-	fn async_backend(&self) -> Option<Self::AsyncBackend> {
+	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
 		(*self).async_backend()
 	}
 }

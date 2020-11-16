@@ -576,7 +576,7 @@ mod execution {
 	) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 	where
 		B: Backend<H>,
-		H: Hasher,
+		H: Hasher + 'static,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + Clone + 'static,
 		N: crate::changes_trie::BlockNumber,
@@ -615,7 +615,7 @@ mod execution {
 	) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 	where
 		S: trie_backend_essence::TrieBackendStorage<H>,
-		H: Hasher,
+		H: Hasher + 'static,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + 'static + Clone,
 		N: crate::changes_trie::BlockNumber,
