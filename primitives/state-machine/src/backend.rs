@@ -27,7 +27,7 @@ use crate::{
 	trie_backend_essence::TrieBackendStorage,
 	UsageInfo, StorageKey, StorageValue, StorageCollection, ChildStorageCollection,
 };
-use sp_std::vec::Vec;
+use sp_std::{vec::Vec, boxed::Box};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 
@@ -260,15 +260,16 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 /// Backend to use with thread.
 /// This trait must be usable as `dyn AsyncBackend`,
 /// which is not the case for Backend trait.
-pub trait AsyncBackend {
+pub trait AsyncBackend: Send {
 }
 
 pub struct AsyncBackendAdapter<H, B>(B, sp_std::marker::PhantomData<H>);
 
-impl<H: Hasher, B: Backend<H>> AsyncBackend for AsyncBackendAdapter<H, B> {
+impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackend for AsyncBackendAdapter<H, B> {
 }
 
-impl<H, B> AsyncBackendAdapter<H, B> {
+// TODO remove bound
+impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackendAdapter<H, B> {
 	pub fn new(backend: B) -> Self {
 		AsyncBackendAdapter(backend, sp_std::marker::PhantomData)
 	}

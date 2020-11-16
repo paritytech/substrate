@@ -107,7 +107,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 ) -> ClientResult<StorageProof>
 	where
 		Header: HeaderT,
-		Hasher: hash_db::Hasher,
+		Hasher: hash_db::Hasher + 'static,
 		Hasher::Out: Ord + codec::Codec,
 		BlocksI: IntoIterator<Item=Header::Number>,
 		HashesI: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
@@ -134,7 +134,7 @@ pub fn check_proof<Header, Hasher>(
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,
-		Hasher: hash_db::Hasher,
+		Hasher: hash_db::Hasher + 'static,
 		Hasher::Out: Ord + codec::Codec,
 {
 	do_check_proof::<Header, Hasher, _>(
@@ -163,7 +163,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,
-		Hasher: hash_db::Hasher,
+		Hasher: hash_db::Hasher + 'static,
 		Hasher::Out: Ord + codec::Codec,
 {
 	do_check_proof::<Header, Hasher, _>(

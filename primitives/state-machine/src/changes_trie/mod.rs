@@ -164,11 +164,16 @@ pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 /// Changes trie storage -> trie backend essence adapter.
 pub struct TrieBackendStorageAdapter<'a, H: Hasher, Number: BlockNumber>(pub &'a dyn Storage<H, Number>);
 
-impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackendStorageAdapter<'a, H, N> {
+impl<'a, H: Hasher + 'static, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackendStorageAdapter<'a, H, N> {
 	type Overlay = sp_trie::MemoryDB<H>;
+	type AsyncStorage = crate::trie_backend_essence::NoopsBackenStorage<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.0.get(key, prefix)
+	}
+
+	fn async_storage(&self) -> Option<Self::AsyncStorage> {
+		None
 	}
 }
 
@@ -226,7 +231,7 @@ pub fn disabled_state<'a, H, Number>() -> Option<State<'a, H, Number>> {
 /// Returns Err(()) if unknown `parent_hash` has been passed.
 /// Returns Ok(None) if there's no data to perform computation.
 /// Panics if background storage returns an error OR if insert to MemoryDB fails.
-pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
+pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher + 'static, Number: BlockNumber>(
 	backend: &B,
 	state: Option<&'a State<'a, H, Number>>,
 	changes: &OverlayedChanges,

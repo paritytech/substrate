@@ -469,7 +469,7 @@ impl OverlayedChanges {
 	/// Convert this instance with all changes into a [`StorageChanges`] instance.
 	#[cfg(feature = "std")]
 	pub fn into_storage_changes<
-		B: Backend<H>, H: Hasher, N: BlockNumber
+		B: Backend<H>, H: Hasher + 'static, N: BlockNumber
 	>(
 		mut self,
 		backend: &B,
@@ -482,7 +482,7 @@ impl OverlayedChanges {
 	}
 
 	/// Drain all changes into a [`StorageChanges`] instance. Leave empty overlay in place.
-	pub fn drain_storage_changes<B: Backend<H>, H: Hasher, N: BlockNumber>(
+	pub fn drain_storage_changes<B: Backend<H>, H: Hasher + 'static, N: BlockNumber>(
 		&mut self,
 		backend: &B,
 		#[cfg(feature = "std")]
@@ -588,7 +588,7 @@ impl OverlayedChanges {
 	///
 	/// Panics on storage error, when `panic_on_storage_error` is set.
 	#[cfg(feature = "std")]
-	pub fn changes_trie_root<'a, H: Hasher, N: BlockNumber, B: Backend<H>>(
+	pub fn changes_trie_root<'a, H: Hasher + 'static, N: BlockNumber, B: Backend<H>>(
 		&self,
 		backend: &B,
 		changes_trie_state: Option<&'a ChangesTrieState<'a, H, N>>,

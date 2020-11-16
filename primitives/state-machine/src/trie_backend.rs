@@ -83,7 +83,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> sp_std::fmt::Debug for TrieBackend<S, 
 
 impl<S, H> Backend<H> for TrieBackend<S, H> where
 	S: TrieBackendStorage<H>,
-	H: Hasher,
+	H: Hasher + 'static,
 	H::Out: Ord + Codec,
 {
 	type Error = crate::DefaultError;
@@ -256,8 +256,18 @@ impl<S, H> Backend<H> for TrieBackend<S, H> where
 		Ok(())
 	}
 
-	fn async_backend(&self) -> Option<Self::AsyncBackend> {
-		self.essence.async_backend().map(|essence| TrieBackend { essence})
+	fn async_backend(&self) -> Option<Box<dyn crate::AsyncBackend>> {
+		use crate::backend::AsyncBackendAdapter;
+		use crate::AsyncBackend;
+
+		//	type AsyncBackend = TrieBackend<S::AsyncStorage, H>;
+		self.essence.async_backend().map(|essence| {
+			let inner: TrieBackend<S::AsyncStorage, H> = TrieBackend { essence };
+			let inner: AsyncBackendAdapter<H, TrieBackend<S::AsyncStorage, H>> = 
+				AsyncBackendAdapter::new(inner);
+			Box::new(inner)
+		});
+		None
 	}
 }
 

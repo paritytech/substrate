@@ -33,7 +33,7 @@ use crate::{Error, ExecutionError, Backend, DBValue};
 use sp_core::storage::ChildInfo;
 
 /// Patricia trie-based backend specialized in get value proofs.
-pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
+pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> {
 	pub(crate) backend: &'a TrieBackendEssence<S, H>,
 	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
 }
@@ -115,12 +115,12 @@ pub type ProofRecorder<H> = Arc<RwLock<HashMap<<H as Hasher>::Out, Option<DBValu
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> (
+pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: Hasher + 'static> (
 	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
 );
 
 /// TODO
-pub struct AsyncProvingBackend<S: TrieBackendStorage<H>, H: Hasher> (
+pub struct AsyncProvingBackend<S: TrieBackendStorage<H>, H: Hasher + 'static> (
 	TrieBackend<AsyncProofRecorderBackend<S, H>, H>,
 );
 
@@ -137,7 +137,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Clone for AsyncProvingBackend<S, H> {
 }
 
 /// Trie backend storage with its proof recorder.
-pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
+pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> {
 	backend: &'a S,
 	proof_recorder: ProofRecorder<H>,
 }
@@ -147,7 +147,7 @@ pub struct AsyncProofRecorderBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	proof_recorder: ProofRecorder<H>,
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
+impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> ProvingBackend<'a, S, H>
 	where H::Out: Codec
 {
 	/// Create new proving backend.
@@ -215,10 +215,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> AsyncProvingBackend<S, H>
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'static + Hasher> TrieBackendStorage<H>
 	for ProofRecorderBackend<'a, S, H>
 {
 	type Overlay = S::Overlay;
+	type AsyncStorage = AsyncProofRecorderBackend<S::AsyncStorage, H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		if let Some(v) = self.proof_recorder.read().get(key) {
@@ -228,13 +229,23 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
 		Ok(backend_value)
 	}
+
+	fn async_storage(&self) -> Option<Self::AsyncStorage> {
+		self.backend.async_storage().map(|backend| {
+			AsyncProofRecorderBackend {
+				backend,
+				proof_recorder: self.proof_recorder.clone(),
+			}
+		})
+	}
 }
 
 // TODO check if use
-impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendStorage<H>
+impl<S: TrieBackendStorage<H>, H: Hasher + 'static> TrieBackendStorage<H>
 	for AsyncProofRecorderBackend<S, H>
 {
 	type Overlay = S::Overlay;
+	type AsyncStorage = AsyncProofRecorderBackend<S::AsyncStorage, H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		if let Some(v) = self.proof_recorder.read().get(key) {
@@ -243,6 +254,15 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendStorage<H>
 		let backend_value =  self.backend.get(key, prefix)?;
 		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
 		Ok(backend_value)
+	}
+
+	fn async_storage(&self) -> Option<Self::AsyncStorage> {
+		self.backend.async_storage().map(|backend| {
+			AsyncProofRecorderBackend {
+				backend,
+				proof_recorder: self.proof_recorder.clone(),
+			}
+		})
 	}
 }
 
@@ -504,7 +524,7 @@ pub fn create_proof_check_backend<H>(
 	proof: StorageProof,
 ) -> Result<TrieBackend<MemoryDB<H>, H>, Box<dyn Error>>
 where
-	H: Hasher,
+	H: Hasher + 'static,
 	H::Out: Codec,
 {
 	let db = proof.into_memory_db();

@@ -75,7 +75,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 		cht_size: NumberFor<B>,
 	) -> ClientResult<Vec<(NumberFor<B>, u32)>>
 		where
-			H: Hasher,
+			H: Hasher + 'static,
 			H::Out: Ord + codec::Codec,
 	{
 		// since we need roots of all changes tries for the range begin..max
@@ -157,7 +157,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 		remote_roots_proof: StorageProof,
 	) -> ClientResult<()>
 		where
-			H: Hasher,
+			H: Hasher + 'static,
 			H::Out: Ord + codec::Codec,
 	{
 		// all the checks are sharing the same storage
@@ -209,7 +209,7 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 	where
 		Block: BlockT,
 		E: CodeExecutor + Clone + 'static,
-		H: Hasher,
+		H: Hasher + 'static,
 		H::Out: Ord + codec::Codec + 'static,
 		S: BlockchainStorage<Block>,
 {

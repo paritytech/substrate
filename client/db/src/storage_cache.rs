@@ -496,7 +496,6 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
-	type AsyncBackend = S::AsyncBackend;
 	const ALLOW_ASYNC: bool = S::ALLOW_ASYNC;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -668,7 +667,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		info
 	}
 
-	fn async_backend(&self) -> Option<Self::AsyncBackend> {
+	fn async_backend(&self) -> Option<Box<dyn sp_state_machine::AsyncBackend>> {
 		self.state.async_backend()
 	}
 }
@@ -743,7 +742,6 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
-	type AsyncBackend = S::AsyncBackend;
 	const ALLOW_ASYNC: bool = S::ALLOW_ASYNC;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -857,7 +855,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 		self.caching_state().usage_info()
 	}
 
-	fn async_backend(&self) -> Option<Self::AsyncBackend> {
+	fn async_backend(&self) -> Option<Box<dyn sp_state_machine::AsyncBackend>> {
 		self.caching_state().async_backend()
 	}
 }

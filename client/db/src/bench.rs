@@ -290,7 +290,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	type Error =  <DbState<B> as StateBackend<HashFor<B>>>::Error;
 	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
 	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
-	type AsyncBackend = <DbState<B> as StateBackend<HashFor<B>>>::AsyncBackend;
 	const ALLOW_ASYNC: bool = <DbState<B> as StateBackend<HashFor<B>>>::ALLOW_ASYNC;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -498,7 +497,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.state.borrow().as_ref().map_or(sp_state_machine::UsageInfo::empty(), |s| s.usage_info())
 	}
 
-	fn async_backend(&self) -> Option<Self::AsyncBackend> {
+	fn async_backend(&self) -> Option<Box<dyn sp_state_machine::AsyncBackend>> {
 		self.state.borrow().as_ref().and_then(|state| state.async_backend())
 	}
 }

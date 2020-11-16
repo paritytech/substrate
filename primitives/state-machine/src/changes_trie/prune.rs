@@ -32,7 +32,7 @@ use codec::{Decode, Codec};
 /// level digest is created. Pruning guarantees to save changes tries for last
 /// `min_blocks_to_keep` blocks. We only prune changes tries at `max_digest_interval`
 /// ranges.
-pub fn prune<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
+pub fn prune<H: Hasher + 'static, Number: BlockNumber, F: FnMut(H::Out)>(
 	storage: &dyn Storage<H, Number>,
 	first: Number,
 	last: Number,
@@ -87,7 +87,7 @@ pub fn prune<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 }
 
 // Prune a trie.
-fn prune_trie<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
+fn prune_trie<H: Hasher + 'static, Number: BlockNumber, F: FnMut(H::Out)>(
 	storage: &dyn Storage<H, Number>,
 	root: H::Out,
 	remove_trie_node: &mut F,

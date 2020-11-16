@@ -412,7 +412,7 @@ impl RuntimeInstanceSpawn {
 		match tasks.start(self.recursive_level) {
 			Processing::SpawnNew => {
 				// warning self.tasks is locked when calling spawn_new
-				self.spawn_new();
+				self.spawn_new(None); // TODO backend should be pass in pending tasks.
 			},
 			Processing::Queue => (),
 			Processing::RunInline => {
@@ -432,6 +432,7 @@ impl RuntimeInstanceSpawn {
 		let scheduler = self.scheduler.clone();
 		let task_receiver = self.task_receiver.clone();
 		let tasks = self.tasks.clone();
+		let runtime_spawn = self.rec_clone();
 		self.scheduler.spawn("executor-extra-runtime-instance", Box::pin(async move {
 			let module = AssertUnwindSafe(module);
 

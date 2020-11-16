@@ -53,7 +53,7 @@ use hash_db::Hasher;
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
 
 /// Light client backend.
-pub struct Backend<S, H: Hasher> {
+pub struct Backend<S, H: Hasher + 'static> {
 	blockchain: Arc<Blockchain<S>>,
 	genesis_state: RwLock<Option<InMemoryBackend<H>>>,
 	import_lock: RwLock<()>,
@@ -73,7 +73,7 @@ pub struct ImportOperation<Block: BlockT, S> {
 }
 
 /// Either in-memory genesis state, or locally-unavailable state.
-pub enum GenesisOrUnavailableState<H: Hasher> {
+pub enum GenesisOrUnavailableState<H: Hasher + 'static> {
 	/// Genesis state - storage values are stored in-memory.
 	Genesis(InMemoryBackend<H>),
 	/// We know that state exists, but all calls will fail with error, because it
@@ -377,14 +377,13 @@ impl<H: Hasher> std::fmt::Debug for GenesisOrUnavailableState<H> {
 	}
 }
 
-impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
+impl<H: Hasher + 'static> StateBackend<H> for GenesisOrUnavailableState<H>
 	where
 		H::Out: Ord + codec::Codec,
 {
 	type Error = ClientError;
 	type Transaction = <InMemoryBackend<H> as StateBackend<H>>::Transaction;
 	type TrieBackendStorage = <InMemoryBackend<H> as StateBackend<H>>::TrieBackendStorage;
-	type AsyncBackend = <InMemoryBackend<H> as StateBackend<H>>::AsyncBackend;
 	const ALLOW_ASYNC: bool = <InMemoryBackend<H> as StateBackend<H>>::ALLOW_ASYNC;
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
@@ -521,7 +520,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn async_backend(&self) -> Option<Self::AsyncBackend> {
+	fn async_backend(&self) -> Option<Box<dyn sp_state_machine::AsyncBackend>> {
 		match self {
 			GenesisOrUnavailableState::Genesis(state) => state.async_backend(),
 			GenesisOrUnavailableState::Unavailable => None,
