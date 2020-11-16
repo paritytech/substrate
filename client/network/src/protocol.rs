@@ -63,7 +63,7 @@ pub mod message;
 pub mod event;
 pub mod sync;
 
-pub use generic_proto::{NotificationsSink, Ready, NotifsHandlerError, LegacyConnectionKillError};
+pub use generic_proto::{NotificationsSink, Ready, NotifsHandlerError};
 
 /// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
@@ -1757,7 +1757,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					notifications_sink,
 				}
 			},
-			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
+			GenericProtoOut::CustomProtocolClosed { peer_id } => {
 				self.on_peer_disconnected(peer_id)
 			},
 			GenericProtoOut::LegacyMessage { peer_id, message } =>
