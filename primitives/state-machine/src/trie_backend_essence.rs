@@ -57,6 +57,17 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	empty: H::Out,
 }
 
+// TODO use the derive macro to avoid this boilerplate (rewrite due to H not being clone)
+impl<S: TrieBackendStorage<H>, H: Hasher> Clone for TrieBackendEssence<S, H> {
+	fn clone(&self) -> Self {
+		TrieBackendEssence {
+			storage: self.storage.clone(),
+			root: self.root.clone(),
+			empty: self.empty.clone(),
+		}
+	}
+}
+
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: Encode {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
@@ -280,11 +291,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// TODO (clone would be easier)
 	pub fn async_backend(&self) -> Option<TrieBackendEssence<S, H>> {
-		self.storage.async_storage().map(|storage| TrieBackendEssence {
-			storage,
-			root: self.root.clone(),
-			empty: self.empty.clone(),
-		})
+		Some(self.clone())
 	}
 }
 
@@ -356,15 +363,11 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue
 }
 
 /// Key-value pairs storage that is used by trie backend essence.
-pub trait TrieBackendStorage<H: Hasher>: Send + Sync + Sized {
+pub trait TrieBackendStorage<H: Hasher>: Send + Sync + Clone {
 	/// Type of in-memory overlay.
 	type Overlay: hash_db::HashDB<H, DBValue> + Default + Consolidate;
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
-
-	/// TODO this is only usefull to avoid thread for some backend
-	/// (memory only)
-	fn async_storage(&self) -> Option<Self>;
 }
 
 // This implementation is used by normal storage trie clients.
@@ -375,9 +378,6 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Storage::<H>::get(self.deref(), key, prefix)
 	}
-	fn async_storage(&self) -> Option<Self> {
-		Some(self.clone())
-	}
 }
 
 // This implementation is used by test storage trie clients.
@@ -387,10 +387,6 @@ impl<H: Hasher> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
-	fn async_storage(&self) -> Option<Self> {
-		// TODO could also make sense to avoid cloning and force runing single thread
-		Some(self.clone())
-	}
 }
 
 impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
@@ -398,10 +394,6 @@ impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
-	}
-	fn async_storage(&self) -> Option<Self> {
-		// TODO could also make sense to avoid cloning and force runing single thread
-		Some(self.clone())
 	}
 }
 

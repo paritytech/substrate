@@ -115,6 +115,7 @@ pub type ProofRecorder<H> = Arc<RwLock<HashMap<<H as Hasher>::Out, Option<DBValu
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
+#[derive(Clone)]
 pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> (
 	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
 );
@@ -172,11 +173,16 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
 		Ok(backend_value)
 	}
-	fn async_storage(&self) -> Option<Self> {
-		Some(ProofRecorderBackend {
+}
+
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> Clone
+	for ProofRecorderBackend<'a, S, H>
+{
+	fn clone(&self) -> Self {
+		ProofRecorderBackend {
 			backend: self.backend,
 			proof_recorder: self.proof_recorder.clone(),
-		})
+		}
 	}
 }
 

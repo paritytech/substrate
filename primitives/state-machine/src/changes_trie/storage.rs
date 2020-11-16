@@ -210,11 +210,17 @@ impl<'a, H, Number> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number>
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.storage.get(key, prefix)
 	}
+}
 
-	fn async_storage(&self) -> Option<Self> {
-		Some(TrieBackendAdapter {
+impl<'a, H, Number> Clone for TrieBackendAdapter<'a, H, Number>
+	where
+		Number: BlockNumber,
+		H: Hasher,
+{
+	fn clone(&self) -> Self {
+		TrieBackendAdapter {
 			storage: self.storage,
 			_hasher: std::marker::PhantomData,
-		})
+		}
 	}
 }

@@ -170,8 +170,11 @@ impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackend
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.0.get(key, prefix)
 	}
-	fn async_storage(&self) -> Option<Self> {
-		Some(TrieBackendStorageAdapter(self.0))
+}
+
+impl<'a, H: Hasher, N: BlockNumber> Clone for TrieBackendStorageAdapter<'a, H, N> {
+	fn clone(&self) -> Self {
+		TrieBackendStorageAdapter(self.0)
 	}
 }
 
