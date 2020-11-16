@@ -363,14 +363,11 @@ pub fn new_light_base(config: Configuration) -> Result<(
 		on_demand.clone(),
 	));
 
-	let grandpa_block_import = grandpa::light_block_import(
-		client.clone(), backend.clone(), &(client.clone() as Arc<_>),
-		Arc::new(on_demand.checker().clone()),
+	let (grandpa_block_import, _) = grandpa::block_import(
+		client.clone(),
+		&(client.clone() as Arc<_>),
+		select_chain.clone(),
 	)?;
-
-	let finality_proof_import = grandpa_block_import.clone();
-	let finality_proof_request_builder =
-		finality_proof_import.create_finality_proof_request_builder();
 
 	let (babe_block_import, babe_link) = sc_consensus_babe::block_import(
 		sc_consensus_babe::Config::get_or_compute(&*client)?,
@@ -384,7 +381,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 		babe_link,
 		babe_block_import,
 		None,
-		Some(Box::new(finality_proof_import)),
+		None,
 		client.clone(),
 		select_chain.clone(),
 		inherent_data_providers.clone(),
@@ -392,9 +389,6 @@ pub fn new_light_base(config: Configuration) -> Result<(
 		config.prometheus_registry(),
 		sp_consensus::NeverCanAuthor,
 	)?;
-
-	let finality_proof_provider =
-		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -405,8 +399,8 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			import_queue,
 			on_demand: Some(on_demand.clone()),
 			block_announce_validator_builder: None,
-			finality_proof_request_builder: Some(finality_proof_request_builder),
-			finality_proof_provider: Some(finality_proof_provider),
+			finality_proof_request_builder: None,
+			finality_proof_provider: None,
 		})?;
 	network_starter.start_network();
 

@@ -16,6 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+// NOTE: should be removed with: https://github.com/paritytech/substrate/pull/7339
+#![allow(dead_code)]
+
 //! GRANDPA block finality proof generation and check.
 //!
 //! Finality of block B is proved by providing:
@@ -37,7 +40,7 @@
 //! of the U) could be returned.
 
 use std::sync::Arc;
-use log::{trace, warn};
+use log::trace;
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use sc_client_api::{
