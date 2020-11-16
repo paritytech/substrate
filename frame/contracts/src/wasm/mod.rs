@@ -1537,7 +1537,7 @@ mod tests {
 				&mut gas_meter
 			),
 			Err(ExecError {
-				error: Error::<Test>::ContractTrapped.into(),
+				error: Error::<Test>::TooManyTopics.into(),
 				origin: ErrorOrigin::Caller,
 			})
 		);
@@ -1582,7 +1582,7 @@ mod tests {
 				&mut gas_meter
 			),
 			Err(ExecError {
-				error: Error::<Test>::ContractTrapped.into(),
+				error: Error::<Test>::DuplicateTopics.into(),
 				origin: ErrorOrigin::Caller,
 			})
 		);
