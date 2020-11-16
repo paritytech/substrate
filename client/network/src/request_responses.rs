@@ -137,12 +137,13 @@ pub enum Event {
 	///
 	/// This event is generated for statistics purposes.
 	RequestFinished {
+		/// Peer that we send a request to.
 		peer: PeerId,
 		/// Name of the protocol in question.
 		protocol: Cow<'static, str>,
-		// TODO: Document.
+		/// Duration the request took.
 		duration: Duration,
-		// TODO: Document.
+		/// Result of the request.
 		result: Result<(), RequestFailure>
 	},
 }
@@ -157,7 +158,7 @@ pub struct RequestResponsesBehaviour {
 		(RequestResponse<GenericCodec>, Option<mpsc::Sender<IncomingRequest>>)
 	>,
 
-	// TODO: Document
+	/// Pending requests, passed down to a [`RequestResponse`] behaviour, awaiting a reply.
 	pending_requests: HashMap<RequestId, (Instant, oneshot::Sender<Result<Vec<u8>, RequestFailure>>)>,
 
 	/// Whenever an incoming request arrives, a `Future` is added to this list and will yield the
@@ -231,10 +232,24 @@ impl RequestResponsesBehaviour {
 				let request_id = protocol.send_request(target, request);
 				self.pending_requests.insert(request_id, (Instant::now(), pending_response));
 			} else {
-				pending_response.send(Err(RequestFailure::NotConnected));
+				if pending_response.send(Err(RequestFailure::NotConnected)).is_err() {
+					log::debug!(
+						target: "sub-libp2p",
+						"Not connected to peer {:?}. At the same time local \
+						 node is no longer interested in the result.",
+						target,
+					);
+				};
 			}
 		} else {
-			pending_response.send(Err(RequestFailure::UnknownProtocol));
+			if pending_response.send(Err(RequestFailure::UnknownProtocol)).is_err() {
+				log::debug!(
+					target: "sub-libp2p",
+					"Unknown protocol {:?}. At the same time local \
+					 node is no longer interested in the result.",
+					protocol,
+				);
+			};
 		}
 	}
 }
@@ -468,25 +483,31 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								},
 							..
 						} => {
-							// TODO: Rework.
-							let started = match self.pending_requests.remove(&request_id) {
+							let (started, delivered) = match self.pending_requests.remove(&request_id) {
 								Some((started, pending_response)) => {
-									pending_response.send(
+									let delivered = pending_response.send(
 										response.map_err(|()| RequestFailure::Refused),
-									).unwrap();
-									started
+									).map_err(|_| RequestFailure::Obsolete);
+									(started, delivered)
 								}
 								None => {
-									todo!("handle this");
+									log::warn!(
+										target: "sub-libp2p",
+										"Received `RequestResponseEvent::Message` with unexpected request id {:?}",
+										request_id,
+									);
+									debug_assert!(false);
+									continue;
 								}
 							};
+
 							let out = Event::RequestFinished {
 								peer,
 								protocol: protocol.clone(),
 								duration: started.elapsed(),
-								// TODO: Don't send OK when the error was mapped above as refused.
-								result: Ok(()),
+								result: delivered,
 							};
+
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}
 
@@ -497,7 +518,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							error,
 							..
 						} => {
-							// TODO: Remove hack
+							// TODO: Remove hack by deriving `Clone` for `OutboundFailure`.
 							let error_clone = match &error {
 								OutboundFailure::ConnectionClosed => OutboundFailure::ConnectionClosed,
 								OutboundFailure::DialFailure => OutboundFailure::DialFailure,
@@ -505,16 +526,28 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								OutboundFailure::UnsupportedProtocols => OutboundFailure::UnsupportedProtocols,
 							};
 
-							// TODO: Rework.
 							let started = match self.pending_requests.remove(&request_id) {
 								Some((started, pending_response)) => {
-									pending_response.send(
+									if pending_response.send(
 										Err(RequestFailure::Network(error)),
-									).unwrap();
+									).is_err() {
+										log::debug!(
+											target: "sub-libp2p",
+											"Request with id {:?} failed. At the same time local \
+											 node is no longer interested in the result.",
+											request_id,
+										);
+									}
 									started
 								}
 								None => {
-									todo!("handle this");
+									log::warn!(
+										target: "sub-libp2p",
+										"Received `RequestResponseEvent::Message` with unexpected request id {:?}",
+										request_id,
+									);
+									debug_assert!(false);
+									continue;
 								}
 							};
 
@@ -524,6 +557,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								duration: started.elapsed(),
 								result: Err(RequestFailure::Network(error_clone)),
 							};
+
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}
 
@@ -562,6 +596,8 @@ pub enum RequestFailure {
 	/// Remote has closed the substream before answering, thereby signaling that it considers the
 	/// request as valid, but refused to answer it.
 	Refused,
+	/// The remote replied, but the local node is no longer interested in the response.
+	Obsolete,
 	/// Problem on the network.
 	#[display(fmt = "Problem on the network")]
 	Network(#[error(ignore)] OutboundFailure),

@@ -249,20 +249,12 @@ struct PacketStats {
 struct Peer<B: BlockT, H: ExHashT> {
 	info: PeerInfo<B>,
 	/// Current block request, if any. Started by emitting [`CustomMessageOutcome::BlockRequest`].
-	///
-	// TODO: Update
-	/// [`libp2p::request_response::RequestId`] is [`Some`] once the block request is send off and
-	/// [`Protocol::on_block_request_started`] is called.
 	block_request: Option<(
 		message::BlockRequest<B>,
 		oneshot::Receiver<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
 	)>,
 	/// Current finality request, if any. Started by emitting
 	/// [`CustomMessageOutcome::FinalityProofRequest`].
-	///
-	// TODO: Update
-	/// [`libp2p::request_response::RequestId`] is [`Some`] once the finality request is send off
-	/// and [`Protocol::on_finality_proof_request_started`] is called.
 	finality_request: Option<(
 		message::FinalityProofRequest<B::Hash>,
 		oneshot::Receiver<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
@@ -679,7 +671,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		who: PeerId,
 		request: message::BlockRequest<B>,
 	) -> CustomMessageOutcome<B> {
-		// TODO: Can we not inline this?
 		prepare_block_request::<B, H>(&mut self.context_data.peers, who, request)
 	}
 
@@ -756,7 +747,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			Ok(blocks) => blocks,
 			Err(err) => {
 				debug!(target: "sync", "Failed to decode block response from {}: {}", peer_id, err);
-				// TODO: Reduce reputation of peer?
+				self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
 				return CustomMessageOutcome::None;
 			}
 		};
@@ -810,7 +801,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			match self.sync.on_block_data(&peer_id, Some(request), block_response) {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
-				Ok(sync::OnBlockData::Request(peer, mut req)) => {
+				Ok(sync::OnBlockData::Request(peer, req)) => {
 					self.prepare_block_request(peer, req)
 				}
 				Err(sync::BadPeer(id, repu)) => {
@@ -820,16 +811,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				}
 			}
 		}
-	}
-
-	/// Must be called in response to a [`CustomMessageOutcome::BlockRequest`] if it has failed.
-	pub fn on_block_request_failed(
-		&mut self,
-		peer: &PeerId,
-	) {
-		// TODO: This can not only happen due to timeouts. Should the `rep::TIMEOUT` be used?
-		self.peerset_handle.report_peer(peer.clone(), rep::TIMEOUT);
-		self.behaviour.disconnect_peer(peer);
 	}
 
 	/// Perform time based maintenance.
@@ -925,7 +906,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		if info.roles.is_full() {
 			match self.sync.new_peer(who.clone(), info.best_hash, info.best_number) {
 				Ok(None) => (),
-				Ok(Some(mut req)) => {
+				Ok(Some(req)) => {
 					let event = self.prepare_block_request(who.clone(), req);
 					self.pending_messages.push_back(event);
 				},
@@ -1257,7 +1238,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			Ok(sync::OnBlockData::Import(origin, blocks)) => {
 				CustomMessageOutcome::BlockImport(origin, blocks)
 			},
-			Ok(sync::OnBlockData::Request(peer, mut req)) => {
+			Ok(sync::OnBlockData::Request(peer, req)) => {
 				self.prepare_block_request(peer, req)
 			}
 			Err(sync::BadPeer(id, repu)) => {
@@ -1317,7 +1298,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		);
 		for result in results {
 			match result {
-				Ok((id, mut req)) => {
+				Ok((id, req)) => {
 					self.pending_messages.push_back(
 						prepare_block_request(&mut self.context_data.peers, id, req)
 					);
@@ -1517,24 +1498,13 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	NotificationStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
 	/// Messages have been received on one or more notifications protocols.
 	NotificationsReceived { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },
-	// TODO: Update comment.
 	/// A new block request must be emitted.
-	/// You must later call either [`Protocol::on_block_response`] or
-	/// [`Protocol::on_block_request_failed`].
-	/// Each peer can only have one active request. If a request already exists for this peer, it
-	/// must be silently discarded.
-	/// It is the responsibility of the handler to ensure that a timeout exists.
 	BlockRequest {
 		target: PeerId,
 		request: crate::schema::v1::BlockRequest,
 		pending_response: oneshot::Sender<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
 	},
-	// TODO: Maybe update?
 	/// A new finality proof request must be emitted.
-	/// Once you have the response, you must call `Protocol::on_finality_proof_response`.
-	/// It is the responsibility of the handler to ensure that a timeout exists.
-	/// If the request times out, or the peer responds in an invalid way, the peer has to be
-	/// disconnect. This will inform the state machine that the request it has emitted is stale.
 	FinalityProofRequest {
 		target: PeerId,
 		request: crate::schema::v1::finality::FinalityProofRequest,
@@ -1607,16 +1577,25 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 
 						let protobuf_response = match crate::schema::v1::BlockResponse::decode(&resp[..]) {
 							Ok(proto) => proto,
-							Err(_e) => {
-								todo!("log error");
+							Err(e) => {
+								trace!(target: "sync", "Failed to decode block request to peer {:?}: {:?}.", id, e);
+								self.peerset_handle.report_peer(id.clone(), rep::BAD_MESSAGE);
+								self.behaviour.disconnect_peer(id);
+								continue;
 							}
 						};
 
-						let id = id.clone();
-						finished_block_requests.push((id, req, protobuf_response));
+						finished_block_requests.push((id.clone(), req, protobuf_response));
 					},
-					Poll::Ready(Ok(Err(_e))) => todo!("call on block request canceled"),
-					Poll::Ready(Err(_e)) => todo!("handle"),
+					// TODO: Match on the concrete error to know whether to reduce the peers reputation.
+					Poll::Ready(Ok(Err(e))) => {
+						peer.block_request.take();
+						trace!(target: "sync", "Block request to peer {:?} failed: {:?}.", id, e);
+					},
+					Poll::Ready(Err(e)) => {
+						peer.block_request.take();
+						trace!(target: "sync", "Block request to peer {:?} failed: {:?}.", id, e);
+					},
 					Poll::Pending => {},
 				}
 			}
@@ -1628,15 +1607,24 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						let protobuf_response = match crate::schema::v1::finality::FinalityProofResponse::decode(&resp[..]) {
 							Ok(proto) => proto,
 							Err(_e) => {
-								todo!("log error");
+								self.peerset_handle.report_peer(id.clone(), rep::BAD_MESSAGE);
+								self.behaviour.disconnect_peer(id);
+								continue;
 							}
 						};
 
 						let id = id.clone();
 						finished_finality_requests.push((id, req, protobuf_response));
 					},
-					Poll::Ready(Ok(Err(_e))) => todo!("call on block request canceled"),
-					Poll::Ready(Err(_e)) => todo!("handle"),
+					// TODO: Match on the concrete error to know whether to reduce the peers reputation.
+					Poll::Ready(Ok(Err(e))) => {
+						peer.finality_request.take();
+						trace!(target: "sync", "Finality request to peer {:?} failed: {:?}.", id, e);
+					},
+					Poll::Ready(Err(e)) => {
+						peer.finality_request.take();
+						trace!(target: "sync", "Finality request to peer {:?} failed: {:?}.", id, e);
+					},
 					Poll::Pending => {},
 				}
 			}
@@ -1658,11 +1646,11 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			self.propagate_transactions();
 		}
 
-		for (id, mut request) in self.sync.block_requests() {
+		for (id, request) in self.sync.block_requests() {
 			let event = prepare_block_request(&mut self.context_data.peers, id.clone(), request);
 			self.pending_messages.push_back(event);
 		}
-		for (id, mut request) in self.sync.justification_requests() {
+		for (id, request) in self.sync.justification_requests() {
 			let event = prepare_block_request(&mut self.context_data.peers, id, request);
 			self.pending_messages.push_back(event);
 		}
@@ -1801,7 +1789,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				}
 		};
 
-		if !matches!(CustomMessageOutcome::<B>::None, outcome) {
+		if !matches!(outcome, CustomMessageOutcome::<B>::None) {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(outcome));
 		}
 

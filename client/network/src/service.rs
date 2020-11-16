@@ -72,7 +72,6 @@ use std::{
 	},
 	task::Poll,
 };
-use wasm_timer::Instant;
 
 pub use behaviour::{ResponseFailure, InboundFailure, RequestFailure, OutboundFailure};
 
@@ -308,9 +307,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					local_public,
 					light_client_handler,
 					discovery_config,
-					params.network_config.request_response_protocols,
 					params.block_request_protocol_config,
 					params.finality_request_protocol_config,
+					params.network_config.request_response_protocols,
 				);
 
 				match result {
@@ -1308,29 +1307,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.event_streams.push(sender),
 				ServiceToWorkerMsg::Request { target, protocol, request, pending_response } => {
 					this.network_service.send_request(&target, &protocol, request, pending_response);
-					// TODO: Should this be moved to NetworkService?
-					// {
-					// 	Ok(request_id) => {
-					// 		// TODO: Do this on a request started event to also track finality and block request events.
-					// 		if let Some(metrics) = this.metrics.as_ref() {
-					// 			metrics.requests_out_started_total
-					// 				.with_label_values(&[&protocol])
-					// 				.inc();
-					// 		}
-					// 		this.pending_requests.insert(
-					// 			request_id,
-					// 			(pending_response, Instant::now(), protocol.to_string())
-					// 		);
-					// 	},
-					// 	Err(behaviour::SendRequestError::NotConnected) => {
-					// 		let err = RequestFailure::Network(OutboundFailure::ConnectionClosed);
-					// 		let _ = pending_response.send(Err(err));
-					// 	},
-					// 	Err(behaviour::SendRequestError::UnknownProtocol) => {
-					// 		let err = RequestFailure::Network(OutboundFailure::UnsupportedProtocols);
-					// 		let _ = pending_response.send(Err(err));
-					// 	},
-					// }
 				},
 				ServiceToWorkerMsg::RegisterNotifProtocol { engine_id, protocol_name } => {
 					this.network_service
@@ -1405,7 +1381,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						}
 					}
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { peer, protocol, duration, result })) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { protocol, duration, result, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						match result {
 							Ok(_) => {
@@ -1418,6 +1394,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 									RequestFailure::NotConnected => "not-connected",
 									RequestFailure::UnknownProtocol => "unknown-protocol",
 									RequestFailure::Refused => "refused",
+									RequestFailure::Obsolete => "obsolete",
 									RequestFailure::Network(OutboundFailure::DialFailure) =>
 										"dial-failure",
 									RequestFailure::Network(OutboundFailure::Timeout) =>

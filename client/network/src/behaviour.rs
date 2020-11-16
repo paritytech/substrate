@@ -17,8 +17,8 @@
 use crate::{
 	config::{ProtocolId, Role}, light_client_handler, peer_info, request_responses,
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
-	protocol::{message::{self, Roles}, CustomMessageOutcome, NotificationsSink, Protocol},
-	ObservedRole, DhtEvent, ExHashT, schema,
+	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
+	ObservedRole, DhtEvent, ExHashT,
 };
 
 use bytes::Bytes;
@@ -69,9 +69,12 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	#[behaviour(ignore)]
 	role: Role,
 
-	// TODO: Document.
+	/// Protocol name used to send out block requests via
+	/// [`request_responses::RequestResponsesBehaviour`].
 	#[behaviour(ignore)]
 	block_request_protocol_name: String,
+	/// Protocol name used to send out finality requests via
+	/// [`request_responses::RequestResponsesBehaviour`].
 	#[behaviour(ignore)]
 	finality_request_protocol_name: String,
 }
@@ -98,13 +101,17 @@ pub enum BehaviourOut<B: BlockT> {
 		result: Result<Duration, ResponseFailure>,
 	},
 
-	/// A request initiated using [`Behaviour::send_request`] has succeeded or failed.
+	/// A request has succeeded or failed.
+	///
+	/// This event is generated for statistics purposes.
 	RequestFinished {
+		/// Peer that we send a request to.
 		peer: PeerId,
 		/// Name of the protocol in question.
 		protocol: Cow<'static, str>,
-		// TODO: Document.
+		/// Duration the request took.
 		duration: Duration,
+		/// Result of the request.
 		result: Result<(), RequestFailure>,
 	},
 
@@ -167,13 +174,13 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		local_public_key: PublicKey,
 		light_client_handler: light_client_handler::LightClientHandler<B>,
 		disco_config: DiscoveryConfig,
-		// TODO: Document that these are all others apart from block and finality.
-		mut request_response_protocols: Vec<request_responses::ProtocolConfig>,
-
-		// TODO: Not so fancy, see definition.
+		// Block and finality request protocol config.
 		block_request_protocol_config: request_responses::ProtocolConfig,
 		finality_request_protocol_config: request_responses::ProtocolConfig,
+		// All remaining request protocol configs.
+		mut request_response_protocols: Vec<request_responses::ProtocolConfig>,
 	) -> Result<Self, request_responses::RegisterError> {
+		// Extract protocol name and add to `request_response_protocols`.
 		let block_request_protocol_name = block_request_protocol_config.name.to_string();
 		let finality_request_protocol_name = finality_request_protocol_config.name.to_string();
 		request_response_protocols.push(block_request_protocol_config);
@@ -231,11 +238,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		self.peer_info.node(peer_id)
 	}
 
-	// TODO Update comment.
 	/// Initiates sending a request.
-	///
-	/// An error is returned if we are not connected to the target peer of if the protocol doesn't
-	/// match one that has been registered.
 	pub fn send_request(
 		&mut self,
 		target: &PeerId,
@@ -353,8 +356,6 @@ Behaviour<B, H> {
 						"Failed to encode block request {:?}: {:?}",
 						request, err
 					);
-
-					// TODO: Should we notify protocol.rs or sync.rs?
 					return
 				}
 
@@ -370,8 +371,6 @@ Behaviour<B, H> {
 						"Failed to encode finality proof request {:?}: {:?}",
 						request, err,
 					);
-
-					// TODO: Should we notify protocol.rs or sync.rs?
 					return;
 				}
 
