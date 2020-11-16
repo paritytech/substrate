@@ -152,8 +152,6 @@ use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
 
-// type BalanceOf<T, I> =
-// 	<<T as pallet_treasury::Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 type BalanceOf<T, I> = pallet_treasury::BalanceOf<T, I>;
 
@@ -244,7 +242,7 @@ decl_storage! {
 		pub BountyCount get(fn bounty_count): BountyIndex;
 
 		/// Bounties that have been made.
-		pub Bounties get(fn bounties):
+		pub StrBountiesMap get(fn bounties):
 			map hasher(twox_64_concat) BountyIndex
 			=> Option<Bounty<T::AccountId, BalanceOf<T, I>, T::BlockNumber>>;
 
@@ -382,7 +380,7 @@ decl_module! {
 		fn approve_bounty(origin, #[compact] bounty_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
-			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 				ensure!(bounty.status == BountyStatus::Proposed, Error::<T, I>::UnexpectedStatus);
 
@@ -413,10 +411,18 @@ decl_module! {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
 			let curator = T::Lookup::lookup(curator)?;
-			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+
+				// TODO re-visit
+				// let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
+				// match bounty.status {
+				// 	BountyStatus::Funded | BountyStatus::CuratorProposed { .. } => {},
+				// 	_ => return Err(Error::<T, I>::UnexpectedStatus.into()),
+				// };
+
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 				match bounty.status {
-					BountyStatus::Funded | BountyStatus::CuratorProposed { .. } => {},
+					BountyStatus::Proposed | BountyStatus::Approved | BountyStatus::Funded => {},
 					_ => return Err(Error::<T, I>::UnexpectedStatus.into()),
 				};
 
@@ -458,7 +464,7 @@ decl_module! {
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
-			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				let slash_curator = |curator: &T::AccountId, curator_deposit: &mut BalanceOf<T, I>| {
@@ -535,7 +541,7 @@ decl_module! {
 		fn accept_curator(origin, #[compact] bounty_id: ProposalIndex) {
 			let signer = ensure_signed(origin)?;
 
-			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				match bounty.status {
@@ -567,7 +573,7 @@ decl_module! {
 			let signer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
-			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 				match &bounty.status {
 					BountyStatus::Active {
@@ -599,7 +605,7 @@ decl_module! {
 		fn claim_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			let _ = ensure_signed(origin)?; // anyone can trigger claim
 
-			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.take().ok_or(Error::<T, I>::InvalidIndex)?;
 				if let BountyStatus::PendingPayout { curator, beneficiary, unlock_at } = bounty.status {
 					ensure!(system::Module::<T>::block_number() >= unlock_at, Error::<T, I>::Premature);
@@ -632,7 +638,7 @@ decl_module! {
 		fn close_bounty(origin, #[compact] bounty_id: BountyIndex) -> DispatchResultWithPostInfo {
 			T::RejectOrigin::ensure_origin(origin)?;
 
-			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResultWithPostInfo {
+			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResultWithPostInfo {
 				let bounty = maybe_bounty.as_ref().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				match &bounty.status {
@@ -694,7 +700,7 @@ decl_module! {
 		fn extend_bounty_expiry(origin, #[compact] bounty_id: BountyIndex, _remark: Vec<u8>) {
 			let signer = ensure_signed(origin)?;
 
-			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				match bounty.status {
@@ -758,7 +764,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			status: BountyStatus::Proposed,
 		};
 
-		Bounties::<T, I>::insert(index, &bounty);
+		StrBountiesMap::<T, I>::insert(index, &bounty);
 		BountyDescriptions::<I>::insert(index, description);
 
 		Self::deposit_event(RawEvent::BountyProposed(index));
