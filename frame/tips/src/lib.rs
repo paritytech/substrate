@@ -573,16 +573,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		if !tip.deposit.is_zero() {
 			let _ = T::Currency::unreserve(&tip.finder, tip.deposit);
 		}
-		if tip.finders_fee {
-			if tip.finder != tip.who {
-				// pay out the finder's fee.
-				let finders_fee = T::TipFindersFee::get() * payout;
-				payout -= finders_fee;
-				// this should go through given we checked it's at most the free balance, but still
-				// we only make a best-effort.
-				let _ = T::Currency::transfer(&treasury, &tip.finder, finders_fee, KeepAlive);
-			}
+
+		if tip.finders_fee && tip.finder != tip.who {
+			// pay out the finder's fee.
+			let finders_fee = T::TipFindersFee::get() * payout;
+			payout -= finders_fee;
+			// this should go through given we checked it's at most the free balance, but still
+			// we only make a best-effort.
+			let _ = T::Currency::transfer(&treasury, &tip.finder, finders_fee, KeepAlive);
 		}
+
 		// same as above: best-effort only.
 		let _ = T::Currency::transfer(&treasury, &tip.who, payout, KeepAlive);
 		Self::deposit_event(RawEvent::TipClosed(hash, tip.who, payout));

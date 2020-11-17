@@ -137,23 +137,26 @@ mod benchmarking;
 pub mod weights;
 
 use sp_std::prelude::*;
-use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error};
+use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error};
+
 use frame_support::traits::{
-	Currency, Get, OnUnbalanced, ExistenceRequirement::{AllowDeath},
-	ReservableCurrency
+	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{KeepAlive, AllowDeath},
+	ReservableCurrency, WithdrawReasons
 };
 use sp_runtime::{Permill, ModuleId, RuntimeDebug, DispatchResult, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, BadOrigin
 }};
 use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_support::traits::{Contains, ContainsLengthBound, EnsureOrigin};
+use frame_support::weights::{Weight, DispatchClass};
 
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
 
-
 type BalanceOf<T, I> = pallet_treasury::BalanceOf<T, I>;
+
+type PositiveImbalanceOf<T, I> = pallet_treasury::PositiveImbalanceOf<T, I>;
 
 pub trait Trait<I=DefaultInstance>: frame_system::Trait + pallet_treasury::Trait<I> {
 
@@ -242,9 +245,13 @@ decl_storage! {
 		pub BountyCount get(fn bounty_count): BountyIndex;
 
 		/// Bounties that have been made.
-		pub StrBountiesMap get(fn bounties):
-			map hasher(twox_64_concat) BountyIndex
-			=> Option<Bounty<T::AccountId, BalanceOf<T, I>, T::BlockNumber>>;
+		// pub StrBountiesMap get(fn bounties):
+		// 	map hasher(twox_64_concat) BountyIndex
+		// 	=> Option<Bounty<T::AccountId, BalanceOf<T, I>, T::BlockNumber>>;
+
+		pub Bounties get(fn bounties):
+		map hasher(twox_64_concat) BountyIndex
+		=> Option<Bounty<T::AccountId, BalanceOf<T, I>, T::BlockNumber>>;
 
 		/// The description of each bounty.
 		pub BountyDescriptions get(fn bounty_descriptions): map hasher(twox_64_concat) BountyIndex => Option<Vec<u8>>;
@@ -380,7 +387,7 @@ decl_module! {
 		fn approve_bounty(origin, #[compact] bounty_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
-			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 				ensure!(bounty.status == BountyStatus::Proposed, Error::<T, I>::UnexpectedStatus);
 
@@ -411,7 +418,7 @@ decl_module! {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
 			let curator = T::Lookup::lookup(curator)?;
-			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 
 				// TODO re-visit
 				// let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
@@ -463,7 +470,7 @@ decl_module! {
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
-			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				let slash_curator = |curator: &T::AccountId, curator_deposit: &mut BalanceOf<T, I>| {
@@ -540,7 +547,7 @@ decl_module! {
 		fn accept_curator(origin, #[compact] bounty_id: ProposalIndex) {
 			let signer = ensure_signed(origin)?;
 
-			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				match bounty.status {
@@ -572,7 +579,7 @@ decl_module! {
 			let signer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
-			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 				match &bounty.status {
 					BountyStatus::Active {
@@ -604,7 +611,7 @@ decl_module! {
 		fn claim_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			let _ = ensure_signed(origin)?; // anyone can trigger claim
 
-			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.take().ok_or(Error::<T, I>::InvalidIndex)?;
 				if let BountyStatus::PendingPayout { curator, beneficiary, unlock_at } = bounty.status {
 					ensure!(system::Module::<T>::block_number() >= unlock_at, Error::<T, I>::Premature);
@@ -637,7 +644,7 @@ decl_module! {
 		fn close_bounty(origin, #[compact] bounty_id: BountyIndex) -> DispatchResultWithPostInfo {
 			T::RejectOrigin::ensure_origin(origin)?;
 
-			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResultWithPostInfo {
+			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResultWithPostInfo {
 				let bounty = maybe_bounty.as_ref().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				match &bounty.status {
@@ -699,7 +706,7 @@ decl_module! {
 		fn extend_bounty_expiry(origin, #[compact] bounty_id: BountyIndex, _remark: Vec<u8>) {
 			let signer = ensure_signed(origin)?;
 
-			StrBountiesMap::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
 				match bounty.status {
@@ -714,6 +721,22 @@ decl_module! {
 			})?;
 
 			Self::deposit_event(Event::<T, I>::BountyExtended(bounty_id));
+		}
+
+		/// # <weight>
+		/// - Complexity: `O(A)` where `A` is the number of approvals
+		/// - Db reads and writes: `Approvals`, `pot account data`
+		/// - Db reads and writes per approval:
+		///   `Proposals`, `proposer account data`, `beneficiary account data`
+		/// - The weight is overestimated if some approvals got missed.
+		/// # </weight>
+		fn on_initialize(n: T::BlockNumber) -> Weight {
+			// Check to see if we should spend some funds!
+			if (n % T::SpendPeriod::get()).is_zero() {
+				Self::spend_funds()
+			} else {
+				0
+			}
 		}
 	}
 }
@@ -763,7 +786,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			status: BountyStatus::Proposed,
 		};
 
-		StrBountiesMap::<T, I>::insert(index, &bounty);
+		Bounties::<T, I>::insert(index, &bounty);
 		BountyDescriptions::<I>::insert(index, description);
 
 		Self::deposit_event(RawEvent::BountyProposed(index));
@@ -771,6 +794,109 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		Ok(())
 	}
 
+	/// Spend some money! returns number of approvals before spend.
+	fn spend_funds() -> Weight {
+
+		let mut total_weight: Weight = Zero::zero();
+		let account_id = Self::account_id();
+		let mut budget_remaining = pallet_treasury::Module::<T,I>::pot();
+
+		pallet_treasury::Module::<T,I>::deposit_event(pallet_treasury::RawEvent::Spending(budget_remaining));
+
+		let mut missed_any = false;
+		let mut imbalance = <PositiveImbalanceOf<T, I>>::zero();
+		let proposals_len = pallet_treasury::Approvals::<I>::mutate(|v| {
+			let proposals_approvals_len = v.len() as u32;
+			v.retain(|&index| {
+				// Should always be true, but shouldn't panic if false or we're screwed.
+				if let Some(p) = pallet_treasury::Module::<T,I>::proposals(index) {
+					if p.value <= budget_remaining {
+						budget_remaining -= p.value;
+						pallet_treasury::Proposals::<T, I>::remove(index);
+
+						// return their deposit.
+						let _ = T::Currency::unreserve(&p.proposer, p.bond);
+
+						// provide the allocation.
+						imbalance.subsume(T::Currency::deposit_creating(&p.beneficiary, p.value));
+						pallet_treasury::Module::<T,I>::deposit_event(pallet_treasury::RawEvent::Awarded(index, p.value, p.beneficiary));
+						false
+					} else {
+						missed_any = true;
+						true
+					}
+				} else {
+					false
+				}
+			});
+			proposals_approvals_len
+		});
+
+		total_weight += T::BouWeightInfo::on_initialize_proposals(proposals_len);
+
+		let bounties_len = BountyApprovals::<I>::mutate(|v| {
+			let bounties_approval_len = v.len() as u32;
+			v.retain(|&index| {
+				Bounties::<T, I>::mutate(index, |bounty| {
+					// Should always be true, but shouldn't panic if false or we're screwed.
+					if let Some(bounty) = bounty {
+						if bounty.value <= budget_remaining {
+							budget_remaining -= bounty.value;
+
+							bounty.status = BountyStatus::Funded;
+
+							// return their deposit.
+							let _ = T::Currency::unreserve(&bounty.proposer, bounty.bond);
+
+							// fund the bounty account
+							imbalance.subsume(T::Currency::deposit_creating(&Self::bounty_account_id(index), bounty.value));
+
+							Self::deposit_event(RawEvent::BountyBecameActive(index));
+							false
+						} else {
+							missed_any = true;
+							true
+						}
+					} else {
+						false
+					}
+				})
+			});
+			bounties_approval_len
+		});
+
+		total_weight += T::BouWeightInfo::on_initialize_bounties(bounties_len);
+
+		if !missed_any {
+			// burn some proportion of the remaining budget if we run a surplus.
+			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
+			budget_remaining -= burn;
+
+			let (debit, credit) = T::Currency::pair(burn);
+			imbalance.subsume(debit);
+			T::BurnDestination::on_unbalanced(credit);
+			pallet_treasury::Module::<T,I>::deposit_event(pallet_treasury::RawEvent::Burnt(burn))
+		}
+
+		// Must never be an error, but better to be safe.
+		// proof: budget_remaining is account free balance minus ED;
+		// Thus we can't spend more than account free balance minus ED;
+		// Thus account is kept alive; qed;
+		if let Err(problem) = T::Currency::settle(
+			&account_id,
+			imbalance,
+			WithdrawReasons::TRANSFER,
+			KeepAlive
+		) {
+			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
+			// Nothing else to do here.
+			drop(problem);
+		}
+
+		pallet_treasury::Module::<T,I>::deposit_event(pallet_treasury::RawEvent::Rollover(budget_remaining));
+
+		total_weight
+	}
 }
 
 // impl<T: Trait<I>, I: Instance> OnUnbalanced<NegativeImbalanceOf<T, I>> for Module<T, I> {

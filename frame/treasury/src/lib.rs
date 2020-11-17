@@ -216,13 +216,13 @@ pub type ProposalIndex = u32;
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Proposal<AccountId, Balance> {
 	/// The account proposing it.
-	proposer: AccountId,
+	pub proposer: AccountId,
 	/// The (total) amount that should be paid if the proposal is accepted.
-	value: Balance,
+	pub value: Balance,
 	/// The account to whom the payment should be made if the proposal is accepted.
-	beneficiary: AccountId,
+	pub beneficiary: AccountId,
 	/// The amount held on deposit (reserved) for making this proposal.
-	bond: Balance,
+	pub bond: Balance,
 }
 
 decl_storage! {
@@ -231,12 +231,12 @@ decl_storage! {
 		ProposalCount get(fn proposal_count): ProposalIndex;
 
 		/// Proposals that have been made.
-		Proposals get(fn proposals):
+		pub Proposals get(fn proposals):
 			map hasher(twox_64_concat) ProposalIndex
 			=> Option<Proposal<T::AccountId, BalanceOf<T, I>>>;
 
 		/// Proposal indices that have been approved but not yet awarded.
-		Approvals get(fn approvals): Vec<ProposalIndex>;
+		pub Approvals get(fn approvals): Vec<ProposalIndex>;
 	}
 	add_extra_genesis {
 		build(|_config| {
@@ -310,7 +310,7 @@ decl_module! {
 
 		type Error = Error<T, I>;
 
-		fn deposit_event() = default;
+		pub fn deposit_event() = default;
 
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
@@ -460,39 +460,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		});
 
 		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
-
-		// let bounties_len = BountyApprovals::<I>::mutate(|v| {
-		// 	let bounties_approval_len = v.len() as u32;
-		// 	v.retain(|&index| {
-		// 		Bounties::<T, I>::mutate(index, |bounty| {
-		// 			// Should always be true, but shouldn't panic if false or we're screwed.
-		// 			if let Some(bounty) = bounty {
-		// 				if bounty.value <= budget_remaining {
-		// 					budget_remaining -= bounty.value;
-
-		// 					bounty.status = BountyStatus::Funded;
-
-		// 					// return their deposit.
-		// 					let _ = T::Currency::unreserve(&bounty.proposer, bounty.bond);
-
-		// 					// fund the bounty account
-		// 					imbalance.subsume(T::Currency::deposit_creating(&Self::bounty_account_id(index), bounty.value));
-
-		// 					Self::deposit_event(RawEvent::BountyBecameActive(index));
-		// 					false
-		// 				} else {
-		// 					missed_any = true;
-		// 					true
-		// 				}
-		// 			} else {
-		// 				false
-		// 			}
-		// 		})
-		// 	});
-		// 	bounties_approval_len
-		// });
-
-		// total_weight += T::WeightInfo::on_initialize_bounties(bounties_len);
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.

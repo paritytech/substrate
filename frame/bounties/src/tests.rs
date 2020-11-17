@@ -483,7 +483,7 @@ fn close_bounty_works() {
 
 		assert_eq!(Bounties::bounties(0), None);
 		// TODO :: re-visit
-		// assert!(!Bounties::<Test>::contains_key(0));
+		// assert!(!Treasury::Proposals::contains_key(0));
 		assert_eq!(Bounties::bounty_descriptions(0), None);
 	});
 }
@@ -517,34 +517,24 @@ fn approve_bounty_works() {
 		assert_eq!(Balances::reserved_balance(0), deposit);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Bounties as OnInitialize<u64>>::on_initialize(2);
 
 		// return deposit
-		// TODO re-visit
-		// assert_eq!(Balances::reserved_balance(0), 0);
-		// assert_eq!(Balances::free_balance(0), 100);
+		assert_eq!(Balances::reserved_balance(0), 0);
+		assert_eq!(Balances::free_balance(0), 100);
 
 		// TODO re-visit
-		// assert_eq!(Bounties::bounties(0).unwrap(), Bounty {
-		// 	proposer: 0,
-		// 	fee: 0,
-		// 	curator_deposit: 0,
-		// 	value: 50,
-		// 	bond: deposit,
-		// 	status: BountyStatus::Funded,
-		// });
 		assert_eq!(Bounties::bounties(0).unwrap(), Bounty {
 			proposer: 0,
 			fee: 0,
 			curator_deposit: 0,
 			value: 50,
 			bond: deposit,
-			status: BountyStatus::Approved,
+			status: BountyStatus::Funded,
 		});
 
-		// TODO re-visit
-		// assert_eq!(Treasury::pot(), 100 - 50 - 25); // burn 25
-		// assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 50);
+		assert_eq!(Treasury::pot(), 100 - 50 - 25); // burn 25
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 50);
 	});
 }
 
@@ -561,7 +551,7 @@ fn assign_curator_works() {
 		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Bounties as OnInitialize<u64>>::on_initialize(2);
 
 		assert_noop!(Bounties::propose_curator(Origin::root(), 0, 4, 50), Error::<Test, _>::InvalidFee);
 
@@ -612,7 +602,7 @@ fn unassign_curator_works() {
 		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Bounties as OnInitialize<u64>>::on_initialize(2);
 
 		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
 
@@ -690,7 +680,7 @@ fn award_and_claim_bounty_works() {
 		assert_noop!(Bounties::claim_bounty(Origin::signed(1), 0), Error::<Test, _>::Premature);
 
 		System::set_block_number(5);
-		<Treasury as OnInitialize<u64>>::on_initialize(5);
+		<Bounties as OnInitialize<u64>>::on_initialize(5);
 
 		assert_ok!(Balances::transfer(Origin::signed(0), Bounties::bounty_account_id(0), 10));
 
@@ -720,7 +710,7 @@ fn claim_handles_high_fee() {
 		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Bounties as OnInitialize<u64>>::on_initialize(2);
 
 		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 49));
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
@@ -728,7 +718,7 @@ fn claim_handles_high_fee() {
 		assert_ok!(Bounties::award_bounty(Origin::signed(4), 0, 3));
 
 		System::set_block_number(5);
-		<Treasury as OnInitialize<u64>>::on_initialize(5);
+		<Bounties as OnInitialize<u64>>::on_initialize(5);
 
 		// make fee > balance
 		let _ = Balances::slash(&Bounties::bounty_account_id(0), 10);
@@ -738,8 +728,7 @@ fn claim_handles_high_fee() {
 		// TODO :: re-visit
 		// assert_eq!(last_event(), RawEvent::BountyClaimed(0, 0, 3));
 
-		// TODO :: re-visit
-		// assert_eq!(Balances::free_balance(4), 70); // 30 + 50 - 10
+		assert_eq!(Balances::free_balance(4), 70); // 30 + 50 - 10
 		assert_eq!(Balances::free_balance(3), 0);
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 0);
 
@@ -758,40 +747,27 @@ fn cancel_and_refund() {
 		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Bounties as OnInitialize<u64>>::on_initialize(2);
 
 		assert_ok!(Balances::transfer(Origin::signed(0), Bounties::bounty_account_id(0), 10));
 
 		// TODO :: re-visit
-		// assert_eq!(Bounties::bounties(0).unwrap(), Bounty {
-		// 	proposer: 0,
-		// 	fee: 0,
-		// 	curator_deposit: 0,
-		// 	value: 50,
-		// 	bond: 85,
-		// 	status: BountyStatus::Funded,
-		// });
-
 		assert_eq!(Bounties::bounties(0).unwrap(), Bounty {
 			proposer: 0,
 			fee: 0,
 			curator_deposit: 0,
 			value: 50,
 			bond: 85,
-			status: BountyStatus::Approved,
+			status: BountyStatus::Funded,
 		});
 
-		// TODO :: re-visit
-		// assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 60);
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 60);
 
 		assert_noop!(Bounties::close_bounty(Origin::signed(0), 0), BadOrigin);
 
-		// TODO :: re-visit
-		// assert_ok!(Bounties::close_bounty(Origin::root(), 0));
-		assert_noop!(Bounties::close_bounty(Origin::root(), 0), Error::<Test, _>::UnexpectedStatus);
+		assert_ok!(Bounties::close_bounty(Origin::root(), 0));
 
-		// TODO :: re-visit
-		// assert_eq!(Treasury::pot(), 85); // - 25 + 10
+		assert_eq!(Treasury::pot(), 85); // - 25 + 10
 	});
 }
 
@@ -805,14 +781,14 @@ fn award_and_cancel() {
 		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Bounties as OnInitialize<u64>>::on_initialize(2);
 
 		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 0, 10));
 		assert_ok!(Bounties::accept_curator(Origin::signed(0), 0));
 
 		// TODO :: re-visit
-		// assert_eq!(Balances::free_balance(0), 95);
-		// assert_eq!(Balances::reserved_balance(0), 5);
+		assert_eq!(Balances::free_balance(0), 95);
+		assert_eq!(Balances::reserved_balance(0), 5);
 
 		assert_ok!(Bounties::award_bounty(Origin::signed(0), 0, 3));
 
@@ -827,10 +803,10 @@ fn award_and_cancel() {
 		// assert_eq!(last_event(), RawEvent::BountyCanceled(0));
 
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 0);
+
 		// Slashed.
-		// TODO :: re-visit
-		// assert_eq!(Balances::free_balance(0), 95);
-		// assert_eq!(Balances::reserved_balance(0), 0);
+		assert_eq!(Balances::free_balance(0), 95);
+		assert_eq!(Balances::reserved_balance(0), 0);
 
 		assert_eq!(Bounties::bounties(0), None);
 		assert_eq!(Bounties::bounty_descriptions(0), None);
@@ -847,7 +823,7 @@ fn expire_and_unassign() {
 		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Bounties as OnInitialize<u64>>::on_initialize(2);
 
 		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 1, 10));
 		assert_ok!(Bounties::accept_curator(Origin::signed(1), 0));
@@ -856,12 +832,12 @@ fn expire_and_unassign() {
 		assert_eq!(Balances::reserved_balance(1), 5);
 
 		System::set_block_number(22);
-		<Treasury as OnInitialize<u64>>::on_initialize(22);
+		<Bounties as OnInitialize<u64>>::on_initialize(22);
 
 		assert_noop!(Bounties::unassign_curator(Origin::signed(0), 0), Error::<Test, _>::Premature);
 
 		System::set_block_number(23);
-		<Treasury as OnInitialize<u64>>::on_initialize(23);
+		<Bounties as OnInitialize<u64>>::on_initialize(23);
 
 		assert_ok!(Bounties::unassign_curator(Origin::signed(0), 0));
 
@@ -893,7 +869,7 @@ fn extend_expiry() {
 		assert_noop!(Bounties::extend_bounty_expiry(Origin::signed(1), 0, Vec::new()), Error::<Test, _>::UnexpectedStatus);
 
 		System::set_block_number(2);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Bounties as OnInitialize<u64>>::on_initialize(2);
 
 		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 10));
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
@@ -902,7 +878,7 @@ fn extend_expiry() {
 		assert_eq!(Balances::reserved_balance(4), 5);
 
 		System::set_block_number(10);
-		<Treasury as OnInitialize<u64>>::on_initialize(10);
+		<Bounties as OnInitialize<u64>>::on_initialize(10);
 
 		assert_noop!(Bounties::extend_bounty_expiry(Origin::signed(0), 0, Vec::new()), Error::<Test, _>::RequireCurator);
 		assert_ok!(Bounties::extend_bounty_expiry(Origin::signed(4), 0, Vec::new()));
@@ -928,7 +904,7 @@ fn extend_expiry() {
 		});
 
 		System::set_block_number(25);
-		<Treasury as OnInitialize<u64>>::on_initialize(25);
+		<Bounties as OnInitialize<u64>>::on_initialize(25);
 
 		assert_noop!(Bounties::unassign_curator(Origin::signed(0), 0), Error::<Test, _>::Premature);
 		assert_ok!(Bounties::unassign_curator(Origin::signed(4), 0));
