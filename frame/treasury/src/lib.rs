@@ -422,7 +422,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Spend some money! returns number of approvals before spend.
-	fn spend_funds() -> Weight {
+	pub fn spend_funds() -> Weight {
 		let mut total_weight: Weight = Zero::zero();
 
 		let mut budget_remaining = Self::pot();

@@ -794,6 +794,94 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		Ok(())
 	}
 
+// TODO :: re-Visit
+// Implementation-1 :: below two test cases are failing with spend_funds() mtd
+// failures:
+//     tests::approve_bounty_works
+//     tests::cancel_and_refund
+/*
+	/// Spend some money! returns number of approvals before spend.
+	fn spend_funds() -> Weight {
+
+		let mut total_weight: Weight = Zero::zero();
+		let account_id = Self::account_id();
+		let mut budget_remaining = pallet_treasury::Module::<T,I>::pot();
+
+		pallet_treasury::Module::<T,I>::deposit_event(pallet_treasury::RawEvent::Spending(budget_remaining));
+
+		let mut missed_any = false;
+		let mut imbalance = <PositiveImbalanceOf<T, I>>::zero();
+
+		let proposals_len = pallet_treasury::Module::<T,I>::spend_funds() as u32;
+
+		total_weight += T::BouWeightInfo::on_initialize_proposals(proposals_len);
+
+		budget_remaining = pallet_treasury::Module::<T,I>::pot();
+
+		let bounties_len = BountyApprovals::<I>::mutate(|v| {
+			let bounties_approval_len = v.len() as u32;
+			v.retain(|&index| {
+				Bounties::<T, I>::mutate(index, |bounty| {
+					// Should always be true, but shouldn't panic if false or we're screwed.
+					if let Some(bounty) = bounty {
+						if bounty.value <= budget_remaining {
+							budget_remaining -= bounty.value;
+
+							bounty.status = BountyStatus::Funded;
+
+							// return their deposit.
+							let _ = T::Currency::unreserve(&bounty.proposer, bounty.bond);
+
+							// fund the bounty account
+							imbalance.subsume(T::Currency::deposit_creating(&Self::bounty_account_id(index), bounty.value));
+
+							Self::deposit_event(RawEvent::BountyBecameActive(index));
+							false
+						} else {
+							missed_any = true;
+							true
+						}
+					} else {
+						false
+					}
+				})
+			});
+			bounties_approval_len
+		});
+
+		total_weight += T::BouWeightInfo::on_initialize_bounties(bounties_len);
+
+		if !missed_any {
+			// burn some proportion of the remaining budget if we run a surplus.
+			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
+			budget_remaining -= burn;
+
+			let (debit, credit) = T::Currency::pair(burn);
+			imbalance.subsume(debit);
+			T::BurnDestination::on_unbalanced(credit);
+			pallet_treasury::Module::<T,I>::deposit_event(pallet_treasury::RawEvent::Burnt(burn))
+		}
+
+		// Must never be an error, but better to be safe.
+		// proof: budget_remaining is account free balance minus ED;
+		// Thus we can't spend more than account free balance minus ED;
+		// Thus account is kept alive; qed;
+		if let Err(problem) = T::Currency::settle(
+			&account_id,
+			imbalance,
+			WithdrawReasons::TRANSFER,
+			KeepAlive
+		) {
+			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
+			// Nothing else to do here.
+			drop(problem);
+		}
+
+		pallet_treasury::Module::<T,I>::deposit_event(pallet_treasury::RawEvent::Rollover(budget_remaining));
+
+		total_weight
+	}
+*/
 	/// Spend some money! returns number of approvals before spend.
 	fn spend_funds() -> Weight {
 
@@ -897,15 +985,5 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 		total_weight
 	}
+
 }
-
-// impl<T: Trait<I>, I: Instance> OnUnbalanced<NegativeImbalanceOf<T, I>> for Module<T, I> {
-// 	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T, I>) {
-// 		let numeric_amount = amount.peek();
-
-// 		// Must resolve into existing but better to be safe.
-// 		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
-
-// 		Self::deposit_event(RawEvent::Deposit(numeric_amount));
-// 	}
-// }
