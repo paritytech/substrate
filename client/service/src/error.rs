@@ -29,6 +29,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Service errors.
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
+#[non_exhaustive]
 pub enum Error {
 	#[error(transparent)]
 	Client(#[from] sp_blockchain::Error),
