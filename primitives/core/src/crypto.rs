@@ -508,6 +508,8 @@ ss58_address_format!(
 		(37, "nodle", "Nodle Chain mainnet, standard account (*25519).")
 	KiltAccount =>
 		(38, "kilt", "KILT Chain mainnet, standard account (*25519).")
+	PolimecAccount =>
+		(41, "poli", "Polimec Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
 	Reserved43 =>

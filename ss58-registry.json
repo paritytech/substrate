@@ -326,6 +326,15 @@
 			"website": "https://mathwallet.org"
 		},
 		{
+			"prefix": 41,
+			"network": "poli",
+			"displayName": "Polimec Chain",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": "https://polimec.io/"
+		},
+		{
 			"prefix": 42,
 			"network": "substrate",
 			"displayName": "Substrate",
