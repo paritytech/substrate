@@ -52,6 +52,11 @@ const DEFAULT_HEAP_PAGES: u64 = 1024;
 pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
+	// TODO here externalities is used as environmental and inherently is
+	// making the `AssertUnwindSafe` assertion, that is not true.
+	// Worst case is probably locked mutex, so not that harmfull.
+	// The thread scenario adds a bit over it but there was already
+	// locked backend.
 	sp_externalities::set_and_run_with_externalities(
 		ext,
 		move || {
@@ -299,6 +304,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 
 /// Helper inner struct to implement `RuntimeSpawn` extension.
 /// TODO consider Arc outside of the spawn: to many here
+#[derive(Clone)]
 pub struct RuntimeInstanceSpawn {
 	module: Arc<dyn WasmModule>,
 	tasks: Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
@@ -385,16 +391,9 @@ enum Processing {
 }
 impl RuntimeInstanceSpawn {
 	fn rec_clone(&self) -> Self {
-		RuntimeInstanceSpawn {
-			module: self.module.clone(),
-			tasks: self.tasks.clone(),
-			counter: self.counter.clone(),
-			scheduler: self.scheduler.clone(),
-			task_receiver: self.task_receiver.clone(),
-			task_sender: self.task_sender.clone(),
-			instance: Arc::new(parking_lot::Mutex::new(None)),
-			recursive_level: self.recursive_level + 1,
-		}
+		let mut result = self.clone();
+		result.recursive_level += 1;
+		result
 	}
 
 	fn remove(&self, handle: u64) -> RuningTask {
@@ -432,16 +431,20 @@ impl RuntimeInstanceSpawn {
 		let scheduler = self.scheduler.clone();
 		let task_receiver = self.task_receiver.clone();
 		let tasks = self.tasks.clone();
-		let runtime_spawn = self.rec_clone();
+		let runtime_spawn = Box::new(self.rec_clone());
+		let module = AssertUnwindSafe(module);
 		self.scheduler.spawn("executor-extra-runtime-instance", Box::pin(async move {
-			let module = AssertUnwindSafe(module);
-
-			let async_ext = match new_async_externalities(scheduler.clone(), backend) {
-				Ok(val) => val,
+			// FIXME: Should be refactored to shared "instance factory".
+			// Instantiating wasm here every time is suboptimal at the moment, shared
+			// pool of instances should be used.
+			//
+			// https://github.com/paritytech/substrate/issues/7354
+			let mut instance = match module.new_instance() {
+				Ok(val) => AssertUnwindSafe(val),
 				Err(e) => {
 					log::error!(
 						target: "executor",
-						"Failed to setup externalities for async context: {}",
+						"Failed to create new instance for module for async context: {}",
 						e,
 					);
 
@@ -450,59 +453,83 @@ impl RuntimeInstanceSpawn {
 				}
 			};
 
-			let mut async_ext = match async_ext.with_runtime_spawn(
-				Box::new(runtime_spawn)
-			) {
-				Ok(val) => val,
-				Err(e) => {
-					log::error!(
-						target: "executor",
-						"Failed to setup runtime extension for async externalities: {}",
-						e,
-					);
-
-					tasks.lock().finished();
-					return;
+			let task_receiver = task_receiver.clone();
+			while let PendingTask { task: Task { dispatcher_ref, func, data }, result_sender } = { 
+				let task_receiver_locked = task_receiver.lock();
+				task_receiver_locked.recv()
+			}.expect("Sender dropped, closing all instance.") {
+				if backend.is_some() {
+					println!("dummy check, TODO move backend in message");
 				}
-			};
-
-			// We allow ourselve to assert unwind safe because we should not panic under this lock,
-			// otherwhise we can switch to using std mutex, but it would need to handle poisoning
-			// to restart a call.
-			let task_receiver = std::panic::AssertUnwindSafe(task_receiver.clone());
-			with_externalities_safe(
-				&mut async_ext,
-				move || {
-					// FIXME: Should be refactored to shared "instance factory".
-					// Instantiating wasm here every time is suboptimal at the moment, shared
-					// pool of instances should be used.
-					//
-					// https://github.com/paritytech/substrate/issues/7354
-					let instance = module.new_instance()
-						.expect("Failed to create new instance from module");
-
-					while let PendingTask { task: Task { dispatcher_ref, func, data }, result_sender } =
-						{ 
-							let task_receiver_locked = task_receiver.lock();
-							task_receiver_locked.recv()
-						}
-							.expect("Sender dropped, closing all instance.") {
-						let result = instance.call(
-							InvokeMethod::TableWithWrapper { dispatcher_ref, func },
-							&data[..],
+				let async_ext = match new_async_externalities(scheduler.clone(), None) {
+					Ok(val) => val,
+					Err(e) => {
+						log::error!(
+							target: "executor",
+							"Failed to setup externalities for async context: {}",
+							e,
 						);
-						match result {
-							Ok(output) => {
-								let _ = result_sender.send(Some(output));
-							},
+
+						// TODO send back message and count (to run non asynch at some point).
+						// tasks.lock().finished();
+						continue;
+					}
+				};
+				let mut async_ext = match async_ext.with_runtime_spawn(runtime_spawn.clone()) {
+					Ok(val) => val,
+					Err(e) => {
+						log::error!(
+							target: "executor",
+							"Failed to setup runtime extension for async externalities: {}",
+							e,
+						);
+
+						// TODO send back message and count (to run non asynch at some point).
+						// tasks.lock().finished();
+						continue;
+					}
+				};
+
+				match with_externalities_safe(
+					&mut async_ext,
+					|| instance.call(
+						InvokeMethod::TableWithWrapper { dispatcher_ref, func },
+						&data[..],
+					)
+				) {
+					Ok(result) => {
+						if let Err(_) = result_sender.send(match result {
+							Ok(output) => Some(output),
 							Err(error) => {
 								log::error!("Call error in spawned task: {:?}", error);
-								let _ = result_sender.send(None);
+								None
 							},
+						}) {
+							// close channel just end this
+								tasks.lock().finished();
+								return;
+						}
+					},
+					Err(error) => {
+						log::error!("Panic error in spawned task: {:?}", error);
+						// reinstantiat wam, TODO could wasm instance unwind
+						// cleanly, probably not.
+						instance = match module.new_instance() {
+							Ok(val) => AssertUnwindSafe(val),
+							Err(e) => {
+								log::error!(
+									target: "executor",
+									"Failed to create new instance for module for async context: {}",
+									e,
+								);
+
+								tasks.lock().finished();
+								return;
+							}
 						}
 					}
 				}
-			);
+			}
 
 			tasks.lock().finished();
 		}));
