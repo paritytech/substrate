@@ -314,11 +314,9 @@ pub mod tests {
 
 	pub type OkCallFetcher = Mutex<Vec<u8>>;
 
-	fn not_implemented_in_tests<T, E>() -> Ready<Result<T, E>>
-	where
-		E: std::convert::From<&'static str>,
+	fn not_implemented_in_tests<T>() -> Ready<Result<T, ClientError>>
 	{
-		futures::future::ready(Err("Not implemented on test node".into()))
+		futures::future::ready(Err(ClientError::Mock("Not implemented on test node")))
 	}
 
 	impl Fetcher<Block> for OkCallFetcher {
