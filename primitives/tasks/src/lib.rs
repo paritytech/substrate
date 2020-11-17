@@ -23,17 +23,19 @@
 //! NOTE: When using in actual runtime, make sure you don't produce unbounded parallelism.
 //! So this is bad example to use it:
 //! ```rust
+//!    use sp_tasks::AsyncStateType;
 //!    fn my_parallel_computator(data: Vec<u8>) -> Vec<u8> {
 //!        unimplemented!()
 //!    }
 //!    fn test(dynamic_variable: i32) {
-//!        for _ in 0..dynamic_variable { sp_tasks::spawn(my_parallel_computator, vec![], None); }
+//!        for _ in 0..dynamic_variable { sp_tasks::spawn(my_parallel_computator, vec![], AsyncStateType::None); }
 //!    }
 //! ```
 //!
 //! While this is a good example:
 //! ```rust
 //!    use codec::Encode;
+//!    use sp_tasks::AsyncStateType;
 //!    static STATIC_VARIABLE: i32 = 4;
 //!
 //!    fn my_parallel_computator(data: Vec<u8>) -> Vec<u8> {
@@ -44,7 +46,7 @@
 //!        let parallel_tasks = (0..STATIC_VARIABLE).map(|idx| sp_tasks::spawn(
 //!            my_parallel_computator,
 //!            computation_payload.chunks(10).nth(idx as _).encode(),
-//!            None,
+//!            AsyncStateType::None,
 //!        ));
 //!    }
 //! ```
@@ -59,13 +61,42 @@
 mod async_externalities;
 
 #[cfg(feature = "std")]
-pub use async_externalities::{new_async_externalities, AsyncExternalities, AsyncBackend};
+pub use async_externalities::{new_async_externalities, AsyncExternalities, AsyncBackend, AsyncExt};
+
+/// Type for `AsyncState`.
+/// TODO rename to stick with doc for all ASyncExt builders.
+#[derive(Debug)]
+#[repr(u8)]
+pub enum AsyncStateType {
+	None = 0,
+	ReadBefore = 1,
+	ReadAtSpawn = 2,
+}
+
+impl Default for AsyncStateType {
+	fn default() -> Self {
+		AsyncStateType::None
+	}
+}
+
+impl AsyncStateType {
+	/// Similar purpose as `TryFrom<u8>`.
+	pub fn from_u8(kind: u8) -> Option<AsyncStateType> {
+		Some(match kind {
+			0 => AsyncStateType::None,
+			1 => AsyncStateType::ReadBefore,
+			2 => AsyncStateType::ReadAtSpawn,
+			_ => return None,
+		})
+	}
+}
 
 #[cfg(feature = "std")]
 mod inner {
 	use std::{panic::AssertUnwindSafe, sync::mpsc};
 	use sp_externalities::ExternalitiesExt as _;
 	use sp_core::traits::TaskExecutorExt;
+	use crate::{AsyncExt, AsyncStateType};
 
 	/// Task handle (wasm).
 	///
@@ -97,12 +128,17 @@ mod inner {
 	pub fn spawn(
 		entry_point: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		backend: Option<Box<dyn crate::AsyncBackend>>,
+		kind: AsyncStateType,
 	) -> DataJoinHandle {
 		let scheduler = sp_externalities::with_externalities(|mut ext| ext.extension::<TaskExecutorExt>()
 			.expect("No task executor associated with the current context!")
 			.clone()
 		).expect("Spawn called outside of externalities context!");
+
+		let backend = match kind {
+			AsyncStateType::None => AsyncExt::stateless_ext(),
+			_ => unimplemented!("TODO need handle on state machine and generally a thread pool like for wasm"),
+		};
 
 		let (sender, receiver) = mpsc::channel();
 		let extra_scheduler = scheduler.clone();
@@ -151,6 +187,7 @@ mod inner {
 mod inner {
 	use core::mem;
 	use sp_std::prelude::*;
+	use crate::AsyncStateType;
 
 	/// Dispatch wrapper for wasm blob.
 	///
@@ -178,13 +215,14 @@ mod inner {
 	}
 
 	/// Spawn new runtime task (wasm).
-	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>) -> DataJoinHandle {
+	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>, kind: AsyncStateType) -> DataJoinHandle {
 		let func_ptr: usize = unsafe { mem::transmute(entry_point) };
 
 		let handle = sp_io::runtime_tasks::spawn(
 			dispatch_wrapper as usize as _,
 			func_ptr as u32,
 			payload,
+			kind as u8,
 		);
 		DataJoinHandle { handle }
 	}
@@ -230,7 +268,7 @@ mod tests {
 	#[test]
 	fn basic() {
 		sp_io::TestExternalities::default().execute_with(|| {
-			let a1 = spawn(async_runner, vec![5, 2, 1], None).join();
+			let a1 = spawn(async_runner, vec![5, 2, 1], AsyncStateType::None).join();
 			assert_eq!(a1, vec![1, 2, 5]);
 		})
 	}
@@ -238,7 +276,7 @@ mod tests {
 	#[test]
 	fn panicking() {
 		let res = sp_io::TestExternalities::default().execute_with_safe(||{
-			spawn(async_panicker, vec![5, 2, 1], None).join();
+			spawn(async_panicker, vec![5, 2, 1], AsyncStateType::None).join();
 		});
 
 		assert!(res.unwrap_err().contains("Closure panicked"));
@@ -258,7 +296,7 @@ mod tests {
 						3 * running_val + 1
 					};
 					data.push(running_val as u8);
-					(spawn(async_runner, data.clone(), None), data.clone())
+					(spawn(async_runner, data.clone(), AsyncStateType::None), data.clone())
 				}
 			).collect::<Vec<_>>();
 

@@ -19,13 +19,14 @@
 //! Async externalities.
 
 pub use sp_state_machine::AsyncBackend;
-use std::any::{TypeId, Any};
+use sp_std::any::{TypeId, Any};
 use sp_std::boxed::Box;
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	traits::{Externalities, SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
 use sp_externalities::{Extensions, ExternalitiesExt as _};
+use crate::AsyncStateType;
 
 
 /// TODO doc
@@ -47,20 +48,6 @@ impl Default for AsyncState {
 	}
 }
 
-/// Type for `AsyncState`.
-#[derive(Debug)]
-enum AsyncStateType {
-	None,
-	ReadBefore,
-	ReadAtSpawn,
-}
-
-impl Default for AsyncStateType {
-	fn default() -> Self {
-		AsyncStateType::None
-	}
-}
-
 pub type CheckpointState = u64;
 
 pub enum AsyncStateResult {
@@ -77,9 +64,70 @@ pub enum AsyncStateResult {
 /// and have just `dyn Ext + Send + Sync`
 pub struct AsyncExt {
 	kind: AsyncStateType,
-	overlay: sp_state_machine::OverlayedChanges,
+	// TODO consider Optional, also this is copy, this could synch.
+	read_overlay: sp_state_machine::OverlayedChanges,
 	spawn_id: Option<CheckpointState>,
 	backend: Option<Box<dyn AsyncBackend>>,
+}
+
+impl AsyncExt {
+	/// Spawn a thread with no state access.
+	///
+	/// No impact on master thread, no need to
+	/// assert the thread did join.
+	/// 
+	/// (But there is no sense in runing if we do not join or kill).
+	/// TODO remember that when inline we run at join or not at all
+	/// for kill so using no panic handler is the same as transmitting
+	/// panic to parent on join.
+	/// TODO make panic in thread panic the master threaod too !!!
+	pub fn stateless_ext() -> Self {
+		AsyncExt {
+			kind: AsyncStateType::None,
+			read_overlay: Default::default(),
+			spawn_id: None,
+			backend: None,
+		}
+	}
+
+	/// Spawn a thread with access to previous
+	/// block state only.
+	///
+	/// No impact on master thread, no need to
+	/// assert the thread did join.
+	pub fn previous_block_read(backend: Box<dyn AsyncBackend>) -> Self {
+		AsyncExt {
+			kind: AsyncStateType::ReadBefore,
+			read_overlay: Default::default(),
+			spawn_id: None,
+			backend: Some(backend),
+		}
+	}
+
+	/// Spawn a thread with access to state at
+	/// the time the thread did spawn.
+	/// This contains a copy of the overlay at the time of spawn.
+	///
+	/// A spawn id transaction is inserted before copy in the overlay and the parent
+	/// thread will be able to know on join if it is on a the same transaction level.
+	///
+	/// Still there is no strong failure case, the master thread should choose behavior
+	/// to adopt when receiving data that is not in synch with the original spawn_id.
+	///
+	/// TODO return original id on join plus a new ext on master (also on child for rec thread) to know if same tx or parent tx
+	/// or dropped tx.
+	pub fn state_at_spawn_read(
+		backend: Box<dyn AsyncBackend>,
+		overlay: sp_state_machine::OverlayedChanges,
+		spawn_id: CheckpointState,
+	) -> Self {
+		AsyncExt {
+			kind: AsyncStateType::ReadBefore,
+			read_overlay: Default::default(),
+			spawn_id: Some(spawn_id),
+			backend: Some(backend),
+		}
+	}
 }
 
 /// Simple state-less externalities for use in async context.
@@ -102,17 +150,12 @@ impl std::fmt::Debug for AsyncExt
 /// New Async externalities.
 pub fn new_async_externalities(
 	scheduler: Box<dyn SpawnNamed>,
-	backend: Option<Box<dyn AsyncBackend>>,
+	async_ext: AsyncExt,
 ) -> Result<AsyncExternalities, &'static str> {
 	let mut res = AsyncExternalities {
 		extensions: Default::default(),
 		// TODO as param
-		state: AsyncExt {
-			kind: Default::default(),
-			overlay: Default::default(),
-			spawn_id: None,
-			backend,
-		},
+		state: async_ext,
 	};
 	let mut ext = &mut res as &mut dyn Externalities;
 	ext.register_extension::<TaskExecutorExt>(TaskExecutorExt(scheduler.clone()))

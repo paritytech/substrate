@@ -41,7 +41,7 @@ use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
 use sp_externalities::ExternalitiesExt as _;
-use sp_tasks::{new_async_externalities, AsyncBackend};
+use sp_tasks::{new_async_externalities, AsyncBackend, AsyncExt, AsyncStateType};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -340,6 +340,7 @@ struct Task {
 
 struct PendingTask {
 	task: Task,
+	ext: AsyncExt,
 	result_sender: mpsc::Sender<Option<Vec<u8>>>,
 }
 
@@ -411,7 +412,7 @@ impl RuntimeInstanceSpawn {
 		match tasks.start(self.recursive_level) {
 			Processing::SpawnNew => {
 				// warning self.tasks is locked when calling spawn_new
-				self.spawn_new(None); // TODO backend should be pass in pending tasks.
+				self.spawn_new();
 			},
 			Processing::Queue => (),
 			Processing::RunInline => {
@@ -426,7 +427,7 @@ impl RuntimeInstanceSpawn {
 		self.task_sender.send(task).expect("TODO mgmt");
 	}
 
-	fn spawn_new(&self, backend: Option<Box<dyn AsyncBackend>>) {
+	fn spawn_new(&self) {
 		let module = self.module.clone();
 		let scheduler = self.scheduler.clone();
 		let task_receiver = self.task_receiver.clone();
@@ -454,14 +455,11 @@ impl RuntimeInstanceSpawn {
 			};
 
 			let task_receiver = task_receiver.clone();
-			while let PendingTask { task: Task { dispatcher_ref, func, data }, result_sender } = { 
+			while let PendingTask { task: Task { dispatcher_ref, func, data }, ext, result_sender } = { 
 				let task_receiver_locked = task_receiver.lock();
 				task_receiver_locked.recv()
 			}.expect("Sender dropped, closing all instance.") {
-				if backend.is_some() {
-					println!("dummy check, TODO move backend in message");
-				}
-				let async_ext = match new_async_externalities(scheduler.clone(), None) {
+				let async_ext = match new_async_externalities(scheduler.clone(), ext) {
 					Ok(val) => val,
 					Err(e) => {
 						log::error!(
@@ -505,9 +503,9 @@ impl RuntimeInstanceSpawn {
 								None
 							},
 						}) {
-							// close channel just end this
-								tasks.lock().finished();
-								return;
+							// Closed channel, remove this thread instance.
+							tasks.lock().finished();
+							return;
 						}
 					},
 					Err(error) => {
@@ -537,11 +535,34 @@ impl RuntimeInstanceSpawn {
 }
 
 impl RuntimeSpawn for RuntimeInstanceSpawn {
-	fn spawn_call(&self, dispatcher_ref: u32, func: u32, data: Vec<u8>) -> u64 {
+	fn spawn_call(
+		&self,
+		dispatcher_ref: u32,
+		func: u32,
+		data: Vec<u8>,
+		kind: u8,
+		calling_ext: &mut dyn Externalities,
+	) -> u64 {
 		let new_handle = self.counter.fetch_add(1, Ordering::Relaxed);
+		let ext = match AsyncStateType::from_u8(kind)
+			// TODO better message
+			.expect("Only from existing kind") {
+				AsyncStateType::None => {
+					AsyncExt::stateless_ext()
+				},
+				AsyncStateType::ReadBefore => {
+					let backend = unimplemented!("TODO get from externalities");
+					AsyncExt::previous_block_read(backend)
+				},
+				AsyncStateType::ReadAtSpawn => {
+					let backend = unimplemented!("TODO get from externalities");
+					let overlay = unimplemented!("TODO get from externalities");
+					AsyncExt::state_at_spawn_read(backend, overlay, new_handle)
+				},
+		};
 
 		let (result_sender, result_receiver) = mpsc::channel();
-		let task = PendingTask { task: Task { dispatcher_ref, func, data }, result_sender};
+		let task = PendingTask { task: Task { dispatcher_ref, func, data }, ext, result_sender};
 		self.insert(new_handle, task, result_receiver);
 
 		new_handle

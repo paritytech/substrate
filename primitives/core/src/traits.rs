@@ -193,8 +193,14 @@ pub trait RuntimeSpawn: Send {
 	/// Returns handle of the spawned task.
 	///
 	/// Function pointers (`dispatcher_ref`, `func`) are WASM pointer types.
-	fn spawn_call(&self, dispatcher_ref: u32, func: u32, payload: Vec<u8>) -> u64;
-
+	fn spawn_call(&self,
+		dispatcher_ref: u32,
+		func: u32,
+		payload: Vec<u8>,
+		kind: u8,
+		ext: &mut dyn Externalities,
+	) -> u64;
+	
 	/// Join the result of previously created runtime instance invocation.
 	fn join(&self, handle: u64) -> Vec<u8>;
 
