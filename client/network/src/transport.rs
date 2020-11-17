@@ -104,13 +104,13 @@ pub fn build_transport(
 
 	let multiplexing_config = {
 		let mut mplex_config = mplex::MplexConfig::new();
-		mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
-		mplex_config.max_buffer_len(usize::MAX);
+		mplex_config.set_max_buffer_behaviour(mplex::MaxBufferBehaviour::Block);
+		mplex_config.set_max_buffer_size(usize::MAX);
 
-		let mut yamux_config = libp2p::yamux::Config::default();
+		let mut yamux_config = libp2p::yamux::YamuxConfig::default();
 		// Enable proper flow-control: window updates are only sent when
 		// buffered data has been consumed.
-		yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::OnRead);
+		yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::on_read());
 
 		core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
 	};

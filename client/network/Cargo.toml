@@ -64,13 +64,13 @@ wasm-timer = "0.2"
 zeroize = "1.0.0"
 
 [dependencies.libp2p]
-version = "0.29.1"
+version = "0.30.1"
 default-features = false
 features = ["identify", "kad", "mdns-async-std", "mplex", "noise", "ping", "request-response", "tcp-async-std", "websocket", "yamux"]
 
 [dev-dependencies]
 assert_matches = "1.3"
-libp2p = { version = "0.29.1", default-features = false }
+libp2p = { version = "0.30.1", default-features = false }
 quickcheck = "0.9.0"
 rand = "0.7.2"
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
