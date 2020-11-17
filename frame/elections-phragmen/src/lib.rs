@@ -685,7 +685,7 @@ decl_event!(
 		/// A candidate was slashed due to failing to obtain a seat as member or runner-up
 		CandidateSlashed(AccountId, Balance),
 		/// A member/runner-up was slashed due to failing to retaining their position.
-		MemberSlashed(AccountId, Balance),
+		SeatHolderSlashed(AccountId, Balance),
 		/// A \[member\] has renounced their candidacy.
 		MemberRenounced(AccountId),
 		/// A voter was reported with the the report being successful or not.
@@ -1007,7 +1007,7 @@ impl<T: Trait> Module<T> {
 			// Burn outgoing bonds
 			to_burn_bond.into_iter().for_each(|x| {
 				let (imbalance, _) = T::Currency::slash_reserved(&x, T::CandidacyBond::get());
-				Self::deposit_event(RawEvent::MemberSlashed(x, T::CandidacyBond::get()));
+				Self::deposit_event(RawEvent:: SeatHolderSlashed(x, T::CandidacyBond::get()));
 				T::LoserCandidate::on_unbalanced(imbalance);
 			});
 
