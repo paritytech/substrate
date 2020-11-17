@@ -4030,6 +4030,7 @@ dependencies = [
  "pallet-im-online",
  "pallet-indices",
  "pallet-membership",
+ "pallet-mmr",
  "pallet-multisig",
  "pallet-offences",
  "pallet-offences-benchmarking",
@@ -4794,7 +4795,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-mmr"
-version = "2.0.0-rc5"
+version = "2.0.0"
 dependencies = [
  "ckb-merkle-mountain-range",
  "env_logger 0.5.13",
