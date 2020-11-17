@@ -486,7 +486,7 @@ mod tests {
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
-		generic::{Era, DigestItem}, Perbill, DispatchError, testing::{Digest, Header, Block},
+		generic::{Era, DigestItem}, DispatchError, testing::{Digest, Header, Block},
 		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup},
 		transaction_validity::{
 			InvalidTransaction, ValidTransaction, TransactionValidityError, UnknownTransaction
@@ -1112,7 +1112,7 @@ mod tests {
 			let runtime_upgrade_weight = <AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
 			let frame_system_on_initialize_weight = frame_system::Module::<Runtime>::on_initialize(block_number);
 			let on_initialize_weight = <AllModules as OnInitialize<u64>>::on_initialize(block_number);
-			let base_block_weight = <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
+			let base_block_weight = <Runtime as frame_system::Trait>::BlockWeights::get().base_block;
 
 			// Weights are recorded correctly
 			assert_eq!(
