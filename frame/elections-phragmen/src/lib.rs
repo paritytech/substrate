@@ -1007,7 +1007,7 @@ impl<T: Trait> Module<T> {
 			// Burn outgoing bonds
 			to_burn_bond.into_iter().for_each(|x| {
 				let (imbalance, _) = T::Currency::slash_reserved(&x, T::CandidacyBond::get());
-				Self::deposit_event(RawEvent:: SeatHolderSlashed(x, T::CandidacyBond::get()));
+				Self::deposit_event(RawEvent::SeatHolderSlashed(x, T::CandidacyBond::get()));
 				T::LoserCandidate::on_unbalanced(imbalance);
 			});
 
