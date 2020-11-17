@@ -276,7 +276,8 @@ pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader>(
 
 	// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_backend);
-	let runtime_code = backend_runtime_code.runtime_code().map_err(|_e| ClientError::RuntimeCodeMissing)?;
+	let runtime_code = backend_runtime_code.runtime_code()
+		.map_err(|_e| ClientError::RuntimeCodeMissing)?;
 
 	execution_proof_check_on_trie_backend::<H, Header::Number, _, _>(
 		&trie_backend,
