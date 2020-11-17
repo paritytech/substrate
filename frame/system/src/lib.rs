@@ -137,9 +137,9 @@ pub mod limits;
 pub(crate) mod mock;
 
 mod extensions;
+pub mod weights;
 #[cfg(test)]
 mod tests;
-mod default_weights;
 
 
 pub use extensions::{
@@ -149,6 +149,7 @@ pub use extensions::{
 };
 // Backward compatible re-export.
 pub use extensions::check_mortality::CheckMortality as CheckEra;
+pub use weights::WeightInfo;
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -158,16 +159,6 @@ pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::ordered_trie_root(xts)
-}
-
-pub trait WeightInfo {
-	fn remark() -> Weight;
-	fn set_heap_pages() -> Weight;
-	fn set_changes_trie_config() -> Weight;
-	fn set_storage(i: u32, ) -> Weight;
-	fn kill_storage(i: u32, ) -> Weight;
-	fn kill_prefix(p: u32, ) -> Weight;
-	fn suicide() -> Weight;
 }
 
 /// An object to track the currently used extrinsic weight in a block.
@@ -551,7 +542,7 @@ decl_module! {
 		/// - Base Weight: 0.665 µs, independent of remark length.
 		/// - No DB operations.
 		/// # </weight>
-		#[weight = T::SystemWeightInfo::remark()]
+		#[weight = T::SystemWeightInfo::remark(_remark.len() as u32)]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}

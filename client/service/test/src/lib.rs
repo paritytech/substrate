@@ -31,6 +31,7 @@ use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
 use sc_service::{
 	TaskManager,
+	SpawnTaskHandle,
 	GenericChainSpec,
 	ChainSpecExtension,
 	Configuration,
@@ -75,6 +76,7 @@ pub trait TestNetNode: Clone + Future<Item = (), Error = sc_service::Error> + Se
 	fn client(&self) -> Arc<Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>>;
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
 	fn network(&self) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>;
+	fn spawn_handle(&self) -> SpawnTaskHandle;
 }
 
 pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
@@ -147,6 +149,9 @@ TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool>
 	fn network(&self) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash>> {
 		self.network.clone()
 	}
+	fn spawn_handle(&self) -> SpawnTaskHandle {
+		self.task_manager.lock().spawn_handle()
+	}
 }
 
 impl<G, E, F, L, U> TestNet<G, E, F, L, U>
@@ -194,7 +199,7 @@ where F: Clone + Send + 'static, L: Clone + Send +'static, U: Clone + Send + 'st
 	}
 }
 
-fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'static + Send> (
+fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'static + Send + Sync> (
 	index: usize,
 	spec: &GenericChainSpec<G, E>,
 	role: Role,
@@ -225,7 +230,6 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		enable_mdns: false,
 		allow_private_ipv4: true,
 		wasm_external_transport: None,
-		use_yamux_flow_control: true,
 	};
 
 	Configuration {
@@ -248,6 +252,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		pruning: Default::default(),
 		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
+		wasm_runtime_overrides: Default::default(),
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ipc: None,
@@ -275,7 +280,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	F: TestNetNode,
 	L: TestNetNode,
-	E: ChainSpecExtension + Clone + 'static + Send,
+	E: ChainSpecExtension + Clone + 'static + Send + Sync,
 	G: RuntimeGenesis + 'static,
 {
 	fn new(
@@ -389,7 +394,7 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	full_builder: Fb,
 	light_builder: Lb,
 ) where
-	E: ChainSpecExtension + Clone + 'static + Send,
+	E: ChainSpecExtension + Clone + 'static + Send + Sync,
 	G: RuntimeGenesis + 'static,
 	Fb: Fn(Configuration) -> Result<F, Error>,
 	F: TestNetNode,
@@ -509,7 +514,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	B: FnMut(&F, &mut U),
 	ExF: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
 	U: Clone + Send + 'static,
-	E: ChainSpecExtension + Clone + 'static + Send,
+	E: ChainSpecExtension + Clone + 'static + Send + Sync,
 	G: RuntimeGenesis + 'static,
 {
 	const NUM_FULL_NODES: usize = 10;
@@ -584,7 +589,7 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	F: TestNetNode,
 	Lb: Fn(Configuration) -> Result<L, Error>,
 	L: TestNetNode,
-	E: ChainSpecExtension + Clone + 'static + Send,
+	E: ChainSpecExtension + Clone + 'static + Send + Sync,
 	G: RuntimeGenesis + 'static,
 {
 	const NUM_FULL_NODES: usize = 10;

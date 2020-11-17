@@ -58,11 +58,11 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	fn check_block_weight(
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<crate::ConsumedWeight, TransactionValidityError> {
-		let weights = T::BlockWeights::get();
+		let maximum_weight = T::BlockWeights::get();
 		let mut all_weight = Module::<T>::block_weight();
-		let extrinsic_weight = info.weight.saturating_add(weights.get(info.class).base_extrinsic);
+		let extrinsic_weight = info.weight.saturating_add(maximum_weight.get(info.class).base_extrinsic);
 
-		if let Some(max) = weights.get(info.class).max_total {
+		if let Some(max) = maximum_weight.get(info.class).max_total {
 			all_weight.checked_add(extrinsic_weight, info.class)
 				.map_err(|_| InvalidTransaction::ExhaustsResources)?;
 			let per_class = *all_weight.get(info.class);
@@ -73,9 +73,9 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 			}
 
 			// Total block weight exceeded.
-			if all_weight.total() > weights.max_block {
+			if all_weight.total() > maximum_weight.max_block {
 				// Check if we can use reserved pool though.
-				match weights.get(info.class).reserved {
+				match maximum_weight.get(info.class).reserved {
 					Some(reserved) if per_class > reserved => {
 						return Err(InvalidTransaction::ExhaustsResources.into());
 					}
@@ -133,7 +133,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	/// Do the pre-dispatch checks. This can be applied to both signed and unsigned.
 	///
 	/// It checks and notes the new weight and length.
-	fn do_pre_dispatch(
+	pub fn do_pre_dispatch(
 		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
@@ -149,7 +149,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	/// Do the validate checks. This can be applied to both signed and unsigned.
 	///
 	/// It only checks that the block weight and length limit will not exceed.
-	fn do_validate(
+	pub fn do_validate(
 		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> TransactionValidity {

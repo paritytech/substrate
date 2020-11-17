@@ -14,7 +14,7 @@ Before you submitting, please check that:
   - [ ] Github's project assignment
 - [ ] You mentioned a related issue if this PR related to it, e.g. `Fixes #228` or `Related #1337`.
 - [ ] You asked any particular reviewers to review. If you aren't sure, start with GH suggestions.
-- [ ] Your PR adheres to [the style guide](https://wiki.parity.io/Substrate-Style-Guide)
+- [ ] Your PR adheres to [the style guide](https://github.com/paritytech/substrate/blob/master/docs/STYLE_GUIDE.md)
   - In particular, mind the maximal line length of 100 (120 in exceptional circumstances).
   - There is no commented code checked in unless necessary.
   - Any panickers have a proof or removed.

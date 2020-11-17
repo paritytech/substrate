@@ -1,3 +1,4 @@
+<!-- markdown-link-check-disable -->
 # Security Policy
 
 Parity Technologies is committed to resolving security vulnerabilities in our software quickly and carefully. We take the necessary steps to minimize risk, provide timely information, and deliver vulnerability fixes and mitigations required to address security issues.

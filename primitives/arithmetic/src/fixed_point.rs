@@ -17,7 +17,7 @@
 //! Decimal Fixed Point implementations for Substrate runtime.
 
 use sp_std::{ops::{self, Add, Sub, Mul, Div}, fmt::Debug, prelude::*, convert::{TryInto, TryFrom}};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, CompactAs};
 use crate::{
 	helpers_128bit::multiply_by_rational, PerThing,
 	traits::{
@@ -342,7 +342,7 @@ macro_rules! implement_fixed {
 		/// A fixed point number representation in the range.
 		///
 		#[doc = $title]
-		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+		#[derive(Encode, Decode, CompactAs, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 		pub struct $name($inner_type);
 
 		impl From<$inner_type> for $name {
@@ -536,10 +536,10 @@ macro_rules! implement_fixed {
 			}
 		}
 
-		impl<P: PerThing> From<P> for $name {
+		impl<P: PerThing> From<P> for $name where P::Inner: FixedPointOperand {
 			fn from(p: P) -> Self {
-				let accuracy = P::ACCURACY.saturated_into();
-				let value = p.deconstruct().saturated_into();
+				let accuracy = P::ACCURACY;
+				let value = p.deconstruct();
 				$name::saturating_from_rational(value, accuracy)
 			}
 		}

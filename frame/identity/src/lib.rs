@@ -72,6 +72,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(test)]
+mod tests;
+mod benchmarking;
+pub mod weights;
+
 use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
@@ -82,36 +87,12 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	dispatch::DispatchResultWithPostInfo,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin},
-	weights::Weight,
 };
 use frame_system::ensure_signed;
-
-#[cfg(test)]
-mod tests;
-mod benchmarking;
-mod default_weights;
+pub use weights::WeightInfo;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
-
-pub trait WeightInfo {
-	fn add_registrar(r: u32, ) -> Weight;
-	fn set_identity(r: u32, x: u32, ) -> Weight;
-	fn set_subs_new(s: u32, ) -> Weight;
-	fn set_subs_old(p: u32, ) -> Weight;
-	fn add_sub(p: u32, ) -> Weight;
-	fn rename_sub(p: u32, ) -> Weight;
-	fn remove_sub(p: u32, ) -> Weight;
-	fn quit_sub(p: u32, ) -> Weight;
-	fn clear_identity(r: u32, s: u32, x: u32, ) -> Weight;
-	fn request_judgement(r: u32, x: u32, ) -> Weight;
-	fn cancel_request(r: u32, x: u32, ) -> Weight;
-	fn set_fee(r: u32, ) -> Weight;
-	fn set_account_id(r: u32, ) -> Weight;
-	fn set_fields(r: u32, ) -> Weight;
-	fn provide_judgement(r: u32, x: u32, ) -> Weight;
-	fn kill_identity(r: u32, s: u32, x: u32, ) -> Weight;
-}
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.

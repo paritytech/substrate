@@ -49,7 +49,7 @@ benchmarks! {
 		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account, and reap this user.
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
-		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1.into();
+		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
 	}: transfer(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount)
 	verify {
 		assert_eq!(Balances::<T>::free_balance(&caller), Zero::zero());
@@ -138,7 +138,7 @@ benchmarks! {
 		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account, and reap this user.
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
-		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1.into();
+		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
 	}: force_transfer(RawOrigin::Root, source_lookup, recipient_lookup, transfer_amount)
 	verify {
 		assert_eq!(Balances::<T>::free_balance(&source), Zero::zero());
