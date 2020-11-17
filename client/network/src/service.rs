@@ -39,7 +39,7 @@ use crate::{
 	},
 	on_demand_layer::AlwaysBadChecker,
 	light_client_handler, block_requests, finality_requests,
-	protocol::{self, event::Event, NotifsHandlerError, LegacyConnectionKillError, NotificationsSink, Ready, sync::SyncState, PeerInfo, Protocol},
+	protocol::{self, event::Event, NotifsHandlerError, NotificationsSink, Ready, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
 use futures::{channel::oneshot, prelude::*};
@@ -661,6 +661,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		if let Some(protocol_name) = protocol_name {
 			sink.send_sync_notification(protocol_name, message);
 		} else {
+			log::error!(
+				target: "sub-libp2p",
+				"Attempted to send notification on unknown protocol: {:?}",
+				engine_id,
+			);
 			return;
 		}
 
@@ -973,7 +978,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	//
+	// NOTE: even though this function is currently sync, it's marked as async for
+	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
+	pub async fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
@@ -1581,9 +1589,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
 								EitherError::A(PingFailure::Timeout)))))))))) => "ping-timeout",
-							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::Legacy(LegacyConnectionKillError)))))))))) => "force-closed",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
 								NotifsHandlerError::SyncNotificationsClogged))))))))) => "sync-notifications-clogged",

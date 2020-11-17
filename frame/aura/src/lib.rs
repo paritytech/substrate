@@ -74,7 +74,7 @@ pub trait Trait: pallet_timestamp::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
 		/// The last timestamp.
-		LastTimestamp get(fn last) build(|_| 0.into()): T::Moment;
+		LastTimestamp get(fn last): T::Moment;
 
 		/// The current authorities
 		pub Authorities get(fn authorities): Vec<T::AuthorityId>;
@@ -196,7 +196,7 @@ impl<T: Trait> Module<T> {
 	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of its slot.
-		<T as pallet_timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
+		<T as pallet_timestamp::Trait>::MinimumPeriod::get().saturating_mul(2u32.into())
 	}
 
 	fn on_timestamp_set(now: T::Moment, slot_duration: T::Moment) {

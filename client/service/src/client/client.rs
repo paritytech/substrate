@@ -22,6 +22,7 @@ use std::{
 	marker::PhantomData,
 	collections::{HashSet, BTreeMap, HashMap},
 	sync::Arc, panic::UnwindSafe, result,
+	path::PathBuf
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
@@ -40,7 +41,7 @@ use sp_runtime::{
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
 		Block as BlockT, Header as HeaderT, Zero, NumberFor,
-		HashFor, SaturatedConversion, One, DigestFor,
+		HashFor, SaturatedConversion, One, DigestFor, UniqueSaturatedInto,
 	},
 };
 use sp_state_machine::{
@@ -181,6 +182,8 @@ pub struct ClientConfig {
 	pub offchain_worker_enabled: bool,
 	/// If true, allows access from the runtime to write into offchain worker db.
 	pub offchain_indexing_api: bool,
+	/// Path where WASM files exist to override the on-chain WASM.
+	pub wasm_runtime_overrides: Option<PathBuf>,
 }
 
 /// Create a client with the explicitly provided backend.
@@ -201,7 +204,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
 	let extensions = ExecutionExtensions::new(Default::default(), keystore);
 	Client::new(
 		backend,
@@ -1141,7 +1144,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let mut ancestor = load_header(ancestor_hash)?;
 		let mut uncles = Vec::new();
 
-		for _generation in 0..max_generation.saturated_into() {
+		for _generation in 0u32..UniqueSaturatedInto::<u32>::unique_saturated_into(max_generation) {
 			let children = self.backend.blockchain().children(ancestor_hash)?;
 			uncles.extend(children.into_iter().filter(|h| h != &current_hash));
 			current_hash = ancestor_hash;

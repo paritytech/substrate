@@ -16,12 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use ansi_term::{Colour, Style};
-use std::{fmt::{self, Write as _}, iter};
-use tracing::{
-	span::{self, Attributes},
-	Event, Id, Level, Subscriber,
-};
+use std::fmt::{self, Write};
+use ansi_term::Colour;
+use tracing::{span::Attributes, Event, Id, Level, Subscriber};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
 	fmt::{
@@ -32,16 +29,62 @@ use tracing_subscriber::{
 	registry::LookupSpan,
 	Layer,
 };
+use regex::Regex;
 
 /// Span name used for the logging prefix. See macro `sc_cli::prefix_logs_with!`
 pub const PREFIX_LOG_SPAN: &str = "substrate-log-prefix";
 
+/// A writer that may write to `inner_writer` with colors.
+///
+/// This is used by [`EventFormat`] to kill colors when `enable_color` is `false`.
+///
+/// It is required to call [`MaybeColorWriter::write`] after all writes are done,
+/// because the content of these writes is buffered and will only be written to the
+/// `inner_writer` at that point.
+struct MaybeColorWriter<'a> {
+	enable_color: bool,
+	buffer: String,
+	inner_writer: &'a mut dyn fmt::Write,
+}
+
+impl<'a> fmt::Write for MaybeColorWriter<'a> {
+	fn write_str(&mut self, buf: &str) -> fmt::Result {
+		self.buffer.push_str(buf);
+		Ok(())
+	}
+}
+
+impl<'a> MaybeColorWriter<'a> {
+	/// Creates a new instance.
+	fn new(enable_color: bool, inner_writer: &'a mut dyn fmt::Write) -> Self {
+		Self {
+			enable_color,
+			inner_writer,
+			buffer: String::new(),
+		}
+	}
+
+	/// Write the buffered content to the `inner_writer`.
+	fn write(&mut self) -> fmt::Result {
+		lazy_static::lazy_static! {
+			static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
+		}
+
+		if !self.enable_color {
+			let replaced = RE.replace_all(&self.buffer, "");
+			self.inner_writer.write_str(&replaced)
+		} else {
+			self.inner_writer.write_str(&self.buffer)
+		}
+	}
+}
+
 pub(crate) struct EventFormat<T = SystemTime> {
 	pub(crate) timer: T,
-	pub(crate) ansi: bool,
 	pub(crate) display_target: bool,
 	pub(crate) display_level: bool,
 	pub(crate) display_thread_name: bool,
+	pub(crate) enable_color: bool,
 }
 
 // NOTE: the following code took inspiration from tracing-subscriber
@@ -59,12 +102,13 @@ where
 		writer: &mut dyn fmt::Write,
 		event: &Event,
 	) -> fmt::Result {
+		let writer = &mut MaybeColorWriter::new(self.enable_color, writer);
 		let normalized_meta = event.normalized_metadata();
 		let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());
-		time::write(&self.timer, writer, self.ansi)?;
+		time::write(&self.timer, writer, self.enable_color)?;
 
 		if self.display_level {
-			let fmt_level = { FmtLevel::new(meta.level(), self.ansi) };
+			let fmt_level = { FmtLevel::new(meta.level(), self.enable_color) };
 			write!(writer, "{} ", fmt_level)?;
 		}
 
@@ -93,13 +137,13 @@ where
 			}
 		}
 
-		let fmt_ctx = { FmtCtx::new(&ctx, event.parent(), self.ansi) };
-		write!(writer, "{}", fmt_ctx)?;
 		if self.display_target {
 			write!(writer, "{}:", meta.target())?;
 		}
 		ctx.format_fields(writer, event)?;
-		writeln!(writer)
+		writeln!(writer)?;
+
+		writer.write()
 	}
 }
 
@@ -244,70 +288,6 @@ impl<'a> fmt::Display for FmtThreadName<'a> {
 
 		// pad thread name using `max_len`
 		write!(f, "{:>width$}", self.name, width = max_len)
-	}
-}
-
-struct FmtCtx<'a, S, N> {
-	ctx: &'a FmtContext<'a, S, N>,
-	span: Option<&'a span::Id>,
-	ansi: bool,
-}
-
-impl<'a, S, N: 'a> FmtCtx<'a, S, N>
-where
-	S: Subscriber + for<'lookup> LookupSpan<'lookup>,
-	N: for<'writer> FormatFields<'writer> + 'static,
-{
-	pub(crate) fn new(
-		ctx: &'a FmtContext<'_, S, N>,
-		span: Option<&'a span::Id>,
-		ansi: bool,
-	) -> Self {
-		Self { ctx, ansi, span }
-	}
-
-	fn bold(&self) -> Style {
-		if self.ansi {
-			return Style::new().bold();
-		}
-
-		Style::new()
-	}
-}
-
-// NOTE: the following code took inspiration from tracing-subscriber
-//
-//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L711
-impl<'a, S, N: 'a> fmt::Display for FmtCtx<'a, S, N>
-where
-	S: Subscriber + for<'lookup> LookupSpan<'lookup>,
-	N: for<'writer> FormatFields<'writer> + 'static,
-{
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let bold = self.bold();
-		let mut seen = false;
-
-		let span = self
-			.span
-			.and_then(|id| self.ctx.span(&id))
-			.or_else(|| self.ctx.lookup_current());
-
-		let scope = span
-			.into_iter()
-			.flat_map(|span| span.from_root().chain(iter::once(span)));
-
-		for name in scope
-			.map(|span| span.metadata().name())
-			.filter(|&x| x != "substrate-node")
-		{
-			seen = true;
-			write!(f, "{}:", bold.paint(name))?;
-		}
-
-		if seen {
-			f.write_char(' ')?;
-		}
-		Ok(())
 	}
 }
 

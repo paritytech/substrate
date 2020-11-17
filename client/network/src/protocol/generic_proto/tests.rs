@@ -23,7 +23,6 @@ use libp2p::{PeerId, Multiaddr, Transport};
 use libp2p::core::{
 	connection::{ConnectionId, ListenerId},
 	ConnectedPoint,
-	muxing,
 	transport::MemoryTransport,
 	upgrade
 };
@@ -55,10 +54,8 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		let transport = MemoryTransport
 			.upgrade(upgrade::Version::V1)
 			.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-			.multiplex(yamux::Config::default())
-			.map(|(peer, muxer), _| (peer, muxing::StreamMuxerBox::new(muxer)))
+			.multiplex(yamux::YamuxConfig::default())
 			.timeout(Duration::from_secs(20))
-			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 			.boxed();
 
 		let (peerset, _) = sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig {

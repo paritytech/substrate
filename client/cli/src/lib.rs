@@ -20,6 +20,8 @@
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
+#![warn(unused_imports)]
+#![warn(unused_crate_dependencies)]
 
 pub mod arg_enums;
 mod commands;
@@ -45,13 +47,13 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
-#[doc(hidden)]
-pub use tracing;
 use tracing_subscriber::{
 	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
 };
 
 pub use logging::PREFIX_LOG_SPAN;
+#[doc(hidden)]
+pub use tracing;
 
 /// Substrate client CLI
 ///
@@ -306,8 +308,7 @@ pub fn init_logger(
 		}
 	}
 
-	let isatty = atty::is(atty::Stream::Stderr);
-	let enable_color = isatty;
+	let enable_color = atty::is(atty::Stream::Stderr);
 	let timer = ChronoLocal::with_format(if simple {
 		"%Y-%m-%d %H:%M:%S".to_string()
 	} else {
@@ -319,12 +320,13 @@ pub fn init_logger(
 		.with_writer(std::io::stderr)
 		.event_format(logging::EventFormat {
 			timer,
-			ansi: enable_color,
 			display_target: !simple,
 			display_level: !simple,
 			display_thread_name: !simple,
+			enable_color,
 		})
-		.finish().with(logging::NodeNameLayer);
+		.finish()
+		.with(logging::NodeNameLayer);
 
 	if let Some(profiling_targets) = profiling_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &profiling_targets);
@@ -423,6 +425,11 @@ mod tests {
 
 	#[test]
 	fn prefix_in_log_lines() {
+		let re = regex::Regex::new(&format!(
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  \[{}\] {}$",
+			EXPECTED_NODE_NAME,
+			EXPECTED_LOG_MESSAGE,
+		)).unwrap();
 		let executable = env::current_exe().unwrap();
 		let output = Command::new(executable)
 			.env("ENABLE_LOGGING", "1")
@@ -431,7 +438,10 @@ mod tests {
 			.unwrap();
 
 		let output = String::from_utf8(output.stderr).unwrap();
-		assert!(output.contains(&format!(" [{}] ", EXPECTED_NODE_NAME)));
+		assert!(
+			re.is_match(output.trim()),
+			format!("Expected:\n{}\nGot:\n{}", re, output),
+		);
 	}
 
 	/// This is no actual test, it will be used by the `prefix_in_log_lines` test.
@@ -440,14 +450,44 @@ mod tests {
 	#[test]
 	fn prefix_in_log_lines_entrypoint() {
 		if env::var("ENABLE_LOGGING").is_ok() {
-			let test_pattern = "test-target=info";
-			init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
+			init_logger("", Default::default(), Default::default()).unwrap();
 			prefix_in_log_lines_process();
 		}
 	}
 
 	#[crate::prefix_logs_with(EXPECTED_NODE_NAME)]
 	fn prefix_in_log_lines_process() {
-		log::info!("Hello World!");
+		log::info!("{}", EXPECTED_LOG_MESSAGE);
+	}
+
+	/// This is no actual test, it will be used by the `do_not_write_with_colors_on_tty` test.
+	/// The given test will call the test executable to only execute this test that
+	/// will only print a log line with some colors in it.
+	#[test]
+	fn do_not_write_with_colors_on_tty_entrypoint() {
+		if env::var("ENABLE_LOGGING").is_ok() {
+			init_logger("", Default::default(), Default::default()).unwrap();
+			log::info!("{}", ansi_term::Colour::Yellow.paint(EXPECTED_LOG_MESSAGE));
+		}
+	}
+
+	#[test]
+	fn do_not_write_with_colors_on_tty() {
+		let re = regex::Regex::new(&format!(
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  {}$",
+			EXPECTED_LOG_MESSAGE,
+		)).unwrap();
+		let executable = env::current_exe().unwrap();
+		let output = Command::new(executable)
+			.env("ENABLE_LOGGING", "1")
+			.args(&["--nocapture", "do_not_write_with_colors_on_tty_entrypoint"])
+			.output()
+			.unwrap();
+
+		let output = String::from_utf8(output.stderr).unwrap();
+		assert!(
+			re.is_match(output.trim()),
+			format!("Expected:\n{}\nGot:\n{}", re, output),
+		);
 	}
 }
