@@ -405,7 +405,7 @@ pub struct NetworkConfiguration {
 	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
 	/// List of request-response protocols that the node supports.
 	pub request_response_protocols: Vec<RequestResponseConfig>,
-	/// Configuration for the default set of nodes used for syncing.
+	/// Configuration for the default set of nodes used for block syncing and transactions.
 	pub default_peers_set: SetConfig,
 	/// Configuration for extra sets of nodes.
 	pub extra_sets: Vec<(&'static str, SetConfig)>,
