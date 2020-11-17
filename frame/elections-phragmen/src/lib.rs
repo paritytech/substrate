@@ -684,7 +684,7 @@ decl_event!(
 		MemberKicked(AccountId),
 		/// A candidate was slashed due to failing to obtain a seat as member or runner-up
 		CandidateSlashed(AccountId, Balance),
-		/// A member/runner-up was slashed due to failing to retaining their position.
+		/// A seat holder (member or runner-up) was slashed due to failing to retaining their position.
 		SeatHolderSlashed(AccountId, Balance),
 		/// A \[member\] has renounced their candidacy.
 		MemberRenounced(AccountId),
