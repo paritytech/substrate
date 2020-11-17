@@ -1,3 +1,4 @@
+<!-- markdown-link-check-disable -->
 chaostest
 =========
 
@@ -56,7 +57,7 @@ DESCRIPTION
   Extra documentation goes here
 ```
 
-_See code: [src/commands/spawn/index.js](https://github.com/paritytech/substrate/blob/harry/chaostest-init/.maintain/chaostest/src/commands/spawn/index.js)_
+_See code: [src/commands/spawn/index.js](https://github.com/paritytech/substrate/blob/master/.maintain/chaostest/src/commands/spawn/index.js)_
 
 ## `chaostest singlenodeheight`
 
@@ -71,7 +72,7 @@ FLAGS
   -t, the wait time out before it halts the polling
 ```
 
-_See code: [src/commands/singlenodeheight/index.js](https://github.com/paritytech/substrate/blob/harry/chaostest-init/.maintain/chaostest/src/commands/singlenodeheight/index.js)_
+_See code: [src/commands/singlenodeheight/index.js](https://github.com/paritytech/substrate/blob/master/.maintain/chaostest/src/commands/singlenodeheight/index.js)_
 
 ## `chaostest clean`
 
@@ -85,5 +86,5 @@ FLAGS
   -n , the desired namespace to delete on your k8s cluster
 ```
 
-_See code: [src/commands/clean/index.js](https://github.com/paritytech/substrate/blob/harry/chaostest-init/.maintain/chaostest/src/commands/clean/index.js)_
+_See code: [src/commands/clean/index.js](https://github.com/paritytech/substrate/blob/master/.maintain/chaostest/src/commands/clean/index.js)_
 <!-- commandsstop -->

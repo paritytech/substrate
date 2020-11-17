@@ -1,3 +1,4 @@
+<!-- markdown-link-check-disable -->
 # Example Pallet
 
 <!-- Original author of paragraph: @gavofyork -->

@@ -46,9 +46,6 @@ pub mod import_queue;
 pub mod evaluation;
 mod metrics;
 
-// block size limit.
-const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
-
 pub use self::error::Error;
 pub use block_import::{
 	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, BlockCheckParams,

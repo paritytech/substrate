@@ -164,7 +164,7 @@ macro_rules! within_span {
 		$( $code:tt )*
 	) => {
 		{
-			$crate::within_span!($crate::span!($crate::Level::TRACE, $name); $( $code )*)
+			$crate::within_span!($crate::span!($lvl, $name); $( $code )*)
 		}
 	};
 }
@@ -233,6 +233,6 @@ macro_rules! enter_span {
 		let __tracing_guard__ = __within_span__.enter();
 	};
 	( $lvl:expr, $name:expr ) => {
-		$crate::enter_span!($crate::span!($crate::Level::TRACE, $name))
+		$crate::enter_span!($crate::span!($lvl, $name))
 	};
 }
