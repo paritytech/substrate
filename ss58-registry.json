@@ -299,6 +299,15 @@
 			"website": "https://nodle.io/"
 		},
 		{
+			"prefix": 38,
+			"network": "kilt",
+			"displayName": "KILT Chain",
+			"symbols": ["KILT"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://kilt.io/"
+		},
+		{
 			"prefix": 39,
 			"network": "mathchain",
 			"displayName": "MathChain mainnet",
