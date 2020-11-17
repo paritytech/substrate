@@ -232,7 +232,7 @@ decl_storage! {
 		/// TipsMap that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
 		/// This has the insecure enumerable hash function since the key itself is already
 		/// guaranteed to be a secure hash.
-		pub TipsMap get(fn tips):
+		pub Tips get(fn tips):
 			map hasher(twox_64_concat) T::Hash
 			=> Option<OpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>>;
 
@@ -335,7 +335,7 @@ decl_module! {
 			let reason_hash = T::Hashing::hash(&reason[..]);
 			ensure!(!Reasons::<T, I>::contains_key(&reason_hash), Error::<T, I>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
-			ensure!(!TipsMap::<T, I>::contains_key(&hash), Error::<T, I>::AlreadyKnown);
+			ensure!(!Tips::<T, I>::contains_key(&hash), Error::<T, I>::AlreadyKnown);
 
 			let deposit = T::TipReportDepositBase::get()
 				+ T::DataDepositPerByte::get() * (reason.len() as u32).into();
@@ -351,7 +351,7 @@ decl_module! {
 				tips: vec![],
 				finders_fee: true
 			};
-			TipsMap::<T, I>::insert(&hash, tip);
+			Tips::<T, I>::insert(&hash, tip);
 			Self::deposit_event(RawEvent::NewTip(hash));
 		}
 
@@ -377,11 +377,11 @@ decl_module! {
 		#[weight = T::TipsWeightInfo::retract_tip()]
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
-			let tip = TipsMap::<T, I>::get(&hash).ok_or(Error::<T, I>::UnknownTip)?;
+			let tip = Tips::<T, I>::get(&hash).ok_or(Error::<T, I>::UnknownTip)?;
 			ensure!(tip.finder == who, Error::<T, I>::NotFinder);
 
 			Reasons::<T, I>::remove(&tip.reason);
-			TipsMap::<T, I>::remove(&hash);
+			Tips::<T, I>::remove(&hash);
 			if !tip.deposit.is_zero() {
 				let _ = T::Currency::unreserve(&who, tip.deposit);
 			}
@@ -430,7 +430,7 @@ decl_module! {
 				tips,
 				finders_fee: false,
 			};
-			TipsMap::<T, I>::insert(&hash, tip);
+			Tips::<T, I>::insert(&hash, tip);
 		}
 
 		/// Declare a tip value for an already-open tip.
@@ -463,11 +463,11 @@ decl_module! {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 
-			let mut tip = TipsMap::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
+			let mut tip = Tips::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
 			if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
 				Self::deposit_event(RawEvent::TipClosing(hash.clone()));
 			}
-			TipsMap::<T, I>::insert(&hash, tip);
+			Tips::<T, I>::insert(&hash, tip);
 		}
 
 		/// Close and payout a tip.
@@ -491,12 +491,12 @@ decl_module! {
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 
-			let tip = TipsMap::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
+			let tip = Tips::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
 			let n = tip.closes.as_ref().ok_or(Error::<T, I>::StillOpen)?;
 			ensure!(system::Module::<T>::block_number() >= *n, Error::<T, I>::Premature);
 			// closed.
 			Reasons::<T, I>::remove(&tip.reason);
-			TipsMap::<T, I>::remove(hash);
+			Tips::<T, I>::remove(hash);
 			Self::payout_tip(hash, tip);
 		}
 	}
@@ -656,7 +656,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				tips: old_tip.tips,
 				finders_fee
 			};
-			TipsMap::<T, I>::insert(hash, new_tip)
+			Tips::<T, I>::insert(hash, new_tip)
 		}
 
 		if_std! {

@@ -407,11 +407,11 @@ fn test_last_reward_migration() {
 
 	let data = vec![
 		(
-			TipsMap::<TestRuntime>::hashed_key_for(hash1),
+			Tips::<TestRuntime>::hashed_key_for(hash1),
 			old_tip_finder.encode().to_vec()
 		),
 		(
-			TipsMap::<TestRuntime>::hashed_key_for(hash2),
+			Tips::<TestRuntime>::hashed_key_for(hash2),
 			old_tip_no_finder.encode().to_vec()
 		),
 	];
@@ -428,7 +428,7 @@ fn test_last_reward_migration() {
 
 		// Test w/ finder
 		assert_eq!(
-			TipsMap::<TestRuntime>::get(hash1),
+			Tips::<TestRuntime>::get(hash1),
 			Some(OpenTip {
 				reason: reason1,
 				who: 10,
@@ -442,7 +442,7 @@ fn test_last_reward_migration() {
 
 		// Test w/o finder
 		assert_eq!(
-			TipsMap::<TestRuntime>::get(hash2),
+			Tips::<TestRuntime>::get(hash2),
 			Some(OpenTip {
 				reason: reason2,
 				who: 20,
