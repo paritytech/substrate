@@ -178,6 +178,16 @@ pub enum Error {
 
 	#[error("AlwaysBadChecker")]
 	AlwaysBadChecker,
+
+	// Should be removed/improved once
+	// the storage `fn`s returns typed errors.
+	#[error("Runtime code error: {0}")]
+	RuntimeCode(&'static str),
+
+	// Should be removed/improved once
+	// the storage `fn`s returns typed errors.
+	#[error("Storage error: {0}")]
+	Storage(String),
 }
 
 impl From<Box<dyn sp_state_machine::Error + Send + Sync + 'static>> for Error {

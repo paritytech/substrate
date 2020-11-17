@@ -7493,6 +7493,7 @@ dependencies = [
  "parking_lot 0.10.2",
  "sc-client-api",
  "sp-core",
+ "thiserror",
 ]
 
 [[package]]

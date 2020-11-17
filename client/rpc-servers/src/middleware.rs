@@ -48,7 +48,7 @@ impl RpcMetrics {
 					&["protocol"]
 				).ok()?, r).ok()?,
 			})
-		}).ok_or(PrometheusError::RegisteringMetricFailed)
+		}).ok_or(PrometheusError::AlreadyReg)
 	}
 }
 
