@@ -1446,7 +1446,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							.inc();
 					}
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened { remote, protocol, notifications_sink, role })) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
+					remote, protocol, notifications_sink, role
+				})) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.notifications_streams_opened_total
 							.with_label_values(&[&protocol]).inc();
@@ -1461,7 +1463,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						role,
 					});
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamReplaced { remote, protocol, notifications_sink })) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamReplaced {
+					remote, protocol, notifications_sink
+				})) => {
 					let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
 					if let Some(s) = peers_notifications_sinks.get_mut(&(remote, protocol)) {
 						*s = notifications_sink;
