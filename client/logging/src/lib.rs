@@ -141,8 +141,7 @@ fn get_default_subscriber_and_telemetries_internal(
 			.expect("provided directive is valid"),
 	);
 
-	let isatty = atty::is(atty::Stream::Stderr);
-	let enable_color = isatty;
+	let enable_color = atty::is(atty::Stream::Stderr);
 	let timer = ChronoLocal::with_format(if simple {
 		"%Y-%m-%d %H:%M:%S".to_string()
 	} else {
@@ -158,10 +157,10 @@ fn get_default_subscriber_and_telemetries_internal(
 	let telemetry_layer = sc_telemetry::TelemetryLayer::new(senders);
 	let event_format = EventFormat {
 		timer,
-		ansi: enable_color,
 		display_target: !simple,
 		display_level: !simple,
 		display_thread_name: !simple,
+		enable_color,
 	};
 	let builder = FmtSubscriber::builder()
 		.with_env_filter(env_filter)

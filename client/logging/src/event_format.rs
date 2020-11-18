@@ -17,7 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use ansi_term::Colour;
-use std::fmt;
+use regex::Regex;
+use std::fmt::{self, Write};
 use tracing::{Event, Level, Subscriber};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
@@ -34,14 +35,14 @@ use tracing_subscriber::{
 pub struct EventFormat<T = SystemTime> {
 	/// Use the given timer for log message timestamps.
 	pub timer: T,
-	/// Enable ANSI terminal colors for formatted output.
-	pub ansi: bool,
 	/// Sets whether or not an event's target is displayed.
 	pub display_target: bool,
 	/// Sets whether or not an event's level is displayed.
 	pub display_level: bool,
 	/// Sets whether or not the name of the current thread is displayed when formatting events.
 	pub display_thread_name: bool,
+	/// Enable ANSI terminal colors for formatted output.
+	pub enable_color: bool,
 }
 
 impl<T> EventFormat<T>
@@ -65,12 +66,13 @@ where
 			return Ok(());
 		}
 
+		let writer = &mut MaybeColorWriter::new(self.enable_color, writer);
 		let normalized_meta = event.normalized_metadata();
 		let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());
-		time::write(&self.timer, writer, self.ansi)?;
+		time::write(&self.timer, writer, self.enable_color)?;
 
 		if self.display_level {
-			let fmt_level = { FmtLevel::new(meta.level(), self.ansi) };
+			let fmt_level = { FmtLevel::new(meta.level(), self.enable_color) };
 			write!(writer, "{} ", fmt_level)?;
 		}
 
@@ -103,7 +105,9 @@ where
 			write!(writer, "{}:", meta.target())?;
 		}
 		ctx.format_fields(writer, event)?;
-		writeln!(writer)
+		writeln!(writer)?;
+
+		writer.write()
 	}
 }
 
@@ -279,6 +283,51 @@ where
 		match self {
 			CustomFmtContext::FmtContext(fmt_ctx) => fmt_ctx.lookup_current(),
 			CustomFmtContext::ContextWithFormatFields(ctx, _) => ctx.lookup_current(),
+		}
+	}
+}
+
+/// A writer that may write to `inner_writer` with colors.
+///
+/// This is used by [`EventFormat`] to kill colors when `enable_color` is `false`.
+///
+/// It is required to call [`MaybeColorWriter::write`] after all writes are done,
+/// because the content of these writes is buffered and will only be written to the
+/// `inner_writer` at that point.
+struct MaybeColorWriter<'a> {
+	enable_color: bool,
+	buffer: String,
+	inner_writer: &'a mut dyn fmt::Write,
+}
+
+impl<'a> fmt::Write for MaybeColorWriter<'a> {
+	fn write_str(&mut self, buf: &str) -> fmt::Result {
+		self.buffer.push_str(buf);
+		Ok(())
+	}
+}
+
+impl<'a> MaybeColorWriter<'a> {
+	/// Creates a new instance.
+	fn new(enable_color: bool, inner_writer: &'a mut dyn fmt::Write) -> Self {
+		Self {
+			enable_color,
+			inner_writer,
+			buffer: String::new(),
+		}
+	}
+
+	/// Write the buffered content to the `inner_writer`.
+	fn write(&mut self) -> fmt::Result {
+		lazy_static::lazy_static! {
+			static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
+		}
+
+		if !self.enable_color {
+			let replaced = RE.replace_all(&self.buffer, "");
+			self.inner_writer.write_str(&replaced)
+		} else {
+			self.inner_writer.write_str(&self.buffer)
 		}
 	}
 }
