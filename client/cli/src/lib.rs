@@ -248,8 +248,7 @@ pub fn init_logger(
 	tracing_receiver: sc_tracing::TracingReceiver,
 	profiling_targets: Option<String>,
 	disable_log_reloading: bool,
-) -> std::result::Result<(), String>
-{
+) -> std::result::Result<(), String> {
 	if let Err(e) = tracing_log::LogTracer::init() {
 		return Err(format!(
 			"Registering Substrate logger failed: {:}!", e

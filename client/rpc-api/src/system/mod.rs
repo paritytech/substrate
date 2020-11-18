@@ -111,8 +111,8 @@ pub trait SystemApi<Hash, Number> {
 
 	/// Sets the logging filter, replacing current with the supplied directives.
 	///
-	/// The syntax is identical to the CLI: <target>=<level>
-	/// eg:
+	/// The syntax is identical to the CLI `<target>=<level>`:
+	///
 	/// `sync=debug,state=trace`
 	#[rpc(name = "system_setLogFilter", returns = "()")]
 	fn system_set_log_filter(&self, directives: String)
