@@ -16,7 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! TODO doc
+//! Substrate logging library.
+//!
+//! This crate uses tokio's [tracing](https://github.com/tokio-rs/tracing/) library for logging.
 
 #![warn(missing_docs)]
 
