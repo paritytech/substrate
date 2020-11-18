@@ -29,18 +29,21 @@ pub use slots::SlotInfo;
 use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
+use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
 use codec::{Decode, Encode};
-use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData, RecordProof};
 use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
-use sp_inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
-use sp_api::{ProvideRuntimeApi, ApiRef};
-use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
-use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use parking_lot::Mutex;
+use sp_api::{ProvideRuntimeApi, ApiRef};
+use sp_arithmetic::traits::BaseArithmetic;
+use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData, RecordProof};
+use sp_inherents::{InherentData, InherentDataProviders};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header, HashFor, NumberFor}
+};
+use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
@@ -158,6 +161,16 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Whether to force authoring if offline.
 	fn force_authoring(&self) -> bool;
 
+	/// Returns whether the block production should back off.
+	///
+	/// By default this function always returns `false`.
+	///
+	/// An example strategy that back offs if the finalized head is lagging too much behind the tip
+	/// is implemented by [`BackoffAuthoringOnFinalizedHeadLagging`].
+	fn should_backoff(&self, _slot_number: u64, _chain_head: &B::Header) -> bool {
+		false
+	}
+
 	/// Returns a handle to a `SyncOracle`.
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle;
 
@@ -248,6 +261,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			None => return Box::pin(future::ready(None)),
 			Some(claim) => claim,
 		};
+
+		if self.should_backoff(slot_number, &chain_head) {
+			return Box::pin(future::ready(None));
+		}
 
 		debug!(
 			target: self.logging_target(),
@@ -584,9 +601,110 @@ pub fn slot_lenience_linear(parent_slot: u64, slot_info: &SlotInfo) -> Option<Du
 	}
 }
 
+/// Trait for providing the strategy for when to backoff block authoring.
+pub trait BackoffAuthoringBlocksStrategy<N> {
+	/// Returns true if we should backoff authoring new blocks.
+	fn should_backoff(
+		&self,
+		chain_head_number: N,
+		chain_head_slot: u64,
+		finalized_number: N,
+		slow_now: u64,
+		logging_target: &str,
+	) -> bool;
+}
+
+/// A simple default strategy for how to decide backing off authoring blocks if the number of
+/// unfinalized blocks grows too large.
+#[derive(Clone)]
+pub struct BackoffAuthoringOnFinalizedHeadLagging<N> {
+	/// The max interval to backoff when authoring blocks, regardless of delay in finality.
+	pub max_interval: N,
+	/// The number of unfinalized blocks allowed before starting to consider to backoff authoring
+	/// blocks. Note that depending on the value for `authoring_bias`, there might still be an
+	/// additional wait until block authorship starts getting declined.
+	pub unfinalized_slack: N,
+	/// Scales the backoff rate. A higher value effectively means we backoff slower, taking longer
+	/// time to reach the maximum backoff as the unfinalized head of chain grows.
+	pub authoring_bias: N,
+}
+
+/// These parameters is supposed to be some form of sensible defaults.
+impl<N: BaseArithmetic> Default for BackoffAuthoringOnFinalizedHeadLagging<N> {
+	fn default() -> Self {
+		Self {
+			// Never wait more than 100 slots before authoring blocks, regardless of delay in
+			// finality.
+			max_interval: 100.into(),
+			// Start to consider backing off block authorship once we have 50 or more unfinalized
+			// blocks at the head of the chain.
+			unfinalized_slack: 50.into(),
+			// A reasonable default for the authoring bias, or reciprocal interval scaling, is 2.
+			// Effectively meaning that consider the unfinalized head suffix length to grow half as
+			// fast as in actuality.
+			authoring_bias: 2.into(),
+		}
+	}
+}
+
+impl<N> BackoffAuthoringBlocksStrategy<N> for BackoffAuthoringOnFinalizedHeadLagging<N>
+where
+	N: BaseArithmetic + Copy
+{
+	fn should_backoff(
+		&self,
+		chain_head_number: N,
+		chain_head_slot: u64,
+		finalized_number: N,
+		slot_now: u64,
+		logging_target: &str,
+	) -> bool {
+		// This should not happen, but we want to keep the previous behaviour if it does.
+		if slot_now <= chain_head_slot {
+			return false;
+		}
+
+		let unfinalized_block_length = chain_head_number - finalized_number;
+		let interval = unfinalized_block_length.saturating_sub(self.unfinalized_slack)
+			/ self.authoring_bias;
+		let interval = interval.min(self.max_interval);
+
+		// We're doing arithmetic between block and slot numbers.
+		let interval: u64 = interval.unique_saturated_into();
+
+		// If interval is nonzero we backoff if the current slot isn't far enough ahead of the chain
+		// head.
+		if slot_now <= chain_head_slot + interval {
+			info!(
+				target: logging_target,
+				"Backing off claiming new slot for block authorship: finality is lagging.",
+			);
+			true
+		} else {
+			false
+		}
+	}
+}
+
+impl<N> BackoffAuthoringBlocksStrategy<N> for () {
+	fn should_backoff(
+		&self,
+		_chain_head_number: N,
+		_chain_head_slot: u64,
+		_finalized_number: N,
+		_slot_now: u64,
+		_logging_target: &str,
+	) -> bool {
+		false
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use std::time::{Duration, Instant};
+	use crate::{BackoffAuthoringOnFinalizedHeadLagging, BackoffAuthoringBlocksStrategy};
+	use substrate_test_runtime_client::runtime::Block;
+	use sp_api::NumberFor;
 
 	const SLOT_DURATION: Duration = Duration::from_millis(6000);
 
@@ -644,5 +762,344 @@ mod test {
 			super::slot_lenience_exponential(1, &slot(19)),
 			Some(SLOT_DURATION * 2u32.pow(7)),
 		);
+	}
+
+	#[derive(PartialEq, Debug)]
+	struct HeadState {
+		head_number: NumberFor<Block>,
+		head_slot: u64,
+		slot_now: NumberFor<Block>,
+	}
+
+	impl HeadState {
+		fn author_block(&mut self) {
+			// Add a block to the head, and set latest slot to the current
+			self.head_number += 1;
+			self.head_slot = self.slot_now;
+			// Advance slot to next
+			self.slot_now += 1;
+		}
+
+		fn dont_author_block(&mut self) {
+			self.slot_now += 1;
+		}
+	}
+
+	#[test]
+	fn should_never_backoff_when_head_not_advancing() {
+		let strategy = BackoffAuthoringOnFinalizedHeadLagging::<NumberFor<Block>> {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
+
+		let head_number = 1;
+		let head_slot = 1;
+		let finalized_number = 1;
+		let slot_now = 2;
+
+		let should_backoff: Vec<bool> = (slot_now..1000)
+			.map(|s| strategy.should_backoff(head_number, head_slot, finalized_number, s, "slots"))
+			.collect();
+
+		// Should always be false, since the head isn't advancing
+		let expected: Vec<bool> = (slot_now..1000).map(|_| false).collect();
+		assert_eq!(should_backoff, expected);
+	}
+
+	#[test]
+	fn should_stop_authoring_if_blocks_are_still_produced_when_finality_stalled() {
+		let strategy = BackoffAuthoringOnFinalizedHeadLagging::<NumberFor<Block>> {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
+
+		let mut head_number = 1;
+		let mut head_slot = 1;
+		let finalized_number = 1;
+		let slot_now = 2;
+
+		let should_backoff: Vec<bool> = (slot_now..300)
+			.map(move |s| {
+				let b = strategy.should_backoff(
+					head_number,
+					head_slot,
+					finalized_number,
+					s,
+					"slots",
+				);
+				// Chain is still advancing (by someone else)
+				head_number += 1;
+				head_slot = s;
+				b
+			})
+			.collect();
+
+		// Should always be true after a short while, since the chain is advancing but finality is stalled
+		let expected: Vec<bool> = (slot_now..300).map(|s| s > 8).collect();
+		assert_eq!(should_backoff, expected);
+	}
+
+	#[test]
+	fn should_never_backoff_if_max_interval_is_reached() {
+		let strategy = BackoffAuthoringOnFinalizedHeadLagging::<NumberFor<Block>> {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
+
+		// The limit `max_interval` is used when the unfinalized chain grows to
+		// 	`max_interval * authoring_bias + unfinalized_slack`,
+		// which for the above parameters becomes
+		// 	100 * 2 + 5 = 205.
+		// Hence we trigger this with head_number > finalized_number + 205.
+		let head_number = 207;
+		let finalized_number = 1;
+
+		// The limit is then used once the current slot is `max_interval` ahead of slot of the head.
+		let head_slot = 1;
+		let slot_now = 2;
+		let max_interval = strategy.max_interval;
+
+		let should_backoff: Vec<bool> = (slot_now..200)
+			.map(|s| strategy.should_backoff(head_number, head_slot, finalized_number, s, "slots"))
+			.collect();
+
+		// Should backoff (true) until we are `max_interval` number of slots ahead of the chain
+		// head slot, then we never backoff (false).
+		let expected: Vec<bool> = (slot_now..200).map(|s| s <= max_interval + head_slot).collect();
+		assert_eq!(should_backoff, expected);
+	}
+
+	#[test]
+	fn should_backoff_authoring_when_finality_stalled() {
+		let param = BackoffAuthoringOnFinalizedHeadLagging {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
+
+		let finalized_number = 2;
+		let mut head_state = HeadState {
+			head_number: 4,
+			head_slot: 10,
+			slot_now: 11,
+		};
+
+		let should_backoff = |head_state: &HeadState| -> bool {
+			<dyn BackoffAuthoringBlocksStrategy<NumberFor<Block>>>::should_backoff(
+				&param,
+				head_state.head_number,
+				head_state.head_slot,
+				finalized_number,
+				head_state.slot_now,
+				"slots",
+			)
+		};
+
+		let backoff: Vec<bool> = (head_state.slot_now..200)
+			.map(|_| {
+				if should_backoff(&head_state) {
+					head_state.dont_author_block();
+					true
+				} else {
+					head_state.author_block();
+					false
+				}
+			})
+			.collect();
+
+		// Gradually start to backoff more and more frequently
+		let expected = [
+			false, false, false, false, false, // no effect
+			true, false,
+			true, false, // 1:1
+			true, true, false,
+			true, true, false, // 2:1
+			true, true, true, false,
+			true, true, true, false, // 3:1
+			true, true, true, true, false,
+			true, true, true, true, false, // 4:1
+			true, true, true, true, true, false,
+			true, true, true, true, true, false, // 5:1
+			true, true, true, true, true, true, false,
+			true, true, true, true, true, true, false, // 6:1
+			true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, false, // 7:1
+			true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, false, // 8:1
+			true, true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, true, false, // 9:1
+			true, true, true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, true, true, false, // 10:1
+			true, true, true, true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, true, true, true, false, // 11:1
+			true, true, true, true, true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, true, true, true, true, false, // 12:1
+			true, true, true, true,
+	];
+
+		assert_eq!(backoff, expected);
+	}
+
+	#[test]
+	fn should_never_wait_more_than_max_interval() {
+		let param = BackoffAuthoringOnFinalizedHeadLagging {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
+
+		let finalized_number = 2;
+		let starting_slot = 11;
+		let mut head_state = HeadState {
+			head_number: 4,
+			head_slot: 10,
+			slot_now: starting_slot,
+		};
+
+		let should_backoff = |head_state: &HeadState| -> bool {
+			<dyn BackoffAuthoringBlocksStrategy<NumberFor<Block>>>::should_backoff(
+				&param,
+				head_state.head_number,
+				head_state.head_slot,
+				finalized_number,
+				head_state.slot_now,
+				"slots",
+			)
+		};
+
+		let backoff: Vec<bool> = (head_state.slot_now..40000)
+			.map(|_| {
+				if should_backoff(&head_state) {
+					head_state.dont_author_block();
+					true
+				} else {
+					head_state.author_block();
+					false
+				}
+			})
+			.collect();
+
+		let slots_claimed: Vec<usize> = backoff
+			.iter()
+			.enumerate()
+			.filter(|&(_i, x)| x == &false)
+			.map(|(i, _x)| i + starting_slot as usize)
+			.collect();
+
+		let last_slot = backoff.len() + starting_slot as usize;
+		let mut last_two_claimed = slots_claimed.iter().rev().take(2);
+
+		// Check that we claimed all the way to the end. Check two slots for when we have an uneven
+		// number of slots_claimed.
+		let expected_distance = param.max_interval as usize + 1;
+		assert_eq!(last_slot - last_two_claimed.next().unwrap(), 92);
+		assert_eq!(last_slot - last_two_claimed.next().unwrap(), 92 + expected_distance);
+
+		let intervals: Vec<_> = slots_claimed
+			.windows(2)
+			.map(|x| x[1] - x[0])
+			.collect();
+
+		// The key thing is that the distance between claimed slots is capped to `max_interval + 1`
+		// assert_eq!(max_observed_interval, Some(&expected_distance));
+		assert_eq!(intervals.iter().max(), Some(&expected_distance));
+
+		// But lets assert all distances, which we expect to grow linearly until `max_interval + 1`
+		let expected_intervals: Vec<_> = (0..497)
+			.map(|i| (i/2).max(1).min(expected_distance) )
+			.collect();
+
+		assert_eq!(intervals, expected_intervals);
+	}
+
+	fn run_until_max_interval(param: BackoffAuthoringOnFinalizedHeadLagging<u64>) -> (u64, u64) {
+		let finalized_number = 0;
+		let mut head_state = HeadState {
+			head_number: 0,
+			head_slot: 0,
+			slot_now: 1,
+		};
+
+		let should_backoff = |head_state: &HeadState| -> bool {
+			<dyn BackoffAuthoringBlocksStrategy<NumberFor<Block>>>::should_backoff(
+				&param,
+				head_state.head_number,
+				head_state.head_slot,
+				finalized_number,
+				head_state.slot_now,
+				"slots",
+			)
+		};
+
+		// Number of blocks until we reach the max interval
+		let block_for_max_interval
+			= param.max_interval * param.authoring_bias + param.unfinalized_slack;
+
+		while head_state.head_number < block_for_max_interval {
+			if should_backoff(&head_state) {
+				head_state.dont_author_block();
+			} else {
+				head_state.author_block();
+			}
+		}
+
+		let slot_time = 6;
+		let time_to_reach_limit = slot_time * head_state.slot_now;
+		(block_for_max_interval, time_to_reach_limit)
+	}
+
+	// Denoting
+	//	C: unfinalized_slack
+	//	M: authoring_bias
+	//	X: max_interval
+	// then the number of slots to reach the max interval can be computed from
+	//	(start_slot + C) + M * sum(n, 1, X)
+	// or
+	//	(start_slot + C) + M * X*(X+1)/2
+	fn expected_time_to_reach_max_interval(
+		param: &BackoffAuthoringOnFinalizedHeadLagging<u64>
+	) -> (u64, u64) {
+		let c = param.unfinalized_slack;
+		let m = param.authoring_bias;
+		let x = param.max_interval;
+		let slot_time = 6;
+
+		let block_for_max_interval = x * m + c;
+
+		// The 1 is because we start at slot_now = 1.
+		let expected_number_of_slots = (1 + c) + m * x * (x + 1) / 2;
+		let time_to_reach = expected_number_of_slots * slot_time;
+
+		(block_for_max_interval, time_to_reach)
+	}
+
+	#[test]
+	fn time_to_reach_upper_bound_for_smaller_slack() {
+		let param = BackoffAuthoringOnFinalizedHeadLagging {
+			max_interval: 100,
+			unfinalized_slack: 5,
+			authoring_bias: 2,
+		};
+		let expected = expected_time_to_reach_max_interval(&param);
+		let (block_for_max_interval, time_to_reach_limit) = run_until_max_interval(param);
+		assert_eq!((block_for_max_interval, time_to_reach_limit), expected);
+		// Note: 16 hours is 57600 sec
+		assert_eq!((block_for_max_interval, time_to_reach_limit), (205, 60636));
+	}
+
+	#[test]
+	fn time_to_reach_upper_bound_for_larger_slack() {
+		let param = BackoffAuthoringOnFinalizedHeadLagging {
+			max_interval: 100,
+			unfinalized_slack: 50,
+			authoring_bias: 2,
+		};
+		let expected = expected_time_to_reach_max_interval(&param);
+		let (block_for_max_interval, time_to_reach_limit) = run_until_max_interval(param);
+		assert_eq!((block_for_max_interval, time_to_reach_limit), expected);
+		assert_eq!((block_for_max_interval, time_to_reach_limit), (250, 60906));
 	}
 }
