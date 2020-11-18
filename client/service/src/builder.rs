@@ -671,7 +671,7 @@ fn init_telemetry(config: &Configuration) -> Option<sc_telemetry::Telemetry> {
 		// we don't want the telemetry to be initialized if telemetry_endpoints == Some([])
 		_ => return None,
 	};
-	Some(config.telemetries.get_or_create(endpoints))
+	Some(config.telemetries.build_telemetry(endpoints))
 }
 
 fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(

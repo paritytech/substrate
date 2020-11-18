@@ -277,7 +277,7 @@ impl Telemetries {
 	///
 	/// The `endpoints` argument is a collection of telemetry WebSocket servers with a corresponding
 	/// verbosity level.
-	pub fn get_or_create(&self, endpoints: TelemetryEndpoints) -> Telemetry {
+	pub fn build_telemetry(&self, endpoints: TelemetryEndpoints) -> Telemetry {
 		let (telemetry, sender) = Telemetry::new(
 			endpoints.clone(),
 			self.wasm_external_transport.clone(),
