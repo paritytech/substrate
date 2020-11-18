@@ -16,51 +16,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// TODO update doc
 //! Telemetry utilities.
 //!
-//! Calling `init_telemetry` registers a global `slog` logger using `slog_scope::set_global_logger`.
-//! After that, calling `slog_scope::with_logger` will return a logger that sends information to
-//! the telemetry endpoints. The `telemetry!` macro is a short-cut for calling
-//! `slog_scope::with_logger` followed with `slog_log!`.
+//! `Telemetry` objects can be created through its constructor `Telemetry::new()`, or through a
+//! `Telemetries` instance. The difference between the two is that `Telemetries` will re-use
+//! connections to the same server if possible and manages a collection of channel `Sender` for you
+//! (see `Senders`). `Telemetries` should be used unless you need finer control.
 //!
-//! Note that you are supposed to only ever use `telemetry!` and not `slog_scope::with_logger` at
-//! the moment. Substrate may eventually be reworked to get proper `slog` support, including sending
-//! information to the telemetry.
+//! The macro `telemetry!` can be used to report telemetries from anywhere but a `Telemetry` must
+//! have been initialized. Creating a `Telemetry` will make all the following code execution use
+//! this `Telemetry` when reporting with the macro `telemetry!` until the `Telemetry` object is
+//! dropped. If multiple `Telemetry` objects are created, the latest one (higher up in the stack)
+//! will be used.
 //!
 //! The [`Telemetry`] struct implements `Stream` and must be polled regularly (or sent to a
 //! background thread/task) in order for the telemetry to properly function. Dropping the object
 //! will also deregister the global logger and replace it with a logger that discards messages.
 //! The `Stream` generates [`TelemetryEvent`]s.
-//!
-//! > **Note**: Cloning the [`Telemetry`] and polling from multiple clones has an unspecified behaviour.
-//!
-//! # Example
-//!
-//! ```no_run
-//! use futures::prelude::*;
-//!
-//! let (telemetry, _sender) = sc_telemetry::Telemetry::new(
-//! 	sc_telemetry::TelemetryEndpoints::new(vec![
-//! 		// The `0` is the maximum verbosity level of messages to send to this endpoint.
-//! 		("wss://example.com".into(), 0)
-//! 	]).expect("Invalid URL or multiaddr provided"),
-//! 	// Can be used to pass an external implementation of WebSockets.
-//! 	None,
-//! 	None,
-//! );
-//!
-//! // The `telemetry` object implements `Stream` and must be processed.
-//! std::thread::spawn(move || {
-//! 	futures::executor::block_on(telemetry.for_each(|_| future::ready(())));
-//! });
-//!
-//! // Sends a message on the telemetry.
-//! sc_telemetry::telemetry!(sc_telemetry::SUBSTRATE_INFO; "test";
-//! 	"foo" => "bar",
-//! )
-//! ```
-//!
 
 use futures::{channel::mpsc, prelude::*};
 use libp2p::{wasm_ext, Multiaddr};
