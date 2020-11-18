@@ -1265,7 +1265,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
 	}
 
-	/// Compute diff between new and old members; they **must already be sorted**. 
+	/// Compute diff between new and old members; they **must already be sorted**.
 	///
 	/// Returns incoming and outgoing members.
 	fn compute_members_diff(
@@ -1427,6 +1427,9 @@ pub trait GetCallMetadata {
 #[impl_for_tuples(30)]
 pub trait OnFinalize<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
+	///
+	/// NOTE: This function is called AFTER ALL extrinsics in a block are applied,
+	/// including inherent extrinsics.
 	fn on_finalize(_n: BlockNumber) {}
 }
 
@@ -1438,6 +1441,9 @@ pub trait OnInitialize<BlockNumber> {
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
+	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
+	/// including inherent extrinsics. Hence for instance `timestamp`
+	/// is not updated at this point yet.
 	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
 }
 
@@ -1569,7 +1575,7 @@ pub mod schedule {
 		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
 		/// only if it is executed *before* the currently scheduled block. For periodic tasks,
 		/// this dispatch is guaranteed to succeed only before the *initial* execution; for
-		/// others, use `reschedule_named`. 
+		/// others, use `reschedule_named`.
 		///
 		/// Will return an error if the `address` is invalid.
 		fn reschedule(
