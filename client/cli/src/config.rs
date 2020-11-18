@@ -536,7 +536,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	}
 
 
-	/// Is log reloading disabled
+	/// Is log reloading disabled (enabled by default)
 	fn is_log_filter_reloading_disabled(&self) -> Result<bool> {
 		Ok(self.shared_params().is_log_filter_reloading_disabled())
 	}
