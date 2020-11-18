@@ -21,7 +21,7 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::sync::Arc;
-use tracing::{Event, Subscriber};
+use tracing::{Event, Id, Subscriber};
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 /// Span name used to report the telemetry.
@@ -54,7 +54,7 @@ where
 				.chain(parents)
 				.find(|x| x.name() == TELEMETRY_LOG_SPAN)
 			{
-				let id = span.id().into_u64();
+				let id = span.id();
 				if let Some(sender) = (self.0).0.lock().get_mut(&id) {
 					let mut attrs = TelemetryAttrs::new(id);
 					let mut vis = TelemetryAttrsVisitor(&mut attrs);
@@ -85,11 +85,11 @@ where
 struct TelemetryAttrs {
 	message_verbosity: Option<u64>,
 	json: Option<String>,
-	id: u64,
+	id: Id,
 }
 
 impl TelemetryAttrs {
-	fn new(id: u64) -> Self {
+	fn new(id: Id) -> Self {
 		Self {
 			message_verbosity: None,
 			json: None,
@@ -115,7 +115,7 @@ impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
 	fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
 		if field.name() == "json" {
 			// NOTE: this is a hack to inject the span id into the json
-			let mut message = format!(r#"{{"id":{},"#, (*self.0).id);
+			let mut message = format!(r#"{{"id":{},"#, (*self.0).id.into_u64());
 			message.push_str(&value[1..]);
 			(*self.0).json = Some(message)
 		}
@@ -128,12 +128,12 @@ impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
 /// span's ID.
 #[derive(Default, Debug, Clone)]
 pub struct Senders(
-	Arc<Mutex<HashMap<u64, std::panic::AssertUnwindSafe<mpsc::Sender<(u8, String)>>>>>,
+	Arc<Mutex<HashMap<Id, std::panic::AssertUnwindSafe<mpsc::Sender<(u8, String)>>>>>,
 );
 
 impl Senders {
-	/// TODO doc
-	pub fn insert(&self, id: u64, sender: mpsc::Sender<(u8, String)>) {
+	/// Insert a channel `Sender` to the collection using an id (`u64`) for its key.
+	pub fn insert(&self, id: Id, sender: mpsc::Sender<(u8, String)>) {
 		self.0
 			.lock()
 			.insert(id, std::panic::AssertUnwindSafe(sender));

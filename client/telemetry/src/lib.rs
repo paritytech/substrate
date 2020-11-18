@@ -283,7 +283,7 @@ impl Telemetries {
 			self.wasm_external_transport.clone(),
 			Some(&self.node_pool),
 		);
-		let id = telemetry.span.id().expect("the span is enabled; qed").into_u64();
+		let id = telemetry.span.id().expect("the span is enabled; qed");
 
 		self.senders.insert(id, sender);
 
