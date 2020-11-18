@@ -33,7 +33,7 @@ use sp_core::{
 };
 use log::warn;
 use codec::Encode;
-use sp_externalities::{Extensions, Extension};
+use sp_externalities::{Extensions, Extension, AsyncBackend, TaskId};
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
@@ -305,7 +305,7 @@ impl Externalities for BasicExternalities {
 		unimplemented!("Transactions are not supported by BasicExternalities");
 	}
 
-	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
+	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
 		unimplemented!("Transactions are not supported by BasicExternalities");
 	}
 
@@ -332,6 +332,20 @@ impl Externalities for BasicExternalities {
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in Basic")
 	}
+
+	fn get_past_async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+		unimplemented!("TODO empty one")
+	}
+
+	fn get_async_backend(&mut self, marker: TaskId) -> Option<Box<dyn AsyncBackend>> {
+		unimplemented!("TODO from self.storage cloned")
+	}
+
+	fn is_state_current(&self, marker: TaskId) -> bool {
+		// no tx
+		true
+	}
+
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {

@@ -28,7 +28,7 @@ use sp_core::{
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{
-	Externalities, Extensions, Extension, ExtensionStore,
+	Externalities, Extensions, Extension, ExtensionStore, AsyncBackend, TaskId,
 };
 use codec::{Decode, Encode, EncodeAppend};
 
@@ -603,7 +603,7 @@ where
 		self.overlay.start_transaction()
 	}
 
-	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
+	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
 		self.mark_dirty();
 		self.overlay.rollback_transaction().map_err(|_| ())
 	}
@@ -667,6 +667,25 @@ where
 
 	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
 		self.backend.set_whitelist(new)
+	}
+
+	fn get_past_async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+		self.backend.async_backend()
+	}
+
+	fn get_async_backend(&mut self, marker: TaskId) -> Option<Box<dyn AsyncBackend>> {
+		self.get_past_async_backend().map(|backend| {
+			self.overlay.set_marker(marker);
+			let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
+				backend,
+				self.overlay,
+			));
+			backend
+		})
+	}
+
+	fn is_state_current(&self, marker: TaskId) -> bool {
+		self.overlay.is_state_current(marker)
 	}
 }
 

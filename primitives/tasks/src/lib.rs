@@ -231,6 +231,9 @@ mod inner {
 	///
 	/// This can be `join`-ed to get (blocking) the result of
 	/// the spawned task execution.
+	///
+	/// TODO this need to switch to an enum with a possible inline
+	/// variant for RuntimeSpawn implemnetation that do not support threads.
 	#[must_use]
 	pub struct DataJoinHandle {
 		handle: u64,

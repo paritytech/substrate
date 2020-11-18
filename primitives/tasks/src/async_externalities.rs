@@ -25,7 +25,7 @@ use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	traits::{Externalities, SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
-use sp_externalities::{Extensions, ExternalitiesExt as _};
+use sp_externalities::{Extensions, ExternalitiesExt as _, TaskId};
 use crate::AsyncStateType;
 
 
@@ -48,13 +48,11 @@ impl Default for AsyncState {
 	}
 }
 
-pub type CheckpointState = u64;
-
 pub enum AsyncStateResult {
 	/// Result is always valid, for `AsyncState::None`
 	/// and `AsyncState::ReadBefore`.
 	StateLess(Vec<u8>),
-	ReadOnly(Vec<u8>, CheckpointState),
+	ReadOnly(Vec<u8>, TaskId),
 }
 
 /// Async view on state machine Ext.
@@ -66,7 +64,7 @@ pub struct AsyncExt {
 	kind: AsyncStateType,
 	// TODO consider Optional, also this is copy, this could synch.
 	read_overlay: sp_state_machine::OverlayedChanges,
-	spawn_id: Option<CheckpointState>,
+	spawn_id: Option<TaskId>,
 	backend: Option<Box<dyn AsyncBackend>>,
 }
 
@@ -119,7 +117,7 @@ impl AsyncExt {
 	pub fn state_at_spawn_read(
 		backend: Box<dyn AsyncBackend>,
 		overlay: sp_state_machine::OverlayedChanges,
-		spawn_id: CheckpointState,
+		spawn_id: TaskId,
 	) -> Self {
 		AsyncExt {
 			kind: AsyncStateType::ReadBefore,
@@ -284,7 +282,7 @@ impl Externalities for AsyncExternalities {
 		unimplemented!("Transactions are not supported by AsyncExternalities");
 	}
 
-	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
+	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
 		unimplemented!("Transactions are not supported by AsyncExternalities");
 	}
 

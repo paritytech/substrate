@@ -28,6 +28,7 @@ use sp_core::{
 	traits::Externalities, Blake2Hasher,
 };
 use codec::Encode;
+use sp_externalities::{TaskId, AsyncBackend};
 
 /// Trait for inspecting state in any backend.
 ///
@@ -176,7 +177,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("Transactions are not supported by ReadOnlyExternalities");
 	}
 
-	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
+	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
 		unimplemented!("Transactions are not supported by ReadOnlyExternalities");
 	}
 
@@ -202,6 +203,19 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
+	}
+
+	fn get_past_async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+		self.backend.async_backend()
+	}
+
+	fn get_async_backend(&mut self, _marker: TaskId) -> Option<Box<dyn AsyncBackend>> {
+		self.get_past_async_backend()
+	}
+
+	fn is_state_current(&self, marker: TaskId) -> bool {
+		// no changes
+		true
 	}
 }
 

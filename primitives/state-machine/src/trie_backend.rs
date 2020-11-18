@@ -28,6 +28,7 @@ use crate::{
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral},
 };
 use sp_std::{boxed::Box, vec::Vec};
+use sp_externalities::AsyncBackend;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -256,9 +257,9 @@ impl<S, H> Backend<H> for TrieBackend<S, H> where
 		Ok(())
 	}
 
-	fn async_backend(&self) -> Option<Box<dyn crate::AsyncBackend>> {
+	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
 		use crate::backend::AsyncBackendAdapter;
-		use crate::AsyncBackend;
+		use sp_externalities::AsyncBackend;
 
 		//	type AsyncBackend = TrieBackend<S::AsyncStorage, H>;
 		self.essence.async_backend().map(|essence| {

@@ -30,6 +30,7 @@ use crate::{
 use sp_std::{vec::Vec, boxed::Box};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
+use sp_externalities::AsyncBackend;
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -257,22 +258,50 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>>;
 }
 
-/// Backend to use with thread.
-/// This trait must be usable as `dyn AsyncBackend`,
-/// which is not the case for Backend trait.
-pub trait AsyncBackend: Send {
-}
-
+/// Async Backend implemented for a given state machine backend.
 pub struct AsyncBackendAdapter<H, B>(B, sp_std::marker::PhantomData<H>);
 
 impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackend for AsyncBackendAdapter<H, B> {
 }
 
-// TODO remove bound
+// TODO remove bound?
 impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackendAdapter<H, B> {
 	pub fn new(backend: B) -> Self {
 		AsyncBackendAdapter(backend, sp_std::marker::PhantomData)
 	}
+}
+
+/// Async Backend implemented at a given state machine current state.
+/// This involves a costy overlay change clone.
+pub struct AsyncBackendAt {
+	backend: Box<dyn AsyncBackend>,
+	// TODO could also extract current value to reduce size.
+	overlay: crate::OverlayedChanges,
+}
+
+impl AsyncBackend for AsyncBackendAt {
+}
+
+impl AsyncBackendAt {
+	pub fn new(backend: Box<dyn AsyncBackend>, overlay: &crate::OverlayedChanges) -> Self {
+		AsyncBackendAt {
+			backend,
+			overlay: overlay.clone(),
+		}
+	}
+}
+
+/// When backend do not allow using a thread,
+/// then we use this `InlineBackend` variant
+/// which will run inline on join.
+/// The backend used will then be the actual
+/// state machine one.
+pub struct InlineBackendAt {
+	// TODO could also extract current value to reduce size.
+	overlay: crate::OverlayedChanges,
+}
+
+impl AsyncBackend for InlineBackendAt {
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {

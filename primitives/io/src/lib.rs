@@ -186,8 +186,15 @@ pub trait Storage {
 	///
 	/// Will panic if there is no open transaction.
 	fn rollback_transaction(&mut self) {
-		self.storage_rollback_transaction()
+		let to_drop_tasks = self.storage_rollback_transaction()
 			.expect("No open transaction that can be rolled back.");
+		if to_drop_tasks.len() > 0 {
+			if let Some(runtime_spawn) = self.extension::<RuntimeSpawnExt>() {
+				for task in to_drop_tasks.into_iter() {
+					runtime_spawn.kill(task)
+				}
+			}
+		}
 	}
 
 	/// Commit the last transaction started by `start_transaction`.

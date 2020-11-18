@@ -31,6 +31,7 @@ use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend, DBValue};
 use sp_core::storage::ChildInfo;
+use sp_externalities::AsyncBackend;
 
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> {
@@ -402,7 +403,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.usage_info()
 	}
 
-	fn async_backend(&self) -> Option<Box<dyn crate::AsyncBackend>> {
+	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
 		None
 /*		Some(Box::new(crate::backend::AsyncBackendAdapter::new(AsyncProvingBackend(
 			TrieBackend::new(AsyncProofRecorderBackend {
@@ -512,7 +513,7 @@ impl<S, H> Backend<H> for AsyncProvingBackend<S, H>
 		self.0.usage_info()
 	}
 
-	fn async_backend(&self) -> Option<Box<dyn crate::AsyncBackend>> {
+	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
 		let inner: AsyncProvingBackend<S, H> = self.clone();
 		Some(Box::new(crate::backend::AsyncBackendAdapter::new(inner)))
 	}
