@@ -251,9 +251,33 @@ macro_rules! parameter_types {
 			$vis:vis static $name:ident: $type:ty = $value:expr;
 		)*
 	) => (
-		#[cfg(no_std)]
+		$crate::parameter_types_impl_thread_local!(
+			$(
+				$( #[ $attr ] )*
+				$vis static $name: $type = $value;
+			)*
+		);
+	);
+}
+
+#[cfg(not(feature = "std"))]
+#[macro_export]
+macro_rules! parameter_types_impl_thread_local {
+	( $( $any:tt )* ) => {
 		compile_error!("static parameter types is only available in std and for testing.");
-		$crate::parameter_types!(
+	};
+}
+
+#[cfg(feature = "std")]
+#[macro_export]
+macro_rules! parameter_types_impl_thread_local {
+	(
+		$(
+			$( #[ $attr:meta ] )*
+			$vis:vis static $name:ident: $type:ty = $value:expr;
+		)*
+	) => {
+		$crate::parameter_types_impl_thread_local!(
 			IMPL_THREAD_LOCAL $( $vis, $name, $type, $value, )*
 		);
 		$crate::paste::item! {
@@ -272,7 +296,7 @@ macro_rules! parameter_types {
 				}
 			)*
 		}
-	);
+	};
 	(IMPL_THREAD_LOCAL $( $vis:vis, $name:ident, $type:ty, $value:expr, )* ) => {
 		$crate::paste::item! {
 			thread_local! {
