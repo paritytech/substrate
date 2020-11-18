@@ -79,12 +79,14 @@ pub type WsTrans = libp2p::core::transport::Boxed<
 >;
 
 impl TelemetryWorker {
-	// TODO update doc
 	/// Builds a new `TelemetryWorker`.
 	///
 	/// The endpoints must be a list of targets, plus a verbosity level. When you send a message
 	/// to the telemetry, only the targets whose verbosity is higher than the verbosity of the
 	/// message will receive it.
+	///
+	/// It can re-use `Node` (connections) if a `NodePool` is provided. Otherwise new `Node` are
+	/// created.
 	pub fn new(
 		endpoints: impl IntoIterator<Item = (Multiaddr, u8)>,
 		wasm_external_transport: impl Into<Option<wasm_ext::ExtTransport>>,
@@ -165,11 +167,7 @@ impl TelemetryWorker {
 		Poll::Pending
 	}
 
-	// TODO update doc
-	/// Equivalent to `slog::Drain::log`, but takes `self` by `&mut` instead, which is more convenient.
-	///
-	/// Keep in mind that you should call `TelemetryWorker::poll` in order to process the messages.
-	/// You should call this function right after calling `slog::Drain::log`.
+	/// Process telemetry message given its verbosity.
 	pub fn log(&mut self, msg_verbosity: u8, json: &str) -> Result<(), ()> {
 		// None of the nodes want that verbosity, so just return without doing any serialization.
 		if self.nodes.iter().all(|(_, node_max_verbosity)| msg_verbosity > *node_max_verbosity) {
