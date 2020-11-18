@@ -1265,12 +1265,12 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
 	}
 
-	/// Compute diff between new and old members; they **must already be sorted**. 
+	/// Compute diff between new and old members; they **must already be sorted**.
 	///
 	/// Returns incoming and outgoing members.
 	fn compute_members_diff(
 		new_members: &[AccountId],
-		old_members: &[AccountId]
+		old_members: &[AccountId],
 	) -> (Vec<AccountId>, Vec<AccountId>) {
 		let mut old_iter = old_members.iter();
 		let mut new_iter = new_members.iter();
@@ -1304,6 +1304,11 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 
 	/// Set the prime member.
 	fn set_prime(_prime: Option<AccountId>) {}
+
+	/// Get the current prime.
+	fn get_prime() -> Option<AccountId> {
+		None
+	}
 }
 
 impl<T: Clone + Ord> ChangeMembers<T> for () {
@@ -1569,7 +1574,7 @@ pub mod schedule {
 		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
 		/// only if it is executed *before* the currently scheduled block. For periodic tasks,
 		/// this dispatch is guaranteed to succeed only before the *initial* execution; for
-		/// others, use `reschedule_named`. 
+		/// others, use `reschedule_named`.
 		///
 		/// Will return an error if the `address` is invalid.
 		fn reschedule(
