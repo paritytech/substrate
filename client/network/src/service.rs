@@ -820,7 +820,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Please call `event_stream` before registering a protocol, otherwise you may miss events
 	/// about the protocol that you have registered.
-	// TODO: remove this method after https://github.com/paritytech/substrate/issues/4587
+	// TODO: remove this method after https://github.com/paritytech/substrate/issues/6827
 	pub fn register_notifications_protocol(
 		&self,
 		protocol_name: impl Into<Cow<'static, str>>,
