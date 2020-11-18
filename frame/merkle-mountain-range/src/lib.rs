@@ -66,9 +66,10 @@ use frame_support::{
 use sp_runtime::traits;
 
 mod mmr;
-mod primitives;
 #[cfg(test)]
 mod tests;
+
+pub mod primitives;
 
 /// This pallet's configuration trait
 pub trait Trait<I = DefaultInstance>: frame_system::Trait {
