@@ -102,7 +102,7 @@ pub enum Never {}
 ///
 /// - Using `static` to create a struct that implements [`Get`](crate::traits::Get) and the value is
 ///   being provided by a static variable with the equivalent name in `UPPER_SNAKE_CASE`. An
-///   additional `set` is provided in this case to alter the static variable. **This is intended for
+///   additional `set` function is provided in this case to alter the static variable. **This is intended for
 ///   testing ONLY**.
 ///
 /// # Examples
