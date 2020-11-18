@@ -1441,9 +1441,10 @@ pub trait OnInitialize<BlockNumber> {
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
+	///
 	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
-	/// including inherent extrinsics. Hence for instance `timestamp`
-	/// is not updated at this point yet.
+	/// including inherent extrinsics. Hence for instance, if you runtime includes
+	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
 	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
 }
 
