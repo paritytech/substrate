@@ -303,18 +303,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	}
 }
 
-#[derive(derive_more::Display, derive_more::From)]
-enum OnBlockResponseError {
-	Request(request_responses::RequestFailure),
-	Decode(prost::DecodeError),
-}
-
-#[derive(derive_more::Display, derive_more::From)]
-enum OnFinalityResponseError {
-	Request(request_responses::RequestFailure),
-	Decode(prost::DecodeError),
-}
-
 fn reported_roles_to_observed_role(local_role: &Role, remote: &PeerId, roles: Roles) -> ObservedRole {
 	if roles.is_authority() {
 		match local_role {
