@@ -38,9 +38,9 @@ use tracing_subscriber::{
 pub use event_format::*;
 pub use layers::*;
 
-/// Initialize the global logger TODO update doc
+/// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects.
 ///
-/// This sets various global logging and tracing instances and thus may only be called once.
+/// When running in a browser, the `telemetry_external_transport` should be provided.
 pub fn get_default_subscriber_and_telemetries(
 	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
@@ -57,9 +57,10 @@ pub fn get_default_subscriber_and_telemetries(
 	)
 }
 
-/// Initialize the global logger TODO update doc
+/// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects with
+/// profiling enabled.
 ///
-/// This sets various global logging and tracing instances and thus may only be called once.
+/// When running in a browser, the `telemetry_external_transport` should be provided.
 pub fn get_default_subscriber_and_telemetries_with_profiling(
 	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
@@ -83,6 +84,8 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 	Ok((subscriber.with(profiling), telemetries))
 }
 
+// Common implementation for `get_default_subscriber_and_telemetries` and
+// `get_default_subscriber_and_telemetries_with_profiling`.
 fn get_default_subscriber_and_telemetries_internal(
 	extra_directives: impl IntoIterator<Item = Directive>,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
@@ -188,6 +191,7 @@ fn get_default_subscriber_and_telemetries_internal(
 	Ok((subscriber, telemetries))
 }
 
+// Transform a string of comma separated logging directive into a `Vec<Directive>`.
 fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
 	let dirs = dirs.as_ref();
 
