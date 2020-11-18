@@ -1,5 +1,5 @@
 [package]
-name = "sc-cli-proc-macro"
+name = "sc-logging-proc-macro"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"

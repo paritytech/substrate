@@ -25,6 +25,10 @@
 mod event_format;
 mod layers;
 
+pub use sc_logging_proc_macro::*;
+#[doc(hidden)]
+pub use tracing;
+
 use tracing::Subscriber;
 use tracing_subscriber::{
 	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, registry::LookupSpan,
@@ -192,4 +196,157 @@ fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
 	}
 
 	dirs.split(',').filter_map(|s| s.parse().ok()).collect()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate as sc_logging;
+	use std::{env, process::Command};
+	use tracing::{metadata::Kind, subscriber::Interest, Callsite, Level, Metadata};
+
+	fn init_logger(pattern: &str) {
+		let (subscriber, telemetries) =
+			get_default_subscriber_and_telemetries(pattern, None).unwrap();
+		tracing::subscriber::set_global_default(subscriber).unwrap();
+	}
+
+	#[test]
+	fn test_logger_filters() {
+		let test_pattern = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
+		init_logger(&test_pattern);
+
+		tracing::dispatcher::get_default(|dispatcher| {
+			let test_filter = |target, level| {
+				struct DummyCallSite;
+				impl Callsite for DummyCallSite {
+					fn set_interest(&self, _: Interest) {}
+					fn metadata(&self) -> &Metadata<'_> {
+						unreachable!();
+					}
+				}
+
+				let metadata = tracing::metadata!(
+					name: "",
+					target: target,
+					level: level,
+					fields: &[],
+					callsite: &DummyCallSite,
+					kind: Kind::SPAN,
+				);
+
+				dispatcher.enabled(&metadata)
+			};
+
+			assert!(test_filter("afg", Level::INFO));
+			assert!(test_filter("afg", Level::DEBUG));
+			assert!(!test_filter("afg", Level::TRACE));
+
+			assert!(test_filter("sync", Level::TRACE));
+			assert!(test_filter("client", Level::WARN));
+
+			assert!(test_filter("telemetry", Level::TRACE));
+			assert!(test_filter("something-with-dash", Level::ERROR));
+		});
+	}
+
+	const EXPECTED_LOG_MESSAGE: &'static str = "yeah logging works as expected";
+
+	#[test]
+	fn dash_in_target_name_works() {
+		let executable = env::current_exe().unwrap();
+		let output = Command::new(executable)
+			.env("ENABLE_LOGGING", "1")
+			.args(&["--nocapture", "log_something_with_dash_target_name"])
+			.output()
+			.unwrap();
+
+		let output = String::from_utf8(output.stderr).unwrap();
+		assert!(output.contains(EXPECTED_LOG_MESSAGE));
+	}
+
+	/// This is no actual test, it will be used by the `dash_in_target_name_works` test.
+	/// The given test will call the test executable to only execute this test that
+	/// will only print `EXPECTED_LOG_MESSAGE` through logging while using a target
+	/// name that contains a dash. This ensures that targets names with dashes work.
+	#[test]
+	fn log_something_with_dash_target_name() {
+		if env::var("ENABLE_LOGGING").is_ok() {
+			let test_pattern = "test-target=info";
+			init_logger(&test_pattern);
+
+			log::info!(target: "test-target", "{}", EXPECTED_LOG_MESSAGE);
+		}
+	}
+
+	const EXPECTED_NODE_NAME: &'static str = "THE_NODE";
+
+	#[test]
+	fn prefix_in_log_lines() {
+		let re = regex::Regex::new(&format!(
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  \[{}\] {}$",
+			EXPECTED_NODE_NAME, EXPECTED_LOG_MESSAGE,
+		))
+		.unwrap();
+		let executable = env::current_exe().unwrap();
+		let output = Command::new(executable)
+			.env("ENABLE_LOGGING", "1")
+			.args(&["--nocapture", "prefix_in_log_lines_entrypoint"])
+			.output()
+			.unwrap();
+
+		let output = String::from_utf8(output.stderr).unwrap();
+		assert!(
+			re.is_match(output.trim()),
+			format!("Expected:\n{}\nGot:\n{}", re, output),
+		);
+	}
+
+	/// This is no actual test, it will be used by the `prefix_in_log_lines` test.
+	/// The given test will call the test executable to only execute this test that
+	/// will only print a log line prefixed by the node name `EXPECTED_NODE_NAME`.
+	#[test]
+	fn prefix_in_log_lines_entrypoint() {
+		if env::var("ENABLE_LOGGING").is_ok() {
+			init_logger("");
+			prefix_in_log_lines_process();
+		}
+	}
+
+	#[crate::prefix_logs_with(EXPECTED_NODE_NAME)]
+	fn prefix_in_log_lines_process() {
+		log::info!("{}", EXPECTED_LOG_MESSAGE);
+	}
+
+	/// This is no actual test, it will be used by the `do_not_write_with_colors_on_tty` test.
+	/// The given test will call the test executable to only execute this test that
+	/// will only print a log line with some colors in it.
+	#[test]
+	fn do_not_write_with_colors_on_tty_entrypoint() {
+		if env::var("ENABLE_LOGGING").is_ok() {
+			init_logger("");
+			log::info!("{}", ansi_term::Colour::Yellow.paint(EXPECTED_LOG_MESSAGE));
+		}
+	}
+
+	#[test]
+	fn do_not_write_with_colors_on_tty() {
+		let re = regex::Regex::new(&format!(
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  {}$",
+			EXPECTED_LOG_MESSAGE,
+		))
+		.unwrap();
+		let executable = env::current_exe().unwrap();
+		let output = Command::new(executable)
+			.env("ENABLE_LOGGING", "1")
+			.args(&["--nocapture", "do_not_write_with_colors_on_tty_entrypoint"])
+			.output()
+			.unwrap();
+
+		let output = String::from_utf8(output.stderr).unwrap();
+		assert!(
+			re.is_match(output.trim()),
+			format!("Expected:\n{}\nGot:\n{}", re, output),
+		);
+	}
 }

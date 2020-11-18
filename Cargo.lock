@@ -6535,7 +6535,6 @@ dependencies = [
 name = "sc-cli"
 version = "0.8.0"
 dependencies = [
- "ansi_term 0.12.1",
  "bip39",
  "chrono",
  "fdlimit",
@@ -6548,7 +6547,6 @@ dependencies = [
  "rand 0.7.3",
  "regex",
  "rpassword",
- "sc-cli-proc-macro",
  "sc-client-api",
  "sc-keystore",
  "sc-logging",
@@ -6571,16 +6569,6 @@ dependencies = [
  "thiserror",
  "tokio 0.2.22",
  "tracing",
-]
-
-[[package]]
-name = "sc-cli-proc-macro"
-version = "2.0.0"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -7124,7 +7112,9 @@ dependencies = [
  "ansi_term 0.12.1",
  "atty",
  "lazy_static",
+ "log",
  "regex",
+ "sc-logging-proc-macro",
  "sc-telemetry",
  "sc-tracing",
  "tracing",
@@ -7132,6 +7122,16 @@ dependencies = [
  "tracing-subscriber",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "sc-logging-proc-macro"
+version = "2.0.0"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

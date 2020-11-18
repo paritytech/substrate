@@ -120,16 +120,16 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 
 	let crate_name = if std::env::var("CARGO_PKG_NAME")
 		.expect("cargo env var always there when compiling; qed")
-		== "sc-cli"
+		== "sc-logging"
 	{
-		Ident::new("sc_cli", Span::call_site().into())
+		Ident::new("sc_logging", Span::call_site())
 	} else {
-		let crate_name = match crate_name("sc-cli") {
+		let crate_name = match crate_name("sc-logging") {
 			Ok(x) => x,
 			Err(err) => return Error::new(Span::call_site(), err).to_compile_error().into(),
 		};
 
-		Ident::new(&crate_name, Span::call_site().into())
+		Ident::new(&crate_name, Span::call_site())
 	};
 
 	let ItemFn {
