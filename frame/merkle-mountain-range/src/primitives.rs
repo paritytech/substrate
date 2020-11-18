@@ -63,6 +63,18 @@ impl<T: frame_system::Trait> LeafDataProvider for frame_system::Module<T> {
 	}
 }
 
+/// New MMR root notification hook.
+pub trait OnNewRoot<Hash> {
+	/// Function called by the pallet in case new MMR root has been computed.
+	///
+	/// Should return the amount of [Weight] consumed by the hook.
+	fn on_new_root(root: &Hash) -> Weight;
+}
+
+/// No-op implementation of [OnNewRoot].
+impl<Hash> OnNewRoot<Hash> for () {
+	fn on_new_root(_root: &Hash) -> Weight { 0 }
+}
 
 /// A full leaf content stored in the offchain-db.
 pub trait FullLeaf: Clone + PartialEq + fmt::Debug + codec::Decode {

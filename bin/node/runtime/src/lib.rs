@@ -900,6 +900,7 @@ impl pallet_mmr::Trait for Runtime {
 	type Hash = <Runtime as frame_system::Trait>::Hash;
 	type HashWeight = HashWeight;
 	type LeafData = frame_system::Module<Self>;
+	type OnNewRoot = ();
 }
 
 construct_runtime!(

@@ -88,6 +88,7 @@ impl Trait for Test {
 	type Hash = H256;
 	type HashWeight = HashWeight;
 	type LeafData = Compact<Keccak256, (frame_system::Module<Test>, LeafData)>;
+	type OnNewRoot = ();
 }
 
 #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, Debug)]

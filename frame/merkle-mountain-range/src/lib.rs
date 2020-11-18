@@ -113,6 +113,14 @@ pub trait Trait<I = DefaultInstance>: frame_system::Trait {
 	/// multiple elements into the tree. In such case it might be worth using [primitives::Compact]
 	/// to make MMR proof for one element of the tuple leaner.
 	type LeafData: primitives::LeafDataProvider;
+
+	/// A hook to act on new MMR root.
+	///
+	/// For some applications it might be benefitial to make the MMR root available externally
+	/// apart from having it in the storage. For instance you might output it in the header digest
+	/// (see [frame_system::Module::deposit_log]) to make it available for Light Clients.
+	/// Hook complexity should be `O(1)`.
+	type OnNewRoot: primitives::OnNewRoot<<Self as Trait<I>>::Hash>;
 }
 
 decl_storage! {
@@ -145,14 +153,18 @@ decl_module! {
 
 			// update the size
 			let (leaves, root) = mmr.finalize().expect("MMR finalize never fails.");
+			let hook_weight = <T::OnNewRoot as primitives::OnNewRoot<_>>::on_new_root(&root);
+
 			<NumberOfLeaves>::put(leaves);
 			<RootHash<T, I>>::put(root);
+
 
 			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 			let hash_weight = peaks_after.saturating_mul(T::HashWeight::get());
 
 			leaf_weight
 				.saturating_add(hash_weight)
+				.saturating_add(hook_weight)
 				.saturating_add(<T as frame_system::Trait>::DbWeight::get().reads_writes(
 					2 + peaks_before,
 					2 + peaks_after,
