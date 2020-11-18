@@ -98,6 +98,7 @@ impl pallet_balances::Trait for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type SpendFunds = ();
 }
 thread_local! {
 	static TEN_TO_FOURTEEN: RefCell<Vec<u128>> = RefCell::new(vec![10,11,12,13,14]);

@@ -206,6 +206,13 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	type SpendFunds: SpendFunds;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+pub trait SpendFunds {
+	fn spend_funds( missed_any: &mut bool ) -> Weight;
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -390,7 +397,7 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			// Check to see if we should spend some funds!
 			if (n % T::SpendPeriod::get()).is_zero() {
-				Self::spend_funds()
+				Self::spend_funds_top()
 			} else {
 				0
 			}
@@ -422,7 +429,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Spend some money! returns number of approvals before spend.
-	pub fn spend_funds() -> Weight {
+	fn spend_funds_top() -> Weight {
 		let mut total_weight: Weight = Zero::zero();
 
 		let mut budget_remaining = Self::pot();
@@ -460,6 +467,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		});
 
 		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
+
+		total_weight += T::SpendFunds::spend_funds(&missed_any);
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
