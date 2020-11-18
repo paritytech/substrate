@@ -40,8 +40,8 @@ use sp_core::{
 use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
-use sp_externalities::ExternalitiesExt as _;
-use sp_tasks::{new_async_externalities, AsyncBackend, AsyncExt, AsyncStateType};
+use sp_externalities::{ExternalitiesExt as _, AsyncBackend};
+use sp_tasks::{new_async_externalities, AsyncExt, AsyncStateType};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;

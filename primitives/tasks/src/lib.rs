@@ -61,7 +61,7 @@
 mod async_externalities;
 
 #[cfg(feature = "std")]
-pub use async_externalities::{new_async_externalities, AsyncExternalities, AsyncBackend, AsyncExt};
+pub use async_externalities::{new_async_externalities, AsyncExternalities, AsyncExt};
 
 /// Type for `AsyncState`.
 /// TODO rename to stick with doc for all ASyncExt builders.

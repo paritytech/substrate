@@ -47,6 +47,7 @@ pub use std_reexport::*;
 pub use execution::*;
 #[cfg(feature = "std")]
 pub use log::{debug, warn, trace, error as log_error};
+pub use sp_externalities::AsyncBackend;
 
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.

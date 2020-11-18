@@ -288,6 +288,9 @@ pub trait Externalities: ExtensionStore {
 	fn get_async_backend(&mut self, marker: TaskId) -> Option<Box<dyn AsyncBackend>>;
 
 	/// Check if state is the same as when an AsyncBackend was acquired.
+	/// TODO actually if we kill, this is not needed (except if we want
+	/// to avoid a panic on a join, but we would most likely return enum
+	/// on join for case where thread has been killed).
 	fn is_state_current(&self, marker: TaskId) -> bool;
 }
 

@@ -18,14 +18,13 @@
 
 //! Async externalities.
 
-pub use sp_state_machine::AsyncBackend;
 use sp_std::any::{TypeId, Any};
 use sp_std::boxed::Box;
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	traits::{Externalities, SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
-use sp_externalities::{Extensions, ExternalitiesExt as _, TaskId};
+use sp_externalities::{Extensions, ExternalitiesExt as _, TaskId, AsyncBackend};
 use crate::AsyncStateType;
 
 
@@ -308,6 +307,18 @@ impl Externalities for AsyncExternalities {
 
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in AsyncExternalities")
+	}
+
+	fn get_past_async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+		unimplemented!("TODO")
+	}
+
+	fn get_async_backend(&mut self, marker: TaskId) -> Option<Box<dyn AsyncBackend>> {
+		unimplemented!("TODO")
+	}
+
+	fn is_state_current(&self, marker: TaskId) -> bool {
+		unimplemented!("TODO")
 	}
 }
 
