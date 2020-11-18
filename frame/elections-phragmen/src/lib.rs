@@ -486,9 +486,13 @@ decl_event!(
 		MemberKicked(AccountId),
 		/// A \[member\] has renounced their candidacy.
 		MemberRenounced(AccountId),
-		/// A voter was reported with the the report being successful or not.
-		/// \[voter, reporter, success\]
-		VoterReported(AccountId, AccountId, bool),
+		/// A \[candidate\] was slashed by \[amount\] due to failing to obtain a seat as member or
+		/// runner-up.
+		///
+		/// Note that old members and runners-up are also candidates.
+		CandidateSlashed(AccountId, Balance),
+		/// A \[seat holder\] was slashed by \[amount\] by being forcefully removed from the set.
+		SeatHolderSlashed(AccountId, Balance),
 	}
 );
 
@@ -816,7 +820,7 @@ impl<T: Trait> Module<T> {
 				let (imbalance, _remaining) = T::Currency::slash_reserved(who, removed.deposit);
 				debug_assert_eq!(_remaining, 0u32.into());
 				T::LoserCandidate::on_unbalanced(imbalance);
-			// TODO: emit event.
+				Self::deposit_event(RawEvent::SeatHolderSlashed(who.clone(), removed.deposit));
 			} else {
 				T::Currency::unreserve(who, removed.deposit);
 			}
@@ -1132,7 +1136,7 @@ impl<T: Trait> Module<T> {
 					{
 						let (imbalance, _) = T::Currency::slash_reserved(c, *d);
 						T::LoserCandidate::on_unbalanced(imbalance);
-						// TODO: emit event.
+						Self::deposit_event(RawEvent::CandidateSlashed(c.clone(), *d));
 					}
 				});
 

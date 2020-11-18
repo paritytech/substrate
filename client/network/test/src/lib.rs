@@ -58,7 +58,7 @@ use sp_core::H256;
 use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_runtime::{ConsensusEngineId, Justification};
+use sp_runtime::Justification;
 use substrate_test_runtime_client::{self, AccountKeyring};
 use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
@@ -557,7 +557,7 @@ pub struct FullPeerConfig {
 	/// Block announce validator.
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
-	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
+	pub notifications_protocols: Vec<Cow<'static, str>>,
 }
 
 pub trait TestNetFactory: Sized {
