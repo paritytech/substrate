@@ -734,6 +734,7 @@ decl_module! {
 			// Check to see if we should spend some funds!
 			if (n % T::SpendPeriod::get()).is_zero() {
 				// Self::spend_funds()
+				0
 			} else {
 				0
 			}
@@ -795,7 +796,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 // TODO :: re-Visit
-// Implementation-1 :: below two test cases are failing with this spend_funds() mtd
+// Implementation-1 :: below two test cases are failing with spend_funds() mtd
 // failures:
 //     tests::approve_bounty_works
 //     tests::cancel_and_refund
@@ -991,11 +992,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 }
 
+
 impl<T: Trait<I>, I: Instance> pallet_treasury::SpendFunds for Module<T, I> {
 
-	fn spend_fund( missed_any: &mut bool) -> Weight {
+	fn spend_funds(total_weight: &mut Weight, missed_any: &mut bool) {
 
-		let mut total_weight: Weight = Zero::zero();
+		let mut imbalance = <PositiveImbalanceOf<T, I>>::zero();
 		let mut budget_remaining = pallet_treasury::Module::<T,I>::pot();
 
 		let bounties_len = BountyApprovals::<I>::mutate(|v| {
@@ -1018,7 +1020,7 @@ impl<T: Trait<I>, I: Instance> pallet_treasury::SpendFunds for Module<T, I> {
 							Self::deposit_event(RawEvent::BountyBecameActive(index));
 							false
 						} else {
-							missed_any = true;
+							*missed_any = true;
 							true
 						}
 					} else {
@@ -1029,9 +1031,8 @@ impl<T: Trait<I>, I: Instance> pallet_treasury::SpendFunds for Module<T, I> {
 			bounties_approval_len
 		});
 
-		total_weight += T::BouWeightInfo::on_initialize_bounties(bounties_len);
+		*total_weight += T::BouWeightInfo::on_initialize_bounties(bounties_len);
 
-		total_weight
 	}
 
 }

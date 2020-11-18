@@ -151,6 +151,7 @@ impl pallet_treasury::Trait<DefaultInstance> for Test {
 	type MaximumReasonLength = MaximumReasonLength;
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
+	type SpendFunds = ( Bounties );
 }
 parameter_types! {
 	pub const BountyDepositBase: u64 = 80;
@@ -517,7 +518,7 @@ fn approve_bounty_works() {
 		assert_eq!(Balances::reserved_balance(0), deposit);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
-		<Bounties as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
 		// return deposit
 		assert_eq!(Balances::reserved_balance(0), 0);

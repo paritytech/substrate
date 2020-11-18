@@ -208,11 +208,12 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	type WeightInfo: WeightInfo;
 
 	type SpendFunds: SpendFunds;
+
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait SpendFunds {
-	fn spend_funds( missed_any: &mut bool ) -> Weight;
+	fn spend_funds( total_weight: &mut Weight, missed_any: &mut bool );
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -429,7 +430,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Spend some money! returns number of approvals before spend.
-	fn spend_funds_top() -> Weight {
+	pub fn spend_funds_top() -> Weight {
 		let mut total_weight: Weight = Zero::zero();
 
 		let mut budget_remaining = Self::pot();
@@ -468,7 +469,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
 
-		total_weight += T::SpendFunds::spend_funds(&missed_any);
+		T::SpendFunds::spend_funds(&mut total_weight, &mut missed_any);
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
