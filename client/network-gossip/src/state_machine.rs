@@ -534,7 +534,7 @@ mod tests {
 
 		let prev_hash = H256::random();
 		let best_hash = H256::random();
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "foo".into());
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into());
 		let m1_hash = H256::random();
 		let m2_hash = H256::random();
 		let m1 = vec![1, 2, 3];
@@ -561,7 +561,7 @@ mod tests {
 
 	#[test]
 	fn message_stream_include_those_sent_before_asking() {
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "foo".into());
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into());
 
 		// Register message.
 		let message = vec![4, 5, 6];
@@ -576,7 +576,7 @@ mod tests {
 
 	#[test]
 	fn can_keep_multiple_messages_per_topic() {
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "foo".into());
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into());
 
 		let topic = [1; 32].into();
 		let msg_a = vec![1, 2, 3];
@@ -590,7 +590,7 @@ mod tests {
 
 	#[test]
 	fn peer_is_removed_on_disconnect() {
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "foo".into());
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into());
 
 		let mut network = NoOpNetwork::default();
 
@@ -606,7 +606,7 @@ mod tests {
 	fn on_incoming_ignores_discarded_messages() {
 		let to_forward = ConsensusGossip::<Block>::new(
 			Arc::new(DiscardAll),
-			"foo".into(),
+			"/foo".into(),
 		).on_incoming(
 			&mut NoOpNetwork::default(),
 			PeerId::random(),
@@ -626,7 +626,7 @@ mod tests {
 
 		let to_forward = ConsensusGossip::<Block>::new(
 			Arc::new(AllowAll),
-			"foo".into(),
+			"/foo".into(),
 		).on_incoming(
 			&mut network,
 			// Unregistered peer.

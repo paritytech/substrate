@@ -363,7 +363,7 @@ mod tests {
 		let network = TestNetwork::default();
 		let mut gossip_engine = GossipEngine::<Block>::new(
 			network.clone(),
-			"my_protocol",
+			"/my_protocol",
 			Arc::new(AllowAll{}),
 		);
 
@@ -384,7 +384,7 @@ mod tests {
 	#[test]
 	fn keeps_multiple_subscribers_per_topic_updated_with_both_old_and_new_messages() {
 		let topic = H256::default();
-		let protocol = Cow::Borrowed("my_protocol");
+		let protocol = Cow::Borrowed("/my_protocol");
 		let remote_peer = PeerId::random();
 		let network = TestNetwork::default();
 
@@ -498,7 +498,7 @@ mod tests {
 		}
 
 		fn prop(channels: Vec<ChannelLengthAndTopic>, notifications: Vec<Vec<Message>>) {
-			let protocol = Cow::Borrowed("my_protocol");
+			let protocol = Cow::Borrowed("/my_protocol");
 			let remote_peer = PeerId::random();
 			let network = TestNetwork::default();
 
