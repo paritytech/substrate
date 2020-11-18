@@ -34,11 +34,13 @@
 // --output=./frame/elections-phragmen/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
-
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{
+	traits::Get,
+	weights::{constants::RocksDbWeight, Weight},
+};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_elections_phragmen.
@@ -55,7 +57,6 @@ pub trait WeightInfo {
 	fn renounce_candidacy_runners_up() -> Weight;
 	fn remove_member_with_replacement() -> Weight;
 	fn remove_member_wrong_refund() -> Weight;
-
 }
 
 /// Weights for pallet_elections_phragmen using the Substrate node and recommended hardware.
@@ -138,17 +139,16 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn vote_equal(v: u32, ) -> Weight {
+	fn vote_equal(v: u32) -> Weight {
 		(89_627_000 as Weight)
 			.saturating_add((197_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-
 	}
-	fn vote_more(v: u32, ) -> Weight {
+	fn vote_more(v: u32) -> Weight {
 		0
 	}
-	fn vote_less(v: u32, ) -> Weight {
+	fn vote_less(v: u32) -> Weight {
 		0
 	}
 	fn remove_voter() -> Weight {
@@ -203,12 +203,8 @@ impl WeightInfo for () {
 		(75_421_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
-
 	}
 	fn remove_member_wrong_refund() -> Weight {
-		(8_489_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-
+		(8_489_000 as Weight).saturating_add(RocksDbWeight::get().reads(1 as Weight))
 	}
-
 }
