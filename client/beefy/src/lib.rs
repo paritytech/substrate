@@ -19,9 +19,9 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use codec::{Codec, Decode, Encode};
 use futures::{future, FutureExt, Stream, StreamExt};
 use log::{debug, error, info, trace, warn};
-use parity_scale_codec::{Codec, Decode, Encode};
 use parking_lot::Mutex;
 
 use sc_client_api::{Backend as BackendT, BlockchainEvents, FinalityNotification, Finalizer};
@@ -32,7 +32,8 @@ use sc_network_gossip::{
 use sp_application_crypto::Ss58Codec;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::SyncOracle as SyncOracleT;
-use sp_core::{traits::BareCryptoStorePtr, Public};
+use sp_core::Public;
+use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor, Zero},
 	ConsensusEngineId, KeyTypeId,
@@ -166,7 +167,7 @@ struct VoteMessage<Hash, Id, Signature> {
 
 struct BeefyWorker<Block: BlockT, Id, Signature, FinalityNotifications> {
 	local_id: Id,
-	key_store: BareCryptoStorePtr,
+	key_store: SyncCryptoStorePtr,
 	min_interval: u32,
 	rounds: Rounds<Block::Hash, Id, Signature>,
 	finality_notifications: FinalityNotifications,
@@ -181,7 +182,7 @@ where
 {
 	fn new(
 		local_id: Id,
-		key_store: BareCryptoStorePtr,
+		key_store: SyncCryptoStorePtr,
 		voters: Vec<Id>,
 		finality_notifications: FinalityNotifications,
 		gossip_engine: GossipEngine<Block>,
@@ -233,16 +234,14 @@ where
 		info!(target: "beefy", "Finality notification: {:?}", notification);
 
 		if self.should_vote_on(*notification.header.number()) {
-			let signature = match self
-				.key_store
-				.read()
-				.sign_with(
-					KEY_TYPE,
-					&self.local_id.to_public_crypto_pair(),
-					&notification.header.hash().encode(),
-				)
-				.map_err(|_| ())
-				.and_then(|res| res.try_into().map_err(|_| ()))
+			let signature = match SyncCryptoStore::sign_with(
+				&*self.key_store,
+				KEY_TYPE,
+				&self.local_id.to_public_crypto_pair(),
+				&notification.header.hash().encode(),
+			)
+			.map_err(|_| ())
+			.and_then(|res| res.try_into().map_err(|_| ()))
 			{
 				Ok(sig) => sig,
 				Err(err) => {
@@ -318,7 +317,7 @@ where
 
 pub async fn start_beefy_gadget<Block, Backend, Client, Network, SyncOracle>(
 	client: Arc<Client>,
-	key_store: BareCryptoStorePtr,
+	key_store: SyncCryptoStorePtr,
 	network: Network,
 	_sync_oracle: SyncOracle,
 ) where
@@ -366,7 +365,7 @@ pub async fn start_beefy_gadget<Block, Backend, Client, Network, SyncOracle>(
 
 	let local_id = match voters
 		.iter()
-		.find(|id| key_store.read().has_keys(&[(id.to_raw_vec(), KEY_TYPE)]))
+		.find(|id| SyncCryptoStore::has_keys(&*key_store, &[(id.to_raw_vec(), KEY_TYPE)]))
 	{
 		Some(id) => {
 			info!(target: "beefy", "Starting BEEFY worker with local id: {:?}", id);

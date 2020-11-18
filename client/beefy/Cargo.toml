@@ -6,18 +6,19 @@ edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 
 [dependencies]
+codec = { version = "1.3.5", package = "parity-scale-codec", features = ["derive"] }
 futures = "0.3"
 log = "0.4"
-parity-scale-codec = "1.3.4"
 parking_lot = "0.11"
 
-sp-application-crypto = "2.0.0"
-sp-blockchain = "2.0.0"
-sp-consensus = "0.8.0"
-sp-core = "2.0.0"
-sp-runtime = "2.0.0"
+sp-application-crypto = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-blockchain = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-consensus = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "master" }
 
-sc-keystore = "2.0.0"
-sc-client-api = "2.0.0"
-sc-network = "0.8.0"
-sc-network-gossip = "0.8.0"
+sc-client-api = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sc-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sc-network = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sc-network-gossip = { git = "https://github.com/paritytech/substrate", branch = "master" }
