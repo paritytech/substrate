@@ -45,9 +45,11 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
-pub use sc_logging::PREFIX_LOG_SPAN;
+pub use sc_logging::{PREFIX_LOG_SPAN, prefix_logs_with};
 #[doc(hidden)]
 pub use tracing;
+#[cfg(test)]
+use trybuild as _;
 
 /// Substrate client CLI
 ///

@@ -124,9 +124,13 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 	{
 		Ident::new("sc_logging", Span::call_site())
 	} else {
-		let crate_name = match crate_name("sc-logging") {
+		// NOTE: the macro can be found in sc-logging or in sc-cli
+		let crate_name = match crate_name("sc-cli") {
 			Ok(x) => x,
-			Err(err) => return Error::new(Span::call_site(), err).to_compile_error().into(),
+			Err(_) => match crate_name("sc-logging") {
+				Ok(x) => x,
+				Err(err) => return Error::new(Span::call_site(), err).to_compile_error().into(),
+			},
 		};
 
 		Ident::new(&crate_name, Span::call_site())

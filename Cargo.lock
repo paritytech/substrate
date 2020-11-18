@@ -6569,6 +6569,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.22",
  "tracing",
+ "trybuild",
 ]
 
 [[package]]
