@@ -33,7 +33,7 @@
 //! - Implement the `Network` trait, representing the low-level networking primitives. It is
 //!   already implemented on `sc_network::NetworkService`.
 //! - Implement the `Validator` trait. See the section below.
-//! - Decide on a `ConsensusEngineId`. Each gossiping protocol should have a different one.
+//! - Decide on a protocol name. Each gossiping protocol should have a different one.
 //! - Build a `GossipEngine` using these three elements.
 //! - Use the methods of the `GossipEngine` in order to send out messages and receive incoming
 //!   messages.
