@@ -33,9 +33,11 @@ use libp2p_wasm_ext::{ExtTransport, ffi};
 
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 
-/// TODO doc
-// TODO should probably renamed to "init()"?
-pub fn init_console_log(pattern: &str, /* level: log::Level, TODO not needed anymore I think */) -> Result<(sc_telemetry::Telemetries, ExtTransport), String> {
+/// Initialize the logger and return a `Telemetries` and a wasm `ExtTransport`.
+///
+/// The `Telemetries` object can be use to create `Telemetry` objects and the wasm `ExtTransport`
+/// can be used for network transport.
+pub fn init(pattern: &str) -> Result<(sc_telemetry::Telemetries, ExtTransport), String> {
 	let transport = ExtTransport::new(ffi::websocket_transport());
 	let (subscriber, telemetries) = sc_logging::get_default_subscriber_and_telemetries(
 		pattern,
