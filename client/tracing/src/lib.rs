@@ -73,21 +73,34 @@ pub fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
 
 /// Reload the logging filter with the supplied directives
 pub fn reload_filter(directives: String) -> Result<(), String> {
+	log::info!("Setting log filter");
 	let mut env_filter = tracing_subscriber::EnvFilter::default();
-	for directive in parse_directives(directives) {
-		env_filter = env_filter.add_directive(directive);
+	for directive in parse_directives(&directives) {
+		match directive {
+			Ok(d) => env_filter = env_filter.add_directive(d),
+			Err(invalid_directive) => {
+				log::warn!("Unable to parse directive while setting log filter: {:?}", invalid_directive);
+			}
+		}
 	}
+	env_filter = env_filter.add_directive(
+		"sc_tracing=trace"
+			.parse()
+			.expect("provided directive is valid"),
+	);
 	FILTER_RELOAD_HANDLE.get()
 		.ok_or("No reload handle present".to_string())?
 		.reload(env_filter)
 		.map_err(|e| format!("{}", e))
 }
 
-/// Parse the supplied text directives into `Vec<tracing_subscriber::filter::Directive>`
-pub fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
-	dirs.as_ref()
-		.split(',')
-		.filter_map(|s| s.parse().ok())
+/// Parse the supplied text directives into `Vec<Result<Directive, String>>`,
+/// with a `Result::Ok` containing the parsed `Directive`
+/// or a `Result::Err` containing the `String` that failed to parse
+pub fn parse_directives(dirs: &str) -> Vec<Result<Directive, String>> {
+	dirs.split(',')
+		.into_iter()
+		.map(|d| d.parse().map_err(|_| d.to_owned()))
 		.collect()
 }
 
@@ -280,14 +293,14 @@ impl ProfilingLayer {
 	/// or without: "pallet" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
 	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str)
-		-> Self
+							-> Self
 	{
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		Self {
 			targets,
 			trace_handler,
 			span_data: Mutex::new(FxHashMap::default()),
-			current_span: Default::default()
+			current_span: Default::default(),
 		}
 	}
 
@@ -509,7 +522,7 @@ mod tests {
 		};
 		let layer = ProfilingLayer::new_with_handler(
 			Box::new(handler),
-			"test_target"
+			"test_target",
 		);
 		let subscriber = tracing_subscriber::fmt().finish().with(layer);
 		(subscriber, spans, events)

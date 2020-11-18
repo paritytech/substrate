@@ -50,6 +50,7 @@ use structopt::{
 pub use tracing;
 use tracing_subscriber::{
 	fmt::time::ChronoLocal,
+	EnvFilter,
 	FmtSubscriber,
 	Layer,
 	layer::SubscriberExt,
@@ -249,15 +250,13 @@ pub fn init_logger(
 	disable_log_reloading: bool,
 ) -> std::result::Result<(), String>
 {
-	use sc_tracing::parse_directives;
-
 	if let Err(e) = tracing_log::LogTracer::init() {
 		return Err(format!(
 			"Registering Substrate logger failed: {:}!", e
 		))
 	}
 
-	let mut env_filter = tracing_subscriber::EnvFilter::default()
+	let mut env_filter = EnvFilter::default()
 		// Disable info logging by default for some modules.
 		.add_directive("ws=off".parse().expect("provided directive is valid"))
 		.add_directive("yamux=off".parse().expect("provided directive is valid"))
@@ -270,20 +269,14 @@ pub fn init_logger(
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
-			// We're not sure if log or tracing is available at this moment, so silently ignore the
-			// parse error.
-			for directive in parse_directives(lvl) {
-				env_filter = env_filter.add_directive(directive);
-			}
+			env_filter = add_directives(env_filter, &lvl);
 		}
 	}
 
 	if pattern != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
 		// parse error.
-		for directive in parse_directives(pattern) {
-			env_filter = env_filter.add_directive(directive);
-		}
+		env_filter = add_directives(env_filter, pattern);
 	}
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
@@ -303,9 +296,7 @@ pub fn init_logger(
 
 	// Make sure to include profiling targets in the filter
 	if let Some(profiling_targets) = profiling_targets.clone() {
-		for directive in parse_directives(profiling_targets) {
-			env_filter = env_filter.add_directive(directive);
-		}
+		env_filter = add_directives(env_filter, &profiling_targets);
 	}
 
 	let isatty = atty::is(atty::Stream::Stderr);
@@ -339,6 +330,26 @@ pub fn init_logger(
 			.with(logging::NodeNameLayer);
 		initialize_tracing(subscriber, tracing_receiver, profiling_targets)
 	}
+}
+
+fn add_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter
+{
+	use sc_tracing::parse_directives;
+
+	let (oks, errs): (Vec<_>, Vec<_>) = parse_directives(directives)
+		.into_iter()
+		.partition(|res| res.is_ok());
+	for invalid_directive in errs {
+		eprintln!("Logging directive not valid: {}",
+				  invalid_directive.expect_err("Already partitioned into Result::Err; qed")
+		);
+	}
+	for directive in oks {
+		env_filter = env_filter.add_directive(
+			directive.expect("Already partitioned into Result::Ok; qed")
+		);
+	}
+	env_filter
 }
 
 fn initialize_tracing<S>(
