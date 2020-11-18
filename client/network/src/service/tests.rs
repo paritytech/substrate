@@ -121,7 +121,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 	(service, event_stream)
 }
 
-const PROTOCOL_NAME: Cow<'static, str> = Cow::Borrowed("foo");
+const PROTOCOL_NAME: Cow<'static, str> = Cow::Borrowed("/foo");
 
 /// Builds two nodes and their associated events stream.
 /// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
