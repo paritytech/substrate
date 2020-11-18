@@ -66,29 +66,15 @@ where
 							json: Some(json),
 							..
 						} => {
-							eprintln!(
-								//target: "telemetry",
-								"###### sent message as {}: {}", id, json,
-							);
-							if let Err(err) = sender.try_send((
+							let _ = sender.try_send((
 								message_verbosity
 									.try_into()
 									.expect("telemetry log message verbosity are u8; qed"),
 								json.clone(),
-							)) {
-								// TODO logs dont work here
-								log::warn!(
-									target: "telemetry",
-									"Ignored telemetry message because of error on channel: {:?}",
-									err,
-								);
-							}
+							));
 						}
 						_ => panic!("missing fields in telemetry log: {:?}", event),
 					}
-				} else {
-					// TODO logs dont work here
-					log::trace!(target: "telemetry", "Telemetry not set");
 				}
 			}
 		}
