@@ -117,7 +117,7 @@
 
 use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::{
-	storage::StorageValue, weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
+	StorageValue, StorageMap, weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker},
 	dispatch::PostDispatchInfo,
 };
@@ -453,7 +453,7 @@ where
 		// We need to keep events available for offchain workers,
 		// hence we initialize the block manually.
 		// OffchainWorker RuntimeApi should skip initialization.
-		let digests = Self::extract_pre_digest(header);
+		let digests = header.digest().clone();
 
 		<frame_system::Module<System>>::initialize(
 			header.number(),
@@ -463,15 +463,16 @@ where
 			frame_system::InitKind::Inspection,
 		);
 
+		// Frame system only inserts the parent hash into the block hashes as normally we don't know
+		// the hash for the header before. However, here we are aware of the hash and we can add it
+		// as well.
+		frame_system::BlockHash::<System>::insert(header.number(), header.hash());
+
 		// Initialize logger, so the log messages are visible
 		// also when running WASM.
 		frame_support::debug::RuntimeLogger::init();
 
-		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(
-			// to maintain backward compatibility we call module offchain workers
-			// with parent block number.
-			header.number().saturating_sub(1u32.into())
-		)
+		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(*header.number())
 	}
 }
 
@@ -481,7 +482,7 @@ mod tests {
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
-		generic::Era, Perbill, DispatchError, testing::{Digest, Header, Block},
+		generic::{Era, DigestItem}, Perbill, DispatchError, testing::{Digest, Header, Block},
 		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup},
 		transaction_validity::{
 			InvalidTransaction, ValidTransaction, TransactionValidityError, UnknownTransaction
@@ -546,6 +547,10 @@ mod tests {
 				fn on_runtime_upgrade() -> Weight {
 					sp_io::storage::set(super::TEST_KEY, "module".as_bytes());
 					200
+				}
+
+				fn offchain_worker(n: T::BlockNumber) {
+					assert_eq!(T::BlockNumber::from(1u32), n);
 				}
 			}
 		}
@@ -1113,6 +1118,29 @@ mod tests {
 				on_initialize_weight +
 				base_block_weight,
 			);
+		});
+	}
+
+	#[test]
+	fn offchain_worker_works_as_expected() {
+		new_test_ext(1).execute_with(|| {
+			let parent_hash = sp_core::H256::from([69u8; 32]);
+			let mut digest = Digest::default();
+			digest.push(DigestItem::Seal([1, 2, 3, 4], vec![5, 6, 7, 8]));
+
+			let header = Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				parent_hash,
+				digest.clone(),
+			);
+
+			Executive::offchain_worker(&header);
+
+			assert_eq!(digest, System::digest());
+			assert_eq!(parent_hash, System::block_hash(0));
+			assert_eq!(header.hash(), System::block_hash(1));
 		});
 	}
 }
