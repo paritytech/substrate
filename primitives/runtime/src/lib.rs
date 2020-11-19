@@ -56,8 +56,12 @@ pub mod traits;
 pub mod transaction_validity;
 pub mod random_number_generator;
 mod runtime_string;
+mod multiaddress;
 
 pub use crate::runtime_string::*;
+
+// Re-export Multiaddress
+pub use multiaddress::MultiAddress;
 
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
