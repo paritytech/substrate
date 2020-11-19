@@ -209,6 +209,9 @@ mod tests {
 	use std::{env, process::Command};
 	use tracing::{metadata::Kind, subscriber::Interest, Callsite, Level, Metadata};
 
+	const EXPECTED_LOG_MESSAGE: &'static str = "yeah logging works as expected";
+	const EXPECTED_NODE_NAME: &'static str = "THE_NODE";
+
 	fn init_logger(pattern: &str) {
 		let (subscriber, telemetries) =
 			get_default_subscriber_and_telemetries(pattern, None).unwrap();
@@ -254,8 +257,6 @@ mod tests {
 		});
 	}
 
-	const EXPECTED_LOG_MESSAGE: &'static str = "yeah logging works as expected";
-
 	#[test]
 	fn dash_in_target_name_works() {
 		let executable = env::current_exe().unwrap();
@@ -282,8 +283,6 @@ mod tests {
 			log::info!(target: "test-target", "{}", EXPECTED_LOG_MESSAGE);
 		}
 	}
-
-	const EXPECTED_NODE_NAME: &'static str = "THE_NODE";
 
 	#[test]
 	fn prefix_in_log_lines() {
