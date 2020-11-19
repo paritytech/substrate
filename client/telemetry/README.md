@@ -10,7 +10,7 @@ connections to the same server if possible and manages a collection of channel `
 The macro `telemetry!` can be used to report telemetries from anywhere but a `Telemetry` must
 have been initialized. Creating a `Telemetry` will make all the following code execution use
 this `Telemetry` when reporting with the macro `telemetry!` until the `Telemetry` object is
-dropped. If multiple `Telemetry` objects are created, the latest one (higher up in the stack)
+dropped. If multiple `Telemetry` objects are created, the most recently created one (higher up in the stack)
 will be used.
 
 The [`Telemetry`] struct implements `Stream` and must be polled regularly (or sent to a

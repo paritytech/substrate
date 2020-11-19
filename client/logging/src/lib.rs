@@ -272,10 +272,10 @@ mod tests {
 		assert!(output.contains(EXPECTED_LOG_MESSAGE));
 	}
 
-	/// This is no actual test, it will be used by the `dash_in_target_name_works` test.
-	/// The given test will call the test executable to only execute this test that
-	/// will only print `EXPECTED_LOG_MESSAGE` through logging while using a target
-	/// name that contains a dash. This ensures that targets names with dashes work.
+	/// This is not an actual test, it is used by the `dash_in_target_name_works` test.
+	/// The given test will call the test executable and only execute this one test that
+	/// only prints `EXPECTED_LOG_MESSAGE` through logging while using a target
+	/// name that contains a dash. This ensures that target names with dashes work.
 	#[test]
 	fn log_something_with_dash_target_name() {
 		if env::var("ENABLE_LOGGING").is_ok() {

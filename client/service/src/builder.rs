@@ -667,8 +667,8 @@ async fn transaction_notifications<TBl, TExPool>(
 
 fn init_telemetry(config: &Configuration) -> Option<sc_telemetry::Telemetry> {
 	let endpoints = match config.telemetry_endpoints.clone() {
+		// Don't initialise telemetry if `telemetry_endpoints` == Some([])
 		Some(endpoints) if !endpoints.is_empty() => endpoints,
-		// we don't want the telemetry to be initialized if telemetry_endpoints == Some([])
 		_ => return None,
 	};
 	Some(config.telemetries.build_telemetry(endpoints))
