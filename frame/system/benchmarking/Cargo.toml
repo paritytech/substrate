@@ -20,10 +20,10 @@ frame-benchmarking = { version = "2.0.0", default-features = false, path = "../.
 frame-system = { version = "2.0.0", default-features = false, path = "../../system" }
 frame-support = { version = "2.0.0", default-features = false, path = "../../support" }
 sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
+sp-io ={ version = "2.0.0", path = "../../../primitives/io" }
 
 [dev-dependencies]
 serde = { version = "1.0.101" }
-sp-io ={ version = "2.0.0", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]
@@ -35,4 +35,5 @@ std = [
 	"frame-system/std",
 	"frame-support/std",
 	"sp-core/std",
+	"sp-io/std",
 ]

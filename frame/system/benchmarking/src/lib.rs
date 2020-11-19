@@ -151,6 +151,16 @@ benchmarks! {
 		let account_info = System::<T>::account(&caller);
 		assert_eq!(account_info.nonce, 0u32.into());
 	}
+
+	#[extra]
+	blake2_256_100x {
+		let l in 0 .. 1024;
+		let preimage = vec![0u8; l as usize];
+	}: {
+		for i in 0 .. 100 {
+			sp_io::hashing::blake2_256(&preimage);
+		}
+	}
 }
 
 #[cfg(test)]
@@ -170,6 +180,7 @@ mod tests {
 			assert_ok!(test_benchmark_kill_storage::<Test>());
 			assert_ok!(test_benchmark_kill_prefix::<Test>());
 			assert_ok!(test_benchmark_suicide::<Test>());
+			assert_ok!(test_benchmark_blake2_256_100x::<Test>());
 		});
 	}
 }
