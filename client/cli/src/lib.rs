@@ -256,16 +256,16 @@ pub fn init_logger(
 		))
 	}
 
+	// Initialize filter - ensure to use `add_directives` so that the given directives are
+	// included as defaults.
 	let mut env_filter = EnvFilter::default()
-		// Disable info logging by default for some modules.
-		.add_directive("ws=off".parse().expect("provided directive is valid"))
-		.add_directive("yamux=off".parse().expect("provided directive is valid"))
-		.add_directive("cranelift_codegen=off".parse().expect("provided directive is valid"))
-		// Set warn logging by default for some modules.
-		.add_directive("cranelift_wasm=warn".parse().expect("provided directive is valid"))
-		.add_directive("hyper=warn".parse().expect("provided directive is valid"))
-		// Enable info for others.
+		// Enable info
 		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
+
+	// Disable info logging by default for some modules.
+	env_filter = add_directives(env_filter,"ws=off,yamux=off,cranelift_codegen=off");
+	// Set warn logging by default for some modules.
+	env_filter = add_directives(env_filter,"cranelift_wasm=warn,hyper=warn");
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
@@ -288,11 +288,8 @@ pub fn init_logger(
 	// Always log the special target `sc_tracing`, overrides global level.
 	// NOTE: this must be done after we check the `max_level_hint` otherwise
 	// it is always raised to `TRACE`.
-	env_filter = env_filter.add_directive(
-		"sc_tracing=trace"
-			.parse()
-			.expect("provided directive is valid"),
-	);
+	env_filter = add_directives(env_filter, "sc_tracing=trace");
+
 
 	// Make sure to include profiling targets in the filter
 	if let Some(profiling_targets) = profiling_targets.clone() {
@@ -332,10 +329,10 @@ pub fn init_logger(
 	}
 }
 
-fn add_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter
-{
-	use sc_tracing::parse_directives;
-
+// Adds default directives to ensure setLogFilter RPC functions correctly
+fn add_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter {
+	use sc_tracing::{parse_directives, add_default_directives};
+	add_default_directives(directives);
 	let (oks, errs): (Vec<_>, Vec<_>) = parse_directives(directives)
 		.into_iter()
 		.partition(|res| res.is_ok());
@@ -348,6 +345,7 @@ fn add_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter
 		env_filter = env_filter.add_directive(
 			directive.expect("Already partitioned into Result::Ok; qed")
 		);
+
 	}
 	env_filter
 }

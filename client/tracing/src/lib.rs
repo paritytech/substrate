@@ -65,24 +65,27 @@ type SCSubscriber<
 > = layer::Layered<tracing_fmt::Layer<Registry, N, E, W>, Registry>;
 
 static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, SCSubscriber>> = OnceCell::new();
+static DEFAULT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
 
 /// Initialize FILTER_RELOAD_HANDLE, only possible once
 pub fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
 	let _ = FILTER_RELOAD_HANDLE.set(handle);
 }
 
+pub fn add_default_directives(directive: &str) {
+	DEFAULT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directive.to_owned());
+}
+
 /// Reload the logging filter with the supplied directives
-pub fn reload_filter(directives: String) -> Result<(), String> {
+pub fn reload_filter(directives: String, with_defaults: bool) -> Result<(), String> {
 	log::info!("Setting log filter");
-	let mut env_filter = tracing_subscriber::EnvFilter::default();
-	for directive in parse_directives(&directives) {
-		match directive {
-			Ok(d) => env_filter = env_filter.add_directive(d),
-			Err(invalid_directive) => {
-				log::warn!("Unable to parse directive while setting log filter: {:?}", invalid_directive);
-			}
+	let mut env_filter = EnvFilter::default();
+	if with_defaults {
+		if let Some(default_directives) = DEFAULT_DIRECTIVES.get() {
+				env_filter = add_directives(env_filter, default_directives.lock().join(","));
 		}
 	}
+	env_filter = add_directives(env_filter, directives);
 	env_filter = env_filter.add_directive(
 		"sc_tracing=trace"
 			.parse()
@@ -92,6 +95,18 @@ pub fn reload_filter(directives: String) -> Result<(), String> {
 		.ok_or("No reload handle present".to_string())?
 		.reload(env_filter)
 		.map_err(|e| format!("{}", e))
+}
+
+fn add_directives(mut env_filter: EnvFilter, directives: String) -> EnvFilter {
+	for directive in parse_directives(&directives) {
+		match directive {
+			Ok(d) => env_filter = env_filter.add_directive(d),
+			Err(invalid_directive) => {
+				log::warn!("Unable to parse directive while setting log filter: {:?}", invalid_directive);
+			}
+		}
+	}
+	env_filter
 }
 
 /// Parse the supplied text directives into `Vec<Result<Directive, String>>`,

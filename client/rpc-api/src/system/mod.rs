@@ -109,12 +109,26 @@ pub trait SystemApi<Hash, Number> {
 	#[rpc(name = "system_syncState", returns = "SyncState<Number>")]
 	fn system_sync_state(&self) -> Receiver<SyncState<Number>>;
 
-	/// Sets the logging filter, replacing current with the supplied directives.
+	/// Sets the logging filter, adding the supplied directives to the defaults.
 	///
 	/// The syntax is identical to the CLI: <target>=<level>
 	/// eg:
 	/// `sync=debug,state=trace`
+	///
+	/// The default filters, including those provided to the CLI will be merged
+	/// with the directives given.
 	#[rpc(name = "system_setLogFilter", returns = "()")]
 	fn system_set_log_filter(&self, directives: String)
+		-> Result<(), jsonrpc_core::Error>;
+
+	/// Sets the logging filter with the supplied directives, excluding the defaults.
+	///
+	/// The syntax is identical to the CLI: <target>=<level>
+	/// eg:
+	/// `sync=debug,state=trace`
+	///
+	/// Only logs the directives given
+	#[rpc(name = "system_rawSetLogFilter", returns = "()")]
+	fn system_raw_set_log_filter(&self, directives: String)
 		-> Result<(), jsonrpc_core::Error>;
 }
