@@ -6504,6 +6504,7 @@ dependencies = [
 name = "sc-cli"
 version = "0.8.0"
 dependencies = [
+ "ansi_term 0.12.1",
  "atty",
  "chrono",
  "fdlimit",

@@ -54,6 +54,7 @@ rpassword = "4.0.1"
 
 [dev-dependencies]
 tempfile = "3.1.0"
+ansi_term = "0.12.1"
 
 [features]
 wasmtime = [

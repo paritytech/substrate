@@ -496,7 +496,7 @@ mod tests {
 	#[test]
 	fn do_not_write_with_colors_on_tty_entrypoint() {
 		if env::var("ENABLE_LOGGING").is_ok() {
-			init_logger("", Default::default(), Default::default()).unwrap();
+			init_logger("", Default::default(), Default::default(), false).unwrap();
 			log::info!("{}", ansi_term::Colour::Yellow.paint(EXPECTED_LOG_MESSAGE));
 		}
 	}
