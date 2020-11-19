@@ -37,7 +37,9 @@ pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 ///
 /// The `Telemetries` object can be use to create `Telemetry` objects and the wasm `ExtTransport`
 /// can be used for network transport.
-pub fn init(pattern: &str) -> Result<(sc_telemetry::Telemetries, ExtTransport), String> {
+pub fn init_logging_and_telemetry(
+	pattern: &str,
+) -> Result<(sc_telemetry::Telemetries, ExtTransport), String> {
 	let transport = ExtTransport::new(ffi::websocket_transport());
 	let (subscriber, telemetries) = sc_logging::get_default_subscriber_and_telemetries(
 		pattern,

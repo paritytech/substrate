@@ -236,7 +236,7 @@ pub trait SubstrateCli: Sized {
 /// Initialize the global logger
 ///
 /// This sets various global logging and tracing instances and thus may only be called once.
-pub fn init_logger(
+pub fn init_logging_and_telemetry(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
 	profiling_targets: Option<&str>,

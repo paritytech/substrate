@@ -21,7 +21,7 @@ use log::info;
 use wasm_bindgen::prelude::*;
 use browser_utils::{
 	Client,
-	browser_configuration, set_console_error_panic_hook,
+	browser_configuration, init_logging_and_telemetry, set_console_error_panic_hook,
 };
 
 /// Starts the client.
@@ -34,7 +34,7 @@ pub async fn start_client(chain_spec: Option<String>, log_level: String) -> Resu
 
 async fn start_inner(chain_spec: Option<String>, log_directives: String) -> Result<Client, Box<dyn std::error::Error>> {
 	set_console_error_panic_hook();
-	let (telemetries, transport) = browser_utils::init(log_directives.as_str())?;
+	let (telemetries, transport) = init_logging_and_telemetry(log_directives.as_str())?;
 	let chain_spec = match chain_spec {
 		Some(chain_spec) => ChainSpec::from_json_bytes(chain_spec.as_bytes().to_vec())
 			.map_err(|e| format!("{:?}", e))?,

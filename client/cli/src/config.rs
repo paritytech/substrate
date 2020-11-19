@@ -21,8 +21,8 @@
 use crate::arg_enums::Database;
 use crate::error::Result;
 use crate::{
-	init_logger, DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
-	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
+	init_logging_and_telemetry, DatabaseParams, ImportParams, KeystoreParams, NetworkParams,
+	NodeKeyParams, OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
 use log::warn;
 use names::{Generator, Name};
@@ -555,7 +555,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		let telemetries = init_logger(
+		let telemetries = init_logging_and_telemetry(
 			&logger_pattern,
 			tracing_receiver,
 			tracing_targets.as_ref().map(|x| x.as_str()),
