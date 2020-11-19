@@ -257,6 +257,8 @@ mod tests {
 		});
 	}
 
+	/// This test ensures that using dash (`-`) in the target name in logs and directives actually
+	/// work.
 	#[test]
 	fn dash_in_target_name_works() {
 		let executable = env::current_exe().unwrap();
