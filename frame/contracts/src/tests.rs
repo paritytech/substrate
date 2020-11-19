@@ -18,6 +18,10 @@ use crate::{
 	BalanceOf, ContractInfo, ContractInfoOf, GenesisConfig, Module,
 	RawAliveContractInfo, RawEvent, Trait, Schedule, gas::Gas,
 	Error, Config, RuntimeReturnCode, storage::Storage,
+	chain_extension::{
+		Result as ExtensionResult, Environment, ChainExtension, Ext, SysTrait, RetVal,
+		UncheckedFrom, InitState, ReturnFlags,
+	},
 	exec::AccountIdOf,
 };
 use assert_matches::assert_matches;
@@ -98,6 +102,85 @@ pub mod test_utils {
 			use sp_std::convert::TryInto;
 			assert_eq!(u32::from_le_bytes($x.data[..].try_into().unwrap()), $y as u32);
 		}}
+	}
+}
+
+thread_local! {
+	static TEST_EXTENSION: sp_std::cell::RefCell<TestExtension> = Default::default();
+}
+
+pub struct TestExtension {
+	enabled: bool,
+	last_seen_buffer: Vec<u8>,
+	last_seen_inputs: (u32, u32, u32, u32),
+}
+
+impl TestExtension {
+	fn disable() {
+		TEST_EXTENSION.with(|e| e.borrow_mut().enabled = false)
+	}
+
+	fn last_seen_buffer() -> Vec<u8> {
+		TEST_EXTENSION.with(|e| e.borrow().last_seen_buffer.clone())
+	}
+
+	fn last_seen_inputs() -> (u32, u32, u32, u32) {
+		TEST_EXTENSION.with(|e| e.borrow().last_seen_inputs.clone())
+	}
+}
+
+impl Default for TestExtension {
+	fn default() -> Self {
+		Self {
+			enabled: true,
+			last_seen_buffer: vec![],
+			last_seen_inputs: (0, 0, 0, 0),
+		}
+	}
+}
+
+impl ChainExtension for TestExtension {
+	fn call<E: Ext>(func_id: u32, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	where
+		<E::T as SysTrait>::AccountId: UncheckedFrom<<E::T as SysTrait>::Hash> + AsRef<[u8]>,
+	{
+		match func_id {
+			0 => {
+				let mut env = env.buf_in_buf_out();
+				let input = env.read(2)?;
+				env.write(&input, false, None)?;
+				TEST_EXTENSION.with(|e| e.borrow_mut().last_seen_buffer = input);
+				Ok(RetVal::Converging(func_id))
+			},
+			1 => {
+				let env = env.only_in();
+				TEST_EXTENSION.with(|e|
+					e.borrow_mut().last_seen_inputs = (
+						env.val0(), env.val1(), env.val2(), env.val3()
+					)
+				);
+				Ok(RetVal::Converging(func_id))
+			},
+			2 => {
+				let mut env = env.buf_in_buf_out();
+				let weight = env.read(2)?[1].into();
+				env.charge_weight(weight)?;
+				Ok(RetVal::Converging(func_id))
+			},
+			3 => {
+				Ok(RetVal::Diverging{
+					flags: ReturnFlags::REVERT,
+					data: vec![42, 99],
+				})
+			},
+			_ => {
+				panic!("Passed unknown func_id to test chain extension: {}", func_id);
+			}
+		}
+	}
+
+	fn enabled() -> bool {
+		TEST_EXTENSION.with(|e| e.borrow().enabled)
 	}
 }
 
@@ -192,7 +275,7 @@ impl Trait for Test {
 	type MaxValueSize = MaxValueSize;
 	type WeightPrice = Self;
 	type WeightInfo = ();
-	type ChainExtension = ();
+	type ChainExtension = TestExtension;
 }
 
 type Balances = pallet_balances::Module<Test>;
@@ -1926,3 +2009,120 @@ fn instantiate_return_code() {
 
 	});
 }
+
+#[test]
+fn disabled_chain_extension_wont_deploy() {
+	let (code, _hash) = compile_module::<Test>("chain_extension").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = Config::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		TestExtension::disable();
+		assert_eq!(
+			Contracts::put_code(Origin::signed(ALICE), code),
+			Err("module uses chain extensions but chain extensions are disabled".into()),
+		);
+	});
+}
+
+#[test]
+fn disabled_chain_extension_errors_on_call() {
+	let (code, hash) = compile_module::<Test>("chain_extension").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = Config::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), code));
+		TestExtension::disable();
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				subsistence,
+				GAS_LIMIT,
+				hash.into(),
+				vec![],
+				vec![],
+			),
+		);
+		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				vec![],
+			),
+			Error::<Test>::NoChainExtension,
+		);
+	});
+}
+
+#[test]
+fn chain_extension_works() {
+	let (code, hash) = compile_module::<Test>("chain_extension").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = Config::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), code));
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				subsistence,
+				GAS_LIMIT,
+				hash.into(),
+				vec![],
+				vec![],
+			),
+		);
+		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
+
+		// The contract takes a up to 2 byte buffer where the first byte passed is used as
+		// as func_id to the chain extension which behaves differently based on the
+		// func_id.
+
+		// 0 = read input buffer and pass it through as output
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![0, 99],
+		);
+		let gas_consumed = result.gas_consumed;
+		assert_eq!(TestExtension::last_seen_buffer(), vec![0, 99]);
+		assert_eq!(result.exec_result.unwrap().data, vec![0, 99]);
+
+		// 1 = treat inputs as integer primitives and store the supplied integers
+		Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![1],
+		).exec_result.unwrap();
+		// those values passed in the fixture
+		assert_eq!(TestExtension::last_seen_inputs(), (4, 1, 16, 12));
+
+		// 2 = charge some extra weight (amount supplied in second byte)
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![2, 42],
+		);
+		assert_ok!(result.exec_result);
+		assert_eq!(result.gas_consumed, gas_consumed + 42);
+
+		// 3 = diverging chain extension call that sets flags to 0x1 and returns a fixed buffer
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![3],
+		).exec_result.unwrap();
+		assert_eq!(result.flags, ReturnFlags::REVERT);
+		assert_eq!(result.data, vec![42, 99]);
+	});
+}
+
