@@ -299,7 +299,7 @@ pub fn init_logger(
 		env_filter = add_directives(env_filter, &profiling_targets);
 	}
 
-	let isatty = atty::is(atty::Stream::Stderr);
+	let enable_color = atty::is(atty::Stream::Stderr);
 	let timer = ChronoLocal::with_format(if simple {
 		"%Y-%m-%d %H:%M:%S".to_string()
 	} else {
@@ -311,7 +311,7 @@ pub fn init_logger(
 		.with_writer(std::io::stderr as _)
 		.event_format(logging::EventFormat {
 			timer,
-			ansi: isatty,
+			enable_color,
 			display_target: !simple,
 			display_level: !simple,
 			display_thread_name: !simple,

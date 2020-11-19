@@ -6504,13 +6504,11 @@ dependencies = [
 name = "sc-cli"
 version = "0.8.0"
 dependencies = [
- "ansi_term 0.12.1",
  "atty",
  "chrono",
  "fdlimit",
  "futures 0.3.5",
  "hex",
- "lazy_static",
  "libp2p",
  "log",
  "names",
@@ -7505,9 +7503,11 @@ version = "2.0.0"
 dependencies = [
  "ansi_term 0.12.1",
  "erased-serde",
+ "lazy_static",
  "log",
  "once_cell",
  "parking_lot 0.10.2",
+ "regex",
  "rustc-hash",
  "sc-telemetry",
  "serde",
