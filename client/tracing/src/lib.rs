@@ -72,15 +72,20 @@ pub fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
 	let _ = FILTER_RELOAD_HANDLE.set(handle);
 }
 
+/// Add log filter directive(s) to the defaults
+///
+/// The syntax is identical to the CLI `<target>=<level>`:
+///
+/// `sync=debug,state=trace`
 pub fn add_default_directives(directive: &str) {
 	DEFAULT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directive.to_owned());
 }
 
 /// Reload the logging filter with the supplied directives
-pub fn reload_filter(directives: String, with_defaults: bool) -> Result<(), String> {
+pub fn reload_filter(directives: String, use_defaults: bool) -> Result<(), String> {
 	log::info!("Setting log filter");
 	let mut env_filter = EnvFilter::default();
-	if with_defaults {
+	if use_defaults {
 		if let Some(default_directives) = DEFAULT_DIRECTIVES.get() {
 				env_filter = add_directives(env_filter, default_directives.lock().join(","));
 		}
