@@ -408,7 +408,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 	/// Get the tracing targets from the current object (if any)
 	///
-	/// By default this is retrieved from `SharedParams` if it is available. Otherwise its
+	/// By default this is retrieved from [`SharedParams`] if it is available. Otherwise its
 	/// `None`.
 	fn tracing_targets(&self) -> Result<Option<String>> {
 		Ok(self.shared_params().tracing_targets())
@@ -416,7 +416,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 	/// Get the TracingReceiver value from the current object
 	///
-	/// By default this is retrieved from `SharedParams` if it is available. Otherwise its
+	/// By default this is retrieved from [`SharedParams`] if it is available. Otherwise its
 	/// `TracingReceiver::default()`.
 	fn tracing_receiver(&self) -> Result<TracingReceiver> {
 		Ok(self.shared_params().tracing_receiver())
@@ -534,7 +534,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	fn log_filters(&self) -> Result<String> {
 		Ok(self.shared_params().log_filters().join(","))
 	}
-
 
 	/// Is log reloading disabled (enabled by default)
 	fn is_log_filter_reloading_disabled(&self) -> Result<bool> {

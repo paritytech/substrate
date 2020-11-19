@@ -111,8 +111,8 @@ pub trait SystemApi<Hash, Number> {
 
 	/// Sets the logging filter, adding the supplied directives to the defaults.
 	///
-	/// The syntax is identical to the CLI: <target>=<level>
-	/// eg:
+	/// The syntax is identical to the CLI `<target>=<level>`:
+	///
 	/// `sync=debug,state=trace`
 	///
 	/// The default filters, including those provided to the CLI will be merged
