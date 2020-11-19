@@ -60,20 +60,20 @@ where
 					let mut vis = TelemetryAttrsVisitor(&mut attrs);
 					event.record(&mut vis);
 
-					match attrs {
-						TelemetryAttrs {
-							verbosity: Some(verbosity),
-							json: Some(json),
-							..
-						} => {
-							let _ = sender.try_send((
-								verbosity
-									.try_into()
-									.expect("telemetry log message verbosity are u8; qed"),
-								json,
-							));
-						}
-						_ => panic!("missing fields in telemetry log: {:?}", event),
+					if let TelemetryAttrs {
+						verbosity: Some(verbosity),
+						json: Some(json),
+						..
+					} = attrs
+					{
+						let _ = sender.try_send((
+							verbosity
+								.try_into()
+								.expect("telemetry log message verbosity are u8; qed"),
+							json,
+						));
+					} else {
+						panic!("missing fields in telemetry log: {:?}", event);
 					}
 				}
 			}
