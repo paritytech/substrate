@@ -330,7 +330,7 @@ impl ConfigDef {
 						consts_metadata.push(constant);
 					},
 					_ => {
-						let msg = "Invalid pallet::constant in pallet::config, expect type trait \
+						let msg = "Invalid pallet::constant in pallet::config, expected type trait \
 							item";
 						return Err(syn::Error::new(trait_item.span(), msg));
 					},
