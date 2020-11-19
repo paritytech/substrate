@@ -132,7 +132,7 @@ pub struct Senders(
 );
 
 impl Senders {
-	/// Insert a channel `Sender` to the collection using an id (`u64`) for its key.
+	/// Insert a channel `Sender` to the collection using an `Id` for its key.
 	pub fn insert(&self, id: Id, sender: mpsc::Sender<(u8, String)>) {
 		self.0
 			.lock()
