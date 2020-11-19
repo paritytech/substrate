@@ -307,9 +307,9 @@ mod tests {
 		);
 	}
 
-	/// This is no actual test, it will be used by the `prefix_in_log_lines` test.
-	/// The given test will call the test executable to only execute this test that
-	/// will only print a log line prefixed by the node name `EXPECTED_NODE_NAME`.
+	/// This is not an actual test, it is used by the `prefix_in_log_lines` test.
+	/// The given test will call the test executable and only execute this one test that
+	/// only prints a log line prefixed by the node name `EXPECTED_NODE_NAME`.
 	#[test]
 	fn prefix_in_log_lines_entrypoint() {
 		if env::var("ENABLE_LOGGING").is_ok() {
@@ -323,9 +323,9 @@ mod tests {
 		log::info!("{}", EXPECTED_LOG_MESSAGE);
 	}
 
-	/// This is no actual test, it will be used by the `do_not_write_with_colors_on_tty` test.
-	/// The given test will call the test executable to only execute this test that
-	/// will only print a log line with some colors in it.
+	/// This is not an actual test, it is used by the `do_not_write_with_colors_on_tty` test.
+	/// The given test will call the test executable and only execute this one test that
+	/// only prints a log line with some colors in it.
 	#[test]
 	fn do_not_write_with_colors_on_tty_entrypoint() {
 		if env::var("ENABLE_LOGGING").is_ok() {
