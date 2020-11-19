@@ -1085,7 +1085,6 @@ where
 	// to receive GRANDPA messages on the network. We don't process the
 	// messages.
 	network.register_notifications_protocol(
-		communication::GRANDPA_ENGINE_ID,
 		From::from(communication::GRANDPA_PROTOCOL_NAME),
 	);
 
