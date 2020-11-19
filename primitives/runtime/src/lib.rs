@@ -50,7 +50,6 @@ use codec::{Encode, Decode};
 pub mod curve;
 pub mod generic;
 pub mod offchain;
-#[cfg(feature = "std")]
 pub mod testing;
 pub mod traits;
 pub mod transaction_validity;

@@ -17,8 +17,9 @@
 
 //! Testing utilities.
 
+#[cfg(feature = "serde")]
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
-use std::{fmt::{self, Debug}, ops::Deref, cell::RefCell};
+use sp_std::{fmt::{self, Debug}, ops::Deref, cell::RefCell, vec::Vec};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
@@ -27,7 +28,7 @@ use crate::traits::{
 use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, CryptoTypeId, ApplyExtrinsicResultWithInfo};
 pub use sp_core::{H256, sr25519};
-use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
+use sp_core::{crypto::{CryptoType, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError, TransactionSource};
 
 /// A dummy type which can be used instead of regular cryptographic primitives.
@@ -36,7 +37,8 @@ use crate::transaction_validity::{TransactionValidity, TransactionValidityError,
 /// 2. Can be converted to any `Public` key.
 /// 3. Implements `RuntimeAppPublic` so it can be used instead of regular application-specific
 ///    crypto.
-#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, PartialOrd, Ord)]
 pub struct UintAuthorityId(pub u64);
 
 impl From<u64> for UintAuthorityId {
@@ -59,8 +61,9 @@ impl UintAuthorityId {
 	}
 }
 
+#[cfg(feature = "std")]
 impl CryptoType for UintAuthorityId {
-	type Pair = Dummy;
+	type Pair = sp_core::crypto::Dummy;
 }
 
 impl AsRef<[u8]> for UintAuthorityId {
@@ -68,23 +71,29 @@ impl AsRef<[u8]> for UintAuthorityId {
 		// Unsafe, i know, but it's test code and it's just there because it's really convenient to
 		// keep `UintAuthorityId` as a u64 under the hood.
 		unsafe {
-			std::slice::from_raw_parts(&self.0 as *const u64 as *const _, std::mem::size_of::<u64>())
+			sp_std::slice::from_raw_parts(
+				&self.0 as *const u64 as *const _,
+				sp_std::mem::size_of::<u64>()
+			)
 		}
 	}
 }
 
+#[cfg(feature = "std")]
 thread_local! {
 	/// A list of all UintAuthorityId keys returned to the runtime.
-	static ALL_KEYS: RefCell<Vec<UintAuthorityId>> = RefCell::new(vec![]);
+	static ALL_KEYS: RefCell<Vec<UintAuthorityId>> = RefCell::new(Vec::new());
 }
 
 impl UintAuthorityId {
 	/// Set the list of keys returned by the runtime call for all keys of that type.
+	#[cfg(feature = "std")]
 	pub fn set_all_keys<T: Into<UintAuthorityId>>(keys: impl IntoIterator<Item=T>) {
 		ALL_KEYS.with(|l| *l.borrow_mut() = keys.into_iter().map(Into::into).collect())
 	}
 }
 
+#[cfg(feature = "std")]
 impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 	const ID: KeyTypeId = key_types::DUMMY;
 	const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"dumm");
@@ -129,6 +138,7 @@ impl OpaqueKeys for UintAuthorityId {
 	}
 }
 
+#[cfg(feature = "std")]
 impl crate::BoundToRuntimeAppPublic for UintAuthorityId {
 	type Public = Self;
 }
@@ -142,7 +152,8 @@ impl traits::IdentifyAccount for UintAuthorityId {
 }
 
 /// A dummy signature type, to match `UintAuthorityId`.
-#[derive(Eq, PartialEq, Clone, Debug, Hash, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Eq, PartialEq, Clone, Debug, Hash, Encode, Decode)]
 pub struct TestSignature(pub u64, pub Vec<u8>);
 
 impl traits::Verify for TestSignature {
@@ -190,6 +201,7 @@ where Xt: parity_util_mem::MallocSizeOf
 	}
 }
 
+#[cfg(feature = "serde")]
 impl<Xt: Encode> serde::Serialize for ExtrinsicWrapper<Xt> {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
@@ -211,7 +223,9 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 }
 
 /// Testing block
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, parity_util_mem::MallocSizeOf)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct Block<Xt> {
 	/// Block header
 	pub header: Header,
@@ -219,6 +233,7 @@ pub struct Block<Xt> {
 	pub extrinsics: Vec<Xt>,
 }
 
+#[cfg(feature = "std")]
 impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic> traits::Block
 	for Block<Xt>
 {
@@ -243,6 +258,7 @@ impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug 
 	}
 }
 
+#[cfg(feature = "serde")]
 impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
 		let r = <Vec<u8>>::deserialize(de)?;
@@ -273,6 +289,7 @@ impl<Call, Extra> TestXt<Call, Extra> {
 // Non-opaque extrinsics always 0.
 parity_util_mem::malloc_size_of_is_0!(any: TestXt<Call, Extra>);
 
+#[cfg(feature = "serde")]
 impl<Call, Extra> Serialize for TestXt<Call, Extra> where TestXt<Call, Extra>: Encode {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
