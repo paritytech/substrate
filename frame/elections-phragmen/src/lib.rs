@@ -391,7 +391,7 @@ decl_storage! {
 				// make sure they have enough stake.
 				assert!(
 					T::Currency::free_balance(member) >= *stake,
-					"Genesis member does not have enough stake",
+					"Genesis member does not have enough stake.",
 				);
 
 				// reserve candidacy bond and set as members.
@@ -406,7 +406,7 @@ decl_storage! {
 						Ok(_) => panic!("Duplicate member in elections-phragmen genesis: {}", member),
 						Err(pos) => members.insert(
 							pos,
-							SeatHolder { who: member.clone(), stake: *stake, deposit: 0u32.into() },
+							SeatHolder { who: member.clone(), stake: *stake, deposit: T::CandidacyBond::get() },
 						),
 					}
 				});
@@ -450,7 +450,7 @@ decl_error! {
 		/// Member cannot re-submit candidacy.
 		MemberSubmit,
 		/// Runner cannot re-submit candidacy.
-		RunnerSubmit,
+		RunnerUpSubmit,
 		/// Candidate does not have enough funds.
 		InsufficientCandidateFunds,
 		/// Not a member.
@@ -636,7 +636,7 @@ decl_module! {
 			let index = is_candidate.unwrap_err();
 
 			ensure!(!Self::is_member(&who), Error::<T>::MemberSubmit);
-			ensure!(!Self::is_runner_up(&who), Error::<T>::RunnerSubmit);
+			ensure!(!Self::is_runner_up(&who), Error::<T>::RunnerUpSubmit);
 
 			T::Currency::reserve(&who, T::CandidacyBond::get())
 				.map_err(|_| Error::<T>::InsufficientCandidateFunds)?;
@@ -812,7 +812,9 @@ impl<T: Trait> Module<T> {
 		// - `Err(_)` if who is not a member.
 		<Members<T>>::try_mutate(|members| {
 			// we remove the member anyhow, regardless of having a runner-up or not.
+			// TODO: a way to make sure all tests operate in a way that accounts are not sorted.
 			let remove_index = members
+				// note: members are always sorted.
 				.binary_search_by(|m| m.who.cmp(who))
 				.map_err(|_| Error::<T>::NotMember)?;
 			let removed = members.remove(remove_index);
@@ -873,7 +875,6 @@ impl<T: Trait> Module<T> {
 	/// O(LogN) given N candidates.
 	fn is_candidate(who: &T::AccountId) -> Result<(), usize> {
 		Self::candidates()
-			// TODO: review all use cases of binary-search
 			.binary_search_by(|c| c.0.cmp(who))
 			.map(|_| ())
 	}
@@ -989,7 +990,6 @@ impl<T: Trait> Module<T> {
 		let desired_runners_up = Self::desired_runners_up() as usize;
 		let num_to_elect = desired_runners_up + desired_seats;
 
-		// TODO: what if we change deposit this on the fly?
 		let mut candidates_and_deposit = Self::candidates();
 		// add all the previous members and runners-up as candidates as well.
 		candidates_and_deposit.append(&mut Self::implicit_candidates());
@@ -1079,10 +1079,9 @@ impl<T: Trait> Module<T> {
 					.collect::<Vec<T::AccountId>>();
 				new_runners_up_ids_sorted.sort();
 
-				// Now we select a prime member using a [Borda
-				// count](https://en.wikipedia.org/wiki/Borda_count). We weigh everyone's vote for that
-				// new member by a multiplier based on the order of the votes. i.e. the first person a
-				// voter votes for gets a 16x multiplier, the next person gets a 15x multiplier, an so
+				// Now we select a prime member using a [Borda count](https://en.wikipedia.org/wiki/Borda_count). We
+				// weigh everyone's vote for that new member by a multiplier based on the order of the votes. i.e. the
+				// first person a voter votes for gets a 16x multiplier, the next person gets a 15x multiplier, an so
 				// on... (assuming `MAXIMUM_VOTE` = 16)
 				let mut prime_votes = new_members_sorted_by_id
 					.iter()
@@ -1116,7 +1115,7 @@ impl<T: Trait> Module<T> {
 					.collect::<Vec<T::AccountId>>();
 
 				// report member changes. We compute diff because we need the outgoing list.
-				let (incoming, outgoing) = T::ChangeMembers::compute_members_diff(
+				let (incoming, outgoing) = T::ChangeMembers::compute_members_diff_sorted(
 					&new_members_ids_sorted,
 					&old_members_ids_sorted,
 				);
@@ -1131,8 +1130,9 @@ impl<T: Trait> Module<T> {
 				// holder will lose their bond.
 				candidates_and_deposit.iter().for_each(|(c, d)| {
 					// any candidate who is not a member and not a runner up.
-					if new_members_ids_sorted.binary_search(c).is_err()
-						&& new_runners_up_ids_sorted.binary_search(c).is_err()
+					if
+						new_members_ids_sorted.binary_search(c).is_err() &&
+						new_runners_up_ids_sorted.binary_search(c).is_err()
 					{
 						let (imbalance, _) = T::Currency::slash_reserved(c, *d);
 						T::LoserCandidate::on_unbalanced(imbalance);
@@ -1279,16 +1279,20 @@ mod tests {
 		type WeightInfo = ();
 	}
 
-	parameter_types! {
-		pub const CandidacyBond: u64 = 3;
-	}
-
 	thread_local! {
 		static VOTING_BOND_BASE: RefCell<u64> = RefCell::new(2);
 		static VOTING_BOND_FACTOR: RefCell<u64> = RefCell::new(0);
 		static DESIRED_MEMBERS: RefCell<u32> = RefCell::new(2);
-		static DESIRED_RUNNERS_UP: RefCell<u32> = RefCell::new(2);
+		static DESIRED_RUNNERS_UP: RefCell<u32> = RefCell::new(0);
 		static TERM_DURATION: RefCell<u64> = RefCell::new(5);
+		static CANDIDACY_BOND: RefCell<u64> = RefCell::new(3);
+	}
+
+	pub struct CandidacyBond;
+	impl Get<u64> for CandidacyBond {
+		fn get() -> u64 {
+			CANDIDACY_BOND.with(|v| *v.borrow())
+		}
 	}
 
 	pub struct VotingBondBase;
@@ -1324,6 +1328,7 @@ mod tests {
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
 		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
+			dbg!(incoming, outgoing, new);
 			// new, incoming, outgoing must be sorted.
 			let mut new_sorted = new.to_vec();
 			new_sorted.sort();
@@ -1403,68 +1408,56 @@ mod tests {
 	);
 
 	pub struct ExtBuilder {
-		genesis_members: Vec<(u64, u64)>,
 		balance_factor: u64,
-		voter_bond: u64,
-		voter_bond_factor: u64,
-		term_duration: u64,
-		desired_runners_up: u32,
-		desired_members: u32,
+		genesis_members: Vec<(u64, u64)>,
 	}
 
 	impl Default for ExtBuilder {
 		fn default() -> Self {
 			Self {
-				genesis_members: vec![],
 				balance_factor: 1,
-				voter_bond: 2,
-				voter_bond_factor: 0,
-				term_duration: 5,
-				desired_runners_up: 0,
-				desired_members: 2,
+				genesis_members: vec![],
 			}
 		}
 	}
 
 	impl ExtBuilder {
-		pub fn voter_bond(mut self, fee: u64) -> Self {
-			self.voter_bond = fee;
+		pub fn voter_bond(self, bond: u64) -> Self {
+			VOTING_BOND_BASE.with(|v| *v.borrow_mut() = bond);
 			self
 		}
-		pub fn voter_bond_factor(mut self, fee: u64) -> Self {
-			self.voter_bond_factor = fee;
+		pub fn voter_bond_factor(self, bond: u64) -> Self {
+			VOTING_BOND_FACTOR.with(|v| *v.borrow_mut() = bond);
 			self
 		}
-		pub fn desired_runners_up(mut self, count: u32) -> Self {
-			self.desired_runners_up = count;
+		pub fn desired_runners_up(self, count: u32) -> Self {
+			DESIRED_RUNNERS_UP.with(|v| *v.borrow_mut() = count);
 			self
 		}
-		pub fn term_duration(mut self, duration: u64) -> Self {
-			self.term_duration = duration;
+		pub fn term_duration(self, duration: u64) -> Self {
+			TERM_DURATION.with(|v| *v.borrow_mut() = duration);
 			self
 		}
 		pub fn genesis_members(mut self, members: Vec<(u64, u64)>) -> Self {
+			MEMBERS.with(|m| {
+				*m.borrow_mut() = members
+					.iter()
+					.map(|(m, _)| m.clone())
+					.collect::<Vec<_>>()
+			});
 			self.genesis_members = members;
 			self
 		}
-		pub fn desired_members(mut self, count: u32) -> Self {
-			self.desired_members = count;
+		pub fn desired_members(self, count: u32) -> Self {
+			DESIRED_MEMBERS.with(|m| *m.borrow_mut() = count);
 			self
 		}
 		pub fn balance_factor(mut self, factor: u64) -> Self {
 			self.balance_factor = factor;
 			self
 		}
-		fn set_constants(&self) {
-			VOTING_BOND_BASE.with(|v| *v.borrow_mut() = self.voter_bond);
-			VOTING_BOND_FACTOR.with(|v| *v.borrow_mut() = self.voter_bond_factor);
-			TERM_DURATION.with(|v| *v.borrow_mut() = self.term_duration);
-			DESIRED_RUNNERS_UP.with(|v| *v.borrow_mut() = self.desired_runners_up);
-			DESIRED_MEMBERS.with(|m| *m.borrow_mut() = self.desired_members);
-			MEMBERS.with(|m| *m.borrow_mut() = self.genesis_members.iter().map(|(m, _)| m.clone()).collect::<Vec<_>>());
-		}
 		pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
-			self.set_constants();
+			MEMBERS.with(|m| *m.borrow_mut() = self.genesis_members.iter().map(|(m, _)| m.clone()).collect::<Vec<_>>());
 			let mut ext: sp_io::TestExternalities = GenesisConfig {
 				pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
 					balances: vec![
@@ -1491,6 +1484,14 @@ mod tests {
 			.into_iter()
 			.map(|(c, _)| c)
 			.collect::<Vec<_>>()
+	}
+
+	fn candidate_deposit(who: &u64) -> u64 {
+		Elections::candidates().into_iter().find_map(|(c, d)| if c == *who { Some(d) } else { None }).unwrap_or_default()
+	}
+
+	fn voter_deposit(who: &u64) -> u64 {
+		Elections::voting(who).deposit
 	}
 
 	fn runners_up_ids() -> Vec<u64> {
@@ -1618,19 +1619,18 @@ mod tests {
 			.genesis_members(vec![(1, 10), (2, 20)])
 			.build_and_execute(|| {
 				System::set_block_number(1);
-				// TODO: genesis members should also serve bond.
 				assert_eq!(
 					Elections::members(),
 					vec![
 						SeatHolder {
 							who: 1,
 							stake: 10,
-							deposit: 0
+							deposit: 3,
 						},
 						SeatHolder {
 							who: 2,
 							stake: 20,
-							deposit: 0
+							deposit: 3,
 						}
 					]
 				);
@@ -1640,7 +1640,7 @@ mod tests {
 					Voter {
 						stake: 10u64,
 						votes: vec![1],
-						deposit: 2
+						deposit: 2,
 					}
 				);
 				assert_eq!(
@@ -1648,7 +1648,7 @@ mod tests {
 					Voter {
 						stake: 20u64,
 						votes: vec![2],
-						deposit: 2
+						deposit: 2,
 					}
 				);
 
@@ -1672,12 +1672,12 @@ mod tests {
 						SeatHolder {
 							who: 1,
 							stake: 10,
-							deposit: 0
+							deposit: 3,
 						},
 						SeatHolder {
 							who: 2,
 							stake: 20,
-							deposit: 0
+							deposit: 3,
 						}
 					]
 				);
@@ -1719,7 +1719,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn genesis_members_cannot_over_stake_1() {
-		// 10 cannot reserve 20 as voting bond and extra genesis will panic.
+		// 20 cannot reserve 20 as voting bond and extra genesis will panic.
 		ExtBuilder::default()
 			.voter_bond(20)
 			.genesis_members(vec![(1, 10), (2, 20)])
@@ -1730,7 +1730,7 @@ mod tests {
 	#[should_panic = "Duplicate member in elections-phragmen genesis: 2"]
 	fn genesis_members_cannot_be_duplicate() {
 		ExtBuilder::default()
-			.genesis_members(vec![(1, 10), (2, 10), (2, 10)])
+			.genesis_members(vec![(1, 10), (2, 10), (2, 12)])
 			.build_and_execute(|| {});
 	}
 
@@ -1782,8 +1782,46 @@ mod tests {
 			assert!(Elections::is_candidate(&1).is_ok());
 			assert!(Elections::is_candidate(&2).is_ok());
 
-			// TODO: check deposit.
+			assert_eq!(candidate_deposit(&1), 3);
+			assert_eq!(candidate_deposit(&2), 3);
+			assert_eq!(candidate_deposit(&3), 0);
 		});
+	}
+
+	#[test]
+	fn updating_candidacy_bond_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(submit_candidacy(Origin::signed(5)));
+			assert_ok!(vote(Origin::signed(5), vec![5], 50));
+			assert_eq!(Elections::candidates(), vec![(5, 3)]);
+
+			// a runtime upgrade changes the bond.
+			CANDIDACY_BOND.with(|v| *v.borrow_mut() = 4);
+
+			assert_ok!(submit_candidacy(Origin::signed(4)));
+			assert_ok!(vote(Origin::signed(4), vec![4], 40));
+			assert_eq!(Elections::candidates(), vec![(4, 4), (5, 3)]);
+
+			// once elected, they each hold their candidacy bond, no more.
+			System::set_block_number(5);
+			Elections::end_block(System::block_number());
+
+			assert_eq!(
+				Elections::members(),
+				vec![
+					SeatHolder {
+						who: 4,
+						stake: 40,
+						deposit: 4
+					},
+					SeatHolder {
+						who: 5,
+						stake: 50,
+						deposit: 3
+					}
+				]
+			);
+		})
 	}
 
 	#[test]
@@ -1865,7 +1903,7 @@ mod tests {
 
 			assert_noop!(
 				submit_candidacy(Origin::signed(3)),
-				Error::<Test>::RunnerSubmit,
+				Error::<Test>::RunnerUpSubmit,
 			);
 		});
 	}
@@ -1928,6 +1966,31 @@ mod tests {
 			assert_eq!(has_lock(&2), 15);
 			assert_eq!(locked_stake_of(&2), 15);
 		});
+	}
+
+	#[test]
+	fn updated_voting_bond_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(submit_candidacy(Origin::signed(5)));
+
+			assert_eq!(balances(&2), (20, 0));
+			assert_ok!(vote(Origin::signed(2), vec![5], 5));
+			assert_eq!(balances(&2), (18, 2));
+			assert_eq!(voter_deposit(&2), 2);
+
+			// a runtime upgrade lowers the voting bond to 1. This guy still un-reserves 2 when
+			// leaving.
+			VOTING_BOND_BASE.with(|v| *v.borrow_mut() = 1);
+
+			// proof that bond changed.
+			assert_eq!(balances(&1), (10, 0));
+			assert_ok!(vote(Origin::signed(1), vec![5], 5));
+			assert_eq!(balances(&1), (9, 1));
+			assert_eq!(voter_deposit(&1), 1);
+
+			assert_ok!(Elections::remove_voter(Origin::signed(2)));
+			assert_eq!(balances(&2), (20, 0));
+		})
 	}
 
 	#[test]
