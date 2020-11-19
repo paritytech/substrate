@@ -36,7 +36,8 @@ pub fn pallet(
 	item: proc_macro::TokenStream
 ) -> proc_macro::TokenStream {
 	if !attr.is_empty() {
-		let msg = "Invalid pallet macro call: expect `#[frame_support::pallet]`";
+		let msg = "Invalid pallet macro call: expected no attributes, e.g. macro call must be just \
+			`#[frame_support::pallet]` or `#[pallet]`";
 		let span = proc_macro2::TokenStream::from(attr).span();
 		return syn::Error::new(span, msg).to_compile_error().into();
 	}
