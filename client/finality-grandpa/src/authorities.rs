@@ -441,7 +441,7 @@ where
 	/// forced change), then the forced change cannot be applied. An error will
 	/// be returned in that case which will prevent block import.
 	pub(crate) fn apply_forced_changes<F, E>(
-		&self,
+		&mut self,
 		best_hash: H,
 		best_number: N,
 		is_descendent_of: &F,
@@ -503,10 +503,7 @@ where
 					"block" => ?change.canon_height
 				);
 
-				// WIP(JON): We should store the set_id for this, but what do we use as
-				// finalized_number? Maybe none as it seems it wont be used for Justifications
-				// anyway?
-				//self.authority_set_changes.append(self.set_id, finalized_number.clone());
+				self.authority_set_changes.append(self.set_id, median_last_finalized.clone());
 
 				new_set = Some((
 					median_last_finalized,
