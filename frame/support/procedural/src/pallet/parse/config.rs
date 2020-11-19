@@ -38,11 +38,11 @@ mod keyword {
 pub struct ConfigDef {
 	/// The index of item in pallet module.
 	pub index: usize,
-	/// Wheither the trait has instance (i.e. define with `Config<I = ()>`)
+	/// Whether the trait has instance (i.e. define with `Config<I = ()>`)
 	pub has_instance: bool,
 	/// Const associated type.
 	pub consts_metadata: Vec<ConstMetadataDef>,
-	/// Wether the trait has the associated type `Event`, note that those bounds are checked:
+	/// Whether the trait has the associated type `Event`, note that those bounds are checked:
 	/// * `IsType<Self as frame_system::Config>::Event`
 	/// * `From<Event>` or `From<Event<T>>` or `From<Event<T, I>>`
 	pub has_event_type: bool,

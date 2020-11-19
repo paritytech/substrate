@@ -35,7 +35,7 @@ pub struct PalletStructDef {
 	pub instances: Vec<helper::InstanceUsage>,
 	/// The keyword Pallet used (contains span).
 	pub pallet: keyword::Pallet,
-	/// Weither the trait `Store` must be generated.
+	/// Whether the trait `Store` must be generated.
 	pub store: Option<(syn::Visibility, keyword::Store)>
 }
 

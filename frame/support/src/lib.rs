@@ -96,7 +96,7 @@ pub enum Never {}
 ///   load the value from the storage under a fixed key. If the value could not be found in the
 ///   storage, the given default value will be returned. It is required that the value implements
 ///   [`Encode`](codec::Encode) and [`Decode`](codec::Decode). The key for looking up the value
-///   in the storage is built using the following formular:
+///   in the storage is built using the following formula:
 ///
 ///   `twox_128(":" ++ NAME ++ ":")` where `NAME` is the name that is passed as type name.
 ///
@@ -1229,7 +1229,7 @@ pub mod pallet_prelude {
 /// Variant documentations and field types are put into metadata.
 /// The attribute `#[pallet::metadata(..)]` allows to specify the metadata to put for some types.
 ///
-/// The metadat of a type is defined by:
+/// The metadata of a type is defined by:
 /// * if matching a type in `#[pallet::metadata(..)]`, then the corresponding metadata.
 /// * otherwise the last segment of the type.
 ///
@@ -1405,7 +1405,7 @@ pub mod pallet_prelude {
 ///
 /// ### Macro expansion
 ///
-/// Macro make currenlty no use of this information, but it might use this information in the
+/// Macro make currently no use of this information, but it might use this information in the
 /// future to give information directly to construct_runtime.
 ///
 /// # Validate unsigned: `#[pallet::validate_unsigned]` optional
@@ -1427,7 +1427,7 @@ pub mod pallet_prelude {
 ///
 /// ### Macro expansion
 ///
-/// Macro make currenlty no use of this information, but it might use this information in the
+/// Macro make currently no use of this information, but it might use this information in the
 /// future to give information directly to construct_runtime.
 ///
 /// # Origin: `#[pallet::origin]` optional
@@ -1838,7 +1838,7 @@ pub mod pallet_prelude {
 /// 	}
 /// 	```
 /// 	and write inside all the call in decl_module with a few changes in the signature:
-/// 	- origin must now be written completly, e.g. `origin: OriginFor<T>`
+/// 	- origin must now be written completely, e.g. `origin: OriginFor<T>`
 /// 	- result type must be `DispatchResultWithPostInfo`, you need to write it and also you might
 /// 	need to put `Ok(().into())` at the end or the function.
 /// 	- `#[compact]` must now be written `#[pallet::compact]`

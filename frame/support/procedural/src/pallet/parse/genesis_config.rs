@@ -27,9 +27,9 @@ use super::helper;
 pub struct GenesisConfigDef {
 	/// The index of item in pallet module.
 	pub index: usize,
-	/// Weither type has instance generic.
+	/// Whether type has instance generic.
 	pub has_instance: bool,
-	/// Weither type has trait generic.
+	/// Whether type has trait generic.
 	pub has_trait: bool,
 	/// A set of usage of instance, must be check for consistency with trait.
 	pub instances: Vec<helper::InstanceUsage>,

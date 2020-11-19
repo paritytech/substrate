@@ -40,9 +40,9 @@ pub struct EventDef {
 	pub instances: Vec<helper::InstanceUsage>,
 	/// If event is declared with instance.
 	pub has_instance: bool,
-	/// If event is declared with genericity.
+	/// If event is declared with generics.
 	pub is_generic: bool,
-	/// Weither the function `deposit_event` must be generated.
+	/// Whether the function `deposit_event` must be generated.
 	pub deposit_event: Option<(syn::Visibility, proc_macro2::Span)>,
 	/// Where clause used in event definition.
 	pub where_clause: Option<syn::WhereClause>,

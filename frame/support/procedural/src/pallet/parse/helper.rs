@@ -380,7 +380,7 @@ pub fn check_pallet_struct_usage(type_: &Box<syn::Type>) -> syn::Result<Instance
 ///
 /// `span` is used in case generics is empty (empty generics has span == call_site).
 ///
-/// return weither it contains instance.
+/// return whether it contains instance.
 pub fn check_impl_gen(
 	gen: &syn::Generics,
 	span: proc_macro2::Span
