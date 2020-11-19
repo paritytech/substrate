@@ -221,12 +221,12 @@ impl Stream for Telemetry {
 			}
 
 			if let Poll::Ready(Some((
-				message_verbosity,
+				verbosity,
 				json,
 			))) = Stream::poll_next(Pin::new(&mut self.inner.receiver), cx)
 			{
 				if let Some(worker) = self.inner.worker.as_mut() {
-					let _ = worker.log(message_verbosity, json.as_str());
+					let _ = worker.log(verbosity, json.as_str());
 				}
 			} else {
 				break;
@@ -302,14 +302,14 @@ impl Telemetries {
 #[macro_export(local_inner_macros)]
 macro_rules! telemetry {
 	( $a:expr; $b:expr; $( $t:tt )* ) => {{
-		let message_verbosity: u8 = $a;
+		let verbosity: u8 = $a;
 		let mut json = format_fields_to_json!($($t)*);
 		// NOTE: the span id will be added later in the JSON for the greater good
 		json.insert("level".into(), "INFO".into());
 		json.insert("msg".into(), $b.into());
 		json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
 		$crate::tracing::info!(target: $crate::TELEMETRY_LOG_SPAN,
-			message_verbosity,
+			verbosity,
 			json = $crate::serde_json::to_string(&json)
 				.expect("contains only string keys; qed").as_str()
 		);

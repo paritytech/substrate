@@ -62,12 +62,12 @@ where
 
 					match attrs {
 						TelemetryAttrs {
-							message_verbosity: Some(message_verbosity),
+							verbosity: Some(verbosity),
 							json: Some(json),
 							..
 						} => {
 							let _ = sender.try_send((
-								message_verbosity
+								verbosity
 									.try_into()
 									.expect("telemetry log message verbosity are u8; qed"),
 								json,
@@ -83,7 +83,7 @@ where
 
 #[derive(Debug)]
 struct TelemetryAttrs {
-	message_verbosity: Option<u64>,
+	verbosity: Option<u64>,
 	json: Option<String>,
 	id: Id,
 }
@@ -91,7 +91,7 @@ struct TelemetryAttrs {
 impl TelemetryAttrs {
 	fn new(id: Id) -> Self {
 		Self {
-			message_verbosity: None,
+			verbosity: None,
 			json: None,
 			id,
 		}
@@ -107,8 +107,8 @@ impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
 	}
 
 	fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
-		if field.name() == "message_verbosity" {
-			(*self.0).message_verbosity = Some(value)
+		if field.name() == "verbosity" {
+			(*self.0).verbosity = Some(value)
 		}
 	}
 
