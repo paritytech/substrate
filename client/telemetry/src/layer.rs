@@ -70,7 +70,7 @@ where
 								message_verbosity
 									.try_into()
 									.expect("telemetry log message verbosity are u8; qed"),
-								json.clone(),
+								json,
 							));
 						}
 						_ => panic!("missing fields in telemetry log: {:?}", event),
