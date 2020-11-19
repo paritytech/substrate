@@ -741,8 +741,11 @@ fn claim_handles_high_fee() {
 #[test]
 fn cancel_and_refund() {
 	new_test_ext().execute_with(|| {
+
 		System::set_block_number(1);
+
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
 
 		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
@@ -752,7 +755,6 @@ fn cancel_and_refund() {
 
 		assert_ok!(Balances::transfer(Origin::signed(0), Bounties::bounty_account_id(0), 10));
 
-		// TODO :: re-visit
 		assert_eq!(Bounties::bounties(0).unwrap(), Bounty {
 			proposer: 0,
 			fee: 0,
@@ -769,7 +771,9 @@ fn cancel_and_refund() {
 		assert_ok!(Bounties::close_bounty(Origin::root(), 0));
 
 		assert_eq!(Treasury::pot(), 85); // - 25 + 10
+
 	});
+
 }
 
 #[test]

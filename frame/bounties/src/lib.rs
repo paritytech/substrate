@@ -137,6 +137,9 @@ mod benchmarking;
 pub mod weights;
 
 use sp_std::prelude::*;
+
+use sp_std::if_std;
+
 use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error};
 
 use frame_support::traits::{
@@ -780,13 +783,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 }
 
+impl<T: Trait<I>, I: Instance> pallet_treasury::SpendFunds<T, I> for Module<T, I> {
 
-impl<T: Trait<I>, I: Instance> pallet_treasury::SpendFunds for Module<T, I> {
-
-	fn spend_funds(total_weight: &mut Weight, missed_any: &mut bool) {
-
-		let mut imbalance = <PositiveImbalanceOf<T, I>>::zero();
-		let mut budget_remaining = pallet_treasury::Module::<T,I>::pot();
+	fn spend_funds( budget_remaining: &mut BalanceOf<T, I>,
+					imbalance: &mut PositiveImbalanceOf<T, I>,
+					total_weight: &mut Weight,
+					missed_any: &mut bool ) {
 
 		let bounties_len = BountyApprovals::<I>::mutate(|v| {
 			let bounties_approval_len = v.len() as u32;
@@ -794,8 +796,8 @@ impl<T: Trait<I>, I: Instance> pallet_treasury::SpendFunds for Module<T, I> {
 				Bounties::<T, I>::mutate(index, |bounty| {
 					// Should always be true, but shouldn't panic if false or we're screwed.
 					if let Some(bounty) = bounty {
-						if bounty.value <= budget_remaining {
-							budget_remaining -= bounty.value;
+						if bounty.value <= *budget_remaining {
+							*budget_remaining -= bounty.value;
 
 							bounty.status = BountyStatus::Funded;
 
@@ -820,7 +822,6 @@ impl<T: Trait<I>, I: Instance> pallet_treasury::SpendFunds for Module<T, I> {
 		});
 
 		*total_weight += T::BouWeightInfo::on_initialize_bounties(bounties_len);
-
 	}
 
 }

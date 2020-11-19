@@ -139,7 +139,6 @@ pub mod weights;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 
-#[cfg(feature = "std")]
 use sp_std::if_std;
 
 use sp_std::prelude::*;
