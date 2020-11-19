@@ -73,7 +73,12 @@ where
 							json,
 						));
 					} else {
-						panic!("missing fields in telemetry log: {:?}", event);
+						panic!(
+							"missing fields in telemetry log: {:?}. This can happen if \
+							`tracing::info_span!` is (mis-)used with the telemetry target \
+							directly; you should use the `telemetry!` macro.",
+							event,
+						);
 					}
 				}
 			}
