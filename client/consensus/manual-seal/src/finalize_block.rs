@@ -18,7 +18,7 @@
 
 use crate::rpc;
 use sp_runtime::{
-	Justification,
+	Justifications,
 	traits::Block as BlockT,
 	generic::BlockId,
 };
@@ -33,7 +33,7 @@ pub struct FinalizeBlockParams<B: BlockT, F, CB> {
 	/// sender to report errors/success to the rpc.
 	pub sender: rpc::Sender<()>,
 	/// finalization justification
-	pub justification: Option<Justification>,
+	pub justification: Option<Justifications>,
 	/// Finalizer trait object.
 	pub finalizer: Arc<F>,
 	/// phantom type to pin the Backend type

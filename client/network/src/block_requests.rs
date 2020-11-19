@@ -422,6 +422,12 @@ where
 				Vec::new()
 			};
 
+			// WIP(JON): Need to encode the whole set of Justifications
+			let a = justification.unwrap_or_default();
+			let justification = a
+				.first()
+				.map(|y| y.1.clone());
+
 			let block_data = schema::v1::BlockData {
 				hash: hash.encode(),
 				header: if get_header {
@@ -649,7 +655,12 @@ where
 							None
 						},
 						justification: if !block_data.justification.is_empty() {
-							Some(block_data.justification)
+							// WIP(JON): Need to decode the whole set of Justifications
+							// let id = sp_finality_grandpa::GRANDPA_ENGINE_ID;
+							const GRANDPA_ENGINE_ID: [u8; 4] = *b"FRNK";
+							let just = vec![(GRANDPA_ENGINE_ID, block_data.justification)];
+							Some(just)
+							// Some(block_data.justification)
 						} else if block_data.is_empty_justification {
 							Some(Vec::new())
 						} else {

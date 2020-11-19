@@ -44,7 +44,7 @@ use parking_lot::Mutex;
 use sc_client_api::{BlockOf, backend::AuxStore, BlockchainEvents};
 use sp_blockchain::{HeaderBackend, ProvideCache, well_known_cache_keys::Id as CacheKeyId};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_runtime::{Justification, RuntimeString};
+use sp_runtime::{Justifications, RuntimeString};
 use sp_runtime::generic::{BlockId, Digest, DigestItem};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_api::ProvideRuntimeApi;
@@ -458,7 +458,7 @@ impl<B: BlockT, Algorithm> Verifier<B> for PowVerifier<B, Algorithm> where
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let hash = header.hash();

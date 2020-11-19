@@ -24,7 +24,7 @@ use sp_consensus::{
 	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError,
 	ForkChoiceStrategy,
 };
-use sp_runtime::Justification;
+use sp_runtime::Justifications;
 use sp_runtime::traits::{Block as BlockT};
 use sp_runtime::generic::BlockId;
 use codec::alloc::collections::hash_map::HashMap;
@@ -35,7 +35,7 @@ pub trait ClientExt<Block: BlockT>: Sized {
 	fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Returns hash of the genesis block.
@@ -59,7 +59,7 @@ pub trait ClientBlockImportExt<Block: BlockT>: Sized {
 		&mut self,
 		origin: BlockOrigin,
 		block: Block,
-		justification: Justification
+		justification: Justifications
 	) -> Result<(), ConsensusError>;
 }
 
@@ -73,7 +73,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 	) -> sp_blockchain::Result<()> {
 		Finalizer::finalize_block(self, id, justification, true)
 	}
@@ -119,7 +119,7 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 		&mut self,
 		origin: BlockOrigin,
 		block: Block,
-		justification: Justification,
+		justification: Justifications,
 	) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
@@ -168,7 +168,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 		&mut self,
 		origin: BlockOrigin,
 		block: Block,
-		justification: Justification,
+		justification: Justifications,
 	) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);

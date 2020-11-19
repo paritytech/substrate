@@ -57,7 +57,7 @@ use sp_core::H256;
 use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_runtime::Justification;
+use sp_runtime::Justifications;
 use substrate_test_runtime_client::{self, AccountKeyring};
 use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
@@ -103,7 +103,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let maybe_keys = header.digest()
@@ -178,7 +178,7 @@ impl PeersClient {
 		}
 	}
 
-	pub fn justification(&self, block: &BlockId<Block>) -> ClientResult<Option<Justification>> {
+	pub fn justification(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		match *self {
 			PeersClient::Full(ref client, ref _backend) => client.justification(block),
 			PeersClient::Light(ref client, ref _backend) => client.justification(block),
@@ -202,7 +202,7 @@ impl PeersClient {
 	pub fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		notify: bool
 	) -> ClientResult<()> {
 		match *self {
@@ -554,7 +554,7 @@ impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let hash = header.hash();
@@ -951,7 +951,7 @@ impl JustificationImport<Block> for ForceFinalized {
 		&mut self,
 		hash: H256,
 		_number: NumberFor<Block>,
-		justification: Justification,
+		justification: Justifications,
 	) -> Result<(), Self::Error> {
 		self.0.finalize_block(BlockId::Hash(hash), Some(justification), true)
 			.map_err(|_| ConsensusError::InvalidJustification.into())

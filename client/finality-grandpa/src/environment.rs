@@ -55,7 +55,7 @@ use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
 use sp_finality_grandpa::{
-	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof,
+	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof, GRANDPA_ENGINE_ID,
 	GrandpaApi, RoundNumber, SetId,
 };
 use prometheus_endpoint::{register, Counter, Gauge, PrometheusError, U64};
@@ -1289,10 +1289,13 @@ where
 
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
-		client.apply_finality(import_op, BlockId::Hash(hash), justification, true).map_err(|e| {
-			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
-			e
-		})?;
+		let justification = justification.map(|j| vec![(GRANDPA_ENGINE_ID, j.clone())]);
+		client
+			.apply_finality(import_op, BlockId::Hash(hash), justification, true)
+			.map_err(|e| {
+				warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+				e
+			})?;
 		telemetry!(CONSENSUS_INFO; "afg.finalized_blocks_up_to";
 			"number" => ?number, "hash" => ?hash,
 		);

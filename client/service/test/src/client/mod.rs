@@ -47,6 +47,7 @@ use sp_consensus::{
 	BlockOrigin, SelectChain, BlockImport, Error as ConsensusError, BlockCheckParams, ImportResult,
 	BlockStatus, BlockImportParams, ForkChoiceStrategy,
 };
+use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 use sp_storage::StorageKey;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 use sp_runtime::{generic::BlockId, DigestItem};
@@ -1021,7 +1022,7 @@ fn import_with_justification() {
 	client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 	// A2 -> A3
-	let justification = vec![1, 2, 3];
+	let justification = vec![(GRANDPA_ENGINE_ID, vec![1, 2, 3])];
 	let a3 = client.new_block_at(
 		&BlockId::Hash(a2.hash()),
 		Default::default(),
@@ -1093,7 +1094,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	);
 
 	// importing B1 as finalized should trigger a re-org and set it as new best
-	let justification = vec![1, 2, 3];
+	let justification = vec![(GRANDPA_ENGINE_ID, vec![1, 2, 3])];
 	client.import_justified(BlockOrigin::Own, b1.clone(), justification).unwrap();
 
 	assert_eq!(

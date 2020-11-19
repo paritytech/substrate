@@ -50,7 +50,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 			&mut self,
 			origin: sp_consensus::BlockOrigin,
 			header: B::Header,
-			justification: Option<sp_runtime::Justification>,
+			justification: Option<sp_runtime::Justifications>,
 			body: Option<Vec<B::Extrinsic>>,
 		) -> Result<
 			(

@@ -239,7 +239,7 @@ impl Verifier<TestBlock> for TestVerifier {
 		&mut self,
 		origin: BlockOrigin,
 		mut header: TestHeader,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		body: Option<Vec<TestExtrinsic>>,
 	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).

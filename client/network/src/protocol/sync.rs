@@ -42,7 +42,7 @@ use extra_requests::ExtraRequests;
 use libp2p::PeerId;
 use log::{debug, trace, warn, info, error};
 use sp_runtime::{
-	Justification,
+	Justifications,
 	generic::BlockId,
 	traits::{Block as BlockT, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion, Hash, HashFor}
 };
@@ -387,7 +387,7 @@ pub enum OnBlockJustification<B: BlockT> {
 		peer: PeerId,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justification
+		justification: Justifications
 	}
 }
 

@@ -18,7 +18,7 @@
 use std::{mem, pin::Pin, time::Duration, marker::PhantomData};
 use futures::{prelude::*, task::Context, task::Poll};
 use futures_timer::Delay;
-use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
+use sp_runtime::{Justifications, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
 use prometheus_endpoint::Registry;
 
@@ -117,7 +117,7 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justification,
+		justification: Justifications,
 	) {
 		let res = self.justification_sender.unbounded_send(
 			worker_messages::ImportJustification(who, hash, number, justification),
@@ -143,7 +143,7 @@ mod worker_messages {
 	use super::*;
 
 	pub struct ImportBlocks<B: BlockT>(pub BlockOrigin, pub Vec<IncomingBlock<B>>);
-	pub struct ImportJustification<B: BlockT>(pub Origin, pub B::Hash, pub NumberFor<B>, pub Justification);
+	pub struct ImportJustification<B: BlockT>(pub Origin, pub B::Hash, pub NumberFor<B>, pub Justifications);
 }
 
 struct BlockImportWorker<B: BlockT, Transaction> {
@@ -281,7 +281,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justification
+		justification: Justifications
 	) {
 		let started = wasm_timer::Instant::now();
 		let success = self.justification_import.as_mut().map(|justification_import| {
@@ -439,7 +439,7 @@ mod tests {
 			&mut self,
 			origin: BlockOrigin,
 			header: Header,
-			_justification: Option<Justification>,
+			_justification: Option<Justifications>,
 			_body: Option<Vec<Extrinsic>>,
 		) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 			Ok((BlockImportParams::new(origin, header), None))
@@ -473,7 +473,7 @@ mod tests {
 			&mut self,
 			_hash: Hash,
 			_number: BlockNumber,
-			_justification: Justification,
+			_justification: Justifications,
 		) -> Result<(), Self::Error> {
 			Ok(())
 		}

@@ -33,7 +33,7 @@ use sp_consensus::{
 	SelectChain,
 };
 use sp_finality_grandpa::{ConsensusLog, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
-use sp_runtime::Justification;
+use sp_runtime::Justifications;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{
 	Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero,
@@ -128,7 +128,7 @@ impl<BE, Block: BlockT, Client, SC> JustificationImport<Block>
 		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
-		justification: Justification,
+		justification: Justifications,
 	) -> Result<(), Self::Error> {
 		// this justification was requested by the sync service, therefore we
 		// are not sure if it should enact a change or not. it could have been a
@@ -615,12 +615,22 @@ where
 		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
-		justification: Justification,
+		justification: Justifications,
 		enacts_change: bool,
 		initial_sync: bool,
 	) -> Result<(), ConsensusError> {
+		let grandpa_justification =
+			match justification.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
+				Some((_, grandpa_justification)) => grandpa_justification,
+				None => {
+					return Err(ConsensusError::ClientImport(
+						"JON(WIP): expected a grandpa justification.".into(),
+					))
+				}
+			};
+
 		let justification = GrandpaJustification::decode_and_verify_finalizes(
-			&justification,
+			&grandpa_justification,
 			(hash, number),
 			self.authority_set.set_id(),
 			&self.authority_set.current_authorities(),

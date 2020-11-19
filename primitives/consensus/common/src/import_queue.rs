@@ -28,7 +28,7 @@
 
 use std::collections::HashMap;
 
-use sp_runtime::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
+use sp_runtime::{Justifications, traits::{Block as BlockT, Header as _, NumberFor}};
 
 use crate::{
 	error::Error as ConsensusError,
@@ -69,7 +69,7 @@ pub struct IncomingBlock<B: BlockT> {
 	/// Block body if requested.
 	pub body: Option<Vec<<B as BlockT>::Extrinsic>>,
 	/// Justification if requested.
-	pub justification: Option<Justification>,
+	pub justification: Option<Justifications>,
 	/// The peer, we received this from
 	pub origin: Option<Origin>,
 	/// Allow importing the block skipping state verification if parent state is missing.
@@ -90,7 +90,7 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
 }
@@ -108,7 +108,7 @@ pub trait ImportQueue<B: BlockT>: Send {
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justification
+		justification: Justifications
 	);
 	/// Polls for actions to perform on the network.
 	///

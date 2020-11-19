@@ -37,7 +37,7 @@ use sp_consensus::{
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
 use codec::{Decode, DecodeAll, Encode};
-use sp_runtime::{generic::BlockId, Justification};
+use sp_runtime::{generic::BlockId, Justifications};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub
 };
@@ -1334,7 +1334,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 #[must_use]
 pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
-	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
+	JustificationImport(Origin, B::Hash, NumberFor<B>, Justifications),
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,

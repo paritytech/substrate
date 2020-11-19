@@ -70,7 +70,7 @@ use sp_core::ChangesTrieConfiguration;
 use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::{generic::{DigestItem, BlockId}, Justification, Storage};
+use sp_runtime::{generic::{DigestItem, BlockId}, Justifications, Storage};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion, HashFor,
 };
@@ -338,7 +338,7 @@ pub(crate) mod columns {
 
 struct PendingBlock<Block: BlockT> {
 	header: Block::Header,
-	justification: Option<Justification>,
+	justification: Option<Justifications>,
 	body: Option<Vec<Block::Extrinsic>>,
 	leaf_state: NewBlockState,
 }
@@ -486,7 +486,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		}
 	}
 
-	fn justification(&self, id: BlockId<Block>) -> ClientResult<Option<Justification>> {
+	fn justification(&self, id: BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Ok(justification) => Ok(Some(justification)),
@@ -610,7 +610,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	pending_block: Option<PendingBlock<Block>>,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
+	finalized_blocks: Vec<(BlockId<Block>, Option<Justifications>)>,
 	set_head: Option<BlockId<Block>>,
 	commit_state: bool,
 }
@@ -651,7 +651,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		&mut self,
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		leaf_state: NewBlockState,
 	) -> ClientResult<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
@@ -746,7 +746,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 	fn mark_finalized(
 		&mut self,
 		block: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 	) -> ClientResult<()> {
 		self.finalized_blocks.push((block, justification));
 		Ok(())
@@ -1026,7 +1026,7 @@ impl<Block: BlockT> Backend<Block> {
 		hash: &Block::Hash,
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
 		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
 	) -> ClientResult<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool)> {
@@ -1501,7 +1501,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
@@ -2354,7 +2354,7 @@ pub(crate) mod tests {
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 		let _ = insert_header(&backend, 1, block0, None, Default::default());
 
-		let justification = Some(vec![1, 2, 3]);
+		let justification = Some(vec![(sp_finality_grandpa::GRANDPA_ENGINE_ID, vec![1, 2, 3])]);
 		backend.finalize_block(BlockId::Number(1), justification.clone()).unwrap();
 
 		assert_eq!(

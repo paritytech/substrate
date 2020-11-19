@@ -95,7 +95,10 @@ pub use either::Either;
 /// the block itself would allow swapping justifications to change the block's hash
 /// (and thus fork the chain). Sending a `Justification` alongside a block instead
 /// bypasses this problem.
-pub type Justification = Vec<u8>;
+pub type EncodedJustification = Vec<u8>;
+/// Collection of Justifications, since we might have more than one stored per block.
+// WIP(JON): Consider making `Justifications` strongly typed.
+pub type Justifications = Vec<(ConsensusEngineId, EncodedJustification)>;
 
 use traits::{Verify, Lazy};
 

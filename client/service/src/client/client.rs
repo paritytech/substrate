@@ -37,7 +37,7 @@ use sp_core::{
 use sp_keystore::SyncCryptoStorePtr;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
-	Justification, BuildStorage,
+	Justifications, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
 		Block as BlockT, Header as HeaderT, Zero, NumberFor,
@@ -686,7 +686,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		origin: BlockOrigin,
 		hash: Block::Hash,
 		import_headers: PrePostHeader<Block::Header>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		body: Option<Vec<Block::Extrinsic>>,
 		storage_changes: Option<sp_api::StorageChanges<backend::StateBackendFor<B, Block>, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
@@ -906,7 +906,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		block: Block::Hash,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		best_block: Block::Hash,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
@@ -1808,7 +1808,7 @@ impl<B, E, Block, RA> Finalizer<Block, B> for Client<B, E, Block, RA> where
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		let last_best = self.backend.blockchain().info().best_hash;
@@ -1825,7 +1825,7 @@ impl<B, E, Block, RA> Finalizer<Block, B> for Client<B, E, Block, RA> where
 	fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		self.lock_import_and_run(|operation| {
@@ -1844,7 +1844,7 @@ impl<B, E, Block, RA> Finalizer<Block, B> for &Client<B, E, Block, RA> where
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		(**self).apply_finality(operation, id, justification, notify)
@@ -1853,7 +1853,7 @@ impl<B, E, Block, RA> Finalizer<Block, B> for &Client<B, E, Block, RA> where
 	fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		(**self).finalize_block(id, justification, notify)
@@ -1933,7 +1933,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		}
 	}
 
-	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
+	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>> {
 		self.backend.blockchain().justification(*id)
 	}
 

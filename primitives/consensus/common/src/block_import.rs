@@ -18,7 +18,7 @@
 //! Block import helpers.
 
 use sp_runtime::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor, HashFor};
-use sp_runtime::Justification;
+use sp_runtime::Justifications;
 use serde::{Serialize, Deserialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -129,7 +129,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// post-runtime digests are pushed back on after.
 	pub header: Block::Header,
 	/// Justification provided for this block from the outside.
-	pub justification: Option<Justification>,
+	pub justification: Option<Justifications>,
 	/// Digest items that have been added after the runtime for external
 	/// work, like a consensus signature.
 	pub post_digests: Vec<DigestItemFor<Block>>,
@@ -340,6 +340,6 @@ pub trait JustificationImport<B: BlockT> {
 		&mut self,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justification,
+		justification: Justifications,
 	) -> Result<(), Self::Error>;
 }

@@ -27,7 +27,7 @@ use sp_consensus::{
 };
 use sp_blockchain::HeaderBackend;
 use sp_inherents::InherentDataProviders;
-use sp_runtime::{traits::Block as BlockT, Justification};
+use sp_runtime::{traits::Block as BlockT, Justifications};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
 use sc_transaction_pool::txpool;
 use std::{sync::Arc, marker::PhantomData};
@@ -57,7 +57,7 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let mut import_params = BlockImportParams::new(origin, header);

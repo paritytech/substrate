@@ -84,7 +84,7 @@ use sp_core::crypto::Public;
 use sp_application_crypto::AppKey;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_runtime::{
-	generic::{BlockId, OpaqueDigestItemId}, Justification,
+	generic::{BlockId, OpaqueDigestItemId}, Justifications,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
@@ -974,7 +974,7 @@ where
 		&mut self,
 		origin: BlockOrigin,
 		header: Block::Header,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		mut body: Option<Vec<Block::Extrinsic>>,
 	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		trace!(

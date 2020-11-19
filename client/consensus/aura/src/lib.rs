@@ -59,7 +59,7 @@ use sp_core::crypto::Public;
 use sp_application_crypto::{AppKey, AppPublic};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::NumberFor, Justification,
+	traits::NumberFor, Justifications,
 };
 use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
@@ -590,7 +590,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let mut inherent_data = self.inherent_data_providers

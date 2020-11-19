@@ -22,7 +22,7 @@ use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
 use sp_core::ChangesTrieConfigurationRange;
 use sp_core::offchain::{OffchainStorage,storage::OffchainOverlayedChanges};
-use sp_runtime::{generic::BlockId, Justification, Storage};
+use sp_runtime::{generic::BlockId, Justifications, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HashFor};
 use sp_state_machine::{
 	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
@@ -148,7 +148,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 		&mut self,
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		state: NewBlockState,
 	) -> sp_blockchain::Result<()>;
 
@@ -195,7 +195,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	fn mark_finalized(
 		&mut self,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 	) -> sp_blockchain::Result<()>;
 	/// Mark a block as new head. If both block import and set head are specified, set head
 	/// overrides block import's best block rule.
@@ -226,7 +226,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
 
@@ -247,7 +247,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 	fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
 
@@ -429,7 +429,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Returns reference to blockchain backend.

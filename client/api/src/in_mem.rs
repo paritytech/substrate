@@ -27,7 +27,7 @@ use sp_core::{
 };
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor};
-use sp_runtime::{Justification, Storage};
+use sp_runtime::{Justifications, Storage};
 use sp_state_machine::{
 	ChangesTrieTransaction, InMemoryBackend, Backend as StateBackend, StorageCollection,
 	ChildStorageCollection,
@@ -51,12 +51,12 @@ struct PendingBlock<B: BlockT> {
 
 #[derive(PartialEq, Eq, Clone)]
 enum StoredBlock<B: BlockT> {
-	Header(B::Header, Option<Justification>),
-	Full(B, Option<Justification>),
+	Header(B::Header, Option<Justifications>),
+	Full(B, Option<Justifications>),
 }
 
 impl<B: BlockT> StoredBlock<B> {
-	fn new(header: B::Header, body: Option<Vec<B::Extrinsic>>, just: Option<Justification>) -> Self {
+	fn new(header: B::Header, body: Option<Vec<B::Extrinsic>>, just: Option<Justifications>) -> Self {
 		match body {
 			Some(body) => StoredBlock::Full(B::new(header, body), just),
 			None => StoredBlock::Header(header, just),
@@ -70,7 +70,7 @@ impl<B: BlockT> StoredBlock<B> {
 		}
 	}
 
-	fn justification(&self) -> Option<&Justification> {
+	fn justification(&self) -> Option<&Justifications> {
 		match *self {
 			StoredBlock::Header(_, ref j) | StoredBlock::Full(_, ref j) => j.as_ref()
 		}
@@ -83,7 +83,7 @@ impl<B: BlockT> StoredBlock<B> {
 		}
 	}
 
-	fn into_inner(self) -> (B::Header, Option<Vec<B::Extrinsic>>, Option<Justification>) {
+	fn into_inner(self) -> (B::Header, Option<Vec<B::Extrinsic>>, Option<Justifications>) {
 		match self {
 			StoredBlock::Header(header, just) => (header, None, just),
 			StoredBlock::Full(block, just) => {
@@ -164,7 +164,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		&self,
 		hash: Block::Hash,
 		header: <Block as BlockT>::Header,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
 	) -> sp_blockchain::Result<()> {
@@ -272,7 +272,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		Ok(())
 	}
 
-	fn finalize_header(&self, id: BlockId<Block>, justification: Option<Justification>) -> sp_blockchain::Result<()> {
+	fn finalize_header(&self, id: BlockId<Block>, justification: Option<Justifications>) -> sp_blockchain::Result<()> {
 		let hash = match self.header(id)? {
 			Some(h) => h.hash(),
 			None => return Err(sp_blockchain::Error::UnknownBlock(format!("{}", id))),
@@ -365,7 +365,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		}))
 	}
 
-	fn justification(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
+	fn justification(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>> {
 		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b|
 			b.justification().map(|x| x.clone()))
 		))
@@ -485,7 +485,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	old_state: InMemoryBackend<HashFor<Block>>,
 	new_state: Option<<InMemoryBackend<HashFor<Block>> as StateBackend<HashFor<Block>>>::Transaction>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
+	finalized_blocks: Vec<(BlockId<Block>, Option<Justifications>)>,
 	set_head: Option<BlockId<Block>>,
 }
 
@@ -502,7 +502,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		&mut self,
 		header: <Block as BlockT>::Header,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 		state: NewBlockState,
 	) -> sp_blockchain::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
@@ -570,7 +570,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 	fn mark_finalized(
 		&mut self,
 		block: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 	) -> sp_blockchain::Result<()> {
 		self.finalized_blocks.push((block, justification));
 		Ok(())
@@ -688,7 +688,7 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
-		justification: Option<Justification>,
+		justification: Option<Justifications>,
 	) -> sp_blockchain::Result<()> {
 		self.blockchain.finalize_header(block, justification)
 	}
