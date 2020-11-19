@@ -49,14 +49,14 @@ pub trait WeightInfo {
 	fn vote_more(_v: u32, ) -> Weight;
 	fn vote_less(_v: u32, ) -> Weight;
 	fn remove_voter() -> Weight;
-	fn report_defunct_voter_correct(_c: u32, _v: u32, ) -> Weight;
-	fn report_defunct_voter_incorrect(_c: u32, _v: u32, ) -> Weight;
 	fn submit_candidacy(_c: u32, ) -> Weight;
 	fn renounce_candidacy_candidate(_c: u32, ) -> Weight;
 	fn renounce_candidacy_members() -> Weight;
 	fn renounce_candidacy_runners_up() -> Weight;
 	fn remove_member_with_replacement() -> Weight;
 	fn remove_member_wrong_refund() -> Weight;
+	fn clean_defunct_voters(v: u32, d: u32) -> Weight;
+	fn election_phragmen(c: u32, v: u32, e: u32) -> Weight;
 }
 
 /// Weights for pallet_elections_phragmen using the Substrate node and recommended hardware.
@@ -78,22 +78,6 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 	fn remove_voter() -> Weight {
 		(73_774_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-
-	}
-	fn report_defunct_voter_correct(c: u32, v: u32, ) -> Weight {
-		(0 as Weight)
-			.saturating_add((1_746_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add((31_383_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add(T::DbWeight::get().reads(7 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-
-	}
-	fn report_defunct_voter_incorrect(c: u32, v: u32, ) -> Weight {
-		(0 as Weight)
-			.saturating_add((1_725_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add((31_293_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 
 	}
@@ -132,9 +116,13 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 	fn remove_member_wrong_refund() -> Weight {
 		(8_489_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-
 	}
-
+	fn election_phragmen(c: u32, v: u32, e: u32) -> Weight {
+		0
+	}
+	fn clean_defunct_voters(v: u32, d: u32) -> Weight {
+		0
+	}
 }
 
 // For backwards compatibility and tests
@@ -154,22 +142,6 @@ impl WeightInfo for () {
 	fn remove_voter() -> Weight {
 		(73_774_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-
-	}
-	fn report_defunct_voter_correct(c: u32, v: u32, ) -> Weight {
-		(0 as Weight)
-			.saturating_add((1_746_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add((31_383_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-
-	}
-	fn report_defunct_voter_incorrect(c: u32, v: u32, ) -> Weight {
-		(0 as Weight)
-			.saturating_add((1_725_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add((31_293_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 
 	}
@@ -206,5 +178,11 @@ impl WeightInfo for () {
 	}
 	fn remove_member_wrong_refund() -> Weight {
 		(8_489_000 as Weight).saturating_add(RocksDbWeight::get().reads(1 as Weight))
+	}
+	fn election_phragmen(c: u32, v: u32, e: u32) -> Weight {
+		0
+	}
+	fn clean_defunct_voters(v: u32, d: u32) -> Weight {
+		0
 	}
 }
