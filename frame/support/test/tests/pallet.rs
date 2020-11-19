@@ -144,8 +144,13 @@ pub mod pallet {
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
 		#[frame_support::transactional]
-		fn foo_transactional(_origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
-			Ok(().into())
+		fn foo_transactional(_origin: OriginFor<T>, #[pallet::compact] foo: u32) -> DispatchResultWithPostInfo {
+			Self::deposit_event(Event::Something(0));
+			if foo != 0 {
+				Ok(().into())
+			} else {
+				Err(Error::<T>::InsufficientProposersBalance.into())
+			}
 		}
 	}
 
@@ -317,6 +322,23 @@ frame_support::construct_runtime!(
 		Example: pallet::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
 	}
 );
+
+#[test]
+fn transactional_works() {
+	TestExternalities::default().execute_with(|| {
+		frame_system::Pallet::<Runtime>::set_block_number(1);
+
+		pallet::Call::<Runtime>::foo_transactional(0).dispatch_bypass_filter(None.into())
+			.err().unwrap();
+		assert!(frame_system::Pallet::<Runtime>::events().is_empty());
+
+		pallet::Call::<Runtime>::foo_transactional(1).dispatch_bypass_filter(None.into()).unwrap();
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events().iter().map(|e| &e.event).collect::<Vec<_>>(),
+			vec![&Event::pallet(pallet::Event::Something(0))],
+		);
+	})
+}
 
 #[test]
 fn call_expand() {
@@ -571,7 +593,7 @@ fn metadata() {
 				name: DecodeDifferent::Decoded("foo_transactional".to_string()),
 				arguments: DecodeDifferent::Decoded(vec![
 					FunctionArgumentMetadata {
-						name: DecodeDifferent::Decoded("_foo".to_string()),
+						name: DecodeDifferent::Decoded("foo".to_string()),
 						ty: DecodeDifferent::Decoded("Compact<u32>".to_string()),
 					}
 				]),
