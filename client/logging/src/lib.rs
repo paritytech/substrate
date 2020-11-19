@@ -213,7 +213,7 @@ mod tests {
 	const EXPECTED_NODE_NAME: &'static str = "THE_NODE";
 
 	fn init_logger(pattern: &str) {
-		let (subscriber, telemetries) =
+		let (subscriber, _telemetries) =
 			get_default_subscriber_and_telemetries(pattern, None).unwrap();
 		tracing::subscriber::set_global_default(subscriber).unwrap();
 	}
