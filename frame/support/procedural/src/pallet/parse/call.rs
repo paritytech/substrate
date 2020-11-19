@@ -115,7 +115,7 @@ pub fn check_dispatchable_first_arg_type(ty: &syn::Type) -> syn::Result<()> {
 
 	syn::parse2::<CheckDispatchableFirstArg>(ty.to_token_stream())
 		.map_err(|e| {
-			let msg = format!("Invalid ty: {}", expected);
+			let msg = format!("Invalid type: {}", expected);
 			let mut err = syn::Error::new(ty.span(), msg);
 			err.combine(e);
 			err
@@ -180,7 +180,7 @@ impl CallDef {
 					let msg = if call_var_attrs.len() == 0 {
 						"Invalid pallet::call, require weight attribute i.e. `#[pallet::weight = $expr]`"
 					} else {
-						"Invalid pallet::call, to many weight attribute given"
+						"Invalid pallet::call, too many weight attributes given"
 					};
 					return Err(syn::Error::new(method.sig.span(), msg));
 				}

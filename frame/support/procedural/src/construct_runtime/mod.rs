@@ -335,8 +335,7 @@ fn decl_runtime_metadata<'a>(
 			let index = module_declaration.index;
 
 			quote!(
-				// Note: we can keep the parts Pallet or Module or ValidateUnsigned because they
-				// are not used by impl_runtime_metadata anyway.
+				// Note: impl_runtime_metadata can be given all parts, no need to filter out any part
 				#module::#pallet_or_module #instance as #name { index #index } with #(#parts)*,
 			)
 		});

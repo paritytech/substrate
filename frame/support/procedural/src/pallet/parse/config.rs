@@ -268,7 +268,7 @@ impl ConfigDef {
 		let item = if let syn::Item::Trait(item) = item {
 			item
 		} else {
-			let msg = "Invalid pallet::config, expect trait definition";
+			let msg = "Invalid pallet::config, expected trait definition";
 			return Err(syn::Error::new(item.span(), msg));
 		};
 
@@ -288,7 +288,7 @@ impl ConfigDef {
 		};
 
 		if item.generics.params.len() > 1 {
-			let msg = "Invalid pallet::config, expect no more than one generics";
+			let msg = "Invalid pallet::config, expected no more than one generic";
 			return Err(syn::Error::new(item.generics.params[2].span(), msg));
 		}
 
