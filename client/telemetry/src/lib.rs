@@ -279,7 +279,7 @@ impl Telemetries {
 	/// verbosity level.
 	pub fn build_telemetry(&self, endpoints: TelemetryEndpoints) -> Telemetry {
 		let (telemetry, sender) = Telemetry::new(
-			endpoints.clone(),
+			endpoints,
 			self.wasm_external_transport.clone(),
 			Some(&self.node_pool),
 		);
