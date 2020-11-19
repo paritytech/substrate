@@ -218,12 +218,26 @@ impl Get<u64> for SystemChainId {
 	}
 }
 
+/// A mapping function that converts Ethereum gas to Substrate weight
+pub trait GasToWeight {
+	fn gas_to_weight(gas: U256) -> Weight;
+}
+
+impl GasToWeight for () {
+	fn gas_to_weight(gas: U256) -> Weight {
+		gas.saturated_into::<Weight>()
+	}
+}
+
 static ISTANBUL_CONFIG: Config = Config::istanbul();
 
 /// EVM module trait
 pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	/// Calculator for current gas price.
 	type FeeCalculator: FeeCalculator;
+
+	/// Maps Ethereum gas to Substrate weight.
+	type GasToWeight: GasToWeight;
 
 	/// Allow the origin to call on behalf of given address.
 	type CallOrigin: EnsureAddressOrigin<Self::Origin>;
@@ -347,7 +361,7 @@ decl_module! {
 		}
 
 		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
-		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
+		#[weight = T::GasToWeight::gas_to_weight(transaction.gas_limit)]
 		fn call(
 			origin,
 			source: H160,
@@ -383,7 +397,7 @@ decl_module! {
 
 		/// Issue an EVM create operation. This is similar to a contract creation transaction in
 		/// Ethereum.
-		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
+		#[weight = T::GasToWeight::gas_to_weight(transaction.gas_limit)]
 		fn create(
 			origin,
 			source: H160,
@@ -416,7 +430,7 @@ decl_module! {
 		}
 
 		/// Issue an EVM create2 operation.
-		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
+		#[weight = T::GasToWeight::gas_to_weight(transaction.gas_limit)]
 		fn create2(
 			origin,
 			source: H160,
