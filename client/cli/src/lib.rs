@@ -262,20 +262,20 @@ pub fn init_logger(
 		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
 
 	// Disable info logging by default for some modules.
-	env_filter = add_directives(env_filter,"ws=off,yamux=off,cranelift_codegen=off");
+	env_filter = add_default_directives(env_filter, "ws=off,yamux=off,cranelift_codegen=off");
 	// Set warn logging by default for some modules.
-	env_filter = add_directives(env_filter,"cranelift_wasm=warn,hyper=warn");
+	env_filter = add_default_directives(env_filter, "cranelift_wasm=warn,hyper=warn");
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
-			env_filter = add_directives(env_filter, &lvl);
+			env_filter = add_default_directives(env_filter, &lvl);
 		}
 	}
 
 	if pattern != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
 		// parse error.
-		env_filter = add_directives(env_filter, pattern);
+		env_filter = add_default_directives(env_filter, pattern);
 	}
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
@@ -287,12 +287,12 @@ pub fn init_logger(
 	// Always log the special target `sc_tracing`, overrides global level.
 	// NOTE: this must be done after we check the `max_level_hint` otherwise
 	// it is always raised to `TRACE`.
-	env_filter = add_directives(env_filter, "sc_tracing=trace");
+	env_filter = add_default_directives(env_filter, "sc_tracing=trace");
 
 
 	// Make sure to include profiling targets in the filter
 	if let Some(profiling_targets) = profiling_targets.clone() {
-		env_filter = add_directives(env_filter, &profiling_targets);
+		env_filter = add_default_directives(env_filter, &profiling_targets);
 	}
 
 	let enable_color = atty::is(atty::Stream::Stderr);
@@ -329,7 +329,7 @@ pub fn init_logger(
 }
 
 // Adds default directives to ensure setLogFilter RPC functions correctly
-fn add_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter {
+fn add_default_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter {
 	use sc_tracing::{parse_directives, add_default_directives};
 	add_default_directives(directives);
 	let (oks, errs): (Vec<_>, Vec<_>) = parse_directives(directives)
