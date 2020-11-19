@@ -69,10 +69,10 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 
 	}
-	fn vote_more(v: u32, ) -> Weight {
+	fn vote_more(_: u32, ) -> Weight {
 		0
 	}
-	fn vote_less(v: u32, ) -> Weight {
+	fn vote_less(_: u32, ) -> Weight {
 		0
 	}
 	fn remove_voter() -> Weight {
@@ -117,10 +117,10 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 		(8_489_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 	}
-	fn election_phragmen(c: u32, v: u32, e: u32) -> Weight {
+	fn election_phragmen(_: u32, _: u32, _: u32) -> Weight {
 		0
 	}
-	fn clean_defunct_voters(v: u32, d: u32) -> Weight {
+	fn clean_defunct_voters(_: u32, _: u32) -> Weight {
 		0
 	}
 }
@@ -133,10 +133,10 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn vote_more(v: u32) -> Weight {
+	fn vote_more(_: u32) -> Weight {
 		0
 	}
-	fn vote_less(v: u32) -> Weight {
+	fn vote_less(_: u32) -> Weight {
 		0
 	}
 	fn remove_voter() -> Weight {
@@ -179,10 +179,10 @@ impl WeightInfo for () {
 	fn remove_member_wrong_refund() -> Weight {
 		(8_489_000 as Weight).saturating_add(RocksDbWeight::get().reads(1 as Weight))
 	}
-	fn election_phragmen(c: u32, v: u32, e: u32) -> Weight {
+	fn election_phragmen(_: u32, _: u32, _: u32) -> Weight {
 		0
 	}
-	fn clean_defunct_voters(v: u32, d: u32) -> Weight {
+	fn clean_defunct_voters(_: u32, _: u32) -> Weight {
 		0
 	}
 }
