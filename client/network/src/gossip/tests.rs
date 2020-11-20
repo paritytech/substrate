@@ -20,7 +20,7 @@ use crate::{config, gossip::QueuedSender, Event, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, Header as _};
-use std::{sync::Arc, time::Duration};
+use std::{borrow::Cow, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
 
 type TestNetworkService = NetworkService<
@@ -120,24 +120,24 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 	(service, event_stream)
 }
 
-const ENGINE_ID: sp_runtime::ConsensusEngineId = *b"foo\0";
+const PROTOCOL_NAME: Cow<'static, str> = Cow::Borrowed("/foo");
 
 /// Builds two nodes and their associated events stream.
-/// The nodes are connected together and have the `ENGINE_ID` protocol registered.
+/// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
 fn build_nodes_one_proto()
 	-> (Arc<TestNetworkService>, impl Stream<Item = Event>, Arc<TestNetworkService>, impl Stream<Item = Event>)
 {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
+		notifications_protocols: vec![PROTOCOL_NAME],
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
 		.. config::NetworkConfiguration::new_local()
 	});
 
 	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
+		notifications_protocols: vec![PROTOCOL_NAME],
 		listen_addresses: vec![],
 		reserved_nodes: vec![config::MultiaddrWithPeerId {
 			multiaddr: listen_addr,
@@ -165,7 +165,7 @@ fn basic_works() {
 				Event::NotificationStreamClosed { .. } => panic!(),
 				Event::NotificationsReceived { messages, .. } => {
 					for message in messages {
-						assert_eq!(message.0, ENGINE_ID);
+						assert_eq!(message.0, PROTOCOL_NAME);
 						assert_eq!(message.1, &b"message"[..]);
 						received_notifications += 1;
 					}
@@ -180,8 +180,8 @@ fn basic_works() {
 	});
 
 	async_std::task::block_on(async move {
-		let (sender, bg_future) =
-			QueuedSender::new(node1, node2_id, ENGINE_ID, NUM_NOTIFS, |msg| msg);
+		let (mut sender, bg_future) =
+			QueuedSender::new(node1, node2_id, PROTOCOL_NAME, NUM_NOTIFS, |msg| msg);
 		async_std::task::spawn(bg_future);
 
 		// Wait for the `NotificationStreamOpened`.

@@ -164,8 +164,9 @@ impl system::Trait for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
-	type ModuleToIndex = ();
+	type PalletInfo = ();
 	type Call = Call;
+	type DbWeight = ();
 }
 
 impl module::Trait for Runtime {}

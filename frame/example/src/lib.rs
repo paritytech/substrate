@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! <!-- markdown-link-check-disable -->
 //! # Example Pallet
 //!
 //! <!-- Original author of paragraph: @gavofyork -->
@@ -256,7 +257,7 @@
 
 use sp_std::marker::PhantomData;
 use frame_support::{
-	dispatch::{DispatchResult, IsSubType}, decl_module, decl_storage, decl_event,
+	dispatch::DispatchResult, decl_module, decl_storage, decl_event, traits::IsSubType,
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
 };
 use sp_std::prelude::*;
@@ -764,7 +765,7 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
-		type ModuleToIndex = ();
+		type PalletInfo = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -774,6 +775,7 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 1;
 	}
 	impl pallet_balances::Trait for Test {
+		type MaxLocks = ();
 		type Balance = u64;
 		type DustRemoval = ();
 		type Event = ();
@@ -842,7 +844,7 @@ mod tests {
 				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 150)
 					.unwrap()
 					.priority,
-				Bounded::max_value(),
+				u64::max_value(),
 			);
 			assert_eq!(
 				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 250),

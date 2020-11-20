@@ -100,6 +100,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+#[cfg(feature = "historical")]
+pub mod historical;
+pub mod weights;
+
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
 use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
@@ -114,14 +122,7 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::ensure_signed;
-
-#[cfg(test)]
-mod mock;
-#[cfg(test)]
-mod tests;
-
-#[cfg(feature = "historical")]
-pub mod historical;
+pub use weights::WeightInfo;
 
 /// Decides whether the session should be ended.
 pub trait ShouldEndSession<BlockNumber> {
@@ -351,16 +352,6 @@ impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
 	}
 }
 
-pub trait WeightInfo {
-	fn set_keys(n: u32, ) -> Weight;
-	fn purge_keys(n: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn set_keys(_n: u32, ) -> Weight { 1_000_000_000 }
-	fn purge_keys(_n: u32, ) -> Weight { 1_000_000_000 }
-}
-
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
@@ -524,9 +515,7 @@ decl_module! {
 		/// - DbReads per key id: `KeyOwner`
 		/// - DbWrites per key id: `KeyOwner`
 		/// # </weight>
-		#[weight = 200_000_000
-			+ T::DbWeight::get().reads(2 + T::Keys::key_ids().len() as Weight)
-			+ T::DbWeight::get().writes(1 + T::Keys::key_ids().len() as Weight)]
+		#[weight = T::WeightInfo::set_keys()]
 		pub fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -549,8 +538,7 @@ decl_module! {
 		/// - DbWrites: `NextKeys`, `origin account`
 		/// - DbWrites per key id: `KeyOwnder`
 		/// # </weight>
-		#[weight = 120_000_000
-			+ T::DbWeight::get().reads_writes(2, 1 + T::Keys::key_ids().len() as Weight)]
+		#[weight = T::WeightInfo::purge_keys()]
 		pub fn purge_keys(origin) {
 			let who = ensure_signed(origin)?;
 			Self::do_purge_keys(&who)?;

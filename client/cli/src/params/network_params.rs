@@ -21,7 +21,7 @@ use sc_network::{
 	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, TransportConfig},
 	multiaddr::Protocol,
 };
-use sc_service::{ChainSpec, config::{Multiaddr, MultiaddrWithPeerId}};
+use sc_service::{ChainSpec, ChainType, config::{Multiaddr, MultiaddrWithPeerId}};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -92,16 +92,20 @@ pub struct NetworkParams {
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
 
-	/// Disable the yamux flow control. This option will be removed in the future once there is
-	/// enough confidence that this feature is properly working.
-	#[structopt(long)]
-	pub no_yamux_flow_control: bool,
-
 	/// Enable peer discovery on local networks.
 	///
-	/// By default this option is true for `--dev` and false otherwise.
+	/// By default this option is `true` for `--dev` or when the chain type is `Local`/`Development`
+	/// and false otherwise.
 	#[structopt(long)]
 	pub discover_local: bool,
+
+	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in the
+	/// presence of potentially adversarial nodes.
+	///
+	/// See the S/Kademlia paper for more information on the high level design as well as its
+	/// security improvements.
+	#[structopt(long)]
+	pub kademlia_disjoint_query_paths: bool,
 }
 
 impl NetworkParams {
@@ -136,6 +140,13 @@ impl NetworkParams {
 		let mut boot_nodes = chain_spec.boot_nodes().to_vec();
 		boot_nodes.extend(self.bootnodes.clone());
 
+		let chain_type = chain_spec.chain_type();
+		// Activate if the user explicitly requested local discovery, `--dev` is given or the
+		// chain type is `Local`/`Development`
+		let allow_non_globals_in_dht = self.discover_local
+			|| is_dev
+			|| matches!(chain_type, ChainType::Local | ChainType::Development);
+
 		NetworkConfiguration {
 			boot_nodes,
 			net_config_path,
@@ -158,10 +169,10 @@ impl NetworkParams {
 				enable_mdns: !is_dev && !self.no_mdns,
 				allow_private_ipv4: !self.no_private_ipv4,
 				wasm_external_transport: None,
-				use_yamux_flow_control: !self.no_yamux_flow_control,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
-			allow_non_globals_in_dht: self.discover_local || is_dev,
+			allow_non_globals_in_dht,
+			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,
 		}
 	}
 }

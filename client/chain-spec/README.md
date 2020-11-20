@@ -4,7 +4,7 @@ This crate contains structs and utilities to declare
 a runtime-specific configuration file (a.k.a chain spec).
 
 Basic chain spec type containing all required parameters is
-[`ChainSpec`](./struct.ChainSpec.html). It can be extended with
+[`ChainSpec`](https://docs.rs/sc-chain-spec/latest/sc_chain_spec/struct.GenericChainSpec.html). It can be extended with
 additional options that contain configuration specific to your chain.
 Usually the extension is going to be an amalgamate of types exposed
 by Substrate core modules. To allow the core modules to retrieve
@@ -25,7 +25,7 @@ pub type MyChainSpec<G> = GenericChainSpec<G, MyExtension>;
 
 Some parameters may require different values depending on the
 current blockchain height (a.k.a. forks). You can use `ChainSpecGroup`
-macro and provided [`Forks`](./struct.Forks.html) structure to put
+macro and provided [`Forks`](https://docs.rs/sc-chain-spec/latest/sc_chain_spec/struct.Forks.html) structure to put
 such parameters to your chain spec.
 This will allow to override a single parameter starting at specific
 block number.

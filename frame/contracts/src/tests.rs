@@ -137,13 +137,14 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
-	type ModuleToIndex = ();
+	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 }
 impl pallet_balances::Trait for Test {
+	type MaxLocks = ();
 	type Balance = u64;
 	type Event = MetaEvent;
 	type DustRemoval = ();
@@ -198,6 +199,7 @@ impl Trait for Test {
 	type MaxDepth = MaxDepth;
 	type MaxValueSize = MaxValueSize;
 	type WeightPrice = Self;
+	type WeightInfo = ();
 }
 
 type Balances = pallet_balances::Module<Test>;
@@ -260,7 +262,7 @@ impl ExtBuilder {
 			balances: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		GenesisConfig {
-			current_schedule: Schedule {
+			current_schedule: Schedule::<Test> {
 				enable_println: true,
 				..Default::default()
 			},
@@ -289,7 +291,8 @@ where
 
 // Perform a call to a plain account.
 // The actual transfer fails because we can only call contracts.
-// Then we check that only the base costs are returned as actual costs.
+// Then we check that no gas was used because the base costs for calling are either charged
+// as part of the `call` extrinsic or by `seal_call`.
 #[test]
 fn calling_plain_account_fails() {
 	ExtBuilder::default().build().execute_with(|| {
@@ -301,7 +304,7 @@ fn calling_plain_account_fails() {
 				DispatchErrorWithPostInfo {
 					error: Error::<Test>::NotCallable.into(),
 					post_info: PostDispatchInfo {
-						actual_weight: Some(67500000),
+						actual_weight: Some(0),
 						pays_fee: Default::default(),
 					},
 				}
@@ -456,6 +459,52 @@ fn instantiate_and_call_and_deposit_event() {
 
 			assert_ok!(creation);
 			assert!(ContractInfoOf::<Test>::contains_key(BOB));
+		});
+}
+
+#[test]
+fn deposit_event_max_value_limit() {
+	let (wasm, code_hash) = compile_module::<Test>("event_size").unwrap();
+
+	ExtBuilder::default()
+		.existential_deposit(50)
+		.build()
+		.execute_with(|| {
+			// Create
+			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
+			assert_ok!(Contracts::instantiate(
+				Origin::signed(ALICE),
+				30_000,
+				GAS_LIMIT,
+				code_hash.into(),
+				vec![],
+			));
+
+			// Check creation
+			let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
+			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
+
+			// Call contract with allowed storage value.
+			assert_ok!(Contracts::call(
+				Origin::signed(ALICE),
+				BOB,
+				0,
+				GAS_LIMIT * 2, // we are copying a huge buffer,
+				<Test as Trait>::MaxValueSize::get().encode(),
+			));
+
+			// Call contract with too large a storage value.
+			assert_err_ignore_postinfo!(
+				Contracts::call(
+					Origin::signed(ALICE),
+					BOB,
+					0,
+					GAS_LIMIT,
+					(<Test as Trait>::MaxValueSize::get() + 1).encode(),
+				),
+				Error::<Test>::ValueTooLarge,
+			);
 		});
 }
 
@@ -1309,7 +1358,7 @@ fn storage_max_value_limit() {
 				BOB,
 				0,
 				GAS_LIMIT * 2, // we are copying a huge buffer
-				Encode::encode(&self::MaxValueSize::get()),
+				<Test as Trait>::MaxValueSize::get().encode(),
 			));
 
 			// Call contract with too large a storage value.
@@ -1319,9 +1368,9 @@ fn storage_max_value_limit() {
 					BOB,
 					0,
 					GAS_LIMIT,
-					Encode::encode(&(self::MaxValueSize::get() + 1)),
+					(<Test as Trait>::MaxValueSize::get() + 1).encode(),
 				),
-				Error::<Test>::ContractTrapped,
+				Error::<Test>::ValueTooLarge,
 			);
 		});
 }
@@ -1606,7 +1655,7 @@ fn crypto_hashes() {
 					0,
 					GAS_LIMIT,
 					params,
-				).0.unwrap();
+				).exec_result.unwrap();
 				assert!(result.is_success());
 				let expected = hash_fn(input.as_ref());
 				assert_eq!(&result.data[..*expected_size], &*expected);
@@ -1639,7 +1688,7 @@ fn transfer_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
 
 		// Contract has enough total balance in order to not go below the subsistence
@@ -1653,7 +1702,7 @@ fn transfer_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 	});
 }
@@ -1686,7 +1735,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::NotCallable);
 
 		assert_ok!(
@@ -1706,7 +1755,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
 
 		// Contract has enough total balance in order to not go below the subsistence
@@ -1720,7 +1769,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough balance but callee reverts because "1" is passed.
@@ -1731,7 +1780,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![1],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeReverted);
 
 		// Contract has enough balance but callee traps because "2" is passed.
@@ -1741,7 +1790,7 @@ fn call_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![2],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeTrapped);
 
 	});
@@ -1776,7 +1825,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0; 33],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
 
 		// Contract has enough total balance in order to not go below the subsistence
@@ -1790,7 +1839,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0; 33],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough balance but the passed code hash is invalid
@@ -1801,7 +1850,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			vec![0; 33],
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CodeNotFound);
 
 		// Contract has enough balance but callee reverts because "1" is passed.
@@ -1811,7 +1860,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			callee_hash.iter().cloned().chain(sp_std::iter::once(1)).collect(),
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeReverted);
 
 		// Contract has enough balance but callee traps because "2" is passed.
@@ -1821,7 +1870,7 @@ fn instantiate_return_code() {
 			0,
 			GAS_LIMIT,
 			callee_hash.iter().cloned().chain(sp_std::iter::once(2)).collect(),
-		).0.unwrap();
+		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeTrapped);
 
 	});

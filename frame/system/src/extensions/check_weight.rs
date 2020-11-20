@@ -90,7 +90,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	/// Upon successes, it returns the new block weight as a `Result`.
 	fn check_block_weight(
 		info: &DispatchInfoOf<T::Call>,
-	) -> Result<crate::weights::ExtrinsicsWeight, TransactionValidityError> {
+	) -> Result<crate::weight::ExtrinsicsWeight, TransactionValidityError> {
 		let maximum_weight = T::MaximumBlockWeight::get();
 		let mut all_weight = Module::<T>::block_weight();
 		match info.class {
@@ -182,7 +182,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	/// Do the pre-dispatch checks. This can be applied to both signed and unsigned.
 	///
 	/// It checks and notes the new weight and length.
-	fn do_pre_dispatch(
+	pub fn do_pre_dispatch(
 		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
@@ -198,7 +198,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	/// Do the validate checks. This can be applied to both signed and unsigned.
 	///
 	/// It only checks that the block weight and length limit will not exceed.
-	fn do_validate(
+	pub fn do_validate(
 		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> TransactionValidity {

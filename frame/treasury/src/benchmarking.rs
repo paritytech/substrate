@@ -36,7 +36,7 @@ fn setup_proposal<T: Trait<I>, I: Instance>(u: u32) -> (
 	<T::Lookup as StaticLookup>::Source,
 ) {
 	let caller = account("caller", u, SEED);
-	let value: BalanceOf<T, I> = T::ProposalBondMinimum::get().saturating_mul(100.into());
+	let value: BalanceOf<T, I> = T::ProposalBondMinimum::get().saturating_mul(100u32.into());
 	let _ = T::Currency::make_free_balance_be(&caller, value);
 	let beneficiary = account("beneficiary", u, SEED);
 	let beneficiary_lookup = T::Lookup::unlookup(beneficiary);
@@ -47,7 +47,7 @@ fn setup_proposal<T: Trait<I>, I: Instance>(u: u32) -> (
 fn setup_awesome<T: Trait<I>, I: Instance>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId) {
 	let caller = whitelisted_caller();
 	let value = T::TipReportDepositBase::get()
-		+ T::TipReportDepositPerByte::get() * length.into()
+		+ T::DataDepositPerByte::get() * length.into()
 		+ T::Currency::minimum_balance();
 	let _ = T::Currency::make_free_balance_be(&caller, value);
 	let reason = vec![0; length as usize];
@@ -71,7 +71,7 @@ fn setup_tip<T: Trait<I>, I: Instance>(r: u32, t: u32) ->
 	let caller = account("member", t - 1, SEED);
 	let reason = vec![0; r as usize];
 	let beneficiary = account("beneficiary", t, SEED);
-	let value = T::Currency::minimum_balance().saturating_mul(100.into());
+	let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 	Ok((caller, reason, beneficiary, value))
 }
 
@@ -109,6 +109,58 @@ fn create_approved_proposals<T: Trait<I>, I: Instance>(n: u32) -> Result<(), &'s
 	Ok(())
 }
 
+// Create bounties that are approved for use in `on_initialize`.
+fn create_approved_bounties<T: Trait<I>, I: Instance>(n: u32) -> Result<(), &'static str> {
+	for i in 0 .. n {
+		let (caller, _curator, _fee, value, reason) = setup_bounty::<T, I>(i, MAX_BYTES);
+		Treasury::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
+		let bounty_id = BountyCount::<I>::get() - 1;
+		Treasury::<T, I>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
+	}
+	ensure!(BountyApprovals::<I>::get().len() == n as usize, "Not all bounty approved");
+	Ok(())
+}
+
+// Create the pre-requisite information needed to create a treasury `propose_bounty`.
+fn setup_bounty<T: Trait<I>, I: Instance>(u: u32, d: u32) -> (
+	T::AccountId,
+	T::AccountId,
+	BalanceOf<T, I>,
+	BalanceOf<T, I>,
+	Vec<u8>,
+) {
+	let caller = account("caller", u, SEED);
+	let value: BalanceOf<T, I> = T::BountyValueMinimum::get().saturating_mul(100u32.into());
+	let fee = value / 2u32.into();
+	let deposit = T::BountyDepositBase::get() + T::DataDepositPerByte::get() * MAX_BYTES.into();
+	let _ = T::Currency::make_free_balance_be(&caller, deposit);
+	let curator = account("curator", u, SEED);
+	let _ = T::Currency::make_free_balance_be(&curator, fee / 2u32.into());
+	let reason = vec![0; d as usize];
+	(caller, curator, fee, value, reason)
+}
+
+fn create_bounty<T: Trait<I>, I: Instance>() -> Result<(
+	<T::Lookup as StaticLookup>::Source,
+	BountyIndex,
+), &'static str> {
+	let (caller, curator, fee, value, reason) = setup_bounty::<T, I>(0, MAX_BYTES);
+	let curator_lookup = T::Lookup::unlookup(curator.clone());
+	Treasury::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
+	let bounty_id = BountyCount::<I>::get() - 1;
+	Treasury::<T, I>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
+	Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
+	Treasury::<T, I>::propose_curator(RawOrigin::Root.into(), bounty_id, curator_lookup.clone(), fee)?;
+	Treasury::<T, I>::accept_curator(RawOrigin::Signed(curator).into(), bounty_id)?;
+	Ok((curator_lookup, bounty_id))
+}
+
+fn setup_pod_account<T: Trait<I>, I: Instance>() {
+	let pot_account = Treasury::<T, I>::account_id();
+	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
+	let _ = T::Currency::make_free_balance_be(&pot_account, value);
+}
+
 const MAX_BYTES: u32 = 16384;
 const MAX_TIPPERS: u32 = 100;
 
@@ -116,16 +168,14 @@ benchmarks_instance! {
 	_ { }
 
 	propose_spend {
-		let u in 0 .. 1000;
-		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(u);
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), value, beneficiary_lookup)
 
 	reject_proposal {
-		let u in 0 .. 1000;
-		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(u);
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		Treasury::<T, _>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
@@ -135,8 +185,7 @@ benchmarks_instance! {
 	}: _(RawOrigin::Root, proposal_id)
 
 	approve_proposal {
-		let u in 0 .. 1000;
-		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(u);
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		Treasury::<T, _>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
@@ -154,7 +203,7 @@ benchmarks_instance! {
 	}: _(RawOrigin::Signed(caller), reason, awesome_person)
 
 	retract_tip {
-		let r in 0 .. MAX_BYTES;
+		let r = MAX_BYTES;
 		let (caller, reason, awesome_person) = setup_awesome::<T, _>(r);
 		Treasury::<T, _>::report_awesome(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -181,7 +230,7 @@ benchmarks_instance! {
 	tip {
 		let t in 1 .. MAX_TIPPERS;
 		let (member, reason, beneficiary, value) = setup_tip::<T, _>(0, t)?;
-		let value = T::Currency::minimum_balance().saturating_mul(100.into());
+		let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 		Treasury::<T, _>::tip_new(
 			RawOrigin::Signed(member).into(),
 			reason.clone(),
@@ -202,13 +251,11 @@ benchmarks_instance! {
 		let t in 1 .. MAX_TIPPERS;
 
 		// Make sure pot is funded
-		let pot_account = Treasury::<T, _>::account_id();
-		let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000.into());
-		let _ = T::Currency::make_free_balance_be(&pot_account, value);
+		setup_pod_account::<T, _>();
 
 		// Set up a new tip proposal
 		let (member, reason, beneficiary, value) = setup_tip::<T, _>(0, t)?;
-		let value = T::Currency::minimum_balance().saturating_mul(100.into());
+		let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 		Treasury::<T, _>::tip_new(
 			RawOrigin::Signed(member).into(),
 			reason.clone(),
@@ -228,12 +275,109 @@ benchmarks_instance! {
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), hash)
 
-	on_initialize {
+	propose_bounty {
+		let d in 0 .. MAX_BYTES;
+
+		let (caller, curator, fee, value, description) = setup_bounty::<T, _>(0, d);
+	}: _(RawOrigin::Signed(caller), value, description)
+
+	approve_bounty {
+		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, MAX_BYTES);
+		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
+		let bounty_id = BountyCount::<I>::get() - 1;
+	}: _(RawOrigin::Root, bounty_id)
+
+	propose_curator {
+		setup_pod_account::<T, _>();
+		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, MAX_BYTES);
+		let curator_lookup = T::Lookup::unlookup(curator.clone());
+		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
+		let bounty_id = BountyCount::<I>::get() - 1;
+		Treasury::<T, _>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
+		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+	}: _(RawOrigin::Root, bounty_id, curator_lookup, fee)
+
+	// Worst case when curator is inactive and any sender unassigns the curator.
+	unassign_curator {
+		setup_pod_account::<T, _>();
+		let (curator_lookup, bounty_id) = create_bounty::<T, _>()?;
+		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+		let bounty_id = BountyCount::<I>::get() - 1;
+		frame_system::Module::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
+		let caller = whitelisted_caller();
+	}: _(RawOrigin::Signed(caller), bounty_id)
+
+	accept_curator {
+		setup_pod_account::<T, _>();
+		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, MAX_BYTES);
+		let curator_lookup = T::Lookup::unlookup(curator.clone());
+		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
+		let bounty_id = BountyCount::<I>::get() - 1;
+		Treasury::<T, _>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
+		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T, _>::propose_curator(RawOrigin::Root.into(), bounty_id, curator_lookup, fee)?;
+	}: _(RawOrigin::Signed(curator), bounty_id)
+
+	award_bounty {
+		setup_pod_account::<T, _>();
+		let (curator_lookup, bounty_id) = create_bounty::<T, _>()?;
+		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+
+		let bounty_id = BountyCount::<I>::get() - 1;
+		let curator = T::Lookup::lookup(curator_lookup)?;
+		let beneficiary = T::Lookup::unlookup(account("beneficiary", 0, SEED));
+	}: _(RawOrigin::Signed(curator), bounty_id, beneficiary)
+
+	claim_bounty {
+		setup_pod_account::<T, _>();
+		let (curator_lookup, bounty_id) = create_bounty::<T, _>()?;
+		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+
+		let bounty_id = BountyCount::<I>::get() - 1;
+		let curator = T::Lookup::lookup(curator_lookup)?;
+
+		let beneficiary = T::Lookup::unlookup(account("beneficiary", 0, SEED));
+		Treasury::<T, _>::award_bounty(RawOrigin::Signed(curator.clone()).into(), bounty_id, beneficiary)?;
+
+		frame_system::Module::<T>::set_block_number(T::BountyDepositPayoutDelay::get());
+
+	}: _(RawOrigin::Signed(curator), bounty_id)
+
+	close_bounty_proposed {
+		setup_pod_account::<T, _>();
+		let (caller, curator, fee, value, reason) = setup_bounty::<T, _>(0, 0);
+		Treasury::<T, _>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
+		let bounty_id = BountyCount::<I>::get() - 1;
+	}: close_bounty(RawOrigin::Root, bounty_id)
+
+	close_bounty_active {
+		setup_pod_account::<T, _>();
+		let (curator_lookup, bounty_id) = create_bounty::<T, _>()?;
+		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+		let bounty_id = BountyCount::<I>::get() - 1;
+	}: close_bounty(RawOrigin::Root, bounty_id)
+
+	extend_bounty_expiry {
+		setup_pod_account::<T, _>();
+		let (curator_lookup, bounty_id) = create_bounty::<T, _>()?;
+		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+
+		let bounty_id = BountyCount::<I>::get() - 1;
+		let curator = T::Lookup::lookup(curator_lookup)?;
+	}: _(RawOrigin::Signed(curator), bounty_id, Vec::new())
+
+	on_initialize_proposals {
 		let p in 0 .. 100;
-		let pot_account = Treasury::<T, _>::account_id();
-		let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000.into());
-		let _ = T::Currency::make_free_balance_be(&pot_account, value);
+		setup_pod_account::<T, _>();
 		create_approved_proposals::<T, _>(p)?;
+	}: {
+		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+	}
+
+	on_initialize_bounties {
+		let b in 0 .. 100;
+		setup_pod_account::<T, _>();
+		create_approved_bounties::<T, _>(b)?;
 	}: {
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 	}
@@ -256,7 +400,18 @@ mod tests {
 			assert_ok!(test_benchmark_tip_new::<Test>());
 			assert_ok!(test_benchmark_tip::<Test>());
 			assert_ok!(test_benchmark_close_tip::<Test>());
-			assert_ok!(test_benchmark_on_initialize::<Test>());
+			assert_ok!(test_benchmark_propose_bounty::<Test>());
+			assert_ok!(test_benchmark_approve_bounty::<Test>());
+			assert_ok!(test_benchmark_propose_curator::<Test>());
+			assert_ok!(test_benchmark_unassign_curator::<Test>());
+			assert_ok!(test_benchmark_accept_curator::<Test>());
+			assert_ok!(test_benchmark_award_bounty::<Test>());
+			assert_ok!(test_benchmark_claim_bounty::<Test>());
+			assert_ok!(test_benchmark_close_bounty_proposed::<Test>());
+			assert_ok!(test_benchmark_close_bounty_active::<Test>());
+			assert_ok!(test_benchmark_extend_bounty_expiry::<Test>());
+			assert_ok!(test_benchmark_on_initialize_proposals::<Test>());
+			assert_ok!(test_benchmark_on_initialize_bounties::<Test>());
 		});
 	}
 }

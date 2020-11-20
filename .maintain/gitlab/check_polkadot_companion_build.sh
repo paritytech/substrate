@@ -90,4 +90,5 @@ $CARGO_HOME/bin/diener --substrate --branch $CI_COMMIT_REF_NAME --git https://gi
 cd polkadot
 
 # Test Polkadot pr or master branch with this Substrate commit.
-time cargo test --all --release --verbose
+cargo update -p sp-io
+time cargo test --all --release --verbose --features=real-overseer

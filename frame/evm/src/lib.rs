@@ -15,7 +15,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! EVM execution module for Substrate
+//! # EVM Module
+//!
+//! The EVM module allows unmodified EVM code to be executed in a Substrate-based blockchain.
+//! - [`evm::Trait`]
+//!
+//! ## EVM Engine
+//!
+//! The EVM module uses [`SputnikVM`](https://github.com/rust-blockchain/evm) as the underlying EVM engine.
+//! The engine is overhauled so that it's [`modular`](https://github.com/corepaper/evm).
+//!
+//! ## Execution Lifecycle
+//!
+//! There are a separate set of accounts managed by the EVM module. Substrate based accounts can call the EVM Module
+//! to deposit or withdraw balance from the Substrate base-currency into a different balance managed and used by
+//! the EVM module. Once a user has populated their balance, they can create and call smart contracts using this module.
+//!
+//! There's one-to-one mapping from Substrate accounts and EVM external accounts that is defined by a conversion function.
+//!
+//! ## EVM Module vs Ethereum Network
+//!
+//! The EVM module should be able to produce nearly identical results compared to the Ethereum mainnet,
+//! including gas cost and balance changes.
+//!
+//! Observable differences include:
+//!
+//! - The available length of block hashes may not be 256 depending on the configuration of the System module
+//! in the Substrate runtime.
+//! - Difficulty and coinbase, which do not make sense in this module and is currently hard coded to zero.
+//!
+//! We currently do not aim to make unobservable behaviors, such as state root, to be the same. We also don't aim to follow
+//! the exact same transaction / receipt format. However, given one Ethereum transaction and one Substrate account's
+//! private key, one should be able to convert any Ethereum transaction into a transaction compatible with this module.
+//!
+//! The gas configurations are configurable. Right now, a pre-defined Istanbul hard fork configuration option is provided.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -337,10 +370,10 @@ decl_module! {
 				nonce,
 				true,
 			)? {
-				(ExitReason::Succeed(_), _, _) => {
+				(ExitReason::Succeed(_), _, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::Executed(target));
 				},
-				(_, _, _) => {
+				(_, _, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::ExecutedFailed(target));
 				},
 			}
@@ -371,10 +404,10 @@ decl_module! {
 				nonce,
 				true,
 			)? {
-				(ExitReason::Succeed(_), create_address, _) => {
+				(ExitReason::Succeed(_), create_address, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::Created(create_address));
 				},
-				(_, create_address, _) => {
+				(_, create_address, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
 				},
 			}
@@ -406,10 +439,10 @@ decl_module! {
 				nonce,
 				true,
 			)? {
-				(ExitReason::Succeed(_), create_address, _) => {
+				(ExitReason::Succeed(_), create_address, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::Created(create_address));
 				},
-				(_, create_address, _) => {
+				(_, create_address, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
 				},
 			}
@@ -485,7 +518,7 @@ impl<T: Trait> Module<T> {
 		gas_price: U256,
 		nonce: Option<U256>,
 		apply_state: bool,
-	) -> Result<(ExitReason, H160, U256), Error<T>> {
+	) -> Result<(ExitReason, H160, U256, Vec<Log>), Error<T>> {
 		Self::execute_evm(
 			source,
 			value,
@@ -517,7 +550,7 @@ impl<T: Trait> Module<T> {
 		gas_price: U256,
 		nonce: Option<U256>,
 		apply_state: bool,
-	) -> Result<(ExitReason, H160, U256), Error<T>> {
+	) -> Result<(ExitReason, H160, U256, Vec<Log>), Error<T>> {
 		let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
 		Self::execute_evm(
 			source,
@@ -551,7 +584,7 @@ impl<T: Trait> Module<T> {
 		gas_price: U256,
 		nonce: Option<U256>,
 		apply_state: bool,
-	) -> Result<(ExitReason, Vec<u8>, U256), Error<T>> {
+	) -> Result<(ExitReason, Vec<u8>, U256, Vec<Log>), Error<T>> {
 		Self::execute_evm(
 			source,
 			value,
@@ -578,7 +611,7 @@ impl<T: Trait> Module<T> {
 		nonce: Option<U256>,
 		apply_state: bool,
 		f: F,
-	) -> Result<(ExitReason, R, U256), Error<T>> where
+	) -> Result<(ExitReason, R, U256, Vec<Log>), Error<T>> where
 		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (ExitReason, R),
 	{
 
@@ -627,11 +660,19 @@ impl<T: Trait> Module<T> {
 		);
 		executor.deposit(source, total_fee.saturating_sub(actual_fee));
 
+		let (values, logs) = executor.deconstruct();
+		let logs_data = logs.into_iter().map(|x| x ).collect::<Vec<_>>();
+		let logs_result = logs_data.clone().into_iter().map(|it| {
+			Log {
+				address: it.address,
+				topics: it.topics,
+				data: it.data
+			}
+		}).collect();
 		if apply_state {
-			let (values, logs) = executor.deconstruct();
-			backend.apply(values, logs, true);
+			backend.apply(values, logs_data, true);
 		}
 
-		Ok((retv, reason, used_gas))
+		Ok((retv, reason, used_gas, logs_result))
 	}
 }

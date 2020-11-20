@@ -41,7 +41,7 @@ use libp2p::{
 };
 use prometheus_endpoint::Registry;
 use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
-use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
+use sp_runtime::traits::Block as BlockT;
 use std::{borrow::Cow, convert::TryFrom, future::Future, pin::Pin, str::FromStr};
 use std::{
 	collections::HashMap,
@@ -281,21 +281,8 @@ pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 /// Splits a Multiaddress into a Multiaddress and PeerId.
 pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
-		Some(multiaddr::Protocol::P2p(key)) => {
-			if !matches!(key.algorithm(), multiaddr::multihash::Code::Identity) {
-				// (note: this is the "person bowing" emoji)
-				log::warn!(
-					"🙇 You are using the peer ID {}. This peer ID uses a legacy, deprecated \
-					representation that will no longer be supported in the future. \
-					Please refresh it by performing a RPC query to the appropriate node, \
-					by looking at its logs, or by using `subkey inspect-node-key` on its \
-					private key.",
-					bs58::encode(key.as_bytes()).into_string()
-				);
-			}
-
-			PeerId::from_multihash(key).map_err(|_| ParseErr::InvalidPeerId)?
-		},
+		Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
+			.map_err(|_| ParseErr::InvalidPeerId)?,
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
 
@@ -413,9 +400,8 @@ pub struct NetworkConfiguration {
 	pub boot_nodes: Vec<MultiaddrWithPeerId>,
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
-	/// List of notifications protocols that the node supports. Must also include a
-	/// `ConsensusEngineId` for backwards-compatibility.
-	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
+	/// List of names of notifications protocols that the node supports.
+	pub notifications_protocols: Vec<Cow<'static, str>>,
 	/// List of request-response protocols that the node supports.
 	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// Maximum allowed number of incoming connections.
@@ -436,6 +422,9 @@ pub struct NetworkConfiguration {
 	pub max_parallel_downloads: u32,
 	/// Should we insert non-global addresses into the DHT?
 	pub allow_non_globals_in_dht: bool,
+	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in the
+	/// presence of potentially adversarial nodes.
+	pub kademlia_disjoint_query_paths: bool,
 }
 
 impl NetworkConfiguration {
@@ -464,10 +453,10 @@ impl NetworkConfiguration {
 				enable_mdns: false,
 				allow_private_ipv4: true,
 				wasm_external_transport: None,
-				use_yamux_flow_control: false,
 			},
 			max_parallel_downloads: 5,
 			allow_non_globals_in_dht: false,
+			kademlia_disjoint_query_paths: false,
 		}
 	}
 
@@ -532,8 +521,6 @@ pub enum TransportConfig {
 		/// This parameter exists whatever the target platform is, but it is expected to be set to
 		/// `Some` only when compiling for WASM.
 		wasm_external_transport: Option<wasm_ext::ExtTransport>,
-		/// Use flow control for yamux streams if set to true.
-		use_yamux_flow_control: bool,
 	},
 
 	/// Only allow connections within the same process.

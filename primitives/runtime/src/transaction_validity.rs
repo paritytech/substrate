@@ -98,7 +98,7 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::BadProof => "Transaction has a bad signature",
 			InvalidTransaction::AncientBirthBlock => "Transaction has an ancient birth block",
 			InvalidTransaction::ExhaustsResources =>
-				"Transaction would exhausts the block limits",
+				"Transaction would exhaust the block limits",
 			InvalidTransaction::Payment =>
 				"Inability to pay some fees (e.g. account balance too low)",
 			InvalidTransaction::BadMandatory =>
@@ -181,6 +181,21 @@ impl From<InvalidTransaction> for TransactionValidityError {
 impl From<UnknownTransaction> for TransactionValidityError {
 	fn from(err: UnknownTransaction) -> Self {
 		TransactionValidityError::Unknown(err)
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for TransactionValidityError {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		None
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for TransactionValidityError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s: &'static str = (*self).into();
+		write!(f, "{}", s)
 	}
 }
 

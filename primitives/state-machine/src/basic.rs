@@ -18,7 +18,7 @@
 //! Basic implementation for Externalities.
 
 use std::{
-	collections::BTreeMap, any::{TypeId, Any}, iter::FromIterator, ops::Bound
+	collections::BTreeMap, any::{TypeId, Any}, iter::FromIterator, ops::Bound,
 };
 use crate::{Backend, StorageKey, StorageValue};
 use hash_db::Hasher;
@@ -348,10 +348,11 @@ impl sp_externalities::ExtensionStore for BasicExternalities {
 	}
 
 	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
-		self.extensions
-			.deregister(type_id)
-			.ok_or(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
-			.map(drop)
+		if self.extensions.deregister(type_id) {
+			Ok(())
+		} else {
+			Err(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
+		}
 	}
 }
 

@@ -16,18 +16,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use log::{debug, warn};
-use parity_scale_codec::{Decode, Encode};
 use futures::prelude::*;
 use futures_timer::Delay;
+use log::{debug, warn};
+use parity_scale_codec::{Decode, Encode};
 use parking_lot::RwLock;
-use std::marker::PhantomData;
 
 use sc_client_api::{backend::{Backend, apply_aux}, utils::is_descendent_of};
 use finality_grandpa::{
@@ -42,8 +42,8 @@ use sp_runtime::traits::{
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use crate::{
-	CommandOrError, Commit, Config, Error, Precommit, Prevote,
-	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
+	local_authority_id, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
+	PrimaryPropose, SignedMessage, VoterCommand,
 };
 
 use sp_consensus::SelectChain;
@@ -331,7 +331,11 @@ impl<Block: BlockT> HasVoted<Block> {
 /// A voter set state meant to be shared safely across multiple owners.
 #[derive(Clone)]
 pub struct SharedVoterSetState<Block: BlockT> {
+	/// The inner shared `VoterSetState`.
 	inner: Arc<RwLock<VoterSetState<Block>>>,
+	/// A tracker for the rounds that we are actively participating on (i.e. voting)
+	/// and the authority id under which we are doing it.
+	voting: Arc<RwLock<HashMap<RoundNumber, AuthorityId>>>,
 }
 
 impl<Block: BlockT> From<VoterSetState<Block>> for SharedVoterSetState<Block> {
@@ -343,12 +347,32 @@ impl<Block: BlockT> From<VoterSetState<Block>> for SharedVoterSetState<Block> {
 impl<Block: BlockT> SharedVoterSetState<Block> {
 	/// Create a new shared voter set tracker with the given state.
 	pub(crate) fn new(state: VoterSetState<Block>) -> Self {
-		SharedVoterSetState { inner: Arc::new(RwLock::new(state)) }
+		SharedVoterSetState {
+			inner: Arc::new(RwLock::new(state)),
+			voting: Arc::new(RwLock::new(HashMap::new())),
+		}
 	}
 
 	/// Read the inner voter set state.
 	pub(crate) fn read(&self) -> parking_lot::RwLockReadGuard<VoterSetState<Block>> {
 		self.inner.read()
+	}
+
+	/// Get the authority id that we are using to vote on the given round, if any.
+	pub(crate) fn voting_on(&self, round: RoundNumber) -> Option<AuthorityId> {
+		self.voting.read().get(&round).cloned()
+	}
+
+	/// Note that we started voting on the give round with the given authority id.
+	pub(crate) fn started_voting_on(&self, round: RoundNumber, local_id: AuthorityId) {
+		self.voting.write().insert(round, local_id);
+	}
+
+	/// Note that we have finished voting on the given round. If we were voting on
+	/// the given round, the authority id that we were using to do it will be
+	/// cleared.
+	pub(crate) fn finished_voting_on(&self, round: RoundNumber) {
+		self.voting.write().remove(&round);
 	}
 
 	/// Return vote status information for the current round.
@@ -467,10 +491,18 @@ where
 	/// extrinsic to report the equivocation. In particular, the session membership
 	/// proof must be generated at the block at which the given set was active which
 	/// isn't necessarily the best block if there are pending authority set changes.
-	fn report_equivocation(
+	pub(crate) fn report_equivocation(
 		&self,
 		equivocation: Equivocation<Block::Hash, NumberFor<Block>>,
 	) -> Result<(), Error> {
+		if let Some(local_id) = self.voter_set_state.voting_on(equivocation.round_number()) {
+			if *equivocation.offender() == local_id {
+				return Err(Error::Safety(
+					"Refraining from sending equivocation report for our own equivocation.".into(),
+				));
+			}
+		}
+
 		let is_descendent_of = is_descendent_of(&*self.client, None);
 
 		let best_header = self.select_chain
@@ -724,11 +756,11 @@ where
 		let prevote_timer = Delay::new(self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(self.config.gossip_duration * 4);
 
-		let local_key = crate::is_voter(&self.voters, self.config.keystore.as_ref());
+		let local_id = local_authority_id(&self.voters, self.config.keystore.as_ref());
 
 		let has_voted = match self.voter_set_state.has_voted(round) {
 			HasVoted::Yes(id, vote) => {
-				if local_key.as_ref().map(|k| k == &id).unwrap_or(false) {
+				if local_id.as_ref().map(|k| k == &id).unwrap_or(false) {
 					HasVoted::Yes(id, vote)
 				} else {
 					HasVoted::No
@@ -737,9 +769,20 @@ where
 			HasVoted::No => HasVoted::No,
 		};
 
+		// NOTE: we cache the local authority id that we'll be using to vote on the
+		// given round. this is done to make sure we only check for available keys
+		// from the keystore in this method when beginning the round, otherwise if
+		// the keystore state changed during the round (e.g. a key was removed) it
+		// could lead to internal state inconsistencies in the voter environment
+		// (e.g. we wouldn't update the voter set state after prevoting since there's
+		// no local authority id).
+		if let Some(id) = local_id.as_ref() {
+			self.voter_set_state.started_voting_on(round, id.clone());
+		}
+
 		// we can only sign when we have a local key in the authority set
 		// and we have a reference to the keystore.
-		let keystore = match (local_key.as_ref(), self.config.keystore.as_ref()) {
+		let keystore = match (local_id.as_ref(), self.config.keystore.as_ref()) {
 			(Some(id), Some(keystore)) => Some((id.clone(), keystore.clone()).into()),
 			_ => None,
 		};
@@ -767,7 +810,7 @@ where
 		let outgoing = Box::pin(outgoing.sink_err_into());
 
 		voter::RoundData {
-			voter_id: local_key,
+			voter_id: local_id,
 			prevote_timer: Box::pin(prevote_timer.map(Ok)),
 			precommit_timer: Box::pin(precommit_timer.map(Ok)),
 			incoming,
@@ -775,10 +818,12 @@ where
 		}
 	}
 
-	fn proposed(&self, round: RoundNumber, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
-
-		let local_id = match local_id {
+	fn proposed(
+		&self,
+		round: RoundNumber,
+		propose: PrimaryPropose<Block>,
+	) -> Result<(), Self::Error> {
+		let local_id = match self.voter_set_state.voting_on(round) {
 			Some(id) => id,
 			None => return Ok(()),
 		};
@@ -815,9 +860,7 @@ where
 	}
 
 	fn prevoted(&self, round: RoundNumber, prevote: Prevote<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
-
-		let local_id = match local_id {
+		let local_id = match self.voter_set_state.voting_on(round) {
 			Some(id) => id,
 			None => return Ok(()),
 		};
@@ -876,9 +919,7 @@ where
 		round: RoundNumber,
 		precommit: Precommit<Block>,
 	) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
-
-		let local_id = match local_id {
+		let local_id = match self.voter_set_state.voting_on(round) {
 			Some(id) => id,
 			None => return Ok(()),
 		};
@@ -1001,6 +1042,9 @@ where
 
 			Ok(Some(set_state))
 		})?;
+
+		// clear any cached local authority id associated with this round
+		self.voter_set_state.finished_voting_on(round);
 
 		Ok(())
 	}
@@ -1157,9 +1201,9 @@ where
 	let status = client.info();
 
 	if number <= status.finalized_number && client.hash(number)? == Some(hash) {
-		// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
-		// the voter will be restarted at the median last finalized block, which can be lower than the local best
-		// finalized block.
+		// This can happen after a forced change (triggered manually from the runtime when
+		// finality is stalled), since the voter will be restarted at the median last finalized
+		// block, which can be lower than the local best finalized block.
 		warn!(target: "afg", "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
 				hash,
 				number,

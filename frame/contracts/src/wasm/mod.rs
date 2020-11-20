@@ -19,7 +19,7 @@
 
 use crate::{CodeHash, Schedule, Trait};
 use crate::wasm::env_def::FunctionImplProvider;
-use crate::exec::{Ext, ExecResult};
+use crate::exec::Ext;
 use crate::gas::GasMeter;
 
 use sp_std::prelude::*;
@@ -34,8 +34,11 @@ mod runtime;
 
 use self::runtime::{to_execution_result, Runtime};
 use self::code_cache::load as load_code;
+use pallet_contracts_primitives::ExecResult;
 
 pub use self::code_cache::save as save_code;
+#[cfg(feature = "runtime-benchmarks")]
+pub use self::code_cache::save_raw as save_code_raw;
 pub use self::runtime::ReturnCode;
 
 /// A prepared wasm module ready for execution.
@@ -64,17 +67,17 @@ pub struct WasmExecutable {
 }
 
 /// Loader which fetches `WasmExecutable` from the code cache.
-pub struct WasmLoader<'a> {
-	schedule: &'a Schedule,
+pub struct WasmLoader<'a, T: Trait> {
+	schedule: &'a Schedule<T>,
 }
 
-impl<'a> WasmLoader<'a> {
-	pub fn new(schedule: &'a Schedule) -> Self {
+impl<'a, T: Trait> WasmLoader<'a, T> {
+	pub fn new(schedule: &'a Schedule<T>) -> Self {
 		WasmLoader { schedule }
 	}
 }
 
-impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a> {
+impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a, T> {
 	type Executable = WasmExecutable;
 
 	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
@@ -94,17 +97,17 @@ impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a> {
 }
 
 /// Implementation of `Vm` that takes `WasmExecutable` and executes it.
-pub struct WasmVm<'a> {
-	schedule: &'a Schedule,
+pub struct WasmVm<'a, T: Trait> {
+	schedule: &'a Schedule<T>,
 }
 
-impl<'a> WasmVm<'a> {
-	pub fn new(schedule: &'a Schedule) -> Self {
+impl<'a, T: Trait> WasmVm<'a, T> {
+	pub fn new(schedule: &'a Schedule<T>) -> Self {
 		WasmVm { schedule }
 	}
 }
 
-impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
+impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T> {
 	type Executable = WasmExecutable;
 
 	fn execute<E: Ext<T = T>>(
@@ -153,7 +156,7 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use sp_core::H256;
-	use crate::exec::{Ext, StorageKey, ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
+	use crate::exec::{Ext, StorageKey};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
@@ -161,6 +164,8 @@ mod tests {
 	use hex_literal::hex;
 	use sp_runtime::DispatchError;
 	use frame_support::weights::Weight;
+	use assert_matches::assert_matches;
+	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
 
 	const GAS_LIMIT: Gas = 10_000_000_000;
 
@@ -186,7 +191,6 @@ mod tests {
 	#[derive(Debug, PartialEq, Eq)]
 	struct TerminationEntry {
 		beneficiary: u64,
-		gas_left: u64,
 	}
 
 	#[derive(Debug, PartialEq, Eq)]
@@ -194,7 +198,6 @@ mod tests {
 		to: u64,
 		value: u64,
 		data: Vec<u8>,
-		gas_left: u64,
 	}
 
 	#[derive(Default)]
@@ -247,13 +250,11 @@ mod tests {
 			&mut self,
 			to: &u64,
 			value: u64,
-			gas_meter: &mut GasMeter<Test>,
 		) -> Result<(), DispatchError> {
 			self.transfers.push(TransferEntry {
 				to: *to,
 				value,
 				data: Vec::new(),
-				gas_left: gas_meter.gas_left(),
 			});
 			Ok(())
 		}
@@ -261,14 +262,13 @@ mod tests {
 			&mut self,
 			to: &u64,
 			value: u64,
-			gas_meter: &mut GasMeter<Test>,
+			_gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
 		) -> ExecResult {
 			self.transfers.push(TransferEntry {
 				to: *to,
 				value,
 				data: data,
-				gas_left: gas_meter.gas_left(),
 			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
@@ -277,11 +277,9 @@ mod tests {
 		fn terminate(
 			&mut self,
 			beneficiary: &u64,
-			gas_meter: &mut GasMeter<Test>,
 		) -> Result<(), DispatchError> {
 			self.terminations.push(TerminationEntry {
 				beneficiary: *beneficiary,
-				gas_left: gas_meter.gas_left(),
 			});
 			Ok(())
 		}
@@ -372,16 +370,14 @@ mod tests {
 			&mut self,
 			to: &u64,
 			value: u64,
-			gas_meter: &mut GasMeter<Test>,
 		) -> Result<(), DispatchError> {
-			(**self).transfer(to, value, gas_meter)
+			(**self).transfer(to, value)
 		}
 		fn terminate(
 			&mut self,
 			beneficiary: &u64,
-			gas_meter: &mut GasMeter<Test>,
 		) -> Result<(), DispatchError> {
-			(**self).terminate(beneficiary, gas_meter)
+			(**self).terminate(beneficiary)
 		}
 		fn call(
 			&mut self,
@@ -461,7 +457,7 @@ mod tests {
 		let wasm = wat::parse_str(wat).unwrap();
 		let schedule = crate::Schedule::default();
 		let prefab_module =
-			prepare_contract::<super::runtime::Env>(&wasm, &schedule).unwrap();
+			prepare_contract::<super::runtime::Env, E::T>(&wasm, &schedule).unwrap();
 
 		let exec = WasmExecutable {
 			// Use a "call" convention.
@@ -523,7 +519,6 @@ mod tests {
 				to: 7,
 				value: 153,
 				data: Vec::new(),
-				gas_left: 9989000000,
 			}]
 		);
 	}
@@ -587,7 +582,6 @@ mod tests {
 				to: 9,
 				value: 6,
 				data: vec![1, 2, 3, 4],
-				gas_left: 9984500000,
 			}]
 		);
 	}
@@ -652,14 +646,14 @@ mod tests {
 			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
-		assert_eq!(
-			&mock_ext.instantiates,
-			&[InstantiateEntry {
-				code_hash: [0x11; 32].into(),
+		assert_matches!(
+			&mock_ext.instantiates[..],
+			[InstantiateEntry {
+				code_hash,
 				endowment: 3,
-				data: vec![1, 2, 3, 4],
-				gas_left: 9971500000,
-			}]
+				data,
+				gas_left: _,
+			}] if code_hash == &[0x11; 32].into() && data == &vec![1, 2, 3, 4]
 		);
 	}
 
@@ -699,7 +693,6 @@ mod tests {
 			&mock_ext.terminations,
 			&[TerminationEntry {
 				beneficiary: 0x09,
-				gas_left: 9994500000,
 			}]
 		);
 	}
@@ -763,7 +756,6 @@ mod tests {
 				to: 9,
 				value: 6,
 				data: vec![1, 2, 3, 4],
-				gas_left: 228,
 			}]
 		);
 	}
@@ -1372,7 +1364,7 @@ mod tests {
 
 	;; size of our buffer is 128 bytes
 	(data (i32.const 160) "\80")
-	
+
 	(func $assert (param i32)
 		(block $ok
 			(br_if $ok
@@ -1470,7 +1462,7 @@ mod tests {
 			vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00])
 		]);
 
-		assert_eq!(gas_meter.gas_left(), 9967000000);
+		assert!(gas_meter.gas_left() > 0);
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"

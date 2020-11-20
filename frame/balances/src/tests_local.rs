@@ -31,6 +31,7 @@ use frame_support::traits::{Get, StorageMapShim};
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInfo};
+use pallet_transaction_payment::CurrencyAdapter;
 
 use frame_system as system;
 impl_outer_origin!{
@@ -87,7 +88,7 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
-	type ModuleToIndex = ();
+	type PalletInfo = ();
 	type AccountData = super::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = Module<Test>;
@@ -97,11 +98,13 @@ parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
 impl pallet_transaction_payment::Trait for Test {
-	type Currency = Module<Test>;
-	type OnTransactionPayment = ();
+	type OnChargeTransaction = CurrencyAdapter<Module<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
+}
+parameter_types! {
+	pub const MaxLocks: u32 = 50;
 }
 impl Trait for Test {
 	type Balance = u64;
@@ -114,6 +117,7 @@ impl Trait for Test {
 		system::CallKillAccount<Test>,
 		u64, super::AccountData<u64>
 	>;
+	type MaxLocks = MaxLocks;
 	type WeightInfo = ();
 }
 

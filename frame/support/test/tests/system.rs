@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::codec::{Encode, Decode, EncodeLike};
+use frame_support::{
+	codec::{Encode, Decode, EncodeLike}, traits::Get, weights::RuntimeDbWeight,
+};
 
 pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
@@ -27,11 +29,15 @@ pub trait Trait: 'static + Eq + Clone {
 	type AccountId: Encode + EncodeLike + Decode;
 	type Call;
 	type Event: From<Event<Self>>;
-	type ModuleToIndex: frame_support::traits::ModuleToIndex;
+	type PalletInfo: frame_support::traits::PalletInfo;
+	type DbWeight: Get<RuntimeDbWeight>;
 }
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
+		#[weight = 0]
+		fn noop(origin) {}
+	}
 }
 
 impl<T: Trait> Module<T> {

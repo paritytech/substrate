@@ -278,6 +278,15 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.unwrap_or_default())
 	}
 
+	/// Get the path where WASM overrides live.
+	///
+	/// By default this is `None`.
+	fn wasm_runtime_overrides(&self) -> Option<PathBuf> {
+		self.import_params()
+			.map(|x| x.wasm_runtime_overrides())
+			.unwrap_or_default()
+	}
+
 	/// Get the execution strategies.
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
@@ -492,6 +501,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			pruning: self.pruning(unsafe_pruning, &role)?,
 			wasm_method: self.wasm_method()?,
+			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
 			rpc_http: self.rpc_http(DCV::rpc_http_listen_port())?,
 			rpc_ws: self.rpc_ws(DCV::rpc_ws_listen_port())?,
@@ -528,7 +538,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.shared_params().log_filters().join(","))
 	}
 
-	/// Initialize substrate. This must be done only once.
+	/// Initialize substrate. This must be done only once per process.
 	///
 	/// This method:
 	///
@@ -537,10 +547,14 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// 3. Raises the FD limit
 	fn init<C: SubstrateCli>(&self) -> Result<()> {
 		let logger_pattern = self.log_filters()?;
+		let tracing_receiver = self.tracing_receiver()?;
+		let tracing_targets = self.tracing_targets()?;
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		init_logger(&logger_pattern);
+		if let Err(e) = init_logger(&logger_pattern, tracing_receiver, tracing_targets) {
+			log::warn!("💬 Problem initializing global logging framework: {:}", e)
+		}
 
 		if let Some(new_limit) = fdlimit::raise_fd_limit() {
 			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {
