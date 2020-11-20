@@ -68,6 +68,7 @@ members = [
 	"frame/benchmarking",
 	"frame/benchmark",
 	"frame/collective",
+	"frame/comment",
 	"frame/contracts",
 	"frame/contracts/rpc",
 	"frame/contracts/rpc/runtime-api",

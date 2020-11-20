@@ -49,7 +49,7 @@ pub trait Trait: frame_system::Trait {
 
 	type ByteTax: Get<BalanceOf<Self>>;
 
-	type MaxKeyLength: Get<usize>;
+	type MaxTopicLength: Get<usize>;
 
 	type MaxCommentLength: Get<usize>;
 
@@ -69,17 +69,23 @@ struct Tax<Balance> {
 	pub per_byte: Balance,
 }
 
+pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
-		CommentCreated(AccountId, Vec);
-		CommentRemoved(AccountId, Key);
+		CommentCreated(AccountId, Vec<u8>),
+		CommentRemoved(AccountId, Vec<u8>),
 	}
 );
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Sudo {
-		/// The `AccountId` of the sudo key.
-		Comments fn(comments): double_map hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) Vec<u8>
+	trait Store for Module<T: Trait> as Comment {
+		/// Comments: User -> Topic -> Message
+		Comments get(fn comment): double_map hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) Vec<u8>
+			=> Option<Comment<BalanceOf<T>, T::BlockNumber>>;
+
+		/// Threads: Topic -> User -> Message
+		Threads get(fn thread): double_map hasher(blake2_128_concat) Vec<u8>, hasher(twox_64_concat) T::AccountId
 			=> Option<Comment<BalanceOf<T>, T::BlockNumber>>;
 
 		/// The tax rate per byte for data stored on chain.
@@ -90,7 +96,7 @@ decl_storage! {
 decl_error! {
 	/// Error for the Sudo module
 	pub enum Error for Module<T: Trait> {
-		KeyTooLarge,
+		TopicTooLarge,
 		ValueTooLarge,
 		NotFound,
 		CannotRemove,
@@ -105,15 +111,15 @@ decl_module! {
 		fn deposit_event() = default;
 
 		#[weight = 0]
-		fn comment(origin, key: Vec<u8>, value: Vec<u8>, extra_deposit: BalanceOf<T>) {
+		fn comment(origin, topic: Vec<u8>, value: Vec<u8>, extra_deposit: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 
-			let key_len = key.len();
-			ensure(key_len <= T::MaxKeyLength::get(), Error::<T>::KeyTooLarge);
+			let topic_len = topic.len();
+			ensure(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
 			let value_len = value.len();
-			ensure(key_len <= T::MaxKeyLength::get(), Error::<T>::ValueTooLarge);
+			ensure(topic_len <= T::MaxTopicLength::get(), Error::<T>::ValueTooLarge);
 
-			let deposit = T::ByteFee::get().saturating_mul(key_len.saturating_add(value_len));
+			let deposit = T::ByteFee::get().saturating_mul(topic_len.saturating_add(value_len));
 			T::Currency::reserve(sender, deposit)?;
 
 			let block_number = frame_system::Module::<T>::block_number();
@@ -124,19 +130,19 @@ decl_module! {
 				tax_rate,
 				comment: value,
 			};
-			Comments::<T>::insert(sender, key, comment);
+			Comments::<T>::insert(sender, topic, comment);
 
-			Self::deposit_event(RawEvent::CommentCreated(sender, key))
+			Self::deposit_event(RawEvent::CommentCreated(sender, topic))
 		}
 
 		#[weight = 0]
-		fn remove_comment(origin, who: T::AccountId, key: Vec<u8>) {
+		fn remove_comment(origin, who: T::AccountId, topic: Vec<u8>) {
 			let sender = ensure_signed(origin)?;
 
-			let key_len = key.len();
-			ensure(key_len <= T::MaxKeyLength::get(), Error::<T>::KeyTooLarge);
+			let topic_len = topic.len();
+			ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
 
-			let { deposit, block_number, comment } = Self::comments(&who, &key).unwrap_or(Error::<T>::NotFound)?;
+			let Comment { deposit, block_number, comment } = Self::comments(&who, &topic).unwrap_or(Error::<T>::NotFound)?;
 			let taxes = Self::taxes();
 
 			let tax = (taxes.base.saturating_add(taxes.per_byte.saturating_mul(comment.len())))
@@ -149,19 +155,19 @@ decl_module! {
 			// Comment will be removed. Actions are always the same.
 			T::Currency::repatriate_reserved(who, sender, remaining_deposit, Status::Free);
 			T::Currency::repatriate_reserved(who, T::BurnDestination::get(), tax, Status::Free);
-			Comments::<T>::remove(who, key);
-			Self::deposit_event(RawEvent::CommentRemoved(who, key));
+			Comments::<T>::remove(who, topic);
+			Self::deposit_event(RawEvent::CommentRemoved(who, topic));
 		}
 
 		#[weight = 0]
-		fn increase_deposit(origin, who: T::AccountId, key: Vec<u8>, extra_deposit: BalanceOf<T>) {
-			let sender = ensure_signed(origin)?
+		fn increase_deposit(origin, who: T::AccountId, topic: Vec<u8>, extra_deposit: BalanceOf<T>) {
+			let sender = ensure_signed(origin)?;
 
-			let key_len = key.len();
-			ensure(key_len <= T::MaxKeyLength::get(), Error::<T>::KeyTooLarge);
+			let topic_len = topic.len();
+			ensure(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
 
-			Comments::<T>::try_mutate(who, key, |mut comment| {
-				T::Currency::transfer(sender, who, )
+			Comments::<T>::try_mutate(who, topic, |mut comment| {
+				//T::Currency::transfer(sender, who, )
 			});
 		}
 	}
