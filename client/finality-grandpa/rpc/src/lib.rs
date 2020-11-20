@@ -196,7 +196,7 @@ mod tests {
 	use sc_block_builder::BlockBuilder;
 	use sc_finality_grandpa::{
 		report, AuthorityId, GrandpaJustificationSender, GrandpaJustification,
-		FinalityProofFragment,
+		FinalityProof,
 	};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::RecordProof;
@@ -215,7 +215,7 @@ mod tests {
 	struct EmptyVoterState;
 
 	struct TestFinalityProofProvider {
-		finality_proofs: Vec<FinalityProofFragment<Header>>,
+		finality_proof: Option<FinalityProof<Header>>,
 	}
 
 	fn voters() -> HashSet<AuthorityId> {
@@ -256,7 +256,14 @@ mod tests {
 			&self,
 			_block: NumberFor<Block>
 		) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
-			Ok(Some(EncodedFinalityProofs(self.finality_proofs.encode().into())))
+			// Don't call this without setting the FinalityProof
+			Ok(Some(EncodedFinalityProofs(
+				self.finality_proof
+					.as_ref()
+					.expect("Don't call rpc_prove_finality without setting the FinalityProof")
+					.encode()
+					.into()
+			)))
 		}
 	}
 
@@ -298,12 +305,12 @@ mod tests {
 	) where
 		VoterState: ReportVoterState + Send + Sync + 'static,
 	{
-		setup_io_handler_with_finality_proofs(voter_state, Default::default())
+		setup_io_handler_with_finality_proofs(voter_state, None)
 	}
 
 	fn setup_io_handler_with_finality_proofs<VoterState>(
 		voter_state: VoterState,
-		finality_proofs: Vec<FinalityProofFragment<Header>>,
+		finality_proof: Option<FinalityProof<Header>>,
 	) -> (
 		jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
 		GrandpaJustificationSender<Block>,
@@ -311,7 +318,7 @@ mod tests {
 		VoterState: ReportVoterState + Send + Sync + 'static,
 	{
 		let (justification_sender, justification_stream) = GrandpaJustificationStream::channel();
-		let finality_proof_provider = Arc::new(TestFinalityProofProvider { finality_proofs });
+		let finality_proof_provider = Arc::new(TestFinalityProofProvider { finality_proof });
 
 		let handler = GrandpaRpcHandler::new(
 			TestAuthoritySet,
@@ -510,15 +517,14 @@ mod tests {
 
 	#[test]
 	fn prove_finality_with_test_finality_proof_provider() {
-		let finality_proofs = vec![FinalityProofFragment {
+		let finality_proof = FinalityProof {
 			block: header(42).hash(),
 			justification: create_justification().encode(),
 			unknown_headers: vec![header(2)],
-			authorities_proof: None,
-		}];
+		};
 		let (io,  _) = setup_io_handler_with_finality_proofs(
 			TestVoterState,
-			finality_proofs.clone(),
+			Some(finality_proof.clone()),
 		);
 
 		let request =
@@ -528,8 +534,7 @@ mod tests {
 		let resp = io.handle_request_sync(request, meta);
 		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
 		let result: sp_core::Bytes = serde_json::from_value(resp["result"].take()).unwrap();
-		let fragments: Vec<FinalityProofFragment<Header>> =
-			Decode::decode(&mut &result[..]).unwrap();
-		assert_eq!(fragments, finality_proofs);
+		let fragments: FinalityProof<Header> = Decode::decode(&mut &result[..]).unwrap();
+		assert_eq!(fragments, finality_proof);
 	}
 }

@@ -122,7 +122,7 @@ mod until_imported;
 mod voting_rule;
 
 pub use authorities::{SharedAuthoritySet, AuthoritySet};
-pub use finality_proof::{FinalityProofFragment, FinalityProofProvider, StorageAndProofProvider};
+pub use finality_proof::{FinalityProof, FinalityProofProvider};
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;

@@ -32,25 +32,20 @@ use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
 use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
-use sp_api::{ApiRef, StorageProof, ProvideRuntimeApi};
+use sp_api::{ApiRef, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
 	import_queue::BoxJustificationImport,
 };
 use std::{collections::{HashMap, HashSet}, pin::Pin};
-use parity_scale_codec::Decode;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::H256;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
-use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
-use finality_proof::{
-	AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker,
-};
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
 use sc_keystore::LocalKeystore;
@@ -204,43 +199,6 @@ sp_api::mock_impl_runtime_apis! {
 impl GenesisAuthoritySetProvider<Block> for TestApi {
 	fn get(&self) -> Result<AuthorityList> {
 		Ok(self.genesis_authorities.clone())
-	}
-}
-
-impl AuthoritySetForFinalityProver<Block> for TestApi {
-	fn authorities(&self, _block: &BlockId<Block>) -> Result<AuthorityList> {
-		Ok(self.genesis_authorities.clone())
-	}
-
-	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
-		let authorities = self.authorities(block)?;
-		let backend = <InMemoryBackend<HashFor<Block>>>::from(vec![
-			(None, vec![(b"authorities".to_vec(), Some(authorities.encode()))])
-		]);
-		let proof = prove_read(backend, vec![b"authorities"])
-			.expect("failure proving read from in-memory storage backend");
-		Ok(proof)
-	}
-}
-
-impl AuthoritySetForFinalityChecker<Block> for TestApi {
-	fn check_authorities_proof(
-		&self,
-		_hash: <Block as BlockT>::Hash,
-		header: <Block as BlockT>::Header,
-		proof: StorageProof,
-	) -> Result<AuthorityList> {
-		let results = read_proof_check::<HashFor<Block>, _>(
-			*header.state_root(), proof, vec![b"authorities"]
-		)
-			.expect("failure checking read proof for authorities");
-		let encoded = results.get(&b"authorities"[..])
-			.expect("returned map must contain all proof keys")
-			.as_ref()
-			.expect("authorities in proof is None");
-		let authorities = Decode::decode(&mut &encoded[..])
-			.expect("failure decoding authorities read from proof");
-		Ok(authorities)
 	}
 }
 
