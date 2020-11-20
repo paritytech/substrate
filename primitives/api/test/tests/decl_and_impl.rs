@@ -106,7 +106,7 @@ mock_impl_runtime_apis! {
 		fn same_name(_: &BlockId<Block>) ->
 			std::result::Result<
 				NativeOrEncoded<()>,
-				(&'static str, ::codec::Error)
+				(&'static str, codec::Error)
 			>
 		{
 			Ok(().into())
@@ -116,14 +116,14 @@ mock_impl_runtime_apis! {
 		fn wild_card(at: &BlockId<Block>, _: u32) ->
 			std::result::Result<
 				NativeOrEncoded<()>,
-				(&'static str, ::codec::Error)
+				(&'static str, codec::Error)
 			>
 		{
 			if let BlockId::Number(1337) = at {
 				// yeah
 				Ok(().into())
 			} else {
-				let e = ::codec::Error::from("Ohh noooo");
+				let e = codec::Error::from("Ohh noooo");
 				Err(("MockApi", e))
 			}
 		}

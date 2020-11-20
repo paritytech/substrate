@@ -10,16 +10,16 @@ error: First error type was declared here.
 17 |         type Error = u32;
    |                      ^^^
 
-error[E0277]: the trait bound `u32: std::convert::From<std::string::String>` is not satisfied
+error[E0277]: the trait bound `u32: std::convert::From<(&'static str, sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::parity_scale_codec::Error)>` is not satisfied
    --> $DIR/mock_only_one_error_type.rs:17:16
     |
 17  |         type Error = u32;
-    |                      ^^^ the trait `std::convert::From<std::string::String>` is not implemented for `u32`
+    |                      ^^^ the trait `std::convert::From<(&'static str, sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::parity_scale_codec::Error)>` is not implemented for `u32`
     |
    ::: $WORKSPACE/primitives/api/src/lib.rs
     |
-    |     type Error: std::fmt::Debug + From<String>;
-    |                                   ------------ required by this bound in `sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ApiErrorExt`
+    |     type Error: std::fmt::Debug + From<(&'static str, codec::Error)>;
+    |                                   ---------------------------------- required by this bound in `sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ApiErrorExt`
     |
     = help: the following implementations were found:
               <u32 as std::convert::From<bool>>
