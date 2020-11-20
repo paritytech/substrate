@@ -73,12 +73,12 @@ fn float_phragmen_poc_works() {
 }
 
 #[test]
-fn phragmen_core_setup_inputs() {
+fn phragmen_core_test_without_edges() {
 	let candidates = vec![1, 2, 3];
 	let voters = vec![
-		(10, 10, vec![1, 2]),
-		(20, 20, vec![1, 3]),
-		(30, 30, vec![2, 3]),
+		(10, 10, vec![]),
+		(20, 20, vec![]),
+		(30, 30, vec![]),
 	];
 
 	let (candidates, voters) = setup_inputs(candidates, voters);
@@ -92,11 +92,7 @@ fn phragmen_core_setup_inputs() {
 				(v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()),
 			))
 			.collect::<Vec<_>>(),
-		vec![
-			(10, 10, vec![(1, 0), (2, 0)]),
-			(20, 20, vec![(1, 0), (3, 0)]),
-			(30, 30, vec![(2, 0), (3, 0)]),
-		]
+		vec![]
 	);
 
 	assert_eq!(
