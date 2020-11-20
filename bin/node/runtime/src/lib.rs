@@ -658,6 +658,7 @@ impl pallet_treasury::Trait for Runtime {
 	type Burn = Burn;
 	type MaximumReasonLength = MaximumReasonLength;
 	type BurnDestination = ();
+	type SpendFunds = Bounties;
 	type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
 }
 
@@ -937,8 +938,8 @@ construct_runtime!(
 		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
 		Proxy: pallet_proxy::{Module, Call, Storage, Event<T>},
 		Multisig: pallet_multisig::{Module, Call, Storage, Event<T>},
-		Bounties: pallet_bounties::{Module, Call, Storage, Config, Event<T>},
-		Tips: pallet_tips::{Module, Call, Storage, Config, Event<T>},
+		Bounties: pallet_bounties::{Module, Call, Storage, Event<T>},
+		Tips: pallet_tips::{Module, Call, Storage, Event<T>},
 	}
 );
 
