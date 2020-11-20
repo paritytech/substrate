@@ -85,20 +85,26 @@ pub enum Never {}
 
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
 ///
-/// The so-called parameter type can be created in three different ways:
+/// The so-called parameter type can be created in four different ways:
 ///
-/// - Using `const` to create a parameter type that provides a `const` getter.
-///   It is required that the `value` is const.
+/// - Using `const` to create a parameter type that provides a `const` getter. It is required that
+///   the `value` is const.
 ///
 /// - Declare the parameter type without `const` to have more freedom when creating the value.
 ///
-/// - Using `storage` to create a storage parameter type. This type is special as it tries to
-///   load the value from the storage under a fixed key. If the value could not be found in the
-///   storage, the given default value will be returned. It is required that the value implements
-///   [`Encode`](codec::Encode) and [`Decode`](codec::Decode). The key for looking up the value
-///   in the storage is built using the following formular:
+/// - Using `storage` to create a storage parameter type. This type is special as it tries to load
+///   the value from the storage under a fixed key. If the value could not be found in the storage,
+///   the given default value will be returned. It is required that the value implements
+///   [`Encode`](codec::Encode) and [`Decode`](codec::Decode). The key for looking up the value in
+///   the storage is built using the following formula:
 ///
 ///   `twox_128(":" ++ NAME ++ ":")` where `NAME` is the name that is passed as type name.
+///
+/// - Using `static` to create a static parameter type. Its value is
+///   being provided by a static variable with the equivalent name in `UPPER_SNAKE_CASE`. An
+///   additional `set` function is provided in this case to alter the static variable. 
+///
+/// **This is intended for testing ONLY and is ONLY available when `std` is enabled**
 ///
 /// # Examples
 ///
@@ -114,12 +120,14 @@ pub enum Never {}
 ///    /// Visibility of the type is optional
 ///    OtherArgument: u64 = non_const_expression();
 ///    pub storage StorageArgument: u64 = 5;
+///    pub static StaticArgument: u32 = 7;
 /// }
 ///
 /// trait Config {
 ///    type Parameter: Get<u64>;
 ///    type OtherParameter: Get<u64>;
 ///    type StorageParameter: Get<u64>;
+///    type StaticParameter: Get<u32>;
 /// }
 ///
 /// struct Runtime;
@@ -127,7 +135,10 @@ pub enum Never {}
 ///    type Parameter = Argument;
 ///    type OtherParameter = OtherArgument;
 ///    type StorageParameter = StorageArgument;
+///    type StaticParameter = StaticArgument;
 /// }
+///
+/// // In testing, `StaticArgument` can be altered later: `StaticArgument::set(8)`.
 /// ```
 ///
 /// # Invalid example:
@@ -142,7 +153,6 @@ pub enum Never {}
 ///    pub const Argument: u64 = non_const_expression();
 /// }
 /// ```
-
 #[macro_export]
 macro_rules! parameter_types {
 	(
@@ -235,7 +245,69 @@ macro_rules! parameter_types {
 				I::from(Self::get())
 			}
 		}
-	}
+	};
+	(
+		$(
+			$( #[ $attr:meta ] )*
+			$vis:vis static $name:ident: $type:ty = $value:expr;
+		)*
+	) => (
+		$crate::parameter_types_impl_thread_local!(
+			$(
+				$( #[ $attr ] )*
+				$vis static $name: $type = $value;
+			)*
+		);
+	);
+}
+
+#[cfg(not(feature = "std"))]
+#[macro_export]
+macro_rules! parameter_types_impl_thread_local {
+	( $( $any:tt )* ) => {
+		compile_error!("static parameter types is only available in std and for testing.");
+	};
+}
+
+#[cfg(feature = "std")]
+#[macro_export]
+macro_rules! parameter_types_impl_thread_local {
+	(
+		$(
+			$( #[ $attr:meta ] )*
+			$vis:vis static $name:ident: $type:ty = $value:expr;
+		)*
+	) => {
+		$crate::parameter_types_impl_thread_local!(
+			IMPL_THREAD_LOCAL $( $vis, $name, $type, $value, )*
+		);
+		$crate::paste::item! {
+			$crate::parameter_types!(
+				$(
+					$( #[ $attr ] )*
+					$vis $name: $type = [<$name:snake:upper>].with(|v| v.borrow().clone());
+				)*
+			);
+			$(
+				impl $name {
+					/// Set the internal value.
+					pub fn set(t: $type) {
+						[<$name:snake:upper>].with(|v| *v.borrow_mut() = t);
+					}
+				}
+			)*
+		}
+	};
+	(IMPL_THREAD_LOCAL $( $vis:vis, $name:ident, $type:ty, $value:expr, )* ) => {
+		$crate::paste::item! {
+			thread_local! {
+				$(
+					pub static [<$name:snake:upper>]: std::cell::RefCell<$type> =
+						std::cell::RefCell::new($value);
+				)*
+			}
+		}
+	};
 }
 
 /// Macro for easily creating a new implementation of both the `Get` and `Contains` traits. Use
