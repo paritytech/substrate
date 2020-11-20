@@ -180,7 +180,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait + pallet_treasury::Trait
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Weight information for extrinsics in this pallet.
-	type TipsWeightInfo: WeightInfo;
+	type WeightInfo: WeightInfo;
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -327,7 +327,7 @@ decl_module! {
 		/// - DbReads: `Reasons`, `Tips`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = T::TipsWeightInfo::report_awesome(reason.len() as u32)]
+		#[weight = <T as Trait<I>>::WeightInfo::report_awesome(reason.len() as u32)]
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
@@ -375,7 +375,7 @@ decl_module! {
 		/// - DbReads: `Tips`, `origin account`
 		/// - DbWrites: `Reasons`, `Tips`, `origin account`
 		/// # </weight>
-		#[weight = T::TipsWeightInfo::retract_tip()]
+		#[weight = <T as Trait<I>>::WeightInfo::retract_tip()]
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 			let tip = Tips::<T, I>::get(&hash).ok_or(Error::<T, I>::UnknownTip)?;
@@ -411,7 +411,7 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Reasons`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = T::TipsWeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32)]
+		#[weight = <T as Trait<I>>::WeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32)]
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, #[compact] tip_value: BalanceOf<T, I>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -459,7 +459,7 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Tips`
 		/// - DbWrites: `Tips`
 		/// # </weight>
-		#[weight = T::TipsWeightInfo::tip(T::Tippers::max_len() as u32)]
+		#[weight = <T as Trait<I>>::WeightInfo::tip(T::Tippers::max_len() as u32)]
 		fn tip(origin, hash: T::Hash, #[compact] tip_value: BalanceOf<T, I>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -488,7 +488,7 @@ decl_module! {
 		/// - DbReads: `Tips`, `Tippers`, `tip finder`
 		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
-		#[weight = T::TipsWeightInfo::close_tip(T::Tippers::max_len() as u32)]
+		#[weight = <T as Trait<I>>::WeightInfo::close_tip(T::Tippers::max_len() as u32)]
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 

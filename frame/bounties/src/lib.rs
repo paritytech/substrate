@@ -181,7 +181,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait + pallet_treasury::Trait
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Weight information for extrinsics in this pallet.
-	type BouWeightInfo: WeightInfo;
+	type WeightInfo: WeightInfo;
 }
 
 // TODO :: Clean-up :: Can BountyIndex replace ProposalIndex ?
@@ -361,7 +361,7 @@ decl_module! {
 		/// - `fee`: The curator fee.
 		/// - `value`: The total payment amount of this bounty, curator fee included.
 		/// - `description`: The description of this bounty.
-		#[weight = T::BouWeightInfo::propose_bounty(description.len() as u32)]
+		#[weight = <T as Trait<I>>::WeightInfo::propose_bounty(description.len() as u32)]
 		fn propose_bounty(
 			origin,
 			#[compact] value: BalanceOf<T, I>,
@@ -381,7 +381,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = T::BouWeightInfo::approve_bounty()]
+		#[weight = <T as Trait<I>>::WeightInfo::approve_bounty()]
 		fn approve_bounty(origin, #[compact] bounty_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
@@ -406,7 +406,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = T::BouWeightInfo::propose_curator()]
+		#[weight = <T as Trait<I>>::WeightInfo::propose_curator()]
 		fn propose_curator(
 			origin,
 			#[compact] bounty_id: ProposalIndex,
@@ -459,7 +459,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = T::BouWeightInfo::unassign_curator()]
+		#[weight = <T as Trait<I>>::WeightInfo::unassign_curator()]
 		fn unassign_curator(
 			origin,
 			#[compact] bounty_id: ProposalIndex,
@@ -541,7 +541,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = T::BouWeightInfo::accept_curator()]
+		#[weight = <T as Trait<I>>::WeightInfo::accept_curator()]
 		fn accept_curator(origin, #[compact] bounty_id: ProposalIndex) {
 			let signer = ensure_signed(origin)?;
 
@@ -572,7 +572,7 @@ decl_module! {
 		///
 		/// - `bounty_id`: Bounty ID to award.
 		/// - `beneficiary`: The beneficiary account whom will receive the payout.
-		#[weight = T::BouWeightInfo::award_bounty()]
+		#[weight = <T as Trait<I>>::WeightInfo::award_bounty()]
 		fn award_bounty(origin, #[compact] bounty_id: ProposalIndex, beneficiary: <T::Lookup as StaticLookup>::Source) {
 			let signer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
@@ -605,7 +605,7 @@ decl_module! {
 		/// The dispatch origin for this call must be the beneficiary of this bounty.
 		///
 		/// - `bounty_id`: Bounty ID to claim.
-		#[weight = T::BouWeightInfo::claim_bounty()]
+		#[weight = <T as Trait<I>>::WeightInfo::claim_bounty()]
 		fn claim_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			let _ = ensure_signed(origin)?; // anyone can trigger claim
 
@@ -638,7 +638,7 @@ decl_module! {
 		/// Only `T::RejectOrigin` is able to cancel a bounty.
 		///
 		/// - `bounty_id`: Bounty ID to cancel.
-		#[weight = T::BouWeightInfo::close_bounty_proposed().max(T::BouWeightInfo::close_bounty_active())]
+		#[weight = <T as Trait<I>>::WeightInfo::close_bounty_proposed().max(<T as Trait<I>>::WeightInfo::close_bounty_active())]
 		fn close_bounty(origin, #[compact] bounty_id: BountyIndex) -> DispatchResultWithPostInfo {
 			T::RejectOrigin::ensure_origin(origin)?;
 
@@ -656,7 +656,7 @@ decl_module! {
 
 						Self::deposit_event(Event::<T, I>::BountyRejected(bounty_id, value));
 						// Return early, nothing else to do.
-						return Ok(Some(T::BouWeightInfo::close_bounty_proposed()).into())
+						return Ok(Some(<T as Trait<I>>::WeightInfo::close_bounty_proposed()).into())
 					},
 					BountyStatus::Approved => {
 						// For weight reasons, we don't allow a council to cancel in this phase.
@@ -690,7 +690,7 @@ decl_module! {
 				*maybe_bounty = None;
 
 				Self::deposit_event(Event::<T, I>::BountyCanceled(bounty_id));
-				Ok(Some(T::BouWeightInfo::close_bounty_active()).into())
+				Ok(Some(<T as Trait<I>>::WeightInfo::close_bounty_active()).into())
 			})
 		}
 
@@ -700,7 +700,7 @@ decl_module! {
 		///
 		/// - `bounty_id`: Bounty ID to extend.
 		/// - `remark`: additional information.
-		#[weight = T::BouWeightInfo::extend_bounty_expiry()]
+		#[weight = <T as Trait<I>>::WeightInfo::extend_bounty_expiry()]
 		fn extend_bounty_expiry(origin, #[compact] bounty_id: BountyIndex, _remark: Vec<u8>) {
 			let signer = ensure_signed(origin)?;
 
@@ -816,7 +816,7 @@ impl<T: Trait<I>, I: Instance> pallet_treasury::SpendFunds<T, I> for Module<T, I
 			bounties_approval_len
 		});
 
-		*total_weight += T::BouWeightInfo::on_initialize_bounties(bounties_len);
+		*total_weight += <T as Trait<I>>::WeightInfo::on_initialize_bounties(bounties_len);
 	}
 
 }

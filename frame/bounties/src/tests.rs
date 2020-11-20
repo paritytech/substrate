@@ -168,7 +168,7 @@ impl Trait for Test {
 	type BountyUpdatePeriod = BountyUpdatePeriod;
 	type BountyCuratorDeposit = BountyCuratorDeposit;
 	type BountyValueMinimum = BountyValueMinimum;
-	type BouWeightInfo = ();
+	type WeightInfo = ();
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;

@@ -649,10 +649,6 @@ impl pallet_treasury::Trait for Runtime {
 		EnsureRoot<AccountId>,
 		pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>
 	>;
-	type Tippers = Elections;
-	type TipCountdown = TipCountdown;
-	type TipFindersFee = TipFindersFee;
-	type TipReportDepositBase = TipReportDepositBase;
 	type DataDepositPerByte = DataDepositPerByte;
 	type Event = Event;
 	type OnSlash = ();
@@ -660,14 +656,28 @@ impl pallet_treasury::Trait for Runtime {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
+	type MaximumReasonLength = MaximumReasonLength;
+	type BurnDestination = ();
+	type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
+}
+
+impl pallet_bounties::Trait for Runtime {
+	type Event = Event;
 	type BountyDepositBase = BountyDepositBase;
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
 	type BountyUpdatePeriod = BountyUpdatePeriod;
 	type BountyCuratorDeposit = BountyCuratorDeposit;
 	type BountyValueMinimum = BountyValueMinimum;
-	type MaximumReasonLength = MaximumReasonLength;
-	type BurnDestination = ();
-	type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
+	type WeightInfo = ();
+}
+
+impl pallet_tips::Trait for Runtime {
+	type Event = Event;
+	type Tippers = Elections;
+	type TipCountdown = TipCountdown;
+	type TipFindersFee = TipFindersFee;
+	type TipReportDepositBase = TipReportDepositBase;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -927,6 +937,8 @@ construct_runtime!(
 		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
 		Proxy: pallet_proxy::{Module, Call, Storage, Event<T>},
 		Multisig: pallet_multisig::{Module, Call, Storage, Event<T>},
+		Bounties: pallet_bounties::{Module, Call, Storage, Config, Event<T>},
+		Tips: pallet_tips::{Module, Call, Storage, Config, Event<T>},
 	}
 );
 

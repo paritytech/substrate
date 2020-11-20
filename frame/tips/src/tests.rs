@@ -164,7 +164,7 @@ impl Trait for Test {
 	type TipReportDepositBase = TipReportDepositBase;
 	// type Event = Event;
 	type Event = ();
-	type TipsWeightInfo = ();
+	type WeightInfo = ();
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
