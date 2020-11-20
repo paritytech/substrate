@@ -54,7 +54,7 @@ pub trait WeightInfo {
 	fn close_bounty_proposed() -> Weight;
 	fn close_bounty_active() -> Weight;
 	fn extend_bounty_expiry() -> Weight;
-	fn on_initialize_bounties(b: u32, ) -> Weight;
+	fn spend_funds(b: u32, ) -> Weight;
 }
 
 /// Weights for pallet_bounties using the Substrate node and recommended hardware.
@@ -111,7 +111,7 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn on_initialize_bounties(b: u32, ) -> Weight {
+	fn spend_funds(b: u32, ) -> Weight {
 		(75_165_000 as Weight)
 			.saturating_add((73_634_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
@@ -174,7 +174,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn on_initialize_bounties(b: u32, ) -> Weight {
+	fn spend_funds(b: u32, ) -> Weight {
 		(75_165_000 as Weight)
 			.saturating_add((73_634_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
