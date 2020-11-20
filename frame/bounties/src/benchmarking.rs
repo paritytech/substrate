@@ -177,6 +177,13 @@ benchmarks! {
 		let curator = T::Lookup::lookup(curator_lookup)?;
 	}: _(RawOrigin::Signed(curator), bounty_id, Vec::new())
 
+	on_initialize_bounties {
+		let b in 0 .. 100;
+		setup_pod_account::<T, _>();
+		create_approved_bounties::<T, _>(b)?;
+	}: {
+		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+	}
 }
 
 #[cfg(test)]
@@ -198,6 +205,7 @@ mod tests {
 			assert_ok!(test_benchmark_close_bounty_proposed::<Test>());
 			assert_ok!(test_benchmark_close_bounty_active::<Test>());
 			assert_ok!(test_benchmark_extend_bounty_expiry::<Test>());
+			assert_ok!(test_benchmark_on_initialize_bounties::<Test>());
 		});
 	}
 }
