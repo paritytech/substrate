@@ -100,7 +100,7 @@ pub enum Never {}
 ///
 ///   `twox_128(":" ++ NAME ++ ":")` where `NAME` is the name that is passed as type name.
 ///
-/// - Using `static` to create a struct that implements [`Get`](crate::traits::Get) and the value is
+/// - Using `static` to create a static parameter type. Its value is
 ///   being provided by a static variable with the equivalent name in `UPPER_SNAKE_CASE`. An
 ///   additional `set` function is provided in this case to alter the static variable. **This is intended for
 ///   testing ONLY**.
