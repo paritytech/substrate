@@ -102,8 +102,9 @@ pub enum Never {}
 ///
 /// - Using `static` to create a static parameter type. Its value is
 ///   being provided by a static variable with the equivalent name in `UPPER_SNAKE_CASE`. An
-///   additional `set` function is provided in this case to alter the static variable. **This is intended for
-///   testing ONLY**.
+///   additional `set` function is provided in this case to alter the static variable. 
+///
+/// **This is intended for testing ONLY and is ONLY available when `std` is enabled**
 ///
 /// # Examples
 ///
