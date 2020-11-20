@@ -53,8 +53,9 @@ use async_std::sync::{Mutex, MutexGuard};
 use futures::prelude::*;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use libp2p::PeerId;
-use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
+use sp_runtime::traits::Block as BlockT;
 use std::{
+	borrow::Cow,
 	collections::VecDeque,
 	fmt,
 	sync::Arc,
@@ -82,7 +83,7 @@ impl<M> QueuedSender<M> {
 	pub fn new<B, H, F>(
 		service: Arc<NetworkService<B, H>>,
 		peer_id: PeerId,
-		protocol: ConsensusEngineId,
+		protocol: Cow<'static, str>,
 		queue_size_limit: usize,
 		messages_encode: F
 	) -> (Self, impl Future<Output = ()> + Send + 'static)
@@ -193,7 +194,7 @@ async fn create_background_future<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>
 	mut wait_for_sender: Receiver<()>,
 	service: Arc<NetworkService<B, H>>,
 	peer_id: PeerId,
-	protocol: ConsensusEngineId,
+	protocol: Cow<'static, str>,
 	shared_message_queue: SharedMessageQueue<M>,
 	messages_encode: F,
 ) {
@@ -212,7 +213,7 @@ async fn create_background_future<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>
 
 			// Starting from below, we try to send the message. If an error happens when sending,
 			// the only sane option we have is to silently discard the message.
-			let sender = match service.notification_sender(peer_id.clone(), protocol) {
+			let sender = match service.notification_sender(peer_id.clone(), protocol.clone()) {
 				Ok(s) => s,
 				Err(_) => continue,
 			};
