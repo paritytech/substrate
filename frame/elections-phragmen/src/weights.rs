@@ -61,72 +61,71 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 	fn vote_equal(v: u32, ) -> Weight {
-		(58_246_000 as Weight)
-			.saturating_add((420_000 as Weight).saturating_mul(v as Weight))
+		(57_585_000 as Weight)
+			.saturating_add((409_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn vote_more(v: u32, ) -> Weight {
-		(88_897_000 as Weight)
-			.saturating_add((430_000 as Weight).saturating_mul(v as Weight))
+		(87_970_000 as Weight)
+			.saturating_add((415_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn vote_less(v: u32, ) -> Weight {
-		(84_344_000 as Weight)
-			.saturating_add((423_000 as Weight).saturating_mul(v as Weight))
+		(83_650_000 as Weight)
+			.saturating_add((405_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn remove_voter() -> Weight {
-		(80_901_000 as Weight)
+		(80_456_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn submit_candidacy(c: u32, ) -> Weight {
-		(70_684_000 as Weight)
-			.saturating_add((425_000 as Weight).saturating_mul(c as Weight))
+		(70_738_000 as Weight)
+			.saturating_add((428_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn renounce_candidacy_candidate(c: u32, ) -> Weight {
-		(49_223_000 as Weight)
-			.saturating_add((223_000 as Weight).saturating_mul(c as Weight))
+		(50_244_000 as Weight)
+			.saturating_add((214_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn renounce_candidacy_members() -> Weight {
-		(91_653_000 as Weight)
+		(90_817_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	fn renounce_candidacy_runners_up() -> Weight {
-		(49_767_000 as Weight)
+		(49_801_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn remove_member_with_replacement() -> Weight {
-		(100_030_000 as Weight)
+		(99_157_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
 	fn remove_member_wrong_refund() -> Weight {
-		(9_062_000 as Weight)
+		(9_042_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 	}
-	fn clean_defunct_voters(v: u32, d: u32, ) -> Weight {
+	fn clean_defunct_voters(v: u32, _d: u32, ) -> Weight {
 		(0 as Weight)
-			.saturating_add((163_343_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add((357_000 as Weight).saturating_mul(d as Weight))
+			.saturating_add((158_896_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(v as Weight)))
 	}
 	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight {
 		(0 as Weight)
-			.saturating_add((85_749_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add((129_489_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add((9_132_000 as Weight).saturating_mul(e as Weight))
+			.saturating_add((85_751_000 as Weight).saturating_mul(c as Weight))
+			.saturating_add((130_226_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((9_200_000 as Weight).saturating_mul(e as Weight))
 			.saturating_add(T::DbWeight::get().reads((2 as Weight).saturating_mul(c as Weight)))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(c as Weight)))
@@ -136,72 +135,71 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn vote_equal(v: u32, ) -> Weight {
-		(58_246_000 as Weight)
-			.saturating_add((420_000 as Weight).saturating_mul(v as Weight))
+		(57_585_000 as Weight)
+			.saturating_add((409_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn vote_more(v: u32, ) -> Weight {
-		(88_897_000 as Weight)
-			.saturating_add((430_000 as Weight).saturating_mul(v as Weight))
+		(87_970_000 as Weight)
+			.saturating_add((415_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn vote_less(v: u32, ) -> Weight {
-		(84_344_000 as Weight)
-			.saturating_add((423_000 as Weight).saturating_mul(v as Weight))
+		(83_650_000 as Weight)
+			.saturating_add((405_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn remove_voter() -> Weight {
-		(80_901_000 as Weight)
+		(80_456_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn submit_candidacy(c: u32, ) -> Weight {
-		(70_684_000 as Weight)
-			.saturating_add((425_000 as Weight).saturating_mul(c as Weight))
+		(70_738_000 as Weight)
+			.saturating_add((428_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn renounce_candidacy_candidate(c: u32, ) -> Weight {
-		(49_223_000 as Weight)
-			.saturating_add((223_000 as Weight).saturating_mul(c as Weight))
+		(50_244_000 as Weight)
+			.saturating_add((214_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn renounce_candidacy_members() -> Weight {
-		(91_653_000 as Weight)
+		(90_817_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	fn renounce_candidacy_runners_up() -> Weight {
-		(49_767_000 as Weight)
+		(49_801_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn remove_member_with_replacement() -> Weight {
-		(100_030_000 as Weight)
+		(99_157_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
 	fn remove_member_wrong_refund() -> Weight {
-		(9_062_000 as Weight)
+		(9_042_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 	}
-	fn clean_defunct_voters(v: u32, d: u32, ) -> Weight {
+	fn clean_defunct_voters(v: u32, _d: u32, ) -> Weight {
 		(0 as Weight)
-			.saturating_add((163_343_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add((357_000 as Weight).saturating_mul(d as Weight))
+			.saturating_add((158_896_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(v as Weight)))
 	}
 	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight {
 		(0 as Weight)
-			.saturating_add((85_749_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add((129_489_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add((9_132_000 as Weight).saturating_mul(e as Weight))
+			.saturating_add((85_751_000 as Weight).saturating_mul(c as Weight))
+			.saturating_add((130_226_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((9_200_000 as Weight).saturating_mul(e as Weight))
 			.saturating_add(RocksDbWeight::get().reads((2 as Weight).saturating_mul(c as Weight)))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(c as Weight)))
