@@ -333,3 +333,10 @@ fn system_network_remove_reserved() {
 	assert_eq!(runtime.block_on(good_fut), Ok(()));
 	assert!(runtime.block_on(bad_fut).is_err());
 }
+
+#[test]
+fn system_set_log_filter() {
+	sc_cli::init_logger("afg=debug", Default::default(), Default::default(), false).unwrap();
+	let res = api(None).system_set_log_filter("bla no ok -\\ /lba".into());
+	assert_eq!(res, Ok(()));
+}

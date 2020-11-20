@@ -51,6 +51,7 @@ sp-io = { version = "2.0.0", path = "../../primitives/io" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 tokio = "0.1.22"
 sc-transaction-pool = { version = "2.0.0", path = "../transaction-pool" }
+sc-cli = { version = "0.8.0", path = "../cli" }
 
 [features]
 test-helpers = ["lazy_static"]
