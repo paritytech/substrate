@@ -11,6 +11,9 @@ futures = "0.3"
 log = "0.4"
 parking_lot = "0.11"
 
+beefy-primitives = { path = "../primitives" }
+
+sp-api = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-application-crypto = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-blockchain = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-consensus = { git = "https://github.com/paritytech/substrate", branch = "master" }
