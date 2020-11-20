@@ -400,8 +400,6 @@ pub struct NetworkConfiguration {
 	pub boot_nodes: Vec<MultiaddrWithPeerId>,
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
-	/// List of names of notifications protocols that the node supports.
-	pub notifications_protocols: Vec<Cow<'static, str>>,
 	/// List of request-response protocols that the node supports.
 	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// Configuration for the default set of nodes used for block syncing and transactions.
@@ -439,9 +437,9 @@ impl NetworkConfiguration {
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			node_key,
-			notifications_protocols: Vec::new(),
 			request_response_protocols: Vec::new(),
 			default_peers_set: SetConfig {
+				notifications_protocols: Vec::new(),
 				in_peers: 25,
 				out_peers: 75,
 				reserved_nodes: Vec::new(),
@@ -503,6 +501,8 @@ impl NetworkConfiguration {
 /// Configuration for a set of nodes.
 #[derive(Clone, Debug)]
 pub struct SetConfig {
+	/// List of names of notifications protocols of this set.
+	pub notifications_protocols: Vec<Cow<'static, str>>,
 	/// Maximum allowed number of incoming connections.
 	pub in_peers: u32,
 	/// Number of outgoing connections we're trying to maintain.

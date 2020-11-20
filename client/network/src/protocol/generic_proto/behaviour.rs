@@ -1926,18 +1926,18 @@ impl NetworkBehaviour for GenericProto {
 				}
 			}
 
-			NotifsHandlerOut::Notification { protocol_name, message } => {
+			NotifsHandlerOut::Notification { protocol, message } => {
 				if self.is_open(&source) {
 					trace!(
 						target: "sub-libp2p",
 						"Handler({:?}) => Notification({:?})",
 						source,
-						protocol_name,
+						protocol,
 					);
-					trace!(target: "sub-libp2p", "External API <= Message({:?}, {:?})", protocol_name, source);
+					trace!(target: "sub-libp2p", "External API <= Message({:?}, {:?})", protocol, source);
 					let event = GenericProtoOut::Notification {
 						peer_id: source,
-						protocol_name,
+						protocol_name: protocol,
 						message,
 					};
 
@@ -1947,7 +1947,7 @@ impl NetworkBehaviour for GenericProto {
 						target: "sub-libp2p",
 						"Handler({:?}) => Post-close notification({:?})",
 						source,
-						protocol_name,
+						protocol,
 					);
 				}
 			}
