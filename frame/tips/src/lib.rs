@@ -157,10 +157,10 @@ use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
 
-pub type BalanceOf<T, I> = pallet_treasury::BalanceOf<T, I>;
-pub type NegativeImbalanceOf<T, I> = pallet_treasury::NegativeImbalanceOf<T, I>;
+pub type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
+pub type NegativeImbalanceOf<T> = pallet_treasury::NegativeImbalanceOf<T>;
 
-pub trait Trait<I=DefaultInstance>: frame_system::Trait + pallet_treasury::Trait<I> {
+pub trait Trait: frame_system::Trait + pallet_treasury::Trait {
 
 	/// Origin from which tippers must come.
 	///
@@ -174,10 +174,10 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait + pallet_treasury::Trait
 	type TipFindersFee: Get<Percent>;
 
 	/// The amount held on deposit for placing a tip report.
-	type TipReportDepositBase: Get<BalanceOf<Self, I>>;
+	type TipReportDepositBase: Get<BalanceOf<Self>>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -228,14 +228,14 @@ pub struct OpenTip<
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Treasury {
+	trait Store for Module<T: Trait> as Treasury {
 
 		/// TipsMap that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
 		/// This has the insecure enumerable hash function since the key itself is already
 		/// guaranteed to be a secure hash.
 		pub Tips get(fn tips):
 			map hasher(twox_64_concat) T::Hash
-			=> Option<OpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>>;
+			=> Option<OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>>;
 
 		/// Simple preimage lookup from the reason's hash to the original data. Again, has an
 		/// insecure enumerable hash since the key is guaranteed to be the result of a secure hash.
@@ -245,9 +245,9 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T, I=DefaultInstance>
+	pub enum Event<T>
 	where
-		Balance = BalanceOf<T, I>,
+		Balance = BalanceOf<T>,
 		<T as frame_system::Trait>::AccountId,
 		<T as frame_system::Trait>::Hash,
 	{
@@ -264,7 +264,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the treasury module.
-	pub enum Error for Module<T: Trait<I>, I: Instance> {
+	pub enum Error for Module<T: Trait> {
 		/// The reason given is just too big.
 		ReasonTooBig,
 		/// The tip was already found/started.
@@ -281,7 +281,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance>
+	pub struct Module<T: Trait>
 		for enum Call
 		where origin: T::Origin
 	{
@@ -293,10 +293,10 @@ decl_module! {
 		const TipFindersFee: Percent = T::TipFindersFee::get();
 
 		/// The amount held on deposit for placing a tip report.
-		const TipReportDepositBase: BalanceOf<T, I> = T::TipReportDepositBase::get();
+		const TipReportDepositBase: BalanceOf<T> = T::TipReportDepositBase::get();
 
 		/// The amount held on deposit per byte within the tip report reason or bounty description.
-		const DataDepositPerByte: BalanceOf<T, I> = T::DataDepositPerByte::get();
+		const DataDepositPerByte: BalanceOf<T> = T::DataDepositPerByte::get();
 
 		/// The treasury's module id, used for deriving its sovereign account ID.
 		const ModuleId: ModuleId = T::ModuleId::get();
@@ -304,7 +304,7 @@ decl_module! {
 		/// Maximum acceptable reason length.
 		const MaximumReasonLength: u32 = T::MaximumReasonLength::get();
 
-		type Error = Error<T, I>;
+		type Error = Error<T>;
 
 		fn deposit_event() = default;
 
@@ -327,22 +327,22 @@ decl_module! {
 		/// - DbReads: `Reasons`, `Tips`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = <T as Trait<I>>::WeightInfo::report_awesome(reason.len() as u32)]
+		#[weight = <T as Trait>::WeightInfo::report_awesome(reason.len() as u32)]
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
-			ensure!(reason.len() <= T::MaximumReasonLength::get() as usize, Error::<T, I>::ReasonTooBig);
+			ensure!(reason.len() <= T::MaximumReasonLength::get() as usize, Error::<T>::ReasonTooBig);
 
 			let reason_hash = T::Hashing::hash(&reason[..]);
-			ensure!(!Reasons::<T, I>::contains_key(&reason_hash), Error::<T, I>::AlreadyKnown);
+			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
-			ensure!(!Tips::<T, I>::contains_key(&hash), Error::<T, I>::AlreadyKnown);
+			ensure!(!Tips::<T>::contains_key(&hash), Error::<T>::AlreadyKnown);
 
 			let deposit = T::TipReportDepositBase::get()
 				+ T::DataDepositPerByte::get() * (reason.len() as u32).into();
 			T::Currency::reserve(&finder, deposit)?;
 
-			Reasons::<T, I>::insert(&reason_hash, &reason);
+			Reasons::<T>::insert(&reason_hash, &reason);
 			let tip = OpenTip {
 				reason: reason_hash,
 				who,
@@ -352,7 +352,7 @@ decl_module! {
 				tips: vec![],
 				finders_fee: true
 			};
-			Tips::<T, I>::insert(&hash, tip);
+			Tips::<T>::insert(&hash, tip);
 			Self::deposit_event(RawEvent::NewTip(hash));
 		}
 
@@ -375,14 +375,14 @@ decl_module! {
 		/// - DbReads: `Tips`, `origin account`
 		/// - DbWrites: `Reasons`, `Tips`, `origin account`
 		/// # </weight>
-		#[weight = <T as Trait<I>>::WeightInfo::retract_tip()]
+		#[weight = <T as Trait>::WeightInfo::retract_tip()]
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
-			let tip = Tips::<T, I>::get(&hash).ok_or(Error::<T, I>::UnknownTip)?;
-			ensure!(tip.finder == who, Error::<T, I>::NotFinder);
+			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
+			ensure!(tip.finder == who, Error::<T>::NotFinder);
 
-			Reasons::<T, I>::remove(&tip.reason);
-			Tips::<T, I>::remove(&hash);
+			Reasons::<T>::remove(&tip.reason);
+			Tips::<T>::remove(&hash);
 			if !tip.deposit.is_zero() {
 				let _ = T::Currency::unreserve(&who, tip.deposit);
 			}
@@ -411,15 +411,15 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Reasons`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = <T as Trait<I>>::WeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32)]
-		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, #[compact] tip_value: BalanceOf<T, I>) {
+		#[weight = <T as Trait>::WeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32)]
+		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, #[compact] tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
-			ensure!(!Reasons::<T, I>::contains_key(&reason_hash), Error::<T, I>::AlreadyKnown);
+			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 
-			Reasons::<T, I>::insert(&reason_hash, &reason);
+			Reasons::<T>::insert(&reason_hash, &reason);
 			Self::deposit_event(RawEvent::NewTip(hash.clone()));
 			let tips = vec![(tipper.clone(), tip_value)];
 			let tip = OpenTip {
@@ -431,7 +431,7 @@ decl_module! {
 				tips,
 				finders_fee: false,
 			};
-			Tips::<T, I>::insert(&hash, tip);
+			Tips::<T>::insert(&hash, tip);
 		}
 
 		/// Declare a tip value for an already-open tip.
@@ -459,16 +459,16 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Tips`
 		/// - DbWrites: `Tips`
 		/// # </weight>
-		#[weight = <T as Trait<I>>::WeightInfo::tip(T::Tippers::max_len() as u32)]
-		fn tip(origin, hash: T::Hash, #[compact] tip_value: BalanceOf<T, I>) {
+		#[weight = <T as Trait>::WeightInfo::tip(T::Tippers::max_len() as u32)]
+		fn tip(origin, hash: T::Hash, #[compact] tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 
-			let mut tip = Tips::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
+			let mut tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
 			if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
 				Self::deposit_event(RawEvent::TipClosing(hash.clone()));
 			}
-			Tips::<T, I>::insert(&hash, tip);
+			Tips::<T>::insert(&hash, tip);
 		}
 
 		/// Close and payout a tip.
@@ -488,22 +488,22 @@ decl_module! {
 		/// - DbReads: `Tips`, `Tippers`, `tip finder`
 		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
-		#[weight = <T as Trait<I>>::WeightInfo::close_tip(T::Tippers::max_len() as u32)]
+		#[weight = <T as Trait>::WeightInfo::close_tip(T::Tippers::max_len() as u32)]
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 
-			let tip = Tips::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
-			let n = tip.closes.as_ref().ok_or(Error::<T, I>::StillOpen)?;
-			ensure!(system::Module::<T>::block_number() >= *n, Error::<T, I>::Premature);
+			let tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
+			let n = tip.closes.as_ref().ok_or(Error::<T>::StillOpen)?;
+			ensure!(system::Module::<T>::block_number() >= *n, Error::<T>::Premature);
 			// closed.
-			Reasons::<T, I>::remove(&tip.reason);
-			Tips::<T, I>::remove(hash);
+			Reasons::<T>::remove(&tip.reason);
+			Tips::<T>::remove(hash);
 			Self::payout_tip(hash, tip);
 		}
 	}
 }
 
-impl<T: Trait<I>, I: Instance> Module<T, I> {
+impl<T: Trait> Module<T> {
 	// Add public immutables and private mutables.
 
 	/// The account ID of the treasury pot.
@@ -519,9 +519,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// `O(T)` and one storage access.
 	fn insert_tip_and_check_closing(
-		tip: &mut OpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>,
+		tip: &mut OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
 		tipper: T::AccountId,
-		tip_value: BalanceOf<T, I>,
+		tip_value: BalanceOf<T>,
 	) -> bool {
 		match tip.tips.binary_search_by_key(&&tipper, |x| &x.0) {
 			Ok(pos) => tip.tips[pos] = (tipper, tip_value),
@@ -538,7 +538,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Remove any non-members of `Tippers` from a `tips` vector. `O(T)`.
-	fn retain_active_tips(tips: &mut Vec<(T::AccountId, BalanceOf<T, I>)>) {
+	fn retain_active_tips(tips: &mut Vec<(T::AccountId, BalanceOf<T>)>) {
 		let members = T::Tippers::sorted_members();
 		let mut members_iter = members.iter();
 		let mut member = members_iter.next();
@@ -562,13 +562,13 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// Up to three balance operations.
 	/// Plus `O(T)` (`T` is Tippers length).
-	fn payout_tip(hash: T::Hash, tip: OpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>) {
+	fn payout_tip(hash: T::Hash, tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>) {
 		let mut tips = tip.tips;
 		Self::retain_active_tips(&mut tips);
 		tips.sort_by_key(|i| i.1);
 
 		let treasury = Self::account_id();
-		let max_payout = pallet_treasury::Module::<T,I>::pot();
+		let max_payout = pallet_treasury::Module::<T>::pot();
 
 		let mut payout = tips[tips.len() / 2].1.min(max_payout);
 		if !tip.deposit.is_zero() {
@@ -621,9 +621,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 		for (hash, old_tip) in StorageKeyIterator::<
 			T::Hash,
-			OldOpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>,
+			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
 			Twox64Concat,
-		>::new(I::PREFIX.as_bytes(), b"Tips").drain()
+		>::new(b"Treasury", b"Tips").drain()
 		{
 
 			if_std! {
@@ -657,7 +657,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				tips: old_tip.tips,
 				finders_fee
 			};
-			Tips::<T, I>::insert(hash, new_tip)
+			Tips::<T>::insert(hash, new_tip)
 		}
 
 		if_std! {

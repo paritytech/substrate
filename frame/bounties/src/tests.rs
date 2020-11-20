@@ -185,7 +185,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	t.into()
 }
 
-fn last_event() -> RawEvent<u64, u128, DefaultInstance> {
+fn last_event() -> RawEvent<u64, u128> {
 	System::events().into_iter().map(|r| r.event)
 		.filter_map(|e| {
 			if let Event::bounties(inner) = e { Some(inner) } else { None }
@@ -234,7 +234,7 @@ fn spend_proposal_fails_when_proposer_poor() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Treasury::propose_spend(Origin::signed(2), 100, 3),
-			Error::<Test, _>::InsufficientProposersBalance,
+			Error::<Test>::InsufficientProposersBalance,
 		);
 	});
 }
@@ -287,21 +287,21 @@ fn reject_already_rejected_spend_proposal_fails() {
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(Origin::root(), 0));
-		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), Error::<Test, _>::InvalidIndex);
+		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), Error::<Test>::InvalidIndex);
 	});
 }
 
 #[test]
 fn reject_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), Error::<Test, _>::InvalidIndex);
+		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), Error::<Test>::InvalidIndex);
 	});
 }
 
 #[test]
 fn accept_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test, _>::InvalidIndex);
+		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test>::InvalidIndex);
 	});
 }
 
@@ -312,7 +312,7 @@ fn accept_already_rejected_spend_proposal_fails() {
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(Origin::root(), 0));
-		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test, _>::InvalidIndex);
+		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test>::InvalidIndex);
 	});
 }
 
@@ -449,17 +449,17 @@ fn propose_bounty_validation_works() {
 
 		assert_noop!(
 			Bounties::propose_bounty(Origin::signed(1), 0, [0; 17_000].to_vec()),
-			Error::<Test, _>::ReasonTooBig
+			Error::<Test>::ReasonTooBig
 		);
 
 		assert_noop!(
 			Bounties::propose_bounty(Origin::signed(1), 10, b"12345678901234567890".to_vec()),
-			Error::<Test, _>::InsufficientProposersBalance
+			Error::<Test>::InsufficientProposersBalance
 		);
 
 		assert_noop!(
 			Bounties::propose_bounty(Origin::signed(1), 0, b"12345678901234567890".to_vec()),
-			Error::<Test, _>::InvalidValue
+			Error::<Test>::InvalidValue
 		);
 	});
 }
@@ -469,7 +469,7 @@ fn close_bounty_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_noop!(Bounties::close_bounty(Origin::root(), 0), Error::<Test, _>::InvalidIndex);
+		assert_noop!(Bounties::close_bounty(Origin::root(), 0), Error::<Test>::InvalidIndex);
 
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 10, b"12345".to_vec()));
 
@@ -494,7 +494,7 @@ fn approve_bounty_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_noop!(Bounties::approve_bounty(Origin::root(), 0), Error::<Test, _>::InvalidIndex);
+		assert_noop!(Bounties::approve_bounty(Origin::root(), 0), Error::<Test>::InvalidIndex);
 
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
 
@@ -512,7 +512,7 @@ fn approve_bounty_works() {
 		});
 		assert_eq!(Bounties::bounty_approvals(), vec![0]);
 
-		assert_noop!(Bounties::close_bounty(Origin::root(), 0), Error::<Test, _>::UnexpectedStatus);
+		assert_noop!(Bounties::close_bounty(Origin::root(), 0), Error::<Test>::UnexpectedStatus);
 
 		// deposit not returned yet
 		assert_eq!(Balances::reserved_balance(0), deposit);
@@ -545,7 +545,7 @@ fn assign_curator_works() {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 
-		assert_noop!(Bounties::propose_curator(Origin::root(), 0, 4, 4), Error::<Test, _>::InvalidIndex);
+		assert_noop!(Bounties::propose_curator(Origin::root(), 0, 4, 4), Error::<Test>::InvalidIndex);
 
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
 
@@ -554,7 +554,7 @@ fn assign_curator_works() {
 		System::set_block_number(2);
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
-		assert_noop!(Bounties::propose_curator(Origin::root(), 0, 4, 50), Error::<Test, _>::InvalidFee);
+		assert_noop!(Bounties::propose_curator(Origin::root(), 0, 4, 50), Error::<Test>::InvalidFee);
 
 		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
 
@@ -569,7 +569,7 @@ fn assign_curator_works() {
 			},
 		});
 
-		assert_noop!(Bounties::accept_curator(Origin::signed(1), 0), Error::<Test, _>::RequireCurator);
+		assert_noop!(Bounties::accept_curator(Origin::signed(1), 0), Error::<Test>::RequireCurator);
 		assert_noop!(Bounties::accept_curator(Origin::signed(4), 0), pallet_balances::Error::<Test, _>::InsufficientBalance);
 
 		Balances::make_free_balance_be(&4, 10);
@@ -661,7 +661,7 @@ fn award_and_claim_bounty_works() {
 
 		assert_eq!(Balances::free_balance(4), 8); // inital 10 - 2 deposit
 
-		assert_noop!(Bounties::award_bounty(Origin::signed(1), 0, 3), Error::<Test, _>::RequireCurator);
+		assert_noop!(Bounties::award_bounty(Origin::signed(1), 0, 3), Error::<Test>::RequireCurator);
 
 		assert_ok!(Bounties::award_bounty(Origin::signed(4), 0, 3));
 
@@ -678,7 +678,7 @@ fn award_and_claim_bounty_works() {
 			},
 		});
 
-		assert_noop!(Bounties::claim_bounty(Origin::signed(1), 0), Error::<Test, _>::Premature);
+		assert_noop!(Bounties::claim_bounty(Origin::signed(1), 0), Error::<Test>::Premature);
 
 		System::set_block_number(5);
 		<Treasury as OnInitialize<u64>>::on_initialize(5);
@@ -796,7 +796,7 @@ fn award_and_cancel() {
 		assert_ok!(Bounties::award_bounty(Origin::signed(0), 0, 3));
 
 		// Cannot close bounty directly when payout is happening...
-		assert_noop!(Bounties::close_bounty(Origin::root(), 0), Error::<Test, _>::PendingPayout);
+		assert_noop!(Bounties::close_bounty(Origin::root(), 0), Error::<Test>::PendingPayout);
 
 		// Instead unassign the curator to slash them and then close.
 		assert_ok!(Bounties::unassign_curator(Origin::root(), 0));
@@ -836,7 +836,7 @@ fn expire_and_unassign() {
 		System::set_block_number(22);
 		<Treasury as OnInitialize<u64>>::on_initialize(22);
 
-		assert_noop!(Bounties::unassign_curator(Origin::signed(0), 0), Error::<Test, _>::Premature);
+		assert_noop!(Bounties::unassign_curator(Origin::signed(0), 0), Error::<Test>::Premature);
 
 		System::set_block_number(23);
 		<Treasury as OnInitialize<u64>>::on_initialize(23);
@@ -868,7 +868,7 @@ fn extend_expiry() {
 
 		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
 
-		assert_noop!(Bounties::extend_bounty_expiry(Origin::signed(1), 0, Vec::new()), Error::<Test, _>::UnexpectedStatus);
+		assert_noop!(Bounties::extend_bounty_expiry(Origin::signed(1), 0, Vec::new()), Error::<Test>::UnexpectedStatus);
 
 		System::set_block_number(2);
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
@@ -882,7 +882,7 @@ fn extend_expiry() {
 		System::set_block_number(10);
 		<Treasury as OnInitialize<u64>>::on_initialize(10);
 
-		assert_noop!(Bounties::extend_bounty_expiry(Origin::signed(0), 0, Vec::new()), Error::<Test, _>::RequireCurator);
+		assert_noop!(Bounties::extend_bounty_expiry(Origin::signed(0), 0, Vec::new()), Error::<Test>::RequireCurator);
 		assert_ok!(Bounties::extend_bounty_expiry(Origin::signed(4), 0, Vec::new()));
 
 		assert_eq!(Bounties::bounties(0).unwrap(), Bounty {
@@ -908,7 +908,7 @@ fn extend_expiry() {
 		System::set_block_number(25);
 		<Treasury as OnInitialize<u64>>::on_initialize(25);
 
-		assert_noop!(Bounties::unassign_curator(Origin::signed(0), 0), Error::<Test, _>::Premature);
+		assert_noop!(Bounties::unassign_curator(Origin::signed(0), 0), Error::<Test>::Premature);
 		assert_ok!(Bounties::unassign_curator(Origin::signed(4), 0));
 
 		assert_eq!(Balances::free_balance(4), 10); // not slashed

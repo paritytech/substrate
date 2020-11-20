@@ -43,7 +43,7 @@ fn setup_awesome<T: Trait<I>, I: Instance>(length: u32) -> (T::AccountId, Vec<u8
 
 // Create the pre-requisite information needed to call `tip_new`.
 fn setup_tip<T: Trait<I>, I: Instance>(r: u32, t: u32) ->
-	Result<(T::AccountId, Vec<u8>, T::AccountId, BalanceOf<T, I>), &'static str>
+	Result<(T::AccountId, Vec<u8>, T::AccountId, BalanceOf<T>), &'static str>
 {
 	let tippers_count = T::Tippers::count();
 
@@ -63,7 +63,7 @@ fn setup_tip<T: Trait<I>, I: Instance>(r: u32, t: u32) ->
 
 // Create `t` new tips for the tip proposal with `hash`.
 // This function automatically makes the tip able to close.
-fn create_tips<T: Trait<I>, I: Instance>(t: u32, hash: T::Hash, value: BalanceOf<T, I>) ->
+fn create_tips<T: Trait<I>, I: Instance>(t: u32, hash: T::Hash, value: BalanceOf<T>) ->
 	Result<(), &'static str>
 {
 	for i in 0 .. t {

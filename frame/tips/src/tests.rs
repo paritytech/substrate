@@ -134,7 +134,7 @@ parameter_types! {
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 	pub const MaximumReasonLength: u32 = 16384;
 }
-impl pallet_treasury::Trait<DefaultInstance> for Test {
+impl pallet_treasury::Trait for Test {
 	type ModuleId = TreasuryModuleId;
 	type Currency = pallet_balances::Module<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
@@ -168,7 +168,7 @@ impl Trait for Test {
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
-type Treasury = pallet_treasury::Module<Test, DefaultInstance>;
+type Treasury = pallet_treasury::Module<Test>;
 type TipsModTestInst = Module<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -209,7 +209,7 @@ fn tip_new_cannot_be_used_twice() {
 		assert_ok!(TipsModTestInst::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
 		assert_noop!(
 			TipsModTestInst::tip_new(Origin::signed(11), b"awesome.dot".to_vec(), 3, 10),
-			Error::<Test, _>::AlreadyKnown
+			Error::<Test>::AlreadyKnown
 		);
 	});
 }
@@ -225,7 +225,7 @@ fn report_awesome_and_tip_works() {
 		// other reports don't count.
 		assert_noop!(
 			TipsModTestInst::report_awesome(Origin::signed(1), b"awesome.dot".to_vec(), 3),
-			Error::<Test, _>::AlreadyKnown
+			Error::<Test>::AlreadyKnown
 		);
 
 		let h = tip_hash();
@@ -276,14 +276,14 @@ fn close_tip_works() {
 
 		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
 
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test, _>::StillOpen);
+		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test>::StillOpen);
 
 		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
 
 		// TODO :: re-visit
 		// assert_eq!(last_event(), RawEvent::TipClosing(h));
 
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test, _>::Premature);
+		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test>::Premature);
 
 		System::set_block_number(2);
 		assert_noop!(TipsModTestInst::close_tip(Origin::none(), h.into()), BadOrigin);
@@ -293,7 +293,7 @@ fn close_tip_works() {
 		// TODO :: re-visit
 		// assert_eq!(last_event(), RawEvent::TipClosed(h, 3, 10));
 
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(100), h.into()), Error::<Test, _>::UnknownTip);
+		assert_noop!(TipsModTestInst::close_tip(Origin::signed(100), h.into()), Error::<Test>::UnknownTip);
 	});
 }
 
@@ -307,10 +307,10 @@ fn retract_tip_works() {
 		assert_ok!(TipsModTestInst::tip(Origin::signed(10), h.clone(), 10));
 		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
-		assert_noop!(TipsModTestInst::retract_tip(Origin::signed(10), h.clone()), Error::<Test, _>::NotFinder);
+		assert_noop!(TipsModTestInst::retract_tip(Origin::signed(10), h.clone()), Error::<Test>::NotFinder);
 		assert_ok!(TipsModTestInst::retract_tip(Origin::signed(0), h.clone()));
 		System::set_block_number(2);
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test, _>::UnknownTip);
+		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test>::UnknownTip);
 
 		// with tip new
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
@@ -318,10 +318,10 @@ fn retract_tip_works() {
 		let h = tip_hash();
 		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
-		assert_noop!(TipsModTestInst::retract_tip(Origin::signed(0), h.clone()), Error::<Test, _>::NotFinder);
+		assert_noop!(TipsModTestInst::retract_tip(Origin::signed(0), h.clone()), Error::<Test>::NotFinder);
 		assert_ok!(TipsModTestInst::retract_tip(Origin::signed(10), h.clone()));
 		System::set_block_number(2);
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(10), h.into()), Error::<Test, _>::UnknownTip);
+		assert_noop!(TipsModTestInst::close_tip(Origin::signed(10), h.into()), Error::<Test>::UnknownTip);
 	});
 }
 

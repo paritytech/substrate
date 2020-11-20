@@ -32,25 +32,25 @@ const SEED: u32 = 0;
 // // Create bounties that are approved for use in `on_initialize`.
 // fn create_approved_bounties<T: Trait<I>, I: Instance>(n: u32) -> Result<(), &'static str> {
 // 	for i in 0 .. n {
-// 		let (caller, _curator, _fee, value, reason) = setup_bounty::<T, I>(i, MAX_BYTES);
-// 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
+// 		let (caller, _curator, _fee, value, reason) = setup_bounty::<T>(i, MAX_BYTES);
+// 		Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 // 		let bounty_id = BountyCount::<I>::get() - 1;
-// 		Bounties::<T, I>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
+// 		Bounties::<T>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
 // 	}
 // 	ensure!(BountyApprovals::<I>::get().len() == n as usize, "Not all bounty approved");
 // 	Ok(())
 // }
 
 // Create the pre-requisite information needed to create a treasury `propose_bounty`.
-fn setup_bounty<T: Trait<I>, I: Instance>(u: u32, d: u32) -> (
+fn setup_bounty<T: Trait>(u: u32, d: u32) -> (
 	T::AccountId,
 	T::AccountId,
-	BalanceOf<T, I>,
-	BalanceOf<T, I>,
+	BalanceOf<T>,
+	BalanceOf<T>,
 	Vec<u8>,
 ) {
 	let caller = account("caller", u, SEED);
-	let value: BalanceOf<T, I> = T::BountyValueMinimum::get().saturating_mul(100u32.into());
+	let value: BalanceOf<T> = T::BountyValueMinimum::get().saturating_mul(100u32.into());
 	let fee = value / 2u32.into();
 	let deposit = T::BountyDepositBase::get() + T::DataDepositPerByte::get() * MAX_BYTES.into();
 	let _ = T::Currency::make_free_balance_be(&caller, deposit);
@@ -64,19 +64,19 @@ fn create_bounty<T: Trait<I>, I: Instance>() -> Result<(
 	<T::Lookup as StaticLookup>::Source,
 	BountyIndex,
 ), &'static str> {
-	let (caller, curator, fee, value, reason) = setup_bounty::<T, I>(0, MAX_BYTES);
+	let (caller, curator, fee, value, reason) = setup_bounty::<T>(0, MAX_BYTES);
 	let curator_lookup = T::Lookup::unlookup(curator.clone());
-	Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
+	Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 	let bounty_id = BountyCount::<I>::get() - 1;
-	Bounties::<T, I>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
-	// Bounties::<T, I>::on_initialize(T::BlockNumber::zero());
-	Bounties::<T, I>::propose_curator(RawOrigin::Root.into(), bounty_id, curator_lookup.clone(), fee)?;
-	Bounties::<T, I>::accept_curator(RawOrigin::Signed(curator).into(), bounty_id)?;
+	Bounties::<T>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
+	// Bounties::<T>::on_initialize(T::BlockNumber::zero());
+	Bounties::<T>::propose_curator(RawOrigin::Root.into(), bounty_id, curator_lookup.clone(), fee)?;
+	Bounties::<T>::accept_curator(RawOrigin::Signed(curator).into(), bounty_id)?;
 	Ok((curator_lookup, bounty_id))
 }
 
 fn setup_pod_account<T: Trait<I>, I: Instance>() {
-	let pot_account = Bounties::<T, I>::account_id();
+	let pot_account = Bounties::<T>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
