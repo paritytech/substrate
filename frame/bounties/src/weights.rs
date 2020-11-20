@@ -61,62 +61,62 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 	fn propose_bounty(d: u32, ) -> Weight {
-		(61_811_000 as Weight)
+		(59_931_000 as Weight)
 			.saturating_add((1_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	fn approve_bounty() -> Weight {
-		(17_579_000 as Weight)
+		(17_226_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn propose_curator() -> Weight {
-		(13_722_000 as Weight)
+		(13_314_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn unassign_curator() -> Weight {
-		(49_951_000 as Weight)
+		(48_677_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn accept_curator() -> Weight {
-		(50_197_000 as Weight)
+		(48_727_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn award_bounty() -> Weight {
-		(35_999_000 as Weight)
+		(34_839_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn claim_bounty() -> Weight {
-		(67_197_000 as Weight)
+		(64_883_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn close_bounty_proposed() -> Weight {
-		(49_043_000 as Weight)
+		(48_003_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn close_bounty_active() -> Weight {
-		(63_202_000 as Weight)
+		(62_215_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn extend_bounty_expiry() -> Weight {
-		(34_943_000 as Weight)
+		(33_748_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn spend_funds(b: u32, ) -> Weight {
-		(75_165_000 as Weight)
-			.saturating_add((73_634_000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+		(3_688_000 as Weight)
+			.saturating_add((70_129_000 as Weight).saturating_mul(b as Weight))
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(b as Weight)))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(b as Weight)))
 	}
 }
@@ -124,62 +124,62 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn propose_bounty(d: u32, ) -> Weight {
-		(61_811_000 as Weight)
+		(59_931_000 as Weight)
 			.saturating_add((1_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	fn approve_bounty() -> Weight {
-		(17_579_000 as Weight)
+		(17_226_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn propose_curator() -> Weight {
-		(13_722_000 as Weight)
+		(13_314_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn unassign_curator() -> Weight {
-		(49_951_000 as Weight)
+		(48_677_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn accept_curator() -> Weight {
-		(50_197_000 as Weight)
+		(48_727_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn award_bounty() -> Weight {
-		(35_999_000 as Weight)
+		(34_839_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn claim_bounty() -> Weight {
-		(67_197_000 as Weight)
+		(64_883_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	fn close_bounty_proposed() -> Weight {
-		(49_043_000 as Weight)
+		(48_003_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	fn close_bounty_active() -> Weight {
-		(63_202_000 as Weight)
+		(62_215_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	fn extend_bounty_expiry() -> Weight {
-		(34_943_000 as Weight)
+		(33_748_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn spend_funds(b: u32, ) -> Weight {
-		(75_165_000 as Weight)
-			.saturating_add((73_634_000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+		(3_688_000 as Weight)
+			.saturating_add((70_129_000 as Weight).saturating_mul(b as Weight))
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(b as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(b as Weight)))
 	}
 }
