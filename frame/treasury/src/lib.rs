@@ -153,7 +153,7 @@ use sp_runtime::{Permill, ModuleId, RuntimeDebug, traits::{
 use frame_support::weights::{Weight, DispatchClass};
 use frame_support::traits::{EnsureOrigin};
 use codec::{Encode, Decode};
-use frame_system::{self as system, ensure_signed};
+use frame_system::{ensure_signed};
 pub use weights::WeightInfo;
 
 pub type BalanceOf<T, I> =

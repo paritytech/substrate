@@ -22,9 +22,10 @@
 use super::*;
 use std::cell::RefCell;
 use frame_support::{
-	assert_noop, assert_ok, impl_outer_origin, impl_outer_event, parameter_types, weights::Weight,
-	traits::{Contains, OnInitialize}
+	assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight,
+	traits::{Contains}
 };
+use sp_runtime::{Permill};
 use sp_core::H256;
 use sp_runtime::{
 	Perbill, ModuleId,
@@ -33,7 +34,7 @@ use sp_runtime::{
 };
 
 impl_outer_origin! {
-	pub enum Origin for TestRuntime where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 mod tips {
@@ -51,14 +52,14 @@ mod tips {
 // }
 
 #[derive(Clone, Eq, PartialEq)]
-pub struct TestRuntime;
+pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl frame_system::Trait for TestRuntime {
+impl frame_system::Trait for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
@@ -89,7 +90,7 @@ impl frame_system::Trait for TestRuntime {
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for TestRuntime {
+impl pallet_balances::Trait for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	// type Event = Event;
@@ -133,9 +134,9 @@ parameter_types! {
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 	pub const MaximumReasonLength: u32 = 16384;
 }
-impl pallet_treasury::Trait<DefaultInstance> for TestRuntime {
+impl pallet_treasury::Trait<DefaultInstance> for Test {
 	type ModuleId = TreasuryModuleId;
-	type Currency = pallet_balances::Module<TestRuntime>;
+	type Currency = pallet_balances::Module<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
 	type DataDepositPerByte = DataDepositPerByte;
@@ -149,13 +150,14 @@ impl pallet_treasury::Trait<DefaultInstance> for TestRuntime {
 	type MaximumReasonLength = MaximumReasonLength;
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
+	type SpendFunds = ();
 }
 parameter_types! {
 	pub const TipCountdown: u64 = 1;
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: u64 = 1;
 }
-impl Trait for TestRuntime {
+impl Trait for Test {
 	type Tippers = TenToFourteen;
 	type TipCountdown = TipCountdown;
 	type TipFindersFee = TipFindersFee;
@@ -164,18 +166,18 @@ impl Trait for TestRuntime {
 	type Event = ();
 	type TipsWeightInfo = ();
 }
-type System = frame_system::Module<TestRuntime>;
-type Balances = pallet_balances::Module<TestRuntime>;
-type Treasury = pallet_treasury::Module<TestRuntime, DefaultInstance>;
-type TipsModTestInst = Module<TestRuntime>;
+type System = frame_system::Module<Test>;
+type Balances = pallet_balances::Module<Test>;
+type Treasury = pallet_treasury::Module<Test, DefaultInstance>;
+type TipsModTestInst = Module<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<TestRuntime>().unwrap();
-	pallet_balances::GenesisConfig::<TestRuntime>{
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	pallet_balances::GenesisConfig::<Test>{
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100), (1, 98), (2, 1)],
 	}.assimilate_storage(&mut t).unwrap();
-	pallet_treasury::GenesisConfig::default().assimilate_storage::<TestRuntime, _>(&mut t).unwrap();
+	pallet_treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
 	t.into()
 }
 
@@ -207,7 +209,7 @@ fn tip_new_cannot_be_used_twice() {
 		assert_ok!(TipsModTestInst::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
 		assert_noop!(
 			TipsModTestInst::tip_new(Origin::signed(11), b"awesome.dot".to_vec(), 3, 10),
-			Error::<TestRuntime, _>::AlreadyKnown
+			Error::<Test, _>::AlreadyKnown
 		);
 	});
 }
@@ -223,7 +225,7 @@ fn report_awesome_and_tip_works() {
 		// other reports don't count.
 		assert_noop!(
 			TipsModTestInst::report_awesome(Origin::signed(1), b"awesome.dot".to_vec(), 3),
-			Error::<TestRuntime, _>::AlreadyKnown
+			Error::<Test, _>::AlreadyKnown
 		);
 
 		let h = tip_hash();
@@ -274,14 +276,14 @@ fn close_tip_works() {
 
 		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
 
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<TestRuntime, _>::StillOpen);
+		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test, _>::StillOpen);
 
 		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
 
 		// TODO :: re-visit
 		// assert_eq!(last_event(), RawEvent::TipClosing(h));
 
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<TestRuntime, _>::Premature);
+		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test, _>::Premature);
 
 		System::set_block_number(2);
 		assert_noop!(TipsModTestInst::close_tip(Origin::none(), h.into()), BadOrigin);
@@ -291,7 +293,7 @@ fn close_tip_works() {
 		// TODO :: re-visit
 		// assert_eq!(last_event(), RawEvent::TipClosed(h, 3, 10));
 
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(100), h.into()), Error::<TestRuntime, _>::UnknownTip);
+		assert_noop!(TipsModTestInst::close_tip(Origin::signed(100), h.into()), Error::<Test, _>::UnknownTip);
 	});
 }
 
@@ -305,10 +307,10 @@ fn retract_tip_works() {
 		assert_ok!(TipsModTestInst::tip(Origin::signed(10), h.clone(), 10));
 		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
-		assert_noop!(TipsModTestInst::retract_tip(Origin::signed(10), h.clone()), Error::<TestRuntime, _>::NotFinder);
+		assert_noop!(TipsModTestInst::retract_tip(Origin::signed(10), h.clone()), Error::<Test, _>::NotFinder);
 		assert_ok!(TipsModTestInst::retract_tip(Origin::signed(0), h.clone()));
 		System::set_block_number(2);
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<TestRuntime, _>::UnknownTip);
+		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test, _>::UnknownTip);
 
 		// with tip new
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
@@ -316,10 +318,10 @@ fn retract_tip_works() {
 		let h = tip_hash();
 		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
-		assert_noop!(TipsModTestInst::retract_tip(Origin::signed(0), h.clone()), Error::<TestRuntime, _>::NotFinder);
+		assert_noop!(TipsModTestInst::retract_tip(Origin::signed(0), h.clone()), Error::<Test, _>::NotFinder);
 		assert_ok!(TipsModTestInst::retract_tip(Origin::signed(10), h.clone()));
 		System::set_block_number(2);
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(10), h.into()), Error::<TestRuntime, _>::UnknownTip);
+		assert_noop!(TipsModTestInst::close_tip(Origin::signed(10), h.into()), Error::<Test, _>::UnknownTip);
 	});
 }
 
@@ -407,11 +409,11 @@ fn test_last_reward_migration() {
 
 	let data = vec![
 		(
-			Tips::<TestRuntime>::hashed_key_for(hash1),
+			Tips::<Test>::hashed_key_for(hash1),
 			old_tip_finder.encode().to_vec()
 		),
 		(
-			Tips::<TestRuntime>::hashed_key_for(hash2),
+			Tips::<Test>::hashed_key_for(hash2),
 			old_tip_no_finder.encode().to_vec()
 		),
 	];
@@ -428,7 +430,7 @@ fn test_last_reward_migration() {
 
 		// Test w/ finder
 		assert_eq!(
-			Tips::<TestRuntime>::get(hash1),
+			Tips::<Test>::get(hash1),
 			Some(OpenTip {
 				reason: reason1,
 				who: 10,
@@ -442,7 +444,7 @@ fn test_last_reward_migration() {
 
 		// Test w/o finder
 		assert_eq!(
-			Tips::<TestRuntime>::get(hash2),
+			Tips::<Test>::get(hash2),
 			Some(OpenTip {
 				reason: reason2,
 				who: 20,
@@ -458,13 +460,13 @@ fn test_last_reward_migration() {
 
 #[test]
 fn genesis_funding_works() {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<TestRuntime>().unwrap();
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let initial_funding = 100;
-	pallet_balances::GenesisConfig::<TestRuntime>{
+	pallet_balances::GenesisConfig::<Test>{
 		// Total issuance will be 200 with treasury account initialized with 100.
 		balances: vec![(0, 100), (Treasury::account_id(), initial_funding)],
 	}.assimilate_storage(&mut t).unwrap();
-	pallet_treasury::GenesisConfig::default().assimilate_storage::<TestRuntime, _>(&mut t).unwrap();
+	pallet_treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {

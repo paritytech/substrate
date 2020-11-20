@@ -25,7 +25,7 @@ use frame_support::{
 	assert_noop, assert_ok, impl_outer_origin, impl_outer_event, parameter_types, weights::Weight,
 	traits::{Contains, OnInitialize}
 };
-
+use frame_system::{self as system};
 use frame_support::traits::ContainsLengthBound;
 
 use sp_core::H256;
@@ -165,15 +165,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	}.assimilate_storage(&mut t).unwrap();
 	GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
 	t.into()
-}
-
-fn last_event() -> RawEvent<u64, u128, DefaultInstance> {
-	System::events().into_iter().map(|r| r.event)
-		.filter_map(|e| {
-			if let Event::treasury(inner) = e { Some(inner) } else { None }
-		})
-		.last()
-		.unwrap()
 }
 
 #[test]

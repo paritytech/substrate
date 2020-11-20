@@ -144,13 +144,15 @@ use sp_std::if_std;
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error, Parameter};
 use frame_support::traits::{
-	Currency, Get, Imbalance, ExistenceRequirement::{KeepAlive},
+	Currency, Get, ExistenceRequirement::{KeepAlive},
 	ReservableCurrency
 };
-use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
-	Zero, AccountIdConversion, Saturating, Hash, BadOrigin
+
+use sp_runtime::{ModuleId, Percent, RuntimeDebug, traits::{
+	Zero, AccountIdConversion, Hash, BadOrigin
 }};
-use frame_support::traits::{Contains, ContainsLengthBound, EnsureOrigin};
+
+use frame_support::traits::{Contains, ContainsLengthBound};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
@@ -226,7 +228,7 @@ pub struct OpenTip<
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Tips {
+	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Treasury {
 
 		/// TipsMap that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
 		/// This has the insecure enumerable hash function since the key itself is already

@@ -22,8 +22,8 @@
 use super::*;
 use std::cell::RefCell;
 use frame_support::{
-	assert_noop, assert_ok, impl_outer_origin, impl_outer_event, parameter_types, weights::Weight,
-	traits::{Contains, OnInitialize}
+	assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight,
+	traits::{Contains, ContainsLengthBound, OnInitialize}
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -151,7 +151,7 @@ impl pallet_treasury::Trait<DefaultInstance> for Test {
 	type MaximumReasonLength = MaximumReasonLength;
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
-	type SpendFunds = ( Bounties );
+	type SpendFunds = Bounties;
 }
 parameter_types! {
 	pub const BountyDepositBase: u64 = 80;

@@ -138,20 +138,19 @@ pub mod weights;
 
 use sp_std::prelude::*;
 
-use sp_std::if_std;
-
-use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error};
+use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error};
 
 use frame_support::traits::{
-	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{KeepAlive, AllowDeath},
-	ReservableCurrency, WithdrawReasons
-};
+	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{AllowDeath},
+	ReservableCurrency};
 use sp_runtime::{Permill, ModuleId, RuntimeDebug, DispatchResult, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, BadOrigin
 }};
 use frame_support::dispatch::DispatchResultWithPostInfo;
-use frame_support::traits::{Contains, ContainsLengthBound, EnsureOrigin};
-use frame_support::weights::{Weight, DispatchClass};
+use frame_support::traits::{EnsureOrigin};
+
+// use frame_support::weights::{Weight, DispatchClass};
+use frame_support::weights::{Weight};
 
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
@@ -242,16 +241,12 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Bounties {
+	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Treasury {
 
 		/// Number of bounty proposals that have been made.
 		pub BountyCount get(fn bounty_count): BountyIndex;
 
 		/// Bounties that have been made.
-		// pub StrBountiesMap get(fn bounties):
-		// 	map hasher(twox_64_concat) BountyIndex
-		// 	=> Option<Bounty<T::AccountId, BalanceOf<T, I>, T::BlockNumber>>;
-
 		pub Bounties get(fn bounties):
 		map hasher(twox_64_concat) BountyIndex
 		=> Option<Bounty<T::AccountId, BalanceOf<T, I>, T::BlockNumber>>;
