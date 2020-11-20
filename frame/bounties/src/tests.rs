@@ -23,7 +23,7 @@ use super::*;
 use std::cell::RefCell;
 use frame_support::{
 	assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight,
-	traits::{Contains, ContainsLengthBound, OnInitialize}
+	impl_outer_event, traits::{Contains, ContainsLengthBound, OnInitialize}
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -41,14 +41,14 @@ mod bounties {
 	pub use crate::*;
 }
 
-// impl_outer_event! {
-// 	pub enum Event for Test {
-// 		system<T>,
-// 		pallet_balances<T>,
-// 		pallet_treasury<T>,
-// 		bounties<T>,
-// 	}
-// }
+impl_outer_event! {
+	pub enum Event for Test {
+		system<T>,
+		pallet_balances<T>,
+		pallet_treasury<T>,
+		bounties<T>,
+	}
+}
 
 
 #[derive(Clone, Eq, PartialEq)]
@@ -71,7 +71,7 @@ impl frame_system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	// type Event = Event;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
@@ -94,7 +94,7 @@ impl pallet_balances::Trait for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	// type Event = Event;
-	type Event = ();
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -135,14 +135,14 @@ parameter_types! {
 	pub const MaximumReasonLength: u32 = 16384;
 }
 // impl pallet_treasury::Trait for Test {
-impl pallet_treasury::Trait<DefaultInstance> for Test {
+impl pallet_treasury::Trait for Test {
 	type ModuleId = TreasuryModuleId;
 	type Currency = pallet_balances::Module<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
 	type DataDepositPerByte = DataDepositPerByte;
 	// type Event = Event;
-	type Event = ();
+	type Event = Event;
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ProposalBondMinimum;
@@ -162,7 +162,7 @@ parameter_types! {
 }
 impl Trait for Test {
 	// type Event = Event;
-	type Event = ();
+	type Event = Event;
 	type BountyDepositBase = BountyDepositBase;
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
 	type BountyUpdatePeriod = BountyUpdatePeriod;
@@ -172,7 +172,7 @@ impl Trait for Test {
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
-type Treasury = pallet_treasury::Module<Test, DefaultInstance>;
+type Treasury = pallet_treasury::Module<Test>;
 type Bounties = Module<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -185,14 +185,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	t.into()
 }
 
-// fn last_event() -> RawEvent<u64, u128, DefaultInstance> {
-// 	System::events().into_iter().map(|r| r.event)
-// 		.filter_map(|e| {
-// 			if let Event::treasury(inner) = e { Some(inner) } else { None }
-// 		})
-// 		.last()
-// 		.unwrap()
-// }
+fn last_event() -> RawEvent<u64, u128, DefaultInstance> {
+	System::events().into_iter().map(|r| r.event)
+		.filter_map(|e| {
+			if let Event::bounties(inner) = e { Some(inner) } else { None }
+		})
+		.last()
+		.unwrap()
+}
 
 #[test]
 fn genesis_config_works() {
@@ -418,7 +418,7 @@ fn propose_bounty_works() {
 
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 10, b"1234567890".to_vec()));
 
-		// assert_eq!(last_event(), RawEvent::BountyProposed(0));
+		assert_eq!(last_event(), RawEvent::BountyProposed(0));
 
 		let deposit: u64 = 85 + 5;
 		assert_eq!(Balances::reserved_balance(0), deposit);
@@ -477,7 +477,7 @@ fn close_bounty_works() {
 
 		let deposit: u64 = 80 + 5;
 
-		// assert_eq!(last_event(), RawEvent::BountyRejected(0, deposit));
+		assert_eq!(last_event(), RawEvent::BountyRejected(0, deposit));
 
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
@@ -687,8 +687,7 @@ fn award_and_claim_bounty_works() {
 
 		assert_ok!(Bounties::claim_bounty(Origin::signed(1), 0));
 
-		// TODO re-visit
-		// assert_eq!(last_event(), RawEvent::BountyClaimed(0, 56, 3));
+		assert_eq!(last_event(), RawEvent::BountyClaimed(0, 56, 3));
 
 		assert_eq!(Balances::free_balance(4), 14); // initial 10 + fee 4
 		// TODO re-visit
@@ -726,8 +725,7 @@ fn claim_handles_high_fee() {
 
 		assert_ok!(Bounties::claim_bounty(Origin::signed(1), 0));
 
-		// TODO :: re-visit
-		// assert_eq!(last_event(), RawEvent::BountyClaimed(0, 0, 3));
+		assert_eq!(last_event(), RawEvent::BountyClaimed(0, 0, 3));
 
 		assert_eq!(Balances::free_balance(4), 70); // 30 + 50 - 10
 		assert_eq!(Balances::free_balance(3), 0);
@@ -804,8 +802,7 @@ fn award_and_cancel() {
 		assert_ok!(Bounties::unassign_curator(Origin::root(), 0));
 		assert_ok!(Bounties::close_bounty(Origin::root(), 0));
 
-		// TODO :: re-visit
-		// assert_eq!(last_event(), RawEvent::BountyCanceled(0));
+		assert_eq!(last_event(), RawEvent::BountyCanceled(0));
 
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 0);
 

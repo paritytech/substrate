@@ -156,11 +156,11 @@ use codec::{Encode, Decode};
 use frame_system::{ensure_signed};
 pub use weights::WeightInfo;
 
-pub type BalanceOf<T, I> =
+pub type BalanceOf<T, I=DefaultInstance> =
 	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-pub type PositiveImbalanceOf<T, I> =
+pub type PositiveImbalanceOf<T, I=DefaultInstance> =
 	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
-pub type NegativeImbalanceOf<T, I> =
+pub type NegativeImbalanceOf<T, I=DefaultInstance> =
 	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait Trait<I=DefaultInstance>: frame_system::Trait {

@@ -156,14 +156,14 @@ use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
 
-type BalanceOf<T, I> = pallet_treasury::BalanceOf<T, I>;
+type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
 
-type PositiveImbalanceOf<T, I> = pallet_treasury::PositiveImbalanceOf<T, I>;
+type PositiveImbalanceOf<T> = pallet_treasury::PositiveImbalanceOf<T>;
 
-pub trait Trait<I=DefaultInstance>: frame_system::Trait + pallet_treasury::Trait<I> {
+pub trait Trait<I=DefaultInstance>: frame_system::Trait + pallet_treasury::Trait {
 
 	/// The amount held on deposit for placing a bounty proposal.
-	type BountyDepositBase: Get<BalanceOf<Self, I>>;
+	type BountyDepositBase: Get<BalanceOf<Self>>;
 
 	/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 	type BountyDepositPayoutDelay: Get<Self::BlockNumber>;
@@ -175,7 +175,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait + pallet_treasury::Trait
 	type BountyCuratorDeposit: Get<Permill>;
 
 	/// Minimum value for a bounty.
-	type BountyValueMinimum: Get<BalanceOf<Self, I>>;
+	type BountyValueMinimum: Get<BalanceOf<Self>>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
@@ -249,7 +249,7 @@ decl_storage! {
 		/// Bounties that have been made.
 		pub Bounties get(fn bounties):
 		map hasher(twox_64_concat) BountyIndex
-		=> Option<Bounty<T::AccountId, BalanceOf<T, I>, T::BlockNumber>>;
+		=> Option<Bounty<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
 		/// The description of each bounty.
 		pub BountyDescriptions get(fn bounty_descriptions): map hasher(twox_64_concat) BountyIndex => Option<Vec<u8>>;
@@ -262,7 +262,7 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T, I=DefaultInstance>
 	where
-		Balance = BalanceOf<T, I>,
+		Balance = BalanceOf<T>,
 		<T as frame_system::Trait>::AccountId,
 	{
 		/// New bounty proposal. [index]
@@ -317,7 +317,7 @@ decl_module! {
 		const ProposalBond: Permill = T::ProposalBond::get();
 
 		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
-		const ProposalBondMinimum: BalanceOf<T, I> = T::ProposalBondMinimum::get();
+		const ProposalBondMinimum: BalanceOf<T> = T::ProposalBondMinimum::get();
 
 		/// Period between successive spends.
 		const SpendPeriod: T::BlockNumber = T::SpendPeriod::get();
@@ -326,13 +326,13 @@ decl_module! {
 		const Burn: Permill = T::Burn::get();
 
 		/// The amount held on deposit per byte within the tip report reason or bounty description.
-		const DataDepositPerByte: BalanceOf<T, I> = T::DataDepositPerByte::get();
+		const DataDepositPerByte: BalanceOf<T> = T::DataDepositPerByte::get();
 
 		/// The treasury's module id, used for deriving its sovereign account ID.
 		const ModuleId: ModuleId = T::ModuleId::get();
 
 		/// The amount held on deposit for placing a bounty proposal.
-		const BountyDepositBase: BalanceOf<T, I> = T::BountyDepositBase::get();
+		const BountyDepositBase: BalanceOf<T> = T::BountyDepositBase::get();
 
 		/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 		const BountyDepositPayoutDelay: T::BlockNumber = T::BountyDepositPayoutDelay::get();
@@ -340,7 +340,7 @@ decl_module! {
 		/// Percentage of the curator fee that will be reserved upfront as deposit for bounty curator.
 		const BountyCuratorDeposit: Permill = T::BountyCuratorDeposit::get();
 
-		const BountyValueMinimum: BalanceOf<T, I> = T::BountyValueMinimum::get();
+		const BountyValueMinimum: BalanceOf<T> = T::BountyValueMinimum::get();
 
 		/// Maximum acceptable reason length.
 		const MaximumReasonLength: u32 = T::MaximumReasonLength::get();
@@ -364,7 +364,7 @@ decl_module! {
 		#[weight = <T as Trait<I>>::WeightInfo::propose_bounty(description.len() as u32)]
 		fn propose_bounty(
 			origin,
-			#[compact] value: BalanceOf<T, I>,
+			#[compact] value: BalanceOf<T>,
 			description: Vec<u8>,
 		) {
 			let proposer = ensure_signed(origin)?;
@@ -411,7 +411,7 @@ decl_module! {
 			origin,
 			#[compact] bounty_id: ProposalIndex,
 			curator: <T::Lookup as StaticLookup>::Source,
-			#[compact] fee: BalanceOf<T, I>,
+			#[compact] fee: BalanceOf<T>,
 		) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
@@ -471,7 +471,7 @@ decl_module! {
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 
-				let slash_curator = |curator: &T::AccountId, curator_deposit: &mut BalanceOf<T, I>| {
+				let slash_curator = |curator: &T::AccountId, curator_deposit: &mut BalanceOf<T>| {
 					let imbalance = T::Currency::slash_reserved(curator, *curator_deposit).0;
 					T::OnSlash::on_unbalanced(imbalance);
 					*curator_deposit = Zero::zero();
@@ -744,7 +744,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	fn create_bounty(
 		proposer: T::AccountId,
 		description: Vec<u8>,
-		value: BalanceOf<T, I>,
+		value: BalanceOf<T>,
 	) -> DispatchResult {
 		ensure!(description.len() <= T::MaximumReasonLength::get() as usize, Error::<T, I>::ReasonTooBig);
 		ensure!(value >= T::BountyValueMinimum::get(), Error::<T, I>::InvalidValue);
@@ -778,10 +778,10 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 }
 
-impl<T: Trait<I>, I: Instance> pallet_treasury::SpendFunds<T, I> for Module<T, I> {
+impl<T: Trait<I>, I: Instance> pallet_treasury::SpendFunds<T> for Module<T, I> {
 
-	fn spend_funds( budget_remaining: &mut BalanceOf<T, I>,
-					imbalance: &mut PositiveImbalanceOf<T, I>,
+	fn spend_funds( budget_remaining: &mut BalanceOf<T>,
+					imbalance: &mut PositiveImbalanceOf<T>,
 					total_weight: &mut Weight,
 					missed_any: &mut bool ) {
 
