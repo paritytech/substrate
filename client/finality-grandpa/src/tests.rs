@@ -99,9 +99,7 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn add_full_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![
-				(communication::GRANDPA_ENGINE_ID, communication::GRANDPA_PROTOCOL_NAME.into())
-			],
+			notifications_protocols: vec![communication::GRANDPA_PROTOCOL_NAME.into()],
 			..Default::default()
 		})
 	}
