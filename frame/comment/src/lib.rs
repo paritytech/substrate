@@ -20,17 +20,24 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{DispatchResult, traits::StaticLookup};
+use sp_runtime::{
+	DispatchResult, RuntimeDebug, SaturatedConversion,
+	traits::{StaticLookup, Saturating},
+};
 
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
 use frame_support::{
 	weights::{Weight, GetDispatchInfo, Pays},
-	traits::UnfilteredDispatchable,
+	traits::{
+		UnfilteredDispatchable, BalanceStatus, Currency, ReservableCurrency,
+		Get,
+	},
 	dispatch::DispatchResultWithPostInfo,
 };
 use frame_system::ensure_signed;
+use codec::{Codec, Encode, Decode};
 
 #[cfg(test)]
 mod mock;
@@ -55,15 +62,18 @@ pub trait Trait: frame_system::Trait {
 
 	type MinDeposit: Get<BalanceOf<Self>>;
 
-	type BurnDestination: Get<Self::Origin>;
+	type BurnDestination: Get<Self::AccountId>;
 }
 
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, Default)]
 struct Comment<Balance, BlockNumber> {
 	pub deposit: Balance,
+	pub tax_rate: Tax<Balance>,
 	pub block_number: BlockNumber,
 	pub comment: Vec<u8>,
 }
 
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default)]
 struct Tax<Balance> {
 	pub base: Balance,
 	pub per_byte: Balance,
@@ -81,11 +91,11 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as Comment {
 		/// Comments: User -> Topic -> Message
-		Comments get(fn comment): double_map hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) Vec<u8>
+		Comments get(fn comments): double_map hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) Vec<u8>
 			=> Option<Comment<BalanceOf<T>, T::BlockNumber>>;
 
 		/// Threads: Topic -> User -> Message
-		Threads get(fn thread): double_map hasher(blake2_128_concat) Vec<u8>, hasher(twox_64_concat) T::AccountId
+		Threads get(fn threads): double_map hasher(blake2_128_concat) Vec<u8>, hasher(twox_64_concat) T::AccountId
 			=> Option<Comment<BalanceOf<T>, T::BlockNumber>>;
 
 		/// The tax rate per byte for data stored on chain.
@@ -115,15 +125,15 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 
 			let topic_len = topic.len();
-			ensure(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
+			ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
 			let value_len = value.len();
-			ensure(topic_len <= T::MaxTopicLength::get(), Error::<T>::ValueTooLarge);
+			ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::ValueTooLarge);
 
-			let deposit = T::ByteFee::get().saturating_mul(topic_len.saturating_add(value_len));
-			T::Currency::reserve(sender, deposit)?;
+			let deposit = T::ByteTax::get().saturating_mul(topic_len.saturating_add(value_len).saturated_into());
+			T::Currency::reserve(&sender, deposit)?;
 
 			let block_number = frame_system::Module::<T>::block_number();
-			let tax_rate = Self::tax();
+			let tax_rate = Self::taxes();
 			let comment = Comment {
 				deposit,
 				block_number,
@@ -142,19 +152,19 @@ decl_module! {
 			let topic_len = topic.len();
 			ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
 
-			let Comment { deposit, block_number, comment } = Self::comments(&who, &topic).unwrap_or(Error::<T>::NotFound)?;
+			let Comment { deposit, tax_rate, block_number, comment } = Self::comments(&who, &topic).ok_or(Error::<T>::NotFound)?;
 			let taxes = Self::taxes();
 
-			let tax = (taxes.base.saturating_add(taxes.per_byte.saturating_mul(comment.len())))
-				.saturating_mul(block_number);
+			let tax = (taxes.base.saturating_add(taxes.per_byte.saturating_mul(comment.len().saturated_into())))
+				.saturating_mul(block_number.into());
 			let remaining_deposit = deposit.saturating_sub(tax);
 
 			let can_be_removed = remaining_deposit <= T::MinDeposit::get() || sender == who;
 			ensure!(can_be_removed, Error::<T>::CannotRemove);
 
 			// Comment will be removed. Actions are always the same.
-			T::Currency::repatriate_reserved(who, sender, remaining_deposit, Status::Free);
-			T::Currency::repatriate_reserved(who, T::BurnDestination::get(), tax, Status::Free);
+			T::Currency::repatriate_reserved(&who, &sender, remaining_deposit, BalanceStatus::Free);
+			T::Currency::repatriate_reserved(&who, &T::BurnDestination::get(), tax, BalanceStatus::Free);
 			Comments::<T>::remove(who, topic);
 			Self::deposit_event(RawEvent::CommentRemoved(who, topic));
 		}
@@ -164,11 +174,11 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 
 			let topic_len = topic.len();
-			ensure(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
+			ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
 
-			Comments::<T>::try_mutate(who, topic, |mut comment| {
-				//T::Currency::transfer(sender, who, )
-			});
+			// Comments::<T>::try_mutate(who, topic, |mut comment| {
+			// 	//T::Currency::transfer(sender, who, )
+			// });
 		}
 	}
 }
