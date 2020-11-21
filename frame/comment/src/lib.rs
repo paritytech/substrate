@@ -22,22 +22,15 @@
 use sp_std::prelude::*;
 use sp_runtime::{
 	DispatchResult, RuntimeDebug, SaturatedConversion,
-	traits::{StaticLookup, Saturating},
+	traits::{Saturating},
 };
 
+use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
 use frame_support::{
-	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
-};
-use frame_support::{
-	weights::{Weight, GetDispatchInfo, Pays},
-	traits::{
-		UnfilteredDispatchable, BalanceStatus, Currency, ReservableCurrency,
-		Get,
-	},
-	dispatch::DispatchResultWithPostInfo,
+	traits::{Currency, ReservableCurrency, Get},
 };
 use frame_system::ensure_signed;
-use codec::{Codec, Encode, Decode};
+use codec::{Encode, Decode};
 
 #[cfg(test)]
 mod mock;
@@ -47,138 +40,122 @@ mod tests;
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-
+	/// Balances
 	type Currency: ReservableCurrency<Self::AccountId>;
-
-	type ByteDeposit: Get<BalanceOf<Self>>;
-
-	type BaseTax: Get<BalanceOf<Self>>;
-
-	type ByteTax: Get<BalanceOf<Self>>;
-
-	type MaxTopicLength: Get<usize>;
-
-	type MaxCommentLength: Get<usize>;
-
+	/// The minimum deposit that needs to be placed for a comment.
 	type MinDeposit: Get<BalanceOf<Self>>;
-
-	type BurnDestination: Get<Self::AccountId>;
+	/// The amount per byte users need to deposit.
+	type ByteDeposit: Get<BalanceOf<Self>>;
+	/// The maximum number of bytes for a topic.
+	type MaxTopicLength: Get<usize>;
+	/// The maximum number of bytes for a comment.
+	type MaxCommentLength: Get<usize>;
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, Default)]
-struct Comment<Balance, BlockNumber> {
+pub struct Post<Balance, BlockNumber> {
 	pub deposit: Balance,
-	pub tax_rate: Tax<Balance>,
 	pub block_number: BlockNumber,
 	pub comment: Vec<u8>,
 }
 
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default)]
-struct Tax<Balance> {
-	pub base: Balance,
-	pub per_byte: Balance,
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+pub enum PostType {
+	Blog,
+	Thread,
 }
 
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
-		CommentCreated(AccountId, Vec<u8>),
-		CommentRemoved(AccountId, Vec<u8>),
+		CommentPosted(AccountId, Vec<u8>),
+		CommentDeleted(AccountId, Vec<u8>),
 	}
 );
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Comment {
-		/// Comments: User -> Topic -> Message
-		Comments get(fn comments): double_map hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) Vec<u8>
-			=> Option<Comment<BalanceOf<T>, T::BlockNumber>>;
+		/// Blogs: User -> Topic -> Message
+		Blog get(fn blog): double_map hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) Vec<u8>
+			=> Option<Post<BalanceOf<T>, T::BlockNumber>>;
 
 		/// Threads: Topic -> User -> Message
-		Threads get(fn threads): double_map hasher(blake2_128_concat) Vec<u8>, hasher(twox_64_concat) T::AccountId
-			=> Option<Comment<BalanceOf<T>, T::BlockNumber>>;
-
-		/// The tax rate per byte for data stored on chain.
-		Taxes get(fn taxes) config(): Tax<BalanceOf<T>>;
+		Thread get(fn thread): double_map hasher(blake2_128_concat) Vec<u8>, hasher(twox_64_concat) T::AccountId
+			=> Option<Post<BalanceOf<T>, T::BlockNumber>>;
 	}
 }
 
 decl_error! {
-	/// Error for the Sudo module
 	pub enum Error for Module<T: Trait> {
+		/// The topic provided is larger than allowed.
 		TopicTooLarge,
-		ValueTooLarge,
+		/// The topic provided is larger than allowed.
+		CommentTooLarge,
+		/// The comment you are looking for does not exist.
 		NotFound,
-		CannotRemove,
 	}
 }
 
 decl_module! {
-	/// Sudo module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
 
 		#[weight = 0]
-		fn comment(origin, topic: Vec<u8>, value: Vec<u8>, extra_deposit: BalanceOf<T>) {
-			let sender = ensure_signed(origin)?;
+		fn post(origin, topic: Vec<u8>, comment: Vec<u8>, post_type: PostType) {
+			let poster = ensure_signed(origin)?;
+			Self::impl_post(&poster, &topic, comment, post_type)?;
+		}
 
+		#[weight = 0]
+		fn delete(origin, topic: Vec<u8>, post_type: PostType) {
+			let poster = ensure_signed(origin)?;
+			Self::impl_delete(&poster, &topic, post_type)?;
+		}
+	}
+}
+
+impl<T: Trait> Module<T> {
+	fn impl_post(who: &T::AccountId, topic: &[u8], comment: Vec<u8>, post_type: PostType) -> DispatchResult {
 			let topic_len = topic.len();
 			ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
-			let value_len = value.len();
-			ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::ValueTooLarge);
+			let comment_len = comment.len();
+			ensure!(comment_len <= T::MaxCommentLength::get(), Error::<T>::CommentTooLarge);
 
-			let deposit = T::ByteTax::get().saturating_mul(topic_len.saturating_add(value_len).saturated_into());
-			T::Currency::reserve(&sender, deposit)?;
+			let deposit = T::ByteDeposit::get().saturating_mul(
+				topic_len.saturating_add(comment_len).saturated_into()
+			);
+			T::Currency::reserve(who, deposit.max(T::MinDeposit::get()))?;
 
 			let block_number = frame_system::Module::<T>::block_number();
-			let tax_rate = Self::taxes();
-			let comment = Comment {
+
+			let post = Post {
 				deposit,
 				block_number,
-				tax_rate,
-				comment: value,
+				comment,
 			};
-			Comments::<T>::insert(sender, topic, comment);
 
-			Self::deposit_event(RawEvent::CommentCreated(sender, topic))
-		}
+			match post_type {
+				PostType::Blog => Blog::<T>::insert(who, topic, post),
+				PostType::Thread => Thread::<T>::insert(topic, who, post),
+			}
 
-		#[weight = 0]
-		fn remove_comment(origin, who: T::AccountId, topic: Vec<u8>) {
-			let sender = ensure_signed(origin)?;
+			Ok(())
+	}
 
-			let topic_len = topic.len();
-			ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
+	fn impl_delete(who: &T::AccountId, topic: &[u8], post_type: PostType) -> DispatchResult {
+		let topic_len = topic.len();
+		ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
 
-			let Comment { deposit, tax_rate, block_number, comment } = Self::comments(&who, &topic).ok_or(Error::<T>::NotFound)?;
-			let taxes = Self::taxes();
+		let post = match post_type {
+			PostType::Blog => Blog::<T>::take(who, topic).ok_or(Error::<T>::NotFound)?,
+			PostType::Thread => Thread::<T>::take(topic, who).ok_or(Error::<T>::NotFound)?,
+		};
 
-			let tax = (taxes.base.saturating_add(taxes.per_byte.saturating_mul(comment.len().saturated_into())))
-				.saturating_mul(block_number.into());
-			let remaining_deposit = deposit.saturating_sub(tax);
-
-			let can_be_removed = remaining_deposit <= T::MinDeposit::get() || sender == who;
-			ensure!(can_be_removed, Error::<T>::CannotRemove);
-
-			// Comment will be removed. Actions are always the same.
-			T::Currency::repatriate_reserved(&who, &sender, remaining_deposit, BalanceStatus::Free);
-			T::Currency::repatriate_reserved(&who, &T::BurnDestination::get(), tax, BalanceStatus::Free);
-			Comments::<T>::remove(who, topic);
-			Self::deposit_event(RawEvent::CommentRemoved(who, topic));
-		}
-
-		#[weight = 0]
-		fn increase_deposit(origin, who: T::AccountId, topic: Vec<u8>, extra_deposit: BalanceOf<T>) {
-			let sender = ensure_signed(origin)?;
-
-			let topic_len = topic.len();
-			ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
-
-			// Comments::<T>::try_mutate(who, topic, |mut comment| {
-			// 	//T::Currency::transfer(sender, who, )
-			// });
-		}
+		T::Currency::unreserve(who, post.deposit);
+		Ok(())
+		//Self::deposit_event(RawEvent::CommentDeleted(who, topic));
 	}
 }
