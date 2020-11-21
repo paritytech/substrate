@@ -19,6 +19,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+mod benchmarks;
+pub mod weights;
+
 use sp_std::prelude::*;
 use sp_runtime::{RuntimeDebug, SaturatedConversion, traits::Saturating};
 
@@ -28,11 +35,7 @@ use frame_support::{
 };
 use frame_system::ensure_signed;
 use codec::{Encode, Decode};
-
-#[cfg(test)]
-mod mock;
-#[cfg(test)]
-mod tests;
+pub use weights::WeightInfo;
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -43,10 +46,12 @@ pub trait Trait: frame_system::Trait {
 	type MinDeposit: Get<BalanceOf<Self>>;
 	/// The amount per byte users need to deposit.
 	type ByteDeposit: Get<BalanceOf<Self>>;
-	/// The maximum number of bytes for a topic.
+	/// The max length for a topic.
 	type MaxTopicLength: Get<usize>;
-	/// The maximum number of bytes for a post.
+	/// The max length for a post.
 	type MaxPostLength: Get<usize>;
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, Default)]
@@ -68,8 +73,8 @@ pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::
 
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
-		PostCreated(AccountId, Topic),
-		PostDeleted(AccountId, Topic),
+		PostCreated(AccountId, Topic, PostType),
+		PostDeleted(AccountId, Topic, PostType),
 	}
 );
 
@@ -87,12 +92,12 @@ decl_storage! {
 
 decl_error! {
 	pub enum Error for Module<T: Trait> {
-		/// The topic provided is larger than allowed.
-		TopicTooLarge,
-		/// The topic provided is larger than allowed.
-		CommentTooLarge,
 		/// The comment you are looking for does not exist.
 		NotFound,
+		/// The topic is too long.
+		TopicLength,
+		/// The post is too long.
+		PostLength,
 	}
 }
 
@@ -102,14 +107,14 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		#[weight = 0]
-		fn post(origin, topic: Topic, post: Vec<u8>, post_type: PostType) {
+		#[weight = T::WeightInfo::post()]
+		fn post(origin, post_type: PostType, topic: Topic, post: Vec<u8>) {
 			let poster = ensure_signed(origin)?;
 
 			let topic_len = topic.len();
-			ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
+			ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicLength);
 			let post_len = post.len();
-			ensure!(post_len <= T::MaxPostLength::get(), Error::<T>::CommentTooLarge);
+			ensure!(post_len <= T::MaxPostLength::get(), Error::<T>::PostLength);
 
 			let deposit = T::ByteDeposit::get().saturating_mul(
 				topic_len.saturating_add(post_len).saturated_into()
@@ -129,15 +134,12 @@ decl_module! {
 				PostType::Thread => Thread::<T>::insert(&topic, &poster, post),
 			}
 
-			Self::deposit_event(RawEvent::PostCreated(poster, topic));
+			Self::deposit_event(RawEvent::PostCreated(poster, topic, post_type));
 		}
 
-		#[weight = 0]
-		fn delete(origin, topic: Topic, post_type: PostType) {
+		#[weight = T::WeightInfo::delete()]
+		fn delete(origin, post_type: PostType, topic: Topic) {
 			let poster = ensure_signed(origin)?;
-
-			let topic_len = topic.len();
-			ensure!(topic_len <= T::MaxTopicLength::get(), Error::<T>::TopicTooLarge);
 
 			let post = match post_type {
 				PostType::Blog => Blog::<T>::take(&poster, &topic).ok_or(Error::<T>::NotFound)?,
@@ -145,7 +147,7 @@ decl_module! {
 			};
 
 			T::Currency::unreserve(&poster, post.deposit);
-			Self::deposit_event(RawEvent::PostDeleted(poster, topic));
+			Self::deposit_event(RawEvent::PostDeleted(poster, topic, post_type));
 		}
 	}
 }

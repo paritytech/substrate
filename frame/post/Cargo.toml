@@ -20,8 +20,11 @@ sp-runtime = { version = "2.0.0-rc6", default-features = false, path = "../../pr
 frame-support = { version = "2.0.0-rc6", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-rc6", default-features = false, path = "../system" }
 
+frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
+
 [dev-dependencies]
 sp-core = { version = "2.0.0-rc6", path = "../../primitives/core" }
+pallet-balances = { version = "2.0.0-rc6", path = "../balances" }
 
 [features]
 default = ["std"]
@@ -33,4 +36,9 @@ std = [
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
+]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"frame-system/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
 ]

@@ -18,152 +18,95 @@
 //! Tests for the module.
 
 use super::*;
-use mock::{ 
-	Sudo, SudoCall, Origin, Call, Test, new_test_ext, LoggerCall, Logger, System, TestEvent,
-}; 
+use mock::{Post, Balances, Test, Origin, new_test_ext};
 use frame_support::{assert_ok, assert_noop};
+use pallet_balances::Error as BalancesError;
 
 #[test]
-fn test_setup_works() {
-	// Environment setup, logger storage, and sudo `key` retrieval should work as expected.
-	new_test_ext(1).execute_with(|| {
-		assert_eq!(Sudo::key(),  1u64);
-		assert_eq!(Logger::i32_log(), vec![]);
-		assert_eq!(Logger::account_log(), vec![]);
+fn blog_post_lifecycle_works() {
+	new_test_ext().execute_with(|| {
+		let topic = b"hello".to_vec();
+		let post = b"world".to_vec();
+		// Create
+		assert_ok!(Post::post(Origin::signed(1), PostType::Blog, topic.clone(), post.clone()));
+		assert_eq!(Balances::reserved_balance(&1), (topic.len() + post.len()) as u64);
+		assert!(Post::blog(&1, &topic).is_some());
+		// Delete
+		assert_ok!(Post::delete(Origin::signed(1), PostType::Blog, topic.clone()));
+		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert!(Post::blog(&1, &topic).is_none());
 	});
 }
 
 #[test]
-fn sudo_basics() {
-	// Configure a default test environment and set the root `key` to 1.
-	new_test_ext(1).execute_with(|| {
-		// A privileged function should work when `sudo` is passed the root `key` as `origin`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
-		assert_ok!(Sudo::sudo(Origin::signed(1), call));
-		assert_eq!(Logger::i32_log(), vec![42i32]); 
-		
-		// A privileged function should not work when `sudo` is passed a non-root `key` as `origin`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
-		assert_noop!(Sudo::sudo(Origin::signed(2), call), Error::<Test>::RequireSudo);
+fn thread_post_lifecycle_works() {
+	new_test_ext().execute_with(|| {
+		let topic = b"hello".to_vec();
+		let post = b"world".to_vec();
+		// Create
+		assert_ok!(Post::post(Origin::signed(1), PostType::Thread, topic.clone(), post.clone()));
+		assert_eq!(Balances::reserved_balance(&1), (topic.len() + post.len()) as u64);
+		assert!(Post::thread(&topic, &1).is_some());
+		// Delete
+		assert_ok!(Post::delete(Origin::signed(1), PostType::Thread, topic.clone()));
+		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert!(Post::thread(&topic, &1).is_none());
 	});
 }
 
 #[test]
-fn sudo_emits_events_correctly() {
-	new_test_ext(1).execute_with(|| {
-		// Set block number to 1 because events are not emitted on block 0.
-		System::set_block_number(1);
-
-		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1)));
-		assert_ok!(Sudo::sudo(Origin::signed(1), call));
-		let expected_event = TestEvent::sudo(RawEvent::Sudid(Ok(())));
-		assert!(System::events().iter().any(|a| a.event == expected_event)); 
-	})
+fn minimum_deposit_enforced() {
+	new_test_ext().execute_with(|| {
+		let topic = b"a".to_vec();
+		let post = b"b".to_vec();
+		assert_ok!(Post::post(Origin::signed(2), PostType::Blog, topic.clone(), post.clone()));
+		assert_eq!(Balances::reserved_balance(&2), <Test as crate::Trait>::MinDeposit::get());
+	});
 }
 
 #[test]
-fn sudo_unchecked_weight_basics() {
-	new_test_ext(1).execute_with(|| {
-		// A privileged function should work when `sudo` is passed the root `key` as origin.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
-		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1_000));
-		assert_eq!(Logger::i32_log(), vec![42i32]); 
-
-		// A privileged function should not work when called with a non-root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
+fn insufficient_funds_fails() {
+	new_test_ext().execute_with(|| {
+		let topic = b"a very long topic".to_vec();
+		let post = b"and a very long post".to_vec();
 		assert_noop!(
-			Sudo::sudo_unchecked_weight(Origin::signed(2), call, 1_000), 
-			Error::<Test>::RequireSudo,
+			Post::post(Origin::signed(1), PostType::Blog, topic, post),
+			BalancesError::<Test, _>::InsufficientBalance,
 		);
-		// `I32Log` is unchanged after unsuccessful call.
-		assert_eq!(Logger::i32_log(), vec![42i32]); 
-
-		// Controls the dispatched weight.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1)));
-		let sudo_unchecked_weight_call = SudoCall::sudo_unchecked_weight(call, 1_000);
-		let info = sudo_unchecked_weight_call.get_dispatch_info();
-		assert_eq!(info.weight, 1_000);
 	});
 }
 
 #[test]
-fn sudo_unchecked_weight_emits_events_correctly() {
-	new_test_ext(1).execute_with(|| {
-		// Set block number to 1 because events are not emitted on block 0.
-		System::set_block_number(1);
-
-		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1)));
-		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1_000));
-		let expected_event = TestEvent::sudo(RawEvent::Sudid(Ok(())));
-		assert!(System::events().iter().any(|a| a.event == expected_event));
-	})
-}
-
-#[test]
-fn set_key_basics() {
-	new_test_ext(1).execute_with(|| {	
-		// A root `key` can change the root `key`
-		assert_ok!(Sudo::set_key(Origin::signed(1), 2));
-		assert_eq!(Sudo::key(),  2u64);
-	});
-
-	new_test_ext(1).execute_with(|| {
-		// A non-root `key` will trigger a `RequireSudo` error and a non-root `key` cannot change the root `key`.
-		assert_noop!(Sudo::set_key(Origin::signed(2), 3), Error::<Test>::RequireSudo);
+fn missing_post_not_found() {
+	new_test_ext().execute_with(|| {
+		let topic = b"404".to_vec();
+		assert_noop!(
+			Post::delete(Origin::signed(1), PostType::Blog, topic),
+			Error::<Test>::NotFound,
+		);
 	});
 }
 
 #[test]
-fn set_key_emits_events_correctly() {
-	new_test_ext(1).execute_with(|| {	
-		// Set block number to 1 because events are not emitted on block 0.
-		System::set_block_number(1);
-
-		// A root `key` can change the root `key`.
-		assert_ok!(Sudo::set_key(Origin::signed(1), 2));
-		let expected_event = TestEvent::sudo(RawEvent::KeyChanged(1));
-		assert!(System::events().iter().any(|a| a.event == expected_event));
-		// Double check.
-		assert_ok!(Sudo::set_key(Origin::signed(2), 4));
-		let expected_event = TestEvent::sudo(RawEvent::KeyChanged(2));
-		assert!(System::events().iter().any(|a| a.event == expected_event));
+fn topic_too_large() {
+	new_test_ext().execute_with(|| {
+		let topic = vec![0u8; 101];
+		let post = b"hello world".to_vec();
+		assert_noop!(
+			Post::post(Origin::signed(1), PostType::Blog, topic, post),
+			Error::<Test>::TopicLength,
+		);
 	});
 }
 
 #[test]
-fn sudo_as_basics() {
-	new_test_ext(1).execute_with(|| {
-		// A privileged function will not work when passed to `sudo_as`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
-		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
-		assert_eq!(Logger::i32_log(), vec![]); 
-		assert_eq!(Logger::account_log(), vec![]);
-
-		// A non-privileged function should not work when called with a non-root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
-		assert_noop!(Sudo::sudo_as(Origin::signed(3), 2, call), Error::<Test>::RequireSudo);
-
-		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
-		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
-		assert_eq!(Logger::i32_log(), vec![42i32]);
-		 // The correct user makes the call within `sudo_as`.
-		assert_eq!(Logger::account_log(), vec![2]);
-	});
-}
-
-#[test]
-fn sudo_as_emits_events_correctly() {
-		new_test_ext(1).execute_with(|| {	
-		// Set block number to 1 because events are not emitted on block 0.
-		System::set_block_number(1);
-
-		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
-		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
-		let expected_event = TestEvent::sudo(RawEvent::SudoAsDone(true));
-		assert!(System::events().iter().any(|a| a.event == expected_event));
+fn post_too_large() {
+	new_test_ext().execute_with(|| {
+		let topic = b"hello world".to_vec();
+		let post = vec![0u8; 1001];
+		assert_noop!(
+			Post::post(Origin::signed(1), PostType::Blog, topic, post),
+			Error::<Test>::PostLength,
+		);
 	});
 }
