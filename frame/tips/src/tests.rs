@@ -23,7 +23,7 @@ use super::*;
 use std::cell::RefCell;
 use frame_support::{
 	assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight,
-	traits::{Contains}
+	impl_outer_event, traits::{Contains}
 };
 use sp_runtime::{Permill};
 use sp_core::H256;
@@ -42,14 +42,14 @@ mod tips {
 	pub use crate::*;
 }
 
-// impl_outer_event! {
-// 	pub enum Event for Test {
-// 		system<T>,
-// 		pallet_balances<T>,
-// 		pallet_treasury<T>,
-// 		tips<T>,
-// 	}
-// }
+impl_outer_event! {
+	pub enum Event for Test {
+		system<T>,
+		pallet_balances<T>,
+		pallet_treasury<T>,
+		tips<T>,
+	}
+}
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
@@ -70,8 +70,7 @@ impl frame_system::Trait for Test {
 	type AccountId = u128; // u64 is not enough to hold bytes used to generate bounty account
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	// type Event = Event;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
@@ -93,8 +92,7 @@ parameter_types! {
 impl pallet_balances::Trait for Test {
 	type MaxLocks = ();
 	type Balance = u64;
-	// type Event = Event;
-	type Event = ();
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -140,8 +138,7 @@ impl pallet_treasury::Trait for Test {
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
 	type DataDepositPerByte = DataDepositPerByte;
-	// type Event = Event;
-	type Event = ();
+	type Event = Event;
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ProposalBondMinimum;
@@ -162,8 +159,7 @@ impl Trait for Test {
 	type TipCountdown = TipCountdown;
 	type TipFindersFee = TipFindersFee;
 	type TipReportDepositBase = TipReportDepositBase;
-	// type Event = Event;
-	type Event = ();
+	type Event = Event;
 	type WeightInfo = ();
 }
 type System = frame_system::Module<Test>;
@@ -181,14 +177,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	t.into()
 }
 
-// fn last_event() -> RawEvent<u64, u128, H256, DefaultInstance> {
-// 	System::events().into_iter().map(|r| r.event)
-// 		.filter_map(|e| {
-// 			if let Event::treasury(inner) = e { Some(inner) } else { None }
-// 		})
-// 		.last()
-// 		.unwrap()
-// }
+fn last_event() -> RawEvent<u64, u128, H256> {
+	System::events().into_iter().map(|r| r.event)
+		.filter_map(|e| {
+			if let Event::tips(inner) = e { Some(inner) } else { None }
+		})
+		.last()
+		.unwrap()
+}
 
 #[test]
 fn genesis_config_works() {
@@ -271,8 +267,7 @@ fn close_tip_works() {
 
 		let h = tip_hash();
 
-		// TODO :: re-visit
-		// assert_eq!(last_event(), RawEvent::NewTip(h));
+		assert_eq!(last_event(), RawEvent::NewTip(h));
 
 		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
 
@@ -280,8 +275,7 @@ fn close_tip_works() {
 
 		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
 
-		// TODO :: re-visit
-		// assert_eq!(last_event(), RawEvent::TipClosing(h));
+		assert_eq!(last_event(), RawEvent::TipClosing(h));
 
 		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test>::Premature);
 
@@ -290,8 +284,7 @@ fn close_tip_works() {
 		assert_ok!(TipsModTestInst::close_tip(Origin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
 
-		// TODO :: re-visit
-		// assert_eq!(last_event(), RawEvent::TipClosed(h, 3, 10));
+		assert_eq!(last_event(), RawEvent::TipClosed(h, 3, 10));
 
 		assert_noop!(TipsModTestInst::close_tip(Origin::signed(100), h.into()), Error::<Test>::UnknownTip);
 	});

@@ -15,16 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Treasury pallet tests.
+//! bounties pallet tests.
 
 #![cfg(test)]
 
 use super::*;
 use std::cell::RefCell;
+
 use frame_support::{
 	assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight,
-	impl_outer_event, traits::{Contains, ContainsLengthBound, OnInitialize}
+	impl_outer_event, traits::{OnInitialize}
 };
+
 use sp_core::H256;
 use sp_runtime::{
 	Perbill, ModuleId,
@@ -50,7 +52,6 @@ impl_outer_event! {
 	}
 }
 
-
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 parameter_types! {
@@ -70,7 +71,6 @@ impl frame_system::Trait for Test {
 	type AccountId = u128; // u64 is not enough to hold bytes used to generate bounty account
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	// type Event = Event;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
@@ -93,7 +93,6 @@ parameter_types! {
 impl pallet_balances::Trait for Test {
 	type MaxLocks = ();
 	type Balance = u64;
-	// type Event = Event;
 	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
@@ -119,7 +118,6 @@ impl pallet_treasury::Trait for Test {
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
 	type DataDepositPerByte = DataDepositPerByte;
-	// type Event = Event;
 	type Event = Event;
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;
@@ -139,7 +137,6 @@ parameter_types! {
 	pub const BountyValueMinimum: u64 = 1;
 }
 impl Trait for Test {
-	// type Event = Event;
 	type Event = Event;
 	type BountyDepositBase = BountyDepositBase;
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
@@ -461,8 +458,12 @@ fn close_bounty_works() {
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
 		assert_eq!(Bounties::bounties(0), None);
-		// TODO :: re-visit
-		// assert!(!Treasury::Proposals::contains_key(0));
+
+		// TODO :: re-visit during review
+		// assert!(!Treasury::Proposals::<Test>::contains_key(0));
+        // assert!(!pallet_treasury::Module::<Test>::Proposals::<Test>::contains_key(0));
+        // assert!(!pallet_treasury::Module<Test>::Proposals<Test>::contains_key(0));
+
 		assert_eq!(Bounties::bounty_descriptions(0), None);
 	});
 }
@@ -502,7 +503,6 @@ fn approve_bounty_works() {
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 100);
 
-		// TODO re-visit
 		assert_eq!(Bounties::bounties(0).unwrap(), Bounty {
 			proposer: 0,
 			fee: 0,
@@ -668,8 +668,8 @@ fn award_and_claim_bounty_works() {
 		assert_eq!(last_event(), RawEvent::BountyClaimed(0, 56, 3));
 
 		assert_eq!(Balances::free_balance(4), 14); // initial 10 + fee 4
-		// TODO re-visit
-		// assert_eq!(Balances::free_balance(3), 56);
+
+		assert_eq!(Balances::free_balance(3), 56);
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 0);
 
 		assert_eq!(Bounties::bounties(0), None);
@@ -767,7 +767,6 @@ fn award_and_cancel() {
 		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 0, 10));
 		assert_ok!(Bounties::accept_curator(Origin::signed(0), 0));
 
-		// TODO :: re-visit
 		assert_eq!(Balances::free_balance(0), 95);
 		assert_eq!(Balances::reserved_balance(0), 5);
 

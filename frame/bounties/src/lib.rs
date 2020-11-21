@@ -15,36 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Treasury Module
-//!
-//! The Treasury module provides a "pot" of funds that can be managed by stakeholders in the
-//! system and a structure for making spending proposals from this pot.
-//!
-//! - [`treasury::Trait`](./trait.Trait.html)
-//! - [`Call`](./enum.Call.html)
-//!
-//! ## Overview
-//!
-//! The Treasury Module itself provides the pot to store funds, and a means for stakeholders to
-//! propose, approve, and deny expenditures. The chain will need to provide a method (e.g.
-//! inflation, fees) for collecting funds.
-//!
-//! By way of example, the Council could vote to fund the Treasury with a portion of the block
-//! reward and use the funds to pay developers.
-//!
-//! ### Tipping
-//!
-//! A separate subsystem exists to allow for an agile "tipping" process, whereby a reward may be
-//! given without first having a pre-determined stakeholder group come to consensus on how much
-//! should be paid.
-//!
-//! A group of `Tippers` is determined through the config `Trait`. After half of these have declared
-//! some amount that they believe a particular reported reason deserves, then a countdown period is
-//! entered where any remaining members can declare their tip amounts also. After the close of the
-//! countdown period, the median of all declared tips is paid to the reported beneficiary, along
-//! with any finders fee, in case of a public (and bonded) original report.
+//! # Bounties Module ( pallet-bounties )
 //!
 //! ### Bounty
+//!
+//! This pallet is build on top of pallet-treasury
 //!
 //! A Bounty Spending is a reward for a specified body of work - or specified set of objectives - that
 //! needs to be executed for a predefined Treasury amount to be paid out. A curator is assigned after
@@ -71,16 +46,6 @@
 //! respectively.
 //! - **Pot:** Unspent funds accumulated by the treasury module.
 //!
-//! Tipping protocol:
-//! - **Tipping:** The process of gathering declarations of amounts to tip and taking the median
-//!   amount to be transferred from the treasury to a beneficiary account.
-//! - **Tip Reason:** The reason for a tip; generally a URL which embodies or explains why a
-//!   particular individual (identified by an account ID) is worthy of a recognition by the
-//!   treasury.
-//! - **Finder:** The original public reporter of some reason for tipping.
-//! - **Finders Fee:** Some proportion of the tip amount that is paid to the reporter of the tip,
-//!   rather than the main beneficiary.
-//!
 //! Bounty:
 //! - **Bounty spending proposal:** A proposal to reward a predefined body of work upon completion by
 //! the Treasury.
@@ -101,18 +66,6 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! General spending/proposal protocol:
-//! - `propose_spend` - Make a spending proposal and stake the required deposit.
-//! - `reject_proposal` - Reject a proposal, slashing the deposit.
-//! - `approve_proposal` - Accept the proposal, returning the deposit.
-//!
-//! Tipping protocol:
-//! - `report_awesome` - Report something worthy of a tip and register for a finders fee.
-//! - `retract_tip` - Retract a previous (finders fee registered) report.
-//! - `tip_new` - Report an item worthy of a tip and declare a specific amount to tip.
-//! - `tip` - Declare or redeclare an amount to tip for a particular reason.
-//! - `close_tip` - Close and pay out a tip.
-//!
 //! Bounty protocol:
 //! - `propose_bounty` - Propose a specific treasury amount to be earmarked for a predefined set of
 //! tasks and stake the required deposit.
@@ -125,10 +78,9 @@
 //! - `unassign_curator` - Unassign an accepted curator from a specific earmark.
 //! - `close_bounty` - Cancel the earmark for a specific treasury amount and close the bounty.
 //!
-//!
 //! ## GenesisConfig
 //!
-//! The Treasury module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+//! None
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -143,13 +95,14 @@ use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error};
 use frame_support::traits::{
 	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{AllowDeath},
 	ReservableCurrency};
-use sp_runtime::{Permill, ModuleId, RuntimeDebug, DispatchResult, traits::{
+
+use sp_runtime::{Permill, RuntimeDebug, DispatchResult, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, BadOrigin
 }};
+
 use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_support::traits::{EnsureOrigin};
 
-// use frame_support::weights::{Weight, DispatchClass};
 use frame_support::weights::{Weight};
 
 use codec::{Encode, Decode};
@@ -183,10 +136,6 @@ pub trait Trait: frame_system::Trait + pallet_treasury::Trait {
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
-
-// TODO :: Clean-up :: Can BountyIndex replace ProposalIndex ?
-/// An index of a proposal. Just a `u32`.
-pub type ProposalIndex = u32;
 
 /// An index of a bounty. Just a `u32`.
 pub type BountyIndex = u32;
@@ -328,9 +277,6 @@ decl_module! {
 		/// The amount held on deposit per byte within the tip report reason or bounty description.
 		const DataDepositPerByte: BalanceOf<T> = T::DataDepositPerByte::get();
 
-		/// The treasury's module id, used for deriving its sovereign account ID.
-		const ModuleId: ModuleId = T::ModuleId::get();
-
 		/// The amount held on deposit for placing a bounty proposal.
 		const BountyDepositBase: BalanceOf<T> = T::BountyDepositBase::get();
 
@@ -382,7 +328,7 @@ decl_module! {
 		/// - One DB change.
 		/// # </weight>
 		#[weight = <T as Trait>::WeightInfo::approve_bounty()]
-		fn approve_bounty(origin, #[compact] bounty_id: ProposalIndex) {
+		fn approve_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
@@ -409,7 +355,7 @@ decl_module! {
 		#[weight = <T as Trait>::WeightInfo::propose_curator()]
 		fn propose_curator(
 			origin,
-			#[compact] bounty_id: ProposalIndex,
+			#[compact] bounty_id: BountyIndex,
 			curator: <T::Lookup as StaticLookup>::Source,
 			#[compact] fee: BalanceOf<T>,
 		) {
@@ -418,12 +364,6 @@ decl_module! {
 			let curator = T::Lookup::lookup(curator)?;
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 
-				// TODO re-visit
-				// let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
-				// match bounty.status {
-				// 	BountyStatus::Funded | BountyStatus::CuratorProposed { .. } => {},
-				// 	_ => return Err(Error::<T>::UnexpectedStatus.into()),
-				// };
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 				match bounty.status {
 					BountyStatus::Proposed | BountyStatus::Approved | BountyStatus::Funded => {},
@@ -462,7 +402,7 @@ decl_module! {
 		#[weight = <T as Trait>::WeightInfo::unassign_curator()]
 		fn unassign_curator(
 			origin,
-			#[compact] bounty_id: ProposalIndex,
+			#[compact] bounty_id: BountyIndex,
 		) {
 			let maybe_sender = ensure_signed(origin.clone())
 				.map(Some)
@@ -542,7 +482,7 @@ decl_module! {
 		/// - One DB change.
 		/// # </weight>
 		#[weight = <T as Trait>::WeightInfo::accept_curator()]
-		fn accept_curator(origin, #[compact] bounty_id: ProposalIndex) {
+		fn accept_curator(origin, #[compact] bounty_id: BountyIndex) {
 			let signer = ensure_signed(origin)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
@@ -573,7 +513,7 @@ decl_module! {
 		/// - `bounty_id`: Bounty ID to award.
 		/// - `beneficiary`: The beneficiary account whom will receive the payout.
 		#[weight = <T as Trait>::WeightInfo::award_bounty()]
-		fn award_bounty(origin, #[compact] bounty_id: ProposalIndex, beneficiary: <T::Lookup as StaticLookup>::Source) {
+		fn award_bounty(origin, #[compact] bounty_id: BountyIndex, beneficiary: <T::Lookup as StaticLookup>::Source) {
 			let signer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
