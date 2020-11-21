@@ -779,12 +779,12 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> pallet_treasury::SpendFunds<T> for Module<T> {
-
-	fn spend_funds( budget_remaining: &mut BalanceOf<T>,
-					imbalance: &mut PositiveImbalanceOf<T>,
-					total_weight: &mut Weight,
-					missed_any: &mut bool ) {
-
+	fn spend_funds(
+		budget_remaining: &mut BalanceOf<T>,
+		imbalance: &mut PositiveImbalanceOf<T>,
+		total_weight: &mut Weight,
+		missed_any: &mut bool
+	) {
 		let bounties_len = BountyApprovals::mutate(|v| {
 			let bounties_approval_len = v.len() as u32;
 			v.retain(|&index| {
@@ -816,7 +816,7 @@ impl<T: Trait> pallet_treasury::SpendFunds<T> for Module<T> {
 			bounties_approval_len
 		});
 
-		*total_weight += <T as Trait>::WeightInfo::on_initialize_bounties(bounties_len);
+		*total_weight += <T as Trait>::WeightInfo::spend_funds(bounties_len);
 	}
 
 }
