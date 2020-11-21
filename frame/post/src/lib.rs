@@ -116,10 +116,26 @@ decl_module! {
 			let post_len = post.len();
 			ensure!(post_len <= T::MaxPostLength::get(), Error::<T>::PostLength);
 
+			// Deposit is at least MinDeposit, or grows with topic and post length.
 			let deposit = T::ByteDeposit::get().saturating_mul(
 				topic_len.saturating_add(post_len).saturated_into()
-			);
-			T::Currency::reserve(&poster, deposit.max(T::MinDeposit::get()))?;
+			).max(T::MinDeposit::get());
+
+			if let Some(post) = match post_type {
+				PostType::Blog => Blog::<T>::get(&poster, &topic),
+				PostType::Thread => Thread::<T>::get(&topic, &poster),
+			} {
+				// User already has placed a deposit, we only reserve what we need to.
+				let existing_deposit = post.deposit;
+				if existing_deposit < deposit {
+					T::Currency::reserve(&poster, deposit - existing_deposit)?;
+				} else if existing_deposit > deposit {
+					T::Currency::unreserve(&poster, existing_deposit - deposit);
+				}
+			} else {
+				// No existing deposit to worry about
+				T::Currency::reserve(&poster, deposit)?;
+			}
 
 			let block_number = frame_system::Module::<T>::block_number();
 

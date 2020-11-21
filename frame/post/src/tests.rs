@@ -55,6 +55,30 @@ fn thread_post_lifecycle_works() {
 }
 
 #[test]
+fn repost_handles_reserves_correctly() {
+	new_test_ext().execute_with(|| {
+		let topic = b"hello".to_vec();
+		let post = b"world".to_vec();
+		// Create
+		assert_ok!(Post::post(Origin::signed(3), PostType::Blog, topic.clone(), post.clone()));
+		assert_eq!(Balances::reserved_balance(&3), (topic.len() + post.len()) as u64);
+		assert!(Post::blog(&3, &topic).is_some());
+		// Repost Bigger
+		let topic = b"hello".to_vec();
+		let post = b"world, nice to see you".to_vec();
+		assert_ok!(Post::post(Origin::signed(3), PostType::Blog, topic.clone(), post.clone()));
+		assert_eq!(Balances::reserved_balance(&3), (topic.len() + post.len()) as u64);
+		assert!(Post::blog(&3, &topic).is_some());
+		// Repost Smaller
+		let topic = b"hello".to_vec();
+		let post = b"bye".to_vec();
+		assert_ok!(Post::post(Origin::signed(3), PostType::Blog, topic.clone(), post.clone()));
+		assert_eq!(Balances::reserved_balance(&3), <Test as Trait>::MinDeposit::get());
+		assert!(Post::blog(&3, &topic).is_some());
+	});
+}
+
+#[test]
 fn minimum_deposit_enforced() {
 	new_test_ext().execute_with(|| {
 		let topic = b"a".to_vec();
