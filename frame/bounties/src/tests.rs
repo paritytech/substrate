@@ -458,11 +458,7 @@ fn close_bounty_works() {
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
 		assert_eq!(Bounties::bounties(0), None);
-
-		// TODO :: re-visit during review
-		// assert!(!Treasury::Proposals::<Test>::contains_key(0));
-        // assert!(!pallet_treasury::Module::<Test>::Proposals::<Test>::contains_key(0));
-        // assert!(!pallet_treasury::Module<Test>::Proposals<Test>::contains_key(0));
+		assert!(!pallet_treasury::Proposals::<Test>::contains_key(0));
 
 		assert_eq!(Bounties::bounty_descriptions(0), None);
 	});
