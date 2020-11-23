@@ -72,8 +72,6 @@ members = [
 	"frame/contracts/rpc/runtime-api",
 	"frame/democracy",
 	"frame/elections",
-	"frame/elections-phragmen",
-	"frame/evm",
 	"frame/example",
 	"frame/example-offchain-worker",
 	"frame/example-parallel",
