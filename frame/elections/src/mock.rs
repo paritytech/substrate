@@ -19,10 +19,9 @@
 
 #![cfg(test)]
 
-use std::cell::RefCell;
 use frame_support::{
 	StorageValue, StorageMap, parameter_types, assert_ok,
-	traits::{Get, ChangeMembers, Currency, LockIdentifier},
+	traits::{ChangeMembers, Currency, LockIdentifier},
 	weights::Weight,
 };
 use sp_core::H256;
@@ -85,34 +84,11 @@ parameter_types! {
 	pub const InactiveGracePeriod: u32 = 1;
 	pub const VotingPeriod: u64 = 4;
 	pub const MinimumVotingLock: u64 = 5;
-}
-
-thread_local! {
-	static VOTER_BOND: RefCell<u64> = RefCell::new(0);
-	static VOTING_FEE: RefCell<u64> = RefCell::new(0);
-	static PRESENT_SLASH_PER_VOTER: RefCell<u64> = RefCell::new(0);
-	static DECAY_RATIO: RefCell<u32> = RefCell::new(0);
-	static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-}
-
-pub struct VotingBond;
-impl Get<u64> for VotingBond {
-	fn get() -> u64 { VOTER_BOND.with(|v| *v.borrow()) }
-}
-
-pub struct VotingFee;
-impl Get<u64> for VotingFee {
-	fn get() -> u64 { VOTING_FEE.with(|v| *v.borrow()) }
-}
-
-pub struct PresentSlashPerVoter;
-impl Get<u64> for PresentSlashPerVoter {
-	fn get() -> u64 { PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow()) }
-}
-
-pub struct DecayRatio;
-impl Get<u32> for DecayRatio {
-	fn get() -> u32 { DECAY_RATIO.with(|v| *v.borrow()) }
+	pub static VotingBond: u64 = 0;
+	pub static VotingFee: u64 = 0;
+	pub static PresentSlashPerVoter: u64 = 0;
+	pub static DecayRatio: u32 = 0;
+	pub static Members: Vec<u64> = vec![];
 }
 
 pub struct TestChangeMembers;
@@ -175,7 +151,7 @@ pub struct ExtBuilder {
 	decay_ratio: u32,
 	desired_seats: u32,
 	voting_fee: u64,
-	voter_bond: u64,
+	voting_bond: u64,
 	bad_presentation_punishment: u64,
 }
 
@@ -186,7 +162,7 @@ impl Default for ExtBuilder {
 			decay_ratio: 24,
 			desired_seats: 2,
 			voting_fee: 0,
-			voter_bond: 0,
+			voting_bond: 0,
 			bad_presentation_punishment: 1,
 		}
 	}
@@ -209,8 +185,8 @@ impl ExtBuilder {
 		self.bad_presentation_punishment = fee;
 		self
 	}
-	pub fn voter_bond(mut self, fee: u64) -> Self {
-		self.voter_bond = fee;
+	pub fn voting_bond(mut self, fee: u64) -> Self {
+		self.voting_bond = fee;
 		self
 	}
 	pub fn desired_seats(mut self, seats: u32) -> Self {
@@ -218,7 +194,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
-		VOTER_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
+		VOTING_BOND.with(|v| *v.borrow_mut() = self.voting_bond);
 		VOTING_FEE.with(|v| *v.borrow_mut() = self.voting_fee);
 		PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
 		DECAY_RATIO.with(|v| *v.borrow_mut() = self.decay_ratio);
