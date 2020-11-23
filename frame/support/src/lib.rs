@@ -1932,4 +1932,17 @@ pub mod pallet_prelude {
 /// 	Thus any use of this pallet in `construct_runtime!` should be careful to update name in
 /// 	order not to break storage or to upgrade storage (moreover for instantiable pallet).
 /// 	If pallet is published, make sure to warn about this breaking change.
+///
+/// # Notes when macro fails to show proper error message spans:
+///
+/// Rustc loses span for some macro input. Some tips to fix it:
+/// * do not use inner attribute:
+/// 	```
+/// 	#[pallet]
+/// 	pub mod pallet {
+/// 		//! This inner attribute will make span fail
+/// 		..
+/// 	}
+/// 	```
+/// * use the newest nightly possible.
 pub use frame_support_procedural::pallet;
