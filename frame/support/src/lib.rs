@@ -67,6 +67,7 @@ pub mod unsigned;
 pub mod error;
 pub mod traits;
 pub mod weights;
+pub mod instances;
 
 pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, Hashable,

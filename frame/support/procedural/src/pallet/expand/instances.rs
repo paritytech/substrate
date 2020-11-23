@@ -35,10 +35,6 @@ pub fn expand_instances(def: &mut Def) -> proc_macro2::TokenStream {
 		#[doc(hidden)]
 		pub type #inherent_ident = ();
 
-		#(
-			/// Generated module instance
-			#[derive(Clone, Copy, PartialEq, Eq, #frame_support::RuntimeDebugNoBound)]
-			pub struct #instances;
-		)*
+		#( pub use #frame_support::instances::#instances; )*
 	)
 }
