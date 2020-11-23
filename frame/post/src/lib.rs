@@ -79,7 +79,7 @@ decl_event!(
 );
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Comment {
+	trait Store for Module<T: Trait> as Post {
 		/// Blogs: User -> Topic -> Message
 		Blog get(fn blog): double_map hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) Topic
 			=> Option<Post<BalanceOf<T>, T::BlockNumber>>;
@@ -92,7 +92,7 @@ decl_storage! {
 
 decl_error! {
 	pub enum Error for Module<T: Trait> {
-		/// The comment you are looking for does not exist.
+		/// The post you are looking for does not exist.
 		NotFound,
 		/// The topic is too long.
 		TopicLength,

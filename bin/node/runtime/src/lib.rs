@@ -890,6 +890,23 @@ impl pallet_vesting::Trait for Runtime {
 	type WeightInfo = pallet_vesting::weights::SubstrateWeight<Runtime>;
 }
 
+parameter_types! {
+	pub const ByteDeposit: Balance = 1 * CENTS;
+	pub const BaseDeposit: Balance = 1 * DOLLARS;
+	pub const MaxTopicLength: usize = 200;
+	pub const MaxPostLength: usize = 10_000;
+}
+
+impl pallet_post::Trait for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type BaseDeposit = BaseDeposit;
+	type ByteDeposit = ByteDeposit;
+	type MaxTopicLength = MaxTopicLength;
+	type MaxPostLength = MaxPostLength;
+	type WeightInfo = pallet_post::weights::SubstrateWeight<Runtime>;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -927,6 +944,7 @@ construct_runtime!(
 		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
 		Proxy: pallet_proxy::{Module, Call, Storage, Event<T>},
 		Multisig: pallet_multisig::{Module, Call, Storage, Event<T>},
+		Post: pallet_post::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -1193,6 +1211,7 @@ impl_runtime_apis! {
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&config, &whitelist);
 
+			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_babe, Babe);
 			add_benchmark!(params, batches, pallet_balances, Balances);
 			add_benchmark!(params, batches, pallet_collective, Council);
@@ -1205,11 +1224,11 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_indices, Indices);
 			add_benchmark!(params, batches, pallet_multisig, Multisig);
 			add_benchmark!(params, batches, pallet_offences, OffencesBench::<Runtime>);
+			add_benchmark!(params, batches, pallet_post, Post);
 			add_benchmark!(params, batches, pallet_proxy, Proxy);
 			add_benchmark!(params, batches, pallet_scheduler, Scheduler);
 			add_benchmark!(params, batches, pallet_session, SessionBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_staking, Staking);
-			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_treasury, Treasury);
 			add_benchmark!(params, batches, pallet_utility, Utility);
