@@ -328,7 +328,7 @@ pub mod pallet {{
 	pub type Module{decl_gen} = Pallet{use_gen};
 
 	#[pallet::interface]
-	impl{impl_gen} Interface<BlockNumberFor<T>> for Pallet{use_gen}
+	impl{impl_gen} Hooks<BlockNumberFor<T>> for Pallet{use_gen}
 		// TODO_MAYBE_WHERE_CLAUSE
 	{{
 		// TODO_ON_FINALIZE
