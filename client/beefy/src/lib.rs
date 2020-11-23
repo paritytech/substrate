@@ -24,7 +24,7 @@ use futures::{future, FutureExt, Stream, StreamExt};
 use log::{debug, error, info, trace, warn};
 use parking_lot::Mutex;
 
-use beefy_primitives::{BeefyApi, Commitment, SignedCommitment, BEEFY_ENGINE_ID, KEY_TYPE};
+use beefy_primitives::{BeefyApi, Commitment, SignedCommitment, KEY_TYPE};
 
 use sc_client_api::{Backend as BackendT, BlockchainEvents, FinalityNotification, Finalizer};
 use sc_network_gossip::{
@@ -370,7 +370,6 @@ pub async fn start_beefy_gadget<Block, Pair, Backend, Client, Network, SyncOracl
 {
 	let gossip_engine = GossipEngine::new(
 		network,
-		BEEFY_ENGINE_ID,
 		BEEFY_PROTOCOL_NAME,
 		Arc::new(AllowAll {
 			topic: topic::<Block>(),

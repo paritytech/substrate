@@ -13,16 +13,16 @@ parking_lot = "0.11"
 
 beefy-primitives = { path = "../primitives" }
 
-sp-api = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-application-crypto = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-blockchain = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-consensus = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-utils = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-api = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
+sp-application-crypto = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
+sp-blockchain = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
+sp-consensus = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
+sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
+sp-utils = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
 
-sc-client-api = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sc-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sc-network = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sc-network-gossip = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sc-client-api = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
+sc-keystore = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
+sc-network = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
+sc-network-gossip = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }

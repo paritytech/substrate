@@ -10,9 +10,9 @@ beefy-gadget = { path = "../." }
 beefy-primitives = { path = "../../primitives" }
 
 codec = { version = "1.3.5", package = "parity-scale-codec", features = ["derive"] }
-sc-rpc = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "master" }
-sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sc-rpc = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "td-mmr" }
 jsonrpc-core = "15.1.0"
 jsonrpc-core-client = "15.1.0"
 jsonrpc-derive = "15.1.0"
