@@ -85,7 +85,7 @@ pub struct WasmBuilder {
 	///
 	/// Defaults to `wasm_binary.rs`.
 	file_name: Option<String>,
-	/// The path to the `Cargo.toml` of the project that should be build
+	/// The path to the `Cargo.toml` of the project that should be built
 	/// for wasm.
 	project_cargo_toml: PathBuf,
 }
