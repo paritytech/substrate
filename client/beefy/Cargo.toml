@@ -20,6 +20,7 @@ sp-consensus = { git = "https://github.com/paritytech/substrate", branch = "mast
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-utils = { git = "https://github.com/paritytech/substrate", branch = "master" }
 
 sc-client-api = { git = "https://github.com/paritytech/substrate", branch = "master" }
 sc-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }

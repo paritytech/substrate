@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::collections::BTreeMap;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -24,10 +24,7 @@ use futures::{future, FutureExt, Stream, StreamExt};
 use log::{debug, error, info, trace, warn};
 use parking_lot::Mutex;
 
-use beefy_primitives::{
-	ecdsa::{AuthorityId, AuthoritySignature},
-	BeefyApi, BEEFY_ENGINE_ID, KEY_TYPE,
-};
+use beefy_primitives::{BeefyApi, Commitment, SignedCommitment, BEEFY_ENGINE_ID, KEY_TYPE};
 
 use sc_client_api::{Backend as BackendT, BlockchainEvents, FinalityNotification, Finalizer};
 use sc_network_gossip::{
@@ -35,11 +32,15 @@ use sc_network_gossip::{
 	ValidatorContext as GossipValidatorContext,
 };
 use sp_api::{BlockId, ProvideRuntimeApi};
+use sp_application_crypto::{AppPublic, Public};
 use sp_blockchain::HeaderBackend;
 use sp_consensus::SyncOracle as SyncOracleT;
-use sp_core::Public;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor, Zero};
+
+pub mod notification;
+
+use notification::BeefySignedCommitmentSender;
 
 pub const BEEFY_PROTOCOL_NAME: &str = "/paritytech/beefy/1";
 
@@ -92,47 +93,60 @@ where
 	}
 }
 
-fn threshold(voters: usize) -> usize {
-	let faulty = voters.saturating_sub(1) / 3;
-	voters - faulty
+fn threshold(authorities: usize) -> usize {
+	let faulty = authorities.saturating_sub(1) / 3;
+	authorities - faulty
 }
 
-struct Rounds<Hash, Id, Signature> {
-	rounds: BTreeMap<Hash, RoundTracker<Id, Signature>>,
-	voters: Vec<Id>,
+struct Rounds<Hash, Number, Id, Signature> {
+	rounds: BTreeMap<(Hash, Number), RoundTracker<Id, Signature>>,
+	authorities: Vec<Id>,
 }
 
-impl<Hash, Id, Signature> Rounds<Hash, Id, Signature>
+impl<Hash, Number, Id, Signature> Rounds<Hash, Number, Id, Signature>
 where
 	Hash: Ord,
+	Number: Ord,
 {
-	fn new(voters: Vec<Id>) -> Self {
+	fn new(authorities: Vec<Id>) -> Self {
 		Rounds {
 			rounds: BTreeMap::new(),
-			voters,
+			authorities,
 		}
 	}
 }
 
-impl<Hash, Id, Signature> Rounds<Hash, Id, Signature>
+impl<Hash, Number, Id, Signature> Rounds<Hash, Number, Id, Signature>
 where
 	Hash: Ord,
+	Number: Ord,
 	Id: PartialEq,
-	Signature: PartialEq,
+	Signature: Clone + PartialEq,
 {
-	fn add_vote(&mut self, round: Hash, vote: (Id, Signature)) -> bool {
+	fn add_vote(&mut self, round: (Hash, Number), vote: (Id, Signature)) -> bool {
 		self.rounds.entry(round).or_default().add_vote(vote)
 	}
 
-	fn is_done(&self, round: &Hash) -> bool {
+	fn is_done(&self, round: &(Hash, Number)) -> bool {
 		self.rounds
 			.get(round)
-			.map(|tracker| tracker.is_done(threshold(self.voters.len())))
+			.map(|tracker| tracker.is_done(threshold(self.authorities.len())))
 			.unwrap_or(false)
 	}
 
-	fn drop(&mut self, round: &Hash) {
-		self.rounds.remove(round);
+	fn drop(&mut self, round: &(Hash, Number)) -> Option<Vec<Option<Signature>>> {
+		let signatures = self.rounds.remove(round)?.votes;
+
+		Some(
+			self.authorities
+				.iter()
+				.map(|authority_id| {
+					signatures
+						.iter()
+						.find_map(|(id, sig)| if id == authority_id { Some(sig.clone()) } else { None })
+				})
+				.collect(),
+		)
 	}
 }
 
@@ -141,8 +155,8 @@ fn topic<Block: BlockT>() -> Block::Hash {
 }
 
 #[derive(Debug, Decode, Encode)]
-struct VoteMessage<Hash, Id, Signature> {
-	block: Hash,
+struct VoteMessage<Hash, Number, Id, Signature> {
+	commitment: Commitment<Number, Hash>,
 	id: Id,
 	signature: Signature,
 }
@@ -151,9 +165,10 @@ struct BeefyWorker<Block: BlockT, Id, Signature, FinalityNotifications> {
 	local_id: Id,
 	key_store: SyncCryptoStorePtr,
 	min_interval: u32,
-	rounds: Rounds<Block::Hash, Id, Signature>,
+	rounds: Rounds<Block::Hash, NumberFor<Block>, Id, Signature>,
 	finality_notifications: FinalityNotifications,
 	gossip_engine: Arc<Mutex<GossipEngine<Block>>>,
+	signed_commitment_sender: BeefySignedCommitmentSender<Block, Signature>,
 	best_finalized_block: NumberFor<Block>,
 	best_block_voted_on: NumberFor<Block>,
 }
@@ -162,12 +177,14 @@ impl<Block, Id, Signature, FinalityNotifications> BeefyWorker<Block, Id, Signatu
 where
 	Block: BlockT,
 {
+	#[allow(clippy::too_many_arguments)]
 	fn new(
 		local_id: Id,
 		key_store: SyncCryptoStorePtr,
-		voters: Vec<Id>,
+		authorities: Vec<Id>,
 		finality_notifications: FinalityNotifications,
 		gossip_engine: GossipEngine<Block>,
+		signed_commitment_sender: BeefySignedCommitmentSender<Block, Signature>,
 		best_finalized_block: NumberFor<Block>,
 		best_block_voted_on: NumberFor<Block>,
 	) -> Self {
@@ -175,9 +192,10 @@ where
 			local_id,
 			key_store,
 			min_interval: 2,
-			rounds: Rounds::new(voters),
+			rounds: Rounds::new(authorities),
 			finality_notifications,
 			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
+			signed_commitment_sender,
 			best_finalized_block,
 			best_block_voted_on,
 		}
@@ -188,7 +206,7 @@ impl<Block, Id, Signature, FinalityNotifications> BeefyWorker<Block, Id, Signatu
 where
 	Block: BlockT,
 	Id: Codec + Debug + PartialEq + Public,
-	Signature: Codec + Debug + PartialEq + std::convert::TryFrom<Vec<u8>>,
+	Signature: Clone + Codec + Debug + PartialEq + std::convert::TryFrom<Vec<u8>>,
 	FinalityNotifications: Stream<Item = FinalityNotification<Block>> + Unpin,
 {
 	fn should_vote_on(&self, number: NumberFor<Block>) -> bool {
@@ -213,14 +231,23 @@ where
 	}
 
 	fn handle_finality_notification(&mut self, notification: FinalityNotification<Block>) {
-		info!(target: "beefy", "🥩 Finality notification: {:?}", notification);
+		debug!(target: "beefy", "🥩 Finality notification: {:?}", notification);
 
 		if self.should_vote_on(*notification.header.number()) {
+			// TODO: this needs to be properly populated by signing an MMR root as the payload
+			// (and/or abstracting the "thing to sign") and with support for validator set changes.
+			let commitment = Commitment {
+				payload: notification.header.hash(),
+				block_number: notification.header.number(),
+				validator_set_id: 0,
+				is_set_transition_block: false,
+			};
+
 			let signature = match SyncCryptoStore::sign_with(
 				&*self.key_store,
 				KEY_TYPE,
 				&self.local_id.to_public_crypto_pair(),
-				&notification.header.hash().encode(),
+				&commitment.encode(),
 			)
 			.map_err(|_| ())
 			.and_then(|res| res.try_into().map_err(|_| ()))
@@ -235,7 +262,7 @@ where
 			self.best_block_voted_on = *notification.header.number();
 
 			let message = VoteMessage {
-				block: notification.header.hash(),
+				commitment,
 				id: self.local_id.clone(),
 				signature,
 			};
@@ -246,18 +273,36 @@ where
 
 			debug!(target: "beefy", "Sent vote message: {:?}", message);
 
-			self.handle_vote(message.block, (message.id, message.signature));
+			self.handle_vote(
+				(message.commitment.payload, *message.commitment.block_number),
+				(message.id, message.signature),
+			);
 		}
 
 		self.best_finalized_block = *notification.header.number();
 	}
 
-	fn handle_vote(&mut self, round: Block::Hash, vote: (Id, Signature)) {
+	fn handle_vote(&mut self, round: (Block::Hash, NumberFor<Block>), vote: (Id, Signature)) {
 		// TODO: validate signature
 		let vote_added = self.rounds.add_vote(round, vote);
+
 		if vote_added && self.rounds.is_done(&round) {
-			info!(target: "beefy", "🥩 Round {:?} concluded.", round);
-			self.rounds.drop(&round);
+			if let Some(signatures) = self.rounds.drop(&round) {
+				// TODO: this needs to be properly populated by signing an MMR root as the payload
+				// (and/or abstracting the "thing to sign") and with support for validator set changes.
+				let commitment = Commitment {
+					payload: round.0,
+					block_number: round.1,
+					validator_set_id: 0,
+					is_set_transition_block: false,
+				};
+
+				let signed_commitment = SignedCommitment { commitment, signatures };
+
+				info!(target: "beefy", "🥩 Round #{} concluded, committed: {:?}.", round.1, signed_commitment);
+
+				self.signed_commitment_sender.notify(signed_commitment);
+			}
 		}
 	}
 
@@ -266,7 +311,7 @@ where
 			|notification| async move {
 				debug!(target: "beefy", "Got vote message: {:?}", notification);
 
-				VoteMessage::<Block::Hash, Id, Signature>::decode(&mut &notification.message[..]).ok()
+				VoteMessage::<Block::Hash, NumberFor<Block>, Id, Signature>::decode(&mut &notification.message[..]).ok()
 			},
 		));
 
@@ -284,7 +329,10 @@ where
 				},
 				vote = votes.next() => {
 					if let Some(vote) = vote {
-						self.handle_vote(vote.block, (vote.id, vote.signature));
+						self.handle_vote(
+							(vote.commitment.payload, vote.commitment.block_number),
+							(vote.id, vote.signature),
+						);
 					} else {
 						return;
 					}
@@ -298,13 +346,17 @@ where
 	}
 }
 
-pub async fn start_beefy_gadget<Block, Backend, Client, Network, SyncOracle>(
+pub async fn start_beefy_gadget<Block, Pair, Backend, Client, Network, SyncOracle>(
 	client: Arc<Client>,
 	key_store: SyncCryptoStorePtr,
 	network: Network,
+	signed_commitment_sender: BeefySignedCommitmentSender<Block, Pair::Signature>,
 	_sync_oracle: SyncOracle,
 ) where
 	Block: BlockT,
+	Pair: sp_core::Pair,
+	Pair::Public: AppPublic + Codec,
+	Pair::Signature: Clone + Codec + Debug + PartialEq + TryFrom<Vec<u8>>,
 	Backend: BackendT<Block>,
 	Client: BlockchainEvents<Block>
 		+ HeaderBackend<Block>
@@ -312,7 +364,7 @@ pub async fn start_beefy_gadget<Block, Backend, Client, Network, SyncOracle>(
 		+ ProvideRuntimeApi<Block>
 		+ Send
 		+ Sync,
-	Client::Api: BeefyApi<Block, AuthorityId>,
+	Client::Api: BeefyApi<Block, Pair::Public>,
 	Network: GossipNetwork<Block> + Clone + Send + 'static,
 	SyncOracle: SyncOracleT + Send + 'static,
 {
@@ -326,12 +378,12 @@ pub async fn start_beefy_gadget<Block, Backend, Client, Network, SyncOracle>(
 	);
 
 	let at = BlockId::hash(client.info().best_hash);
-	let voters = client
+	let authorities = client
 		.runtime_api()
 		.authorities(&at)
 		.expect("Failed to get BEEFY authorities");
 
-	let local_id = match voters
+	let local_id = match authorities
 		.iter()
 		.find(|id| SyncCryptoStore::has_keys(&*key_store, &[(id.to_raw_vec(), KEY_TYPE)]))
 	{
@@ -348,12 +400,13 @@ pub async fn start_beefy_gadget<Block, Backend, Client, Network, SyncOracle>(
 	let best_finalized_block = client.info().finalized_number;
 	let best_block_voted_on = Zero::zero();
 
-	let worker = BeefyWorker::<_, AuthorityId, AuthoritySignature, _>::new(
-		local_id,
+	let worker = BeefyWorker::<_, Pair::Public, Pair::Signature, _>::new(
+		local_id.clone(),
 		key_store,
-		voters,
+		authorities,
 		client.finality_notification_stream(),
 		gossip_engine,
+		signed_commitment_sender,
 		best_finalized_block,
 		best_block_voted_on,
 	);
