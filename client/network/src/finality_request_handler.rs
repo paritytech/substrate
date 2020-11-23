@@ -65,7 +65,7 @@ impl<B: BlockT> FinalityRequestHandler<B> {
 		protocol_id: ProtocolId,
 		proof_provider: Arc<dyn FinalityProofProvider<B>>,
 	) -> (Self, ProtocolConfig){
-		// TODO: Likeley we want to allow more than 0 buffered requests. Rethink this value.
+		// TODO: Likely we want to allow more than 0 buffered requests. Rethink this value.
 		let (tx, rx) = mpsc::channel(0);
 
 		let mut protocol_config = generate_protocol_config(protocol_id);
