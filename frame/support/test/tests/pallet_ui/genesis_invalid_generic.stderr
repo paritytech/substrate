@@ -1,4 +1,4 @@
-error: Invalid genesis builder: expect `GenesisBuild<T>` or `GenesisBuild<T, I>`
+error: Invalid genesis builder: expected `GenesisBuild<T>` or `GenesisBuild<T, I>`
   --> $DIR/genesis_invalid_generic.rs:19:7
    |
 19 |     impl GenesisBuild for GenesisConfig {}

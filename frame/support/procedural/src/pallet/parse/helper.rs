@@ -154,7 +154,7 @@ impl syn::parse::Parse for Unit {
 		let content;
 		syn::parenthesized!(content in input);
 		if !content.is_empty() {
-			let msg = "unexpected tokens, expect nothing inside parenthesis as `()`";
+			let msg = "unexpected tokens, expected nothing inside parenthesis as `()`";
 			return Err(syn::Error::new(content.span(), msg));
 		}
 		Ok(Self)
@@ -167,7 +167,7 @@ impl syn::parse::Parse for StaticLifetime {
 	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
 		let lifetime = input.parse::<syn::Lifetime>()?;
 		if lifetime.ident != "static" {
-			let msg = "unexpected tokens, expect `static`";
+			let msg = "unexpected tokens, expected `static`";
 			return Err(syn::Error::new(lifetime.ident.span(), msg));
 		}
 		Ok(Self)
@@ -183,7 +183,7 @@ pub fn check_config_def_gen(
 	gen: &syn::Generics,
 	span: proc_macro2::Span,
 ) -> syn::Result<()> {
-	let expected = "expect `I: 'static = ()`";
+	let expected = "expected `I: 'static = ()`";
 	pub struct CheckTraitDefGenerics;
 	impl syn::parse::Parse for CheckTraitDefGenerics {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -219,7 +219,7 @@ pub fn check_type_def_gen_no_bounds(
 	gen: &syn::Generics,
 	span: proc_macro2::Span,
 ) -> syn::Result<InstanceUsage> {
-	let expected = "expect `T` or `T, I = ()`";
+	let expected = "expected `T` or `T, I = ()`";
 	pub struct Checker(InstanceUsage);
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -266,7 +266,7 @@ pub fn check_type_def_optional_gen(
 	gen: &syn::Generics,
 	span: proc_macro2::Span,
 ) -> syn::Result<Option<InstanceUsage>> {
-	let expected = "expect `` or `T` or `T: Config` or `T, I = ()` or \
+	let expected = "expected `` or `T` or `T: Config` or `T, I = ()` or \
 		`T: Config<I>, I: 'static = ()`";
 	pub struct Checker(Option<InstanceUsage>);
 	impl syn::parse::Parse for Checker {
@@ -340,7 +340,7 @@ pub fn check_type_def_optional_gen(
 ///
 /// return the instance if found.
 pub fn check_pallet_struct_usage(type_: &Box<syn::Type>) -> syn::Result<InstanceUsage> {
-	let expected = "expect `Pallet<T>` or `Pallet<T, I>`";
+	let expected = "expected `Pallet<T>` or `Pallet<T, I>`";
 	pub struct Checker(InstanceUsage);
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -385,7 +385,7 @@ pub fn check_impl_gen(
 	gen: &syn::Generics,
 	span: proc_macro2::Span
 ) -> syn::Result<InstanceUsage> {
-	let expected = "expect `impl<T: Config>` or `impl<T: Config<I>, I: 'static>`";
+	let expected = "expected `impl<T: Config>` or `impl<T: Config<I>, I: 'static>`";
 	pub struct Checker(InstanceUsage);
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -435,7 +435,7 @@ pub fn check_type_def_gen(
 	gen: &syn::Generics,
 	span: proc_macro2::Span,
 ) -> syn::Result<InstanceUsage> {
-	let expected = "expect `T` or `T: Config` or `T, I = ()` or \
+	let expected = "expected `T` or `T: Config` or `T, I = ()` or \
 		`T: Config<I>, I: 'static = ()`";
 	pub struct Checker(InstanceUsage);
 	impl syn::parse::Parse for Checker {
@@ -506,7 +506,7 @@ pub fn check_type_def_gen(
 ///
 /// return the instance if found.
 pub fn check_genesis_builder_usage(type_: &syn::Path) -> syn::Result<InstanceUsage> {
-	let expected = "expect `GenesisBuild<T>` or `GenesisBuild<T, I>`";
+	let expected = "expected `GenesisBuild<T>` or `GenesisBuild<T, I>`";
 	pub struct Checker(InstanceUsage);
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -552,7 +552,7 @@ pub fn check_type_value_gen(
 	gen: &syn::Generics,
 	span: proc_macro2::Span,
 ) -> syn::Result<Option<InstanceUsage>> {
-	let expected = "expect `` or `T: Config` or `T: Config<I>, I: 'static`";
+	let expected = "expected `` or `T: Config` or `T: Config<I>, I: 'static`";
 	pub struct Checker(Option<InstanceUsage>);
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {

@@ -1,4 +1,4 @@
-error: Invalid ty: expect `OriginFor<T>`
+error: Invalid type: expect `OriginFor<T>`
   --> $DIR/call_invalid_origin_type.rs:17:18
    |
 17 |         fn foo(origin: u8) {}
