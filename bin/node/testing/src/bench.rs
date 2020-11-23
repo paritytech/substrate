@@ -695,7 +695,6 @@ impl BenchContext {
 					clear_justification_requests: false,
 					needs_justification: false,
 					bad_justification: false,
-					needs_finality_proof: false,
 					is_new_best: true,
 				}
 			)

@@ -17,7 +17,6 @@
 //! Schema for stuff in the aux-db.
 
 use std::fmt::Debug;
-use std::sync::Arc;
 use parity_scale_codec::{Encode, Decode};
 use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
@@ -28,7 +27,6 @@ use log::{info, warn};
 use sp_finality_grandpa::{AuthorityList, SetId, RoundNumber};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
-use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
 use crate::environment::{
 	CompletedRound, CompletedRounds, CurrentRounds, HasVoted, SharedVoterSetState, VoterSetState,
 };
@@ -38,7 +36,6 @@ const VERSION_KEY: &[u8] = b"grandpa_schema_version";
 const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
 const CONCLUDED_ROUNDS: &[u8] = b"grandpa_concluded_rounds";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
-const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 
 const CURRENT_VERSION: u32 = 2;
 
@@ -122,7 +119,6 @@ pub(crate) fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> Cl
 /// Persistent data kept between runs.
 pub(crate) struct PersistentData<Block: BlockT> {
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	pub(crate) set_state: SharedVoterSetState<Block>,
 }
 
@@ -272,8 +268,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 		G: FnOnce() -> ClientResult<AuthorityList>,
 {
 	let version: Option<u32> = load_decode(backend, VERSION_KEY)?;
-	let consensus_changes = load_decode(backend, CONSENSUS_CHANGES_KEY)?
-		.unwrap_or_else(ConsensusChanges::<Block::Hash, NumberFor<Block>>::empty);
 
 	let make_genesis_round = move || RoundState::genesis((genesis_hash, genesis_number));
 
@@ -282,7 +276,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 			if let Some((new_set, set_state)) = migrate_from_version0::<Block, _, _>(backend, &make_genesis_round)? {
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
-					consensus_changes: Arc::new(consensus_changes.into()),
 					set_state: set_state.into(),
 				});
 			}
@@ -291,7 +284,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 			if let Some((new_set, set_state)) = migrate_from_version1::<Block, _, _>(backend, &make_genesis_round)? {
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
-					consensus_changes: Arc::new(consensus_changes.into()),
 					set_state: set_state.into(),
 				});
 			}
@@ -321,7 +313,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 
 				return Ok(PersistentData {
 					authority_set: set.into(),
-					consensus_changes: Arc::new(consensus_changes.into()),
 					set_state: set_state.into(),
 				});
 			}
@@ -359,7 +350,6 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	Ok(PersistentData {
 		authority_set: genesis_set.into(),
 		set_state: genesis_state.into(),
-		consensus_changes: Arc::new(consensus_changes.into()),
 	})
 }
 
@@ -419,18 +409,6 @@ pub(crate) fn write_concluded_round<Block: BlockT, B: AuxStore>(
 	round_number.using_encoded(|n| key.extend(n));
 
 	backend.insert_aux(&[(&key[..], round_data.encode().as_slice())], &[])
-}
-
-/// Update the consensus changes.
-pub(crate) fn update_consensus_changes<H, N, F, R>(
-	set: &ConsensusChanges<H, N>,
-	write_aux: F
-) -> R where
-	H: Encode + Clone,
-	N: Encode + Clone,
-	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
-{
-	write_aux(&[(CONSENSUS_CHANGES_KEY, set.encode().as_slice())])
 }
 
 #[cfg(test)]
