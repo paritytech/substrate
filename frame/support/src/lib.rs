@@ -2010,7 +2010,7 @@ pub mod pallet_prelude {
 ///
 /// Rustc loses span for some macro input. Some tips to fix it:
 /// * do not use inner attribute:
-/// 	```
+/// 	```ignore
 /// 	#[pallet]
 /// 	pub mod pallet {
 /// 		//! This inner attribute will make span fail
