@@ -221,7 +221,7 @@ pub struct Peerset {
 	/// If true, we only accept reserved nodes.
 	reserved_only: bool,
 	/// For each set, lists of nodes that don't occupy slots and that we should try to always be
-	/// connected to. Is kept in sync with the list of non-slot-occupubg nodes in
+	/// connected to. Is kept in sync with the list of non-slot-occupying nodes in
 	/// [`Peerset::data`].
 	reserved_nodes: Vec<HashSet<PeerId>>,
 	/// Receiver for messages from the `PeersetHandle` and from `tx`.
