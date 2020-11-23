@@ -67,7 +67,7 @@ pub struct BlockRequestHandler<B> {
 impl <B: BlockT> BlockRequestHandler<B> {
 	/// Create a new [`BlockRequestHandler`].
 	pub fn new(protocol_id: ProtocolId, client: Arc<dyn Client<B>>) -> (Self, ProtocolConfig) {
-		// TODO: Likeley we want to allow more than 0 buffered requests. Rethink this value.
+		// TODO: Likely we want to allow more than 0 buffered requests. Rethink this value.
 		let (tx, request_receiver) = mpsc::channel(0);
 
 		let mut protocol_config = generate_protocol_config(protocol_id);
