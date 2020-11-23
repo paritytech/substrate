@@ -23,7 +23,7 @@
 //! support a certain capability, such as handling blocks and transactions of a specific chain,
 //! or collating a certain parachain.
 //!
-//! For each each node in each set, the peerset holds a flag specifying whether the node is
+//! For each node in each set, the peerset holds a flag specifying whether the node is
 //! connected to us or not.
 //!
 //! This connected/disconnected status is specific to the node and set combination, and it is for
