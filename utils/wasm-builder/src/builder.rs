@@ -69,7 +69,7 @@ impl WasmBuilderSelectProject {
 
 /// The builder for building a wasm binary.
 ///
-/// The builder itself is seperated into multiple structs to make the setup type safe.
+/// The builder itself is separated into multiple structs to make the setup type safe.
 ///
 /// Building a wasm binary:
 ///
