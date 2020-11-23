@@ -611,6 +611,7 @@ impl<'a, T: Trait> rules::Rules for ScheduleRules<'a, T> {
 			I32Clz | I64Clz => w.i64clz,
 			I32Ctz | I64Ctz => w.i64ctz,
 			I32Popcnt | I64Popcnt => w.i64popcnt,
+			I32Eqz | I64Eqz => w.i64eqz,
 			I64ExtendSI32 => w.i64extendsi32,
 			I64ExtendUI32 => w.i64extendui32,
 			I32WrapI64 => w.i32wrapi64,

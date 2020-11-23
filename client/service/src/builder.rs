@@ -41,7 +41,7 @@ use futures::{
 };
 use sc_keystore::LocalKeystore;
 use log::{info, warn};
-use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+use sc_network::config::{Role, OnDemand};
 use sc_network::NetworkService;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
@@ -205,11 +205,12 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 	TRtApi,
 >;
 
-/// Construct and hold different layers of Keystore wrappers
-pub struct KeystoreContainer {
-	keystore: Arc<dyn CryptoStore>,
-	sync_keystore: SyncCryptoStorePtr,
+enum KeystoreContainerInner {
+	Local(Arc<LocalKeystore>)
 }
+
+/// Construct and hold different layers of Keystore wrappers
+pub struct KeystoreContainer(KeystoreContainerInner);
 
 impl KeystoreContainer {
 	/// Construct KeystoreContainer
@@ -221,22 +222,36 @@ impl KeystoreContainer {
 			)?,
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
-		let sync_keystore = keystore.clone() as SyncCryptoStorePtr;
 
-		Ok(Self {
-			keystore,
-			sync_keystore,
-		})
+		Ok(Self(KeystoreContainerInner::Local(keystore)))
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
 	pub fn keystore(&self) -> Arc<dyn CryptoStore> {
-		self.keystore.clone()
+		match self.0 {
+			KeystoreContainerInner::Local(ref keystore) => keystore.clone(),
+		}
 	}
 
 	/// Returns the synchrnous keystore wrapper
 	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
-		self.sync_keystore.clone()
+		match self.0 {
+			KeystoreContainerInner::Local(ref keystore) => keystore.clone() as SyncCryptoStorePtr,
+		}
+	}
+
+	/// Returns the local keystore if available
+	///
+	/// The function will return None if the available keystore is not a local keystore.
+	///
+	/// # Note
+	///
+	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore implementation, like
+	/// a remote keystore for example. Only use this if you a certain that you require it!
+	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
+		match self.0 {
+			KeystoreContainerInner::Local(ref keystore) => Some(keystore.clone()),
+		}
 	}
 }
 
@@ -815,10 +830,6 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	pub block_announce_validator_builder: Option<Box<
 		dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send
 	>>,
-	/// An optional finality proof request builder.
-	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
-	/// An optional, shared finality proof request provider.
-	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
@@ -843,7 +854,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 {
 	let BuildNetworkParams {
 		config, client, transaction_pool, spawn_handle, import_queue, on_demand,
-		block_announce_validator_builder, finality_proof_request_builder, finality_proof_provider,
+		block_announce_validator_builder,
 	} = params;
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
@@ -881,8 +892,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		},
 		network_config: config.network.clone(),
 		chain: client.clone(),
-		finality_proof_provider,
-		finality_proof_request_builder,
 		on_demand: on_demand,
 		transaction_pool: transaction_pool_adapter as _,
 		import_queue: Box::new(import_queue),

@@ -47,7 +47,7 @@ use sp_consensus::{
 	BlockOrigin, Error as ConsensusError, SelectChain, SlotData, BlockCheckParams, ImportResult
 };
 use sp_consensus::import_queue::{
-	Verifier, BasicQueue, DefaultImportQueue, BoxJustificationImport, BoxFinalityProofImport,
+	Verifier, BasicQueue, DefaultImportQueue, BoxJustificationImport,
 };
 use sc_client_api::{backend::AuxStore, BlockOf};
 use sp_blockchain::{
@@ -59,7 +59,7 @@ use sp_core::crypto::Public;
 use sp_application_crypto::{AppKey, AppPublic};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	Justification,
+	traits::NumberFor, Justification,
 };
 use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
@@ -73,6 +73,7 @@ use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
 	CheckedHeader, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
+	BackoffAuthoringBlocksStrategy,
 };
 
 use sp_api::ApiExt;
@@ -138,7 +139,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
-pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
+pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 	slot_duration: SlotDuration,
 	client: Arc<C>,
 	select_chain: SC,
@@ -147,11 +148,12 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
+	backoff_authoring_blocks: Option<BS>,
 	keystore: SyncCryptoStorePtr,
 	can_author_with: CAW,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
@@ -163,6 +165,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	CAW: CanAuthorWith<B> + Send,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
 	let worker = AuraWorker {
 		client,
@@ -171,6 +174,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 		keystore,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
+		backoff_authoring_blocks,
 		_key_type: PhantomData::<P>,
 	};
 	register_aura_inherent_data_provider(
@@ -188,20 +192,22 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	))
 }
 
-struct AuraWorker<C, E, I, P, SO> {
+struct AuraWorker<C, E, I, P, SO, BS> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
 	keystore: SyncCryptoStorePtr,
 	sync_oracle: SO,
 	force_authoring: bool,
+	backoff_authoring_blocks: Option<BS>,
 	_key_type: PhantomData<P>,
 }
 
-impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraWorker<C, E, I, P, SO>
+impl<B, C, E, I, P, Error, SO, BS> sc_consensus_slots::SimpleSlotWorker<B>
+	for AuraWorker<C, E, I, P, SO, BS>
 where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Sync,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + HeaderBackend<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error = Error>,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -210,6 +216,7 @@ where
 	P::Public: AppPublic + Public + Member + Encode + Decode + Hash,
 	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Clone,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	type BlockImport = I;
@@ -314,6 +321,21 @@ where
 
 	fn force_authoring(&self) -> bool {
 		self.force_authoring
+	}
+
+	fn should_backoff(&self, slot_number: u64, chain_head: &B::Header) -> bool {
+		if let Some(ref strategy) = self.backoff_authoring_blocks {
+			if let Ok(chain_head_slot) = find_pre_digest::<B, P>(chain_head) {
+				return strategy.should_backoff(
+					*chain_head.number(),
+					chain_head_slot,
+					self.client.info().finalized_number,
+					slot_number,
+					self.logging_target(),
+				);
+			}
+		}
+		false
 	}
 
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle {
@@ -814,7 +836,6 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 	slot_duration: SlotDuration,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<B>>,
-	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
 	spawner: &S,
@@ -846,7 +867,6 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 		verifier,
 		Box::new(block_import),
 		justification_import,
-		finality_proof_import,
 		spawner,
 		registry,
 	))
@@ -863,7 +883,7 @@ mod tests {
 	use sp_keyring::sr25519::Keyring;
 	use sc_client_api::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
-	use sc_consensus_slots::SimpleSlotWorker;
+	use sc_consensus_slots::{SimpleSlotWorker, BackoffAuthoringOnFinalizedHeadLagging};
 	use std::task::Poll;
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_runtime::traits::Header as _;
@@ -1012,7 +1032,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			aura_futures.push(start_aura::<_, _, _, _, _, AuthorityPair, _, _, _>(
+			aura_futures.push(start_aura::<_, _, _, _, _, AuthorityPair, _, _, _, _>(
 				slot_duration,
 				client.clone(),
 				select_chain,
@@ -1021,6 +1041,7 @@ mod tests {
 				DummyOracle,
 				inherent_data_providers,
 				false,
+				Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				keystore,
 				sp_consensus::AlwaysCanAuthor,
 			).expect("Starts aura"));
@@ -1081,6 +1102,7 @@ mod tests {
 			keystore: keystore.into(),
 			sync_oracle: DummyOracle.clone(),
 			force_authoring: false,
+			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 			_key_type: PhantomData::<AuthorityPair>,
 		};
 

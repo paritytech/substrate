@@ -682,6 +682,10 @@ decl_event!(
 		/// A \[member\] has been removed. This should always be followed by either `NewTerm` or
 		/// `EmptyTerm`.
 		MemberKicked(AccountId),
+		/// A candidate was slashed due to failing to obtain a seat as member or runner-up
+		CandidateSlashed(AccountId, Balance),
+		/// A seat holder (member or runner-up) was slashed due to failing to retaining their position.
+		SeatHolderSlashed(AccountId, Balance),
 		/// A \[member\] has renounced their candidacy.
 		MemberRenounced(AccountId),
 		/// A voter was reported with the the report being successful or not.
@@ -995,6 +999,7 @@ impl<T: Trait> Module<T> {
 					new_runners_up_ids_sorted.binary_search(&c).is_err()
 				{
 					let (imbalance, _) = T::Currency::slash_reserved(&c, T::CandidacyBond::get());
+					Self::deposit_event(RawEvent::CandidateSlashed(c, T::CandidacyBond::get()));
 					T::LoserCandidate::on_unbalanced(imbalance);
 				}
 			});
@@ -1002,6 +1007,7 @@ impl<T: Trait> Module<T> {
 			// Burn outgoing bonds
 			to_burn_bond.into_iter().for_each(|x| {
 				let (imbalance, _) = T::Currency::slash_reserved(&x, T::CandidacyBond::get());
+				Self::deposit_event(RawEvent::SeatHolderSlashed(x, T::CandidacyBond::get()));
 				T::LoserCandidate::on_unbalanced(imbalance);
 			});
 
@@ -1052,7 +1058,6 @@ impl<T: Trait> ContainsLengthBound for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::cell::RefCell;
 	use frame_support::{assert_ok, assert_noop, assert_err_with_weight, parameter_types,
 		weights::Weight,
 	};
@@ -1117,36 +1122,13 @@ mod tests {
 		pub const CandidacyBond: u64 = 3;
 	}
 
-	thread_local! {
-		static VOTING_BOND: RefCell<u64> = RefCell::new(2);
-		static DESIRED_MEMBERS: RefCell<u32> = RefCell::new(2);
-		static DESIRED_RUNNERS_UP: RefCell<u32> = RefCell::new(2);
-		static TERM_DURATION: RefCell<u64> = RefCell::new(5);
-	}
-
-	pub struct VotingBond;
-	impl Get<u64> for VotingBond {
-		fn get() -> u64 { VOTING_BOND.with(|v| *v.borrow()) }
-	}
-
-	pub struct DesiredMembers;
-	impl Get<u32> for DesiredMembers {
-		fn get() -> u32 { DESIRED_MEMBERS.with(|v| *v.borrow()) }
-	}
-
-	pub struct DesiredRunnersUp;
-	impl Get<u32> for DesiredRunnersUp {
-		fn get() -> u32 { DESIRED_RUNNERS_UP.with(|v| *v.borrow()) }
-	}
-
-	pub struct TermDuration;
-	impl Get<u64> for TermDuration {
-		fn get() -> u64 { TERM_DURATION.with(|v| *v.borrow()) }
-	}
-
-	thread_local! {
-		pub static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-		pub static PRIME: RefCell<Option<u64>> = RefCell::new(None);
+	frame_support::parameter_types! {
+		pub static VotingBond: u64 = 2;
+		pub static DesiredMembers: u32 = 2;
+		pub static DesiredRunnersUp: u32 = 2;
+		pub static TermDuration: u64 = 5;
+		pub static Members: Vec<u64> = vec![];
+		pub static Prime: Option<u64> = None;
 	}
 
 	pub struct TestChangeMembers;

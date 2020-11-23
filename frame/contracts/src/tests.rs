@@ -31,11 +31,10 @@ use sp_runtime::{
 use frame_support::{
 	assert_ok, assert_err_ignore_postinfo, impl_outer_dispatch, impl_outer_event,
 	impl_outer_origin, parameter_types, StorageMap,
-	traits::{Currency, Get, ReservableCurrency},
+	traits::{Currency, ReservableCurrency},
 	weights::{Weight, PostDispatchInfo},
 	dispatch::DispatchErrorWithPostInfo,
 };
-use std::cell::RefCell;
 use frame_system::{self as system, EventRecord, Phase};
 
 mod contracts {
@@ -102,15 +101,6 @@ pub mod test_utils {
 	}
 }
 
-thread_local! {
-	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
-}
-
-pub struct ExistentialDeposit;
-impl Get<u64> for ExistentialDeposit {
-	fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
-}
-
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
 parameter_types! {
@@ -118,6 +108,7 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Trait for Test {
 	type BaseCallFilter = ();
