@@ -1,7 +1,6 @@
-# Comment Module
+# Pallet Post
 
-- [`comment::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
+A pallet for storing posts on-chain.
 
 ## Overview
 
