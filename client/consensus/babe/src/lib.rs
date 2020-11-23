@@ -79,9 +79,7 @@ use std::{
 	any::Any, borrow::Cow, convert::TryInto,
 };
 use sp_consensus::{ImportResult, CanAuthorWith};
-use sp_consensus::import_queue::{
-	BoxJustificationImport, BoxFinalityProofImport,
-};
+use sp_consensus::import_queue::BoxJustificationImport;
 use sp_core::crypto::Public;
 use sp_application_crypto::AppKey;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
@@ -1484,7 +1482,6 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	babe_link: BabeLink<Block>,
 	block_import: Inner,
 	justification_import: Option<BoxJustificationImport<Block>>,
-	finality_proof_import: Option<BoxFinalityProofImport<Block>>,
 	client: Arc<Client>,
 	select_chain: SelectChain,
 	inherent_data_providers: InherentDataProviders,
@@ -1516,7 +1513,6 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 		verifier,
 		Box::new(block_import),
 		justification_import,
-		finality_proof_import,
 		spawner,
 		registry,
 	))

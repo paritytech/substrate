@@ -571,7 +571,6 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup},
 		Perbill,
 	};
-	use std::cell::RefCell;
 	use smallvec::smallvec;
 
 	const CALL: &<Runtime as frame_system::Trait>::Call =
@@ -599,20 +598,14 @@ mod tests {
 		pub enum Origin for Runtime {}
 	}
 
-	thread_local! {
-		static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
-	}
-
-	pub struct ExtrinsicBaseWeight;
-	impl Get<u64> for ExtrinsicBaseWeight {
-		fn get() -> u64 { EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()) }
-	}
-
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub static ExtrinsicBaseWeight: u64 = 0;
+		pub static TransactionByteFee: u64 = 1;
+		pub static WeightToFee: u64 = 1;
 	}
 
 	impl frame_system::Trait for Runtime {
@@ -656,17 +649,7 @@ mod tests {
 		type MaxLocks = ();
 		type WeightInfo = ();
 	}
-	thread_local! {
-		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
-		static WEIGHT_TO_FEE: RefCell<u64> = RefCell::new(1);
-	}
 
-	pub struct TransactionByteFee;
-	impl Get<u64> for TransactionByteFee {
-		fn get() -> u64 { TRANSACTION_BYTE_FEE.with(|v| *v.borrow()) }
-	}
-
-	pub struct WeightToFee;
 	impl WeightToFeePolynomial for WeightToFee {
 		type Balance = u64;
 
