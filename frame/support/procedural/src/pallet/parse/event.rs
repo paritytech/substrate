@@ -18,6 +18,7 @@
 use super::helper;
 use syn::spanned::Spanned;
 use quote::ToTokens;
+use frame_support_procedural_tools::clean_type_string;
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -221,26 +222,15 @@ impl EventDef {
 					.map(|field| {
 						metadata.iter().find(|m| m.0 == field.ty)
 							.map(|m| m.1.clone())
-							.or_else(|| {
-								if let syn::Type::Path(p) = &field.ty {
-									p.path.segments.last().map(|s| format!("{}", s.ident))
-								} else {
-									None
-								}
-							})
-							.ok_or_else(|| {
-								let msg = "Invalid pallet::event, type can't be parsed for \
-									metadata, must be either a path type (and thus last \
-									segments ident is metadata) or match a type in the \
-									metadata attributes";
-								syn::Error::new(field.span(), msg)
+							.unwrap_or_else(|| {
+								clean_type_string(&field.ty.to_token_stream().to_string())
 							})
 					})
-					.collect::<syn::Result<_>>()?;
+					.collect();
 
-				Ok((name, args, docs))
+				(name, args, docs)
 			})
-			.collect::<syn::Result<_>>()?;
+			.collect();
 
 		Ok(EventDef {
 			index,

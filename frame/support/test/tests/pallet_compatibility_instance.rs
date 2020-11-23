@@ -130,6 +130,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(fn deposit_event)]
+	#[pallet::metadata(T::Balance = "Balance")]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Dummy event, just here so there's a generic type that's used.
 		Dummy(T::Balance),

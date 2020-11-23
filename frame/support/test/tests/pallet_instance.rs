@@ -591,7 +591,7 @@ fn metadata() {
 		event: Some(DecodeDifferent::Decoded(vec![
 			EventMetadata {
 				name: DecodeDifferent::Decoded("Proposed".to_string()),
-				arguments: DecodeDifferent::Decoded(vec!["AccountId".to_string()]),
+				arguments: DecodeDifferent::Decoded(vec!["<T as frame_system::Config>::AccountId".to_string()]),
 				documentation: DecodeDifferent::Decoded(vec![
 					" doc comment put in metadata".to_string()
 				]),

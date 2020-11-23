@@ -1232,7 +1232,7 @@ pub mod pallet_prelude {
 ///
 /// The metadata of a type is defined by:
 /// * if matching a type in `#[pallet::metadata(..)]`, then the corresponding metadata.
-/// * otherwise the last segment of the type.
+/// * otherwise the type stringified.
 ///
 /// E.g.:
 /// ```ignore
@@ -1242,7 +1242,7 @@ pub mod pallet_prelude {
 /// 	Proposed(u32, T::AccountId),
 /// }
 /// ```
-/// will write in event variant metadata `"SpecialU32"` and `"AccountId"`.
+/// will write in event variant metadata `"SpecialU32"` and `"T::AccountId"`.
 ///
 /// The attribute `#[pallet::generate_deposit($visbility fn deposit_event)]` generate a helper
 /// function on `Pallet` to deposit event.
@@ -1558,7 +1558,7 @@ pub mod pallet_prelude {
 /// 	pub enum Event<T: Config> {
 /// 		/// doc comment put in metadata
 /// 		// `<T as frame_system::Config>::AccountId` is not defined in metadata list, the last
-/// 		// segment is put into metadata, i.e. `AccountId`
+/// 		// Thus the metadata is `<T as frame_system::Config>::AccountId`.
 /// 		Proposed(<T as frame_system::Config>::AccountId),
 /// 		/// doc
 /// 		// here metadata will be `Balance` as define in metadata list

@@ -133,7 +133,11 @@ pub mod pallet {
 	{
 		/// Doc comment put in metadata
 		#[pallet::weight(Weight::from(*_foo))]
-		fn foo(origin: OriginFor<T>, #[pallet::compact] _foo: u32, _bar: u32) -> DispatchResultWithPostInfo {
+		fn foo(
+			origin: OriginFor<T>,
+			#[pallet::compact] _foo: u32,
+			_bar: u32,
+		) -> DispatchResultWithPostInfo {
 			T::AccountId::from(SomeType1); // Test for where clause
 			T::AccountId::from(SomeType3); // Test for where clause
 			let _ = origin;
@@ -144,7 +148,10 @@ pub mod pallet {
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
 		#[frame_support::transactional]
-		fn foo_transactional(_origin: OriginFor<T>, #[pallet::compact] foo: u32) -> DispatchResultWithPostInfo {
+		fn foo_transactional(
+			_origin: OriginFor<T>,
+			#[pallet::compact] foo: u32,
+		) -> DispatchResultWithPostInfo {
 			Self::deposit_event(Event::Something(0));
 			if foo != 0 {
 				Ok(().into())
@@ -605,7 +612,7 @@ fn metadata() {
 		event: Some(DecodeDifferent::Decoded(vec![
 			EventMetadata {
 				name: DecodeDifferent::Decoded("Proposed".to_string()),
-				arguments: DecodeDifferent::Decoded(vec!["AccountId".to_string()]),
+				arguments: DecodeDifferent::Decoded(vec!["<T as frame_system::Config>::AccountId".to_string()]),
 				documentation: DecodeDifferent::Decoded(vec![
 					" doc comment put in metadata".to_string()
 				]),
@@ -624,7 +631,7 @@ fn metadata() {
 			},
 			EventMetadata {
 				name: DecodeDifferent::Decoded("SomethingElse".to_string()),
-				arguments: DecodeDifferent::Decoded(vec!["_1".to_string()]),
+				arguments: DecodeDifferent::Decoded(vec!["<T::AccountId as SomeAssociation1>::_1".to_string()]),
 				documentation: DecodeDifferent::Decoded(vec![]),
 			},
 		])),
