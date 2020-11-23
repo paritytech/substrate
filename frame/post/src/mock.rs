@@ -82,7 +82,7 @@ impl pallet_balances::Trait for Test {
 
 parameter_types! {
 	pub const ByteDeposit: u64 = 1;
-	pub const MinDeposit: u64 = 10;
+	pub const BaseDeposit: u64 = 10;
 	pub const MaxTopicLength: usize = 100;
 	pub const MaxPostLength: usize = 1000;
 }
@@ -90,17 +90,17 @@ parameter_types! {
 impl Trait for Test {
 	type Event = ();
 	type Currency = Balances;
-	type MinDeposit = MinDeposit;
+	type BaseDeposit = BaseDeposit;
 	type ByteDeposit = ByteDeposit;
 	type MaxTopicLength = MaxTopicLength;
-	type MaxPostLength = MaxTopicLength;
+	type MaxPostLength = MaxPostLength;
 	type WeightInfo = ();
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test>{
-		balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
+		balances: vec![(1, 100), (2, 200), (3, 300), (4, 400), (5, 500), (6, 600), (1337, 1_000_000)],
 	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }

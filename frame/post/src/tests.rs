@@ -27,9 +27,10 @@ fn blog_post_lifecycle_works() {
 	new_test_ext().execute_with(|| {
 		let topic = b"hello".to_vec();
 		let post = b"world".to_vec();
+		let base = <Test as crate::Trait>::BaseDeposit::get();
 		// Create
 		assert_ok!(Post::post(Origin::signed(1), PostType::Blog, topic.clone(), post.clone()));
-		assert_eq!(Balances::reserved_balance(&1), (topic.len() + post.len()) as u64);
+		assert_eq!(Balances::reserved_balance(&1), base + (topic.len() + post.len()) as u64);
 		assert!(Post::blog(&1, &topic).is_some());
 		// Delete
 		assert_ok!(Post::delete(Origin::signed(1), PostType::Blog, topic.clone()));
@@ -43,9 +44,10 @@ fn thread_post_lifecycle_works() {
 	new_test_ext().execute_with(|| {
 		let topic = b"hello".to_vec();
 		let post = b"world".to_vec();
+		let base = <Test as crate::Trait>::BaseDeposit::get();
 		// Create
 		assert_ok!(Post::post(Origin::signed(1), PostType::Thread, topic.clone(), post.clone()));
-		assert_eq!(Balances::reserved_balance(&1), (topic.len() + post.len()) as u64);
+		assert_eq!(Balances::reserved_balance(&1), base + (topic.len() + post.len()) as u64);
 		assert!(Post::thread(&topic, &1).is_some());
 		// Delete
 		assert_ok!(Post::delete(Origin::signed(1), PostType::Thread, topic.clone()));
@@ -59,21 +61,22 @@ fn repost_handles_reserves_correctly() {
 	new_test_ext().execute_with(|| {
 		let topic = b"hello".to_vec();
 		let post = b"world".to_vec();
+		let base = <Test as Trait>::BaseDeposit::get();
 		// Create
 		assert_ok!(Post::post(Origin::signed(3), PostType::Blog, topic.clone(), post.clone()));
-		assert_eq!(Balances::reserved_balance(&3), (topic.len() + post.len()) as u64);
+		assert_eq!(Balances::reserved_balance(&3), base + (topic.len() + post.len()) as u64);
 		assert!(Post::blog(&3, &topic).is_some());
 		// Repost Bigger
 		let topic = b"hello".to_vec();
 		let post = b"world, nice to see you".to_vec();
 		assert_ok!(Post::post(Origin::signed(3), PostType::Blog, topic.clone(), post.clone()));
-		assert_eq!(Balances::reserved_balance(&3), (topic.len() + post.len()) as u64);
+		assert_eq!(Balances::reserved_balance(&3), base + (topic.len() + post.len()) as u64);
 		assert!(Post::blog(&3, &topic).is_some());
 		// Repost Smaller
 		let topic = b"hello".to_vec();
 		let post = b"bye".to_vec();
 		assert_ok!(Post::post(Origin::signed(3), PostType::Blog, topic.clone(), post.clone()));
-		assert_eq!(Balances::reserved_balance(&3), <Test as Trait>::MinDeposit::get());
+		assert_eq!(Balances::reserved_balance(&3), base + (topic.len() + post.len()) as u64);
 		assert!(Post::blog(&3, &topic).is_some());
 	});
 }
@@ -83,16 +86,17 @@ fn minimum_deposit_enforced() {
 	new_test_ext().execute_with(|| {
 		let topic = b"a".to_vec();
 		let post = b"b".to_vec();
+		let base = <Test as crate::Trait>::BaseDeposit::get();
 		assert_ok!(Post::post(Origin::signed(2), PostType::Blog, topic.clone(), post.clone()));
-		assert_eq!(Balances::reserved_balance(&2), <Test as crate::Trait>::MinDeposit::get());
+		assert_eq!(Balances::reserved_balance(&2), base + (topic.len() + post.len()) as u64);
 	});
 }
 
 #[test]
 fn insufficient_funds_fails() {
 	new_test_ext().execute_with(|| {
-		let topic = b"a very long topic".to_vec();
-		let post = b"and a very long post".to_vec();
+		let topic = b"a very long topic and post".to_vec();
+		let post = vec![0u8; 1000];
 		assert_noop!(
 			Post::post(Origin::signed(1), PostType::Blog, topic, post),
 			BalancesError::<Test, _>::InsufficientBalance,
@@ -117,9 +121,11 @@ fn topic_too_large() {
 		let topic = vec![0u8; 101];
 		let post = b"hello world".to_vec();
 		assert_noop!(
-			Post::post(Origin::signed(1), PostType::Blog, topic, post),
+			Post::post(Origin::signed(1337), PostType::Blog, topic, post.clone()),
 			Error::<Test>::TopicLength,
 		);
+		let topic = vec![0u8; 100];
+		assert_ok!(Post::post(Origin::signed(1337), PostType::Blog, topic, post));
 	});
 }
 
@@ -129,8 +135,10 @@ fn post_too_large() {
 		let topic = b"hello world".to_vec();
 		let post = vec![0u8; 1001];
 		assert_noop!(
-			Post::post(Origin::signed(1), PostType::Blog, topic, post),
+			Post::post(Origin::signed(1337), PostType::Blog, topic.clone(), post),
 			Error::<Test>::PostLength,
 		);
+		let post = vec![0u8; 1000];
+		assert_ok!(Post::post(Origin::signed(1337), PostType::Blog, topic, post));
 	});
 }

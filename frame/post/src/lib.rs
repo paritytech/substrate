@@ -42,8 +42,8 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// Balances
 	type Currency: ReservableCurrency<Self::AccountId>;
-	/// The minimum deposit that needs to be placed for a post.
-	type MinDeposit: Get<BalanceOf<Self>>;
+	/// The base deposit that needs to be placed for a post.
+	type BaseDeposit: Get<BalanceOf<Self>>;
 	/// The amount per byte users need to deposit.
 	type ByteDeposit: Get<BalanceOf<Self>>;
 	/// The max length for a topic.
@@ -116,10 +116,12 @@ decl_module! {
 			let post_len = post.len();
 			ensure!(post_len <= T::MaxPostLength::get(), Error::<T>::PostLength);
 
-			// Deposit is at least MinDeposit, or grows with topic and post length.
-			let deposit = T::ByteDeposit::get().saturating_mul(
-				topic_len.saturating_add(post_len).saturated_into()
-			).max(T::MinDeposit::get());
+			// Deposit is BaseDeposit + ByteDeposit * Bytes.
+			let deposit = T::BaseDeposit::get().saturating_add(
+				T::ByteDeposit::get().saturating_mul(
+					topic_len.saturating_add(post_len).saturated_into()
+				)
+			);
 
 			if let Some(post) = match post_type {
 				PostType::Blog => Blog::<T>::get(&poster, &topic),
