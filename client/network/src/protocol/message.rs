@@ -216,7 +216,7 @@ pub mod generic {
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct ConsensusMessage {
 		/// Identifies consensus engine.
-		pub engine_id: ConsensusEngineId,
+		pub protocol: ConsensusEngineId,
 		/// Message payload.
 		pub data: Vec<u8>,
 	}

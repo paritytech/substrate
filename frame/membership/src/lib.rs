@@ -278,7 +278,6 @@ impl<T: Trait<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
 mod tests {
 	use super::*;
 
-	use std::cell::RefCell;
 	use frame_support::{
 		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
 		ord_parameter_types
@@ -298,6 +297,8 @@ mod tests {
 		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub static Members: Vec<u64> = vec![];
+		pub static Prime: Option<u64> = None;
 	}
 	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
@@ -332,11 +333,6 @@ mod tests {
 		pub const Three: u64 = 3;
 		pub const Four: u64 = 4;
 		pub const Five: u64 = 5;
-	}
-
-	thread_local! {
-		static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-		static PRIME: RefCell<Option<u64>> = RefCell::new(None);
 	}
 
 	pub struct TestChangeMembers;

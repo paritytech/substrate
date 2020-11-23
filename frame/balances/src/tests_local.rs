@@ -27,9 +27,8 @@ use sp_runtime::{
 use sp_core::H256;
 use sp_io;
 use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
-use frame_support::traits::{Get, StorageMapShim};
+use frame_support::traits::StorageMapShim;
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
-use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInfo};
 use pallet_transaction_payment::CurrencyAdapter;
 
@@ -49,15 +48,6 @@ impl_outer_event! {
 	}
 }
 
-thread_local! {
-	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
-}
-
-pub struct ExistentialDeposit;
-impl Get<u64> for ExistentialDeposit {
-	fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
-}
-
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
@@ -66,6 +56,7 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();

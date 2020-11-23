@@ -37,7 +37,7 @@ use sp_consensus::{
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
 use codec::{Decode, DecodeAll, Encode};
-use sp_runtime::{generic::BlockId, ConsensusEngineId, Justification};
+use sp_runtime::{generic::BlockId, Justification};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub
 };
@@ -231,8 +231,8 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: GenericProto,
-	/// For each legacy gossiping engine ID, the corresponding new protocol name.
-	protocol_name_by_engine: HashMap<ConsensusEngineId, Cow<'static, str>>,
+	/// List of notifications protocols that have been registered.
+	notification_protocols: Vec<Cow<'static, str>>,
 	/// For each protocol name, the legacy equivalent.
 	legacy_equiv_by_name: HashMap<Cow<'static, str>, Fallback>,
 	/// Name of the protocol used for transactions.
@@ -252,6 +252,7 @@ struct PacketStats {
 	count_in: u64,
 	count_out: u64,
 }
+
 /// Peer information
 #[derive(Debug, Clone)]
 struct Peer<B: BlockT, H: ExHashT> {
@@ -349,8 +350,8 @@ fn build_status_message<B: BlockT>(protocol_config: &ProtocolConfig, chain: &Arc
 /// Fallback mechanism to use to send a notification if no substream is open.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Fallback {
-	/// Use a `Message::Consensus` with the given engine ID.
-	Consensus(ConsensusEngineId),
+	/// Formerly-known as `Consensus` messages. Now regular notifications.
+	Consensus,
 	/// The message is the bytes encoding of a `Transactions<E>` (which is itself defined as a `Vec<E>`).
 	Transactions,
 	/// The message is the bytes encoding of a `BlockAnnounce<H>`.
@@ -446,7 +447,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			transaction_pool,
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
-			protocol_name_by_engine: HashMap::new(),
+			notification_protocols: Vec::new(),
 			legacy_equiv_by_name,
 			transactions_protocol,
 			block_announces_protocol,
@@ -621,7 +622,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			GenericMessage::RemoteCallRequest(_) |
 			GenericMessage::RemoteReadRequest(_) |
 			GenericMessage::RemoteHeaderRequest(_) |
-			GenericMessage::RemoteChangesRequest(_) => {
+			GenericMessage::RemoteChangesRequest(_) |
+			GenericMessage::Consensus(_) |
+			GenericMessage::ConsensusBatch(_) => {
 				debug!(
 					target: "sub-libp2p",
 					"Received no longer supported legacy request from {:?}",
@@ -629,38 +632,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				);
 				self.disconnect_peer(&who);
 				self.peerset_handle.report_peer(who, rep::BAD_PROTOCOL);
-			},
-			GenericMessage::Consensus(msg) =>
-				return if self.protocol_name_by_engine.contains_key(&msg.engine_id) {
-					CustomMessageOutcome::NotificationsReceived {
-						remote: who,
-						messages: vec![(msg.engine_id, From::from(msg.data))],
-					}
-				} else {
-					debug!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
-					CustomMessageOutcome::None
-				},
-			GenericMessage::ConsensusBatch(messages) => {
-				let messages = messages
-					.into_iter()
-					.filter_map(|msg| {
-						if self.protocol_name_by_engine.contains_key(&msg.engine_id) {
-							Some((msg.engine_id, From::from(msg.data)))
-						} else {
-							debug!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
-							None
-						}
-					})
-					.collect::<Vec<_>>();
-
-				return if !messages.is_empty() {
-					CustomMessageOutcome::NotificationsReceived {
-						remote: who,
-						messages,
-					}
-				} else {
-					CustomMessageOutcome::None
-				};
 			},
 		}
 
@@ -685,7 +656,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			// Notify all the notification protocols as closed.
 			CustomMessageOutcome::NotificationStreamClosed {
 				remote: peer,
-				protocols: self.protocol_name_by_engine.keys().cloned().collect(),
+				protocols: self.notification_protocols.clone(),
 			}
 		} else {
 			CustomMessageOutcome::None
@@ -939,7 +910,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		// Notify all the notification protocols as open.
 		CustomMessageOutcome::NotificationStreamOpened {
 			remote: who,
-			protocols: self.protocol_name_by_engine.keys().cloned().collect(),
+			protocols: self.notification_protocols.clone(),
 			roles: info.roles,
 			notifications_sink,
 		}
@@ -952,16 +923,17 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// returns a list of substreams to open as a result.
 	pub fn register_notifications_protocol<'a>(
 		&'a mut self,
-		engine_id: ConsensusEngineId,
-		protocol_name: impl Into<Cow<'static, str>>,
+		protocol: impl Into<Cow<'static, str>>,
 		handshake_message: Vec<u8>,
 	) -> impl Iterator<Item = (&'a PeerId, Roles, &'a NotificationsSink)> + 'a {
-		let protocol_name = protocol_name.into();
-		if self.protocol_name_by_engine.insert(engine_id, protocol_name.clone()).is_some() {
-			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol_name);
+		let protocol = protocol.into();
+
+		if self.notification_protocols.iter().any(|p| *p == protocol) {
+			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol);
 		} else {
-			self.behaviour.register_notif_protocol(protocol_name.clone(), handshake_message);
-			self.legacy_equiv_by_name.insert(protocol_name, Fallback::Consensus(engine_id));
+			self.notification_protocols.push(protocol.clone());
+			self.behaviour.register_notif_protocol(protocol.clone(), handshake_message);
+			self.legacy_equiv_by_name.insert(protocol, Fallback::Consensus);
 		}
 
 		let behaviour = &self.behaviour;
@@ -1450,20 +1422,20 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,
-		protocols: Vec<ConsensusEngineId>,
+		protocols: Vec<Cow<'static, str>>,
 		roles: Roles,
 		notifications_sink: NotificationsSink
 	},
 	/// The [`NotificationsSink`] of some notification protocols need an update.
 	NotificationStreamReplaced {
 		remote: PeerId,
-		protocols: Vec<ConsensusEngineId>,
+		protocols: Vec<Cow<'static, str>>,
 		notifications_sink: NotificationsSink,
 	},
 	/// Notification protocols have been closed with a remote.
-	NotificationStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
+	NotificationStreamClosed { remote: PeerId, protocols: Vec<Cow<'static, str>> },
 	/// Messages have been received on one or more notifications protocols.
-	NotificationsReceived { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },
+	NotificationsReceived { remote: PeerId, messages: Vec<(Cow<'static, str>, Bytes)> },
 	/// A new block request must be emitted.
 	/// You must later call either [`Protocol::on_block_response`] or
 	/// [`Protocol::on_block_request_failed`].
@@ -1664,7 +1636,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			GenericProtoOut::CustomProtocolReplaced { peer_id, notifications_sink, .. } => {
 				CustomMessageOutcome::NotificationStreamReplaced {
 					remote: peer_id,
-					protocols: self.protocol_name_by_engine.keys().cloned().collect(),
+					protocols: self.notification_protocols.clone(),
 					notifications_sink,
 				}
 			},
@@ -1675,10 +1647,10 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				self.on_custom_message(peer_id, message),
 			GenericProtoOut::Notification { peer_id, protocol_name, message } =>
 				match self.legacy_equiv_by_name.get(&protocol_name) {
-					Some(Fallback::Consensus(engine_id)) => {
+					Some(Fallback::Consensus) => {
 						CustomMessageOutcome::NotificationsReceived {
 							remote: peer_id,
-							messages: vec![(*engine_id, message.freeze())],
+							messages: vec![(protocol_name, message.freeze())],
 						}
 					}
 					Some(Fallback::Transactions) => {

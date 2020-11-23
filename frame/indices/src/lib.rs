@@ -21,13 +21,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod mock;
-pub mod address;
 mod tests;
 mod benchmarking;
 pub mod weights;
 
 use sp_std::prelude::*;
 use codec::Codec;
+use sp_runtime::MultiAddress;
 use sp_runtime::traits::{
 	StaticLookup, Member, LookupError, Zero, Saturating, AtLeast32Bit
 };
@@ -35,10 +35,8 @@ use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
 use frame_system::{ensure_signed, ensure_root};
-use self::address::Address as RawAddress;
 pub use weights::WeightInfo;
 
-pub type Address<T> = RawAddress<<T as frame_system::Config>::AccountId, <T as Trait>::AccountIndex>;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// The module's config trait.
@@ -287,17 +285,18 @@ impl<T: Trait> Module<T> {
 
 	/// Lookup an address to get an Id, if there's one there.
 	pub fn lookup_address(
-		a: address::Address<T::AccountId, T::AccountIndex>
+		a: MultiAddress<T::AccountId, T::AccountIndex>
 	) -> Option<T::AccountId> {
 		match a {
-			address::Address::Id(i) => Some(i),
-			address::Address::Index(i) => Self::lookup_index(i),
+			MultiAddress::Id(i) => Some(i),
+			MultiAddress::Index(i) => Self::lookup_index(i),
+			_ => None,
 		}
 	}
 }
 
 impl<T: Trait> StaticLookup for Module<T> {
-	type Source = address::Address<T::AccountId, T::AccountIndex>;
+	type Source = MultiAddress<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
 
 	fn lookup(a: Self::Source) -> Result<Self::Target, LookupError> {
@@ -305,6 +304,6 @@ impl<T: Trait> StaticLookup for Module<T> {
 	}
 
 	fn unlookup(a: Self::Target) -> Self::Source {
-		address::Address::Id(a)
+		MultiAddress::Id(a)
 	}
 }
