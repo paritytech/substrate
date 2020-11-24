@@ -29,9 +29,7 @@ use std::{
 
 use libp2p::build_multiaddr;
 use log::trace;
-use sc_network::config::FinalityProofProvider;
 use sc_network::block_request_handler::BlockRequestHandler;
-use sc_network::finality_request_handler::FinalityRequestHandler;
 use sp_blockchain::{
 	HeaderBackend, Result as ClientResult,
 	well_known_cache_keys::{self, Id as CacheKeyId},
@@ -46,7 +44,7 @@ use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_network::config::Role;
 use sp_consensus::block_validation::{DefaultBlockAnnounceValidator, BlockAnnounceValidator};
 use sp_consensus::import_queue::{
-	BasicQueue, BoxJustificationImport, Verifier, BoxFinalityProofImport,
+	BasicQueue, BoxJustificationImport, Verifier,
 };
 use sp_consensus::block_import::{BlockImport, ImportResult};
 use sp_consensus::Error as ConsensusError;
@@ -54,14 +52,14 @@ use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockChec
 use futures::prelude::*;
 use futures::future::BoxFuture;
 use sc_network::{NetworkWorker, NetworkService, config::ProtocolId};
-use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
+use sc_network::config::{NetworkConfiguration, TransportConfig};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
 use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_runtime::{ConsensusEngineId, Justification};
+use sp_runtime::Justification;
 use substrate_test_runtime_client::{self, AccountKeyring};
 use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
@@ -560,7 +558,7 @@ pub struct FullPeerConfig {
 	/// Block announce validator.
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
-	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
+	pub notifications_protocols: Vec<Cow<'static, str>>,
 }
 
 pub trait TestNetFactory: Sized {
@@ -589,20 +587,10 @@ pub trait TestNetFactory: Sized {
 		-> (
 			BlockImportAdapter<Transaction>,
 			Option<BoxJustificationImport<Block>>,
-			Option<BoxFinalityProofImport<Block>>,
-			Option<BoxFinalityProofRequestBuilder<Block>>,
 			Self::PeerData,
 		)
 	{
-		(client.as_block_import(), None, None, None, Default::default())
-	}
-
-	/// Get finality proof provider (if supported).
-	fn make_finality_proof_provider(
-		&self,
-		_client: PeersClient,
-	) -> Option<Arc<dyn FinalityProofProvider<Block>>> {
-		None
+		(client.as_block_import(), None, Default::default())
 	}
 
 	fn default_config() -> ProtocolConfig {
@@ -639,8 +627,6 @@ pub trait TestNetFactory: Sized {
 		let (
 			block_import,
 			justification_import,
-			finality_proof_import,
-			finality_proof_request_builder,
 			data,
 		) = self.make_block_import(PeersClient::Full(client.clone(), backend.clone()));
 
@@ -655,7 +641,6 @@ pub trait TestNetFactory: Sized {
 			verifier.clone(),
 			Box::new(block_import.clone()),
 			justification_import,
-			finality_proof_import,
 			&sp_core::testing::TaskExecutor::new(),
 			None,
 		));
@@ -675,23 +660,10 @@ pub trait TestNetFactory: Sized {
 
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
-		// Add block request handler.
 		let block_request_protocol_config = {
 			let (handler, protocol_config) = BlockRequestHandler::new(protocol_id.clone(), client.clone());
 			self.spawn_task(handler.run().boxed());
 			protocol_config
-		};
-
-		// Add finality request handler.
-		let finality_request_protocol_config = match self.make_finality_proof_provider(PeersClient::Full(client.clone(), backend.clone())) {
-			Some(provider) => {
-				let (handler, protocol_config) = FinalityRequestHandler::new(protocol_id.clone(), provider);
-				self.spawn_task(handler.run().boxed());
-				protocol_config
-			},
-			None => {
-				sc_network::finality_request_handler::generate_protocol_config(protocol_id.clone())
-			}
 		};
 
 		let network = NetworkWorker::new(sc_network::config::Params {
@@ -699,7 +671,6 @@ pub trait TestNetFactory: Sized {
 			executor: None,
 			network_config,
 			chain: client.clone(),
-			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id,
@@ -708,7 +679,6 @@ pub trait TestNetFactory: Sized {
 				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
 			metrics_registry: None,
 			block_request_protocol_config,
-			finality_request_protocol_config,
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -740,8 +710,6 @@ pub trait TestNetFactory: Sized {
 		let (
 			block_import,
 			justification_import,
-			finality_proof_import,
-			finality_proof_request_builder,
 			data,
 		) = self.make_block_import(PeersClient::Light(client.clone(), backend.clone()));
 
@@ -756,7 +724,6 @@ pub trait TestNetFactory: Sized {
 			verifier.clone(),
 			Box::new(block_import.clone()),
 			justification_import,
-			finality_proof_import,
 			&sp_core::testing::TaskExecutor::new(),
 			None,
 		));
@@ -778,15 +745,11 @@ pub trait TestNetFactory: Sized {
 		// Add block request handler.
 		let block_request_protocol_config = sc_network::block_request_handler::generate_protocol_config(protocol_id.clone());
 
-		// Add finality request handler.
-		let finality_request_protocol_config = sc_network::finality_request_handler::generate_protocol_config(protocol_id.clone());
-
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
 			executor: None,
 			network_config,
 			chain: client.clone(),
-			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id,
@@ -794,7 +757,6 @@ pub trait TestNetFactory: Sized {
 			block_announce_validator: Box::new(DefaultBlockAnnounceValidator),
 			metrics_registry: None,
 			block_request_protocol_config,
-			finality_request_protocol_config,
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -1024,16 +986,12 @@ impl TestNetFactory for JustificationTestNet {
 		-> (
 			BlockImportAdapter<Transaction>,
 			Option<BoxJustificationImport<Block>>,
-			Option<BoxFinalityProofImport<Block>>,
-			Option<BoxFinalityProofRequestBuilder<Block>>,
 			Self::PeerData,
 		)
 	{
 		(
 			client.as_block_import(),
 			Some(Box::new(ForceFinalized(client))),
-			None,
-			None,
 			Default::default(),
 		)
 	}

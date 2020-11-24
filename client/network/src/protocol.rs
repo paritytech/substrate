@@ -19,7 +19,7 @@
 use crate::{
 	ExHashT,
 	chain::Client,
-	config::{BoxFinalityProofRequestBuilder, ProtocolId, TransactionPool, TransactionImportFuture, TransactionImport},
+	config::{ProtocolId, TransactionPool, TransactionImportFuture, TransactionImport},
 	error,
 	utils::{interval, LruHashSet},
 };
@@ -45,7 +45,7 @@ use sp_consensus::{
 	block_validation::BlockAnnounceValidator,
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
-use sp_runtime::{generic::BlockId, ConsensusEngineId, Justification};
+use sp_runtime::{generic::BlockId, Justification};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub
 };
@@ -127,7 +127,6 @@ struct Metrics {
 	peers: Gauge<U64>,
 	queued_blocks: Gauge<U64>,
 	fork_targets: Gauge<U64>,
-	finality_proofs: GaugeVec<U64>,
 	justifications: GaugeVec<U64>,
 	propagated_transactions: Counter<U64>,
 }
@@ -152,16 +151,6 @@ impl Metrics {
 					Opts::new(
 						"sync_extra_justifications",
 						"Number of extra justifications requests"
-					),
-					&["status"],
-				)?;
-				register(g, r)?
-			},
-			finality_proofs: {
-				let g = GaugeVec::new(
-					Opts::new(
-						"sync_extra_finality_proofs",
-						"Number of extra finality proof requests",
 					),
 					&["status"],
 				)?;
@@ -223,8 +212,8 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: GenericProto,
-	/// For each legacy gossiping engine ID, the corresponding new protocol name.
-	protocol_name_by_engine: HashMap<ConsensusEngineId, Cow<'static, str>>,
+	/// List of notifications protocols that have been registered.
+	notification_protocols: Vec<Cow<'static, str>>,
 	/// For each protocol name, the legacy equivalent.
 	legacy_equiv_by_name: HashMap<Cow<'static, str>, Fallback>,
 	/// Name of the protocol used for transactions.
@@ -244,6 +233,7 @@ struct PacketStats {
 	count_in: u64,
 	count_out: u64,
 }
+
 /// Peer information
 #[derive(Debug)]
 struct Peer<B: BlockT, H: ExHashT> {
@@ -251,12 +241,6 @@ struct Peer<B: BlockT, H: ExHashT> {
 	/// Current block request, if any. Started by emitting [`CustomMessageOutcome::BlockRequest`].
 	block_request: Option<(
 		message::BlockRequest<B>,
-		oneshot::Receiver<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
-	)>,
-	/// Current finality request, if any. Started by emitting
-	/// [`CustomMessageOutcome::FinalityProofRequest`].
-	finality_request: Option<(
-		message::FinalityProofRequest<B::Hash>,
 		oneshot::Receiver<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
 	)>,
 	/// Holds a set of transactions known to this peer.
@@ -348,8 +332,8 @@ fn build_status_message<B: BlockT>(protocol_config: &ProtocolConfig, chain: &Arc
 /// Fallback mechanism to use to send a notification if no substream is open.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Fallback {
-	/// Use a `Message::Consensus` with the given engine ID.
-	Consensus(ConsensusEngineId),
+	/// Formerly-known as `Consensus` messages. Now regular notifications.
+	Consensus,
 	/// The message is the bytes encoding of a `Transactions<E>` (which is itself defined as a `Vec<E>`).
 	Transactions,
 	/// The message is the bytes encoding of a `BlockAnnounce<H>`.
@@ -363,7 +347,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		local_peer_id: PeerId,
 		chain: Arc<dyn Client<B>>,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
-		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		protocol_id: ProtocolId,
 		peerset_config: sc_peerset::PeersetConfig,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
@@ -375,7 +358,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			config.roles,
 			chain.clone(),
 			&info,
-			finality_proof_request_builder,
 			block_announce_validator,
 			config.max_parallel_downloads,
 		);
@@ -445,7 +427,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			transaction_pool,
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
-			protocol_name_by_engine: HashMap::new(),
+			notification_protocols: Vec::new(),
 			legacy_equiv_by_name,
 			transactions_protocol,
 			block_announces_protocol,
@@ -612,15 +594,14 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				warn!(target: "sub-libp2p", "Received unexpected RemoteHeaderResponse"),
 			GenericMessage::RemoteChangesResponse(_) =>
 				warn!(target: "sub-libp2p", "Received unexpected RemoteChangesResponse"),
-			GenericMessage::FinalityProofResponse(_) =>
-				warn!(target: "sub-libp2p", "Received unexpected FinalityProofResponse"),
 			GenericMessage::BlockRequest(_) |
-			GenericMessage::FinalityProofRequest(_) |
 			GenericMessage::RemoteReadChildRequest(_) |
 			GenericMessage::RemoteCallRequest(_) |
 			GenericMessage::RemoteReadRequest(_) |
 			GenericMessage::RemoteHeaderRequest(_) |
-			GenericMessage::RemoteChangesRequest(_) => {
+			GenericMessage::RemoteChangesRequest(_) |
+			GenericMessage::Consensus(_) |
+			GenericMessage::ConsensusBatch(_) => {
 				debug!(
 					target: "sub-libp2p",
 					"Received no longer supported legacy request from {:?}",
@@ -628,38 +609,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				);
 				self.disconnect_peer(&who);
 				self.peerset_handle.report_peer(who, rep::BAD_PROTOCOL);
-			},
-			GenericMessage::Consensus(msg) =>
-				return if self.protocol_name_by_engine.contains_key(&msg.engine_id) {
-					CustomMessageOutcome::NotificationsReceived {
-						remote: who,
-						messages: vec![(msg.engine_id, From::from(msg.data))],
-					}
-				} else {
-					debug!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
-					CustomMessageOutcome::None
-				},
-			GenericMessage::ConsensusBatch(messages) => {
-				let messages = messages
-					.into_iter()
-					.filter_map(|msg| {
-						if self.protocol_name_by_engine.contains_key(&msg.engine_id) {
-							Some((msg.engine_id, From::from(msg.data)))
-						} else {
-							debug!(target: "sync", "Received message on non-registered protocol: {:?}", msg.engine_id);
-							None
-						}
-					})
-					.collect::<Vec<_>>();
-
-				return if !messages.is_empty() {
-					CustomMessageOutcome::NotificationsReceived {
-						remote: who,
-						messages,
-					}
-				} else {
-					CustomMessageOutcome::None
-				};
 			},
 		}
 
@@ -688,7 +637,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			// Notify all the notification protocols as closed.
 			CustomMessageOutcome::NotificationStreamClosed {
 				remote: peer,
-				protocols: self.protocol_name_by_engine.keys().cloned().collect(),
+				protocols: self.notification_protocols.clone(),
 			}
 		} else {
 			CustomMessageOutcome::None
@@ -890,7 +839,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				best_number: status.best_number
 			},
 			block_request: None,
-			finality_request: None,
 			known_transactions: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_TRANSACTIONS)
 				.expect("Constant is nonzero")),
 			known_blocks: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_BLOCKS)
@@ -920,7 +868,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		// Notify all the notification protocols as open.
 		CustomMessageOutcome::NotificationStreamOpened {
 			remote: who,
-			protocols: self.protocol_name_by_engine.keys().cloned().collect(),
+			protocols: self.notification_protocols.clone(),
 			roles: info.roles,
 			notifications_sink,
 		}
@@ -933,16 +881,17 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// returns a list of substreams to open as a result.
 	pub fn register_notifications_protocol<'a>(
 		&'a mut self,
-		engine_id: ConsensusEngineId,
-		protocol_name: impl Into<Cow<'static, str>>,
+		protocol: impl Into<Cow<'static, str>>,
 		handshake_message: Vec<u8>,
 	) -> impl Iterator<Item = (&'a PeerId, Roles, &'a NotificationsSink)> + 'a {
-		let protocol_name = protocol_name.into();
-		if self.protocol_name_by_engine.insert(engine_id, protocol_name.clone()).is_some() {
-			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol_name);
+		let protocol = protocol.into();
+
+		if self.notification_protocols.iter().any(|p| *p == protocol) {
+			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol);
 		} else {
-			self.behaviour.register_notif_protocol(protocol_name.clone(), handshake_message);
-			self.legacy_equiv_by_name.insert(protocol_name, Fallback::Consensus(engine_id));
+			self.notification_protocols.push(protocol.clone());
+			self.behaviour.register_notif_protocol(protocol.clone(), handshake_message);
+			self.legacy_equiv_by_name.insert(protocol, Fallback::Consensus);
 		}
 
 		let behaviour = &self.behaviour;
@@ -1317,53 +1266,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.on_justification_import(hash, number, success)
 	}
 
-	/// Request a finality proof for the given block.
-	///
-	/// Queues a new finality proof request and tries to dispatch all pending requests.
-	pub fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.sync.request_finality_proof(&hash, number)
-	}
-
 	/// Notify the protocol that we have learned about the existence of nodes.
 	///
 	/// Can be called multiple times with the same `PeerId`s.
 	pub fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		self.behaviour.add_discovered_nodes(peer_ids)
-	}
-
-	pub fn finality_proof_import_result(
-		&mut self,
-		request_block: (B::Hash, NumberFor<B>),
-		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
-	) {
-		self.sync.on_finality_proof_import(request_block, finalization_result)
-	}
-
-	/// Must be called after a [`CustomMessageOutcome::FinalityProofRequest`] has been emitted,
-	/// to notify of the response having arrived.
-	pub fn on_finality_proof_response(
-		&mut self,
-		who: PeerId,
-		request: message::FinalityProofRequest<B::Hash>,
-		proof: Vec<u8>,
-	) -> CustomMessageOutcome<B> {
-		let resp = message::FinalityProofResponse::<B::Hash> {
-			// TODO: correct?
-			id: 0,
-			block: request.block,
-			proof: if proof.is_empty() { None } else { Some(proof) },
-		};
-
-		match self.sync.on_block_finality_proof(who, resp) {
-			Ok(sync::OnBlockFinalityProof::Nothing) => CustomMessageOutcome::None,
-			Ok(sync::OnBlockFinalityProof::Import { peer, hash, number, proof }) =>
-				CustomMessageOutcome::FinalityProofImport(peer, hash, number, proof),
-			Err(sync::BadPeer(id, repu)) => {
-				self.behaviour.disconnect_peer(&id);
-				self.peerset_handle.report_peer(id, repu);
-				CustomMessageOutcome::None
-			}
-		}
 	}
 
 	fn format_stats(&self) -> String {
@@ -1402,15 +1309,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				.set(m.justifications.failed_requests.into());
 			metrics.justifications.with_label_values(&["importing"])
 				.set(m.justifications.importing_requests.into());
-
-			metrics.finality_proofs.with_label_values(&["pending"])
-				.set(m.finality_proofs.pending_requests.into());
-			metrics.finality_proofs.with_label_values(&["active"])
-				.set(m.finality_proofs.active_requests.into());
-			metrics.finality_proofs.with_label_values(&["failed"])
-				.set(m.finality_proofs.failed_requests.into());
-			metrics.finality_proofs.with_label_values(&["importing"])
-				.set(m.finality_proofs.importing_requests.into());
 		}
 	}
 }
@@ -1448,66 +1346,33 @@ fn prepare_block_request<B: BlockT, H: ExHashT>(
 	}
 }
 
-fn prepare_finality_request<B: BlockT, H: ExHashT>(
-	peers: &mut HashMap<PeerId, Peer<B, H>>,
-	who: PeerId,
-	request: message::FinalityProofRequest<B::Hash>,
-) -> CustomMessageOutcome<B> {
-	let (tx, rx) = oneshot::channel();
-
-	match peers.get_mut(&who) {
-		Some(peer) => {
-			peer.finality_request = Some((request.clone(), rx))
-		},
-		None => unimplemented!(),
-	}
-
-	let request = crate::schema::v1::finality::FinalityProofRequest {
-		block_hash: request.block.encode(),
-		request: request.request,
-	};
-
-	CustomMessageOutcome::FinalityProofRequest {
-		target: who,
-		request: request,
-		pending_response: tx,
-	}
-}
-
 /// Outcome of an incoming custom message.
 #[derive(Debug)]
 #[must_use]
 pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
-	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,
-		protocols: Vec<ConsensusEngineId>,
+		protocols: Vec<Cow<'static, str>>,
 		roles: Roles,
 		notifications_sink: NotificationsSink
 	},
 	/// The [`NotificationsSink`] of some notification protocols need an update.
 	NotificationStreamReplaced {
 		remote: PeerId,
-		protocols: Vec<ConsensusEngineId>,
+		protocols: Vec<Cow<'static, str>>,
 		notifications_sink: NotificationsSink,
 	},
 	/// Notification protocols have been closed with a remote.
-	NotificationStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
+	NotificationStreamClosed { remote: PeerId, protocols: Vec<Cow<'static, str>> },
 	/// Messages have been received on one or more notifications protocols.
-	NotificationsReceived { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },
+	NotificationsReceived { remote: PeerId, messages: Vec<(Cow<'static, str>, Bytes)> },
 	/// A new block request must be emitted.
 	BlockRequest {
 		target: PeerId,
 		request: crate::schema::v1::BlockRequest,
-		pending_response: oneshot::Sender<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
-	},
-	/// A new finality proof request must be emitted.
-	FinalityProofRequest {
-		target: PeerId,
-		request: crate::schema::v1::finality::FinalityProofRequest,
 		pending_response: oneshot::Sender<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
 	},
 	/// Peer has a reported a new head of chain.
@@ -1568,7 +1433,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 
 		// Check for finished outgoing requests.
 		let mut finished_block_requests = Vec::new();
-		let mut finished_finality_requests = Vec::new();
 		for (id, peer) in self.context_data.peers.iter_mut() {
 			if let Peer { block_request: Some((_, pending_response)), .. } = peer {
 				match pending_response.poll_unpin(cx) {
@@ -1599,42 +1463,9 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					Poll::Pending => {},
 				}
 			}
-			if let Peer { finality_request: Some((_, pending_response)), .. } = peer {
-				match pending_response.poll_unpin(cx) {
-					Poll::Ready(Ok(Ok(resp))) => {
-						let (req, _) = peer.finality_request.take().unwrap();
-
-						let protobuf_response = match crate::schema::v1::finality::FinalityProofResponse::decode(&resp[..]) {
-							Ok(proto) => proto,
-							Err(_e) => {
-								self.peerset_handle.report_peer(id.clone(), rep::BAD_MESSAGE);
-								self.behaviour.disconnect_peer(id);
-								continue;
-							}
-						};
-
-						let id = id.clone();
-						finished_finality_requests.push((id, req, protobuf_response));
-					},
-					// TODO: Match on the concrete error to know whether to reduce the peers reputation.
-					Poll::Ready(Ok(Err(e))) => {
-						peer.finality_request.take();
-						trace!(target: "sync", "Finality request to peer {:?} failed: {:?}.", id, e);
-					},
-					Poll::Ready(Err(e)) => {
-						peer.finality_request.take();
-						trace!(target: "sync", "Finality request to peer {:?} failed: {:?}.", id, e);
-					},
-					Poll::Pending => {},
-				}
-			}
 		}
 		for (id, req, protobuf_response) in finished_block_requests {
 			let ev = self.on_block_response(id, req, protobuf_response);
-			self.pending_messages.push_back(ev);
-		}
-		for (id, req, protobuf_response) in finished_finality_requests {
-			let ev = self.on_finality_proof_response(id, req, protobuf_response.proof);
 			self.pending_messages.push_back(ev);
 		}
 
@@ -1652,10 +1483,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		}
 		for (id, request) in self.sync.justification_requests() {
 			let event = prepare_block_request(&mut self.context_data.peers, id, request);
-			self.pending_messages.push_back(event);
-		}
-		for (id, request) in self.sync.finality_proof_requests() {
-			let event = prepare_finality_request(&mut self.context_data.peers, id, request);
 			self.pending_messages.push_back(event);
 		}
 		if let Poll::Ready(Some((tx_hash, result))) = self.pending_transactions.poll_next_unpin(cx) {
@@ -1741,7 +1568,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			GenericProtoOut::CustomProtocolReplaced { peer_id, notifications_sink, .. } => {
 				CustomMessageOutcome::NotificationStreamReplaced {
 					remote: peer_id,
-					protocols: self.protocol_name_by_engine.keys().cloned().collect(),
+					protocols: self.notification_protocols.clone(),
 					notifications_sink,
 				}
 			},
@@ -1752,10 +1579,10 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				self.on_custom_message(peer_id, message),
 			GenericProtoOut::Notification { peer_id, protocol_name, message } =>
 				match self.legacy_equiv_by_name.get(&protocol_name) {
-					Some(Fallback::Consensus(engine_id)) => {
+					Some(Fallback::Consensus) => {
 						CustomMessageOutcome::NotificationsReceived {
 							remote: peer_id,
-							messages: vec![(*engine_id, message.freeze())],
+							messages: vec![(protocol_name, message.freeze())],
 						}
 					}
 					Some(Fallback::Transactions) => {

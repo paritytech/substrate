@@ -21,7 +21,7 @@ use crate::{config, Event, NetworkService, NetworkWorker};
 use libp2p::PeerId;
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, Header as _};
-use std::{sync::Arc, time::Duration};
+use std::{borrow::Cow, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
 
 type TestNetworkService = NetworkService<
@@ -87,29 +87,23 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		PassThroughVerifier(false),
 		Box::new(client.clone()),
 		None,
-		None,
 		&sp_core::testing::TaskExecutor::new(),
 		None,
 	));
 
 	let protocol_id = config::ProtocolId::from("/test-protocol-name");
 
-	// Add block request handler.
 	let block_request_protocol_config = {
 		let (handler, protocol_config) = crate::block_request_handler::BlockRequestHandler::new(protocol_id.clone(), client.clone());
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
 
-	// Add finality protocol.
-	let finality_request_protocol_config = crate::finality_request_handler::generate_protocol_config(protocol_id.clone());
-
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
 		network_config: config,
 		chain: client.clone(),
-		finality_proof_request_builder: None,
 		on_demand: None,
 		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
 		protocol_id,
@@ -119,7 +113,6 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		),
 		metrics_registry: None,
 		block_request_protocol_config,
-		finality_request_protocol_config,
 	})
 	.unwrap();
 
@@ -134,24 +127,24 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 	(service, event_stream)
 }
 
-const ENGINE_ID: sp_runtime::ConsensusEngineId = *b"foo\0";
+const PROTOCOL_NAME: Cow<'static, str> = Cow::Borrowed("/foo");
 
 /// Builds two nodes and their associated events stream.
-/// The nodes are connected together and have the `ENGINE_ID` protocol registered.
+/// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
 fn build_nodes_one_proto()
 	-> (Arc<TestNetworkService>, impl Stream<Item = Event>, Arc<TestNetworkService>, impl Stream<Item = Event>)
 {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
+		notifications_protocols: vec![PROTOCOL_NAME],
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
 		.. config::NetworkConfiguration::new_local()
 	});
 
 	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
+		notifications_protocols: vec![PROTOCOL_NAME],
 		listen_addresses: vec![],
 		reserved_nodes: vec![config::MultiaddrWithPeerId {
 			multiaddr: listen_addr,
@@ -174,10 +167,10 @@ fn notifications_state_consistent() {
 
 	// Write some initial notifications that shouldn't get through.
 	for _ in 0..(rand::random::<u8>() % 5) {
-		node1.write_notification(node2.local_peer_id().clone(), ENGINE_ID, b"hello world".to_vec());
+		node1.write_notification(node2.local_peer_id().clone(), PROTOCOL_NAME, b"hello world".to_vec());
 	}
 	for _ in 0..(rand::random::<u8>() % 5) {
-		node2.write_notification(node1.local_peer_id().clone(), ENGINE_ID, b"hello world".to_vec());
+		node2.write_notification(node1.local_peer_id().clone(), PROTOCOL_NAME, b"hello world".to_vec());
 	}
 
 	async_std::task::block_on(async move {
@@ -200,10 +193,10 @@ fn notifications_state_consistent() {
 			// Start by sending a notification from node1 to node2 and vice-versa. Part of the
 			// test consists in ensuring that notifications get ignored if the stream isn't open.
 			if rand::random::<u8>() % 5 >= 3 {
-				node1.write_notification(node2.local_peer_id().clone(), ENGINE_ID, b"hello world".to_vec());
+				node1.write_notification(node2.local_peer_id().clone(), PROTOCOL_NAME, b"hello world".to_vec());
 			}
 			if rand::random::<u8>() % 5 >= 3 {
-				node2.write_notification(node1.local_peer_id().clone(), ENGINE_ID, b"hello world".to_vec());
+				node2.write_notification(node1.local_peer_id().clone(), PROTOCOL_NAME, b"hello world".to_vec());
 			}
 
 			// Also randomly disconnect the two nodes from time to time.
@@ -232,31 +225,31 @@ fn notifications_state_consistent() {
 			};
 
 			match next_event {
-				future::Either::Left(Event::NotificationStreamOpened { remote, engine_id, .. }) => {
+				future::Either::Left(Event::NotificationStreamOpened { remote, protocol, .. }) => {
 					something_happened = true;
 					assert!(!node1_to_node2_open);
 					node1_to_node2_open = true;
 					assert_eq!(remote, *node2.local_peer_id());
-					assert_eq!(engine_id, ENGINE_ID);
+					assert_eq!(protocol, PROTOCOL_NAME);
 				}
-				future::Either::Right(Event::NotificationStreamOpened { remote, engine_id, .. }) => {
+				future::Either::Right(Event::NotificationStreamOpened { remote, protocol, .. }) => {
 					something_happened = true;
 					assert!(!node2_to_node1_open);
 					node2_to_node1_open = true;
 					assert_eq!(remote, *node1.local_peer_id());
-					assert_eq!(engine_id, ENGINE_ID);
+					assert_eq!(protocol, PROTOCOL_NAME);
 				}
-				future::Either::Left(Event::NotificationStreamClosed { remote, engine_id, .. }) => {
+				future::Either::Left(Event::NotificationStreamClosed { remote, protocol, .. }) => {
 					assert!(node1_to_node2_open);
 					node1_to_node2_open = false;
 					assert_eq!(remote, *node2.local_peer_id());
-					assert_eq!(engine_id, ENGINE_ID);
+					assert_eq!(protocol, PROTOCOL_NAME);
 				}
-				future::Either::Right(Event::NotificationStreamClosed { remote, engine_id, .. }) => {
+				future::Either::Right(Event::NotificationStreamClosed { remote, protocol, .. }) => {
 					assert!(node2_to_node1_open);
 					node2_to_node1_open = false;
 					assert_eq!(remote, *node1.local_peer_id());
-					assert_eq!(engine_id, ENGINE_ID);
+					assert_eq!(protocol, PROTOCOL_NAME);
 				}
 				future::Either::Left(Event::NotificationsReceived { remote, .. }) => {
 					assert!(node1_to_node2_open);
@@ -264,7 +257,7 @@ fn notifications_state_consistent() {
 					if rand::random::<u8>() % 5 >= 4 {
 						node1.write_notification(
 							node2.local_peer_id().clone(),
-							ENGINE_ID,
+							PROTOCOL_NAME,
 							b"hello world".to_vec()
 						);
 					}
@@ -275,7 +268,7 @@ fn notifications_state_consistent() {
 					if rand::random::<u8>() % 5 >= 4 {
 						node2.write_notification(
 							node1.local_peer_id().clone(),
-							ENGINE_ID,
+							PROTOCOL_NAME,
 							b"hello world".to_vec()
 						);
 					}
@@ -294,7 +287,7 @@ fn lots_of_incoming_peers_works() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (main_node, _) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
+		notifications_protocols: vec![PROTOCOL_NAME],
 		listen_addresses: vec![listen_addr.clone()],
 		in_peers: u32::max_value(),
 		transport: config::TransportConfig::MemoryOnly,
@@ -311,7 +304,7 @@ fn lots_of_incoming_peers_works() {
 		let main_node_peer_id = main_node_peer_id.clone();
 
 		let (_dialing_node, event_stream) = build_test_full_node(config::NetworkConfiguration {
-			notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
+			notifications_protocols: vec![PROTOCOL_NAME],
 			listen_addresses: vec![],
 			reserved_nodes: vec![config::MultiaddrWithPeerId {
 				multiaddr: listen_addr.clone(),
@@ -377,7 +370,7 @@ fn notifications_back_pressure() {
 				Event::NotificationStreamClosed { .. } => panic!(),
 				Event::NotificationsReceived { messages, .. } => {
 					for message in messages {
-						assert_eq!(message.0, ENGINE_ID);
+						assert_eq!(message.0, PROTOCOL_NAME);
 						assert_eq!(message.1, format!("hello #{}", received_notifications));
 						received_notifications += 1;
 					}
@@ -402,7 +395,7 @@ fn notifications_back_pressure() {
 
 		// Sending!
 		for num in 0..TOTAL_NOTIFS {
-			let notif = node1.notification_sender(node2_id.clone(), ENGINE_ID).unwrap();
+			let notif = node1.notification_sender(node2_id.clone(), PROTOCOL_NAME).unwrap();
 			notif.ready().await.unwrap().send(format!("hello #{}", num)).unwrap();
 		}
 

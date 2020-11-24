@@ -41,7 +41,7 @@ use futures::{
 };
 use sc_keystore::LocalKeystore;
 use log::{info, warn};
-use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+use sc_network::config::{Role, OnDemand};
 use sc_network::NetworkService;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
@@ -830,10 +830,6 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	pub block_announce_validator_builder: Option<Box<
 		dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send
 	>>,
-	/// An optional finality proof request builder.
-	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
-	/// An optional, shared finality proof request provider.
-	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
@@ -858,7 +854,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 {
 	let BuildNetworkParams {
 		config, client, transaction_pool, spawn_handle, import_queue, on_demand,
-		block_announce_validator_builder, finality_proof_request_builder, finality_proof_provider,
+		block_announce_validator_builder,
 	} = params;
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
@@ -893,18 +889,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		protocol_config
 	};
 
-	let finality_request_protocol_config = match finality_proof_provider {
-		Some(provider) => {
-			// TODO: Only do this if we are not a light client.
-			let (handler, protocol_config) = sc_network::finality_request_handler::FinalityRequestHandler::new(protocol_id.clone(), provider);
-			spawn_handle.spawn("finality_request_handler", handler.run());
-			protocol_config
-		},
-		None => {
-			sc_network::finality_request_handler::generate_protocol_config(protocol_id.clone())
-		}
-	};
-
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
@@ -915,7 +899,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		},
 		network_config: config.network.clone(),
 		chain: client.clone(),
-		finality_proof_request_builder,
 		on_demand: on_demand,
 		transaction_pool: transaction_pool_adapter as _,
 		import_queue: Box::new(import_queue),
@@ -923,7 +906,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		block_announce_validator,
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
-		finality_request_protocol_config,
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

@@ -22,7 +22,7 @@ sp-std = { version = "2.0.0", default-features = false, path = "../../../primiti
 sp-tasks = { version = "2.0.0", default-features = false, path = "../../../primitives/tasks" }
 
 [build-dependencies]
-wasm-builder-runner = { version = "2.0.0", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+substrate-wasm-builder = { version = "3.0.0", path = "../../../utils/wasm-builder" }
 
 [features]
 default = [ "std" ]

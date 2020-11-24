@@ -260,7 +260,6 @@ mod utils;
 pub mod block_request_handler;
 pub mod config;
 pub mod error;
-pub mod finality_request_handler;
 pub mod gossip;
 pub mod network_state;
 

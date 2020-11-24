@@ -1357,7 +1357,7 @@ mod tests {
 		let transport = MemoryTransport::default()
 			.upgrade(upgrade::Version::V1)
 			.authenticate(NoiseConfig::xx(dh_key).into_authenticated())
-			.multiplex(yamux::Config::default())
+			.multiplex(yamux::YamuxConfig::default())
 			.boxed();
 		Swarm::new(transport, LightClientHandler::new(cf, client, checker, ps), local_peer)
 	}
