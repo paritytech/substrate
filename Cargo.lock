@@ -7157,6 +7157,7 @@ dependencies = [
  "prost-build",
  "quickcheck",
  "rand 0.7.3",
+ "sc-block-builder",
  "sc-client-api",
  "sc-peerset",
  "serde",
