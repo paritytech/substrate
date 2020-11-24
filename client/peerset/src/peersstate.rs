@@ -156,6 +156,13 @@ impl PeersState {
 		}
 	}
 
+	/// Returns the number of sets.
+	///
+	/// Corresponds to the number of elements passed to [`PeersState::new`].
+	pub fn num_sets(&self) -> usize {
+		self.sets.len()
+	}
+
 	/// Returns an object that grants access to the reputation value of a peer.
 	pub fn peer_reputation(&mut self, peer_id: &PeerId) -> Option<Reputation> {
 		let node = self.nodes.get_mut(peer_id)?;

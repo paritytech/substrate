@@ -404,7 +404,8 @@ pub struct NetworkConfiguration {
 	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// Configuration for the default set of nodes used for block syncing and transactions.
 	pub default_peers_set: SetConfig,
-	/// Configuration for extra sets of nodes.
+	/// Configuration for extra sets of nodes, with names.
+	// TODO: are names really appropriate?
 	pub extra_sets: Vec<(&'static str, SetConfig)>,
 	/// The non-reserved peer mode.
 	pub non_reserved_mode: NonReservedPeerMode,
@@ -501,8 +502,12 @@ impl NetworkConfiguration {
 /// Configuration for a set of nodes.
 #[derive(Clone, Debug)]
 pub struct SetConfig {
-	/// List of names of notifications protocols of this set.
-	pub notifications_protocols: Vec<Cow<'static, str>>,
+	/// Name of the main notifications protocols of this set. A substream on this set will be
+	/// considered established once this protocol is open.
+	pub main_notifications_protocol: Cow<'static, str>,
+	/// Additional notification protocols that will be attempted, but whose success isn't
+	/// mandatory.
+	pub optional_notifications_protocol: Vec<Cow<'static, str>>,
 	/// Maximum allowed number of incoming connections.
 	pub in_peers: u32,
 	/// Number of outgoing connections we're trying to maintain.
