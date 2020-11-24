@@ -330,21 +330,22 @@ pub fn init_logger(
 
 // Adds default directives to ensure setLogFilter RPC functions correctly
 fn add_default_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter {
-	use sc_tracing::{parse_directives, add_default_directives};
-	add_default_directives(directives);
-	let (oks, errs): (Vec<_>, Vec<_>) = parse_directives(directives)
+	sc_tracing::add_default_directives(directives);
+	let (oks, errs): (Vec<_>, Vec<_>) = sc_tracing::parse_directives(directives)
 		.into_iter()
 		.partition(|res| res.is_ok());
+
 	for invalid_directive in errs {
 		eprintln!("Logging directive not valid: {}",
 				  invalid_directive.expect_err("Already partitioned into Result::Err; qed")
 		);
+		panic!("Invalid logging directives.");
 	}
+
 	for directive in oks {
 		env_filter = env_filter.add_directive(
 			directive.expect("Already partitioned into Result::Ok; qed")
 		);
-
 	}
 	env_filter
 }

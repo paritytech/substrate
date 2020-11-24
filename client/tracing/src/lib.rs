@@ -312,9 +312,7 @@ impl ProfilingLayer {
 	/// either with a level, eg: "pallet=trace"
 	/// or without: "pallet" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
-	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str)
-							-> Self
-	{
+	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str) -> Self {
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		Self {
 			targets,
