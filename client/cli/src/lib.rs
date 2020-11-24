@@ -329,6 +329,7 @@ pub fn init_logger(
 }
 
 // Adds default directives to ensure setLogFilter RPC functions correctly
+// Panics if any of the provided directives is invalid.
 fn add_default_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter {
 	sc_tracing::add_default_directives(directives);
 	let (oks, errs): (Vec<_>, Vec<_>) = sc_tracing::parse_directives(directives)
