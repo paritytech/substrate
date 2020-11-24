@@ -404,9 +404,8 @@ pub struct NetworkConfiguration {
 	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// Configuration for the default set of nodes used for block syncing and transactions.
 	pub default_peers_set: SetConfig,
-	/// Configuration for extra sets of nodes, with names.
-	// TODO: are names really appropriate?
-	pub extra_sets: Vec<(&'static str, SetConfig)>,
+	/// Configuration for extra sets of nodes.
+	pub extra_sets: Vec<NonDefaultSetConfig>,
 	/// The non-reserved peer mode.
 	pub non_reserved_mode: NonReservedPeerMode,
 	/// Client identifier. Sent over the wire for debugging purposes.
@@ -440,7 +439,7 @@ impl NetworkConfiguration {
 			node_key,
 			request_response_protocols: Vec::new(),
 			default_peers_set: SetConfig {
-				notifications_protocols: Vec::new(),
+				optional_notifications_protocol: Vec::new(),
 				in_peers: 25,
 				out_peers: 75,
 				reserved_nodes: Vec::new(),
@@ -502,9 +501,6 @@ impl NetworkConfiguration {
 /// Configuration for a set of nodes.
 #[derive(Clone, Debug)]
 pub struct SetConfig {
-	/// Name of the main notifications protocols of this set. A substream on this set will be
-	/// considered established once this protocol is open.
-	pub main_notifications_protocol: Cow<'static, str>,
 	/// Additional notification protocols that will be attempted, but whose success isn't
 	/// mandatory.
 	pub optional_notifications_protocol: Vec<Cow<'static, str>>,
@@ -514,6 +510,16 @@ pub struct SetConfig {
 	pub out_peers: u32,
 	/// List of reserved node addresses.
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
+}
+
+/// Extension to [`SetConfig`] for sets that aren't the default set.
+#[derive(Clone, Debug)]
+pub struct NonDefaultSetConfig {
+	/// Name of the main notifications protocols of this set. A substream on this set will be
+	/// considered established once this protocol is open.
+	pub main_notifications_protocol: Cow<'static, str>,
+	/// Base configuration.
+	pub set_config: SetConfig,
 }
 
 /// Configuration for the transport layer.

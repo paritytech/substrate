@@ -605,12 +605,16 @@ impl GenericProto {
 		}
 	}
 
-	/// Notify the behaviour that we have learned about the existence of nodes.
+	/// Notify the behaviour that we have learned that the given nodes belong to the given set.
 	///
 	/// Can be called multiple times with the same `PeerId`s.
-	pub fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
+	pub fn add_discovered_nodes(
+		&mut self,
+		set_id: sc_peerset::SetId,
+		peer_ids: impl Iterator<Item = PeerId>
+	) {
 		let local_peer_id = &self.local_peer_id;
-		self.peerset.discovered("main", peer_ids.filter_map(|peer_id| {
+		self.peerset.discovered(set_id, peer_ids.filter_map(|peer_id| {
 			if peer_id == *local_peer_id {
 				error!(
 					target: "sub-libp2p",

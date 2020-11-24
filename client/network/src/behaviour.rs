@@ -515,7 +515,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 				// implementation for `PeerInfoEvent`.
 			}
 			DiscoveryOut::Discovered(peer_id) => {
-				self.substrate.add_discovered_nodes(iter::once(peer_id));
+				self.substrate.add_discovered_nodes(sc_peerset::SetId::from(0), iter::once(peer_id));  // TODO: correct set?
 			}
 			DiscoveryOut::ValueFound(results, duration) => {
 				self.events.push_back(BehaviourOut::Dht(DhtEvent::ValueFound(results), duration));

@@ -194,9 +194,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let peerset_config = {
 			let mut sets = Vec::with_capacity(1 + params.network_config.extra_sets.len());
 
-			for (main_set, bootnodes, name, set_cfg) in
-				iter::once((true, bootnodes, "main", &params.network_config.default_peers_set))
-					.chain(params.network_config.extra_sets.iter().map(|&(n, ref c)| (false, Vec::new(), n, c)))
+			for (main_set, bootnodes, set_cfg) in
+				iter::once((true, bootnodes, &params.network_config.default_peers_set))
+					.chain(params.network_config.extra_sets.iter().map(|c| (false, Vec::new(), &c.set_config)))
 			{
 				let reserved_nodes = {
 					let mut reserved_nodes = HashSet::new();
@@ -227,7 +227,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				};
 
 				sets.push(sc_peerset::SetConfig {
-					name,
 					in_peers: set_cfg.in_peers,
 					out_peers: set_cfg.out_peers,
 					bootnodes,
@@ -617,7 +616,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Need a better solution to manage authorized peers, but now just use reserved peers for
 	/// prototyping.
 	pub fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
-		self.peerset.set_reserved_peers("main", peers)
+		self.peerset.set_reserved_peers(peerset::SetId(0), peers)
 	}
 
 	/// Set authorized_only flag.
@@ -931,7 +930,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset.remove_reserved_peer("main", peer);
+		self.peerset.remove_reserved_peer(peerset::SetId(0), peer);
 	}
 
 	/// Adds a `PeerId` and its address as reserved. The string should encode the address
@@ -945,7 +944,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		if peer_id == self.local_peer_id {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
 		}
-		self.peerset.add_reserved_peer("main", peer_id.clone());
+		self.peerset.add_reserved_peer(peerset::SetId(0), peer_id.clone());
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
@@ -980,6 +979,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 		// TODO:
 		//self.peerset.set_peers_set(group_id, peer_ids);
+
+		// TODO: longevity of entries in peers set?
 
 		for (peer_id, addr) in peers.into_iter() {
 			let _ = self
