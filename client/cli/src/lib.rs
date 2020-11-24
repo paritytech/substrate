@@ -273,8 +273,8 @@ pub fn init_logger(
 
 	if pattern != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
-		// parse error. Use add_directives to ensure RPC addLogFilter functions correctly.
-		env_filter = add_directives(env_filter, pattern);
+		// parse error.
+		env_filter = add_default_directives(env_filter, pattern);
 	}
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
@@ -327,15 +327,10 @@ pub fn init_logger(
 	}
 }
 
-// Adds default directives to ensure setLogFilter RPC functions correctly
+// Adds default directives to ensure addLogFilter and resetLogFilter RPCs function correctly
 // Panics if any of the provided directives are invalid.
-fn add_default_directives(env_filter: EnvFilter, directives: &str) -> EnvFilter {
+fn add_default_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter {
 	sc_tracing::add_default_directives(directives);
-	add_directives(env_filter, directives)
-}
-
-// Panics if any of the provided directives are invalid.
-fn add_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter {
 	let (oks, errs): (Vec<_>, Vec<_>) = sc_tracing::parse_directives(directives)
 		.into_iter()
 		.partition(|res| res.is_ok());
