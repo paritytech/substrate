@@ -636,13 +636,12 @@ checksum = "631ae5198c9be5e753e5cc215e1bd73c2b466a3565173db433f52bb9d3e66dba"
 
 [[package]]
 name = "cargo_metadata"
-version = "0.10.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8de60b887edf6d74370fc8eb177040da4847d971d6234c7b13a6da324ef0caf"
+checksum = "d5a5f7b42f606b7f23674f6f4d877628350682bc40687d3fae65679a58d55345"
 dependencies = [
- "semver 0.9.0",
+ "semver 0.11.0",
  "serde",
- "serde_derive",
  "serde_json",
 ]
 
@@ -1780,16 +1779,6 @@ dependencies = [
  "lazy_static",
  "libc",
  "libloading",
- "winapi 0.3.9",
-]
-
-[[package]]
-name = "fs2"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
-dependencies = [
- "libc",
  "winapi 0.3.9",
 ]
 
@@ -4043,7 +4032,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "static_assertions",
- "substrate-wasm-builder-runner",
+ "substrate-wasm-builder",
 ]
 
 [[package]]
@@ -4114,7 +4103,7 @@ dependencies = [
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
- "substrate-wasm-builder-runner",
+ "substrate-wasm-builder",
 ]
 
 [[package]]
@@ -7321,7 +7310,7 @@ dependencies = [
  "sp-sandbox",
  "sp-std",
  "sp-tasks",
- "substrate-wasm-builder-runner",
+ "substrate-wasm-builder",
 ]
 
 [[package]]
@@ -7663,7 +7652,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a3186ec9e65071a2095434b1f5bb24838d4e8e130f584c790f6033c79943537"
 dependencies = [
- "semver-parser",
+ "semver-parser 0.7.0",
 ]
 
 [[package]]
@@ -7672,7 +7661,16 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
 dependencies = [
- "semver-parser",
+ "semver-parser 0.7.0",
+]
+
+[[package]]
+name = "semver"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f301af10236f6df4160f7c3f04eec6dbc70ace82d23326abad5edee88801c6b6"
+dependencies = [
+ "semver-parser 0.10.1",
  "serde",
 ]
 
@@ -7681,6 +7679,15 @@ name = "semver-parser"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
+
+[[package]]
+name = "semver-parser"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42ef146c2ad5e5f4b037cd6ce2ebb775401729b19a82040c1beac9d36c7d1428"
+dependencies = [
+ "pest",
+]
 
 [[package]]
 name = "send_wrapper"
@@ -8496,7 +8503,7 @@ dependencies = [
  "sp-io",
  "sp-runtime-interface",
  "sp-std",
- "substrate-wasm-builder-runner",
+ "substrate-wasm-builder",
 ]
 
 [[package]]
@@ -8507,7 +8514,7 @@ dependencies = [
  "sp-io",
  "sp-runtime-interface",
  "sp-std",
- "substrate-wasm-builder-runner",
+ "substrate-wasm-builder",
 ]
 
 [[package]]
@@ -8993,7 +9000,7 @@ dependencies = [
  "sp-trie",
  "sp-version",
  "substrate-test-runtime-client",
- "substrate-wasm-builder-runner",
+ "substrate-wasm-builder",
  "trie-db",
 ]
 
@@ -9063,23 +9070,17 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasm-builder"
-version = "2.0.1"
+version = "3.0.0"
 dependencies = [
  "ansi_term 0.12.1",
  "atty",
  "build-helper",
  "cargo_metadata",
- "fs2",
- "itertools 0.8.2",
  "tempfile",
  "toml",
  "walkdir",
  "wasm-gc-api",
 ]
-
-[[package]]
-name = "substrate-wasm-builder-runner"
-version = "2.0.0"
 
 [[package]]
 name = "subtle"
