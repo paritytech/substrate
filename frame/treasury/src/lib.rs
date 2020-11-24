@@ -391,10 +391,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
 
 		// Call Runtime hooks to external pallet using treasury to compute spend funds.
-		T::SpendFunds::spend_funds( &mut budget_remaining,
-									&mut imbalance,
-									&mut total_weight,
-									&mut missed_any );
+		T::SpendFunds::spend_funds( &mut budget_remaining, &mut imbalance, &mut total_weight, &mut missed_any );
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
