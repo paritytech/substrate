@@ -25,7 +25,9 @@ mod sandbox;
 use crate::{
 	*, Module as Contracts,
 	exec::StorageKey,
+	rent::Rent,
 	schedule::{API_BENCHMARK_BATCH_SIZE, INSTR_BENCHMARK_BATCH_SIZE},
+	storage::Storage,
 };
 use self::{
 	code::{
@@ -75,7 +77,11 @@ impl Endow {
 	}
 }
 
-impl<T: Trait> Contract<T> {
+impl<T: Trait> Contract<T>
+where
+	T: Trait,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
 	/// Create new contract and use a default account id as instantiator.
 	fn new(
 		module: WasmModule<T>,
@@ -123,7 +129,8 @@ impl<T: Trait> Contract<T> {
 			Endow::Max => (0u32.into(), Endow::max::<T>()),
 		};
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
-		let addr = T::DetermineContractAddress::contract_address_for(&module.hash, &data, &caller);
+		let salt = vec![0xff];
+		let addr = Contracts::<T>::contract_address(&caller, &module.hash, &salt);
 
 		// The default block number is zero. The benchmarking system bumps the block number
 		// to one for the benchmarking closure when it is set to zero. In order to prevent this
@@ -139,6 +146,7 @@ impl<T: Trait> Contract<T> {
 			Weight::max_value(),
 			module.hash,
 			data,
+			salt,
 		)?;
 
 		let result = Contract {
@@ -160,7 +168,7 @@ impl<T: Trait> Contract<T> {
 	fn store(&self, items: &Vec<(StorageKey, Vec<u8>)>) -> Result<(), &'static str> {
 		let info = self.alive_info()?;
 		for item in items {
-			crate::storage::write_contract_storage::<T>(
+			Storage::<T>::write(
 				&self.account_id,
 				&info.trie_id,
 				&item.0,
@@ -192,7 +200,7 @@ impl<T: Trait> Contract<T> {
 	/// Get the block number when this contract will be evicted. Returns an error when
 	/// the rent collection won't happen because the contract has to much endowment.
 	fn eviction_at(&self) -> Result<T::BlockNumber, &'static str> {
-		let projection = crate::rent::compute_rent_projection::<T>(&self.account_id)
+		let projection = Rent::<T>::compute_projection(&self.account_id)
 			.map_err(|_| "Invalid acc for rent")?;
 		match projection {
 			RentProjection::EvictionAt(at) => Ok(at),
@@ -211,7 +219,11 @@ struct Tombstone<T: Trait> {
 	storage: Vec<(StorageKey, Vec<u8>)>,
 }
 
-impl<T: Trait> Tombstone<T> {
+impl<T: Trait> Tombstone<T>
+where
+	T: Trait,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
 	/// Create and evict a new contract with the supplied storage item count and size each.
 	fn new(stor_num: u32, stor_size: u32) -> Result<Self, &'static str> {
 		let contract = Contract::<T>::new(WasmModule::dummy(), vec![], Endow::CollectRent)?;
@@ -220,7 +232,7 @@ impl<T: Trait> Tombstone<T> {
 		System::<T>::set_block_number(
 			contract.eviction_at()? + T::SignedClaimHandicap::get() + 5u32.into()
 		);
-		crate::rent::collect_rent::<T>(&contract.account_id);
+		Rent::<T>::collect(&contract.account_id);
 		contract.ensure_tombstone()?;
 
 		Ok(Tombstone {
@@ -250,6 +262,11 @@ fn caller_funding<T: Trait>() -> BalanceOf<T> {
 }
 
 benchmarks! {
+	where_clause { where
+		T::AccountId: UncheckedFrom<T::Hash>,
+		T::AccountId: AsRef<[u8]>,
+	}
+
 	_ {
 	}
 
@@ -276,17 +293,20 @@ benchmarks! {
 	// The size of the input data influences the runtime because it is hashed in order to determine
 	// the contract address.
 	// `n`: Size of the data passed to constructor in kilobytes.
+	// `s`: Size of the salt in kilobytes.
 	instantiate {
 		let n in 0 .. code::max_pages::<T>() * 64;
+		let s in 0 .. code::max_pages::<T>() * 64;
 		let data = vec![42u8; (n * 1024) as usize];
+		let salt = vec![42u8; (s * 1024) as usize];
 		let endowment = Config::<T>::subsistence_threshold_uncached();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_mem();
 		let origin = RawOrigin::Signed(caller.clone());
-		let addr = T::DetermineContractAddress::contract_address_for(&hash, &data, &caller);
+		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
 		Contracts::<T>::put_code_raw(code)?;
-	}: _(origin, endowment, Weight::max_value(), hash, data)
+	}: _(origin, endowment, Weight::max_value(), hash, data, salt)
 	verify {
 		// endowment was removed from the caller
 		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - endowment);
@@ -1000,7 +1020,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let trie_id = instance.alive_info()?.trie_id;
 		for key in keys {
-			crate::storage::write_contract_storage::<T>(
+			Storage::<T>::write(
 				&instance.account_id,
 				&trie_id,
 				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
@@ -1045,7 +1065,7 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let trie_id = instance.alive_info()?.trie_id;
 		for key in keys {
-			crate::storage::write_contract_storage::<T>(
+			Storage::<T>::write(
 				&instance.account_id,
 				&trie_id,
 				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
@@ -1089,7 +1109,7 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
 		let trie_id = instance.alive_info()?.trie_id;
-		crate::storage::write_contract_storage::<T>(
+		Storage::<T>::write(
 			&instance.account_id,
 			&trie_id,
 			key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
@@ -1341,7 +1361,9 @@ benchmarks! {
 					ValueType::I32,
 					ValueType::I32,
 					ValueType::I32,
-					ValueType::I32
+					ValueType::I32,
+					ValueType::I32,
+					ValueType::I32,
 				],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1371,6 +1393,8 @@ benchmarks! {
 				Regular(Instruction::I32Const(addr_len_offset as i32)), // address_len_ptr
 				Regular(Instruction::I32Const(u32::max_value() as i32)), // output_ptr
 				Regular(Instruction::I32Const(0)), // output_len_ptr
+				Regular(Instruction::I32Const(0)), // salt_ptr
+				Regular(Instruction::I32Const(0)), // salt_ptr_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1381,8 +1405,8 @@ benchmarks! {
 		let callee = instance.addr.clone();
 		let addresses = hashes
 			.iter()
-			.map(|hash| T::DetermineContractAddress::contract_address_for(
-				hash, &[], &instance.account_id
+			.map(|hash| Contracts::<T>::contract_address(
+				&instance.account_id, hash, &[],
 			))
 			.collect::<Vec<_>>();
 
@@ -1398,9 +1422,10 @@ benchmarks! {
 		}
 	}
 
-	seal_instantiate_per_input_output_kb {
+	seal_instantiate_per_input_output_salt_kb {
 		let i in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let o in 0 .. (code::max_pages::<T>() - 1) * 64;
+		let s in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let callee_code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -1458,7 +1483,9 @@ benchmarks! {
 					ValueType::I32,
 					ValueType::I32,
 					ValueType::I32,
-					ValueType::I32
+					ValueType::I32,
+					ValueType::I32,
+					ValueType::I32,
 				],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1496,6 +1523,8 @@ benchmarks! {
 				Regular(Instruction::I32Const(addr_len_offset as i32)), // address_len_ptr
 				Regular(Instruction::I32Const(output_offset as i32)), // output_ptr
 				Regular(Instruction::I32Const(output_len_offset as i32)), // output_len_ptr
+				Counter(input_offset as u32, input_len as u32), // salt_ptr
+				Regular(Instruction::I32Const((s * 1024).max(input_len as u32) as i32)), // salt_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::I32Eqz),
 				Regular(Instruction::If(BlockType::NoResult)),
@@ -2401,6 +2430,8 @@ mod tests {
 	create_test!(seal_transfer);
 	create_test!(seal_call);
 	create_test!(seal_call_per_transfer_input_output_kb);
+	create_test!(seal_instantiate);
+	create_test!(seal_instantiate_per_input_output_salt_kb);
 	create_test!(seal_clear_storage);
 	create_test!(seal_hash_sha2_256);
 	create_test!(seal_hash_sha2_256_per_kb);
