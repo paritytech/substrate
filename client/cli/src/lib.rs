@@ -354,7 +354,7 @@ fn initialize_tracing<S>(
 	subscriber: S,
 	tracing_receiver: sc_tracing::TracingReceiver,
 	profiling_targets: Option<String>,
-)  -> std::result::Result<(), String>
+) -> std::result::Result<(), String>
 where
 	S: tracing::Subscriber + Send + Sync + 'static,
 {
