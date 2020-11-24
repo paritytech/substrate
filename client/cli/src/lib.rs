@@ -336,10 +336,12 @@ fn add_default_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFil
 		.into_iter()
 		.partition(|res| res.is_ok());
 
-	for invalid_directive in errs {
-		eprintln!("Logging directive not valid: {}",
-				  invalid_directive.expect_err("Already partitioned into Result::Err; qed")
-		);
+	if !errs.is_empty() {
+		for invalid_directive in errs {
+			eprintln!("Logging directive not valid: {}",
+					  invalid_directive.expect_err("Already partitioned into Result::Err; qed")
+			);
+		}
 		panic!("Invalid logging directives.");
 	}
 
