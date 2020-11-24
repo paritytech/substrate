@@ -19,7 +19,6 @@ sp-std = { version = "2.0.0", default-features = false, path = "../../primitives
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
-pallet-balances = { version = "2.0.0", default-features = false, path = "../balances" }
 pallet-treasury = { version = "2.0.0", default-features = false, path = "../treasury" }
 
 frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
@@ -28,6 +27,7 @@ frame-benchmarking = { version = "2.0.0", default-features = false, path = "../b
 sp-io ={ version = "2.0.0", path = "../../primitives/io" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-storage = { version = "2.0.0", path = "../../primitives/storage" }
+pallet-balances = { version = "2.0.0", path = "../balances" }
 
 [features]
 default = ["std"]
@@ -38,7 +38,6 @@ std = [
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
-	"pallet-balances/std",
 	"pallet-treasury/std",
 ]
 runtime-benchmarks = [

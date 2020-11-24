@@ -60,7 +60,6 @@
 
 #[cfg(test)]
 mod tests;
-
 mod benchmarking;
 
 pub mod weights;
@@ -153,13 +152,13 @@ pub type ProposalIndex = u32;
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Proposal<AccountId, Balance> {
 	/// The account proposing it.
-	pub proposer: AccountId,
+	proposer: AccountId,
 	/// The (total) amount that should be paid if the proposal is accepted.
-	pub value: Balance,
+	value: Balance,
 	/// The account to whom the payment should be made if the proposal is accepted.
-	pub beneficiary: AccountId,
+	beneficiary: AccountId,
 	/// The amount held on deposit (reserved) for making this proposal.
-	pub bond: Balance,
+	bond: Balance,
 }
 
 decl_storage! {
@@ -327,7 +326,7 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			// Check to see if we should spend some funds!
 			if (n % T::SpendPeriod::get()).is_zero() {
-				Self::spend_funds_top()
+				Self::spend_funds()
 			} else {
 				0
 			}
@@ -346,20 +345,13 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		T::ModuleId::get().into_account()
 	}
 
-	// /// The account ID of a bounty account
-	// pub fn bounty_account_id(id: BountyIndex) -> T::AccountId {
-	// 	// only use two byte prefix to support 16 byte account id (used by test)
-	// 	// "modl" ++ "py/trsry" ++ "bt" is 14 bytes, and two bytes remaining for bounty index
-	// 	T::ModuleId::get().into_sub_account(("bt", id))
-	// }
-
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: BalanceOf<T, I>) -> BalanceOf<T, I> {
 		T::ProposalBondMinimum::get().max(T::ProposalBond::get() * value)
 	}
 
 	/// Spend some money! returns number of approvals before spend.
-	pub fn spend_funds_top() -> Weight {
+	pub fn spend_funds() -> Weight {
 		let mut total_weight: Weight = Zero::zero();
 
 		let mut budget_remaining = Self::pot();

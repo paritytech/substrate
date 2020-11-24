@@ -17,7 +17,7 @@
 
 //! # Bounties Module ( pallet-bounties )
 //!
-//! ### Bounty
+//! ## Bounty
 //!
 //! This pallet is build on top of pallet-treasury
 //!
@@ -37,14 +37,6 @@
 //!
 //!
 //! ### Terminology
-//!
-//! - **Proposal:** A suggestion to allocate funds from the pot to a beneficiary.
-//! - **Beneficiary:** An account who will receive the funds from a proposal iff
-//! the proposal is approved.
-//! - **Deposit:** Funds that a proposer must lock when making a proposal. The
-//! deposit will be returned or slashed if the proposal is approved or rejected
-//! respectively.
-//! - **Pot:** Unspent funds accumulated by the treasury module.
 //!
 //! Bounty:
 //! - **Bounty spending proposal:** A proposal to reward a predefined body of work upon completion by
@@ -251,7 +243,7 @@ decl_error! {
 		/// A bounty payout is pending.
 		/// To cancel the bounty, you must unassign and slash the curator.
 		PendingPayout,
-		/// The tip cannot be claimed/closed because it's still in the countdown period.
+		/// The bounties cannot be claimed/closed because it's still in the countdown period.
 		Premature,
 	}
 }

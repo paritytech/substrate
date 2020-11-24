@@ -32,14 +32,6 @@
 //!
 //! ### Terminology
 //!
-//! - **Proposal:** A suggestion to allocate funds from the pot to a beneficiary.
-//! - **Beneficiary:** An account who will receive the funds from a proposal iff
-//! the proposal is approved.
-//! - **Deposit:** Funds that a proposer must lock when making a proposal. The
-//! deposit will be returned or slashed if the proposal is approved or rejected
-//! respectively.
-//! - **Pot:** Unspent funds accumulated by the treasury module.
-//!
 //! Tipping protocol:
 //! - **Tipping:** The process of gathering declarations of amounts to tip and taking the median
 //!   amount to be transferred from the treasury to a beneficiary account.
