@@ -715,7 +715,7 @@ impl ProtocolsHandler for NotifsHandler {
 			},
 
 			NotifsHandlerIn::Close => {
-				for mut substream in self.legacy_substreams.drain() {
+				for mut substream in self.legacy_substreams.drain(..) {
 					substream.shutdown();
 					self.legacy_shutdown.push(substream);
 				}
