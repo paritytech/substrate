@@ -139,11 +139,13 @@ impl HistoriedDBMut {
 		let init_nodes = ContextHead {
 			key: k.to_vec(),
 			backend: block_nodes.clone(),
+			encoded_indexes: Vec::new(),
 			node_init_from: (),
 		};
 		let init = ContextHead {
 			key: k.to_vec(),
 			backend: branch_nodes.clone(),
+			encoded_indexes: Vec::new(),
 			node_init_from: init_nodes.clone(),
 		};
 

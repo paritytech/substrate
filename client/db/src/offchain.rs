@@ -125,11 +125,13 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 			let init_nodes = ContextHead {
 				key: k.clone(),
 				backend: block_nodes.clone(),
+				encoded_indexes: Vec::new(),
 				node_init_from: (),
 			};
 			let init = ContextHead {
 				key: k.clone(),
 				backend: branch_nodes.clone(),
+				encoded_indexes: Vec::new(),
 				node_init_from: init_nodes.clone(),
 			};
 
@@ -497,11 +499,13 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 				let init_nodes = ContextHead {
 					key: key.clone(),
 					backend: self.block_nodes.clone(),
+					encoded_indexes: Vec::new(),
 					node_init_from: (),
 				};
 				let init = ContextHead {
 					key,
 					backend: self.branch_nodes.clone(),
+					encoded_indexes: Vec::new(),
 					node_init_from: init_nodes.clone(),
 				};
 				let v: Option<HValue> = historied_db::DecodeWithContext::decode_with_context(&mut &v[..], &(init, init_nodes));
@@ -643,11 +647,13 @@ impl BlockChainLocalAt {
 						let init_nodes = ContextHead {
 							key: key.clone(),
 							backend: self.block_nodes.clone(),
+							encoded_indexes: Vec::new(),
 							node_init_from: (),
 						};
 						let init = ContextHead {
 							key: key.clone(),
 							backend: self.branch_nodes.clone(),
+							encoded_indexes: Vec::new(),
 							node_init_from: init_nodes.clone(),
 						};
 						let v: Option<HValue> = historied_db::DecodeWithContext::decode_with_context(
@@ -690,11 +696,13 @@ impl BlockChainLocalAt {
 							let init_nodes = ContextHead {
 								key: key.clone(),
 								backend: self.block_nodes.clone(),
+								encoded_indexes: Vec::new(),
 								node_init_from: (),
 							};
 							let init = ContextHead {
 								key: key.clone(),
 								backend: self.branch_nodes.clone(),
+								encoded_indexes: Vec::new(),
 								node_init_from: init_nodes.clone(),
 							};
 
@@ -770,10 +778,12 @@ impl BlockChainLocalAt {
 
 /// Multiple node splitting strategy based on content
 /// size.
+#[derive(Clone, Copy)]
 pub struct MetaBranches;
 
 /// Multiple node splitting strategy based on content
 /// size.
+#[derive(Clone, Copy)]
 pub struct MetaBlocks;
 
 impl NodesMeta for MetaBranches {
@@ -877,8 +887,13 @@ impl BranchNodes {
 }
 
 impl NodeStorage<Option<Vec<u8>>, u64, LinearBackendInner, MetaBlocks> for BlockNodes {
-	fn get_node(&self, reference_key: &[u8], relative_index: u64) -> Option<LinearNode> {
-		let key = Self::vec_address(reference_key, relative_index);
+	fn get_node(
+		&self,
+		reference_key: &[u8],
+		parent_encoded_indexes: &[u8],
+		relative_index: u64,
+	) -> Option<LinearNode> {
+		let key = Self::vec_address(reference_key, parent_encoded_indexes, relative_index);
 		self.0.read(crate::columns::AUX, &key).and_then(|value| {
 			// use encoded len as size (this is bigger than the call to estimate size
 			// but not really an issue, otherwhise could adjust).
@@ -894,21 +909,37 @@ impl NodeStorage<Option<Vec<u8>>, u64, LinearBackendInner, MetaBlocks> for Block
 }
 
 impl NodeStorageMut<Option<Vec<u8>>, u64, LinearBackendInner, MetaBlocks> for BlockNodes {
-	fn set_node(&mut self, reference_key: &[u8], relative_index: u64, node: &LinearNode) {
-		let key = Self::vec_address(reference_key, relative_index);
+	fn set_node(
+		&mut self,
+		reference_key: &[u8],
+		parent_encoded_indexes: &[u8],
+		relative_index: u64,
+		node: &LinearNode,
+	) {
+		let key = Self::vec_address(reference_key, parent_encoded_indexes, relative_index);
 		let encoded = node.inner().encode();
 		self.0.write(key, encoded);
 	}
-	fn remove_node(&mut self, reference_key: &[u8], relative_index: u64) {
-		let key = Self::vec_address(reference_key, relative_index);
+	fn remove_node(
+		&mut self,
+		reference_key: &[u8],
+		parent_encoded_indexes: &[u8],
+		relative_index: u64,
+	) {
+		let key = Self::vec_address(reference_key, parent_encoded_indexes, relative_index);
 		self.0.remove(key);
 	}
 }
 
 impl NodeStorage<BranchLinear, u32, TreeBackendInner, MetaBranches> for BranchNodes {
-	fn get_node(&self, reference_key: &[u8], relative_index: u64) -> Option<TreeNode> {
+	fn get_node(
+		&self,
+		reference_key: &[u8],
+		parent_encoded_indexes: &[u8],
+		relative_index: u64,
+	) -> Option<TreeNode> {
 		use historied_db::DecodeWithContext;
-		let key = Self::vec_address(reference_key, relative_index);
+		let key = Self::vec_address(reference_key, parent_encoded_indexes, relative_index);
 		self.0.read(crate::columns::AUX, &key).and_then(|value| {
 			// use encoded len as size (this is bigger than the call to estimate size
 			// but not an issue, otherwhise could adjust).
@@ -921,6 +952,7 @@ impl NodeStorage<BranchLinear, u32, TreeBackendInner, MetaBranches> for BranchNo
 				&ContextHead {
 					key: reference_key.to_vec(),
 					backend: block_nodes,
+					encoded_indexes: parent_encoded_indexes.to_vec(),
 					node_init_from: (),
 				},
 			).map(|data| Node::new (
@@ -932,13 +964,24 @@ impl NodeStorage<BranchLinear, u32, TreeBackendInner, MetaBranches> for BranchNo
 }
 
 impl NodeStorageMut<BranchLinear, u32, TreeBackendInner, MetaBranches> for BranchNodes {
-	fn set_node(&mut self, reference_key: &[u8], relative_index: u64, node: &TreeNode) {
-		let key = Self::vec_address(reference_key, relative_index);
+	fn set_node(
+		&mut self,
+		reference_key: &[u8],
+		parent_encoded_indexes: &[u8],
+		relative_index: u64,
+		node: &TreeNode,
+	) {
+		let key = Self::vec_address(reference_key, parent_encoded_indexes, relative_index);
 		let encoded = node.inner().encode();
 		self.0.write(key, encoded);
 	}
-	fn remove_node(&mut self, reference_key: &[u8], relative_index: u64) {
-		let key = Self::vec_address(reference_key, relative_index);
+	fn remove_node(
+		&mut self,
+		reference_key: &[u8],
+		parent_encoded_indexes: &[u8],
+		relative_index: u64,
+	) {
+		let key = Self::vec_address(reference_key, parent_encoded_indexes, relative_index);
 		self.0.remove(key);
 	}
 }
