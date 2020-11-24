@@ -971,6 +971,7 @@ impl ProtocolsHandler for NotifsHandler {
 						if let Some(pos) = self.out_protocols.iter().position(|(n, _)| *n == protocol_name) {
 							if let Some(substream) = out_substreams[pos].as_mut() {
 								let _ = substream.start_send_unpin(message);
+								cx.waker().wake_by_ref();
 								continue 'poll_notifs_sink;
 							}
 
