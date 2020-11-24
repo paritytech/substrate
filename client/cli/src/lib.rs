@@ -255,12 +255,11 @@ pub fn init_logger(
 		))
 	}
 
-	// Initialize filter - ensure to use `add_directives` so that the given directives are
-	// included as defaults.
-	let mut env_filter = EnvFilter::default()
-		// Enable info
-		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
-
+	// Initialize filter - ensure to use `add_default_directives` for any defaults to persist
+	// after log filter reloading by RPC
+	let mut env_filter = EnvFilter::default();
+	// Enable info
+	env_filter = add_default_directives(env_filter,"info");
 	// Disable info logging by default for some modules.
 	env_filter = add_default_directives(env_filter, "ws=off,yamux=off,cranelift_codegen=off");
 	// Set warn logging by default for some modules.
@@ -274,8 +273,8 @@ pub fn init_logger(
 
 	if pattern != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
-		// parse error.
-		env_filter = add_default_directives(env_filter, pattern);
+		// parse error. Use add_directives to ensure RPC addLogFilter functions correctly.
+		env_filter = add_directives(env_filter, pattern);
 	}
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
@@ -285,10 +284,10 @@ pub fn init_logger(
 	};
 
 	// Always log the special target `sc_tracing`, overrides global level.
+	// Required because profiling traces are emitted via `sc_tracing`
 	// NOTE: this must be done after we check the `max_level_hint` otherwise
 	// it is always raised to `TRACE`.
 	env_filter = add_default_directives(env_filter, "sc_tracing=trace");
-
 
 	// Make sure to include profiling targets in the filter
 	if let Some(profiling_targets) = profiling_targets.clone() {
@@ -329,13 +328,17 @@ pub fn init_logger(
 }
 
 // Adds default directives to ensure setLogFilter RPC functions correctly
-// Panics if any of the provided directives is invalid.
-fn add_default_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter {
+// Panics if any of the provided directives are invalid.
+fn add_default_directives(env_filter: EnvFilter, directives: &str) -> EnvFilter {
 	sc_tracing::add_default_directives(directives);
+	add_directives(env_filter, directives)
+}
+
+// Panics if any of the provided directives are invalid.
+fn add_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter {
 	let (oks, errs): (Vec<_>, Vec<_>) = sc_tracing::parse_directives(directives)
 		.into_iter()
 		.partition(|res| res.is_ok());
-
 	if !errs.is_empty() {
 		for invalid_directive in errs {
 			eprintln!("Logging directive not valid: {}",
@@ -344,7 +347,6 @@ fn add_default_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFil
 		}
 		panic!("Invalid logging directives.");
 	}
-
 	for directive in oks {
 		env_filter = env_filter.add_directive(
 			directive.expect("Already partitioned into Result::Ok; qed")
@@ -363,7 +365,6 @@ where
 {
 	if let Some(profiling_targets) = profiling_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &profiling_targets);
-
 		if let Err(e) = tracing::subscriber::set_global_default(subscriber.with(profiling)) {
 			return Err(format!(
 				"Registering Substrate tracing subscriber failed: {:}!", e

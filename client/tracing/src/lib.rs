@@ -66,6 +66,7 @@ type SCSubscriber<
 
 static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, SCSubscriber>> = OnceCell::new();
 static DEFAULT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
+static CURRENT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
 
 /// Initialize FILTER_RELOAD_HANDLE, only possible once
 pub fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
@@ -77,37 +78,47 @@ pub fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
 /// The syntax is identical to the CLI `<target>=<level>`:
 ///
 /// `sync=debug,state=trace`
-pub fn add_default_directives(directive: &str) {
-	DEFAULT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directive.to_owned());
+pub fn add_default_directives(directives: &str) {
+	DEFAULT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directives.to_owned());
+	add_directives(directives);
 }
 
-/// Reload the logging filter with the supplied directives
-pub fn reload_filter(directives: String, use_defaults: bool) -> Result<(), String> {
-	log::info!("Setting log filter");
+/// Add directives to current directives
+pub fn add_directives(directives: &str) {
+	CURRENT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directives.to_owned());
+}
+
+/// Reload the logging filter with the supplied directives added to the existing directives
+pub fn reload_filter() -> Result<(), String> {
 	let mut env_filter = EnvFilter::default();
-	if use_defaults {
-		if let Some(default_directives) = DEFAULT_DIRECTIVES.get() {
-				env_filter = add_directives(env_filter, default_directives.lock().join(","));
-		}
+	if let Some(current_directives) = CURRENT_DIRECTIVES.get() {
+		env_filter = add_to_filter(env_filter, current_directives.lock().join(","));
 	}
-	env_filter = add_directives(env_filter, directives);
 	env_filter = env_filter.add_directive(
 		"sc_tracing=trace"
 			.parse()
 			.expect("provided directive is valid"),
 	);
+	log::debug!(target: "tracing", "Reloading log filter with: {}", env_filter);
 	FILTER_RELOAD_HANDLE.get()
 		.ok_or("No reload handle present".to_string())?
 		.reload(env_filter)
 		.map_err(|e| format!("{}", e))
 }
 
-fn add_directives(mut env_filter: EnvFilter, directives: String) -> EnvFilter {
+pub fn reset_log_filter() -> Result<(), String> {
+	*CURRENT_DIRECTIVES
+		.get_or_init(|| Mutex::new(Vec::new())).lock() =
+		DEFAULT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().clone();
+	reload_filter()
+}
+
+fn add_to_filter(mut env_filter: EnvFilter, directives: String) -> EnvFilter {
 	for directive in parse_directives(&directives) {
 		match directive {
 			Ok(d) => env_filter = env_filter.add_directive(d),
 			Err(invalid_directive) => {
-				log::warn!("Unable to parse directive while setting log filter: {:?}", invalid_directive);
+				log::warn!(target: "tracing", "Unable to parse directive while setting log filter: {:?}", invalid_directive);
 			}
 		}
 	}

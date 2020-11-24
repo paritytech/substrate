@@ -198,13 +198,14 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		Receiver(Compat::new(rx))
 	}
 
-	fn system_set_log_filter(&self, directives: String) -> std::result::Result<(), rpc::Error> {
+	fn system_add_log_filter(&self, directives: String) -> std::result::Result<(), rpc::Error> {
 		self.deny_unsafe.check_if_safe()?;
-		sc_tracing::reload_filter(directives, true).map_err(|_e| rpc::Error::internal_error())
+		sc_tracing::add_directives(&directives);
+		sc_tracing::reload_filter().map_err(|_e| rpc::Error::internal_error())
 	}
 
-	fn system_raw_set_log_filter(&self, directives: String)-> std::result::Result<(), rpc::Error> {
+	fn system_reset_log_filter(&self)-> std::result::Result<(), rpc::Error> {
 		self.deny_unsafe.check_if_safe()?;
-		sc_tracing::reload_filter(directives, false).map_err(|_e| rpc::Error::internal_error())
+		sc_tracing::reset_log_filter().map_err(|_e| rpc::Error::internal_error())
 	}
 }
