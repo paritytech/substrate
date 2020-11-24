@@ -229,7 +229,7 @@ impl Sandbox for HostState {
 			.map_err(|e| e.to_string())
 	}
 
-	fn memory_new(&mut self, initial: u32, maximum: MemoryId) -> sp_wasm_interface::Result<u32> {
+	fn memory_new(&mut self, initial: u32, maximum: u32) -> sp_wasm_interface::Result<u32> {
 		self.inner
 			.sandbox_store
 			.borrow_mut()

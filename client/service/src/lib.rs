@@ -73,13 +73,14 @@ pub use sc_executor::NativeExecutionDispatch;
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use sc_network::config::{
-	FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder, TransactionImport,
+	OnDemand, TransactionImport,
 	TransactionImportFuture,
 };
 pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
+pub use self::client::{LocalCallExecutor, ClientConfig};
 use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";

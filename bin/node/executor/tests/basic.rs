@@ -621,7 +621,7 @@ fn deploying_wasm_contract_should_work() {
 				signed: Some((charlie(), signed_extra(2, 0))),
 				function: Call::Contracts(
 					pallet_contracts::Call::call::<Runtime>(
-						pallet_indices::address::Address::Id(addr.clone()),
+						sp_runtime::MultiAddress::Id(addr.clone()),
 						10,
 						500_000_000,
 						vec![0x00, 0x01, 0x02, 0x03]
