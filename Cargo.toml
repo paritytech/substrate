@@ -21,6 +21,7 @@ members = [
 	"client/chain-spec",
 	"client/chain-spec/derive",
 	"client/cli",
+	"client/cli/proc-macro",
 	"client/consensus/aura",
 	"client/consensus/babe",
 	"client/consensus/babe/rpc",
@@ -53,11 +54,11 @@ members = [
 	"client/service",
 	"client/service/test",
 	"client/state-db",
+	"client/sync-state-rpc",
 	"client/telemetry",
 	"client/transaction-pool",
 	"client/transaction-pool/graph",
 	"utils/prometheus",
-	"utils/wasm-builder-runner",
 	"frame/assets",
 	"frame/aura",
 	"frame/atomic-swap",
@@ -73,11 +74,10 @@ members = [
 	"frame/democracy",
 	"frame/elections-phragmen",
 	"frame/elections",
-	"frame/evm",
 	"frame/example",
 	"frame/example-offchain-worker",
+	"frame/example-parallel",
 	"frame/executive",
-	"frame/finality-tracker",
 	"frame/grandpa",
 	"frame/identity",
 	"frame/im-online",
@@ -134,10 +134,10 @@ members = [
 	"primitives/debug-derive",
 	"primitives/storage",
 	"primitives/externalities",
-	"primitives/finality-tracker",
 	"primitives/finality-grandpa",
 	"primitives/inherents",
 	"primitives/keyring",
+	"primitives/keystore",
 	"primitives/offchain",
 	"primitives/panic-handler",
 	"primitives/npos-elections",
@@ -163,6 +163,7 @@ members = [
 	"primitives/std",
 	"primitives/version",
 	"primitives/state-machine",
+	"primitives/tasks",
 	"primitives/timestamp",
 	"primitives/test-primitives",
 	"primitives/transaction-pool",
@@ -217,8 +218,6 @@ crossbeam-queue = { opt-level = 3 }
 crypto-mac = { opt-level = 3 }
 curve25519-dalek = { opt-level = 3 }
 ed25519-dalek = { opt-level = 3 }
-evm-core = { opt-level = 3 }
-evm-runtime = { opt-level = 3 }
 flate2 = { opt-level = 3 }
 futures-channel = { opt-level = 3 }
 hashbrown = { opt-level = 3 }

@@ -15,8 +15,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
-derive_more = "0.99.2"
-libp2p = { version = "0.28.1", default-features = false }
+thiserror = "1.0.21"
+libp2p = { version = "0.30.1", default-features = false }
 log = "0.4.8"
 sp-core = { path= "../../core", version = "2.0.0"}
 sp-inherents = { version = "2.0.0", path = "../../inherents" }
@@ -33,9 +33,10 @@ codec = { package = "parity-scale-codec", version = "1.3.1", features = ["derive
 parking_lot = "0.10.0"
 serde = { version = "1.0", features = ["derive"] }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0"}
-wasm-timer = "0.2.4"
+wasm-timer = "0.2.5"
 
 [dev-dependencies]
+futures = "0.3.4"
 sp-test-primitives = { version = "2.0.0", path = "../../test-primitives" }
 
 [features]

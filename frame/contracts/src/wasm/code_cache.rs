@@ -30,6 +30,7 @@ use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
 use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Trait};
 use sp_std::prelude::*;
 use sp_runtime::traits::Hash;
+use sp_core::crypto::UncheckedFrom;
 use frame_support::StorageMap;
 
 /// Put code in the storage. The hash of code is used as a key and is returned
@@ -38,9 +39,27 @@ use frame_support::StorageMap;
 /// This function instruments the given code and caches it in the storage.
 pub fn save<T: Trait>(
 	original_code: Vec<u8>,
-	schedule: &Schedule,
-) -> Result<CodeHash<T>, &'static str> {
-	let prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
+	schedule: &Schedule<T>,
+) -> Result<CodeHash<T>, &'static str> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
+	let prefab_module = prepare::prepare_contract::<Env, T>(&original_code, schedule)?;
+	let code_hash = T::Hashing::hash(&original_code);
+
+	<CodeStorage<T>>::insert(code_hash, prefab_module);
+	<PristineCode<T>>::insert(code_hash, original_code);
+
+	Ok(code_hash)
+}
+
+/// Version of `save` to be used in runtime benchmarks.
+//
+/// This version neither checks nor instruments the passed in code. This is useful
+/// when code needs to be benchmarked without the injected instrumentation.
+#[cfg(feature = "runtime-benchmarks")]
+pub fn save_raw<T: Trait>(
+	original_code: Vec<u8>,
+	schedule: &Schedule<T>,
+) -> Result<CodeHash<T>, &'static str> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
+	let prefab_module = prepare::benchmarking::prepare_contract::<T>(&original_code, schedule)?;
 	let code_hash = T::Hashing::hash(&original_code);
 
 	<CodeStorage<T>>::insert(code_hash, prefab_module);
@@ -56,8 +75,8 @@ pub fn save<T: Trait>(
 /// re-instrumentation and update the cache in the storage.
 pub fn load<T: Trait>(
 	code_hash: &CodeHash<T>,
-	schedule: &Schedule,
-) -> Result<PrefabWasmModule, &'static str> {
+	schedule: &Schedule<T>,
+) -> Result<PrefabWasmModule, &'static str> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
 	let mut prefab_module =
 		<CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
 
@@ -68,7 +87,7 @@ pub fn load<T: Trait>(
 		// We need to re-instrument the code with the latest schedule here.
 		let original_code =
 			<PristineCode<T>>::get(code_hash).ok_or_else(|| "pristine code is not found")?;
-		prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
+		prefab_module = prepare::prepare_contract::<Env, T>(&original_code, schedule)?;
 		<CodeStorage<T>>::insert(&code_hash, &prefab_module);
 	}
 	Ok(prefab_module)

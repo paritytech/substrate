@@ -1316,7 +1316,7 @@ mod tests {
 			connection::ConnectionId,
 			identity,
 			muxing::{StreamMuxerBox, SubstreamRef},
-			transport::{Transport, boxed::Boxed, memory::MemoryTransport},
+			transport::{Transport, Boxed, memory::MemoryTransport},
 			upgrade
 		},
 		noise::{self, Keypair, X25519, NoiseConfig},
@@ -1355,9 +1355,7 @@ mod tests {
 		let transport = MemoryTransport::default()
 			.upgrade(upgrade::Version::V1)
 			.authenticate(NoiseConfig::xx(dh_key).into_authenticated())
-			.multiplex(yamux::Config::default())
-			.map(|(peer, muxer), _| (peer, StreamMuxerBox::new(muxer)))
-			.map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+			.multiplex(yamux::YamuxConfig::default())
 			.boxed();
 		Swarm::new(transport, LightClientHandler::new(cf, client, checker, ps), local_peer)
 	}
@@ -1429,7 +1427,7 @@ mod tests {
 			_: ChangesProof<B::Header>
 		) -> Result<Vec<(NumberFor<B>, u32)>, ClientError> {
 			match self.ok {
-				true => Ok(vec![(100.into(), 2)]),
+				true => Ok(vec![(100u32.into(), 2)]),
 				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}

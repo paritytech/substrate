@@ -47,33 +47,25 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
+pub mod weights;
+
 use sp_std::prelude::*;
 use sp_std::fmt::Debug;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
 	StaticLookup, Zero, AtLeast32BitUnsigned, MaybeSerializeDeserialize, Convert
 }};
-use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure, weights::Weight};
+use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
 use frame_support::traits::{
-	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier,
+	Currency, LockableCurrency, VestingSchedule, WithdrawReasons, LockIdentifier,
 	ExistenceRequirement, Get,
 };
 use frame_system::{ensure_signed, ensure_root};
-
-mod benchmarking;
-mod default_weights;
+pub use weights::WeightInfo;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type MaxLocksOf<T> = <<T as Trait>::Currency as LockableCurrency<<T as frame_system::Trait>::AccountId>>::MaxLocks;
-
-pub trait WeightInfo {
-	fn vest_locked(l: u32, ) -> Weight;
-	fn vest_unlocked(l: u32, ) -> Weight;
-	fn vest_other_locked(l: u32, ) -> Weight;
-	fn vest_other_unlocked(l: u32, ) -> Weight;
-	fn vested_transfer(l: u32, ) -> Weight;
-	fn force_vested_transfer(l: u32, ) -> Weight;
-}
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -156,7 +148,7 @@ decl_storage! {
 					per_block: per_block,
 					starting_block: begin
 				});
-				let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+				let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 				T::Currency::set_lock(VESTING_ID, who, locked, reasons);
 			}
 		})
@@ -330,7 +322,7 @@ impl<T: Trait> Module<T> {
 			Vesting::<T>::remove(&who);
 			Self::deposit_event(RawEvent::VestingCompleted(who));
 		} else {
-			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 			T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons);
 			Self::deposit_event(RawEvent::VestingUpdated(who, locked_now));
 		}
@@ -398,10 +390,8 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 mod tests {
 	use super::*;
 
-	use std::cell::RefCell;
 	use frame_support::{
 		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
-		traits::Get
 	};
 	use sp_core::H256;
 	use sp_runtime::{
@@ -464,6 +454,7 @@ mod tests {
 	}
 	parameter_types! {
 		pub const MinVestedTransfer: u64 = 256 * 2;
+		pub static ExistentialDeposit: u64 = 0;
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -476,13 +467,6 @@ mod tests {
 	type Balances = pallet_balances::Module<Test>;
 	type Vesting = Module<Test>;
 
-	thread_local! {
-		static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
-	}
-	pub struct ExistentialDeposit;
-	impl Get<u64> for ExistentialDeposit {
-		fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
-	}
 
 	pub struct ExtBuilder {
 		existential_deposit: u64,

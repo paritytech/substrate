@@ -1,0 +1,8 @@
+error[E0277]: `<T as Trait>::C` doesn't implement `std::fmt::Debug`
+ --> $DIR/debug.rs:7:2
+  |
+7 |     c: T::C,
+  |     ^ `<T as Trait>::C` cannot be formatted using `{:?}` because it doesn't implement `std::fmt::Debug`
+  |
+  = help: the trait `std::fmt::Debug` is not implemented for `<T as Trait>::C`
+  = note: required for the cast to the object type `dyn std::fmt::Debug`

@@ -55,7 +55,7 @@ RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/node-template -lruntime=debug -
 ### Multi-Node Local Testnet
 
 To see the multi-node consensus algorithm in action, run a local testnet with two validator nodes,
-Alice and Bob, that have been [configured](/bin/node-template/node/src/chain_spec.rs) as the initial
+Alice and Bob, that have been [configured](./node/src/chain_spec.rs) as the initial
 authorities of the `local` testnet chain and endowed with testnet units.
 
 Note: this will require two terminal sessions (one for each node).

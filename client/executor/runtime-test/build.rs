@@ -14,13 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use wasm_builder_runner::WasmBuilder;
+use substrate_wasm_builder::WasmBuilder;
 
 fn main() {
 	// regular build
 	WasmBuilder::new()
 		.with_current_project()
-		.with_wasm_builder_from_crates_or_path("2.0.0", "../../../utils/wasm-builder")
 		.export_heap_base()
 		.import_memory()
 		.build();
@@ -28,10 +27,9 @@ fn main() {
 	// and building with tracing activated
 	WasmBuilder::new()
 		.with_current_project()
-		.with_wasm_builder_from_crates_or_path("2.0.0", "../../../utils/wasm-builder")
 		.export_heap_base()
 		.import_memory()
 		.set_file_name("wasm_binary_with_tracing.rs")
-		.append_to_rust_flags("--cfg feature=\\\"with-tracing\\\"")
+		.append_to_rust_flags(r#"--cfg feature="with-tracing""#)
 		.build();
 }

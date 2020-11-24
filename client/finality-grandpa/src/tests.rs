@@ -25,8 +25,8 @@ use sc_network_test::{
 	Block, BlockImportAdapter, Hash, PassThroughVerifier, Peer, PeersClient, PeersFullClient,
 	TestClient, TestNetFactory, FullPeerConfig,
 };
-use sc_network::config::{ProtocolConfig, BoxFinalityProofRequestBuilder};
-use parking_lot::Mutex;
+use sc_network::config::ProtocolConfig;
+use parking_lot::{RwLock, Mutex};
 use futures_timer::Delay;
 use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
@@ -36,23 +36,25 @@ use sp_api::{ApiRef, StorageProof, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
-	import_queue::{BoxJustificationImport, BoxFinalityProofImport},
+	import_queue::BoxJustificationImport,
 };
 use std::{collections::{HashMap, HashSet}, pin::Pin};
 use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
-use sp_core::{H256, crypto::Public};
+use sp_core::H256;
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
 use finality_proof::{
-	FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker,
+	AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker,
 };
-use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
+use sc_keystore::LocalKeystore;
+use sp_application_crypto::key_types::GRANDPA;
 
 type TestLinkHalf =
 	LinkHalf<Block, PeersFullClient, LongestChain<substrate_test_runtime_client::Backend, Block>>;
@@ -96,9 +98,7 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn add_full_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![
-				(communication::GRANDPA_ENGINE_ID, communication::GRANDPA_PROTOCOL_NAME.into())
-			],
+			notifications_protocols: vec![communication::GRANDPA_PROTOCOL_NAME.into()],
 			..Default::default()
 		})
 	}
@@ -116,8 +116,6 @@ impl TestNetFactory for GrandpaTestNet {
 		-> (
 			BlockImportAdapter<Transaction>,
 			Option<BoxJustificationImport<Block>>,
-			Option<BoxFinalityProofImport<Block>>,
-			Option<BoxFinalityProofRequestBuilder<Block>>,
 			PeerData,
 		)
 	{
@@ -132,45 +130,12 @@ impl TestNetFactory for GrandpaTestNet {
 				(
 					BlockImportAdapter::new_full(import),
 					Some(justification_import),
-					None,
-					None,
 					Mutex::new(Some(link)),
 				)
 			},
-			PeersClient::Light(ref client, ref backend) => {
-				use crate::light_import::tests::light_block_import_without_justifications;
-
-				let authorities_provider = Arc::new(self.test_config.clone());
-				// forbid direct finalization using justification that came with the block
-				// => light clients will try to fetch finality proofs
-				let import = light_block_import_without_justifications(
-					client.clone(),
-					backend.clone(),
-					&self.test_config,
-					authorities_provider,
-				).expect("Could not create block import for fresh peer.");
-				let finality_proof_req_builder = import.0.create_finality_proof_request_builder();
-				let proof_import = Box::new(import.clone());
-				(
-					BlockImportAdapter::new_light(import),
-					None,
-					Some(proof_import),
-					Some(finality_proof_req_builder),
-					Mutex::new(None),
-				)
+			PeersClient::Light(..) => {
+				panic!("Light client is not used in tests.");
 			},
-		}
-	}
-
-	fn make_finality_proof_provider(
-		&self,
-		client: PeersClient
-	) -> Option<Arc<dyn sc_network::config::FinalityProofProvider<Block>>> {
-		match client {
-			PeersClient::Full(_, ref backend)  => {
-				Some(Arc::new(FinalityProofProvider::new(backend.clone(), self.test_config.clone())))
-			},
-			PeersClient::Light(_, _) => None,
 		}
 	}
 
@@ -285,10 +250,11 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 
-fn create_keystore(authority: Ed25519Keyring) -> (BareCryptoStorePtr, tempfile::TempDir) {
+fn create_keystore(authority: Ed25519Keyring) -> (SyncCryptoStorePtr, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-	keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(&authority.to_seed())
+	let keystore = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+		.expect("Creates keystore"));
+	SyncCryptoStore::ed25519_generate_new(&*keystore, GRANDPA, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 
 	(keystore, keystore_path)
@@ -367,7 +333,6 @@ fn run_to_completion_with<F>(
 			},
 			link: link,
 			network: net_service,
-			inherent_data_providers: InherentDataProviders::new(),
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
@@ -499,7 +464,6 @@ fn finalize_3_voters_1_full_observer() {
 			},
 			link: link,
 			network: net_service,
-			inherent_data_providers: InherentDataProviders::new(),
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
@@ -663,7 +627,6 @@ fn transition_3_voters_twice_1_full_observer() {
 			},
 			link: link,
 			network: net_service,
-			inherent_data_providers: InherentDataProviders::new(),
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
@@ -678,24 +641,6 @@ fn transition_3_voters_twice_1_full_observer() {
 	let wait_for = ::futures::future::join_all(finality_notifications);
 
 	block_until_complete(wait_for, &net, &mut runtime);
-}
-
-#[test]
-fn justification_is_emitted_when_consensus_data_changes() {
-	let mut runtime = Runtime::new().unwrap();
-	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
-	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 3);
-
-	// import block#1 WITH consensus data change
-	let new_authorities = vec![sp_consensus_babe::AuthorityId::from_slice(&[42; 32])];
-	net.peer(0).push_authorities_change_block(new_authorities);
-	net.block_until_sync();
-	let net = Arc::new(Mutex::new(net));
-	run_to_completion(&mut runtime, 1, net.clone(), peers);
-
-	// ... and check that there's justification for block#1
-	assert!(net.lock().peer(0).client().justification(&BlockId::Number(1)).unwrap().is_some(),
-		"Missing justification for block#1");
 }
 
 #[test]
@@ -716,25 +661,6 @@ fn justification_is_generated_periodically() {
 	for i in 0..3 {
 		assert!(net.lock().peer(i).client().justification(&BlockId::Number(32)).unwrap().is_some());
 	}
-}
-
-#[test]
-fn consensus_changes_works() {
-	let mut changes = ConsensusChanges::<H256, u64>::empty();
-
-	// pending changes are not finalized
-	changes.note_change((10, H256::from_low_u64_be(1)));
-	assert_eq!(changes.finalize((5, H256::from_low_u64_be(5)), |_| Ok(None)).unwrap(), (false, false));
-
-	// no change is selected from competing pending changes
-	changes.note_change((1, H256::from_low_u64_be(1)));
-	changes.note_change((1, H256::from_low_u64_be(101)));
-	assert_eq!(changes.finalize((10, H256::from_low_u64_be(10)), |_| Ok(Some(H256::from_low_u64_be(1001)))).unwrap(), (true, false));
-
-	// change is selected from competing pending changes
-	changes.note_change((1, H256::from_low_u64_be(1)));
-	changes.note_change((1, H256::from_low_u64_be(101)));
-	assert_eq!(changes.finalize((10, H256::from_low_u64_be(10)), |_| Ok(Some(H256::from_low_u64_be(1)))).unwrap(), (true, true));
 }
 
 #[test]
@@ -945,7 +871,6 @@ fn allows_reimporting_change_blocks() {
 			needs_justification: true,
 			clear_justification_requests: false,
 			bad_justification: false,
-			needs_finality_proof: false,
 			is_new_best: true,
 			header_only: false,
 		}),
@@ -1053,7 +978,7 @@ fn voter_persists_its_votes() {
 			voter_rx: TracingUnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
-			keystore: BareCryptoStorePtr,
+			keystore: SyncCryptoStorePtr,
 		}
 
 		impl Future for ResettableVoter {
@@ -1070,7 +995,7 @@ fn voter_persists_its_votes() {
 					Poll::Pending => return Poll::Pending,
 					Poll::Ready(None) => return Poll::Ready(()),
 					Poll::Ready(Some(())) => {
-						let (_block_import, _, _, _, link) =
+						let (_block_import, _, link) =
 							this.net.lock()
 									.make_block_import::<
 										TransactionFor<substrate_test_runtime_client::Backend, Block>
@@ -1088,7 +1013,6 @@ fn voter_persists_its_votes() {
 							},
 							link,
 							network: this.net.lock().peers[0].network_service().clone(),
-							inherent_data_providers: InherentDataProviders::new(),
 							telemetry_on_connect: None,
 							voting_rule: VotingRulesBuilder::default().build(),
 							prometheus_registry: None,
@@ -1146,7 +1070,7 @@ fn voter_persists_its_votes() {
 		};
 
 		let set_state = {
-			let (_, _, _, _, link) = net.lock()
+			let (_, _, link) = net.lock()
 				.make_block_import::<
 					TransactionFor<substrate_test_runtime_client::Backend, Block>
 				>(client);
@@ -1314,100 +1238,6 @@ fn finalize_3_voters_1_light_observer() {
 }
 
 #[test]
-fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
-	sp_tracing::try_init_simple();
-	let mut runtime = Runtime::new().unwrap();
-
-	let peers = &[Ed25519Keyring::Alice];
-	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
-	net.add_light_peer();
-
-	// import block#1 WITH consensus data change. Light client ignores justification
-	// && instead fetches finality proof for block #1
-	net.peer(0).push_authorities_change_block(vec![sp_consensus_babe::AuthorityId::from_slice(&[42; 32])]);
-	let net = Arc::new(Mutex::new(net));
-	run_to_completion(&mut runtime, 1, net.clone(), peers);
-	net.lock().block_until_sync();
-
-	// check that the block#1 is finalized on light client
-	runtime.block_on(futures::future::poll_fn(move |cx| {
-		if net.lock().peer(1).client().info().finalized_number == 1 {
-			Poll::Ready(())
-		} else {
-			net.lock().poll(cx);
-			Poll::Pending
-		}
-	}));
-}
-
-#[test]
-fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_different() {
-	// for debug: to ensure that without forced change light client will sync finality proof
-	const FORCE_CHANGE: bool = true;
-
-	sp_tracing::try_init_simple();
-	let mut runtime = Runtime::new().unwrap();
-
-	// two of these guys are offline.
-	let genesis_authorities = if FORCE_CHANGE {
-		vec![
-			Ed25519Keyring::Alice,
-			Ed25519Keyring::Bob,
-			Ed25519Keyring::Charlie,
-			Ed25519Keyring::One,
-			Ed25519Keyring::Two,
-		]
-	} else {
-		vec![
-			Ed25519Keyring::Alice,
-			Ed25519Keyring::Bob,
-			Ed25519Keyring::Charlie,
-		]
-	};
-	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
-	let api = TestApi::new(make_ids(&genesis_authorities));
-
-	let voters = make_ids(peers_a);
-	let net = GrandpaTestNet::new(api, 3);
-	let net = Arc::new(Mutex::new(net));
-
-	// best is #1
-	net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-		// add a forced transition at block 5.
-		let mut block = builder.build().unwrap().block;
-		if FORCE_CHANGE {
-			add_forced_change(&mut block, 0, ScheduledChange {
-				next_authorities: voters.clone(),
-				delay: 3,
-			});
-		}
-		block
-	});
-
-	// ensure block#10 enacts authorities set change => justification is generated
-	// normally it will reach light client, but because of the forced change, it will not
-	net.lock().peer(0).push_blocks(8, false); // best is #9
-	net.lock().peer(0).push_authorities_change_block(
-		vec![sp_consensus_babe::AuthorityId::from_slice(&[42; 32])]
-	); // #10
-	net.lock().peer(0).push_blocks(1, false); // best is #11
-	net.lock().block_until_sync();
-
-	// finalize block #11 on full clients
-	run_to_completion(&mut runtime, 11, net.clone(), peers_a);
-
-	// request finalization by light client
-	net.lock().add_light_peer();
-	net.lock().block_until_sync();
-
-	// check block, finalized on light client
-	assert_eq!(
-		net.lock().peer(3).client().info().finalized_number,
-		if FORCE_CHANGE { 0 } else { 10 },
-	);
-}
-
-#[test]
 fn voter_catches_up_to_latest_round_when_behind() {
 	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
@@ -1434,7 +1264,6 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			},
 			link,
 			network: net.lock().peer(peer_id).network_service().clone(),
-			inherent_data_providers: InherentDataProviders::new(),
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
@@ -1533,7 +1362,7 @@ type TestEnvironment<N, VR> = Environment<
 
 fn test_environment<N, VR>(
 	link: &TestLinkHalf,
-	keystore: Option<BareCryptoStorePtr>,
+	keystore: Option<SyncCryptoStorePtr>,
 	network_service: N,
 	voting_rule: VR,
 ) -> TestEnvironment<N, VR>
@@ -1543,7 +1372,6 @@ where
 {
 	let PersistentData {
 		ref authority_set,
-		ref consensus_changes,
 		ref set_state,
 		..
 	} = link.persistent_data;
@@ -1567,7 +1395,6 @@ where
 	Environment {
 		authority_set: authority_set.clone(),
 		config: config.clone(),
-		consensus_changes: consensus_changes.clone(),
 		client: link.client.clone(),
 		select_chain: link.select_chain.clone(),
 		set_id: authority_set.set_id(),
@@ -1714,6 +1541,10 @@ fn grandpa_environment_never_overwrites_round_voter_state() {
 
 	assert_eq!(get_current_round(2).unwrap(), HasVoted::No);
 
+	// we need to call `round_data` for the next round to pick up
+	// from the keystore which authority id we'll be using to vote
+	environment.round_data(2);
+
 	let info = peer.client().info();
 
 	let prevote = finality_grandpa::Prevote {
@@ -1813,4 +1644,56 @@ fn imports_justification_for_regular_blocks_on_import() {
 	assert!(
 		client.justification(&BlockId::Hash(block_hash)).unwrap().is_some(),
 	);
+}
+
+#[test]
+fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
+	use finality_grandpa::voter::Environment;
+
+	let alice = Ed25519Keyring::Alice;
+	let voters = make_ids(&[alice]);
+
+	let environment = {
+		let mut net = GrandpaTestNet::new(TestApi::new(voters), 1);
+		let peer = net.peer(0);
+		let network_service = peer.network_service().clone();
+		let link = peer.data.lock().take().unwrap();
+		let (keystore, _keystore_path) = create_keystore(alice);
+		test_environment(&link, Some(keystore), network_service.clone(), ())
+	};
+
+	let signed_prevote = {
+		let prevote = finality_grandpa::Prevote {
+			target_hash: H256::random(),
+			target_number: 1,
+		};
+
+		let signed = alice.sign(&[]).into();
+		(prevote, signed)
+	};
+
+	let mut equivocation = finality_grandpa::Equivocation {
+		round_number: 1,
+		identity: alice.public().into(),
+		first: signed_prevote.clone(),
+		second: signed_prevote.clone(),
+	};
+
+	// we need to call `round_data` to pick up from the keystore which
+	// authority id we'll be using to vote
+	environment.round_data(1);
+
+	// reporting the equivocation should fail since the offender is a local
+	// authority (i.e. we have keys in our keystore for the given id)
+	let equivocation_proof = sp_finality_grandpa::Equivocation::Prevote(equivocation.clone());
+	assert!(matches!(
+		environment.report_equivocation(equivocation_proof),
+		Err(Error::Safety(_))
+	));
+
+	// if we set the equivocation offender to another id for which we don't have
+	// keys it should work
+	equivocation.identity = Default::default();
+	let equivocation_proof = sp_finality_grandpa::Equivocation::Prevote(equivocation);
+	assert!(environment.report_equivocation(equivocation_proof).is_ok());
 }

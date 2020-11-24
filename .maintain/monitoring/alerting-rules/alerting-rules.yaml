@@ -6,18 +6,18 @@ groups:
   # Block production
   ##############################################################################
 
-  - alert: LowNumberOfNewBlocks
+  - alert: BlockProductionSlow
     annotations:
-      message: 'Less than one new block per minute on instance {{
-      $labels.instance }}.'
+      message: 'Best block on instance {{ $labels.instance }} increases by
+      less than 1 per minute for more than 3 minutes.'
     expr: increase(polkadot_block_height{status="best"}[1m]) < 1
     for: 3m
     labels:
       severity: warning
-  - alert: LowNumberOfNewBlocks
+  - alert: BlockProductionSlow
     annotations:
-      message: 'Less than one new block per minute on instance {{
-      $labels.instance }}.'
+      message: 'Best block on instance {{ $labels.instance }} increases by
+      less than 1 per minute for more than 10 minutes.'
     expr: increase(polkadot_block_height{status="best"}[1m]) < 1
     for: 10m
     labels:
@@ -34,7 +34,7 @@ groups:
       severity: warning
     annotations:
       message: 'Finalized block on instance {{ $labels.instance }} increases by
-      less than 1 per minute.'
+      less than 1 per minute for more than 3 minutes.'
   - alert: BlockFinalizationSlow
     expr: increase(polkadot_block_height{status="finalized"}[1m]) < 1
     for: 10m
@@ -42,7 +42,7 @@ groups:
       severity: critical
     annotations:
       message: 'Finalized block on instance {{ $labels.instance }} increases by
-      less than 1 per minute.'
+      less than 1 per minute for more than 10 minutes.'
   - alert: BlockFinalizationLaggingBehind
     # Under the assumption of an average block production of 6 seconds,
     # "best" and "finalized" being more than 10 blocks apart would imply
@@ -54,7 +54,7 @@ groups:
       severity: critical
     annotations:
       message: "Block finalization on instance {{ $labels.instance }} is behind
-      block production by {{ $value }} for more than 8m"
+      block production by {{ $value }} for more than 8 minutes."
 
   ##############################################################################
   # Transaction queue
@@ -68,7 +68,7 @@ groups:
       severity: warning
     annotations:
       message: 'The transaction pool size on node {{ $labels.instance }} has
-      been monotonically increasing for the last 10 minutes.'
+      been monotonically increasing for more than 10 minutes.'
   - alert: TransactionQueueSizeIncreasing
     expr: 'increase(polkadot_sub_txpool_validations_scheduled[5m]) -
     increase(polkadot_sub_txpool_validations_finished[5m]) > 0'
@@ -77,7 +77,7 @@ groups:
       severity: critical
     annotations:
       message: 'The transaction pool size on node {{ $labels.instance }} has
-      been monotonically increasing for the last 30 minutes.'
+      been monotonically increasing for more than 30 minutes.'
   - alert: TransactionQueueSizeHigh
     expr: 'polkadot_sub_txpool_validations_scheduled -
     polkadot_sub_txpool_validations_finished > 10000'
@@ -86,13 +86,13 @@ groups:
       severity: critical
     annotations:
       message: 'The transaction pool size on node {{ $labels.instance }} has
-      been above 10_000 for the last 5 minutes.'
+      been above 10_000 for more than 5 minutes.'
 
   ##############################################################################
   # Networking
   ##############################################################################
 
-  - alert: LowNumberOfPeers
+  - alert: NumberOfPeersLow
     expr: polkadot_sub_libp2p_peers_count < 3
     for: 3m
     labels:
@@ -100,7 +100,7 @@ groups:
     annotations:
       message: 'The node {{ $labels.instance }} has less than 3 peers for more
       than 3 minutes'
-  - alert: LowNumberOfPeers
+  - alert: NumberOfPeersLow
     expr: polkadot_sub_libp2p_peers_count < 3
     for: 15m
     labels:
@@ -113,7 +113,7 @@ groups:
   # System
   ##############################################################################
 
-  - alert: HighNumberOfFileDescriptors
+  - alert: NumberOfFileDescriptorsHigh
     expr: 'node_filefd_allocated{domain=~"kusama|polkadot"} > 10000'
     for: 3m
     labels:
@@ -126,7 +126,17 @@ groups:
   # Others
   ##############################################################################
 
-  - alert: AuthorityDiscoveryHighDiscoveryFailure
+  - alert: ContinuousTaskEnded
+    expr: '(polkadot_tasks_spawned_total{task_name != "basic-authorship-proposer"} == 1)
+        - on(instance, task_name) (polkadot_tasks_ended_total == 1)'
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      message: 'Continuous task {{ $labels.task_name }} on node
+      {{ $labels.instance }} ended unexpectedly.'
+
+  - alert: AuthorityDiscoveryDiscoveryFailureHigh
     expr: 'polkadot_authority_discovery_handle_value_found_event_failure /
     ignoring(name)
     polkadot_authority_discovery_dht_event_received{name="value_found"} > 0.5'
@@ -134,5 +144,6 @@ groups:
     labels:
       severity: warning
     annotations:
-      message: "Authority discovery on node {{ $labels.instance }} fails to
-      process more than 50 % of the values found on the DHT."
+      message: 'Authority discovery on node {{ $labels.instance }} fails to
+      process more than 50 % of the values found on the DHT for more than 2
+      hours.'

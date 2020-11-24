@@ -48,7 +48,7 @@ hex-literal = { version = "0.3.1", optional = true }
 template = { version = "2.0.0", default-features = false, path = "../pallets/template", package = "pallet-template" }
 
 [build-dependencies]
-wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+substrate-wasm-builder = { version = "3.0.0", path = "../../../utils/wasm-builder" }
 
 [features]
 default = ["std"]

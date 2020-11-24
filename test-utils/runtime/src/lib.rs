@@ -66,8 +66,8 @@ pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+/// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
 #[cfg(feature = "std")]
-/// Wasm binary unwrapped. If built with `BUILD_DUMMY_WASM_BINARY`, the function panics.
 pub fn wasm_binary_unwrap() -> &'static [u8] {
 	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
 						supported with the flag disabled.")
@@ -340,6 +340,8 @@ cfg_if! {
 				/// Test that ensures that we can call a function that takes multiple
 				/// arguments.
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
+				/// Traces log "Hey I'm runtime."
+				fn do_trace_log();
 			}
 		}
 	} else {
@@ -391,6 +393,8 @@ cfg_if! {
 				/// Test that ensures that we can call a function that takes multiple
 				/// arguments.
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
+				/// Traces log "Hey I'm runtime."
+				fn do_trace_log();
 			}
 		}
 	}
@@ -698,6 +702,11 @@ cfg_if! {
 					assert_eq!(&data[..], &other[..]);
 					assert_eq!(data.len(), num as usize);
 				}
+
+				fn do_trace_log() {
+					frame_support::debug::RuntimeLogger::init();
+					frame_support::debug::trace!("Hey I'm runtime");
+				}
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
@@ -943,6 +952,11 @@ cfg_if! {
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
 					assert_eq!(&data[..], &other[..]);
 					assert_eq!(data.len(), num as usize);
+				}
+
+				fn do_trace_log() {
+					frame_support::debug::RuntimeLogger::init();
+					frame_support::debug::trace!("Hey I'm runtime");
 				}
 			}
 

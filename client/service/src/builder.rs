@@ -33,13 +33,16 @@ use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator, Chain},
 	import_queue::ImportQueue,
 };
-use futures::{FutureExt, StreamExt, future::ready, channel::oneshot};
 use jsonrpc_pubsub::manager::SubscriptionManager;
-use sc_keystore::Store as Keystore;
+use futures::{
+	FutureExt, StreamExt,
+	future::ready,
+	channel::oneshot,
+};
+use sc_keystore::LocalKeystore;
 use log::{info, warn};
-use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+use sc_network::config::{Role, OnDemand};
 use sc_network::NetworkService;
-use parking_lot::RwLock;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo,
@@ -52,7 +55,11 @@ use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::MaintainedTransactionPool;
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
-use sp_core::traits::{CodeExecutor, SpawnNamed};
+use sp_core::traits::{
+	CodeExecutor,
+	SpawnNamed,
+};
+use sp_keystore::{CryptoStore, SyncCryptoStorePtr};
 use sp_runtime::BuildStorage;
 use sc_client_api::{
 	BlockBackend, BlockchainEvents,
@@ -169,14 +176,14 @@ pub type TLightCallExecutor<TBl, TExecDisp> = sc_light::GenesisCallExecutor<
 type TFullParts<TBl, TRtApi, TExecDisp> = (
 	TFullClient<TBl, TRtApi, TExecDisp>,
 	Arc<TFullBackend<TBl>>,
-	Arc<RwLock<sc_keystore::Store>>,
+	KeystoreContainer,
 	TaskManager,
 );
 
 type TLightParts<TBl, TRtApi, TExecDisp> = (
 	Arc<TLightClient<TBl, TRtApi, TExecDisp>>,
 	Arc<TLightBackend<TBl>>,
-	Arc<RwLock<sc_keystore::Store>>,
+	KeystoreContainer,
 	TaskManager,
 	Arc<OnDemand<TBl>>,
 );
@@ -198,6 +205,56 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 	TRtApi,
 >;
 
+enum KeystoreContainerInner {
+	Local(Arc<LocalKeystore>)
+}
+
+/// Construct and hold different layers of Keystore wrappers
+pub struct KeystoreContainer(KeystoreContainerInner);
+
+impl KeystoreContainer {
+	/// Construct KeystoreContainer
+	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
+		let keystore = Arc::new(match config {
+			KeystoreConfig::Path { path, password } => LocalKeystore::open(
+				path.clone(),
+				password.clone(),
+			)?,
+			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
+		});
+
+		Ok(Self(KeystoreContainerInner::Local(keystore)))
+	}
+
+	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
+	pub fn keystore(&self) -> Arc<dyn CryptoStore> {
+		match self.0 {
+			KeystoreContainerInner::Local(ref keystore) => keystore.clone(),
+		}
+	}
+
+	/// Returns the synchrnous keystore wrapper
+	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
+		match self.0 {
+			KeystoreContainerInner::Local(ref keystore) => keystore.clone() as SyncCryptoStorePtr,
+		}
+	}
+
+	/// Returns the local keystore if available
+	///
+	/// The function will return None if the available keystore is not a local keystore.
+	///
+	/// # Note
+	///
+	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore implementation, like
+	/// a remote keystore for example. Only use this if you a certain that you require it!
+	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
+		match self.0 {
+			KeystoreContainerInner::Local(ref keystore) => Some(keystore.clone()),
+		}
+	}
+}
+
 /// Creates a new full client for the given config.
 pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
@@ -215,13 +272,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	let keystore = match &config.keystore {
-		KeystoreConfig::Path { path, password } => Keystore::open(
-			path.clone(),
-			password.clone()
-		)?,
-		KeystoreConfig::InMemory => Keystore::new_in_memory(),
-	};
+	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
@@ -254,7 +305,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
 			config.execution_strategies.clone(),
-			Some(keystore.clone()),
+			Some(keystore_container.sync_keystore()),
 		);
 
 		new_client(
@@ -267,13 +318,19 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			Box::new(task_manager.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 			ClientConfig {
-				offchain_worker_enabled : config.offchain_worker.enabled ,
+				offchain_worker_enabled : config.offchain_worker.enabled,
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
+				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 			},
 		)?
 	};
 
-	Ok((client, backend, keystore, task_manager))
+	Ok((
+		client,
+		backend,
+		keystore_container,
+		task_manager,
+	))
 }
 
 /// Create the initial parts of a light node.
@@ -283,18 +340,10 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-
+	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
 		TaskManager::new(config.task_executor.clone(), registry)?
-	};
-
-	let keystore = match &config.keystore {
-		KeystoreConfig::Path { path, password } => Keystore::open(
-			path.clone(),
-			password.clone()
-		)?,
-		KeystoreConfig::InMemory => Keystore::new_in_memory(),
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -331,7 +380,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 	)?);
 
-	Ok((client, backend, keystore, task_manager, on_demand))
+	Ok((client, backend, keystore_container, task_manager, on_demand))
 }
 
 /// Create an instance of db-backed client.
@@ -363,7 +412,7 @@ pub fn new_client<E, Block, RA>(
 	const CANONICALIZATION_DELAY: u64 = 4096;
 
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = crate::client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
+	let executor = crate::client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
 	Ok((
 		crate::client::Client::new(
 			backend.clone(),
@@ -390,7 +439,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// A task manager returned by `new_full_parts`/`new_light_parts`.
 	pub task_manager: &'a mut TaskManager,
 	/// A shared keystore returned by `new_full_parts`/`new_light_parts`.
-	pub keystore: Arc<RwLock<Keystore>>,
+	pub keystore: SyncCryptoStorePtr,
 	/// An optional, shared data fetcher for light clients.
 	pub on_demand: Option<Arc<OnDemand<TBl>>>,
 	/// A shared transaction pool.
@@ -673,7 +722,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
-	keystore: Arc<RwLock<Keystore>>,
+	keystore: SyncCryptoStorePtr,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
 	remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
@@ -720,13 +769,18 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 			subscriptions.clone(),
 			remote_blockchain.clone(),
 			on_demand,
+			deny_unsafe,
 		);
 		(chain, state, child_state)
 
 	} else {
 		// Full nodes
 		let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
-		let (state, child_state) = sc_rpc::state::new_full(client.clone(), subscriptions.clone());
+		let (state, child_state) = sc_rpc::state::new_full(
+			client.clone(),
+			subscriptions.clone(),
+			deny_unsafe,
+		);
 		(chain, state, child_state)
 	};
 
@@ -776,10 +830,6 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	pub block_announce_validator_builder: Option<Box<
 		dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send
 	>>,
-	/// An optional finality proof request builder.
-	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
-	/// An optional, shared finality proof request provider.
-	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
@@ -804,7 +854,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 {
 	let BuildNetworkParams {
 		config, client, transaction_pool, spawn_handle, import_queue, on_demand,
-		block_announce_validator_builder, finality_proof_request_builder, finality_proof_provider,
+		block_announce_validator_builder,
 	} = params;
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
@@ -842,8 +892,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		},
 		network_config: config.network.clone(),
 		chain: client.clone(),
-		finality_proof_provider,
-		finality_proof_request_builder,
 		on_demand: on_demand,
 		transaction_pool: transaction_pool_adapter as _,
 		import_queue: Box::new(import_queue),
