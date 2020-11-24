@@ -64,8 +64,11 @@ type SCSubscriber<
 	W = fn() -> std::io::Stderr
 > = layer::Layered<tracing_fmt::Layer<Registry, N, E, W>, Registry>;
 
+// Handle to reload the tracing log filter
 static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, SCSubscriber>> = OnceCell::new();
+// Directives that are defaulted to when resetting the log filter
 static DEFAULT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
+// Current state of log filter
 static CURRENT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
 
 /// Initialize FILTER_RELOAD_HANDLE, only possible once
