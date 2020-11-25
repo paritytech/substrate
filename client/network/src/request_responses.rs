@@ -742,7 +742,7 @@ impl RequestResponseCodec for GenericCodec {
 
 #[cfg(test)]
 mod tests {
-	use futures::{channel::mpsc, prelude::*};
+	use futures::{channel::{mpsc, oneshot}, prelude::*};
 	use libp2p::identity::Keypair;
 	use libp2p::Multiaddr;
 	use libp2p::core::upgrade;
@@ -753,7 +753,7 @@ mod tests {
 
 	#[test]
 	fn basic_request_response_works() {
-		let protocol_name = "/test/req-rep/1";
+		let protocol_name = "/test/req-resp/1";
 
 		// Build swarms whose behaviour is `RequestResponsesBehaviour`.
 		let mut swarms = (0..2)
@@ -826,39 +826,38 @@ mod tests {
 		// Remove and run the remaining swarm.
 		let (mut swarm, _) = swarms.remove(0);
 		async_std::task::block_on(async move {
-			let mut sent_request_id = None;
+			let mut response_receiver = None;
 
 			loop {
 				match swarm.next_event().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-						let id = swarm.send_request(
+						let (sender, receiver) = oneshot::channel();
+						swarm.send_request(
 							&peer_id,
 							protocol_name,
-							b"this is a request".to_vec()
-						).unwrap();
-						assert!(sent_request_id.is_none());
-						sent_request_id = Some(id);
+							b"this is a request".to_vec(),
+							sender,
+						);
+						assert!(response_receiver.is_none());
+						response_receiver = Some(receiver);
 					}
 					SwarmEvent::Behaviour(super::Event::RequestFinished {
-						peer: _,
-						protocol: _,
-						request_id,
-						result,
+						result, ..
 					}) => {
-						assert_eq!(Some(request_id), sent_request_id);
-						let result = result.unwrap();
-						assert_eq!(result, b"this is a response");
+						assert!(result.is_ok());
 						break;
 					}
 					_ => {}
 				}
 			}
+
+			assert_eq!(response_receiver.unwrap().await.unwrap().unwrap(), b"this is a response");
 		});
 	}
 
 	#[test]
 	fn max_response_size_exceeded() {
-		let protocol_name = "/test/req-rep/1";
+		let protocol_name = "/test/req-resp/1";
 
 		// Build swarms whose behaviour is `RequestResponsesBehaviour`.
 		let mut swarms = (0..2)
@@ -931,34 +930,36 @@ mod tests {
 		// Remove and run the remaining swarm.
 		let (mut swarm, _) = swarms.remove(0);
 		async_std::task::block_on(async move {
-			let mut sent_request_id = None;
+			let mut response_receiver = None;
 
 			loop {
 				match swarm.next_event().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-						let id = swarm.send_request(
+						let (sender, receiver) = oneshot::channel();
+						swarm.send_request(
 							&peer_id,
 							protocol_name,
-							b"this is a request".to_vec()
-						).unwrap();
-						assert!(sent_request_id.is_none());
-						sent_request_id = Some(id);
+							b"this is a request".to_vec(),
+							sender,
+						);
+						assert!(response_receiver.is_none());
+						response_receiver = Some(receiver);
 					}
 					SwarmEvent::Behaviour(super::Event::RequestFinished {
-						peer: _,
-						protocol: _,
-						request_id,
-						result,
+						result, ..
 					}) => {
-						assert_eq!(Some(request_id), sent_request_id);
-						match result {
-							Err(super::RequestFailure::Network(super::OutboundFailure::ConnectionClosed)) => {},
-							_ => panic!()
-						}
+						assert!(result.is_err());
 						break;
 					}
 					_ => {}
 				}
+			}
+
+			;
+
+			match response_receiver.unwrap().await.unwrap().unwrap_err() {
+				super::RequestFailure::Network(super::OutboundFailure::ConnectionClosed) => {},
+				_ => panic!()
 			}
 		});
 	}
