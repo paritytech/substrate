@@ -130,9 +130,8 @@ pub const CONSENSUS_WARN: u8 = 4;
 pub const CONSENSUS_INFO: u8 = 1;
 
 /// Telemetry object. Implements `Future` and must be polled regularly.
-/// Contains an `Arc` and can be cloned and pass around. Only one clone needs to be polled
-/// regularly and should be polled regularly.
-/// Dropping all the clones unregisters the telemetry.
+///
+/// Dropping unregisters the telemetry.
 #[derive(Debug)]
 pub struct Telemetry {
 	inner: TelemetryInner,
