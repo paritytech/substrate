@@ -1879,7 +1879,8 @@ pub mod pallet_prelude {
 /// 5. start writing new pallet module
 /// 	```ignore
 /// 	pub use pallet::*;
-///     #[frame_support::pallet]
+///
+/// 	#[frame_support::pallet]
 /// 	pub mod pallet {
 /// 		pub use frame_support::pallet_prelude::*;
 /// 		pub use frame_system::pallet_prelude::*;
