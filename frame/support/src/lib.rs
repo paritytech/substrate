@@ -1058,7 +1058,7 @@ pub mod pallet_prelude {
 /// It is define by a module item:
 /// ```ignore
 /// #[pallet]
-/// mod pallet {
+/// pub mod pallet {
 /// ...
 /// }
 /// ```
@@ -1073,7 +1073,7 @@ pub mod pallet_prelude {
 /// frame_system:
 /// ```ignore
 /// #[pallet]
-/// mod {
+/// pub mod pallet {
 ///		use frame_support::pallet_prelude::*;
 ///		use frame_system::pallet_prelude::*;
 ///		...
@@ -1880,7 +1880,7 @@ pub mod pallet_prelude {
 /// 	```ignore
 /// 	pub use pallet::*;
 ///     #[frame_support::pallet]
-/// 	mod pallet {
+/// 	pub mod pallet {
 /// 		pub use frame_support::pallet_prelude::*;
 /// 		pub use frame_system::pallet_prelude::*;
 /// 		use super::*;
