@@ -22,8 +22,7 @@ use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use crate::error;
-use sp_core::crypto::{SecretString, Zeroize};
-use std::str::FromStr;
+use sp_core::crypto::SecretString;
 
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
@@ -82,21 +81,15 @@ impl KeystoreParams {
 		let password = if self.password_interactive {
 			#[cfg(not(target_os = "unknown"))]
 			{
-				let mut password = input_keystore_password()?;
-				let secret = std::str::FromStr::from_str(password.as_str())
-					.map_err(|()| "Error reading password")?;
-				password.zeroize();
-				Some(secret)
+				let password = input_keystore_password()?;
+				Some(SecretString::new(password))
 			}
 			#[cfg(target_os = "unknown")]
 			None
 		} else if let Some(ref file) = self.password_filename {
-			let mut password = fs::read_to_string(file)
+			let password = fs::read_to_string(file)
 				.map_err(|e| format!("{}", e))?;
-			let secret = std::str::FromStr::from_str(password.as_str())
-				.map_err(|()| "Error reading password")?;
-			password.zeroize();
-			Some(secret)
+			Some(SecretString::new(password))
 		} else {
 			self.password.clone()
 		};
@@ -114,10 +107,8 @@ impl KeystoreParams {
 		let (password_interactive, password) = (self.password_interactive, self.password.clone());
 
 		let pass = if password_interactive {
-			let mut password = rpassword::read_password_from_tty(Some("Key password: "))?;
-			let pass = Some(FromStr::from_str(&password).map_err(|()| "Error reading password")?);
-			password.zeroize();
-			pass
+			let password = rpassword::read_password_from_tty(Some("Key password: "))?;
+			Some(SecretString::new(password))
 		} else {
 			password
 		};
