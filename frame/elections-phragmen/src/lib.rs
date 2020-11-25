@@ -127,95 +127,88 @@ type NegativeImbalanceOf<T> =
 /// Helper functions for migrations of this module.
 pub mod migrations {
 	use super::*;
-	use frame_support::{migration::StorageKeyIterator, Twox64Concat};
+	use frame_support::{
+		traits::{PalletVersion, GetPalletVersion},
+		Twox64Concat,
+		migration::StorageKeyIterator,
+	};
+
+	pub fn migrate_to_3_0_0<T: Trait>(old_voter_bond: BalanceOf<T>, old_candidacy_bond: BalanceOf<T>) -> Weight {
+		let current_version = <Module<T> as GetPalletVersion>::current_version();
+		let maybe_storage_version = <Module<T> as GetPalletVersion>::storage_version();
+
+		if current_version == PalletVersion::new(3, 0, 0) {
+			match maybe_storage_version {
+				Some(storage_version) if storage_version == PalletVersion::new(2, 0, 0) => {
+					migrate_voters_to_recorded_deposit::<T>(old_voter_bond);
+					migrate_candidates_to_recorded_deposit::<T>(old_candidacy_bond);
+					migrate_runners_up_to_recorded_deposit::<T>(old_candidacy_bond);
+					migrate_members_to_recorded_deposit::<T>(old_candidacy_bond);
+					Weight::max_value()
+				},
+				_ => {
+					0
+				}
+			}
+		} else {
+			0
+		}
+	}
 
 	/// Migrate from the old legacy voting bond (fixed) to the new one (per-vote dynamic).
 	///
 	/// Will only be triggered if storage version is V1.
-	pub fn migrate_voters_to_recorded_deposit<T: Trait>(old_deposit: BalanceOf<T>) -> Weight {
-		if <Module<T>>::pallet_storage_version() == StorageVersion::V1 {
-			let mut count = 0;
-			<StorageKeyIterator<T::AccountId, (BalanceOf<T>, Vec<T::AccountId>), Twox64Concat>>::new(
-				<Voting<T>>::module_prefix(),
-				b"Voting",
-			)
-			.for_each(|(who, (stake, votes))| {
-				// Insert a new value into the same location, thus no need to do `.drain()`.
-				let deposit = old_deposit;
-				let voter = Voter { votes, stake, deposit };
-				<Voting<T>>::insert(who, voter);
-				count += 1;
-			});
-
-			PalletStorageVersion::put(StorageVersion::V2RecordedDeposit);
-			frame_support::debug::info!(
-				"🏛 pallet-elections-phragmen: {} voters migrated to V2PerVoterDeposit.",
-				count,
-			);
-			Weight::max_value()
-		} else {
-			frame_support::debug::warn!(
-				"🏛 pallet-elections-phragmen: Tried to run migration but PalletStorageVersion is \
-				updated to V2. This code probably needs to be removed now.",
-			);
-			0
-		}
+	pub fn migrate_voters_to_recorded_deposit<T: Trait>(old_deposit: BalanceOf<T>) {
+		let mut count = 0;
+		<StorageKeyIterator<T::AccountId, (BalanceOf<T>, Vec<T::AccountId>), Twox64Concat>>::new(
+			<Voting<T>>::module_prefix(),
+			b"Voting",
+		)
+		.for_each(|(who, (stake, votes))| {
+			// Insert a new value into the same location, thus no need to do `.drain()`.
+			let deposit = old_deposit;
+			let voter = Voter { votes, stake, deposit };
+			<Voting<T>>::insert(who, voter);
+			count += 1;
+		});
 	}
 
 	/// Migrate all candidates to recorded deposit.
 	///
 	/// Will only be triggered if storage version is V1.
-	pub fn migrate_candidates_to_recorded_deposit<T: Trait>(old_deposit: BalanceOf<T>) -> Weight {
-		if <Module<T>>::pallet_storage_version() == StorageVersion::V1 {
-			let old_candidates = frame_support::migration::take_storage_value::<Vec<T::AccountId>>(
-				<Voting<T>>::module_prefix(),
-				b"Candidates",
-				&[],
-			)
-			.unwrap_or_default();
-			let new_candidates = old_candidates
-				.into_iter()
-				.map(|c| (c, old_deposit))
-				.collect::<Vec<_>>();
-			<Candidates<T>>::put(new_candidates);
-			Weight::max_value()
-		} else {
-			frame_support::debug::warn!(
-				"🏛 pallet-elections-phragmen: Tried to run migration but PalletStorageVersion is \
-				updated. This code probably needs to be removed now.",
-			);
-			0
-		}
+	pub fn migrate_candidates_to_recorded_deposit<T: Trait>(old_deposit: BalanceOf<T>) {
+		let old_candidates = frame_support::migration::take_storage_value::<Vec<T::AccountId>>(
+			<Voting<T>>::module_prefix(),
+			b"Candidates",
+			&[],
+		)
+		.unwrap_or_default();
+		let new_candidates = old_candidates
+			.into_iter()
+			.map(|c| (c, old_deposit))
+			.collect::<Vec<_>>();
+		<Candidates<T>>::put(new_candidates);
 	}
 
-	pub fn migrate_members_to_recorded_deposit<T: Trait>(deposit: BalanceOf<T>) -> Weight {
-		if <Module<T>>::pallet_storage_version() == StorageVersion::V1 {
-			let _ = <Members<T>>::translate::<Vec<(T::AccountId, BalanceOf<T>)>, _>(
-				|maybe_old_members| {
-					maybe_old_members.map(|old_members| {
-						frame_support::debug::info!(
-							"migrated {} member accounts.",
-							old_members.len()
-						);
-						old_members
-							.into_iter()
-							.map(|(who, stake)| SeatHolder {
-								who,
-								stake,
-								deposit,
-							})
-							.collect::<Vec<_>>()
-					})
-				},
-			);
-			Weight::max_value()
-		} else {
-			frame_support::debug::warn!(
-				"🏛 pallet-elections-phragmen: Tried to run migration but PalletStorageVersion is \
-				updated. This code probably needs to be removed now.",
-			);
-			0
-		}
+	pub fn migrate_members_to_recorded_deposit<T: Trait>(deposit: BalanceOf<T>) {
+		let _ = <Members<T>>::translate::<Vec<(T::AccountId, BalanceOf<T>)>, _>(
+			|maybe_old_members| {
+				maybe_old_members.map(|old_members| {
+					frame_support::debug::info!(
+						"migrated {} member accounts.",
+						old_members.len()
+					);
+					old_members
+						.into_iter()
+						.map(|(who, stake)| SeatHolder {
+							who,
+							stake,
+							deposit,
+						})
+						.collect::<Vec<_>>()
+				})
+			},
+		);
 	}
 
 	pub fn migrate_runners_up_to_recorded_deposit<T: Trait>(deposit: BalanceOf<T>) -> Weight {
@@ -2705,7 +2698,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, false),
 				Error::<Test>::InvalidReplacement,
-				Some(33489000) // only thing that matters for now is that it is NOT the full block.
+				Some(34042000) // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 	}
