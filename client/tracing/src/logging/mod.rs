@@ -191,13 +191,7 @@ fn get_default_subscriber_and_telemetries_internal(
 
 // Transform a string of comma separated logging directive into a `Vec<Directive>`.
 fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
-	let dirs = dirs.as_ref();
-
-	if dirs.is_empty() {
-		return Default::default();
-	}
-
-	dirs.split(',').filter_map(|s| s.parse().ok()).collect()
+	dirs.as_ref().split(',').filter_map(|s| s.parse().ok()).collect()
 }
 
 #[cfg(test)]
