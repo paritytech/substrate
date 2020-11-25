@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::event_format::{CustomFmtContext, EventFormat};
+use crate::logging::event_format::{CustomFmtContext, EventFormat};
 use std::fmt;
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::{
