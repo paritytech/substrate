@@ -259,22 +259,22 @@ pub fn init_logger(
 	// after log filter reloading by RPC
 	let mut env_filter = EnvFilter::default();
 	// Enable info
-	env_filter = add_default_directives(env_filter,"info");
+	env_filter = add_default_directives(env_filter,"info", true);
 	// Disable info logging by default for some modules.
-	env_filter = add_default_directives(env_filter, "ws=off,yamux=off,cranelift_codegen=off");
+	env_filter = add_default_directives(env_filter, "ws=off,yamux=off,cranelift_codegen=off", true);
 	// Set warn logging by default for some modules.
-	env_filter = add_default_directives(env_filter, "cranelift_wasm=warn,hyper=warn");
+	env_filter = add_default_directives(env_filter, "cranelift_wasm=warn,hyper=warn", true);
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
-			env_filter = add_default_directives(env_filter, &lvl);
+			env_filter = add_default_directives(env_filter, &lvl, true);
 		}
 	}
 
 	if pattern != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
 		// parse error.
-		env_filter = add_default_directives(env_filter, pattern);
+		env_filter = add_default_directives(env_filter, pattern, false);
 	}
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
@@ -287,11 +287,11 @@ pub fn init_logger(
 	// Required because profiling traces are emitted via `sc_tracing`
 	// NOTE: this must be done after we check the `max_level_hint` otherwise
 	// it is always raised to `TRACE`.
-	env_filter = add_default_directives(env_filter, "sc_tracing=trace");
+	env_filter = add_default_directives(env_filter, "sc_tracing=trace", true);
 
 	// Make sure to include profiling targets in the filter
 	if let Some(profiling_targets) = profiling_targets.clone() {
-		env_filter = add_default_directives(env_filter, &profiling_targets);
+		env_filter = add_default_directives(env_filter, &profiling_targets, false);
 	}
 
 	let enable_color = atty::is(atty::Stream::Stderr);
@@ -328,8 +328,8 @@ pub fn init_logger(
 }
 
 // Adds default directives to ensure addLogFilter and resetLogFilter RPCs function correctly
-// Panics if any of the provided directives are invalid.
-fn add_default_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFilter {
+// Panics if any of the provided directives are invalid when `panic_if_invalid` is true.
+fn add_default_directives(mut env_filter: EnvFilter, directives: &str, panic_if_invalid: bool) -> EnvFilter {
 	sc_tracing::add_default_directives(directives);
 	let (oks, errs): (Vec<_>, Vec<_>) = sc_tracing::parse_directives(directives)
 		.into_iter()
@@ -340,7 +340,9 @@ fn add_default_directives(mut env_filter: EnvFilter, directives: &str) -> EnvFil
 					  invalid_directive.expect_err("Already partitioned into Result::Err; qed")
 			);
 		}
-		panic!("Invalid logging directives.");
+		if panic_if_invalid {
+			panic!("Invalid logging directives.");
+		}
 	}
 	for directive in oks {
 		env_filter = env_filter.add_directive(
@@ -368,7 +370,7 @@ where
 	} else {
 		if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
 			return Err(format!(
-				"Registering Substrate tracing subscriber  failed: {:}!", e
+				"Registering Substrate tracing subscriber failed: {:}!", e
 			))
 		}
 	}
