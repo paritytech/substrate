@@ -85,8 +85,8 @@ impl TelemetryWorker {
 	/// to the telemetry, only the targets whose verbosity is higher than the verbosity of the
 	/// message will receive it.
 	///
-	/// It can re-use `Node` (connections) if a `NodePool` is provided. Otherwise new `Node` are
-	/// created.
+	/// It can re-use `Node` (connections) if a `NodePool` is provided and share the same address of
+	/// connection. Otherwise new `Node` are created.
 	pub fn new(
 		endpoints: impl IntoIterator<Item = (Multiaddr, u8)>,
 		wasm_external_transport: impl Into<Option<wasm_ext::ExtTransport>>,
