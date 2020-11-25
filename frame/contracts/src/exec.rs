@@ -15,10 +15,11 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
-	TrieId, BalanceOf, ContractInfo, TrieIdGenerator,
-	gas::GasMeter, rent, storage, Error, ContractInfoOf
+	CodeHash, Config, Event, RawEvent, Trait, Module as Contracts,
+	TrieId, BalanceOf, ContractInfo, gas::GasMeter, rent::Rent, storage::{self, Storage},
+	Error, ContractInfoOf
 };
+use sp_core::crypto::UncheckedFrom;
 use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, Zero, Convert, Saturating};
 use frame_support::{
@@ -75,6 +76,7 @@ pub trait Ext {
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		input_data: Vec<u8>,
+		salt: &[u8],
 	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError>;
 
 	/// Transfer some amount of funds into the specified account.
@@ -118,7 +120,7 @@ pub trait Ext {
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> Result<(), &'static str>;
+	) -> Result<(), DispatchError>;
 
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
@@ -215,6 +217,7 @@ pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 impl<'a, T, E, V, L> ExecutionContext<'a, T, V, L>
 where
 	T: Trait,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	L: Loader<T, Executable = E>,
 	V: Vm<T, Executable = E>,
 {
@@ -264,12 +267,12 @@ where
 			Err(Error::<T>::MaxCallDepthReached)?
 		}
 
-		// Assumption: `collect_rent` doesn't collide with overlay because
-		// `collect_rent` will be done on first call and destination contract and balance
+		// Assumption: `collect` doesn't collide with overlay because
+		// `collect` will be done on first call and destination contract and balance
 		// cannot be changed before the first call
 		// We do not allow 'calling' plain accounts. For transfering value
 		// `seal_transfer` must be used.
-		let contract = if let Some(ContractInfo::Alive(info)) = rent::collect_rent::<T>(&dest) {
+		let contract = if let Some(ContractInfo::Alive(info)) = Rent::<T>::collect(&dest) {
 			info
 		} else {
 			Err(Error::<T>::NotCallable)?
@@ -308,6 +311,7 @@ where
 		gas_meter: &mut GasMeter<T>,
 		code_hash: &CodeHash<T>,
 		input_data: Vec<u8>,
+		salt: &[u8],
 	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
 		if self.depth == self.config.max_depth as usize {
 			Err(Error::<T>::MaxCallDepthReached)?
@@ -315,19 +319,15 @@ where
 
 		let transactor_kind = self.transactor_kind();
 		let caller = self.self_account.clone();
-		let dest = T::DetermineContractAddress::contract_address_for(
-			code_hash,
-			&input_data,
-			&caller,
-		);
+		let dest = Contracts::<T>::contract_address(&caller, code_hash, salt);
 
 		// TrieId has not been generated yet and storage is empty since contract is new.
 		//
 		// Generate it now.
-		let dest_trie_id = <T as Trait>::TrieIdGenerator::trie_id(&dest);
+		let dest_trie_id = Storage::<T>::generate_trie_id(&dest);
 
 		let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
-			storage::place_contract::<T>(
+			Storage::<T>::place_contract(
 				&dest,
 				nested
 					.self_trie_id
@@ -444,7 +444,10 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	dest: &T::AccountId,
 	value: BalanceOf<T>,
 	ctx: &mut ExecutionContext<'a, T, V, L>,
-) -> Result<(), DispatchError> {
+) -> Result<(), DispatchError>
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
 	use self::TransferCause::*;
 	use self::TransactorKind::*;
 
@@ -491,6 +494,7 @@ struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 impl<'a, 'b: 'a, T, E, V, L> Ext for CallContext<'a, 'b, T, V, L>
 where
 	T: Trait + 'b,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	V: Vm<T, Executable = E>,
 	L: Loader<T, Executable = E>,
 {
@@ -503,7 +507,7 @@ where
 				expect can't fail;\
 				qed",
 		);
-		storage::read_contract_storage(trie_id, key)
+		Storage::<T>::read(trie_id, key)
 	}
 
 	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
@@ -514,12 +518,12 @@ where
 				qed",
 		);
 		if let Err(storage::ContractAbsentError) =
-			storage::write_contract_storage::<T>(&self.ctx.self_account, trie_id, &key, value)
+			Storage::<T>::write(&self.ctx.self_account, trie_id, &key, value)
 		{
 			panic!(
 				"the contract must be in the alive state within the `CallContext`;\
 				the contract cannot be absent in storage;
-				write_contract_storage cannot return `None`;
+				write cannot return `None`;
 				qed"
 			);
 		}
@@ -531,8 +535,9 @@ where
 		endowment: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		input_data: Vec<u8>,
+		salt: &[u8],
 	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
-		self.ctx.instantiate(endowment, gas_meter, code_hash, input_data)
+		self.ctx.instantiate(endowment, gas_meter, code_hash, input_data, salt)
 	}
 
 	fn transfer(
@@ -558,9 +563,7 @@ where
 		let value = T::Currency::free_balance(&self_id);
 		if let Some(caller_ctx) = self.ctx.caller {
 			if caller_ctx.is_live(&self_id) {
-				return Err(DispatchError::Other(
-					"Cannot terminate a contract that is present on the call stack",
-				));
+				return Err(Error::<T>::ReentranceDenied.into());
 			}
 		}
 		transfer(
@@ -576,7 +579,7 @@ where
 				a contract has a trie id;\
 				this can't be None; qed",
 		);
-		storage::destroy_contract::<T>(&self_id, self_trie_id);
+		Storage::<T>::destroy_contract(&self_id, self_trie_id);
 		Ok(())
 	}
 
@@ -596,16 +599,14 @@ where
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> Result<(), &'static str> {
+	) -> Result<(), DispatchError> {
 		if let Some(caller_ctx) = self.ctx.caller {
 			if caller_ctx.is_live(&self.ctx.self_account) {
-				return Err(
-					"Cannot perform restoration of a contract that is present on the call stack",
-				);
+				return Err(Error::<T>::ReentranceDenied.into());
 			}
 		}
 
-		let result = crate::rent::restore_to::<T>(
+		let result = Rent::<T>::restore_to(
 			self.ctx.self_account.clone(),
 			dest.clone(),
 			code_hash.clone(),
@@ -667,7 +668,7 @@ where
 
 	fn set_rent_allowance(&mut self, rent_allowance: BalanceOf<T>) {
 		if let Err(storage::ContractAbsentError) =
-			storage::set_rent_allowance::<T>(&self.ctx.self_account, rent_allowance)
+			Storage::<T>::set_rent_allowance(&self.ctx.self_account, rent_allowance)
 		{
 			panic!(
 				"`self_account` points to an alive contract within the `CallContext`;
@@ -677,7 +678,7 @@ where
 	}
 
 	fn rent_allowance(&self) -> BalanceOf<T> {
-		storage::rent_allowance::<T>(&self.ctx.self_account)
+		Storage::<T>::rent_allowance(&self.ctx.self_account)
 			.unwrap_or_else(|_| <BalanceOf<T>>::max_value()) // Must never be triggered actually
 	}
 
@@ -711,22 +712,20 @@ fn deposit_event<T: Trait>(
 mod tests {
 	use super::{
 		BalanceOf, Event, ExecResult, ExecutionContext, Ext, Loader,
-		RawEvent, Vm, ReturnFlags, ExecError, ErrorOrigin
+		RawEvent, Vm, ReturnFlags, ExecError, ErrorOrigin, AccountIdOf,
 	};
 	use crate::{
 		gas::GasMeter, tests::{ExtBuilder, Test, MetaEvent},
 		exec::ExecReturnValue, CodeHash, Config,
 		gas::Gas,
-		storage, Error
+		storage::Storage,
+		tests::{ALICE, BOB, CHARLIE},
+		Error,
 	};
 	use crate::tests::test_utils::{place_contract, set_balance, get_balance};
 	use sp_runtime::DispatchError;
 	use assert_matches::assert_matches;
 	use std::{cell::RefCell, collections::HashMap, marker::PhantomData, rc::Rc};
-
-	const ALICE: u64 = 1;
-	const BOB: u64 = 2;
-	const CHARLIE: u64 = 3;
 
 	const GAS_LIMIT: Gas = 10_000_000_000;
 
@@ -869,7 +868,7 @@ mod tests {
 
 		ExtBuilder::default().build().execute_with(|| {
 			let cfg = Config::preload();
-			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			set_balance(&origin, 100);
 			set_balance(&dest, 0);
 
@@ -902,13 +901,13 @@ mod tests {
 
 		ExtBuilder::default().build().execute_with(|| {
 			let cfg = Config::preload();
-			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			place_contract(&BOB, return_ch);
 			set_balance(&origin, 100);
 			set_balance(&dest, 0);
 
 			let output = ctx.call(
-				dest,
+				dest.clone(),
 				55,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				vec![],
@@ -932,7 +931,7 @@ mod tests {
 
 		ExtBuilder::default().build().execute_with(|| {
 			let cfg = Config::preload();
-			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			set_balance(&origin, 0);
 
 			let result = super::transfer(
@@ -1061,6 +1060,7 @@ mod tests {
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&input_data_ch,
 				vec![1, 2, 3, 4],
+				&[],
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -1120,13 +1120,13 @@ mod tests {
 
 		let vm = MockVm::new();
 
-		let witnessed_caller_bob = RefCell::new(None::<u64>);
-		let witnessed_caller_charlie = RefCell::new(None::<u64>);
+		let witnessed_caller_bob = RefCell::new(None::<AccountIdOf<Test>>);
+		let witnessed_caller_charlie = RefCell::new(None::<AccountIdOf<Test>>);
 
 		let mut loader = MockLoader::empty();
 		let bob_ch = loader.insert(|ctx| {
 			// Record the caller for bob.
-			*witnessed_caller_bob.borrow_mut() = Some(*ctx.ext.caller());
+			*witnessed_caller_bob.borrow_mut() = Some(ctx.ext.caller().clone());
 
 			// Call into CHARLIE contract.
 			assert_matches!(
@@ -1137,19 +1137,19 @@ mod tests {
 		});
 		let charlie_ch = loader.insert(|ctx| {
 			// Record the caller for charlie.
-			*witnessed_caller_charlie.borrow_mut() = Some(*ctx.ext.caller());
+			*witnessed_caller_charlie.borrow_mut() = Some(ctx.ext.caller().clone());
 			exec_success()
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
 			let cfg = Config::preload();
 
-			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			place_contract(&dest, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
 
 			let result = ctx.call(
-				dest,
+				dest.clone(),
 				0,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				vec![],
@@ -1217,6 +1217,7 @@ mod tests {
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
 					&dummy_ch,
 					vec![],
+					&[],
 				),
 				Err(_)
 			);
@@ -1243,13 +1244,14 @@ mod tests {
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
 					&dummy_ch,
 					vec![],
+					&[],
 				),
 				Ok((address, ref output)) if output.data == vec![80, 65, 83, 83] => address
 			);
 
 			// Check that the newly created account has the expected code hash and
 			// there are instantiation event.
-			assert_eq!(storage::code_hash::<Test>(&instantiated_contract_address).unwrap(), dummy_ch);
+			assert_eq!(Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(), dummy_ch);
 			assert_eq!(&events(), &[
 				RawEvent::Instantiated(ALICE, instantiated_contract_address)
 			]);
@@ -1276,12 +1278,13 @@ mod tests {
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
 					&dummy_ch,
 					vec![],
+					&[],
 				),
 				Ok((address, ref output)) if output.data == vec![70, 65, 73, 76] => address
 			);
 
 			// Check that the account has not been created.
-			assert!(storage::code_hash::<Test>(&instantiated_contract_address).is_err());
+			assert!(Storage::<Test>::code_hash(&instantiated_contract_address).is_err());
 			assert!(events().is_empty());
 		});
 	}
@@ -1292,7 +1295,7 @@ mod tests {
 
 		let mut loader = MockLoader::empty();
 		let dummy_ch = loader.insert(|_| exec_success());
-		let instantiated_contract_address = Rc::new(RefCell::new(None::<u64>));
+		let instantiated_contract_address = Rc::new(RefCell::new(None::<AccountIdOf<Test>>));
 		let instantiator_ch = loader.insert({
 			let dummy_ch = dummy_ch.clone();
 			let instantiated_contract_address = Rc::clone(&instantiated_contract_address);
@@ -1302,7 +1305,8 @@ mod tests {
 					&dummy_ch,
 					Config::<Test>::subsistence_threshold_uncached(),
 					ctx.gas_meter,
-					vec![]
+					vec![],
+					&[48, 49, 50],
 				).unwrap();
 
 				*instantiated_contract_address.borrow_mut() = address.into();
@@ -1326,7 +1330,7 @@ mod tests {
 
 			// Check that the newly created account has the expected code hash and
 			// there are instantiation event.
-			assert_eq!(storage::code_hash::<Test>(&instantiated_contract_address).unwrap(), dummy_ch);
+			assert_eq!(Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(), dummy_ch);
 			assert_eq!(&events(), &[
 				RawEvent::Instantiated(BOB, instantiated_contract_address)
 			]);
@@ -1350,7 +1354,8 @@ mod tests {
 						&dummy_ch,
 						15u64,
 						ctx.gas_meter,
-						vec![]
+						vec![],
+						&[],
 					),
 					Err(ExecError {
 						error: DispatchError::Other("It's a trap!"),
@@ -1405,6 +1410,7 @@ mod tests {
 						&mut GasMeter::<Test>::new(GAS_LIMIT),
 						&terminate_ch,
 						vec![],
+						&[],
 					),
 					Err(Error::<Test>::NewContractNotFunded.into())
 				);
@@ -1437,6 +1443,7 @@ mod tests {
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&rent_allowance_ch,
 				vec![],
+				&[],
 			);
 			assert_matches!(result, Ok(_));
 		});
