@@ -23,10 +23,9 @@ use super::*;
 use std::cell::RefCell;
 use frame_support::{
 	assert_noop, assert_ok, impl_outer_origin, impl_outer_event, parameter_types, weights::Weight,
-	traits::{Contains, OnInitialize}
+	traits::{OnInitialize}
 };
 use frame_system::{self as system};
-use frame_support::traits::ContainsLengthBound;
 
 use sp_core::H256;
 use sp_runtime::{
@@ -101,28 +100,6 @@ impl pallet_balances::Trait for Test {
 }
 thread_local! {
 	static TEN_TO_FOURTEEN: RefCell<Vec<u128>> = RefCell::new(vec![10,11,12,13,14]);
-}
-pub struct TenToFourteen;
-impl Contains<u128> for TenToFourteen {
-	fn sorted_members() -> Vec<u128> {
-		TEN_TO_FOURTEEN.with(|v| {
-			v.borrow().clone()
-		})
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn add(new: &u128) {
-		TEN_TO_FOURTEEN.with(|v| {
-			let mut members = v.borrow_mut();
-			members.push(*new);
-			members.sort();
-		})
-	}
-}
-impl ContainsLengthBound for TenToFourteen {
-	fn max_len() -> usize {
-		TEN_TO_FOURTEEN.with(|v| v.borrow().len())
-	}
-	fn min_len() -> usize { 0 }
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
