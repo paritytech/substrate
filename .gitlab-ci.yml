@@ -471,7 +471,9 @@ build-rust-doc:
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs
-  allow_failure:                   true
+  needs:
+    - job:                         test-linux-stable
+      artifacts:                   false
   variables:
     <<:                            *default-vars
     RUSTFLAGS:                     -Dwarnings
@@ -677,6 +679,8 @@ publish-s3-doc:
   needs:
     - job:                         build-rust-doc
       artifacts:                   true
+    - job:                         build-linux-substrate
+      artifacts:                   false
   <<:                              *build-refs
   <<:                              *kubernetes-build
   variables:
