@@ -59,7 +59,7 @@ use sp_core::traits::{
 	CodeExecutor,
 	SpawnNamed,
 };
-use sp_keystore::{CryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::BuildStorage;
 use sc_client_api::{
 	BlockBackend, BlockchainEvents,
@@ -209,21 +209,19 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 >;
 
 enum KeystoreContainerInner {
-	Local(Arc<LocalKeystore>)
+	Local()
 }
 
 /// Construct and hold different layers of Keystore wrappers
-pub struct KeystoreContainer(KeystoreContainerInner);
+pub struct KeystoreContainer {
+	remotes: Vec<Arc<dyn SyncCryptoStore>>,
+	local: Arc<LocalKeystore>,
+}
 
 impl KeystoreContainer {
 	/// Construct KeystoreContainer
 	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
 		let keystore = Arc::new(match config {
-			KeystoreConfig::Remote { uri } => {
-				return Err(Error::Other(
-					format!("Don't know how to connect to {}. Protocol not supported", uri)))
-
-			}
 			KeystoreConfig::Path { path, password } => LocalKeystore::open(
 				path.clone(),
 				password.clone(),
@@ -231,20 +229,29 @@ impl KeystoreContainer {
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
 
-		Ok(Self(KeystoreContainerInner::Local(keystore)))
+		Ok(Self{remotes: Default::default(), local: keystore})
+	}
+
+	/// Add another remote keystore
+	pub fn add_remote_keystore(&mut self, remote: Arc<dyn SyncCryptoStore>) {
+		self.remotes.push(remote)
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
 	pub fn keystore(&self) -> Arc<dyn CryptoStore> {
-		match self.0 {
-			KeystoreContainerInner::Local(ref keystore) => keystore.clone(),
+		if let Some(c) = self.remotes.first() {
+			c.clone() as Arc<dyn CryptoStore>
+		} else {
+			self.local.clone()
 		}
 	}
 
 	/// Returns the synchrnous keystore wrapper
 	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
-		match self.0 {
-			KeystoreContainerInner::Local(ref keystore) => keystore.clone() as SyncCryptoStorePtr,
+		if let Some(c) = self.remotes.first() {
+			c.clone()
+		} else {
+			self.local.clone() as SyncCryptoStorePtr
 		}
 	}
 
@@ -257,9 +264,7 @@ impl KeystoreContainer {
 	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore implementation, like
 	/// a remote keystore for example. Only use this if you a certain that you require it!
 	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
-		match self.0 {
-			KeystoreContainerInner::Local(ref keystore) => Some(keystore.clone()),
-		}
+		Some(self.local.clone())
 	}
 }
 

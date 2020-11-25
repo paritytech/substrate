@@ -30,9 +30,9 @@ const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
 /// Parameters of the keystore
 #[derive(Debug, StructOpt)]
 pub struct KeystoreParams {
-	/// Specify a custom URI to connect to for keystore-services
-	#[structopt(long = "keystore-uri", value_name = "REMOTE_URI")]
-	pub keystore_uri: Option<String>,
+	/// Specify custom URIs to connect to for keystore-services
+	#[structopt(long = "keystore-uri")]
+	pub keystore_uris: Vec<String>,
 	/// Specify custom keystore path.
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
@@ -70,14 +70,9 @@ pub fn secret_string_from_str(s: &str) -> std::result::Result<SecretString, Stri
 
 impl KeystoreParams {
 	/// Get the keystore configuration for the parameters
-	pub fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
-		if let Some(uri) = &self.keystore_uri {
-			if self.keystore_path.is_some() {
-				return Err("You can't specify both keystore-path and keystore-uri".into())
-			}
+	/// returns a vector of remote-urls and the local Keystore configuration
+	pub fn keystore_config(&self, base_path: &PathBuf) -> Result<(Vec<String>, KeystoreConfig)> {
 
-			return Ok(KeystoreConfig::Remote { uri: uri.clone() })
-		}
 		let password = if self.password_interactive {
 			#[cfg(not(target_os = "unknown"))]
 			{
@@ -99,7 +94,7 @@ impl KeystoreParams {
 			.clone()
 			.unwrap_or_else(|| base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH));
 
-		Ok(KeystoreConfig::Path { path, password })
+		Ok((self.keystore_uris.clone(), KeystoreConfig::Path { path, password }))
 	}
 
 	/// helper method to fetch password from `KeyParams` or read from stdin

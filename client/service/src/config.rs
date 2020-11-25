@@ -50,6 +50,8 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
+	/// Ordered list of remote URIs to connect to for async keystore support
+	pub keystore_remotes: Vec<String>,
 	/// Configuration for the database.
 	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
@@ -136,11 +138,6 @@ pub enum KeystoreConfig {
 		/// Node keystore's password.
 		password: Option<SecretString>
 	},
-	/// A remote Keystore instance
-	Remote {
-		/// the URI to connect to for the remote-instance
-		uri: String,
-	},
 	/// In-memory keystore. Recommended for in-browser nodes.
 	InMemory,
 }
@@ -150,15 +147,6 @@ impl KeystoreConfig {
 	pub fn path(&self) -> Option<&Path> {
 		match self {
 			Self::Path { path, .. } => Some(path),
-			Self::Remote { .. } => None,
-			Self::InMemory => None,
-		}
-	}
-	/// Returns the remote uri of the keystore, if  remote
-	pub fn uri(&self) -> Option<&String> {
-		match self {
-			Self::Remote { uri } => Some(uri),
-			Self::Path { .. } => None,
 			Self::InMemory => None,
 		}
 	}

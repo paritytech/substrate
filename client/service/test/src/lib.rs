@@ -239,6 +239,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		task_executor,
 		transaction_pool: Default::default(),
 		network: network_config,
+		keystore_remotes: Default::default(),
 		keystore: KeystoreConfig::Path {
 			path: root.join("key"),
 			password: None

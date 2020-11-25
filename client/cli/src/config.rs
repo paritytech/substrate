@@ -188,10 +188,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// Bu default this is retrieved from `KeystoreParams` if it is available. Otherwise it uses
 	/// `KeystoreConfig::InMemory`.
-	fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
+	fn keystore_config(&self, base_path: &PathBuf) -> Result<(Vec<String>, KeystoreConfig)> {
 		self.keystore_params()
 			.map(|x| x.keystore_config(base_path))
-			.unwrap_or(Ok(KeystoreConfig::InMemory))
+			.unwrap_or(Ok((Vec::new(), KeystoreConfig::InMemory)))
 	}
 
 	/// Get the database cache size.
@@ -475,6 +475,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 		let is_validator = role.is_network_authority();
+		let (keystore_remotes, keystore) = self.keystore_config(&config_dir)?;
 
 		let unsafe_pruning = self
 			.import_params()
@@ -495,7 +496,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 				node_key,
 				DCV::p2p_listen_port(),
 			)?,
-			keystore: self.keystore_config(&config_dir)?,
+			keystore_remotes,
+			keystore,
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
