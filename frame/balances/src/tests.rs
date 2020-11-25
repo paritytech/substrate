@@ -23,7 +23,7 @@
 pub struct CallWithDispatchInfo;
 impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
 	type Origin = ();
-	type Trait = ();
+	type Config = ();
 	type Info = frame_support::weights::DispatchInfo;
 	type PostInfo = frame_support::weights::PostDispatchInfo;
 
@@ -55,7 +55,7 @@ macro_rules! decl_tests {
 		pub type System = frame_system::Module<$test>;
 		pub type Balances = Module<$test>;
 
-		pub const CALL: &<$test as frame_system::Trait>::Call = &$crate::tests::CallWithDispatchInfo;
+		pub const CALL: &<$test as frame_system::Config>::Call = &$crate::tests::CallWithDispatchInfo;
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
@@ -91,7 +91,7 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
 				assert_eq!(Balances::free_balance(1), 10);
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath));
-				assert!(!<<Test as Trait>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
+				assert!(!<<Test as Config>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
 			});
 		}
 

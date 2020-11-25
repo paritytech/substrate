@@ -1653,16 +1653,16 @@ pub trait EnsureOrigin<OuterOrigin> {
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
 /// `construct_runtime` and `impl_outer_dispatch`.
 pub trait UnfilteredDispatchable {
-	/// The origin type of the runtime, (i.e. `frame_system::Trait::Origin`).
+	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
 	type Origin;
 
 	/// Dispatch this call but do not check the filter in origin.
 	fn dispatch_bypass_filter(self, origin: Self::Origin) -> crate::dispatch::DispatchResultWithPostInfo;
 }
 
-/// Methods available on `frame_system::Trait::Origin`.
+/// Methods available on `frame_system::Config::Origin`.
 pub trait OriginTrait: Sized {
-	/// Runtime call type, as in `frame_system::Trait::Call`
+	/// Runtime call type, as in `frame_system::Config::Call`
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
@@ -1674,7 +1674,7 @@ pub trait OriginTrait: Sized {
 	/// Add a filter to the origin.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
 
-	/// Reset origin filters to default one, i.e `frame_system::Trait::BaseCallFilter`.
+	/// Reset origin filters to default one, i.e `frame_system::Config::BaseCallFilter`.
 	fn reset_filter(&mut self);
 
 	/// Replace the caller with caller from the other origin
@@ -1686,13 +1686,13 @@ pub trait OriginTrait: Sized {
 	/// Get the caller.
 	fn caller(&self) -> &Self::PalletsOrigin;
 
-	/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+	/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
 	fn none() -> Self;
 
 	/// Create with system root origin and no filter.
 	fn root() -> Self;
 
-	/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+	/// Create with system signed origin and `frame-system::Config::BaseCallFilter`.
 	fn signed(by: Self::AccountId) -> Self;
 }
 

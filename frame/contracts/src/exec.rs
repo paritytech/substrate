@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	CodeHash, Config, Event, RawEvent, Trait, Module as Contracts,
+	CodeHash, ConfigCache, Event, RawEvent, Config, Module as Contracts,
 	TrieId, BalanceOf, ContractInfo, gas::GasMeter, rent::Rent, storage::{self, Storage},
 	Error, ContractInfoOf
 };
@@ -30,14 +30,14 @@ use frame_support::{
 };
 use pallet_contracts_primitives::{ErrorOrigin, ExecError, ExecReturnValue, ExecResult, ReturnFlags};
 
-pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
-pub type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
-pub type SeedOf<T> = <T as frame_system::Trait>::Hash;
-pub type BlockNumberOf<T> = <T as frame_system::Trait>::BlockNumber;
+pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+pub type MomentOf<T> = <<T as Config>::Time as Time>::Moment;
+pub type SeedOf<T> = <T as frame_system::Config>::Hash;
+pub type BlockNumberOf<T> = <T as frame_system::Config>::BlockNumber;
 pub type StorageKey = [u8; 32];
 
 /// A type that represents a topic of an event. At the moment a hash is used.
-pub type TopicOf<T> = <T as frame_system::Trait>::Hash;
+pub type TopicOf<T> = <T as frame_system::Config>::Hash;
 
 /// Describes whether we deal with a contract or a plain account.
 pub enum TransactorKind {
@@ -54,7 +54,7 @@ pub enum TransactorKind {
 /// This interface is specialized to an account of the executing code, so all
 /// operations are implicitly performed on that account.
 pub trait Ext {
-	type T: Trait;
+	type T: Config;
 
 	/// Returns the storage entry of the executing account by the given `key`.
 	///
@@ -171,7 +171,7 @@ pub trait Ext {
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
 /// executable to be executed by an accompanying `Vm` implementation.
-pub trait Loader<T: Trait> {
+pub trait Loader<T: Config> {
 	type Executable;
 
 	/// Load the initializer portion of the code specified by the `code_hash`. This
@@ -190,7 +190,7 @@ pub trait Loader<T: Trait> {
 ///
 /// Execution of code can end by either implicit termination (that is, reached the end of
 /// executable), explicit termination via returning a buffer or termination due to a trap.
-pub trait Vm<T: Trait> {
+pub trait Vm<T: Config> {
 	type Executable;
 
 	fn execute<E: Ext<T = T>>(
@@ -202,12 +202,12 @@ pub trait Vm<T: Trait> {
 	) -> ExecResult;
 }
 
-pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
+pub struct ExecutionContext<'a, T: Config + 'a, V, L> {
 	pub caller: Option<&'a ExecutionContext<'a, T, V, L>>,
 	pub self_account: T::AccountId,
 	pub self_trie_id: Option<TrieId>,
 	pub depth: usize,
-	pub config: &'a Config<T>,
+	pub config: &'a ConfigCache<T>,
 	pub vm: &'a V,
 	pub loader: &'a L,
 	pub timestamp: MomentOf<T>,
@@ -216,7 +216,7 @@ pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 
 impl<'a, T, E, V, L> ExecutionContext<'a, T, V, L>
 where
-	T: Trait,
+	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	L: Loader<T, Executable = E>,
 	V: Vm<T, Executable = E>,
@@ -225,7 +225,7 @@ where
 	///
 	/// The specified `origin` address will be used as `sender` for. The `origin` must be a regular
 	/// account (not a contract).
-	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
+	pub fn top_level(origin: T::AccountId, cfg: &'a ConfigCache<T>, vm: &'a V, loader: &'a L) -> Self {
 		ExecutionContext {
 			caller: None,
 			self_trie_id: None,
@@ -437,7 +437,7 @@ enum TransferCause {
 /// is specified as `Terminate`. Otherwise, any transfer that would bring the sender below the
 /// subsistence threshold (for contracts) or the existential deposit (for plain accounts)
 /// results in an error.
-fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
+fn transfer<'a, T: Config, V: Vm<T>, L: Loader<T>>(
 	cause: TransferCause,
 	origin: TransactorKind,
 	transactor: &T::AccountId,
@@ -483,7 +483,7 @@ where
 /// implies that the control won't be returned to the contract anymore, but there is still some code
 /// on the path of the return from that call context. Therefore, care must be taken in these
 /// situations.
-struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
+struct CallContext<'a, 'b: 'a, T: Config + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 	ctx: &'a mut ExecutionContext<'b, T, V, L>,
 	caller: T::AccountId,
 	value_transferred: BalanceOf<T>,
@@ -493,7 +493,7 @@ struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 
 impl<'a, 'b: 'a, T, E, V, L> Ext for CallContext<'a, 'b, T, V, L>
 where
-	T: Trait + 'b,
+	T: Config + 'b,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	V: Vm<T, Executable = E>,
 	L: Loader<T, Executable = E>,
@@ -693,13 +693,13 @@ where
 	}
 }
 
-fn deposit_event<T: Trait>(
+fn deposit_event<T: Config>(
 	topics: Vec<T::Hash>,
 	event: Event<T>,
 ) {
 	<frame_system::Module<T>>::deposit_event_indexed(
 		&*topics,
-		<T as Trait>::Event::from(event).into(),
+		<T as Config>::Event::from(event).into(),
 	)
 }
 
@@ -716,7 +716,7 @@ mod tests {
 	};
 	use crate::{
 		gas::GasMeter, tests::{ExtBuilder, Test, MetaEvent},
-		exec::ExecReturnValue, CodeHash, Config,
+		exec::ExecReturnValue, CodeHash, ConfigCache,
 		gas::Gas,
 		storage::Storage,
 		tests::{ALICE, BOB, CHARLIE},
@@ -769,7 +769,7 @@ mod tests {
 
 		fn insert(&mut self, f: impl Fn(MockCtx) -> ExecResult + 'a) -> CodeHash<Test> {
 			// Generate code hashes as monotonically increasing values.
-			let code_hash = <Test as frame_system::Trait>::Hash::from_low_u64_be(self.counter);
+			let code_hash = <Test as frame_system::Config>::Hash::from_low_u64_be(self.counter);
 
 			self.counter += 1;
 			self.map.insert(code_hash, MockExecutable::new(f));
@@ -843,7 +843,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			place_contract(&BOB, exec_ch);
 
@@ -867,7 +867,7 @@ mod tests {
 		let loader = MockLoader::empty();
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			set_balance(&origin, 100);
 			set_balance(&dest, 0);
@@ -900,7 +900,7 @@ mod tests {
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			place_contract(&BOB, return_ch);
 			set_balance(&origin, 100);
@@ -930,7 +930,7 @@ mod tests {
 		let loader = MockLoader::empty();
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			set_balance(&origin, 0);
 
@@ -966,7 +966,7 @@ mod tests {
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 			place_contract(&BOB, return_ch);
 
@@ -997,7 +997,7 @@ mod tests {
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 			place_contract(&BOB, return_ch);
 
@@ -1025,7 +1025,7 @@ mod tests {
 
 		// This one tests passing the input data into a contract via call.
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			place_contract(&BOB, input_data_ch);
 
@@ -1050,7 +1050,7 @@ mod tests {
 
 		// This one tests passing the input data into a contract via instantiate.
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
 			set_balance(&ALICE, 100);
@@ -1097,7 +1097,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			set_balance(&BOB, 1);
 			place_contract(&BOB, recurse_ch);
@@ -1142,7 +1142,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			place_contract(&dest, bob_ch);
@@ -1184,7 +1184,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			place_contract(&BOB, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
@@ -1208,7 +1208,7 @@ mod tests {
 		let dummy_ch = loader.insert(|_| exec_success());
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
 			assert_matches!(
@@ -1234,7 +1234,7 @@ mod tests {
 		);
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			set_balance(&ALICE, 1000);
 
@@ -1268,7 +1268,7 @@ mod tests {
 		);
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			set_balance(&ALICE, 1000);
 
@@ -1303,7 +1303,7 @@ mod tests {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				let (address, output) = ctx.ext.instantiate(
 					&dummy_ch,
-					Config::<Test>::subsistence_threshold_uncached(),
+					ConfigCache::<Test>::subsistence_threshold_uncached(),
 					ctx.gas_meter,
 					vec![],
 					&[48, 49, 50],
@@ -1315,7 +1315,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			set_balance(&ALICE, 1000);
 			set_balance(&BOB, 100);
@@ -1368,7 +1368,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			set_balance(&ALICE, 1000);
 			set_balance(&BOB, 100);
@@ -1400,7 +1400,7 @@ mod tests {
 			.existential_deposit(15)
 			.build()
 			.execute_with(|| {
-				let cfg = Config::preload();
+				let cfg = ConfigCache::preload();
 				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 				set_balance(&ALICE, 1000);
 
@@ -1434,7 +1434,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = Config::preload();
+			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			set_balance(&ALICE, 100);
 

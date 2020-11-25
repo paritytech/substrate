@@ -39,9 +39,9 @@
 //!    `Yes`**.
 //!
 //! ```
-//! # use frame_system::Trait;
+//! # use frame_system::Config;
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //!         #[weight = 1000]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
@@ -52,10 +52,10 @@
 //! 2.1 Define weight and class, **in which case `PaysFee` would be `Yes`**.
 //!
 //! ```
-//! # use frame_system::Trait;
+//! # use frame_system::Config;
 //! # use frame_support::weights::DispatchClass;
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //!         #[weight = (1000, DispatchClass::Operational)]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
@@ -66,10 +66,10 @@
 //! 2.2 Define weight and `PaysFee`, **in which case `ClassifyDispatch` would be `Normal`**.
 //!
 //! ```
-//! # use frame_system::Trait;
+//! # use frame_system::Config;
 //! # use frame_support::weights::Pays;
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //!         #[weight = (1000, Pays::No)]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
@@ -80,10 +80,10 @@
 //! 3. Define all 3 parameters.
 //!
 //! ```
-//! # use frame_system::Trait;
+//! # use frame_system::Config;
 //! # use frame_support::weights::{DispatchClass, Pays};
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //!         #[weight = (1000, DispatchClass::Operational, Pays::No)]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
@@ -100,10 +100,10 @@
 //! all 3 are static values, providing a raw tuple is easier.
 //!
 //! ```
-//! # use frame_system::Trait;
+//! # use frame_system::Config;
 //! # use frame_support::weights::{DispatchClass, FunctionOf, Pays};
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //!         #[weight = FunctionOf(
 //! 			// weight, function.
 //! 			|args: (&u32, &u64)| *args.0 as u64 + args.1,
@@ -701,7 +701,7 @@ mod tests {
 	use crate::{decl_module, parameter_types, traits::Get};
 	use super::*;
 
-	pub trait Trait: 'static {
+	pub trait Config: 'static {
 		type Origin;
 		type Balance;
 		type BlockNumber;
@@ -718,7 +718,7 @@ mod tests {
 		};
 	}
 
-	impl Trait for TraitImpl {
+	impl Config for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type Balance = u32;
@@ -727,7 +727,7 @@ mod tests {
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 			// no arguments, fixed weight
 			#[weight = 1000]
 			fn f00(_origin) { unimplemented!(); }

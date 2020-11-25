@@ -27,15 +27,15 @@ use crate::Module as Proxy;
 
 const SEED: u32 = 0;
 
-fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
+fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	let events = frame_system::Module::<T>::events();
-	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
+	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	// compare to the last event record
 	let EventRecord { event, .. } = &events[events.len() - 1];
 	assert_eq!(event, &system_event);
 }
 
-fn add_proxies<T: Trait>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(), &'static str> {
+fn add_proxies<T: Config>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(), &'static str> {
 	let caller = maybe_who.unwrap_or_else(|| whitelisted_caller());
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	for i in 0..n {
@@ -49,7 +49,7 @@ fn add_proxies<T: Trait>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(), 
 	Ok(())
 }
 
-fn add_announcements<T: Trait>(
+fn add_announcements<T: Config>(
 	n: u32,
 	maybe_who: Option<T::AccountId>,
 	maybe_real: Option<T::AccountId>
@@ -91,7 +91,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
 	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
 		assert_last_event::<T>(RawEvent::ProxyExecuted(Ok(())).into())
@@ -106,7 +106,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&delegate, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(delegate.clone()).into(),
 			real.clone(),
@@ -126,7 +126,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
 			real.clone(),
@@ -147,7 +147,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
 			real.clone(),
@@ -169,7 +169,7 @@ benchmarks! {
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		add_announcements::<T>(a, Some(caller.clone()), None)?;
-		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		let call_hash = T::CallHasher::hash_of(&call);
 	}: _(RawOrigin::Signed(caller.clone()), real.clone(), call_hash)
 	verify {

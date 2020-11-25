@@ -29,13 +29,13 @@ use sp_npos_elections::*;
 const SEED: u32 = 0;
 
 /// This function removes all validators and nominators from storage.
-pub fn clear_validators_and_nominators<T: Trait>() {
+pub fn clear_validators_and_nominators<T: Config>() {
 	Validators::<T>::remove_all();
 	Nominators::<T>::remove_all();
 }
 
 /// Grab a funded user.
-pub fn create_funded_user<T: Trait>(
+pub fn create_funded_user<T: Config>(
 	string: &'static str,
 	n: u32,
 	balance_factor: u32,
@@ -49,7 +49,7 @@ pub fn create_funded_user<T: Trait>(
 }
 
 /// Create a stash and controller pair.
-pub fn create_stash_controller<T: Trait>(
+pub fn create_stash_controller<T: Config>(
 	n: u32,
 	balance_factor: u32,
 	destination: RewardDestination<T::AccountId>,
@@ -66,7 +66,7 @@ pub fn create_stash_controller<T: Trait>(
 
 /// Create a stash and controller pair, where the controller is dead, and payouts go to controller.
 /// This is used to test worst case payout scenarios.
-pub fn create_stash_and_dead_controller<T: Trait>(
+pub fn create_stash_and_dead_controller<T: Config>(
 	n: u32,
 	balance_factor: u32,
 	destination: RewardDestination<T::AccountId>,
@@ -83,7 +83,7 @@ pub fn create_stash_and_dead_controller<T: Trait>(
 }
 
 /// create `max` validators.
-pub fn create_validators<T: Trait>(
+pub fn create_validators<T: Config>(
 	max: u32,
 	balance_factor: u32,
 ) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
@@ -115,7 +115,7 @@ pub fn create_validators<T: Trait>(
 ///    Else, all of them are considered and `edge_per_nominator` random validators are voted for.
 ///
 /// Return the validators choosen to be nominated.
-pub fn create_validators_with_nominators_for_era<T: Trait>(
+pub fn create_validators_with_nominators_for_era<T: Config>(
 	validators: u32,
 	nominators: u32,
 	edge_per_nominator: usize,
@@ -173,7 +173,7 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(
 
 /// Build a _really bad_ but acceptable solution for election. This should always yield a solution
 /// which has a less score than the seq-phragmen.
-pub fn get_weak_solution<T: Trait>(
+pub fn get_weak_solution<T: Config>(
 	do_reduce: bool,
 ) -> (Vec<ValidatorIndex>, CompactAssignments, ElectionScore, ElectionSize) {
 	let mut backing_stake_of: BTreeMap<T::AccountId, BalanceOf<T>> = BTreeMap::new();
@@ -282,7 +282,7 @@ pub fn get_weak_solution<T: Trait>(
 
 /// Create a solution for seq-phragmen. This uses the same internal function as used by the offchain
 /// worker code.
-pub fn get_seq_phragmen_solution<T: Trait>(
+pub fn get_seq_phragmen_solution<T: Config>(
 	do_reduce: bool,
 ) -> (
 	Vec<ValidatorIndex>,
@@ -307,7 +307,7 @@ pub fn get_seq_phragmen_solution<T: Trait>(
 }
 
 /// Returns a solution in which only one winner is elected with just a self vote.
-pub fn get_single_winner_solution<T: Trait>(
+pub fn get_single_winner_solution<T: Config>(
 	winner: T::AccountId,
 ) -> Result<
 	(
@@ -352,7 +352,7 @@ pub fn get_single_winner_solution<T: Trait>(
 }
 
 /// get the active era.
-pub fn current_era<T: Trait>() -> EraIndex {
+pub fn current_era<T: Config>() -> EraIndex {
 	<Module<T>>::current_era().unwrap_or(0)
 }
 
@@ -366,7 +366,7 @@ pub fn init_active_era() {
 
 /// Create random assignments for the given list of winners. Each assignment will have
 /// MAX_NOMINATIONS edges.
-pub fn create_assignments_for_offchain<T: Trait>(
+pub fn create_assignments_for_offchain<T: Config>(
 	num_assignments: u32,
 	winners: Vec<<T::Lookup as StaticLookup>::Source>,
 ) -> Result<

@@ -33,26 +33,26 @@ pub mod logger {
 	use super::*;
 	use frame_system::ensure_root;
 
-	pub trait Trait: frame_system::Trait {
-		type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	pub trait Config: frame_system::Config {
+		type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 	}
 
 	decl_storage! {
-		trait Store for Module<T: Trait> as Logger {
+		trait Store for Module<T: Config> as Logger {
 			AccountLog get(fn account_log): Vec<T::AccountId>;
 			I32Log get(fn i32_log): Vec<i32>;
 		}
 	}
 
 	decl_event! {
-		pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
+		pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId {
 			AppendI32(i32, Weight),
 			AppendI32AndAccount(AccountId, i32, Weight),
 		}
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Trait>::Origin {
+		pub struct Module<T: Config> for enum Call where origin: <T as frame_system::Config>::Origin {
 			fn deposit_event() = default;
 
 			#[weight = *weight]
@@ -118,7 +118,7 @@ impl Filter<Call> for BlockEverything {
 	}
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = BlockEverything;
 	type Origin = Origin;
 	type Call = Call;
@@ -146,13 +146,13 @@ impl frame_system::Trait for Test {
 	type SystemWeightInfo = ();
 }
 
-// Implement the logger module's `Trait` on the Test runtime.
-impl logger::Trait for Test {
+// Implement the logger module's `Config` on the Test runtime.
+impl logger::Config for Test {
 	type Event = TestEvent;
 }
 
-// Implement the sudo module's `Trait` on the Test runtime.
-impl Trait for Test {
+// Implement the sudo module's `Config` on the Test runtime.
+impl Config for Test {
 	type Event = TestEvent;
 	type Call = Call;
 }

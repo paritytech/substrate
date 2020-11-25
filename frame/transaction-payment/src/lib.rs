@@ -25,11 +25,11 @@
 //!     chance to be included by the transaction queue.
 //!
 //! Additionally, this module allows one to configure:
-//!   - The mapping between one unit of weight to one unit of fee via [`Trait::WeightToFee`].
+//!   - The mapping between one unit of weight to one unit of fee via [`Config::WeightToFee`].
 //!   - A means of updating the fee for the next block, via defining a multiplier, based on the
 //!     final state of the chain at the end of the previous block. This can be configured via
-//!     [`Trait::FeeMultiplierUpdate`]
-//!   - How the fees are paid via [`Trait::OnChargeTransaction`].
+//!     [`Config::FeeMultiplierUpdate`]
+//!   - How the fees are paid via [`Config::OnChargeTransaction`].
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -63,7 +63,7 @@ pub use payment::*;
 pub type Multiplier = FixedU128;
 
 type BalanceOf<T> =
-	<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::Balance;
+	<<T as Config>::OnChargeTransaction as OnChargeTransaction<T>>::Balance;
 
 /// A struct to update the weight multiplier per block. It implements `Convert<Multiplier,
 /// Multiplier>`, meaning that it can convert the previous multiplier to the next one. This should
@@ -135,7 +135,7 @@ impl MultiplierUpdate for () {
 }
 
 impl<T, S, V, M> MultiplierUpdate for TargetedFeeAdjustment<T, S, V, M>
-	where T: frame_system::Trait, S: Get<Perquintill>, V: Get<Multiplier>, M: Get<Multiplier>,
+	where T: frame_system::Config, S: Get<Perquintill>, V: Get<Multiplier>, M: Get<Multiplier>,
 {
 	fn min() -> Multiplier {
 		M::get()
@@ -149,7 +149,7 @@ impl<T, S, V, M> MultiplierUpdate for TargetedFeeAdjustment<T, S, V, M>
 }
 
 impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S, V, M>
-	where T: frame_system::Trait, S: Get<Perquintill>, V: Get<Multiplier>, M: Get<Multiplier>,
+	where T: frame_system::Config, S: Get<Perquintill>, V: Get<Multiplier>, M: Get<Multiplier>,
 {
 	fn convert(previous: Multiplier) -> Multiplier {
 		// Defensive only. The multiplier in storage should always be at most positive. Nonetheless
@@ -160,8 +160,8 @@ impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S,
 
 		// the computed ratio is only among the normal class.
 		let normal_max_weight =
-			<T as frame_system::Trait>::AvailableBlockRatio::get() *
-			<T as frame_system::Trait>::MaximumBlockWeight::get();
+			<T as frame_system::Config>::AvailableBlockRatio::get() *
+			<T as frame_system::Config>::MaximumBlockWeight::get();
 		let normal_block_weight =
 			<frame_system::Module<T>>::block_weight()
 			.get(frame_support::weights::DispatchClass::Normal)
@@ -213,7 +213,7 @@ impl Default for Releases {
 	}
 }
 
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// Handler for withdrawing, refunding and depositing the transaction fee.
 	/// Transaction fees are withdrawn before the transaction is executed.
 	/// After the transaction was executed the transaction weight can be
@@ -233,7 +233,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as TransactionPayment {
+	trait Store for Module<T: Config> as TransactionPayment {
 		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::saturating_from_integer(1);
 
 		StorageVersion build(|_: &GenesisConfig| Releases::V2): Releases;
@@ -241,7 +241,7 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		const TransactionByteFee: BalanceOf<T> = T::TransactionByteFee::get();
 
@@ -263,7 +263,7 @@ decl_module! {
 			assert!(
 				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
 				Multiplier::checked_from_integer(
-					<T as frame_system::Trait>::MaximumBlockWeight::get().try_into().unwrap()
+					<T as frame_system::Config>::MaximumBlockWeight::get().try_into().unwrap()
 				).unwrap(),
 			);
 
@@ -296,7 +296,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> where
+impl<T: Config> Module<T> where
 	BalanceOf<T>: FixedPointOperand
 {
 	/// Query the data that we know about the fee of a given `call`.
@@ -407,13 +407,13 @@ impl<T: Trait> Module<T> where
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
-		let capped_weight = weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
+		let capped_weight = weight.min(<T as frame_system::Config>::MaximumBlockWeight::get());
 		T::WeightToFee::calc(&capped_weight)
 	}
 }
 
 impl<T> Convert<Weight, BalanceOf<T>> for Module<T> where
-	T: Trait,
+	T: Config,
 	BalanceOf<T>: FixedPointOperand,
 {
 	/// Compute the fee for the specified weight.
@@ -429,9 +429,9 @@ impl<T> Convert<Weight, BalanceOf<T>> for Module<T> where
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct ChargeTransactionPayment<T: Trait + Send + Sync>(#[codec(compact)] BalanceOf<T>);
+pub struct ChargeTransactionPayment<T: Config + Send + Sync>(#[codec(compact)] BalanceOf<T>);
 
-impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
+impl<T: Config + Send + Sync> ChargeTransactionPayment<T> where
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 	BalanceOf<T>: Send + Sync + FixedPointOperand,
 {
@@ -449,14 +449,14 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 	) -> Result<
 		(
 			BalanceOf<T>,
-			<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
+			<<T as Config>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
 		),
 		TransactionValidityError,
 	> {
 		let tip = self.0;
 		let fee = Module::<T>::compute_fee(len as u32, info, tip);
 
-		<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::withdraw_fee(who, call, info, fee, tip)
+		<<T as Config>::OnChargeTransaction as OnChargeTransaction<T>>::withdraw_fee(who, call, info, fee, tip)
 			.map(|i| (fee, i))
 	}
 
@@ -478,7 +478,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 	}
 }
 
-impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
+impl<T: Config + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "ChargeTransactionPayment<{:?}>", self.0)
@@ -489,7 +489,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> where
+impl<T: Config + Send + Sync> SignedExtension for ChargeTransactionPayment<T> where
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 {
@@ -503,7 +503,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 		// who paid the fee
 		Self::AccountId,
 		// imbalance resulting from withdrawing the fee
-		<<T as Trait>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
+		<<T as Config>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
 	);
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
@@ -573,7 +573,7 @@ mod tests {
 	};
 	use smallvec::smallvec;
 
-	const CALL: &<Runtime as frame_system::Trait>::Call =
+	const CALL: &<Runtime as frame_system::Config>::Call =
 		&Call::Balances(BalancesCall::transfer(2, 69));
 
 	impl_outer_dispatch! {
@@ -608,7 +608,7 @@ mod tests {
 		pub static WeightToFee: u64 = 1;
 	}
 
-	impl frame_system::Trait for Runtime {
+	impl frame_system::Config for Runtime {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
@@ -640,7 +640,7 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 1;
 	}
 
-	impl pallet_balances::Trait for Runtime {
+	impl pallet_balances::Config for Runtime {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
@@ -663,7 +663,7 @@ mod tests {
 		}
 	}
 
-	impl Trait for Runtime {
+	impl Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = WeightToFee;
@@ -841,7 +841,7 @@ mod tests {
 			// fee will be proportional to what is the actual maximum weight in the runtime.
 			assert_eq!(
 				Balances::free_balance(&1),
-				(10000 - <Runtime as frame_system::Trait>::MaximumBlockWeight::get()) as u64
+				(10000 - <Runtime as frame_system::Config>::MaximumBlockWeight::get()) as u64
 			);
 		});
 	}

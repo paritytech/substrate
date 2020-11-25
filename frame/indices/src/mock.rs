@@ -23,7 +23,7 @@ use sp_runtime::testing::Header;
 use sp_runtime::Perbill;
 use sp_core::H256;
 use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
-use crate::{self as indices, Module, Trait};
+use crate::{self as indices, Module, Config};
 use frame_system as system;
 use pallet_balances as balances;
 
@@ -49,7 +49,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = ();
@@ -81,7 +81,7 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
 
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type DustRemoval = ();
@@ -95,7 +95,7 @@ parameter_types! {
 	pub const Deposit: u64 = 1;
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type AccountIndex = u64;
 	type Currency = Balances;
 	type Deposit = Deposit;

@@ -52,7 +52,7 @@ pub trait WeightInfo {
 
 /// Weights for pallet_scheduler using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
+impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn schedule(s: u32, ) -> Weight {
 		(35_029_000 as Weight)
 			.saturating_add((77_000 as Weight).saturating_mul(s as Weight))

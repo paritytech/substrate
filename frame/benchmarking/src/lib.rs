@@ -137,7 +137,7 @@ pub use sp_storage::TrackedStorageKey;
 ///
 /// Test functions are automatically generated for each benchmark and are accessible to you when you
 /// run `cargo test`. All tests are named `test_benchmark_<benchmark_name>`, expect you to pass them
-/// the Runtime Trait, and run them in a test externalities environment. The test function runs your
+/// the Runtime Config, and run them in a test externalities environment. The test function runs your
 /// benchmark just like a regular benchmark, but only testing at the lowest and highest values for
 /// each component. The function will return `Ok(())` if the benchmarks return no errors.
 ///
@@ -636,7 +636,7 @@ macro_rules! benchmark_backend {
 		#[allow(non_camel_case_types)]
 		struct $name;
 		#[allow(unused_variables)]
-		impl<T: Trait $( <$instance>, I: Instance)? >
+		impl<T: Config $( <$instance>, I: Instance)? >
 			$crate::BenchmarkingSetup<T $(, $instance)? > for $name
 			where $( $where_clause )*
 		{
@@ -710,7 +710,7 @@ macro_rules! selected_benchmark {
 		}
 
 		// Allow us to select a benchmark from the list of available benchmarks.
-		impl<T: Trait $( <$instance>, I: Instance )? >
+		impl<T: Config $( <$instance>, I: Instance )? >
 			$crate::BenchmarkingSetup<T $(, $instance )? > for SelectedBenchmark
 			where $( $where_clause )*
 		{
@@ -750,9 +750,9 @@ macro_rules! impl_benchmark {
 		( $( { $( $name_inst:ident )? } $name:ident )* )
 		( $( $name_extra:ident ),* )
 	) => {
-		impl<T: Trait $(<$instance>, I: Instance)? >
+		impl<T: Config $(<$instance>, I: Instance)? >
 			$crate::Benchmarking<$crate::BenchmarkResults> for Module<T $(, $instance)? >
-			where T: frame_system::Trait, $( $where_clause )*
+			where T: frame_system::Config, $( $where_clause )*
 		{
 			fn benchmarks(extra: bool) -> Vec<&'static [u8]> {
 				let mut all = vec![ $( stringify!($name).as_ref() ),* ];
@@ -948,8 +948,8 @@ macro_rules! impl_benchmark_test {
 		$name:ident
 	) => {
 		$crate::paste::item! {
-			fn [<test_benchmark_ $name>] <T: Trait > () -> Result<(), &'static str>
-				where T: frame_system::Trait, $( $where_clause )*
+			fn [<test_benchmark_ $name>] <T: Config > () -> Result<(), &'static str>
+				where T: frame_system::Config, $( $where_clause )*
 			{
 				let selected_benchmark = SelectedBenchmark::$name;
 				let components = <

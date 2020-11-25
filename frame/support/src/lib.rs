@@ -347,14 +347,14 @@ pub use frame_support_procedural::{
 /// This is useful for type generic over runtime:
 /// ```
 /// # use frame_support::CloneNoBound;
-/// trait Trait {
+/// trait Config {
 ///		type C: Clone;
 /// }
 ///
 /// // Foo implements [`Clone`] because `C` bounds [`Clone`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Clone`].
 /// #[derive(CloneNoBound)]
-/// struct Foo<T: Trait> {
+/// struct Foo<T: Config> {
 ///		c: T::C,
 /// }
 /// ```
@@ -365,14 +365,14 @@ pub use frame_support_procedural::CloneNoBound;
 /// This is useful for type generic over runtime:
 /// ```
 /// # use frame_support::{EqNoBound, PartialEqNoBound};
-/// trait Trait {
+/// trait Config {
 ///		type C: Eq;
 /// }
 ///
 /// // Foo implements [`Eq`] because `C` bounds [`Eq`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Eq`].
 /// #[derive(PartialEqNoBound, EqNoBound)]
-/// struct Foo<T: Trait> {
+/// struct Foo<T: Config> {
 ///		c: T::C,
 /// }
 /// ```
@@ -383,14 +383,14 @@ pub use frame_support_procedural::EqNoBound;
 /// This is useful for type generic over runtime:
 /// ```
 /// # use frame_support::PartialEqNoBound;
-/// trait Trait {
+/// trait Config {
 ///		type C: PartialEq;
 /// }
 ///
 /// // Foo implements [`PartialEq`] because `C` bounds [`PartialEq`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`PartialEq`].
 /// #[derive(PartialEqNoBound)]
-/// struct Foo<T: Trait> {
+/// struct Foo<T: Config> {
 ///		c: T::C,
 /// }
 /// ```
@@ -402,14 +402,14 @@ pub use frame_support_procedural::PartialEqNoBound;
 /// ```
 /// # use frame_support::DebugNoBound;
 /// # use core::fmt::Debug;
-/// trait Trait {
+/// trait Config {
 ///		type C: Debug;
 /// }
 ///
 /// // Foo implements [`Debug`] because `C` bounds [`Debug`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Debug`].
 /// #[derive(DebugNoBound)]
-/// struct Foo<T: Trait> {
+/// struct Foo<T: Config> {
 ///		c: T::C,
 /// }
 /// ```
@@ -571,7 +571,7 @@ mod tests {
 	use sp_std::{marker::PhantomData, result};
 	use sp_io::TestExternalities;
 
-	pub trait Trait: 'static {
+	pub trait Config: 'static {
 		type BlockNumber: Codec + EncodeLike + Default;
 		type Origin;
 		type PalletInfo: crate::traits::PalletInfo;
@@ -581,16 +581,16 @@ mod tests {
 	mod module {
 		#![allow(dead_code)]
 
-		use super::Trait;
+		use super::Config;
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self  {}
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self  {}
 		}
 	}
 	use self::module::Module;
 
 	decl_storage! {
-		trait Store for Module<T: Trait> as Test {
+		trait Store for Module<T: Config> as Test {
 			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
 				map hasher(twox_64_concat) u32 => u64;
 			pub OptionLinkedMap: map hasher(blake2_128_concat) u32 => Option<u32>;
@@ -612,7 +612,7 @@ mod tests {
 	}
 
 	struct Test;
-	impl Trait for Test {
+	impl Config for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
 		type PalletInfo = ();

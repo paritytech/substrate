@@ -17,7 +17,7 @@
 //! This module contains the cost schedule and supporting code that constructs a
 //! sane default schedule from a `WeightInfo` implementation.
 
-use crate::{Trait, weights::WeightInfo};
+use crate::{Config, weights::WeightInfo};
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
@@ -42,7 +42,7 @@ pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug)]
-pub struct Schedule<T: Trait> {
+pub struct Schedule<T: Config> {
 	/// Version of the schedule.
 	pub version: u32,
 
@@ -131,7 +131,7 @@ pub struct Limits {
 ///    and dropping return values in order to maintain a valid module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug)]
-pub struct InstructionWeights<T: Trait> {
+pub struct InstructionWeights<T: Config> {
 	pub i64const: u32,
 	pub i64load: u32,
 	pub i64store: u32,
@@ -190,7 +190,7 @@ pub struct InstructionWeights<T: Trait> {
 /// Describes the weight for each imported function that a contract is allowed to call.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug)]
-pub struct HostFnWeights<T: Trait> {
+pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_caller`.
 	pub caller: Weight,
 
@@ -410,7 +410,7 @@ macro_rules! cost_byte_batched {
 	}
 }
 
-impl<T: Trait> Default for Schedule<T> {
+impl<T: Config> Default for Schedule<T> {
 	fn default() -> Self {
 		Self {
 			version: 0,
@@ -440,7 +440,7 @@ impl Default for Limits {
 	}
 }
 
-impl<T: Trait> Default for InstructionWeights<T> {
+impl<T: Config> Default for InstructionWeights<T> {
 	fn default() -> Self {
 		let max_pages = Limits::default().memory_pages;
 		Self {
@@ -500,7 +500,7 @@ impl<T: Trait> Default for InstructionWeights<T> {
 	}
 }
 
-impl<T: Trait> Default for HostFnWeights<T> {
+impl<T: Config> Default for HostFnWeights<T> {
 	fn default() -> Self {
 		Self {
 			caller: cost_batched!(seal_caller),
@@ -554,12 +554,12 @@ impl<T: Trait> Default for HostFnWeights<T> {
 	}
 }
 
-struct ScheduleRules<'a, T: Trait> {
+struct ScheduleRules<'a, T: Config> {
 	schedule: &'a Schedule<T>,
 	params: Vec<u32>,
 }
 
-impl<T: Trait> Schedule<T> {
+impl<T: Config> Schedule<T> {
 	pub fn rules(&self, module: &elements::Module) -> impl rules::Rules + '_ {
 		ScheduleRules {
 			schedule: &self,
@@ -576,7 +576,7 @@ impl<T: Trait> Schedule<T> {
 	}
 }
 
-impl<'a, T: Trait> rules::Rules for ScheduleRules<'a, T> {
+impl<'a, T: Config> rules::Rules for ScheduleRules<'a, T> {
 	fn instruction_cost(&self, instruction: &elements::Instruction) -> Option<u32> {
 		use parity_wasm::elements::Instruction::*;
 		let w = &self.schedule.instruction_weights;

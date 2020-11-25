@@ -27,7 +27,7 @@
 //! Thus, before executing a contract it should be reinstrument with new schedule.
 
 use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
-use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Trait};
+use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Config};
 use sp_std::prelude::*;
 use sp_runtime::traits::Hash;
 use sp_core::crypto::UncheckedFrom;
@@ -37,7 +37,7 @@ use frame_support::StorageMap;
 /// as a result of this function.
 ///
 /// This function instruments the given code and caches it in the storage.
-pub fn save<T: Trait>(
+pub fn save<T: Config>(
 	original_code: Vec<u8>,
 	schedule: &Schedule<T>,
 ) -> Result<CodeHash<T>, &'static str> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
@@ -55,7 +55,7 @@ pub fn save<T: Trait>(
 /// This version neither checks nor instruments the passed in code. This is useful
 /// when code needs to be benchmarked without the injected instrumentation.
 #[cfg(feature = "runtime-benchmarks")]
-pub fn save_raw<T: Trait>(
+pub fn save_raw<T: Config>(
 	original_code: Vec<u8>,
 	schedule: &Schedule<T>,
 ) -> Result<CodeHash<T>, &'static str> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
@@ -73,7 +73,7 @@ pub fn save_raw<T: Trait>(
 /// If the module was instrumented with a lower version of schedule than
 /// the current one given as an argument, then this function will perform
 /// re-instrumentation and update the cache in the storage.
-pub fn load<T: Trait>(
+pub fn load<T: Config>(
 	code_hash: &CodeHash<T>,
 	schedule: &Schedule<T>,
 ) -> Result<PrefabWasmModule, &'static str> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {

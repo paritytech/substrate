@@ -20,7 +20,7 @@
 //! The Session module allows validators to manage their session keys, provides a function for changing
 //! the session length, and handles session rotation.
 //!
-//! - [`session::Trait`](./trait.Trait.html)
+//! - [`session::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 //!
@@ -88,7 +88,7 @@
 //! ```
 //! use pallet_session as session;
 //!
-//! fn validators<T: pallet_session::Trait>() -> Vec<<T as pallet_session::Trait>::ValidatorId> {
+//! fn validators<T: pallet_session::Config>() -> Vec<<T as pallet_session::Config>::ValidatorId> {
 //!	<pallet_session::Module<T>>::validators()
 //! }
 //! # fn main(){}
@@ -346,15 +346,15 @@ impl<AId> SessionHandler<AId> for TestSessionHandler {
 	fn on_disabled(_: usize) {}
 }
 
-impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
+impl<T: Config> ValidatorRegistration<T::ValidatorId> for Module<T> {
 	fn is_registered(id: &T::ValidatorId) -> bool {
 		Self::load_keys(id).is_some()
 	}
 }
 
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
 
 	/// A stable ID for a validator.
 	type ValidatorId: Member + Parameter;
@@ -392,7 +392,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Session {
+	trait Store for Module<T: Config> as Session {
 		/// The current set of validators.
 		Validators get(fn validators): Vec<T::ValidatorId>;
 
@@ -483,7 +483,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the session module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Invalid ownership proof.
 		InvalidProof,
 		/// No associated validator ID for account.
@@ -496,7 +496,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -560,7 +560,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Move on to next session. Register new validator set and session keys. Changes
 	/// to the validator set have a session of delay to take effect. This allows for
 	/// equivocation punishment after a fork.
@@ -776,7 +776,7 @@ impl<T: Trait> Module<T> {
 /// registering account-ID of that session key index.
 pub struct FindAccountFromAuthorIndex<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
 
-impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
+impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 	for FindAccountFromAuthorIndex<T, Inner>
 {
 	fn find_author<'a, I>(digests: I) -> Option<T::ValidatorId>
@@ -789,7 +789,7 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 	}
 }
 
-impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
+impl<T: Config> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 	/// This session module always calls new_session and next_session at the same time, hence we
 	/// do a simple proxy and pass the function to next rotation.
 	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {

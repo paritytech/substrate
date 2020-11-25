@@ -42,7 +42,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
@@ -72,7 +72,7 @@ impl frame_system::Trait for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = ();
 	type DustRemoval = ();
@@ -103,7 +103,7 @@ type EnsureTwoOrRoot = EnsureOneOf<
 	EnsureRoot<u64>,
 	EnsureSignedBy<Two, u64>
 >;
-impl Trait for Test {
+impl Config for Test {
 	type Event = ();
 	type Currency = Balances;
 	type Slashed = ();

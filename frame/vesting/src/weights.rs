@@ -54,7 +54,7 @@ pub trait WeightInfo {
 
 /// Weights for pallet_vesting using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
+impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn vest_locked(l: u32, ) -> Weight {
 		(57_472_000 as Weight)
 			.saturating_add((155_000 as Weight).saturating_mul(l as Weight))

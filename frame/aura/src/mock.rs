@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use crate::{Trait, Module, GenesisConfig};
+use crate::{Config, Module, GenesisConfig};
 use sp_consensus_aura::ed25519::AuthorityId;
 use sp_runtime::{
 	traits::IdentityLookup, Perbill,
@@ -45,7 +45,7 @@ parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
@@ -73,14 +73,14 @@ impl frame_system::Trait for Test {
 	type SystemWeightInfo = ();
 }
 
-impl pallet_timestamp::Trait for Test {
+impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = Aura;
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type AuthorityId = AuthorityId;
 }
 

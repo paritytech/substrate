@@ -37,10 +37,10 @@ use crate as utility;
 pub mod example {
 	use super::*;
 	use frame_support::dispatch::WithPostDispatchInfo;
-	pub trait Trait: frame_system::Trait { }
+	pub trait Config: frame_system::Config { }
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Trait>::Origin {
+		pub struct Module<T: Config> for enum Call where origin: <T as frame_system::Config>::Origin {
 			#[weight = *weight]
 			fn noop(_origin, weight: Weight) { }
 
@@ -97,7 +97,7 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = TestBaseCallFilter;
 	type Origin = Origin;
 	type Index = u64;
@@ -127,7 +127,7 @@ impl frame_system::Trait for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type DustRemoval = ();
@@ -142,7 +142,7 @@ parameter_types! {
 	pub const MaxSignatories: u16 = 3;
 }
 
-impl example::Trait for Test {}
+impl example::Config for Test {}
 
 pub struct TestBaseCallFilter;
 impl Filter<Call> for TestBaseCallFilter {
@@ -158,7 +158,7 @@ impl Filter<Call> for TestBaseCallFilter {
 		}
 	}
 }
-impl Trait for Test {
+impl Config for Test {
 	type Event = TestEvent;
 	type Call = Call;
 	type WeightInfo = ();
@@ -428,7 +428,7 @@ fn batch_handles_weight_refund() {
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
-			<Test as Trait>::WeightInfo::batch(2) + end_weight * 2,
+			<Test as Config>::WeightInfo::batch(2) + end_weight * 2,
 		);
 	});
 }
@@ -465,7 +465,7 @@ fn batch_all_revert() {
 			]),
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
-					actual_weight: Some(<Test as Trait>::WeightInfo::batch_all(2) + info.weight * 2),
+					actual_weight: Some(<Test as Config>::WeightInfo::batch_all(2) + info.weight * 2),
 					pays_fee: Pays::Yes
 				},
 				error: pallet_balances::Error::<Test, _>::InsufficientBalance.into()
@@ -536,7 +536,7 @@ fn batch_all_handles_weight_refund() {
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
-			<Test as Trait>::WeightInfo::batch_all(2) + end_weight * 2,
+			<Test as Config>::WeightInfo::batch_all(2) + end_weight * 2,
 		);
 	});
 }

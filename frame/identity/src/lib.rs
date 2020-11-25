@@ -17,7 +17,7 @@
 
 //! # Identity Module
 //!
-//! - [`identity::Trait`](./trait.Trait.html)
+//! - [`identity::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
@@ -68,7 +68,7 @@
 //! * `kill_identity` - Forcibly remove the associated identity; the deposit is lost.
 //!
 //! [`Call`]: ./enum.Call.html
-//! [`Trait`]: ./trait.Trait.html
+//! [`Config`]: ./trait.Config.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -91,12 +91,12 @@ use frame_support::{
 use frame_system::ensure_signed;
 pub use weights::WeightInfo;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The currency trait.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -399,7 +399,7 @@ pub struct RegistrarInfo<
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Identity {
+	trait Store for Module<T: Config> as Identity {
 		/// Information that is pertinent to identify the entity behind an account.
 		///
 		/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
@@ -428,7 +428,7 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
+	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId, Balance = BalanceOf<T> {
 		/// A name was set or reset (which will remove all judgements). \[who\]
 		IdentitySet(AccountId),
 		/// A name was cleared, and the given balance returned. \[who, deposit\]
@@ -456,7 +456,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the identity module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Too many subs-accounts.
 		TooManySubAccounts,
 		/// Account isn't found.
@@ -494,7 +494,7 @@ decl_error! {
 
 decl_module! {
 	/// Identity module declaration.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		/// The amount held on deposit for a registered identity.
 		const BasicDeposit: BalanceOf<T> = T::BasicDeposit::get();
 
@@ -1125,7 +1125,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Get the subs of an account.
 	pub fn subs(who: &T::AccountId) -> Vec<(T::AccountId, Data)> {
 		SubsOf::<T>::get(who).1

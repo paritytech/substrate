@@ -342,7 +342,7 @@ fn weight_soft_limit_is_used() {
 	new_test_ext().execute_with(|| {
 		set_can_report(false);
 		// Only 2 can fit in one block
-		set_offence_weight(<mock::Runtime as Trait>::WeightSoftLimit::get() / 2);
+		set_offence_weight(<mock::Runtime as Config>::WeightSoftLimit::get() / 2);
 
 		// Queue 3 offences
 		// #1

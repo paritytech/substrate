@@ -410,7 +410,7 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 			.segments
 			.last()
 			.as_ref()
-			.expect("Trait path should always contain at least one item; qed")
+			.expect("Config path should always contain at least one item; qed")
 			.ident;
 
 		generate_runtime_mod_name_for_trait(trait_name)

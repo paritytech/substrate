@@ -20,7 +20,7 @@
 ///! environment that provides the seal interface as imported functions.
 
 use super::{
-	Trait,
+	Config,
 	code::WasmModule,
 };
 use sp_core::crypto::UncheckedFrom;
@@ -39,9 +39,9 @@ impl Sandbox {
 	}
 }
 
-impl<T: Trait> From<&WasmModule<T>> for Sandbox
+impl<T: Config> From<&WasmModule<T>> for Sandbox
 where
-	T: Trait,
+	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	/// Creates an instance from the supplied module and supplies as much memory

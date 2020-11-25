@@ -20,7 +20,7 @@
 
 use crate::wasm::env_def::ImportSatisfyCheck;
 use crate::wasm::PrefabWasmModule;
-use crate::{Schedule, Trait};
+use crate::{Schedule, Config};
 
 use parity_wasm::elements::{self, Internal, External, MemoryType, Type, ValueType};
 use pwasm_utils;
@@ -34,13 +34,13 @@ pub const IMPORT_MODULE_FN: &str = "seal0";
 /// compiler toolchains might not support specifying other modules than "env" for memory imports.
 pub const IMPORT_MODULE_MEMORY: &str = "env";
 
-struct ContractModule<'a, T: Trait> {
+struct ContractModule<'a, T: Config> {
 	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).
 	module: elements::Module,
 	schedule: &'a Schedule<T>,
 }
 
-impl<'a, T: Trait> ContractModule<'a, T> {
+impl<'a, T: Config> ContractModule<'a, T> {
 	/// Creates a new instance of `ContractModule`.
 	///
 	/// Returns `Err` if the `original_code` couldn't be decoded or
@@ -369,7 +369,7 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 	}
 }
 
-fn get_memory_limits<T: Trait>(module: Option<&MemoryType>, schedule: &Schedule<T>)
+fn get_memory_limits<T: Config>(module: Option<&MemoryType>, schedule: &Schedule<T>)
 	-> Result<(u32, u32), &'static str>
 {
 	if let Some(memory_type) = module {
@@ -410,7 +410,7 @@ fn get_memory_limits<T: Trait>(module: Option<&MemoryType>, schedule: &Schedule<
 /// - all imported functions from the external environment matches defined by `env` module,
 ///
 /// The preprocessing includes injecting code for gas metering and metering the height of stack.
-pub fn prepare_contract<C: ImportSatisfyCheck, T: Trait>(
+pub fn prepare_contract<C: ImportSatisfyCheck, T: Config>(
 	original_code: &[u8],
 	schedule: &Schedule<T>,
 ) -> Result<PrefabWasmModule, &'static str> {
@@ -452,7 +452,7 @@ pub fn prepare_contract<C: ImportSatisfyCheck, T: Trait>(
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking {
 	use super::{
-		Trait, ContractModule, PrefabWasmModule, ImportSatisfyCheck, Schedule, get_memory_limits
+		Config, ContractModule, PrefabWasmModule, ImportSatisfyCheck, Schedule, get_memory_limits
 	};
 	use parity_wasm::elements::FunctionType;
 
@@ -463,7 +463,7 @@ pub mod benchmarking {
 	}
 
 	/// Prepare function that neither checks nor instruments the passed in code.
-	pub fn prepare_contract<T: Trait>(original_code: &[u8], schedule: &Schedule<T>)
+	pub fn prepare_contract<T: Config>(original_code: &[u8], schedule: &Schedule<T>)
 		-> Result<PrefabWasmModule, &'static str>
 	{
 		let contract_module = ContractModule::new(original_code, schedule)?;

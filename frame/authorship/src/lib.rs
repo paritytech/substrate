@@ -34,7 +34,7 @@ use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
 const MAX_UNCLES: usize = 10;
 
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// Find the author of a block.
 	type FindAuthor: FindAuthor<Self::AccountId>;
 	/// The number of blocks back we should accept uncles.
@@ -152,7 +152,7 @@ enum UncleEntryItem<BlockNumber, Hash, Author> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Authorship {
+	trait Store for Module<T: Config> as Authorship {
 		/// Uncles
 		Uncles: Vec<UncleEntryItem<T::BlockNumber, T::Hash, T::AccountId>>;
 		/// Author of current block.
@@ -164,7 +164,7 @@ decl_storage! {
 
 decl_error! {
 	/// Error for the authorship module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// The uncle parent not in the chain.
 		InvalidUncleParent,
 		/// Uncles already set in the block.
@@ -183,7 +183,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
@@ -223,7 +223,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Fetch the author of the block.
 	///
 	/// This is safe to invoke in `on_initialize` implementations, as well
@@ -337,7 +337,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> ProvideInherent for Module<T> {
+impl<T: Config> ProvideInherent for Module<T> {
 	type Call = Call<T>;
 	type Error = InherentError;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
@@ -417,7 +417,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
@@ -449,7 +449,7 @@ mod tests {
 		pub const UncleGenerations: u64 = 5;
 	}
 
-	impl Trait for Test {
+	impl Config for Test {
 		type FindAuthor = AuthorGiven;
 		type UncleGenerations = UncleGenerations;
 		type FilterUncle = SealVerify<VerifyBlock>;
