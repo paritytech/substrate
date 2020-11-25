@@ -16,7 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, gossip::QueuedSender, Event, NetworkService, NetworkWorker};
+use crate::block_request_handler::BlockRequestHandler;
+use crate::gossip::QueuedSender;
+use crate::{config,  Event, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, Header as _};
@@ -105,7 +107,7 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 		chain: client.clone(),
 		on_demand: None,
 		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
-		protocol_id: config::ProtocolId::from("/test-protocol-name"),
+		protocol_id,
 		import_queue,
 		block_announce_validator: Box::new(
 			sp_consensus::block_validation::DefaultBlockAnnounceValidator,

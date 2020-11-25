@@ -21,6 +21,7 @@ use crate::{
 	chain::Client,
 	config::{ProtocolId, TransactionPool, TransactionImportFuture, TransactionImport},
 	error,
+	request_responses::RequestFailure,
 	utils::{interval, LruHashSet},
 };
 
@@ -28,10 +29,11 @@ use bytes::{Bytes, BytesMut};
 use codec::{Decode, DecodeAll, Encode};
 use futures::{channel::oneshot, prelude::*, stream::FuturesUnordered};
 use generic_proto::{GenericProto, GenericProtoOut};
-use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, connection::{ConnectionId, ListenerId}};
-use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
+use libp2p::request_response::OutboundFailure;
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
+use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
+use libp2p::{Multiaddr, PeerId};
 use log::{log, Level, trace, debug, warn, error};
 use message::{BlockAnnounce, Message};
 use message::generic::{Message as GenericMessage, Roles};
@@ -241,7 +243,7 @@ struct Peer<B: BlockT, H: ExHashT> {
 	/// Current block request, if any. Started by emitting [`CustomMessageOutcome::BlockRequest`].
 	block_request: Option<(
 		message::BlockRequest<B>,
-		oneshot::Receiver<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
+		oneshot::Receiver<Result<Vec<u8>, RequestFailure>>,
 	)>,
 	/// Holds a set of transactions known to this peer.
 	known_transactions: LruHashSet<H>,
@@ -1373,7 +1375,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	BlockRequest {
 		target: PeerId,
 		request: crate::schema::v1::BlockRequest,
-		pending_response: oneshot::Sender<Result<Vec<u8>, crate::request_responses::RequestFailure>>,
+		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 	/// Peer has a reported a new head of chain.
 	PeerNewBest(PeerId, NumberFor<B>),
@@ -1451,10 +1453,23 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 
 						finished_block_requests.push((id.clone(), req, protobuf_response));
 					},
-					// TODO: Match on the concrete error to know whether to reduce the peers reputation.
 					Poll::Ready(Ok(Err(e))) => {
 						peer.block_request.take();
 						trace!(target: "sync", "Block request to peer {:?} failed: {:?}.", id, e);
+
+						match e {
+							RequestFailure::Network(OutboundFailure::Timeout) => {
+ 								self.peerset_handle.report_peer(id.clone(), rep::BAD_RESPONSE);
+							}
+							RequestFailure::Obsolete => {
+								debug_assert!(
+									false,
+									"Can not receive `RequestFailure::Obsolete` after dropping the \
+									 response reciver.",
+								);
+							}
+							_ => {},
+						}
 					},
 					Poll::Ready(Err(e)) => {
 						peer.block_request.take();
