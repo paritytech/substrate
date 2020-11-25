@@ -23,10 +23,11 @@
 mod mock;
 #[cfg(test)]
 mod tests;
+mod benchmarking;
 mod weights;
 
 use sp_std::prelude::*;
-use sp_runtime::ModuleId;
+use sp_runtime::{DispatchError, ModuleId};
 use sp_runtime::traits::{AccountIdConversion, Saturating, Zero};
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure, RuntimeDebug};
 use frame_support::dispatch::{Dispatchable, DispatchResult, GetDispatchInfo};
@@ -46,7 +47,7 @@ pub trait Trait: frame_system::Trait {
 	type ModuleId: Get<ModuleId>;
 
 	/// A dispatchable call.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + From<frame_system::Call<Self>>;
 
 	/// The currency trait.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -68,13 +69,14 @@ pub trait Trait: frame_system::Trait {
 }
 
 type Index = u32;
+type CallIndex = (u8, u8);
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Lottery {
 		/// The configuration for the current lottery.
-		Lottery: Option<LotteryConfig<T::BlockNumber, BalanceOf<T>, <T as Trait>::Call>>;
+		Lottery: Option<LotteryConfig<T::BlockNumber, BalanceOf<T>>>;
 		/// Users who have purchased a ticket.
-		Participants: map hasher(twox_64_concat) T::AccountId => Vec<<T as Trait>::Call>;
+		Participants: map hasher(twox_64_concat) T::AccountId => Vec<CallIndex>;
 		/// Total number of tickets sold.
 		TicketsCount: Index;
 		/// Each ticket's owner.
@@ -88,6 +90,8 @@ decl_event!(
 		Balance = BalanceOf<T>,
 		Call = <T as Trait>::Call,
 	{
+		/// A lottery has been started!
+		LotteryStarted,
 		/// A winner has been chosen!
 		Winner(AccountId, Balance),
 		/// A ticket has been bought!
@@ -113,11 +117,13 @@ decl_error! {
 		AlreadyParticipating,
 		/// Too many calls for a single lottery.
 		TooManyCalls,
+		/// Failed to encode calls
+		EncodingFailed,
 	}
 }
 
 #[derive(Encode, Decode, Default, RuntimeDebug)]
-pub struct LotteryConfig<BlockNumber, Balance, Call> {
+pub struct LotteryConfig<BlockNumber, Balance> {
 	/// Price per entry.
 	price: Balance,
 	/// Starting block of the lottery.
@@ -127,7 +133,7 @@ pub struct LotteryConfig<BlockNumber, Balance, Call> {
 	/// Payout block of the lottery.
 	payout: BlockNumber,
 	/// Calls available this lottery.
-	calls: Vec<Call>,
+	calls: Vec<CallIndex>,
 }
 
 decl_module! {
@@ -147,11 +153,13 @@ decl_module! {
 		) {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			ensure!(calls.len() <= T::MaxCalls::get(), Error::<T>::TooManyCalls);
+			let indices = Self::calls_to_indices(&calls)?;
 			Lottery::<T>::try_mutate(|lottery| -> DispatchResult {
 				ensure!(lottery.is_none(), Error::<T>::InProgress);
-				*lottery = Some(LotteryConfig { price, start, end, payout, calls });
+				*lottery = Some(LotteryConfig { price, start, end, payout, calls: indices });
 				Ok(())
 			})?;
+			Self::deposit_event(RawEvent::LotteryStarted);
 		}
 
 		#[weight = 0]
@@ -161,7 +169,8 @@ decl_module! {
 
 			// Only try to buy a ticket if the underlying call is successful.
 			// Not much we can do if this fails.
-			let _ = Self::do_buy_ticket(&caller, &call);
+			let res = Self::do_buy_ticket(&caller, &call);
+			println!("{:?}", res);
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
@@ -210,25 +219,41 @@ impl<T: Trait> Module<T> {
 		(account_id, balance)
 	}
 
+	fn calls_to_indices(calls: &[<T as Trait>::Call]) -> Result<Vec<CallIndex>, DispatchError> {
+		let mut indices = Vec::with_capacity(calls.len());
+		for c in calls.iter() {
+			let index = Self::call_to_index(c)?;
+			indices.push(index)
+		}
+		Ok(indices)
+	}
+
+	fn call_to_index(call: &<T as Trait>::Call) -> Result<CallIndex, DispatchError> {
+		let encoded_call = call.encode();
+		if encoded_call.len() < 2 { Err(Error::<T>::EncodingFailed)? }
+		return Ok((encoded_call[0], encoded_call[1]))
+	}
+
 	fn do_buy_ticket(caller: &T::AccountId, call: &<T as Trait>::Call) -> DispatchResult {
 		// Check the call is valid lottery
 		let config = Lottery::<T>::get().ok_or(Error::<T>::NotConfigured)?;
 		let block_number = frame_system::Module::<T>::block_number();
 		ensure!(block_number >= config.start, Error::<T>::NotStarted);
 		ensure!(block_number < config.end, Error::<T>::AlreadyEnded);
-		ensure!(config.calls.iter().any(|c| variant_eq(call, c)), Error::<T>::InvalidCall);
+		let call_index = Self::call_to_index(call)?;
+		ensure!(config.calls.iter().any(|c| call_index == *c), Error::<T>::InvalidCall);
 		let ticket_count = TicketsCount::get();
 		let new_ticket_count = ticket_count.checked_add(1).ok_or(Error::<T>::Overflow)?;
 		// Try to update the participant status
 		Participants::<T>::try_mutate(&caller, |participating_calls| -> DispatchResult {
 			// Check that user is not already participating under this call.
-			ensure!(!participating_calls.iter().any(|c| variant_eq(c, call)), Error::<T>::AlreadyParticipating);
+			ensure!(!participating_calls.iter().any(|c| call_index == *c), Error::<T>::AlreadyParticipating);
 			// Check user has enough funds and send it to the Lottery account.
 			T::Currency::transfer(caller, &Self::account_id(), config.price, KeepAlive)?;
 			// Create a new ticket.
 			TicketsCount::put(new_ticket_count);
 			Tickets::<T>::insert(ticket_count, caller.clone());
-			participating_calls.push(call.clone());
+			participating_calls.push(call_index);
 			Ok(())
 		})?;
 
@@ -243,9 +268,4 @@ impl<T: Trait> Module<T> {
 			.expect("secure hashes should always be bigger than u32; qed");
 		random_number % total
 	}
-}
-
-// Compare that two enum variants are the same, ignoring the values.
-fn variant_eq<T>(a: &T, b: &T) -> bool {
-	sp_std::mem::discriminant(a) == sp_std::mem::discriminant(b)
 }
