@@ -39,15 +39,40 @@ use crate::{
 	},
 	on_demand_layer::AlwaysBadChecker,
 	light_client_handler, block_requests,
-	protocol::{self, event::Event, NotifsHandlerError, NotificationsSink, Ready, sync::SyncState, PeerInfo, Protocol},
+	protocol::{
+		self,
+		NotifsHandlerError,
+		NotificationsSink,
+		PeerInfo,
+		Protocol,
+		Ready,
+		event::Event,
+		sync::SyncState,
+	},
 	transport, ReputationChange,
 };
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{PeerId, multiaddr, Multiaddr};
-use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}, either::EitherError};
+use libp2p::core::{
+	ConnectedPoint,
+	Executor,
+	connection::{
+		ConnectionLimits,
+		ConnectionError,
+		PendingConnectionError
+	},
+	either::EitherError,
+	upgrade
+};
 use libp2p::kad::record;
 use libp2p::ping::handler::PingFailure;
-use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent, protocols_handler::NodeHandlerWrapperError};
+use libp2p::swarm::{
+	AddressScore,
+	NetworkBehaviour,
+	SwarmBuilder,
+	SwarmEvent,
+	protocols_handler::NodeHandlerWrapperError
+};
 use log::{error, info, trace, warn};
 use metrics::{Metrics, MetricSources, Histogram, HistogramVec};
 use parking_lot::Mutex;
@@ -332,7 +357,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				transport::build_transport(local_identity, config_mem, config_wasm)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
-				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER)
+				.connection_limits(ConnectionLimits::default()
+					.with_max_established_per_peer(Some(crate::MAX_CONNECTIONS_PER_PEER as u32))
+					// TODO: with_max_established_incoming(Some(<limit-from-somewhere>))
+					// cf. https://github.com/paritytech/substrate/issues/7432
+				)
+				.substream_upgrade_protocol_override(upgrade::Version::V1Lazy)
 				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
 				.connection_event_buffer_size(1024);
 			if let Some(spawner) = params.executor {
@@ -368,7 +398,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		// Add external addresses.
 		for addr in &params.network_config.public_addresses {
-			Swarm::<B, H>::add_external_address(&mut swarm, addr.clone());
+			Swarm::<B, H>::add_external_address(&mut swarm, addr.clone(), AddressScore::Infinite);
 		}
 
 		let external_addresses = Arc::new(Mutex::new(Vec::new()));
@@ -553,10 +583,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				.collect()
 		};
 
+		let peer_id = Swarm::<B, H>::local_peer_id(&swarm).to_base58();
+		let listened_addresses = Swarm::<B, H>::listeners(&swarm).cloned().collect();
+		let external_addresses = Swarm::<B, H>::external_addresses(&swarm)
+			.map(|r| &r.addr)
+			.cloned()
+			.collect();
+
 		NetworkState {
-			peer_id: Swarm::<B, H>::local_peer_id(&swarm).to_base58(),
-			listened_addresses: Swarm::<B, H>::listeners(&swarm).cloned().collect(),
-			external_addresses: Swarm::<B, H>::external_addresses(&swarm).cloned().collect(),
+			peer_id,
+			listened_addresses,
+			external_addresses,
 			connected_peers,
 			not_connected_peers,
 			peerset: swarm.user_protocol_mut().peerset_debug_info(),
@@ -1675,7 +1712,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		// Update the variables shared with the `NetworkService`.
 		this.num_connected.store(num_connected_peers, Ordering::Relaxed);
 		{
-			let external_addresses = Swarm::<B, H>::external_addresses(&this.network_service).cloned().collect();
+			let external_addresses = Swarm::<B, H>::external_addresses(&this.network_service)
+				.map(|r| &r.addr)
+				.cloned()
+				.collect();
 			*this.external_addresses.lock() = external_addresses;
 		}
 
@@ -1702,7 +1742,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			}
 			metrics.peerset_num_discovered.set(this.network_service.user_protocol().num_discovered_peers() as u64);
 			metrics.peerset_num_requested.set(this.network_service.user_protocol().requested_peers().count() as u64);
-			metrics.pending_connections.set(Swarm::network_info(&this.network_service).num_connections_pending as u64);
+			metrics.pending_connections.set(Swarm::network_info(&this.network_service).connection_counters().num_pending() as u64);
 		}
 
 		Poll::Pending
