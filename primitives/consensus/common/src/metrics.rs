@@ -30,7 +30,6 @@ pub(crate) struct Metrics {
 	pub import_queue_processed: CounterVec<U64>,
 	pub block_verification_time: HistogramVec,
 	pub block_verification_and_import_time: Histogram,
-	pub finality_proof_import_time: Histogram,
 	pub justification_import_time: Histogram,
 }
 
@@ -59,15 +58,6 @@ impl Metrics {
 					HistogramOpts::new(
 						"block_verification_and_import_time",
 						"Time taken to verify and import blocks",
-					),
-				)?,
-				registry,
-			)?,
-			finality_proof_import_time: register(
-				Histogram::with_opts(
-					HistogramOpts::new(
-						"finality_proof_import_time",
-						"Time taken to import finality proofs",
 					),
 				)?,
 				registry,
