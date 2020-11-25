@@ -614,7 +614,7 @@ decl_module! {
 		/// ### Warning
 		///
 		/// Even if a candidate ends up being a member, they must call renounce_candidacy to get
-		/// their deposit back. Winning the spot in an election will also lead to a slash.
+		/// their deposit back. Losing the spot in an election will also lead to a slash.
 		///
 		/// # <weight>
 		/// The number of current candidates must be provided as witness data.
@@ -738,17 +738,16 @@ decl_module! {
 				));
 			} // else, prediction was correct.
 
-			Self::remove_and_replace_member(&who, true).map(|had_replacement| {
-				Self::deposit_event(RawEvent::MemberKicked(who.clone()));
+			let had_replacement = Self::remove_and_replace_member(&who, true)?;
+			Self::deposit_event(RawEvent::MemberKicked(who.clone()));
 
-				if !had_replacement {
-					// if we end up here, we will charge a full block weight.
-					Self::do_phragmen();
-				}
+			if !had_replacement {
+				// if we end up here, we will charge a full block weight.
+				Self::do_phragmen();
+			}
 
-				// no refund needed.
-				None.into()
-			}).map_err(|e| e.into())
+			// no refund needed.
+			Ok(None.into())
 		}
 
 		/// Clean all voters who are defunct (i.e. the do not serve any purpose at all). The deposit
@@ -848,7 +847,7 @@ impl<T: Trait> Module<T> {
 				.map(|x| x.who.clone())
 				.collect::<Vec<_>>();
 			let outgoing = &[who.clone()];
-			let current_prime = T::ChangeMembers::get_prime().unwrap_or_default();
+			let maybe_current_prime = T::ChangeMembers::get_prime();
 			let return_value = match maybe_replacement {
 				// member ids are already sorted, other two elements have one item.
 				Some(incoming) => {
@@ -864,10 +863,15 @@ impl<T: Trait> Module<T> {
 					false
 				}
 			};
-			if &current_prime != who {
-				// re-set the prime if the removed was not the old prime.
-				T::ChangeMembers::set_prime(Some(current_prime))
+
+			// if there was a prime before and they are not the one being removed, then set them
+			// again.
+			if let Some(current_prime) = maybe_current_prime {
+				if &current_prime != who {
+					T::ChangeMembers::set_prime(Some(current_prime));
+				}
 			}
+
 			return_value
 		})
 	}
@@ -956,11 +960,9 @@ impl<T: Trait> Module<T> {
 
 	/// Remove a certain someone as a voter.
 	fn do_remove_voter(who: &T::AccountId) {
-		let Voter { deposit, .. } = <Voting<T>>::get(who);
+		let Voter { deposit, .. } = <Voting<T>>::take(who);
 
 		// remove storage, lock and unreserve.
-		<Voting<T>>::remove(who);
-
 		T::Currency::remove_lock(T::ModuleId::get(), who);
 
 		let _remainder = T::Currency::unreserve(who, deposit);
