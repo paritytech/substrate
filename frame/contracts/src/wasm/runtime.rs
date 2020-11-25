@@ -291,8 +291,8 @@ pub struct Runtime<'a, E: Ext + 'a> {
 impl<'a, E> Runtime<'a, E>
 where
 	E: Ext + 'a,
-	<E::T as frame_system::Trait>::AccountId:
-		UncheckedFrom<<E::T as frame_system::Trait>::Hash> + AsRef<[u8]>
+	<E::T as frame_system::Config>::AccountId:
+		UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>
 {
 	pub fn new(
 		ext: &'a mut E,

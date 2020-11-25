@@ -462,8 +462,8 @@ mod tests {
 		gas_meter: &mut GasMeter<E::T>,
 	) -> ExecResult
 	where
-		<E::T as frame_system::Trait>::AccountId:
-			UncheckedFrom<<E::T as frame_system::Trait>::Hash> + AsRef<[u8]>
+		<E::T as frame_system::Config>::AccountId:
+			UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>
 	{
 		use crate::exec::Vm;
 
