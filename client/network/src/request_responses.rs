@@ -121,6 +121,8 @@ pub enum Event {
 	/// A remote sent a request and either we have successfully answered it or an error happened.
 	///
 	/// This event is generated for statistics purposes.
+	//
+	// TODO: This is currently only emitted on failure. Also emit on success.
 	InboundRequest {
 		/// Peer which has emitted the request.
 		peer: PeerId,

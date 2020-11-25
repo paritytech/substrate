@@ -883,7 +883,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	};
 
 	let block_request_protocol_config = {
-		if config.role == Role::Light {
+		if matches!(config.role, Role::Light) {
 			// Allow outgoing requests but deny incoming requests.
 			sc_network::block_request_handler::generate_protocol_config(protocol_id.clone())
 		} else {
