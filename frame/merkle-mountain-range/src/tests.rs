@@ -51,7 +51,6 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
-	pub const HashWeight: Weight = 1_000;
 }
 impl frame_system::Trait for Test {
 	type BaseCallFilter = ();
@@ -86,9 +85,9 @@ impl Trait for Test {
 
 	type Hashing = Keccak256;
 	type Hash = H256;
-	type HashWeight = HashWeight;
 	type LeafData = Compact<Keccak256, (frame_system::Module<Test>, LeafData)>;
 	type OnNewRoot = ();
+	type WeightInfo = ();
 }
 
 #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, Debug)]
@@ -113,12 +112,12 @@ thread_local! {
 impl LeafDataProvider for LeafData {
 	type LeafData = Self;
 
-	fn leaf_data() -> (Self::LeafData, Weight) {
-		(LEAF_DATA.with(|r| r.borrow().clone()), 1)
+	fn leaf_data() -> Self::LeafData {
+		LEAF_DATA.with(|r| r.borrow().clone())
 	}
 }
 
-type MMR = Module<Test>;
+pub(crate) type MMR = Module<Test>;
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()

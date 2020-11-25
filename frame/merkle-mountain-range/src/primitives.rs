@@ -17,11 +17,7 @@
 
 //! Merkle Mountain Range primitive types.
 
-use frame_support::{
-	RuntimeDebug,
-	traits::Get,
-	weights::Weight,
-};
+use frame_support::RuntimeDebug;
 use sp_runtime::traits;
 use sp_std::fmt;
 #[cfg(not(feature = "std"))]
@@ -37,16 +33,14 @@ pub trait LeafDataProvider {
 	///
 	/// This is being called by the `on_initialize` method of
 	/// this pallet at the very beginning of each block.
-	/// The second return value should indicate how much [Weight]
-	/// was required to retrieve the data.
-	fn leaf_data() -> (Self::LeafData, Weight);
+	fn leaf_data() -> Self::LeafData;
 }
 
 impl LeafDataProvider for () {
 	type LeafData = ();
 
-	fn leaf_data() -> (Self::LeafData, Weight) {
-		((), 0)
+	fn leaf_data() -> Self::LeafData {
+		()
 	}
 }
 
@@ -59,23 +53,20 @@ impl LeafDataProvider for () {
 impl<T: frame_system::Trait> LeafDataProvider for frame_system::Module<T> {
 	type LeafData = <T as frame_system::Trait>::Hash;
 
-	fn leaf_data() -> (Self::LeafData, Weight) {
-		let hash = Self::parent_hash();
-		(hash, T::DbWeight::get().reads(1))
+	fn leaf_data() -> Self::LeafData {
+		Self::parent_hash()
 	}
 }
 
 /// New MMR root notification hook.
 pub trait OnNewRoot<Hash> {
 	/// Function called by the pallet in case new MMR root has been computed.
-	///
-	/// Should return the amount of [Weight] consumed by the hook.
-	fn on_new_root(root: &Hash) -> Weight;
+	fn on_new_root(root: &Hash);
 }
 
 /// No-op implementation of [OnNewRoot].
 impl<Hash> OnNewRoot<Hash> for () {
-	fn on_new_root(_root: &Hash) -> Weight { 0 }
+	fn on_new_root(_root: &Hash) {}
 }
 
 /// A full leaf content stored in the offchain-db.
@@ -227,16 +218,11 @@ macro_rules! impl_leaf_data_for_tuple {
 				( $( DataOrHash<H, $name::LeafData>, )+ ),
 			>;
 
-			fn leaf_data() -> (Self::LeafData, Weight) {
-				let mut total_weight: Weight = 0;
+			fn leaf_data() -> Self::LeafData {
 				let tuple = (
-					$( {
-						let (leaf, weight) = $name::leaf_data();
-						total_weight = total_weight.saturating_add(weight);
-						DataOrHash::Data(leaf)
-					}, )+
+					$( DataOrHash::Data($name::leaf_data()), )+
 				);
-				(Compact::new(tuple), total_weight)
+				Compact::new(tuple)
 			}
 		}
 
@@ -249,16 +235,10 @@ macro_rules! impl_leaf_data_for_tuple {
 		{
 			type LeafData = ( $( $name::LeafData, )+ );
 
-			fn leaf_data() -> (Self::LeafData, Weight) {
-				let mut total_weight: Weight = 0;
-				let tuple = (
-					$( {
-							let (leaf, weight) = $name::leaf_data();
-							total_weight = total_weight.saturating_add(weight);
-							leaf
-					},)+
-				);
-				(tuple, total_weight)
+			fn leaf_data() -> Self::LeafData {
+				(
+					$( $name::leaf_data(), )+
+				)
 			}
 		}
 	}

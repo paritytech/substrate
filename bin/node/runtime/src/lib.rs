@@ -898,9 +898,9 @@ impl pallet_mmr::Trait for Runtime {
 	const INDEXING_PREFIX: &'static [u8] = b"mmr";
 	type Hashing = <Runtime as frame_system::Trait>::Hashing;
 	type Hash = <Runtime as frame_system::Trait>::Hash;
-	type HashWeight = HashWeight;
 	type LeafData = frame_system::Module<Self>;
 	type OnNewRoot = ();
+	type WeightInfo = ();
 }
 
 construct_runtime!(

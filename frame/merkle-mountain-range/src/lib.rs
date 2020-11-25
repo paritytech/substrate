@@ -61,15 +61,21 @@ use codec::Encode;
 use frame_support::{
 	decl_module, decl_storage,
 	weights::Weight,
-	traits::Get,
 };
 use sp_runtime::traits;
 
+mod default_weights;
 mod mmr;
+#[cfg(any(feature = "runtime-benchmarks", test))]
+mod benchmarking;
 #[cfg(test)]
 mod tests;
 
 pub mod primitives;
+
+pub trait WeightInfo {
+	fn on_initialize(peaks: u64) -> Weight;
+}
 
 /// This pallet's configuration trait
 pub trait Trait<I = DefaultInstance>: frame_system::Trait {
@@ -103,9 +109,6 @@ pub trait Trait<I = DefaultInstance>: frame_system::Trait {
 		+ sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + codec::Codec
 		+ codec::EncodeLike;
 
-	/// The cost of hashing a concatentation of two [Self::Hash] elements.
-	type HashWeight: Get<Weight>;
-
 	/// Data stored in the leaf nodes.
 	///
 	/// The [LeafData](primitives::LeafDataProvider) is responsible for returning the entire leaf
@@ -122,6 +125,9 @@ pub trait Trait<I = DefaultInstance>: frame_system::Trait {
 	/// (see [frame_system::Module::deposit_log]) to make it available for Light Clients.
 	/// Hook complexity should be `O(1)`.
 	type OnNewRoot: primitives::OnNewRoot<<Self as Trait<I>>::Hash>;
+
+	/// Weights for this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -147,29 +153,20 @@ decl_module! {
 			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
 			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
-			let (data, leaf_weight) = T::LeafData::leaf_data();
+			let data = T::LeafData::leaf_data();
 			// append new leaf to MMR
 			let mut mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(leaves);
 			mmr.push(data).expect("MMR push never fails.");
 
 			// update the size
 			let (leaves, root) = mmr.finalize().expect("MMR finalize never fails.");
-			let hook_weight = <T::OnNewRoot as primitives::OnNewRoot<_>>::on_new_root(&root);
+			<T::OnNewRoot as primitives::OnNewRoot<_>>::on_new_root(&root);
 
 			<NumberOfLeaves>::put(leaves);
 			<RootHash<T, I>>::put(root);
 
-
 			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
-			let hash_weight = peaks_after.saturating_mul(T::HashWeight::get());
-
-			leaf_weight
-				.saturating_add(hash_weight)
-				.saturating_add(hook_weight)
-				.saturating_add(<T as frame_system::Trait>::DbWeight::get().reads_writes(
-					2 + peaks_before,
-					2 + peaks_after,
-				))
+			T::WeightInfo::on_initialize(peaks_before.max(peaks_after))
 		}
 	}
 }

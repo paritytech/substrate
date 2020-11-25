@@ -4780,6 +4780,7 @@ version = "2.0.0"
 dependencies = [
  "ckb-merkle-mountain-range",
  "env_logger 0.5.13",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex-literal",
