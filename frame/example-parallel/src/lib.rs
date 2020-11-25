@@ -153,6 +153,7 @@ decl_module! {
 
 fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParticipant]) -> bool {
 
+	sp_tasks::set_capacity(2);
 	fn spawn_verify(data: Vec<u8>) -> Vec<u8> {
 		let stream = &mut &data[..];
 		let event_id = Vec::<u8>::decode(stream).expect("Failed to decode");
@@ -185,6 +186,7 @@ fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParti
 
 fn validate_pending_participants_parallel(number: usize) {
 
+	sp_tasks::set_capacity(2);
 	fn spawn_verify(data: Vec<u8>) -> Vec<u8> {
 		let stream = &mut &data[..];
 		let split = u32::decode(stream).expect("Failed to decode") as usize;

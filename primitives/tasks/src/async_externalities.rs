@@ -119,7 +119,7 @@ impl AsyncExt {
 		spawn_id: TaskId,
 	) -> Self {
 		AsyncExt {
-			kind: AsyncStateType::ReadLastBlock,
+			kind: AsyncStateType::ReadAtSpawn,
 			read_overlay: Default::default(),
 			spawn_id: Some(spawn_id),
 			backend: Some(backend),

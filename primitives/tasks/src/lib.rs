@@ -123,7 +123,7 @@ mod inner {
 
 	/// TODO doc
 	pub fn set_capacity(capacity: u32) {
-		unimplemented!() // TODO need a management object for native
+		// TODO unimplemented!() // TODO need a management object for native
 	}
 
 	/// Spawn new runtime task (native).
@@ -139,7 +139,22 @@ mod inner {
 
 		let backend = match kind {
 			AsyncStateType::Stateless => AsyncExt::stateless_ext(),
-			_ => unimplemented!("TODO need handle on state machine and generally a thread pool like for wasm"),
+			AsyncStateType::ReadLastBlock => {
+				let backend = sp_externalities::with_externalities(|mut ext|
+					ext.get_past_async_backend()
+						.expect("Unsupported spawn kind.")
+				).expect("Spawn called outside of externalities context!");
+
+				AsyncExt::previous_block_read(backend)
+			},
+			AsyncStateType::ReadAtSpawn => {
+				let spawn_id = unimplemented!("TODO need handle on state machine and generally a thread pool like for wasm");
+				let backend = sp_externalities::with_externalities(|mut ext|
+					ext.get_async_backend(spawn_id)
+						.expect("Unsupported spawn kind.")
+				).expect("Spawn called outside of externalities context!");
+				AsyncExt::state_at_spawn_read(backend, Default::default(), spawn_id)
+			},
 		};
 
 		let (sender, receiver) = mpsc::channel();
