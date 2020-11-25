@@ -100,7 +100,10 @@ pub fn reload_filter() -> Result<(), String> {
 			match directive {
 				Ok(dir) => env_filter = env_filter.add_directive(dir),
 				Err(invalid_directive) => {
-					log::warn!(target: "tracing", "Unable to parse directive while setting log filter: {:?}", invalid_directive);
+					log::warn!(
+						target: "tracing",
+						"Unable to parse directive while setting log filter: {:?}", invalid_directive
+					);
 				}
 			}
 		}

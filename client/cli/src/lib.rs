@@ -275,14 +275,20 @@ pub fn init_logger(
 	// after log filter reloading by RPC
 	let mut env_filter = EnvFilter::default()
 		// Enable info
-		.add_directive(parse_default_directive("info").expect("provided directive is valid"))
+		.add_directive(parse_default_directive("info")
+			.expect("provided directive is valid"))
 		// Disable info logging by default for some modules.
-		.add_directive(parse_default_directive("ws=off").expect("provided directive is valid"))
-		.add_directive(parse_default_directive("yamux=off").expect("provided directive is valid"))
-		.add_directive(parse_default_directive("cranelift_codegen=off").expect("provided directive is valid"))
+		.add_directive(parse_default_directive("ws=off")
+			.expect("provided directive is valid"))
+		.add_directive(parse_default_directive("yamux=off")
+			.expect("provided directive is valid"))
+		.add_directive(parse_default_directive("cranelift_codegen=off")
+			.expect("provided directive is valid"))
 		// Set warn logging by default for some modules.
-		.add_directive(parse_default_directive("cranelift_wasm=warn").expect("provided directive is valid"))
-		.add_directive(parse_default_directive("hyper=warn").expect("provided directive is valid"));
+		.add_directive(parse_default_directive("cranelift_wasm=warn")
+			.expect("provided directive is valid"))
+		.add_directive(parse_default_directive("hyper=warn")
+			.expect("provided directive is valid"));
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
@@ -306,7 +312,9 @@ pub fn init_logger(
 	// Required because profiling traces are emitted via `sc_tracing`
 	// NOTE: this must be done after we check the `max_level_hint` otherwise
 	// it is always raised to `TRACE`.
-	env_filter = env_filter.add_directive(parse_default_directive("sc_tracing=trace").expect("provided directive is valid"));
+	env_filter = env_filter.add_directive(
+		parse_default_directive("sc_tracing=trace").expect("provided directive is valid")
+	);
 
 	// Make sure to include profiling targets in the filter
 	if let Some(profiling_targets) = profiling_targets.clone() {
