@@ -19,14 +19,12 @@
 
 use super::*;
 use mock::{
-	Lottery, Balances, Test, Origin, Call, BalancesCall,
+	Lottery, Balances, Test, Origin, Call, SystemCall, BalancesCall,
 	new_test_ext, run_to_block
 };
 use sp_runtime::traits::{BadOrigin};
-use frame_support::{
-	assert_noop, assert_ok,
-	traits::{Currency},
-};
+use frame_support::{assert_noop, assert_ok};
+use pallet_balances::Error as BalancesError;
 
 #[test]
 fn initial_state() {
@@ -46,7 +44,10 @@ fn basic_end_to_end_works() {
 		let start = 5;
 		let end = 20;
 		let payout = 25;
-		let calls = vec![Call::Balances(BalancesCall::transfer(0, 0))];
+		let calls = vec![
+			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
+			Call::Balances(BalancesCall::transfer(0, 0)),
+		];
 
 		// Setup Lottery
 		assert_ok!(Lottery::setup_lottery(Origin::root(), price, start, end, payout, calls.clone()));
@@ -96,8 +97,15 @@ fn setup_lottery_works() {
 		let start = 5;
 		let end = 20;
 		let payout = 25;
-		let calls = vec![Call::Balances(BalancesCall::transfer(0, 0))];
-		let too_many_calls = vec![Call::Balances(BalancesCall::transfer(0, 0)); 10];
+		let calls = vec![
+			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
+			Call::Balances(BalancesCall::transfer(0, 0)),
+		];
+		let too_many_calls = vec![
+			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
+			Call::Balances(BalancesCall::transfer(0, 0)),
+			Call::System(SystemCall::remark(vec![])),
+		];
 
 		// Setup ignores bad origin
 		assert_noop!(
@@ -128,5 +136,80 @@ fn buy_ticket_works_as_simple_passthrough() {
 	new_test_ext().execute_with(|| {
 		// No lottery set up
 		let call = Call::Balances(BalancesCall::transfer(2, 20));
+		// This is just a basic transfer then
+		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
+		assert_eq!(Balances::free_balance(&1), 100 - 20);
+		assert_eq!(TicketsCount::get(), 0);
+
+		// Lottery is set up, but too expensive to enter, so `do_buy_ticket` fails.
+		let calls = vec![
+			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
+			Call::Balances(BalancesCall::transfer(0, 0)),
+		];
+		// Ticket price of 60 would kill the user's account
+		assert_ok!(Lottery::setup_lottery(Origin::root(), 60, 0, 10, 15, calls.clone()));
+		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
+		assert_eq!(Balances::free_balance(&1), 100 - 20 - 20);
+		assert_eq!(TicketsCount::get(), 0);
+
+		// If call would fail, the whole thing still fails the same
+		let fail_call = Call::Balances(BalancesCall::transfer(2, 1000));
+		assert_noop!(
+			Lottery::buy_ticket(Origin::signed(1), fail_call),
+			BalancesError::<Test, _>::InsufficientBalance,
+		);
+
+		let bad_origin_call = Call::Balances(BalancesCall::force_transfer(0, 0, 0));
+		assert_noop!(
+			Lottery::buy_ticket(Origin::signed(1), bad_origin_call),
+			BadOrigin,
+		);
+
+		// User can call other txs, but doesn't get a ticket
+		let remark_call = Call::System(SystemCall::remark(b"hello, world!".to_vec()));
+		assert_ok!(Lottery::buy_ticket(Origin::signed(1), remark_call));
+		assert_eq!(TicketsCount::get(), 0);
+	});
+}
+
+#[test]
+fn buy_ticket_works() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![
+			Call::System(SystemCall::remark(vec![])),
+			Call::Balances(BalancesCall::transfer(0, 0)),
+		];
+		// Setup lottery
+		assert_ok!(Lottery::setup_lottery(Origin::root(), 1, 5, 20, 25, calls.clone()));
+
+		// Can't buy ticket before start
+		let call = Call::Balances(BalancesCall::transfer(2, 1));
+		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
+		assert_eq!(TicketsCount::get(), 0);
+
+		// Go to start, buy ticket for transfer
+		run_to_block(5);
+		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call));
+		assert_eq!(TicketsCount::get(), 1);
+
+		// Can't buy another of the same ticket (even if call is slightly changed)
+		let call = Call::Balances(BalancesCall::transfer(3, 30));
+		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call));
+		assert_eq!(TicketsCount::get(), 1);
+
+		// Buy ticket for remark
+		let call = Call::System(SystemCall::remark(b"hello, world!".to_vec()));
+		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
+		assert_eq!(TicketsCount::get(), 2);
+
+		// Go to end, can't buy tickets anymore
+		run_to_block(20);
+		assert_ok!(Lottery::buy_ticket(Origin::signed(2), call.clone()));
+		assert_eq!(TicketsCount::get(), 2);
+
+		// Go to payout, can't buy tickets when there is no lottery open
+		run_to_block(25);
+		assert_ok!(Lottery::buy_ticket(Origin::signed(2), call.clone()));
+		assert_eq!(TicketsCount::get(), 0);
 	});
 }

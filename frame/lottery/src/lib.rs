@@ -146,7 +146,7 @@ decl_module! {
 			calls: Vec<<T as Trait>::Call>,
 		) {
 			T::ManagerOrigin::ensure_origin(origin)?;
-			ensure!(calls.len() < T::MaxCalls::get(), Error::<T>::TooManyCalls);
+			ensure!(calls.len() <= T::MaxCalls::get(), Error::<T>::TooManyCalls);
 			Lottery::<T>::try_mutate(|lottery| -> DispatchResult {
 				ensure!(lottery.is_none(), Error::<T>::InProgress);
 				*lottery = Some(LotteryConfig { price, start, end, payout, calls });
@@ -245,6 +245,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+// Compare that two enum variants are the same, ignoring the values.
 fn variant_eq<T>(a: &T, b: &T) -> bool {
 	sp_std::mem::discriminant(a) == sp_std::mem::discriminant(b)
 }
