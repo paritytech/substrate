@@ -6481,7 +6481,6 @@ dependencies = [
  "rpassword",
  "sc-client-api",
  "sc-keystore",
- "sc-logging",
  "sc-network",
  "sc-service",
  "sc-telemetry",
@@ -7040,35 +7039,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-logging"
-version = "2.0.0"
-dependencies = [
- "ansi_term 0.12.1",
- "atty",
- "lazy_static",
- "log",
- "regex",
- "sc-logging-proc-macro",
- "sc-telemetry",
- "sc-tracing",
- "tracing",
- "tracing-log",
- "tracing-subscriber",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "sc-logging-proc-macro"
-version = "2.0.0"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "sc-network"
 version = "0.8.0"
 dependencies = [
@@ -7486,17 +7456,33 @@ dependencies = [
 name = "sc-tracing"
 version = "2.0.0"
 dependencies = [
+ "ansi_term 0.12.1",
+ "atty",
  "erased-serde",
+ "lazy_static",
  "log",
  "parking_lot 0.10.2",
+ "regex",
  "rustc-hash",
  "sc-telemetry",
+ "sc-tracing-proc-macro",
  "serde",
  "serde_json",
  "sp-tracing",
  "tracing",
  "tracing-core",
+ "tracing-log",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "sc-tracing-proc-macro"
+version = "2.0.0"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -8828,10 +8814,10 @@ dependencies = [
  "rand 0.7.3",
  "sc-chain-spec",
  "sc-informant",
- "sc-logging",
  "sc-network",
  "sc-service",
  "sc-telemetry",
+ "sc-tracing",
  "sp-database",
  "tracing",
  "wasm-bindgen",

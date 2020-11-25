@@ -24,6 +24,8 @@
 //!
 //! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
 
+pub mod logging;
+
 use rustc_hash::FxHashMap;
 use std::fmt;
 use std::time::{Duration, Instant};
@@ -42,6 +44,9 @@ use tracing_subscriber::{CurrentSpan, layer::{Layer, Context}};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
+
+#[doc(hidden)]
+pub use tracing;
 
 /// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingLayer {

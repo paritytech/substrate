@@ -94,7 +94,7 @@ where
 			let parents = span.parents();
 			for span in std::iter::once(span).chain(parents) {
 				let exts = span.extensions();
-				if let Some(prefix) = exts.get::<crate::layers::Prefix>() {
+				if let Some(prefix) = exts.get::<super::layers::Prefix>() {
 					write!(writer, "{}", prefix.as_str())?;
 					break;
 				}

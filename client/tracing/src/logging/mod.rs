@@ -25,9 +25,7 @@
 mod event_format;
 mod layers;
 
-pub use sc_logging_proc_macro::*;
-#[doc(hidden)]
-pub use tracing;
+pub use sc_tracing_proc_macro::*;
 
 use tracing::Subscriber;
 use tracing_subscriber::{
@@ -64,7 +62,7 @@ pub fn get_default_subscriber_and_telemetries(
 pub fn get_default_subscriber_and_telemetries_with_profiling(
 	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
-	tracing_receiver: sc_tracing::TracingReceiver,
+	tracing_receiver: crate::TracingReceiver,
 	profiling_targets: &str,
 ) -> std::result::Result<
 	(
@@ -79,7 +77,7 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 			.chain(parse_directives(profiling_targets).into_iter()),
 		telemetry_external_transport,
 	)?;
-	let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, profiling_targets);
+	let profiling = crate::ProfilingLayer::new(tracing_receiver, profiling_targets);
 
 	Ok((subscriber.with(profiling), telemetries))
 }

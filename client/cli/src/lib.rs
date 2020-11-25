@@ -44,9 +44,10 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
-pub use sc_logging::{PREFIX_LOG_SPAN, prefix_logs_with};
+use sc_tracing::logging;
 #[doc(hidden)]
-pub use tracing;
+pub use sc_tracing;
+pub use sc_tracing::logging::prefix_logs_with;
 
 /// Substrate client CLI
 ///
@@ -240,7 +241,7 @@ pub fn init_logging_and_telemetry(
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 ) -> std::result::Result<sc_telemetry::Telemetries, String> {
 	Ok(if let Some(profiling_targets) = profiling_targets {
-		let (subscriber, telemetries) = sc_logging::get_default_subscriber_and_telemetries_with_profiling(
+		let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries_with_profiling(
 			pattern,
 			telemetry_external_transport,
 			tracing_receiver,
@@ -255,7 +256,7 @@ pub fn init_logging_and_telemetry(
 
 		telemetries
 	} else {
-		let (subscriber, telemetries) = sc_logging::get_default_subscriber_and_telemetries(
+		let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries(
 			pattern,
 			telemetry_external_transport,
 		)?;

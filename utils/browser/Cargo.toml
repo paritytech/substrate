@@ -29,7 +29,7 @@ sc-service = { version = "0.8.0", path = "../../client/service", default-feature
 sc-network = { path = "../../client/network", version = "0.8.0"}
 sc-chain-spec = { path = "../../client/chain-spec", version = "2.0.0"}
 sc-telemetry = { path = "../../client/telemetry", version = "2.0.0"}
-sc-logging = { path = "../../client/logging", version = "2.0.0"}
+sc-tracing = { path = "../../client/tracing", version = "2.0.0"}
 
 # Imported just for the `wasm-bindgen` feature
 rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"] }
