@@ -73,7 +73,7 @@ pub use sc_executor::NativeExecutionDispatch;
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use sc_network::config::{
-	FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder, TransactionImport,
+	OnDemand, TransactionImport,
 	TransactionImportFuture,
 };
 pub use sc_tracing::TracingReceiver;

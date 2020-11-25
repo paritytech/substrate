@@ -41,7 +41,7 @@ use futures::{
 };
 use sc_keystore::LocalKeystore;
 use log::{info, warn};
-use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+use sc_network::config::{Role, OnDemand};
 use sc_network::NetworkService;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
@@ -839,10 +839,6 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	pub block_announce_validator_builder: Option<Box<
 		dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send
 	>>,
-	/// An optional finality proof request builder.
-	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
-	/// An optional, shared finality proof request provider.
-	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
@@ -867,7 +863,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 {
 	let BuildNetworkParams {
 		config, client, transaction_pool, spawn_handle, import_queue, on_demand,
-		block_announce_validator_builder, finality_proof_request_builder, finality_proof_provider,
+		block_announce_validator_builder,
 	} = params;
 
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
@@ -905,8 +901,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		},
 		network_config: config.network.clone(),
 		chain: client.clone(),
-		finality_proof_provider,
-		finality_proof_request_builder,
 		on_demand: on_demand,
 		transaction_pool: transaction_pool_adapter as _,
 		import_queue: Box::new(import_queue),
