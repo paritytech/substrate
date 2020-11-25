@@ -124,7 +124,6 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 	{
 		Path::from(Ident::new("sc_tracing", Span::call_site()))
 	} else {
-		// NOTE: the macro can be found in sc-tracing or in sc-cli
 		match crate_name("sc-cli") {
 			Ok(x) => syn::parse_str::<Path>(&format!("{}::sc_tracing", x)).unwrap(),
 			Err(_) => match crate_name("sc-tracing") {
