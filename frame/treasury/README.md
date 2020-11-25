@@ -23,7 +23,3 @@ General spending/proposal protocol:
 - `propose_spend` - Make a spending proposal and stake the required deposit.
 - `reject_proposal` - Reject a proposal, slashing the deposit.
 - `approve_proposal` - Accept the proposal, returning the deposit.
-
-## GenesisConfig
-
-The Treasury module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
