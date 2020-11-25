@@ -4,4 +4,9 @@ error[E0277]: can't compare `Foo<T>` with `Foo<T>`
 6   | struct Foo<T: Trait> {
     |        ^^^ no implementation for `Foo<T> == Foo<T>`
     |
+   ::: $RUST/src/libcore/cmp.rs
+    |
+    | pub trait Eq: PartialEq<Self> {
+    |               --------------- required by this bound in `std::cmp::Eq`
+    |
     = help: the trait `std::cmp::PartialEq` is not implemented for `Foo<T>`

@@ -7579,6 +7579,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-utils",
  "substrate-test-runtime",
+ "thiserror",
  "wasm-timer",
 ]
 

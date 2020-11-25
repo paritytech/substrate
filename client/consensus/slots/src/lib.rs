@@ -940,7 +940,7 @@ mod test {
 			true, true, true, true,
 	];
 
-		assert_eq!(backoff, expected);
+		assert_eq!(backoff.as_slice(), &expected[..]);
 	}
 
 	#[test]

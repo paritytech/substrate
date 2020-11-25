@@ -60,6 +60,7 @@ pub enum Error {
 	#[error("Transaction couldn't enter the pool because of the limit")]
 	ImmediatelyDropped,
 
+	#[from(ignore)]
 	#[error("{0}")]
 	InvalidBlockId(String),
 
