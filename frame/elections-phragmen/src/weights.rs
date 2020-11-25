@@ -17,7 +17,7 @@
 
 //! Weights for pallet_elections_phragmen
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 2.0.0
-//! DATE: 2020-10-27, STEPS: [50, ], REPEAT: 20, LOW RANGE: [], HIGH RANGE: []
+//! DATE: 2020-11-20, STEPS: [50, ], REPEAT: 20, LOW RANGE: [], HIGH RANGE: []
 //! EXECUTION: Some(Wasm), WASM-EXECUTION: Compiled, CHAIN: Some("dev"), DB CACHE: 128
 
 // Executed Command:
@@ -34,155 +34,174 @@
 // --output=./frame/elections-phragmen/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
+
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{
-	traits::Get,
-	weights::{constants::RocksDbWeight, Weight},
-};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_elections_phragmen.
 pub trait WeightInfo {
-	fn vote_equal(_v: u32, ) -> Weight;
-	fn vote_more(_v: u32, ) -> Weight;
-	fn vote_less(_v: u32, ) -> Weight;
+	fn vote_equal(v: u32, ) -> Weight;
+	fn vote_more(v: u32, ) -> Weight;
+	fn vote_less(v: u32, ) -> Weight;
 	fn remove_voter() -> Weight;
-	fn submit_candidacy(_c: u32, ) -> Weight;
-	fn renounce_candidacy_candidate(_c: u32, ) -> Weight;
+	fn submit_candidacy(c: u32, ) -> Weight;
+	fn renounce_candidacy_candidate(c: u32, ) -> Weight;
 	fn renounce_candidacy_members() -> Weight;
 	fn renounce_candidacy_runners_up() -> Weight;
 	fn remove_member_with_replacement() -> Weight;
 	fn remove_member_wrong_refund() -> Weight;
-	fn clean_defunct_voters(v: u32, d: u32) -> Weight;
-	fn election_phragmen(c: u32, v: u32, e: u32) -> Weight;
+	fn clean_defunct_voters(v: u32, d: u32, ) -> Weight;
+	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight;
 }
 
 /// Weights for pallet_elections_phragmen using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 	fn vote_equal(v: u32, ) -> Weight {
-		(89_627_000 as Weight)
-			.saturating_add((197_000 as Weight).saturating_mul(v as Weight))
+		(57_585_000 as Weight)
+			.saturating_add((409_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-
 	}
-	fn vote_more(_: u32, ) -> Weight {
-		0
+	fn vote_more(v: u32, ) -> Weight {
+		(87_970_000 as Weight)
+			.saturating_add((415_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(T::DbWeight::get().reads(5 as Weight))
+			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn vote_less(_: u32, ) -> Weight {
-		0
+	fn vote_less(v: u32, ) -> Weight {
+		(83_650_000 as Weight)
+			.saturating_add((405_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(T::DbWeight::get().reads(5 as Weight))
+			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn remove_voter() -> Weight {
-		(73_774_000 as Weight)
+		(80_456_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-
 	}
 	fn submit_candidacy(c: u32, ) -> Weight {
-		(73_403_000 as Weight)
-			.saturating_add((314_000 as Weight).saturating_mul(c as Weight))
+		(70_738_000 as Weight)
+			.saturating_add((428_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-
 	}
 	fn renounce_candidacy_candidate(c: u32, ) -> Weight {
-		(48_834_000 as Weight)
-			.saturating_add((187_000 as Weight).saturating_mul(c as Weight))
+		(50_244_000 as Weight)
+			.saturating_add((214_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-
 	}
 	fn renounce_candidacy_members() -> Weight {
-		(78_402_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
+		(90_817_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
-
 	}
 	fn renounce_candidacy_runners_up() -> Weight {
-		(49_054_000 as Weight)
+		(49_801_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-
 	}
 	fn remove_member_with_replacement() -> Weight {
-		(75_421_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+		(99_157_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
-
 	}
 	fn remove_member_wrong_refund() -> Weight {
-		(8_489_000 as Weight)
+		(9_042_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 	}
-	fn election_phragmen(_: u32, _: u32, _: u32) -> Weight {
-		0
+	fn clean_defunct_voters(v: u32, _d: u32, ) -> Weight {
+		(0 as Weight)
+			.saturating_add((158_896_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(v as Weight)))
+			.saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(v as Weight)))
 	}
-	fn clean_defunct_voters(_: u32, _: u32) -> Weight {
-		0
+	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight {
+		(0 as Weight)
+			.saturating_add((85_751_000 as Weight).saturating_mul(c as Weight))
+			.saturating_add((130_226_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((9_200_000 as Weight).saturating_mul(e as Weight))
+			.saturating_add(T::DbWeight::get().reads((2 as Weight).saturating_mul(c as Weight)))
+			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(v as Weight)))
+			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(c as Weight)))
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn vote_equal(v: u32) -> Weight {
-		(89_627_000 as Weight)
-			.saturating_add((197_000 as Weight).saturating_mul(v as Weight))
+	fn vote_equal(v: u32, ) -> Weight {
+		(57_585_000 as Weight)
+			.saturating_add((409_000 as Weight).saturating_mul(v as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn vote_more(_: u32) -> Weight {
-		0
+	fn vote_more(v: u32, ) -> Weight {
+		(87_970_000 as Weight)
+			.saturating_add((415_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn vote_less(_: u32) -> Weight {
-		0
+	fn vote_less(v: u32, ) -> Weight {
+		(83_650_000 as Weight)
+			.saturating_add((405_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn remove_voter() -> Weight {
-		(73_774_000 as Weight)
+		(80_456_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-
 	}
 	fn submit_candidacy(c: u32, ) -> Weight {
-		(73_403_000 as Weight)
-			.saturating_add((314_000 as Weight).saturating_mul(c as Weight))
+		(70_738_000 as Weight)
+			.saturating_add((428_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-
 	}
 	fn renounce_candidacy_candidate(c: u32, ) -> Weight {
-		(48_834_000 as Weight)
-			.saturating_add((187_000 as Weight).saturating_mul(c as Weight))
+		(50_244_000 as Weight)
+			.saturating_add((214_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-
 	}
 	fn renounce_candidacy_members() -> Weight {
-		(78_402_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
+		(90_817_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
-
 	}
 	fn renounce_candidacy_runners_up() -> Weight {
-		(49_054_000 as Weight)
+		(49_801_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-
 	}
 	fn remove_member_with_replacement() -> Weight {
-		(75_421_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+		(99_157_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
 	fn remove_member_wrong_refund() -> Weight {
-		(8_489_000 as Weight).saturating_add(RocksDbWeight::get().reads(1 as Weight))
+		(9_042_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 	}
-	fn election_phragmen(_: u32, _: u32, _: u32) -> Weight {
-		0
+	fn clean_defunct_voters(v: u32, _d: u32, ) -> Weight {
+		(0 as Weight)
+			.saturating_add((158_896_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(v as Weight)))
+			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(v as Weight)))
 	}
-	fn clean_defunct_voters(_: u32, _: u32) -> Weight {
-		0
+	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight {
+		(0 as Weight)
+			.saturating_add((85_751_000 as Weight).saturating_mul(c as Weight))
+			.saturating_add((130_226_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((9_200_000 as Weight).saturating_mul(e as Weight))
+			.saturating_add(RocksDbWeight::get().reads((2 as Weight).saturating_mul(c as Weight)))
+			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(v as Weight)))
+			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(c as Weight)))
 	}
 }
