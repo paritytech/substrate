@@ -31,9 +31,9 @@ use crate::Module as Lottery;
 // Set up and start a lottery
 fn start_lottery<T: Trait>() -> Result<(), &'static str> {
 	let price = T::Currency::minimum_balance();
-	let start = 0.into();
-	let end = 10.into();
-	let payout = 15.into();
+	let start = 0u32.into();
+	let end = 10u32.into();
+	let payout = 15u32.into();
 	// Calls will be maximum length...
 	let mut calls = vec![
 		frame_system::Call::<T>::set_code(vec![]).into();
@@ -51,9 +51,9 @@ benchmarks! {
 
 	setup_lottery {
 		let price = BalanceOf::<T>::max_value();
-		let start = 0.into();
-		let end = 10.into();
-		let payout = 15.into();
+		let start = 0u32.into();
+		let end = 10u32.into();
+		let payout = 15u32.into();
 		let calls = vec![
 			frame_system::Call::<T>::remark(vec![]).into(),
 		];
@@ -113,26 +113,26 @@ benchmarks! {
 		start_lottery::<T>()?;
 		let winner = account("winner", 0, 0);
 		// User needs more than min balance to get ticket
-		T::Currency::make_free_balance_be(&winner, T::Currency::minimum_balance() * 10.into());
+		T::Currency::make_free_balance_be(&winner, T::Currency::minimum_balance() * 10u32.into());
 		// Make sure lottery account has at least min balance too
 		let lottery_account = Lottery::<T>::account_id();
-		T::Currency::make_free_balance_be(&lottery_account, T::Currency::minimum_balance() * 10.into());
+		T::Currency::make_free_balance_be(&lottery_account, T::Currency::minimum_balance() * 10u32.into());
 		// Buy a ticket
 		let call = frame_system::Call::<T>::remark(vec![]);
 		Lottery::<T>::buy_ticket(RawOrigin::Signed(winner.clone()).into(), Box::new(call.into()))?;
 		// Kill user account for worst case
-		T::Currency::make_free_balance_be(&winner, 0.into());
+		T::Currency::make_free_balance_be(&winner, 0u32.into());
 		// Assert that lotto is set up for winner
 		assert_eq!(TicketsCount::get(), 1);
 		assert!(!Lottery::<T>::pot().1.is_zero());
 	}: {
 		// Start lottery has block 15 configured for payout
-		Lottery::<T>::on_initialize(15.into());
+		Lottery::<T>::on_initialize(15u32.into());
 	}
 	verify {
 		assert!(crate::Lottery::<T>::get().is_none());
 		assert_eq!(TicketsCount::get(), 0);
-		assert_eq!(Lottery::<T>::pot().1, 0.into());
+		assert_eq!(Lottery::<T>::pot().1, 0u32.into());
 		assert!(!T::Currency::free_balance(&winner).is_zero())
 	}
 }
