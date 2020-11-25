@@ -24,7 +24,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod benchmarking;
-mod weights;
+pub mod weights;
 
 use sp_std::prelude::*;
 use sp_runtime::{DispatchError, ModuleId};
@@ -76,13 +76,17 @@ type CallIndex = (u8, u8);
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Lottery {
+		LotteryIndex: Index;
 		/// The configuration for the current lottery.
 		Lottery: Option<LotteryConfig<T::BlockNumber, BalanceOf<T>>>;
-		/// Users who have purchased a ticket.
-		Participants: map hasher(twox_64_concat) T::AccountId => Vec<CallIndex>;
+		/// Users who have purchased a ticket. (Lottery Index, Tickets Purchased)
+		Participants: map hasher(twox_64_concat) T::AccountId => (Index, Vec<CallIndex>);
 		/// Total number of tickets sold.
 		TicketsCount: Index;
 		/// Each ticket's owner.
+		///
+		/// May have residual storage from previous lotteries. Use `TicketsCount` to see which ones
+		/// are actually valid ticket mappings.
 		Tickets: map hasher(twox_64_concat) Index => Option<T::AccountId>;
 	}
 }
@@ -127,6 +131,8 @@ decl_error! {
 
 #[derive(Encode, Decode, Default, RuntimeDebug)]
 pub struct LotteryConfig<BlockNumber, Balance> {
+	/// Index of this lottery
+	index: Index,
 	/// Price per entry.
 	price: Balance,
 	/// Starting block of the lottery.
@@ -145,7 +151,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		#[weight = 0]
+		#[weight = T::WeightInfo::setup_lottery(calls.len() as u32)]
 		fn setup_lottery(
 			origin,
 			price: BalanceOf<T>,
@@ -159,13 +165,20 @@ decl_module! {
 			let indices = Self::calls_to_indices(&calls)?;
 			Lottery::<T>::try_mutate(|lottery| -> DispatchResult {
 				ensure!(lottery.is_none(), Error::<T>::InProgress);
-				*lottery = Some(LotteryConfig { price, start, end, payout, calls: indices });
+				let index = LotteryIndex::get();
+				let new_index = index.checked_add(1).ok_or(Error::<T>::Overflow)?;
+				// Use new_index to more easily track everything with the current state.
+				*lottery = Some(LotteryConfig { index: new_index, price, start, end, payout, calls: indices });
+				LotteryIndex::put(new_index);
 				Ok(())
 			})?;
 			Self::deposit_event(RawEvent::LotteryStarted);
 		}
 
-		#[weight = 0]
+		#[weight =
+			T::WeightInfo::buy_ticket()
+				.saturating_add(call.get_dispatch_info().weight)
+		]
 		fn buy_ticket(origin, call: Box<<T as Trait>::Call>) {
 			let caller = ensure_signed(origin.clone())?;
 			call.clone().dispatch(origin).map_err(|e| e.error)?;
@@ -189,10 +202,8 @@ decl_module! {
 
 				Lottery::<T>::kill();
 				TicketsCount::kill();
-				Participants::<T>::remove_all();
-				Tickets::<T>::remove_all();
 
-				return T::DbWeight::get().reads_writes(2, ticket_count.saturating_mul(2).into())
+				return T::WeightInfo::on_initialize()
 			} else {
 				return Weight::zero()
 			}
@@ -249,9 +260,16 @@ impl<T: Trait> Module<T> {
 		let ticket_count = TicketsCount::get();
 		let new_ticket_count = ticket_count.checked_add(1).ok_or(Error::<T>::Overflow)?;
 		// Try to update the participant status
-		Participants::<T>::try_mutate(&caller, |participating_calls| -> DispatchResult {
-			// Check that user is not already participating under this call.
-			ensure!(!participating_calls.iter().any(|c| call_index == *c), Error::<T>::AlreadyParticipating);
+		Participants::<T>::try_mutate(&caller, |(lottery_index, participating_calls)| -> DispatchResult {
+			let index = LotteryIndex::get();
+			// If lottery index doesn't match, then reset participating calls and index.
+			if *lottery_index != index {
+				*participating_calls = Vec::new();
+				*lottery_index = index;
+			} else {
+				// Check that user is not already participating under this call.
+				ensure!(!participating_calls.iter().any(|c| call_index == *c), Error::<T>::AlreadyParticipating);
+			}
 			// Check user has enough funds and send it to the Lottery account.
 			T::Currency::transfer(caller, &Self::account_id(), config.price, KeepAlive)?;
 			// Create a new ticket.

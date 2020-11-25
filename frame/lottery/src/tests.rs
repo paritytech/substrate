@@ -31,7 +31,7 @@ fn initial_state() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Balances::free_balance(Lottery::account_id()), 1);
 		assert!(crate::Lottery::<Test>::get().is_none());
-		assert_eq!(Participants::<Test>::get(&1), vec![]);
+		assert_eq!(Participants::<Test>::get(&1), (0, vec![]));
 		assert_eq!(TicketsCount::get(), 0);
 		assert!(Tickets::<Test>::get(0).is_none());
 	});
@@ -61,7 +61,7 @@ fn basic_end_to_end_works() {
 		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
 		// 20 from the transfer, 10 from buying a ticket
 		assert_eq!(Balances::free_balance(&1), 100 - 20 - 10);
-		assert_eq!(Participants::<Test>::get(&1).len(), 1);
+		assert_eq!(Participants::<Test>::get(&1).1.len(), 1);
 		assert_eq!(TicketsCount::get(), 1);
 		// 1 owns the 0 ticket
 		assert_eq!(Tickets::<Test>::get(0), Some(1));
@@ -82,9 +82,7 @@ fn basic_end_to_end_works() {
 		run_to_block(25);
 		// Lottery is reset
 		assert!(crate::Lottery::<Test>::get().is_none());
-		assert_eq!(Participants::<Test>::get(&1), vec![]);
 		assert_eq!(TicketsCount::get(), 0);
-		assert!(Tickets::<Test>::get(0).is_none());
 		// User 1 wins
 		assert_eq!(Balances::free_balance(&1), 70 + 40);
 	});

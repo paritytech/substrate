@@ -50,18 +50,15 @@ benchmarks! {
 	_ { }
 
 	setup_lottery {
+		let n in 0 .. T::MaxCalls::get() as u32;
 		let price = BalanceOf::<T>::max_value();
 		let start = 0u32.into();
 		let end = 10u32.into();
 		let payout = 15u32.into();
-		let calls = vec![
-			frame_system::Call::<T>::remark(vec![]).into(),
-		];
+		let calls = vec![frame_system::Call::<T>::remark(vec![]).into(); n as usize];
 
 		let call = Call::<T>::setup_lottery(price, start, end, payout, calls);
 		let origin = T::ManagerOrigin::successful_origin();
-
-		// use success origin
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(crate::Lottery::<T>::get().is_some());
@@ -75,36 +72,17 @@ benchmarks! {
 		let set_code_index: CallIndex = Lottery::<T>::call_to_index(
 			&frame_system::Call::<T>::set_code(vec![]).into()
 		)?;
-		let already_called: Vec<CallIndex> = vec![
-			set_code_index;
-			T::MaxCalls::get().saturating_sub(1)
-		];
+		let already_called: (Index, Vec<CallIndex>) = (
+			LotteryIndex::get(),
+			vec![
+				set_code_index;
+				T::MaxCalls::get().saturating_sub(1)
+			],
+		);
 		Participants::<T>::insert(&caller, already_called);
 
 		let call = frame_system::Call::<T>::remark(vec![]);
 	}: _(RawOrigin::Signed(caller), Box::new(call.into()))
-	verify {
-		assert_eq!(TicketsCount::get(), 1);
-	}
-
-	do_buy_ticket {
-		let caller = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		start_lottery::<T>()?;
-		// force user to have a long vec of calls participating
-		let set_code_index: CallIndex = Lottery::<T>::call_to_index(
-			&frame_system::Call::<T>::set_code(vec![]).into()
-		)?;
-		let already_called: Vec<CallIndex> = vec![
-			set_code_index;
-			T::MaxCalls::get().saturating_sub(1)
-		];
-		Participants::<T>::insert(&caller, already_called);
-
-		let call = frame_system::Call::<T>::remark(vec![]);
-	}: {
-		Lottery::<T>::do_buy_ticket(&caller, &call.into())?
-	}
 	verify {
 		assert_eq!(TicketsCount::get(), 1);
 	}
@@ -148,7 +126,6 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_setup_lottery::<Test>());
 			assert_ok!(test_benchmark_buy_ticket::<Test>());
-			assert_ok!(test_benchmark_do_buy_ticket::<Test>());
 			assert_ok!(test_benchmark_on_initialize::<Test>());
 		});
 	}

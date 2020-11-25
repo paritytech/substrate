@@ -44,27 +44,21 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_lottery.
 pub trait WeightInfo {
-	fn setup_lottery() -> Weight;
+	fn setup_lottery(n: u32) -> Weight;
 	fn buy_ticket() -> Weight;
-	fn do_buy_ticket() -> Weight;
 	fn on_initialize() -> Weight;
 }
 
 /// Weights for pallet_lottery using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
-	fn setup_lottery() -> Weight {
+	fn setup_lottery(_n: u32) -> Weight {
 		(26_604_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn buy_ticket() -> Weight {
 		(110_562_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
-	}
-	fn do_buy_ticket() -> Weight {
-		(106_527_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
@@ -77,18 +71,13 @@ impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn setup_lottery() -> Weight {
+	fn setup_lottery(_n: u32) -> Weight {
 		(26_604_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn buy_ticket() -> Weight {
 		(110_562_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
-	}
-	fn do_buy_ticket() -> Weight {
-		(106_527_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
