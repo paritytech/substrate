@@ -95,7 +95,10 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 	let protocol_id = config::ProtocolId::from("/test-protocol-name");
 
 	let block_request_protocol_config = {
-		let (handler, protocol_config) = crate::block_request_handler::BlockRequestHandler::new(protocol_id.clone(), client.clone());
+		let (handler, protocol_config) = BlockRequestHandler::new(
+			protocol_id.clone(),
+			client.clone(),
+		);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};

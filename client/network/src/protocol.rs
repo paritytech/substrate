@@ -736,18 +736,20 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			}
 		} else {
 			// Validate fields against the request.
-			if request.fields.contains(message::BlockAttributes::HEADER) && block_response.blocks.iter().any(|b| b.header.is_none()) {
-				self.behaviour.disconnect_peer(&peer_id);
-				self.peerset_handle.report_peer(peer_id, rep::BAD_RESPONSE);
-				trace!(target: "sync", "Missing header for a block");
-				return CustomMessageOutcome::None
-			}
-			if request.fields.contains(message::BlockAttributes::BODY) && block_response.blocks.iter().any(|b| b.body.is_none()) {
-				self.behaviour.disconnect_peer(&peer_id);
-				self.peerset_handle.report_peer(peer_id, rep::BAD_RESPONSE);
-				trace!(target: "sync", "Missing body for a block");
-				return CustomMessageOutcome::None
-			}
+			if request.fields.contains(message::BlockAttributes::HEADER)
+				&& block_response.blocks.iter().any(|b| b.header.is_none()) {
+					self.behaviour.disconnect_peer(&peer_id);
+					self.peerset_handle.report_peer(peer_id, rep::BAD_RESPONSE);
+					trace!(target: "sync", "Missing header for a block");
+					return CustomMessageOutcome::None
+				}
+			if request.fields.contains(message::BlockAttributes::BODY)
+				&& block_response.blocks.iter().any(|b| b.body.is_none()) {
+					self.behaviour.disconnect_peer(&peer_id);
+					self.peerset_handle.report_peer(peer_id, rep::BAD_RESPONSE);
+					trace!(target: "sync", "Missing body for a block");
+					return CustomMessageOutcome::None
+				}
 
 			match self.sync.on_block_data(&peer_id, Some(request), block_response) {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>

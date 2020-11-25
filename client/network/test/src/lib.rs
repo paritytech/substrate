@@ -29,7 +29,7 @@ use std::{
 
 use libp2p::build_multiaddr;
 use log::trace;
-use sc_network::block_request_handler::BlockRequestHandler;
+use sc_network::block_request_handler::{self, BlockRequestHandler};
 use sp_blockchain::{
 	HeaderBackend, Result as ClientResult,
 	well_known_cache_keys::{self, Id as CacheKeyId},
@@ -743,7 +743,9 @@ pub trait TestNetFactory: Sized {
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
 		// Add block request handler.
-		let block_request_protocol_config = sc_network::block_request_handler::generate_protocol_config(protocol_id.clone());
+		let block_request_protocol_config = block_request_handler::generate_protocol_config(
+			protocol_id.clone(),
+		);
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,

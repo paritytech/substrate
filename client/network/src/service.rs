@@ -1345,7 +1345,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						}
 					}
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { protocol, duration, result, .. })) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished {
+					protocol, duration, result, ..
+				})) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						match result {
 							Ok(_) => {
