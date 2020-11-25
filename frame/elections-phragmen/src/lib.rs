@@ -898,7 +898,7 @@ impl<T: Trait> Module<T> {
 
 	/// Check if `who` is currently an active runner-up.
 	///
-	/// O(LogN) given N runners-up. Since runners-up are limited, O(1).
+	/// O(N) given N runners-up. Since runners-up are limited, O(1).
 	fn is_runner_up(who: &T::AccountId) -> bool {
 		Self::runners_up()
 			.iter()
