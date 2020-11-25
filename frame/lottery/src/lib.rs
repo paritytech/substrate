@@ -19,21 +19,26 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+mod weights;
+
 use sp_std::prelude::*;
 use sp_runtime::ModuleId;
 use sp_runtime::traits::{AccountIdConversion, Saturating, Zero};
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure, RuntimeDebug};
-use frame_support::dispatch::{Dispatchable, PostDispatchInfo, DispatchResult, GetDispatchInfo};
+use frame_support::dispatch::{Dispatchable, DispatchResult, GetDispatchInfo};
 use frame_support::traits::{
 	Currency, ReservableCurrency, Get, EnsureOrigin, ExistenceRequirement::KeepAlive, Randomness,
 };
 use frame_support::weights::Weight;
 use frame_system::ensure_signed;
 use codec::{Encode, Decode};
+pub use weights::WeightInfo;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-
-pub trait WeightInfo { }
 
 /// The module's config trait.
 pub trait Trait: frame_system::Trait {
@@ -41,7 +46,7 @@ pub trait Trait: frame_system::Trait {
 	type ModuleId: Get<ModuleId>;
 
 	/// A dispatchable call.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> + GetDispatchInfo;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
 
 	/// The currency trait.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -160,9 +165,8 @@ decl_module! {
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			if Lottery::<T>::get().map_or(false, |config| config.payout < n) {
-				let lottery_balance = Self::pot();
-				let lottery_account = Self::account_id();
+			if Lottery::<T>::get().map_or(false, |config| config.payout <= n) {
+				let (lottery_account, lottery_balance) = Self::pot();
 				let ticket_count = TicketsCount::get();
 
 				let winning_number = Self::choose_winner(ticket_count);
@@ -196,26 +200,29 @@ impl<T: Trait> Module<T> {
 		T::ModuleId::get().into_account()
 	}
 
-	/// Return the amount of money in the pot.
+	/// Return the pot account and amount of money in the pot.
 	// The existential deposit is not part of the pot so lottery account never gets deleted.
-	fn pot() -> BalanceOf<T> {
-		T::Currency::free_balance(&Self::account_id())
-			.saturating_sub(T::Currency::minimum_balance())
+	fn pot() -> (T::AccountId, BalanceOf<T>) {
+		let account_id = Self::account_id();
+		let balance = T::Currency::free_balance(&account_id)
+			.saturating_sub(T::Currency::minimum_balance());
+
+		(account_id, balance)
 	}
 
 	fn do_buy_ticket(caller: &T::AccountId, call: &<T as Trait>::Call) -> DispatchResult {
 		// Check the call is valid lottery
 		let config = Lottery::<T>::get().ok_or(Error::<T>::NotConfigured)?;
 		let block_number = frame_system::Module::<T>::block_number();
-		ensure!(block_number > config.start, Error::<T>::NotStarted);
+		ensure!(block_number >= config.start, Error::<T>::NotStarted);
 		ensure!(block_number < config.end, Error::<T>::AlreadyEnded);
-		ensure!(config.calls.contains(&call), Error::<T>::InvalidCall);
+		ensure!(config.calls.iter().any(|c| variant_eq(call, c)), Error::<T>::InvalidCall);
 		let ticket_count = TicketsCount::get();
 		let new_ticket_count = ticket_count.checked_add(1).ok_or(Error::<T>::Overflow)?;
 		// Try to update the participant status
 		Participants::<T>::try_mutate(&caller, |participating_calls| -> DispatchResult {
 			// Check that user is not already participating under this call.
-			ensure!(!participating_calls.contains(call), Error::<T>::AlreadyParticipating);
+			ensure!(!participating_calls.iter().any(|c| variant_eq(c, call)), Error::<T>::AlreadyParticipating);
 			// Check user has enough funds and send it to the Lottery account.
 			T::Currency::transfer(caller, &Self::account_id(), config.price, KeepAlive)?;
 			// Create a new ticket.
@@ -236,4 +243,8 @@ impl<T: Trait> Module<T> {
 			.expect("secure hashes should always be bigger than u32; qed");
 		random_number % total
 	}
+}
+
+fn variant_eq<T>(a: &T, b: &T) -> bool {
+	sp_std::mem::discriminant(a) == sp_std::mem::discriminant(b)
 }
