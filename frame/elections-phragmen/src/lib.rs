@@ -1329,7 +1329,6 @@ mod tests {
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
 		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
-			dbg!(incoming, outgoing, new);
 			// new, incoming, outgoing must be sorted.
 			let mut new_sorted = new.to_vec();
 			new_sorted.sort();
@@ -2684,7 +2683,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, true),
 				Error::<Test>::InvalidReplacement,
-				Some(33489000), // only thing that matters for now is that it is NOT the full block.
+				Some(34042000), // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 
