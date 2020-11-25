@@ -633,6 +633,8 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub static TransactionByteFee: u64 = 1;
+		pub static WeightToFee: u64 = 1;
 	}
 
 	impl frame_system::Trait for Runtime {
@@ -672,17 +674,7 @@ mod tests {
 		type MaxLocks = ();
 		type WeightInfo = ();
 	}
-	thread_local! {
-		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
-		static WEIGHT_TO_FEE: RefCell<u64> = RefCell::new(1);
-	}
 
-	pub struct TransactionByteFee;
-	impl Get<u64> for TransactionByteFee {
-		fn get() -> u64 { TRANSACTION_BYTE_FEE.with(|v| *v.borrow()) }
-	}
-
-	pub struct WeightToFee;
 	impl WeightToFeePolynomial for WeightToFee {
 		type Balance = u64;
 

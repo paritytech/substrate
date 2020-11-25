@@ -107,7 +107,6 @@ fn async_import_queue_drops() {
 			verifier,
 			Box::new(substrate_test_runtime_client::new()),
 			None,
-			None,
 			&executor,
 			None,
 		);

@@ -249,7 +249,6 @@ mod block_requests;
 mod chain;
 mod peer_info;
 mod discovery;
-mod finality_requests;
 mod light_client_handler;
 mod on_demand_layer;
 mod protocol;

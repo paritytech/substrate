@@ -19,20 +19,19 @@
 
 	(func (export "call")
 		;; copy code hash to contract memory
-		(call $seal_input (i32.const 264) (i32.const 304))
+		(call $seal_input (i32.const 308) (i32.const 304))
 		(call $assert
 			(i32.eq
 				(i32.load (i32.const 304))
-				(i32.const 32)
+				(i32.const 64)
 			)
 		)
-
 		(call $seal_restore_to
 			;; Pointer and length of the encoded dest buffer.
-			(i32.const 256)
-			(i32.const 8)
+			(i32.const 340)
+			(i32.const 32)
 			;; Pointer and length of the encoded code hash buffer
-			(i32.const 264)
+			(i32.const 308)
 			(i32.const 32)
 			;; Pointer and length of the encoded rent_allowance buffer
 			(i32.const 296)
@@ -65,14 +64,12 @@
 	;; Buffer that has ACL storage keys.
 	(data (i32.const 100) "\01")
 
-	;; Address of bob
-	(data (i32.const 256) "\02\00\00\00\00\00\00\00")
-
-	;; [264, 296) Code hash of SET_RENT (copied here by seal_input)
-
 	;; [296, 304) Rent allowance
 	(data (i32.const 296) "\32\00\00\00\00\00\00\00")
 
-	;; [304, 308) Size of SET_RENT buffer
-	(data (i32.const 304) "\20")
+	;; [304, 308) Size of the buffer that holds code_hash + addr
+	(data (i32.const 304) "\40")
+
+	;; [308, 340) code hash of bob (copied by seal_input)
+	;; [340, 372) addr of bob (copied by seal_input)
 )
