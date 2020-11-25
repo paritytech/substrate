@@ -82,7 +82,7 @@ benchmarks! {
 		Participants::<T>::insert(&caller, already_called);
 
 		let call = frame_system::Call::<T>::remark(vec![]);
-	}: _(RawOrigin::Signed(caller), call.into())
+	}: _(RawOrigin::Signed(caller), Box::new(call.into()))
 	verify {
 		assert_eq!(TicketsCount::get(), 1);
 	}
@@ -119,7 +119,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&lottery_account, T::Currency::minimum_balance() * 10.into());
 		// Buy a ticket
 		let call = frame_system::Call::<T>::remark(vec![]);
-		Lottery::<T>::buy_ticket(RawOrigin::Signed(winner.clone()).into(), call.into())?;
+		Lottery::<T>::buy_ticket(RawOrigin::Signed(winner.clone()).into(), Box::new(call.into()))?;
 		// Kill user account for worst case
 		T::Currency::make_free_balance_be(&winner, 0.into());
 		// Assert that lotto is set up for winner

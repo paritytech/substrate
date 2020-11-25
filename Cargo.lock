@@ -3994,6 +3994,7 @@ dependencies = [
  "pallet-identity",
  "pallet-im-online",
  "pallet-indices",
+ "pallet-lottery",
  "pallet-membership",
  "pallet-multisig",
  "pallet-offences",

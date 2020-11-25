@@ -166,7 +166,7 @@ decl_module! {
 		}
 
 		#[weight = 0]
-		fn buy_ticket(origin, call: <T as Trait>::Call) {
+		fn buy_ticket(origin, call: Box<<T as Trait>::Call>) {
 			let caller = ensure_signed(origin.clone())?;
 			call.clone().dispatch(origin).map_err(|e| e.error)?;
 

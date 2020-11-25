@@ -96,7 +96,6 @@ impl pallet_balances::Trait for Test {
 parameter_types! {
 	pub const LotteryModuleId: ModuleId = ModuleId(*b"py/lotto");
 	pub const MaxCalls: usize = 2;
-	pub const ManagerOrigin: u32 = 1024;
 }
 
 impl Trait for Test {

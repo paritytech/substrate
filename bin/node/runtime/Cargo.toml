@@ -57,6 +57,7 @@ pallet-grandpa = { version = "2.0.0", default-features = false, path = "../../..
 pallet-im-online = { version = "2.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-indices = { version = "2.0.0", default-features = false, path = "../../../frame/indices" }
 pallet-identity = { version = "2.0.0", default-features = false, path = "../../../frame/identity" }
+pallet-lottery = { version = "2.0.0", default-features = false, path = "../../../frame/lottery" }
 pallet-membership = { version = "2.0.0", default-features = false, path = "../../../frame/membership" }
 pallet-multisig = { version = "2.0.0", default-features = false, path = "../../../frame/multisig" }
 pallet-offences = { version = "2.0.0", default-features = false, path = "../../../frame/offences" }
