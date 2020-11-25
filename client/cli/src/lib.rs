@@ -21,7 +21,6 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 #![warn(unused_imports)]
-#![warn(unused_crate_dependencies)]
 
 pub mod arg_enums;
 mod commands;
@@ -48,8 +47,6 @@ use structopt::{
 pub use sc_logging::{PREFIX_LOG_SPAN, prefix_logs_with};
 #[doc(hidden)]
 pub use tracing;
-#[cfg(test)]
-use trybuild as _;
 
 /// Substrate client CLI
 ///
