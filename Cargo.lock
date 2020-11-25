@@ -6234,9 +6234,9 @@ dependencies = [
 
 [[package]]
 name = "rpassword"
-version = "4.0.5"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99371657d3c8e4d816fb6221db98fa408242b0b53bac08f8676a41f8554fe99f"
+checksum = "d755237fc0f99d98641540e66abac8bc46a0652f19148ac9e21de2da06b326c9"
 dependencies = [
  "libc",
  "winapi 0.3.9",
@@ -6361,7 +6361,6 @@ name = "sc-authority-discovery"
 version = "0.8.0"
 dependencies = [
  "async-trait",
- "bytes 0.5.6",
  "derive_more",
  "either",
  "futures 0.3.8",
@@ -6374,7 +6373,6 @@ dependencies = [
  "quickcheck",
  "rand 0.7.3",
  "sc-client-api",
- "sc-keystore",
  "sc-network",
  "sc-peerset",
  "serde_json",
@@ -6510,7 +6508,6 @@ dependencies = [
  "fnv",
  "futures 0.3.8",
  "hash-db",
- "hex-literal",
  "kvdb",
  "kvdb-memorydb",
  "lazy_static",
@@ -6518,7 +6515,6 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sc-executor",
- "sc-telemetry",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
@@ -6526,7 +6522,6 @@ dependencies = [
  "sp-database",
  "sp-externalities",
  "sp-inherents",
- "sp-keyring",
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
@@ -8057,7 +8052,6 @@ dependencies = [
  "lru 0.6.1",
  "parity-scale-codec",
  "parking_lot 0.10.2",
- "sp-block-builder",
  "sp-consensus",
  "sp-database",
  "sp-runtime",
@@ -8365,7 +8359,6 @@ name = "sp-panic-handler"
 version = "2.0.0"
 dependencies = [
  "backtrace",
- "log",
 ]
 
 [[package]]
@@ -8394,7 +8387,6 @@ dependencies = [
  "sp-application-crypto",
  "sp-arithmetic",
  "sp-core",
- "sp-inherents",
  "sp-io",
  "sp-state-machine",
  "sp-std",

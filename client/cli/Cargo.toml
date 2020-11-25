@@ -46,7 +46,7 @@ tracing = "0.1.22"
 thiserror = "1.0.21"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
-rpassword = "4.0.1"
+rpassword = "5.0.0"
 
 [dev-dependencies]
 tempfile = "3.1.0"

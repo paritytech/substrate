@@ -257,9 +257,14 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		select_chain.clone(),
 	)?;
 
+	let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
+		grandpa_block_import.clone(),
+		client.clone(),
+	);
+
 	let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _, _>(
 		sc_consensus_aura::slot_duration(&*client)?,
-		grandpa_block_import.clone(),
+		aura_block_import,
 		Some(Box::new(grandpa_block_import)),
 		client.clone(),
 		InherentDataProviders::new(),
