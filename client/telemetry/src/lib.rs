@@ -18,9 +18,9 @@
 
 //! Telemetry utilities.
 //!
-/// The `Telemetry` object is a `Stream` that needs to be polled regularly in order to function.
-/// It is unregistered when the object is dropped.
-///
+//! The `Telemetry` object is a `Stream` that needs to be polled regularly in order to function.
+//! It is unregistered when the object is dropped.
+//!
 //! `Telemetry` objects can be created through its constructor `Telemetry::new()`, or through a
 //! `Telemetries` instance. The difference between the two is that `Telemetries` will re-use
 //! connections to the same server if possible and manages a collection of channel `Sender` for you
