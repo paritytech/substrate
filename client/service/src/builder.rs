@@ -883,10 +883,15 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	};
 
 	let block_request_protocol_config = {
-		// TODO: Only do this if we are not a light client.
-		let (handler, protocol_config) = sc_network::block_request_handler::BlockRequestHandler::new(protocol_id.clone(), client.clone());
-		spawn_handle.spawn("block_request_handler", handler.run());
-		protocol_config
+		if config.role == Role::Light {
+			// Allow outgoing requests but deny incoming requests.
+			sc_network::block_request_handler::generate_protocol_config(protocol_id.clone())
+		} else {
+			// Allow both outgoing and incoming requests.
+			let (handler, protocol_config) = sc_network::block_request_handler::BlockRequestHandler::new(protocol_id.clone(), client.clone());
+			spawn_handle.spawn("block_request_handler", handler.run());
+			protocol_config
+		}
 	};
 
 	let network_params = sc_network::config::Params {

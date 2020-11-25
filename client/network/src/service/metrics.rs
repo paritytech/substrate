@@ -78,8 +78,6 @@ pub struct Metrics {
 	pub requests_in_success_total: HistogramVec,
 	pub requests_out_failure_total: CounterVec<U64>,
 	pub requests_out_success_total: HistogramVec,
-	// TODO: Is this still used anywhere?
-	pub requests_out_started_total: CounterVec<U64>,
 }
 
 impl Metrics {
@@ -254,13 +252,6 @@ impl Metrics {
 					buckets: prometheus::exponential_buckets(0.001, 2.0, 16)
 						.expect("parameters are always valid values; qed"),
 				},
-				&["protocol"]
-			)?, registry)?,
-			requests_out_started_total: prometheus::register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_requests_out_started_total",
-					"Total number of requests emitted"
-				),
 				&["protocol"]
 			)?, registry)?,
 		})

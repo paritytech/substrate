@@ -50,7 +50,6 @@ use libp2p::{
 };
 use std::{
 	borrow::Cow, collections::{hash_map::Entry, HashMap}, convert::TryFrom as _, io, iter,
-	// TODO: Should we use wasm_timer instant here?
 	pin::Pin, task::{Context, Poll}, time::{Duration, Instant},
 };
 

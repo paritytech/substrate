@@ -781,7 +781,7 @@ pub trait TestNetFactory: Sized {
 		});
 	}
 
-	// TODO: Not ideal. Can we do better?
+	/// Used to spawn background tasks, e.g. the block request protocol handler.
 	fn spawn_task(&self, f: BoxFuture<'static, ()>) {
 		async_std::task::spawn(f);
 	}
