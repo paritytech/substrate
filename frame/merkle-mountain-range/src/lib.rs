@@ -32,7 +32,7 @@
 //! Keccak256 for Ethereum compatibility).
 //!
 //! Depending on the usage context (off-chain vs on-chain) the pallet is able to:
-//! - verify MMR leafs proofs (on-chain)
+//! - verify MMR leaf proofs (on-chain)
 //! - generate leaf proofs (off-chain)
 //!
 //! See [primitives::Compact] documentation for how you can optimize proof size for leafs that are
@@ -40,7 +40,7 @@
 //!
 //! ## What for?
 //!
-//!	Primary use case for this pallet is to generate MMR root hashes, that can later on be used by
+//!	Primary use case for this pallet is to generate MMR root hashes, that can latter on be used by
 //!	BEEFY protocol (see https://github.com/paritytech/grandpa-bridge-gadget).
 //!	MMR root hashes along with BEEFY will make it possible to build Super Light Clients (SLC) of
 //!	Substrate-based chains. The SLC will be able to follow finality and can be shown proofs of more
@@ -114,13 +114,13 @@ pub trait Trait<I = DefaultInstance>: frame_system::Trait {
 	/// The [LeafData](primitives::LeafDataProvider) is responsible for returning the entire leaf
 	/// data that will be inserted to the MMR.
 	/// [LeafDataProvider](primitives::LeafDataProvider)s can be composed into tuples to put
-	/// multiple elements into the tree. In such case it might be worth using [primitives::Compact]
+	/// multiple elements into the tree. In such a case it might be worth using [primitives::Compact]
 	/// to make MMR proof for one element of the tuple leaner.
 	type LeafData: primitives::LeafDataProvider;
 
-	/// A hook to act on new MMR root.
+	/// A hook to act on the new MMR root.
 	///
-	/// For some applications it might be benefitial to make the MMR root available externally
+	/// For some applications it might be beneficial to make the MMR root available externally
 	/// apart from having it in the storage. For instance you might output it in the header digest
 	/// (see [frame_system::Module::deposit_log]) to make it available for Light Clients.
 	/// Hook complexity should be `O(1)`.
@@ -185,7 +185,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		(T::INDEXING_PREFIX, pos).encode()
 	}
 
-	/// Generate a MMR proof for given `leaf_index`.
+	/// Generate a MMR proof for the given `leaf_index`.
 	///
 	/// Note this method can only be used from an off-chain context
 	/// (Offchain Worker or Runtime API call), since it requires
