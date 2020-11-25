@@ -188,6 +188,17 @@ impl TaskExecutorExt {
 
 /// Runtime spawn extension.
 pub trait RuntimeSpawn: Send {
+	/// Run a call as native.
+	///
+	/// Returns handle of the spawned task.
+	fn spawn_call_native(
+		&self,
+		func: fn(Vec<u8>) -> Vec<u8>,
+		data: Vec<u8>,
+		kind: u8,
+		calling_ext: &mut dyn Externalities,
+	) -> u64;
+
 	/// Create new runtime instance and use dynamic dispatch to invoke with specified payload.
 	///
 	/// Returns handle of the spawned task.

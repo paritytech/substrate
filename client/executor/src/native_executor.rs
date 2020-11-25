@@ -306,14 +306,14 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 /// TODO consider Arc outside of the spawn: to many here
 #[derive(Clone)]
 pub struct RuntimeInstanceSpawn {
-	module: Arc<dyn WasmModule>,
+	module: Option<Arc<dyn WasmModule>>,
+	instance: Arc<parking_lot::Mutex<Option<Box<dyn WasmInstance>>>>,
 	tasks: Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
 	counter: Arc<AtomicU64>,
 	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 	task_receiver: Arc<parking_lot::Mutex<mpsc::Receiver<PendingTask>>>,
 	task_sender: mpsc::Sender<PendingTask>,
 	recursive_level: usize,
-	instance: Arc<parking_lot::Mutex<Option<Box<dyn WasmInstance>>>>,
 }
 
 /// Task info for this instance.
@@ -332,10 +332,20 @@ enum RuningTask {
 	Inline(Task),
 }
 
-struct Task {
+struct WasmTask {
 	dispatcher_ref: u32,
 	data: Vec<u8>,
 	func: u32,
+}
+
+struct NativeTask {
+	data: Vec<u8>,
+	func: fn(Vec<u8>) -> Vec<u8>,
+}
+
+enum Task {
+	Native(NativeTask),
+	Wasm(WasmTask),
 }
 
 struct PendingTask {
@@ -427,6 +437,7 @@ impl RuntimeInstanceSpawn {
 		self.task_sender.send(task).expect("TODO mgmt");
 	}
 
+	// TODO should make a variant without module instantiation for native
 	fn spawn_new(&self) {
 		let module = self.module.clone();
 		let scheduler = self.scheduler.clone();
@@ -440,9 +451,9 @@ impl RuntimeInstanceSpawn {
 			// pool of instances should be used.
 			//
 			// https://github.com/paritytech/substrate/issues/7354
-			let mut instance = match module.new_instance() {
-				Ok(val) => AssertUnwindSafe(val),
-				Err(e) => {
+			let mut instance = match module.as_ref().map(|m| m.new_instance()) {
+				Some(Ok(val)) => Some(AssertUnwindSafe(val)),
+				Some(Err(e)) => {
 					log::error!(
 						target: "executor",
 						"Failed to create new instance for module for async context: {}",
@@ -452,10 +463,11 @@ impl RuntimeInstanceSpawn {
 					tasks.lock().finished();
 					return;
 				}
+				None => None,
 			};
 
 			let task_receiver = task_receiver.clone();
-			while let PendingTask { task: Task { dispatcher_ref, func, data }, ext, result_sender } = { 
+			while let PendingTask { task: Task::Wasm(WasmTask { dispatcher_ref, func, data }), ext, result_sender } = { 
 				let task_receiver_locked = task_receiver.lock();
 				task_receiver_locked.recv()
 			}.expect("Sender dropped, closing all instance.") {
@@ -488,9 +500,11 @@ impl RuntimeInstanceSpawn {
 					}
 				};
 
+				let instance_mut = instance.as_mut()
+					.expect("Non native call instatiated with module");
 				match with_externalities_safe(
 					&mut async_ext,
-					|| instance.call(
+					|| instance_mut.call(
 						InvokeMethod::TableWithWrapper { dispatcher_ref, func },
 						&data[..],
 					)
@@ -512,9 +526,9 @@ impl RuntimeInstanceSpawn {
 						log::error!("Panic error in spawned task: {:?}", error);
 						// reinstantiat wam, TODO could wasm instance unwind
 						// cleanly, probably not.
-						instance = match module.new_instance() {
-							Ok(val) => AssertUnwindSafe(val),
-							Err(e) => {
+						instance = match module.as_ref().map(|m| m.new_instance()) {
+							Some(Ok(val)) => Some(AssertUnwindSafe(val)),
+							Some(Err(e)) => {
 								log::error!(
 									target: "executor",
 									"Failed to create new instance for module for async context: {}",
@@ -524,7 +538,8 @@ impl RuntimeInstanceSpawn {
 								tasks.lock().finished();
 								return;
 							}
-						}
+							None => None,
+						};
 					}
 				}
 			}
@@ -535,6 +550,82 @@ impl RuntimeInstanceSpawn {
 }
 
 impl RuntimeSpawn for RuntimeInstanceSpawn {
+	fn spawn_call_native(
+		&self,
+		func: fn(Vec<u8>) -> Vec<u8>,
+		data: Vec<u8>,
+		kind: u8,
+		calling_ext: &mut dyn Externalities,
+	) -> u64 {
+		unimplemented!("TODO adapt");
+/*		let scheduler = sp_externalities::with_externalities(|mut ext| ext.extension::<TaskExecutorExt>()
+			.expect("No task executor associated with the current context!")
+			.clone()
+		).expect("Spawn called outside of externalities context!");
+
+		let backend = match kind {
+			AsyncStateType::Stateless => AsyncExt::stateless_ext(),
+			AsyncStateType::ReadLastBlock => {
+				let backend = sp_externalities::with_externalities(|mut ext|
+					ext.get_past_async_backend()
+						.expect("Unsupported spawn kind.")
+				).expect("Spawn called outside of externalities context!");
+
+				AsyncExt::previous_block_read(backend)
+			},
+			AsyncStateType::ReadAtSpawn => {
+				let spawn_id = unimplemented!("TODO need handle on state machine and generally a thread pool like for wasm");
+				let backend = sp_externalities::with_externalities(|mut ext|
+					ext.get_async_backend(spawn_id)
+						.expect("Unsupported spawn kind.")
+				).expect("Spawn called outside of externalities context!");
+				AsyncExt::state_at_spawn_read(backend, Default::default(), spawn_id)
+			},
+		};
+
+		let (sender, receiver) = mpsc::channel();
+		let extra_scheduler = scheduler.clone();
+		scheduler.spawn("parallel-runtime-spawn", Box::pin(async move {
+			let result = match crate::new_async_externalities(extra_scheduler, backend) {
+				Ok(mut ext) => {
+					let mut ext = AssertUnwindSafe(&mut ext);
+					match std::panic::catch_unwind(move || {
+						sp_externalities::set_and_run_with_externalities(
+							&mut **ext,
+							move || entry_point(data),
+						)
+					}) {
+						Ok(result) => result,
+						Err(panic) => {
+							log::error!(
+								target: "runtime",
+								"Spawned task panicked: {:?}",
+								panic,
+							);
+
+							// This will drop sender without sending anything.
+							return;
+						}
+					}
+				},
+				Err(e) => {
+					log::error!(
+						target: "runtime",
+						"Unable to run async task: {}",
+						e,
+					);
+
+					return;
+				},
+			};
+
+			let _ = sender.send(result);
+		}));
+
+		DataJoinHandle { receiver }
+*/
+	}
+
 	fn spawn_call(
 		&self,
 		dispatcher_ref: u32,
@@ -562,7 +653,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		};
 
 		let (result_sender, result_receiver) = mpsc::channel();
-		let task = PendingTask { task: Task { dispatcher_ref, func, data }, ext, result_sender};
+		let task = PendingTask { task: Task::Wasm(WasmTask { dispatcher_ref, func, data }), ext, result_sender};
 		self.insert(new_handle, task, result_receiver);
 
 		new_handle
@@ -578,10 +669,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					panic!("Spawned task panicked for the handle");
 				}
 			},
-			RuningTask::Inline(Task { dispatcher_ref, func, data }) => {
+			RuningTask::Inline(Task::Wasm(WasmTask { dispatcher_ref, func, data })) => {
 				let mut instance = self.instance.lock();
 				if instance.is_none() {
-					*instance = Some(self.module.new_instance()
+					*instance = self.module.as_ref().map(|m| m.new_instance()
 						.expect("Failed to create new instance from module"));
 				}
 				let result = instance.as_ref().expect("lazy init above").call(
@@ -595,6 +686,9 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 						panic!("Spawned task panicked for the handle");
 					},
 				}
+			},
+			RuningTask::Inline(Task::Native(_)) => {
+				unimplemented!()
 			},
 		}
 	}
@@ -610,7 +704,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 
 impl RuntimeInstanceSpawn {
 	pub fn new(
-		module: Arc<dyn WasmModule>,
+		module: Option<Arc<dyn WasmModule>>,
 		scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 		capacity: usize,
 	) -> Self {
@@ -628,8 +722,8 @@ impl RuntimeInstanceSpawn {
 		}
 	}
 
-	fn with_externalities_and_module(
-		module: Arc<dyn WasmModule>,
+	pub fn with_externalities_and_module(
+		module: Option<Arc<dyn WasmModule>>,
 		mut ext: &mut dyn Externalities,
 	) -> Option<Self> {
 		// Using 0 as capacity is only if we got the sp::io host
@@ -645,7 +739,7 @@ impl RuntimeInstanceSpawn {
 		sp_externalities::with_externalities(
 			move |mut ext| {
 				if let Some(runtime_spawn) =
-					Self::with_externalities_and_module(module.clone(), ext)
+					Self::with_externalities_and_module(Some(module.clone()), ext)
 				{
 					if let Err(e) = ext.register_extension(
 						RuntimeSpawnExt(Box::new(runtime_spawn))

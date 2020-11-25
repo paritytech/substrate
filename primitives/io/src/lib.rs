@@ -1248,61 +1248,50 @@ pub trait Sandbox {
 /// Wasm host functions for managing tasks.
 ///
 /// This should not be used directly. Use `sp_tasks` for running parallel tasks instead.
-#[runtime_interface(wasm_only)]
+#[runtime_interface]
 pub trait RuntimeTasks {
 	/// TODO doc
 	///
 	/// This should not be used directly. Use `sp_tasks::set_capacity` instead.
-	fn set_capacity(capacity: u32) {
-		sp_externalities::with_externalities(|mut ext|{
-			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
-				.expect("Cannot set capacity without dynamic runtime dispatcher (RuntimeSpawnExt)");
-			runtime_spawn.set_capacity(capacity)
-		}).expect("`RuntimeTasks::set_capacity`: called outside of externalities context")
+	fn set_capacity(&mut self, capacity: u32) {
+		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
+			.expect("Cannot set capacity without dynamic runtime dispatcher (RuntimeSpawnExt)");
+		runtime_spawn.set_capacity(capacity);
 	}
 
 	/// Wasm host function for spawning task.
 	///
 	/// This should not be used directly. Use `sp_tasks::spawn` instead.
-	fn spawn(dispatcher_ref: u32, entry: u32, payload: Vec<u8>, kind: u8) -> u64 {
-		sp_externalities::with_externalities(|mut ext|{
-			let ext_unsafe = ext as *mut dyn Externalities;
-			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
-				.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
-			// Unsafe usage here means that `spawn_call` shall never attempt to access
-			// or deregister this `RuntimeSpawnExt` from the unchecked ext2.
-			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
-			// a given id, to make this safer.
-			let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, kind, ext_unsafe);
-			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
-			// Not necessary (same lifetime as runtime_spawn), but shows intent to keep
-			// ext alive as long as ext_unsafe is in scope.
-			drop(ext);
-			result
-		}).expect("`RuntimeTasks::spawn`: called outside of externalities context")
+	fn spawn(&mut self, dispatcher_ref: u32, entry: u32, payload: Vec<u8>, kind: u8) -> u64 {
+		let ext_unsafe = *self as *mut dyn Externalities;
+		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
+			.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
+		// Unsafe usage here means that `spawn_call` shall never attempt to access
+		// or deregister this `RuntimeSpawnExt` from the unchecked ext2.
+		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+		// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+		// a given id, to make this safer.
+		let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, kind, ext_unsafe);
+		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
+		result
 	}
 
 	/// Wasm host function for joining a task.
 	///
 	/// This should not be used directly. Use `join` of `sp_tasks::spawn` result instead.
-	fn join(handle: u64) -> Vec<u8> {
-		sp_externalities::with_externalities(|mut ext| {
-			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
-				.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
-			runtime_spawn.join(handle)
-		}).expect("`RuntimeTasks::join`: called outside of externalities context")
+	fn join(&mut self, handle: u64) -> Vec<u8> {
+		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
+			.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
+		runtime_spawn.join(handle)
 	}
 
 	/// TODO doc
 	///
 	/// This should not be used directly. Use `kill` of `sp_tasks::spawn` result instead.
-	fn kill(handle: u64) {
-		sp_externalities::with_externalities(|mut ext| {
-			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
-				.expect("Cannot kill without dynamic runtime dispatcher (RuntimeSpawnExt)");
-			runtime_spawn.kill(handle)
-		}).expect("`RuntimeTasks::kill`: called outside of externalities context")
+	fn kill(&mut self, handle: u64) {
+		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
+			.expect("Cannot kill without dynamic runtime dispatcher (RuntimeSpawnExt)");
+		runtime_spawn.kill(handle)
 	}
 }
 

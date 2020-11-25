@@ -93,110 +93,70 @@ impl AsyncStateType {
 	}
 }
 
-#[cfg(feature = "std")]
-mod inner {
-	use std::{panic::AssertUnwindSafe, sync::mpsc};
-	use sp_externalities::ExternalitiesExt as _;
-	use sp_core::traits::TaskExecutorExt;
-	use crate::{AsyncExt, AsyncStateType};
+/// Task handle.
+///
+/// This can be `join`-ed to get (blocking) the result of
+/// the spawned task execution.
+///
+/// TODO this need to switch to an enum with a possible inline
+/// variant for RuntimeSpawn implemnetation that do not support threads.
+#[must_use]
+pub struct DataJoinHandle {
+	handle: u64,
+}
 
-	/// Task handle (wasm).
-	///
-	/// This can be `join`-ed to get (blocking) the result of
-	/// the spawned task execution.
-	#[must_use]
-	pub struct DataJoinHandle {
-		receiver: mpsc::Receiver<Vec<u8>>,
-	}
-
-	impl DataJoinHandle {
-		/// Join handle returned by `spawn` function
-		pub fn join(self) -> Vec<u8> {
-			self.receiver.recv().expect("Spawned runtime task terminated before sending result.")
-		}
-
-		/// TODO doc
-		pub fn kill(self) {
-			unimplemented!()
-		}
+impl DataJoinHandle {
+	/// Join handle returned by `spawn` function
+	pub fn join(self) -> Vec<u8> {
+		sp_io::runtime_tasks::join(self.handle)
 	}
 
 	/// TODO doc
-	pub fn set_capacity(capacity: u32) {
-		// TODO unimplemented!() // TODO need a management object for native
+	pub fn kill(self) {
+		sp_io::runtime_tasks::kill(self.handle)
 	}
+}
+
+/// TODO doc
+pub fn set_capacity(capacity: u32) {
+	sp_io::runtime_tasks::set_capacity(capacity)
+}
+
+#[cfg(feature = "std")]
+mod inner {
+	use std::panic::AssertUnwindSafe;
+	use std::sync::{mpsc, Arc, atomic::{AtomicU64, Ordering}};
+	use std::collections::HashMap;
+	use sp_externalities::{Externalities, ExternalitiesExt as _};
+	use sp_core::traits::RuntimeSpawnExt;
+	use crate::{AsyncExt, AsyncStateType};
+	use super::DataJoinHandle;
 
 	/// Spawn new runtime task (native).
+	/// TODO factor this code with the runtime spawn one
 	pub fn spawn(
 		entry_point: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
 		kind: AsyncStateType,
 	) -> DataJoinHandle {
-		let scheduler = sp_externalities::with_externalities(|mut ext| ext.extension::<TaskExecutorExt>()
-			.expect("No task executor associated with the current context!")
-			.clone()
-		).expect("Spawn called outside of externalities context!");
+		let handle = sp_externalities::with_externalities(|mut ext|{
+			let ext_unsafe = ext as *mut dyn Externalities;
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
+			// Unsafe usage here means that `spawn_call` shall never attempt to access
+			// or deregister this `RuntimeSpawnExt` from the unchecked ext2.
+			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+			// a given id, to make this safer.
+			let result = runtime_spawn.spawn_call_native(entry_point, data, kind as u8, ext_unsafe);
+			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
+			// Not necessary (same lifetime as runtime_spawn), but shows intent to keep
+			// ext alive as long as ext_unsafe is in scope.
+			drop(ext);
+			result
+		}).expect("`RuntimeTasks::spawn`: called outside of externalities context");
 
-		let backend = match kind {
-			AsyncStateType::Stateless => AsyncExt::stateless_ext(),
-			AsyncStateType::ReadLastBlock => {
-				let backend = sp_externalities::with_externalities(|mut ext|
-					ext.get_past_async_backend()
-						.expect("Unsupported spawn kind.")
-				).expect("Spawn called outside of externalities context!");
-
-				AsyncExt::previous_block_read(backend)
-			},
-			AsyncStateType::ReadAtSpawn => {
-				let spawn_id = unimplemented!("TODO need handle on state machine and generally a thread pool like for wasm");
-				let backend = sp_externalities::with_externalities(|mut ext|
-					ext.get_async_backend(spawn_id)
-						.expect("Unsupported spawn kind.")
-				).expect("Spawn called outside of externalities context!");
-				AsyncExt::state_at_spawn_read(backend, Default::default(), spawn_id)
-			},
-		};
-
-		let (sender, receiver) = mpsc::channel();
-		let extra_scheduler = scheduler.clone();
-		scheduler.spawn("parallel-runtime-spawn", Box::pin(async move {
-			let result = match crate::new_async_externalities(extra_scheduler, backend) {
-				Ok(mut ext) => {
-					let mut ext = AssertUnwindSafe(&mut ext);
-					match std::panic::catch_unwind(move || {
-						sp_externalities::set_and_run_with_externalities(
-							&mut **ext,
-							move || entry_point(data),
-						)
-					}) {
-						Ok(result) => result,
-						Err(panic) => {
-							log::error!(
-								target: "runtime",
-								"Spawned task panicked: {:?}",
-								panic,
-							);
-
-							// This will drop sender without sending anything.
-							return;
-						}
-					}
-				},
-				Err(e) => {
-					log::error!(
-						target: "runtime",
-						"Unable to run async task: {}",
-						e,
-					);
-
-					return;
-				},
-			};
-
-			let _ = sender.send(result);
-		}));
-
-		DataJoinHandle { receiver }
+		DataJoinHandle { handle }
 	}
 }
 
@@ -226,11 +186,6 @@ mod inner {
 		sp_runtime_interface::pack_ptr_and_len(output.as_ptr() as usize as _, output.len() as _)
 	}
 
-	/// TODO doc
-	pub fn set_capacity(capacity: u32) {
-		sp_io::runtime_tasks::set_capacity(capacity)
-	}
-
 	/// Spawn new runtime task (wasm).
 	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>, kind: AsyncStateType) -> DataJoinHandle {
 		let func_ptr: usize = unsafe { mem::transmute(entry_point) };
@@ -244,32 +199,9 @@ mod inner {
 		DataJoinHandle { handle }
 	}
 
-	/// Task handle (wasm).
-	///
-	/// This can be `join`-ed to get (blocking) the result of
-	/// the spawned task execution.
-	///
-	/// TODO this need to switch to an enum with a possible inline
-	/// variant for RuntimeSpawn implemnetation that do not support threads.
-	#[must_use]
-	pub struct DataJoinHandle {
-		handle: u64,
-	}
-
-	impl DataJoinHandle {
-		/// Join handle returned by `spawn` function
-		pub fn join(self) -> Vec<u8> {
-			sp_io::runtime_tasks::join(self.handle)
-		}
-
-		/// TODO doc
-		pub fn kill(self) {
-			sp_io::runtime_tasks::kill(self.handle)
-		}
-	}
 }
 
-pub use inner::{DataJoinHandle, spawn, set_capacity};
+pub use inner::spawn;
 
 #[cfg(test)]
 mod tests {

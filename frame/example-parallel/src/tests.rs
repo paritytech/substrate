@@ -80,11 +80,29 @@ impl Trait for Test {
 
 type Example = Module<Test>;
 
+use sc_executor::RuntimeInstanceSpawn;
+use sp_core::Pair;
+use sp_core::traits::RuntimeSpawnExt;
+use sp_core::offchain::{
+	testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
+	OffchainExt, TransactionPoolExt,
+};
+
+fn test_ext() -> sp_io::TestExternalities {
+	let mut ext = sp_io::TestExternalities::default();
+	let (pool, pool_state) = TestTransactionPoolExt::new();
+
+	ext.register_extension(TransactionPoolExt::new(pool));
+	let runtime_spawn = RuntimeInstanceSpawn::with_externalities_and_module(None, &mut ext.ext())
+		.unwrap();
+	ext.register_extension(RuntimeSpawnExt(Box::new(runtime_spawn)));
+	ext
+}
+
 #[test]
 fn it_can_enlist() {
-	use sp_core::Pair;
 
-	sp_io::TestExternalities::default().execute_with(|| {
+	test_ext().execute_with(|| {
 		let (pair1, _) = sp_core::sr25519::Pair::generate();
 		let (pair2, _) = sp_core::sr25519::Pair::generate();
 
@@ -114,9 +132,8 @@ fn it_can_enlist() {
 
 #[test]
 fn one_wrong_will_not_enlist_anyone() {
-	use sp_core::Pair;
 
-	sp_io::TestExternalities::default().execute_with(|| {
+	test_ext().execute_with(|| {
 		let (pair1, _) = sp_core::sr25519::Pair::generate();
 		let (pair2, _) = sp_core::sr25519::Pair::generate();
 		let (pair3, _) = sp_core::sr25519::Pair::generate();
@@ -152,9 +169,8 @@ fn one_wrong_will_not_enlist_anyone() {
 
 #[test]
 fn it_can_pending_enlist() {
-	use sp_core::Pair;
 
-	sp_io::TestExternalities::default().execute_with(|| {
+	test_ext().execute_with(|| {
 		let nb = 6;
 		let pairs: Vec<_> = (0..nb).into_iter()
 			.map(|_| sp_core::sr25519::Pair::generate().0)
@@ -186,5 +202,3 @@ fn it_can_pending_enlist() {
 	});
 
 }
-
-
