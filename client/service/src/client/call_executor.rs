@@ -126,7 +126,7 @@ where
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = if self.client_config.offchain_indexing_api {
-			OverlayedChanges::default_with_offchain_indexing()
+			OverlayedChanges::with_offchain_indexing()
 		} else {
 			OverlayedChanges::default()
 		};

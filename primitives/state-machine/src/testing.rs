@@ -92,7 +92,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 
 	/// Create a new instance of `TestExternalities` with code and storage.
 	pub fn new_with_code(code: &[u8], mut storage: Storage) -> Self {
-		let mut overlay = OverlayedChanges::default_with_offchain_indexing();
+		let mut overlay = OverlayedChanges::with_offchain_indexing();
 		let changes_trie_config = storage.top.get(CHANGES_TRIE_CONFIG)
 			.and_then(|v| Decode::decode(&mut &v[..]).ok());
 		overlay.set_collect_extrinsics(changes_trie_config.is_some());

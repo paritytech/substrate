@@ -784,7 +784,7 @@ mod tests {
 	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
-		let mut changes = OverlayedChanges::default_with_offchain_indexing();
+		let mut changes = OverlayedChanges::with_offchain_indexing();
 		changes.set_collect_extrinsics(true);
 		changes.set_extrinsic_index(1);
 		changes.set_storage(vec![1], Some(vec![100]));
