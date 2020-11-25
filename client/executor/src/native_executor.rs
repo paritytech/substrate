@@ -547,10 +547,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		let ext = match AsyncStateType::from_u8(kind)
 			// TODO better message
 			.expect("Only from existing kind") {
-				AsyncStateType::None => {
+				AsyncStateType::Stateless => {
 					AsyncExt::stateless_ext()
 				},
-				AsyncStateType::ReadBefore => {
+				AsyncStateType::ReadLastBlock => {
 					let backend = unimplemented!("TODO get from externalities");
 					AsyncExt::previous_block_read(backend)
 				},

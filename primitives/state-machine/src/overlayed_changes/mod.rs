@@ -89,40 +89,73 @@ impl Extrinsics {
 }
 
 /// Keep trace of state markers.
+///
+/// State markers ensure a minimal
+/// set rules regarding worker usage:
+///	- Worker with read access cannot
+///	report result to the main thread
+///	for a rollbacked the spawning transaction.
 #[derive(Debug, Default, Clone)]
-struct Markers;
+struct Markers {
+	// current valid task ids
+	markers: BTreeSet<TaskId>,
+	// current transaction and associated
+	// task ids.
+	transactions: Vec<Vec<TaskId>>,
+}
 
 impl Markers {
+	fn current_transaction(&mut self) -> &mut Vec<TaskId> {
+		if self.transactions.is_empty() {
+			// always a runing context
+			self.transactions.push(Default::default());
+		}
+		self.transactions.last_mut()
+			.expect("Initialized above")
+	}
+
 	fn set_marker(&mut self, marker: TaskId) {
-		unimplemented!()
+		self.markers.insert(marker);
+		self.current_transaction().push(marker)
 	}
 
 	fn start_transaction(&mut self) {
-		unimplemented!()
+		self.transactions.push(Default::default());
 	}
 
 	fn rollback_transaction(&mut self) -> Vec<TaskId> {
-		// TODO using sp_task::kill is actually impossible,
-		// since state_machine did alread  borrowmut externalitise
-		// and kill will do the same.
-		// Thread kill directly could be done, but not for inline.
-		// Therefore we will need to move this Marker struct
-		// to externality extension and call when externality did
-		// call it -> TODO move Markers to the RuntimeSpawn and
-		// put on_start_tx ... for it.
-		// -> allowing early kill.
-		// For inline this would simply change state of stored
-		// online.
-		// Actually this only need to be done this call.
-		unimplemented!("TODO sp_task::kill all ids");
+		if let Some(markers) = self.transactions.pop() {
+			for marker in markers.iter() {
+				self.markers.remove(marker);
+				// TODO using sp_task::kill is actually impossible,
+				// since state_machine did alread  borrowmut externalitise
+				// and kill will do the same.
+				// Thread kill directly could be done, but not for inline.
+				// Therefore we will need to move this Marker struct
+				// to externality extension and call when externality did
+				// call it -> TODO move Markers to the RuntimeSpawn and
+				// put on_start_tx ... for it.
+				// -> allowing early kill.
+				// For inline this would simply change state of stored
+				// online.
+				// Actually this only need to be done this call.
+				unimplemented!("TODO sp_task::kill all ids");
+				// Or do it from calle
+			}
+			markers
+		} else {
+			Default::default()
+		}
 	}
 
 	fn commit_transaction(&mut self) {
-		unimplemented!("TODO move tx markers to parent")
+		if let Some(mut markers) = self.transactions.pop() {
+			self.current_transaction().append(&mut markers);
+		}
 	}
 
 	fn is_state_current(&self, marker: TaskId) -> bool {
-		unimplemented!()
+		self.markers.contains(&marker)
 	}
 }
 

@@ -33,7 +33,7 @@ pub enum AsyncState {
 	/// Externalities do not access state, so we join
 	None,
 	/// Externalities access read only the backend unmodified state.
-	ReadBefore(AsyncExt),
+	ReadLastBlock(AsyncExt),
 	/// Externalities access read only the backend unmodified state,
 	/// and the change at the time of spawn.
 	/// In this case when joining we return an identifier of the
@@ -49,7 +49,7 @@ impl Default for AsyncState {
 
 pub enum AsyncStateResult {
 	/// Result is always valid, for `AsyncState::None`
-	/// and `AsyncState::ReadBefore`.
+	/// and `AsyncState::ReadLastBlock`.
 	StateLess(Vec<u8>),
 	ReadOnly(Vec<u8>, TaskId),
 }
@@ -80,7 +80,7 @@ impl AsyncExt {
 	/// TODO make panic in thread panic the master threaod too !!!
 	pub fn stateless_ext() -> Self {
 		AsyncExt {
-			kind: AsyncStateType::None,
+			kind: AsyncStateType::Stateless,
 			read_overlay: Default::default(),
 			spawn_id: None,
 			backend: None,
@@ -94,7 +94,7 @@ impl AsyncExt {
 	/// assert the thread did join.
 	pub fn previous_block_read(backend: Box<dyn AsyncBackend>) -> Self {
 		AsyncExt {
-			kind: AsyncStateType::ReadBefore,
+			kind: AsyncStateType::ReadLastBlock,
 			read_overlay: Default::default(),
 			spawn_id: None,
 			backend: Some(backend),
@@ -119,7 +119,7 @@ impl AsyncExt {
 		spawn_id: TaskId,
 	) -> Self {
 		AsyncExt {
-			kind: AsyncStateType::ReadBefore,
+			kind: AsyncStateType::ReadLastBlock,
 			read_overlay: Default::default(),
 			spawn_id: Some(spawn_id),
 			backend: Some(backend),

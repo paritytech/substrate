@@ -28,7 +28,9 @@
 //!        unimplemented!()
 //!    }
 //!    fn test(dynamic_variable: i32) {
-//!        for _ in 0..dynamic_variable { sp_tasks::spawn(my_parallel_computator, vec![], AsyncStateType::None); }
+//!       for _ in 0..dynamic_variable {
+//!					sp_tasks::spawn(my_parallel_computator, vec![], AsyncStateType::Stateless);
+//!				}
 //!    }
 //! ```
 //!
@@ -46,7 +48,7 @@
 //!        let parallel_tasks = (0..STATIC_VARIABLE).map(|idx| sp_tasks::spawn(
 //!            my_parallel_computator,
 //!            computation_payload.chunks(10).nth(idx as _).encode(),
-//!            AsyncStateType::None,
+//!            AsyncStateType::Stateless,
 //!        ));
 //!    }
 //! ```
@@ -68,14 +70,14 @@ pub use async_externalities::{new_async_externalities, AsyncExternalities, Async
 #[derive(Debug)]
 #[repr(u8)]
 pub enum AsyncStateType {
-	None = 0,
-	ReadBefore = 1,
+	Stateless = 0,
+	ReadLastBlock = 1,
 	ReadAtSpawn = 2,
 }
 
 impl Default for AsyncStateType {
 	fn default() -> Self {
-		AsyncStateType::None
+		AsyncStateType::Stateless
 	}
 }
 
@@ -83,8 +85,8 @@ impl AsyncStateType {
 	/// Similar purpose as `TryFrom<u8>`.
 	pub fn from_u8(kind: u8) -> Option<AsyncStateType> {
 		Some(match kind {
-			0 => AsyncStateType::None,
-			1 => AsyncStateType::ReadBefore,
+			0 => AsyncStateType::Stateless,
+			1 => AsyncStateType::ReadLastBlock,
 			2 => AsyncStateType::ReadAtSpawn,
 			_ => return None,
 		})
@@ -136,7 +138,7 @@ mod inner {
 		).expect("Spawn called outside of externalities context!");
 
 		let backend = match kind {
-			AsyncStateType::None => AsyncExt::stateless_ext(),
+			AsyncStateType::Stateless => AsyncExt::stateless_ext(),
 			_ => unimplemented!("TODO need handle on state machine and generally a thread pool like for wasm"),
 		};
 
@@ -271,7 +273,7 @@ mod tests {
 	#[test]
 	fn basic() {
 		sp_io::TestExternalities::default().execute_with(|| {
-			let a1 = spawn(async_runner, vec![5, 2, 1], AsyncStateType::None).join();
+			let a1 = spawn(async_runner, vec![5, 2, 1], AsyncStateType::Stateless).join();
 			assert_eq!(a1, vec![1, 2, 5]);
 		})
 	}
@@ -279,7 +281,7 @@ mod tests {
 	#[test]
 	fn panicking() {
 		let res = sp_io::TestExternalities::default().execute_with_safe(||{
-			spawn(async_panicker, vec![5, 2, 1], AsyncStateType::None).join();
+			spawn(async_panicker, vec![5, 2, 1], AsyncStateType::Stateless).join();
 		});
 
 		assert!(res.unwrap_err().contains("Closure panicked"));
@@ -299,7 +301,7 @@ mod tests {
 						3 * running_val + 1
 					};
 					data.push(running_val as u8);
-					(spawn(async_runner, data.clone(), AsyncStateType::None), data.clone())
+					(spawn(async_runner, data.clone(), AsyncStateType::Stateless), data.clone())
 				}
 			).collect::<Vec<_>>();
 
