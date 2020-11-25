@@ -203,6 +203,10 @@ decl_module! {
 				Lottery::<T>::kill();
 				TicketsCount::kill();
 
+				// We choose not need to kill Participants and Tickets to avoid a large number
+				// of writes at one time. Instead, data persists between lotteries, but is not used
+				// if it is not relevant.
+
 				return T::WeightInfo::on_initialize()
 			} else {
 				return Weight::zero()
