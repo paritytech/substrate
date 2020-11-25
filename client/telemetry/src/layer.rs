@@ -73,7 +73,8 @@ where
 							json,
 						));
 					} else {
-						panic!(
+						// NOTE: logging in this function doesn't work
+						eprintln!(
 							"missing fields in telemetry log: {:?}. This can happen if \
 							`tracing::info_span!` is (mis-)used with the telemetry target \
 							directly; you should use the `telemetry!` macro.",
