@@ -905,7 +905,7 @@ impl pallet_lottery::Trait for Runtime {
 	type Randomness = RandomnessCollectiveFlip;
 	type ManagerOrigin = EnsureRoot<AccountId>;
 	type MaxCalls = MaxCalls;
-	type WeightInfo = ();
+	type WeightInfo = pallet_lottery::weights::SubstrateWeight<Runtime>;
 }
 
 construct_runtime!(
