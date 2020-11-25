@@ -197,7 +197,7 @@ fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate as sc_logging;
+	use crate as sc_tracing;
 	use std::{env, process::Command};
 	use tracing::{metadata::Kind, subscriber::Interest, Callsite, Level, Metadata};
 
@@ -310,7 +310,7 @@ mod tests {
 		}
 	}
 
-	#[crate::prefix_logs_with(EXPECTED_NODE_NAME)]
+	#[crate::logging::prefix_logs_with(EXPECTED_NODE_NAME)]
 	fn prefix_in_log_lines_process() {
 		log::info!("{}", EXPECTED_LOG_MESSAGE);
 	}
