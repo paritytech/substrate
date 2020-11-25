@@ -112,12 +112,10 @@ macro_rules! afg_log {
 mod authorities;
 mod aux_schema;
 mod communication;
-mod consensus_changes;
 mod environment;
 mod finality_proof;
 mod import;
 mod justification;
-mod light_import;
 mod notification;
 mod observer;
 mod until_imported;
@@ -128,7 +126,6 @@ pub use finality_proof::{FinalityProofFragment, FinalityProofProvider, StorageAn
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
-pub use light_import::{light_block_import, GrandpaLightBlockImport};
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
@@ -588,7 +585,6 @@ where
 			select_chain.clone(),
 			persistent_data.authority_set.clone(),
 			voter_commands_tx,
-			persistent_data.consensus_changes.clone(),
 			authority_set_hard_forks,
 			justification_sender.clone(),
 		),
@@ -844,7 +840,6 @@ where
 			network: network.clone(),
 			set_id: persistent_data.authority_set.set_id(),
 			authority_set: persistent_data.authority_set.clone(),
-			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
 			justification_sender: Some(justification_sender),
@@ -989,7 +984,6 @@ where
 					select_chain: self.env.select_chain.clone(),
 					config: self.env.config.clone(),
 					authority_set: self.env.authority_set.clone(),
-					consensus_changes: self.env.consensus_changes.clone(),
 					network: self.env.network.clone(),
 					voting_rule: self.env.voting_rule.clone(),
 					metrics: self.env.metrics.clone(),
@@ -1085,7 +1079,6 @@ where
 	// to receive GRANDPA messages on the network. We don't process the
 	// messages.
 	network.register_notifications_protocol(
-		communication::GRANDPA_ENGINE_ID,
 		From::from(communication::GRANDPA_PROTOCOL_NAME),
 	);
 

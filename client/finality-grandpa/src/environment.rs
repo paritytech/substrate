@@ -34,10 +34,10 @@ use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,
 };
-use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as ClientError};
+use sp_blockchain::HeaderMetadata;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
+	Block as BlockT, Header as HeaderT, NumberFor, Zero,
 };
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
@@ -50,7 +50,6 @@ use sp_consensus::SelectChain;
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::communication::Network as NetworkT;
-use crate::consensus_changes::SharedConsensusChanges;
 use crate::notification::GrandpaJustificationSender;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
@@ -440,7 +439,6 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
@@ -1115,7 +1113,6 @@ where
 		finalize_block(
 			self.client.clone(),
 			&self.authority_set,
-			&self.consensus_changes,
 			Some(self.config.justification_period.into()),
 			hash,
 			number,
@@ -1180,7 +1177,6 @@ impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<
 pub(crate) fn finalize_block<BE, Block, Client>(
 	client: Arc<Client>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	justification_period: Option<NumberFor<Block>>,
 	hash: Block::Hash,
 	number: NumberFor<Block>,
@@ -1215,15 +1211,6 @@ where
 
 	// FIXME #1483: clone only when changed
 	let old_authority_set = authority_set.clone();
-	// holds the old consensus changes in case it is changed below, needed for
-	// reverting in case of failure
-	let mut old_consensus_changes = None;
-
-	let mut consensus_changes = consensus_changes.lock();
-	let canon_at_height = |canon_number| {
-		// "true" because the block is finalized
-		canonical_at_height(&*client, (hash, number), true, canon_number)
-	};
 
 	let update_res: Result<_, Error> = client.lock_import_and_run(|import_op| {
 		let status = authority_set.apply_standard_changes(
@@ -1232,26 +1219,6 @@ where
 			&is_descendent_of::<Block, _>(&*client, None),
 			initial_sync,
 		).map_err(|e| Error::Safety(e.to_string()))?;
-
-		// check if this is this is the first finalization of some consensus changes
-		let (alters_consensus_changes, finalizes_consensus_changes) = consensus_changes
-			.finalize((number, hash), &canon_at_height)?;
-
-		if alters_consensus_changes {
-			old_consensus_changes = Some(consensus_changes.clone());
-
-			let write_result = crate::aux_schema::update_consensus_changes(
-				&*consensus_changes,
-				|insert| apply_aux(import_op, insert, &[]),
-			);
-
-			if let Err(e) = write_result {
-				warn!(target: "afg", "Failed to write updated consensus changes to disk. Bailing.");
-				warn!(target: "afg", "Node is in a potentially inconsistent state.");
-
-				return Err(e.into());
-			}
-		}
 
 		// send a justification notification if a sender exists and in case of error log it.
 		fn notify_justification<Block: BlockT>(
@@ -1280,9 +1247,7 @@ where
 				let mut justification_required =
 					// justification is always required when block that enacts new authorities
 					// set is finalized
-					status.new_set_block.is_some() ||
-					// justification is required when consensus changes are finalized
-					finalizes_consensus_changes;
+					status.new_set_block.is_some();
 
 				// justification is required every N blocks to be able to prove blocks
 				// finalization to remote nodes
@@ -1387,57 +1352,7 @@ where
 		Err(e) => {
 			*authority_set = old_authority_set;
 
-			if let Some(old_consensus_changes) = old_consensus_changes {
-				*consensus_changes = old_consensus_changes;
-			}
-
 			Err(CommandOrError::Error(e))
 		}
 	}
-}
-
-/// Using the given base get the block at the given height on this chain. The
-/// target block must be an ancestor of base, therefore `height <= base.height`.
-pub(crate) fn canonical_at_height<Block: BlockT, C: HeaderBackend<Block>>(
-	provider: &C,
-	base: (Block::Hash, NumberFor<Block>),
-	base_is_canonical: bool,
-	height: NumberFor<Block>,
-) -> Result<Option<Block::Hash>, ClientError> {
-	if height > base.1 {
-		return Ok(None);
-	}
-
-	if height == base.1 {
-		if base_is_canonical {
-			return Ok(Some(base.0));
-		} else {
-			return Ok(provider.hash(height).unwrap_or(None));
-		}
-	} else if base_is_canonical {
-		return Ok(provider.hash(height).unwrap_or(None));
-	}
-
-	let one = NumberFor::<Block>::one();
-
-	// start by getting _canonical_ block with number at parent position and then iterating
-	// backwards by hash.
-	let mut current = match provider.header(BlockId::Number(base.1 - one))? {
-		Some(header) => header,
-		_ => return Ok(None),
-	};
-
-	// we've already checked that base > height above.
-	let mut steps = base.1 - height - one;
-
-	while steps > NumberFor::<Block>::zero() {
-		current = match provider.header(BlockId::Hash(*current.parent_hash()))? {
-			Some(header) => header,
-			_ => return Ok(None),
-		};
-
-		steps -= one;
-	}
-
-	Ok(Some(current.hash()))
 }

@@ -18,8 +18,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 parking_lot = "0.10.0"
 futures = "0.3.4"
 futures-timer = "3.0.1"
-wasm-timer = "0.2.0"
-libp2p = { version = "0.29.1", default-features = false, features = ["dns", "tcp-async-std", "wasm-ext", "websocket"] }
+wasm-timer = "0.2.5"
+libp2p = { version = "0.30.1", default-features = false, features = ["dns", "tcp-async-std", "wasm-ext", "websocket"] }
 log = "0.4.8"
 pin-project = "0.4.6"
 rand = "0.7.2"
