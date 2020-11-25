@@ -43,6 +43,11 @@ pub trait Trait: frame_system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as ExampleOffchainWorker {
+		/// A vector of pending participants
+		///
+		/// They need to be verified before being added to participants.
+		PendingParticipants get(fn pending_participants): Vec<EnlistedParticipant>;
+
 		/// A vector of current participants
 		///
 		/// To enlist someone to participate, signed payload should be
@@ -116,6 +121,33 @@ decl_module! {
 			}
 			Ok(())
 		}
+
+		/// Submit list of pending participants to the current event.
+		#[weight = 0]
+		pub fn enlist_pending_participants(origin, participants: Vec<EnlistedParticipant>)
+			-> DispatchResult
+		{
+			let _ = ensure_signed(origin)?;
+
+			for participant in participants {
+				PendingParticipants::append(participant);
+			}
+			Ok(())
+		}
+
+		/// Validate a given number of pending participant.
+		///
+		/// This uses the current read state to validate in parallel.
+		/// It removes participants that are invalid from pending list
+		/// and process the valid ones.
+		#[weight = 0]
+		pub fn validate_pendings_participants(origin, number: u32)
+			-> DispatchResult
+		{
+			validate_pending_participants_parallel(number as usize);
+			Ok(())
+		}
+	
 	}
 }
 
@@ -141,7 +173,7 @@ fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParti
 	let handle = sp_tasks::spawn(spawn_verify, async_payload, sp_tasks::AsyncStateType::Stateless);
 	let mut result = true;
 
-	for participant in &participants[participants.len()/2+1..] {
+	for participant in &participants[participants.len()/2..] {
 		if !participant.verify(event_id) {
 			result = false;
 			break;
@@ -149,4 +181,47 @@ fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParti
 	}
 
 	bool::decode(&mut &handle.join()[..]).expect("Failed to decode result") && result
+}
+
+fn validate_pending_participants_parallel(number: usize) {
+
+	fn spawn_verify(data: Vec<u8>) -> Vec<u8> {
+		let stream = &mut &data[..];
+		let split = u32::decode(stream).expect("Failed to decode") as usize;
+		let participants = PendingParticipants::get();
+		let event_id = CurrentEventId::get();
+		let mut to_skip = Vec::new();
+
+		for (index, participant) in (&participants[..split]).iter().enumerate() {
+			if !participant.verify(&event_id) {
+				to_skip.push(index as u32);
+			}
+		}
+		to_skip.encode()
+	}
+
+	let participants = PendingParticipants::get();
+	let event_id = CurrentEventId::get();
+
+	let number = sp_std::cmp::min(participants.len(), number);
+	let split = number / 2;
+	let mut async_payload = Vec::new();
+	// We should really skip spawn when split is 0, but this is just an example.
+	(split as u32).encode_to(&mut async_payload);
+
+	let handle = sp_tasks::spawn(spawn_verify, async_payload, sp_tasks::AsyncStateType::ReadAtSpawn);
+
+	for participant in &participants[split..number] {
+		if participant.verify(&event_id) {
+			Participants::append(participant.account.clone());
+		}
+	}
+	let mut to_skip: Vec<u32> = Decode::decode(&mut &handle.join()[..]).expect("Failed to decode result");
+	for (index, participant) in (&participants[..split]).iter().enumerate() {
+		if Some(&(index as u32)) == to_skip.first() {
+			to_skip.remove(0);
+		} else {
+			Participants::append(participant.account.clone());
+		}
+	}
 }

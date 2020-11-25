@@ -149,3 +149,42 @@ fn one_wrong_will_not_enlist_anyone() {
 	});
 
 }
+
+#[test]
+fn it_can_pending_enlist() {
+	use sp_core::Pair;
+
+	sp_io::TestExternalities::default().execute_with(|| {
+		let nb = 6;
+		let pairs: Vec<_> = (0..nb).into_iter()
+			.map(|_| sp_core::sr25519::Pair::generate().0)
+			.collect();
+
+		let event_name = b"test";
+
+		Example::run_event(Origin::signed(Default::default()), event_name.to_vec())
+			.expect("Failed to enlist");
+
+		let participants: Vec<_> = pairs.into_iter().map(|pair|
+			EnlistedParticipant {
+				account: pair.public().to_vec(),
+				signature: AsRef::<[u8]>::as_ref(&pair.sign(event_name)).to_vec(),
+			}
+		).collect();
+
+		Example::enlist_pending_participants(Origin::signed(Default::default()), participants)
+			.expect("Failed to enlist");
+
+		assert_eq!(Example::pending_participants().len(), nb);
+		assert_eq!(Example::participants().len(), 0);
+
+		Example::validate_pendings_participants(Origin::signed(Default::default()), nb as u32)
+			.expect("Failed to enlist");
+
+		assert_eq!(Example::pending_participants().len(), 0);
+		assert_eq!(Example::participants().len(), nb);
+	});
+
+}
+
+
