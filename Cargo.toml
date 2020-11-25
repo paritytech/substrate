@@ -184,7 +184,6 @@ members = [
 	"utils/frame/rpc/system",
 	"utils/prometheus",
 	"utils/wasm-builder",
-	"utils/wasm-builder-runner",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates

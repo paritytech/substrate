@@ -15,7 +15,7 @@
 		;; Self-destruct by sending full balance to the 0 address.
 		(call $seal_terminate
 			(i32.const 0)	;; Pointer to destination address
-			(i32.const 8)	;; Length of destination address
+			(i32.const 32)	;; Length of destination address
 		)
 	)
 
