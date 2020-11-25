@@ -1098,6 +1098,7 @@ impl<T: Trait> Module<T> {
 						}
 					}
 				}
+
 				// We then select the new member with the highest weighted stake. In the case of
 				// a tie, the last person in the list with the tied score is selected. This is
 				// the person with the "highest" account id based on the sort above.
@@ -1279,14 +1280,12 @@ mod tests {
 		type WeightInfo = ();
 	}
 
-	parameter_types! {
-		pub const CandidacyBond: u64 = 3;
-	}
-
 	frame_support::parameter_types! {
-		pub static VotingBond: u64 = 2;
+		pub static VotingBondBase: u64 = 2;
+		pub static VotingBondFactor: u64 = 0;
+		pub static CandidacyBond: u64 = 3;
 		pub static DesiredMembers: u32 = 2;
-		pub static DesiredRunnersUp: u32 = 2;
+		pub static DesiredRunnersUp: u32 = 0;
 		pub static TermDuration: u64 = 5;
 		pub static Members: Vec<u64> = vec![];
 		pub static Prime: Option<u64> = None;
@@ -1295,7 +1294,6 @@ mod tests {
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
 		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
-			dbg!(incoming, outgoing, new);
 			// new, incoming, outgoing must be sorted.
 			let mut new_sorted = new.to_vec();
 			new_sorted.sort();
@@ -1565,6 +1563,10 @@ mod tests {
 	fn params_should_work() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Elections::desired_members(), 2);
+			assert_eq!(Elections::desired_runners_up(), 0);
+			assert_eq!(<Test as Trait>::VotingBondBase::get(), 2);
+			assert_eq!(<Test as Trait>::VotingBondFactor::get(), 0);
+			assert_eq!(<Test as Trait>::CandidacyBond::get(), 3);
 			assert_eq!(Elections::term_duration(), 5);
 			assert_eq!(Elections::election_rounds(), 0);
 
@@ -2279,6 +2281,7 @@ mod tests {
 
 			assert_eq!(members_and_stake(), vec![(3, 30), (5, 20)]);
 			assert!(Elections::runners_up().is_empty());
+
 			assert_eq_uvec!(all_voters(), vec![2, 3, 4]);
 			assert!(candidate_ids().is_empty());
 			assert_eq!(<Candidates<Test>>::decode_len(), None);
@@ -2650,7 +2653,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, true),
 				Error::<Test>::InvalidReplacement,
-				Some(33489000), // only thing that matters for now is that it is NOT the full block.
+				Some(34042000), // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 
@@ -2672,7 +2675,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::root(), 4, false),
 				Error::<Test>::InvalidReplacement,
-				Some(33489000) // only thing that matters for now is that it is NOT the full block.
+				Some(34042000) // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 	}
