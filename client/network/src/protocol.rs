@@ -1458,8 +1458,14 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						trace!(target: "sync", "Block request to peer {:?} failed: {:?}.", id, e);
 
 						match e {
+							RequestFailure::UnknownProtocol => {
+								debug_assert!(false, "Block request protocol should always be known.");
+							}
 							RequestFailure::Network(OutboundFailure::Timeout) => {
- 								self.peerset_handle.report_peer(id.clone(), rep::BAD_RESPONSE);
+								self.peerset_handle.report_peer(id.clone(), rep::TIMEOUT);
+							}
+							RequestFailure::Network(OutboundFailure::UnsupportedProtocols) => {
+								self.peerset_handle.report_peer(id.clone(), rep::BAD_PROTOCOL);
 							}
 							RequestFailure::Obsolete => {
 								debug_assert!(
