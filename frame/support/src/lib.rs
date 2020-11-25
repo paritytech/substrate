@@ -104,8 +104,6 @@ pub enum Never {}
 ///   being provided by a static variable with the equivalent name in `UPPER_SNAKE_CASE`. An
 ///   additional `set` function is provided in this case to alter the static variable. 
 ///
-/// **This is intended for testing ONLY and is ONLY available when `std` is enabled**
-///
 /// # Examples
 ///
 /// ```
@@ -488,7 +486,6 @@ macro_rules! ensure {
 ///
 /// Used as `assert_noop(expression_to_assert, expected_error_expression)`.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_noop {
 	(
 		$x:expr,
@@ -504,7 +501,6 @@ macro_rules! assert_noop {
 ///
 /// Used as `assert_err!(expression_to_assert, expected_error_expression)`
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_err {
 	( $x:expr , $y:expr $(,)? ) => {
 		assert_eq!($x, Err($y.into()));
@@ -516,7 +512,6 @@ macro_rules! assert_err {
 /// This can be used on`DispatchResultWithPostInfo` when the post info should
 /// be ignored.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_err_ignore_postinfo {
 	( $x:expr , $y:expr $(,)? ) => {
 		$crate::assert_err!($x.map(|_| ()).map_err(|e| e.error), $y);
@@ -525,7 +520,6 @@ macro_rules! assert_err_ignore_postinfo {
 
 /// Assert an expression returns error with the given weight.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_err_with_weight {
 	($call:expr, $err:expr, $weight:expr $(,)? ) => {
 		if let Err(dispatch_err_with_post) = $call {
@@ -542,7 +536,6 @@ macro_rules! assert_err_with_weight {
 /// Used as `assert_ok!(expression_to_assert, expected_ok_expression)`,
 /// or `assert_ok!(expression_to_assert)` which would assert against `Ok(())`.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_ok {
 	( $x:expr $(,)? ) => {
 		let is = $x;
