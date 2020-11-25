@@ -23,11 +23,13 @@ use std::collections::{hash_map::Entry, HashMap};
 use std::sync::Arc;
 
 #[derive(Debug, Default)]
+/// A collection of nodes connecting to a telemetry server and identified by address.
 pub struct NodePool {
 	nodes: Mutex<HashMap<Multiaddr, Arc<Mutex<Node<WsTrans>>>>>,
 }
 
 impl NodePool {
+	/// Create a new `Node` if it doesn't exist for a given address.
 	pub fn get_or_create(
 		&self,
 		transport: WsTrans,

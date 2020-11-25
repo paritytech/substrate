@@ -42,7 +42,7 @@ use std::{io, pin::Pin, sync::Arc, task::Context, task::Poll, time};
 mod node;
 pub(crate) mod node_pool;
 
-use node_pool::NodePool;
+pub use node_pool::NodePool;
 
 /// Timeout after which a connection attempt is considered failed. Includes the WebSocket HTTP
 /// upgrading.

@@ -34,6 +34,8 @@
 //! will also deregister the global logger and replace it with a logger that discards messages.
 //! The `Stream` generates [`TelemetryEvent`]s.
 
+#![warn(missing_docs)]
+
 use futures::{channel::mpsc, prelude::*};
 use libp2p::{wasm_ext, Multiaddr};
 use log::{error, warn};
