@@ -22,7 +22,8 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, whitelisted_caller};
+use frame_support::traits::{OnInitialize, UnfilteredDispatchable};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use sp_runtime::traits::Bounded;
 
 use crate::Module as Lottery;
@@ -40,7 +41,8 @@ fn start_lottery<T: Trait>() -> Result<(), &'static str> {
 	];
 	// Last call will be the match for worst case scenario.
 	calls.push(frame_system::Call::<T>::remark(vec![]).into());
-	Lottery::<T>::setup_lottery(RawOrigin::Root.into(), price, start, end, payout, calls)?;
+	let origin = T::ManagerOrigin::successful_origin();
+	Lottery::<T>::setup_lottery(origin, price, start, end, payout, calls)?;
 	Ok(())
 }
 
@@ -56,12 +58,11 @@ benchmarks! {
 			frame_system::Call::<T>::remark(vec![]).into(),
 		];
 
-	// 	let call = Call::<T>::setup_lottery(price, start, end, payout, calls);
-	// 	let origin = T::ManagerOrigin::successful_origin();
+		let call = Call::<T>::setup_lottery(price, start, end, payout, calls);
+		let origin = T::ManagerOrigin::successful_origin();
 
-	// 	// use success origin
-	// }: { call.dispatch_bypass_filter(origin)? }
-	}: _(RawOrigin::Root, price, start, end, payout, calls)
+		// use success origin
+	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(crate::Lottery::<T>::get().is_some());
 	}
@@ -86,12 +87,54 @@ benchmarks! {
 		assert_eq!(TicketsCount::get(), 1);
 	}
 
-	on_initialize {
+	do_buy_ticket {
+		let caller = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		start_lottery::<T>()?;
+		// force user to have a long vec of calls participating
+		let set_code_index: CallIndex = Lottery::<T>::call_to_index(
+			&frame_system::Call::<T>::set_code(vec![]).into()
+		)?;
+		let already_called: Vec<CallIndex> = vec![
+			set_code_index;
+			T::MaxCalls::get().saturating_sub(1)
+		];
+		Participants::<T>::insert(&caller, already_called);
 
+		let call = frame_system::Call::<T>::remark(vec![]);
 	}: {
-
+		Lottery::<T>::do_buy_ticket(&caller, &call.into())?
+	}
+	verify {
+		assert_eq!(TicketsCount::get(), 1);
 	}
 
+	on_initialize {
+		start_lottery::<T>()?;
+		let winner = account("winner", 0, 0);
+		// User needs more than min balance to get ticket
+		T::Currency::make_free_balance_be(&winner, T::Currency::minimum_balance() * 10.into());
+		// Make sure lottery account has at least min balance too
+		let lottery_account = Lottery::<T>::account_id();
+		T::Currency::make_free_balance_be(&lottery_account, T::Currency::minimum_balance() * 10.into());
+		// Buy a ticket
+		let call = frame_system::Call::<T>::remark(vec![]);
+		Lottery::<T>::buy_ticket(RawOrigin::Signed(winner.clone()).into(), call.into())?;
+		// Kill user account for worst case
+		T::Currency::make_free_balance_be(&winner, 0.into());
+		// Assert that lotto is set up for winner
+		assert_eq!(TicketsCount::get(), 1);
+		assert!(!Lottery::<T>::pot().1.is_zero());
+	}: {
+		// Start lottery has block 15 configured for payout
+		Lottery::<T>::on_initialize(15.into());
+	}
+	verify {
+		assert!(crate::Lottery::<T>::get().is_none());
+		assert_eq!(TicketsCount::get(), 0);
+		assert_eq!(Lottery::<T>::pot().1, 0.into());
+		assert!(!T::Currency::free_balance(&winner).is_zero())
+	}
 }
 
 #[cfg(test)]
@@ -105,6 +148,8 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_setup_lottery::<Test>());
 			assert_ok!(test_benchmark_buy_ticket::<Test>());
+			assert_ok!(test_benchmark_do_buy_ticket::<Test>());
+			assert_ok!(test_benchmark_on_initialize::<Test>());
 		});
 	}
 }

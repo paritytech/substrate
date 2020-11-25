@@ -69,6 +69,9 @@ pub trait Trait: frame_system::Trait {
 }
 
 type Index = u32;
+
+// Any runtime call can be encoded into two bytes which represent the pallet and call index.
+// We use this to uniquely match someone's incoming call with the calls configured for the lottery.
 type CallIndex = (u8, u8);
 
 decl_storage! {
@@ -169,8 +172,7 @@ decl_module! {
 
 			// Only try to buy a ticket if the underlying call is successful.
 			// Not much we can do if this fails.
-			let res = Self::do_buy_ticket(&caller, &call);
-			println!("{:?}", res);
+			let _ = Self::do_buy_ticket(&caller, &call);
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
@@ -200,8 +202,7 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-
-	/// The account ID of the treasury pot.
+	/// The account ID of the lottery pot.
 	///
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
@@ -219,6 +220,7 @@ impl<T: Trait> Module<T> {
 		(account_id, balance)
 	}
 
+	// Converts a vector of calls into a vector of call indices.
 	fn calls_to_indices(calls: &[<T as Trait>::Call]) -> Result<Vec<CallIndex>, DispatchError> {
 		let mut indices = Vec::with_capacity(calls.len());
 		for c in calls.iter() {
@@ -228,12 +230,14 @@ impl<T: Trait> Module<T> {
 		Ok(indices)
 	}
 
+	// Convert a call to it's call index by encoding the call and taking the first two bytes.
 	fn call_to_index(call: &<T as Trait>::Call) -> Result<CallIndex, DispatchError> {
 		let encoded_call = call.encode();
 		if encoded_call.len() < 2 { Err(Error::<T>::EncodingFailed)? }
 		return Ok((encoded_call[0], encoded_call[1]))
 	}
 
+	// Logic for buying a ticket.
 	fn do_buy_ticket(caller: &T::AccountId, call: &<T as Trait>::Call) -> DispatchResult {
 		// Check the call is valid lottery
 		let config = Lottery::<T>::get().ok_or(Error::<T>::NotConfigured)?;
@@ -262,6 +266,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
+	// Randomly choose a winner from among the total number of participants.
 	fn choose_winner(total: u32) -> u32 {
 		let random_seed = T::Randomness::random(b"lottery");
 		let random_number = <u32>::decode(&mut random_seed.as_ref())
