@@ -38,7 +38,7 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	on_demand_layer::AlwaysBadChecker,
-	light_client_handler, block_requests, finality_requests,
+	light_client_handler, block_requests,
 	protocol::{self, event::Event, NotifsHandlerError, NotificationsSink, Ready, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
@@ -248,7 +248,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			local_peer_id.clone(),
 			params.chain.clone(),
 			params.transaction_pool,
-			params.finality_proof_request_builder,
 			params.protocol_id.clone(),
 			peerset_config,
 			params.block_announce_validator,
@@ -266,10 +265,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			let block_requests = {
 				let config = block_requests::Config::new(&params.protocol_id);
 				block_requests::BlockRequests::new(config, params.chain.clone())
-			};
-			let finality_proof_requests = {
-				let config = finality_requests::Config::new(&params.protocol_id);
-				finality_requests::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
 			};
 			let light_client_handler = {
 				let config = light_client_handler::Config::new(&params.protocol_id);
@@ -310,7 +305,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					user_agent,
 					local_public,
 					block_requests,
-					finality_proof_requests,
 					light_client_handler,
 					discovery_config,
 					params.network_config.request_response_protocols,
@@ -1361,12 +1355,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					this.import_queue.import_justification(origin, hash, nb, justification);
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::FinalityProofImport(origin, hash, nb, proof))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_finality_proofs_submitted.inc();
-					}
-					this.import_queue.import_finality_proof(origin, hash, nb, proof);
-				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest { protocol, result, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						match result {
@@ -1563,11 +1551,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
-								EitherError::A(PingFailure::Timeout)))))))))) => "ping-timeout",
+								EitherError::A(EitherError::A(EitherError::B(
+								EitherError::A(PingFailure::Timeout))))))))) => "ping-timeout",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged))))))))) => "sync-notifications-clogged",
+								EitherError::A(EitherError::A(EitherError::A(
+								NotifsHandlerError::SyncNotificationsClogged)))))))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) => "protocol-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout)) => "keep-alive-timeout",
 							None => "actively-closed",
@@ -1751,23 +1739,6 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 	}
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.protocol.user_protocol_mut().request_justification(hash, number)
-	}
-	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.protocol.user_protocol_mut().request_finality_proof(hash, number)
-	}
-	fn finality_proof_imported(
-		&mut self,
-		who: PeerId,
-		request_block: (B::Hash, NumberFor<B>),
-		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
-	) {
-		let success = finalization_result.is_ok();
-		self.protocol.user_protocol_mut().finality_proof_import_result(request_block, finalization_result);
-		if !success {
-			info!("💔 Invalid finality proof provided by {} for #{}", who, request_block.0);
-			self.protocol.user_protocol_mut().disconnect_peer(&who);
-			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid finality proof"));
-		}
 	}
 }
 

@@ -1218,7 +1218,6 @@ impl<T: Trait> ContainsLengthBound for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::cell::RefCell;
 	use frame_support::{assert_ok, assert_noop, assert_err_with_weight, parameter_types,
 		traits::OnInitialize,
 		weights::Weight,
@@ -1280,50 +1279,17 @@ mod tests {
 		type WeightInfo = ();
 	}
 
-	thread_local! {
-		static VOTING_BOND_BASE: RefCell<u64> = RefCell::new(2);
-		static VOTING_BOND_FACTOR: RefCell<u64> = RefCell::new(0);
-		static DESIRED_MEMBERS: RefCell<u32> = RefCell::new(2);
-		static DESIRED_RUNNERS_UP: RefCell<u32> = RefCell::new(0);
-		static TERM_DURATION: RefCell<u64> = RefCell::new(5);
-		static CANDIDACY_BOND: RefCell<u64> = RefCell::new(3);
+	parameter_types! {
+		pub const CandidacyBond: u64 = 3;
 	}
 
-	pub struct CandidacyBond;
-	impl Get<u64> for CandidacyBond {
-		fn get() -> u64 {
-			CANDIDACY_BOND.with(|v| *v.borrow())
-		}
-	}
-
-	pub struct VotingBondBase;
-	impl Get<u64> for VotingBondBase {
-		fn get() -> u64 { VOTING_BOND_BASE.with(|v| *v.borrow()) }
-	}
-
-	pub struct VotingBondFactor;
-	impl Get<u64> for VotingBondFactor {
-		fn get() -> u64 { VOTING_BOND_FACTOR.with(|v| *v.borrow()) }
-	}
-
-	pub struct DesiredMembers;
-	impl Get<u32> for DesiredMembers {
-		fn get() -> u32 { DESIRED_MEMBERS.with(|v| *v.borrow()) }
-	}
-
-	pub struct DesiredRunnersUp;
-	impl Get<u32> for DesiredRunnersUp {
-		fn get() -> u32 { DESIRED_RUNNERS_UP.with(|v| *v.borrow()) }
-	}
-
-	pub struct TermDuration;
-	impl Get<u64> for TermDuration {
-		fn get() -> u64 { TERM_DURATION.with(|v| *v.borrow()) }
-	}
-
-	thread_local! {
-		pub static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-		pub static PRIME: RefCell<Option<u64>> = RefCell::new(None);
+	frame_support::parameter_types! {
+		pub static VotingBond: u64 = 2;
+		pub static DesiredMembers: u32 = 2;
+		pub static DesiredRunnersUp: u32 = 2;
+		pub static TermDuration: u64 = 5;
+		pub static Members: Vec<u64> = vec![];
+		pub static Prime: Option<u64> = None;
 	}
 
 	pub struct TestChangeMembers;
