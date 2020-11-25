@@ -660,7 +660,7 @@ impl OverlayedChanges {
 	}
 
 	/// Instantiate an offchain overlay with offchain indexing enabled.
-	pub fn default_with_offchain_indexing() -> Self {
+	pub fn with_offchain_indexing() -> Self {
 		let mut result = Self::default();
 		result.offchain = OffchainOverlayedChanges::enabled();
 		result
