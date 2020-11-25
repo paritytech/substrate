@@ -95,7 +95,15 @@ pub fn add_directives(directives: &str) {
 pub fn reload_filter() -> Result<(), String> {
 	let mut env_filter = EnvFilter::default();
 	if let Some(current_directives) = CURRENT_DIRECTIVES.get() {
-		env_filter = add_to_filter(env_filter, current_directives.lock().join(","));
+		// Use join and then split in case any directives added together
+		for directive in current_directives.lock().join(",").split(',').map(|d| d.parse()) {
+			match directive {
+				Ok(dir) => env_filter = env_filter.add_directive(dir),
+				Err(invalid_directive) => {
+					log::warn!(target: "tracing", "Unable to parse directive while setting log filter: {:?}", invalid_directive);
+				}
+			}
+		}
 	}
 	env_filter = env_filter.add_directive(
 		"sc_tracing=trace"
@@ -116,26 +124,14 @@ pub fn reset_log_filter() -> Result<(), String> {
 	reload_filter()
 }
 
-fn add_to_filter(mut env_filter: EnvFilter, directives: String) -> EnvFilter {
-	for directive in parse_directives(&directives) {
-		match directive {
-			Ok(d) => env_filter = env_filter.add_directive(d),
-			Err(invalid_directive) => {
-				log::warn!(target: "tracing", "Unable to parse directive while setting log filter: {:?}", invalid_directive);
-			}
-		}
-	}
-	env_filter
-}
-
-/// Parse the supplied text directives into `Vec<Result<Directive, String>>`,
-/// with a `Result::Ok` containing the parsed `Directive`
-/// or a `Result::Err` containing the `String` that failed to parse
-pub fn parse_directives(dirs: &str) -> Vec<Result<Directive, String>> {
-	dirs.split(',')
-		.into_iter()
-		.map(|d| d.parse().map_err(|_| d.to_owned()))
-		.collect()
+/// Parse `Directive` and add to default directives if successful. Ensures the supplied directive
+/// will be restored when resetting the log filter.
+pub fn parse_default_directive(directive: &str) -> Result<Directive, String> {
+	let dir = directive
+		.parse()
+		.map_err(|_| format!("Unable to parse directive: {}", directive))?;
+	add_default_directives(directive);
+	Ok(dir)
 }
 
 /// Responsible for assigning ids to new spans, which are not re-used.

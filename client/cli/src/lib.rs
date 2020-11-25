@@ -249,6 +249,22 @@ pub fn init_logger(
 	profiling_targets: Option<String>,
 	disable_log_reloading: bool,
 ) -> std::result::Result<(), String> {
+	use sc_tracing::parse_default_directive;
+
+	// Accept all valid directives and print invalid ones
+	fn parse_user_directives(mut env_filter: EnvFilter, dirs: &str) -> EnvFilter {
+		let dir_list: Vec<&str> = dirs
+			.split(',')
+			.collect();
+		for dir in dir_list {
+			match parse_default_directive(&dir) {
+				Ok(d) => env_filter = env_filter.add_directive(d),
+				Err(e) => eprintln!("Supplied log directive is not valid: {}", e),
+			}
+		}
+		env_filter
+	}
+
 	if let Err(e) = tracing_log::LogTracer::init() {
 		return Err(format!(
 			"Registering Substrate logger failed: {:}!", e
@@ -257,24 +273,27 @@ pub fn init_logger(
 
 	// Initialize filter - ensure to use `add_default_directives` for any defaults to persist
 	// after log filter reloading by RPC
-	let mut env_filter = EnvFilter::default();
-	// Enable info
-	env_filter = add_default_directives(env_filter,"info", true);
-	// Disable info logging by default for some modules.
-	env_filter = add_default_directives(env_filter, "ws=off,yamux=off,cranelift_codegen=off", true);
-	// Set warn logging by default for some modules.
-	env_filter = add_default_directives(env_filter, "cranelift_wasm=warn,hyper=warn", true);
+	let mut env_filter = EnvFilter::default()
+		// Enable info
+		.add_directive(parse_default_directive("info").expect("provided directive is valid"))
+		// Disable info logging by default for some modules.
+		.add_directive(parse_default_directive("ws=off").expect("provided directive is valid"))
+		.add_directive(parse_default_directive("yamux=off").expect("provided directive is valid"))
+		.add_directive(parse_default_directive("cranelift_codegen=off").expect("provided directive is valid"))
+		// Set warn logging by default for some modules.
+		.add_directive(parse_default_directive("cranelift_wasm=warn").expect("provided directive is valid"))
+		.add_directive(parse_default_directive("hyper=warn").expect("provided directive is valid"));
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
-			env_filter = add_default_directives(env_filter, &lvl, true);
+			env_filter = parse_user_directives(env_filter, &lvl);
 		}
 	}
 
 	if pattern != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
 		// parse error.
-		env_filter = add_default_directives(env_filter, pattern, false);
+		env_filter = parse_user_directives(env_filter, pattern);
 	}
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
@@ -287,11 +306,11 @@ pub fn init_logger(
 	// Required because profiling traces are emitted via `sc_tracing`
 	// NOTE: this must be done after we check the `max_level_hint` otherwise
 	// it is always raised to `TRACE`.
-	env_filter = add_default_directives(env_filter, "sc_tracing=trace", true);
+	env_filter = env_filter.add_directive(parse_default_directive("sc_tracing=trace").expect("provided directive is valid"));
 
 	// Make sure to include profiling targets in the filter
 	if let Some(profiling_targets) = profiling_targets.clone() {
-		env_filter = add_default_directives(env_filter, &profiling_targets, false);
+		env_filter = parse_user_directives(env_filter, &profiling_targets);
 	}
 
 	let enable_color = atty::is(atty::Stream::Stderr);
@@ -325,31 +344,6 @@ pub fn init_logger(
 			.with(logging::NodeNameLayer);
 		initialize_tracing(subscriber, tracing_receiver, profiling_targets)
 	}
-}
-
-// Adds default directives to ensure addLogFilter and resetLogFilter RPCs function correctly
-// Panics if any of the provided directives are invalid when `panic_if_invalid` is true.
-fn add_default_directives(mut env_filter: EnvFilter, directives: &str, panic_if_invalid: bool) -> EnvFilter {
-	sc_tracing::add_default_directives(directives);
-	let (oks, errs): (Vec<_>, Vec<_>) = sc_tracing::parse_directives(directives)
-		.into_iter()
-		.partition(|res| res.is_ok());
-	if !errs.is_empty() {
-		for invalid_directive in errs {
-			eprintln!("Logging directive not valid: {}",
-					  invalid_directive.expect_err("Already partitioned into Result::Err; qed")
-			);
-		}
-		if panic_if_invalid {
-			panic!("Invalid logging directives.");
-		}
-	}
-	for directive in oks {
-		env_filter = env_filter.add_directive(
-			directive.expect("Already partitioned into Result::Ok; qed")
-		);
-	}
-	env_filter
 }
 
 fn initialize_tracing<S>(
