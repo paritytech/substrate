@@ -19,7 +19,7 @@
 use crate::{
 	ExHashT,
 	chain::Client,
-	config::{BoxFinalityProofRequestBuilder, ProtocolId, TransactionPool, TransactionImportFuture, TransactionImport},
+	config::{ProtocolId, TransactionPool, TransactionImportFuture, TransactionImport},
 	error,
 	utils::{interval, LruHashSet},
 };
@@ -131,7 +131,6 @@ struct Metrics {
 	peers: Gauge<U64>,
 	queued_blocks: Gauge<U64>,
 	fork_targets: Gauge<U64>,
-	finality_proofs: GaugeVec<U64>,
 	justifications: GaugeVec<U64>,
 	propagated_transactions: Counter<U64>,
 }
@@ -160,16 +159,6 @@ impl Metrics {
 					Opts::new(
 						"sync_extra_justifications",
 						"Number of extra justifications requests"
-					),
-					&["status"],
-				)?;
-				register(g, r)?
-			},
-			finality_proofs: {
-				let g = GaugeVec::new(
-					Opts::new(
-						"sync_extra_finality_proofs",
-						"Number of extra finality proof requests",
 					),
 					&["status"],
 				)?;
@@ -365,7 +354,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		local_peer_id: PeerId,
 		chain: Arc<dyn Client<B>>,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
-		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		protocol_id: ProtocolId,
 		peerset_config: sc_peerset::PeersetConfig,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
@@ -377,7 +365,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			config.roles,
 			chain.clone(),
 			&info,
-			finality_proof_request_builder,
 			block_announce_validator,
 			config.max_parallel_downloads,
 		);
@@ -614,10 +601,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				warn!(target: "sub-libp2p", "Received unexpected RemoteHeaderResponse"),
 			GenericMessage::RemoteChangesResponse(_) =>
 				warn!(target: "sub-libp2p", "Received unexpected RemoteChangesResponse"),
-			GenericMessage::FinalityProofResponse(_) =>
-				warn!(target: "sub-libp2p", "Received unexpected FinalityProofResponse"),
 			GenericMessage::BlockRequest(_) |
-			GenericMessage::FinalityProofRequest(_) |
 			GenericMessage::RemoteReadChildRequest(_) |
 			GenericMessage::RemoteCallRequest(_) |
 			GenericMessage::RemoteReadRequest(_) |
@@ -1314,46 +1298,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.on_justification_import(hash, number, success)
 	}
 
-	/// Request a finality proof for the given block.
-	///
-	/// Queues a new finality proof request and tries to dispatch all pending requests.
-	pub fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.sync.request_finality_proof(&hash, number)
-	}
-
 	/// Notify the protocol that we have learned about the existence of nodes.
 	///
 	/// Can be called multiple times with the same `PeerId`s.
 	pub fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		self.behaviour.add_discovered_nodes(peer_ids)
-	}
-
-	pub fn finality_proof_import_result(
-		&mut self,
-		request_block: (B::Hash, NumberFor<B>),
-		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
-	) {
-		self.sync.on_finality_proof_import(request_block, finalization_result)
-	}
-
-	/// Must be called after a [`CustomMessageOutcome::FinalityProofRequest`] has been emitted,
-	/// to notify of the response having arrived.
-	pub fn on_finality_proof_response(
-		&mut self,
-		who: PeerId,
-		response: message::FinalityProofResponse<B::Hash>,
-	) -> CustomMessageOutcome<B> {
-		trace!(target: "sync", "Finality proof response from {} for {}", who, response.block);
-		match self.sync.on_block_finality_proof(who, response) {
-			Ok(sync::OnBlockFinalityProof::Nothing) => CustomMessageOutcome::None,
-			Ok(sync::OnBlockFinalityProof::Import { peer, hash, number, proof }) =>
-				CustomMessageOutcome::FinalityProofImport(peer, hash, number, proof),
-			Err(sync::BadPeer(id, repu)) => {
-				self.behaviour.disconnect_peer(&id);
-				self.peerset_handle.report_peer(id, repu);
-				CustomMessageOutcome::None
-			}
-		}
 	}
 
 	fn format_stats(&self) -> String {
@@ -1399,15 +1348,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				.set(m.justifications.failed_requests.into());
 			metrics.justifications.with_label_values(&["importing"])
 				.set(m.justifications.importing_requests.into());
-
-			metrics.finality_proofs.with_label_values(&["pending"])
-				.set(m.finality_proofs.pending_requests.into());
-			metrics.finality_proofs.with_label_values(&["active"])
-				.set(m.finality_proofs.active_requests.into());
-			metrics.finality_proofs.with_label_values(&["failed"])
-				.set(m.finality_proofs.failed_requests.into());
-			metrics.finality_proofs.with_label_values(&["importing"])
-				.set(m.finality_proofs.importing_requests.into());
 		}
 	}
 }
@@ -1418,7 +1358,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
-	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,
@@ -1443,12 +1382,6 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// must be silently discarded.
 	/// It is the responsibility of the handler to ensure that a timeout exists.
 	BlockRequest { target: PeerId, request: message::BlockRequest<B> },
-	/// A new finality proof request must be emitted.
-	/// Once you have the response, you must call `Protocol::on_finality_proof_response`.
-	/// It is the responsibility of the handler to ensure that a timeout exists.
-	/// If the request times out, or the peer responds in an invalid way, the peer has to be
-	/// disconnect. This will inform the state machine that the request it has emitted is stale.
-	FinalityProofRequest { target: PeerId, block_hash: B::Hash, request: Vec<u8> },
 	/// Peer has a reported a new head of chain.
 	PeerNewBest(PeerId, NumberFor<B>),
 	None,
@@ -1542,14 +1475,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			let event = CustomMessageOutcome::BlockRequest {
 				target: id,
 				request: r,
-			};
-			self.pending_messages.push_back(event);
-		}
-		for (id, r) in self.sync.finality_proof_requests() {
-			let event = CustomMessageOutcome::FinalityProofRequest {
-				target: id,
-				block_hash: r.block,
-				request: r.request,
 			};
 			self.pending_messages.push_back(event);
 		}
