@@ -359,8 +359,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
 				.connection_limits(ConnectionLimits::default()
 					.with_max_established_per_peer(Some(crate::MAX_CONNECTIONS_PER_PEER as u32))
-					// TODO: with_max_established_incoming(Some(<limit-from-somewhere>))
-					// cf. https://github.com/paritytech/substrate/issues/7432
+					.with_max_established_incoming(Some(crate::MAX_CONNECTIONS_ESTABLISHED_INCOMING))
 				)
 				.substream_upgrade_protocol_override(upgrade::Version::V1Lazy)
 				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
