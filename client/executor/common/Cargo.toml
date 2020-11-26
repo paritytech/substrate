@@ -24,6 +24,7 @@ sp-allocator = { version = "2.0.0", path = "../../../primitives/allocator" }
 sp-wasm-interface = { version = "2.0.0", path = "../../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "2.0.0", path = "../../../primitives/runtime-interface" }
 sp-serializer = { version = "2.0.0", path = "../../../primitives/serializer" }
+thiserror = "1.0.21"
 
 [features]
 default = []
