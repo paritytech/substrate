@@ -49,6 +49,11 @@ pub use execution::*;
 pub use log::{debug, warn, trace, error as log_error};
 pub use sp_externalities::AsyncBackend;
 
+/// TODO
+pub mod ext_tools {
+	pub use crate::ext::{guard, EXT_NOT_ALLOWED_TO_FAIL};
+}
+
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.
 #[cfg(not(feature = "std"))]

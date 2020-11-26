@@ -42,20 +42,23 @@ use crate::StorageTransactionCache;
 #[cfg(feature = "std")]
 use std::error;
 
-const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
+/// TODO
+pub const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 const BENCHMARKING_FN: &str = "\
 	This is a special fn only for benchmarking where a database commit happens from the runtime.
 	For that reason client started transactions before calling into runtime are not allowed.
 	Without client transactions the loop condition garantuees the success of the tx close.";
 
 
+/// TODO
 #[cfg(feature = "std")]
-fn guard() -> sp_panic_handler::AbortGuard {
+pub fn guard() -> sp_panic_handler::AbortGuard {
 	sp_panic_handler::AbortGuard::force_abort()
 }
 
+/// TODO
 #[cfg(not(feature = "std"))]
-fn guard() -> () {
+pub fn guard() -> () {
 	()
 }
 
@@ -106,6 +109,7 @@ pub struct Ext<'a, H, N, B>
 	/// The storage backend to read from.
 	backend: &'a B,
 	/// The cache for the storage transactions.
+	/// TODO need to disable this if needed (eg cumulus or task)
 	storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H, N>,
 	/// Changes trie state to read from.
 	#[cfg(feature = "std")]

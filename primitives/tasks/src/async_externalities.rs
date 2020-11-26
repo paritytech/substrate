@@ -29,28 +29,11 @@ use sp_core::{
 };
 use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend};
 use crate::AsyncStateType;
+use sp_state_machine::ext_tools::{EXT_NOT_ALLOWED_TO_FAIL, guard};
+use sp_state_machine::trace;
+use sp_core::hexdisplay::HexDisplay;
 
-// TODO this section is copied from state-machine: move and share the code some how
-
-// start_section
-const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
-const BENCHMARKING_FN: &str = "\
-	This is a special fn only for benchmarking where a database commit happens from the runtime.
-	For that reason client started transactions before calling into runtime are not allowed.
-	Without client transactions the loop condition garantuees the success of the tx close.";
-
-
-#[cfg(feature = "std")]
-fn guard() -> sp_panic_handler::AbortGuard {
-	sp_panic_handler::AbortGuard::force_abort()
-}
-
-#[cfg(not(feature = "std"))]
-fn guard() -> () {
-	()
-}
-
-// end_section
+const KIND_WITH_BACKEND: &str = "This async kind is only buildable with a backend.";
 
 /// TODO doc
 pub enum AsyncState {
@@ -85,9 +68,12 @@ pub enum AsyncStateResult {
 /// and have just `dyn Ext + Send + Sync`
 pub struct AsyncExt {
 	kind: AsyncStateType,
+	// Actually unused at this point, is for write variant.
 	// TODO consider Optional, also this is copy, this could synch.
-	read_overlay: sp_state_machine::OverlayedChanges,
+	overlay: sp_state_machine::OverlayedChanges,
 	spawn_id: Option<TaskId>,
+	// TODO consider non optional with dummy impl for None (is filter
+	// by kind beforehand anyway).
 	backend: Option<Box<dyn AsyncBackend>>,
 }
 
@@ -105,7 +91,7 @@ impl AsyncExt {
 	pub fn stateless_ext() -> Self {
 		AsyncExt {
 			kind: AsyncStateType::Stateless,
-			read_overlay: Default::default(),
+			overlay: Default::default(),
 			spawn_id: None,
 			backend: None,
 		}
@@ -119,7 +105,7 @@ impl AsyncExt {
 	pub fn previous_block_read(backend: Box<dyn AsyncBackend>) -> Self {
 		AsyncExt {
 			kind: AsyncStateType::ReadLastBlock,
-			read_overlay: Default::default(),
+			overlay: Default::default(),
 			spawn_id: None,
 			backend: Some(backend),
 		}
@@ -139,12 +125,11 @@ impl AsyncExt {
 	/// or dropped tx.
 	pub fn state_at_spawn_read(
 		backend: Box<dyn AsyncBackend>,
-		overlay: sp_state_machine::OverlayedChanges,
 		spawn_id: TaskId,
 	) -> Self {
 		AsyncExt {
 			kind: AsyncStateType::ReadAtSpawn,
-			read_overlay: Default::default(),
+			overlay: Default::default(),
 			spawn_id: Some(spawn_id),
 			backend: Some(backend),
 		}
@@ -215,8 +200,23 @@ impl Externalities for AsyncExternalities {
 		panic!("`set_offchain_storage`: should not be used in async externalities!")
 	}
 
-	fn storage(&self, _key: &[u8]) -> Option<StorageValue> {
-		panic!("`storage`: should not be used in async externalities!")
+	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
+		match self.state.kind {
+			AsyncStateType::Stateless => {
+				panic!("`storage`: should not be used in async externalities!")
+			},
+			AsyncStateType::ReadLastBlock
+			| AsyncStateType::ReadAtSpawn => (),
+		}
+		let _guard = guard();
+		let result = self.state.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
+			self.state.backend.as_ref().expect(KIND_WITH_BACKEND).storage(key));
+		trace!(target: "state", "{:?}: Th Get {}={:?}",
+			self.state.spawn_id,
+			HexDisplay::from(&key),
+			result.as_ref().map(HexDisplay::from)
+		);
+		result
 	}
 
 	fn storage_hash(&self, _key: &[u8]) -> Option<Vec<u8>> {

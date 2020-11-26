@@ -224,4 +224,6 @@ fn validate_pending_participants_parallel(number: usize) {
 			Participants::append(participant.account.clone());
 		}
 	}
+	let mut participants = participants;
+	PendingParticipants::set(participants.split_off(number));
 }

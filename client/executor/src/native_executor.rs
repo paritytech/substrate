@@ -591,10 +591,9 @@ impl RuntimeInstanceSpawn {
 				AsyncExt::previous_block_read(backend)
 			},
 			AsyncStateType::ReadAtSpawn => {
-				let backend = calling_ext.get_past_async_backend()
+				let backend = calling_ext.get_async_backend(new_handle)
 					.expect("Unsupported spawn kind.");
-				let overlay = Default::default();
-				AsyncExt::state_at_spawn_read(backend, overlay, new_handle)
+				AsyncExt::state_at_spawn_read(backend, new_handle)
 			},
 		}, new_handle)
 	}

@@ -262,6 +262,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 pub struct AsyncBackendAdapter<H, B>(B, sp_std::marker::PhantomData<H>);
 
 impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackend for AsyncBackendAdapter<H, B> {
+	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.0.storage(key).expect(crate::ext_tools::EXT_NOT_ALLOWED_TO_FAIL)
+	}
 }
 
 // TODO remove bound?
@@ -280,6 +283,10 @@ pub struct AsyncBackendAt {
 }
 
 impl AsyncBackend for AsyncBackendAt {
+	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec()))
+			.unwrap_or_else(|| self.backend.storage(key))
+	}
 }
 
 impl AsyncBackendAt {
@@ -296,12 +303,17 @@ impl AsyncBackendAt {
 /// which will run inline on join.
 /// The backend used will then be the actual
 /// state machine one.
+/// TODO this doc seem irrelevant, audit this struct
+/// usage?? probably for memory only.
 pub struct InlineBackendAt {
 	// TODO could also extract current value to reduce size.
 	overlay: crate::OverlayedChanges,
 }
 
 impl AsyncBackend for InlineBackendAt {
+	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.overlay.storage(key).flatten().map(|v| v.to_vec())
+	}
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {

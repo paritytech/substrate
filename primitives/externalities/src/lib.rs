@@ -301,6 +301,7 @@ pub type TaskId = u64;
 /// This trait must be usable as `dyn AsyncBackend`,
 /// which is not the case for Backend trait.
 pub trait AsyncBackend: Send {
+	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 }
 
 /// This act as `AsyncBackend` but not `Sync`
