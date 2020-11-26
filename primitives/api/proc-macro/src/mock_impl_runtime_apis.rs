@@ -71,7 +71,7 @@ fn implement_common_api_traits(
 
 	let error_type = error_type
 		.map(|e| quote!(#e))
-		.unwrap_or_else(|| quote!( (&'static str, #crate_::codec::Error) ));
+		.unwrap_or_else(|| quote!( #crate_::ApiError ) );
 
 	// Quote using the span from `error_type` to generate nice error messages when the type is
 	// not implementing a trait or similar.

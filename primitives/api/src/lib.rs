@@ -74,10 +74,6 @@ use sp_core::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::{panic::UnwindSafe, cell::RefCell};
 
-#[cfg(feature = "std")]
-mod error;
-#[cfg(feature = "std")]
-pub use crate::error::Error as ApiError;
 
 /// Maximum nesting level for extrinsics.
 pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
@@ -397,6 +393,27 @@ pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {
 	/// Construct an instance of the runtime api.
 	fn construct_runtime_api<'a>(call: &'a C) -> ApiRef<'a, Self::RuntimeApi>;
 }
+
+/// An error describing which API call failed.
+#[cfg_attr(feature = "std", derive(Debug, thiserror::Error))]
+#[cfg_attr(feature = "std", error("Failed to execute API call {tag}"))]
+#[cfg(feature = "std")]
+pub struct ApiError {
+    tag: &'static str,
+    #[source]
+    error: codec::Error,
+}
+
+#[cfg(feature = "std")]
+impl From<(&'static str, codec::Error)> for ApiError {
+    fn from((tag, error): (&'static str, crate::codec::Error)) -> Self {
+        Self {
+            tag,
+            error,
+        }
+    }
+}
+
 
 /// Extends the runtime api traits with an associated error type. This trait is given as super
 /// trait to every runtime api trait.
