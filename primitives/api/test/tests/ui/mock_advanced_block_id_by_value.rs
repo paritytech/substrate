@@ -1,4 +1,5 @@
 use substrate_test_runtime_client::runtime::Block;
+use sp_api::ApiError;
 
 sp_api::decl_runtime_apis! {
 	pub trait Api {
