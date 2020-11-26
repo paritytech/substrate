@@ -266,9 +266,9 @@ impl<S, H> Backend<H> for TrieBackend<S, H> where
 			let inner: TrieBackend<S::AsyncStorage, H> = TrieBackend { essence };
 			let inner: AsyncBackendAdapter<H, TrieBackend<S::AsyncStorage, H>> = 
 				AsyncBackendAdapter::new(inner);
-			Box::new(inner)
-		});
-		None
+			let backend: Box<dyn AsyncBackend> = Box::new(inner);
+			backend
+		})
 	}
 }
 
