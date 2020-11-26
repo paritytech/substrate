@@ -326,9 +326,11 @@ pub struct RuntimeInstanceSpawnInfo {
 	capacity: usize,
 }
 
+// TODO naming is bad (inline are not runing)
 enum RuningTask {
 	// TODO condvar?
 	Task(mpsc::Receiver<Option<Vec<u8>>>),
+	// TODO need to ad context of exteranlity init
 	Inline(Task),
 }
 
@@ -439,6 +441,30 @@ impl RuntimeInstanceSpawn {
 		self.task_sender.send(task).expect("TODO mgmt");
 	}
 
+	fn instantiate(
+		module: &Option<Arc<dyn WasmModule>>,
+		tasks: &Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
+	) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
+		Some(match module.as_ref().map(|m| m.new_instance()) {
+			Some(Ok(val)) => AssertUnwindSafe(val),
+			Some(Err(e)) => {
+				log::error!(
+					target: "executor",
+					"Failed to create new instance for module for async context: {}",
+					e,
+				);
+
+				tasks.lock().finished();
+				return None;
+			}
+			None => {
+				log::error!(target: "executor", "No module for a wasm task.");
+				tasks.lock().finished();
+				return None;
+			},
+		})
+	}
+
 	// TODO should make a variant without module instantiation for native
 	fn spawn_new(&self) {
 		let module = self.module.clone();
@@ -483,32 +509,15 @@ impl RuntimeInstanceSpawn {
 				};
 				match task {
 					Task::Wasm(WasmTask { dispatcher_ref, func, data }) => {
-						// TODO put instanciation in method (duplicated code)
-						// FIXME: Should be refactored to shared "instance factory".
-						// Instantiating wasm here every time is suboptimal at the moment, shared
-						// pool of instances should be used.
-						//
-						// https://github.com/paritytech/substrate/issues/7354
-						let mut instance = match module.as_ref().map(|m| m.new_instance()) {
-							Some(Ok(val)) => Some(AssertUnwindSafe(val)),
-							Some(Err(e)) => {
-								log::error!(
-									target: "executor",
-									"Failed to create new instance for module for async context: {}",
-									e,
-								);
-
-								tasks.lock().finished();
-								return;
-							}
-							None => None,
+						let mut instance = if let Some(instance) = Self::instantiate(&*module, &tasks) {
+							instance
+						} else {
+							return;
 						};
 
-						let instance_mut = instance.as_mut()
-							.expect("Non native call instatiated with module");
 						match with_externalities_safe(
 							&mut async_ext,
-							|| instance_mut.call(
+							|| instance.call(
 								InvokeMethod::TableWithWrapper { dispatcher_ref, func },
 								&data[..],
 							)
@@ -528,21 +537,10 @@ impl RuntimeInstanceSpawn {
 							},
 							Err(error) => {
 								log::error!("Panic error in spawned task: {:?}", error);
-								// reinstantiat wam, TODO could wasm instance unwind
-								// cleanly, probably not.
-								instance = match module.as_ref().map(|m| m.new_instance()) {
-									Some(Ok(val)) => Some(AssertUnwindSafe(val)),
-									Some(Err(e)) => {
-										log::error!(
-											target: "executor",
-											"Failed to create new instance for module for async context: {}",
-											e,
-										);
-
-										tasks.lock().finished();
-										return;
-									}
-									None => None,
+								instance = if let Some(instance) = Self::instantiate(&*module, &tasks) {
+									instance
+								} else {
+									return;
 								};
 							}
 						}
@@ -550,7 +548,21 @@ impl RuntimeInstanceSpawn {
 					Task::Native(NativeTask { func, data }) => {
 						// We do not instantiate, this assume we never run both Wasm and
 						// native for a single instance spawn.
-						unimplemented!();
+						match with_externalities_safe(
+							&mut async_ext,
+							|| func(data)
+						) {
+							Ok(result) => {
+								if let Err(_) = result_sender.send(Some(result)) {
+									// Closed channel, remove this thread instance.
+									tasks.lock().finished();
+									return;
+								}
+							},
+							Err(error) => {
+								log::error!("Panic error in spawned task: {:?}", error);
+							}
+						}
 					},
 				}
 			}
@@ -704,6 +716,11 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					*instance = self.module.as_ref().map(|m| m.new_instance()
 						.expect("Failed to create new instance from module"));
 				}
+				// TODO this require inline async ext the reproduce the limited
+				// externality context of AsyncExt and also a panic handler.
+				// Not srue about panic handler since currently even if panic
+				// is handled we panic on result receiver.
+				// -> so no panic handler I guess.
 				let result = instance.as_ref().expect("lazy init above").call(
 					InvokeMethod::TableWithWrapper { dispatcher_ref, func },
 					&data[..],
@@ -716,8 +733,9 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					},
 				}
 			},
-			RuningTask::Inline(Task::Native(_)) => {
-				unimplemented!()
+			RuningTask::Inline(Task::Native(NativeTask { func, data })) => {
+				// Same TODO for ext (actually without we double ext borrow_mut).
+				func(data)
 			},
 		}
 	}

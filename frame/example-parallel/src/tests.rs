@@ -102,7 +102,10 @@ fn test_ext() -> sp_io::TestExternalities {
 #[test]
 fn it_can_enlist() {
 
-	test_ext().execute_with(|| {
+	let test = |inline: bool| test_ext().execute_with(|| {
+		if !inline {
+			sp_tasks::set_capacity(1);
+		}
 		let (pair1, _) = sp_core::sr25519::Pair::generate();
 		let (pair2, _) = sp_core::sr25519::Pair::generate();
 
@@ -128,12 +131,16 @@ fn it_can_enlist() {
 		assert_eq!(Example::participants().len(), 2);
 	});
 
+	test(false);
+	test(true);
+
 }
 
 #[test]
 fn one_wrong_will_not_enlist_anyone() {
 
 	test_ext().execute_with(|| {
+		sp_tasks::set_capacity(1);
 		let (pair1, _) = sp_core::sr25519::Pair::generate();
 		let (pair2, _) = sp_core::sr25519::Pair::generate();
 		let (pair3, _) = sp_core::sr25519::Pair::generate();
@@ -170,7 +177,10 @@ fn one_wrong_will_not_enlist_anyone() {
 #[test]
 fn it_can_pending_enlist() {
 
-	test_ext().execute_with(|| {
+	let test = |inline: bool| test_ext().execute_with(|| {
+		if !inline {
+			sp_tasks::set_capacity(1);
+		}
 		let nb = 6;
 		let pairs: Vec<_> = (0..nb).into_iter()
 			.map(|_| sp_core::sr25519::Pair::generate().0)
@@ -200,5 +210,6 @@ fn it_can_pending_enlist() {
 		assert_eq!(Example::pending_participants().len(), 0);
 		assert_eq!(Example::participants().len(), nb);
 	});
-
+	test(false);
+	test(true);
 }
