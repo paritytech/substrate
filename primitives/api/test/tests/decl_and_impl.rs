@@ -17,6 +17,7 @@
 
 use sp_api::{
 	RuntimeApiInfo, decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis,
+	ApiError,
 	ApiExt,
 };
 use sp_runtime::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
@@ -124,8 +125,7 @@ mock_impl_runtime_apis! {
 				// yeah
 				Ok(().into())
 			} else {
-				let e = codec::Error::from("Ohh noooo");
-				Err(("MockApi", e))
+				Err(ApiError::new("MockApi", codec::Error::from("Ohh noooo")))
 			}
 		}
 	}
@@ -210,7 +210,7 @@ fn mock_runtime_api_works_with_advanced() {
 	Api::<Block>::same_name(&mock, &BlockId::Number(0)).unwrap();
 	mock.wild_card(&BlockId::Number(1337), 1).unwrap();
 	assert_eq!(
-		("MockApi", ::codec::Error::from("Ohh noooo")),
+		ApiError::new("MockApi", ::codec::Error::from("Ohh noooo")),
 		mock.wild_card(&BlockId::Number(1336), 1).unwrap_err()
 	);
 }

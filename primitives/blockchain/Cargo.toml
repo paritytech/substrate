@@ -24,3 +24,4 @@ sp-consensus = { version = "0.8.0", path = "../consensus/common" }
 sp-runtime = { version = "2.0.0", path = "../runtime" }
 sp-state-machine = { version = "0.8.0", path = "../state-machine" }
 sp-database = { version = "2.0.0", path = "../database" }
+sp-api = { version = "2.0.0", path = "../api" }

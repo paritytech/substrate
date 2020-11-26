@@ -6898,6 +6898,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-serializer",
  "sp-wasm-interface",
+ "thiserror",
  "wasmi",
 ]
 
@@ -8111,6 +8112,7 @@ dependencies = [
  "lru 0.6.1",
  "parity-scale-codec",
  "parking_lot 0.10.2",
+ "sp-api",
  "sp-consensus",
  "sp-database",
  "sp-runtime",

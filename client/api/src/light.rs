@@ -326,7 +326,7 @@ pub mod tests {
 
 	fn not_implemented_in_tests<T>() -> Ready<Result<T, ClientError>>
 	{
-		futures::future::ready(MockError.into())
+		futures::future::ready(Err(MockError.into()))
 	}
 
 	impl Fetcher<Block> for OkCallFetcher {

@@ -708,7 +708,7 @@ impl<'a> ToClientSideDecl<'a> {
 							},
 							#crate_::NativeOrEncoded::Encoded(r) => {
 								<#ret_type as #crate_::Decode>::decode(&mut &r[..])
-									.map_err(|err| { (#function_name, err).into() })
+									.map_err(|err| { #crate_::ApiError::new(#function_name, err).into() })
 							}
 						}
 					)

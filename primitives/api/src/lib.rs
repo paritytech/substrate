@@ -395,7 +395,7 @@ pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {
 }
 
 /// An error describing which API call failed.
-#[cfg_attr(feature = "std", derive(Debug, thiserror::Error))]
+#[cfg_attr(feature = "std", derive(Debug, thiserror::Error, Eq, PartialEq))]
 #[cfg_attr(feature = "std", error("Failed to execute API call {tag}"))]
 #[cfg(feature = "std")]
 pub struct ApiError {
@@ -406,7 +406,7 @@ pub struct ApiError {
 
 #[cfg(feature = "std")]
 impl From<(&'static str, codec::Error)> for ApiError {
-    fn from((tag, error): (&'static str, crate::codec::Error)) -> Self {
+    fn from((tag, error): (&'static str, codec::Error)) -> Self {
         Self {
             tag,
             error,
@@ -414,6 +414,15 @@ impl From<(&'static str, codec::Error)> for ApiError {
     }
 }
 
+#[cfg(feature = "std")]
+impl ApiError {
+	pub fn new(tag: &'static str, error: codec::Error) -> Self {
+		Self {
+			tag,
+			error,
+		}
+	}
+}
 
 /// Extends the runtime api traits with an associated error type. This trait is given as super
 /// trait to every runtime api trait.

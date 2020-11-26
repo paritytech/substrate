@@ -17,11 +17,12 @@
 
 //! Substrate client possible errors.
 
-use std::{self, result, path::PathBuf};
+use std::{self, result};
 use sp_state_machine;
 use sp_runtime::transaction_validity::TransactionValidityError;
 use sp_consensus;
 use codec::Error as CodecError;
+use sp_api::ApiError;
 
 /// Client Result type alias
 pub type Result<T> = result::Result<T, Error>;
@@ -116,8 +117,8 @@ pub enum Error {
 	#[error("Error decoding call result of {0}")]
 	CallResultDecode(&'static str, #[source] CodecError),
 
-	#[error("Decoding of {0} failed")]
-	RuntimeApiCodecError(&'static str, #[source] codec::Error),
+	#[error(transparent)]
+	RuntimeApiCodecError(#[from] ApiError),
 
 	#[error("Runtime :code missing in storage")]
 	RuntimeCodeMissing,
@@ -158,16 +159,6 @@ pub enum Error {
 	#[error("Failed to load the block weight for block {0}")]
 	LoadingBlockWeightFailed(String),
 
-	#[error("WASM override IO error")]
-	WasmOverrideIo(PathBuf, #[source] std::io::Error),
-
-	#[error("Overwriting WASM requires a directory where local \
-	WASM is stored. {} is not a directory", .0.display())]
-	WasmOverrideNotADirectory(PathBuf),
-
-	#[error("Duplicate WASM Runtimes found: \n{}\n", .0.join("\n") )]
-	DuplicateWasmRuntime(Vec<String>),
-
 	#[error("State Database error: {0}")]
 	StateDatabase(String),
 
@@ -194,12 +185,6 @@ impl From<Box<dyn sp_state_machine::Error + Send + Sync + 'static>> for Error {
 impl From<Box<dyn sp_state_machine::Error>> for Error {
 	fn from(e: Box<dyn sp_state_machine::Error>) -> Self {
 		Self::from_state(e)
-	}
-}
-
-impl From<ApiError> for Error {
-	fn from(x: ApiError) -> Self {
-		Self::RuntimeApiCodecError(x.0, x.1)
 	}
 }
 
