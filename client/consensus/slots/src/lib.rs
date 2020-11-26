@@ -532,11 +532,8 @@ impl<T: Clone> SlotDuration<T> {
 			}
 		}?;
 
-		{
-			let slot_duration = slot_duration.slot_duration();
-			if slot_duration == 0u64 {
-				return Err(sp_blockchain::Error::SlotDurationInvalid(slot_duration))
-			}
+		if slot_duration.slot_duration() == 0u64 {
+			return Err(sp_blockchain::Error::SlotDurationInvalid(slot_duration))
 		}
 
 		Ok(slot_duration)
