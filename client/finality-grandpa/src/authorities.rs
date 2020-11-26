@@ -705,8 +705,8 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
     }
 
     pub(crate) fn get_set_id(&self, block_number: N) -> Option<(u64, N)> {
-        let idx = self.authority_set_changes
-            .binary_search_by_key(&block_number, |(_set_id, n)| n.clone())
+		let idx = self.authority_set_changes
+			.binary_search_by_key(&block_number, |(_set_id, n)| n.clone())
 			.unwrap_or_else(|b| b);
 		if idx < self.authority_set_changes.len() {
 			Some(self.authority_set_changes[idx].clone())

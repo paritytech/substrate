@@ -256,7 +256,6 @@ mod tests {
 			&self,
 			_block: NumberFor<Block>
 		) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
-			// Don't call this without setting the FinalityProof
 			Ok(Some(EncodedFinalityProofs(
 				self.finality_proof
 					.as_ref()
