@@ -171,23 +171,22 @@ pub mod migrations {
 			<Voting<T>>::insert(who, voter);
 			count += 1;
 		});
+		frame_support::debug::info!("migrated {} voter accounts.", count);
 	}
 
 	/// Migrate all candidates to recorded deposit.
 	///
 	/// Will only be triggered if storage version is V1.
 	pub fn migrate_candidates_to_recorded_deposit<T: Trait>(old_deposit: BalanceOf<T>) {
-		let old_candidates = frame_support::migration::take_storage_value::<Vec<T::AccountId>>(
-			<Voting<T>>::module_prefix(),
-			b"Candidates",
-			&[],
-		)
-		.unwrap_or_default();
-		let new_candidates = old_candidates
-			.into_iter()
-			.map(|c| (c, old_deposit))
-			.collect::<Vec<_>>();
-		<Candidates<T>>::put(new_candidates);
+		let _ = <Candidates<T>>::translate::<Vec<T::AccountId>, _>(|maybe_old_candidates| {
+			maybe_old_candidates.map(|old_candidates| {
+				frame_support::debug::info!("migrated {} candidate accounts.", old_candidates.len());
+				old_candidates
+					.into_iter()
+					.map(|c| (c, old_deposit))
+					.collect::<Vec<_>>()
+			})
+		});
 	}
 
 	pub fn migrate_members_to_recorded_deposit<T: Trait>(deposit: BalanceOf<T>) {
@@ -270,11 +269,11 @@ pub struct Voter<AccountId, Balance> {
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
 pub struct SeatHolder<AccountId, Balance> {
 	/// The holder.
-	who: AccountId,
+	pub who: AccountId,
 	/// The total backing stake.
-	stake: Balance,
+	pub stake: Balance,
 	/// The amount of deposit held.s
-	deposit: Balance,
+	pub deposit: Balance,
 }
 
 /// Storage version.
