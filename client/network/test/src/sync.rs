@@ -801,6 +801,7 @@ fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 
 	// Make sync protocol aware of the best block
 	net.peer(0).network_service().new_best_block_imported(block_hash, 3);
+	net.block_until_idle();
 
 	// Connect another node that should now sync to the tip
 	net.add_full_peer_with_config(Default::default());
