@@ -68,7 +68,7 @@ pub enum Error {
 	InvalidChildType,
 
 	#[error("RemoteBodyRequest: invalid extrinsics root expected: {expected} but got {received}")]
-	ExtrinsicRootInvalid{ received: String, expected: String},
+	ExtrinsicRootInvalid { received: String, expected: String },
 
 	// `inner` cannot be made member, since it lacks `std::error::Error` trait bounds.
 	#[error("Execution failed: {0:?}")]
