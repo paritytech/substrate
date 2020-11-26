@@ -6890,12 +6890,10 @@ name = "sc-executor-common"
 version = "0.8.0"
 dependencies = [
  "derive_more",
- "log",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "sp-allocator",
  "sp-core",
- "sp-runtime-interface",
  "sp-serializer",
  "sp-wasm-interface",
  "thiserror",
