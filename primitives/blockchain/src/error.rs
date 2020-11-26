@@ -50,9 +50,6 @@ pub enum Error {
 	#[error("Cancelled oneshot channel {0}")]
 	OneShotCancelled(#[from] futures::channel::oneshot::Canceled),
 
-	#[error("JsonRpc error: {0}")]
-	JsonRpc(String),
-
 	#[error(transparent)]
 	Consensus(#[from] sp_consensus::Error),
 
@@ -156,8 +153,6 @@ pub enum Error {
 	#[error("Failed to get header for hash {0}")]
 	MissingHeader(String),
 
-	#[error("Failed to load the block weight for block {0}")]
-	LoadingBlockWeightFailed(String),
 
 	#[error("State Database error: {0}")]
 	StateDatabase(String),
