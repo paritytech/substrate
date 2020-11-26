@@ -779,3 +779,37 @@ fn wait_until_deferred_block_announce_validation_is_ready() {
 		net.block_until_idle();
 	}
 }
+
+/// When we don't inform the sync protocol about the best block, a node will not sync from us as the
+/// handshake is not does not contain our best block.
+#[test]
+fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
+	sp_tracing::try_init_simple();
+	log::trace!(target: "sync", "Test");
+	let mut net = TestNet::new(1);
+
+	// Produce some blocks
+	let block_hash = net.peer(0).push_blocks_at_without_informing_sync(BlockId::Number(0), 3, true);
+
+	// Add a node and wait until they are connected
+	net.add_full_peer_with_config(Default::default());
+	net.block_until_connected();
+	net.block_until_idle();
+
+	// The peer should not have synced the block.
+	assert!(!net.peer(1).has_block(&block_hash));
+
+	// Make sync protocol aware of the best block
+	net.peer(0).network_service().new_best_block_imported(block_hash, 3);
+
+	// Connect another node that should now sync to the tip
+	net.add_full_peer_with_config(Default::default());
+	net.block_until_connected();
+
+	while !net.peer(2).has_block(&block_hash) {
+		net.block_until_idle();
+	}
+
+	// However peer 1 should still not have the block.
+	assert!(!net.peer(1).has_block(&block_hash));
+}
