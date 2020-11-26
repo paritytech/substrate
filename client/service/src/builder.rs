@@ -712,7 +712,7 @@ fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(
 					"chain" => chain_name.clone(),
 					"genesis_hash" => ?genesis_hash,
 					"authority" => is_authority,
-					"startup_time" => startup_time,
+					"startup_time" => startup_time.to_string(),
 					"network_id" => network_id.clone()
 				);
 
