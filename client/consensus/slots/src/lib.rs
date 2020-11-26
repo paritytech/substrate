@@ -20,7 +20,8 @@
 //! time during which certain events can and/or must occur.  This crate
 //! provides generic functionality for slots.
 
-#![forbid(unsafe_code, missing_docs)]
+#![forbid(unsafe_code)]
+#![deny(missing_docs)]
 
 mod slots;
 mod aux_schema;
@@ -470,6 +471,15 @@ pub enum CheckedHeader<H, S> {
 	Checked(H, S),
 }
 
+
+
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
+pub enum Error<T> where T: SlotData + Clone + Debug + Send + Sync + 'static {
+	#[error("Slot duration is invalid: {0:?}")]
+	SlotDurationInvalid(SlotDuration<T>),
+}
+
 /// A slot duration. Create with `get_or_compute`.
 // The internal member should stay private here to maintain invariants of
 // `get_or_compute`.
@@ -494,7 +504,7 @@ impl<T: SlotData + Clone> SlotData for SlotDuration<T> {
 	const SLOT_KEY: &'static [u8] = T::SLOT_KEY;
 }
 
-impl<T: Clone> SlotDuration<T> {
+impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 	/// Either fetch the slot duration from disk or compute it from the
 	/// genesis state.
 	///
@@ -533,7 +543,7 @@ impl<T: Clone> SlotDuration<T> {
 		}?;
 
 		if slot_duration.slot_duration() == 0u64 {
-			return Err(sp_blockchain::Error::SlotDurationInvalid(slot_duration))
+			return Err(sp_blockchain::Error::Application(Box::new(Error::SlotDurationInvalid(slot_duration))))
 		}
 
 		Ok(slot_duration)
