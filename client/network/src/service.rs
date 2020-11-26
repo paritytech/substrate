@@ -484,11 +484,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.network_service.user_protocol_mut().on_block_finalized(hash, &header);
 	}
 
-	/// This should be called when blocks are added to the
-	/// chain by something other than the import queue.
-	/// Currently this is only useful for tests.
-	pub fn update_chain(&mut self) {
-		self.network_service.user_protocol_mut().update_chain();
+	/// Inform the network service about new best imported block.
+	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
+		self.network_service.user_protocol_mut().new_best_block_imported(hash, number);
 	}
 
 	/// Returns the local `PeerId`.
@@ -1012,21 +1010,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		self.num_connected.load(Ordering::Relaxed)
 	}
 
-	/// This function should be called when blocks are added to the chain by something other
-	/// than the import queue.
-	///
-	/// > **Important**: This function is a hack and can be removed at any time. Do **not** use it.
-	pub fn update_chain(&self) {
+	/// Inform the network service about new best imported block.
+	pub fn new_best_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::UpdateChain);
-	}
-
-	/// Inform the network service about an own imported block.
-	pub fn own_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
+			.unbounded_send(ServiceToWorkerMsg::NewBestBlockImported(hash, number));
 	}
 
 	/// Utility function to extract `PeerId` from each `Multiaddr` for priority group updates.
@@ -1181,8 +1169,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		protocol_name: Cow<'static, str>,
 	},
 	DisconnectPeer(PeerId),
-	UpdateChain,
-	OwnBlockImported(B::Hash, NumberFor<B>),
+	NewBestBlockImported(B::Hash, NumberFor<B>),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -1319,10 +1306,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.register_notifications_protocol(protocol_name),
 				ServiceToWorkerMsg::DisconnectPeer(who) =>
 					this.network_service.user_protocol_mut().disconnect_peer(&who),
-				ServiceToWorkerMsg::UpdateChain =>
-					this.network_service.user_protocol_mut().update_chain(),
-				ServiceToWorkerMsg::OwnBlockImported(hash, number) =>
-					this.network_service.user_protocol_mut().own_block_imported(hash, number),
+				ServiceToWorkerMsg::NewBestBlockImported(hash, number) =>
+					this.network_service.user_protocol_mut().new_best_block_imported(hash, number),
 			}
 		}
 

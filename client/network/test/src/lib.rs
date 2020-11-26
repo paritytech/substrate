@@ -328,7 +328,10 @@ impl<D> Peer<D> {
 			at = hash;
 		}
 
-		self.network.update_chain();
+		self.network.new_best_block_imported(
+			at,
+			full_client.header(&BlockId::Hash(at)).ok().flatten().unwrap().number().clone(),
+		);
 		self.network.service().announce_block(at.clone(), Vec::new());
 		at
 	}

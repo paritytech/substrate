@@ -250,8 +250,8 @@ async fn build_network_future<
 					network.service().announce_block(notification.hash, Vec::new());
 				}
 
-				if let sp_consensus::BlockOrigin::Own = notification.origin {
-					network.service().own_block_imported(
+				if notification.is_new_best {
+					network.service().new_best_block_imported(
 						notification.hash,
 						notification.header.number().clone(),
 					);
