@@ -33,7 +33,7 @@ benchmarks! {
 	}: {
 		MMR::on_initialize(block_number);
 	} verify {
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), block_number);
+		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), block_number + 1);
 	}
 }
 
