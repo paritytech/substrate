@@ -11,7 +11,7 @@ struct MockApi;
 sp_api::mock_impl_runtime_apis! {
 	impl Api<Block> for MockApi {
 		#[advanced]
-		fn test(&self) -> Result<sp_core::NativeOrEncoded<()>, (&'static str, codec::Error)> {
+		fn test(&self) -> Result<sp_core::NativeOrEncoded<()>, ApiError> {
 			Ok(().into())
 		}
 	}

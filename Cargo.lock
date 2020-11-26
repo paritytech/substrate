@@ -6828,6 +6828,7 @@ dependencies = [
  "sp-state-machine",
  "sp-trie",
  "substrate-test-runtime-client",
+ "thiserror",
 ]
 
 [[package]]
@@ -7985,6 +7986,7 @@ dependencies = [
  "sp-std",
  "sp-test-primitives",
  "sp-version",
+ "thiserror",
 ]
 
 [[package]]

@@ -171,14 +171,8 @@ pub enum Error {
 	#[error("State Database error: {0}")]
 	StateDatabase(String),
 
-	#[error("Invalid value for slot_duration: the value ({0}) must be greater than 0.")]
-	SlotDurationInvalid(u64),
-
 	#[error(transparent)]
 	Application(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
-
-	#[error("AlwaysBadChecker")]
-	AlwaysBadChecker,
 
 	// Should be removed/improved once
 	// the storage `fn`s returns typed errors.
@@ -207,8 +201,8 @@ impl From<Box<dyn sp_state_machine::Error>> for Error {
 	}
 }
 
-impl From<(&'static str, codec::Error)> for Error {
-	fn from(x: (&'static str, codec::Error)) -> Self {
+impl From<ApiError> for Error {
+	fn from(x: ApiError) -> Self {
 		Self::RuntimeApiCodecError(x.0, x.1)
 	}
 }

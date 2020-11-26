@@ -4,7 +4,7 @@ error: `BlockId` needs to be taken by reference and not by value!
 11 | / sp_api::mock_impl_runtime_apis! {
 12 | |     impl Api<Block> for MockApi {
 13 | |         #[advanced]
-14 | |         fn test(&self, _: BlockId<Block>) -> Result<sp_core::NativeOrEncoded<()>, (&'static str, codec::Error)> {
+14 | |         fn test(&self, _: BlockId<Block>) -> Result<sp_core::NativeOrEncoded<()>, ApiError> {
 ...  |
 17 | |     }
 18 | | }
