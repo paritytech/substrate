@@ -47,11 +47,10 @@ fn rpc_call(method: &str) -> String {
 
 fn deserialize_rpc_result<T: DeserializeOwned>(js_value: JsValue) -> T {
 	let string = js_value.as_string().unwrap();
-	let value: serde_json::Value = serde_json::from_str(&string).unwrap();
-	let result = serde_json::from_value::<Success>(value).unwrap().result;
+	let value = serde_json::from_str::<Success>(&string).unwrap().result;
 	// We need to convert a `Value::Object` into a proper type.
-	let result_string = serde_json::to_string(&result).unwrap();
-	serde_json::from_str(&result_string).unwrap()
+	let value_string = serde_json::to_string(&value).unwrap();
+	serde_json::from_str(&value_string).unwrap()
 }
 
 #[wasm_bindgen_test]

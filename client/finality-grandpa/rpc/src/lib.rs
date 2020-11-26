@@ -197,7 +197,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use serde::Deserialize;
 	use std::{collections::HashSet, convert::TryInto, sync::Arc};
 	use jsonrpc_core::{Notification, Output, types::Params};
 
@@ -386,8 +385,7 @@ mod tests {
 		// Subscribe
 		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
 		let resp = io.handle_request_sync(sub_request, meta.clone());
-		let val: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
-		let resp = Output::deserialize(val).unwrap();
+		let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
 
 		let sub_id = match resp {
 			Output::Success(success) => success.result,
@@ -419,8 +417,7 @@ mod tests {
 		// Subscribe
 		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
 		let resp = io.handle_request_sync(sub_request, meta.clone());
-		let val: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
-		let resp = Output::deserialize(val).unwrap();
+		let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
 		assert!(matches!(resp, Output::Success(_)));
 
 		// Unsubscribe with wrong ID

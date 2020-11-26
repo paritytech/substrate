@@ -306,7 +306,7 @@ mod tests {
 	#[test]
 	fn call_request_should_serialize_deserialize_properly() {
 		type Req = CallRequest<String, u128>;
-		let value: serde_json::Value = serde_json::from_str(r#"
+		let req: Req = serde_json::from_str(r#"
 		{
 			"origin": "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL",
 			"dest": "5DRakbLVnjVrW6niwLfHGW24EeCEvDAFGEXrtaYS5M4ynoom",
@@ -315,7 +315,6 @@ mod tests {
 			"inputData": "0x8c97db39"
 		}
 		"#).unwrap();
-		let req = Req::deserialize(value).unwrap();
 		assert_eq!(req.gas_limit.into_u256(), U256::from(0xe8d4a51000u64));
 	}
 
