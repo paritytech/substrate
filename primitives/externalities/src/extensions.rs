@@ -61,12 +61,12 @@ macro_rules! decl_extension {
 		$vis struct $ext_name (pub $inner);
 
 		impl $crate::Extension for $ext_name {
-			fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+			fn as_mut_any(&mut self) -> &mut dyn sp_std::any::Any {
 				self
 			}
 		}
 
-		impl std::ops::Deref for $ext_name {
+		impl sp_std::ops::Deref for $ext_name {
 			type Target = $inner;
 
 			fn deref(&self) -> &Self::Target {
@@ -74,7 +74,7 @@ macro_rules! decl_extension {
 			}
 		}
 
-		impl std::ops::DerefMut for $ext_name {
+		impl sp_std::ops::DerefMut for $ext_name {
 			fn deref_mut(&mut self) -> &mut Self::Target {
 				&mut self.0
 			}

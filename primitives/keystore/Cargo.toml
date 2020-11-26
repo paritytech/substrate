@@ -23,6 +23,7 @@ parking_lot = { version = "0.10.0", default-features = false }
 
 sp-core = { version = "2.0.0", path = "../core" }
 sp-externalities = { version = "0.8.0", path = "../externalities", default-features = false }
+sp-std = { version = "2.0.0", path = "../std", default-features = false }
 
 [dev-dependencies]
 rand = "0.7.2"

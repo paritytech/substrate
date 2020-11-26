@@ -337,6 +337,8 @@ cfg_if! {
 				fn test_storage();
 				/// Check a witness.
 				fn test_witness(proof: StorageProof, root: crate::Hash);
+				/// Run various tests against task workers api.
+				fn test_tasks();
 				/// Test that ensures that we can call a function that takes multiple
 				/// arguments.
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
@@ -390,6 +392,8 @@ cfg_if! {
 				fn test_storage();
 				/// Check a witness.
 				fn test_witness(proof: StorageProof, root: crate::Hash);
+				/// Run various tests against task workers api.
+				fn test_tasks();
 				/// Test that ensures that we can call a function that takes multiple
 				/// arguments.
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
@@ -698,6 +702,10 @@ cfg_if! {
 					test_witness(proof, root);
 				}
 
+				fn test_tasks() {
+					test_tasks();
+				}
+
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
 					assert_eq!(&data[..], &other[..]);
 					assert_eq!(data.len(), num as usize);
@@ -949,6 +957,10 @@ cfg_if! {
 					test_witness(proof, root);
 				}
 
+				fn test_tasks() {
+					test_tasks();
+				}
+
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
 					assert_eq!(&data[..], &other[..]);
 					assert_eq!(data.len(), num as usize);
@@ -1151,6 +1163,19 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 	assert!(ext.storage_root().as_slice() != &root[..]);
 }
 
+fn test_tasks() {
+	// TODO test (and implement) that without registring stuff we can use task (default to inline
+	// when extension is missing).
+	sp_tasks::set_capacity(4);
+	fn todo(_inp: Vec<u8>) -> Vec<u8> {
+		panic!("TODO, actually there is some testing to do with panic too");
+	}
+	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
+
+	unimplemented!("join, kill and consort");
+}
+
+
 #[cfg(test)]
 mod tests {
 	use substrate_test_runtime_client::{
@@ -1237,5 +1262,17 @@ mod tests {
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		runtime_api.test_witness(&block_id, proof, root).unwrap();
+	}
+
+	#[test]
+	fn test_tasks() {
+		let client = TestClientBuilder::new()
+			// TODO register the task & th extension
+			.set_execution_strategy(ExecutionStrategy::Both)
+			.build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(client.chain_info().best_number);
+
+		runtime_api.test_tasks(&block_id).unwrap();
 	}
 }

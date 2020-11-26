@@ -59,11 +59,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
 mod async_externalities;
 
 #[cfg(feature = "std")]
 pub use async_externalities::{new_async_externalities, AsyncExternalities, AsyncExt};
+
+use sp_std::vec::Vec;
 
 /// Type for `AsyncState`.
 /// TODO rename to stick with doc for all ASyncExt builders.
@@ -165,6 +166,7 @@ mod inner {
 	use core::mem;
 	use sp_std::prelude::*;
 	use crate::AsyncStateType;
+	use super::DataJoinHandle;
 
 	/// Dispatch wrapper for wasm blob.
 	///

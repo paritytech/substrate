@@ -18,15 +18,39 @@
 
 //! Async externalities.
 
-use sp_std::any::{TypeId, Any};
-use sp_std::boxed::Box;
+use sp_std::{
+	boxed::Box,
+	any::{TypeId, Any},
+	vec::Vec,
+};
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
-	traits::{Externalities, SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
+	traits::{SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
-use sp_externalities::{Extensions, ExternalitiesExt as _, TaskId, AsyncBackend};
+use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend};
 use crate::AsyncStateType;
 
+// TODO this section is copied from state-machine: move and share the code some how
+
+// start_section
+const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
+const BENCHMARKING_FN: &str = "\
+	This is a special fn only for benchmarking where a database commit happens from the runtime.
+	For that reason client started transactions before calling into runtime are not allowed.
+	Without client transactions the loop condition garantuees the success of the tx close.";
+
+
+#[cfg(feature = "std")]
+fn guard() -> sp_panic_handler::AbortGuard {
+	sp_panic_handler::AbortGuard::force_abort()
+}
+
+#[cfg(not(feature = "std"))]
+fn guard() -> () {
+	()
+}
+
+// end_section
 
 /// TODO doc
 pub enum AsyncState {
@@ -130,7 +154,7 @@ impl AsyncExt {
 /// Simple state-less externalities for use in async context.
 ///
 /// Will panic if anything is accessing the storage.
-#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct AsyncExternalities {
 	extensions: Extensions,
 	state: AsyncExt,
@@ -145,6 +169,7 @@ impl std::fmt::Debug for AsyncExt
 }
 
 /// New Async externalities.
+#[cfg(feature = "std")]
 pub fn new_async_externalities(
 	scheduler: Box<dyn SpawnNamed>,
 	async_ext: AsyncExt,
@@ -161,6 +186,12 @@ pub fn new_async_externalities(
 	Ok(res)
 }
 
+pub fn new_inline_only_externalities(
+	async_ext: AsyncExt,
+) -> Result<AsyncExternalities, &'static str> {
+	unimplemented!("this is what should be use in no_std environments");
+}
+	
 impl AsyncExternalities {
 	/// Extend async externalities with the ability to spawn wasm instances.
 	pub fn with_runtime_spawn(

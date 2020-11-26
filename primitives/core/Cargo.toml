@@ -34,10 +34,10 @@ secrecy = { version = "0.6.0", default-features = false }
 lazy_static = { version = "1.4.0", default-features = false, optional = true }
 parking_lot = { version = "0.10.0", optional = true }
 sp-debug-derive = { version = "2.0.0", path = "../debug-derive" }
-sp-externalities = { version = "0.8.0", optional = true, path = "../externalities" }
+sp-externalities = { version = "0.8.0", default-features = false, path = "../externalities" }
 sp-storage = { version = "2.0.0", default-features = false, path = "../storage" }
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
-futures = { version = "0.3.1", optional = true }
+futures = { version = "0.3.1", default-features = false, features = ["alloc"] }
 dyn-clonable = { version = "0.9.0", optional = true }
 thiserror = { version = "1.0.21", optional = true }
 
@@ -105,12 +105,12 @@ std = [
 	"num-traits/std",
 	"tiny-keccak",
 	"sp-debug-derive/std",
-	"sp-externalities",
+	"sp-externalities/std",
 	"sp-storage/std",
 	"sp-runtime-interface/std",
 	"zeroize/alloc",
 	"secrecy/alloc",
-	"futures",
+	"futures/std",
 	"futures/thread-pool",
 	"libsecp256k1/std",
 	"dyn-clonable",

@@ -17,15 +17,21 @@
 
 //! Shareable Substrate traits.
 
+#[cfg(feature = "std")]
 use std::{
-	borrow::Cow,
 	fmt::{Debug, Display},
 	panic::UnwindSafe,
+};
+use sp_std::{
+	borrow::Cow,
+	boxed::Box,
+	vec::Vec,
 };
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
 /// Code execution engine.
+#[cfg(feature = "std")]
 pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	/// Externalities error type.
 	type Error: Display + Debug + Send + Sync + 'static;
@@ -55,7 +61,7 @@ pub trait FetchRuntimeCode {
 }
 
 /// Wrapper to use a `u8` slice or `Vec` as [`FetchRuntimeCode`].
-pub struct WrappedRuntimeCode<'a>(pub std::borrow::Cow<'a, [u8]>);
+pub struct WrappedRuntimeCode<'a>(pub Cow<'a, [u8]>);
 
 impl<'a> FetchRuntimeCode for WrappedRuntimeCode<'a> {
 	fn fetch_runtime_code<'b>(&'b self) -> Option<Cow<'b, [u8]>> {
@@ -114,9 +120,11 @@ impl<'a> FetchRuntimeCode for RuntimeCode<'a> {
 }
 
 /// Could not find the `:code` in the externalities while initializing the [`RuntimeCode`].
+#[cfg(feature = "std")]
 #[derive(Debug)]
 pub struct CodeNotFound;
 
+#[cfg(feature = "std")]
 impl std::fmt::Display for CodeNotFound {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
 		write!(f, "the storage entry `:code` doesn't have any code")
@@ -141,6 +149,7 @@ impl MissingHostFunctions {
 }
 
 /// Something that can call a method in a WASM blob.
+#[cfg(feature = "std")]
 pub trait CallInWasm: Send + Sync {
 	/// Call the given `method` in the given `wasm_blob` using `call_data` (SCALE encoded arguments)
 	/// to decode the arguments for the method.
@@ -162,11 +171,13 @@ pub trait CallInWasm: Send + Sync {
 	) -> Result<Vec<u8>, String>;
 }
 
+#[cfg(feature = "std")]
 sp_externalities::decl_extension! {
 	/// The call-in-wasm extension to register/retrieve from the externalities.
 	pub struct CallInWasmExt(Box<dyn CallInWasm>);
 }
 
+#[cfg(feature = "std")]
 impl CallInWasmExt {
 	/// Creates a new instance of `Self`.
 	pub fn new<T: CallInWasm + 'static>(inner: T) -> Self {
@@ -231,14 +242,23 @@ pub trait RuntimeSpawn: Send {
 	fn set_capacity(&self, capacity: u32);
 }
 
-#[cfg(feature = "std")]
 sp_externalities::decl_extension! {
 	/// Extension that supports spawning extra runtime instances in externalities.
 	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
 }
 
+/// Hacky trait to trick `SpawnNamed` trait
+/// to exists in no_std but without actual
+/// `Clone` feature.
+/// This could be remove when/if dyn_cloneable crate
+/// become no_std (not much work, TODO make a PR for it).
+#[cfg(not(feature = "std"))]
+pub trait Clone { }
+
 /// Something that can spawn futures (blocking and non-blocking) with an assigned name.
-#[dyn_clonable::clonable]
+/// TODO not having dyn_clonable make it not really usable in no_std, but trait exists
+/// so we can query extension for it.
+#[cfg_attr(feature = "std", dyn_clonable::clonable)]
 pub trait SpawnNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
@@ -249,6 +269,9 @@ pub trait SpawnNamed: Clone + Send + Sync {
 	/// The given `name` is used to identify the future in tracing.
 	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
 }
+
+#[cfg(not(feature = "std"))]
+impl Clone for Box<dyn SpawnNamed> { }
 
 impl SpawnNamed for Box<dyn SpawnNamed> {
 	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {

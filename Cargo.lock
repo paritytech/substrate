@@ -8414,6 +8414,7 @@ dependencies = [
  "schnorrkel",
  "sp-core",
  "sp-externalities",
+ "sp-std",
 ]
 
 [[package]]
@@ -8664,6 +8665,7 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-io",
+ "sp-panic-handler",
  "sp-runtime-interface",
  "sp-state-machine",
  "sp-std",
@@ -9061,6 +9063,7 @@ dependencies = [
  "sp-session",
  "sp-state-machine",
  "sp-std",
+ "sp-tasks",
  "sp-transaction-pool",
  "sp-trie",
  "sp-version",
