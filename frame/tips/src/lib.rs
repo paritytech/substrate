@@ -134,6 +134,10 @@ pub struct OpenTip<
 	finders_fee: bool,
 }
 
+// Note :: For backward compatability reasons,
+// pallet-tips uses Treasury for storage.
+// This is temporary soultion, soon will get replaced with
+// Own storage identifier.
 decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
 

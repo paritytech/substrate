@@ -181,6 +181,10 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 	},
 }
 
+// Note :: For backward compatability reasons,
+// pallet-bounties uses Treasury for storage.
+// This is temporary soultion, soon will get replaced with
+// Own storage identifier.
 decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
 
