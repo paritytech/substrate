@@ -307,16 +307,27 @@ impl Telemetries {
 macro_rules! telemetry {
 	( $a:expr; $b:expr; $( $t:tt )* ) => {{
 		let verbosity: u8 = $a;
-		let mut json = format_fields_to_json!($($t)*);
-		// NOTE: the span id will be added later in the JSON for the greater good
-		json.insert("level".into(), "INFO".into());
-		json.insert("msg".into(), $b.into());
-		json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
-		$crate::tracing::info!(target: $crate::TELEMETRY_LOG_SPAN,
-			verbosity,
-			json = $crate::serde_json::to_string(&json)
-				.expect("contains only string keys; qed").as_str()
-		);
+		match format_fields_to_json!($($t)*) {
+			Err(err) => {
+				$crate::tracing::error!(
+					target: "telemetry",
+					"Could not serialize value for telemetry: {}",
+					err,
+				);
+			},
+			Ok(mut json) => {
+				// NOTE: the span id will be added later in the JSON for the greater good
+				json.insert("level".into(), "INFO".into());
+				json.insert("msg".into(), $b.into());
+				json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
+				let serialized_json = $crate::serde_json::to_string(&json)
+					.expect("contains only string keys; qed");
+				$crate::tracing::info!(target: $crate::TELEMETRY_LOG_SPAN,
+					verbosity,
+					json = serialized_json.as_str(),
+				);
+			},
+		}
 	}};
 }
 
@@ -324,21 +335,36 @@ macro_rules! telemetry {
 #[doc(hidden)]
 macro_rules! format_fields_to_json {
 	( $k:literal => $v:expr $(,)? $(, $($t:tt)+ )? ) => {{
-		let mut map = $crate::serde_json::Map::new();
-		map.insert($k.into(), $crate::serde_json::to_value($v)
-			.expect("telemetry values must be serializable"));
-		$(
-			map.append(&mut format_fields_to_json!($($t)*));
-		)*
-		map
+		$crate::serde_json::to_value(&$v)
+			.map(|value| {
+				let mut map = $crate::serde_json::Map::new();
+				map.insert($k.into(), value);
+				map
+			})
+			$(
+				.and_then(|mut prev_map| {
+					format_fields_to_json!($($t)*)
+						.map(move |mut other_map| {
+							prev_map.append(&mut other_map);
+							prev_map
+						})
+				})
+			)*
 	}};
 	( $k:literal => ? $v:expr $(,)? $(, $($t:tt)+ )? ) => {{
 		let mut map = $crate::serde_json::Map::new();
-		map.insert($k.into(), std::format!("{:?}", $v).into());
+		map.insert($k.into(), std::format!("{:?}", &$v).into());
+		let ok_map: Result<_, $crate::serde_json::Error> = Ok(map);
+		ok_map
 		$(
-			map.append(&mut format_fields_to_json!($($t)*));
+			.and_then(|mut prev_map| {
+				format_fields_to_json!($($t)*)
+					.map(move |mut other_map| {
+						prev_map.append(&mut other_map);
+						prev_map
+					})
+			})
 		)*
-		map
 	}};
 }
 
