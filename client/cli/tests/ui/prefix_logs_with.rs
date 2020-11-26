@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-mod sc_logging {}
+mod sc_tracing {}
 
 /// This test ensures that prefix_logs_with is usable from sc_cli directly without importing
 /// sc_logging.
