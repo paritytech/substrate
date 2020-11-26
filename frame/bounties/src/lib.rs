@@ -206,19 +206,19 @@ decl_event!(
 		Balance = BalanceOf<T>,
 		<T as frame_system::Trait>::AccountId,
 	{
-		/// New bounty proposal. [index]
+		/// New bounty proposal. \[index\]
 		BountyProposed(BountyIndex),
-		/// A bounty proposal was rejected; funds were slashed. [index, bond]
+		/// A bounty proposal was rejected; funds were slashed. \[index, bond\]
 		BountyRejected(BountyIndex, Balance),
-		/// A bounty proposal is funded and became active. [index]
+		/// A bounty proposal is funded and became active. \[index\]
 		BountyBecameActive(BountyIndex),
-		/// A bounty is awarded to a beneficiary. [index, beneficiary]
+		/// A bounty is awarded to a beneficiary. \[index, beneficiary\]
 		BountyAwarded(BountyIndex, AccountId),
-		/// A bounty is claimed by beneficiary. [index, payout, beneficiary]
+		/// A bounty is claimed by beneficiary. \[index, payout, beneficiary\]
 		BountyClaimed(BountyIndex, Balance, AccountId),
-		/// A bounty is cancelled. [index]
+		/// A bounty is cancelled. \[index\]
 		BountyCanceled(BountyIndex),
-		/// A bounty expiry is extended. [index]
+		/// A bounty expiry is extended. \[index\]
 		BountyExtended(BountyIndex),
 	}
 );
