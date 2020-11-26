@@ -6565,6 +6565,7 @@ dependencies = [
  "sp-version",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime",
+ "thiserror",
 ]
 
 [[package]]

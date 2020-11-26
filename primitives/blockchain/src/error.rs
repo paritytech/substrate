@@ -183,10 +183,6 @@ pub enum Error {
 	// the storage `fn`s returns typed errors.
 	#[error("Storage error: {0}")]
 	Storage(String),
-	
-	/// Unit test helper for mocked modules.
-	#[error("Mock: {0}")]
-	Mock(&'static str),
 }
 
 impl From<Box<dyn sp_state_machine::Error + Send + Sync + 'static>> for Error {
