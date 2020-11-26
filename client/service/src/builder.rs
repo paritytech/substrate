@@ -208,13 +208,25 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 	TRtApi,
 >;
 
-enum KeystoreContainerInner {
-	Local()
+trait AsCryptoRef {
+    fn keystore_ref(&self) -> Arc<dyn CryptoStore>;
+    fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore>;
+}
+
+struct DoubleWrap<T>(Arc<T>);
+
+impl<T> AsCryptoRef for DoubleWrap<T> where T: CryptoStore + SyncCryptoStore + 'static {
+    fn keystore_ref(&self) -> Arc<dyn CryptoStore> {
+        self.0.clone()
+    }
+    fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore> {
+        self.0.clone()
+    }
 }
 
 /// Construct and hold different layers of Keystore wrappers
 pub struct KeystoreContainer {
-	remotes: Vec<Arc<dyn SyncCryptoStore>>,
+	remotes: Vec<Box<dyn AsCryptoRef>>,
 	local: Arc<LocalKeystore>,
 }
 
@@ -233,14 +245,16 @@ impl KeystoreContainer {
 	}
 
 	/// Add another remote keystore
-	pub fn add_remote_keystore(&mut self, remote: Arc<dyn SyncCryptoStore>) {
-		self.remotes.push(remote)
+	pub fn add_remote_keystore<T>(&mut self, remote: Arc<T>)
+		where T: CryptoStore + SyncCryptoStore + 'static
+	{
+		self.remotes.push(Box::new(DoubleWrap(remote)))
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
 	pub fn keystore(&self) -> Arc<dyn CryptoStore> {
 		if let Some(c) = self.remotes.first() {
-			c.clone() as Arc<dyn CryptoStore>
+			c.keystore_ref()
 		} else {
 			self.local.clone()
 		}
@@ -249,7 +263,7 @@ impl KeystoreContainer {
 	/// Returns the synchrnous keystore wrapper
 	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
 		if let Some(c) = self.remotes.first() {
-			c.clone()
+			c.sync_keystore_ref()
 		} else {
 			self.local.clone() as SyncCryptoStorePtr
 		}

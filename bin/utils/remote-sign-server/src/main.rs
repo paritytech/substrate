@@ -58,7 +58,7 @@ async fn main() {
     let opt = Opt::from_args();
     let base_path = std::env::current_dir().unwrap();
     let keystore = match opt.keystore.keystore_config(&base_path) {
-        Ok(KeystoreConfig::Path { path, password }) => {
+        Ok((_, KeystoreConfig::Path { path, password })) => {
             LocalKeystore::open(path, password).map_err(|e| format!("{:}", e))
         },
         Err(e) => Err(format!("{:}", e)),

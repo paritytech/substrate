@@ -75,6 +75,7 @@ where
 
 			DatabaseConfig::Custom(sp_database::as_database(db))
 		},
+		keystore_remotes: Default::default(),
 		keystore: KeystoreConfig::InMemory,
 		default_heap_pages: Default::default(),
 		dev_key_seed: Default::default(),
