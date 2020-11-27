@@ -1167,12 +1167,18 @@ fn test_tasks() {
 	// TODO test (and implement) that without registring stuff we can use task (default to inline
 	// when extension is missing).
 	sp_tasks::set_capacity(4);
+
 	fn todo(_inp: Vec<u8>) -> Vec<u8> {
-		panic!("TODO, actually there is some testing to do with panic too");
+		//panic!("TODO, actually there is some testing to do with panic too");
+		let mut result = Vec::<u8>::default();
+		result.push(42);
+		result
 	}
 	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
+	let res = handle.join();
+	assert!(res.get(0) == Some(&42))
 
-	unimplemented!("join, kill and consort");
+// TODO	unimplemented!("join, kill and consort");
 }
 
 
@@ -1267,7 +1273,6 @@ mod tests {
 	#[test]
 	fn test_tasks() {
 		let client = TestClientBuilder::new()
-			// TODO register the task & th extension
 			.set_execution_strategy(ExecutionStrategy::Both)
 			.build();
 		let runtime_api = client.runtime_api();
