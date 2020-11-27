@@ -212,7 +212,7 @@ where
 			&state,
 			changes_trie_state.as_ref(),
 			parent_hash,
-		)?;
+		).map_err(|e| sp_blockchain::Error::StorageChanges(e))?;
 
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(header, self.extrinsics),
