@@ -17,6 +17,25 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Async externalities.
+//!
+//!
+//!
+//! Allowed ext function, cummulative (kind bellow got access to parent capability):
+//!
+//! - AsyncStateType::Stateless: None
+//!		- extension (only thread extension if not inline) so purely technical
+//!		(also true for all other kind).
+//! - AsyncStateType::ReadLastBlock
+//!		- storage
+//!		- child_storage
+//!		- next_storage_key
+//!		- next_child_storage_key
+//!		- get_past_async_backend (warning this is only for this type, not inherited)
+//! - AsyncStateType::ReadAtSpawn
+//!		- get_async_backend
+//!		- is_state_current
+// TODO consider moving part of it to state machine (removing the current
+// dep on state machine).
 
 use sp_std::{
 	boxed::Box,
@@ -195,19 +214,24 @@ type StorageKey = Vec<u8>;
 
 type StorageValue = Vec<u8>;
 
+impl AsyncExternalities {
+	fn guard_stateless(&self, panic: &'static str) {
+		match self.state.kind {
+			AsyncStateType::Stateless => {
+				panic!(panic)
+			},
+			AsyncStateType::ReadLastBlock
+			| AsyncStateType::ReadAtSpawn => (),
+		}
+	}
+}
 impl Externalities for AsyncExternalities {
 	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {
 		panic!("`set_offchain_storage`: should not be used in async externalities!")
 	}
 
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
-		match self.state.kind {
-			AsyncStateType::Stateless => {
-				panic!("`storage`: should not be used in async externalities!")
-			},
-			AsyncStateType::ReadLastBlock
-			| AsyncStateType::ReadAtSpawn => (),
-		}
+		self.guard_stateless("`storage`: should not be used in async externalities!");
 		let _guard = guard();
 		let result = self.state.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.state.backend.as_ref().expect(KIND_WITH_BACKEND).storage(key));
@@ -220,15 +244,32 @@ impl Externalities for AsyncExternalities {
 	}
 
 	fn storage_hash(&self, _key: &[u8]) -> Option<Vec<u8>> {
+		// TODO currently no hash function to avoid having to move the hasher trait
+		// in AsyncExternalities extension.
 		panic!("`storage_hash`: should not be used in async externalities!")
 	}
 
 	fn child_storage(
 		&self,
-		_child_info: &ChildInfo,
-		_key: &[u8],
+		child_info: &ChildInfo,
+		key: &[u8],
 	) -> Option<StorageValue> {
-		panic!("`child_storage`: should not be used in async externalities!")
+		self.guard_stateless("`child_storage`: should not be used in async externalities!");
+		let _guard = guard();
+		let result = self.state.overlay
+			.child_storage(child_info, key)
+			.map(|x| x.map(|x| x.to_vec()))
+			.unwrap_or_else(||
+				self.state.backend.as_ref().expect(KIND_WITH_BACKEND).child_storage(child_info, key));
+
+		trace!(target: "state", "{:?}: Th GetChild({}) {}={:?}",
+			self.state.spawn_id,
+			HexDisplay::from(&child_info.storage_key()),
+			HexDisplay::from(&key),
+			result.as_ref().map(HexDisplay::from)
+		);
+
+		result
 	}
 
 	fn child_storage_hash(
@@ -239,16 +280,49 @@ impl Externalities for AsyncExternalities {
 		panic!("`child_storage_hash`: should not be used in async externalities!")
 	}
 
-	fn next_storage_key(&self, _key: &[u8]) -> Option<StorageKey> {
-		panic!("`next_storage_key`: should not be used in async externalities!")
+	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
+		// TODO factor logic wit state machine Ext !!!
+		self.guard_stateless("`next_storage_key`: should not be used in async externalities!");
+		let next_backend_key = self.state.backend.as_ref().expect(KIND_WITH_BACKEND).next_storage_key(key);
+		let next_overlay_key_change = self.state.overlay.next_storage_key_change(key);
+
+		match (next_backend_key, next_overlay_key_change) {
+			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
+			(backend_key, None) => backend_key,
+			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
+				Some(overlay_key.0.to_vec())
+			} else {
+				self.next_storage_key(&overlay_key.0[..])
+			},
+		}
 	}
 
 	fn next_child_storage_key(
 		&self,
-		_child_info: &ChildInfo,
-		_key: &[u8],
+		child_info: &ChildInfo,
+		key: &[u8],
 	) -> Option<StorageKey> {
-		panic!("`next_child_storage_key`: should not be used in async externalities!")
+		// TODO factor logic wit state machine Ext !!!
+		self.guard_stateless("`next_child_storage_key`: should not be used in async externalities!");
+		let next_backend_key = self.state.backend.as_ref().expect(KIND_WITH_BACKEND)
+			.next_child_storage_key(child_info, key);
+		let next_overlay_key_change = self.state.overlay.next_child_storage_key_change(
+			child_info.storage_key(),
+			key
+		);
+
+		match (next_backend_key, next_overlay_key_change) {
+			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
+			(backend_key, None) => backend_key,
+			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
+				Some(overlay_key.0.to_vec())
+			} else {
+				self.next_child_storage_key(
+					child_info,
+					&overlay_key.0[..],
+				)
+			},
+		}
 	}
 
 	fn place_storage(&mut self, _key: StorageKey, _maybe_value: Option<StorageValue>) {
@@ -294,6 +368,8 @@ impl Externalities for AsyncExternalities {
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> Vec<u8> {
+		// TODO currently no storage_root function to avoid having to move the hasher trait
+		// in AsyncExternalities extension.
 		panic!("`storage_root`: should not be used in async externalities!")
 	}
 
@@ -301,6 +377,8 @@ impl Externalities for AsyncExternalities {
 		&mut self,
 		_child_info: &ChildInfo,
 	) -> Vec<u8> {
+		// TODO currently no storage_root function to avoid having to move the hasher trait
+		// in AsyncExternalities extension.
 		panic!("`child_storage_root`: should not be used in async externalities!")
 	}
 
@@ -340,16 +418,49 @@ impl Externalities for AsyncExternalities {
 		unimplemented!("set_whitelist is not supported in AsyncExternalities")
 	}
 
+	// TODO this guard only make sense when renturning non optional
+	// TODO change api.
 	fn get_past_async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
-		unimplemented!("TODO")
+		match self.state.kind {
+			AsyncStateType::Stateless
+			| AsyncStateType::ReadAtSpawn => {
+				panic!("Staking a ReadLastBlock worker is only possible from a ReadLastBlock worker");
+			},
+			AsyncStateType::ReadLastBlock => (),
+		}
+
+		self.state.backend.as_ref().expect(KIND_WITH_BACKEND).async_backend()
 	}
 
 	fn get_async_backend(&mut self, marker: TaskId) -> Option<Box<dyn AsyncBackend>> {
-		unimplemented!("TODO")
+		match self.state.kind {
+			AsyncStateType::Stateless
+			| AsyncStateType::ReadLastBlock => {
+				panic!("Staking a ReadAtSpawn worker is only possible from a ReadAtSpawn worker");
+			},
+			AsyncStateType::ReadAtSpawn => (),
+		}
+
+		self.state.overlay.set_marker(marker);
+		// TODO Creating a new backend is only of any use for write
+		/*let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
+			backend,
+			self.overlay,
+		));*/
+
+		self.state.backend.as_ref().expect(KIND_WITH_BACKEND).async_backend()
 	}
 
 	fn is_state_current(&self, marker: TaskId) -> bool {
-		unimplemented!("TODO")
+		match self.state.kind {
+			AsyncStateType::Stateless
+			| AsyncStateType::ReadLastBlock => {
+				panic!("Staking a ReadAtSpawn worker is only possible from a ReadAtSpawn worker");
+			},
+			AsyncStateType::ReadAtSpawn => (),
+		}
+
+		self.state.overlay.is_state_current(marker)
 	}
 }
 

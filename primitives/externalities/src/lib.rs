@@ -301,7 +301,31 @@ pub type TaskId = u64;
 /// This trait must be usable as `dyn AsyncBackend`,
 /// which is not the case for Backend trait.
 pub trait AsyncBackend: Send {
+	/// TODO
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// TODO
+	fn child_storage(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Option<Vec<u8>>;
+
+	/// TODO
+	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// TODO
+	fn next_child_storage_key(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8]
+	) -> Option<Vec<u8>>;
+
+	/// TODO this is just some way to clone without having
+	/// AsyncBackend: Clone.
+	/// With no_std dyn clone, we could remove it.
+	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>>;
+
 }
 
 /// This act as `AsyncBackend` but not `Sync`

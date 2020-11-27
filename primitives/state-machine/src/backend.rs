@@ -265,6 +265,30 @@ impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackend for AsyncBackendAda
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.0.storage(key).expect(crate::ext_tools::EXT_NOT_ALLOWED_TO_FAIL)
 	}
+
+	fn child_storage(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		self.0.child_storage(child_info, key).expect(crate::ext_tools::EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.0.next_storage_key(key).expect(crate::ext_tools::EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	fn next_child_storage_key(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8]
+	) -> Option<Vec<u8>> {
+		self.0.next_child_storage_key(child_info, key).expect(crate::ext_tools::EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+		self.0.async_backend()
+	}
 }
 
 // TODO remove bound?
@@ -287,6 +311,59 @@ impl AsyncBackend for AsyncBackendAt {
 		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec()))
 			.unwrap_or_else(|| self.backend.storage(key))
 	}
+
+	fn child_storage(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		self.overlay.child_storage(child_info, key).map(|x| x.map(|x| x.to_vec()))
+			.unwrap_or_else(|| self.backend.child_storage(child_info, key))
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
+		let next_backend_key = self.backend.next_storage_key(key);
+		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
+
+		match (next_backend_key, next_overlay_key_change) {
+			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
+			(backend_key, None) => backend_key,
+			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
+				Some(overlay_key.0.to_vec())
+			} else {
+				self.next_storage_key(&overlay_key.0[..])
+			},
+		}
+	}
+
+	fn next_child_storage_key(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8]
+	) -> Option<Vec<u8>> {
+		let next_backend_key = self.backend.next_child_storage_key(child_info, key);
+		let next_overlay_key_change = self.overlay.next_child_storage_key_change(child_info.storage_key(), key);
+
+		match (next_backend_key, next_overlay_key_change) {
+			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
+			(backend_key, None) => backend_key,
+			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
+				Some(overlay_key.0.to_vec())
+			} else {
+				self.next_child_storage_key(child_info, &overlay_key.0[..])
+			},
+		}
+	}
+
+	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+		self.backend.async_backend().map(|backend| {
+			let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
+				backend,
+				&self.overlay,
+			));
+			backend
+		})
+	}
 }
 
 impl AsyncBackendAt {
@@ -305,6 +382,7 @@ impl AsyncBackendAt {
 /// state machine one.
 /// TODO this doc seem irrelevant, audit this struct
 /// usage?? probably for memory only.
+#[derive(Clone)]
 pub struct InlineBackendAt {
 	// TODO could also extract current value to reduce size.
 	overlay: crate::OverlayedChanges,
@@ -313,6 +391,42 @@ pub struct InlineBackendAt {
 impl AsyncBackend for InlineBackendAt {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.overlay.storage(key).flatten().map(|v| v.to_vec())
+	}
+
+	fn child_storage(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		self.overlay.child_storage(child_info, key).flatten().map(|x| x.to_vec())
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.overlay.next_storage_key_change(key)
+			.map(|overlay_key| if overlay_key.1.value().is_some() {
+				Some(overlay_key.0.to_vec())
+			} else {
+				None
+			})
+			.flatten()
+	}
+
+	fn next_child_storage_key(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8]
+	) -> Option<Vec<u8>> {
+		self.overlay.next_child_storage_key_change(child_info.storage_key(), key)
+			.map(|overlay_key| if overlay_key.1.value().is_some() {
+				Some(overlay_key.0.to_vec())
+			} else {
+				None
+			})
+			.flatten()
+	}
+
+	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+		Some(Box::new(self.clone()))
 	}
 }
 
