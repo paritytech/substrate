@@ -617,5 +617,23 @@ mod tests {
 		})
 	}
 
-	// Test to make sure normal & mandatory are tracked separately.
+	#[test]
+	fn normal_and_mandatory_tracked_separately() {
+		new_test_ext().execute_with(|| {
+			// Max block is 1024
+			// Max normal is 768 (75%)
+			// Max mandatory is unlimited
+			let max_normal = DispatchInfo { weight: 753, ..Default::default() };
+			let mandatory = DispatchInfo { weight: 1019, class: DispatchClass::Mandatory, ..Default::default() };
+
+			let len = 0_usize;
+
+			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
+			assert_eq!(System::block_weight().total(), 768);
+			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&mandatory, len));
+			assert_eq!(block_weight_limit(), 1024);
+			assert_eq!(System::block_weight().total(), 1024 + 758);
+			assert_eq!(CheckWeight::<Test>::check_extrinsic_weight(&mandatory), Ok(()));
+		});
+	}
 }

@@ -117,7 +117,7 @@ pub struct WeightsPerClass {
 	/// blocks.
 	///
 	/// In the worst case, the total weight consumed by the class is going to be:
-	/// `MAX(max_total) + MAX(guaranteed)`.
+	/// `MAX(max_total) + MAX(reserved)`.
 	pub max_total: Option<Weight>,
 	/// Block reserved allowance for all extrinsics of a particular class.
 	///
