@@ -317,7 +317,6 @@ macro_rules! telemetry {
 			},
 			Ok(mut json) => {
 				// NOTE: the span id will be added later in the JSON for the greater good
-				json.insert("level".into(), "INFO".into());
 				json.insert("msg".into(), $b.into());
 				json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
 				let serialized_json = $crate::serde_json::to_string(&json)
