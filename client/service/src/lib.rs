@@ -471,7 +471,7 @@ fn start_rpc_servers<
 >(
 	_: &Configuration,
 	_: H,
-	_: Option<&sc_rpc_server::RpcMetrics>
+	_: sc_rpc_server::RpcMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }
