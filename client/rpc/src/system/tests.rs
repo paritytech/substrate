@@ -335,8 +335,90 @@ fn system_network_remove_reserved() {
 }
 
 #[test]
-fn system_set_log_filter() {
-	sc_cli::init_logger("afg=debug", Default::default(), Default::default(), false).unwrap();
-	let res = api(None).system_set_log_filter("bla no ok -\\ /lba".into());
-	assert_eq!(res, Ok(()));
+fn test_add_reset_log_filter() {
+	use std::process::{Stdio, Command};
+	use std::env;
+	use std::io::{BufReader, BufRead, Write};
+	use std::sync::{Arc, Mutex};
+	use std::thread;
+	use std::time::Duration;
+
+	const EXPECTED_BEFORE_ADD: &'static str = "EXPECTED_BEFORE_ADD";
+	const EXPECTED_AFTER_ADD: &'static str = "EXPECTED_AFTER_ADD";
+
+	// Enter log generation / filter reload
+	if std::env::var("TEST_LOG_FILTER").is_ok() {
+		sc_cli::init_logger("test_before_add=debug", Default::default(), Default::default(), false).unwrap();
+		loop {
+			for line in std::io::stdin().lock().lines() {
+				let line = line.expect("Failed to read bytes");
+				if line.contains("add_reload") {
+					sc_tracing::add_directives("test_after_add");
+					assert!(sc_tracing::reload_filter().is_ok(), "Reload handle not present");
+				} else if line.contains("reset") {
+					assert!(sc_tracing::reset_log_filter().is_ok(), "Unable to reset log filter");
+				} else if line.contains("exit") {
+					return;
+				}
+				log::debug!(target: "test_before_add", "{}", EXPECTED_BEFORE_ADD);
+				log::debug!(target: "test_after_add", "{}", EXPECTED_AFTER_ADD);
+			}
+		}
+	}
+
+	// Call this test again to enter the log generation / filter reload block
+	let test_executable = env::current_exe().expect("Unable to get current executable!");
+	let mut child_process = Command::new(test_executable)
+		.env("TEST_LOG_FILTER", "1")
+		.args(&["--nocapture", "test_add_reset_log_filter"])
+		.stdin(Stdio::piped())
+		.stderr(Stdio::piped())
+		.stdout(Stdio::inherit())
+		.spawn()
+		.unwrap();
+
+	let child_stderr = child_process.stderr.take().expect("Could not get child stderr");
+	let mut child_out = BufReader::new(child_stderr);
+	let mut child_in = child_process.stdin.take().expect("Could not get child stdin");
+
+	let child_out_str = Arc::new(Mutex::new(String::new()));
+	let shared = child_out_str.clone();
+
+	let _handle = thread::spawn(move || {
+		let mut line = String::new();
+		while let Ok(_) = child_out.read_line(&mut line) {
+			shared.lock().unwrap().push_str(&line);
+			line.clear();
+		}
+	});
+
+	// Initiate logs loop in child process
+	child_in.write("\n".as_bytes()).unwrap();
+	thread::sleep(Duration::from_millis(100));
+	let test1_str = child_out_str.lock().unwrap().clone();
+	// Assert that only the first target is present
+	assert!(test1_str.contains(EXPECTED_BEFORE_ADD));
+	assert!(!test1_str.contains(EXPECTED_AFTER_ADD));
+	child_out_str.lock().unwrap().clear();
+
+	// Initiate add directive & reload in child process
+	child_in.write("add_reload\n".as_bytes()).unwrap();
+	thread::sleep(Duration::from_millis(100));
+	let test2_str = child_out_str.lock().unwrap().clone();
+	// Assert that both targets are now present
+	assert!(test2_str.contains(EXPECTED_BEFORE_ADD));
+	assert!(test2_str.contains(EXPECTED_AFTER_ADD));
+	child_out_str.lock().unwrap().clear();
+
+	// Initiate logs filter reset in child process
+	child_in.write("reset\n".as_bytes()).unwrap();
+	thread::sleep(Duration::from_millis(100));
+	let test3_str = child_out_str.lock().unwrap().clone();
+	// Assert that only the first target is present as it was initially
+	assert!(test3_str.contains(EXPECTED_BEFORE_ADD));
+	assert!(!test3_str.contains(EXPECTED_AFTER_ADD));
+
+	// Return from child process
+	child_in.write("exit\n".as_bytes()).unwrap();
+	assert!(child_process.wait().expect("Error waiting for child process").success());
 }
