@@ -1489,8 +1489,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
 			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 				return Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }),
-			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
+				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
 		};
 
 		let outcome = match event {

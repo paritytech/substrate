@@ -17,9 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use libp2p::{
-	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
+	PeerId, Transport,
 	core::{
-		self, either::{EitherOutput, EitherTransport}, muxing::StreamMuxerBox,
+		self, either::EitherTransport, muxing::StreamMuxerBox,
 		transport::{Boxed, OptionalTransport}, upgrade
 	},
 	mplex, identity, bandwidth, wasm_ext, noise
@@ -74,11 +74,7 @@ pub fn build_transport(
 		// For more information about these two panics, see in "On the Importance of
 		// Checking Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
 		// and Richard J. Lipton.
-		let noise_keypair_legacy = noise::Keypair::<noise::X25519>::new().into_authentic(&keypair)
-			.expect("can only fail in case of a hardware bug; since this signing is performed only \
-				once and at initialization, we're taking the bet that the inconvenience of a very \
-				rare panic here is basically zero");
-		let noise_keypair_spec = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair)
+		let noise_keypair = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair)
 			.expect("can only fail in case of a hardware bug; since this signing is performed only \
 				once and at initialization, we're taking the bet that the inconvenience of a very \
 				rare panic here is basically zero");
@@ -87,19 +83,9 @@ pub fn build_transport(
 		let mut noise_legacy = noise::LegacyConfig::default();
 		noise_legacy.recv_legacy_handshake = true;
 
-		let mut xx_config = noise::NoiseConfig::xx(noise_keypair_spec);
+		let mut xx_config = noise::NoiseConfig::xx(noise_keypair);
 		xx_config.set_legacy_config(noise_legacy.clone());
-		let mut ix_config = noise::NoiseConfig::ix(noise_keypair_legacy);
-		ix_config.set_legacy_config(noise_legacy);
-
-		let extract_peer_id = |result| match result {
-			EitherOutput::First((peer_id, o)) => (peer_id, EitherOutput::First(o)),
-			EitherOutput::Second((peer_id, o)) => (peer_id, EitherOutput::Second(o)),
-		};
-
-		core::upgrade::SelectUpgrade::new(xx_config.into_authenticated(), ix_config.into_authenticated())
-			.map_inbound(extract_peer_id)
-			.map_outbound(extract_peer_id)
+		xx_config.into_authenticated()
 	};
 
 	let multiplexing_config = {
@@ -115,7 +101,7 @@ pub fn build_transport(
 		core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
 	};
 
-	let transport = transport.upgrade(upgrade::Version::V1)
+	let transport = transport.upgrade(upgrade::Version::V1Lazy)
 		.authenticate(authentication_config)
 		.multiplex(multiplexing_config)
 		.timeout(Duration::from_secs(20))

@@ -28,7 +28,7 @@ use futures::{FutureExt, Stream, StreamExt, stream::Fuse};
 use addr_cache::AddrCache;
 use async_trait::async_trait;
 use codec::Decode;
-use libp2p::{core::multiaddr, multihash::Multihash};
+use libp2p::{core::multiaddr, multihash::{Multihash, Hasher}};
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
 use prost::Message;
