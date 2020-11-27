@@ -410,30 +410,6 @@ impl<'a> ConnectedPeer<'a> {
 		}
 	}
 
-	/// Returns the reputation value of the node.
-	///
-	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
-	pub fn reputation(&self) -> i32 {
-		self.state
-			.nodes
-			.get(&*self.peer_id)
-			.map_or(0, |p| p.reputation)
-	}
-
-	/// Sets the reputation of the peer.
-	///
-	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
-	pub fn set_reputation(&mut self, value: i32) {
-		if let Some(node) = self.state.nodes.get_mut(&*self.peer_id) {
-			node.reputation = value;
-		} else {
-			debug_assert!(
-				false,
-				"State inconsistency: set_reputation on an unknown node"
-			);
-		}
-	}
-
 	/// Performs an arithmetic addition on the reputation score of that peer.
 	///
 	/// In case of overflow, the value will be capped.
@@ -589,6 +565,7 @@ impl<'a> NotConnectedPeer<'a> {
 	/// Sets the reputation of the peer.
 	///
 	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
+	#[cfg(test)] // Feel free to remove this if this function is needed outside of tests
 	pub fn set_reputation(&mut self, value: i32) {
 		if let Some(node) = self.state.nodes.get_mut(&*self.peer_id) {
 			node.reputation = value;
@@ -596,22 +573,6 @@ impl<'a> NotConnectedPeer<'a> {
 			debug_assert!(
 				false,
 				"State inconsistency: set_reputation on an unknown node"
-			);
-		}
-	}
-
-	/// Performs an arithmetic addition on the reputation score of that peer.
-	///
-	/// In case of overflow, the value will be capped.
-	///
-	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
-	pub fn add_reputation(&mut self, modifier: i32) {
-		if let Some(node) = self.state.nodes.get_mut(&*self.peer_id) {
-			node.reputation = node.reputation.saturating_add(modifier);
-		} else {
-			debug_assert!(
-				false,
-				"State inconsistency: add_reputation on an unknown node"
 			);
 		}
 	}
