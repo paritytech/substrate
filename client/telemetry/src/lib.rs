@@ -25,9 +25,9 @@
 //!
 //! The macro `telemetry!` can be used to report telemetries from anywhere in the code but a
 //! `Telemetry` must have been initialized. Creating a `Telemetry` will make all the following code
-//! execution (including new created async background tasks) use this `Telemetry` when reporting
+//! execution (including newly created async background tasks) use this `Telemetry` when reporting
 //! telemetries. If multiple `Telemetry` objects are created, the latest one (higher up in the
-//! stack) will be used. If no `Telemetry` object can be found, nothing happens.
+//! stack) will be used. If no `Telemetry` object can be found, nothing is reported.
 //!
 //! To re-use connections to the same server you need to use the `Telemetries` object to create a
 //! `Telemetry`. `Telemetries` also manages a collection of channel `Sender` for you (see
