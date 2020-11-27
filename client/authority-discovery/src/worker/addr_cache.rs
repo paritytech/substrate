@@ -139,7 +139,7 @@ fn peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
 mod tests {
 	use super::*;
 
-	use libp2p::multihash;
+	use libp2p::multihash::{self, Multihash};
 	use quickcheck::{Arbitrary, Gen, QuickCheck, TestResult};
 	use rand::Rng;
 
@@ -163,7 +163,7 @@ mod tests {
 		fn arbitrary<G: Gen>(g: &mut G) -> Self {
 			let seed: [u8; 32] = g.gen();
 			let peer_id = PeerId::from_multihash(
-				multihash::wrap(multihash::Code::Sha2_256, &seed)
+				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap()
 			).unwrap();
 			let multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse::<Multiaddr>()
 				.unwrap()
