@@ -254,7 +254,9 @@ impl<H, N, V> ForkTree<H, N, V> where
 	}
 
 	fn node_iter(&self) -> impl Iterator<Item=&Node<H, N, V>> {
-		ForkTreeIterator { stack: self.roots.iter().collect() }
+		// we need to reverse the order of roots to maintain the expected
+		// ordering since the iterator uses a stack to track state.
+		ForkTreeIterator { stack: self.roots.iter().rev().collect() }
 	}
 
 	/// Iterates the nodes in the tree in pre-order.
