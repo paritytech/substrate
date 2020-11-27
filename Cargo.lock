@@ -6574,6 +6574,7 @@ dependencies = [
  "sp-version",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime",
+ "thiserror",
 ]
 
 [[package]]
@@ -6837,6 +6838,7 @@ dependencies = [
  "sp-state-machine",
  "sp-trie",
  "substrate-test-runtime-client",
+ "thiserror",
 ]
 
 [[package]]
@@ -6897,14 +6899,13 @@ name = "sc-executor-common"
 version = "0.8.0"
 dependencies = [
  "derive_more",
- "log",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "sp-allocator",
  "sp-core",
- "sp-runtime-interface",
  "sp-serializer",
  "sp-wasm-interface",
+ "thiserror",
  "wasmi",
 ]
 
@@ -7328,7 +7329,6 @@ name = "sc-service"
 version = "0.8.0"
 dependencies = [
  "async-std",
- "derive_more",
  "directories 3.0.1",
  "exit-future",
  "futures 0.1.30",
@@ -7387,6 +7387,7 @@ dependencies = [
  "substrate-test-runtime",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
  "tokio 0.2.23",
  "tracing",
  "tracing-futures",
@@ -7440,6 +7441,7 @@ dependencies = [
  "parking_lot 0.10.2",
  "sc-client-api",
  "sp-core",
+ "thiserror",
 ]
 
 [[package]]
@@ -7458,6 +7460,7 @@ dependencies = [
  "serde_json",
  "sp-blockchain",
  "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
@@ -7519,6 +7522,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-utils",
  "substrate-test-runtime",
+ "thiserror",
  "wasm-timer",
 ]
 
@@ -7527,7 +7531,6 @@ name = "sc-transaction-pool"
 version = "2.0.0"
 dependencies = [
  "assert_matches",
- "derive_more",
  "futures 0.3.8",
  "futures-diagnose",
  "hex",
@@ -7551,6 +7554,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
+ "thiserror",
  "wasm-timer",
 ]
 
@@ -7992,6 +7996,7 @@ dependencies = [
  "sp-std",
  "sp-test-primitives",
  "sp-version",
+ "thiserror",
 ]
 
 [[package]]
@@ -8110,10 +8115,12 @@ dependencies = [
 name = "sp-blockchain"
 version = "2.0.0"
 dependencies = [
+ "futures 0.3.8",
  "log",
  "lru 0.6.1",
  "parity-scale-codec",
  "parking_lot 0.10.2",
+ "sp-api",
  "sp-consensus",
  "sp-database",
  "sp-runtime",
@@ -8669,6 +8676,7 @@ dependencies = [
  "sp-api",
  "sp-blockchain",
  "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
