@@ -1324,7 +1324,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						match result {
 							Ok(serve_time) => {
-								metrics.requests_in_success_total
+								metrics.requests_in_duration_building_response
 									.with_label_values(&[&protocol])
 									.observe(serve_time.as_secs_f64());
 							}
