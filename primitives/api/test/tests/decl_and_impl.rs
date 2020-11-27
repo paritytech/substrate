@@ -24,7 +24,6 @@ use sp_runtime::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
 use sp_core::NativeOrEncoded;
 use substrate_test_runtime_client::runtime::Block;
 use sp_blockchain::Result;
-use codec;
 
 /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
 /// trait are done by the `construct_runtime!` macro in a real runtime.
