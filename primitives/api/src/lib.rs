@@ -69,7 +69,7 @@ pub use sp_std::{slice, mem};
 #[cfg(feature = "std")]
 use sp_std::result;
 #[doc(hidden)]
-pub use codec::{self, Encode, Decode, DecodeLimit};
+pub use codec::{Encode, Decode, DecodeLimit};
 use sp_core::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::{panic::UnwindSafe, cell::RefCell};
