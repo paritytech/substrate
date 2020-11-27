@@ -289,7 +289,7 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 ///         /// Sets the error type that is being used by the mock implementation.
 ///         /// The error type is used by all runtime apis. It is only required to
 ///         /// be specified in one trait implementation.
-///         type Error = ApiError;
+///         type Error = sp_api::ApiError;
 ///
 ///         fn build_block() -> Block {
 ///              unimplemented!("Not Required in tests")
@@ -333,15 +333,15 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 ///
 /// sp_api::mock_impl_runtime_apis! {
 ///     impl Balance<Block> for MockApi {
-///         type Error = ApiError;
+///         type Error = sp_api::ApiError;
 ///         #[advanced]
-///         fn get_balance(&self, at: &BlockId<Block>) -> Result<NativeOrEncoded<u64>, ApiError> {
+///         fn get_balance(&self, at: &BlockId<Block>) -> Result<NativeOrEncoded<u64>, Self::Error> {
 ///             println!("Being called at: {}", at);
 ///
 ///             Ok(self.balance.into())
 ///         }
 ///         #[advanced]
-///         fn set_balance(at: &BlockId<Block>, val: u64) -> Result<NativeOrEncoded<()>, ApiError> {
+///         fn set_balance(at: &BlockId<Block>, val: u64) -> Result<NativeOrEncoded<()>, Self::Error> {
 ///             if let BlockId::Number(1) = at {
 ///                 println!("Being called to set balance to: {}", val);
 ///             }
