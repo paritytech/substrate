@@ -83,7 +83,6 @@ impl FetchRuntimeCode for WasmBlob {
 	}
 }
 
-
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum WasmOverrideError {
