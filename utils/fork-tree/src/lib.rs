@@ -229,7 +229,10 @@ impl<H, N, V> ForkTree<H, N, V> where
 					number = n;
 					data = d;
 				},
-				None => return Ok(false),
+				None => {
+					self.rebalance();
+					return Ok(false);
+				},
 			}
 		}
 
