@@ -302,6 +302,9 @@ pub struct HostFnWeights<T: Trait> {
 	/// Weight per output byte received through `seal_instantiate`.
 	pub instantiate_per_output_byte: Weight,
 
+	/// Weight per salt byte supplied to `seal_instantiate`.
+	pub instantiate_per_salt_byte: Weight,
+
 	/// Weight of calling `seal_hash_sha_256`.
 	pub hash_sha2_256: Weight,
 
@@ -535,8 +538,9 @@ impl<T: Trait> Default for HostFnWeights<T> {
 			call_per_input_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 1, 0),
 			call_per_output_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 0, 1),
 			instantiate: cost_batched!(seal_instantiate),
-			instantiate_per_input_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_kb, 1, 0),
-			instantiate_per_output_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_kb, 0, 1),
+			instantiate_per_input_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 1, 0, 0),
+			instantiate_per_output_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 0, 1, 0),
+			instantiate_per_salt_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 0, 0, 1),
 			hash_sha2_256: cost_batched!(seal_hash_sha2_256),
 			hash_sha2_256_per_byte: cost_byte_batched!(seal_hash_sha2_256_per_kb),
 			hash_keccak_256: cost_batched!(seal_hash_keccak_256),

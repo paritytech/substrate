@@ -21,7 +21,7 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-pub use crate::chain::{Client, FinalityProofProvider};
+pub use crate::chain::Client;
 pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
 pub use crate::request_responses::{IncomingRequest, ProtocolConfig as RequestResponseConfig};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
@@ -69,17 +69,6 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Client that contains the blockchain.
 	pub chain: Arc<dyn Client<B>>,
-
-	/// Finality proof provider.
-	///
-	/// This object, if `Some`, is used when a node on the network requests a proof of finality
-	/// from us.
-	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
-
-	/// How to build requests for proofs of finality.
-	///
-	/// This object, if `Some`, is used when we need a proof of finality from another node.
-	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 
 	/// The `OnDemand` object acts as a "receiver" for block data requests from the client.
 	/// If `Some`, the network worker will process these requests and answer them.
@@ -152,25 +141,6 @@ impl fmt::Display for Role {
 		}
 	}
 }
-
-/// Finality proof request builder.
-pub trait FinalityProofRequestBuilder<B: BlockT>: Send {
-	/// Build data blob, associated with the request.
-	fn build_request_data(&mut self, hash: &B::Hash) -> Vec<u8>;
-}
-
-/// Implementation of `FinalityProofRequestBuilder` that builds a dummy empty request.
-#[derive(Debug, Default)]
-pub struct DummyFinalityProofRequestBuilder;
-
-impl<B: BlockT> FinalityProofRequestBuilder<B> for DummyFinalityProofRequestBuilder {
-	fn build_request_data(&mut self, _: &B::Hash) -> Vec<u8> {
-		Vec::new()
-	}
-}
-
-/// Shared finality proof request builder struct used by the queue.
-pub type BoxFinalityProofRequestBuilder<B> = Box<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
 
 /// Result of the transaction import.
 #[derive(Clone, Copy, Debug)]

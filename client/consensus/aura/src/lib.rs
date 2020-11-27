@@ -47,7 +47,7 @@ use sp_consensus::{
 	BlockOrigin, Error as ConsensusError, SelectChain, SlotData, BlockCheckParams, ImportResult
 };
 use sp_consensus::import_queue::{
-	Verifier, BasicQueue, DefaultImportQueue, BoxJustificationImport, BoxFinalityProofImport,
+	Verifier, BasicQueue, DefaultImportQueue, BoxJustificationImport,
 };
 use sc_client_api::{backend::AuxStore, BlockOf};
 use sp_blockchain::{
@@ -836,7 +836,6 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 	slot_duration: SlotDuration,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<B>>,
-	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
 	spawner: &S,
@@ -868,7 +867,6 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 		verifier,
 		Box::new(block_import),
 		justification_import,
-		finality_proof_import,
 		spawner,
 		registry,
 	))

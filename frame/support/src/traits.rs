@@ -1267,7 +1267,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
 	}
 
-	/// Compute diff between new and old members; they **must already be sorted**. 
+	/// Compute diff between new and old members; they **must already be sorted**.
 	///
 	/// Returns incoming and outgoing members.
 	fn compute_members_diff(
@@ -1429,6 +1429,9 @@ pub trait GetCallMetadata {
 #[impl_for_tuples(30)]
 pub trait OnFinalize<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
+	///
+	/// NOTE: This function is called AFTER ALL extrinsics in a block are applied,
+	/// including inherent extrinsics.
 	fn on_finalize(_n: BlockNumber) {}
 }
 
@@ -1440,6 +1443,10 @@ pub trait OnInitialize<BlockNumber> {
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
+	///
+	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
+	/// including inherent extrinsics. Hence for instance, if you runtime includes
+	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
 	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
 }
 
