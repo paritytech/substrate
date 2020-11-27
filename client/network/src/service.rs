@@ -38,7 +38,7 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	on_demand_layer::AlwaysBadChecker,
-	light_client_handler, block_requests, finality_requests,
+	light_client_handler, block_requests,
 	protocol::{self, event::Event, NotifsHandlerError, NotificationsSink, Ready, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
@@ -264,7 +264,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			local_peer_id.clone(),
 			params.chain.clone(),
 			params.transaction_pool,
-			params.finality_proof_request_builder,
 			params.protocol_id.clone(),
 			peerset_config,
 			params.block_announce_validator,
@@ -282,10 +281,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			let block_requests = {
 				let config = block_requests::Config::new(&params.protocol_id);
 				block_requests::BlockRequests::new(config, params.chain.clone())
-			};
-			let finality_proof_requests = {
-				let config = finality_requests::Config::new(&params.protocol_id);
-				finality_requests::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
 			};
 			let light_client_handler = {
 				let config = light_client_handler::Config::new(&params.protocol_id);
@@ -326,7 +321,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					user_agent,
 					local_public,
 					block_requests,
-					finality_proof_requests,
 					light_client_handler,
 					discovery_config,
 					params.network_config.request_response_protocols,
@@ -506,11 +500,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.network_service.user_protocol_mut().on_block_finalized(hash, &header);
 	}
 
-	/// This should be called when blocks are added to the
-	/// chain by something other than the import queue.
-	/// Currently this is only useful for tests.
-	pub fn update_chain(&mut self) {
-		self.network_service.user_protocol_mut().update_chain();
+	/// Inform the network service about new best imported block.
+	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
+		self.network_service.user_protocol_mut().new_best_block_imported(hash, number);
 	}
 
 	/// Returns the local `PeerId`.
@@ -1039,21 +1031,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		self.num_connected.load(Ordering::Relaxed)
 	}
 
-	/// This function should be called when blocks are added to the chain by something other
-	/// than the import queue.
-	///
-	/// > **Important**: This function is a hack and can be removed at any time. Do **not** use it.
-	pub fn update_chain(&self) {
+	/// Inform the network service about new best imported block.
+	pub fn new_best_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::UpdateChain);
-	}
-
-	/// Inform the network service about an own imported block.
-	pub fn own_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
+			.unbounded_send(ServiceToWorkerMsg::NewBestBlockImported(hash, number));
 	}
 
 	/// Utility function to extract `PeerId` from each `Multiaddr` for priority group updates.
@@ -1208,8 +1190,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		protocol_name: Cow<'static, str>,
 	},
 	DisconnectPeer(PeerId),
-	UpdateChain,
-	OwnBlockImported(B::Hash, NumberFor<B>),
+	NewBestBlockImported(B::Hash, NumberFor<B>),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -1346,10 +1327,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.register_notifications_protocol(protocol_name),
 				ServiceToWorkerMsg::DisconnectPeer(who) =>
 					this.network_service.user_protocol_mut().disconnect_peer(&who),
-				ServiceToWorkerMsg::UpdateChain =>
-					this.network_service.user_protocol_mut().update_chain(),
-				ServiceToWorkerMsg::OwnBlockImported(hash, number) =>
-					this.network_service.user_protocol_mut().own_block_imported(hash, number),
+				ServiceToWorkerMsg::NewBestBlockImported(hash, number) =>
+					this.network_service.user_protocol_mut().new_best_block_imported(hash, number),
 			}
 		}
 
@@ -1381,12 +1360,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						metrics.import_queue_justifications_submitted.inc();
 					}
 					this.import_queue.import_justification(origin, hash, nb, justification);
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::FinalityProofImport(origin, hash, nb, proof))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_finality_proofs_submitted.inc();
-					}
-					this.import_queue.import_finality_proof(origin, hash, nb, proof);
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest { protocol, result, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
@@ -1584,11 +1557,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
-								EitherError::A(PingFailure::Timeout)))))))))) => "ping-timeout",
+								EitherError::A(EitherError::A(EitherError::B(
+								EitherError::A(PingFailure::Timeout))))))))) => "ping-timeout",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged))))))))) => "sync-notifications-clogged",
+								EitherError::A(EitherError::A(EitherError::A(
+								NotifsHandlerError::SyncNotificationsClogged)))))))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) => "protocol-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout)) => "keep-alive-timeout",
 							None => "actively-closed",
@@ -1772,23 +1745,6 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 	}
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.protocol.user_protocol_mut().request_justification(hash, number)
-	}
-	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.protocol.user_protocol_mut().request_finality_proof(hash, number)
-	}
-	fn finality_proof_imported(
-		&mut self,
-		who: PeerId,
-		request_block: (B::Hash, NumberFor<B>),
-		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
-	) {
-		let success = finalization_result.is_ok();
-		self.protocol.user_protocol_mut().finality_proof_import_result(request_block, finalization_result);
-		if !success {
-			info!("💔 Invalid finality proof provided by {} for #{}", who, request_block.0);
-			self.protocol.user_protocol_mut().disconnect_peer(&who);
-			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid finality proof"));
-		}
 	}
 }
 

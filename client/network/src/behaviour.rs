@@ -15,9 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	config::{ProtocolId, Role}, block_requests, light_client_handler, finality_requests,
+	config::{ProtocolId, Role}, block_requests, light_client_handler,
 	peer_info, request_responses, discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
-	protocol::{message::{self, Roles}, CustomMessageOutcome, NotificationsSink, Protocol},
+	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
 	ObservedRole, DhtEvent, ExHashT,
 };
 
@@ -58,8 +58,6 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	request_responses: request_responses::RequestResponsesBehaviour,
 	/// Block request handling.
 	block_requests: block_requests::BlockRequests<B>,
-	/// Finality proof request handling.
-	finality_proof_requests: finality_requests::FinalityProofRequests<B>,
 	/// Light client request handling.
 	light_client_handler: light_client_handler::LightClientHandler<B>,
 
@@ -76,7 +74,6 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 pub enum BehaviourOut<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
-	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
 
 	/// Started a random iterative Kademlia discovery query.
 	RandomKademliaStarted(ProtocolId),
@@ -182,7 +179,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		user_agent: String,
 		local_public_key: PublicKey,
 		block_requests: block_requests::BlockRequests<B>,
-		finality_proof_requests: finality_requests::FinalityProofRequests<B>,
 		light_client_handler: light_client_handler::LightClientHandler<B>,
 		disco_config: DiscoveryConfig,
 		request_response_protocols: Vec<request_responses::ProtocolConfig>,
@@ -194,7 +190,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 			request_responses:
 				request_responses::RequestResponsesBehaviour::new(request_response_protocols.into_iter())?,
 			block_requests,
-			finality_proof_requests,
 			light_client_handler,
 			events: VecDeque::new(),
 			role,
@@ -334,8 +329,6 @@ Behaviour<B, H> {
 				self.events.push_back(BehaviourOut::BlockImport(origin, blocks)),
 			CustomMessageOutcome::JustificationImport(origin, hash, nb, justification) =>
 				self.events.push_back(BehaviourOut::JustificationImport(origin, hash, nb, justification)),
-			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
-				self.events.push_back(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)),
 			CustomMessageOutcome::BlockRequest { target, request } => {
 				match self.block_requests.send_request(&target, request) {
 					block_requests::SendRequestOutcome::Ok => {
@@ -358,9 +351,6 @@ Behaviour<B, H> {
 					block_requests::SendRequestOutcome::NotConnected |
 					block_requests::SendRequestOutcome::EncodeError(_) => {},
 				}
-			},
-			CustomMessageOutcome::FinalityProofRequest { target, block_hash, request } => {
-				self.finality_proof_requests.send_request(&target, block_hash, request);
 			},
 			CustomMessageOutcome::NotificationStreamOpened { remote, protocols, roles, notifications_sink } => {
 				let role = reported_roles_to_observed_role(&self.role, &remote, roles);
@@ -449,26 +439,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 					request_duration,
 				});
 				self.substrate.on_block_request_failed(&peer);
-			}
-		}
-	}
-}
-
-impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<finality_requests::Event<B>> for Behaviour<B, H> {
-	fn inject_event(&mut self, event: finality_requests::Event<B>) {
-		match event {
-			finality_requests::Event::Response { peer, block_hash, proof } => {
-				let response = message::FinalityProofResponse {
-					id: 0,
-					block: block_hash,
-					proof: if !proof.is_empty() {
-						Some(proof)
-					} else {
-						None
-					},
-				};
-				let ev = self.substrate.on_finality_proof_response(peer, response);
-				self.inject_event(ev);
 			}
 		}
 	}

@@ -693,7 +693,7 @@ impl ProtocolsHandler for NotifsHandler {
 					}
 				};
 
-				for mut substream in self.legacy_substreams.drain() {
+				for mut substream in self.legacy_substreams.drain(..) {
 					substream.shutdown();
 					self.legacy_shutdown.push(substream);
 				}
@@ -913,6 +913,16 @@ impl ProtocolsHandler for NotifsHandler {
 						if let Some(pos) = self.out_protocols.iter().position(|(n, _)| *n == protocol_name) {
 							if let Some(substream) = out_substreams[pos].as_mut() {
 								let _ = substream.start_send_unpin(message);
+								// Calling `start_send_unpin` only queues the message. Actually
+								// emitting the message is done with `poll_flush`. In order to
+								// not introduce too much complexity, this flushing is done earlier
+								// in the body of this `poll()` method. As such, we schedule a task
+								// wake-up now in order to guarantee that `poll()` will be called
+								// again and the flush happening.
+								// At the time of the writing of this comment, a rewrite of this
+								// code is being planned. If you find this comment in the wild and
+								// the rewrite didn't happen, please consider a refactor.
+								cx.waker().wake_by_ref();
 								continue 'poll_notifs_sink;
 							}
 

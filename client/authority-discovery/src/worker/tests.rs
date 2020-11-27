@@ -37,66 +37,6 @@ use substrate_test_runtime_client::runtime::Block;
 
 use super::*;
 
-#[test]
-fn interval_at_with_start_now() {
-	let start = Instant::now();
-
-	let mut interval = interval_at(
-		std::time::Instant::now(),
-		std::time::Duration::from_secs(10),
-	);
-
-	futures::executor::block_on(async {
-		interval.next().await;
-	});
-
-	assert!(
-		Instant::now().saturating_duration_since(start) < Duration::from_secs(1),
-		"Expected low resolution instant interval to fire within less than a second.",
-	);
-}
-
-#[test]
-fn interval_at_is_queuing_ticks() {
-	let start = Instant::now();
-
-	let interval = interval_at(start, std::time::Duration::from_millis(100));
-
-	// Let's wait for 200ms, thus 3 elements should be queued up (1st at 0ms, 2nd at 100ms, 3rd
-	// at 200ms).
-	std::thread::sleep(Duration::from_millis(200));
-
-	futures::executor::block_on(async {
-		interval.take(3).collect::<Vec<()>>().await;
-	});
-
-	// Make sure we did not wait for more than 300 ms, which would imply that `at_interval` is
-	// not queuing ticks.
-	assert!(
-		Instant::now().saturating_duration_since(start) < Duration::from_millis(300),
-		"Expect interval to /queue/ events when not polled for a while.",
-	);
-}
-
-#[test]
-fn interval_at_with_initial_delay() {
-	let start = Instant::now();
-
-	let mut interval = interval_at(
-		std::time::Instant::now() + Duration::from_millis(100),
-		std::time::Duration::from_secs(10),
-	);
-
-	futures::executor::block_on(async {
-		interval.next().await;
-	});
-
-	assert!(
-		Instant::now().saturating_duration_since(start) > Duration::from_millis(100),
-		"Expected interval with initial delay not to fire right away.",
-	);
-}
-
 #[derive(Clone)]
 pub(crate) struct TestApi {
 	pub(crate) authorities: Vec<AuthorityId>,
