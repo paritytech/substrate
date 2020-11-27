@@ -140,8 +140,6 @@ optional = true
 
 [features]
 default = [ "cli" ]
-# enable non-secure Substrate Simple Remote Signer
-with-ssrs = [ "sc-service/with-ssrs" ]
 browser = [
 	"browser-utils",
 	"wasm-bindgen",

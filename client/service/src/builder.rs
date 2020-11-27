@@ -69,9 +69,6 @@ use sc_client_api::{
 };
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
 
-#[cfg(feature = "with-ssrs")]
-use sc_jsonrpc_remote_signer::client::RemoteKeystore as SSRSRemoteKeystore;
-
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
 /// specific interface where the RPC extension will be exposed is safe or not.
