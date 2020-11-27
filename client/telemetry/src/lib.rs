@@ -29,8 +29,8 @@
 //! telemetries. If multiple `Telemetry` objects are created, the latest one (higher up in the
 //! stack) will be used. If no `Telemetry` object can be found, nothing is reported.
 //!
-//! To re-use connections to the same server you need to use the `Telemetries` object to create a
-//! `Telemetry`. `Telemetries` also manages a collection of channel `Sender` for you (see
+//! To re-use connections to the same server you need to use the `Telemetries` object to create
+//! multiple `Telemetry`. `Telemetries` also manages a collection of channel `Sender` for you (see
 //! `Senders`). `Telemetries` should be used unless you need finer control.
 //!
 //! The [`Telemetry`] struct implements `Stream` and must be polled regularly (or sent to a
