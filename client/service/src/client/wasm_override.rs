@@ -100,9 +100,9 @@ pub enum WasmOverrideError {
 	DuplicateRuntime(Vec<String>),
 }
 
-impl Into<sp_blockchain::Error> for WasmOverrideError {
-	fn into(self) -> sp_blockchain::Error {
-		sp_blockchain::Error::Application(Box::new(self))
+impl From<WasmOverrideError> for sp_blockchain::Error {
+	fn from(err: WasmOverrideError) -> Self {
+		Self::Application(Box::new(err))
 	}
 }
 
