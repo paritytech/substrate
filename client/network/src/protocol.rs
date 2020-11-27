@@ -528,10 +528,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.num_sync_requests()
 	}
 
-	/// Sync local state with the blockchain state.
-	pub fn update_chain(&mut self) {
-		let info = self.context_data.chain.info();
-		self.sync.update_chain_info(&info.best_hash, info.best_number);
+	/// Inform sync about new best imported block.
+	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
+		self.sync.update_chain_info(&hash, number);
 		self.behaviour.set_legacy_handshake_message(
 			build_status_message(&self.config, &self.context_data.chain),
 		);
@@ -539,11 +538,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			&self.block_announces_protocol,
 			BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
 		);
-	}
-
-	/// Inform sync about an own imported block.
-	pub fn own_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
-		self.sync.update_chain_info(&hash, number);
 	}
 
 	fn update_peer_info(&mut self, who: &PeerId) {
@@ -1258,18 +1252,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
-		let new_best = results.iter().rev().find_map(|r| match r {
-			(Ok(BlockImportResult::ImportedUnknown(n, aux, _)), hash) if aux.is_new_best => Some((*n, hash.clone())),
-			_ => None,
-		});
-		if let Some((best_num, best_hash)) = new_best {
-			self.sync.update_chain_info(&best_hash, best_num);
-			self.behaviour.set_legacy_handshake_message(build_status_message(&self.config, &self.context_data.chain));
-			self.behaviour.set_notif_protocol_handshake(
-				&self.block_announces_protocol,
-				BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
-			);
-		}
 		let results = self.sync.on_blocks_processed(
 			imported,
 			count,
