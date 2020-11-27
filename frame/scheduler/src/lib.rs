@@ -817,7 +817,7 @@ mod tests {
 	}
 	impl system::Trait for Test {
 		type BaseCallFilter = BaseFilter;
-		type BlockWeights = BlockWeights;
+		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = RocksDbWeight;
 		type Origin = Origin;

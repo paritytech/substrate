@@ -119,7 +119,7 @@ impl Filter<Call> for BlockEverything {
 
 impl frame_system::Trait for Test {
 	type BaseCallFilter = BlockEverything;
-	type BlockWeights = BlockWeights;
+	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
 	type Origin = Origin;

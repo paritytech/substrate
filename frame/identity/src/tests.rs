@@ -43,7 +43,7 @@ parameter_types! {
 }
 impl frame_system::Trait for Test {
 	type BaseCallFilter = ();
-	type BlockWeights = BlockWeights;
+	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
 	type Index = u64;

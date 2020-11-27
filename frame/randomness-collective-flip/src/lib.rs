@@ -160,7 +160,7 @@ mod tests {
 
 	impl frame_system::Trait for Test {
 		type BaseCallFilter = ();
-		type BlockWeights = BlockWeights;
+		type BlockWeights = ();
 		type BlockLength = BlockLength;
 		type DbWeight = ();
 		type Origin = Origin;

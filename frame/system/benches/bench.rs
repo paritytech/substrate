@@ -67,7 +67,7 @@ frame_support::parameter_types! {
 pub struct Runtime;
 impl system::Trait for Runtime {
 	type BaseCallFilter = ();
-	type BlockWeights = BlockWeights;
+	type BlockWeights = ();
 	type BlockLength = BlockLength;
 	type DbWeight = ();
 	type Origin = Origin;

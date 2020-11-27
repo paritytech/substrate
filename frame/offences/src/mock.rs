@@ -96,7 +96,7 @@ parameter_types! {
 }
 impl frame_system::Trait for Runtime {
 	type BaseCallFilter = ();
-	type BlockWeights = BlockWeights;
+	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
 	type Origin = Origin;
