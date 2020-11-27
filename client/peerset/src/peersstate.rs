@@ -699,7 +699,7 @@ impl<'a> Reputation<'a> {
 	///
 	/// In case of overflow, the value will be capped.
 	pub fn add_reputation(&mut self, modifier: i32) {
-		let mut reputation = &mut self.node.as_mut().unwrap().get_mut().reputation;
+		let reputation = &mut self.node.as_mut().unwrap().get_mut().reputation;
 		*reputation = reputation.saturating_add(modifier);
 	}
 }

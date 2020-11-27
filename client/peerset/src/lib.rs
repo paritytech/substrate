@@ -599,7 +599,7 @@ impl Peerset {
 		self.update_time();
 
 		if self.reserved_only {
-			if !self.reserved_nodes.iter().any(|l| !l.contains(&peer_id)) {
+			if !self.reserved_nodes.iter().any(|l| l.contains(&peer_id)) {
 				self.message_queue.push_back(Message::Reject(index));
 				return;
 			}
