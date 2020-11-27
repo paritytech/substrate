@@ -28,6 +28,9 @@
 //!
 //! This connected/disconnected status is specific to the node and set combination, and it is for
 //! example possible for a node to be connected through a specific set but not another.
+//!
+//! In addition, for each, set, the peerset also holds a list of reserved nodes towards which it
+//! will at all time try to maintain a connection with.
 
 mod peersstate;
 
