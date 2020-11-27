@@ -213,6 +213,9 @@ impl Default for Pays {
 }
 
 /// A generalized group of dispatch types.
+///
+/// NOTE whenever upgrading the enum make sure to also update
+/// [DispatchClass::all] and [DispatchClass::non_mandatory] helper functions.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
