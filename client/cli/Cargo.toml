@@ -21,7 +21,7 @@ ansi_term = "0.12.1"
 tokio = { version = "0.2.21", features = [ "signal", "rt-core", "rt-threaded", "blocking" ] }
 futures = "0.3.4"
 fdlimit = "0.2.1"
-libp2p = "0.30.1"
+libp2p = "0.31.1"
 parity-scale-codec = "1.3.0"
 hex = "0.4.2"
 rand = "0.7.3"
@@ -52,7 +52,7 @@ sc-cli-proc-macro = { version = "2.0.0", path = "./proc-macro" }
 thiserror = "1.0.21"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
-rpassword = "4.0.1"
+rpassword = "5.0.0"
 
 [dev-dependencies]
 tempfile = "3.1.0"

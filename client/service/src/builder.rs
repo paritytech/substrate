@@ -604,12 +604,12 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		on_demand.clone(), remote_blockchain.clone(), &*rpc_extensions_builder,
 		backend.offchain_storage(), system_rpc_tx.clone()
 	);
-	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry()).ok();
-	let rpc = start_rpc_servers(&config, gen_handler, rpc_metrics.as_ref())?;
+	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
+	let rpc = start_rpc_servers(&config, gen_handler, rpc_metrics.clone())?;
 	// This is used internally, so don't restrict access to unsafe RPC
 	let rpc_handlers = RpcHandlers(Arc::new(gen_handler(
 		sc_rpc::DenyUnsafe::No,
-		sc_rpc_server::RpcMiddleware::new(rpc_metrics.as_ref().cloned(), "inbrowser")
+		sc_rpc_server::RpcMiddleware::new(rpc_metrics, "inbrowser")
 	).into()));
 
 	// Telemetry

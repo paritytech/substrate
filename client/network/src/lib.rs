@@ -283,6 +283,9 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 /// two peers, the per-peer connection limit is not set to 1 but 2.
 const MAX_CONNECTIONS_PER_PEER: usize = 2;
 
+/// The maximum number of concurrent established connections that were incoming.
+const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
+
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
 

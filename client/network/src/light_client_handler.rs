@@ -43,6 +43,7 @@ use libp2p::{
 		upgrade::{OutboundUpgrade, read_one, write_one}
 	},
 	swarm::{
+		AddressRecord,
 		NegotiatedSubstream,
 		NetworkBehaviour,
 		NetworkBehaviourAction,
@@ -1465,7 +1466,7 @@ mod tests {
 	impl PollParameters for EmptyPollParams {
 		type SupportedProtocolsIter = iter::Empty<Vec<u8>>;
 		type ListenedAddressesIter = iter::Empty<Multiaddr>;
-		type ExternalAddressesIter = iter::Empty<Multiaddr>;
+		type ExternalAddressesIter = iter::Empty<AddressRecord>;
 
 		fn supported_protocols(&self) -> Self::SupportedProtocolsIter {
 			iter::empty()
