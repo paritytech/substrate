@@ -1259,9 +1259,4 @@ mod tests {
 
 		is_submit_signed_transaction::<Runtime>();
 	}
-
-	#[test]
-	fn weights_are_valid() {
-		RuntimeBlockWeights::get().validate().unwrap();
-	}
 }

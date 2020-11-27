@@ -527,6 +527,12 @@ decl_module! {
 			}
 		}
 
+		fn integrity_test() {
+			T::block_weights()
+				.validate()
+				.expect("The weights are invalid.");
+		}
+
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
