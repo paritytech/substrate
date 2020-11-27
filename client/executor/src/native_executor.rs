@@ -41,7 +41,7 @@ use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
 use sp_externalities::{ExternalitiesExt as _, AsyncBackend};
-use sp_tasks::{new_async_externalities, AsyncExt, AsyncStateType};
+use sp_tasks::{new_async_externalities, new_inline_only_externalities, AsyncExt, AsyncStateType};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -307,7 +307,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 #[derive(Clone)]
 pub struct RuntimeInstanceSpawn {
 	module: Option<Arc<dyn WasmModule>>,
-	instance: Arc<parking_lot::Mutex<Option<Box<dyn WasmInstance>>>>,
+	instance: Arc<parking_lot::Mutex<Option<AssertUnwindSafe<Box<dyn WasmInstance>>>>>,
 	tasks: Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
 	counter: Arc<AtomicU64>,
 	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
@@ -331,7 +331,7 @@ enum RuningTask {
 	// TODO condvar?
 	Task(mpsc::Receiver<Option<Vec<u8>>>),
 	// TODO need to ad context of exteranlity init
-	Inline(Task),
+	Inline(PendingInlineTask),
 }
 
 struct WasmTask {
@@ -354,6 +354,11 @@ struct PendingTask {
 	task: Task,
 	ext: AsyncExt,
 	result_sender: mpsc::Sender<Option<Vec<u8>>>,
+}
+
+struct PendingInlineTask {
+	task: Task,
+	ext: AsyncExt,
 }
 
 impl RuntimeInstanceSpawnInfo {
@@ -431,7 +436,10 @@ impl RuntimeInstanceSpawn {
 			Processing::Queue => (),
 			Processing::RunInline => {
 				// TODO in this case a useless channel was opened.
-				tasks.tasks.insert(handle, RuningTask::Inline(task.task));
+				tasks.tasks.insert(handle, RuningTask::Inline(PendingInlineTask{
+					task: task.task,
+					ext: task.ext,
+				}));
 				return;
 			},
 		}
@@ -460,6 +468,26 @@ impl RuntimeInstanceSpawn {
 			None => {
 				log::error!(target: "executor", "No module for a wasm task.");
 				tasks.lock().finished();
+				return None;
+			},
+		})
+	}
+	fn instantiate_inline(
+		module: &Option<Arc<dyn WasmModule>>,
+	) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
+		// TODO factor code with instantiate (FnOnce as param)
+		Some(match module.as_ref().map(|m| m.new_instance()) {
+			Some(Ok(val)) => AssertUnwindSafe(val),
+			Some(Err(e)) => {
+				log::error!(
+					target: "executor",
+					"Failed to create new instance for module for async context: {}",
+					e,
+				);
+				return None;
+			}
+			None => {
+				log::error!(target: "executor", "No module for a wasm task.");
 				return None;
 			},
 		})
@@ -709,32 +737,74 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					panic!("Spawned task panicked for the handle");
 				}
 			},
-			RuningTask::Inline(Task::Wasm(WasmTask { dispatcher_ref, func, data })) => {
+			RuningTask::Inline(
+				PendingInlineTask { ext, task: Task::Wasm(WasmTask { dispatcher_ref, func, data }) },
+			) => {
 				let mut instance = self.instance.lock();
 				if instance.is_none() {
-					*instance = self.module.as_ref().map(|m| m.new_instance()
-						.expect("Failed to create new instance from module"));
+					*instance = if let Some(instance) = Self::instantiate_inline(&self.module) {
+						Some(instance)
+					} else {
+						panic!("TODO thi sshould panic whole tx?");
+					};
 				}
-				// TODO this require inline async ext the reproduce the limited
-				// externality context of AsyncExt and also a panic handler.
-				// Not srue about panic handler since currently even if panic
-				// is handled we panic on result receiver.
-				// -> so no panic handler I guess.
-				let result = instance.as_ref().expect("lazy init above").call(
-					InvokeMethod::TableWithWrapper { dispatcher_ref, func },
-					&data[..],
-				);
-				match result {
-					Ok(output) => output,
-					Err(error) => {
-						log::error!("Call error in spawned task: {:?}", error);
-						panic!("Spawned task panicked for the handle");
+
+ 				let mut async_ext = match new_inline_only_externalities(ext) {
+					Ok(val) => val,
+					Err(e) => {
+						log::error!(
+							target: "executor",
+							"Failed to setup externalities for inline async context: {}",
+							e,
+						);
+						panic!("TODO return panic th result instead");
+					}
+				};
+				let instance = instance.as_ref().expect("Lazy init at start");
+
+				match with_externalities_safe(
+					&mut async_ext,
+					|| instance.call(
+						InvokeMethod::TableWithWrapper { dispatcher_ref, func },
+						&data[..],
+					)
+				) {
+					Ok(Ok(result)) => result,
+					Ok(Err(error)) => {
+						log::error!("Wasm instance error in : {:?}", error);
+						panic!("TODO thi sshould panic whole tx?");
 					},
+					Err(error) => {
+						log::error!("Panic error in sinlined task: {:?}", error);
+						panic!("TODO return panic th result instead");
+					}
 				}
 			},
-			RuningTask::Inline(Task::Native(NativeTask { func, data })) => {
-				// Same TODO for ext (actually without we double ext borrow_mut).
-				func(data)
+			RuningTask::Inline(
+				PendingInlineTask { ext, task: Task::Native(NativeTask { func, data }) },
+			) => {
+				// TODO factor code with wasm
+ 				let mut async_ext = match new_inline_only_externalities(ext) {
+					Ok(val) => val,
+					Err(e) => {
+						log::error!(
+							target: "executor",
+							"Failed to setup externalities for inline async context: {}",
+							e,
+						);
+						panic!("TODO return panic th result instead");
+					}
+				};
+				match with_externalities_safe(
+					&mut async_ext,
+					|| func(data),
+				) {
+					Ok(result) => result,
+					Err(error) => {
+						log::error!("Panic error in sinlined task: {:?}", error);
+						panic!("TODO return panic th result instead");
+					}
+				}
 			},
 		}
 	}

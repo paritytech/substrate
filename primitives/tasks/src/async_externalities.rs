@@ -193,7 +193,11 @@ pub fn new_async_externalities(
 pub fn new_inline_only_externalities(
 	async_ext: AsyncExt,
 ) -> Result<AsyncExternalities, &'static str> {
-	unimplemented!("this is what should be use in no_std environments");
+	Ok(AsyncExternalities {
+		extensions: Default::default(),
+		// TODO as param
+		state: async_ext,
+	})
 }
 	
 impl AsyncExternalities {

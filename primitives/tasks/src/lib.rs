@@ -62,7 +62,7 @@
 mod async_externalities;
 
 #[cfg(feature = "std")]
-pub use async_externalities::{new_async_externalities, AsyncExternalities, AsyncExt};
+pub use async_externalities::{new_async_externalities, new_inline_only_externalities, AsyncExternalities, AsyncExt};
 
 use sp_std::vec::Vec;
 
