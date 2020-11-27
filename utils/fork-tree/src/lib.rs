@@ -942,6 +942,10 @@ mod test {
 		//   — J - K
 		//
 		// (where N is not a part of fork tree)
+		//
+		// NOTE: the tree will get automatically rebalance on import and won't be laid out like the
+		// diagram above. the children will be ordered by subtree depth and the longest branches
+		// will be on the leftmost side of the tree.
 		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
 			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "O"];
 			match (*base, *block) {
@@ -1135,7 +1139,7 @@ mod test {
 
 		assert_eq!(
 			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
-			vec![("I", 4), ("L", 4)],
+			vec![("L", 4), ("I", 4)],
 		);
 
 		// finalizing a node from another fork that isn't part of the tree clears the tree
@@ -1183,7 +1187,7 @@ mod test {
 
 		assert_eq!(
 			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
-			vec![("I", 4), ("L", 4)],
+			vec![("L", 4), ("I", 4)],
 		);
 
 		assert_eq!(
@@ -1357,11 +1361,11 @@ mod test {
 			vec![
 				("A", 1),
 				("B", 2), ("C", 3), ("D", 4), ("E", 5),
-				("F", 2),
+				("F", 2), ("H", 3), ("L", 4), ("M", 5),
+				("O", 5),
+				("I", 4),
 				("G", 3),
-				("H", 3), ("I", 4),
-				("L", 4), ("M", 5), ("O", 5),
-				("J", 2), ("K", 3)
+				("J", 2), ("K", 3),
 			],
 		);
 	}
@@ -1483,7 +1487,7 @@ mod test {
 
 		assert_eq!(
 			removed.map(|(hash, _, _)| hash).collect::<Vec<_>>(),
-			vec!["A", "F", "G", "H", "I", "L", "M", "O", "J", "K"]
+			vec!["A", "F", "H", "L", "M", "O", "I", "G", "J", "K"]
 		);
 
 		let removed = tree.prune(
@@ -1548,19 +1552,30 @@ mod test {
 	fn tree_rebalance() {
 		let (mut tree, _) = test_fork_tree();
 
+		// the tree is automatically rebalanced on import, therefore we should iterate in preorder
+		// exploring the longest forks first. check the ascii art above to understand the expected
+		// output below.
 		assert_eq!(
 			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
-			vec!["A", "B", "C", "D", "E", "F", "G", "H", "I", "L", "M", "O", "J", "K"],
+			vec!["A", "B", "C", "D", "E", "F", "H", "L", "M", "O", "I", "G", "J", "K"],
 		);
 
-		// after rebalancing the tree we should iterate in preorder exploring
-		// the longest forks first. check the ascii art above to understand the
-		// expected output below.
-		tree.rebalance();
+		// let's add a block "P" which is a descendent of block "O"
+		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
+			match (*base, *block) {
+				(b, "P") => Ok(vec!["A", "F", "L", "O"].into_iter().any(|n| n == b)),
+				_ => Ok(false),
+			}
+		};
 
+		tree.import("P", 6, (), &is_descendent_of).unwrap();
+
+		// this should re-order the tree, since the branch "A -> B -> C -> D -> E" is no longer tied
+		// with 5 blocks depth. additionally "O" should be visited before "M" now, since it has one
+		// descendent "P" which makes that branch 6 blocks long.
 		assert_eq!(
 			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
-			["A", "B", "C", "D", "E", "F", "H", "L", "M", "O", "I", "G", "J", "K"]
+			["A", "F", "H", "L", "O", "P", "M", "I", "G", "B", "C", "D", "E", "J", "K"]
 		);
 	}
 }
