@@ -113,7 +113,7 @@ mod tests {
 			crate::tests::new_test_ext().execute_with(|| {
 				let mut mmr = crate::mmr::Mmr::<
 					crate::mmr::storage::RuntimeStorage,
-					crate::tests::Test,
+					crate::mock::Test,
 					crate::DefaultInstance,
 					_,
 				>::new(0);

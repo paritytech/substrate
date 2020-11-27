@@ -69,6 +69,8 @@ mod mmr;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
 #[cfg(test)]
+mod mock;
+#[cfg(test)]
 mod tests;
 
 pub mod primitives;

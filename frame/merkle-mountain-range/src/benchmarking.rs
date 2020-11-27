@@ -19,28 +19,32 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use crate::{*, tests::MMR};
+use crate::*;
 use frame_support::traits::OnInitialize;
 use frame_benchmarking::benchmarks;
+use sp_std::prelude::*;
 
 benchmarks! {
 	_ {	}
 
 	on_initialize {
-		let x in 0 .. 1_000;
+		let x in 1 .. 1_000;
 
-		let block_number = x as u64;
+		let leaves = x as u64;
 	}: {
-		MMR::on_initialize(block_number);
+		for b in 0..leaves {
+			Module::<T>::on_initialize((b as u32).into());
+		}
 	} verify {
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), block_number + 1);
+		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), leaves);
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::tests::*;
+	use crate::mock::*;
+	use crate::tests::new_test_ext;
 	use frame_support::assert_ok;
 
 	#[test]
