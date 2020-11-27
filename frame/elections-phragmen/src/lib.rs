@@ -211,11 +211,10 @@ pub mod migrations {
 	}
 
 	pub fn migrate_runners_up_to_recorded_deposit<T: Trait>(deposit: BalanceOf<T>) -> Weight {
-		if <Module<T>>::pallet_storage_version() == StorageVersion::V1 {
-			let _ = <RunnersUp<T>>::translate::<Vec<(T::AccountId, BalanceOf<T>)>, _>(
-				|maybe_old_runners_up| {
-					maybe_old_runners_up.map(|old_runners_up| {
-						frame_support::debug::info!(
+		let _ = <RunnersUp<T>>::translate::<Vec<(T::AccountId, BalanceOf<T>)>, _>(
+			|maybe_old_runners_up| {
+				maybe_old_runners_up.map(|old_runners_up| {
+					frame_support::debug::info!(
 							"migrated {} runner-up accounts.",
 							old_runners_up.len()
 						);
@@ -228,16 +227,9 @@ pub mod migrations {
 							})
 							.collect::<Vec<_>>()
 					})
-				},
-			);
-			Weight::max_value()
-		} else {
-			frame_support::debug::warn!(
-				"🏛 pallet-elections-phragmen: Tried to run migration but PalletStorageVersion is \
-				updated. This code probably needs to be removed now.",
-			);
-			0
-		}
+			},
+		);
+		Weight::max_value()
 	}
 }
 
@@ -274,15 +266,6 @@ pub struct SeatHolder<AccountId, Balance> {
 	pub stake: Balance,
 	/// The amount of deposit held.s
 	pub deposit: Balance,
-}
-
-/// Storage version.
-#[derive(Encode, Decode, Eq, PartialEq)]
-pub enum StorageVersion {
-	/// Initial version.
-	V1,
-	/// After moving to per-vote deposit.
-	V2RecordedDeposit,
 }
 
 pub trait Trait: frame_system::Trait {
@@ -369,13 +352,6 @@ decl_storage! {
 		///
 		/// Invariant: Always sorted based on account id.
 		pub Candidates get(fn candidates): Vec<(T::AccountId, BalanceOf<T>)>;
-
-		/// Should be used in conjunction with `on_runtime_upgrade` to ensure an upgrade is executed
-		/// once, even if the code is not removed in time.
-		/// TODO: use basti's new version stuff?
-		pub PalletStorageVersion get(fn pallet_storage_version)
-			build(|_| StorageVersion::V2RecordedDeposit): StorageVersion = StorageVersion::V1;
-
 	} add_extra_genesis {
 		config(members): Vec<(T::AccountId, BalanceOf<T>)>;
 		build(|config: &GenesisConfig<T>| {
