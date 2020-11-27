@@ -18,19 +18,20 @@
 
 //! Telemetry utilities.
 //!
-//! The `Telemetry` object is a `Stream` that needs to be polled regularly in order to function.
-//! It is unregistered when the object is dropped.
+//! You can collect telemetries for a substrate node by creating a `Telemetry` object. For every
+//! substrate node there must be only one `Telemetry` object. This `Telemetry` object can connect to
+//! multiple telemetry endpoints. The `Telemetry` object is a `Stream` that needs to be polled
+//! regularly in order to function.
 //!
-//! `Telemetry` objects can be created through its constructor `Telemetry::new()`, or through a
-//! `Telemetries` instance. The difference between the two is that `Telemetries` will re-use
-//! connections to the same server if possible and manages a collection of channel `Sender` for you
-//! (see `Senders`). `Telemetries` should be used unless you need finer control.
+//! The macro `telemetry!` can be used to report telemetries from anywhere in the code but a
+//! `Telemetry` must have been initialized. Creating a `Telemetry` will make all the following code
+//! execution (including new created async background tasks) use this `Telemetry` when reporting
+//! telemetries. If multiple `Telemetry` objects are created, the latest one (higher up in the
+//! stack) will be used. If no `Telemetry` object can be found, nothing happens.
 //!
-//! The macro `telemetry!` can be used to report telemetries from anywhere but a `Telemetry` must
-//! have been initialized. Creating a `Telemetry` will make all the following code execution use
-//! this `Telemetry` when reporting with the macro `telemetry!` until the `Telemetry` object is
-//! dropped. If multiple `Telemetry` objects are created, the latest one (higher up in the stack)
-//! will be used. If no `Telemetry` object can be found, nothing happens.
+//! To re-use connections to the same server you need to use the `Telemetries` object to create a
+//! `Telemetry`. `Telemetries` also manages a collection of channel `Sender` for you (see
+//! `Senders`). `Telemetries` should be used unless you need finer control.
 //!
 //! The [`Telemetry`] struct implements `Stream` and must be polled regularly (or sent to a
 //! background thread/task) in order for the telemetry to properly function.
