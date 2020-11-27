@@ -163,10 +163,10 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
 		C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
 		CB: ClientBackend<B> + 'static,
 		E: Environment<B> + 'static,
-		E::Error: std::fmt::Display,
-		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
+		E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
 		CS: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
 		SC: SelectChain<B> + 'static,
+		TransactionFor<C, B>: 'static,
 {
 	while let Some(command) = commands_stream.next().await {
 		match command {
@@ -230,9 +230,9 @@ pub async fn run_instant_seal<B, BI, CB, E, C, A, SC>(
 		C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
 		CB: ClientBackend<B> + 'static,
 		E: Environment<B> + 'static,
-		E::Error: std::fmt::Display,
-		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
-		SC: SelectChain<B> + 'static
+		E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
+		SC: SelectChain<B> + 'static,
+		TransactionFor<C, B>: 'static,
 {
 	// instant-seal creates blocks as soon as transactions are imported
 	// into the transaction pool.
