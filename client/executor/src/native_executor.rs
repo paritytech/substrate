@@ -727,6 +727,11 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		new_handle
 	}
 
+	// TODO here pass calling_ext and trigger join to transmit to state machine level
+	// resulting in getting results into change.
+	// -> for read we only need to remove marker.
+	// + TODO same in kill but unimplemented
+	// TODO panic on received panic result.
 	fn join(&self, handle: u64) -> Vec<u8> {
 		match self.remove(handle) {
 			RuningTask::Task(receiver) => {
