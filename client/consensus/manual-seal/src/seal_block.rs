@@ -87,10 +87,10 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 			+ Send + Sync + 'static,
 		C: HeaderBackend<B> + ProvideRuntimeApi<B>,
 		E: Environment<B>,
-		<E as Environment<B>>::Error: std::fmt::Display,
-		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
+		E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
 		P: txpool::ChainApi<Block=B>,
 		SC: SelectChain<B>,
+		TransactionFor<C, B>: 'static,
 {
 	let future = async {
 		if pool.validated_pool().status().ready == 0 && !create_empty {
@@ -111,7 +111,7 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 		};
 
 		let proposer = env.init(&parent)
-			.map_err(|err| Error::StringError(format!("{}", err))).await?;
+			.map_err(|err| Error::StringError(format!("{:?}", err))).await?;
 		let id = inherent_data_provider.create_inherent_data()?;
 		let inherents_len = id.len();
 
@@ -122,7 +122,7 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 		};
 
 		let proposal = proposer.propose(id.clone(), digest, Duration::from_secs(MAX_PROPOSAL_DURATION), false.into())
-			.map_err(|err| Error::StringError(format!("{}", err))).await?;
+			.map_err(|err| Error::StringError(format!("{:?}", err))).await?;
 
 		if proposal.block.extrinsics().len() == inherents_len && !create_empty {
 			return Err(Error::EmptyTransactionPool)
@@ -133,6 +133,7 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 		params.body = Some(body);
 		params.finalized = finalize;
 		params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+		params.storage_changes = Some(proposal.storage_changes);
 
 		if let Some(digest_provider) = digest_provider {
 			digest_provider.append_block_import(&parent, &mut params, &id)?;
