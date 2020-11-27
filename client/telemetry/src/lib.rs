@@ -33,8 +33,7 @@
 //! will be used. If no `Telemetry` object can be found, nothing happens.
 //!
 //! The [`Telemetry`] struct implements `Stream` and must be polled regularly (or sent to a
-//! background thread/task) in order for the telemetry to properly function. Dropping the object
-//! will also deregister the global logger and replace it with a logger that discards messages.
+//! background thread/task) in order for the telemetry to properly function.
 //! The `Stream` generates [`TelemetryEvent`]s.
 
 #![warn(missing_docs)]
