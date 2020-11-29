@@ -136,12 +136,26 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	type SpendFunds: SpendFunds<Self, I>;
 }
 
+/// A trait to allow the Treasury Pallet to spend it's funds for other purposes.
+/// There is an expectation that the implementer of this trait will correctly manage
+/// the mutable variables passed to it:
+/// * `budget_remaining`: How much available funds that can be spent by the treasury.
+///    As funds are spent, you must correctly deduct from this value.
+/// * `imbalance`: Any imbalances that you create should be subsumed in here to
+///    maximize efficiency of updating the total issuance. (i.e. `deposit_creating`)
+/// * `total_weight`: Track any weight that your `spend_fund` implementation uses by
+///    updating this value.
+/// * `missed_any`: If there were items that you want to spend on, but there were
+///    not enough funds, mark this value as `true`. This will prevent the treasury
+///    from burning the excess funds.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait SpendFunds<T: Trait<I>, I=DefaultInstance> {
-    fn spend_funds( budget_remaining: &mut BalanceOf<T, I>,
-                    imbalance: &mut PositiveImbalanceOf<T, I>,
-                    total_weight: &mut Weight,
-                    missed_any: &mut bool );
+	fn spend_funds(
+		budget_remaining: &mut BalanceOf<T, I>,
+		imbalance: &mut PositiveImbalanceOf<T, I>,
+		total_weight: &mut Weight,
+		missed_any: &mut bool,
+	);
 }
 
 /// An index of a proposal. Just a `u32`.
