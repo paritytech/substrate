@@ -697,7 +697,6 @@ decl_module! {
 				// In both cases, we will change more weight than need. Refund and abort.
 				return Err(Error::<T>::InvalidReplacement.with_weight(
 					// refund. The weight value comes from a benchmark which is special to this.
-					//  5.751 µs
 					T::WeightInfo::remove_member_wrong_refund()
 				));
 			} // else, prediction was correct.
@@ -714,7 +713,7 @@ decl_module! {
 			Ok(None.into())
 		}
 
-		/// Clean all voters who are defunct (i.e. the do not serve any purpose at all). The deposit
+		/// Clean all voters who are defunct (i.e. they do not serve any purpose at all). The deposit
 		/// of the removed voters are returned.
 		///
 		/// This is an root function to be used only for cleaning the state.
