@@ -664,7 +664,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		// `peers_notifications_sinks` mutex as soon as possible.
 		let sink = {
 			let peers_notifications_sinks = self.peers_notifications_sinks.lock();
-			if let Some(sink) = peers_notifications_sinks.get(&(target, protocol.clone())) {
+			if let Some(sink) = peers_notifications_sinks.get(&(target.clone(), protocol.clone())) {
 				sink.clone()
 			} else {
 				// Notification silently discarded, as documented.
@@ -684,6 +684,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		}
 
 		// Sending is communicated to the `NotificationsSink`.
+		trace!(
+			target: "sub-libp2p",
+			"External API => Notification({:?}, {:?}, {} bytes)",
+			target,
+			protocol,
+			message.len()
+		);
+		trace!(target: "sub-libp2p", "Handler({:?}) <= Sync notification", target);
 		sink.send_sync_notification(protocol, message);
 	}
 
@@ -1139,6 +1147,7 @@ impl NotificationSender {
 				Ok(r) => r,
 				Err(()) => return Err(NotificationSenderError::Closed),
 			},
+			peer_id: self.sink.peer_id(),
 			notification_size_metric: self.notification_size_metric.clone(),
 		})
 	}
@@ -1148,6 +1157,9 @@ impl NotificationSender {
 #[must_use]
 pub struct NotificationSenderReady<'a> {
 	ready: Ready<'a>,
+
+	/// Target of the notification.
+	peer_id: &'a PeerId,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1162,6 +1174,15 @@ impl<'a> NotificationSenderReady<'a> {
 		if let Some(notification_size_metric) = &self.notification_size_metric {
 			notification_size_metric.observe(notification.len() as f64);
 		}
+
+		trace!(
+			target: "sub-libp2p",
+			"External API => Notification({:?}, {:?}, {} bytes)",
+			self.peer_id,
+			self.ready.protocol_name(),
+			notification.len()
+		);
+		trace!(target: "sub-libp2p", "Handler({:?}) <= Async notification", self.peer_id);
 
 		self.ready
 			.send(notification)
