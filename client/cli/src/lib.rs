@@ -252,11 +252,14 @@ pub fn init_logger(
 	use sc_tracing::parse_default_directive;
 
 	// Accept all valid directives and print invalid ones
-	fn parse_user_directives(mut env_filter: EnvFilter, dirs: &str) -> std::result::Result<EnvFilter, String> {
+	fn parse_user_directives(mut env_filter: EnvFilter, dirs: &str) -> EnvFilter {
 		for dir in dirs.split(',') {
-			parse_default_directive(&dir).map_err(|e| format!("Supplied log directive is not valid: {}", e))?;
+			match parse_default_directive(&dir) {
+				Ok(d) => env_filter = env_filter.add_directive(d),
+				Err(e) => eprintln!("Supplied log directive is not valid: {}", e),
+			}
 		}
-		Ok(env_filter)
+		env_filter
 	}
 
 	if let Err(e) = tracing_log::LogTracer::init() {
