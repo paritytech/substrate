@@ -268,7 +268,7 @@ pub fn init_logger(
 		))
 	}
 
-	// Initialize filter - ensure to use `add_default_directives` for any defaults to persist
+	// Initialize filter - ensure to use `parse_default_directive` for any defaults to persist
 	// after log filter reloading by RPC
 	let mut env_filter = EnvFilter::default()
 		// Enable info
