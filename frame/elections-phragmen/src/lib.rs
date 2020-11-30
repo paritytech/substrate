@@ -701,7 +701,6 @@ decl_module! {
 				// In both cases, we will change more weight than need. Refund and abort.
 				return Err(Error::<T>::InvalidReplacement.with_weight(
 					// refund. The weight value comes from a benchmark which is special to this.
-					//  5.751 µs
 					T::WeightInfo::remove_member_wrong_refund()
 				));
 			} // else, prediction was correct.
