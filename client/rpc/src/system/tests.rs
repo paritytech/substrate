@@ -24,7 +24,10 @@ use substrate_test_runtime_client::runtime::Block;
 use assert_matches::assert_matches;
 use futures::prelude::*;
 use sp_utils::mpsc::tracing_unbounded;
-use std::thread;
+use std::{
+	process::{Stdio, Command}, env, io::{BufReader, BufRead, Write},
+	sync::{Arc, Mutex}, thread, time::Duration
+};
 
 struct Status {
 	pub peers: usize,
@@ -336,31 +339,23 @@ fn system_network_remove_reserved() {
 
 #[test]
 fn test_add_reset_log_filter() {
-	use std::{
-		process::{Stdio, Command}, env, io::{BufReader, BufRead, Write},
-		sync::{Arc, Mutex}, time::Duration
-	};
-
 	const EXPECTED_BEFORE_ADD: &'static str = "EXPECTED_BEFORE_ADD";
 	const EXPECTED_AFTER_ADD: &'static str = "EXPECTED_AFTER_ADD";
 
 	// Enter log generation / filter reload
 	if std::env::var("TEST_LOG_FILTER").is_ok() {
 		sc_cli::init_logger("test_before_add=debug", Default::default(), Default::default(), false).unwrap();
-		loop {
-			for line in std::io::stdin().lock().lines() {
-				let line = line.expect("Failed to read bytes");
-				if line.contains("add_reload") {
-					sc_tracing::add_directives("test_after_add");
-					assert!(sc_tracing::reload_filter().is_ok(), "Reload handle not present");
-				} else if line.contains("reset") {
-					assert!(sc_tracing::reset_log_filter().is_ok(), "Unable to reset log filter");
-				} else if line.contains("exit") {
-					return;
-				}
-				log::debug!(target: "test_before_add", "{}", EXPECTED_BEFORE_ADD);
-				log::debug!(target: "test_after_add", "{}", EXPECTED_AFTER_ADD);
+		for line in std::io::stdin().lock().lines() {
+			let line = line.expect("Failed to read bytes");
+			if line.contains("add_reload") {
+				assert!(api(None).system_add_log_filter("test_after_add".to_owned()).is_ok(), "Unable to add log filter");
+			} else if line.contains("reset") {
+				assert!(api(None).system_reset_log_filter().is_ok(), "Unable to reset log filter");
+			} else if line.contains("exit") {
+				return;
 			}
+			log::debug!(target: "test_before_add", "{}", EXPECTED_BEFORE_ADD);
+			log::debug!(target: "test_after_add", "{}", EXPECTED_AFTER_ADD);
 		}
 	}
 
@@ -371,7 +366,6 @@ fn test_add_reset_log_filter() {
 		.args(&["--nocapture", "test_add_reset_log_filter"])
 		.stdin(Stdio::piped())
 		.stderr(Stdio::piped())
-		.stdout(Stdio::inherit())
 		.spawn()
 		.unwrap();
 
@@ -391,7 +385,7 @@ fn test_add_reset_log_filter() {
 	});
 
 	// Initiate logs loop in child process
-	child_in.write("\n".as_bytes()).unwrap();
+	child_in.write(b"\n").unwrap();
 	thread::sleep(Duration::from_millis(100));
 	let test1_str = child_out_str.lock().unwrap().clone();
 	// Assert that only the first target is present
@@ -400,7 +394,7 @@ fn test_add_reset_log_filter() {
 	child_out_str.lock().unwrap().clear();
 
 	// Initiate add directive & reload in child process
-	child_in.write("add_reload\n".as_bytes()).unwrap();
+	child_in.write(b"add_reload\n").unwrap();
 	thread::sleep(Duration::from_millis(100));
 	let test2_str = child_out_str.lock().unwrap().clone();
 	// Assert that both targets are now present
@@ -409,7 +403,7 @@ fn test_add_reset_log_filter() {
 	child_out_str.lock().unwrap().clear();
 
 	// Initiate logs filter reset in child process
-	child_in.write("reset\n".as_bytes()).unwrap();
+	child_in.write(b"reset\n").unwrap();
 	thread::sleep(Duration::from_millis(100));
 	let test3_str = child_out_str.lock().unwrap().clone();
 	// Assert that only the first target is present as it was initially
@@ -417,6 +411,6 @@ fn test_add_reset_log_filter() {
 	assert!(!test3_str.contains(EXPECTED_AFTER_ADD));
 
 	// Return from child process
-	child_in.write("exit\n".as_bytes()).unwrap();
+	child_in.write(b"exit\n").unwrap();
 	assert!(child_process.wait().expect("Error waiting for child process").success());
 }
