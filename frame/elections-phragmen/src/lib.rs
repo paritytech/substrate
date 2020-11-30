@@ -366,10 +366,6 @@ decl_storage! {
 					"Genesis member does not have enough stake.",
 				);
 
-				// reserve candidacy bond and set as members.
-				T::Currency::reserve(&member, T::CandidacyBond::get())
-					.expect("Genesis member does not have enough balance to be a candidate");
-
 				// Note: all members will only vote for themselves, hence they must be given exactly
 				// their own stake as total backing. Any sane election should behave as such.
 				// Nonetheless, stakes will be updated for term 1 onwards according to the election.
@@ -378,17 +374,17 @@ decl_storage! {
 						Ok(_) => panic!("Duplicate member in elections-phragmen genesis: {}", member),
 						Err(pos) => members.insert(
 							pos,
-							SeatHolder { who: member.clone(), stake: *stake, deposit: T::CandidacyBond::get() },
+							SeatHolder { who: member.clone(), stake: *stake, deposit: Zero::zero() },
 						),
 					}
 				});
 
-				// set self-votes to make persistent.
-				<Module<T>>::vote(
-					T::Origin::from(Some(member.clone()).into()),
-					vec![member.clone()],
-					*stake,
-				).expect("Genesis member could not vote.");
+				// set self-votes to make persistent. Genesis voters don't have any bond, nor do
+				// they have any lock.
+				<Voting<T>>::insert(
+					&member,
+					Voter { votes: vec![member.clone()], stake: *stake, deposit: Zero::zero() },
+				);
 
 				member.clone()
 			}).collect::<Vec<T::AccountId>>();
@@ -790,8 +786,8 @@ impl<T: Trait> Module<T> {
 
 			// slash or unreserve
 			if slash {
-				let (imbalance, _remaining) = T::Currency::slash_reserved(who, removed.deposit);
-				debug_assert_eq!(_remaining, 0u32.into());
+				let (imbalance, _remainder) = T::Currency::slash_reserved(who, removed.deposit);
+				debug_assert!(_remainder.is_zero());
 				T::LoserCandidate::on_unbalanced(imbalance);
 				Self::deposit_event(RawEvent::SeatHolderSlashed(who.clone(), removed.deposit));
 			} else {
@@ -1557,12 +1553,12 @@ mod tests {
 						SeatHolder {
 							who: 1,
 							stake: 10,
-							deposit: 3,
+							deposit: 0,
 						},
 						SeatHolder {
 							who: 2,
 							stake: 20,
-							deposit: 3,
+							deposit: 0,
 						}
 					]
 				);
@@ -1572,7 +1568,7 @@ mod tests {
 					Voter {
 						stake: 10u64,
 						votes: vec![1],
-						deposit: 2,
+						deposit: 0,
 					}
 				);
 				assert_eq!(
@@ -1580,7 +1576,7 @@ mod tests {
 					Voter {
 						stake: 20u64,
 						votes: vec![2],
-						deposit: 2,
+						deposit: 0,
 					}
 				);
 
@@ -1604,12 +1600,12 @@ mod tests {
 						SeatHolder {
 							who: 1,
 							stake: 10,
-							deposit: 3,
+							deposit: 0,
 						},
 						SeatHolder {
 							who: 2,
 							stake: 20,
-							deposit: 3,
+							deposit: 0,
 						}
 					]
 				);
@@ -1619,7 +1615,7 @@ mod tests {
 					Voter {
 						stake: 10u64,
 						votes: vec![1],
-						deposit: 2
+						deposit: 0,
 					}
 				);
 				assert_eq!(
@@ -1627,7 +1623,7 @@ mod tests {
 					Voter {
 						stake: 20u64,
 						votes: vec![2],
-						deposit: 2
+						deposit: 0,
 					}
 				);
 
@@ -1645,16 +1641,6 @@ mod tests {
 		// 10 cannot lock 20 as their stake and extra genesis will panic.
 		ExtBuilder::default()
 			.genesis_members(vec![(1, 20), (2, 20)])
-			.build_and_execute(|| {});
-	}
-
-	#[test]
-	#[should_panic]
-	fn genesis_members_cannot_over_stake_1() {
-		// 20 cannot reserve 20 as voting bond and extra genesis will panic.
-		ExtBuilder::default()
-			.voter_bond(20)
-			.genesis_members(vec![(1, 10), (2, 20)])
 			.build_and_execute(|| {});
 	}
 
