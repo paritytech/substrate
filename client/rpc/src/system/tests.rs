@@ -336,12 +336,10 @@ fn system_network_remove_reserved() {
 
 #[test]
 fn test_add_reset_log_filter() {
-	use std::process::{Stdio, Command};
-	use std::env;
-	use std::io::{BufReader, BufRead, Write};
-	use std::sync::{Arc, Mutex};
-	use std::thread;
-	use std::time::Duration;
+	use std::{
+		process::{Stdio, Command}, env, io::{BufReader, BufRead, Write},
+		sync::{Arc, Mutex}, time::Duration
+	};
 
 	const EXPECTED_BEFORE_ADD: &'static str = "EXPECTED_BEFORE_ADD";
 	const EXPECTED_AFTER_ADD: &'static str = "EXPECTED_AFTER_ADD";
