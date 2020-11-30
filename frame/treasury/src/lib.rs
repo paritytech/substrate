@@ -20,7 +20,7 @@
 //! The Treasury module provides a "pot" of funds that can be managed by stakeholders in the system
 //! and a structure for making spending proposals from this pot.
 //!
-//! - [`treasury::Trait`](./trait.Trait.html)
+//! - [`treasury::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
@@ -81,13 +81,13 @@ use frame_system::{ensure_signed};
 pub use weights::WeightInfo;
 
 pub type BalanceOf<T, I=DefaultInstance> =
-	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 pub type PositiveImbalanceOf<T, I=DefaultInstance> =
-	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
+	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::PositiveImbalance;
 pub type NegativeImbalanceOf<T, I=DefaultInstance> =
-	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
-pub trait Trait<I=DefaultInstance>: frame_system::Trait {
+pub trait Config<I=DefaultInstance>: frame_system::Config {
 	/// The treasury's module id, used for deriving its sovereign account ID.
 	type ModuleId: Get<ModuleId>;
 
@@ -104,7 +104,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	type DataDepositPerByte: Get<BalanceOf<Self, I>>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Handler for the unbalanced decrease when slashing for a rejected proposal or bounty.
 	type OnSlash: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
@@ -148,7 +148,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 ///    not enough funds, mark this value as `true`. This will prevent the treasury
 ///    from burning the excess funds.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
-pub trait SpendFunds<T: Trait<I>, I=DefaultInstance> {
+pub trait SpendFunds<T: Config<I>, I=DefaultInstance> {
 	fn spend_funds(
 		budget_remaining: &mut BalanceOf<T, I>,
 		imbalance: &mut PositiveImbalanceOf<T, I>,
@@ -175,7 +175,7 @@ pub struct Proposal<AccountId, Balance> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Treasury {
+	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Treasury {
 		/// Number of proposals that have been made.
 		ProposalCount get(fn proposal_count): ProposalIndex;
 
@@ -206,7 +206,7 @@ decl_event!(
 	pub enum Event<T, I=DefaultInstance>
 	where
 		Balance = BalanceOf<T, I>,
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::AccountId,
 	{
 		/// New proposal. \[proposal_index\]
 		Proposed(ProposalIndex),
@@ -228,7 +228,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the treasury module.
-	pub enum Error for Module<T: Trait<I>, I: Instance> {
+	pub enum Error for Module<T: Config<I>, I: Instance> {
 		/// Proposer's balance is too low.
 		InsufficientProposersBalance,
 		/// No proposal or bounty at that index.
@@ -237,7 +237,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance>
+	pub struct Module<T: Config<I>, I: Instance=DefaultInstance>
 		for enum Call
 		where origin: T::Origin
 	{
@@ -347,7 +347,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> Module<T, I> {
+impl<T: Config<I>, I: Instance> Module<T, I> {
 	// Add public immutables and private mutables.
 
 	/// The account ID of the treasury pot.
@@ -447,7 +447,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 }
 
-impl<T: Trait<I>, I: Instance> OnUnbalanced<NegativeImbalanceOf<T, I>> for Module<T, I> {
+impl<T: Config<I>, I: Instance> OnUnbalanced<NegativeImbalanceOf<T, I>> for Module<T, I> {
 	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T, I>) {
 		let numeric_amount = amount.peek();
 

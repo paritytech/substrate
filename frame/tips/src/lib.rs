@@ -22,7 +22,7 @@
 //! A subsystem to allow for an agile "tipping" process, whereby a reward may be given without first
 //! having a pre-determined stakeholder group come to consensus on how much should be paid.
 //!
-//! A group of `Tippers` is determined through the config `Trait`. After half of these have declared
+//! A group of `Tippers` is determined through the config `Config`. After half of these have declared
 //! some amount that they believe a particular reported reason deserves, then a countdown period is
 //! entered where any remaining members can declare their tip amounts also. After the close of the
 //! countdown period, the median of all declared tips is paid to the reported beneficiary, along
@@ -79,7 +79,7 @@ pub use weights::WeightInfo;
 pub type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
 pub type NegativeImbalanceOf<T> = pallet_treasury::NegativeImbalanceOf<T>;
 
-pub trait Trait: frame_system::Trait + pallet_treasury::Trait {
+pub trait Config: frame_system::Config + pallet_treasury::Config {
 
 	/// Origin from which tippers must come.
 	///
@@ -96,7 +96,7 @@ pub trait Trait: frame_system::Trait + pallet_treasury::Trait {
 	type TipReportDepositBase: Get<BalanceOf<Self>>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -134,7 +134,7 @@ pub struct OpenTip<
 // This is temporary soultion, soon will get replaced with
 // Own storage identifier.
 decl_storage! {
-	trait Store for Module<T: Trait> as Treasury {
+	trait Store for Module<T: Config> as Treasury {
 
 		/// TipsMap that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
 		/// This has the insecure enumerable hash function since the key itself is already
@@ -154,8 +154,8 @@ decl_event!(
 	pub enum Event<T>
 	where
 		Balance = BalanceOf<T>,
-		<T as frame_system::Trait>::AccountId,
-		<T as frame_system::Trait>::Hash,
+		<T as frame_system::Config>::AccountId,
+		<T as frame_system::Config>::Hash,
 	{
 		/// A new tip suggestion has been opened. \[tip_hash\]
 		NewTip(Hash),
@@ -170,7 +170,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the tips module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// The reason given is just too big.
 		ReasonTooBig,
 		/// The tip was already found/started.
@@ -187,7 +187,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait>
+	pub struct Module<T: Config>
 		for enum Call
 		where origin: T::Origin
 	{
@@ -230,7 +230,7 @@ decl_module! {
 		/// - DbReads: `Reasons`, `Tips`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = <T as Trait>::WeightInfo::report_awesome(reason.len() as u32)]
+		#[weight = <T as Config>::WeightInfo::report_awesome(reason.len() as u32)]
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
@@ -278,7 +278,7 @@ decl_module! {
 		/// - DbReads: `Tips`, `origin account`
 		/// - DbWrites: `Reasons`, `Tips`, `origin account`
 		/// # </weight>
-		#[weight = <T as Trait>::WeightInfo::retract_tip()]
+		#[weight = <T as Config>::WeightInfo::retract_tip()]
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
@@ -314,7 +314,7 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Reasons`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = <T as Trait>::WeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32)]
+		#[weight = <T as Config>::WeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32)]
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, #[compact] tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -362,7 +362,7 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Tips`
 		/// - DbWrites: `Tips`
 		/// # </weight>
-		#[weight = <T as Trait>::WeightInfo::tip(T::Tippers::max_len() as u32)]
+		#[weight = <T as Config>::WeightInfo::tip(T::Tippers::max_len() as u32)]
 		fn tip(origin, hash: T::Hash, #[compact] tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -391,7 +391,7 @@ decl_module! {
 		/// - DbReads: `Tips`, `Tippers`, `tip finder`
 		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
-		#[weight = <T as Trait>::WeightInfo::close_tip(T::Tippers::max_len() as u32)]
+		#[weight = <T as Config>::WeightInfo::close_tip(T::Tippers::max_len() as u32)]
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 
@@ -406,7 +406,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	// Add public immutables and private mutables.
 
 	/// The account ID of the treasury pot.

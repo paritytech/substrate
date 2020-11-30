@@ -59,7 +59,7 @@ pub trait WeightInfo {
 
 /// Weights for pallet_bounties using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
+impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn propose_bounty(d: u32, ) -> Weight {
 		(59_931_000 as Weight)
 			.saturating_add((1_000 as Weight).saturating_mul(d as Weight))
