@@ -1410,7 +1410,7 @@ pub mod pallet_prelude {
 ///
 /// Allow to define the genesis configuration of the pallet.
 ///
-/// Item is defined as either a type alias or an enum or a struct.
+/// Item is defined as either an enum or a struct.
 /// It needs to be public and implement trait GenesisBuild with `#[pallet::genesis_build]`.
 /// The type generics is constrained to be either none, or `T` or `T: Config`.
 ///

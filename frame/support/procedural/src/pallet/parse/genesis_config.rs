@@ -21,7 +21,6 @@ use super::helper;
 /// Definition for pallet genesis config type.
 ///
 /// Either:
-/// * `type GenesisConfig`
 /// * `struct GenesisConfig`
 /// * `enum GenesisConfig`
 pub struct GenesisConfigDef {
@@ -43,9 +42,8 @@ impl GenesisConfigDef {
 		let (vis, ident, generics) = match &item {
 			syn::Item::Enum(item) => (&item.vis, &item.ident, &item.generics),
 			syn::Item::Struct(item) => (&item.vis, &item.ident, &item.generics),
-			syn::Item::Type(item) => (&item.vis, &item.ident, &item.generics),
 			_ => {
-				let msg = "Invalid pallet::genesis_config, expected enum or struct or type";
+				let msg = "Invalid pallet::genesis_config, expected enum or struct";
 				return Err(syn::Error::new(item.span(), msg));
 			},
 		};
