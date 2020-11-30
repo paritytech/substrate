@@ -92,6 +92,17 @@ impl AsyncStateType {
 			_ => return None,
 		})
 	}
+
+	/// Depending on concurrency management strategy
+	/// we may need to resolve the result against
+	/// parent externalities.
+	pub fn need_resolve(&self) -> bool {
+		match *self {
+			AsyncStateType::Stateless => false,
+			AsyncStateType::ReadLastBlock => false,
+			AsyncStateType::ReadAtSpawn => false,
+		}
+	}
 }
 
 /// Task handle.
@@ -108,8 +119,8 @@ pub struct DataJoinHandle {
 
 impl DataJoinHandle {
 	/// Join handle returned by `spawn` function
-	pub fn join(self) -> Vec<u8> {
-		sp_io::runtime_tasks::join(self.handle)
+	pub fn join(self) -> sp_externalities::WorkerResult {
+		sp_io::runtime_tasks::join(self.handle).into()
 	}
 
 	/// TODO doc

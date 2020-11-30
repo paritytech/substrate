@@ -341,7 +341,7 @@ impl Externalities for BasicExternalities {
 		unimplemented!("TODO from self.storage cloned")
 	}
 
-	fn resolve_worker_state(&mut self, state_update: WorkerResult) -> WorkerResult {
+	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> WorkerResult {
 		// No transaction, works as read (TODO not true for worker in write mode).
 		state_update.read_resolve()
 	}

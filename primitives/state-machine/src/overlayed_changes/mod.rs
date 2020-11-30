@@ -220,7 +220,12 @@ impl Markers {
 			WorkerResult::Panic => {
 				// TODO at this point a Panic should result in panic from parent
 				// but we could also change it to Invalid result here.
-				WorkerResult::Panic
+				panic!("Panic from a worker")
+			},
+			WorkerResult::HardPanic => {
+				// TODO when sure panic shall panic parent, hard panic should be remove in favor of only
+				// panic even if there can be a small difference
+				panic!("Hard panic from a worker")
 			},
 		}
 	}

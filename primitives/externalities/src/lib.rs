@@ -287,20 +287,21 @@ pub trait Externalities: ExtensionStore {
 	/// state, and the marker should be still registerd by this call.
 	fn get_async_backend(&mut self, marker: TaskId) -> Option<Box<dyn AsyncBackend>>;
 
-	/// Resolve worker state does update externality
+	/// Resolve worker result does update externality state
 	/// and also apply rules relative to the exernality state.
 	///
 	/// This method must be call before processing any worker result,
 	/// for instance from a worker point of view the result may be valid,
 	/// but after checking against parent externalities, it may change
 	/// to invalid.
-	fn resolve_worker_state(&mut self, state_update: WorkerResult) -> WorkerResult;
+	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> WorkerResult;
 }
 
 /// Result from worker execution.
 ///
 /// Note that an error that is expected should
 /// be serialize in a `Valid` result payload.
+#[derive(codec::Encode, codec::Decode)]
 pub enum WorkerResult {
 	/// Payload resulting from a successfull
 	/// stateless call, or a call that
@@ -309,23 +310,27 @@ pub enum WorkerResult {
 	/// Result that require to be checked against
 	/// its parent externality state.
 	CallAt(Vec<u8>, TaskId),
-	/// Internal panic when runing the worker.
-	/// This should propagate panick in caller.
-	Panic,
 	/// A worker execution that is not valid
 	/// (such state usually results from a
-	/// `resolve_worker_state` call).
+	/// `resolve_worker_result` call).
 	Invalid,
+	/// Internal panic when runing the worker.
+	/// This should propagate panic in caller.
+	Panic,
+	/// Technical panic when runing the worker.
+	/// This always propagate panic in caller.
+	HardPanic,
 }
 
 impl WorkerResult {
-	/// Check if calls to `resolve_worker_state`
+	/// Check if calls to `resolve_worker_result`
 	/// is required (not required if returns false).
 	pub fn is_resolved(&self) -> bool {
 		match self {
 			WorkerResult::Valid(..)
 				| WorkerResult::Invalid => true,
 			WorkerResult::CallAt(..)
+				| WorkerResult::HardPanic
 				| WorkerResult::Panic => false,
 		}
 	}
@@ -337,6 +342,7 @@ impl WorkerResult {
 			WorkerResult::CallAt(result, ..) => WorkerResult::Valid(result),
 			WorkerResult::Valid(result) => WorkerResult::Valid(result),
 			WorkerResult::Panic => WorkerResult::Panic,
+			WorkerResult::HardPanic => WorkerResult::HardPanic,
 			WorkerResult::Invalid => WorkerResult::Invalid,
 		}
 	}

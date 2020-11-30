@@ -27,6 +27,7 @@ use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 };
 use sp_runtime::RuntimeDebug;
+use sp_core::traits::WorkerResult;
 
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
@@ -179,8 +180,15 @@ fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParti
 			break;
 		}
 	}
-
-	bool::decode(&mut &handle.join()[..]).expect("Failed to decode result") && result
+	match handle.join() {
+		WorkerResult::Valid(encoded) => {
+			bool::decode(&mut &encoded[..]).expect("Failed to decode result") && result
+		},
+		WorkerResult::Invalid => {
+			unreachable!("Worker run as stateless")
+		},
+		_ => panic!("Unexpected result"), // TODO split into two types.
+	}
 }
 
 fn validate_pending_participants_parallel(number: usize) {
@@ -216,7 +224,16 @@ fn validate_pending_participants_parallel(number: usize) {
 			Participants::append(participant.account.clone());
 		}
 	}
-	let mut to_skip: Vec<u32> = Decode::decode(&mut &handle.join()[..]).expect("Failed to decode result");
+	let mut to_skip: Vec<u32> = match handle.join() {
+		WorkerResult::Valid(result) => {
+			Decode::decode(&mut &result[..]).expect("Failed to decode result")
+		},
+		WorkerResult::Invalid => {
+			unreachable!("Transaction bug")
+		},
+		_ => panic!("Unexpected result"), // TODO split into two types.
+	};
+
 	for (index, participant) in (&participants[..split]).iter().enumerate() {
 		if Some(&(index as u32)) == to_skip.first() {
 			to_skip.remove(0);

@@ -28,7 +28,7 @@ use sp_std::{
 	vec::Vec,
 };
 
-pub use sp_externalities::{Externalities, ExternalitiesExt};
+pub use sp_externalities::{Externalities, ExternalitiesExt, WorkerResult};
 
 /// Code execution engine.
 #[cfg(feature = "std")]
@@ -224,13 +224,13 @@ pub trait RuntimeSpawn: Send {
 	) -> u64;
 	
 	/// Join the result of previously created runtime instance invocation.
-	fn join(&self, handle: u64) -> Vec<u8>;
+	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> WorkerResult;
 
 	/// Stop the previous created runtime instance invocation.
 	/// Note that kill can be more expensive than `join`, as
 	/// it involve spawning again the worker, when join just
 	/// release it.
-	fn kill(&self, handle: u64);
+	fn kill(&self, handle: u64, calling_ext: &mut dyn Externalities);
 
 	/// Change the number of runtime runing in the pool.
 	/// Note that this should only increase capacity (default value

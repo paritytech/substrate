@@ -40,7 +40,7 @@ use sp_core::{
 use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
-use sp_externalities::{ExternalitiesExt as _, AsyncBackend};
+use sp_externalities::{ExternalitiesExt as _, AsyncBackend, WorkerResult};
 use sp_tasks::{new_async_externalities, new_inline_only_externalities, AsyncExt, AsyncStateType};
 
 /// Default num of pages for the heap
@@ -329,7 +329,7 @@ pub struct RuntimeInstanceSpawnInfo {
 // TODO naming is bad (inline are not runing)
 enum RuningTask {
 	// TODO condvar?
-	Task(mpsc::Receiver<Option<Vec<u8>>>),
+	Task(mpsc::Receiver<Option<WorkerResult>>),
 	// TODO need to ad context of exteranlity init
 	Inline(PendingInlineTask),
 }
@@ -353,7 +353,7 @@ enum Task {
 struct PendingTask {
 	task: Task,
 	ext: AsyncExt,
-	result_sender: mpsc::Sender<Option<Vec<u8>>>,
+	result_sender: mpsc::Sender<Option<WorkerResult>>,
 }
 
 struct PendingInlineTask {
@@ -425,13 +425,13 @@ impl RuntimeInstanceSpawn {
 		&self,
 		handle: u64,
 		task: PendingTask,
-		result_receiver: mpsc::Receiver<Option<Vec<u8>>>,
+		result_receiver: mpsc::Receiver<Option<WorkerResult>>,
 	) {
 		let mut tasks = self.tasks.lock();
 		match tasks.start(self.recursive_level) {
 			Processing::SpawnNew => {
 				// warning self.tasks is locked when calling spawn_new
-				self.spawn_new();
+				self.spawn_new(handle);
 			},
 			Processing::Queue => (),
 			Processing::RunInline => {
@@ -494,7 +494,7 @@ impl RuntimeInstanceSpawn {
 	}
 
 	// TODO should make a variant without module instantiation for native
-	fn spawn_new(&self) {
+	fn spawn_new(&self, handle: u64) {
 		let module = self.module.clone();
 		let scheduler = self.scheduler.clone();
 		let task_receiver = self.task_receiver.clone();
@@ -535,7 +535,8 @@ impl RuntimeInstanceSpawn {
 						continue;
 					}
 				};
-				match task {
+				let need_resolve = async_ext.need_resolve();
+				let result = match task {
 					Task::Wasm(WasmTask { dispatcher_ref, func, data }) => {
 						let mut instance = if let Some(instance) = Self::instantiate(&*module, &tasks) {
 							instance
@@ -551,16 +552,16 @@ impl RuntimeInstanceSpawn {
 							)
 						) {
 							Ok(result) => {
-								if let Err(_) = result_sender.send(match result {
-									Ok(output) => Some(output),
+								match result {
+									Ok(output) => if need_resolve {
+										WorkerResult::CallAt(output, handle)
+									} else {
+										WorkerResult::Valid(output)
+									},
 									Err(error) => {
 										log::error!("Call error in spawned task: {:?}", error);
-										None
+										WorkerResult::HardPanic
 									},
-								}) {
-									// Closed channel, remove this thread instance.
-									tasks.lock().finished();
-									return;
 								}
 							},
 							Err(error) => {
@@ -568,8 +569,10 @@ impl RuntimeInstanceSpawn {
 								instance = if let Some(instance) = Self::instantiate(&*module, &tasks) {
 									instance
 								} else {
+									tasks.lock().finished();
 									return;
 								};
+								WorkerResult::Panic
 							}
 						}
 					},
@@ -580,18 +583,22 @@ impl RuntimeInstanceSpawn {
 							&mut async_ext,
 							|| func(data)
 						) {
-							Ok(result) => {
-								if let Err(_) = result_sender.send(Some(result)) {
-									// Closed channel, remove this thread instance.
-									tasks.lock().finished();
-									return;
-								}
+							Ok(result) => if need_resolve {
+								WorkerResult::CallAt(result, handle)
+							} else {
+								WorkerResult::Valid(result)
 							},
 							Err(error) => {
 								log::error!("Panic error in spawned task: {:?}", error);
+								WorkerResult::Panic
 							}
 						}
 					},
+				};
+				if let Err(_) = result_sender.send(Some(result)) {
+					// Closed channel, remove this thread instance.
+					tasks.lock().finished();
+					return;
 				}
 			}
 
@@ -727,24 +734,20 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		new_handle
 	}
 
-	// TODO here pass calling_ext and trigger join to transmit to state machine level
-	// resulting in getting results into change.
-	// -> for read we only need to remove marker.
-	// + TODO same in kill but unimplemented
-	// TODO panic on received panic result.
-	fn join(&self, handle: u64) -> Vec<u8> {
+	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> WorkerResult {
 		match self.remove(handle) {
 			RuningTask::Task(receiver) => {
 				if let Some(output) = receiver.recv()
 					.expect("Spawned task panicked for the handle") {
-					output
-				} else {
-					panic!("Spawned task panicked for the handle");
+						output
+					} else {
+						panic!("Spawned task panicked for the handle");
 				}
 			},
 			RuningTask::Inline(
 				PendingInlineTask { ext, task: Task::Wasm(WasmTask { dispatcher_ref, func, data }) },
 			) => {
+				let need_resolve = ext.need_resolve();
 				let mut instance = self.instance.lock();
 				if instance.is_none() {
 					*instance = if let Some(instance) = Self::instantiate_inline(&self.module) {
@@ -754,7 +757,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					};
 				}
 
- 				let mut async_ext = match new_inline_only_externalities(ext) {
+				let mut async_ext = match new_inline_only_externalities(ext) {
 					Ok(val) => val,
 					Err(e) => {
 						log::error!(
@@ -774,14 +777,19 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 						&data[..],
 					)
 				) {
-					Ok(Ok(result)) => result,
+					// TODO if we knew tihs is stateless, we could return valid
+					Ok(Ok(result)) => if need_resolve {
+						WorkerResult::CallAt(result, handle)
+					} else {
+						WorkerResult::Valid(result)
+					},
 					Ok(Err(error)) => {
 						log::error!("Wasm instance error in : {:?}", error);
-						panic!("TODO thi sshould panic whole tx?");
+						WorkerResult::HardPanic
 					},
 					Err(error) => {
 						log::error!("Panic error in sinlined task: {:?}", error);
-						panic!("TODO return panic th result instead");
+						WorkerResult::Panic
 					}
 				}
 			},
@@ -789,7 +797,8 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 				PendingInlineTask { ext, task: Task::Native(NativeTask { func, data }) },
 			) => {
 				// TODO factor code with wasm
- 				let mut async_ext = match new_inline_only_externalities(ext) {
+				let need_resolve = ext.need_resolve();
+				let mut async_ext = match new_inline_only_externalities(ext) {
 					Ok(val) => val,
 					Err(e) => {
 						log::error!(
@@ -804,17 +813,23 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					&mut async_ext,
 					|| func(data),
 				) {
-					Ok(result) => result,
+					// TODO Here if we got info about task being stateless, we could
+					// directly return Valid
+					Ok(result) => if need_resolve {
+						WorkerResult::CallAt(result, handle)
+					} else {
+						WorkerResult::Valid(result)
+					},
 					Err(error) => {
 						log::error!("Panic error in sinlined task: {:?}", error);
-						panic!("TODO return panic th result instead");
+						WorkerResult::Panic
 					}
 				}
 			},
 		}
 	}
 
-	fn kill(&self, handle: u64) {
+	fn kill(&self, handle: u64, calling_ext: &mut dyn Externalities) {
 		unimplemented!()
 	}
 

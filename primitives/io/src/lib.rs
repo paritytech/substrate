@@ -61,7 +61,6 @@ use sp_runtime_interface::pass_by::PassBy;
 
 use codec::{Encode, Decode};
 
-#[cfg(feature = "std")]
 use sp_externalities::{ExternalitiesExt, Externalities};
 
 #[cfg(feature = "std")]
@@ -189,12 +188,17 @@ pub trait Storage {
 		let to_drop_tasks = self.storage_rollback_transaction()
 			.expect("No open transaction that can be rolled back.");
 		if to_drop_tasks.len() > 0 {
+			let ext_unsafe = *self as *mut dyn Externalities;
 			if let Some(runtime_spawn) = self.extension::<RuntimeSpawnExt>() {
+				let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
 				for task in to_drop_tasks.into_iter() {
-					runtime_spawn.kill(task)
+					// TODO abstraction to make it less unsafe, see other unsafe call
+					// of this filepr.
+					runtime_spawn.kill(task, ext_unsafe)
 				}
 			}
 		}
+		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 	}
 
 	/// Commit the last transaction started by `start_transaction`.
@@ -1279,20 +1283,50 @@ pub trait RuntimeTasks {
 	/// Wasm host function for joining a task.
 	///
 	/// This should not be used directly. Use `join` of `sp_tasks::spawn` result instead.
-	fn join(&mut self, handle: u64) -> Vec<u8> {
-		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
-			.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		runtime_spawn.join(handle)
+	fn join(&mut self, handle: u64) -> WorkerResult {
+		let result: sp_externalities::WorkerResult = {
+			let ext_unsafe = *self as *mut dyn Externalities;
+			let runtime_spawn = self.extension::<RuntimeSpawnExt>()
+				.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
+			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+			let result = runtime_spawn.join(handle, ext_unsafe);
+			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
+			result
+		};
+		self.resolve_worker_result(result).into()
 	}
 
 	/// TODO doc
 	///
 	/// This should not be used directly. Use `kill` of `sp_tasks::spawn` result instead.
 	fn kill(&mut self, handle: u64) {
+		let ext_unsafe = *self as *mut dyn Externalities;
 		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
 			.expect("Cannot kill without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		runtime_spawn.kill(handle)
+		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+		runtime_spawn.kill(handle, ext_unsafe);
+		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 	}
+}
+
+/// Worker result with suport of runtime interface.
+#[derive(Encode, Decode)]
+pub struct WorkerResult(sp_externalities::WorkerResult);
+
+impl From<sp_externalities::WorkerResult> for WorkerResult {
+	fn from(result: sp_externalities::WorkerResult) -> Self {
+		WorkerResult(result)
+	}
+}
+
+impl Into<sp_externalities::WorkerResult> for WorkerResult {
+	fn into(self) -> sp_externalities::WorkerResult {
+		self.0
+	}
+}
+
+impl sp_runtime_interface::pass_by::PassBy for WorkerResult {
+	type PassBy = sp_runtime_interface::pass_by::Codec<WorkerResult>;
 }
 
 /// Allocator used by Substrate when executing the Wasm runtime.

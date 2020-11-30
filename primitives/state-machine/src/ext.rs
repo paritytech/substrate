@@ -689,7 +689,7 @@ where
 		})
 	}
 
-	fn resolve_worker_state(&mut self, state_update: WorkerResult) -> WorkerResult {
+	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> WorkerResult {
 		self.overlay.resolve_worker_result(state_update)
 	}
 }

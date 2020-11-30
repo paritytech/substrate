@@ -25,7 +25,7 @@
 //! - AsyncStateType::Stateless: None
 //!		- extension (only thread extension if not inline) so purely technical
 //!		(also true for all other kind).
-//!		- resolve_worker_state
+//!		- resolve_worker_result
 //! - AsyncStateType::ReadLastBlock
 //!		- storage
 //!		- child_storage
@@ -153,6 +153,13 @@ impl AsyncExt {
 			backend: Some(backend),
 		}
 	}
+
+	/// Depending on kind the result may be already
+	/// valid, in this case we do not need to resolve
+	/// it.
+	pub fn need_resolve(&self) -> bool {
+		self.kind.need_resolve()
+	}
 }
 
 /// Simple state-less externalities for use in async context.
@@ -228,7 +235,15 @@ impl AsyncExternalities {
 			| AsyncStateType::ReadAtSpawn => (),
 		}
 	}
+
+	/// Depending on kind the result may be already
+	/// valid, in this case we do not need to resolve
+	/// it.
+	pub fn need_resolve(&self) -> bool {
+		self.state.kind.need_resolve()
+	}
 }
+
 impl Externalities for AsyncExternalities {
 	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {
 		panic!("`set_offchain_storage`: should not be used in async externalities!")
@@ -455,7 +470,7 @@ impl Externalities for AsyncExternalities {
 		self.state.backend.as_ref().expect(KIND_WITH_BACKEND).async_backend()
 	}
 
-	fn resolve_worker_state(&mut self, state_update: WorkerResult) -> WorkerResult {
+	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> WorkerResult {
 		/* actually overlay with no stored info is the same
 		match self.state.kind {
 			AsyncStateType::ReadLastBlock

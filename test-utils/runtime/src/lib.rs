@@ -1175,8 +1175,11 @@ fn test_tasks() {
 		result
 	}
 	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
-	let res = handle.join();
-	assert!(res.get(0) == Some(&42))
+	if let sp_externalities::WorkerResult::Valid(res) = handle.join() {
+		assert!(res.get(0) == Some(&42))
+	} else {
+		panic!("expected result for task")
+	}
 
 // TODO	unimplemented!("join, kill and consort");
 }
