@@ -91,14 +91,6 @@ pub fn add_directives(directives: &str) {
 	CURRENT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directives.to_owned());
 }
 
-/// Add directives to current directives
-pub fn get_directives() -> String {
-	CURRENT_DIRECTIVES
-		.get_or_init(|| Mutex::new(Vec::new()))
-		.lock()
-		.join(",")
-}
-
 /// Reload the logging filter with the supplied directives added to the existing directives
 pub fn reload_filter() -> Result<(), String> {
 	let mut env_filter = EnvFilter::default();
@@ -129,6 +121,9 @@ pub fn reload_filter() -> Result<(), String> {
 		.map_err(|e| format!("{}", e))
 }
 
+/// Resets the log filter back to the original state when the node was started.
+///
+/// Includes substrate defaults and CLI supplied directives.
 pub fn reset_log_filter() -> Result<(), String> {
 	*CURRENT_DIRECTIVES
 		.get_or_init(|| Mutex::new(Vec::new())).lock() =
