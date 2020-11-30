@@ -3,7 +3,7 @@
 The Treasury module provides a "pot" of funds that can be managed by stakeholders in the
 system and a structure for making spending proposals from this pot.
 
-- [`treasury::Config`](https://docs.rs/pallet-treasury/latest/pallet_treasury/trait.Config.html)
+- [`treasury::Trait`](https://docs.rs/pallet-treasury/latest/pallet_treasury/trait.Trait.html)
 - [`Call`](https://docs.rs/pallet-treasury/latest/pallet_treasury/enum.Call.html)
 
 ## Overview
