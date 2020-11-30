@@ -475,7 +475,7 @@ pub enum CheckedHeader<H, S> {
 
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
-pub enum Error<T> where T: SlotData + Clone + Debug + Send + Sync + 'static {
+pub enum Error<T> where T: SlotData + Debug + Send + Sync + 'static {
 	#[error("Slot duration is invalid: {0:?}")]
 	SlotDurationInvalid(SlotDuration<T>),
 }
@@ -493,7 +493,7 @@ impl<T> Deref for SlotDuration<T> {
 	}
 }
 
-impl<T: SlotData + Clone> SlotData for SlotDuration<T> {
+impl<T: SlotData> SlotData for SlotDuration<T> {
 	/// Get the slot duration in milliseconds.
 	fn slot_duration(&self) -> u64
 		where T: SlotData,
@@ -504,7 +504,7 @@ impl<T: SlotData + Clone> SlotData for SlotDuration<T> {
 	const SLOT_KEY: &'static [u8] = T::SLOT_KEY;
 }
 
-impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
+impl<T: Clone + Debug + Send + Sync + 'static> SlotDuration<T> {
 	/// Either fetch the slot duration from disk or compute it from the
 	/// genesis state.
 	///
