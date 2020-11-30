@@ -718,7 +718,7 @@ decl_module! {
 			Ok(None.into())
 		}
 
-		/// Clean all voters who are defunct (i.e. the do not serve any purpose at all). The deposit
+		/// Clean all voters who are defunct (i.e. they do not serve any purpose at all). The deposit
 		/// of the removed voters are returned.
 		///
 		/// This is an root function to be used only for cleaning the state.
