@@ -2,7 +2,7 @@
 
 The Staking module is used to manage funds at stake by network maintainers.
 
-- [`staking::Config`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html)
+- [`staking::Trait`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html)
 - [`Call`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html)
 - [`Module`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Module.html)
 
