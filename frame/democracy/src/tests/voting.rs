@@ -56,53 +56,21 @@ fn split_vote_cancellation_should_work() {
 #[test]
 fn single_proposal_should_work() {
 	new_test_ext().execute_with(|| {
-
-		let who_acc_id = 1;
-		let who_acc_id_42 = 42;
-		let dbg_this_file = file!();
-
 		System::set_block_number(0);
-
-		let dbg_current_line = line!();
-		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
-						dbg_this_file,
-						dbg_current_line,
-						who_acc_id,
-						Balances::free_balance(who_acc_id),
-						who_acc_id_42,
-						Balances::free_balance(who_acc_id_42));
-
-		assert_ok!(propose_set_balance_and_note(who_acc_id, 5, 2));
-		let dbg_current_line = line!();
-		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
-						dbg_this_file,
-						dbg_current_line,
-						who_acc_id,
-						Balances::free_balance(who_acc_id),
-						who_acc_id_42,
-						Balances::free_balance(who_acc_id_42));
-
+		assert_ok!(propose_set_balance_and_note(1, 2, 1));
 		let r = 0;
 		assert!(Democracy::referendum_info(r).is_none());
 
 		// start of 2 => next referendum scheduled.
 		fast_forward_to(2);
-		assert_ok!(Democracy::vote(Origin::signed(who_acc_id), r, aye(who_acc_id)));
-		let dbg_current_line = line!();
-		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
-						dbg_this_file,
-						dbg_current_line,
-						who_acc_id,
-						Balances::free_balance(who_acc_id),
-						who_acc_id_42,
-						Balances::free_balance(who_acc_id_42));
+		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 
 		assert_eq!(Democracy::referendum_count(), 1);
 		assert_eq!(
 			Democracy::referendum_status(0),
 			Ok(ReferendumStatus {
 				end: 4,
-				proposal_hash: set_balance_proposal_hash_and_note(5),
+				proposal_hash: set_balance_proposal_hash_and_note(2),
 				threshold: VoteThreshold::SuperMajorityApprove,
 				delay: 2,
 				tally: Tally { ayes: 1, nays: 0, turnout: 10 },
@@ -123,17 +91,7 @@ fn single_proposal_should_work() {
 		// referendum passes and wait another two blocks for enactment.
 		fast_forward_to(6);
 
-		let dbg_current_line = line!();
-		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
-						dbg_this_file,
-						dbg_current_line,
-						who_acc_id,
-						Balances::free_balance(who_acc_id),
-						who_acc_id_42,
-						Balances::free_balance(who_acc_id_42));
-
-		assert_eq!(Balances::free_balance(42), 5);
-
+		assert_eq!(Balances::free_balance(42), 2);
 	});
 }
 
@@ -204,5 +162,266 @@ fn passing_low_turnout_voting_should_work() {
 		next_block();
 		next_block();
 		assert_eq!(Balances::free_balance(42), 2);
+	});
+}
+
+#[test]
+fn first_free_should_work() {
+	new_test_ext().execute_with(|| {
+
+		const PROP_ACC_ID: u64 = 6;
+		const VOTER1_ACC_ID: u64 = 5;
+		const WHO_ACC_ID_42: u64 = 42;
+		const DBG_THIS_FILE: &str = file!();
+
+		System::set_block_number(0);
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::**Test-Start**",
+						DBG_THIS_FILE,
+						dbg_current_line );
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						PROP_ACC_ID,
+						Balances::free_balance(PROP_ACC_ID),
+						WHO_ACC_ID_42,
+						Balances::free_balance(WHO_ACC_ID_42));
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						VOTER1_ACC_ID,
+						Balances::free_balance(VOTER1_ACC_ID),
+						WHO_ACC_ID_42,
+						Balances::free_balance(WHO_ACC_ID_42));
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::**Democracy::propose({:#?})**",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						PROP_ACC_ID );
+
+		assert_ok!(propose_set_balance_and_note(PROP_ACC_ID, 5, 10));
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						PROP_ACC_ID,
+						Balances::free_balance(PROP_ACC_ID),
+						WHO_ACC_ID_42,
+						Balances::free_balance(WHO_ACC_ID_42));
+
+		let r = 0;
+		assert!(Democracy::referendum_info(r).is_none());
+
+		// start of 2 => next referendum scheduled.
+		fast_forward_to(2);
+
+		// referendum still running
+		assert!(Democracy::referendum_status(r).is_ok());
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::**Democracy::vote({:#?})**",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						PROP_ACC_ID );
+
+		assert_ok!(Democracy::vote(Origin::signed(PROP_ACC_ID), r, aye(PROP_ACC_ID)));
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						PROP_ACC_ID,
+						Balances::free_balance(PROP_ACC_ID),
+						WHO_ACC_ID_42,
+						Balances::free_balance(WHO_ACC_ID_42));
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						VOTER1_ACC_ID,
+						Balances::free_balance(VOTER1_ACC_ID),
+						WHO_ACC_ID_42,
+						Balances::free_balance(WHO_ACC_ID_42));
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::**Democracy::vote({:#?})**",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						VOTER1_ACC_ID );
+
+		assert_ok!(Democracy::vote(Origin::signed(VOTER1_ACC_ID), r, aye(VOTER1_ACC_ID)));
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						PROP_ACC_ID,
+						Balances::free_balance(PROP_ACC_ID),
+						WHO_ACC_ID_42,
+						Balances::free_balance(WHO_ACC_ID_42));
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						VOTER1_ACC_ID,
+						Balances::free_balance(VOTER1_ACC_ID),
+						WHO_ACC_ID_42,
+						Balances::free_balance(WHO_ACC_ID_42));
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::**Democracy::referendum_status**",
+						DBG_THIS_FILE,
+						dbg_current_line );
+
+		assert_eq!(Democracy::referendum_count(), 1);
+		assert_eq!(
+			Democracy::referendum_status(0),
+			Ok(ReferendumStatus {
+				end: 4,
+				proposal_hash: set_balance_proposal_hash_and_note(5),
+				threshold: VoteThreshold::SuperMajorityApprove,
+				delay: 2,
+				tally: Tally { ayes: 11, nays: 0, turnout: 110 },
+			})
+		);
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::**Democracy::vote({:#?})**",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						PROP_ACC_ID );
+
+		assert_ok!(Democracy::vote(Origin::signed(PROP_ACC_ID), r, aye(PROP_ACC_ID)));
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::**Democracy::vote({:#?})**",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						VOTER1_ACC_ID );
+
+		assert_ok!(Democracy::vote(Origin::signed(VOTER1_ACC_ID), r, aye(VOTER1_ACC_ID)));
+
+		fast_forward_to(3);
+
+		assert_eq!(
+			Democracy::referendum_status(r),
+			Ok(ReferendumStatus {
+				end: 4,
+				proposal_hash: set_balance_proposal_hash_and_note(5),
+				threshold: VoteThreshold::SuperMajorityApprove,
+				delay: 2,
+				tally: Tally { ayes: 11, nays: 0, turnout: 110 },
+			})
+		);
+
+		// referendum still running
+		assert!(Democracy::referendum_status(r).is_ok());
+
+		// referendum runs during 2 and 3, ends @ start of 4.
+		fast_forward_to(4);
+
+		assert!(Democracy::referendum_status(r).is_err());
+		assert!(pallet_scheduler::Agenda::<Test>::get(6)[0].is_some());
+
+		// referendum passes and wait another two blocks for enactment.
+		fast_forward_to(6);
+
+		assert_eq!(Balances::free_balance(42), 5);
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::**referendum-0-Test-Exit**",
+						DBG_THIS_FILE,
+						dbg_current_line );
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						PROP_ACC_ID,
+						Balances::free_balance(PROP_ACC_ID),
+						WHO_ACC_ID_42,
+						Balances::free_balance(WHO_ACC_ID_42));
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						VOTER1_ACC_ID,
+						Balances::free_balance(VOTER1_ACC_ID),
+						WHO_ACC_ID_42,
+						Balances::free_balance(WHO_ACC_ID_42));
+
+
+		//============= referendum-1(Start) ====================================
+
+		/*
+		const REF1_PROP_ACC_ID: u64 = 4;
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::**referendum-1-Start**",
+						DBG_THIS_FILE,
+						dbg_current_line );
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::**Democracy::propose({:#?})**",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						REF1_PROP_ACC_ID );
+
+		assert_ok!(propose_set_balance_and_note(REF1_PROP_ACC_ID, 4, 10));
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						REF1_PROP_ACC_ID,
+						Balances::free_balance(REF1_PROP_ACC_ID),
+						WHO_ACC_ID_42,
+						Balances::free_balance(WHO_ACC_ID_42));
+
+		let r = 1;
+		assert!(Democracy::referendum_info(r).is_none());
+
+		// start of 2 => next referendum scheduled.
+		fast_forward_to(2);
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::**Democracy::vote({:#?})**",
+						DBG_THIS_FILE,
+						dbg_current_line,
+						VOTER1_ACC_ID );
+
+		assert!(Democracy::referendum_status(r).is_ok());
+
+		assert_ok!(Democracy::vote(Origin::signed(VOTER1_ACC_ID), r, aye(VOTER1_ACC_ID)));
+
+		fast_forward_to(3);
+
+		assert_eq!(
+			Democracy::referendum_status(r),
+			Ok(ReferendumStatus {
+				end: 4,
+				proposal_hash: set_balance_proposal_hash_and_note(5),
+				threshold: VoteThreshold::SuperMajorityApprove,
+				delay: 2,
+				tally: Tally { ayes: 11, nays: 0, turnout: 110 },
+			})
+		);
+
+		// referendum still running
+		assert!(Democracy::referendum_status(r).is_ok());
+
+		// referendum runs during 2 and 3, ends @ start of 4.
+		fast_forward_to(4);
+
+		assert!(Democracy::referendum_status(r).is_err());
+		*/
 	});
 }

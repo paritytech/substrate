@@ -605,7 +605,16 @@ decl_module! {
 			T::Currency::reserve(&who, value)?;
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (&[&who][..], value));
-
+			if_std! {
+				let dbg_this_file = file!();
+				let dbg_current_line = line!();
+				println!( "@[{:#?}::{:#?}]::propose()::Who[{:#?}] | Index[{:#?}] | Val[{:#?}]",
+						dbg_this_file,
+						dbg_current_line,
+						who,
+						index,
+						value );
+			}
 			<PublicProps<T>>::append((index, proposal_hash, who));
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
@@ -1246,6 +1255,7 @@ impl<T: Trait> Module<T> {
 	/// Actually enact a vote, if legit.
 	fn try_vote(who: &T::AccountId, ref_index: ReferendumIndex, vote: AccountVote<BalanceOf<T>>) -> DispatchResultWithPostInfo {
 		let mut is_account_voting_first_time: bool = false;
+		let mut is_account_revoting: bool = false;
 		let mut status = Self::referendum_status(ref_index)?;
 		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::InsufficientFunds);
 		VotingOf::<T>::try_mutate(who, |voting| -> DispatchResult {
@@ -1258,6 +1268,7 @@ impl<T: Trait> Module<T> {
 							status.tally.reduce(approve, *delegations);
 						}
 						votes[i].1 = vote;
+						is_account_revoting = true;
 					}
 					Err(i) => {
 						ensure!(votes.len() as u32 <= T::MaxVotes::get(), Error::<T>::MaxVotesReached);
@@ -1269,7 +1280,7 @@ impl<T: Trait> Module<T> {
 				if let Some(approve) = vote.as_standard() {
 					status.tally.increase(approve, *delegations);
 				}
-				if votes.len() as u32 == 1 {
+				if ( votes.len() as u32 == 1 ) && ( is_account_revoting == false ) {
 					is_account_voting_first_time = true;
 				}
 				Ok(())
@@ -1290,9 +1301,10 @@ impl<T: Trait> Module<T> {
 		if_std! {
 			let dbg_this_file = file!();
 			let dbg_current_line = line!();
-			println!( "@[{:#?}::{:#?}]::try_vote()::stat::is_account_voting_first_time[{:#?}]",
+			println!( "@[{:#?}::{:#?}]::try_vote()::Who[{:#?}]-is_account_voting_first_time[{:#?}]",
 					dbg_this_file,
 					dbg_current_line,
+					who,
 					is_account_voting_first_time );
 		}
 		if is_account_voting_first_time == false {
@@ -1301,61 +1313,6 @@ impl<T: Trait> Module<T> {
 			Ok(Pays::No.into())
 		}
 	}
-
-	/*
-	/// Actually enact a vote, if legit.
-	fn try_vote(who: &T::AccountId, ref_index: ReferendumIndex, vote: AccountVote<BalanceOf<T>>) -> DispatchResult {
-
-		let mut is_account_voting_first_time: bool = false;
-
-		let mut status = Self::referendum_status(ref_index)?;
-		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::InsufficientFunds);
-		VotingOf::<T>::try_mutate(who, |voting| -> DispatchResult {
-			if let Voting::Direct { ref mut votes, delegations, .. } = voting {
-				match votes.binary_search_by_key(&ref_index, |i| i.0) {
-					Ok(i) => {
-						// Shouldn't be possible to fail, but we handle it gracefully.
-						status.tally.remove(votes[i].1).ok_or(Error::<T>::Underflow)?;
-						if let Some(approve) = votes[i].1.as_standard() {
-							status.tally.reduce(approve, *delegations);
-						}
-						votes[i].1 = vote;
-					}
-					Err(i) => {
-						ensure!(votes.len() as u32 <= T::MaxVotes::get(), Error::<T>::MaxVotesReached);
-						votes.insert(i, (ref_index, vote));
-					}
-				}
-				// Shouldn't be possible to fail, but we handle it gracefully.
-				status.tally.add(vote).ok_or(Error::<T>::Overflow)?;
-				if let Some(approve) = vote.as_standard() {
-					status.tally.increase(approve, *delegations);
-				}
-				if votes.len() as u32 == 1 {
-					is_account_voting_first_time = true;
-				}
-				Ok(())
-			} else {
-				Err(Error::<T>::AlreadyDelegating.into())
-			}
-		})?;
-
-		// Extend the lock to `balance` (rather than setting it) since we don't know what other
-		// votes are in place.
-		T::Currency::extend_lock(
-			DEMOCRACY_ID,
-			who,
-			vote.balance(),
-			WithdrawReasons::TRANSFER
-		);
-		ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
-		if is_account_voting_first_time == false {
-			Ok(())
-		} else {
-			Ok(Pays::No.into())
-		}
-	}
-	*/
 
 	/// Remove the account's vote for the given referendum if possible. This is possible when:
 	/// - The referendum has not finished.
