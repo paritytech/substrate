@@ -69,7 +69,7 @@ impl Def {
 		let item_span = item.span().clone();
 		let items = &mut item.content.as_mut()
 			.ok_or_else(|| {
-				let msg = "Invalid pallet definition, expect mod to be inlined.";
+				let msg = "Invalid pallet definition, expected mod to be inlined.";
 				syn::Error::new(item_span, msg)
 			})?.1;
 

@@ -31,7 +31,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let pallet_ident = &def.pallet_struct.pallet;
 	let where_clause = &def.call.where_clause;
 
-	let fn_ = def.call.methods.iter().map(|method| &method.fn_).collect::<Vec<_>>();
+	let fn_name = def.call.methods.iter().map(|method| &method.name).collect::<Vec<_>>();
 
 	let fn_weight = def.call.methods.iter().map(|method| &method.weight);
 
@@ -87,7 +87,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				#frame_support::sp_std::marker::PhantomData<(#type_use_gen,)>,
 				#frame_support::Never,
 			),
-			#( #fn_( #( #args_compact_attr #args_type ),* ), )*
+			#( #fn_name( #( #args_compact_attr #args_type ),* ), )*
 		}
 
 		impl<#type_impl_gen> #frame_support::dispatch::GetDispatchInfo
@@ -97,7 +97,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			fn get_dispatch_info(&self) -> #frame_support::dispatch::DispatchInfo {
 				match *self {
 					#(
-						Self::#fn_ ( #( ref #args_name, )* ) => {
+						Self::#fn_name ( #( ref #args_name, )* ) => {
 							let base_weight = #fn_weight;
 
 							let weight = <
@@ -131,13 +131,13 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		{
 			fn get_call_name(&self) -> &'static str {
 				match *self {
-					#( Self::#fn_(..) => stringify!(#fn_), )*
+					#( Self::#fn_name(..) => stringify!(#fn_name), )*
 					Self::__Ignore(_, _) => unreachable!("__PhantomItem cannot be used."),
 				}
 			}
 
 			fn get_call_names() -> &'static [&'static str] {
-				&[ #( stringify!(#fn_), )* ]
+				&[ #( stringify!(#fn_name), )* ]
 			}
 		}
 
@@ -152,8 +152,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			) -> #frame_support::dispatch::DispatchResultWithPostInfo {
 				match self {
 					#(
-						Self::#fn_( #( #args_name, )* ) =>
-							<#pallet_ident<#type_use_gen>>::#fn_(origin, #( #args_name, )* )
+						Self::#fn_name( #( #args_name, )* ) =>
+							<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
 								.map(Into::into).map_err(Into::into),
 					)*
 					Self::__Ignore(_, _) => {
@@ -175,7 +175,9 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			pub fn call_functions() -> &'static [#frame_support::dispatch::FunctionMetadata] {
 				&[ #(
 					#frame_support::dispatch::FunctionMetadata {
-						name: #frame_support::dispatch::DecodeDifferent::Encode(stringify!(#fn_)),
+						name: #frame_support::dispatch::DecodeDifferent::Encode(
+							stringify!(#fn_name)
+						),
 						arguments: #frame_support::dispatch::DecodeDifferent::Encode(
 							&[ #(
 								#frame_support::dispatch::FunctionArgumentMetadata {

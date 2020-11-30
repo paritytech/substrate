@@ -68,7 +68,7 @@ impl PalletStructDef {
 		let item = if let syn::Item::Struct(item) = item {
 			item
 		} else {
-			let msg = "Invalid pallet::pallet, expect struct definition";
+			let msg = "Invalid pallet::pallet, expected struct definition";
 			return Err(syn::Error::new(item.span(), msg));
 		};
 

@@ -100,13 +100,13 @@ fn retrieve_arg(
 		if arg_pos < args.args.len() {
 			Ok(args.args[arg_pos].clone())
 		} else {
-			let msg = format!("pallet::storage unexpected number of generic argument, expect at \
+			let msg = format!("pallet::storage unexpected number of generic argument, expected at \
 				least {} args, found {}", arg_pos + 1, args.args.len());
 			Err(syn::Error::new(args.span(), msg))
 		}
 	} else {
-		let msg = format!("pallet::storage unexpected number of generic argument, expect at least \
-			{} args, found none", arg_pos + 1);
+		let msg = format!("pallet::storage unexpected number of generic argument, expected at \
+			least {} args, found none", arg_pos + 1);
 		Err(syn::Error::new(segment.span(), msg))
 	}
 }
@@ -116,7 +116,7 @@ impl StorageDef {
 		let item = if let syn::Item::Type(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::storage, expect item type"));
+			return Err(syn::Error::new(item.span(), "Invalid pallet::storage, expected item type"));
 		};
 
 		let mut attrs: Vec<PalletStorageAttr> = helper::take_item_attrs(&mut item.attrs)?;
@@ -135,12 +135,12 @@ impl StorageDef {
 		let typ = if let syn::Type::Path(typ) = &*item.ty {
 			typ
 		} else {
-			let msg = "Invalid pallet::storage, expect type path";
+			let msg = "Invalid pallet::storage, expected type path";
 			return Err(syn::Error::new(item.ty.span(), msg));
 		};
 
 		if typ.path.segments.len() != 1 {
-			let msg = "Invalid pallet::storage, expect type path with one segment";
+			let msg = "Invalid pallet::storage, expected type path with one segment";
 			return Err(syn::Error::new(item.ty.span(), msg));
 		}
 
@@ -169,7 +169,7 @@ impl StorageDef {
 			}
 			found @ _ => {
 				let msg = format!(
-					"Invalid pallet::storage, expect ident: `StorageValue` or \
+					"Invalid pallet::storage, expected ident: `StorageValue` or \
 					`StorageMap` or `StorageDoubleMap` in order to expand metadata, found \
 					`{}`",
 					found,

@@ -297,7 +297,7 @@ impl ConfigDef {
 			true
 		} else {
 			false
-		}
+		};
 
 		let mut has_event_type = false;
 		let mut consts_metadata = vec![];
@@ -362,7 +362,7 @@ impl ConfigDef {
 			};
 
 			let msg = format!(
-				"Invalid pallet::trait, expect explicit `{}::Config` as supertrait, \
+				"Invalid pallet::trait, expected explicit `{}::Config` as supertrait, \
 				found {}. \
 				(try `pub trait Config: frame_system::Config {{ ...` or \
 				`pub trait Config<I: 'static>: frame_system::Config {{ ...`). \

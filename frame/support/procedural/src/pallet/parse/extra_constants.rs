@@ -59,7 +59,7 @@ impl ExtraConstantsDef {
 		let item = if let syn::Item::Impl(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expect item impl"));
+			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expected item impl"));
 		};
 
 		let mut instances = vec![];
@@ -67,7 +67,7 @@ impl ExtraConstantsDef {
 		instances.push(helper::check_pallet_struct_usage(&item.self_ty)?);
 
 		if let Some((_, _, for_)) = item.trait_ {
-			let msg = "Invalid pallet::call, expect no trait ident as in \
+			let msg = "Invalid pallet::call, expected no trait ident as in \
 				`impl<..> Pallet<..> { .. }`";
 			return Err(syn::Error::new(for_.span(), msg))
 		}

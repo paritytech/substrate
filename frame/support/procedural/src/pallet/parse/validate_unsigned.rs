@@ -31,23 +31,23 @@ impl ValidateUnsignedDef {
 		let item = if let syn::Item::Impl(item) = item {
 			item
 		} else {
-			let msg = "Invalid pallet::validate_unsigned, expect item impl";
+			let msg = "Invalid pallet::validate_unsigned, expected item impl";
 			return Err(syn::Error::new(item.span(), msg));
 		};
 
 		if item.trait_.is_none() {
-			let msg = "Invalid pallet::validate_unsigned, expect impl<..> ValidateUnsigned for \
+			let msg = "Invalid pallet::validate_unsigned, expected impl<..> ValidateUnsigned for \
 				Pallet<..>";
 			return Err(syn::Error::new(item.span(), msg));
 		}
 
 		if let Some(last) = item.trait_.as_ref().unwrap().1.segments.last() {
 			if last.ident != "ValidateUnsigned" {
-				let msg = "Invalid pallet::validate_unsigned, expect trait ValidateUnsigned";
+				let msg = "Invalid pallet::validate_unsigned, expected trait ValidateUnsigned";
 				return Err(syn::Error::new(last.span(), msg));
 			}
 		} else {
-			let msg = "Invalid pallet::validate_unsigned, expect impl<..> ValidateUnsigned for \
+			let msg = "Invalid pallet::validate_unsigned, expected impl<..> ValidateUnsigned for \
 				Pallet<..>";
 			return Err(syn::Error::new(item.span(), msg));
 		}

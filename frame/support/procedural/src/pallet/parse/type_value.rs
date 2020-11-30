@@ -43,7 +43,8 @@ impl TypeValueDef {
 		let item = if let syn::Item::Fn(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::type_value, expect item fn"));
+			let msg = "Invalid pallet::type_value, expected item fn";
+			return Err(syn::Error::new(item.span(), msg));
 		};
 
 
@@ -73,7 +74,7 @@ impl TypeValueDef {
 		let type_ = match item.sig.output.clone() {
 			syn::ReturnType::Type(_, type_) => type_,
 			syn::ReturnType::Default => {
-				let msg = "Invalid pallet::type_value, expect return type";
+				let msg = "Invalid pallet::type_value, expected return type";
 				return Err(syn::Error::new(item.sig.span(), msg));
 			},
 		};

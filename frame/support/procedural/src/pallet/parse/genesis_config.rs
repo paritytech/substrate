@@ -45,7 +45,7 @@ impl GenesisConfigDef {
 			syn::Item::Struct(item) => (&item.vis, &item.ident, &item.generics),
 			syn::Item::Type(item) => (&item.vis, &item.ident, &item.generics),
 			_ => {
-				let msg = "Invalid pallet::genesis_config, expect enum or struct or type";
+				let msg = "Invalid pallet::genesis_config, expected enum or struct or type";
 				return Err(syn::Error::new(item.span(), msg));
 			},
 		};

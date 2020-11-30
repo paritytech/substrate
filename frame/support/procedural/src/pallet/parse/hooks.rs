@@ -33,7 +33,7 @@ impl HooksDef {
 		let item = if let syn::Item::Impl(item) = item {
 			item
 		} else {
-			let msg = "Invalid pallet::hooks, expect item impl";
+			let msg = "Invalid pallet::hooks, expected item impl";
 			return Err(syn::Error::new(item.span(), msg));
 		};
 
@@ -43,7 +43,7 @@ impl HooksDef {
 
 		let item_trait = &item.trait_.as_ref()
 			.ok_or_else(|| {
-				let msg = "Invalid pallet::hooks, expect impl<..> Hooks \
+				let msg = "Invalid pallet::hooks, expected impl<..> Hooks \
 					for Pallet<..>";
 				syn::Error::new(item.span(), msg)
 			})?.1;
@@ -52,7 +52,7 @@ impl HooksDef {
 			|| item_trait.segments[0].ident != "Hooks"
 		{
 			let msg = format!(
-				"Invalid pallet::hooks, expect trait to be `Hooks` found `{}`\
+				"Invalid pallet::hooks, expected trait to be `Hooks` found `{}`\
 				, you can import from `frame_support::pallet_prelude`",
 				quote::quote!(#item_trait)
 			);

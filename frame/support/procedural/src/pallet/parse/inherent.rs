@@ -31,21 +31,22 @@ impl InherentDef {
 		let item = if let syn::Item::Impl(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::inherent, expect item impl"));
+			let msg = "Invalid pallet::inherent, expected item impl";
+			return Err(syn::Error::new(item.span(), msg));
 		};
 
 		if item.trait_.is_none() {
-			let msg = "Invalid pallet::inherent, expect impl<..> ProvideInherent for Pallet<..>";
+			let msg = "Invalid pallet::inherent, expected impl<..> ProvideInherent for Pallet<..>";
 			return Err(syn::Error::new(item.span(), msg));
 		}
 
 		if let Some(last) = item.trait_.as_ref().unwrap().1.segments.last() {
 			if last.ident != "ProvideInherent" {
-				let msg = "Invalid pallet::inherent, expect trait ProvideInherent";
+				let msg = "Invalid pallet::inherent, expected trait ProvideInherent";
 				return Err(syn::Error::new(last.span(), msg));
 			}
 		} else {
-			let msg = "Invalid pallet::inherent, expect impl<..> ProvideInherent for Pallet<..>";
+			let msg = "Invalid pallet::inherent, expected impl<..> ProvideInherent for Pallet<..>";
 			return Err(syn::Error::new(item.span(), msg));
 		}
 

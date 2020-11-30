@@ -41,7 +41,7 @@ impl OriginDef {
 			syn::Item::Struct(item) => (&item.vis, &item.ident, &item.generics),
 			syn::Item::Type(item) => (&item.vis, &item.ident, &item.generics),
 			_ => {
-				let msg = "Invalid pallet::origin, expect enum or struct or type";
+				let msg = "Invalid pallet::origin, expected enum or struct or type";
 				return Err(syn::Error::new(item.span(), msg));
 			},
 		};

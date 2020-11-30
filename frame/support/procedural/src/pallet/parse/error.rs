@@ -42,7 +42,7 @@ impl ErrorDef {
 		let item = if let syn::Item::Enum(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::error, expect item enum"));
+			return Err(syn::Error::new(item.span(), "Invalid pallet::error, expected item enum"));
 		};
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::error, `Error` must be public";

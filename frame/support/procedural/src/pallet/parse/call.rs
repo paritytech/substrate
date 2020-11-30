@@ -47,7 +47,7 @@ pub struct CallDef {
 /// Definition of dispatchable typically: `#[weight...] fn foo(origin .., param1: ...) -> ..`
 pub struct CallVariantDef {
 	/// Function name.
-	pub fn_: syn::Ident,
+	pub name: syn::Ident,
 	/// Information on args: `(is_compact, name, type)`
 	pub args: Vec<(bool, syn::Ident, Box<syn::Type>)>,
 	/// Weight formula.
@@ -98,7 +98,6 @@ impl syn::parse::Parse for ArgAttrIsCompact {
 
 /// Check the syntax is `OriginFor<T>`
 pub fn check_dispatchable_first_arg_type(ty: &syn::Type) -> syn::Result<()> {
-	let expected = "expect `OriginFor<T>`";
 
 	pub struct CheckDispatchableFirstArg;
 	impl syn::parse::Parse for CheckDispatchableFirstArg {
@@ -114,7 +113,7 @@ pub fn check_dispatchable_first_arg_type(ty: &syn::Type) -> syn::Result<()> {
 
 	syn::parse2::<CheckDispatchableFirstArg>(ty.to_token_stream())
 		.map_err(|e| {
-			let msg = format!("Invalid type: {}", expected);
+			let msg = "Invalid type: expected `OriginFor<T>`";
 			let mut err = syn::Error::new(ty.span(), msg);
 			err.combine(e);
 			err
@@ -133,7 +132,7 @@ impl CallDef {
 		let item = if let syn::Item::Impl(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expect item impl"));
+			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expected item impl"));
 		};
 
 		let mut instances = vec![];
@@ -141,7 +140,7 @@ impl CallDef {
 		instances.push(helper::check_pallet_struct_usage(&item.self_ty)?);
 
 		if let Some((_, _, for_)) = item.trait_ {
-			let msg = "Invalid pallet::call, expect no trait ident as in \
+			let msg = "Invalid pallet::call, expected no trait ident as in \
 				`impl<..> Pallet<..> { .. }`";
 			return Err(syn::Error::new(for_.span(), msg))
 		}
@@ -214,7 +213,7 @@ impl CallDef {
 				let docs = helper::get_doc_literals(&method.attrs);
 
 				methods.push(CallVariantDef {
-					fn_: method.sig.ident.clone(),
+					name: method.sig.ident.clone(),
 					weight,
 					args,
 					docs,

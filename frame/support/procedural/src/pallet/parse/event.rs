@@ -184,7 +184,7 @@ impl EventDef {
 		let item = if let syn::Item::Enum(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::event, expect item enum"))
+			return Err(syn::Error::new(item.span(), "Invalid pallet::event, expected item enum"))
 		};
 
 		let event_attrs: Vec<PalletEventAttr> = helper::take_item_attrs(&mut item.attrs)?;
