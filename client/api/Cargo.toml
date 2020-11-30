@@ -46,3 +46,4 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.
 kvdb-memorydb = "0.7.0"
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime"  }
+thiserror = "1.0.21"

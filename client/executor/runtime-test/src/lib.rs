@@ -261,6 +261,17 @@ sp_core::wasm_export_functions! {
 		wasm_tracing::exit(span_id)
 	}
 
+	fn test_nested_spans() {
+		sp_io::init_tracing();
+		let span_id = wasm_tracing::enter_span(Default::default());
+		{
+			sp_io::init_tracing();
+			let span_id = wasm_tracing::enter_span(Default::default());
+			wasm_tracing::exit(span_id);
+		}
+		wasm_tracing::exit(span_id);
+	}
+
 	fn returns_mutable_static() -> u64 {
 		unsafe {
 			MUTABLE_STATIC += 1;
