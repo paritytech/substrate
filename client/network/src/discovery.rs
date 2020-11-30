@@ -736,8 +736,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							handler,
 							event: (pid.clone(), event)
 						}),
-					NetworkBehaviourAction::ReportObservedAddr { address } =>
-						return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+					NetworkBehaviourAction::ReportObservedAddr { address, score } =>
+						return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
 				}
 			}
 		}
@@ -767,8 +767,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
 				NetworkBehaviourAction::NotifyHandler { event, .. } =>
 					match event {},		// `event` is an enum with no variant
-				NetworkBehaviourAction::ReportObservedAddr { address } =>
-					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+				NetworkBehaviourAction::ReportObservedAddr { address, score } =>
+					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
 			}
 		}
 
