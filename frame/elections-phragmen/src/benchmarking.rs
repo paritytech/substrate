@@ -446,11 +446,19 @@ benchmarks! {
 		// that we give all candidates a self vote to make sure they are all considered.
 		let c in 1 .. MAX_CANDIDATES;
 		let v in 1 .. MAX_VOTERS;
-		let e in MAX_VOTERS .. (MAX_VOTERS * MAXIMUM_VOTE as u32);
+		let e in MAX_VOTERS .. MAX_VOTERS * MAXIMUM_VOTE as u32;
 		clean::<T>();
 
+		// so we have a situation with v and e. we want e to basically always be in the range of `e
+		// -> e * MAXIMUM_VOTE`, but we cannot express that now with the benchmarks. So what we do
+		// is: when c is being iterated, v, and e are max and fine. when v is being iterated, e is
+		// being set to max and this is a problem. In these cases, we cap e to a lower value, namely
+		// v * MAXIMUM_VOTE. when e is being iterated, v is at max, and again fine.
+		// all in all, votes_per_voter can never be more than MAXIMUM_VOTE.
+		let votes_per_voter = (e / v).min(MAXIMUM_VOTE as u32);
+
 		let all_candidates = submit_candidates_with_self_vote::<T>(c, "candidates")?;
-		let _ = distribute_voters::<T>(all_candidates, v, (e / MAX_VOTERS) as usize)?;
+		let _ = distribute_voters::<T>(all_candidates, v, votes_per_voter as usize)?;
 	}: {
 		<Elections<T>>::on_initialize(T::TermDuration::get());
 	}
@@ -535,7 +543,14 @@ mod tests {
 		});
 
 		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
-			assert_ok!(test_benchmark_election_phragmen::<Test>());
+			let result = test_benchmark_election_phragmen::<Test>();
+			let is_ok = result.is_ok();
+			let is_expected_error = std::matches!(
+				result,
+				Err("in the test setup, we only want to run for component `v` when it is max. This error message is expected.")
+			);
+			assert!(is_ok || is_expected_error);
+
 		});
 	}
 }
