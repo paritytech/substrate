@@ -761,7 +761,10 @@ impl RequestResponseCodec for GenericCodec {
 
 #[cfg(test)]
 mod tests {
-	use futures::{channel::{mpsc, oneshot}, prelude::*};
+	use futures::channel::{mpsc, oneshot};
+	use futures::executor::LocalPool;
+	use futures::prelude::*;
+	use futures::task::Spawn;
 	use libp2p::identity::Keypair;
 	use libp2p::Multiaddr;
 	use libp2p::core::upgrade;
@@ -773,6 +776,7 @@ mod tests {
 	#[test]
 	fn basic_request_response_works() {
 		let protocol_name = "/test/req-resp/1";
+		let mut pool = LocalPool::new();
 
 		// Build swarms whose behaviour is `RequestResponsesBehaviour`.
 		let mut swarms = (0..2)
@@ -800,12 +804,12 @@ mod tests {
 						inbound_queue: Some(tx),
 					})).unwrap();
 
-					async_std::task::spawn(async move {
+					pool.spawner().spawn_obj(async move {
 						while let Some(rq) = rx.next().await {
 							assert_eq!(rq.payload, b"this is a request");
 							let _ = rq.pending_response.send(b"this is a response".to_vec());
 						}
-					});
+					}.boxed().into()).unwrap();
 
 					b
 				};
@@ -825,26 +829,24 @@ mod tests {
 			Swarm::dial_addr(&mut swarms[0].0, dial_addr).unwrap();
 		}
 
-		// Running `swarm[0]` in the background until a `InboundRequest` event happens,
-		// which is a hint about the test having ended.
-		async_std::task::spawn({
+		// Running `swarm[0]` in the background.
+		pool.spawner().spawn_obj({
 			let (mut swarm, _) = swarms.remove(0);
 			async move {
 				loop {
 					match swarm.next_event().await {
 						SwarmEvent::Behaviour(super::Event::InboundRequest { result, .. }) => {
-							assert!(result.is_ok());
-							break
+							result.unwrap();
 						},
 						_ => {}
 					}
 				}
-			}
-		});
+			}.boxed().into()
+		}).unwrap();
 
 		// Remove and run the remaining swarm.
 		let (mut swarm, _) = swarms.remove(0);
-		async_std::task::block_on(async move {
+		pool.run_until(async move {
 			let mut response_receiver = None;
 
 			loop {
@@ -863,7 +865,7 @@ mod tests {
 					SwarmEvent::Behaviour(super::Event::RequestFinished {
 						result, ..
 					}) => {
-						assert!(result.is_ok());
+						result.unwrap();
 						break;
 					}
 					_ => {}
@@ -877,6 +879,7 @@ mod tests {
 	#[test]
 	fn max_response_size_exceeded() {
 		let protocol_name = "/test/req-resp/1";
+		let mut pool = LocalPool::new();
 
 		// Build swarms whose behaviour is `RequestResponsesBehaviour`.
 		let mut swarms = (0..2)
@@ -904,12 +907,12 @@ mod tests {
 						inbound_queue: Some(tx),
 					})).unwrap();
 
-					async_std::task::spawn(async move {
+					pool.spawner().spawn_obj(async move {
 						while let Some(rq) = rx.next().await {
 							assert_eq!(rq.payload, b"this is a request");
 							let _ = rq.pending_response.send(b"this response exceeds the limit".to_vec());
 						}
-					});
+					}.boxed().into()).unwrap();
 
 					b
 				};
@@ -931,7 +934,7 @@ mod tests {
 
 		// Running `swarm[0]` in the background until a `InboundRequest` event happens,
 		// which is a hint about the test having ended.
-		async_std::task::spawn({
+		pool.spawner().spawn_obj({
 			let (mut swarm, _) = swarms.remove(0);
 			async move {
 				loop {
@@ -943,12 +946,12 @@ mod tests {
 						_ => {}
 					}
 				}
-			}
-		});
+			}.boxed().into()
+		}).unwrap();
 
 		// Remove and run the remaining swarm.
 		let (mut swarm, _) = swarms.remove(0);
-		async_std::task::block_on(async move {
+		pool.run_until(async move {
 			let mut response_receiver = None;
 
 			loop {
@@ -973,8 +976,6 @@ mod tests {
 					_ => {}
 				}
 			}
-
-			;
 
 			match response_receiver.unwrap().await.unwrap().unwrap_err() {
 				super::RequestFailure::Network(super::OutboundFailure::ConnectionClosed) => {},
