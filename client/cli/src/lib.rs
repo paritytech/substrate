@@ -252,11 +252,11 @@ pub fn init_logger(
 	use sc_tracing::parse_default_directive;
 
 	// Accept all valid directives and print invalid ones
-	fn parse_user_directives(mut env_filter: EnvFilter, dirs: &str) -> EnvFilter {
+	fn add_directives_and_print_invalid(mut env_filter: EnvFilter, dirs: &str) -> EnvFilter {
 		for dir in dirs.split(',') {
 			match parse_default_directive(&dir) {
 				Ok(d) => env_filter = env_filter.add_directive(d),
-				Err(e) => eprintln!("Supplied log directive is not valid: {}", e),
+				Err(e) => eprintln!("{}", e),
 			}
 		}
 		env_filter
@@ -289,14 +289,14 @@ pub fn init_logger(
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
-			env_filter = parse_user_directives(env_filter, &lvl);
+			env_filter = add_directives_and_print_invalid(env_filter, &lvl);
 		}
 	}
 
 	if pattern != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
 		// parse error.
-		env_filter = parse_user_directives(env_filter, pattern);
+		env_filter = add_directives_and_print_invalid(env_filter, pattern);
 	}
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
@@ -315,7 +315,7 @@ pub fn init_logger(
 
 	// Make sure to include profiling targets in the filter
 	if let Some(profiling_targets) = profiling_targets.clone() {
-		env_filter = parse_user_directives(env_filter, &profiling_targets);
+		env_filter = add_directives_and_print_invalid(env_filter, &profiling_targets);
 	}
 
 	let enable_color = atty::is(atty::Stream::Stderr);
