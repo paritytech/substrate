@@ -741,7 +741,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 				match &mut self.state {
 					State::Open { .. } => {
-						let pending_opening = out_substreams.iter().map(|_| false).collect();
+						let pending_opening = self.out_protocols.iter().map(|_| false).collect();
 						self.state = State::Closed {
 							pending_opening,
 						};
