@@ -555,7 +555,7 @@ mod tests {
 				libp2p::PeerId::random(),
 				hash,
 				1,
-				Vec::new(),
+				sp_runtime::Justifications(Vec::new()),
 			)))
 			.unwrap();
 

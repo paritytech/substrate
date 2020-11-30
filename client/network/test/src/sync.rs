@@ -22,6 +22,7 @@ use futures::{Future, executor::block_on};
 use super::*;
 use sp_consensus::block_validation::Validation;
 use substrate_test_runtime::Header;
+use sp_runtime::Justifications;
 
 fn test_ancestor_search_when_common_is(n: usize) {
 	sp_tracing::try_init_simple();
@@ -252,9 +253,9 @@ fn sync_justifications() {
 	assert_eq!(net.peer(1).client().justification(&BlockId::Number(10)).unwrap(), None);
 
 	// we finalize block #10, #15 and #20 for peer 0 with a justification
-	net.peer(0).client().finalize_block(BlockId::Number(10), Some(Vec::new()), true).unwrap();
-	net.peer(0).client().finalize_block(BlockId::Number(15), Some(Vec::new()), true).unwrap();
-	net.peer(0).client().finalize_block(BlockId::Number(20), Some(Vec::new()), true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Number(10), Some(Justifications(Vec::new())), true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Number(15), Some(Justifications(Vec::new())), true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Number(20), Some(Justifications(Vec::new())), true).unwrap();
 
 	let h1 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
 	let h2 = net.peer(1).client().header(&BlockId::Number(15)).unwrap().unwrap();
@@ -269,10 +270,10 @@ fn sync_justifications() {
 		net.poll(cx);
 
 		for height in (10..21).step_by(5) {
-			if net.peer(0).client().justification(&BlockId::Number(height)).unwrap() != Some(Vec::new()) {
+			if net.peer(0).client().justification(&BlockId::Number(height)).unwrap() != Some(Justifications(Vec::new())) {
 				return Poll::Pending;
 			}
-			if net.peer(1).client().justification(&BlockId::Number(height)).unwrap() != Some(Vec::new()) {
+			if net.peer(1).client().justification(&BlockId::Number(height)).unwrap() != Some(Justifications(Vec::new())) {
 				return Poll::Pending;
 			}
 		}
@@ -295,7 +296,7 @@ fn sync_justifications_across_forks() {
 	// for both and finalize the small fork instead.
 	net.block_until_sync();
 
-	net.peer(0).client().finalize_block(BlockId::Hash(f1_best), Some(Vec::new()), true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Hash(f1_best), Some(Justifications(Vec::new())), true).unwrap();
 
 	net.peer(1).request_justification(&f1_best, 10);
 	net.peer(1).request_justification(&f2_best, 11);
@@ -303,8 +304,8 @@ fn sync_justifications_across_forks() {
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		if net.peer(0).client().justification(&BlockId::Number(10)).unwrap() == Some(Vec::new()) &&
-			net.peer(1).client().justification(&BlockId::Number(10)).unwrap() == Some(Vec::new())
+		if net.peer(0).client().justification(&BlockId::Number(10)).unwrap() == Some(Justifications(Vec::new())) &&
+			net.peer(1).client().justification(&BlockId::Number(10)).unwrap() == Some(Justifications(Vec::new()))
 		{
 			Poll::Ready(())
 		} else {
@@ -696,8 +697,9 @@ fn can_sync_to_peers_with_wrong_common_block() {
 	net.block_until_connected();
 
 	// both peers re-org to the same fork without notifying each other
-	net.peer(0).client().finalize_block(BlockId::Hash(fork_hash), Some(Vec::new()), true).unwrap();
-	net.peer(1).client().finalize_block(BlockId::Hash(fork_hash), Some(Vec::new()), true).unwrap();
+	let just = Some(Justifications(Vec::new()));
+	net.peer(0).client().finalize_block(BlockId::Hash(fork_hash), just.clone(), true).unwrap();
+	net.peer(1).client().finalize_block(BlockId::Hash(fork_hash), just, true).unwrap();
 	let final_hash = net.peer(0).push_blocks(1, false);
 
 	net.block_until_sync();

@@ -1779,6 +1779,7 @@ pub(crate) mod tests {
 	use sp_runtime::generic::DigestItem;
 	use sp_state_machine::{TrieMut, TrieDBMut};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
+	use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 
 	pub(crate) type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
@@ -2354,7 +2355,7 @@ pub(crate) mod tests {
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 		let _ = insert_header(&backend, 1, block0, None, Default::default());
 
-		let justification = Some(vec![(sp_finality_grandpa::GRANDPA_ENGINE_ID, vec![1, 2, 3])]);
+		let justification = Some(Justifications(vec![(GRANDPA_ENGINE_ID, vec![1, 2, 3])]));
 		backend.finalize_block(BlockId::Number(1), justification.clone()).unwrap();
 
 		assert_eq!(

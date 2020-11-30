@@ -1289,7 +1289,7 @@ where
 
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
-		let justification = justification.map(|j| vec![(GRANDPA_ENGINE_ID, j.clone())]);
+		let justification = justification.map(|j| sp_runtime::Justifications(vec![(GRANDPA_ENGINE_ID, j.clone())]));
 		client
 			.apply_finality(import_op, BlockId::Hash(hash), justification, true)
 			.map_err(|e| {

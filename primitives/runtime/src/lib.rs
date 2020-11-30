@@ -97,8 +97,9 @@ pub use either::Either;
 /// bypasses this problem.
 pub type EncodedJustification = Vec<u8>;
 /// Collection of Justifications, since we might have more than one stored per block.
-// WIP(JON): Consider making `Justifications` strongly typed.
-pub type Justifications = Vec<(ConsensusEngineId, EncodedJustification)>;
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct Justifications(pub Vec<(ConsensusEngineId, EncodedJustification)>);
 
 use traits::{Verify, Lazy};
 

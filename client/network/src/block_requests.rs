@@ -406,7 +406,7 @@ where
 			} else {
 				None
 			};
-			let is_empty_justification = justification.as_ref().map(|j| j.is_empty()).unwrap_or(false);
+			let is_empty_justification = justification.as_ref().map(|j| j.0.is_empty()).unwrap_or(false);
 
 			let body = if get_body {
 				match self.chain.block_body(&BlockId::Hash(hash))? {
@@ -423,8 +423,9 @@ where
 			};
 
 			// WIP(JON): Need to encode the whole set of Justifications
-			let a = justification.unwrap_or_default();
+			let a = justification.unwrap_or(sp_runtime::Justifications(Vec::new()));
 			let justification = a
+				.0
 				.first()
 				.map(|y| y.1.clone());
 
@@ -659,10 +660,10 @@ where
 							// let id = sp_finality_grandpa::GRANDPA_ENGINE_ID;
 							const GRANDPA_ENGINE_ID: [u8; 4] = *b"FRNK";
 							let just = vec![(GRANDPA_ENGINE_ID, block_data.justification)];
-							Some(just)
+							Some(sp_runtime::Justifications(just))
 							// Some(block_data.justification)
 						} else if block_data.is_empty_justification {
-							Some(Vec::new())
+							Some(sp_runtime::Justifications(Vec::new()))
 						} else {
 							None
 						},

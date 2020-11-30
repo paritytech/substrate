@@ -40,7 +40,7 @@ use sp_consensus::{
 };
 use std::{collections::{HashMap, HashSet}, pin::Pin};
 use parity_scale_codec::Decode;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
+use sp_runtime::{Justifications, traits::{Block as BlockT, Header as HeaderT, HashFor}};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::H256;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
@@ -909,7 +909,7 @@ fn test_bad_justification() {
 	let block = || {
 		let block = block.clone();
 		let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
-		import.justification = Some(Vec::new());
+		import.justification = Some(Justifications(Vec::new()));
 		import.body = Some(block.extrinsics);
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
@@ -1625,7 +1625,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 
 	// we import the block with justification attached
 	let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
-	import.justification = Some(vec![(GRANDPA_ENGINE_ID, justification.encode())]);
+	import.justification = Some(Justifications(vec![(GRANDPA_ENGINE_ID, justification.encode())]));
 	import.body = Some(block.extrinsics);
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 

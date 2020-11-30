@@ -30,6 +30,7 @@ use std::sync::Arc;
 use sp_runtime::{
 	traits::{BlakeTwo256, HashFor, NumberFor},
 	generic::BlockId, traits::{Block as _, Header as HeaderT}, Digest,
+	Justifications,
 };
 use std::collections::HashMap;
 use parking_lot::Mutex;
@@ -378,7 +379,7 @@ fn execution_proof_is_generated_and_checked() {
 		remote_client.import_justified(
 			BlockOrigin::Own,
 			remote_client.new_block(digest).unwrap().build().unwrap().block,
-			Default::default(),
+			Justifications(Default::default()),
 		).unwrap();
 	}
 

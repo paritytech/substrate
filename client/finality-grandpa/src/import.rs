@@ -620,7 +620,7 @@ where
 		initial_sync: bool,
 	) -> Result<(), ConsensusError> {
 		let grandpa_justification =
-			match justification.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
+			match justification.0.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
 				Some((_, grandpa_justification)) => grandpa_justification,
 				None => {
 					return Err(ConsensusError::ClientImport(

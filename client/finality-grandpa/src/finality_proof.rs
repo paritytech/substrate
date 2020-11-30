@@ -335,7 +335,7 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 		}
 
 		if let Some(justification) = blockchain.justification(current_id)? {
-			if let Some((_, grandpa_justification)) = justification.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
+			if let Some((_, grandpa_justification)) = justification.0.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
 				// check if the current block enacts new GRANDPA authorities set
 				let new_authorities = authorities_provider.authorities(&current_id)?;
 				let new_authorities_proof = if current_authorities != new_authorities {
@@ -594,6 +594,7 @@ pub(crate) mod tests {
 	use sc_client_api::in_mem::Blockchain as InMemoryBlockchain;
 	use super::*;
 	use sp_core::crypto::Public;
+	use sp_runtime::Justifications;
 
 	pub(crate) type FinalityProof = super::FinalityProof<Header>;
 
@@ -671,10 +672,14 @@ pub(crate) mod tests {
 	fn test_blockchain() -> InMemoryBlockchain<Block> {
 		use sp_finality_grandpa::GRANDPA_ENGINE_ID as ID;
 		let blockchain = InMemoryBlockchain::<Block>::new();
-		blockchain.insert(header(0).hash(), header(0), Some(vec![(ID, vec![0])]), None, NewBlockState::Final).unwrap();
-		blockchain.insert(header(1).hash(), header(1), Some(vec![(ID, vec![1])]), None, NewBlockState::Final).unwrap();
-		blockchain.insert(header(2).hash(), header(2), None, None, NewBlockState::Best).unwrap();
-		blockchain.insert(header(3).hash(), header(3), Some(vec![(ID, vec![3])]), None, NewBlockState::Final).unwrap();
+		let just0 = Some(Justifications(vec![(ID, vec![0])]));
+		let just1 = Some(Justifications(vec![(ID, vec![1])]));
+		let just2 = None;
+		let just3 = Some(Justifications(vec![(ID, vec![3])]));
+		blockchain.insert(header(0).hash(), header(0), just0, None, NewBlockState::Final).unwrap();
+		blockchain.insert(header(1).hash(), header(1), just1, None, NewBlockState::Final).unwrap();
+		blockchain.insert(header(2).hash(), header(2), just2, None, NewBlockState::Best).unwrap();
+		blockchain.insert(header(3).hash(), header(3), just3, None, NewBlockState::Final).unwrap();
 		blockchain
 	}
 
@@ -726,7 +731,8 @@ pub(crate) mod tests {
 		blockchain.insert(side_header(4).hash(), side_header(4), None, None, NewBlockState::Best).unwrap();
 		blockchain.insert(second_side_header(5).hash(), second_side_header(5), None, None, NewBlockState::Best)
 			.unwrap();
-		blockchain.insert(header(5).hash(), header(5), Some(vec![(ID, vec![5])]), None, NewBlockState::Final).unwrap();
+		let just = Some(Justifications(vec![(ID, vec![5])]));
+		blockchain.insert(header(5).hash(), header(5), just, None, NewBlockState::Final).unwrap();
 
 		// chain is 1 -> 2 -> 3 -> 4 -> 5
 		//                      \> 4' -> 5'
@@ -769,10 +775,12 @@ pub(crate) mod tests {
 		use sp_finality_grandpa::GRANDPA_ENGINE_ID as ID;
 		let blockchain = test_blockchain();
 		let authorities = vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)];
-		let just4 = TestJustification((0, authorities.clone()), vec![4]).encode();
-		let just5 = TestJustification((0, authorities.clone()), vec![5]).encode();
-		blockchain.insert(header(4).hash(), header(4), Some(vec![(ID, just4)]), None, NewBlockState::Final).unwrap();
-		blockchain.insert(header(5).hash(), header(5), Some(vec![(ID, just5.clone())]), None, NewBlockState::Final).unwrap();
+		let just4_grandpa = TestJustification((0, authorities.clone()), vec![4]).encode();
+		let just4 = Justifications(vec![(ID, just4_grandpa)]);
+		let just5_grandpa = TestJustification((0, authorities.clone()), vec![5]).encode();
+		let just5 = Justifications(vec![(ID, just5_grandpa.clone())]);
+		blockchain.insert(header(4).hash(), header(4), Some(just4), None, NewBlockState::Final).unwrap();
+		blockchain.insert(header(5).hash(), header(5), Some(just5), None, NewBlockState::Final).unwrap();
 
 		// blocks 4 && 5 are finalized with justification
 		// => since authorities are the same, we only need justification for 5
@@ -788,7 +796,7 @@ pub(crate) mod tests {
 		).unwrap().unwrap()[..]).unwrap();
 		assert_eq!(proof_of_5, vec![FinalityProofFragment {
 			block: header(5).hash(),
-			justification: just5,
+			justification: just5_grandpa,
 			unknown_headers: Vec::new(),
 			authorities_proof: None,
 		}]);
@@ -798,7 +806,7 @@ pub(crate) mod tests {
 	fn finality_proof_finalized_earlier_block_if_no_justification_for_target_is_known() {
 		use sp_finality_grandpa::GRANDPA_ENGINE_ID as ID;
 		let blockchain = test_blockchain();
-		blockchain.insert(header(4).hash(), header(4), Some(vec![(ID, vec![4])]), None, NewBlockState::Final).unwrap();
+		blockchain.insert(header(4).hash(), header(4), Some(Justifications(vec![(ID, vec![4])])), None, NewBlockState::Final).unwrap();
 		blockchain.insert(header(5).hash(), header(5), None, None, NewBlockState::Final).unwrap();
 
 		// block 4 is finalized with justification + we request for finality of 5
@@ -828,13 +836,16 @@ pub(crate) mod tests {
 		let auth3 = vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)];
 		let auth5 = vec![(AuthorityId::from_slice(&[5u8; 32]), 1u64)];
 		let auth7 = vec![(AuthorityId::from_slice(&[7u8; 32]), 1u64)];
-		let just4 = TestJustification((0, auth3.clone()), vec![4]).encode();
-		let just5 = TestJustification((0, auth3.clone()), vec![5]).encode();
-		let just7 = TestJustification((1, auth5.clone()), vec![7]).encode();
-		blockchain.insert(header(4).hash(), header(4), Some(vec![(ID, just4)]), None, NewBlockState::Final).unwrap();
-		blockchain.insert(header(5).hash(), header(5), Some(vec![(ID, just5.clone())]), None, NewBlockState::Final).unwrap();
+		let just4_grandpa = TestJustification((0, auth3.clone()), vec![4]).encode();
+		let just4 = Some(Justifications(vec![(ID, just4_grandpa)]));
+		let just5_grandpa = TestJustification((0, auth3.clone()), vec![5]).encode();
+		let just5 = Some(Justifications(vec![(ID, just5_grandpa.clone())]));
+		let just7_grandpa = TestJustification((1, auth5.clone()), vec![7]).encode();
+		let just7 = Some(Justifications(vec![(ID, just7_grandpa.clone())]));
+		blockchain.insert(header(4).hash(), header(4), just4, None, NewBlockState::Final).unwrap();
+		blockchain.insert(header(5).hash(), header(5), just5.clone(), None, NewBlockState::Final).unwrap();
 		blockchain.insert(header(6).hash(), header(6), None, None, NewBlockState::Final).unwrap();
-		blockchain.insert(header(7).hash(), header(7), Some(vec![(ID, just7.clone())]), None, NewBlockState::Final).unwrap();
+		blockchain.insert(header(7).hash(), header(7), just7, None, NewBlockState::Final).unwrap();
 
 		// when querying for finality of 6, we assume that the #3 is the last block known to the requester
 		// => since we only have justification for #7, we provide #7
@@ -864,14 +875,14 @@ pub(crate) mod tests {
 			// first fragment provides justification for #5 && authorities set that starts acting from #5
 			FinalityProofFragment {
 				block: header(5).hash(),
-				justification: just5,
+				justification: just5_grandpa,
 				unknown_headers: Vec::new(),
 				authorities_proof: Some(StorageProof::new(vec![vec![50]])),
 			},
 			// last fragment provides justification for #7 && unknown#7
 			FinalityProofFragment {
 				block: header(7).hash(),
-				justification: just7.clone(),
+				justification: just7_grandpa.clone(),
 				unknown_headers: vec![header(7)],
 				authorities_proof: Some(StorageProof::new(vec![vec![70]])),
 			},
@@ -1024,7 +1035,8 @@ pub(crate) mod tests {
 		// finality proof at all
 		let blockchain = test_blockchain();
 		let just4 = TestJustification((0, vec![(AuthorityId::from_slice(&[42u8; 32]), 1u64)]), vec![4]).encode();
-		blockchain.insert(header(4).hash(), header(4), Some(vec![(ID, just4)]), None, NewBlockState::Final).unwrap();
+		let just4 = Some(Justifications(vec![(ID, just4)]));
+		blockchain.insert(header(4).hash(), header(4), just4, None, NewBlockState::Final).unwrap();
 
 		let proof_of_4 = prove_finality::<_, _, TestJustification>(
 			&blockchain,
