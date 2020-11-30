@@ -78,7 +78,7 @@ pub enum Error {
 	#[error("Other: {0}")]
 	Other(String),
 	/// Some error occurred in the allocator
-	#[error("Allocation Error")]
+	#[error(transparent)]
 	Allocator(#[from] sp_allocator::Error),
 	/// Execution of a host function failed.
 	#[error("Host function {0} execution failed with: {1}")]
