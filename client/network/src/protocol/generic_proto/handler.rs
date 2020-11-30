@@ -165,7 +165,7 @@ enum State {
 		pending_opening: Vec<bool>,
 
 		/// When the `Closed` state was entered.
-		when_closed: Instant,
+		closed_at: Instant,
 	},
 
 	/// Handler is in the "Closed" state. A [`NotifsHandlerOut::OpenDesiredByRemote`] has been emitted.
@@ -271,7 +271,7 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 			peer_id: peer_id.clone(),
 			endpoint: connected_point.clone(),
 			state: State::Closed {
-				when_closed: Instant::now(),
+				closed_at: Instant::now(),
 				pending_opening: (0..num_out_proto).map(|_| false).collect(),
 			},
 			legacy_protocol: self.legacy_protocol,
@@ -742,14 +742,14 @@ impl ProtocolsHandler for NotifsHandler {
 					State::Open { .. } => {
 						let pending_opening = self.out_protocols.iter().map(|_| false).collect();
 						self.state = State::Closed {
-							when_closed: Instant::now(),
+							closed_at: Instant::now(),
 							pending_opening,
 						};
 					},
 					State::Opening { out_substreams, .. } => {
 						let pending_opening = out_substreams.iter().map(|s| s.is_none()).collect();
 						self.state = State::Closed {
-							when_closed: Instant::now(),
+							closed_at: Instant::now(),
 							pending_opening,
 						};
 
@@ -759,7 +759,7 @@ impl ProtocolsHandler for NotifsHandler {
 					},
 					State::OpenDesiredByRemote { pending_opening, .. } => {
 						self.state = State::Closed {
-							when_closed: Instant::now(),
+							closed_at: Instant::now(),
 							pending_opening: mem::replace(pending_opening, Vec::new()),
 						};
 					}
@@ -834,7 +834,7 @@ impl ProtocolsHandler for NotifsHandler {
 					// Open failure!
 					self.state = State::Closed {
 						pending_opening: (0..self.out_protocols.len()).map(|_| false).collect(),
-						when_closed: Instant::now(),
+						closed_at: Instant::now(),
 					};
 
 					self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
@@ -854,7 +854,7 @@ impl ProtocolsHandler for NotifsHandler {
 		}
 
 		match self.state {
-			State::Closed { when_closed, .. } => KeepAlive::Until(when_closed + KEEPALIVE_TOLERANCE),
+			State::Closed { closed_at, .. } => KeepAlive::Until(closed_at + KEEPALIVE_TOLERANCE),
 			State::OpenDesiredByRemote { .. } | State::Opening { .. } | State::Open { .. } =>
 				KeepAlive::Yes,
 		}
@@ -910,7 +910,7 @@ impl ProtocolsHandler for NotifsHandler {
 			if !in_substreams.iter().any(|s| s.is_some()) {
 				self.state = State::Closed {
 					pending_opening: mem::replace(pending_opening, Vec::new()),
-					when_closed: Instant::now(),
+					closed_at: Instant::now(),
 				};
 				return Poll::Ready(ProtocolsHandlerEvent::Custom(
 					NotifsHandlerOut::CloseDesired
