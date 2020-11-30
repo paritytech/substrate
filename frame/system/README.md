@@ -3,7 +3,7 @@
 The System module provides low-level access to core types and cross-cutting utilities.
 It acts as the base layer for other pallets to interact with the Substrate framework components.
 
-- [`system::Trait`](https://docs.rs/frame-system/latest/frame_system/trait.Trait.html)
+- [`system::Config`](https://docs.rs/frame-system/latest/frame_system/trait.Config.html)
 
 ## Overview
 
@@ -57,10 +57,10 @@ Import the System module and derive your module's configuration trait from the s
 use frame_support::{decl_module, dispatch};
 use frame_system::{self as system, ensure_signed};
 
-pub trait Trait: system::Trait {}
+pub trait Config: system::Config {}
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		#[weight = 0]
 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 			let _sender = ensure_signed(origin)?;
