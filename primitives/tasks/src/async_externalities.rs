@@ -413,7 +413,7 @@ impl Externalities for AsyncExternalities {
 		unimplemented!("Transactions are not supported by AsyncExternalities");
 	}
 
-	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
+	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
 		unimplemented!("Transactions are not supported by AsyncExternalities");
 	}
 

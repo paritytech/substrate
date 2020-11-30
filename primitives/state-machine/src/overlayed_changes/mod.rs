@@ -151,20 +151,6 @@ impl Markers {
 		if let Some(markers) = self.transactions.pop() {
 			for marker in markers.iter() {
 				self.markers.remove(marker);
-				// TODO using sp_task::kill is actually impossible,
-				// since state_machine did alread  borrowmut externalitise
-				// and kill will do the same.
-				// Thread kill directly could be done, but not for inline.
-				// Therefore we will need to move this Marker struct
-				// to externality extension and call when externality did
-				// call it -> TODO move Markers to the RuntimeSpawn and
-				// put on_start_tx ... for it.
-				// -> allowing early kill.
-				// For inline this would simply change state of stored
-				// online.
-				// Actually this only need to be done this call.
-				unimplemented!("TODO sp_task::kill all ids");
-				// Or do it from calle
 			}
 			markers
 		} else {
@@ -174,24 +160,9 @@ impl Markers {
 
 	#[must_use]
 	fn commit_transaction(&mut self) -> Vec<TaskId> {
-		// TODO factor code with rollback
 		if let Some(markers) = self.transactions.pop() {
 			for marker in markers.iter() {
 				self.markers.remove(marker);
-				// TODO using sp_task::kill is actually impossible,
-				// since state_machine did alread  borrowmut externalitise
-				// and kill will do the same.
-				// Thread kill directly could be done, but not for inline.
-				// Therefore we will need to move this Marker struct
-				// to externality extension and call when externality did
-				// call it -> TODO move Markers to the RuntimeSpawn and
-				// put on_start_tx ... for it.
-				// -> allowing early kill.
-				// For inline this would simply change state of stored
-				// online.
-				// Actually this only need to be done this call.
-				unimplemented!("TODO sp_task::kill all ids");
-				// Or do it from calle
 			}
 			markers
 		} else {
@@ -534,6 +505,7 @@ impl OverlayedChanges {
 	///
 	/// Any changes made during that transaction are discarded. Returns an error if
 	/// there is no open transaction that can be rolled back.
+	#[must_use]
 	pub fn rollback_transaction(&mut self) -> Result<Vec<TaskId>, NoOpenTransaction> {
 		let to_kill = self.markers.rollback_transaction();
 		self.top.rollback_transaction()?;
@@ -549,14 +521,15 @@ impl OverlayedChanges {
 	///
 	/// Any changes made during that transaction are committed. Returns an error if there
 	/// is no open transaction that can be committed.
-	pub fn commit_transaction(&mut self) -> Result<(), NoOpenTransaction> {
-		self.markers.commit_transaction();
+	#[must_use]
+	pub fn commit_transaction(&mut self) -> Result<Vec<TaskId>, NoOpenTransaction> {
+		let to_kill = self.markers.commit_transaction();
 		self.top.commit_transaction()?;
 		for (_, (changeset, _)) in self.children.iter_mut() {
 			changeset.commit_transaction()
 				.expect("Top and children changesets are started in lockstep; qed");
 		}
-		Ok(())
+		Ok(to_kill)
 	}
 
 	/// Call this before transfering control to the runtime.

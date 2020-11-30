@@ -213,7 +213,7 @@ pub trait Externalities: ExtensionStore {
 	/// Any changes made during that storage transaction are discarded. Returns an error when
 	/// no transaction is open that can be closed.
 	///
-	/// Return possible task id of task that will not be in synch with the thread to allow
+	/// Return possible task ids of tasks that will not be in synch with the thread to allow
 	/// early kill.
 	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()>;
 
@@ -221,7 +221,10 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Any changes made during that storage transaction are committed. Returns an error when
 	/// no transaction is open that can be closed.
-	fn storage_commit_transaction(&mut self) -> Result<(), ()>;
+	///
+	/// Return possible task ids of tasks that will not be in synch with the thread to allow
+	/// early kill.
+	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()>;
 
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	/// Benchmarking related functionality and shouldn't be used anywhere else!

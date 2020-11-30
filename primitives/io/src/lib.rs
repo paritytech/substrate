@@ -197,8 +197,8 @@ pub trait Storage {
 					runtime_spawn.kill(task, ext_unsafe)
 				}
 			}
+			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 		}
-		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 	}
 
 	/// Commit the last transaction started by `start_transaction`.
@@ -209,8 +209,21 @@ pub trait Storage {
 	///
 	/// Will panic if there is no open transaction.
 	fn commit_transaction(&mut self) {
-		self.storage_commit_transaction()
+		// TODO factor with rollback
+		let to_drop_tasks = self.storage_commit_transaction()
 			.expect("No open transaction that can be committed.");
+		if to_drop_tasks.len() > 0 {
+			let ext_unsafe = *self as *mut dyn Externalities;
+			if let Some(runtime_spawn) = self.extension::<RuntimeSpawnExt>() {
+				let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+				for task in to_drop_tasks.into_iter() {
+					// TODO abstraction to make it less unsafe, see other unsafe call
+					// of this filepr.
+					runtime_spawn.kill(task, ext_unsafe)
+				}
+			}
+			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
+		}
 	}
 }
 

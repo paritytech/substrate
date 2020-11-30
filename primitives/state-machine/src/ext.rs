@@ -613,7 +613,7 @@ where
 		self.overlay.rollback_transaction().map_err(|_| ())
 	}
 
-	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
+	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
 		self.overlay.commit_transaction().map_err(|_| ())
 	}
 

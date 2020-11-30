@@ -181,7 +181,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("Transactions are not supported by ReadOnlyExternalities");
 	}
 
-	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
+	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
 		unimplemented!("Transactions are not supported by ReadOnlyExternalities");
 	}
 
