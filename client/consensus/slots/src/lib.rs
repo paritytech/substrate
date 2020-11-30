@@ -504,7 +504,7 @@ impl<T: SlotData> SlotData for SlotDuration<T> {
 	const SLOT_KEY: &'static [u8] = T::SLOT_KEY;
 }
 
-impl<T: Clone + Debug + Send + Sync + 'static> SlotDuration<T> {
+impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 	/// Either fetch the slot duration from disk or compute it from the
 	/// genesis state.
 	///
