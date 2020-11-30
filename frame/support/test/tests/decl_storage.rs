@@ -24,13 +24,13 @@ mod tests {
 	use std::marker::PhantomData;
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=frame_support_test {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
 	}
 
-	pub trait Trait: frame_support_test::Trait {}
+	pub trait Config: frame_support_test::Config {}
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait> as TestStorage {
+		trait Store for Module<T: Config> as TestStorage {
 			// non-getters: pub / $default
 
 			/// Hello, this is doc!
@@ -88,7 +88,7 @@ mod tests {
 		type DbWeight = ();
 	}
 
-	impl Trait for TraitImpl {}
+	impl Config for TraitImpl {}
 
 	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 		prefix: DecodeDifferent::Encode("TestStorage"),
@@ -414,16 +414,16 @@ mod tests {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test2 {
-	pub trait Trait: frame_support_test::Trait {}
+	pub trait Config: frame_support_test::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=frame_support_test {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
 	}
 
 	type PairOf<T> = (T, T);
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait> as TestStorage {
+		trait Store for Module<T: Config> as TestStorage {
 			SingleDef : u32;
 			PairDef : PairOf<u32>;
 			Single : Option<u32>;
@@ -445,19 +445,19 @@ mod test2 {
 		type DbWeight = ();
 	}
 
-	impl Trait for TraitImpl {}
+	impl Config for TraitImpl {}
 }
 
 #[cfg(test)]
 #[allow(dead_code)]
 mod test3 {
-	pub trait Trait: frame_support_test::Trait {}
+	pub trait Config: frame_support_test::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=frame_support_test {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
 	}
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait> as Test {
+		trait Store for Module<T: Config> as Test {
 			Foo get(fn foo) config(initial_foo): u32;
 		}
 	}
@@ -473,7 +473,7 @@ mod test3 {
 		type DbWeight = ();
 	}
 
-	impl Trait for TraitImpl {}
+	impl Config for TraitImpl {}
 }
 
 #[cfg(test)]
@@ -482,17 +482,17 @@ mod test_append_and_len {
 	use sp_io::TestExternalities;
 	use codec::{Encode, Decode};
 
-	pub trait Trait: frame_support_test::Trait {}
+	pub trait Config: frame_support_test::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=frame_support_test {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 	struct NoDef(u32);
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait> as Test {
+		trait Store for Module<T: Config> as Test {
 			NoDefault: Option<NoDef>;
 
 			JustVec: Vec<u32>;
@@ -518,7 +518,7 @@ mod test_append_and_len {
 		type DbWeight = ();
 	}
 
-	impl Trait for Test {}
+	impl Config for Test {}
 
 	#[test]
 	fn default_for_option() {

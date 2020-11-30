@@ -24,12 +24,12 @@ use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header
 mod module {
 	use super::*;
 
-	pub trait Trait: system::Trait {
+	pub trait Config: system::Config {
 		type Event: From<Event> + Into<<Self as system::Config>::Event>;
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		pub struct Module<T: Config> for enum Call where origin: T::Origin {
 			pub fn deposit_event() = default;
 		}
 	}
@@ -88,7 +88,7 @@ impl system::Config for Runtime {
 	type SystemWeightInfo = ();
 }
 
-impl module::Trait for Runtime {
+impl module::Config for Runtime {
 	type Event = Event;
 }
 

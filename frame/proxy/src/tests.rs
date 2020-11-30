@@ -91,7 +91,7 @@ impl frame_system::Config for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type Event = TestEvent;
@@ -100,7 +100,7 @@ impl pallet_balances::Trait for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-impl pallet_utility::Trait for Test {
+impl pallet_utility::Config for Test {
 	type Event = TestEvent;
 	type Call = Call;
 	type WeightInfo = ();
@@ -143,7 +143,7 @@ impl Filter<Call> for BaseFilter {
 		}
 	}
 }
-impl Trait for Test {
+impl Config for Test {
 	type Event = TestEvent;
 	type Call = Call;
 	type Currency = Balances;

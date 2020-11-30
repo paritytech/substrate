@@ -23,7 +23,7 @@
 pub struct CallWithDispatchInfo;
 impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
 	type Origin = ();
-	type Trait = ();
+	type Config = ();
 	type Info = frame_support::weights::DispatchInfo;
 	type PostInfo = frame_support::weights::PostDispatchInfo;
 
@@ -91,7 +91,7 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
 				assert_eq!(Balances::free_balance(1), 10);
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath));
-				assert!(!<<Test as Trait>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
+				assert!(!<<Test as Config>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
 			});
 		}
 

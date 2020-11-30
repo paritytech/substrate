@@ -33,10 +33,10 @@ const SOME_TEST_VERSION: PalletVersion = PalletVersion { major: 3000, minor: 30,
 /// Checks that `on_runtime_upgrade` sets the latest pallet version when being called without
 /// being provided by the user.
 mod module1 {
-	pub trait Trait: frame_system::Trait {}
+	pub trait Config: frame_system::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where
+		pub struct Module<T: Config> for enum Call where
 			origin: <T as frame_system::Config>::Origin,
 		{}
 	}
@@ -47,10 +47,10 @@ mod module1 {
 mod module2 {
 	use super::*;
 
-	pub trait Trait<I=DefaultInstance>: frame_system::Trait {}
+	pub trait Config<I=DefaultInstance>: frame_system::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
+		pub struct Module<T: Config<I>, I: Instance=DefaultInstance> for enum Call where
 			origin: <T as frame_system::Config>::Origin,
 		{
 			fn on_runtime_upgrade() -> Weight {
@@ -72,7 +72,7 @@ mod module2 {
 	}
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {}
+		trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Module2 {}
 	}
 }
 
@@ -124,10 +124,10 @@ mod pallet4 {
 	}
 }
 
-impl module1::Trait for Runtime {}
-impl module2::Trait for Runtime {}
-impl module2::Trait<module2::Instance1> for Runtime {}
-impl module2::Trait<module2::Instance2> for Runtime {}
+impl module1::Config for Runtime {}
+impl module2::Config for Runtime {}
+impl module2::Config<module2::Instance1> for Runtime {}
+impl module2::Config<module2::Instance2> for Runtime {}
 
 impl pallet3::Config for Runtime {}
 impl pallet4::Config for Runtime {}

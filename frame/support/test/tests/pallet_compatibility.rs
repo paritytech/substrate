@@ -31,7 +31,7 @@ mod pallet_old {
 	use frame_system::ensure_root;
 	use super::SomeAssociation;
 
-	pub trait Trait: frame_system::Trait {
+	pub trait Config: frame_system::Config {
 		type SomeConst: Get<Self::Balance>;
 		type Balance: Parameter + codec::HasCompact + From<u32> + Into<Weight> + Default
 			+ SomeAssociation;
@@ -39,7 +39,7 @@ mod pallet_old {
 	}
 
 	decl_storage! {
-		trait Store for Module<T: Trait> as Example {
+		trait Store for Module<T: Config> as Example {
 			/// Some documentation
 			Dummy get(fn dummy) config(): Option<T::Balance>;
 			Bar get(fn bar) config(): map hasher(blake2_128_concat) T::AccountId => T::Balance;
@@ -52,14 +52,14 @@ mod pallet_old {
 	}
 
 	decl_event!(
-		pub enum Event<T> where Balance = <T as Trait>::Balance {
+		pub enum Event<T> where Balance = <T as Config>::Balance {
 			/// Dummy event, just here so there's a generic type that's used.
 			Dummy(Balance),
 		}
 	);
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		pub struct Module<T: Config> for enum Call where origin: T::Origin {
 			type Error = Error<T>;
 			fn deposit_event() = default;
 			const SomeConst: T::Balance = T::SomeConst::get();
@@ -84,7 +84,7 @@ mod pallet_old {
 	}
 
 	decl_error! {
-		pub enum Error for Module<T: Trait> {
+		pub enum Error for Module<T: Config> {
 			/// Some wrong behavior
 			Wrong,
 		}
@@ -239,7 +239,7 @@ impl pallet::Config for Runtime {
 	type SomeConst = SomeConst;
 	type Balance = u64;
 }
-impl pallet_old::Trait for Runtime {
+impl pallet_old::Config for Runtime {
 	type Event = Event;
 	type SomeConst = SomeConst;
 	type Balance = u64;

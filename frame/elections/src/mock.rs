@@ -68,7 +68,7 @@ impl frame_system::Config for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type DustRemoval = ();
@@ -110,7 +110,7 @@ parameter_types!{
 	pub const ElectionModuleId: LockIdentifier = *b"py/elect";
 }
 
-impl elections::Trait for Test {
+impl elections::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
 	type BadPresentation = ();

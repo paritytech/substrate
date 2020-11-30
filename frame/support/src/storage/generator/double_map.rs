@@ -425,9 +425,6 @@ mod test_iterators {
 		storage::{generator::StorageDoubleMap, IterableStorageDoubleMap, unhashed},
 	};
 
-	/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
-	pub trait Trait: Config {}
-	impl<T: Config> Trait for T {}
 	pub trait Config: 'static {
 		type Origin;
 		type BlockNumber;
@@ -436,14 +433,14 @@ mod test_iterators {
 	}
 
 	crate::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 	struct NoDef(u32);
 
 	crate::decl_storage! {
-		trait Store for Module<T: Trait> as Test {
+		trait Store for Module<T: Config> as Test {
 			DoubleMap: double_map hasher(blake2_128_concat) u16, hasher(twox_64_concat) u32 => u64;
 		}
 	}

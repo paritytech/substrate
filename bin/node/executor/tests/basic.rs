@@ -588,7 +588,7 @@ fn deploying_wasm_contract_should_work() {
 		&[],
 	);
 
-	let subsistence = pallet_contracts::Config::<Runtime>::subsistence_threshold_uncached();
+	let subsistence = pallet_contracts::ConfigCache::<Runtime>::subsistence_threshold_uncached();
 
 	let b = construct_block(
 		&mut new_test_ext(compact_code_unwrap(), false),

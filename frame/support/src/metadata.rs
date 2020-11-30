@@ -27,9 +27,6 @@ pub use frame_metadata::{
 /// Example:
 /// ```
 ///# mod module0 {
-///#    // Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
-///#    pub trait Trait: Config {}
-///#    impl<T: Config> Trait for T {}
 ///#    pub trait Config: 'static {
 ///#        type Origin;
 ///#        type BlockNumber;
@@ -37,11 +34,11 @@ pub use frame_metadata::{
 ///#        type DbWeight: frame_support::traits::Get<frame_support::weights::RuntimeDbWeight>;
 ///#    }
 ///#    frame_support::decl_module! {
-///#        pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+///#        pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
 ///#    }
 ///#
 ///#    frame_support::decl_storage! {
-///#        trait Store for Module<T: Trait> as TestStorage {}
+///#        trait Store for Module<T: Config> as TestStorage {}
 ///#    }
 ///# }
 ///# use module0 as module1;
@@ -300,9 +297,6 @@ mod tests {
 	mod system {
 		use super::*;
 
-		/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
-		pub trait Trait: Config {}
-		impl<T: Config> Trait for T {}
 		pub trait Config: 'static {
 			type BaseCallFilter;
 			const ASSOCIATED_CONST: u64 = 500;
@@ -317,7 +311,7 @@ mod tests {
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 				/// Hi, I am a comment.
 				const BlockNumber: T::BlockNumber = 100.into();
 				const GetType: T::AccountId = T::SomeValue::get().into();
@@ -354,12 +348,12 @@ mod tests {
 		use crate::dispatch::DispatchResult;
 		use super::system;
 
-		pub trait Trait: system::Trait {
+		pub trait Config: system::Config {
 			type Balance;
 		}
 
 		decl_event!(
-			pub enum Event<T> where <T as Trait>::Balance
+			pub enum Event<T> where <T as Config>::Balance
 			{
 				/// Hi, I am a comment.
 				TestEvent(Balance),
@@ -367,7 +361,7 @@ mod tests {
 		);
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=system {
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {
 				type Error = Error<T>;
 
 				#[weight = 0]
@@ -376,7 +370,7 @@ mod tests {
 		}
 
 		crate::decl_error! {
-			pub enum Error for Module<T: Trait> {
+			pub enum Error for Module<T: Config> {
 				/// Some user input error
 				UserInputError,
 				/// Something bad happened
@@ -389,23 +383,23 @@ mod tests {
 	mod event_module2 {
 		use super::system;
 
-		pub trait Trait: system::Trait {
+		pub trait Config: system::Config {
 			type Balance;
 		}
 
 		decl_event!(
-			pub enum Event<T> where <T as Trait>::Balance
+			pub enum Event<T> where <T as Config>::Balance
 			{
 				TestEvent(Balance),
 			}
 		);
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=system {}
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}
 		}
 
 		crate::decl_storage! {
-			trait Store for Module<T: Trait> as TestStorage {
+			trait Store for Module<T: Config> as TestStorage {
 				StorageMethod : Option<u32>;
 			}
 			add_extra_genesis {
@@ -439,11 +433,11 @@ mod tests {
 		}
 	}
 
-	impl event_module::Trait for TestRuntime {
+	impl event_module::Config for TestRuntime {
 		type Balance = u32;
 	}
 
-	impl event_module2::Trait for TestRuntime {
+	impl event_module2::Config for TestRuntime {
 		type Balance = u32;
 	}
 

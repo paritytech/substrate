@@ -103,9 +103,8 @@ pub enum Never {}
 ///
 /// - Using `static` to create a static parameter type. Its value is
 ///   being provided by a static variable with the equivalent name in `UPPER_SNAKE_CASE`. An
-///   additional `set` function is provided in this case to alter the static variable. 
-///
-/// **This is intended for testing ONLY and is ONLY available when `std` is enabled**
+///   additional `set` function is provided in this case to alter the static variable.
+///   **This is intended for testing ONLY and is ONLY available when `std` is enabled.**
 ///
 /// # Examples
 ///
@@ -348,14 +347,14 @@ pub use frame_support_procedural::{
 /// This is useful for type generic over runtime:
 /// ```
 /// # use frame_support::CloneNoBound;
-/// trait Trait {
+/// trait Config {
 ///		type C: Clone;
 /// }
 ///
 /// // Foo implements [`Clone`] because `C` bounds [`Clone`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Clone`].
 /// #[derive(CloneNoBound)]
-/// struct Foo<T: Trait> {
+/// struct Foo<T: Config> {
 ///		c: T::C,
 /// }
 /// ```
@@ -366,14 +365,14 @@ pub use frame_support_procedural::CloneNoBound;
 /// This is useful for type generic over runtime:
 /// ```
 /// # use frame_support::{EqNoBound, PartialEqNoBound};
-/// trait Trait {
+/// trait Config {
 ///		type C: Eq;
 /// }
 ///
 /// // Foo implements [`Eq`] because `C` bounds [`Eq`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Eq`].
 /// #[derive(PartialEqNoBound, EqNoBound)]
-/// struct Foo<T: Trait> {
+/// struct Foo<T: Config> {
 ///		c: T::C,
 /// }
 /// ```
@@ -384,14 +383,14 @@ pub use frame_support_procedural::EqNoBound;
 /// This is useful for type generic over runtime:
 /// ```
 /// # use frame_support::PartialEqNoBound;
-/// trait Trait {
+/// trait Config {
 ///		type C: PartialEq;
 /// }
 ///
 /// // Foo implements [`PartialEq`] because `C` bounds [`PartialEq`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`PartialEq`].
 /// #[derive(PartialEqNoBound)]
-/// struct Foo<T: Trait> {
+/// struct Foo<T: Config> {
 ///		c: T::C,
 /// }
 /// ```
@@ -403,14 +402,14 @@ pub use frame_support_procedural::PartialEqNoBound;
 /// ```
 /// # use frame_support::DebugNoBound;
 /// # use core::fmt::Debug;
-/// trait Trait {
+/// trait Config {
 ///		type C: Debug;
 /// }
 ///
 /// // Foo implements [`Debug`] because `C` bounds [`Debug`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Debug`].
 /// #[derive(DebugNoBound)]
-/// struct Foo<T: Trait> {
+/// struct Foo<T: Config> {
 ///		c: T::C,
 /// }
 /// ```
@@ -489,7 +488,6 @@ macro_rules! ensure {
 ///
 /// Used as `assert_noop(expression_to_assert, expected_error_expression)`.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_noop {
 	(
 		$x:expr,
@@ -505,7 +503,6 @@ macro_rules! assert_noop {
 ///
 /// Used as `assert_err!(expression_to_assert, expected_error_expression)`
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_err {
 	( $x:expr , $y:expr $(,)? ) => {
 		assert_eq!($x, Err($y.into()));
@@ -517,7 +514,6 @@ macro_rules! assert_err {
 /// This can be used on`DispatchResultWithPostInfo` when the post info should
 /// be ignored.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_err_ignore_postinfo {
 	( $x:expr , $y:expr $(,)? ) => {
 		$crate::assert_err!($x.map(|_| ()).map_err(|e| e.error), $y);
@@ -526,7 +522,6 @@ macro_rules! assert_err_ignore_postinfo {
 
 /// Assert an expression returns error with the given weight.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_err_with_weight {
 	($call:expr, $err:expr, $weight:expr $(,)? ) => {
 		if let Err(dispatch_err_with_post) = $call {
@@ -543,7 +538,6 @@ macro_rules! assert_err_with_weight {
 /// Used as `assert_ok!(expression_to_assert, expected_ok_expression)`,
 /// or `assert_ok!(expression_to_assert)` which would assert against `Ok(())`.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_ok {
 	( $x:expr $(,)? ) => {
 		let is = $x;
@@ -572,9 +566,6 @@ mod tests {
 	use sp_std::{marker::PhantomData, result};
 	use sp_io::TestExternalities;
 
-	/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
-	pub trait Trait: Config {}
-	impl<T: Config> Trait for T {}
 	pub trait Config: 'static {
 		type BlockNumber: Codec + EncodeLike + Default;
 		type Origin;
@@ -585,16 +576,16 @@ mod tests {
 	mod module {
 		#![allow(dead_code)]
 
-		use super::{Trait, Config};
+		use super::Config;
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self  {}
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self  {}
 		}
 	}
 	use self::module::Module;
 
 	decl_storage! {
-		trait Store for Module<T: Trait> as Test {
+		trait Store for Module<T: Config> as Test {
 			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
 				map hasher(twox_64_concat) u32 => u64;
 			pub OptionLinkedMap: map hasher(blake2_128_concat) u32 => Option<u32>;

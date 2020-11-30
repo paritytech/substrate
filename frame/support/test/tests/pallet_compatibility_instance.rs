@@ -23,14 +23,14 @@ mod pallet_old {
 	};
 	use frame_system::ensure_root;
 
-	pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
+	pub trait Config<I: Instance = DefaultInstance>: frame_system::Config {
 		type SomeConst: Get<Self::Balance>;
 		type Balance: Parameter + codec::HasCompact + From<u32> + Into<Weight> + Default;
 		type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 	}
 
 	decl_storage! {
-		trait Store for Module<T: Trait<I>, I: Instance = DefaultInstance> as Example {
+		trait Store for Module<T: Config<I>, I: Instance = DefaultInstance> as Example {
 			/// Some documentation
 			Dummy get(fn dummy) config(): Option<T::Balance>;
 			Bar get(fn bar) config(): map hasher(blake2_128_concat) T::AccountId => T::Balance;
@@ -40,14 +40,14 @@ mod pallet_old {
 	}
 
 	decl_event!(
-		pub enum Event<T, I = DefaultInstance> where Balance = <T as Trait<I>>::Balance {
+		pub enum Event<T, I = DefaultInstance> where Balance = <T as Config<I>>::Balance {
 			/// Dummy event, just here so there's a generic type that's used.
 			Dummy(Balance),
 		}
 	);
 
 	decl_module! {
-		pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+		pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
 			type Error = Error<T, I>;
 			fn deposit_event() = default;
 			const SomeConst: T::Balance = T::SomeConst::get();
@@ -72,7 +72,7 @@ mod pallet_old {
 	}
 
 	decl_error! {
-		pub enum Error for Module<T: Trait<I>, I: Instance> {
+		pub enum Error for Module<T: Config<I>, I: Instance> {
 			/// Some wrong behavior
 			Wrong,
 		}
@@ -235,17 +235,17 @@ impl pallet::Config<pallet::Instance3> for Runtime {
 	type SomeConst = SomeConst;
 	type Balance = u64;
 }
-impl pallet_old::Trait for Runtime {
+impl pallet_old::Config for Runtime {
 	type Event = Event;
 	type SomeConst = SomeConst;
 	type Balance = u64;
 }
-impl pallet_old::Trait<pallet_old::Instance2> for Runtime {
+impl pallet_old::Config<pallet_old::Instance2> for Runtime {
 	type Event = Event;
 	type SomeConst = SomeConst;
 	type Balance = u64;
 }
-impl pallet_old::Trait<pallet_old::Instance3> for Runtime {
+impl pallet_old::Config<pallet_old::Instance3> for Runtime {
 	type Event = Event;
 	type SomeConst = SomeConst;
 	type Balance = u64;

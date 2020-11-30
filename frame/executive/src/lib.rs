@@ -145,7 +145,7 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 /// Main entry point for certain runtime actions as e.g. `execute_block`.
 ///
 /// Generic parameters:
-/// - `System`: Something that implements `frame_system::Trait`
+/// - `System`: Something that implements `frame_system::Config`
 /// - `Block`: The block type of the runtime
 /// - `Context`: The context that is used when checking an extrinsic.
 /// - `UnsignedValidator`: The unsigned transaction validator of the runtime.
@@ -158,7 +158,7 @@ pub struct Executive<System, Block, Context, UnsignedValidator, AllModules, OnRu
 );
 
 impl<
-	System: frame_system::Trait,
+	System: frame_system::Config,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	UnsignedValidator,
@@ -185,7 +185,7 @@ where
 }
 
 impl<
-	System: frame_system::Trait,
+	System: frame_system::Config,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	UnsignedValidator,
@@ -505,10 +505,10 @@ mod tests {
 			UnknownTransaction, TransactionSource, TransactionValidity
 		};
 
-		pub trait Trait: frame_system::Trait {}
+		pub trait Config: frame_system::Config {}
 
 		frame_support::decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+			pub struct Module<T: Config> for enum Call where origin: T::Origin {
 				#[weight = 100]
 				fn some_function(origin) {
 					// NOTE: does not make any different.
@@ -555,7 +555,7 @@ mod tests {
 			}
 		}
 
-		impl<T: Trait> sp_runtime::traits::ValidateUnsigned for Module<T> {
+		impl<T: Config> sp_runtime::traits::ValidateUnsigned for Module<T> {
 			type Call = Call<T>;
 
 			fn validate_unsigned(
@@ -626,7 +626,7 @@ mod tests {
 	parameter_types! {
 		pub const ExistentialDeposit: Balance = 1;
 	}
-	impl pallet_balances::Trait for Runtime {
+	impl pallet_balances::Config for Runtime {
 		type Balance = Balance;
 		type Event = Event;
 		type DustRemoval = ();
@@ -639,13 +639,13 @@ mod tests {
 	parameter_types! {
 		pub const TransactionByteFee: Balance = 0;
 	}
-	impl pallet_transaction_payment::Trait for Runtime {
+	impl pallet_transaction_payment::Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = IdentityFee<Balance>;
 		type FeeMultiplierUpdate = ();
 	}
-	impl custom::Trait for Runtime {}
+	impl custom::Config for Runtime {}
 
 	pub struct RuntimeVersion;
 	impl frame_support::traits::Get<sp_version::RuntimeVersion> for RuntimeVersion {
@@ -717,7 +717,7 @@ mod tests {
 		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(2, 69)), sign_extra(1, 0, 0));
 		let weight = xt.get_dispatch_info().weight + <Runtime as frame_system::Config>::ExtrinsicBaseWeight::get();
 		let fee: Balance
-			= <Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&weight);
+			= <Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -948,7 +948,7 @@ mod tests {
 				let weight = xt.get_dispatch_info().weight
 					+ <Runtime as frame_system::Config>::ExtrinsicBaseWeight::get();
 				let fee: Balance =
-					<Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&weight);
+					<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
 				Executive::initialize_block(&Header::new(
 					1,
 					H256::default(),

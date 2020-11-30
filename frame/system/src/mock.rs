@@ -71,7 +71,7 @@ pub struct Call;
 
 impl Dispatchable for Call {
 	type Origin = Origin;
-	type Trait = ();
+	type Config = ();
 	type Info = DispatchInfo;
 	type PostInfo = PostDispatchInfo;
 	fn dispatch(self, _origin: Self::Origin)

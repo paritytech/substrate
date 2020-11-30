@@ -34,10 +34,10 @@ std = [
 	"codec/std",
 	"sp-io/std",
 	"frame-support/std",
+	"frame-system/std",
 	"sp-inherents/std",
 	"sp-core/std",
 	"sp-std/std",
 	"sp-runtime/std",
 	"sp-state-machine",
-	"frame-system/std",
 ]

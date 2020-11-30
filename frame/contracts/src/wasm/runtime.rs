@@ -17,7 +17,7 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
-	HostFnWeights, Schedule, Trait, CodeHash, BalanceOf, Error,
+	HostFnWeights, Schedule, Config, CodeHash, BalanceOf, Error,
 	exec::{Ext, StorageKey, TopicOf},
 	gas::{Gas, GasMeter, Token, GasMeterResult},
 	wasm::env_def::ConvertibleToWasm,
@@ -193,7 +193,7 @@ pub enum RuntimeToken {
 	HashBlake128(u32),
 }
 
-impl<T: Trait> Token<T> for RuntimeToken
+impl<T: Config> Token<T> for RuntimeToken
 where
 	T::AccountId: UncheckedFrom<T::Hash>, T::AccountId: AsRef<[u8]>
 {

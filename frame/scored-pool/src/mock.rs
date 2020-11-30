@@ -77,7 +77,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 }
 
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type Event = ();
@@ -114,7 +114,7 @@ impl InitializeMembers<u64> for TestChangeMembers {
 	}
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type Event = ();
 	type KickOrigin = EnsureSignedBy<KickOrigin, u64>;
 	type MembershipInitialized = TestChangeMembers;

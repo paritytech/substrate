@@ -76,7 +76,7 @@ impl WeightInfo for () {
 	fn remove_connections() -> Weight { 50_000_000 }
 }
 
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The event type of this module.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
@@ -103,7 +103,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as NodeAuthorization {
+	trait Store for Module<T: Config> as NodeAuthorization {
 		/// The set of well known nodes. This is stored sorted (just by value).
 		pub WellKnownNodes get(fn well_known_nodes): BTreeSet<PeerId>;
 		/// A map that maintains the ownership of each node.
@@ -149,7 +149,7 @@ decl_event! {
 
 decl_error! {
 	/// Error for the node authorization module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// The PeerId is too long.
 		PeerIdTooLong,
 		/// Too many well known nodes.
@@ -170,7 +170,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		/// The maximum number of authorized well known nodes
 		const MaxWellKnownNodes: u32 = T::MaxWellKnownNodes::get();
 
@@ -403,7 +403,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	fn initialize_nodes(nodes: &Vec<(PeerId, T::AccountId)>) {
 		let peer_ids = nodes.iter()
 			.map(|item| item.0.clone())
@@ -491,7 +491,7 @@ mod tests {
 		pub const MaxWellKnownNodes: u32 = 4;
 		pub const MaxPeerIdLength: u32 = 2;
 	}
-	impl Trait for Test {
+	impl Config for Test {
 		type Event = ();
 		type MaxWellKnownNodes = MaxWellKnownNodes;
 		type MaxPeerIdLength = MaxPeerIdLength;

@@ -18,7 +18,7 @@
 //!
 //! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 //!
-//! - [`contract::Trait`](./trait.Trait.html)
+//! - [`contract::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
@@ -132,12 +132,12 @@ pub type TrieId = Vec<u8>;
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account
 #[derive(Encode, Decode, RuntimeDebug)]
-pub enum ContractInfo<T: Trait> {
+pub enum ContractInfo<T: Config> {
 	Alive(AliveContractInfo<T>),
 	Tombstone(TombstoneContractInfo<T>),
 }
 
-impl<T: Trait> ContractInfo<T> {
+impl<T: Config> ContractInfo<T> {
 	/// If contract is alive then return some alive info
 	pub fn get_alive(self) -> Option<AliveContractInfo<T>> {
 		if let ContractInfo::Alive(alive) = self {
@@ -250,18 +250,18 @@ where
 	}
 }
 
-impl<T: Trait> From<AliveContractInfo<T>> for ContractInfo<T> {
+impl<T: Config> From<AliveContractInfo<T>> for ContractInfo<T> {
 	fn from(alive_info: AliveContractInfo<T>) -> Self {
 		Self::Alive(alive_info)
 	}
 }
 
 pub type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 pub type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	type Time: Time;
 	type Randomness: Randomness<Self::Hash>;
 
@@ -323,7 +323,7 @@ pub trait Trait: frame_system::Trait {
 
 decl_error! {
 	/// Error for the contracts module.
-	pub enum Error for Module<T: Trait>
+	pub enum Error for Module<T: Config>
 	where
 		T::AccountId: UncheckedFrom<T::Hash>,
 		T::AccountId: AsRef<[u8]>,
@@ -383,7 +383,7 @@ decl_error! {
 
 decl_module! {
 	/// Contracts module.
-	pub struct Module<T: Trait> for enum Call
+	pub struct Module<T: Config> for enum Call
 	where
 		origin: T::Origin,
 		T::AccountId: UncheckedFrom<T::Hash>,
@@ -564,7 +564,7 @@ decl_module! {
 }
 
 /// Public APIs provided by the contracts module.
-impl<T: Trait> Module<T>
+impl<T: Config> Module<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
@@ -638,7 +638,7 @@ where
 	}
 }
 
-impl<T: Trait> Module<T>
+impl<T: Config> Module<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
@@ -647,7 +647,7 @@ where
 		gas_meter: &mut GasMeter<T>,
 		func: impl FnOnce(&mut ExecutionContext<T, WasmVm<T>, WasmLoader<T>>, &mut GasMeter<T>) -> ExecResult,
 	) -> ExecResult {
-		let cfg = Config::preload();
+		let cfg = ConfigCache::preload();
 		let vm = WasmVm::new(&cfg.schedule);
 		let loader = WasmLoader::new(&cfg.schedule);
 		let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
@@ -699,7 +699,7 @@ decl_event! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Contracts
+	trait Store for Module<T: Config> as Contracts
 	where
 		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 	{
@@ -722,7 +722,7 @@ decl_storage! {
 ///
 /// We assume that these values can't be changed in the
 /// course of transaction execution.
-pub struct Config<T: Trait> {
+pub struct ConfigCache<T: Config> {
 	pub schedule: Schedule<T>,
 	pub existential_deposit: BalanceOf<T>,
 	pub tombstone_deposit: BalanceOf<T>,
@@ -730,12 +730,12 @@ pub struct Config<T: Trait> {
 	pub max_value_size: u32,
 }
 
-impl<T: Trait> Config<T>
+impl<T: Config> ConfigCache<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
-	fn preload() -> Config<T> {
-		Config {
+	fn preload() -> ConfigCache<T> {
+		ConfigCache {
 			schedule: <Module<T>>::current_schedule(),
 			existential_deposit: T::Currency::minimum_balance(),
 			tombstone_deposit: T::TombstoneDeposit::get(),

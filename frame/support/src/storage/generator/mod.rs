@@ -42,9 +42,6 @@ mod tests {
 
 	struct Runtime;
 
-	/// Kind of alias for `Config` trait. Deprecated as `Trait` is renamed `Config`.
-	pub trait Trait: Config {}
-	impl<T: Config> Trait for T {}
 	pub trait Config: 'static {
 		type Origin;
 		type BlockNumber;
@@ -60,11 +57,11 @@ mod tests {
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
 	}
 
 	crate::decl_storage! {
-		trait Store for Module<T: Trait> as Runtime {
+		trait Store for Module<T: Config> as Runtime {
 			Value get(fn value) config(): (u64, u64);
 			NumberMap: map hasher(identity) u32 => u64;
 			DoubleMap: double_map hasher(identity) u32, hasher(identity) u32 => u64;

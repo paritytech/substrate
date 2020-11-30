@@ -26,45 +26,45 @@ use sp_runtime::transaction_validity::{
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Transaction pool error type.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error, derive_more::From)]
+#[allow(missing_docs)]
 pub enum Error {
 	/// Transaction is not verifiable yet, but might be in the future.
-	#[display(fmt="Unknown transaction validity: {:?}", _0)]
+	#[error("Unknown transaction validity: {0:?}")]
 	UnknownTransaction(UnknownTransaction),
-	/// Transaction is invalid.
-	#[display(fmt="Invalid transaction validity: {:?}", _0)]
+
+	#[error("Invalid transaction validity: {0:?}")]
 	InvalidTransaction(InvalidTransaction),
 	/// The transaction validity returned no "provides" tag.
 	///
 	/// Such transactions are not accepted to the pool, since we use those tags
 	/// to define identity of transactions (occupance of the same "slot").
-	#[display(fmt="The transaction does not provide any tags, so the pool can't identify it.")]
+	#[error("The transaction validity returned no `provides` tags, so the pool can't identify it.")]
 	NoTagsProvided,
-	/// The transaction is temporarily banned.
-	#[display(fmt="Temporarily Banned")]
+
+	#[error("Temporarily Banned")]
 	TemporarilyBanned,
-	/// The transaction is already in the pool.
-	#[display(fmt="[{:?}] Already imported", _0)]
+
+	#[error("[{0:?}] Transaction is already in the pool")]
 	AlreadyImported(Box<dyn std::any::Any + Send>),
-	/// The transaction cannot be imported cause it's a replacement and has too low priority.
-	#[display(fmt="Too low priority ({} > {})", old, new)]
+
+	#[error("Transaction cannot be imported due to too low priority ({0} > {1})", old, new)]
 	TooLowPriority {
 		/// Transaction already in the pool.
 		old: Priority,
 		/// Transaction entering the pool.
 		new: Priority
 	},
-	/// Deps cycle detected and we couldn't import transaction.
-	#[display(fmt="Cycle Detected")]
+
+	#[error("Dependency cycle detected")]
 	CycleDetected,
-	/// Transaction was dropped immediately after it got inserted.
-	#[display(fmt="Transaction couldn't enter the pool because of the limit.")]
+
+	#[error("Transaction couldn't enter the pool because of the limit.")]
 	ImmediatelyDropped,
-	/// Invalid block id.
+
+	#[error("Invlaid block id: {0}")]
 	InvalidBlockId(String),
 }
-
-impl std::error::Error for Error {}
 
 /// Transaction pool error conversion.
 pub trait IntoPoolError: ::std::error::Error + Send + Sized {
