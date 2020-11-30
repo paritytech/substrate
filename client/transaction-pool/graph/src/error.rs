@@ -32,36 +32,36 @@ pub enum Error {
 	/// Transaction is not verifiable yet, but might be in the future.
 	#[error("Unknown transaction validity: {0:?}")]
 	UnknownTransaction(UnknownTransaction),
-	/// Transaction is invalid.
+
 	#[error("Invalid transaction validity: {0:?}")]
 	InvalidTransaction(InvalidTransaction),
 	/// The transaction validity returned no "provides" tag.
 	///
 	/// Such transactions are not accepted to the pool, since we use those tags
 	/// to define identity of transactions (occupance of the same "slot").
-	#[error("The transaction does not provide any tags, so the pool can't identify it.")]
+	#[error("The transaction validity returned no `provides` tags, so the pool can't identify it.")]
 	NoTagsProvided,
 
 	#[error("Temporarily Banned")]
 	TemporarilyBanned,
-	/// The transaction is already in the pool.
-	#[error("[{0:?}] Already imported")]
+
+	#[error("[{0:?}] Transaction is already in the pool")]
 	AlreadyImported(Box<dyn std::any::Any + Send>),
-	/// The transaction cannot be imported cause it's a replacement and has too low priority.
-	#[error("Too low priority ({0} > {1})", old, new)]
+
+	#[error("Transaction cannot be imported due to too low priority ({0} > {1})", old, new)]
 	TooLowPriority {
 		/// Transaction already in the pool.
 		old: Priority,
 		/// Transaction entering the pool.
 		new: Priority
 	},
-	/// Deps cycle detected and we couldn't import transaction.
-	#[error("Cycle Detected")]
+
+	#[error("Dependency cycle detected")]
 	CycleDetected,
-	/// Transaction was dropped immediately after it got inserted.
+
 	#[error("Transaction couldn't enter the pool because of the limit.")]
 	ImmediatelyDropped,
-	/// Invalid block id.
+
 	#[error("Invlaid block id: {0}")]
 	InvalidBlockId(String),
 }

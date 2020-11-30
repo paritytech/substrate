@@ -20,7 +20,7 @@ time. If an entity is currently a member, this results in removal
 from the `Pool` and `Members`; the entity is immediately replaced
 by the next highest scoring candidate in the pool, if available.
 
-- [`scored_pool::Trait`](https://docs.rs/pallet-scored-pool/latest/pallet_scored_pool/trait.Trait.html)
+- [`scored_pool::Config`](https://docs.rs/pallet-scored-pool/latest/pallet_scored_pool/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-scored-pool/latest/pallet_scored_pool/enum.Call.html)
 - [`Module`](https://docs.rs/pallet-scored-pool/latest/pallet_scored_pool/struct.Module.html)
 
@@ -41,10 +41,10 @@ use frame_support::{decl_module, dispatch};
 use frame_system::ensure_signed;
 use pallet_scored_pool::{self as scored_pool};
 
-pub trait Trait: scored_pool::Trait {}
+pub trait Config: scored_pool::Config {}
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		#[weight = 0]
 		pub fn candidate(origin) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
