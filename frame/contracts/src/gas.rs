@@ -31,7 +31,7 @@ pub type Gas = frame_support::weights::Weight;
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
 pub enum GasMeterResult {
-	Proceed,
+	Proceed(ChargedAmount),
 	OutOfGas,
 }
 
@@ -39,8 +39,17 @@ impl GasMeterResult {
 	pub fn is_out_of_gas(&self) -> bool {
 		match *self {
 			GasMeterResult::OutOfGas => true,
-			GasMeterResult::Proceed => false,
+			GasMeterResult::Proceed(_) => false,
 		}
+	}
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct ChargedAmount(Gas);
+
+impl ChargedAmount {
+	pub fn amount(&self) -> Gas {
+		self.0
 	}
 }
 
@@ -138,17 +147,18 @@ impl<T: Config> GasMeter<T> {
 		self.gas_left = new_value.unwrap_or_else(Zero::zero);
 
 		match new_value {
-			Some(_) => GasMeterResult::Proceed,
+			Some(_) => GasMeterResult::Proceed(ChargedAmount(amount)),
 			None => GasMeterResult::OutOfGas,
 		}
 	}
 
-	// Account for not fully used gas.
-	//
-	// This can be used after dispatching a runtime call to refund gas that was not
-	// used by the dispatchable.
-	pub fn refund(&mut self, gas: Gas) {
-		self.gas_left = self.gas_left.saturating_add(gas).max(self.gas_limit);
+	/// Refund previously charged gas back to the gas meter.
+	///
+	/// This can be used if a gas worst case estimation must be charged before
+	/// performing a certain action. This way the difference can be refundend when
+	/// the worst case did not happen.
+	pub fn refund(&mut self, amount: ChargedAmount) {
+		self.gas_left = self.gas_left.saturating_add(amount.0).min(self.gas_limit)
 	}
 
 	/// Allocate some amount of gas and perform some work with

@@ -163,7 +163,7 @@ where
 	///
 	/// Weight is synonymous with gas in substrate.
 	pub fn charge_weight(&mut self, amount: Weight) -> Result<()> {
-		self.inner.runtime.charge_gas(RuntimeToken::ChainExtension(amount))
+		self.inner.runtime.charge_gas(RuntimeToken::ChainExtension(amount)).map(|_| ())
 	}
 
 	/// Grants access to the execution environment of the current contract call.
@@ -299,7 +299,7 @@ where
 	/// weight of the chain extension. This should usually be the case when fixed input types
 	/// are used. Non fixed size types (like everything using `Vec`) usually need to use
 	/// [`in_len()`](Self::in_len) in order to properly charge the necessary weight.
-	pub fn read_as<T: Decode>(&self) -> Result<T> {
+	pub fn read_as<T: Decode>(&mut self) -> Result<T> {
 		self.inner.runtime.read_sandbox_memory_as(
 			self.inner.input_ptr,
 			self.inner.input_len,

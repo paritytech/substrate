@@ -19,7 +19,7 @@
 use crate::{
 	HostFnWeights, Schedule, Config, CodeHash, BalanceOf, Error,
 	exec::{Ext, StorageKey, TopicOf},
-	gas::{Gas, GasMeter, Token, GasMeterResult},
+	gas::{Gas, GasMeter, Token, GasMeterResult, ChargedAmount},
 	wasm::env_def::ConvertibleToWasm,
 };
 use sp_sandbox;
@@ -27,7 +27,7 @@ use parity_wasm::elements::ValueType;
 use frame_system;
 use frame_support::dispatch::DispatchError;
 use sp_std::prelude::*;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeAll, Encode};
 use sp_runtime::traits::SaturatedConversion;
 use sp_core::crypto::UncheckedFrom;
 use sp_io::hashing::{
@@ -199,6 +199,8 @@ pub enum RuntimeToken {
 	HashBlake128(u32),
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
 	ChainExtension(u64),
+	/// Weight charged for copying data from the sandbox.
+	CopyIn(u32),
 }
 
 impl<T: Config> Token<T> for RuntimeToken
@@ -258,6 +260,7 @@ where
 			HashBlake128(len) => s.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			ChainExtension(amount) => amount,
+			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
 		}
 	}
 }
@@ -398,12 +401,12 @@ where
 	/// Charge the gas meter with the specified token.
 	///
 	/// Returns `Err(HostError)` if there is not enough gas.
-	pub fn charge_gas<Tok>(&mut self, token: Tok) -> Result<(), DispatchError>
+	pub fn charge_gas<Tok>(&mut self, token: Tok) -> Result<ChargedAmount, DispatchError>
 	where
 		Tok: Token<E::T, Metadata=HostFnWeights<E::T>>,
 	{
 		match self.gas_meter.charge(&self.schedule.host_fn_weights, token) {
-			GasMeterResult::Proceed => Ok(()),
+			GasMeterResult::Proceed(amount) => Ok(amount),
 			GasMeterResult::OutOfGas => Err(Error::<E::T>::OutOfGas.into())
 		}
 	}
@@ -439,11 +442,29 @@ where
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
 	/// - the buffer contents cannot be decoded as the required type.
-	pub fn read_sandbox_memory_as<D: Decode>(&self, ptr: u32, len: u32)
+	///
+	/// # Note
+	///
+	/// It is safe to forgo benchmarking and charging weight relative to `len` for fixed
+	/// size types (basically everything not containing a heap collection):
+	/// Despite the fact that we are usually about to read the encoding of a fixed size
+	/// type, we cannot know the ecoded size of that type. We therefore are required to
+	/// use the length provided by the contract. This length is untrusted and therefore
+	/// we charge weight relative to the provided size upfront that covers the copy costs.
+	/// On success this cost is refunded as the copying was already covered in the
+	/// overall cost of the host function. This is different from `read_sandbox_memory`
+	/// where the size is dynamic and the costs resulting from that dynamic size must
+	/// be charged relative to this dynamic size anyways (before reading) by constructing
+	/// the benchmark for that.
+	pub fn read_sandbox_memory_as<D: Decode>(&mut self, ptr: u32, len: u32)
 	-> Result<D, DispatchError>
 	{
+		let amount = self.charge_gas(RuntimeToken::CopyIn(len))?;
 		let buf = self.read_sandbox_memory(ptr, len)?;
-		D::decode(&mut &buf[..]).map_err(|_| Error::<E::T>::DecodingFailed.into())
+		let decoded = D::decode_all(&mut &buf[..])
+			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
+		self.gas_meter.refund(amount);
+		Ok(decoded)
 	}
 
 	/// Write the given buffer and its length to the designated locations in sandbox memory and
