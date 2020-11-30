@@ -523,7 +523,7 @@ fn offchain_http_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-#[should_panic(expected = "Allocator ran out of space")]
+#[should_panic]
 fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 
@@ -719,6 +719,15 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	assert_eq!(span_datum.target, "default");
 	assert_eq!(span_datum.name, "");
 	assert_eq!(values.bool_values.get("wasm").unwrap(), &true);
+
+	call_in_wasm(
+		"test_nested_spans",
+		Default::default(),
+		wasm_method,
+		&mut ext,
+	).unwrap();
+	let len = traces.lock().unwrap().len();
+	assert_eq!(len, 2);
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]

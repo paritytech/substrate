@@ -214,15 +214,9 @@ decl_module! {
 
 			let who = T::Lookup::lookup(who)?;
 
-			let res = match call.dispatch_bypass_filter(frame_system::RawOrigin::Signed(who).into()) {
-				Ok(_) => true,
-				Err(e) => {
-					sp_runtime::print(e);
-					false
-				}
-			};
+			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Signed(who).into());
 
-			Self::deposit_event(RawEvent::SudoAsDone(res));
+			Self::deposit_event(RawEvent::SudoAsDone(res.map(|_| ()).map_err(|e| e.error)));
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -236,7 +230,7 @@ decl_event!(
 		/// The \[sudoer\] just switched identity; the old key is supplied.
 		KeyChanged(AccountId),
 		/// A sudo just took place. \[result\]
-		SudoAsDone(bool),
+		SudoAsDone(DispatchResult),
 	}
 );
 

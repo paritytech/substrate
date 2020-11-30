@@ -163,7 +163,7 @@ fn sudo_as_emits_events_correctly() {
 		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
 		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
-		let expected_event = TestEvent::sudo(RawEvent::SudoAsDone(true));
+		let expected_event = TestEvent::sudo(RawEvent::SudoAsDone(Ok(())));
 		assert!(System::events().iter().any(|a| a.event == expected_event));
 	});
 }
