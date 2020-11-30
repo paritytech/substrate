@@ -28,75 +28,69 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum Error {
-	/// Unserializable Data
 	#[error("Unserializable data encountered")]
 	InvalidData(#[from] sp_serializer::Error),
-	/// Trap occurred during execution
+
 	#[error(transparent)]
 	Trap(#[from] wasmi::Trap),
-	/// Wasmi loading/instantiating error
+
 	#[error(transparent)]
 	Wasmi(#[from] wasmi::Error),
-	/// Error in the API. Parameter is an error message.
+
 	#[error("API Error: {0}")]
 	ApiError(String),
-	/// Method is not found
+
 	#[error("Method not found: '{0}'")]
 	MethodNotFound(String),
-	/// Code is invalid (expected single byte)
-	#[error("Invalid Code: '{0}'")]
+
+	#[error("Invalid Code (expected single byte): '{0}'")]
 	InvalidCode(String),
-	/// Could not get runtime version.
+
 	#[error("On-chain runtime does not specify version")]
 	VersionInvalid,
-	/// Externalities have failed.
+
 	#[error("Externalities error")]
 	Externalities,
-	/// Invalid index.
+
 	#[error("Invalid index provided")]
 	InvalidIndex,
-	/// Invalid return type.
+
 	#[error("Invalid type returned (should be u64)")]
 	InvalidReturn,
-	/// Runtime failed.
+
 	#[error("Runtime error")]
 	Runtime,
-	/// Runtime panicked.
+
 	#[error("Runtime panicked: {0}")]
 	RuntimePanicked(String),
-	/// Invalid memory reference.
+
 	#[error("Invalid memory reference")]
 	InvalidMemoryReference,
-	/// The runtime must provide a global named `__heap_base` of type i32 for specifying where the
-	/// allocator is allowed to place its data.
-	#[error("The runtime doesn't provide a global named `__heap_base`")]
+
+	#[error("The runtime doesn't provide a global named `__heap_base` of type `i32`")]
 	HeapBaseNotFoundOrInvalid,
-	/// The runtime WebAssembly module is not allowed to have the `start` function.
-	#[error("The runtime has the `start` function")]
+
+	#[error("The runtime must not have the `start` function defined")]
 	RuntimeHasStartFn,
-	/// Some other error occurred
+
 	#[error("Other: {0}")]
 	Other(String),
-	/// Some error occurred in the allocator
-	#[error("Allocation Error")]
+
+	#[error(transparent)]
 	Allocator(#[from] sp_allocator::Error),
-	/// Execution of a host function failed.
+
 	#[error("Host function {0} execution failed with: {1}")]
 	FunctionExecution(String, String),
-	/// No table is present.
-	///
-	/// Call was requested that requires table but none was present in the instance.
+
 	#[error("No table exported by wasm blob")]
 	NoTable,
-	/// No table entry is present.
-	///
-	/// Call was requested that requires specific entry in the table to be present.
+
 	#[error("No table entry with index {0} in wasm blob exported table")]
 	NoTableEntryWithIndex(u32),
-	/// Table entry is not a function.
+
 	#[error("Table element with index {0} is not a function in wasm blob exported table")]
 	TableElementIsNotAFunction(u32),
-	/// Function in table is null and thus cannot be called.
+
 	#[error("Table entry with index {0} in wasm blob is null")]
 	FunctionRefIsNull(u32),
 
