@@ -56,21 +56,53 @@ fn split_vote_cancellation_should_work() {
 #[test]
 fn single_proposal_should_work() {
 	new_test_ext().execute_with(|| {
+
+		let who_acc_id = 1;
+		let who_acc_id_42 = 42;
+		let dbg_this_file = file!();
+
 		System::set_block_number(0);
-		assert_ok!(propose_set_balance_and_note(1, 2, 1));
+
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						dbg_this_file,
+						dbg_current_line,
+						who_acc_id,
+						Balances::free_balance(who_acc_id),
+						who_acc_id_42,
+						Balances::free_balance(who_acc_id_42));
+
+		assert_ok!(propose_set_balance_and_note(who_acc_id, 5, 2));
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						dbg_this_file,
+						dbg_current_line,
+						who_acc_id,
+						Balances::free_balance(who_acc_id),
+						who_acc_id_42,
+						Balances::free_balance(who_acc_id_42));
+
 		let r = 0;
 		assert!(Democracy::referendum_info(r).is_none());
 
 		// start of 2 => next referendum scheduled.
 		fast_forward_to(2);
-		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
+		assert_ok!(Democracy::vote(Origin::signed(who_acc_id), r, aye(who_acc_id)));
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						dbg_this_file,
+						dbg_current_line,
+						who_acc_id,
+						Balances::free_balance(who_acc_id),
+						who_acc_id_42,
+						Balances::free_balance(who_acc_id_42));
 
 		assert_eq!(Democracy::referendum_count(), 1);
 		assert_eq!(
 			Democracy::referendum_status(0),
 			Ok(ReferendumStatus {
 				end: 4,
-				proposal_hash: set_balance_proposal_hash_and_note(2),
+				proposal_hash: set_balance_proposal_hash_and_note(5),
 				threshold: VoteThreshold::SuperMajorityApprove,
 				delay: 2,
 				tally: Tally { ayes: 1, nays: 0, turnout: 10 },
@@ -91,7 +123,17 @@ fn single_proposal_should_work() {
 		// referendum passes and wait another two blocks for enactment.
 		fast_forward_to(6);
 
-		assert_eq!(Balances::free_balance(42), 2);
+		let dbg_current_line = line!();
+		println!("@[{:#?}::{:#?}]::Bal of(acc-{:#?}={:#?} | acc-{:#?}={:#?})",
+						dbg_this_file,
+						dbg_current_line,
+						who_acc_id,
+						Balances::free_balance(who_acc_id),
+						who_acc_id_42,
+						Balances::free_balance(who_acc_id_42));
+
+		assert_eq!(Balances::free_balance(42), 5);
+
 	});
 }
 
