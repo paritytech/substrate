@@ -17,11 +17,10 @@
 
 //! # Tipping Module ( pallet-tips )
 //!
-//! This pallet is build on top of pallet-treasury
+//! > NOTE: This pallet is tightly coupled with pallet-treasury.
 //!
-//! A subsystem to allow for an agile "tipping" process, whereby a reward may be
-//! given without first having a pre-determined stakeholder group come to consensus on how much
-//! should be paid.
+//! A subsystem to allow for an agile "tipping" process, whereby a reward may be given without first
+//! having a pre-determined stakeholder group come to consensus on how much should be paid.
 //!
 //! A group of `Tippers` is determined through the config `Trait`. After half of these have declared
 //! some amount that they believe a particular reported reason deserves, then a countdown period is
@@ -52,10 +51,6 @@
 //! - `tip_new` - Report an item worthy of a tip and declare a specific amount to tip.
 //! - `tip` - Declare or redeclare an amount to tip for a particular reason.
 //! - `close_tip` - Close and pay out a tip.
-//!
-//! ## GenesisConfig
-//!
-//! None
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

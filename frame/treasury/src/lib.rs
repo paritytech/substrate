@@ -17,8 +17,8 @@
 
 //! # Treasury Module
 //!
-//! The Treasury module provides a "pot" of funds that can be managed by stakeholders in the
-//! system and a structure for making spending proposals from this pot.
+//! The Treasury module provides a "pot" of funds that can be managed by stakeholders in the system
+//! and a structure for making spending proposals from this pot.
 //!
 //! - [`treasury::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
@@ -36,11 +36,10 @@
 //! ### Terminology
 //!
 //! - **Proposal:** A suggestion to allocate funds from the pot to a beneficiary.
-//! - **Beneficiary:** An account who will receive the funds from a proposal iff
-//! the proposal is approved.
-//! - **Deposit:** Funds that a proposer must lock when making a proposal. The
-//! deposit will be returned or slashed if the proposal is approved or rejected
-//! respectively.
+//! - **Beneficiary:** An account who will receive the funds from a proposal iff the proposal is
+//!   approved.
+//! - **Deposit:** Funds that a proposer must lock when making a proposal. The deposit will be
+//!   returned or slashed if the proposal is approved or rejected respectively.
 //! - **Pot:** Unspent funds accumulated by the treasury module.
 //!
 //! ## Interface
