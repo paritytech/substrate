@@ -181,13 +181,12 @@ fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParti
 		}
 	}
 	match handle.join() {
-		WorkerResult::Valid(encoded) => {
+		Some(encoded) => {
 			bool::decode(&mut &encoded[..]).expect("Failed to decode result") && result
 		},
-		WorkerResult::Invalid => {
+		None => {
 			unreachable!("Worker run as stateless")
 		},
-		_ => panic!("Unexpected result"), // TODO split into two types.
 	}
 }
 
@@ -225,13 +224,12 @@ fn validate_pending_participants_parallel(number: usize) {
 		}
 	}
 	let mut to_skip: Vec<u32> = match handle.join() {
-		WorkerResult::Valid(result) => {
+		Some(result) => {
 			Decode::decode(&mut &result[..]).expect("Failed to decode result")
 		},
-		WorkerResult::Invalid => {
+		None => {
 			unreachable!("Transaction bug")
 		},
-		_ => panic!("Unexpected result"), // TODO split into two types.
 	};
 
 	for (index, participant) in (&participants[..split]).iter().enumerate() {

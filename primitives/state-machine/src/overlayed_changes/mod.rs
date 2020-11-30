@@ -200,7 +200,7 @@ impl Markers {
 
 	}
 
-	pub fn resolve_worker_result(&mut self, result: WorkerResult) -> WorkerResult {
+	pub fn resolve_worker_result(&mut self, result: WorkerResult) -> Option<Vec<u8>> {
 		match result {
 			WorkerResult::CallAt(result, marker) => {
 				match self.markers.remove(&marker) {
@@ -210,13 +210,12 @@ impl Markers {
 								markers.remove(ix);
 							}
 						}
-						WorkerResult::Valid(result)
+						Some(result)
 					}
-					None => WorkerResult::Invalid,
+					None => None,
 				}
 			},
-			r@WorkerResult::Valid(..) => r,
-			r@WorkerResult::Invalid => r,
+			WorkerResult::Valid(result) => Some(result),
 			WorkerResult::Panic => {
 				// TODO at this point a Panic should result in panic from parent
 				// but we could also change it to Invalid result here.
@@ -512,7 +511,7 @@ impl OverlayedChanges {
 	}
 
 	/// TODO
-	pub fn resolve_worker_result(&mut self, result: WorkerResult) -> WorkerResult {
+	pub fn resolve_worker_result(&mut self, result: WorkerResult) -> Option<Vec<u8>> {
 		self.markers.resolve_worker_result(result)
 	}
 

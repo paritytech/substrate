@@ -224,7 +224,7 @@ pub trait RuntimeSpawn: Send {
 	) -> u64;
 	
 	/// Join the result of previously created runtime instance invocation.
-	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> WorkerResult;
+	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>>;
 
 	/// Stop the previous created runtime instance invocation.
 	/// Note that kill can be more expensive than `join`, as

@@ -734,8 +734,8 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		new_handle
 	}
 
-	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> WorkerResult {
-		match self.remove(handle) {
+	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
+		let worker_result = match self.remove(handle) {
 			RuningTask::Task(receiver) => {
 				if let Some(output) = receiver.recv()
 					.expect("Spawned task panicked for the handle") {
@@ -826,7 +826,9 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					}
 				}
 			},
-		}
+		};
+
+		calling_ext.resolve_worker_result(worker_result)
 	}
 
 	fn kill(&self, handle: u64, calling_ext: &mut dyn Externalities) {

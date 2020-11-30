@@ -470,7 +470,7 @@ impl Externalities for AsyncExternalities {
 		self.state.backend.as_ref().expect(KIND_WITH_BACKEND).async_backend()
 	}
 
-	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> WorkerResult {
+	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		/* actually overlay with no stored info is the same
 		match self.state.kind {
 			AsyncStateType::ReadLastBlock

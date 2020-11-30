@@ -119,8 +119,8 @@ pub struct DataJoinHandle {
 
 impl DataJoinHandle {
 	/// Join handle returned by `spawn` function
-	pub fn join(self) -> sp_externalities::WorkerResult {
-		sp_io::runtime_tasks::join(self.handle).into()
+	pub fn join(self) -> Option<Vec<u8>> {
+		sp_io::runtime_tasks::join(self.handle)
 	}
 
 	/// TODO doc

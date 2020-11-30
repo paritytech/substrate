@@ -213,7 +213,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		self.get_past_async_backend()
 	}
 
-	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> WorkerResult {
+	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		state_update.read_resolve()
 	}
 }

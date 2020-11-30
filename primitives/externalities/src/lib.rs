@@ -293,8 +293,8 @@ pub trait Externalities: ExtensionStore {
 	/// This method must be call before processing any worker result,
 	/// for instance from a worker point of view the result may be valid,
 	/// but after checking against parent externalities, it may change
-	/// to invalid.
-	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> WorkerResult;
+	/// to invalid (`None`).
+	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>>;
 }
 
 /// Result from worker execution.
@@ -310,10 +310,6 @@ pub enum WorkerResult {
 	/// Result that require to be checked against
 	/// its parent externality state.
 	CallAt(Vec<u8>, TaskId),
-	/// A worker execution that is not valid
-	/// (such state usually results from a
-	/// `resolve_worker_result` call).
-	Invalid,
 	/// Internal panic when runing the worker.
 	/// This should propagate panic in caller.
 	Panic,
@@ -327,8 +323,7 @@ impl WorkerResult {
 	/// is required (not required if returns false).
 	pub fn is_resolved(&self) -> bool {
 		match self {
-			WorkerResult::Valid(..)
-				| WorkerResult::Invalid => true,
+			WorkerResult::Valid(..) => true,
 			WorkerResult::CallAt(..)
 				| WorkerResult::HardPanic
 				| WorkerResult::Panic => false,
@@ -337,13 +332,16 @@ impl WorkerResult {
 
 	/// Resolve state default implementation for
 	/// Externalities that do not register changes.
-	pub fn read_resolve(self) -> Self {
+	pub fn read_resolve(self) -> Option<Vec<u8>> {
 		match self {
-			WorkerResult::CallAt(result, ..) => WorkerResult::Valid(result),
-			WorkerResult::Valid(result) => WorkerResult::Valid(result),
-			WorkerResult::Panic => WorkerResult::Panic,
-			WorkerResult::HardPanic => WorkerResult::HardPanic,
-			WorkerResult::Invalid => WorkerResult::Invalid,
+			WorkerResult::CallAt(result, ..) => Some(result),
+			WorkerResult::Valid(result) => Some(result),
+			WorkerResult::Panic => {
+				panic!("Panic in worker")
+			},
+			WorkerResult::HardPanic => {
+				panic!("Hard panic in worker")
+			},
 		}
 	}
 }
