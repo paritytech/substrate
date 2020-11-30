@@ -138,7 +138,7 @@ pub struct NotifsHandler {
 	/// Whether we are the connection dialer or listener.
 	endpoint: ConnectedPoint,
 
-	/// Remotes we are connected to.
+	/// Remote we are connected to.
 	peer_id: PeerId,
 
 	/// State of this handler.
