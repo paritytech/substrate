@@ -1,6 +1,6 @@
 # Identity Module
 
-- [`identity::Config`](https://docs.rs/pallet-identity/latest/pallet_identity/trait.Config.html)
+- [`identity::Trait`](https://docs.rs/pallet-identity/latest/pallet_identity/trait.Trait.html)
 - [`Call`](https://docs.rs/pallet-identity/latest/pallet_identity/enum.Call.html)
 
 ## Overview
