@@ -20,9 +20,9 @@
 use codec::Encode;
 use sp_runtime::traits::Convert;
 
-use super::super::Trait as SessionTrait;
+use super::super::Config as SessionTrait;
 use super::super::{Module as SessionModule, SessionIndex};
-use super::Trait as HistoricalTrait;
+use super::Config as HistoricalTrait;
 
 use super::shared;
 use sp_std::prelude::*;
