@@ -53,7 +53,7 @@ use libp2p::{
 	}
 };
 use prost::Message;
-use sp_runtime::{generic::BlockId, traits::{Block, Header, One, Zero}};
+use sp_runtime::{generic::BlockId, Justifications, traits::{Block, Header, One, Zero}};
 use std::{
 	cmp::min,
 	collections::{HashMap, VecDeque},
@@ -422,12 +422,7 @@ where
 				Vec::new()
 			};
 
-			// WIP(JON): Need to encode the whole set of Justifications
-			let a = justification.unwrap_or(sp_runtime::Justifications(Vec::new()));
-			let justification = a
-				.0
-				.first()
-				.map(|y| y.1.clone());
+			let justification = justification.unwrap_or(sp_runtime::Justifications(Vec::new())).encode();
 
 			let block_data = schema::v1::BlockData {
 				hash: hash.encode(),
@@ -439,7 +434,7 @@ where
 				body,
 				receipt: Vec::new(),
 				message_queue: Vec::new(),
-				justification: justification.unwrap_or_default(),
+				justification,
 				is_empty_justification,
 			};
 
@@ -656,12 +651,10 @@ where
 							None
 						},
 						justification: if !block_data.justification.is_empty() {
-							// WIP(JON): Need to decode the whole set of Justifications
-							// let id = sp_finality_grandpa::GRANDPA_ENGINE_ID;
-							const GRANDPA_ENGINE_ID: [u8; 4] = *b"FRNK";
-							let just = vec![(GRANDPA_ENGINE_ID, block_data.justification)];
-							Some(sp_runtime::Justifications(just))
-							// Some(block_data.justification)
+							let justifications: Justifications =
+								Decode::decode(&mut &block_data.justification[..])
+									.expect("WIP(JON): remove me");
+							Some(justifications)
 						} else if block_data.is_empty_justification {
 							Some(sp_runtime::Justifications(Vec::new()))
 						} else {
