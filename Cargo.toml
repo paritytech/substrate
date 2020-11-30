@@ -59,7 +59,6 @@ members = [
 	"client/transaction-pool",
 	"client/transaction-pool/graph",
 	"utils/prometheus",
-	"utils/wasm-builder-runner",
 	"frame/assets",
 	"frame/aura",
 	"frame/atomic-swap",

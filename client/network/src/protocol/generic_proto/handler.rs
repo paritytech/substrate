@@ -138,6 +138,9 @@ pub struct NotifsHandler {
 	/// Whether we are the connection dialer or listener.
 	endpoint: ConnectedPoint,
 
+	/// Remote we are connected to.
+	peer_id: PeerId,
+
 	/// State of this handler.
 	state: State,
 
@@ -260,12 +263,13 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 		SelectUpgrade::new(in_protocols, self.legacy_protocol.clone())
 	}
 
-	fn into_handler(self, _: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
+	fn into_handler(self, peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
 		let num_out_proto = self.out_protocols.len();
 
 		NotifsHandler {
 			in_protocols: self.in_protocols,
 			out_protocols: self.out_protocols,
+			peer_id: peer_id.clone(),
 			endpoint: connected_point.clone(),
 			when_connection_open: Instant::now(),
 			state: State::Closed {
@@ -365,6 +369,8 @@ pub struct NotificationsSink {
 
 #[derive(Debug)]
 struct NotificationsSinkInner {
+	/// Target of the sink.
+	peer_id: PeerId,
 	/// Sender to use in asynchronous contexts. Uses an asynchronous mutex.
 	async_channel: FuturesMutex<mpsc::Sender<NotificationsSinkMessage>>,
 	/// Sender to use in synchronous contexts. Uses a synchronous mutex.
@@ -390,6 +396,11 @@ enum NotificationsSinkMessage {
 }
 
 impl NotificationsSink {
+	/// Returns the [`PeerId`] the sink is connected to.
+	pub fn peer_id(&self) -> &PeerId {
+		&self.inner.peer_id
+	}
+
 	/// Sends a notification to the peer.
 	///
 	/// If too many messages are already buffered, the notification is silently discarded and the
@@ -447,6 +458,12 @@ pub struct Ready<'a> {
 }
 
 impl<'a> Ready<'a> {
+	/// Returns the name of the protocol. Matches the one passed to
+	/// [`NotificationsSink::reserve_notification`].
+	pub fn protocol_name(&self) -> &Cow<'static, str> {
+		&self.protocol_name
+	}
+
 	/// Consumes this slots reservation and actually queues the notification.
 	///
 	/// Returns an error if the substream has been closed.
@@ -622,6 +639,7 @@ impl ProtocolsHandler for NotifsHandler {
 					let (sync_tx, sync_rx) = mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
 					let notifications_sink = NotificationsSink {
 						inner: Arc::new(NotificationsSinkInner {
+							peer_id: self.peer_id.clone(),
 							async_channel: FuturesMutex::new(async_tx),
 							sync_channel: Mutex::new(sync_tx),
 						}),
@@ -666,6 +684,7 @@ impl ProtocolsHandler for NotifsHandler {
 							_ => unreachable!()
 						};
 
+						debug_assert_eq!(pending_opening.len(), self.out_protocols.len());
 						for (n, is_pending) in pending_opening.iter().enumerate() {
 							if *is_pending {
 								continue;
@@ -722,8 +741,9 @@ impl ProtocolsHandler for NotifsHandler {
 
 				match &mut self.state {
 					State::Open { .. } => {
+						let pending_opening = self.out_protocols.iter().map(|_| false).collect();
 						self.state = State::Closed {
-							pending_opening: Vec::new(),
+							pending_opening,
 						};
 					},
 					State::Opening { out_substreams, .. } => {
@@ -782,6 +802,7 @@ impl ProtocolsHandler for NotifsHandler {
 					let (sync_tx, sync_rx) = mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
 					let notifications_sink = NotificationsSink {
 						inner: Arc::new(NotificationsSinkInner {
+							peer_id: self.peer_id.clone(),
 							async_channel: FuturesMutex::new(async_tx),
 							sync_channel: Mutex::new(sync_tx),
 						}),
@@ -971,6 +992,16 @@ impl ProtocolsHandler for NotifsHandler {
 						if let Some(pos) = self.out_protocols.iter().position(|(n, _)| *n == protocol_name) {
 							if let Some(substream) = out_substreams[pos].as_mut() {
 								let _ = substream.start_send_unpin(message);
+								// Calling `start_send_unpin` only queues the message. Actually
+								// emitting the message is done with `poll_flush`. In order to
+								// not introduce too much complexity, this flushing is done earlier
+								// in the body of this `poll()` method. As such, we schedule a task
+								// wake-up now in order to guarantee that `poll()` will be called
+								// again and the flush happening.
+								// At the time of the writing of this comment, a rewrite of this
+								// code is being planned. If you find this comment in the wild and
+								// the rewrite didn't happen, please consider a refactor.
+								cx.waker().wake_by_ref();
 								continue 'poll_notifs_sink;
 							}
 

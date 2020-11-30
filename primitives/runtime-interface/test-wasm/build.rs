@@ -15,12 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use wasm_builder_runner::WasmBuilder;
+use substrate_wasm_builder::WasmBuilder;
 
 fn main() {
 	WasmBuilder::new()
 		.with_current_project()
-		.with_wasm_builder_from_crates_or_path("2.0.1", "../../../utils/wasm-builder")
 		.export_heap_base()
 		.import_memory()
 		.build()
