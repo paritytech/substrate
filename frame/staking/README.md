@@ -2,7 +2,7 @@
 
 The Staking module is used to manage funds at stake by network maintainers.
 
-- [`staking::Trait`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html)
+- [`staking::Config`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html)
 - [`Module`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Module.html)
 
@@ -90,7 +90,7 @@ valid behavior_ while _punishing any misbehavior or lack of availability_.
 
 Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
 `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-validator as well as its nominators. Only the [`Trait::MaxNominatorRewardedPerValidator`]
+validator as well as its nominators. Only the [`Config::MaxNominatorRewardedPerValidator`]
 biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
 nominator's account.
 
@@ -137,10 +137,10 @@ use frame_support::{decl_module, dispatch};
 use frame_system::ensure_signed;
 use pallet_staking::{self as staking};
 
-pub trait Trait: staking::Trait {}
+pub trait Config: staking::Config {}
 
 decl_module! {
-    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+    pub struct Module<T: Config> for enum Call where origin: T::Origin {
         /// Reward a validator.
         #[weight = 0]
         pub fn reward_myself(origin) -> dispatch::DispatchResult {
@@ -157,7 +157,7 @@ decl_module! {
 ### Era payout
 
 The era payout is computed using yearly inflation curve defined at
-[`T::RewardCurve`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html#associatedtype.RewardCurve) as such:
+[`T::RewardCurve`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.RewardCurve) as such:
 
 ```nocompile
 staker_payout = yearly_inflation(npos_token_staked / total_tokens) * total_tokens / era_per_year
@@ -168,7 +168,7 @@ This payout is used to reward stakers as defined in next section
 remaining_payout = max_yearly_inflation * total_tokens / era_per_year - staker_payout
 ```
 The remaining reward is send to the configurable end-point
-[`T::RewardRemainder`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html#associatedtype.RewardRemainder).
+[`T::RewardRemainder`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.RewardRemainder).
 
 ### Reward Calculation
 
@@ -214,7 +214,7 @@ Any funds already placed into stash can be the target of the following operation
 
 The controller account can free a portion (or all) of the funds using the
 [`unbond`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.unbond) call. Note that the funds are not immediately
-accessible. Instead, a duration denoted by [`BondingDuration`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html#associatedtype.BondingDuration)
+accessible. Instead, a duration denoted by [`BondingDuration`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.BondingDuration)
 (in number of eras) must pass until the funds can actually be removed. Once the
 `BondingDuration` is over, the [`withdraw_unbonded`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.withdraw_unbonded)
 call can be used to actually withdraw the funds.

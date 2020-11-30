@@ -1575,34 +1575,20 @@ impl NetworkBehaviour for GenericProto {
 						}
 					}
 
-					// DisabledPendingEnable => DisabledPendingEnable | Incoming
+					// DisabledPendingEnable => Enabled | DisabledPendingEnable
 					PeerState::DisabledPendingEnable { mut connections, timer, timer_deadline } => {
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, _)| *c == connection) {
 							if let ConnectionState::Closed = *connec_state {
-								*connec_state = ConnectionState::OpenDesiredByRemote;
-
-								let incoming_id = self.next_incoming_index;
-								self.next_incoming_index.0 = match self.next_incoming_index.0.checked_add(1) {
-									Some(v) => v,
-									None => {
-										error!(target: "sub-libp2p", "Overflow in next_incoming_index");
-										return
-									}
-								};
-
-								debug!(target: "sub-libp2p", "PSM <= Incoming({}, {:?}).",
-									source, incoming_id);
-								self.peerset.incoming(source.clone(), incoming_id);
-								self.incoming.push(IncomingPeer {
+								debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open",
+									source, connection);
+								self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 									peer_id: source.clone(),
-									alive: true,
-									incoming_id,
+									handler: NotifyHandler::One(connection),
+									event: NotifsHandlerIn::Open,
 								});
+								*connec_state = ConnectionState::Opening;
 
-								*entry.into_mut() = PeerState::Incoming {
-									connections,
-									backoff_until: Some(timer_deadline),
-								};
+								*entry.into_mut() = PeerState::Enabled { connections };
 
 							} else {
 								// Connections in `OpeningThenClosing` are in a Closed phase, and

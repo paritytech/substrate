@@ -11,7 +11,7 @@ with a fixed supply, including:
 * Asset Transfer
 * Asset Destruction
 
-To use it in your runtime, you need to implement the assets [`Trait`](https://docs.rs/pallet-assets/latest/pallet_assets/trait.Trait.html).
+To use it in your runtime, you need to implement the assets [`Config`](https://docs.rs/pallet-assets/latest/pallet_assets/trait.Config.html).
 
 The supported dispatchable functions are documented in the [`Call`](https://docs.rs/pallet-assets/latest/pallet_assets/enum.Call.html) enum.
 
@@ -72,10 +72,10 @@ use pallet_assets as assets;
 use frame_support::{decl_module, dispatch, ensure};
 use frame_system::ensure_signed;
 
-pub trait Trait: assets::Trait { }
+pub trait Config: assets::Config { }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		pub fn issue_token_airdrop(origin) -> dispatch::DispatchResult {
 			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
 
@@ -106,7 +106,7 @@ Below are assumptions that must be held when using this module.  If any of
 them are violated, the behavior of this module is undefined.
 
 * The total count of assets should be less than
-  `Trait::AssetId::max_value()`.
+  `Config::AssetId::max_value()`.
 
 ## Related Modules
 

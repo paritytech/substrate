@@ -24,7 +24,7 @@
 //! we define this simple definition of a contract that can be passed to `create_code` that
 //! compiles it down into a `WasmModule` that can be used as a contract's code.
 
-use crate::Trait;
+use crate::Config;
 use crate::Module as Contracts;
 
 use parity_wasm::elements::{Instruction, Instructions, FuncBody, ValueType, BlockType};
@@ -87,9 +87,9 @@ pub struct ImportedMemory {
 }
 
 impl ImportedMemory {
-	pub fn max<T: Trait>() -> Self
+	pub fn max<T: Config>() -> Self
 	where
-		T: Trait,
+		T: Config,
 		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	{
 		let pages = max_pages::<T>();
@@ -105,15 +105,15 @@ pub struct ImportedFunction {
 
 /// A wasm module ready to be put on chain with `put_code`.
 #[derive(Clone)]
-pub struct WasmModule<T:Trait> {
+pub struct WasmModule<T:Config> {
 	pub code: Vec<u8>,
 	pub hash: <T::Hashing as Hash>::Output,
 	memory: Option<ImportedMemory>,
 }
 
-impl<T: Trait> From<ModuleDefinition> for WasmModule<T>
+impl<T: Config> From<ModuleDefinition> for WasmModule<T>
 where
-	T: Trait,
+	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	fn from(def: ModuleDefinition) -> Self {
@@ -225,9 +225,9 @@ where
 	}
 }
 
-impl<T: Trait> WasmModule<T>
+impl<T: Config> WasmModule<T>
 where
-	T: Trait,
+	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	/// Creates a wasm module with an empty `call` and `deploy` function and nothing else.
@@ -483,9 +483,9 @@ pub mod body {
 }
 
 /// The maximum amount of pages any contract is allowed to have according to the current `Schedule`.
-pub fn max_pages<T: Trait>() -> u32
+pub fn max_pages<T: Config>() -> u32
 where
-	T: Trait,
+	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	Contracts::<T>::current_schedule().limits.memory_pages
