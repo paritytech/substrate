@@ -29,7 +29,7 @@ pub fn expand_type_values(def: &mut Def) -> proc_macro2::TokenStream {
 		let item = &mut def.item.content.as_mut().expect("Checked by def").1[type_value.index];
 		let span = item.span();
 		*item = syn::Item::Verbatim(Default::default());
-		
+
 		let vis = &type_value.vis;
 		let ident = &type_value.ident;
 		let block = &type_value.block;

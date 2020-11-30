@@ -309,7 +309,7 @@ pub mod pallet {{
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use super::*;
-	
+
 	#[pallet::config]
 	pub trait Config{config_gen}: frame_system::Config
 		// TODO_MAYBE_ADDITIONAL_BOUNDS_AND_WHERE_CLAUSE

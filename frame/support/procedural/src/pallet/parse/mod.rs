@@ -197,7 +197,7 @@ impl Def {
 			_ => Ok(())
 		}
 	}
-	
+
 	/// Check that usage of trait `Config` is consistent with the definition, i.e. it is used with
 	/// instance iff it is defined with instance.
 	fn check_instance_usage(&self) -> syn::Result<()> {

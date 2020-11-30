@@ -309,7 +309,7 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckWeight<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{BlockWeight, AllExtrinsicsLen, Config};
+	use crate::{BlockWeight, AllExtrinsicsLen};
 	use crate::mock::{Test, CALL, new_test_ext, System};
 	use sp_std::marker::PhantomData;
 	use frame_support::{assert_ok, assert_noop};
