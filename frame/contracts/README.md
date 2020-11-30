@@ -2,7 +2,7 @@
 
 The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 
-- [`contract::Trait`](https://docs.rs/pallet-contracts/latest/pallet_contracts/trait.Trait.html)
+- [`contract::Config`](https://docs.rs/pallet-contracts/latest/pallet_contracts/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-contracts/latest/pallet_contracts/enum.Call.html)
 
 ## Overview
