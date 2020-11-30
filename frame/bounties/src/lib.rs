@@ -318,8 +318,6 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB change.
 		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::approve_bounty()]
 		fn approve_bounty(origin, #[compact] bounty_id: BountyIndex) {
@@ -343,8 +341,6 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB change.
 		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::propose_curator()]
 		fn propose_curator(
@@ -390,8 +386,6 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB change.
 		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::unassign_curator()]
 		fn unassign_curator(
@@ -472,8 +466,6 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - O(1).
-		/// - Limited storage reads.
-		/// - One DB change.
 		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::accept_curator()]
 		fn accept_curator(origin, #[compact] bounty_id: BountyIndex) {
@@ -506,6 +498,10 @@ decl_module! {
 		///
 		/// - `bounty_id`: Bounty ID to award.
 		/// - `beneficiary`: The beneficiary account whom will receive the payout.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::award_bounty()]
 		fn award_bounty(origin, #[compact] bounty_id: BountyIndex, beneficiary: <T::Lookup as StaticLookup>::Source) {
 			let signer = ensure_signed(origin)?;
@@ -539,6 +535,10 @@ decl_module! {
 		/// The dispatch origin for this call must be the beneficiary of this bounty.
 		///
 		/// - `bounty_id`: Bounty ID to claim.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::claim_bounty()]
 		fn claim_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			let _ = ensure_signed(origin)?; // anyone can trigger claim
@@ -572,6 +572,10 @@ decl_module! {
 		/// Only `T::RejectOrigin` is able to cancel a bounty.
 		///
 		/// - `bounty_id`: Bounty ID to cancel.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::close_bounty_proposed().max(<T as Config>::WeightInfo::close_bounty_active())]
 		fn close_bounty(origin, #[compact] bounty_id: BountyIndex) -> DispatchResultWithPostInfo {
 			T::RejectOrigin::ensure_origin(origin)?;
@@ -634,6 +638,10 @@ decl_module! {
 		///
 		/// - `bounty_id`: Bounty ID to extend.
 		/// - `remark`: additional information.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::extend_bounty_expiry()]
 		fn extend_bounty_expiry(origin, #[compact] bounty_id: BountyIndex, _remark: Vec<u8>) {
 			let signer = ensure_signed(origin)?;
