@@ -292,12 +292,11 @@ impl ConfigDef {
 			return Err(syn::Error::new(item.generics.params[2].span(), msg));
 		}
 
-		let has_instance;
-		if let Some(_) = item.generics.params.first() {
+		let has_instance = if let Some(_) = item.generics.params.first() {
 			helper::check_config_def_gen(&item.generics, item.ident.span())?;
-			has_instance = true;
+			true
 		} else {
-			has_instance = false;
+			false
 		}
 
 		let mut has_event_type = false;

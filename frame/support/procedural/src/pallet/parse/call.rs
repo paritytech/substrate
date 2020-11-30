@@ -69,7 +69,6 @@ impl syn::parse::Parse for FunctionAttr {
 		syn::bracketed!(content in input);
 		content.parse::<keyword::pallet>()?;
 		content.parse::<syn::Token![::]>()?;
-
 		content.parse::<keyword::weight>()?;
 
 		let weight_content;
