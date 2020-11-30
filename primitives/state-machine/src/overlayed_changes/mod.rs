@@ -39,6 +39,7 @@ use crate::changes_trie::BlockNumber;
 use std::collections::{HashMap as Map, hash_map::Entry as MapEntry};
 #[cfg(not(feature = "std"))]
 use sp_std::collections::btree_map::{BTreeMap as Map, Entry as MapEntry};
+use sp_std::collections::btree_map::BTreeMap;
 use sp_std::collections::btree_set::BTreeSet;
 use codec::{Decode, Encode};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo};
@@ -46,7 +47,7 @@ use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo};
 use sp_core::offchain::storage::OffchainOverlayedChanges;
 use hash_db::Hasher;
 use crate::DefaultError;
-use sp_externalities::{Extensions, Extension, TaskId};
+use sp_externalities::{Extensions, Extension, TaskId, WorkerResult};
 
 pub use self::changeset::{OverlayedValue, NoOpenTransaction, AlreadyInRuntime, NotInRuntime};
 
@@ -95,34 +96,57 @@ impl Extrinsics {
 ///	- Worker with read access cannot
 ///	report result to the main thread
 ///	for a rollbacked the spawning transaction.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 struct Markers {
 	// current valid task ids
-	markers: BTreeSet<TaskId>,
+	markers: BTreeMap<TaskId, MarkerDesc>,
 	// current transaction and associated
 	// task ids.
 	transactions: Vec<Vec<TaskId>>,
 }
 
-impl Markers {
-	fn current_transaction(&mut self) -> &mut Vec<TaskId> {
-		if self.transactions.is_empty() {
-			// always a runing context
-			self.transactions.push(Default::default());
+#[derive(Debug, Clone)]
+struct MarkerDesc {
+	transaction_depth: usize,
+}
+
+impl Default for Markers {
+	fn default() -> Self {
+		Markers {
+			markers: BTreeMap::new(),
+			transactions: Vec::new(),
 		}
-		self.transactions.last_mut()
-			.expect("Initialized above")
+	}
+}
+
+impl Markers {
+	fn current_transaction_internal(transactions: &mut Vec<Vec<TaskId>>) -> (&mut Vec<TaskId>, usize) {
+		if transactions.is_empty() {
+			// always a runing context
+			transactions.push(Default::default());
+		}
+		let len = transactions.len();
+		(transactions.last_mut()
+			.expect("Initialized above"), len)
+	}
+
+	fn current_transaction(&mut self) -> (&mut Vec<TaskId>, usize) {
+		Self::current_transaction_internal(&mut self.transactions)
 	}
 
 	fn set_marker(&mut self, marker: TaskId) {
-		self.markers.insert(marker);
-		self.current_transaction().push(marker)
+		let (mut tx, index) = Self::current_transaction_internal(&mut self.transactions);
+		self.markers.insert(marker, MarkerDesc {
+			transaction_depth: index,
+		});
+		tx.push(marker)
 	}
 
 	fn start_transaction(&mut self) {
 		self.transactions.push(Default::default());
 	}
 
+	#[must_use]
 	fn rollback_transaction(&mut self) -> Vec<TaskId> {
 		if let Some(markers) = self.transactions.pop() {
 			for marker in markers.iter() {
@@ -148,15 +172,59 @@ impl Markers {
 		}
 	}
 
-	fn commit_transaction(&mut self) {
-		if let Some(mut markers) = self.transactions.pop() {
-			self.current_transaction().append(&mut markers);
+	#[must_use]
+	fn commit_transaction(&mut self) -> Vec<TaskId> {
+		// TODO factor code with rollback
+		if let Some(markers) = self.transactions.pop() {
+			for marker in markers.iter() {
+				self.markers.remove(marker);
+				// TODO using sp_task::kill is actually impossible,
+				// since state_machine did alread  borrowmut externalitise
+				// and kill will do the same.
+				// Thread kill directly could be done, but not for inline.
+				// Therefore we will need to move this Marker struct
+				// to externality extension and call when externality did
+				// call it -> TODO move Markers to the RuntimeSpawn and
+				// put on_start_tx ... for it.
+				// -> allowing early kill.
+				// For inline this would simply change state of stored
+				// online.
+				// Actually this only need to be done this call.
+				unimplemented!("TODO sp_task::kill all ids");
+				// Or do it from calle
+			}
+			markers
+		} else {
+			Default::default()
+		}
+
+	}
+
+	pub fn resolve_worker_result(&mut self, result: WorkerResult) -> WorkerResult {
+		match result {
+			WorkerResult::CallAt(result, marker) => {
+				match self.markers.remove(&marker) {
+					Some(marker_desc) => {
+						if let Some(mut markers) = self.transactions.get_mut(marker_desc.transaction_depth) {
+							if let Some(ix) = markers.iter().position(|id| id == &marker) {
+								markers.remove(ix);
+							}
+						}
+						WorkerResult::Valid(result)
+					}
+					None => WorkerResult::Invalid,
+				}
+			},
+			r@WorkerResult::Valid(..) => r,
+			r@WorkerResult::Invalid => r,
+			WorkerResult::Panic => {
+				// TODO at this point a Panic should result in panic from parent
+				// but we could also change it to Invalid result here.
+				WorkerResult::Panic
+			},
 		}
 	}
 
-	fn is_state_current(&self, marker: TaskId) -> bool {
-		self.markers.contains(&marker)
-	}
 }
 
 /// The set of changes that are overlaid onto the backend.
@@ -439,8 +507,8 @@ impl OverlayedChanges {
 	}
 
 	/// TODO
-	pub fn is_state_current(&self, marker: TaskId) -> bool {
-		self.markers.is_state_current(marker)
+	pub fn resolve_worker_result(&mut self, result: WorkerResult) -> WorkerResult {
+		self.markers.resolve_worker_result(result)
 	}
 
 	/// Start a new nested transaction.

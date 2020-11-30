@@ -33,7 +33,7 @@ use sp_core::{
 };
 use log::warn;
 use codec::Encode;
-use sp_externalities::{Extensions, Extension, AsyncBackend, TaskId};
+use sp_externalities::{Extensions, Extension, AsyncBackend, TaskId, WorkerResult};
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
@@ -341,9 +341,9 @@ impl Externalities for BasicExternalities {
 		unimplemented!("TODO from self.storage cloned")
 	}
 
-	fn is_state_current(&self, marker: TaskId) -> bool {
-		// no tx
-		true
+	fn resolve_worker_state(&mut self, state_update: WorkerResult) -> WorkerResult {
+		// No transaction, works as read (TODO not true for worker in write mode).
+		state_update.read_resolve()
 	}
 
 }

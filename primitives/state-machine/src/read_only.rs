@@ -28,7 +28,7 @@ use sp_core::{
 	traits::Externalities, Blake2Hasher,
 };
 use codec::Encode;
-use sp_externalities::{TaskId, AsyncBackend};
+use sp_externalities::{TaskId, AsyncBackend, WorkerResult};
 
 /// Trait for inspecting state in any backend.
 ///
@@ -213,9 +213,8 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		self.get_past_async_backend()
 	}
 
-	fn is_state_current(&self, marker: TaskId) -> bool {
-		// no changes
-		true
+	fn resolve_worker_state(&mut self, state_update: WorkerResult) -> WorkerResult {
+		state_update.read_resolve()
 	}
 }
 

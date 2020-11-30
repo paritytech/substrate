@@ -287,11 +287,59 @@ pub trait Externalities: ExtensionStore {
 	/// state, and the marker should be still registerd by this call.
 	fn get_async_backend(&mut self, marker: TaskId) -> Option<Box<dyn AsyncBackend>>;
 
-	/// Check if state is the same as when an AsyncBackend was acquired.
-	/// TODO actually if we kill, this is not needed (except if we want
-	/// to avoid a panic on a join, but we would most likely return enum
-	/// on join for case where thread has been killed).
-	fn is_state_current(&self, marker: TaskId) -> bool;
+	/// Resolve worker state does update externality
+	/// and also apply rules relative to the exernality state.
+	///
+	/// This method must be call before processing any worker result,
+	/// for instance from a worker point of view the result may be valid,
+	/// but after checking against parent externalities, it may change
+	/// to invalid.
+	fn resolve_worker_state(&mut self, state_update: WorkerResult) -> WorkerResult;
+}
+
+/// Result from worker execution.
+///
+/// Note that an error that is expected should
+/// be serialize in a `Valid` result payload.
+pub enum WorkerResult {
+	/// Payload resulting from a successfull
+	/// stateless call, or a call that
+	/// is guaranted to be valid at this point.
+	Valid(Vec<u8>),
+	/// Result that require to be checked against
+	/// its parent externality state.
+	CallAt(Vec<u8>, TaskId),
+	/// Internal panic when runing the worker.
+	/// This should propagate panick in caller.
+	Panic,
+	/// A worker execution that is not valid
+	/// (such state usually results from a
+	/// `resolve_worker_state` call).
+	Invalid,
+}
+
+impl WorkerResult {
+	/// Check if calls to `resolve_worker_state`
+	/// is required (not required if returns false).
+	pub fn is_resolved(&self) -> bool {
+		match self {
+			WorkerResult::Valid(..)
+				| WorkerResult::Invalid => true,
+			WorkerResult::CallAt(..)
+				| WorkerResult::Panic => false,
+		}
+	}
+
+	/// Resolve state default implementation for
+	/// Externalities that do not register changes.
+	pub fn read_resolve(self) -> Self {
+		match self {
+			WorkerResult::CallAt(result, ..) => WorkerResult::Valid(result),
+			WorkerResult::Valid(result) => WorkerResult::Valid(result),
+			WorkerResult::Panic => WorkerResult::Panic,
+			WorkerResult::Invalid => WorkerResult::Invalid,
+		}
+	}
 }
 
 /// A unique indentifier for a transactional level.

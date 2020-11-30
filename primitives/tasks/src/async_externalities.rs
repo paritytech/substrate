@@ -25,6 +25,7 @@
 //! - AsyncStateType::Stateless: None
 //!		- extension (only thread extension if not inline) so purely technical
 //!		(also true for all other kind).
+//!		- resolve_worker_state
 //! - AsyncStateType::ReadLastBlock
 //!		- storage
 //!		- child_storage
@@ -33,7 +34,6 @@
 //!		- get_past_async_backend (warning this is only for this type, not inherited)
 //! - AsyncStateType::ReadAtSpawn
 //!		- get_async_backend
-//!		- is_state_current
 // TODO consider moving part of it to state machine (removing the current
 // dep on state machine).
 
@@ -46,7 +46,7 @@ use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	traits::{SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
-use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend};
+use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend, WorkerResult};
 use crate::AsyncStateType;
 use sp_state_machine::ext_tools::{EXT_NOT_ALLOWED_TO_FAIL, guard};
 use sp_state_machine::trace;
@@ -428,7 +428,7 @@ impl Externalities for AsyncExternalities {
 		match self.state.kind {
 			AsyncStateType::Stateless
 			| AsyncStateType::ReadAtSpawn => {
-				panic!("Staking a ReadLastBlock worker is only possible from a ReadLastBlock worker");
+				panic!("Spawning a ReadLastBlock worker is only possible from a ReadLastBlock worker");
 			},
 			AsyncStateType::ReadLastBlock => (),
 		}
@@ -440,7 +440,7 @@ impl Externalities for AsyncExternalities {
 		match self.state.kind {
 			AsyncStateType::Stateless
 			| AsyncStateType::ReadLastBlock => {
-				panic!("Staking a ReadAtSpawn worker is only possible from a ReadAtSpawn worker");
+				panic!("Spawning a ReadAtSpawn worker is only possible from a ReadAtSpawn worker");
 			},
 			AsyncStateType::ReadAtSpawn => (),
 		}
@@ -455,16 +455,18 @@ impl Externalities for AsyncExternalities {
 		self.state.backend.as_ref().expect(KIND_WITH_BACKEND).async_backend()
 	}
 
-	fn is_state_current(&self, marker: TaskId) -> bool {
+	fn resolve_worker_state(&mut self, state_update: WorkerResult) -> WorkerResult {
+		/* actually overlay with no stored info is the same
 		match self.state.kind {
-			AsyncStateType::Stateless
-			| AsyncStateType::ReadLastBlock => {
-				panic!("Staking a ReadAtSpawn worker is only possible from a ReadAtSpawn worker");
+			AsyncStateType::ReadLastBlock
+			| AsyncStateType::Stateless => {
+				state_update.read_resolve()
 			},
-			AsyncStateType::ReadAtSpawn => (),
-		}
-
-		self.state.overlay.is_state_current(marker)
+			AsyncStateType::ReadAtSpawn => {
+		*/
+		self.state.overlay.resolve_worker_result(state_update)
+//			},
+//		}
 	}
 }
 

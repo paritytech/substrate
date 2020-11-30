@@ -29,6 +29,7 @@ use sp_core::{
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{
 	Externalities, Extensions, Extension, ExtensionStore, AsyncBackend, TaskId,
+	WorkerResult,
 };
 use codec::{Decode, Encode, EncodeAppend};
 
@@ -688,8 +689,8 @@ where
 		})
 	}
 
-	fn is_state_current(&self, marker: TaskId) -> bool {
-		self.overlay.is_state_current(marker)
+	fn resolve_worker_state(&mut self, state_update: WorkerResult) -> WorkerResult {
+		self.overlay.resolve_worker_result(state_update)
 	}
 }
 
