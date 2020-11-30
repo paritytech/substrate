@@ -110,7 +110,8 @@ pub fn reload_filter() -> Result<(), String> {
 				Err(invalid_directive) => {
 					log::warn!(
 						target: "tracing",
-						"Unable to parse directive while setting log filter: {:?}", invalid_directive
+						"Unable to parse directive while setting log filter: {:?}",
+						invalid_directive,
 					);
 				}
 			}
@@ -135,8 +136,9 @@ pub fn reset_log_filter() -> Result<(), String> {
 	reload_filter()
 }
 
-/// Parse `Directive` and add to default directives if successful. Ensures the supplied directive
-/// will be restored when resetting the log filter.
+/// Parse `Directive` and add to default directives if successful. 
+///
+/// Ensures the supplied directive will be restored when resetting the log filter.
 pub fn parse_default_directive(directive: &str) -> Result<Directive, String> {
 	let dir = directive
 		.parse()
