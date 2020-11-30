@@ -30,7 +30,7 @@ use crate::Module as TipsMod;
 const SEED: u32 = 0;
 
 // Create the pre-requisite information needed to create a `report_awesome`.
-fn setup_awesome<T: Trait>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId) {
+fn setup_awesome<T: Config>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId) {
 	let caller = whitelisted_caller();
 	let value = T::TipReportDepositBase::get()
 		+ T::DataDepositPerByte::get() * length.into()
@@ -42,7 +42,7 @@ fn setup_awesome<T: Trait>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId)
 }
 
 // Create the pre-requisite information needed to call `tip_new`.
-fn setup_tip<T: Trait>(r: u32, t: u32) ->
+fn setup_tip<T: Config>(r: u32, t: u32) ->
 	Result<(T::AccountId, Vec<u8>, T::AccountId, BalanceOf<T>), &'static str>
 {
 	let tippers_count = T::Tippers::count();
@@ -63,7 +63,7 @@ fn setup_tip<T: Trait>(r: u32, t: u32) ->
 
 // Create `t` new tips for the tip proposal with `hash`.
 // This function automatically makes the tip able to close.
-fn create_tips<T: Trait>(t: u32, hash: T::Hash, value: BalanceOf<T>) ->
+fn create_tips<T: Config>(t: u32, hash: T::Hash, value: BalanceOf<T>) ->
 	Result<(), &'static str>
 {
 	for i in 0 .. t {
@@ -79,7 +79,7 @@ fn create_tips<T: Trait>(t: u32, hash: T::Hash, value: BalanceOf<T>) ->
 	Ok(())
 }
 
-fn setup_pod_account<T: Trait>() {
+fn setup_pod_account<T: Config>() {
 	let pot_account = TipsMod::<T>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);

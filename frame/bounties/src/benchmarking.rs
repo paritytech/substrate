@@ -31,7 +31,7 @@ use crate::Module as Bounties;
 const SEED: u32 = 0;
 
 // Create bounties that are approved for use in `on_initialize`.
-fn create_approved_bounties<T: Trait>(n: u32) -> Result<(), &'static str> {
+fn create_approved_bounties<T: Config>(n: u32) -> Result<(), &'static str> {
 	for i in 0 .. n {
 		let (caller, _curator, _fee, value, reason) = setup_bounty::<T>(i, MAX_BYTES);
 		Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
@@ -43,7 +43,7 @@ fn create_approved_bounties<T: Trait>(n: u32) -> Result<(), &'static str> {
 }
 
 // Create the pre-requisite information needed to create a treasury `propose_bounty`.
-fn setup_bounty<T: Trait>(u: u32, d: u32) -> (
+fn setup_bounty<T: Config>(u: u32, d: u32) -> (
 	T::AccountId,
 	T::AccountId,
 	BalanceOf<T>,
@@ -61,7 +61,7 @@ fn setup_bounty<T: Trait>(u: u32, d: u32) -> (
 	(caller, curator, fee, value, reason)
 }
 
-fn create_bounty<T: Trait>() -> Result<(
+fn create_bounty<T: Config>() -> Result<(
 	<T::Lookup as StaticLookup>::Source,
 	BountyIndex,
 ), &'static str> {
@@ -76,13 +76,13 @@ fn create_bounty<T: Trait>() -> Result<(
 	Ok((curator_lookup, bounty_id))
 }
 
-fn setup_pod_account<T: Trait>() {
+fn setup_pod_account<T: Config>() {
 	let pot_account = Bounties::<T>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
-fn assert_last_event<T: Trait>(generic_event: <T as Config>::Event) {
+fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	let events = frame_system::Module::<T>::events();
 	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	// compare to the last event record

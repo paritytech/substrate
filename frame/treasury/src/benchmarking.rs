@@ -30,7 +30,7 @@ use crate::Module as Treasury;
 const SEED: u32 = 0;
 
 // Create the pre-requisite information needed to create a treasury `propose_spend`.
-fn setup_proposal<T: Trait<I>, I: Instance>(u: u32) -> (
+fn setup_proposal<T: Config<I>, I: Instance>(u: u32) -> (
 	T::AccountId,
 	BalanceOf<T, I>,
 	<T::Lookup as StaticLookup>::Source,
@@ -44,7 +44,7 @@ fn setup_proposal<T: Trait<I>, I: Instance>(u: u32) -> (
 }
 
 // Create proposals that are approved for use in `on_initialize`.
-fn create_approved_proposals<T: Trait<I>, I: Instance>(n: u32) -> Result<(), &'static str> {
+fn create_approved_proposals<T: Config<I>, I: Instance>(n: u32) -> Result<(), &'static str> {
 	for i in 0 .. n {
 		let (caller, value, lookup) = setup_proposal::<T, I>(i);
 		Treasury::<T, I>::propose_spend(
@@ -59,7 +59,7 @@ fn create_approved_proposals<T: Trait<I>, I: Instance>(n: u32) -> Result<(), &'s
 	Ok(())
 }
 
-fn setup_pod_account<T: Trait<I>, I: Instance>() {
+fn setup_pod_account<T: Config<I>, I: Instance>() {
 	let pot_account = Treasury::<T, I>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
