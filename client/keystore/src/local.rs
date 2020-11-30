@@ -503,6 +503,8 @@ mod tests {
 		str::FromStr,
 	};
 
+	const TEST_KEY_TYPE: KeyTypeId = KeyTypeId(*b"test");
+
 	impl KeystoreInner {
 		fn insert_ephemeral_from_seed<Pair: AppPair>(&mut self, seed: &str) -> Result<Pair> {
 			self.insert_ephemeral_from_seed_by_type::<Pair::Generic>(seed, Pair::ID).map(Into::into)
@@ -517,7 +519,7 @@ mod tests {
 				})
 		}
 
-		fn generate<Pair: AppPair>(&self) -> Result<Pair> {
+		fn generate<Pair: AppPair>(&mut self) -> Result<Pair> {
 			self.generate_by_type::<Pair::Generic>(Pair::ID).map(Into::into)
 		}
 	}
