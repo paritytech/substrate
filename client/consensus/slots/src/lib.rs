@@ -475,7 +475,7 @@ pub enum CheckedHeader<H, S> {
 
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
-pub enum Error<T> where T: SlotData + Debug + Send + Sync + 'static {
+pub enum Error<T> where T: Debug {
 	#[error("Slot duration is invalid: {0:?}")]
 	SlotDurationInvalid(SlotDuration<T>),
 }
