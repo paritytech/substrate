@@ -24,22 +24,22 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_system::{RawOrigin, Module as System, Trait as SystemTrait};
+use frame_system::{RawOrigin, Module as System, Config as SystemTrait};
 use frame_benchmarking::{benchmarks, account};
 use frame_support::traits::{Currency, OnInitialize};
 
 use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto}};
 use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
 
-use pallet_balances::{Trait as BalancesTrait};
+use pallet_balances::{Config as BalancesTrait};
 use pallet_babe::BabeEquivocationOffence;
 use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
-use pallet_im_online::{Trait as ImOnlineTrait, Module as ImOnline, UnresponsivenessOffence};
-use pallet_offences::{Trait as OffencesTrait, Module as Offences};
-use pallet_session::historical::{Trait as HistoricalTrait, IdentificationTuple};
-use pallet_session::{Trait as SessionTrait, SessionManager};
+use pallet_im_online::{Config as ImOnlineTrait, Module as ImOnline, UnresponsivenessOffence};
+use pallet_offences::{Config as OffencesTrait, Module as Offences};
+use pallet_session::historical::{Config as HistoricalTrait, IdentificationTuple};
+use pallet_session::{Config as SessionTrait, SessionManager};
 use pallet_staking::{
-	Module as Staking, Trait as StakingTrait, RewardDestination, ValidatorPrefs,
+	Module as Staking, Config as StakingTrait, RewardDestination, ValidatorPrefs,
 	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS, Event as StakingEvent
 };
 
@@ -50,9 +50,9 @@ const MAX_OFFENDERS: u32 = 100;
 const MAX_NOMINATORS: u32 = 100;
 const MAX_DEFERRED_OFFENCES: u32 = 100;
 
-pub struct Module<T: Trait>(Offences<T>);
+pub struct Module<T: Config>(Offences<T>);
 
-pub trait Trait:
+pub trait Config:
 	SessionTrait
 	+ StakingTrait
 	+ OffencesTrait
@@ -80,17 +80,17 @@ impl<T: HistoricalTrait + OffencesTrait> IdTupleConvert<T> for T where
 type LookupSourceOf<T> = <<T as SystemTrait>::Lookup as StaticLookup>::Source;
 type BalanceOf<T> = <<T as StakingTrait>::Currency as Currency<<T as SystemTrait>::AccountId>>::Balance;
 
-struct Offender<T: Trait> {
+struct Offender<T: Config> {
 	pub controller: T::AccountId,
 	pub stash: T::AccountId,
 	pub nominator_stashes: Vec<T::AccountId>,
 }
 
-fn bond_amount<T: Trait>() -> BalanceOf<T> {
+fn bond_amount<T: Config>() -> BalanceOf<T> {
 	T::Currency::minimum_balance().saturating_mul(10_000u32.into())
 }
 
-fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<Offender<T>, &'static str> {
+fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'static str> {
 	let stash: T::AccountId = account("stash", n, SEED);
 	let controller: T::AccountId = account("controller", n, SEED);
 	let controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(controller.clone());
@@ -149,7 +149,7 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<Offender<T>, &'s
 	Ok(Offender { controller, stash, nominator_stashes })
 }
 
-fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<
+fn make_offenders<T: Config>(num_offenders: u32, num_nominators: u32) -> Result<
 	(Vec<IdentificationTuple<T>>, Vec<Offender<T>>),
 	&'static str
 > {
@@ -176,7 +176,7 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<
 }
 
 #[cfg(test)]
-fn check_events<T: Trait, I: Iterator<Item = <T as SystemTrait>::Event>>(expected: I) {
+fn check_events<T: Config, I: Iterator<Item = <T as SystemTrait>::Event>>(expected: I) {
 	let events = System::<T>::events() .into_iter()
 		.map(|frame_system::EventRecord { event, .. }| event).collect::<Vec<_>>();
 	let expected = expected.collect::<Vec<_>>();
