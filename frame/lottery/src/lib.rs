@@ -28,7 +28,7 @@ pub mod weights;
 
 use sp_std::prelude::*;
 use sp_runtime::{DispatchError, ModuleId};
-use sp_runtime::traits::{AccountIdConversion, Saturating, Zero};
+use sp_runtime::traits::{AccountIdConversion, Saturating};
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure, RuntimeDebug};
 use frame_support::dispatch::{Dispatchable, DispatchResult, GetDispatchInfo};
 use frame_support::traits::{

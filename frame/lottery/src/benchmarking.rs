@@ -24,7 +24,7 @@ use super::*;
 use frame_system::RawOrigin;
 use frame_support::traits::{OnInitialize, UnfilteredDispatchable};
 use frame_benchmarking::{benchmarks, account, whitelisted_caller};
-use sp_runtime::traits::Bounded;
+use sp_runtime::traits::{Bounded, Zero};
 
 use crate::Module as Lottery;
 
