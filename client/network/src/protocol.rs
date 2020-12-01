@@ -96,6 +96,8 @@ mod rep {
 	use sc_peerset::ReputationChange as Rep;
 	/// Reputation change when a peer doesn't respond in time to our messages.
 	pub const TIMEOUT: Rep = Rep::new(-(1 << 10), "Request timeout");
+	/// Reputation change when a peer refuses a request.
+	pub const REFUSED: Rep = Rep::new(-(1 << 10), "Request refused");
 	/// Reputation change when we are a light client and a peer is behind us.
 	pub const PEER_BEHIND_US_LIGHT: Rep = Rep::new(-(1 << 8), "Useless for a light peer");
 	/// Reputation change when a peer sends us any transaction.
@@ -1437,23 +1439,33 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						trace!(target: "sync", "Block request to peer {:?} failed: {:?}.", id, e);
 
 						match e {
-							RequestFailure::UnknownProtocol => {
-								debug_assert!(false, "Block request protocol should always be known.");
-							}
 							RequestFailure::Network(OutboundFailure::Timeout) => {
 								self.peerset_handle.report_peer(id.clone(), rep::TIMEOUT);
+								self.behaviour.disconnect_peer(id);
 							}
 							RequestFailure::Network(OutboundFailure::UnsupportedProtocols) => {
 								self.peerset_handle.report_peer(id.clone(), rep::BAD_PROTOCOL);
+								self.behaviour.disconnect_peer(id);
+							}
+							RequestFailure::Network(OutboundFailure::DialFailure) => {
+								self.behaviour.disconnect_peer(id);
+							}
+							RequestFailure::Refused => {
+								self.peerset_handle.report_peer(id.clone(), rep::REFUSED);
+								self.behaviour.disconnect_peer(id);
+							}
+							RequestFailure::Network(OutboundFailure::ConnectionClosed)
+							| RequestFailure::NotConnected => {},
+							RequestFailure::UnknownProtocol => {
+								debug_assert!(false, "Block request protocol should always be known.");
 							}
 							RequestFailure::Obsolete => {
 								debug_assert!(
 									false,
 									"Can not receive `RequestFailure::Obsolete` after dropping the \
-									 response reciver.",
+									 response receiver.",
 								);
 							}
-							_ => {},
 						}
 					},
 					Poll::Ready(Err(e)) => {
