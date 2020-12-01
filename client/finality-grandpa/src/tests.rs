@@ -416,7 +416,7 @@ fn finalize_3_voters_no_observers() {
 	);
 }
 
-/*#[test]
+#[test]
 fn finalize_3_voters_1_full_observer() {
 	let mut runtime = Runtime::new().unwrap();
 
@@ -430,13 +430,39 @@ fn finalize_3_voters_1_full_observer() {
 		.collect::<Vec<_>>();
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
-	runtime.spawn(initialize_grandpa(&mut net, &all_peers));
+	runtime.spawn(initialize_grandpa(&mut net, peers));
+
+	runtime.spawn({
+		let peer_id = 3;
+		let net_service = net.peers[peer_id].network_service().clone();
+		let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
+
+		let grandpa_params = GrandpaParams {
+			config: Config {
+				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
+				keystore: None,
+				name: Some(format!("peer#{}", peer_id)),
+				is_authority: true,
+				observer_enabled: true,
+			},
+			link: link,
+			network: net_service,
+			telemetry_on_connect: None,
+			voting_rule: (),
+			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
+		};
+
+		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
+	});
+
 	net.peer(0).push_blocks(20, false);
 
 	let net = Arc::new(Mutex::new(net));
 	let mut finality_notifications = Vec::new();
 
-	for (peer_id, _) in all_peers.iter().enumerate() {
+	for peer_id in 0..4 {
 		let client = net.lock().peers[peer_id].client().clone();
 		finality_notifications.push(
 			client.finality_notification_stream()
@@ -450,7 +476,7 @@ fn finalize_3_voters_1_full_observer() {
 		.map(|_| ());
 
 	block_until_complete(wait_for, &net, &mut runtime);
-}*/
+}
 
 /*#[test]
 fn transition_3_voters_twice_1_full_observer() {
