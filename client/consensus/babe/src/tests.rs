@@ -37,11 +37,11 @@ use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
 	NoNetwork as DummyOracle, Proposal, RecordProof, AlwaysCanAuthor,
-	import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport},
+	import_queue::{BoxBlockImport, BoxJustificationImport},
 };
 use sc_network_test::*;
 use sc_network_test::{Block as TestBlock, PeersClient};
-use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
+use sc_network::config::ProtocolConfig;
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use sc_client_api::{BlockchainEvents, backend::TransactionFor};
 use log::debug;
@@ -272,8 +272,6 @@ impl TestNetFactory for BabeTestNet {
 		-> (
 			BlockImportAdapter<Transaction>,
 			Option<BoxJustificationImport<Block>>,
-			Option<BoxFinalityProofImport<Block>>,
-			Option<BoxFinalityProofRequestBuilder<Block>>,
 			Option<PeerData>,
 		)
 	{
@@ -294,8 +292,6 @@ impl TestNetFactory for BabeTestNet {
 		);
 		(
 			BlockImportAdapter::new_full(block_import),
-			None,
-			None,
 			None,
 			Some(PeerData { link, inherent_data_providers, block_import: data_block_import }),
 		)
