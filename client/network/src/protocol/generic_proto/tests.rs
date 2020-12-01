@@ -213,6 +213,8 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 
 #[test]
 fn reconnect_after_disconnect() {
+	let _ = env_logger::try_init();
+
 	// We connect two nodes together, then force a disconnect (through the API of the `Service`),
 	// check that the disconnect worked, and finally check whether they successfully reconnect.
 

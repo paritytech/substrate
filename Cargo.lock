@@ -7084,6 +7084,7 @@ dependencies = [
  "bytes 0.5.6",
  "derive_more",
  "either",
+ "env_logger",
  "erased-serde",
  "fnv",
  "fork-tree",
