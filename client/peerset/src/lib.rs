@@ -87,7 +87,7 @@ impl PeersetHandle {
 	/// Has no effect if the node was already a reserved peer.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for this node,
-	/// >            otherwise it will not be able to connect to it.
+	/// >           otherwise it will not be able to connect to it.
 	pub fn add_reserved_peer(&self, peer_id: PeerId) {
 		let _ = self.tx.unbounded_send(Action::AddReservedPeer(peer_id));
 	}
@@ -169,7 +169,7 @@ pub struct PeersetConfig {
 	/// List of bootstrap nodes to initialize the peer with.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
-	/// >    otherwise it will not be able to connect to them.
+	/// >           otherwise it will not be able to connect to them.
 	pub bootnodes: Vec<PeerId>,
 
 	/// If true, we only accept nodes in [`PeersetConfig::priority_groups`].
@@ -178,7 +178,7 @@ pub struct PeersetConfig {
 	/// Lists of nodes we should always be connected to.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
-	/// >    otherwise it will not be able to connect to them.
+	/// >           otherwise it will not be able to connect to them.
 	pub priority_groups: Vec<(String, HashSet<PeerId>)>,
 }
 
@@ -576,7 +576,7 @@ impl Peerset {
 	/// Adds discovered peer ids to the PSM.
 	///
 	/// > **Note**: There is no equivalent "expired" message, meaning that it is the responsibility
-	/// >    of the PSM to remove `PeerId`s that fail to dial too often.
+	/// >           of the PSM to remove `PeerId`s that fail to dial too often.
 	pub fn discovered<I: IntoIterator<Item = PeerId>>(&mut self, peer_ids: I) {
 		let mut discovered_any = false;
 
