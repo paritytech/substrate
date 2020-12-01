@@ -417,8 +417,13 @@ impl RuntimeInstanceSpawn {
 	}
 
 	fn remove(&self, handle: u64) -> RuningTask {
+		// TODO kill if possible
 		self.tasks.lock().tasks.remove(&handle)
 			.expect("Existing handle use for join")
+/*		// let thread_id = std::thread::current().id();
+		//
+		unimplemented!("handle mapping of runing task on task_receiver::recv")
+// TODO call that:	calling_ext.resolve_worker_result(WorkerResult::Kill(handle))*/
 	}
 
 	fn insert(
@@ -832,7 +837,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 	}
 
 	fn kill(&self, handle: u64, calling_ext: &mut dyn Externalities) {
-		unimplemented!()
+		self.remove(handle);
 	}
 
 	fn set_capacity(&self, capacity: u32) {
