@@ -779,7 +779,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 	run_to_completion(&mut runtime, 30, net.clone(), all_peers);
 }
 
-/*#[test]
+#[test]
 fn force_change_to_new_set() {
 	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
@@ -835,7 +835,7 @@ fn force_change_to_new_set() {
 	// we add_blocks after the voters are spawned because otherwise
 	// the link-halves have the wrong AuthoritySet
 	run_to_completion(&mut runtime, 25, net, peers_a);
-}*/
+}
 
 #[test]
 fn allows_reimporting_change_blocks() {
