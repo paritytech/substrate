@@ -18,7 +18,7 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions for {{pallet}}.
 pub struct WeightInfo<T>(PhantomData<T>);
-impl<T: frame_system::Trait> {{pallet}}::WeightInfo for WeightInfo<T> {
+impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 	{{~#each benchmarks as |benchmark|}}
 	fn {{benchmark.name~}}
 	(

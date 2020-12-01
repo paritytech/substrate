@@ -30,7 +30,7 @@ use frame_system::{RawOrigin, ensure_signed, ensure_none};
 
 decl_storage! {
 	trait Store for Module<T: Config> as Test where
-		<T as OtherTrait>::OtherEvent: Into<<T as Config>::Event>
+		<T as OtherConfig>::OtherEvent: Into<<T as Config>::Event>
 	{
 		Value get(fn value): Option<u32>;
 	}
@@ -38,7 +38,7 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Config> for enum Call where
-		origin: T::Origin, <T as OtherTrait>::OtherEvent: Into<<T as Config>::Event>
+		origin: T::Origin, <T as OtherConfig>::OtherEvent: Into<<T as Config>::Event>
 	{
 		#[weight = 0]
 		fn set_value(origin, n: u32) -> DispatchResult {
@@ -59,11 +59,11 @@ impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
 
-pub trait OtherTrait {
+pub trait OtherConfig {
 	type OtherEvent;
 }
 
-pub trait Config: frame_system::Config + OtherTrait
+pub trait Config: frame_system::Config + OtherConfig
 	where Self::OtherEvent: Into<<Self as Config>::Event>
 {
 	type Event;
@@ -104,7 +104,7 @@ impl Config for Test {
 	type Event = ();
 }
 
-impl OtherTrait for Test {
+impl OtherConfig for Test {
 	type OtherEvent = ();
 }
 
@@ -113,7 +113,7 @@ fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 benchmarks!{
-	where_clause { where <T as OtherTrait>::OtherEvent: Into<<T as Config>::Event> }
+	where_clause { where <T as OtherConfig>::OtherEvent: Into<<T as Config>::Event> }
 
 	_ {
 		// Define a common range for `b`.
