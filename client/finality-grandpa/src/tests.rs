@@ -478,7 +478,7 @@ fn finalize_3_voters_1_full_observer() {
 	block_until_complete(wait_for, &net, &mut runtime);
 }
 
-/*#[test]
+#[test]
 fn transition_3_voters_twice_1_full_observer() {
 	sp_tracing::try_init_simple();
 	let peers_a = &[
@@ -501,12 +501,54 @@ fn transition_3_voters_twice_1_full_observer() {
 
 	let observer = &[Ed25519Keyring::One];
 
+	let all_peers = peers_a.iter()
+		.chain(peers_b)
+		.chain(peers_c)
+		.chain(observer)
+		.cloned()
+		.collect::<HashSet<_>>(); // deduplicate
+
 	let genesis_voters = make_ids(peers_a);
 
 	let api = TestApi::new(genesis_voters);
 	let net = Arc::new(Mutex::new(GrandpaTestNet::new(api, 8)));
 
 	let mut runtime = Runtime::new().unwrap();
+
+	let mut keystore_paths = Vec::new();
+	let mut voters = Vec::new();
+	for (peer_id, local_key) in all_peers.clone().into_iter().enumerate() {
+		let (keystore, keystore_path) = create_keystore(local_key);
+		keystore_paths.push(keystore_path);
+
+		let (net_service, link) = {
+			let net = net.lock();
+			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
+			(
+				net.peers[peer_id].network_service().clone(),
+				link,
+			)
+		};
+
+		let grandpa_params = GrandpaParams {
+			config: Config {
+				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
+				keystore: Some(keystore),
+				name: Some(format!("peer#{}", peer_id)),
+				is_authority: true,
+				observer_enabled: true,
+			},
+			link,
+			network: net_service,
+			telemetry_on_connect: None,
+			voting_rule: (),
+			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
+		};
+
+		voters.push(run_grandpa_voter(grandpa_params).expect("all in order with client and network"));
+	}
 
 	net.lock().peer(0).push_blocks(1, false);
 	net.lock().block_until_sync();
@@ -573,30 +615,13 @@ fn transition_3_voters_twice_1_full_observer() {
 	}
 
 	let mut finality_notifications = Vec::new();
-	let all_peers = peers_a.iter()
-		.chain(peers_b)
-		.chain(peers_c)
-		.chain(observer)
-		.cloned()
-		.collect::<HashSet<_>>() // deduplicate
-		.into_iter()
-		.enumerate();
 
-	let mut keystore_paths = Vec::new();
-	for (peer_id, local_key) in all_peers {
-		let (keystore, keystore_path) = create_keystore(local_key);
-		keystore_paths.push(keystore_path);
+	for voter in voters {
+		runtime.spawn(voter);
+	}
 
-		let (client, net_service, link) = {
-			let net = net.lock();
-			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
-			(
-				net.peers[peer_id].client().clone(),
-				net.peers[peer_id].network_service().clone(),
-				link,
-			)
-		};
-
+	for (peer_id, _) in all_peers.into_iter().enumerate() {
+		let client = net.lock().peers[peer_id].client().clone();
 		finality_notifications.push(
 			client.finality_notification_stream()
 				.take_while(|n| future::ready(n.header.number() < &30))
@@ -609,33 +634,13 @@ fn transition_3_voters_twice_1_full_observer() {
 					assert_eq!(set.pending_changes().count(), 0);
 				})
 		);
-
-		let grandpa_params = GrandpaParams {
-			config: Config {
-				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
-				keystore: Some(keystore),
-				name: Some(format!("peer#{}", peer_id)),
-				is_authority: true,
-				observer_enabled: true,
-			},
-			link: link,
-			network: net_service,
-			telemetry_on_connect: None,
-			voting_rule: (),
-			prometheus_registry: None,
-			shared_voter_state: SharedVoterState::empty(),
-		};
-		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
-
-		runtime.spawn(voter);
 	}
 
 	// wait for all finalized on each.
 	let wait_for = ::futures::future::join_all(finality_notifications);
 
 	block_until_complete(wait_for, &net, &mut runtime);
-}*/
+}
 
 #[test]
 fn justification_is_generated_periodically() {
