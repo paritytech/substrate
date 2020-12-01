@@ -373,7 +373,7 @@ impl KeystoreInner {
 
 	/// Insert a new key with anonymous crypto.
 	///
-	/// Places it into the file system store.
+	/// Places it into the file system store, if a path is configured.
 	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<()> {
 		if let Some(path) = self.key_file_path(public, key_type) {
 			let mut file = File::create(path).map_err(Error::Io)?;
@@ -385,7 +385,8 @@ impl KeystoreInner {
 
 	/// Generate a new key.
 	///
-	/// Places it into the file system store.
+	/// Places it into the file system store, if a path is configured. Otherwise insert
+	/// it into the memory cache only.
 	fn generate_by_type<Pair: PairT>(&mut self, key_type: KeyTypeId) -> Result<Pair> {
 		let (pair, phrase, _) = Pair::generate_with_phrase(self.password());
 		if let Some(path) = self.key_file_path(pair.public().as_slice(), key_type) {
