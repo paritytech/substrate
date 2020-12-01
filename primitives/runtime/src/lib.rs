@@ -96,10 +96,14 @@ pub use either::Either;
 /// (and thus fork the chain). Sending a `Justification` alongside a block instead
 /// bypasses this problem.
 pub type EncodedJustification = Vec<u8>;
+
+/// Justification together with an ID to tag it's origin.
+pub type Justification = (ConsensusEngineId, EncodedJustification);
+
 /// Collection of Justifications, since we might have more than one stored per block.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub struct Justifications(pub Vec<(ConsensusEngineId, EncodedJustification)>);
+pub struct Justifications(pub Vec<Justification>);
 
 use traits::{Verify, Lazy};
 
