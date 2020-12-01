@@ -68,8 +68,6 @@ pub trait Config: frame_system::Config {
 	type WeightInfo: WeightInfo;
 }
 
-type Index = u32;
-
 // Any runtime call can be encoded into two bytes which represent the pallet and call index.
 // We use this to uniquely match someone's incoming call with the calls configured for the lottery.
 type CallIndex = (u8, u8);
@@ -93,18 +91,18 @@ pub struct LotteryConfig<BlockNumber, Balance> {
 
 decl_storage! {
 	trait Store for Module<T: Config> as Lottery {
-		LotteryIndex: Index;
+		LotteryIndex: u32;
 		/// The configuration for the current lottery.
 		Lottery: Option<LotteryConfig<T::BlockNumber, BalanceOf<T>>>;
 		/// Users who have purchased a ticket. (Lottery Index, Tickets Purchased)
-		Participants: map hasher(twox_64_concat) T::AccountId => (Index, Vec<CallIndex>);
+		Participants: map hasher(twox_64_concat) T::AccountId => (u32, Vec<CallIndex>);
 		/// Total number of tickets sold.
-		TicketsCount: Index;
+		TicketsCount: u32;
 		/// Each ticket's owner.
 		///
 		/// May have residual storage from previous lotteries. Use `TicketsCount` to see which ones
 		/// are actually valid ticket mappings.
-		Tickets: map hasher(twox_64_concat) Index => Option<T::AccountId>;
+		Tickets: map hasher(twox_64_concat) u32 => Option<T::AccountId>;
 	}
 }
 
@@ -112,14 +110,13 @@ decl_event!(
 	pub enum Event<T> where
 		<T as frame_system::Config>::AccountId,
 		Balance = BalanceOf<T>,
-		Call = <T as Config>::Call,
 	{
 		/// A lottery has been started!
 		LotteryStarted,
 		/// A winner has been chosen!
 		Winner(AccountId, Balance),
 		/// A ticket has been bought!
-		TicketBought(AccountId, Call),
+		TicketBought(AccountId, CallIndex),
 	}
 );
 
@@ -188,11 +185,15 @@ decl_module! {
 		]
 		fn buy_ticket(origin, call: Box<<T as Config>::Call>) {
 			let caller = ensure_signed(origin.clone())?;
-			call.clone().dispatch(origin).map_err(|e| e.error)?;
+			// This conversion may fail, but we want this function to always act
+			// as a passthrough... so we will parse the result below.
+			let maybe_call_index = Self::call_to_index(&call);
+			call.dispatch(origin).map_err(|e| e.error)?;
 
 			// Only try to buy a ticket if the underlying call is successful.
 			// Not much we can do if this fails.
-			let _ = Self::do_buy_ticket(&caller, &call);
+			let call_index = maybe_call_index?;
+			let _ = Self::do_buy_ticket(&caller, &call_index);
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
@@ -273,13 +274,12 @@ impl<T: Config> Module<T> {
 	}
 
 	// Logic for buying a ticket.
-	fn do_buy_ticket(caller: &T::AccountId, call: &<T as Config>::Call) -> DispatchResult {
+	fn do_buy_ticket(caller: &T::AccountId, call_index: &(u8, u8)) -> DispatchResult {
 		// Check the call is valid lottery
 		let config = Lottery::<T>::get().ok_or(Error::<T>::NotConfigured)?;
 		let block_number = frame_system::Module::<T>::block_number();
 		ensure!(block_number < config.start.saturating_add(config.length), Error::<T>::AlreadyEnded);
-		let call_index = Self::call_to_index(call)?;
-		ensure!(config.calls.iter().any(|c| call_index == *c), Error::<T>::InvalidCall);
+		ensure!(config.calls.iter().any(|c| call_index == c), Error::<T>::InvalidCall);
 		let ticket_count = TicketsCount::get();
 		let new_ticket_count = ticket_count.checked_add(1).ok_or(Error::<T>::Overflow)?;
 		// Try to update the participant status
@@ -291,25 +291,25 @@ impl<T: Config> Module<T> {
 				*lottery_index = index;
 			} else {
 				// Check that user is not already participating under this call.
-				ensure!(!participating_calls.iter().any(|c| call_index == *c), Error::<T>::AlreadyParticipating);
+				ensure!(!participating_calls.iter().any(|c| call_index == c), Error::<T>::AlreadyParticipating);
 			}
 			// Check user has enough funds and send it to the Lottery account.
 			T::Currency::transfer(caller, &Self::account_id(), config.price, KeepAlive)?;
 			// Create a new ticket.
 			TicketsCount::put(new_ticket_count);
 			Tickets::<T>::insert(ticket_count, caller.clone());
-			participating_calls.push(call_index);
+			participating_calls.push(*call_index);
 			Ok(())
 		})?;
 
-		Self::deposit_event(RawEvent::TicketBought(caller.clone(), call.clone()));
+		Self::deposit_event(RawEvent::TicketBought(caller.clone(), *call_index));
 
 		Ok(())
 	}
 
 	// Randomly choose a winner from among the total number of participants.
 	fn choose_winner(total: u32) -> u32 {
-		let random_seed = T::Randomness::random(b"lottery");
+		let random_seed = T::Randomness::random(&T::ModuleId::get().encode());
 		let random_number = <u32>::decode(&mut random_seed.as_ref())
 			.expect("secure hashes should always be bigger than u32; qed");
 		random_number % total
