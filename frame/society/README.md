@@ -1,6 +1,6 @@
 # Society Module
 
-- [`society::Config`](https://docs.rs/pallet-society/latest/pallet_society/trait.Config.html)
+- [`society::Trait`](https://docs.rs/pallet-society/latest/pallet_society/trait.Trait.html)
 - [`Call`](https://docs.rs/pallet-society/latest/pallet_society/enum.Call.html)
 
 ## Overview

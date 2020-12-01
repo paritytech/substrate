@@ -2,7 +2,7 @@
 
 The Balances module provides functionality for handling accounts and balances.
 
-- [`balances::Config`](https://docs.rs/pallet-balances/latest/pallet_balances/trait.Config.html)
+- [`balances::Trait`](https://docs.rs/pallet-balances/latest/pallet_balances/trait.Trait.html)
 - [`Call`](https://docs.rs/pallet-balances/latest/pallet_balances/enum.Call.html)
 - [`Module`](https://docs.rs/pallet-balances/latest/pallet_balances/struct.Module.html)
 
