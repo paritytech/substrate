@@ -1586,7 +1586,9 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						}
 					}
 					Some(Fallback::Transactions) => {
-						if let Ok(m) = <message::Transactions<B::Extrinsic> as Decode>::decode(&mut message.as_ref()) {
+						if let Ok(m) = <message::Transactions<B::Extrinsic> as Decode>::decode(
+							&mut message.as_ref(),
+						) {
 							self.on_transactions(peer_id, m);
 						} else {
 							warn!(target: "sub-libp2p", "Failed to decode transactions list");
@@ -1610,7 +1612,11 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						}
 					}
 					None => {
-						debug!(target: "sub-libp2p", "Received notification from unknown protocol {:?}", protocol_name);
+						debug!(
+							target: "sub-libp2p",
+							"Received notification from unknown protocol {:?}",
+							protocol_name,
+						);
 						CustomMessageOutcome::None
 					}
 				}
