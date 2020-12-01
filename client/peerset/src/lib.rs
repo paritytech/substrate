@@ -525,8 +525,8 @@ impl Peerset {
 		self.update_time();
 
 		if self.reserved_only && !self.priority_groups.get(RESERVED_NODES).map_or(false, |n| n.contains(&peer_id)) {
-				self.message_queue.push_back(Message::Reject(index));
-				return;
+			self.message_queue.push_back(Message::Reject(index));
+			return;
 		}
 
 		let not_connected = match self.data.peer(&peer_id) {
