@@ -29,7 +29,7 @@ use sp_runtime::traits::Bounded;
 use crate::Module as Lottery;
 
 // Set up and start a lottery
-fn start_lottery<T: Trait>() -> Result<(), &'static str> {
+fn start_lottery<T: Config>() -> Result<(), &'static str> {
 	let price = T::Currency::minimum_balance();
 	let start = 0u32.into();
 	let end = 10u32.into();

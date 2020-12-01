@@ -51,7 +51,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
@@ -83,7 +83,7 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
 
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type Event = ();
@@ -98,7 +98,7 @@ parameter_types! {
 	pub const MaxCalls: usize = 2;
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type ModuleId = LotteryModuleId;
 	type Call = Call;
 	type Currency = Balances;

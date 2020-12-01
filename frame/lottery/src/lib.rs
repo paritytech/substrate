@@ -39,10 +39,10 @@ use frame_system::ensure_signed;
 use codec::{Encode, Decode};
 pub use weights::WeightInfo;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// The module's config trait.
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The Lottery's module id
 	type ModuleId: Get<ModuleId>;
 
@@ -56,7 +56,7 @@ pub trait Trait: frame_system::Trait {
 	type Randomness: Randomness<Self::Hash>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The manager origin.
 	type ManagerOrigin: EnsureOrigin<Self::Origin>;
@@ -75,7 +75,7 @@ type Index = u32;
 type CallIndex = (u8, u8);
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Lottery {
+	trait Store for Module<T: Config> as Lottery {
 		LotteryIndex: Index;
 		/// The configuration for the current lottery.
 		Lottery: Option<LotteryConfig<T::BlockNumber, BalanceOf<T>>>;
@@ -93,9 +93,9 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::AccountId,
 		Balance = BalanceOf<T>,
-		Call = <T as Trait>::Call,
+		Call = <T as Config>::Call,
 	{
 		/// A lottery has been started!
 		LotteryStarted,
@@ -107,7 +107,7 @@ decl_event!(
 );
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// An overflow has occurred.
 		Overflow,
 		/// A lottery has not been configured.
@@ -146,7 +146,7 @@ pub struct LotteryConfig<BlockNumber, Balance> {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin, system = frame_system {
 		/// TODO: Expose Constants
 
 		fn deposit_event() = default;
@@ -158,7 +158,7 @@ decl_module! {
 			start: T::BlockNumber,
 			end: T::BlockNumber,
 			payout: T::BlockNumber,
-			calls: Vec<<T as Trait>::Call>,
+			calls: Vec<<T as Config>::Call>,
 		) {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			ensure!(calls.len() <= T::MaxCalls::get(), Error::<T>::TooManyCalls);
@@ -179,7 +179,7 @@ decl_module! {
 			T::WeightInfo::buy_ticket()
 				.saturating_add(call.get_dispatch_info().weight)
 		]
-		fn buy_ticket(origin, call: Box<<T as Trait>::Call>) {
+		fn buy_ticket(origin, call: Box<<T as Config>::Call>) {
 			let caller = ensure_signed(origin.clone())?;
 			call.clone().dispatch(origin).map_err(|e| e.error)?;
 
@@ -216,7 +216,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// The account ID of the lottery pot.
 	///
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
@@ -236,7 +236,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	// Converts a vector of calls into a vector of call indices.
-	fn calls_to_indices(calls: &[<T as Trait>::Call]) -> Result<Vec<CallIndex>, DispatchError> {
+	fn calls_to_indices(calls: &[<T as Config>::Call]) -> Result<Vec<CallIndex>, DispatchError> {
 		let mut indices = Vec::with_capacity(calls.len());
 		for c in calls.iter() {
 			let index = Self::call_to_index(c)?;
@@ -246,14 +246,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	// Convert a call to it's call index by encoding the call and taking the first two bytes.
-	fn call_to_index(call: &<T as Trait>::Call) -> Result<CallIndex, DispatchError> {
+	fn call_to_index(call: &<T as Config>::Call) -> Result<CallIndex, DispatchError> {
 		let encoded_call = call.encode();
 		if encoded_call.len() < 2 { Err(Error::<T>::EncodingFailed)? }
 		return Ok((encoded_call[0], encoded_call[1]))
 	}
 
 	// Logic for buying a ticket.
-	fn do_buy_ticket(caller: &T::AccountId, call: &<T as Trait>::Call) -> DispatchResult {
+	fn do_buy_ticket(caller: &T::AccountId, call: &<T as Config>::Call) -> DispatchResult {
 		// Check the call is valid lottery
 		let config = Lottery::<T>::get().ok_or(Error::<T>::NotConfigured)?;
 		let block_number = frame_system::Module::<T>::block_number();

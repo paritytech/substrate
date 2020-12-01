@@ -51,7 +51,7 @@ pub trait WeightInfo {
 
 /// Weights for pallet_lottery using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
+impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn setup_lottery(n: u32, ) -> Weight {
 		(31_350_000 as Weight)
 			.saturating_add((496_000 as Weight).saturating_mul(n as Weight))
