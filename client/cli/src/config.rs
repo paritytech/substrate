@@ -555,14 +555,12 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		if let Err(e) = init_logger(
+		init_logger(
 			&logger_pattern,
 			tracing_receiver,
 			tracing_targets,
 			disable_log_reloading,
-		) {
-			log::warn!("💬 Problem initializing global logging framework: {:}", e)
-		}
+		)?;
 
 		if let Some(new_limit) = fdlimit::raise_fd_limit() {
 			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {
