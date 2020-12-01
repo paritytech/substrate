@@ -138,6 +138,16 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 	fn spawn(&self, name: &'static str, future: BoxFuture<'static, ()>) {
 		self.spawn(name, future);
 	}
+
+	fn spawn_with_handle(
+		&self,
+		name: &'static str,
+		future: BoxFuture<'static, ()>,
+	) -> Option<sp_core::traits::RemoteHandle> {
+		// This is not using pool, and no way to abort task either.
+		self.spawn_with_handle(name, future);
+		Some(Box::new(()))
+	}
 }
 
 /// A wrapper over `SpawnTaskHandle` that will notify a receiver whenever any

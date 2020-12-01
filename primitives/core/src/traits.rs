@@ -255,6 +255,14 @@ sp_externalities::decl_extension! {
 #[cfg(not(feature = "std"))]
 pub trait Clone { }
 
+/// Remote handle for a future, dropping it
+/// should do as much as supported to remove
+/// thread from its thread pool.
+pub type RemoteHandle = Box<dyn SpawnHandle>;
+
+/// Alias of the future type to use with `SpawnedNamed` trait.
+pub type BoxFuture = futures::future::BoxFuture<'static, ()>;
+
 /// Something that can spawn futures (blocking and non-blocking) with an assigned name.
 /// TODO not having dyn_clonable make it not really usable in no_std, but trait exists
 /// so we can query extension for it.
@@ -263,22 +271,51 @@ pub trait SpawnNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
-	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+	fn spawn_blocking(&self, name: &'static str, future: BoxFuture);
 	/// Spawn the given non-blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
-	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+	fn spawn(&self, name: &'static str, future: BoxFuture);
+	/// Spawn the given non-blocking future if poossible, returns a handle.
+	///
+	/// The given `name` is used to identify the future in tracing.
+	fn spawn_with_handle(
+		&self,
+		name: &'static str,
+		future: BoxFuture,
+	) -> Option<RemoteHandle>;
+}
+
+/// Handle over a spawn named future.
+pub trait SpawnHandle: Send {
+	/// Associated future can be dropped
+	/// and remove from pool if a pool is used.
+	fn dismiss(&mut self);
+}
+
+impl SpawnHandle for () {
+	fn dismiss(&mut self) {
+		// () is a noops handle.
+	}
 }
 
 #[cfg(not(feature = "std"))]
 impl Clone for Box<dyn SpawnNamed> { }
 
 impl SpawnNamed for Box<dyn SpawnNamed> {
-	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_blocking(&self, name: &'static str, future: BoxFuture) {
 		(**self).spawn_blocking(name, future)
 	}
 
-	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn(&self, name: &'static str, future: BoxFuture) {
 		(**self).spawn(name, future)
+	}
+
+	fn spawn_with_handle(
+		&self,
+		name: &'static str,
+		future: BoxFuture,
+	) -> Option<RemoteHandle> {
+		(**self).spawn_with_handle(name, future)
 	}
 }

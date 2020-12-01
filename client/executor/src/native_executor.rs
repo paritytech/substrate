@@ -34,7 +34,7 @@ use sp_core::{
 	NativeOrEncoded,
 	traits::{
 		CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions,
-		RuntimeSpawnExt, RuntimeSpawn,
+		RuntimeSpawnExt, RuntimeSpawn, RemoteHandle, BoxFuture,
 	},
 };
 use log::trace;
@@ -314,20 +314,105 @@ pub struct RuntimeInstanceSpawn {
 	task_receiver: Arc<parking_lot::Mutex<mpsc::Receiver<PendingTask>>>,
 	task_sender: mpsc::Sender<PendingTask>,
 	recursive_level: usize,
+	kill_handles: kill_handle::KillHandles,
+}
+
+
+#[cfg(all(unix, feature = "abort-future", feature = "std"))]
+mod kill_handle {
+	use super::*;
+	use std::collections::BTreeMap;
+
+	#[derive(Default, Clone)]
+	pub(super) struct KillHandles(Arc<parking_lot::Mutex<KillHandlesInner>>);
+
+	struct KillHandlesInner {
+		/// threads handle with associated pthread.
+		running: BTreeMap<u64, RemoteHandle>,
+		/// worker mapping with their thread ids.
+		workers: BTreeMap<u64, u64>,
+	}
+
+	impl Default for KillHandlesInner {
+		fn default() -> Self {
+			KillHandlesInner {
+				running: BTreeMap::new(),
+				workers: BTreeMap::new(),
+			}
+		}
+	}
+
+	impl KillHandles {
+		pub(super) fn new_thread_id(&self, counter: &Arc<AtomicU64>) -> u64 {
+			counter.fetch_add(1, Ordering::Relaxed)
+		}
+		pub(super) fn register_new_thread(&self, handle: Option<RemoteHandle>, thread_id: u64) {
+			if let Some(handle) = handle {
+				self.0.lock().running.insert(thread_id, handle);
+			}
+		}
+		pub(super) fn register_worker(&self, worker: u64, thread_id: u64) {
+			self.0.lock().workers.insert(worker, thread_id);
+		}
+		pub(super) fn finished_worker(&self, worker: u64) {
+			let mut lock = self.0.lock();
+			if let Some(pthread_id) = lock.workers.remove(&worker) {
+				lock.running.remove(&pthread_id);
+			}
+		}
+		pub(super) fn finished_thread(&self, thread: u64) {
+			self.0.lock().running.remove(&thread);
+		}
+		// TODO rename all of these pr kill reference to 'forget'
+		// as we got no idea if there will be kill.
+		pub(super) fn kill_thread(&self, worker: u64) {
+			let mut lock = self.0.lock();
+			if let Some(handle_id) = lock.workers.remove(&worker) {
+				if let Some(mut handle) = lock.running.remove(&handle_id) {
+					handle.dismiss();
+				}
+			}
+		}
+	}
+}
+
+#[cfg(not(all(unix, feature = "abort-future", feature = "std")))]
+mod kill_handle {
+	use super::*;
+
+	#[derive(Default, Clone)]
+	pub(super) struct KillHandles;
+
+	impl KillHandles {
+		pub(super) fn new_thread_id(&self, _counter: &Arc<AtomicU64>) -> u64 {
+			0
+		}
+		pub(super) fn register_new_thread(&self, _handle: Option<RemoteHandle>, _thread_id: u64) {
+		}
+		pub(super) fn finished_thread(&self, _thread: u64) {
+		}
+		pub(super) fn register_worker(&self, _worker: u64, _thread_id: u64) {
+		}
+		pub(super) fn finished_worker(&self, _worker: u64) {
+		}
+		pub(super) fn kill_thread(&self, _worker: u64) {
+		}
+	}
 }
 
 /// Task info for this instance.
 /// Instance is local to a wasm call.
 pub struct RuntimeInstanceSpawnInfo {
-	tasks: HashMap<u64, RuningTask>,
+	// TODO rename Running Task, it is only pending
+	tasks: HashMap<u64, RunningTask>,
 	// consider atomic instead (depending on usefullness
 	// of this struct
 	nb_runing: usize,
 	capacity: usize,
 }
 
-// TODO naming is bad (inline are not runing)
-enum RuningTask {
+// TODO naming is bad (inline are not running)
+enum RunningTask {
 	// TODO condvar?
 	Task(mpsc::Receiver<Option<WorkerResult>>),
 	// TODO need to ad context of exteranlity init
@@ -351,6 +436,7 @@ enum Task {
 }
 
 struct PendingTask {
+	handle: u64,
 	task: Task,
 	ext: AsyncExt,
 	result_sender: mpsc::Sender<Option<WorkerResult>>,
@@ -416,7 +502,7 @@ impl RuntimeInstanceSpawn {
 		result
 	}
 
-	fn remove(&self, handle: u64) -> RuningTask {
+	fn remove(&self, handle: u64) -> RunningTask {
 		// TODO kill if possible
 		self.tasks.lock().tasks.remove(&handle)
 			.expect("Existing handle use for join")
@@ -436,19 +522,26 @@ impl RuntimeInstanceSpawn {
 		match tasks.start(self.recursive_level) {
 			Processing::SpawnNew => {
 				// warning self.tasks is locked when calling spawn_new
-				self.spawn_new(handle);
+				if !self.spawn_new() {
+					// TODO in this case a useless channel was opened.
+					tasks.tasks.insert(handle, RunningTask::Inline(PendingInlineTask{
+						task: task.task,
+						ext: task.ext,
+					}));
+					return;
+				}
 			},
 			Processing::Queue => (),
 			Processing::RunInline => {
 				// TODO in this case a useless channel was opened.
-				tasks.tasks.insert(handle, RuningTask::Inline(PendingInlineTask{
+				tasks.tasks.insert(handle, RunningTask::Inline(PendingInlineTask{
 					task: task.task,
 					ext: task.ext,
 				}));
 				return;
 			},
 		}
-		tasks.tasks.insert(handle, RuningTask::Task (
+		tasks.tasks.insert(handle, RunningTask::Task (
 			result_receiver,
 		));
 		self.task_sender.send(task).expect("TODO mgmt");
@@ -499,19 +592,24 @@ impl RuntimeInstanceSpawn {
 	}
 
 	// TODO should make a variant without module instantiation for native
-	fn spawn_new(&self, handle: u64) {
+	fn spawn_new(&self) -> bool {
 		let module = self.module.clone();
 		let scheduler = self.scheduler.clone();
 		let task_receiver = self.task_receiver.clone();
 		let tasks = self.tasks.clone();
 		let runtime_spawn = Box::new(self.rec_clone());
 		let module = AssertUnwindSafe(module);
-		self.scheduler.spawn("executor-extra-runtime-instance", Box::pin(async move {
+		let kill_handles = self.kill_handles.clone();
+		let thread_id = kill_handles.new_thread_id(&self.counter);
+		let thread_handle = self.spawn_with_handle(
+			"executor-extra-runtime-instance",
+			Box::pin(async move {
 			let task_receiver = task_receiver.clone();
-			while let PendingTask { task, ext, result_sender } = { 
+			while let PendingTask { handle, task, ext, result_sender } = { 
 				let task_receiver_locked = task_receiver.lock();
 				task_receiver_locked.recv()
 			}.expect("Sender dropped, closing all instance.") {
+				kill_handles.register_worker(handle, thread_id);
 				let async_ext = match new_async_externalities(scheduler.clone(), ext) {
 					Ok(val) => val,
 					Err(e) => {
@@ -574,6 +672,7 @@ impl RuntimeInstanceSpawn {
 								instance = if let Some(instance) = Self::instantiate(&*module, &tasks) {
 									instance
 								} else {
+									kill_handles.finished_worker(handle);
 									tasks.lock().finished();
 									return;
 								};
@@ -602,6 +701,7 @@ impl RuntimeInstanceSpawn {
 				};
 				if let Err(_) = result_sender.send(Some(result)) {
 					// Closed channel, remove this thread instance.
+					kill_handles.finished_worker(handle);
 					tasks.lock().finished();
 					return;
 				}
@@ -609,7 +709,34 @@ impl RuntimeInstanceSpawn {
 
 			tasks.lock().finished();
 		}));
+		if let Some(thread_handle) = thread_handle {
+			self.kill_handles.register_new_thread(thread_handle, thread_id);
+			true
+		} else {
+			false
+		}
 	}
+
+	#[cfg(feature = "abort-future")]
+	fn spawn_with_handle(
+		&self,
+		name: &'static str,
+		future: BoxFuture,
+	) -> Option<Option<RemoteHandle>> {
+		self.scheduler.spawn_with_handle(name, future)
+			.map(|th| Some(th))
+	}
+
+	#[cfg(not(feature = "abort-future"))]
+	fn spawn_with_handle(
+		&self,
+		name: &'static str,
+		future: BoxFuture,
+	) -> Option<Option<RemoteHandle>> {
+		self.scheduler.spawn(name, future);
+		Some(None)
+	}
+
 }
 
 impl RuntimeInstanceSpawn {
@@ -637,6 +764,21 @@ impl RuntimeInstanceSpawn {
 			},
 		}, new_handle)
 	}
+
+	fn spawn_call_inner(
+		&self,
+		task: Task,
+		kind: u8,
+		calling_ext: &mut dyn Externalities,
+	) -> u64 {
+		let (ext, handle) = self.spawn_call_ext(kind, calling_ext);
+		let (result_sender, result_receiver) = mpsc::channel();
+
+		let task = PendingTask { task, ext, result_sender, handle };
+		self.insert(handle, task, result_receiver);
+
+		handle
+	}
 }
 
 impl RuntimeSpawn for RuntimeInstanceSpawn {
@@ -647,79 +789,8 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		kind: u8,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		let (ext, new_handle) = self.spawn_call_ext(kind, calling_ext);
-
-		let (result_sender, result_receiver) = mpsc::channel();
-		let task = PendingTask { task: Task::Native(NativeTask { func, data }), ext, result_sender};
-		self.insert(new_handle, task, result_receiver);
-
-		new_handle
-/*		let scheduler = sp_externalities::with_externalities(|mut ext| ext.extension::<TaskExecutorExt>()
-			.expect("No task executor associated with the current context!")
-			.clone()
-		).expect("Spawn called outside of externalities context!");
-
-		let backend = match kind {
-			AsyncStateType::Stateless => AsyncExt::stateless_ext(),
-			AsyncStateType::ReadLastBlock => {
-				let backend = sp_externalities::with_externalities(|mut ext|
-					ext.get_past_async_backend()
-						.expect("Unsupported spawn kind.")
-				).expect("Spawn called outside of externalities context!");
-
-				AsyncExt::previous_block_read(backend)
-			},
-			AsyncStateType::ReadAtSpawn => {
-				let spawn_id = unimplemented!("TODO need handle on state machine and generally a thread pool like for wasm");
-				let backend = sp_externalities::with_externalities(|mut ext|
-					ext.get_async_backend(spawn_id)
-						.expect("Unsupported spawn kind.")
-				).expect("Spawn called outside of externalities context!");
-				AsyncExt::state_at_spawn_read(backend, Default::default(), spawn_id)
-			},
-		};
-
-		let (sender, receiver) = mpsc::channel();
-		let extra_scheduler = scheduler.clone();
-		scheduler.spawn("parallel-runtime-spawn", Box::pin(async move {
-			let result = match crate::new_async_externalities(extra_scheduler, backend) {
-				Ok(mut ext) => {
-					let mut ext = AssertUnwindSafe(&mut ext);
-					match std::panic::catch_unwind(move || {
-						sp_externalities::set_and_run_with_externalities(
-							&mut **ext,
-							move || entry_point(data),
-						)
-					}) {
-						Ok(result) => result,
-						Err(panic) => {
-							log::error!(
-								target: "runtime",
-								"Spawned task panicked: {:?}",
-								panic,
-							);
-
-							// This will drop sender without sending anything.
-							return;
-						}
-					}
-				},
-				Err(e) => {
-					log::error!(
-						target: "runtime",
-						"Unable to run async task: {}",
-						e,
-					);
-
-					return;
-				},
-			};
-
-			let _ = sender.send(result);
-		}));
-
-		DataJoinHandle { receiver }
-*/
+		let task = Task::Native(NativeTask { func, data });
+		self.spawn_call_inner(task, kind, calling_ext)
 	}
 
 	fn spawn_call(
@@ -730,18 +801,13 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		kind: u8,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		let (ext, new_handle) = self.spawn_call_ext(kind, calling_ext);
-
-		let (result_sender, result_receiver) = mpsc::channel();
-		let task = PendingTask { task: Task::Wasm(WasmTask { dispatcher_ref, func, data }), ext, result_sender};
-		self.insert(new_handle, task, result_receiver);
-
-		new_handle
+		let task = Task::Wasm(WasmTask { dispatcher_ref, func, data });
+		self.spawn_call_inner(task, kind, calling_ext)
 	}
 
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
 		let worker_result = match self.remove(handle) {
-			RuningTask::Task(receiver) => {
+			RunningTask::Task(receiver) => {
 				if let Some(output) = receiver.recv()
 					.expect("Spawned task panicked for the handle") {
 						output
@@ -749,7 +815,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 						panic!("Spawned task panicked for the handle");
 				}
 			},
-			RuningTask::Inline(
+			RunningTask::Inline(
 				PendingInlineTask { ext, task: Task::Wasm(WasmTask { dispatcher_ref, func, data }) },
 			) => {
 				let need_resolve = ext.need_resolve();
@@ -798,7 +864,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					}
 				}
 			},
-			RuningTask::Inline(
+			RunningTask::Inline(
 				PendingInlineTask { ext, task: Task::Native(NativeTask { func, data }) },
 			) => {
 				// TODO factor code with wasm
@@ -837,7 +903,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 	}
 
 	fn kill(&self, handle: u64, calling_ext: &mut dyn Externalities) {
+		self.kill_handles.kill_thread(handle);
 		self.remove(handle);
+		// calling_ext.killed_worker(handle) // Not needed for current use case
+		// as there is not much memory to free from the state machine.
 	}
 
 	fn set_capacity(&self, capacity: u32) {
@@ -862,6 +931,7 @@ impl RuntimeInstanceSpawn {
 			task_sender,
 			instance: Arc::new(parking_lot::Mutex::new(None)),
 			recursive_level: 0,
+			kill_handles: Default::default(),
 		}
 	}
 

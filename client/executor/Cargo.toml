@@ -54,11 +54,17 @@ tracing-subscriber = "0.2.10"
 [features]
 default = [ "std" ]
 # This crate does not have `no_std` support, we just require this for tests
-std = []
+std = [
+  "abort-future"
+]
 wasm-extern-trace = []
 wasmtime = [
 	"sc-executor-wasmtime",
 ]
 wasmi-errno = [
 	"wasmi/errno"
+]
+# Do try to abort future.
+# This is behind a feature for not being very useful.
+abort-future = [
 ]

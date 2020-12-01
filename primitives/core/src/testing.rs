@@ -151,4 +151,27 @@ impl crate::traits::SpawnNamed for TaskExecutor {
 	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		self.0.spawn_ok(future);
 	}
+	fn spawn_with_handle(
+		&self,
+		_name: &'static str,
+		future: futures::future::BoxFuture<'static, ()>,
+	) -> Option<crate::traits::RemoteHandle> {
+		use futures::task::SpawnExt;
+		if let Some(handle) = self.0.spawn_with_handle(future).ok() {
+			Some(Box::new(Handle(Some(handle))))
+		} else {
+			None
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+struct Handle(Option<futures::future::RemoteHandle<()>>);
+
+#[cfg(feature = "std")]
+impl crate::traits::SpawnHandle for Handle {
+	fn dismiss(&mut self) {
+		// drop the remote handle to free pool.
+		self.0.take();
+	}
 }
