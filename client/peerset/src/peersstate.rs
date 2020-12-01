@@ -46,8 +46,8 @@ pub struct PeersState {
 	/// List of nodes that we know about.
 	///
 	/// > **Note**: This list should really be ordered by decreasing reputation, so that we can
-	/// 			easily select the best node to connect to. As a first draft, however, we don't
-	/// 			sort, to make the logic easier.
+	///           easily select the best node to connect to. As a first draft, however, we don't
+	///           sort, to make the logic easier.
 	nodes: HashMap<PeerId, Node>,
 
 	/// Configuration of each set. The size of this `Vec` is never modified.
