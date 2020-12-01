@@ -398,9 +398,9 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								event: ((*protocol).to_string(), event),
 							})
 						}
-						NetworkBehaviourAction::ReportObservedAddr { address } => {
+						NetworkBehaviourAction::ReportObservedAddr { address, score } => {
 							return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-								address,
+								address, score,
 							})
 						}
 					};

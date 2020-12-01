@@ -17,7 +17,7 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use crate::{CodeHash, Schedule, Trait};
+use crate::{CodeHash, Schedule, Config};
 use crate::wasm::env_def::FunctionImplProvider;
 use crate::exec::Ext;
 use crate::gas::GasMeter;
@@ -68,17 +68,17 @@ pub struct WasmExecutable {
 }
 
 /// Loader which fetches `WasmExecutable` from the code cache.
-pub struct WasmLoader<'a, T: Trait> {
+pub struct WasmLoader<'a, T: Config> {
 	schedule: &'a Schedule<T>,
 }
 
-impl<'a, T: Trait> WasmLoader<'a, T> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
+impl<'a, T: Config> WasmLoader<'a, T> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
 	pub fn new(schedule: &'a Schedule<T>) -> Self {
 		WasmLoader { schedule }
 	}
 }
 
-impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a, T>
+impl<'a, T: Config> crate::exec::Loader<T> for WasmLoader<'a, T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
@@ -101,17 +101,17 @@ where
 }
 
 /// Implementation of `Vm` that takes `WasmExecutable` and executes it.
-pub struct WasmVm<'a, T: Trait> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
+pub struct WasmVm<'a, T: Config> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
 	schedule: &'a Schedule<T>,
 }
 
-impl<'a, T: Trait> WasmVm<'a, T> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
+impl<'a, T: Config> WasmVm<'a, T> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
 	pub fn new(schedule: &'a Schedule<T>) -> Self {
 		WasmVm { schedule }
 	}
 }
 
-impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T>
+impl<'a, T: Config> crate::exec::Vm<T> for WasmVm<'a, T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
@@ -462,8 +462,8 @@ mod tests {
 		gas_meter: &mut GasMeter<E::T>,
 	) -> ExecResult
 	where
-		<E::T as frame_system::Trait>::AccountId:
-			UncheckedFrom<<E::T as frame_system::Trait>::Hash> + AsRef<[u8]>
+		<E::T as frame_system::Config>::AccountId:
+			UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>
 	{
 		use crate::exec::Vm;
 
