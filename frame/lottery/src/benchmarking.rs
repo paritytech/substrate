@@ -92,7 +92,7 @@ benchmarks! {
 		let origin = T::ManagerOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert!(crate::Lottery::<T>::get().unwrap().repeat, false);
+		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, false);
 	}
 
 	on_initialize_end {
@@ -160,8 +160,9 @@ mod tests {
 	#[test]
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_start_lottery::<Test>());
 			assert_ok!(test_benchmark_buy_ticket::<Test>());
+			assert_ok!(test_benchmark_start_lottery::<Test>());
+			assert_ok!(test_benchmark_stop_repeat::<Test>());
 			assert_ok!(test_benchmark_on_initialize_end::<Test>());
 			assert_ok!(test_benchmark_on_initialize_repeat::<Test>());
 		});
