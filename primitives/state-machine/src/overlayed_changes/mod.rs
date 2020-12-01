@@ -187,6 +187,7 @@ impl Markers {
 				}
 			},
 			WorkerResult::Valid(result) => Some(result),
+			WorkerResult::Invalid => None,
 			WorkerResult::Panic => {
 				// TODO at this point a Panic should result in panic from parent
 				// but we could also change it to Invalid result here.

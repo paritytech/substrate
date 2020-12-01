@@ -1176,8 +1176,31 @@ fn test_tasks() {
 	}
 	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
 	let res = handle.join().expect("expected result for task");
-	assert!(res.get(0) == Some(&42))
+	assert!(res.get(0) == Some(&42));
 
+	fn tokill(_inp: Vec<u8>) -> Vec<u8> {
+		loop { }
+	}
+	let handle = sp_tasks::spawn(tokill, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
+	let res = handle.dismiss();
+	fn do_panic(_inp: Vec<u8>) -> Vec<u8> {
+		panic!("heloo");
+	}
+	let handle = sp_tasks::spawn(do_panic, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
+	// Dismiss don't panic
+	let res = handle.dismiss();
+
+	sp_io::storage::start_transaction();
+	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
+	// invalidate state for handle
+	sp_io::storage::rollback_transaction();
+	assert!(handle.join().is_none());
+	sp_io::storage::start_transaction();
+	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::AsyncStateType::ReadLastBlock);
+	sp_io::storage::rollback_transaction();
+	// state stay correct for last block
+	assert!(handle.join().is_some());
+	
 // TODO	unimplemented!("join, kill and consort");
 }
 

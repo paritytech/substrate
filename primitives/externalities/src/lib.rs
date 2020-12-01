@@ -313,6 +313,10 @@ pub enum WorkerResult {
 	/// Result that require to be checked against
 	/// its parent externality state.
 	CallAt(Vec<u8>, TaskId),
+	/// A worker execution that is not valid.
+	/// For instance when asumption on state
+	/// are required.
+	Invalid,
 	/// Internal panic when runing the worker.
 	/// This should propagate panic in caller.
 	Panic,
@@ -322,23 +326,13 @@ pub enum WorkerResult {
 }
 
 impl WorkerResult {
-	/// Check if calls to `resolve_worker_result`
-	/// is required (not required if returns false).
-	pub fn is_resolved(&self) -> bool {
-		match self {
-			WorkerResult::Valid(..) => true,
-			WorkerResult::CallAt(..)
-				| WorkerResult::HardPanic
-				| WorkerResult::Panic => false,
-		}
-	}
-
 	/// Resolve state default implementation for
 	/// Externalities that do not register changes.
 	pub fn read_resolve(self) -> Option<Vec<u8>> {
 		match self {
 			WorkerResult::CallAt(result, ..) => Some(result),
 			WorkerResult::Valid(result) => Some(result),
+			WorkerResult::Invalid => None,
 			WorkerResult::Panic => {
 				panic!("Panic in worker")
 			},

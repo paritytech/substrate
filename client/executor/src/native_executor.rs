@@ -500,9 +500,8 @@ impl RuntimeInstanceSpawn {
 		result
 	}
 
-	fn remove(&self, handle: u64) -> RunningTask {
+	fn remove(&self, handle: u64) -> Option<RunningTask> {
 		self.tasks.lock().tasks.remove(&handle)
-			.expect("Existing handle use for join")
 	}
 
 	fn insert(
@@ -799,25 +798,25 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 	}
 
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
-		let worker_result = match self.remove(handle) {
-			RunningTask::Task(receiver) => {
-				if let Some(output) = receiver.recv()
-					.expect("Spawned task panicked for the handle") {
-						output
-					} else {
-						panic!("Spawned task panicked for the handle");
-				}
+		let worker_result = || match self.remove(handle) {
+			Some(RunningTask::Task(receiver)) => match receiver.recv() {
+				Ok(Some(output)) => output,
+				Ok(None)
+				| Err(_) => {
+					// spawned task did end with no result, so panic
+					WorkerResult::Panic
+				},
 			},
-			RunningTask::Inline(
+			Some(RunningTask::Inline(
 				PendingInlineTask { ext, task: Task::Wasm(WasmTask { dispatcher_ref, func, data }) },
-			) => {
+			)) => {
 				let need_resolve = ext.need_resolve();
 				let mut instance = self.instance.lock();
 				if instance.is_none() {
 					*instance = if let Some(instance) = Self::instantiate_inline(&self.module) {
 						Some(instance)
 					} else {
-						panic!("TODO thi sshould panic whole tx?");
+						return WorkerResult::HardPanic;
 					};
 				}
 
@@ -829,7 +828,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 							"Failed to setup externalities for inline async context: {}",
 							e,
 						);
-						panic!("TODO return panic th result instead");
+						return WorkerResult::HardPanic;
 					}
 				};
 				let instance = instance.as_ref().expect("Lazy init at start");
@@ -857,9 +856,9 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					}
 				}
 			},
-			RunningTask::Inline(
+			Some(RunningTask::Inline(
 				PendingInlineTask { ext, task: Task::Native(NativeTask { func, data }) },
-			) => {
+			)) => {
 				// TODO factor code with wasm
 				let need_resolve = ext.need_resolve();
 				let mut async_ext = match new_inline_only_externalities(ext) {
@@ -870,7 +869,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 							"Failed to setup externalities for inline async context: {}",
 							e,
 						);
-						panic!("TODO return panic th result instead");
+						return WorkerResult::HardPanic;
 					}
 				};
 				match with_externalities_safe(
@@ -890,9 +889,12 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					}
 				}
 			},
+			// handle has been removed due to dismiss or
+			// invalid externality condition.
+			None => WorkerResult::Invalid,
 		};
 
-		calling_ext.resolve_worker_result(worker_result)
+		calling_ext.resolve_worker_result(worker_result())
 	}
 
 	fn dismiss(&self, handle: u64) {
