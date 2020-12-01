@@ -897,7 +897,7 @@ parameter_types! {
 	pub const MaxCalls: usize = 10;
 }
 
-impl pallet_lottery::Trait for Runtime {
+impl pallet_lottery::Config for Runtime {
 	type ModuleId = LotteryModuleId;
 	type Call = Call;
 	type Event = Event;
