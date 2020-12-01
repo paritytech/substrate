@@ -106,6 +106,7 @@ impl Config for Test {
 	type Event = ();
 	type ManagerOrigin = EnsureRoot<u64>;
 	type MaxCalls = MaxCalls;
+	type ValidateCall = Lottery;
 	type WeightInfo = ();
 }
 

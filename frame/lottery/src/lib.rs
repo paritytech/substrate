@@ -16,6 +16,26 @@
 // limitations under the License.
 
 //! A lottery pallet that uses participation in the network to purchase tickets.
+//!
+//! With this pallet, you can configure a lottery, which is a pot of money that
+//! users contribute to, and that is reallocated to a single user at the end of
+//! the lottery period. Just like a normal lottery system, to participate, you
+//! need to "buy a ticket", which is used to fund the pot.
+//!
+//! The unique feature of this lottery system is that tickets can only be
+//! purchased by making a "valid call" dispatched through this pallet.
+//! By configuring certain calls to be valid for the lottery, you can encourage
+//! users to make those calls on your network. An example of how this could be
+//! used is to set validator nominations as a valid lottery call. If the lottery
+//! is set to repeat every month, then users would be encouraged to re-nominate
+//! validators every month.
+//!
+//! This pallet can be configured to use dynamically set calls or statically set
+//! calls. Call validation happens through the `ValidateCall` implementation.
+//! This pallet provides one implementation of this using the `CallIndices`
+//! storage item. You can also make your own implementation at the runtime level
+//! which can contain much more complex logic, such as validation of the
+//! parameters, which this pallet alone cannot do.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -64,6 +84,9 @@ pub trait Config: frame_system::Config {
 	/// The max number of calls available in a single lottery.
 	type MaxCalls: Get<usize>;
 
+	/// Used to determine if a call would be valid for purchasing a ticket.
+	type ValidateCall: ValidateCall<Self>;
+
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -83,10 +106,27 @@ pub struct LotteryConfig<BlockNumber, Balance> {
 	/// Delay for choosing the winner of the lottery. (start + length + delay = payout).
 	/// Randomness in the "payout" block will be used to determine the winner.
 	delay: BlockNumber,
-	/// Calls available this lottery.
-	calls: Vec<CallIndex>,
 	/// Whether this lottery will repeat after it completes.
 	repeat: bool,
+}
+
+pub trait ValidateCall<T: Config> {
+	fn validate_call(call: &<T as Config>::Call) -> bool;
+}
+
+impl<T: Config> ValidateCall<T> for () {
+	fn validate_call(_: &<T as Config>::Call) -> bool { false }
+}
+
+impl<T: Config> ValidateCall<T> for Module<T> {
+	fn validate_call(call: &<T as Config>::Call) -> bool {
+		let valid_calls = CallIndices::get();
+		let call_index = match Self::call_to_index(&call) {
+			Ok(call_index) => call_index,
+			Err(_) => return false,
+		};
+		valid_calls.iter().any(|c| call_index == *c)
+	}
 }
 
 decl_storage! {
@@ -103,6 +143,9 @@ decl_storage! {
 		/// May have residual storage from previous lotteries. Use `TicketsCount` to see which ones
 		/// are actually valid ticket mappings.
 		Tickets: map hasher(twox_64_concat) u32 => Option<T::AccountId>;
+		/// The calls stored in this pallet to be used in an active lottery if configured
+		/// by `Config::ValidateCall`.
+		CallIndices: Vec<CallIndex>;
 	}
 }
 
@@ -113,6 +156,8 @@ decl_event!(
 	{
 		/// A lottery has been started!
 		LotteryStarted,
+		/// A new set of calls have been set!
+		CallsUpdated,
 		/// A winner has been chosen!
 		Winner(AccountId, Balance),
 		/// A ticket has been bought!
@@ -148,49 +193,6 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		/// Start a lottery using the provided configuration.
-		///
-		/// This extrinsic must be called by the `ManagerOrigin`.
-		///
-		/// Parameters:
-		///
-		/// * `price`: The cost of a single ticket.
-		/// * `length`: How long the lottery should run for starting at the current block.
-		/// * `delay`: How long after the lottery end we should wait before picking a winner.
-		/// * `calls`: The calls allowed for purchasing a lottery ticket. **Important**: Only
-		///    the call index is used to determine if the ticket purchase is valid.
-		/// * `repeat`: If the lottery should repeat when completed.
-		#[weight = T::WeightInfo::start_lottery(calls.len() as u32)]
-		fn start_lottery(origin,
-			price: BalanceOf<T>,
-			length: T::BlockNumber,
-			delay: T::BlockNumber,
-			calls: Vec<<T as Config>::Call>,
-			repeat: bool,
-		) {
-			T::ManagerOrigin::ensure_origin(origin)?;
-			ensure!(calls.len() <= T::MaxCalls::get(), Error::<T>::TooManyCalls);
-			let indices = Self::calls_to_indices(&calls)?;
-			Lottery::<T>::try_mutate(|lottery| -> DispatchResult {
-				ensure!(lottery.is_none(), Error::<T>::InProgress);
-				let index = LotteryIndex::get();
-				let new_index = index.checked_add(1).ok_or(Error::<T>::Overflow)?;
-				let start = frame_system::Module::<T>::block_number();
-				// Use new_index to more easily track everything with the current state.
-				*lottery = Some(LotteryConfig {
-					price,
-					start,
-					length,
-					delay,
-					calls: indices,
-					repeat,
-				});
-				LotteryIndex::put(new_index);
-				Ok(())
-			})?;
-			Self::deposit_event(RawEvent::LotteryStarted);
-		}
-
 		/// Buy a ticket to enter the lottery.
 		///
 		/// This extrinsic acts as a passthrough function for `call`. In all
@@ -208,15 +210,59 @@ decl_module! {
 		]
 		fn buy_ticket(origin, call: Box<<T as Config>::Call>) {
 			let caller = ensure_signed(origin.clone())?;
-			// This conversion may fail, but we want this function to always act
-			// as a passthrough... so we will parse the result below.
-			let maybe_call_index = Self::call_to_index(&call);
-			call.dispatch(origin).map_err(|e| e.error)?;
+			call.clone().dispatch(origin).map_err(|e| e.error)?;
 
-			// Only try to buy a ticket if the underlying call is successful.
-			// Not much we can do if this fails.
-			let call_index = maybe_call_index?;
-			let _ = Self::do_buy_ticket(&caller, &call_index);
+			let _ = Self::do_buy_ticket(&caller, &call);
+		}
+
+		#[weight = T::WeightInfo::set_calls(calls.len() as u32)]
+		fn set_calls(origin, calls: Vec<<T as Config>::Call>) {
+			T::ManagerOrigin::ensure_origin(origin)?;
+			ensure!(calls.len() <= T::MaxCalls::get(), Error::<T>::TooManyCalls);
+			if calls.is_empty() {
+				CallIndices::kill();
+			} else {
+				let indices = Self::calls_to_indices(&calls)?;
+				CallIndices::put(indices);
+			}
+			Self::deposit_event(RawEvent::CallsUpdated);
+		}
+
+		/// Start a lottery using the provided configuration.
+		///
+		/// This extrinsic must be called by the `ManagerOrigin`.
+		///
+		/// Parameters:
+		///
+		/// * `price`: The cost of a single ticket.
+		/// * `length`: How long the lottery should run for starting at the current block.
+		/// * `delay`: How long after the lottery end we should wait before picking a winner.
+		/// * `repeat`: If the lottery should repeat when completed.
+		#[weight = T::WeightInfo::start_lottery()]
+		fn start_lottery(origin,
+			price: BalanceOf<T>,
+			length: T::BlockNumber,
+			delay: T::BlockNumber,
+			repeat: bool,
+		) {
+			T::ManagerOrigin::ensure_origin(origin)?;
+			Lottery::<T>::try_mutate(|lottery| -> DispatchResult {
+				ensure!(lottery.is_none(), Error::<T>::InProgress);
+				let index = LotteryIndex::get();
+				let new_index = index.checked_add(1).ok_or(Error::<T>::Overflow)?;
+				let start = frame_system::Module::<T>::block_number();
+				// Use new_index to more easily track everything with the current state.
+				*lottery = Some(LotteryConfig {
+					price,
+					start,
+					length,
+					delay,
+					repeat,
+				});
+				LotteryIndex::put(new_index);
+				Ok(())
+			})?;
+			Self::deposit_event(RawEvent::LotteryStarted);
 		}
 
 		/// If a lottery is repeating, you can use this to stop the repeat.
@@ -311,12 +357,13 @@ impl<T: Config> Module<T> {
 	}
 
 	// Logic for buying a ticket.
-	fn do_buy_ticket(caller: &T::AccountId, call_index: &(u8, u8)) -> DispatchResult {
+	fn do_buy_ticket(caller: &T::AccountId, call: &<T as Config>::Call) -> DispatchResult {
 		// Check the call is valid lottery
 		let config = Lottery::<T>::get().ok_or(Error::<T>::NotConfigured)?;
 		let block_number = frame_system::Module::<T>::block_number();
 		ensure!(block_number < config.start.saturating_add(config.length), Error::<T>::AlreadyEnded);
-		ensure!(config.calls.iter().any(|c| call_index == c), Error::<T>::InvalidCall);
+		ensure!(T::ValidateCall::validate_call(call), Error::<T>::InvalidCall);
+		let call_index = Self::call_to_index(call)?;
 		let ticket_count = TicketsCount::get();
 		let new_ticket_count = ticket_count.checked_add(1).ok_or(Error::<T>::Overflow)?;
 		// Try to update the participant status
@@ -328,18 +375,18 @@ impl<T: Config> Module<T> {
 				*lottery_index = index;
 			} else {
 				// Check that user is not already participating under this call.
-				ensure!(!participating_calls.iter().any(|c| call_index == c), Error::<T>::AlreadyParticipating);
+				ensure!(!participating_calls.iter().any(|c| call_index == *c), Error::<T>::AlreadyParticipating);
 			}
 			// Check user has enough funds and send it to the Lottery account.
 			T::Currency::transfer(caller, &Self::account_id(), config.price, KeepAlive)?;
 			// Create a new ticket.
 			TicketsCount::put(new_ticket_count);
 			Tickets::<T>::insert(ticket_count, caller.clone());
-			participating_calls.push(*call_index);
+			participating_calls.push(call_index);
 			Ok(())
 		})?;
 
-		Self::deposit_event(RawEvent::TicketBought(caller.clone(), *call_index));
+		Self::deposit_event(RawEvent::TicketBought(caller.clone(), call_index));
 
 		Ok(())
 	}

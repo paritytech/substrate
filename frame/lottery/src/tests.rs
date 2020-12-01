@@ -48,8 +48,11 @@ fn basic_end_to_end_works() {
 			Call::Balances(BalancesCall::transfer(0, 0)),
 		];
 
+		// Set calls for the lottery
+		assert_ok!(Lottery::set_calls(Origin::root(), calls));
+
 		// Start lottery, it repeats
-		assert_ok!(Lottery::start_lottery(Origin::root(), price, length, delay, calls.clone(), true));
+		assert_ok!(Lottery::start_lottery(Origin::root(), price, length, delay, true));
 		assert!(crate::Lottery::<Test>::get().is_some());
 
 		assert_eq!(Balances::free_balance(&1), 100);
@@ -88,10 +91,39 @@ fn basic_end_to_end_works() {
 				start: 25,
 				length,
 				delay,
-				calls: vec![(1,2), (1,0)],
 				repeat: true,
 			}
 		);
+	});
+}
+
+#[test]
+fn set_calls_works() {
+	new_test_ext().execute_with(|| {
+		assert!(!CallIndices::exists());
+
+		let calls = vec![
+			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
+			Call::Balances(BalancesCall::transfer(0, 0)),
+		];
+
+		assert_ok!(Lottery::set_calls(Origin::root(), calls));
+		assert!(CallIndices::exists());
+
+		let too_many_calls = vec![
+			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
+			Call::Balances(BalancesCall::transfer(0, 0)),
+			Call::System(SystemCall::remark(vec![])),
+		];
+
+		assert_noop!(
+			Lottery::set_calls(Origin::root(), too_many_calls),
+			Error::<Test>::TooManyCalls,
+		);
+
+		// Clear calls
+		assert_ok!(Lottery::set_calls(Origin::root(), vec![]));
+		assert!(CallIndices::get().is_empty());
 	});
 }
 
@@ -101,33 +133,21 @@ fn start_lottery_works() {
 		let price = 10;
 		let length = 20;
 		let delay = 5;
-		let calls = vec![
-			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
-			Call::Balances(BalancesCall::transfer(0, 0)),
-		];
-		let too_many_calls = vec![
-			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
-			Call::Balances(BalancesCall::transfer(0, 0)),
-			Call::System(SystemCall::remark(vec![])),
-		];
+
 
 		// Setup ignores bad origin
 		assert_noop!(
-			Lottery::start_lottery(Origin::signed(1), price, length, delay, calls.clone(), false),
+			Lottery::start_lottery(Origin::signed(1), price, length, delay, false),
 			BadOrigin,
 		);
-		// Too many calls
-		assert_noop!(
-			Lottery::start_lottery(Origin::root(), price, length, delay, too_many_calls, false),
-			Error::<Test>::TooManyCalls,
-		);
+
 
 		// All good
-		assert_ok!(Lottery::start_lottery(Origin::root(), price, length, delay, calls.clone(), false));
+		assert_ok!(Lottery::start_lottery(Origin::root(), price, length, delay, false));
 
 		// Can't open another one if lottery is already present
 		assert_noop!(
-			Lottery::start_lottery(Origin::root(), price, length, delay, calls, false),
+			Lottery::start_lottery(Origin::root(), price, length, delay, false),
 			Error::<Test>::InProgress,
 		);
 	});
@@ -150,8 +170,10 @@ fn buy_ticket_works_as_simple_passthrough() {
 			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
 			Call::Balances(BalancesCall::transfer(0, 0)),
 		];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls));
+
 		// Ticket price of 60 would kill the user's account
-		assert_ok!(Lottery::start_lottery(Origin::root(), 60, 10, 5, calls.clone(), false));
+		assert_ok!(Lottery::start_lottery(Origin::root(), 60, 10, 5, false));
 		assert_ok!(Lottery::buy_ticket(Origin::signed(1), call.clone()));
 		assert_eq!(Balances::free_balance(&1), 100 - 20 - 20);
 		assert_eq!(TicketsCount::get(), 0);
@@ -171,18 +193,25 @@ fn buy_ticket_works_as_simple_passthrough() {
 
 		// User can call other txs, but doesn't get a ticket
 		let remark_call = Box::new(Call::System(SystemCall::remark(b"hello, world!".to_vec())));
-		assert_ok!(Lottery::buy_ticket(Origin::signed(1), remark_call));
+		assert_ok!(Lottery::buy_ticket(Origin::signed(2), remark_call));
 		assert_eq!(TicketsCount::get(), 0);
+
+		let successful_call = Box::new(Call::Balances(BalancesCall::transfer(2, 1)));
+		assert_ok!(Lottery::buy_ticket(Origin::signed(2), successful_call));
+		assert_eq!(TicketsCount::get(), 1);
 	});
 }
 
 #[test]
 fn buy_ticket_works() {
 	new_test_ext().execute_with(|| {
+		// Set calls for the lottery.
 		let calls = vec![
 			Call::System(SystemCall::remark(vec![])),
 			Call::Balances(BalancesCall::transfer(0, 0)),
 		];
+		assert_ok!(Lottery::set_calls(Origin::root(), calls));
+
 
 		// Can't buy ticket before start
 		let call = Box::new(Call::Balances(BalancesCall::transfer(2, 1)));
@@ -190,7 +219,7 @@ fn buy_ticket_works() {
 		assert_eq!(TicketsCount::get(), 0);
 
 		// Start lottery
-		assert_ok!(Lottery::start_lottery(Origin::root(), 1, 20, 5, calls.clone(), false));
+		assert_ok!(Lottery::start_lottery(Origin::root(), 1, 20, 5, false));
 
 		// Go to start, buy ticket for transfer
 		run_to_block(5);

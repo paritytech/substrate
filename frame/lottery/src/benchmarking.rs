@@ -41,7 +41,8 @@ fn setup_lottery<T: Config>(repeat: bool) -> Result<(), &'static str> {
 	// Last call will be the match for worst case scenario.
 	calls.push(frame_system::Call::<T>::remark(vec![]).into());
 	let origin = T::ManagerOrigin::successful_origin();
-	Lottery::<T>::start_lottery(origin, price, length, delay, calls, repeat)?;
+	Lottery::<T>::set_calls(origin.clone(), calls)?;
+	Lottery::<T>::start_lottery(origin, price, length, delay, repeat)?;
 	Ok(())
 }
 
@@ -71,14 +72,26 @@ benchmarks! {
 		assert_eq!(TicketsCount::get(), 1);
 	}
 
-	start_lottery {
+	set_calls {
 		let n in 0 .. T::MaxCalls::get() as u32;
+		let calls = vec![frame_system::Call::<T>::remark(vec![]).into(); n as usize];
+
+		let call = Call::<T>::set_calls(calls);
+		let origin = T::ManagerOrigin::successful_origin();
+		assert!(CallIndices::get().is_empty());
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		if !n.is_zero() {
+			assert!(!CallIndices::get().is_empty());
+		}
+	}
+
+	start_lottery {
 		let price = BalanceOf::<T>::max_value();
 		let end = 10u32.into();
 		let payout = 5u32.into();
-		let calls = vec![frame_system::Call::<T>::remark(vec![]).into(); n as usize];
 
-		let call = Call::<T>::start_lottery(price, end, payout, calls, true);
+		let call = Call::<T>::start_lottery(price, end, payout, true);
 		let origin = T::ManagerOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -161,6 +174,7 @@ mod tests {
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_buy_ticket::<Test>());
+			assert_ok!(test_benchmark_set_calls::<Test>());
 			assert_ok!(test_benchmark_start_lottery::<Test>());
 			assert_ok!(test_benchmark_stop_repeat::<Test>());
 			assert_ok!(test_benchmark_on_initialize_end::<Test>());
