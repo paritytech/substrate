@@ -208,10 +208,7 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 		}));
 
 		async move {
-			match rx.await {
-				Ok(x) => x,
-				Err(err) => Err(sp_blockchain::Error::Msg(err.to_string()))
-			}
+			rx.await?
 		}.boxed()
 	}
 }

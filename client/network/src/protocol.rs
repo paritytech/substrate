@@ -1083,16 +1083,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let is_best = self.context_data.chain.info().best_hash == hash;
 		debug!(target: "sync", "Reannouncing block {:?} is_best: {}", hash, is_best);
-		self.send_announcement(&header, data, is_best, true)
-	}
-
-	fn send_announcement(&mut self, header: &B::Header, data: Vec<u8>, is_best: bool, force: bool) {
-		let hash = header.hash();
 
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
-			trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
 			let inserted = peer.known_blocks.insert(hash);
-			if inserted || force {
+			if inserted {
+				trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
 				let message = message::BlockAnnounce {
 					header: header.clone(),
 					state: if is_best {
@@ -1489,8 +1484,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
 			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 				return Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }),
-			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
+				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
 		};
 
 		let outcome = match event {
