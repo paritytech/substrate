@@ -74,6 +74,23 @@ type Index = u32;
 // We use this to uniquely match someone's incoming call with the calls configured for the lottery.
 type CallIndex = (u8, u8);
 
+#[derive(Encode, Decode, Default, Eq, PartialEq, RuntimeDebug)]
+pub struct LotteryConfig<BlockNumber, Balance> {
+	/// Price per entry.
+	price: Balance,
+	/// Starting block of the lottery.
+	start: BlockNumber,
+	/// Length of the lottery (start + length = end).
+	length: BlockNumber,
+	/// Delay for choosing the winner of the lottery. (start + length + delay = payout).
+	/// Randomness in the "payout" block will be used to determine the winner.
+	delay: BlockNumber,
+	/// Calls available this lottery.
+	calls: Vec<CallIndex>,
+	/// Whether this lottery will repeat after it completes.
+	repeat: bool,
+}
+
 decl_storage! {
 	trait Store for Module<T: Config> as Lottery {
 		LotteryIndex: Index;
@@ -112,8 +129,6 @@ decl_error! {
 		Overflow,
 		/// A lottery has not been configured.
 		NotConfigured,
-		/// A lottery has not started.
-		NotStarted,
 		/// A lottery is already in progress.
 		InProgress,
 		/// A lottery has already ended.
@@ -129,36 +144,20 @@ decl_error! {
 	}
 }
 
-#[derive(Encode, Decode, Default, RuntimeDebug)]
-pub struct LotteryConfig<BlockNumber, Balance> {
-	/// Index of this lottery
-	index: Index,
-	/// Price per entry.
-	price: Balance,
-	/// Starting block of the lottery.
-	start: BlockNumber,
-	/// Ending block of the lottery.
-	end: BlockNumber,
-	/// Payout block of the lottery.
-	payout: BlockNumber,
-	/// Calls available this lottery.
-	calls: Vec<CallIndex>,
-}
-
 decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin, system = frame_system {
-		/// TODO: Expose Constants
+		const ModuleId: ModuleId = T::ModuleId::get();
+		const MaxCalls: u32 = T::MaxCalls::get() as u32;
 
 		fn deposit_event() = default;
 
-		#[weight = T::WeightInfo::setup_lottery(calls.len() as u32)]
-		fn setup_lottery(
-			origin,
+		#[weight = T::WeightInfo::start_lottery(calls.len() as u32)]
+		fn start_lottery(origin,
 			price: BalanceOf<T>,
-			start: T::BlockNumber,
-			end: T::BlockNumber,
-			payout: T::BlockNumber,
+			length: T::BlockNumber,
+			delay: T::BlockNumber,
 			calls: Vec<<T as Config>::Call>,
+			repeat: bool,
 		) {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			ensure!(calls.len() <= T::MaxCalls::get(), Error::<T>::TooManyCalls);
@@ -167,8 +166,16 @@ decl_module! {
 				ensure!(lottery.is_none(), Error::<T>::InProgress);
 				let index = LotteryIndex::get();
 				let new_index = index.checked_add(1).ok_or(Error::<T>::Overflow)?;
+				let start = frame_system::Module::<T>::block_number();
 				// Use new_index to more easily track everything with the current state.
-				*lottery = Some(LotteryConfig { index: new_index, price, start, end, payout, calls: indices });
+				*lottery = Some(LotteryConfig {
+					price,
+					start,
+					length,
+					delay,
+					calls: indices,
+					repeat,
+				});
 				LotteryIndex::put(new_index);
 				Ok(())
 			})?;
@@ -189,30 +196,43 @@ decl_module! {
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			if Lottery::<T>::get().map_or(false, |config| config.payout <= n) {
-				let (lottery_account, lottery_balance) = Self::pot();
-				let ticket_count = TicketsCount::get();
+			Lottery::<T>::mutate(|mut lottery| -> Weight {
+				if let Some(config) = &mut lottery {
+					let payout_block = config.start
+						.saturating_add(config.length)
+						.saturating_add(config.delay);
+					if payout_block <= n {
+						let (lottery_account, lottery_balance) = Self::pot();
+						let ticket_count = TicketsCount::get();
 
-				let winning_number = Self::choose_winner(ticket_count);
-				let winner = Tickets::<T>::get(winning_number).unwrap_or(lottery_account);
-				// Not much we can do if this fails...
-				let _ = T::Currency::transfer(&Self::account_id(), &winner, lottery_balance, KeepAlive);
+						let winning_number = Self::choose_winner(ticket_count);
+						let winner = Tickets::<T>::get(winning_number).unwrap_or(lottery_account);
+						// Not much we can do if this fails...
+						let _ = T::Currency::transfer(&Self::account_id(), &winner, lottery_balance, KeepAlive);
 
-				Self::deposit_event(RawEvent::Winner(winner, lottery_balance));
+						Self::deposit_event(RawEvent::Winner(winner, lottery_balance));
 
-				Lottery::<T>::kill();
-				TicketsCount::kill();
+						TicketsCount::kill();
 
-				// We choose not need to kill Participants and Tickets to avoid a large number
-				// of writes at one time. Instead, data persists between lotteries, but is not used
-				// if it is not relevant.
-
-				return T::WeightInfo::on_initialize()
-			} else {
-				return Weight::zero()
-			}
+						if config.repeat {
+							// If lottery should repeat, increment index by 1.
+							LotteryIndex::mutate(|index| *index = index.saturating_add(1));
+							// Set a new start with the current block.
+							config.start = n;
+							return T::WeightInfo::on_initialize_repeat()
+						} else {
+							// Else, kill the lottery storage.
+							*lottery = None;
+							return T::WeightInfo::on_initialize_end()
+						}
+						// We choose not need to kill Participants and Tickets to avoid a large number
+						// of writes at one time. Instead, data persists between lotteries, but is not used
+						// if it is not relevant.
+					}
+				}
+				return T::DbWeight::get().reads(1)
+			})
 		}
-
 	}
 }
 
@@ -257,8 +277,7 @@ impl<T: Config> Module<T> {
 		// Check the call is valid lottery
 		let config = Lottery::<T>::get().ok_or(Error::<T>::NotConfigured)?;
 		let block_number = frame_system::Module::<T>::block_number();
-		ensure!(block_number >= config.start, Error::<T>::NotStarted);
-		ensure!(block_number < config.end, Error::<T>::AlreadyEnded);
+		ensure!(block_number < config.start.saturating_add(config.length), Error::<T>::AlreadyEnded);
 		let call_index = Self::call_to_index(call)?;
 		ensure!(config.calls.iter().any(|c| call_index == *c), Error::<T>::InvalidCall);
 		let ticket_count = TicketsCount::get();

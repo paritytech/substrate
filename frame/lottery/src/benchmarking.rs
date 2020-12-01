@@ -29,11 +29,10 @@ use sp_runtime::traits::Bounded;
 use crate::Module as Lottery;
 
 // Set up and start a lottery
-fn start_lottery<T: Config>() -> Result<(), &'static str> {
+fn setup_lottery<T: Config>() -> Result<(), &'static str> {
 	let price = T::Currency::minimum_balance();
-	let start = 0u32.into();
-	let end = 10u32.into();
-	let payout = 15u32.into();
+	let length = 10u32.into();
+	let delay = 5u32.into();
 	// Calls will be maximum length...
 	let mut calls = vec![
 		frame_system::Call::<T>::set_code(vec![]).into();
@@ -42,22 +41,21 @@ fn start_lottery<T: Config>() -> Result<(), &'static str> {
 	// Last call will be the match for worst case scenario.
 	calls.push(frame_system::Call::<T>::remark(vec![]).into());
 	let origin = T::ManagerOrigin::successful_origin();
-	Lottery::<T>::setup_lottery(origin, price, start, end, payout, calls)?;
+	Lottery::<T>::start_lottery(origin, price, length, delay, calls, false)?;
 	Ok(())
 }
 
 benchmarks! {
 	_ { }
 
-	setup_lottery {
+	start_lottery {
 		let n in 0 .. T::MaxCalls::get() as u32;
 		let price = BalanceOf::<T>::max_value();
-		let start = 0u32.into();
 		let end = 10u32.into();
-		let payout = 15u32.into();
+		let payout = 5u32.into();
 		let calls = vec![frame_system::Call::<T>::remark(vec![]).into(); n as usize];
 
-		let call = Call::<T>::setup_lottery(price, start, end, payout, calls);
+		let call = Call::<T>::start_lottery(price, end, payout, calls, true);
 		let origin = T::ManagerOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -67,7 +65,7 @@ benchmarks! {
 	buy_ticket {
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		start_lottery::<T>()?;
+		setup_lottery::<T>()?;
 		// force user to have a long vec of calls participating
 		let set_code_index: CallIndex = Lottery::<T>::call_to_index(
 			&frame_system::Call::<T>::set_code(vec![]).into()
@@ -88,7 +86,7 @@ benchmarks! {
 	}
 
 	on_initialize {
-		start_lottery::<T>()?;
+		setup_lottery::<T>()?;
 		let winner = account("winner", 0, 0);
 		// User needs more than min balance to get ticket
 		T::Currency::make_free_balance_be(&winner, T::Currency::minimum_balance() * 10u32.into());
@@ -124,7 +122,7 @@ mod tests {
 	#[test]
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_setup_lottery::<Test>());
+			assert_ok!(test_benchmark_start_lottery::<Test>());
 			assert_ok!(test_benchmark_buy_ticket::<Test>());
 			assert_ok!(test_benchmark_on_initialize::<Test>());
 		});
