@@ -423,12 +423,6 @@ fn finalize_3_voters_1_full_observer() {
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
-	let all_peers = peers.iter()
-		.cloned()
-		.map(Some)
-		.chain(std::iter::once(None))
-		.collect::<Vec<_>>();
-
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
 	runtime.spawn(initialize_grandpa(&mut net, peers));
 
@@ -937,14 +931,14 @@ fn test_bad_justification() {
 	);
 }
 
-/*#[test]
+#[test]
 fn voter_persists_its_votes() {
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use futures::future;
-	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 
 	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
+	let mut keystore_paths = Vec::new();
 
 	// we have two authorities but we'll only be running the voter for alice
 	// we are going to be listening for the prevotes it casts
@@ -952,153 +946,71 @@ fn voter_persists_its_votes() {
 	let voters = make_ids(peers);
 
 	// alice has a chain with 20 blocks
-	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 2);
-	net.peer(0).push_blocks(20, false);
-	net.block_until_sync();
-
-	assert_eq!(net.peer(0).client().info().best_number, 20,
-			   "Peer #{} failed to sync", 0);
-
-
-	let peer = net.peer(0);
-	let client = peer.client().clone();
-	let net = Arc::new(Mutex::new(net));
-
-	// channel between the voter and the main controller.
-	// sending a message on the `voter_tx` restarts the voter.
-	let (voter_tx, voter_rx) = tracing_unbounded::<()>("");
-
-	let mut keystore_paths = Vec::new();
-
-	// startup a grandpa voter for alice but also listen for messages on a
-	// channel. whenever a message is received the voter is restarted. when the
-	// sender is dropped the voter is stopped.
-	{
-		let (keystore, keystore_path) = create_keystore(peers[0]);
-		keystore_paths.push(keystore_path);
-
-		struct ResettableVoter {
-			voter: Pin<Box<dyn Future<Output = ()> + Send + Unpin>>,
-			voter_rx: TracingUnboundedReceiver<()>,
-			net: Arc<Mutex<GrandpaTestNet>>,
-			client: PeersClient,
-			keystore: SyncCryptoStorePtr,
-		}
-
-		impl Future for ResettableVoter {
-			type Output = ();
-
-			fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-				let this = Pin::into_inner(self);
-
-				if let Poll::Ready(()) = Pin::new(&mut this.voter).poll(cx) {
-					panic!("error in the voter");
-				}
-
-				match  Pin::new(&mut this.voter_rx).poll_next(cx) {
-					Poll::Pending => return Poll::Pending,
-					Poll::Ready(None) => return Poll::Ready(()),
-					Poll::Ready(Some(())) => {
-						let (_block_import, _, link) =
-							this.net.lock()
-									.make_block_import::<
-										TransactionFor<substrate_test_runtime_client::Backend, Block>
-									>(this.client.clone());
-						let link = link.lock().take().unwrap();
-
-						let grandpa_params = GrandpaParams {
-							config: Config {
-								gossip_duration: TEST_GOSSIP_DURATION,
-								justification_period: 32,
-								keystore: Some(this.keystore.clone()),
-								name: Some(format!("peer#{}", 0)),
-								is_authority: true,
-								observer_enabled: true,
-							},
-							link,
-							network: this.net.lock().peers[0].network_service().clone(),
-							telemetry_on_connect: None,
-							voting_rule: VotingRulesBuilder::default().build(),
-							prometheus_registry: None,
-							shared_voter_state: SharedVoterState::empty(),
-						};
-
-						let voter = run_grandpa_voter(grandpa_params)
-							.expect("all in order with client and network")
-							.map(move |r| {
-								// we need to keep the block_import alive since it owns the
-								// sender for the voter commands channel, if that gets dropped
-								// then the voter will stop
-								drop(_block_import);
-								r
-							});
-
-						this.voter = Box::pin(voter);
-						// notify current task in order to poll the voter
-						cx.waker().wake_by_ref();
-					}
-				};
-
-				Poll::Pending
-			}
-		}
-
-		// we create a "dummy" voter by setting it to `pending` and triggering the `tx`.
-		// this way, the `ResettableVoter` will reset its `voter` field to a value ASAP.
-		voter_tx.unbounded_send(()).unwrap();
-		runtime.spawn(ResettableVoter {
-			voter: Box::pin(futures::future::pending()),
-			voter_rx,
-			net: net.clone(),
-			client: client.clone(),
-			keystore,
-		});
-	}
-
-	let (exit_tx, exit_rx) = futures::channel::oneshot::channel::<()>();
+	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 3);
 
 	// create the communication layer for bob, but don't start any
 	// voter. instead we'll listen for the prevote that alice casts
 	// and cast our own manually
-	{
+	let bob_keystore = {
 		let (keystore, keystore_path) = create_keystore(peers[1]);
 		keystore_paths.push(keystore_path);
-
+		keystore
+	};
+	let bob_network = {
 		let config = Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
 			justification_period: 32,
-			keystore: Some(keystore.clone()),
+			keystore: Some(bob_keystore.clone()),
 			name: Some(format!("peer#{}", 1)),
 			is_authority: true,
 			observer_enabled: true,
 		};
 
 		let set_state = {
-			let (_, _, link) = net.lock()
+			let bob_client = net.peer(1).client().clone();
+			let (_, _, link) = net
 				.make_block_import::<
 					TransactionFor<substrate_test_runtime_client::Backend, Block>
-				>(client);
+				>(bob_client);
 			let LinkHalf { persistent_data, .. } = link.lock().take().unwrap();
 			let PersistentData { set_state, .. } = persistent_data;
 			set_state
 		};
 
-		let network = communication::NetworkBridge::new(
-			net.lock().peers[1].network_service().clone(),
+		communication::NetworkBridge::new(
+			net.peers[1].network_service().clone(),
 			config.clone(),
 			set_state,
 			None,
-		);
+		)
+	};
 
-		let (round_rx, round_tx) = network.round_communication(
-			Some((peers[1].public().into(), keystore).into()),
+	net.peer(0).push_blocks(20, false);
+	net.block_until_sync();
+
+	assert_eq!(net.peer(0).client().info().best_number, 20,
+			   "Peer #{} failed to sync", 0);
+
+	// spawn two voters for alice.
+	// half-way through the test, we stop one and start the other.
+	let (alice_voter1, abort) = future::abortable(initialize_grandpa(&mut net, &peers[..1]));
+	let alice_voter2 = Arc::new(Mutex::new(Some(initialize_grandpa(&mut net, &peers[..1]))));
+	runtime.spawn(alice_voter1);
+
+	let net = Arc::new(Mutex::new(net));
+
+	let (exit_tx, exit_rx) = futures::channel::oneshot::channel::<()>();
+
+	{
+		let (round_rx, round_tx) = bob_network.round_communication(
+			Some((peers[1].public().into(), bob_keystore).into()),
 			communication::Round(1),
 			communication::SetId(0),
 			Arc::new(VoterSet::new(voters).unwrap()),
 			HasVoted::No,
 		);
 
-		runtime.spawn(network);
+		runtime.spawn(bob_network);
 
 		let round_tx = Arc::new(Mutex::new(round_tx));
 		let exit_tx = Arc::new(Mutex::new(Some(exit_tx)));
@@ -1106,13 +1018,16 @@ fn voter_persists_its_votes() {
 		let net = net.clone();
 		let state = Arc::new(AtomicUsize::new(0));
 
+		let runtime_handle = runtime.handle().clone();
 		runtime.spawn(round_rx.for_each(move |signed| {
 			let net2 = net.clone();
 			let net = net.clone();
-			let voter_tx = voter_tx.clone();
+			let abort = abort.clone();
 			let round_tx = round_tx.clone();
 			let state = state.clone();
 			let exit_tx = exit_tx.clone();
+			let runtime_handle = runtime_handle.clone();
+			let alice_voter2 = alice_voter2.clone();
 
 			async move {
 				if state.compare_and_swap(0, 1, Ordering::SeqCst) == 0 {
@@ -1147,7 +1062,8 @@ fn voter_persists_its_votes() {
 						net.lock().peer(0).client().as_full().unwrap().hash(30).unwrap().unwrap();
 
 					// we restart alice's voter
-					voter_tx.unbounded_send(()).unwrap();
+					abort.abort();
+					runtime_handle.spawn(alice_voter2.lock().take().unwrap());
 
 					// and we push our own prevote for block 30
 					let prevote = finality_grandpa::Prevote {
@@ -1194,7 +1110,7 @@ fn voter_persists_its_votes() {
 	}
 
 	block_until_complete(exit_rx.into_future(), &net, &mut runtime);
-}*/
+}
 
 #[test]
 fn finalize_3_voters_1_light_observer() {
