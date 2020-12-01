@@ -336,12 +336,11 @@ where
 	}
 
 	/// Callback, invoked when a new block request has been received from remote.
-	fn on_block_request
-		( &mut self
-		, peer: &PeerId
-		, request: &schema::v1::BlockRequest
-		) -> Result<schema::v1::BlockResponse, Error>
-	{
+	fn on_block_request(
+		&mut self,
+		peer: &PeerId,
+		request: &schema::v1::BlockRequest,
+	) -> Result<schema::v1::BlockResponse, Error> {
 		log::trace!(
 			target: "sync",
 			"Block request from peer {}: from block {:?} to block {:?}, max blocks {:?}",
