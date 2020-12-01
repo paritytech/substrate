@@ -46,6 +46,7 @@ use sp_std::marker::PhantomData;
 pub trait WeightInfo {
 	fn start_lottery(n: u32, ) -> Weight;
 	fn buy_ticket() -> Weight;
+	fn stop_repeat() -> Weight;
 	fn on_initialize_repeat() -> Weight;
 	fn on_initialize_end() -> Weight;
 }
@@ -62,6 +63,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn buy_ticket() -> Weight {
 		(116_213_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
+			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+	}
+	fn stop_repeat() -> Weight {
+		(111_483_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	fn on_initialize_repeat() -> Weight {
@@ -85,6 +91,11 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn buy_ticket() -> Weight {
+		(116_213_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+	}
+	fn stop_repeat() -> Weight {
 		(116_213_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))

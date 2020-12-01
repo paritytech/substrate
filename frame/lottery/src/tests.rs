@@ -48,7 +48,7 @@ fn basic_end_to_end_works() {
 			Call::Balances(BalancesCall::transfer(0, 0)),
 		];
 
-		// Start lottery
+		// Start lottery, it repeats
 		assert_ok!(Lottery::start_lottery(Origin::root(), price, length, delay, calls.clone(), true));
 		assert!(crate::Lottery::<Test>::get().is_some());
 
@@ -216,5 +216,6 @@ fn buy_ticket_works() {
 		run_to_block(25);
 		assert_ok!(Lottery::buy_ticket(Origin::signed(2), call.clone()));
 		assert_eq!(TicketsCount::get(), 0);
+		assert_eq!(LotteryIndex::get(), 1);
 	});
 }

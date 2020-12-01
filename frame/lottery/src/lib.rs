@@ -148,6 +148,18 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		/// Start a lottery using the provided configuration.
+		///
+		/// This extrinsic must be called by the `ManagerOrigin`.
+		///
+		/// Parameters:
+		///
+		/// * `price`: The cost of a single ticket.
+		/// * `length`: How long the lottery should run for starting at the current block.
+		/// * `delay`: How long after the lottery end we should wait before picking a winner.
+		/// * `calls`: The calls allowed for purchasing a lottery ticket. **Important**: Only
+		///    the call index is used to determine if the ticket purchase is valid.
+		/// * `repeat`: If the lottery should repeat when completed.
 		#[weight = T::WeightInfo::start_lottery(calls.len() as u32)]
 		fn start_lottery(origin,
 			price: BalanceOf<T>,
@@ -179,6 +191,17 @@ decl_module! {
 			Self::deposit_event(RawEvent::LotteryStarted);
 		}
 
+		/// Buy a ticket to enter the lottery.
+		///
+		/// This extrinsic acts as a passthrough function for `call`. In all
+		/// situations where `call` alone would succeed, this extrinsic should
+		/// succeed.
+		///
+		/// If `call` is successful, then we will attempt to purchase a ticket,
+		/// which may fail silently. To detect success of a ticket purchase, you
+		/// should listen for the `TicketBought` event.
+		///
+		/// This extrinsic must be called by a signed origin.
 		#[weight =
 			T::WeightInfo::buy_ticket()
 				.saturating_add(call.get_dispatch_info().weight)
@@ -194,6 +217,20 @@ decl_module! {
 			// Not much we can do if this fails.
 			let call_index = maybe_call_index?;
 			let _ = Self::do_buy_ticket(&caller, &call_index);
+		}
+
+		/// If a lottery is repeating, you can use this to stop the repeat.
+		/// The lottery will continue to run to completion.
+		///
+		/// This extrinsic must be called by the `ManagerOrigin`.
+		#[weight = T::WeightInfo::stop_repeat()]
+		fn stop_repeat(origin) {
+			T::ManagerOrigin::ensure_origin(origin)?;
+			Lottery::<T>::mutate(|mut lottery| {
+				if let Some(config) = &mut lottery {
+					config.repeat = false
+				}
+			});
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {

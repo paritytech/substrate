@@ -48,6 +48,29 @@ fn setup_lottery<T: Config>(repeat: bool) -> Result<(), &'static str> {
 benchmarks! {
 	_ { }
 
+	buy_ticket {
+		let caller = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		setup_lottery::<T>(false)?;
+		// force user to have a long vec of calls participating
+		let set_code_index: CallIndex = Lottery::<T>::call_to_index(
+			&frame_system::Call::<T>::set_code(vec![]).into()
+		)?;
+		let already_called: (u32, Vec<CallIndex>) = (
+			LotteryIndex::get(),
+			vec![
+				set_code_index;
+				T::MaxCalls::get().saturating_sub(1)
+			],
+		);
+		Participants::<T>::insert(&caller, already_called);
+
+		let call = frame_system::Call::<T>::remark(vec![]);
+	}: _(RawOrigin::Signed(caller), Box::new(call.into()))
+	verify {
+		assert_eq!(TicketsCount::get(), 1);
+	}
+
 	start_lottery {
 		let n in 0 .. T::MaxCalls::get() as u32;
 		let price = BalanceOf::<T>::max_value();
@@ -62,27 +85,14 @@ benchmarks! {
 		assert!(crate::Lottery::<T>::get().is_some());
 	}
 
-	buy_ticket {
-		let caller = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		setup_lottery::<T>(false)?;
-		// force user to have a long vec of calls participating
-		let set_code_index: CallIndex = Lottery::<T>::call_to_index(
-			&frame_system::Call::<T>::set_code(vec![]).into()
-		)?;
-		let already_called: (Index, Vec<CallIndex>) = (
-			LotteryIndex::get(),
-			vec![
-				set_code_index;
-				T::MaxCalls::get().saturating_sub(1)
-			],
-		);
-		Participants::<T>::insert(&caller, already_called);
-
-		let call = frame_system::Call::<T>::remark(vec![]);
-	}: _(RawOrigin::Signed(caller), Box::new(call.into()))
+	stop_repeat {
+		setup_lottery::<T>(true)?;
+		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, true);
+		let call = Call::<T>::stop_repeat();
+		let origin = T::ManagerOrigin::successful_origin();
+	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(TicketsCount::get(), 1);
+		assert!(crate::Lottery::<T>::get().unwrap().repeat, false);
 	}
 
 	on_initialize_end {
