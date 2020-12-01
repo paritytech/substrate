@@ -188,13 +188,9 @@ pub trait Storage {
 		let to_drop_tasks = self.storage_rollback_transaction()
 			.expect("No open transaction that can be rolled back.");
 		if to_drop_tasks.len() > 0 {
-			let ext_unsafe = *self as *mut dyn Externalities;
 			if let Some(runtime_spawn) = self.extension::<RuntimeSpawnExt>() {
-				let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
 				for task in to_drop_tasks.into_iter() {
-					// TODO abstraction to make it less unsafe, see other unsafe call
-					// of this filepr.
-					runtime_spawn.kill(task, ext_unsafe)
+					runtime_spawn.dismiss(task)
 				}
 			}
 			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
@@ -213,13 +209,9 @@ pub trait Storage {
 		let to_drop_tasks = self.storage_commit_transaction()
 			.expect("No open transaction that can be committed.");
 		if to_drop_tasks.len() > 0 {
-			let ext_unsafe = *self as *mut dyn Externalities;
 			if let Some(runtime_spawn) = self.extension::<RuntimeSpawnExt>() {
-				let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
 				for task in to_drop_tasks.into_iter() {
-					// TODO abstraction to make it less unsafe, see other unsafe call
-					// of this filepr.
-					runtime_spawn.kill(task, ext_unsafe)
+					runtime_spawn.dismiss(task)
 				}
 			}
 			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
@@ -1309,12 +1301,10 @@ pub trait RuntimeTasks {
 	/// TODO doc
 	///
 	/// This should not be used directly. Use `kill` of `sp_tasks::spawn` result instead.
-	fn kill(&mut self, handle: u64) {
-		let ext_unsafe = *self as *mut dyn Externalities;
+	fn dismiss(&mut self, handle: u64) {
 		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
 			.expect("Cannot kill without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-		runtime_spawn.kill(handle, ext_unsafe);
+		runtime_spawn.dismiss(handle);
 		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 	}
 }

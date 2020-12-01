@@ -227,10 +227,13 @@ pub trait RuntimeSpawn: Send {
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>>;
 
 	/// Stop the previous created runtime instance invocation.
-	/// Note that kill can be more expensive than `join`, as
-	/// it involve spawning again the worker, when join just
+	///
+	/// After calling `dismiss`, `join` would only result in `None`,
+	/// but there is no guaranty the running process is actually stopped.
+	/// Note that `dismiss` can be more expensive than `join`, as
+	/// it can involve spawning again the worker, when `join` just
 	/// release it.
-	fn kill(&self, handle: u64, calling_ext: &mut dyn Externalities);
+	fn dismiss(&self, handle: u64);
 
 	/// Change the number of runtime runing in the pool.
 	/// Note that this should only increase capacity (default value

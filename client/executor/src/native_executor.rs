@@ -314,35 +314,35 @@ pub struct RuntimeInstanceSpawn {
 	task_receiver: Arc<parking_lot::Mutex<mpsc::Receiver<PendingTask>>>,
 	task_sender: mpsc::Sender<PendingTask>,
 	recursive_level: usize,
-	kill_handles: kill_handle::KillHandles,
+	dismiss_handles: dismiss_handle::DismissHandles,
 }
 
 
 #[cfg(all(unix, feature = "abort-future", feature = "std"))]
-mod kill_handle {
+mod dismiss_handle {
 	use super::*;
 	use std::collections::BTreeMap;
 
 	#[derive(Default, Clone)]
-	pub(super) struct KillHandles(Arc<parking_lot::Mutex<KillHandlesInner>>);
+	pub(super) struct DismissHandles(Arc<parking_lot::Mutex<DismissHandlesInner>>);
 
-	struct KillHandlesInner {
+	struct DismissHandlesInner {
 		/// threads handle with associated pthread.
 		running: BTreeMap<u64, RemoteHandle>,
 		/// worker mapping with their thread ids.
 		workers: BTreeMap<u64, u64>,
 	}
 
-	impl Default for KillHandlesInner {
+	impl Default for DismissHandlesInner {
 		fn default() -> Self {
-			KillHandlesInner {
+			DismissHandlesInner {
 				running: BTreeMap::new(),
 				workers: BTreeMap::new(),
 			}
 		}
 	}
 
-	impl KillHandles {
+	impl DismissHandles {
 		pub(super) fn new_thread_id(&self, counter: &Arc<AtomicU64>) -> u64 {
 			counter.fetch_add(1, Ordering::Relaxed)
 		}
@@ -363,9 +363,7 @@ mod kill_handle {
 		pub(super) fn finished_thread(&self, thread: u64) {
 			self.0.lock().running.remove(&thread);
 		}
-		// TODO rename all of these pr kill reference to 'forget'
-		// as we got no idea if there will be kill.
-		pub(super) fn kill_thread(&self, worker: u64) {
+		pub(super) fn dismiss_thread(&self, worker: u64) {
 			let mut lock = self.0.lock();
 			if let Some(handle_id) = lock.workers.remove(&worker) {
 				if let Some(mut handle) = lock.running.remove(&handle_id) {
@@ -377,13 +375,13 @@ mod kill_handle {
 }
 
 #[cfg(not(all(unix, feature = "abort-future", feature = "std")))]
-mod kill_handle {
+mod dismiss_handle {
 	use super::*;
 
 	#[derive(Default, Clone)]
-	pub(super) struct KillHandles;
+	pub(super) struct DismissHandles;
 
-	impl KillHandles {
+	impl DismissHandles {
 		pub(super) fn new_thread_id(&self, _counter: &Arc<AtomicU64>) -> u64 {
 			0
 		}
@@ -395,7 +393,7 @@ mod kill_handle {
 		}
 		pub(super) fn finished_worker(&self, _worker: u64) {
 		}
-		pub(super) fn kill_thread(&self, _worker: u64) {
+		pub(super) fn dismiss_thread(&self, _worker: u64) {
 		}
 	}
 }
@@ -503,13 +501,8 @@ impl RuntimeInstanceSpawn {
 	}
 
 	fn remove(&self, handle: u64) -> RunningTask {
-		// TODO kill if possible
 		self.tasks.lock().tasks.remove(&handle)
 			.expect("Existing handle use for join")
-/*		// let thread_id = std::thread::current().id();
-		//
-		unimplemented!("handle mapping of runing task on task_receiver::recv")
-// TODO call that:	calling_ext.resolve_worker_result(WorkerResult::Kill(handle))*/
 	}
 
 	fn insert(
@@ -599,8 +592,8 @@ impl RuntimeInstanceSpawn {
 		let tasks = self.tasks.clone();
 		let runtime_spawn = Box::new(self.rec_clone());
 		let module = AssertUnwindSafe(module);
-		let kill_handles = self.kill_handles.clone();
-		let thread_id = kill_handles.new_thread_id(&self.counter);
+		let dismiss_handles = self.dismiss_handles.clone();
+		let thread_id = dismiss_handles.new_thread_id(&self.counter);
 		let thread_handle = self.spawn_with_handle(
 			"executor-extra-runtime-instance",
 			Box::pin(async move {
@@ -609,7 +602,7 @@ impl RuntimeInstanceSpawn {
 				let task_receiver_locked = task_receiver.lock();
 				task_receiver_locked.recv()
 			}.expect("Sender dropped, closing all instance.") {
-				kill_handles.register_worker(handle, thread_id);
+				dismiss_handles.register_worker(handle, thread_id);
 				let async_ext = match new_async_externalities(scheduler.clone(), ext) {
 					Ok(val) => val,
 					Err(e) => {
@@ -672,7 +665,7 @@ impl RuntimeInstanceSpawn {
 								instance = if let Some(instance) = Self::instantiate(&*module, &tasks) {
 									instance
 								} else {
-									kill_handles.finished_worker(handle);
+									dismiss_handles.finished_worker(handle);
 									tasks.lock().finished();
 									return;
 								};
@@ -701,7 +694,7 @@ impl RuntimeInstanceSpawn {
 				};
 				if let Err(_) = result_sender.send(Some(result)) {
 					// Closed channel, remove this thread instance.
-					kill_handles.finished_worker(handle);
+					dismiss_handles.finished_worker(handle);
 					tasks.lock().finished();
 					return;
 				}
@@ -710,7 +703,7 @@ impl RuntimeInstanceSpawn {
 			tasks.lock().finished();
 		}));
 		if let Some(thread_handle) = thread_handle {
-			self.kill_handles.register_new_thread(thread_handle, thread_id);
+			self.dismiss_handles.register_new_thread(thread_handle, thread_id);
 			true
 		} else {
 			false
@@ -902,11 +895,9 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		calling_ext.resolve_worker_result(worker_result)
 	}
 
-	fn kill(&self, handle: u64, calling_ext: &mut dyn Externalities) {
-		self.kill_handles.kill_thread(handle);
+	fn dismiss(&self, handle: u64) {
+		self.dismiss_handles.dismiss_thread(handle);
 		self.remove(handle);
-		// calling_ext.killed_worker(handle) // Not needed for current use case
-		// as there is not much memory to free from the state machine.
 	}
 
 	fn set_capacity(&self, capacity: u32) {
@@ -931,7 +922,7 @@ impl RuntimeInstanceSpawn {
 			task_sender,
 			instance: Arc::new(parking_lot::Mutex::new(None)),
 			recursive_level: 0,
-			kill_handles: Default::default(),
+			dismiss_handles: Default::default(),
 		}
 	}
 

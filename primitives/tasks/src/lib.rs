@@ -124,8 +124,8 @@ impl DataJoinHandle {
 	}
 
 	/// TODO doc
-	pub fn kill(self) {
-		sp_io::runtime_tasks::kill(self.handle)
+	pub fn dismiss(self) {
+		sp_io::runtime_tasks::dismiss(self.handle)
 	}
 }
 

@@ -102,9 +102,9 @@ impl AsyncExt {
 	/// No impact on master thread, no need to
 	/// assert the thread did join.
 	/// 
-	/// (But there is no sense in runing if we do not join or kill).
+	/// (But there is no sense in runing if we do not join or dismiss).
 	/// TODO remember that when inline we run at join or not at all
-	/// for kill so using no panic handler is the same as transmitting
+	/// for dismiss so using no panic handler is the same as transmitting
 	/// panic to parent on join.
 	/// TODO make panic in thread panic the master threaod too !!!
 	pub fn stateless_ext() -> Self {
