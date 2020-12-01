@@ -43,6 +43,7 @@
 #![recursion_limit="128"]
 
 use sp_std::{prelude::*, result};
+use sp_std::if_std; // Import into scope the if_std! macro.
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
 use sp_runtime::{RuntimeDebug, traits::Hash};
@@ -56,7 +57,7 @@ use frame_support::{
 	},
 	ensure,
 	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
-	weights::{DispatchClass, GetDispatchInfo, Weight},
+	weights::{DispatchClass, GetDispatchInfo, Weight, Pays},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -472,8 +473,20 @@ decl_module! {
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
 				let end = system::Module::<T>::block_number() + T::MotionDuration::get();
 				let votes = Votes { index, threshold, ayes: vec![who.clone()], nays: vec![], end };
-				<Voting<T, I>>::insert(proposal_hash, votes);
+				if_std! {
+					let dbg_this_file = file!();
+					let dbg_current_line = line!();
+					let yes_votes = votes.ayes.len() as MemberCount;
+					let no_votes = votes.nays.len() as MemberCount;
+					println!( "@[{:#?}::{:#?}]::propose() | Who[{:#?}] | y[{:#?}]-n[{:#?}]",
+							dbg_this_file,
+							dbg_current_line,
+							who,
+							yes_votes,
+							no_votes );
 
+				}
+				<Voting<T, I>>::insert(proposal_hash, votes);
 				Self::deposit_event(RawEvent::Proposed(who, index, proposal_hash, threshold));
 
 				Ok(Some(T::WeightInfo::propose_proposed(
@@ -505,6 +518,7 @@ decl_module! {
 			#[compact] index: ProposalIndex,
 			approve: bool,
 		) -> DispatchResultWithPostInfo {
+			let mut is_account_voting_first_time: bool = false;
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
 			ensure!(members.contains(&who), Error::<T, I>::NotMember);
@@ -512,8 +526,33 @@ decl_module! {
 			let mut voting = Self::voting(&proposal).ok_or(Error::<T, I>::ProposalMissing)?;
 			ensure!(voting.index == index, Error::<T, I>::WrongIndex);
 
+			let yes_votes = voting.ayes.len() as MemberCount;
+			let no_votes = voting.nays.len() as MemberCount;
+
 			let position_yes = voting.ayes.iter().position(|a| a == &who);
 			let position_no = voting.nays.iter().position(|a| a == &who);
+
+			// Init state after propose
+			// proposer cast first "ayes" vote
+			// State used to detect motion first vote
+			if yes_votes + no_votes == 1 {
+				if position_yes.is_none() && position_no.is_none() {
+					is_account_voting_first_time = true;
+				}
+			}
+
+			if_std! {
+				let dbg_this_file = file!();
+				let dbg_current_line = line!();
+				println!( "@[{:#?}::{:#?}]::vote() | Enter | Who[{:#?}] | aprov[{:#?}] | is_account_voting_first_time[{:#?}] | y[{:#?}]-n[{:#?}]",
+						dbg_this_file,
+						dbg_current_line,
+						who,
+						approve,
+						is_account_voting_first_time,
+						yes_votes,
+						no_votes );
+			}
 
 			if approve {
 				if position_yes.is_none() {
@@ -537,11 +576,29 @@ decl_module! {
 
 			let yes_votes = voting.ayes.len() as MemberCount;
 			let no_votes = voting.nays.len() as MemberCount;
+			if_std! {
+				let dbg_this_file = file!();
+				let dbg_current_line = line!();
+				println!( "@[{:#?}::{:#?}]::vote() | Exit | Who[{:#?}] | aprov[{:#?}] | is_account_voting_first_time[{:#?}] | y[{:#?}]-n[{:#?}]",
+						dbg_this_file,
+						dbg_current_line,
+						who,
+						approve,
+						is_account_voting_first_time,
+						yes_votes,
+						no_votes );
+			}
+
 			Self::deposit_event(RawEvent::Voted(who, proposal, approve, yes_votes, no_votes));
 
 			Voting::<T, I>::insert(&proposal, voting);
 
-			Ok(Some(T::WeightInfo::vote(members.len() as u32)).into())
+			if is_account_voting_first_time {
+				Ok(Pays::No.into())
+			}
+			else {
+				Ok(Some(T::WeightInfo::vote(members.len() as u32)).into())
+			}
 		}
 
 		/// Close a vote that is either approved, disapproved or whose voting period has ended.
@@ -1438,6 +1495,15 @@ mod tests {
 					topics: vec![],
 				}
 			]);
+
+			assert_ok!(
+				Collective::vote(Origin::signed(2), hash.clone(), 0, true)
+			);
+
+			assert_ok!(
+				Collective::vote(Origin::signed(3), hash.clone(), 0, false)
+			);
+
 		});
 	}
 

@@ -153,7 +153,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_std::if_std; // Import into scope the if_std! macro.
 use sp_runtime::{
 	DispatchResult, DispatchError, RuntimeDebug,
 	traits::{Zero, Hash, Dispatchable, Saturating, Bounded},
@@ -605,16 +604,7 @@ decl_module! {
 			T::Currency::reserve(&who, value)?;
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (&[&who][..], value));
-			if_std! {
-				let dbg_this_file = file!();
-				let dbg_current_line = line!();
-				println!( "@[{:#?}::{:#?}]::propose()::Who[{:#?}] | Index[{:#?}] | Val[{:#?}]",
-						dbg_this_file,
-						dbg_current_line,
-						who,
-						index,
-						value );
-			}
+
 			<PublicProps<T>>::append((index, proposal_hash, who));
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
@@ -658,7 +648,7 @@ decl_module! {
 		fn vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: AccountVote<BalanceOf<T>>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::try_vote(&who, ref_index, vote)
 		}
@@ -1253,9 +1243,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Actually enact a vote, if legit.
-	fn try_vote(who: &T::AccountId, ref_index: ReferendumIndex, vote: AccountVote<BalanceOf<T>>) -> DispatchResultWithPostInfo {
-		let mut is_account_voting_first_time: bool = false;
-		let mut is_account_revoting: bool = false;
+	fn try_vote(who: &T::AccountId, ref_index: ReferendumIndex, vote: AccountVote<BalanceOf<T>>) -> DispatchResult {
 		let mut status = Self::referendum_status(ref_index)?;
 		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::InsufficientFunds);
 		VotingOf::<T>::try_mutate(who, |voting| -> DispatchResult {
@@ -1268,7 +1256,6 @@ impl<T: Trait> Module<T> {
 							status.tally.reduce(approve, *delegations);
 						}
 						votes[i].1 = vote;
-						is_account_revoting = true;
 					}
 					Err(i) => {
 						ensure!(votes.len() as u32 <= T::MaxVotes::get(), Error::<T>::MaxVotesReached);
@@ -1280,15 +1267,11 @@ impl<T: Trait> Module<T> {
 				if let Some(approve) = vote.as_standard() {
 					status.tally.increase(approve, *delegations);
 				}
-				if ( votes.len() as u32 == 1 ) && ( is_account_revoting == false ) {
-					is_account_voting_first_time = true;
-				}
 				Ok(())
 			} else {
 				Err(Error::<T>::AlreadyDelegating.into())
 			}
 		})?;
-
 		// Extend the lock to `balance` (rather than setting it) since we don't know what other
 		// votes are in place.
 		T::Currency::extend_lock(
@@ -1298,20 +1281,7 @@ impl<T: Trait> Module<T> {
 			WithdrawReasons::TRANSFER
 		);
 		ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
-		if_std! {
-			let dbg_this_file = file!();
-			let dbg_current_line = line!();
-			println!( "@[{:#?}::{:#?}]::try_vote()::Who[{:#?}]-is_account_voting_first_time[{:#?}]",
-					dbg_this_file,
-					dbg_current_line,
-					who,
-					is_account_voting_first_time );
-		}
-		if is_account_voting_first_time == false {
-			Ok(Pays::Yes.into())
-		} else {
-			Ok(Pays::No.into())
-		}
+		Ok(())
 	}
 
 	/// Remove the account's vote for the given referendum if possible. This is possible when:
