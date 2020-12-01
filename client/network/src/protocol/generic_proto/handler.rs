@@ -802,11 +802,11 @@ impl ProtocolsHandler for NotifsHandler {
 	) -> Poll<
 		ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent, Self::Error>
 	> {
-		// TODO: finish PR
-
 		if let Some(ev) = self.events_queue.pop_front() {
 			return Poll::Ready(ev);
 		}
+
+		// TODO: finish PR
 
 		// Poll inbound substreams.
 		// Inbound substreams being closed is always tolerated, except for the

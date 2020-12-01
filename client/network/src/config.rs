@@ -409,7 +409,6 @@ impl NetworkConfiguration {
 			node_key,
 			request_response_protocols: Vec::new(),
 			default_peers_set: SetConfig {
-				optional_notifications_protocol: Vec::new(),
 				in_peers: 25,
 				out_peers: 75,
 				reserved_nodes: Vec::new(),
@@ -471,12 +470,9 @@ impl NetworkConfiguration {
 /// Configuration for a set of nodes.
 #[derive(Clone, Debug)]
 pub struct SetConfig {
-	/// Additional notification protocols that will be attempted, but whose success isn't
-	/// mandatory.
-	pub optional_notifications_protocol: Vec<Cow<'static, str>>,
-	/// Maximum allowed number of incoming connections.
+	/// Maximum allowed number of incoming substreams related to this set.
 	pub in_peers: u32,
-	/// Number of outgoing connections we're trying to maintain.
+	/// Number of outgoing substreams related to this set that we're trying to maintain.
 	pub out_peers: u32,
 	/// List of reserved node addresses.
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
@@ -485,9 +481,12 @@ pub struct SetConfig {
 /// Extension to [`SetConfig`] for sets that aren't the default set.
 #[derive(Clone, Debug)]
 pub struct NonDefaultSetConfig {
-	/// Name of the main notifications protocols of this set. A substream on this set will be
+	/// Name of the notifications protocols of this set. A substream on this set will be
 	/// considered established once this protocol is open.
-	pub main_notifications_protocol: Cow<'static, str>,
+	///
+	/// > **Note**: This field isn't present for the default set, as this is handled internally
+	/// >           by the networking code.
+	pub notifications_protocol: Cow<'static, str>,
 	/// Base configuration.
 	pub set_config: SetConfig,
 }

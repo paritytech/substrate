@@ -677,13 +677,14 @@ impl GenericProto {
 	}
 
 	/// Function that is called when the peerset wants us to connect to a peer.
-	fn peerset_report_connect(&mut self, peer_id: PeerId) {
+	fn peerset_report_connect(&mut self, set_id: peerset::SetId, peer_id: PeerId) {
 		// If `PeerId` is unknown to us, insert an entry, start dialing, and return early.
 		let mut occ_entry = match self.peers.entry(peer_id.clone()) {
 			Entry::Occupied(entry) => entry,
 			Entry::Vacant(entry) => {
 				// If there's no entry in `self.peers`, start dialing.
-				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Starting to connect", entry.key());
+				debug!(target: "sub-libp2p", "PSM => Connect({:?}, {:?}): Starting to connect",
+					set_id, entry.key());
 				debug!(target: "sub-libp2p", "Libp2p <= Dial {:?}", entry.key());
 				self.events.push_back(NetworkBehaviourAction::DialPeer {
 					peer_id: entry.key().clone(),
@@ -700,8 +701,8 @@ impl GenericProto {
 			// Backoff (not expired) => PendingRequest
 			PeerState::Backoff { ref timer, ref timer_deadline } if *timer_deadline > now => {
 				let peer_id = occ_entry.key().clone();
-				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
-					until {:?}", peer_id, timer_deadline);
+				debug!(target: "sub-libp2p", "PSM => Connect({:?}, {:?}): Will start to connect at \
+					until {:?}", set_id, peer_id, timer_deadline);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
 					timer: *timer,
 					timer_deadline: *timer_deadline,
@@ -710,7 +711,8 @@ impl GenericProto {
 
 			// Backoff (expired) => Requested
 			PeerState::Backoff { .. } => {
-				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Starting to connect", occ_entry.key());
+				debug!(target: "sub-libp2p", "PSM => Connect({:?}, {:?}): Starting to connect",
+					set_id, occ_entry.key());
 				debug!(target: "sub-libp2p", "Libp2p <= Dial {:?}", occ_entry.key());
 				self.events.push_back(NetworkBehaviourAction::DialPeer {
 					peer_id: occ_entry.key().clone(),
@@ -725,8 +727,8 @@ impl GenericProto {
 				backoff_until: Some(ref backoff)
 			} if *backoff > now => {
 				let peer_id = occ_entry.key().clone();
-				debug!(target: "sub-libp2p", "PSM => Connect({:?}): But peer is backed-off until {:?}",
-					peer_id, backoff);
+				debug!(target: "sub-libp2p", "PSM => Connect({:?}, {:?}): But peer is backed-off until {:?}",
+					set_id, peer_id, backoff);
 
 				let delay_id = self.next_delay_id;
 				self.next_delay_id.0 += 1;
@@ -753,8 +755,8 @@ impl GenericProto {
 				if let Some((connec_id, connec_state)) = connections.iter_mut()
 					.find(|(_, s)| matches!(s, ConnectionState::Closed))
 				{
-					debug!(target: "sub-libp2p", "PSM => Connect({:?}): Enabling connections.",
-						occ_entry.key());
+					debug!(target: "sub-libp2p", "PSM => Connect({:?}, {:?}): Enabling connections.",
+						set_id, occ_entry.key());
 					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open", peer_id, *connec_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: peer_id.clone(),
@@ -771,8 +773,8 @@ impl GenericProto {
 					}));
 					debug!(
 						target: "sub-libp2p",
-						"PSM => Connect({:?}): No connection in proper state. Delaying.",
-						occ_entry.key()
+						"PSM => Connect({:?}, {:?}): No connection in proper state. Delaying.",
+						set_id, occ_entry.key()
 					);
 
 					let timer_deadline = {
@@ -803,8 +805,8 @@ impl GenericProto {
 
 			// Incoming => Enabled
 			PeerState::Incoming { mut connections, .. } => {
-				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Enabling connections.",
-					occ_entry.key());
+				debug!(target: "sub-libp2p", "PSM => Connect({:?}, {:?}): Enabling connections.",
+					set_id, occ_entry.key());
 				if let Some(inc) = self.incoming.iter_mut()
 					.find(|i| i.peer_id == *occ_entry.key() && i.alive) {
 					inc.alive = false;
@@ -832,22 +834,22 @@ impl GenericProto {
 			// Other states are kept as-is.
 			st @ PeerState::Enabled { .. } => {
 				warn!(target: "sub-libp2p",
-					"PSM => Connect({:?}): Already connected.",
-					occ_entry.key());
+					"PSM => Connect({:?}, {:?}): Already connected.",
+					set_id, occ_entry.key());
 				*occ_entry.into_mut() = st;
 				debug_assert!(false);
 			},
 			st @ PeerState::DisabledPendingEnable { .. } => {
 				warn!(target: "sub-libp2p",
-					"PSM => Connect({:?}): Already pending enabling.",
-					occ_entry.key());
+					"PSM => Connect({:?}, {:?}): Already pending enabling.",
+					set_id, occ_entry.key());
 				*occ_entry.into_mut() = st;
 				debug_assert!(false);
 			},
 			st @ PeerState::Requested { .. } | st @ PeerState::PendingRequest { .. } => {
 				warn!(target: "sub-libp2p",
-					"PSM => Connect({:?}): Duplicate request.",
-					occ_entry.key());
+					"PSM => Connect({:?}, {:?}): Duplicate request.",
+					set_id, occ_entry.key());
 				*occ_entry.into_mut() = st;
 				debug_assert!(false);
 			},
@@ -860,18 +862,20 @@ impl GenericProto {
 	}
 
 	/// Function that is called when the peerset wants us to disconnect from a peer.
-	fn peerset_report_disconnect(&mut self, peer_id: PeerId) {
+	fn peerset_report_disconnect(&mut self, set_id: peerset::SetId, peer_id: PeerId) {
 		let mut entry = match self.peers.entry(peer_id) {
 			Entry::Occupied(entry) => entry,
 			Entry::Vacant(entry) => {
-				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Already disabled.", entry.key());
+				debug!(target: "sub-libp2p", "PSM => Drop({:?}, {:?}): Already disabled.",
+					set_id, entry.key());
 				return
 			}
 		};
 
 		match mem::replace(entry.get_mut(), PeerState::Poisoned) {
 			st @ PeerState::Disabled { .. } | st @ PeerState::Backoff { .. } => {
-				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Already disabled.", entry.key());
+				debug!(target: "sub-libp2p", "PSM => Drop({:?}, {:?}): Already disabled.",
+					set_id, entry.key());
 				*entry.into_mut() = st;
 			},
 
@@ -879,8 +883,8 @@ impl GenericProto {
 			PeerState::DisabledPendingEnable { connections, timer_deadline, timer: _ } => {
 				debug_assert!(!connections.is_empty());
 				debug!(target: "sub-libp2p",
-					"PSM => Drop({:?}): Interrupting pending enabling.",
-					entry.key());
+					"PSM => Drop({:?}, {:?}): Interrupting pending enabling.",
+					set_id, entry.key());
 				*entry.into_mut() = PeerState::Disabled {
 					connections,
 					backoff_until: Some(timer_deadline),
@@ -889,7 +893,8 @@ impl GenericProto {
 
 			// Enabled => Disabled
 			PeerState::Enabled { mut connections } => {
-				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Disabling connections.", entry.key());
+				debug!(target: "sub-libp2p", "PSM => Drop({:?}, {:?}): Disabling connections.",
+					set_id, entry.key());
 
 				debug_assert!(connections.iter().any(|(_, s)|
 					matches!(s, ConnectionState::Opening | ConnectionState::Open(_))));
@@ -934,20 +939,22 @@ impl GenericProto {
 				// We don't cancel dialing. Libp2p doesn't expose that on purpose, as other
 				// sub-systems (such as the discovery mechanism) may require dialing this peer as
 				// well at the same time.
-				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Not yet connected.", entry.key());
+				debug!(target: "sub-libp2p", "PSM => Drop({:?}, {:?}): Not yet connected.",
+					set_id, entry.key());
 				entry.remove();
 			},
 
 			// PendingRequest => Backoff
 			PeerState::PendingRequest { timer, timer_deadline } => {
-				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Not yet connected", entry.key());
+				debug!(target: "sub-libp2p", "PSM => Drop({:?}, {:?}): Not yet connected",
+					set_id, entry.key());
 				*entry.into_mut() = PeerState::Backoff { timer, timer_deadline }
 			},
 
 			// Invalid state transitions.
 			st @ PeerState::Incoming { .. } => {
-				error!(target: "sub-libp2p", "PSM => Drop({:?}): Not enabled (Incoming).",
-					entry.key());
+				error!(target: "sub-libp2p", "PSM => Drop({:?}, {:?}): Not enabled (Incoming).",
+					set_id, entry.key());
 				*entry.into_mut() = st;
 				debug_assert!(!false);
 			},
@@ -1974,11 +1981,11 @@ impl NetworkBehaviour for GenericProto {
 				Poll::Ready(Some(sc_peerset::Message::Reject(index))) => {
 					self.peerset_report_reject(index);
 				}
-				Poll::Ready(Some(sc_peerset::Message::Connect { peer_id, .. })) => {
-					self.peerset_report_connect(peer_id);
+				Poll::Ready(Some(sc_peerset::Message::Connect { set_id, peer_id, .. })) => {
+					self.peerset_report_connect(set_id, peer_id);
 				}
-				Poll::Ready(Some(sc_peerset::Message::Drop { peer_id, .. })) => {
-					self.peerset_report_disconnect(peer_id);
+				Poll::Ready(Some(sc_peerset::Message::Drop { set_id, peer_id, .. })) => {
+					self.peerset_report_disconnect(set_id, peer_id);
 				}
 				Poll::Ready(None) => {
 					error!(target: "sub-libp2p", "Peerset receiver stream has returned None");
