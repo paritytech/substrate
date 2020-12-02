@@ -29,12 +29,12 @@ pub const TELEMETRY_LOG_SPAN: &str = "telemetry-logger";
 
 /// `Layer` that handles the logs for telemetries.
 #[derive(Debug)]
-pub struct TelemetryLayer(Senders);
+pub struct TelemetryLayer(Mutex<mpsc::Sender<(Id, u8, String)>>);
 
 impl TelemetryLayer {
 	/// Create a new [`TelemetryLayer`] using the [`Senders`] provided in argument.
-	pub fn new(senders: Senders) -> Self {
-		Self(senders)
+	pub fn new(sender: mpsc::Sender<(Id, u8, String)>) -> Self {
+		Self(Mutex::new(sender))
 	}
 }
 
@@ -55,32 +55,31 @@ where
 				.find(|x| x.name() == TELEMETRY_LOG_SPAN)
 			{
 				let id = span.id();
-				if let Some(sender) = (self.0).0.lock().get_mut(&id) {
-					let mut attrs = TelemetryAttrs::new(id);
-					let mut vis = TelemetryAttrsVisitor(&mut attrs);
-					event.record(&mut vis);
+				let mut attrs = TelemetryAttrs::new(id.clone());
+				let mut vis = TelemetryAttrsVisitor(&mut attrs);
+				event.record(&mut vis);
 
-					if let TelemetryAttrs {
-						verbosity: Some(verbosity),
-						json: Some(json),
-						..
-					} = attrs
-					{
-						let _ = sender.try_send((
-							verbosity
-								.try_into()
-								.expect("telemetry log message verbosity are u8; qed"),
-							json,
-						));
-					} else {
-						// NOTE: logging in this function doesn't work
-						eprintln!(
-							"missing fields in telemetry log: {:?}. This can happen if \
-							`tracing::info_span!` is (mis-)used with the telemetry target \
-							directly; you should use the `telemetry!` macro.",
-							event,
-						);
-					}
+				if let TelemetryAttrs {
+					verbosity: Some(verbosity),
+					json: Some(json),
+					..
+				} = attrs
+				{
+					let _ = self.0.lock().try_send((
+						id,
+						verbosity
+							.try_into()
+							.expect("telemetry log message verbosity are u8; qed"),
+						json,
+					));
+				} else {
+					// NOTE: logging in this function doesn't work
+					eprintln!(
+						"missing fields in telemetry log: {:?}. This can happen if \
+						`tracing::info_span!` is (mis-)used with the telemetry target \
+						directly; you should use the `telemetry!` macro.",
+						event,
+					);
 				}
 			}
 		}

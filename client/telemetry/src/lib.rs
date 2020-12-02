@@ -263,7 +263,6 @@ pub struct Telemetries {
 	node_map: HashMap<Id, Vec<(u8, Multiaddr)>>,
 	connection_messages: HashMap<Id, String>,
 	connection_sinks: HashMap<Id, TelemetryConnectionSinks>,
-	senders: Senders, // TODO remove
 	node_pool: HashMap<Multiaddr, crate::worker::node::Node<crate::worker::WsTrans>>, // TODO mod
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
 }
@@ -279,7 +278,6 @@ impl Telemetries {
 			node_map: Default::default(),
 			connection_messages: Default::default(),
 			connection_sinks: Default::default(),
-			senders: Default::default(),
 			node_pool: Default::default(),
 			wasm_external_transport: None,
 		}
@@ -314,14 +312,15 @@ impl Telemetries {
 		);
 		let id = telemetry.span.id().expect("the span is enabled; qed");
 
-		self.senders.insert(id, sender);
+		//self.senders.insert(id, sender);
+		// TODO
 
 		telemetry
 	}
 
-	/// Get a clone of the channel's [`Senders`].
-	pub fn senders(&self) -> Senders {
-		self.senders.clone()
+	/// TODO
+	pub fn sender(&self) -> mpsc::Sender<(Id, u8, String)> {
+		self.sender.clone()
 	}
 
 	/// TODO
@@ -332,7 +331,6 @@ impl Telemetries {
 			node_map,
 			connection_messages,
 			connection_sinks,
-			senders,
 			mut node_pool,
 			wasm_external_transport,
 		} = self;

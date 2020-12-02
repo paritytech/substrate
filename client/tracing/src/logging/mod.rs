@@ -160,8 +160,8 @@ fn get_default_subscriber_and_telemetries_internal(
 	} else {
 		sc_telemetry::Telemetries::new()
 	};
-	let senders = telemetries.senders();
-	let telemetry_layer = sc_telemetry::TelemetryLayer::new(senders);
+	let sender = telemetries.sender();
+	let telemetry_layer = sc_telemetry::TelemetryLayer::new(sender);
 	let event_format = EventFormat {
 		timer,
 		display_target: !simple,
