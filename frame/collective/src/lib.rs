@@ -530,9 +530,7 @@ decl_module! {
 			let position_no = voting.nays.iter().position(|a| a == &who);
 
 			// first vote of member in the motion
-			if position_yes.is_none() && position_no.is_none() {
-				is_account_voting_first_time = true;
-			}
+			let is_account_voting_first_time = position_yes.is_none() && position_no.is_none();
 
 			if_std! {
 				let dbg_this_file = file!();
