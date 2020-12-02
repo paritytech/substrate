@@ -506,6 +506,8 @@ ss58_address_format!(
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
 	NodleAccount =>
 		(37, "nodle", "Nodle Chain mainnet, standard account (*25519).")
+	UniartsAccount =>
+		(38, "uniarts", "UniArts Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
 	Reserved43 =>
@@ -517,8 +519,6 @@ ss58_address_format!(
 	Reserved47 =>
 		(47, "reserved47", "Reserved for future use (47).")
 	// Note: 48 and above are reserved.
-	UniartsAccount =>
-		(49, "uniarts", "UniArts Chain mainnet, standard account (*25519).")
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
