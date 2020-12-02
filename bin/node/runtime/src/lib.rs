@@ -896,10 +896,10 @@ parameter_types! {
 	pub const HashWeight: Weight = 1;
 }
 
-impl pallet_mmr::Trait for Runtime {
+impl pallet_mmr::Config for Runtime {
 	const INDEXING_PREFIX: &'static [u8] = b"mmr";
-	type Hashing = <Runtime as frame_system::Trait>::Hashing;
-	type Hash = <Runtime as frame_system::Trait>::Hash;
+	type Hashing = <Runtime as frame_system::Config>::Hashing;
+	type Hash = <Runtime as frame_system::Config>::Hash;
 	type LeafData = frame_system::Module<Self>;
 	type OnNewRoot = ();
 	type WeightInfo = ();

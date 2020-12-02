@@ -80,7 +80,7 @@ pub trait WeightInfo {
 }
 
 /// This pallet's configuration trait
-pub trait Trait<I = DefaultInstance>: frame_system::Trait {
+pub trait Config<I = DefaultInstance>: frame_system::Config {
 	/// Prefix for elements stored in the Off-chain DB via Indexing API.
 	///
 	/// Each node of the MMR is inserted both on-chain and off-chain via Indexing API.
@@ -101,7 +101,7 @@ pub trait Trait<I = DefaultInstance>: frame_system::Trait {
 	///
 	/// Then we create a tuple of these two hashes, SCALE-encode it (concatenate) and
 	/// hash, to obtain a new MMR inner node - the new peak.
-	type Hashing: traits::Hash<Output = <Self as Trait<I>>::Hash>;
+	type Hashing: traits::Hash<Output = <Self as Config<I>>::Hash>;
 
 	/// The hashing output type.
 	///
@@ -126,16 +126,16 @@ pub trait Trait<I = DefaultInstance>: frame_system::Trait {
 	/// apart from having it in the storage. For instance you might output it in the header digest
 	/// (see [frame_system::Module::deposit_log]) to make it available for Light Clients.
 	/// Hook complexity should be `O(1)`.
-	type OnNewRoot: primitives::OnNewRoot<<Self as Trait<I>>::Hash>;
+	type OnNewRoot: primitives::OnNewRoot<<Self as Config<I>>::Hash>;
 
 	/// Weights for this pallet.
 	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance = DefaultInstance> as MerkleMountainRange {
+	trait Store for Module<T: Config<I>, I: Instance = DefaultInstance> as MerkleMountainRange {
 		/// Latest MMR Root hash.
-		pub RootHash get(fn mmr_root_hash): <T as Trait<I>>::Hash;
+		pub RootHash get(fn mmr_root_hash): <T as Config<I>>::Hash;
 
 		/// Current size of the MMR (number of leaves).
 		pub NumberOfLeaves get(fn mmr_leaves): u64;
@@ -144,13 +144,13 @@ decl_storage! {
 		///
 		/// Note this collection only contains MMR peaks, the inner nodes (and leaves)
 		/// are pruned and only stored in the Offchain DB.
-		pub Nodes get(fn mmr_peak): map hasher(identity) u64 => Option<<T as Trait<I>>::Hash>;
+		pub Nodes get(fn mmr_peak): map hasher(identity) u64 => Option<<T as Config<I>>::Hash>;
 	}
 }
 
 decl_module! {
 	/// A public part of the pallet.
-	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
@@ -177,12 +177,12 @@ decl_module! {
 type ModuleMmr<StorageType, T, I> = mmr::Mmr<StorageType, T, I, LeafOf<T, I>>;
 
 /// Leaf data.
-type LeafOf<T, I> = <<T as Trait<I>>::LeafData as primitives::LeafDataProvider>::LeafData;
+type LeafOf<T, I> = <<T as Config<I>>::LeafData as primitives::LeafDataProvider>::LeafData;
 
 /// Hashing used for the pallet.
-pub(crate) type HashingOf<T, I> = <T as Trait<I>>::Hashing;
+pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;
 
-impl<T: Trait<I>, I: Instance> Module<T, I> {
+impl<T: Config<I>, I: Instance> Module<T, I> {
 	fn offchain_key(pos: u64) -> sp_std::prelude::Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
 	}
@@ -194,7 +194,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_proof(leaf_index: u64) -> Result<
-		(LeafOf<T, I>, primitives::Proof<<T as Trait<I>>::Hash>),
+		(LeafOf<T, I>, primitives::Proof<<T as Config<I>>::Hash>),
 		mmr::Error,
 	> {
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(Self::mmr_leaves());
@@ -209,7 +209,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// or the proof is invalid.
 	pub fn verify_leaf(
 		leaf: LeafOf<T, I>,
-		proof: primitives::Proof<<T as Trait<I>>::Hash>,
+		proof: primitives::Proof<<T as Config<I>>::Hash>,
 	) -> Result<(), mmr::Error> {
 		if proof.leaf_count > Self::mmr_leaves()
 			|| proof.leaf_count == 0

@@ -57,13 +57,13 @@ pub(crate) fn hex(s: &str) -> H256 {
 }
 
 fn decode_node(v: Vec<u8>) -> mmr::Node<
-	<Test as Trait>::Hashing,
+	<Test as Config>::Hashing,
 	(H256, LeafData),
 > {
 	use crate::primitives::DataOrHash;
-	type A = DataOrHash::<<Test as Trait>::Hashing, H256>;
-	type B = DataOrHash::<<Test as Trait>::Hashing, LeafData>;
-	type Node = mmr::Node<<Test as Trait>::Hashing, (A, B)>;
+	type A = DataOrHash::<<Test as Config>::Hashing, H256>;
+	type B = DataOrHash::<<Test as Config>::Hashing, LeafData>;
+	type Node = mmr::Node<<Test as Config>::Hashing, (A, B)>;
 	let tuple: Node = codec::Decode::decode(&mut &v[..]).unwrap();
 
 	match tuple {

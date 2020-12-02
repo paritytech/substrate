@@ -50,8 +50,8 @@ impl LeafDataProvider for () {
 /// Hence we implement the [LeafDataProvider] for [frame_system::Module], since the
 /// current block hash is not available (since the block is not finished yet),
 /// we use the `parent_hash` here.
-impl<T: frame_system::Trait> LeafDataProvider for frame_system::Module<T> {
-	type LeafData = <T as frame_system::Trait>::Hash;
+impl<T: frame_system::Config> LeafDataProvider for frame_system::Module<T> {
+	type LeafData = <T as frame_system::Config>::Hash;
 
 	fn leaf_data() -> Self::LeafData {
 		Self::parent_hash()

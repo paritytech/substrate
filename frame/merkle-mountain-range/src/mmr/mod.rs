@@ -25,7 +25,7 @@ use sp_runtime::traits;
 pub use self::mmr::{Mmr, Error};
 
 /// Node type for runtime `T`.
-pub type NodeOf<T, I, L> = Node<<T as crate::Trait<I>>::Hashing, L>;
+pub type NodeOf<T, I, L> = Node<<T as crate::Config<I>>::Hashing, L>;
 
 /// A node stored in the MMR.
 pub type Node<H, L> = crate::primitives::DataOrHash<H, L>;

@@ -19,7 +19,7 @@
 
 use codec::Encode;
 use crate::mmr::{NodeOf, Node};
-use crate::{NumberOfLeaves, Nodes, Module, Trait, Instance, primitives};
+use crate::{NumberOfLeaves, Nodes, Module, Config, Instance, primitives};
 use frame_support::{StorageMap, StorageValue};
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
@@ -55,7 +55,7 @@ impl<StorageType, T, I, L> Default for Storage<StorageType, T, I, L> {
 }
 
 impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T, I, L> where
-	T: Trait<I>,
+	T: Config<I>,
 	I: Instance,
 	L: primitives::FullLeaf,
 {
@@ -74,7 +74,7 @@ impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T,
 }
 
 impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<RuntimeStorage, T, I, L> where
-	T: Trait<I>,
+	T: Config<I>,
 	I: Instance,
 	L: primitives::FullLeaf,
 {
