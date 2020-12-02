@@ -790,7 +790,7 @@ fn force_change_to_new_set() {
 
 	let voters = make_ids(peers_a);
 	let mut net = GrandpaTestNet::new(api, 3);
-	runtime.spawn(initialize_grandpa(&mut net, peers_a));
+	let voters_future = initialize_grandpa(&mut net, peers_a);
 	let net = Arc::new(Mutex::new(net));
 
 	net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
@@ -828,6 +828,7 @@ fn force_change_to_new_set() {
 	// it will only finalize if the forced transition happens.
 	// we add_blocks after the voters are spawned because otherwise
 	// the link-halves have the wrong AuthoritySet
+	runtime.spawn(voters_future);
 	run_to_completion(&mut runtime, 25, net, peers_a);
 }
 
