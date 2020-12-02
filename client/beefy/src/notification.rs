@@ -22,7 +22,7 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 
 /// Stream of signed commitments returned when subscribing.
 pub type SignedCommitment<Block, Signature> =
-	beefy_primitives::SignedCommitment<NumberFor<Block>, <Block as BlockT>::Hash, Signature>;
+	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::MmrRootHash, Signature>;
 
 /// Stream of signed commitments returned when subscribing.
 type SignedCommitmentStream<Block, Signature> = TracingUnboundedReceiver<SignedCommitment<Block, Signature>>;

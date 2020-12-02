@@ -24,7 +24,7 @@ use futures::{future, FutureExt, Stream, StreamExt};
 use log::{debug, error, info, trace, warn};
 use parking_lot::Mutex;
 
-use beefy_primitives::{BeefyApi, Commitment, SignedCommitment, KEY_TYPE};
+use beefy_primitives::{BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, BEEFY_ENGINE_ID, KEY_TYPE};
 
 use sc_client_api::{Backend as BackendT, BlockchainEvents, FinalityNotification, Finalizer};
 use sc_network_gossip::{
@@ -36,7 +36,10 @@ use sp_application_crypto::{AppPublic, Public};
 use sp_blockchain::HeaderBackend;
 use sp_consensus::SyncOracle as SyncOracleT;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor, Zero};
+use sp_runtime::{
+	generic::OpaqueDigestItemId,
+	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor, Zero},
+};
 
 pub mod notification;
 
@@ -165,7 +168,7 @@ struct BeefyWorker<Block: BlockT, Id, Signature, FinalityNotifications> {
 	local_id: Id,
 	key_store: SyncCryptoStorePtr,
 	min_interval: u32,
-	rounds: Rounds<Block::Hash, NumberFor<Block>, Id, Signature>,
+	rounds: Rounds<MmrRootHash, NumberFor<Block>, Id, Signature>,
 	finality_notifications: FinalityNotifications,
 	gossip_engine: Arc<Mutex<GossipEngine<Block>>>,
 	signed_commitment_sender: BeefySignedCommitmentSender<Block, Signature>,
@@ -231,13 +234,20 @@ where
 	}
 
 	fn handle_finality_notification(&mut self, notification: FinalityNotification<Block>) {
-		debug!(target: "beefy", "🥩 Finality notification: {:?}", notification);
+		debug!(target: "beefy", "Finality notification: {:?}", notification);
 
 		if self.should_vote_on(*notification.header.number()) {
-			// TODO: this needs to be properly populated by signing an MMR root as the payload
-			// (and/or abstracting the "thing to sign") and with support for validator set changes.
+			let mmr_root = if let Some(hash) = find_mmr_root_digest::<Block, Id>(&notification.header) {
+				hash
+			} else {
+				warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", notification.header.hash());
+				return;
+			};
+
+			// TODO: this needs added support for validator set changes (and abstracting the
+			// "thing to sign" would be nice).
 			let commitment = Commitment {
-				payload: notification.header.hash(),
+				payload: mmr_root,
 				block_number: notification.header.number(),
 				validator_set_id: 0,
 				is_set_transition_block: false,
@@ -282,14 +292,14 @@ where
 		self.best_finalized_block = *notification.header.number();
 	}
 
-	fn handle_vote(&mut self, round: (Block::Hash, NumberFor<Block>), vote: (Id, Signature)) {
+	fn handle_vote(&mut self, round: (MmrRootHash, NumberFor<Block>), vote: (Id, Signature)) {
 		// TODO: validate signature
 		let vote_added = self.rounds.add_vote(round, vote);
 
 		if vote_added && self.rounds.is_done(&round) {
 			if let Some(signatures) = self.rounds.drop(&round) {
-				// TODO: this needs to be properly populated by signing an MMR root as the payload
-				// (and/or abstracting the "thing to sign") and with support for validator set changes.
+				// TODO: this needs added support for validator set changes (and abstracting the
+				// "thing to sign" would be nice).
 				let commitment = Commitment {
 					payload: round.0,
 					block_number: round.1,
@@ -311,7 +321,7 @@ where
 			|notification| async move {
 				debug!(target: "beefy", "Got vote message: {:?}", notification);
 
-				VoteMessage::<Block::Hash, NumberFor<Block>, Id, Signature>::decode(&mut &notification.message[..]).ok()
+				VoteMessage::<MmrRootHash, NumberFor<Block>, Id, Signature>::decode(&mut &notification.message[..]).ok()
 			},
 		));
 
@@ -411,6 +421,19 @@ pub async fn start_beefy_gadget<Block, Pair, Backend, Client, Network, SyncOracl
 	);
 
 	worker.run().await
+}
+
+/// Extract the MMR root hash from a digest in the given header, if it exists.
+fn find_mmr_root_digest<Block: BlockT, Id>(header: &Block::Header) -> Option<MmrRootHash>
+where
+	Id: Codec,
+{
+	header.digest().logs().iter().find_map(|log| {
+		match log.try_to::<ConsensusLog<Id>>(OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID)) {
+			Some(ConsensusLog::MmrRoot(root)) => Some(root),
+			_ => None,
+		}
+	})
 }
 
 #[cfg(test)]
