@@ -518,7 +518,6 @@ decl_module! {
 			#[compact] index: ProposalIndex,
 			approve: bool,
 		) -> DispatchResultWithPostInfo {
-			let mut is_account_voting_first_time: bool = false;
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
 			ensure!(members.contains(&who), Error::<T, I>::NotMember);
@@ -583,10 +582,14 @@ decl_module! {
 			Voting::<T, I>::insert(&proposal, voting);
 
 			if is_account_voting_first_time {
-				Ok(Pays::No.into())
+				Ok((Some(
+					T::WeightInfo::vote(members.len() as u32)),
+					Pays::No).into())
 			}
 			else {
-				Ok(Some(T::WeightInfo::vote(members.len() as u32)).into())
+				Ok((Some(
+					T::WeightInfo::vote(members.len() as u32)),
+					Pays::Yes).into())
 			}
 		}
 
@@ -657,16 +660,17 @@ decl_module! {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
-				return Ok(Some(
+				return Ok((Some(
 					T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
-						.saturating_add(proposal_weight)
-				).into());
+					.saturating_add(proposal_weight)),
+					Pays::No.into()).into());
+
 			} else if disapproved {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
-				return Ok(Some(
-					T::WeightInfo::close_early_disapproved(seats, proposal_count)
-				).into());
+				return Ok((Some(
+					T::WeightInfo::close_early_disapproved(seats, proposal_count)),
+					Pays::No.into()).into());
 			}
 
 			// Only allow actual closing of the proposal after the voting period has ended.
@@ -693,16 +697,16 @@ decl_module! {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
-				return Ok(Some(
+				return Ok((Some(
 					T::WeightInfo::close_approved(len as u32, seats, proposal_count)
-						.saturating_add(proposal_weight)
-				).into());
+					.saturating_add(proposal_weight)),
+					Pays::No.into()).into());
 			} else {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
-				return Ok(Some(
-					T::WeightInfo::close_disapproved(seats, proposal_count)
-				).into());
+				return Ok((Some(
+					T::WeightInfo::close_disapproved(seats, proposal_count)),
+					Pays::No.into()).into());
 			}
 		}
 
