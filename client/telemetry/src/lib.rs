@@ -44,6 +44,7 @@ use libp2p::{wasm_ext, Multiaddr};
 use log::{error, warn};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{
+	collections::HashMap,
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
@@ -162,7 +163,7 @@ impl Telemetry {
 	pub fn new(
 		endpoints: TelemetryEndpoints,
 		wasm_external_transport: Option<wasm_ext::ExtTransport>,
-		node_pool: Option<&NodePool>,
+		node_pool: Option<()>,
 	) -> (Self, mpsc::Sender<(u8, String)>) {
 		let endpoints = endpoints.0;
 
@@ -171,7 +172,7 @@ impl Telemetry {
 		let worker = match worker::TelemetryWorker::new(
 			endpoints,
 			wasm_external_transport,
-			node_pool,
+			None,
 		) {
 			Ok(w) => Some(w),
 			Err(err) => {
@@ -257,6 +258,7 @@ impl Stream for Telemetry {
 pub struct Telemetries {
 	receiver: Arc<mpsc::Receiver<(Id, u8, String)>>,
 	sender: mpsc::Sender<(Id, u8, String)>,
+	node_map: HashMap<Id, Vec<(u8, Multiaddr)>>,
 	senders: Senders,
 	node_pool: Arc<NodePool>,
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
@@ -270,6 +272,7 @@ impl Telemetries {
 		Self {
 			receiver: Arc::new(receiver), // TODO remove Arc
 			sender,
+			node_map: Default::default(),
 			senders: Default::default(),
 			node_pool: Default::default(),
 			wasm_external_transport: None,
@@ -301,7 +304,7 @@ impl Telemetries {
 		let (telemetry, sender) = Telemetry::new(
 			endpoints,
 			self.wasm_external_transport.clone(),
-			Some(&self.node_pool),
+			None, // TODO
 		);
 		let id = telemetry.span.id().expect("the span is enabled; qed");
 
@@ -317,9 +320,64 @@ impl Telemetries {
 
 	/// TODO
 	pub async fn run(self) {
-		let mut receiver = Arc::try_unwrap(self.receiver).expect("todo, remove");
+		let Self {
+			receiver,
+			sender,
+			node_map,
+			senders,
+			node_pool,
+			wasm_external_transport,
+		} = self;
+		let mut receiver = Arc::try_unwrap(receiver).expect("todo, remove");
 
-		while let Some((id, priority, message)) = receiver.next().await {
+		while let Some((id, verbosity, message)) = receiver.next().await {
+			let before = Instant::now();
+
+			let nodes = if let Some(nodes) = node_map.get(&id) {
+				nodes
+			} else {
+				log::error!(
+					target: "telemetry",
+					"Received telemetry log for unknown id ({:?}): {}",
+					id,
+					message,
+				);
+				continue;
+			};
+
+			for (node_max_verbosity, addr) in nodes {
+				let node_pool = node_pool.lock();
+				let node = if let Some(node) = node_pool.get(addr) {
+					node
+				} else {
+					log::error!(
+						target: "telemetry",
+						"Could not find telemetry server in the NodePool: {}",
+						addr,
+					);
+					continue;
+				};
+				let mut node = node.lock();
+
+				if verbosity > *node_max_verbosity {
+					log::trace!(
+						target: "telemetry",
+						"Skipping {} for log entry with verbosity {:?}",
+						addr,
+						verbosity);
+					continue;
+				}
+
+				// `send_message` returns an error if we're not connected, which we silently ignore.
+				let _ = node.send_message(message.clone()); // TODO probably dont need to clone
+			}
+
+			if before.elapsed() > Duration::from_millis(200) {
+				log::warn!(
+					target: "telemetry",
+					"Processing one telemetry message took more than 200ms",
+				);
+			}
 		}
 	}
 }

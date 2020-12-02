@@ -42,7 +42,7 @@ use std::{io, pin::Pin, sync::Arc, task::Context, task::Poll, time};
 mod node;
 pub(crate) mod node_pool;
 
-pub use node_pool::NodePool;
+pub(crate) use node_pool::NodePool;
 
 /// Timeout after which a connection attempt is considered failed. Includes the WebSocket HTTP
 /// upgrading.
@@ -129,11 +129,14 @@ impl TelemetryWorker {
 		let mut force_connected = false;
 		let nodes = endpoints.into_iter().map(|(addr, verbosity)| {
 			let node = if let Some(node_pool) = node_pool {
+				/*
 				let (node, is_new) = node_pool.get_or_create(transport.clone(), addr);
 				if !is_new {
 					force_connected = true;
 				}
 				node
+				*/
+				todo!("remove")
 			} else {
 				Arc::new(Mutex::new(node::Node::new(transport.clone(), addr)))
 			};

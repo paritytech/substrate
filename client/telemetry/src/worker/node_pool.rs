@@ -18,14 +18,14 @@
 
 use crate::worker::{node::Node, WsTrans};
 use libp2p::Multiaddr;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 use std::collections::{hash_map::Entry, HashMap};
 use std::sync::Arc;
 
 #[derive(Debug, Default)]
 /// A collection of nodes connecting to a telemetry server and identified by address.
 pub struct NodePool {
-	nodes: Mutex<HashMap<Multiaddr, Arc<Mutex<Node<WsTrans>>>>>,
+	nodes: Mutex<HashMap<Multiaddr, Arc<Mutex<Node<WsTrans>>>>>, // TODO remove inner Arc<Mutex<>>
 }
 
 impl NodePool {
@@ -45,5 +45,9 @@ impl NodePool {
 				.clone(),
 			new,
 		)
+	}
+
+	pub(crate) fn lock(&self) -> MutexGuard<HashMap<Multiaddr, Arc<Mutex<Node<WsTrans>>>>> {
+		self.nodes.lock()
 	}
 }
