@@ -946,7 +946,7 @@ fn voter_persists_its_votes() {
 	let voters = make_ids(peers);
 
 	// alice has a chain with 20 blocks
-	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 3);
+	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 2);
 
 	// create the communication layer for bob, but don't start any
 	// voter. instead we'll listen for the prevote that alice casts
@@ -985,17 +985,47 @@ fn voter_persists_its_votes() {
 		)
 	};
 
+	// spawn two voters for alice.
+	// half-way through the test, we stop one and start the other.
+	let (alice_voter1, abort) = future::abortable(initialize_grandpa(&mut net, &peers[..1]));
+	let alice_voter2 = Arc::new(Mutex::new(Some({
+		let (keystore, _) = create_keystore(peers[0]);
+
+		let net_service = net.peers[0].network_service().clone();
+
+		let alice_client = net.peer(0).client().clone();
+		let (_, _, link) = net
+			.make_block_import::<
+				TransactionFor<substrate_test_runtime_client::Backend, Block>
+			>(alice_client);
+		let link = link.lock().take().unwrap();
+
+		let grandpa_params = GrandpaParams {
+			config: Config {
+				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
+				keystore: Some(keystore),
+				name: Some(format!("peer#{}", 0)),
+				is_authority: true,
+				observer_enabled: true,
+			},
+			link,
+			network: net_service,
+			telemetry_on_connect: None,
+			voting_rule: (),
+			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
+		};
+		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
+	})));
+	runtime.spawn(alice_voter1);
+
+
 	net.peer(0).push_blocks(20, false);
 	net.block_until_sync();
 
 	assert_eq!(net.peer(0).client().info().best_number, 20,
 			   "Peer #{} failed to sync", 0);
-
-	// spawn two voters for alice.
-	// half-way through the test, we stop one and start the other.
-	let (alice_voter1, abort) = future::abortable(initialize_grandpa(&mut net, &peers[..1]));
-	let alice_voter2 = Arc::new(Mutex::new(Some(initialize_grandpa(&mut net, &peers[..1]))));
-	runtime.spawn(alice_voter1);
 
 	let net = Arc::new(Mutex::new(net));
 
@@ -1039,7 +1069,7 @@ fn voter_persists_its_votes() {
 
 					// its chain has 20 blocks and the voter targets 3/4 of the
 					// unfinalized chain, so the vote should be for block 15
-					assert!(prevote.target_number == 15);
+					assert_eq!(prevote.target_number, 15);
 
 					// we push 20 more blocks to alice's chain
 					net.lock().peer(0).push_blocks(20, false);
