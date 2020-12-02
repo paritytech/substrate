@@ -32,7 +32,7 @@ use sp_state_machine::{
 	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction,
 	StorageCollection, ChildStorageCollection,
 };
-use sp_runtime::{generic::BlockId, Justifications, Storage};
+use sp_runtime::{generic::BlockId, Justification, Justifications, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HashFor};
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
@@ -365,6 +365,14 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 	fn mark_head(&mut self, block: BlockId<Block>) -> ClientResult<()> {
 		self.set_head = Some(block);
 		Ok(())
+	}
+
+	fn append_justification(
+		&mut self,
+		_block: BlockId<Block>,
+		_justification: Justification,
+	) -> ClientResult<()> {
+		todo!();
 	}
 }
 

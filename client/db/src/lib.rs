@@ -70,7 +70,7 @@ use sp_core::ChangesTrieConfiguration;
 use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::{generic::{DigestItem, BlockId}, Justifications, Storage};
+use sp_runtime::{generic::{DigestItem, BlockId}, Justification, Justifications, Storage};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion, HashFor,
 };
@@ -612,6 +612,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justifications>)>,
 	set_head: Option<BlockId<Block>>,
+	appended_justifications: Vec<(BlockId<Block>, Justification)>,
 	commit_state: bool,
 }
 
@@ -756,6 +757,17 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		assert!(self.set_head.is_none(), "Only one set head per operation is allowed");
 		self.set_head = Some(block);
 		Ok(())
+	}
+
+	fn append_justification(
+		&mut self,
+		_block: BlockId<Block>,
+		_justification: Justification,
+	) -> sp_blockchain::Result<()> {
+		// WIP(JON): How we append Justification depends on implementation of mark_finalized. Maybe
+		// we need to check self.finalized_blocks and update if it block already exists there.
+		// Otherwise probably need one additional field in BlockImportOperation.
+		todo!();
 	}
 }
 
@@ -1463,6 +1475,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
 			set_head: None,
+			appended_justifications: Vec::new(),
 			commit_state: false,
 		})
 	}

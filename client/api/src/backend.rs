@@ -197,9 +197,17 @@ pub trait BlockImportOperation<Block: BlockT> {
 		id: BlockId<Block>,
 		justification: Option<Justifications>,
 	) -> sp_blockchain::Result<()>;
+
 	/// Mark a block as new head. If both block import and set head are specified, set head
 	/// overrides block import's best block rule.
 	fn mark_head(&mut self, id: BlockId<Block>) -> sp_blockchain::Result<()>;
+
+	/// Append justification to an already finalized block.
+	fn append_justification(
+		&mut self,
+		id: BlockId<Block>,
+		justification: Justification
+	) -> sp_blockchain::Result<()>;
 }
 
 /// Interface for performing operations on the backend.
@@ -251,6 +259,15 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
 
+	/// Append Justification to an already finalized block.
+	///
+	/// The already finalized block may or may not already have a Justification. If it does we append
+	/// the new Justification to the old one.
+	fn append_justification(
+		&self,
+		id: BlockId<Block>,
+		justification: Justification,
+	) -> sp_blockchain::Result<()>;
 }
 
 /// Provides access to an auxiliary database.

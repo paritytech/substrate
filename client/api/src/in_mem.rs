@@ -27,7 +27,7 @@ use sp_core::{
 };
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor};
-use sp_runtime::{Justifications, Storage};
+use sp_runtime::{Justification, Justifications, Storage};
 use sp_state_machine::{
 	ChangesTrieTransaction, InMemoryBackend, Backend as StateBackend, StorageCollection,
 	ChildStorageCollection,
@@ -487,6 +487,8 @@ pub struct BlockImportOperation<Block: BlockT> {
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justifications>)>,
 	set_head: Option<BlockId<Block>>,
+	// WIP(JON)
+	appended_justifications: Vec<(BlockId<Block>, Justification)>,
 }
 
 impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> where
@@ -581,6 +583,19 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		self.set_head = Some(block);
 		Ok(())
 	}
+
+	fn append_justification(
+		&mut self,
+		_block: BlockId<Block>,
+		_justification: Justification,
+	) -> sp_blockchain::Result<()> {
+		// WIP(JON): How we append Justification depends on implementation of mark_finalized. Maybe
+		// we need to check self.finalized_blocks and update if it block already exists there.
+		// Otherwise probably need one additional field in BlockImportOperation.
+
+		//self.appended_justifications.push((block, justification));
+		todo!()
+	}
 }
 
 /// In-memory backend. Keeps all states and blocks in memory.
@@ -636,6 +651,7 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 			aux: Default::default(),
 			finalized_blocks: Default::default(),
 			set_head: None,
+			appended_justifications: Default::default(),
 		})
 	}
 

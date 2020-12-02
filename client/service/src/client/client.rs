@@ -964,6 +964,17 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
+	fn append_justification_with_block_hash(
+		&self,
+		operation: &mut ClientImportOperation<Block, B>,
+		block: Block::Hash,
+		justification: Justification,
+	) -> sp_blockchain::Result<()> {
+		// WIP(JON): check to make sure `block` is already finalized
+		operation.op.append_justification(BlockId::Hash(block), justification)?;
+		todo!();
+	}
+
 	fn notify_finalized(
 		&self,
 		notify_finalized: Vec<Block::Hash>,
@@ -1833,6 +1844,21 @@ impl<B, E, Block, RA> Finalizer<Block, B> for Client<B, E, Block, RA> where
 			self.apply_finality(operation, id, justification, notify)
 		})
 	}
+
+	fn append_justification(
+		&self,
+		id: BlockId<Block>,
+		justification: Justification,
+	)-> sp_blockchain::Result<()> {
+		let block_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
+		self.lock_import_and_run(|operation| {
+			self.append_justification_with_block_hash(
+				operation,
+				block_hash,
+				justification,
+			)
+		})
+	}
 }
 
 
@@ -1859,6 +1885,14 @@ impl<B, E, Block, RA> Finalizer<Block, B> for &Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<()> {
 		(**self).finalize_block(id, justification, notify)
 	}
+
+	fn append_justification(
+		&self,
+		id: BlockId<Block>,
+		justification: Justification,
+	) -> blockchain::Result<()> {
+        (**self).append_justification(id, justification)
+    }
 }
 
 impl<B, E, Block, RA> BlockchainEvents<Block> for Client<B, E, Block, RA>
