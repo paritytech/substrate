@@ -7374,6 +7374,7 @@ dependencies = [
  "sc-light",
  "sc-network",
  "sc-service",
+ "sc-telemetry",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
