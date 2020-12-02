@@ -897,7 +897,7 @@ parameter_types! {
 	pub const AssetDepositPerZombie: Balance = 1 * DOLLARS;
 }
 
-impl pallet_assets::Trait for Runtime {
+impl pallet_assets::Config for Runtime {
 	type Event = Event;
 	type Balance = u64;
 	type AssetId = u32;
@@ -905,7 +905,7 @@ impl pallet_assets::Trait for Runtime {
 	type ForceOrigin = EnsureRoot<AccountId>;
 	type AssetDepositBase = AssetDepositBase;
 	type AssetDepositPerZombie = AssetDepositPerZombie;
-	type WeightInfo = weights::pallet_assets::WeightInfo<Runtime>;
+	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
 }
 
 construct_runtime!(
