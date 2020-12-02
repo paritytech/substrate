@@ -158,7 +158,7 @@ fn get_default_subscriber_and_telemetries_internal(
 	let telemetries = if let Some(telemetry_external_transport) = telemetry_external_transport {
 		sc_telemetry::Telemetries::with_wasm_external_transport(telemetry_external_transport)
 	} else {
-		Default::default()
+		sc_telemetry::Telemetries::new()
 	};
 	let senders = telemetries.senders();
 	let telemetry_layer = sc_telemetry::TelemetryLayer::new(senders);

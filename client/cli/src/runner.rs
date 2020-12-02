@@ -112,6 +112,7 @@ where
 pub struct Runner<C: SubstrateCli> {
 	config: Configuration,
 	tokio_runtime: tokio::runtime::Runtime,
+	telemetries: sc_telemetry::Telemetries,
 	phantom: PhantomData<C>,
 }
 
@@ -138,9 +139,10 @@ impl<C: SubstrateCli> Runner<C> {
 			config: command.create_configuration(
 				cli,
 				task_executor.into(),
-				telemetries,
+				telemetries.clone(),
 			)?,
 			tokio_runtime,
+			telemetries,
 			phantom: PhantomData,
 		})
 	}
@@ -186,6 +188,7 @@ impl<C: SubstrateCli> Runner<C> {
 	) -> Result<()> {
 		self.print_node_infos();
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
+		task_manager.spawn_handle().spawn("telemetries", self.telemetries.run());
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
 		self.tokio_runtime.block_on(task_manager.clean_shutdown());
 		res.map_err(|e| e.to_string().into())

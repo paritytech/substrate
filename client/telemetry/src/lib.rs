@@ -50,6 +50,7 @@ use std::{
 	time::Duration,
 };
 use wasm_timer::Instant;
+use tracing::Id;
 
 pub use chrono;
 pub use libp2p::wasm_ext::ExtTransport;
@@ -252,14 +253,29 @@ impl Stream for Telemetry {
 /// An object that keeps track of all the [`Telemetry`] created by its `build_telemetry()` method.
 ///
 /// [`Telemetry`] created through this object re-use connections if possible.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Telemetries {
+	receiver: Arc<mpsc::Receiver<(Id, u8, String)>>,
+	sender: mpsc::Sender<(Id, u8, String)>,
 	senders: Senders,
 	node_pool: Arc<NodePool>,
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
 }
 
 impl Telemetries {
+	/// TODO
+	pub fn new() -> Self {
+		let (sender, receiver) = mpsc::channel(16);
+
+		Self {
+			receiver: Arc::new(receiver), // TODO remove Arc
+			sender,
+			senders: Default::default(),
+			node_pool: Default::default(),
+			wasm_external_transport: None,
+		}
+	}
+
 	/// Create a [`Telemetries`] object using an `ExtTransport`.
 	///
 	/// This is used in WASM contexts where we need some binding between the networking provided by
@@ -273,7 +289,7 @@ impl Telemetries {
 	pub fn with_wasm_external_transport(wasm_external_transport: wasm_ext::ExtTransport) -> Self {
 		Self {
 			wasm_external_transport: Some(wasm_external_transport),
-			..Default::default()
+			..Self::new()
 		}
 	}
 
@@ -297,6 +313,14 @@ impl Telemetries {
 	/// Get a clone of the channel's [`Senders`].
 	pub fn senders(&self) -> Senders {
 		self.senders.clone()
+	}
+
+	/// TODO
+	pub async fn run(self) {
+		let mut receiver = Arc::try_unwrap(self.receiver).expect("todo, remove");
+
+		while let Some((id, priority, message)) = receiver.next().await {
+		}
 	}
 }
 
