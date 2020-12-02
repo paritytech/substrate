@@ -679,6 +679,18 @@ parameter_types! {
 	pub const MaxDepth: u32 = 32;
 	pub const StorageSizeOffset: u32 = 8;
 	pub const MaxValueSize: u32 = 16 * 1024;
+	pub MaxItemCount: u32 = {
+		// We allow to accumulate 75% of the storage that is possible to remove in a
+		// single extrinsic.
+		use pallet_contracts::WeightInfo;
+		type SubWeight = pallet_contracts::weights::SubstrateWeight<Runtime>;
+		let weight_per_item =
+			(SubWeight::claim_surcharge(1) - SubWeight::claim_surcharge(0))
+				.max(SubWeight::seal_terminate_per_item(1) - SubWeight::seal_terminate_per_item(0))
+				.max(1);
+		let upper_limit: u32 = (MaximumExtrinsicWeight::get() / weight_per_item).saturated_into();
+		Perbill::from_percent(75) * upper_limit
+	};
 }
 
 impl pallet_contracts::Config for Runtime {
@@ -695,6 +707,7 @@ impl pallet_contracts::Config for Runtime {
 	type SurchargeReward = SurchargeReward;
 	type MaxDepth = MaxDepth;
 	type MaxValueSize = MaxValueSize;
+	type MaxItemCount = MaxItemCount;
 	type WeightPrice = pallet_transaction_payment::Module<Self>;
 	type WeightInfo = pallet_contracts::weights::SubstrateWeight<Self>;
 }

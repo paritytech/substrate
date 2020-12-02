@@ -164,6 +164,7 @@ parameter_types! {
 	pub const SurchargeReward: u64 = 150;
 	pub const MaxDepth: u32 = 100;
 	pub const MaxValueSize: u32 = 16_384;
+	pub const MaxItemCount: u32 = 4096;
 }
 
 parameter_types! {
@@ -190,6 +191,7 @@ impl Config for Test {
 	type SurchargeReward = SurchargeReward;
 	type MaxDepth = MaxDepth;
 	type MaxValueSize = MaxValueSize;
+	type MaxItemCount = MaxItemCount;
 	type WeightPrice = Self;
 	type WeightInfo = ();
 }

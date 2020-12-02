@@ -19,19 +19,25 @@
 use crate::{
 	exec::{AccountIdOf, StorageKey},
 	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Config, TrieId,
-	AccountCounter,
+	AccountCounter, Error,
 };
 use sp_std::prelude::*;
 use sp_std::marker::PhantomData;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::Bounded;
 use sp_core::crypto::UncheckedFrom;
-use frame_support::{storage::child, StorageMap};
+use frame_support::{storage::child, StorageMap, dispatch::DispatchError, traits::Get};
 
 /// An error that means that the account requested either doesn't exist or represents a tombstone
 /// account.
 #[cfg_attr(test, derive(PartialEq, Eq, Debug))]
 pub struct ContractAbsentError;
+
+impl From<ContractAbsentError> for DispatchError {
+	fn from(_: ContractAbsentError) -> Self {
+		DispatchError::Other("Called storage function on non-alive contract.")
+	}
+}
 
 pub struct Storage<T>(PhantomData<T>);
 
@@ -62,10 +68,10 @@ where
 		trie_id: &TrieId,
 		key: &StorageKey,
 		opt_new_value: Option<Vec<u8>>,
-	) -> Result<(), ContractAbsentError> {
+	) -> Result<(), DispatchError> {
 		let mut new_info = match <ContractInfoOf<T>>::get(account) {
 			Some(ContractInfo::Alive(alive)) => alive,
-			None | Some(ContractInfo::Tombstone(_)) => return Err(ContractAbsentError),
+			None | Some(ContractInfo::Tombstone(_)) => Err(ContractAbsentError)?,
 		};
 
 		let hashed_key = blake2_256(key);
@@ -91,6 +97,9 @@ where
 				}
 			},
 			(None, Some(new_value)) => {
+				if new_info.total_pair_count >= T::MaxItemCount::get() {
+					return Err(Error::<T>::TooManyStorageItems.into());
+				}
 				new_info.total_pair_count += 1;
 				if new_value.is_empty() {
 					new_info.empty_pair_count += 1;

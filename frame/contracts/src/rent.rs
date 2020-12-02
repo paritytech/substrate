@@ -305,8 +305,9 @@ where
 
 	/// Process a report that a contract under the given address should be evicted.
 	///
-	/// Enact the eviction right away if the contract should be evicted and return true.
-	/// Otherwise, **do nothing** and return false.
+	/// Enact the eviction right away if the contract should be evicted and returns the number
+	/// of storage items that where removed.
+	/// Otherwise, **do nothing** and return None.
 	///
 	/// The `handicap` parameter gives a way to check the rent to a moment in the past instead
 	/// of current block. E.g. if the contract is going to be evicted at the current block,
@@ -318,10 +319,10 @@ where
 	pub fn snitch_contract_should_be_evicted(
 		account: &T::AccountId,
 		handicap: T::BlockNumber,
-	) -> bool {
+	) -> Option<u32> {
 		let contract_info = <ContractInfoOf<T>>::get(account);
 		let alive_contract_info = match contract_info {
-			None | Some(ContractInfo::Tombstone(_)) => return false,
+			None | Some(ContractInfo::Tombstone(_)) => return None,
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 		let current_block_number = <frame_system::Module<T>>::block_number();
@@ -335,10 +336,11 @@ where
 		// Enact the verdict only if the contract gets removed.
 		match verdict {
 			Verdict::Kill | Verdict::Evict { .. } => {
+				let result = alive_contract_info.total_pair_count;
 				Self::enact_verdict(account, alive_contract_info, current_block_number, verdict);
-				true
+				Some(result)
 			}
-			_ => false,
+			_ => None,
 		}
 	}
 

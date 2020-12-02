@@ -124,7 +124,7 @@ use frame_system::{ensure_signed, ensure_root};
 use pallet_contracts_primitives::{
 	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult, ExecResult,
 };
-use frame_support::weights::Weight;
+use frame_support::weights::{Weight, WithPostDispatchInfo};
 
 pub type CodeHash<T> = <T as frame_system::Config>::Hash;
 pub type TrieId = Vec<u8>;
@@ -312,6 +312,14 @@ pub trait Config: frame_system::Config {
 	/// The maximum size of a storage value and event payload in bytes.
 	type MaxValueSize: Get<u32>;
 
+	/// The maximum number of storage items a contract is allowed to have.
+	///
+	/// The weight of evicting or removing a contract is linearly dependend on the number
+	/// of storage items. Therefore it is necessary to prevent the creation of more items
+	/// than it is possibel to remove in a single block. Otherwise it becomes impossible
+	/// to remove contracts that are too large.
+	type MaxItemCount: Get<u32>;
+
 	/// Used to answer contracts's queries regarding the current weight price. This is **not**
 	/// used to calculate the actual fee and is only for informational purposes.
 	type WeightPrice: Convert<Weight, BalanceOf<Self>>;
@@ -378,6 +386,8 @@ decl_error! {
 		/// on the call stack. Those actions are contract self destruction and restoration
 		/// of a tombstone.
 		ReentranceDenied,
+		/// The count in [`T::MaxItemCount`] was exceeded.
+		TooManyStorageItems,
 	}
 }
 
@@ -430,6 +440,14 @@ decl_module! {
 
 		/// The maximum size of a storage value in bytes. A reasonable default is 16 KiB.
 		const MaxValueSize: u32 = T::MaxValueSize::get();
+
+		/// The maximum number of storage items a contract is allowed to have.
+		///
+		/// The weight of evicting or removing a contract is linearly dependend on the number
+		/// of storage items. Therefore it is necessary to prevent the creation of more items
+		/// than it is possibel to remove in a single block. Otherwise it becomes impossible
+		/// to remove contracts that are too large.
+		const MaxItemCount: u32 = T::MaxItemCount::get();
 
 		fn deposit_event() = default;
 
@@ -533,17 +551,28 @@ decl_module! {
 		///
 		/// If contract is not evicted as a result of this call, no actions are taken and
 		/// the sender is not eligible for the reward.
-		#[weight = T::WeightInfo::claim_surcharge()]
-		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
-			let origin = origin.into();
-			let (signed, rewarded) = match (origin, aux_sender) {
+		///
+		/// A priori the weight for removing a maximum sized contract is assumed. Post dispatch
+		/// weight correction is used to account for the following:
+		///  1. In case of error only the basic overhead of calling this extrinsic is charged.
+		///	 2. The weight is corrected to the actual amount of storage a contract has.
+		///	 3. In case of succesful eviction no weight fees are payed for the removal.
+		#[weight = T::WeightInfo::claim_surcharge(T::MaxItemCount::get())]
+		fn claim_surcharge(
+			origin,
+			dest: T::AccountId,
+			aux_sender: Option<T::AccountId>
+		) -> DispatchResultWithPostInfo {
+			let (signed, rewarded) = match (origin.into(), aux_sender) {
 				(Ok(frame_system::RawOrigin::Signed(account)), None) => {
 					(true, account)
 				},
 				(Ok(frame_system::RawOrigin::None), Some(aux_sender)) => {
 					(false, aux_sender)
 				},
-				_ => Err(Error::<T>::InvalidSurchargeClaim)?,
+				_ => Err(
+					Error::<T>::InvalidSurchargeClaim.with_weight(T::WeightInfo::claim_surcharge(0))
+				)?,
 			};
 
 			// Add some advantage for block producers (who send unsigned extrinsics) by
@@ -556,8 +585,18 @@ decl_module! {
 			};
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
-			if Rent::<T>::snitch_contract_should_be_evicted(&dest, handicap) {
-				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get())?;
+			if let Some(count) = Rent::<T>::snitch_contract_should_be_evicted(&dest, handicap) {
+				use frame_support::weights::Pays;
+				let actual_weight = T::WeightInfo::claim_surcharge(count);
+				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get())
+				.map_err(|e| {
+					let mut err = e.with_weight(actual_weight);
+					err.post_info.pays_fee = Pays::No;
+					err
+				})?;
+				Ok((Some(actual_weight.into()), Pays::No).into())
+			} else {
+				Ok(Some(T::WeightInfo::claim_surcharge(0)).into())
 			}
 		}
 	}

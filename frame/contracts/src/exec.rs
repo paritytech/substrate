@@ -64,7 +64,7 @@ pub trait Ext {
 
 	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
 	/// the storage entry is deleted.
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>);
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), DispatchError>;
 
 	/// Instantiate a contract from the given code.
 	///
@@ -510,23 +510,18 @@ where
 		Storage::<T>::read(trie_id, key)
 	}
 
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+	fn set_storage(
+		&mut self,
+		key: StorageKey,
+		value: Option<Vec<u8>>
+	) -> Result<(), DispatchError> {
 		let trie_id = self.ctx.self_trie_id.as_ref().expect(
 			"`ctx.self_trie_id` points to an alive contract within the `CallContext`;\
 				it cannot be `None`;\
 				expect can't fail;\
 				qed",
 		);
-		if let Err(storage::ContractAbsentError) =
-			Storage::<T>::write(&self.ctx.self_account, trie_id, &key, value)
-		{
-			panic!(
-				"the contract must be in the alive state within the `CallContext`;\
-				the contract cannot be absent in storage;
-				write cannot return `None`;
-				qed"
-			);
-		}
+		Storage::<T>::write(&self.ctx.self_account, trie_id, &key, value)
 	}
 
 	fn instantiate(
