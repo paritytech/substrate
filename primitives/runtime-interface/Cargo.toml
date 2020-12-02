@@ -30,7 +30,7 @@ sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" 
 sp-core = { version = "2.0.0", path = "../core" }
 sp-io = { version = "2.0.0", path = "../io" }
 rustversion = "1.0.0"
-trybuild = "1.0.23"
+trybuild = { git = "https://github.com/bkchr/trybuild.git", branch = "bkchr-use-workspace-cargo-lock" }
 
 [features]
 default = [ "std" ]
