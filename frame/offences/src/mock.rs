@@ -20,7 +20,7 @@
 #![cfg(test)]
 
 use std::cell::RefCell;
-use crate::{Module, Trait};
+use crate::{Module, Config};
 use codec::Encode;
 use sp_runtime::Perbill;
 use sp_staking::{
@@ -94,7 +94,7 @@ parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 }
-impl frame_system::Trait for Runtime {
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -123,7 +123,7 @@ parameter_types! {
 		Perbill::from_percent(60) * BlockWeights::get().max_block;
 }
 
-impl Trait for Runtime {
+impl Config for Runtime {
 	type Event = TestEvent;
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;

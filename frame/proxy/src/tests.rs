@@ -60,7 +60,7 @@ parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -86,7 +86,7 @@ impl frame_system::Trait for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type Event = TestEvent;
@@ -95,7 +95,7 @@ impl pallet_balances::Trait for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-impl pallet_utility::Trait for Test {
+impl pallet_utility::Config for Test {
 	type Event = TestEvent;
 	type Call = Call;
 	type WeightInfo = ();
@@ -138,7 +138,7 @@ impl Filter<Call> for BaseFilter {
 		}
 	}
 }
-impl Trait for Test {
+impl Config for Test {
 	type Event = TestEvent;
 	type Call = Call;
 	type Currency = Balances;

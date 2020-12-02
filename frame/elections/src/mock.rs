@@ -35,7 +35,7 @@ parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -62,7 +62,7 @@ impl frame_system::Trait for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type DustRemoval = ();
@@ -104,7 +104,7 @@ parameter_types!{
 	pub const ElectionModuleId: LockIdentifier = *b"py/elect";
 }
 
-impl elections::Trait for Test {
+impl elections::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
 	type BadPresentation = ();

@@ -200,7 +200,7 @@ impl ExtrinsicT for Extrinsic {
 
 impl sp_runtime::traits::Dispatchable for Extrinsic {
 	type Origin = Origin;
-	type Trait = ();
+	type Config = ();
 	type Info = ();
 	type PostInfo = ();
 	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
@@ -440,7 +440,7 @@ parameter_types! {
 		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
 }
 
-impl frame_system::Trait for Runtime {
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = ();
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
@@ -464,7 +464,7 @@ impl frame_system::Trait for Runtime {
 	type SystemWeightInfo = ();
 }
 
-impl pallet_timestamp::Trait for Runtime {
+impl pallet_timestamp::Config for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
@@ -477,7 +477,7 @@ parameter_types! {
 	pub const ExpectedBlockTime: u64 = 10_000;
 }
 
-impl pallet_babe::Trait for Runtime {
+impl pallet_babe::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	// there is no actual runtime in this test-runtime, so testing crates

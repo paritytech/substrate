@@ -145,7 +145,7 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 /// Main entry point for certain runtime actions as e.g. `execute_block`.
 ///
 /// Generic parameters:
-/// - `System`: Something that implements `frame_system::Trait`
+/// - `System`: Something that implements `frame_system::Config`
 /// - `Block`: The block type of the runtime
 /// - `Context`: The context that is used when checking an extrinsic.
 /// - `UnsignedValidator`: The unsigned transaction validator of the runtime.
@@ -158,7 +158,7 @@ pub struct Executive<System, Block, Context, UnsignedValidator, AllModules, OnRu
 );
 
 impl<
-	System: frame_system::Trait,
+	System: frame_system::Config,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	UnsignedValidator,
@@ -185,7 +185,7 @@ where
 }
 
 impl<
-	System: frame_system::Trait,
+	System: frame_system::Config,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	UnsignedValidator,
@@ -511,10 +511,10 @@ mod tests {
 			UnknownTransaction, TransactionSource, TransactionValidity
 		};
 
-		pub trait Trait: frame_system::Trait {}
+		pub trait Config: frame_system::Config {}
 
 		frame_support::decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+			pub struct Module<T: Config> for enum Call where origin: T::Origin {
 				#[weight = 100]
 				fn some_function(origin) {
 					// NOTE: does not make any different.
@@ -561,7 +561,7 @@ mod tests {
 			}
 		}
 
-		impl<T: Trait> sp_runtime::traits::ValidateUnsigned for Module<T> {
+		impl<T: Config> sp_runtime::traits::ValidateUnsigned for Module<T> {
 			type Call = Call<T>;
 
 			fn validate_unsigned(
@@ -601,7 +601,7 @@ mod tests {
 			write: 100,
 		};
 	}
-	impl frame_system::Trait for Runtime {
+	impl frame_system::Config for Runtime {
 		type BaseCallFilter = ();
 		type BlockWeights = BlockWeights;
 		type BlockLength = ();
@@ -629,7 +629,7 @@ mod tests {
 	parameter_types! {
 		pub const ExistentialDeposit: Balance = 1;
 	}
-	impl pallet_balances::Trait for Runtime {
+	impl pallet_balances::Config for Runtime {
 		type Balance = Balance;
 		type Event = Event;
 		type DustRemoval = ();
@@ -642,13 +642,13 @@ mod tests {
 	parameter_types! {
 		pub const TransactionByteFee: Balance = 0;
 	}
-	impl pallet_transaction_payment::Trait for Runtime {
+	impl pallet_transaction_payment::Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = IdentityFee<Balance>;
 		type FeeMultiplierUpdate = ();
 	}
-	impl custom::Trait for Runtime {}
+	impl custom::Config for Runtime {}
 
 	pub struct RuntimeVersion;
 	impl frame_support::traits::Get<sp_version::RuntimeVersion> for RuntimeVersion {
@@ -671,8 +671,8 @@ mod tests {
 	type TestXt = sp_runtime::testing::TestXt<Call, SignedExtra>;
 	type TestBlock = Block<TestXt>;
 	type TestUncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<
-		<Runtime as frame_system::Trait>::AccountId,
-		<Runtime as frame_system::Trait>::Call,
+		<Runtime as frame_system::Config>::AccountId,
+		<Runtime as frame_system::Config>::Call,
 		(),
 		SignedExtra,
 	>;
@@ -719,9 +719,9 @@ mod tests {
 		}.assimilate_storage(&mut t).unwrap();
 		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(2, 69)), sign_extra(1, 0, 0));
 		let weight = xt.get_dispatch_info().weight +
-			<Runtime as frame_system::Trait>::BlockWeights::get().get(DispatchClass::Normal).base_extrinsic;
+			<Runtime as frame_system::Config>::BlockWeights::get().get(DispatchClass::Normal).base_extrinsic;
 		let fee: Balance
-			= <Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&weight);
+			= <Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -822,7 +822,7 @@ mod tests {
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as Weight;
 		// on_initialize weight + base block execution weight
-		let block_weights = <Runtime as frame_system::Trait>::BlockWeights::get();
+		let block_weights = <Runtime as frame_system::Config>::BlockWeights::get();
 		let base_block_weight = 175 + block_weights.base_block;
 		let limit = block_weights.get(DispatchClass::Normal).max_total.unwrap()
 			- base_block_weight;
@@ -867,7 +867,7 @@ mod tests {
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
 			// Block execution weight + on_initialize weight from custom module
-			let base_block_weight = 175 + <Runtime as frame_system::Trait>::BlockWeights::get().base_block;
+			let base_block_weight = 175 + <Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
 			Executive::initialize_block(&Header::new(
 				1,
@@ -885,7 +885,7 @@ mod tests {
 			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
-			let extrinsic_weight = len as Weight + <Runtime as frame_system::Trait>::BlockWeights
+			let extrinsic_weight = len as Weight + <Runtime as frame_system::Config>::BlockWeights
 				::get().get(DispatchClass::Normal).base_extrinsic;
 			assert_eq!(
 				<frame_system::Module<Runtime>>::block_weight().total(),
@@ -952,13 +952,13 @@ mod tests {
 					Call::System(SystemCall::remark(vec![1u8])),
 					sign_extra(1, 0, 0),
 				);
-				let weight = xt.get_dispatch_info().weight + <Runtime as frame_system::Trait>
+				let weight = xt.get_dispatch_info().weight + <Runtime as frame_system::Config>
 					::BlockWeights
 					::get()
 					.get(DispatchClass::Normal)
 					.base_extrinsic;
 				let fee: Balance =
-					<Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&weight);
+					<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
 				Executive::initialize_block(&Header::new(
 					1,
 					H256::default(),
@@ -1116,7 +1116,7 @@ mod tests {
 			let runtime_upgrade_weight = <AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
 			let frame_system_on_initialize_weight = frame_system::Module::<Runtime>::on_initialize(block_number);
 			let on_initialize_weight = <AllModules as OnInitialize<u64>>::on_initialize(block_number);
-			let base_block_weight = <Runtime as frame_system::Trait>::BlockWeights::get().base_block;
+			let base_block_weight = <Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
 			// Weights are recorded correctly
 			assert_eq!(

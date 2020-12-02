@@ -37,7 +37,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = ();
@@ -67,7 +67,7 @@ parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type Event = ();
 	type Call = Call<Test>;
 }

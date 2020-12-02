@@ -91,7 +91,7 @@ parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1_000_000);
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -117,7 +117,7 @@ impl frame_system::Trait for Test {
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
 }
-impl pallet_scheduler::Trait for Test {
+impl pallet_scheduler::Config for Test {
 	type Event = Event;
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
@@ -130,7 +130,7 @@ impl pallet_scheduler::Trait for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type Event = Event;
@@ -168,7 +168,7 @@ impl Contains<u64> for OneToFive {
 	fn add(_m: &u64) {}
 }
 
-impl super::Trait for Test {
+impl super::Config for Test {
 	type Proposal = Call;
 	type Event = Event;
 	type Currency = pallet_balances::Module<Self>;
@@ -237,7 +237,7 @@ fn set_balance_proposal(value: u64) -> Vec<u8> {
 fn set_balance_proposal_is_correctly_filtered_out() {
 	for i in 0..10 {
 		let call = Call::decode(&mut &set_balance_proposal(i)[..]).unwrap();
-		assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+		assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 	}
 }
 

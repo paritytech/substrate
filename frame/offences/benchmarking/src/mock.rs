@@ -41,7 +41,7 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -67,7 +67,7 @@ impl frame_system::Trait for Test {
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = Balance;
 	type Event = Event;
@@ -80,13 +80,13 @@ impl pallet_balances::Trait for Test {
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
 }
-impl pallet_timestamp::Trait for Test {
+impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
-impl pallet_session::historical::Trait for Test {
+impl pallet_session::historical::Config for Test {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
 }
@@ -117,7 +117,7 @@ parameter_types! {
 	pub const Offset: u64 = 0;
 }
 
-impl pallet_session::Trait for Test {
+impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
@@ -146,7 +146,7 @@ parameter_types! {
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
-impl pallet_staking::Trait for Test {
+impl pallet_staking::Config for Test {
 	type Currency = Balances;
 	type UnixTime = pallet_timestamp::Module<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -171,7 +171,7 @@ impl pallet_staking::Trait for Test {
 	type WeightInfo = ();
 }
 
-impl pallet_im_online::Trait for Test {
+impl pallet_im_online::Config for Test {
 	type AuthorityId = UintAuthorityId;
 	type Event = Event;
 	type SessionDuration = Period;
@@ -184,7 +184,7 @@ parameter_types! {
 	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * BlockWeights::get().max_block;
 }
 
-impl pallet_offences::Trait for Test {
+impl pallet_offences::Config for Test {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
@@ -196,7 +196,7 @@ impl<T> frame_system::offchain::SendTransactionTypes<T> for Test where Call: Fro
 	type OverarchingCall = Call;
 }
 
-impl crate::Trait for Test {}
+impl crate::Config for Test {}
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, u64, ()>;

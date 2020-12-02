@@ -142,7 +142,7 @@ parameter_types! {
 	pub static MaxIterations: u32 = 0;
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -165,7 +165,7 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = MaxLocks;
 	type Balance = Balance;
 	type Event = MetaEvent;
@@ -184,7 +184,7 @@ sp_runtime::impl_opaque_keys! {
 		pub other: OtherSessionHandler,
 	}
 }
-impl pallet_session::Trait for Test {
+impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
@@ -197,11 +197,11 @@ impl pallet_session::Trait for Test {
 	type WeightInfo = ();
 }
 
-impl pallet_session::historical::Trait for Test {
+impl pallet_session::historical::Config for Test {
 	type FullIdentification = crate::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = crate::ExposureOf<Test>;
 }
-impl pallet_authorship::Trait for Test {
+impl pallet_authorship::Config for Test {
 	type FindAuthor = Author11;
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
@@ -210,7 +210,7 @@ impl pallet_authorship::Trait for Test {
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
 }
-impl pallet_timestamp::Trait for Test {
+impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -250,7 +250,7 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 	}
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -656,7 +656,7 @@ pub(crate) fn start_era(era_index: EraIndex) {
 
 pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
 	inflation::compute_total_payout(
-		<Test as Trait>::RewardCurve::get(),
+		<Test as Config>::RewardCurve::get(),
 		Staking::eras_total_stake(Staking::active_era().unwrap().index),
 		Balances::total_issuance(),
 		duration,
@@ -664,7 +664,7 @@ pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
 }
 
 pub(crate) fn reward_all_elected() {
-	let rewards = <Test as Trait>::SessionInterface::validators()
+	let rewards = <Test as Config>::SessionInterface::validators()
 		.into_iter()
 		.map(|v| (v, 1));
 

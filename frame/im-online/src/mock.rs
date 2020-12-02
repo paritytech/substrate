@@ -21,7 +21,7 @@
 
 use std::cell::RefCell;
 
-use crate::{Module, Trait};
+use crate::{Module, Config};
 use sp_runtime::Perbill;
 use sp_staking::{SessionIndex, offence::{ReportOffence, OffenceError}};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
@@ -108,7 +108,7 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
-impl frame_system::Trait for Runtime {
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -141,7 +141,7 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 
-impl pallet_session::Trait for Runtime {
+impl pallet_session::Config for Runtime {
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Runtime, TestSessionManager>;
 	type SessionHandler = (ImOnline, );
@@ -154,7 +154,7 @@ impl pallet_session::Trait for Runtime {
 	type WeightInfo = ();
 }
 
-impl pallet_session::historical::Trait for Runtime {
+impl pallet_session::historical::Config for Runtime {
 	type FullIdentification = u64;
 	type FullIdentificationOf = ConvertInto;
 }
@@ -163,7 +163,7 @@ parameter_types! {
 	pub const UncleGenerations: u32 = 5;
 }
 
-impl pallet_authorship::Trait for Runtime {
+impl pallet_authorship::Config for Runtime {
 	type FindAuthor = ();
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
@@ -174,7 +174,7 @@ parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
-impl Trait for Runtime {
+impl Config for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;

@@ -24,12 +24,12 @@ use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header
 mod module {
 	use super::*;
 
-	pub trait Trait: system::Trait {
-		type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	pub trait Config: system::Config {
+		type Event: From<Event> + Into<<Self as system::Config>::Event>;
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		pub struct Module<T: Config> for enum Call where origin: T::Origin {
 			pub fn deposit_event() = default;
 		}
 	}
@@ -65,7 +65,7 @@ frame_support::parameter_types! {
 }
 #[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
-impl system::Trait for Runtime {
+impl system::Config for Runtime {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
 	type BlockLength = BlockLength;
@@ -89,7 +89,7 @@ impl system::Trait for Runtime {
 	type SystemWeightInfo = ();
 }
 
-impl module::Trait for Runtime {
+impl module::Config for Runtime {
 	type Event = Event;
 }
 

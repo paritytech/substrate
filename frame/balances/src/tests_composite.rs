@@ -28,7 +28,7 @@ use sp_io;
 use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use pallet_transaction_payment::CurrencyAdapter;
-use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInfo};
+use crate::{GenesisConfig, Module, Config, decl_tests, tests::CallWithDispatchInfo};
 
 use frame_system as system;
 impl_outer_origin!{
@@ -55,7 +55,7 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(1024);
 	pub static ExistentialDeposit: u64 = 0;
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -81,14 +81,14 @@ impl frame_system::Trait for Test {
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
-impl pallet_transaction_payment::Trait for Test {
+impl pallet_transaction_payment::Config for Test {
 	type OnChargeTransaction = CurrencyAdapter<Module<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
