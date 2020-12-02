@@ -44,6 +44,7 @@ use libp2p::{
 		upgrade::{OutboundUpgrade, read_one, write_one}
 	},
 	swarm::{
+		AddressRecord,
 		NegotiatedSubstream,
 		NetworkBehaviour,
 		NetworkBehaviourAction,
@@ -627,7 +628,7 @@ where
 		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
 		let child_info = match ChildType::from_prefixed_key(prefixed_key) {
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
-			None => Err("Invalid child storage key".into()),
+			None => Err(sp_blockchain::Error::InvalidChildStorageKey),
 		};
 		let proof = match child_info.and_then(|child_info| self.chain.read_child_proof(
 			&BlockId::Hash(block),
@@ -1463,7 +1464,7 @@ mod tests {
 	impl PollParameters for EmptyPollParams {
 		type SupportedProtocolsIter = iter::Empty<Vec<u8>>;
 		type ListenedAddressesIter = iter::Empty<Multiaddr>;
-		type ExternalAddressesIter = iter::Empty<Multiaddr>;
+		type ExternalAddressesIter = iter::Empty<AddressRecord>;
 
 		fn supported_protocols(&self) -> Self::SupportedProtocolsIter {
 			iter::empty()
