@@ -34,7 +34,7 @@ use sp_std::vec::Vec;
 ///
 /// Each value is stored at:
 /// ```nocompile
-/// Twox128(<Prefix::Pallet as PalletInfo>::name())
+/// Twox128(Prefix::pallet_prefix())
 ///		++ Twox128(Prefix::STORAGE_PREFIX)
 ///		++ Hasher1(encode(key1))
 ///		++ Hasher2(encode(key2))

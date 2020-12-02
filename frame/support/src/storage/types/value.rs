@@ -31,7 +31,7 @@ use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 ///
 /// Each value is stored at:
 /// ```nocompile
-/// Twox128(<Prefix::Pallet as PalletInfo>::name()) ++ Twox128(Prefix::STORAGE_PREFIX)
+/// Twox128(Prefix::pallet_prefix()) ++ Twox128(Prefix::STORAGE_PREFIX)
 /// ```
 pub struct StorageValue<Prefix, Value, QueryKind=OptionQuery, OnEmpty=GetDefault>(
 	core::marker::PhantomData<(Prefix, Value, QueryKind, OnEmpty)>
