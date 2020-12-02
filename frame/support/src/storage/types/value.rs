@@ -47,8 +47,7 @@ where
 {
 	type Query = QueryKind::Query;
 	fn module_prefix() -> &'static [u8] {
-		<Prefix::PalletInfo as crate::traits::PalletInfo>::name::<Prefix::Pallet>()
-			.expect("Every active pallet has a name in the runtime; qed").as_bytes()
+		Prefix::pallet_prefix().as_bytes()
 	}
 	fn storage_prefix() -> &'static [u8] {
 		Prefix::STORAGE_PREFIX.as_bytes()
@@ -201,8 +200,7 @@ mod test {
 
 	struct Prefix;
 	impl StorageInstance for Prefix {
-		type Pallet = ();
-		type PalletInfo = ();
+		fn pallet_prefix() -> &'static str { "test" }
 		const STORAGE_PREFIX: &'static str = "foo";
 	}
 

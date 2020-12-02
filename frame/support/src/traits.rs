@@ -1733,11 +1733,10 @@ pub trait Instance: 'static {
 
 /// An instance of a storage.
 ///
-/// It is required the the couple `(PalletInfo::name<Pallet>(), STORAGE_PREFIX)` is unique.
+/// It is required the the couple `(pallet_prefix(), STORAGE_PREFIX)` is unique.
 /// Any storage with same couple will collide.
 pub trait StorageInstance {
-	type Pallet: 'static;
-	type PalletInfo: PalletInfo;
+	fn pallet_prefix() -> &'static str;
 	const STORAGE_PREFIX: &'static str;
 }
 
