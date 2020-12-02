@@ -582,14 +582,16 @@ decl_module! {
 			Voting::<T, I>::insert(&proposal, voting);
 
 			if is_account_voting_first_time {
-				Ok((Some(
-					T::WeightInfo::vote(members.len() as u32)),
-					Pays::No).into())
+				Ok((
+					Some(T::WeightInfo::vote(members.len() as u32)),
+					Pays::No,
+				).into())
 			}
 			else {
-				Ok((Some(
-					T::WeightInfo::vote(members.len() as u32)),
-					Pays::Yes).into())
+				Ok((
+					Some(T::WeightInfo::vote(members.len() as u32)),
+					Pays::Yes,
+				).into())
 			}
 		}
 
