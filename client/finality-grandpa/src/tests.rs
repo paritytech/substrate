@@ -300,7 +300,7 @@ fn initialize_grandpa(
 			link,
 			network: net_service,
 			telemetry_on_connect: None,
-			voting_rule: (),
+			voting_rule: VotingRulesBuilder::default().build(),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 		};
@@ -988,13 +988,23 @@ fn voter_persists_its_votes() {
 	// spawn two voters for alice.
 	// half-way through the test, we stop one and start the other.
 	let (alice_voter1, abort) = future::abortable(initialize_grandpa(&mut net, &peers[..1]));
-	let alice_voter2 = Arc::new(Mutex::new(Some({
+	fn alice_voter2(
+		peers: &[Ed25519Keyring],
+		net: Arc<Mutex<GrandpaTestNet>>,
+	) -> impl Future<Output = ()> + Unpin + Send + 'static {
 		let (keystore, _) = create_keystore(peers[0]);
+		let mut net = net.lock();
 
-		let net_service = net.peers[0].network_service().clone();
-
+		// we add a new peer to the test network and we'll use
+		// the network service of this new peer
+		net.add_full_peer();
+		let net_service = net.peers[2].network_service().clone();
+		// but we'll reuse the client from the first peer (alice_voter1)
+		// since we want to share the same database, so that we can
+		// read the persisted state after aborting alice_voter1.
 		let alice_client = net.peer(0).client().clone();
-		let (_, _, link) = net
+
+		let (_block_import, _, link) = net
 			.make_block_import::<
 				TransactionFor<substrate_test_runtime_client::Backend, Block>
 			>(alice_client);
@@ -1012,14 +1022,23 @@ fn voter_persists_its_votes() {
 			link,
 			network: net_service,
 			telemetry_on_connect: None,
-			voting_rule: (),
+			voting_rule: VotingRulesBuilder::default().build(),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 		};
-		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
-	})));
-	runtime.spawn(alice_voter1);
 
+		run_grandpa_voter(grandpa_params)
+			.expect("all in order with client and network")
+			.map(move |r| {
+				// we need to keep the block_import alive since it owns the
+				// sender for the voter commands channel, if that gets dropped
+				// then the voter will stop
+				drop(_block_import);
+				r
+			})
+	};
+
+	runtime.spawn(alice_voter1);
 
 	net.peer(0).push_blocks(20, false);
 	net.block_until_sync();
@@ -1057,7 +1076,6 @@ fn voter_persists_its_votes() {
 			let state = state.clone();
 			let exit_tx = exit_tx.clone();
 			let runtime_handle = runtime_handle.clone();
-			let alice_voter2 = alice_voter2.clone();
 
 			async move {
 				if state.compare_and_swap(0, 1, Ordering::SeqCst) == 0 {
@@ -1093,7 +1111,7 @@ fn voter_persists_its_votes() {
 
 					// we restart alice's voter
 					abort.abort();
-					runtime_handle.spawn(alice_voter2.lock().take().unwrap());
+					runtime_handle.spawn(alice_voter2(peers, net.clone()));
 
 					// and we push our own prevote for block 30
 					let prevote = finality_grandpa::Prevote {
