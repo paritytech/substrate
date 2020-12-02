@@ -128,19 +128,75 @@ type NegativeImbalanceOf<T> =
 
 /// Migrations to version [`3.0.0`], as denoted by the changelog.
 pub mod migrations_3_0_0 {
-	use super::*;
-	use codec::FullCodec;
+	use codec::{Encode, Decode, FullCodec};
 	use frame_support::{
+		RuntimeDebug, weights::Weight, Twox64Concat,
 		storage::types::{StorageMap, StorageValue},
-		traits::{GetPalletVersion, PalletVersion, StorageInstance},
-		Twox64Concat,
+		traits::{GetPalletVersion, PalletVersion},
 	};
 
-	type NewCandidates<I, A, B> = StorageValue<I, Vec<(A, B)>>;
-	type NewMembers<I, A, B> = StorageValue<I, Vec<SeatHolder<A, B>>>;
-	type NewRunnersUp<I, A, B> = StorageValue<I, Vec<SeatHolder<A, B>>>;
-	// NOTE: maybe be generic on the damn hasher as well, neh?
-	type NewVoting<I, A, B> = StorageMap<I, Twox64Concat, A, Voter<A, B>>;
+	#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
+	pub struct SeatHolder<AccountId, Balance> {
+		pub who: AccountId,
+		pub stake: Balance,
+		pub deposit: Balance,
+	}
+
+	#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
+	pub struct Voter<AccountId, Balance> {
+		pub votes: Vec<AccountId>,
+		pub stake: Balance,
+		pub deposit: Balance,
+	}
+
+	pub trait V2ToV3 {
+		type Module: GetPalletVersion;
+		type AccountId: 'static + FullCodec;
+		type Balance: 'static + FullCodec + Copy + std::fmt::Debug;
+	}
+
+	struct __PhragmenElection;
+	impl frame_support::traits::PalletInfo for __PhragmenElection {
+		fn index<P: 'static>() -> Option<usize> { unreachable!() }
+		fn name<P: 'static>() -> Option<&'static str> { Some("PhragmenElection") }
+	}
+
+	struct __Candidates;
+	impl frame_support::traits::StorageInstance for __Candidates {
+		type Pallet = ();
+		type PalletInfo = __PhragmenElection;
+		const STORAGE_PREFIX: &'static str = "Candidates";
+	}
+
+	#[allow(type_alias_bounds)]
+	type Candidates<T: V2ToV3> = StorageValue<__Candidates, Vec<(T::AccountId, T::Balance)>>;
+
+	struct __Members;
+	impl frame_support::traits::StorageInstance for __Members {
+		type Pallet = ();
+		type PalletInfo = __PhragmenElection;
+		const STORAGE_PREFIX: &'static str = "Members";
+	}
+	#[allow(type_alias_bounds)]
+	type Members<T: V2ToV3> = StorageValue<__Members, Vec<SeatHolder<T::AccountId, T::Balance>>>;
+
+	struct __RunnersUp;
+	impl frame_support::traits::StorageInstance for __RunnersUp {
+		type Pallet = ();
+		type PalletInfo = __PhragmenElection;
+		const STORAGE_PREFIX: &'static str = "RunnersUp";
+	}
+	#[allow(type_alias_bounds)]
+	type RunnersUp<T: V2ToV3> = StorageValue<__RunnersUp, Vec<SeatHolder<T::AccountId, T::Balance>>>;
+
+	struct __Voting;
+	impl frame_support::traits::StorageInstance for __Voting {
+		type Pallet = ();
+		type PalletInfo = __PhragmenElection;
+		const STORAGE_PREFIX: &'static str = "Voting";
+	}
+	#[allow(type_alias_bounds)]
+	type Voting<T: V2ToV3> = StorageMap<__Voting, Twox64Concat, T::AccountId, Voter<T::AccountId, T::Balance>>;
 
 	/// Apply all of the migrations from 2_0_0 to 3_0_0.
 	///
@@ -151,26 +207,21 @@ pub mod migrations_3_0_0 {
 	///
 	/// Be aware that this migration is intended to be used only for the mentioned versions. Use
 	/// with care and run at your own risk.
-	pub fn apply<
-		Instance: StorageInstance,
-		Module: GetPalletVersion,
-		AccountId: 'static + FullCodec,
-		Balance: 'static + FullCodec + Copy + std::fmt::Debug,
-	>(
-		old_voter_bond: Balance,
-		old_candidacy_bond: Balance,
+	pub fn apply<T: V2ToV3>(
+		old_voter_bond: T::Balance,
+		old_candidacy_bond: T::Balance,
 	) -> Weight {
-		let maybe_storage_version = <Module as GetPalletVersion>::storage_version();
+		let maybe_storage_version = <T::Module as GetPalletVersion>::storage_version();
 		match maybe_storage_version {
 			Some(storage_version) if storage_version <= PalletVersion::new(2, 0, 0) => {
-				migrate_voters_to_recorded_deposit::<Instance, AccountId, Balance>(old_voter_bond);
-				migrate_candidates_to_recorded_deposit::<Instance, AccountId, Balance>(
+				migrate_voters_to_recorded_deposit::<T>(old_voter_bond);
+				migrate_candidates_to_recorded_deposit::<T>(
 					old_candidacy_bond,
 				);
-				migrate_runners_up_to_recorded_deposit::<Instance, AccountId, Balance>(
+				migrate_runners_up_to_recorded_deposit::<T>(
 					old_candidacy_bond,
 				);
-				migrate_members_to_recorded_deposit::<Instance, AccountId, Balance>(
+				migrate_members_to_recorded_deposit::<T>(
 					old_candidacy_bond,
 				);
 				Weight::max_value()
@@ -180,14 +231,8 @@ pub mod migrations_3_0_0 {
 	}
 
 	/// Migrate from the old legacy voting bond (fixed) to the new one (per-vote dynamic).
-	pub fn migrate_voters_to_recorded_deposit<
-		I: StorageInstance,
-		AccountId: 'static + FullCodec,
-		Balance: 'static + FullCodec + Copy + std::fmt::Debug,
-	>(
-		old_deposit: Balance,
-	) {
-		<NewVoting<I, AccountId, Balance>>::translate::<(Balance, Vec<AccountId>), _>(
+	pub fn migrate_voters_to_recorded_deposit<T: V2ToV3>(old_deposit: T::Balance) {
+		<Voting<T>>::translate::<(T::Balance, Vec<T::AccountId>), _>(
 			|_who, (stake, votes)| {
 				let deposit = old_deposit;
 				dbg!(deposit);
@@ -201,19 +246,13 @@ pub mod migrations_3_0_0 {
 
 		frame_support::debug::info!(
 			"migrated {} voter accounts.",
-			<NewVoting<I, AccountId, Balance>>::iter().count(),
+			<Voting<T>>::iter().count(),
 		);
 	}
 
 	/// Migrate all candidates to recorded deposit.
-	pub fn migrate_candidates_to_recorded_deposit<
-		I: StorageInstance,
-		AccountId: 'static + FullCodec,
-		Balance: 'static + FullCodec + Copy,
-	>(
-		old_deposit: Balance,
-	) {
-		let _ = <NewCandidates<I, AccountId, Balance>>::translate::<Vec<AccountId>, _>(
+	pub fn migrate_candidates_to_recorded_deposit<T: V2ToV3>(old_deposit: T::Balance) {
+		let _ = <Candidates<T>>::translate::<Vec<T::AccountId>, _>(
 			|maybe_old_candidates| {
 				maybe_old_candidates.map(|old_candidates| {
 					frame_support::debug::info!(
@@ -230,14 +269,8 @@ pub mod migrations_3_0_0 {
 	}
 
 	/// Migrate all members to recorded deposit.
-	pub fn migrate_members_to_recorded_deposit<
-		I: StorageInstance,
-		AccountId: 'static + FullCodec,
-		Balance: 'static + FullCodec + Copy,
-	>(
-		deposit: Balance,
-	) {
-		let _ = <NewMembers<I, AccountId, Balance>>::translate::<Vec<(AccountId, Balance)>, _>(
+	pub fn migrate_members_to_recorded_deposit<T: V2ToV3>(deposit: T::Balance) {
+		let _ = <Members<T>>::translate::<Vec<(T::AccountId, T::Balance)>, _>(
 			|maybe_old_members| {
 				maybe_old_members.map(|old_members| {
 					frame_support::debug::info!("migrated {} member accounts.", old_members.len());
@@ -255,14 +288,8 @@ pub mod migrations_3_0_0 {
 	}
 
 	/// Migrate all runners-up to recorded deposit.
-	pub fn migrate_runners_up_to_recorded_deposit<
-		I: StorageInstance,
-		AccountId: 'static + FullCodec,
-		Balance: 'static + FullCodec + Copy,
-	>(
-		deposit: Balance,
-	) {
-		let _ = <NewRunnersUp<I, AccountId, Balance>>::translate::<Vec<(AccountId, Balance)>, _>(
+	pub fn migrate_runners_up_to_recorded_deposit<T: V2ToV3>(deposit: T::Balance) {
+		let _ = <RunnersUp<T>>::translate::<Vec<(T::AccountId, T::Balance)>, _>(
 			|maybe_old_runners_up| {
 				maybe_old_runners_up.map(|old_runners_up| {
 					frame_support::debug::info!(
