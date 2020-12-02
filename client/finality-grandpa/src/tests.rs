@@ -300,7 +300,7 @@ fn initialize_grandpa(
 			link,
 			network: net_service,
 			telemetry_on_connect: None,
-			voting_rule: VotingRulesBuilder::default().build(),
+			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 		};
@@ -987,7 +987,38 @@ fn voter_persists_its_votes() {
 
 	// spawn two voters for alice.
 	// half-way through the test, we stop one and start the other.
-	let (alice_voter1, abort) = future::abortable(initialize_grandpa(&mut net, &peers[..1]));
+	let (alice_voter1, abort) = future::abortable({
+		let (keystore, _) = create_keystore(peers[0]);
+
+		let (net_service, link) = {
+			// temporary needed for some reason
+			let link = net.peers[0].data.lock().take().expect("link initialized at startup; qed");
+			(
+				net.peers[0].network_service().clone(),
+				link,
+			)
+		};
+
+		let grandpa_params = GrandpaParams {
+			config: Config {
+				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
+				keystore: Some(keystore),
+				name: Some(format!("peer#{}", 0)),
+				is_authority: true,
+				observer_enabled: true,
+			},
+			link,
+			network: net_service,
+			telemetry_on_connect: None,
+			voting_rule: VotingRulesBuilder::default().build(),
+			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
+		};
+
+		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
+	});
+
 	fn alice_voter2(
 		peers: &[Ed25519Keyring],
 		net: Arc<Mutex<GrandpaTestNet>>,
