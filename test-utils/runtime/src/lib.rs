@@ -1146,6 +1146,7 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 	#[cfg(feature = "std")]
 	let mut offchain_overlay = Default::default();
 	let mut cache = sp_state_machine::StorageTransactionCache::<_, _, BlockNumber>::default();
+	let mut extensions = sp_externalities::Extensions::default();
 	let mut ext = sp_state_machine::Ext::new(
 		&mut overlay,
 		#[cfg(feature = "std")]
@@ -1154,8 +1155,7 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		&backend,
 		#[cfg(feature = "std")]
 		None,
-		#[cfg(feature = "std")]
-		None,
+		Some(&mut extensions),
 	);
 	assert!(ext.storage(b"value3").is_some());
 	assert!(ext.storage(b"xyz").is_none());
@@ -1163,6 +1163,16 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 	assert!(ext.storage_root().as_slice() == &root[..]);
 	ext.place_storage(vec![0], Some(vec![1]));
 	assert!(ext.storage_root().as_slice() != &root[..]);
+
+	use sp_externalities::ExternalitiesExt;
+	use sp_core::traits::RuntimeSpawnExt;
+
+	let runtime_ext = unimplemented!();
+
+	let dyn_ext: &mut dyn Externalities = &mut ext;
+	// use inline only extension.
+	// TODO method not found (not in no_std)
+	dyn_ext.register_extension::<RuntimeSpawnExt>(RuntimeSpawnExt(runtime_ext)).unwrap();
 
 	fn worker_test(_inp: Vec<u8>) -> Vec<u8> {
 		let mut result = Vec::<u8>::default();
@@ -1186,7 +1196,8 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 	}
 	// TODO move these host task to a task module
 	fn host_runtime_tasks_set_capacity(_capacity: u32) {
-		// Ignore (this implementation only run inline).
+		// Ignore (this implementation only run inline, so no
+		// need to call extension).
 	}
 
 	fn host_runtime_tasks_spawn(
@@ -1196,8 +1207,6 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		kind: u8,
 	) -> u64 {
 		sp_externalities::with_externalities(|mut ext| {
-			use sp_externalities::ExternalitiesExt;
-			use sp_core::traits::RuntimeSpawnExt;
 			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
 				.expect("Inline runtime extension improperly set.");
 			0

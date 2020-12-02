@@ -117,11 +117,10 @@ pub struct Ext<'a, H, N, B>
 	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 	/// Pseudo-unique id used for tracing.
 	pub id: u16,
+	/// Extensions registered with this instance.
+	extensions: Option<OverlayedExtensions<'a>>,
 	/// Dummy usage of N arg.
 	_phantom: sp_std::marker::PhantomData<N>,
-	/// Extensions registered with this instance.
-	#[cfg(feature = "std")]
-	extensions: Option<OverlayedExtensions<'a>>,
 }
 
 
@@ -137,12 +136,14 @@ impl<'a, H, N, B> Ext<'a, H, N, B>
 		overlay: &'a mut OverlayedChanges,
 		storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H, N>,
 		backend: &'a B,
+		extensions: Option<&'a mut Extensions>,
 	) -> Self {
 		Ext {
 			overlay,
 			backend,
 			id: 0,
 			storage_transaction_cache,
+			extensions: extensions.map(OverlayedExtensions::new),
 			_phantom: Default::default(),
 		}
 	}
@@ -733,35 +734,6 @@ impl<'a> StorageAppend<'a> {
 	}
 }
 
-#[cfg(not(feature = "std"))]
-impl<'a, H, N, B> ExtensionStore for Ext<'a, H, N, B>
-where
-	H: Hasher,
-	H::Out: Ord + 'static + codec::Codec,
-	B: Backend<H>,
-	N: crate::changes_trie::BlockNumber,
-{
-	fn extension_by_type_id(&mut self, _type_id: TypeId) -> Option<&mut dyn Any> {
-		None
-	}
-
-	fn register_extension_with_type_id(
-		&mut self,
-		_type_id: TypeId,
-		_extension: Box<dyn Extension>,
-	) -> Result<(), sp_externalities::Error> {
-		Err(sp_externalities::Error::ExtensionsAreNotSupported)
-	}
-
-	fn deregister_extension_by_type_id(
-		&mut self,
-		_type_id: TypeId,
-	) -> Result<(), sp_externalities::Error> {
-		Err(sp_externalities::Error::ExtensionsAreNotSupported)
-	}
-}
-
-#[cfg(feature = "std")]
 impl<'a, H, N, B> ExtensionStore for Ext<'a, H, N, B>
 where
 	H: Hasher,
