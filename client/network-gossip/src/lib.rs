@@ -81,14 +81,6 @@ pub trait Network<B: BlockT> {
 	/// Send a notification to a peer.
 	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>);
 
-	/// Registers a notifications protocol.
-	///
-	/// See the documentation of [`NetworkService:register_notifications_protocol`] for more information.
-	fn register_notifications_protocol(
-		&self,
-		protocol: Cow<'static, str>,
-	);
-
 	/// Notify everyone we're connected to that we have the given block.
 	///
 	/// Note: this method isn't strictly related to gossiping and should eventually be moved
@@ -111,13 +103,6 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 
 	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
 		NetworkService::write_notification(self, who, protocol, message)
-	}
-
-	fn register_notifications_protocol(
-		&self,
-		protocol: Cow<'static, str>,
-	) {
-		NetworkService::register_notifications_protocol(self, protocol)
 	}
 
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
