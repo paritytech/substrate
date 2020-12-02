@@ -357,8 +357,18 @@ impl Peerset {
 					);
 				}
 			},
-			peersstate::Peer::NotConnected(mut peer) => peer.add_reputation(change.value),
-			peersstate::Peer::Unknown(peer) => peer.discover().add_reputation(change.value),
+			peersstate::Peer::NotConnected(mut peer) => {
+				trace!(target: "peerset", "Report {}: {:+} to {}. Reason: {}",
+					peer_id, change.value, peer.reputation(), change.reason
+				);
+				peer.add_reputation(change.value)
+			},
+			peersstate::Peer::Unknown(peer) => {
+				trace!(target: "peerset", "Discover {}: {:+}. Reason: {}",
+					peer_id, change.value, change.reason
+				);
+				peer.discover().add_reputation(change.value)
+			},
 		}
 	}
 
@@ -561,10 +571,9 @@ impl Peerset {
 		match self.data.peer(&peer_id) {
 			peersstate::Peer::Connected(mut entry) => {
 				// Decrease the node's reputation so that we don't try it again and again and again.
-				let rep_before = entry.reputation();
 				entry.add_reputation(DISCONNECT_REPUTATION_CHANGE);
-				let rep_after = entry.reputation();
-				trace!(target: "peerset", "Dropping {}: {} -> {}", peer_id, rep_before, rep_after);
+				trace!(target: "peerset", "Dropping {}: {:+} to {}",
+					peer_id, DISCONNECT_REPUTATION_CHANGE, entry.reputation());
 				entry.disconnect();
 			}
 			peersstate::Peer::NotConnected(_) | peersstate::Peer::Unknown(_) =>
