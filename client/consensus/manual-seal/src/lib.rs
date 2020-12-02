@@ -27,7 +27,7 @@ use sp_consensus::{
 };
 use sp_blockchain::HeaderBackend;
 use sp_inherents::InherentDataProviders;
-use sp_runtime::{traits::Block as BlockT, Justifications};
+use sp_runtime::{traits::Block as BlockT, Justifications, ConsensusEngineId};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
 use sc_transaction_pool::txpool;
 use std::{sync::Arc, marker::PhantomData};
@@ -48,6 +48,10 @@ pub use self::{
 	rpc::{EngineCommand, CreatedBlock},
 };
 use sp_api::{ProvideRuntimeApi, TransactionFor};
+
+/// The `ConsensusEngineId` of Manual Seal.
+// WIP(JON): consider creating a new crate primitives/manual-seal for this
+pub const MANUAL_SEAL_ENGINE_ID: ConsensusEngineId = [b'm', b'a', b's', b'e'];
 
 /// The verifier for the manual seal engine; instantly finalizes.
 struct ManualSealVerifier;
@@ -193,6 +197,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
 				).await;
 			}
 			EngineCommand::FinalizeBlock { hash, sender, justification } => {
+				let justification = justification.map(|j| (MANUAL_SEAL_ENGINE_ID, j));
 				finalize_block(
 					FinalizeBlockParams {
 						hash,
