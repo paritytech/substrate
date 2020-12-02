@@ -644,7 +644,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Need a better solution to manage authorized peers, but now just use reserved peers for
 	/// prototyping.
 	pub fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
-		self.peerset.set_reserved_peers(peerset::SetId(0), peers)
+		self.peerset.set_reserved_peers(sc_peerset::SetId(0), peers)
+		// TODO: set 1?
 	}
 
 	/// Set authorized_only flag.
@@ -966,7 +967,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset.remove_reserved_peer(peerset::SetId(0), peer);
+		self.peerset.remove_reserved_peer(sc_peerset::SetId(0), peer);
+		// TODO: set 1?
 	}
 
 	/// Adds a `PeerId` and its address as reserved. The string should encode the address
@@ -980,7 +982,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		if peer_id == self.local_peer_id {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
 		}
-		self.peerset.add_reserved_peer(peerset::SetId(0), peer_id.clone());
+		self.peerset.add_reserved_peer(sc_peerset::SetId(0), peer_id.clone());
+		// TODO: set 1?
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));

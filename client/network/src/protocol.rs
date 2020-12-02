@@ -621,7 +621,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	/// Called by peer when it is disconnecting
-	pub fn on_peer_disconnected(&mut self, peer: PeerId) -> CustomMessageOutcome<B> {
+	pub fn on_sync_peer_disconnected(&mut self, peer: PeerId) -> CustomMessageOutcome<B> {
 		if self.important_peers.contains(&peer) {
 			warn!(target: "sync", "Reserved peer {} disconnected", peer);
 		} else {
@@ -667,14 +667,14 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				}
 				None => {
 					trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer);
-					self.behaviour.disconnect_peer(&peer);
+					self.behaviour.disconnect_peer(&peer, sc_peerset::SetId::from(0));
 					self.peerset_handle.report_peer(peer, rep::UNEXPECTED_RESPONSE);
 					return CustomMessageOutcome::None;
 				}
 			}
 		} else {
 			trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer);
-			self.behaviour.disconnect_peer(&peer);
+			self.behaviour.disconnect_peer(&peer, sc_peerset::SetId::from(0));
 			self.peerset_handle.report_peer(peer, rep::UNEXPECTED_RESPONSE);
 			return CustomMessageOutcome::None;
 		};
@@ -700,7 +700,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				Ok(sync::OnBlockJustification::Import { peer, hash, number, justification }) =>
 					CustomMessageOutcome::JustificationImport(peer, hash, number, justification),
 				Err(sync::BadPeer(id, repu)) => {
-					self.behaviour.disconnect_peer(&id);
+					self.behaviour.disconnect_peer(&id, sc_peerset::SetId::from(0));
 					self.peerset_handle.report_peer(id, repu);
 					CustomMessageOutcome::None
 				}
@@ -708,13 +708,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		} else {
 			// Validate fields against the request.
 			if request.fields.contains(message::BlockAttributes::HEADER) && response.blocks.iter().any(|b| b.header.is_none()) {
-				self.behaviour.disconnect_peer(&peer);
+				self.behaviour.disconnect_peer(&peer, sc_peerset::SetId::from(0));
 				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
 				trace!(target: "sync", "Missing header for a block");
 				return CustomMessageOutcome::None
 			}
 			if request.fields.contains(message::BlockAttributes::BODY) && response.blocks.iter().any(|b| b.body.is_none()) {
-				self.behaviour.disconnect_peer(&peer);
+				self.behaviour.disconnect_peer(&peer, sc_peerset::SetId::from(0));
 				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
 				trace!(target: "sync", "Missing body for a block");
 				return CustomMessageOutcome::None
@@ -731,7 +731,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					}
 				}
 				Err(sync::BadPeer(id, repu)) => {
-					self.behaviour.disconnect_peer(&id);
+					self.behaviour.disconnect_peer(&id, sc_peerset::SetId::from(0));
 					self.peerset_handle.report_peer(id, repu);
 					CustomMessageOutcome::None
 				}
@@ -745,7 +745,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		peer: &PeerId,
 	) {
 		self.peerset_handle.report_peer(peer.clone(), rep::TIMEOUT);
-		self.behaviour.disconnect_peer(peer);
+		self.behaviour.disconnect_peer(peer, sc_peerset::SetId::from(0));
 	}
 
 	/// Perform time based maintenance.
@@ -780,13 +780,14 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		for p in aborting {
-			self.behaviour.disconnect_peer(&p);
+			self.behaviour.disconnect_peer(&p, sc_peerset::SetId::from(0));
 			self.peerset_handle.report_peer(p, rep::TIMEOUT);
 		}
 	}
 
-	/// Called on the first connection between two peers, after their exchange of handshake.
-	fn on_peer_connected(
+	/// Called on the first connection between two peers on the default set, after their exchange
+	/// of handshake.
+	fn on_sync_peer_connected(
 		&mut self,
 		who: PeerId,
 		status: BlockAnnouncesHandshake<B>,
@@ -806,7 +807,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				self.genesis_hash, status.genesis_hash
 			);
 			self.peerset_handle.report_peer(who.clone(), rep::GENESIS_MISMATCH);
-			self.behaviour.disconnect_peer(&who);
+			self.behaviour.disconnect_peer(&who, sc_peerset::SetId::from(0));
 
 			if self.boot_node_ids.contains(&who) {
 				error!(
@@ -826,7 +827,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			if status.roles.is_light() {
 				debug!(target: "sync", "Peer {} is unable to serve light requests", who);
 				self.peerset_handle.report_peer(who.clone(), rep::BAD_ROLE);
-				self.behaviour.disconnect_peer(&who);
+				self.behaviour.disconnect_peer(&who, sc_peerset::SetId::from(0));
 				return CustomMessageOutcome::None;
 			}
 
@@ -843,7 +844,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
 				debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
 				self.peerset_handle.report_peer(who.clone(), rep::PEER_BEHIND_US_LIGHT);
-				self.behaviour.disconnect_peer(&who);
+				self.behaviour.disconnect_peer(&who, sc_peerset::SetId::from(0));
 				return CustomMessageOutcome::None;
 			}
 		}
@@ -879,7 +880,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					});
 				},
 				Err(sync::BadPeer(id, repu)) => {
-					self.behaviour.disconnect_peer(&id);
+					self.behaviour.disconnect_peer(&id, sc_peerset::SetId::from(0));
 					self.peerset_handle.report_peer(id, repu)
 				}
 			}
@@ -934,7 +935,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		// sending transaction to light node is considered a bad behavior
 		if !self.config.roles.is_full() {
 			trace!(target: "sync", "Peer {} is trying to send transactions to the light node", who);
-			self.behaviour.disconnect_peer(&who);
+			self.behaviour.disconnect_peer(&who, sc_peerset::SetId::from(1));
 			self.peerset_handle.report_peer(who, rep::UNEXPECTED_TRANSACTIONS);
 			return;
 		}
@@ -1210,7 +1211,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				}
 			}
 			Err(sync::BadPeer(id, repu)) => {
-				self.behaviour.disconnect_peer(&id);
+				self.behaviour.disconnect_peer(&id, sc_peerset::SetId::from(0));
 				self.peerset_handle.report_peer(id, repu);
 				CustomMessageOutcome::None
 			}
@@ -1262,7 +1263,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					});
 				}
 				Err(sync::BadPeer(id, repu)) => {
-					self.behaviour.disconnect_peer(&id);
+					self.behaviour.disconnect_peer(&id, sc_peerset::SetId::from(0));
 					self.peerset_handle.report_peer(id, repu)
 				}
 			}
@@ -1279,7 +1280,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	///
 	/// Can be called multiple times with the same `PeerId`s.
 	pub fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
-		self.behaviour.add_discovered_nodes(peer_ids)
+		self.behaviour.add_discovered_nodes(sc_peerset::SetId::from(0), peer_ids);
+		self.behaviour.add_discovered_nodes(sc_peerset::SetId::from(1), peer_ids);
 	}
 
 	fn format_stats(&self) -> String {
@@ -1489,7 +1491,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		};
 
 		let outcome = match event {
-			GenericProtoOut::CustomProtocolOpen { peer_id, received_handshake, notifications_sink, .. } => {
+			GenericProtoOut::CustomProtocolOpen { peer_id, set_id, received_handshake, notifications_sink, .. } => {
 				// `received_handshake` can be either a `Status` message if received from the
 				// legacy substream ,or a `BlockAnnouncesHandshake` if received from the block
 				// announces substream.
@@ -1502,7 +1504,17 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 							genesis_hash: handshake.genesis_hash,
 						};
 
-						self.on_peer_connected(peer_id, handshake, notifications_sink)
+						// Set number 0 is hardcoded the default set of peers we sync from.
+						if set_id == sc_peerset::SetId::from(0) {
+							self.on_sync_peer_connected(peer_id, handshake, notifications_sink)
+						} else {
+							CustomMessageOutcome::NotificationStreamOpened {
+								remote: who,
+								protocols: self.notification_protocols.clone(),
+								roles: info.roles,
+								notifications_sink,
+							}
+						}
 					},
 					Ok(msg) => {
 						debug!(
@@ -1517,7 +1529,17 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					Err(err) => {
 						match <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(&mut &received_handshake[..]) {
 							Ok(handshake) => {
-								self.on_peer_connected(peer_id, handshake, notifications_sink)
+								// Set number 0 is hardcoded the default set of peers we sync from.
+								if set_id == sc_peerset::SetId::from(0) {
+									self.on_sync_peer_connected(peer_id, handshake, notifications_sink)
+								} else {
+									CustomMessageOutcome::NotificationStreamOpened {
+										remote: who,
+										protocols: self.notification_protocols.clone(),
+										roles: info.roles,
+										notifications_sink,
+									}
+								}
 							}
 							Err(err2) => {
 								debug!(
@@ -1542,8 +1564,16 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					notifications_sink,
 				}
 			},
-			GenericProtoOut::CustomProtocolClosed { peer_id } => {
-				self.on_peer_disconnected(peer_id)
+			GenericProtoOut::CustomProtocolClosed { peer_id, set_id } => {
+				// Set number 0 is hardcoded the default set of peers we sync from.
+				if set_id == sc_peerset::SetId::from(0) {
+					self.on_sync_peer_disconnected(peer_id)
+				} else {
+					CustomMessageOutcome::NotificationStreamClosed {
+						remote: peer,
+						protocols: self.notification_protocols.clone(),
+					}
+				}
 			},
 			GenericProtoOut::LegacyMessage { peer_id, message } =>
 				self.on_custom_message(peer_id, message),
