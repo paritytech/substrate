@@ -269,8 +269,8 @@ pub enum NotifsHandlerIn {
 	/// Importantly, it is forbidden to send a [`NotifsHandlerIn::Open`] while a previous one is
 	/// already in the fly. It is however possible if a `Close` is still in the fly.
 	Open {
-		/// Protocol whose substream to open.
-		protocol: Cow<'static, str>,
+		/// Index of the protocol in the list of protocols passed at initialization.
+		protocol_index: usize,
 	},
 
 	/// Instruct the handler to close the notification substreams, or reject any pending incoming
@@ -278,8 +278,8 @@ pub enum NotifsHandlerIn {
 	///
 	/// Must always be answered by a [`NotifsHandlerOut::CloseResult`] event.
 	Close {
-		/// Protocol whose substream to close.
-		protocol: Cow<'static, str>,
+		/// Index of the protocol in the list of protocols passed at initialization.
+		protocol_index: usize,
 	},
 }
 
@@ -288,8 +288,8 @@ pub enum NotifsHandlerIn {
 pub enum NotifsHandlerOut {
 	/// Acknowledges a [`NotifsHandlerIn::Open`].
 	OpenResultOk {
-		/// Name of the protocol.
-		protocol: Cow<'static, str>,
+		/// Index of the protocol in the list of protocols passed at initialization.
+		protocol_index: usize,
 		/// The endpoint of the connection that is open for custom protocols.
 		endpoint: ConnectedPoint,
 		/// Handshake that was sent to us.
@@ -302,14 +302,14 @@ pub enum NotifsHandlerOut {
 	/// Acknowledges a [`NotifsHandlerIn::Open`]. The remote has refused the attempt to open
 	/// notification substreams.
 	OpenResultErr {
-		/// Name of the protocol.
-		protocol: Cow<'static, str>,
+		/// Index of the protocol in the list of protocols passed at initialization.
+		protocol_index: usize,
 	},
 
 	/// Acknowledges a [`NotifsHandlerIn::Close`].
 	CloseResult {
-		/// Name of the protocol.
-		protocol: Cow<'static, str>,
+		/// Index of the protocol in the list of protocols passed at initialization.
+		protocol_index: usize,
 	},
 
 	/// The remote would like the substreams to be open. Send a [`NotifsHandlerIn::Open`] or a
@@ -318,8 +318,8 @@ pub enum NotifsHandlerOut {
 	/// yet been acknowledged by a matching [`NotifsHandlerOut`], then you don't need to a send
 	/// another [`NotifsHandlerIn`].
 	OpenDesiredByRemote {
-		/// Name of the protocol.
-		protocol: Cow<'static, str>,
+		/// Index of the protocol in the list of protocols passed at initialization.
+		protocol_index: usize,
 	},
 
 	/// The remote would like the substreams to be closed. Send a [`NotifsHandlerIn::Close`] in
@@ -327,8 +327,8 @@ pub enum NotifsHandlerOut {
 	/// been acknowledged by a [`NotifsHandlerOut::CloseResult`], then you don't need to a send
 	/// another one.
 	CloseDesired {
-		/// Name of the protocol.
-		protocol: Cow<'static, str>,
+		/// Index of the protocol in the list of protocols passed at initialization.
+		protocol_index: usize,
 	},
 
 	/// Received a non-gossiping message on the legacy substream.
@@ -346,8 +346,8 @@ pub enum NotifsHandlerOut {
 	///
 	/// Can only happen when the handler is in the open state.
 	Notification {
-		/// Name of the protocol of the message.
-		protocol: Cow<'static, str>,
+		/// Index of the protocol in the list of protocols passed at initialization.
+		protocol_index: usize,
 		/// Message that has been received.
 		message: BytesMut,
 	},

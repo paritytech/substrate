@@ -79,6 +79,12 @@ impl From<usize> for SetId {
 	}
 }
 
+impl From<SetId> for usize {
+	fn from(id: SetId) -> Self {
+		id.0
+	}
+}
+
 /// Description of a reputation adjustment for a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReputationChange {

@@ -527,11 +527,11 @@ impl GenericProto {
 				for (connec_id, connec_state) in connections.iter_mut()
 					.filter(|(_, s)| matches!(s, ConnectionState::Open(_)))
 				{
-					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close", peer_id, *connec_id);
+					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close({:?})", peer_id, *connec_id, set_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: peer_id.clone(),
 						handler: NotifyHandler::One(*connec_id),
-						event: NotifsHandlerIn::Close,
+						event: NotifsHandlerIn::Close { protocol_index: set_id.into() },
 					});
 					*connec_state = ConnectionState::Closing;
 				}
@@ -539,11 +539,11 @@ impl GenericProto {
 				for (connec_id, connec_state) in connections.iter_mut()
 					.filter(|(_, s)| matches!(s, ConnectionState::Opening))
 				{
-					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close", peer_id, *connec_id);
+					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close({:?})", peer_id, *connec_id, set_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: peer_id.clone(),
 						handler: NotifyHandler::One(*connec_id),
-						event: NotifsHandlerIn::Close,
+						event: NotifsHandlerIn::Close { protocol_index: set_id.into() },
 					});
 					*connec_state = ConnectionState::OpeningThenClosing;
 				}
@@ -575,11 +575,11 @@ impl GenericProto {
 				for (connec_id, connec_state) in connections.iter_mut()
 					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote))
 				{
-					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close", peer_id, *connec_id);
+					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close({:?})", peer_id, *connec_id, set_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: peer_id.clone(),
 						handler: NotifyHandler::One(*connec_id),
-						event: NotifsHandlerIn::Close,
+						event: NotifsHandlerIn::Close { protocol_index: set_id.into() },
 					});
 					*connec_state = ConnectionState::Closing;
 				}
@@ -777,11 +777,11 @@ impl GenericProto {
 				{
 					debug!(target: "sub-libp2p", "PSM => Connect({}, {:?}): Enabling connections.",
 						occ_entry.key().0, set_id);
-					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open", peer_id, *connec_id);
+					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open({:?})", peer_id, *connec_id, set_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: peer_id.clone(),
 						handler: NotifyHandler::One(*connec_id),
-						event: NotifsHandlerIn::Open,
+						event: NotifsHandlerIn::Open { protocol_index: set_id.into() },
 					});
 					*connec_state = ConnectionState::Opening;
 					*occ_entry.into_mut() = PeerState::Enabled { connections };
@@ -839,11 +839,12 @@ impl GenericProto {
 				for (connec_id, connec_state) in connections.iter_mut()
 					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote))
 				{
-					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open", occ_entry.key(), *connec_id);
+					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open({:?})",
+						occ_entry.key(), *connec_id, set_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: occ_entry.key().clone(),
 						handler: NotifyHandler::One(*connec_id),
-						event: NotifsHandlerIn::Open,
+						event: NotifsHandlerIn::Open { protocol_index: set_id.into() },
 					});
 					*connec_state = ConnectionState::Opening;
 				}
@@ -931,11 +932,12 @@ impl GenericProto {
 				for (connec_id, connec_state) in connections.iter_mut()
 					.filter(|(_, s)| matches!(s, ConnectionState::Opening))
 				{
-					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close", entry.key(), *connec_id);
+					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close({:?})",
+						entry.key(), *connec_id, set_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: entry.key().clone(),
 						handler: NotifyHandler::One(*connec_id),
-						event: NotifsHandlerIn::Close,
+						event: NotifsHandlerIn::Close { protocol_index: set_id.into() },
 					});
 					*connec_state = ConnectionState::OpeningThenClosing;
 				}
@@ -943,11 +945,12 @@ impl GenericProto {
 				for (connec_id, connec_state) in connections.iter_mut()
 					.filter(|(_, s)| matches!(s, ConnectionState::Open(_)))
 				{
-					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close", entry.key(), *connec_id);
+					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close({:?})",
+						entry.key(), *connec_id, set_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: entry.key().clone(),
 						handler: NotifyHandler::One(*connec_id),
-						event: NotifsHandlerIn::Close,
+						event: NotifsHandlerIn::Close { protocol_index: set_id.into() },
 					});
 					*connec_state = ConnectionState::Closing;
 				}
@@ -1029,11 +1032,12 @@ impl GenericProto {
 				for (connec_id, connec_state) in connections.iter_mut()
 					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote))
 				{
-					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open", incoming.peer_id, *connec_id);
+					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open({:?})",
+						incoming.peer_id, *connec_id, set_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: incoming.peer_id.clone(),
 						handler: NotifyHandler::One(*connec_id),
-						event: NotifsHandlerIn::Open,
+						event: NotifsHandlerIn::Open(set_id),
 					});
 					*connec_state = ConnectionState::Opening;
 				}
@@ -1084,11 +1088,12 @@ impl GenericProto {
 				for (connec_id, connec_state) in connections.iter_mut()
 					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote))
 				{
-					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close", incoming.peer_id, connec_id);
+					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close({:?})",
+						incoming.peer_id, connec_id, set_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: incoming.peer_id.clone(),
 						handler: NotifyHandler::One(*connec_id),
-						event: NotifsHandlerIn::Close,
+						event: NotifsHandlerIn::Close { protocol_index: set_id.into() },
 					});
 					*connec_state = ConnectionState::Closing;
 				}
@@ -1130,11 +1135,11 @@ impl NetworkBehaviour for GenericProto {
 						"Libp2p => Connected({}, {:?}, {:?}): Connection was requested by PSM.",
 						peer_id, set_id, endpoint
 					);
-					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open", peer_id, *conn);
+					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open({:?})", peer_id, *conn, set_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: peer_id.clone(),
 						handler: NotifyHandler::One(*conn),
-						event: NotifsHandlerIn::Open
+						event: NotifsHandlerIn::Open { protocol_index: set_id.into() },
 					});
 
 					let mut connections = SmallVec::new();
@@ -1504,7 +1509,9 @@ impl NetworkBehaviour for GenericProto {
 		event: NotifsHandlerOut,
 	) {
 		match event {
-			NotifsHandlerOut::OpenDesiredByRemote { set_id } => {
+			NotifsHandlerOut::OpenDesiredByRemote { protocol_index } => {
+				let set_id = sc_peerset::SetId::from(protocol_index);
+
 				debug!(target: "sub-libp2p",
 					"Handler({:?}, {:?}]) => OpenDesiredByRemote({:?})",
 					source, connection, set_id);
@@ -1552,11 +1559,12 @@ impl NetworkBehaviour for GenericProto {
 
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, _)| *c == connection) {
 							if let ConnectionState::Closed = *connec_state {
-								debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open", source, connection);
+								debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open({:?})",
+									source, connection, set_id);
 								self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 									peer_id: source,
 									handler: NotifyHandler::One(connection),
-									event: NotifsHandlerIn::Open,
+									event: NotifsHandlerIn::Open { protocol_index: set_id.into() },
 								});
 								*connec_state = ConnectionState::Opening;
 							} else {
@@ -1623,12 +1631,12 @@ impl NetworkBehaviour for GenericProto {
 					PeerState::DisabledPendingEnable { mut connections, timer, timer_deadline } => {
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, _)| *c == connection) {
 							if let ConnectionState::Closed = *connec_state {
-								debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open",
-									source, connection);
+								debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Open({:?})",
+									source, connection, set_id);
 								self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 									peer_id: source.clone(),
 									handler: NotifyHandler::One(connection),
-									event: NotifsHandlerIn::Open,
+									event: NotifsHandlerIn::Open { protocol_index: set_id.into() },
 								});
 								*connec_state = ConnectionState::Opening;
 
@@ -1667,7 +1675,9 @@ impl NetworkBehaviour for GenericProto {
 				};
 			}
 
-			NotifsHandlerOut::CloseDesired => {
+			NotifsHandlerOut::CloseDesired { protocol_index } => {
+				let set_id = sc_peerset::SetId::from(protocol_index);
+
 				debug!(target: "sub-libp2p",
 					"Handler({}, {:?}) => CloseDesired({:?})",
 					source, connection, set_id);
@@ -1702,11 +1712,11 @@ impl NetworkBehaviour for GenericProto {
 						debug_assert!(matches!(connections[pos].1, ConnectionState::Open(_)));
 						connections[pos].1 = ConnectionState::Closing;
 
-						debug!(target: "sub-libp2p", "Handler({}, {:?}) <= Close", source, connection);
+						debug!(target: "sub-libp2p", "Handler({}, {:?}) <= Close({:?})", source, connection, set_id);
 						self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 							peer_id: source.clone(),
 							handler: NotifyHandler::One(connection),
-							event: NotifsHandlerIn::Close,
+							event: NotifsHandlerIn::Close { protocol_index: set_id.into() },
 						});
 
 						if let Some((replacement_pos, replacement_sink)) = connections
@@ -1767,7 +1777,9 @@ impl NetworkBehaviour for GenericProto {
 				}
 			}
 
-			NotifsHandlerOut::CloseResult { set_id } => {
+			NotifsHandlerOut::CloseResult { protocol_index } => {
+				let set_id = sc_peerset::SetId::from(protocol_index);
+
 				debug!(target: "sub-libp2p",
 					"Handler({}, {:?}) => CloseResult({:?})",
 					source, connection, set_id);
@@ -1798,7 +1810,8 @@ impl NetworkBehaviour for GenericProto {
 				}
 			}
 
-			NotifsHandlerOut::OpenResultOk { received_handshake, notifications_sink, .. } => {
+			NotifsHandlerOut::OpenResultOk { protocol_index, received_handshake, notifications_sink, .. } => {
+				let set_id = sc_peerset::SetId::from(protocol_index);
 				debug!(target: "sub-libp2p",
 					"Handler({}, {:?}) => OpenResultOk({:?})",
 					source, connection, set_id);
@@ -1856,7 +1869,8 @@ impl NetworkBehaviour for GenericProto {
 				}
 			}
 
-			NotifsHandlerOut::OpenResultErr { set_id } => {
+			NotifsHandlerOut::OpenResultErr { protocol_index } => {
+				let set_id = sc_peerset::SetId::from(protocol_index);
 				debug!(target: "sub-libp2p",
 					"Handler({:?}, {:?}) => OpenResultErr({:?})",
 					source, connection, set_id);
@@ -1961,21 +1975,21 @@ impl NetworkBehaviour for GenericProto {
 				}
 			}
 
-			NotifsHandlerOut::Notification { protocol, message } => {
-				if self.is_open(&source) {
+			NotifsHandlerOut::Notification { protocol_index, message } => {
+				let set_id = sc_peerset::SetId::from(protocol_index);
+				if self.is_open(&source, set_id) {
 					trace!(
 						target: "sub-libp2p",
 						"Handler({:?}) => Notification({}, {:?}, {} bytes)",
 						source,
 						set_id,
-						protocol,
 						message.len()
 					);
 					trace!(target: "sub-libp2p", "External API <= Message({:?}, {}, {:?})",
 						protocol, source, set_id);
 					let event = GenericProtoOut::Notification {
 						peer_id: source,
-						protocol_name: protocol,
+						set_id,
 						message,
 					};
 
@@ -1986,7 +2000,6 @@ impl NetworkBehaviour for GenericProto {
 						"Handler({:?}) => Post-close notification({}, {:?}, {} bytes)",
 						source,
 						set_id,
-						protocol,
 						message.len()
 					);
 				}
@@ -2064,12 +2077,12 @@ impl NetworkBehaviour for GenericProto {
 					if let Some((connec_id, connec_state)) = connections.iter_mut()
 						.find(|(_, s)| matches!(s, ConnectionState::Closed))
 					{
-						debug!(target: "sub-libp2p", "Handler({}, {:?}, {:?}) <= Open (ban expired)",
-							peer_id, set_id, *connec_id);
+						debug!(target: "sub-libp2p", "Handler({}, {:?}) <= Open({:?}) (ban expired)",
+							peer_id, *connec_id, set_id);
 						self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 							peer_id: peer_id.clone(),
 							handler: NotifyHandler::One(*connec_id),
-							event: NotifsHandlerIn::Open,
+							event: NotifsHandlerIn::Open { protocol_index: set_id.into() },
 						});
 						*connec_state = ConnectionState::Opening;
 						*peer_state = PeerState::Enabled {
