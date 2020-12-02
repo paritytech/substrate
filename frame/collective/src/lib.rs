@@ -526,32 +526,23 @@ decl_module! {
 			let mut voting = Self::voting(&proposal).ok_or(Error::<T, I>::ProposalMissing)?;
 			ensure!(voting.index == index, Error::<T, I>::WrongIndex);
 
-			let yes_votes = voting.ayes.len() as MemberCount;
-			let no_votes = voting.nays.len() as MemberCount;
-
 			let position_yes = voting.ayes.iter().position(|a| a == &who);
 			let position_no = voting.nays.iter().position(|a| a == &who);
 
-			// Init state after propose
-			// proposer cast first "ayes" vote
-			// State used to detect motion first vote
-			if yes_votes + no_votes == 1 {
-				if position_yes.is_none() && position_no.is_none() {
-					is_account_voting_first_time = true;
-				}
+			// first vote of member in the motion
+			if position_yes.is_none() && position_no.is_none() {
+				is_account_voting_first_time = true;
 			}
 
 			if_std! {
 				let dbg_this_file = file!();
 				let dbg_current_line = line!();
-				println!( "@[{:#?}::{:#?}]::vote() | Enter | Who[{:#?}] | aprov[{:#?}] | is_account_voting_first_time[{:#?}] | y[{:#?}]-n[{:#?}]",
+				println!( "@[{:#?}::{:#?}]::vote() | Enter | Who[{:#?}] | aprov[{:#?}] | is_account_voting_first_time[{:#?}]",
 						dbg_this_file,
 						dbg_current_line,
 						who,
 						approve,
-						is_account_voting_first_time,
-						yes_votes,
-						no_votes );
+						is_account_voting_first_time );
 			}
 
 			if approve {
