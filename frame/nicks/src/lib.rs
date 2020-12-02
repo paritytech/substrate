@@ -17,7 +17,7 @@
 
 //! # Nicks Module
 //!
-//! - [`nicks::Trait`](./trait.Trait.html)
+//! - [`nicks::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
@@ -37,7 +37,7 @@
 //! * `kill_name` - Forcibly remove the associated name; the deposit is lost.
 //!
 //! [`Call`]: ./enum.Call.html
-//! [`Trait`]: ./trait.Trait.html
+//! [`Config`]: ./trait.Config.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -51,12 +51,12 @@ use frame_support::{
 };
 use frame_system::ensure_signed;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The currency trait.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -78,14 +78,14 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Nicks {
+	trait Store for Module<T: Config> as Nicks {
 		/// The lookup table for names.
 		NameOf: map hasher(twox_64_concat) T::AccountId => Option<(Vec<u8>, BalanceOf<T>)>;
 	}
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
+	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId, Balance = BalanceOf<T> {
 		/// A name was set. \[who\]
 		NameSet(AccountId),
 		/// A name was forcibly set. \[target\]
@@ -101,7 +101,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the nicks module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// A name is too short.
 		TooShort,
 		/// A name is too long.
@@ -113,7 +113,7 @@ decl_error! {
 
 decl_module! {
 	/// Nicks module declaration.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -262,7 +262,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
@@ -292,7 +292,7 @@ mod tests {
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
 	}
-	impl pallet_balances::Trait for Test {
+	impl pallet_balances::Config for Test {
 		type MaxLocks = ();
 		type Balance = u64;
 		type Event = ();
@@ -309,7 +309,7 @@ mod tests {
 	ord_parameter_types! {
 		pub const One: u64 = 1;
 	}
-	impl Trait for Test {
+	impl Config for Test {
 		type Event = ();
 		type Currency = Balances;
 		type ReservationFee = ReservationFee;

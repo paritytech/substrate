@@ -29,7 +29,7 @@
 //! * Asset Freezing
 //! * Asset Destruction (Burning)
 //!
-//! To use it in your runtime, you need to implement the assets [`Trait`](./trait.Trait.html).
+//! To use it in your runtime, you need to implement the assets [`Config`](./trait.Config.html).
 //!
 //! The supported dispatchable functions are documented in the [`Call`](./enum.Call.html) enum.
 //!
@@ -125,12 +125,12 @@ mod benchmarking;
 
 mod default_weight;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// The module configuration trait.
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The units in which we record balances.
 	type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy;
@@ -199,7 +199,7 @@ pub struct AssetBalance<
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Assets {
+	trait Store for Module<T: Config> as Assets {
 		/// Details of an asset.
 		Asset: map hasher(blake2_128_concat) T::AssetId => Option<AssetDetails<
 			T::Balance,
@@ -217,9 +217,9 @@ decl_storage! {
 
 decl_event! {
 	pub enum Event<T> where
-		<T as frame_system::Trait>::AccountId,
-		<T as Trait>::Balance,
-		<T as Trait>::AssetId,
+		<T as frame_system::Config>::AccountId,
+		<T as Config>::Balance,
+		<T as Config>::AssetId,
 	{
 		/// Some asset class was created. \[asset_id, creator, owner\]
 		Created(AssetId, AccountId, AccountId),
@@ -249,7 +249,7 @@ decl_event! {
 }
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Transfer amount should be non-zero.
 		AmountZero,
 		/// Account balance must be greater than or equal to the transfer amount.
@@ -294,7 +294,7 @@ pub trait WeightInfo {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -855,7 +855,7 @@ decl_module! {
 }
 
 // The main implementation block for the module.
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	// Public immutables
 
 	/// Get the asset `id` balance of `who`.
@@ -952,7 +952,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
@@ -984,7 +984,7 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 1;
 	}
 
-	impl pallet_balances::Trait for Test {
+	impl pallet_balances::Config for Test {
 		type MaxLocks = ();
 		type Balance = u64;
 		type DustRemoval = ();
@@ -999,7 +999,7 @@ mod tests {
 		pub const AssetDepositPerZombie: u64 = 1;
 	}
 
-	impl Trait for Test {
+	impl Config for Test {
 		type Currency = Balances;
 		type Event = Event;
 		type Balance = u64;

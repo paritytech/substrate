@@ -31,7 +31,7 @@ pub enum Error {
 	/// Failed to verify a dht payload with the given signature.
 	VerifyingDhtPayload,
 	/// Failed to hash the authority id to be used as a dht key.
-	HashingAuthorityId(libp2p::core::multiaddr::multihash::EncodeError),
+	HashingAuthorityId(libp2p::core::multiaddr::multihash::Error),
 	/// Failed calling into the Substrate runtime.
 	CallingRuntime(sp_blockchain::Error),
 	/// Received a dht record with a key that does not match any in-flight awaited keys.

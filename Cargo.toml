@@ -59,7 +59,6 @@ members = [
 	"client/transaction-pool",
 	"client/transaction-pool/graph",
 	"utils/prometheus",
-	"utils/wasm-builder-runner",
 	"frame/assets",
 	"frame/aura",
 	"frame/atomic-swap",
@@ -75,7 +74,6 @@ members = [
 	"frame/democracy",
 	"frame/elections-phragmen",
 	"frame/elections",
-	"frame/evm",
 	"frame/example",
 	"frame/example-offchain-worker",
 	"frame/example-parallel",
@@ -209,7 +207,6 @@ aesni = { opt-level = 3 }
 blake2 = { opt-level = 3 }
 blake2-rfc = { opt-level = 3 }
 blake2b_simd = { opt-level = 3 }
-blake2s_simd = { opt-level = 3 }
 chacha20poly1305 = { opt-level = 3 }
 cranelift-codegen = { opt-level = 3 }
 cranelift-wasm = { opt-level = 3 }
@@ -219,8 +216,6 @@ crossbeam-queue = { opt-level = 3 }
 crypto-mac = { opt-level = 3 }
 curve25519-dalek = { opt-level = 3 }
 ed25519-dalek = { opt-level = 3 }
-evm-core = { opt-level = 3 }
-evm-runtime = { opt-level = 3 }
 flate2 = { opt-level = 3 }
 futures-channel = { opt-level = 3 }
 hashbrown = { opt-level = 3 }

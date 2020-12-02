@@ -20,6 +20,6 @@ have not been designed to be economically secure. Do not use this pallet as-is i
 * `kill_name` - Forcibly remove the associated name; the deposit is lost.
 
 [`Call`]: ./enum.Call.html
-[`Trait`]: ./trait.Trait.html
+[`Config`]: ./trait.Config.html
 
 License: Apache-2.0
