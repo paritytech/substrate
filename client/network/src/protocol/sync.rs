@@ -1925,8 +1925,17 @@ mod test {
 		request
 	}
 
+	/// This test is a regression test as observed on a real network.
+	///
+	/// The node is connected to multiple peers. Both of these peers are having a best block (1) that
+	/// is below our best block (3). Now peer 2 announces a fork of block 3 that we will
+	/// request from peer 2. After imporitng the fork, peer 2 and then peer 1 will announce block 4.
+	/// But as peer 1 in our view is still at block 1, we will request block 2 (which we already have)
+	/// from it. In the meanwhile peer 2 sends us block 4 and 3 and we send another request for block
+	/// 2 to peer 2. Peer 1 answers with block 2 and then peer 2. This will need to succeed, as we
+	/// have requested block 2 from both peers.
 	#[test]
-	fn lol() {
+	fn do_not_report_peer_on_block_response_for_block_request() {
 		sp_tracing::try_init_simple();
 
 		let mut client = Arc::new(TestClientBuilder::new().build());
