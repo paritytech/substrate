@@ -621,7 +621,7 @@ decl_module! {
 		#[weight = if *has_replacement {
 			T::WeightInfo::remove_member_with_replacement()
 		} else {
-			T::block_weights().max_block
+			T::BlockWeights::get().max_block
 		}]
 		fn remove_member(
 			origin,
@@ -829,7 +829,7 @@ impl<T: Trait> Module<T> {
 		if !Self::term_duration().is_zero() {
 			if (block_number % Self::term_duration()).is_zero() {
 				Self::do_phragmen();
-				return T::block_weights().max_block;
+				return T::BlockWeights::get().max_block;
 			}
 		}
 		0

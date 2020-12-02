@@ -256,11 +256,6 @@ pub trait Trait: 'static + Eq + Clone {
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
 
 	type SystemWeightInfo: WeightInfo;
-
-	/// Return block weights object.
-	fn block_weights() -> limits::BlockWeights {
-		Self::BlockWeights::get()
-	}
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -521,14 +516,14 @@ decl_module! {
 					Some(AccountInfo { nonce, refcount: rc as RefCount, data })
 				);
 				UpgradedToU32RefCount::put(true);
-				T::block_weights().max_block
+				T::BlockWeights::get().max_block
 			} else {
 				0
 			}
 		}
 
 		fn integrity_test() {
-			T::block_weights()
+			T::BlockWeights::get()
 				.validate()
 				.expect("The weights are invalid.");
 		}
@@ -536,7 +531,7 @@ decl_module! {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight = *_ratio * T::block_weights().max_block]
+		#[weight = *_ratio * T::BlockWeights::get().max_block]
 		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
 		}
@@ -577,7 +572,7 @@ decl_module! {
 		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
 		/// We will treat this as a full block.
 		/// # </weight>
-		#[weight = (T::block_weights().max_block, DispatchClass::Operational)]
+		#[weight = (T::BlockWeights::get().max_block, DispatchClass::Operational)]
 		pub fn set_code(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
@@ -594,7 +589,7 @@ decl_module! {
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
 		/// # </weight>
-		#[weight = (T::block_weights().max_block, DispatchClass::Operational)]
+		#[weight = (T::BlockWeights::get().max_block, DispatchClass::Operational)]
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);

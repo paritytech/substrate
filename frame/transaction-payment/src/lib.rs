@@ -158,7 +158,7 @@ impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S,
 		let min_multiplier = M::get();
 		let previous = previous.max(min_multiplier);
 
-		let weights = T::block_weights();
+		let weights = T::BlockWeights::get();
 		// the computed ratio is only among the normal class.
 		let normal_max_weight = weights.get(DispatchClass::Normal).max_total
 			.unwrap_or_else(|| weights.max_block);
@@ -263,7 +263,7 @@ decl_module! {
 			assert!(
 				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
 				Multiplier::checked_from_integer(
-					T::block_weights().max_block.try_into().unwrap()
+					T::BlockWeights::get().max_block.try_into().unwrap()
 				).unwrap(),
 			);
 
@@ -273,7 +273,7 @@ decl_module! {
 			// which is 1% more than the target.
 			let min_value = T::FeeMultiplierUpdate::min();
 			let mut target = T::FeeMultiplierUpdate::target() *
-				T::block_weights().get(DispatchClass::Normal).max_total.unwrap();
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap();
 
 			// add 1 percent;
 			let addition = target / 100;
@@ -406,7 +406,7 @@ impl<T: Trait> Module<T> where
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
-			let base_fee = Self::weight_to_fee(T::block_weights().get(class).base_extrinsic);
+			let base_fee = Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic);
 			base_fee
 				.saturating_add(fixed_len_fee)
 				.saturating_add(adjusted_weight_fee)
@@ -419,7 +419,7 @@ impl<T: Trait> Module<T> where
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
-		let capped_weight = weight.min(T::block_weights().max_block);
+		let capped_weight = weight.min(T::BlockWeights::get().max_block);
 		T::WeightToFee::calc(&capped_weight)
 	}
 }
@@ -483,7 +483,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 	///  that the transaction which consumes more resources (either length or weight) with the same
 	/// `fee` ends up having lower priority.
 	fn get_priority(len: usize, info: &DispatchInfoOf<T::Call>, final_fee: BalanceOf<T>) -> TransactionPriority {
-		let weight_saturation = T::block_weights().max_block / info.weight.max(1);
+		let weight_saturation = T::BlockWeights::get().max_block / info.weight.max(1);
 		let max_block_length = *T::BlockLength::get().max.get(DispatchClass::Normal);
 		let len_saturation = max_block_length as u64 / (len as u64).max(1);
 		let coefficient: BalanceOf<T> = weight_saturation.min(len_saturation).saturated_into::<BalanceOf<T>>();

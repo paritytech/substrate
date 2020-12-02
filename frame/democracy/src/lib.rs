@@ -1086,7 +1086,7 @@ decl_module! {
 		}
 
 		/// Enact a proposal from a referendum. For now we just make the weight be the maximum.
-		#[weight = T::block_weights().max_block]
+		#[weight = T::BlockWeights::get().max_block]
 		fn enact_proposal(origin, proposal_hash: T::Hash, index: ReferendumIndex) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::do_enact_proposal(proposal_hash, index)
@@ -1609,7 +1609,7 @@ impl<T: Trait> Module<T> {
 	/// - Db reads per R: `DepositOf`, `ReferendumInfoOf`
 	/// # </weight>
 	fn begin_block(now: T::BlockNumber) -> Result<Weight, DispatchError> {
-		let max_block_weight = T::block_weights().max_block;
+		let max_block_weight = T::BlockWeights::get().max_block;
 		let mut weight = 0;
 
 		// pick out another public referendum if it's time.

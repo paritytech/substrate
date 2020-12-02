@@ -266,13 +266,17 @@ mod tests {
 	use frame_support::{assert_ok, assert_noop};
 	use frame_support::weights::{Weight, Pays};
 
+	fn block_weights() -> crate::limits::BlockWeights {
+		<Test as crate::Trait>::BlockWeights::get()
+	}
+
 	fn normal_weight_limit() -> Weight {
-		Test::block_weights().get(DispatchClass::Normal).max_total
-			.unwrap_or_else(|| Test::block_weights().max_block)
+		block_weights().get(DispatchClass::Normal).max_total
+			.unwrap_or_else(|| block_weights().max_block)
 	}
 
 	fn block_weight_limit() -> Weight {
-		Test::block_weights().max_block
+		block_weights().max_block
 	}
 
 	fn normal_length_limit() -> u32 {
@@ -308,7 +312,7 @@ mod tests {
 	fn normal_extrinsic_limited_by_maximum_extrinsic_weight() {
 		new_test_ext().execute_with(|| {
 			let max = DispatchInfo {
-				weight: Test::block_weights().get(DispatchClass::Normal).max_extrinsic.unwrap() + 1,
+				weight: block_weights().get(DispatchClass::Normal).max_extrinsic.unwrap() + 1,
 				class: DispatchClass::Normal,
 				..Default::default()
 			};
@@ -324,7 +328,7 @@ mod tests {
 	#[test]
 	fn operational_extrinsic_limited_by_operational_space_limit() {
 		new_test_ext().execute_with(|| {
-			let weights = Test::block_weights();
+			let weights = block_weights();
 			let operational_limit = weights.get(DispatchClass::Operational).max_total
 				.unwrap_or_else(|| weights.max_block);
 			let base_weight = weights.get(DispatchClass::Normal).base_extrinsic;
@@ -507,7 +511,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let normal_limit = normal_weight_limit();
 			let small = DispatchInfo { weight: 100, ..Default::default() };
-			let base_extrinsic = Test::block_weights().get(DispatchClass::Normal).base_extrinsic;
+			let base_extrinsic = block_weights().get(DispatchClass::Normal).base_extrinsic;
 			let medium = DispatchInfo {
 				weight: normal_limit - base_extrinsic,
 				..Default::default()
@@ -542,7 +546,7 @@ mod tests {
 				pays_fee: Default::default(),
 			};
 			let len = 0_usize;
-			let base_extrinsic = Test::block_weights().get(DispatchClass::Normal).base_extrinsic;
+			let base_extrinsic = block_weights().get(DispatchClass::Normal).base_extrinsic;
 
 			// We allow 75% for normal transaction, so we put 25% - extrinsic base weight
 			BlockWeight::mutate(|current_weight| {
@@ -582,7 +586,7 @@ mod tests {
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
 			assert_eq!(
 				BlockWeight::get().total(),
-				info.weight + 128 + Test::block_weights().get(DispatchClass::Normal).base_extrinsic,
+				info.weight + 128 + block_weights().get(DispatchClass::Normal).base_extrinsic,
 			);
 
 			assert!(
@@ -591,7 +595,7 @@ mod tests {
 			);
 			assert_eq!(
 				BlockWeight::get().total(),
-				info.weight + 128 + Test::block_weights().get(DispatchClass::Normal).base_extrinsic,
+				info.weight + 128 + block_weights().get(DispatchClass::Normal).base_extrinsic,
 			);
 		})
 	}
@@ -599,7 +603,7 @@ mod tests {
 	#[test]
 	fn zero_weight_extrinsic_still_has_base_weight() {
 		new_test_ext().execute_with(|| {
-			let weights = Test::block_weights();
+			let weights = block_weights();
 			let free = DispatchInfo { weight: 0, ..Default::default() };
 			let len = 0_usize;
 
