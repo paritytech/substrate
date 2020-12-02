@@ -103,7 +103,7 @@ impl PeersetHandle {
 	pub fn set_reserved_only(&self, reserved: bool) {
 		let _ = self.tx.unbounded_send(Action::SetReservedOnly(reserved));
 	}
-	
+
 	/// Set reserved peers to the new set.
 	pub fn set_reserved_peers(&self, peer_ids: HashSet<PeerId>) {
 		let _ = self.tx.unbounded_send(Action::SetReservedPeers(peer_ids));
@@ -252,7 +252,7 @@ impl Peerset {
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
 		self.on_remove_from_priority_group(RESERVED_NODES, peer_id);
 	}
-	
+
 	fn on_set_reserved_peers(&mut self, peer_ids: HashSet<PeerId>) {
 		self.on_set_priority_group(RESERVED_NODES, peer_ids);
 	}
@@ -555,15 +555,16 @@ impl Peerset {
 	/// Must only be called after the PSM has either generated a `Connect` message with this
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
 	pub fn dropped(&mut self, peer_id: PeerId) {
-		trace!(target: "peerset", "Dropping {:?}", peer_id);
-
 		// We want reputations to be up-to-date before adjusting them.
 		self.update_time();
 
 		match self.data.peer(&peer_id) {
 			peersstate::Peer::Connected(mut entry) => {
 				// Decrease the node's reputation so that we don't try it again and again and again.
+				let rep_before = entry.reputation();
 				entry.add_reputation(DISCONNECT_REPUTATION_CHANGE);
+				let rep_after = entry.reputation();
+				trace!(target: "peerset", "Dropping {}: {} -> {}", peer_id, rep_before, rep_after);
 				entry.disconnect();
 			}
 			peersstate::Peer::NotConnected(_) | peersstate::Peer::Unknown(_) =>
