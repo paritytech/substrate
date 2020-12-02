@@ -556,13 +556,11 @@ fn motions_all_first_vote_free_works() {
 
         // Duplicate vote, expecting error with Pays::Yes ...
         let vote_rval: DispatchResultWithPostInfo = Collective::vote(Origin::signed(2), hash.clone(), 0, true);
-        let dbg_this_file = file!();
-        let dbg_current_line = line!();
         match vote_rval {
             Ok(_) => {
                 println!( "@[{:#?}::{:#?}]::vote-fee() | Should not Occur",
-                    dbg_this_file,
-                    dbg_current_line );
+                    file!(),
+                    line!() );
             },
             Err(err) => {
                 assert_eq!( err.post_info.pays_fee, Pays::Yes );
@@ -605,6 +603,37 @@ fn motions_all_first_vote_free_works() {
             )
         );
 
+        // Test close() Extrincis | Check DispatchResultWithPostInfo with Pay Info
+
+        let proposal_weight = proposal.get_dispatch_info().weight;
+
+        // trying to close the valid proposal, Expecting OK with Pays::No
+        assert_eq!(
+            Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len),
+            Ok(
+                PostDispatchInfo {
+                    actual_weight: Some(
+                        437711000,
+                    ),
+                    pays_fee: Pays::No,
+                },
+            )
+        );
+
+        // trying to close the proposal, which is already closed. Expecting error "ProposalMissing" with Pays::Yes
+        let close_rval: DispatchResultWithPostInfo = Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len);
+        match close_rval {
+            Ok(_) => {
+                println!( "@[{:#?}::{:#?}]::vote-fee() | Should not Occur",
+                    file!(),
+                    line!() );
+            },
+            Err(err) => {
+                assert_eq!( err.post_info.pays_fee, Pays::Yes );
+            },
+        }
+
+        // Verify the events pool
         assert_eq!(System::events(), vec![
             EventRecord {
                 phase: Phase::Initialization,
@@ -659,40 +688,24 @@ fn motions_all_first_vote_free_works() {
                     2
                 )),
                 topics: vec![],
-            }
+            },
+            EventRecord {
+                phase: Phase::Initialization,
+                event: Event::collective_Instance1(RawEvent::Closed(
+                    hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
+                    1,
+                    2,
+                )),
+                topics: vec![],
+            },
+            EventRecord {
+                phase: Phase::Initialization,
+                event: Event::collective_Instance1(RawEvent::Disapproved(
+                    hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
+                )),
+                topics: vec![],
+            },
         ]);
-
-        // Check DispatchResultWithPostInfo with Pay Info
-
-        let proposal_weight = proposal.get_dispatch_info().weight;
-
-        assert_eq!(
-            Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len),
-            Ok(
-                PostDispatchInfo {
-                    actual_weight: Some(
-                        437711000,
-                    ),
-                    pays_fee: Pays::No,
-                },
-            )
-        );
-
-        // trying to close the proposal, which is already closed. Expecting error "ProposalMissing" with Pays::Yes
-        let close_rval: DispatchResultWithPostInfo = Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len);
-        let dbg_this_file = file!();
-        let dbg_current_line = line!();
-        match close_rval {
-            Ok(_) => {
-                println!( "@[{:#?}::{:#?}]::vote-fee() | Should not Occur",
-                    dbg_this_file,
-                    dbg_current_line );
-            },
-            Err(err) => {
-                assert_eq!( err.post_info.pays_fee, Pays::Yes );
-            },
-        }
-
     });
 }
 
