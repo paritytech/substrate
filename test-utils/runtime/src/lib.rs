@@ -437,7 +437,7 @@ parameter_types! {
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
-		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(50));
+		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
 }
 
 impl frame_system::Trait for Runtime {

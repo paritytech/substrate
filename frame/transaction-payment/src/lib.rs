@@ -273,7 +273,10 @@ decl_module! {
 			// which is 1% more than the target.
 			let min_value = T::FeeMultiplierUpdate::min();
 			let mut target = T::FeeMultiplierUpdate::target() *
-				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap();
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.expect(
+					"Setting `max_total` for `Normal` dispatch class is not compatible with \
+					`transaction-payment` pallet."
+				);
 
 			// add 1 percent;
 			let addition = target / 100;

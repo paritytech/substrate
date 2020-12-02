@@ -359,6 +359,10 @@ impl BlockWeightsBuilder {
 	///
 	/// This value is used to derive maximal allowed extrinsic weight for each
 	/// class, based on the allowance.
+	///
+	/// This is to make sure that extrinsics don't stay forever in the pool,
+	/// because they could seamingly fit the block (since they are below `max_block`),
+	/// but the cost of calling `on_initialize` alway prevents them from being included.
 	pub fn avg_block_initialization(mut self, init_cost: Perbill) -> Self {
 		self.init_cost = Some(init_cost);
 		self
