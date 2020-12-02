@@ -1682,19 +1682,26 @@ fn validate_blocks<Block: BlockT>(
 			return Err(BadPeer(who.clone(), rep::NOT_REQUESTED))
 		}
 
-		let block = if request.direction == message::Direction::Descending {
+		let block_header = if request.direction == message::Direction::Descending {
 			blocks.last()
 		} else {
 			blocks.first()
-		};
+		}.and_then(|b| b.header.as_ref());
 
-		let expected_block = block.and_then(|b| b.header.as_ref())
+		let expected_block = block_header.as_ref()
 			.map_or(false, |h| match request.from {
 				message::FromBlock::Hash(hash) => h.hash() == hash,
 				message::FromBlock::Number(n) => h.number() == &n,
 			});
 
 		if !expected_block {
+			debug!(
+				target: "sync",
+				"Received block that was not requested. Requested {:?}, got {:?}.",
+				request.from,
+				block_header,
+			);
+
 			return Err(BadPeer(who.clone(), rep::NOT_REQUESTED))
 		}
 	}
