@@ -498,12 +498,16 @@ decl_module! {
 		/// # <weight>
 		/// we consider the common case of placing more votes. In other two case, we refund.
 		/// # </weight>
-		#[weight = T::WeightInfo::vote_more(votes.len() as u32)]
+		#[weight =
+			T::WeightInfo::vote_more(votes.len() as u32)
+			.max(T::WeightInfo::vote_less(votes.len() as u32))
+			.max(T::WeightInfo::vote_equal(votes.len() as u32))
+		]
 		fn vote(
 			origin,
 			votes: Vec<T::AccountId>,
 			#[compact] value: BalanceOf<T>,
-		) -> DispatchResultWithPostInfo {
+		) {
 			let who = ensure_signed(origin)?;
 
 			// votes should not be empty and more than `MAXIMUM_VOTE` in any case.
@@ -526,23 +530,19 @@ decl_module! {
 			// Reserve bond.
 			let new_deposit = Self::deposit_of(votes.len());
 			let Voter { deposit: old_deposit, .. } = <Voting<T>>::get(&who);
-			let maybe_refund = match new_deposit.cmp(&old_deposit) {
+			match new_deposit.cmp(&old_deposit) {
 				Ordering::Greater => {
 					// Must reserve a bit more.
 					let to_reserve = new_deposit - old_deposit;
 					T::Currency::reserve(&who, to_reserve)
 						.map_err(|_| Error::<T>::UnableToPayBond)?;
-					None
 				},
-				Ordering::Equal => {
-					Some(T::WeightInfo::vote_equal(votes.len() as u32))
-				},
+				Ordering::Equal => {},
 				Ordering::Less => {
 					// Must unreserve a bit.
 					let to_unreserve = old_deposit - new_deposit;
 					let _remainder = T::Currency::unreserve(&who, to_unreserve);
 					debug_assert!(_remainder.is_zero());
-					Some(T::WeightInfo::vote_less(votes.len() as u32))
 				},
 			};
 
@@ -558,7 +558,6 @@ decl_module! {
 			);
 
 			Voting::<T>::insert(&who, Voter { votes, deposit: new_deposit, stake: locked_stake });
-			Ok(maybe_refund.into())
 		}
 
 		/// Remove `origin` as a voter.
@@ -1505,7 +1504,7 @@ mod tests {
 		Elections::submit_candidacy(origin, Elections::candidates().len() as u32)
 	}
 
-	fn vote(origin: Origin, votes: Vec<u64>, stake: u64) -> DispatchResultWithPostInfo {
+	fn vote(origin: Origin, votes: Vec<u64>, stake: u64) -> DispatchResult {
 		// historical note: helper function was created in a period of time in which the API of vote
 		// call was changing. Currently it is a wrapper for the original call and does not do much.
 		// Nonetheless, totally harmless.
