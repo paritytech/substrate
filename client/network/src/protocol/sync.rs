@@ -1638,37 +1638,6 @@ fn validate_blocks<Block: BlockT>(
 	who: &PeerId,
 	request: Option<BlockRequest<Block>>,
 ) -> Result<(), BadPeer> {
-	for b in blocks {
-		if let Some(header) = &b.header {
-			let hash = header.hash();
-			if hash != b.hash {
-				debug!(
-					target:"sync",
-					"Bad header received from {}. Expected hash {:?}, got {:?}",
-					who,
-					b.hash,
-					hash,
-				);
-				return Err(BadPeer(who.clone(), rep::BAD_BLOCK))
-			}
-		}
-		if let (Some(header), Some(body)) = (&b.header, &b.body) {
-			let expected = *header.extrinsics_root();
-			let got = HashFor::<Block>::ordered_trie_root(body.iter().map(Encode::encode).collect());
-			if expected != got {
-				debug!(
-					target:"sync",
-					"Bad extrinsic root for a block {} received from {}. Expected {:?}, got {:?}",
-					b.hash,
-					who,
-					expected,
-					got,
-				);
-				return Err(BadPeer(who.clone(), rep::BAD_BLOCK))
-			}
-		}
-	}
-
 	if let Some(request) = request {
 		if Some(blocks.len() as _) > request.max {
 			debug!(
@@ -1703,6 +1672,37 @@ fn validate_blocks<Block: BlockT>(
 			);
 
 			return Err(BadPeer(who.clone(), rep::NOT_REQUESTED))
+		}
+	}
+
+	for b in blocks {
+		if let Some(header) = &b.header {
+			let hash = header.hash();
+			if hash != b.hash {
+				debug!(
+					target:"sync",
+					"Bad header received from {}. Expected hash {:?}, got {:?}",
+					who,
+					b.hash,
+					hash,
+				);
+				return Err(BadPeer(who.clone(), rep::BAD_BLOCK))
+			}
+		}
+		if let (Some(header), Some(body)) = (&b.header, &b.body) {
+			let expected = *header.extrinsics_root();
+			let got = HashFor::<Block>::ordered_trie_root(body.iter().map(Encode::encode).collect());
+			if expected != got {
+				debug!(
+					target:"sync",
+					"Bad extrinsic root for a block {} received from {}. Expected {:?}, got {:?}",
+					b.hash,
+					who,
+					expected,
+					got,
+				);
+				return Err(BadPeer(who.clone(), rep::BAD_BLOCK))
+			}
 		}
 	}
 
