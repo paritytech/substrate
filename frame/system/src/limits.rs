@@ -75,20 +75,12 @@ pub struct ValidationErrors {
 	pub errors: Vec<String>,
 }
 
-#[cfg(feature = "std")]
 macro_rules! error_assert {
 	($cond : expr, $err : expr, $format : expr $(, $params: expr )*$(,)*) => {
 		if !$cond {
 			$err.has_errors = true;
-			$err.errors.push(format!($format $(, &$params )*));
-		}
-	}
-}
-#[cfg(not(feature = "std"))]
-macro_rules! error_assert {
-	($cond : expr, $err : expr, $format : expr $(, $params: expr )*$(,)*) => {
-		if !$cond {
-			$err.has_errors = true;
+			#[cfg(feature = "std")]
+			{ $err.errors.push(format!($format $(, &$params )*)); }
 		}
 	}
 }
