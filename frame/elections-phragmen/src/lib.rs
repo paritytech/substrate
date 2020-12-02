@@ -129,6 +129,7 @@ type NegativeImbalanceOf<T> =
 /// Migrations to version [`3.0.0`], as denoted by the changelog.
 pub mod migrations_3_0_0 {
 	use codec::{Encode, Decode, FullCodec};
+	use sp_std::prelude::*;
 	use frame_support::{
 		RuntimeDebug, weights::Weight, Twox64Concat,
 		storage::types::{StorageMap, StorageValue},
@@ -152,7 +153,7 @@ pub mod migrations_3_0_0 {
 	pub trait V2ToV3 {
 		type Module: GetPalletVersion;
 		type AccountId: 'static + FullCodec;
-		type Balance: 'static + FullCodec + Copy + std::fmt::Debug;
+		type Balance: 'static + FullCodec + Copy;
 	}
 
 	struct __PhragmenElection;
@@ -235,7 +236,6 @@ pub mod migrations_3_0_0 {
 		<Voting<T>>::translate::<(T::Balance, Vec<T::AccountId>), _>(
 			|_who, (stake, votes)| {
 				let deposit = old_deposit;
-				dbg!(deposit);
 				Some(Voter {
 					votes,
 					stake,
