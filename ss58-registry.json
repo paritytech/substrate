@@ -369,6 +369,15 @@
 			"decimals": null,
 			"standardAccount": null,
 			"website": null
-		}
+		},
+		{
+			"prefix": 49,
+			"network": "uniarts",
+			"displayName": "UniArts Network",
+			"symbols": ["UART","UINK"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://uniarts.me"
+		},
 	]
 }
