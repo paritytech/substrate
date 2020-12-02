@@ -1184,11 +1184,62 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 			ext.storage(key).clone()
 		).unwrap()
 	}
+	// TODO move these host task to a task module
+	fn host_runtime_tasks_set_capacity(_capacity: u32) {
+		// just ignore
+/*		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
+			.expect("Cannot set capacity without dynamic runtime dispatcher (RuntimeSpawnExt)");
+		runtime_spawn.set_capacity(capacity);*/
+	}
+
+	fn host_runtime_tasks_spawn(
+		dispatcher_ref: u32,
+		entry: u32,
+		payload: Vec<u8>,
+		kind: u8,
+	) -> u64 {
+		0
+/*		let ext_unsafe = *self as *mut dyn Externalities;
+		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
+			.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
+		// Unsafe usage here means that `spawn_call` shall never attempt to access
+		// or deregister this `RuntimeSpawnExt` from the unchecked ext2.
+		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+		// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+		// a given id, to make this safer.
+		let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, kind, ext_unsafe);
+		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
+		result*/
+	}
+
+	fn host_runtime_tasks_join(handle: u64) -> Option<Vec<u8>> {
+		None
+/*		let ext_unsafe = *self as *mut dyn Externalities;
+		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
+			.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
+		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+		let result = runtime_spawn.join(handle, ext_unsafe);
+		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
+		result*/
+	}
+
+	fn host_runtime_tasks_dismiss(handle: u64) {
+		/*
+		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
+			.expect("Cannot kill without dynamic runtime dispatcher (RuntimeSpawnExt)");
+		runtime_spawn.dismiss(handle);
+		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
+		*/
+	}
 
 	#[cfg(not(feature = "std"))]
 	let _guard = unsafe {(
 		sp_io::storage::host_get.replace_implementation(host_storage_get),
 		sp_io::storage::host_set.replace_implementation(host_storage_set),
+		sp_io::runtime_tasks::host_set_capacity.replace_implementation(host_runtime_tasks_set_capacity),
+		sp_io::runtime_tasks::host_spawn.replace_implementation(host_runtime_tasks_spawn),
+		sp_io::runtime_tasks::host_join.replace_implementation(host_runtime_tasks_join),
+		sp_io::runtime_tasks::host_dismiss.replace_implementation(host_runtime_tasks_dismiss),
 	)};
 
 	sp_externalities::set_and_run_with_externalities(&mut ext, || {

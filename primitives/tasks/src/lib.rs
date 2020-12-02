@@ -200,7 +200,11 @@ mod inner {
 	}
 
 	/// Spawn new runtime task (wasm).
-	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>, kind: AsyncStateType) -> DataJoinHandle {
+	pub fn spawn(
+		entry_point: fn(Vec<u8>) -> Vec<u8>,
+		payload: Vec<u8>,
+		kind: AsyncStateType,
+	) -> DataJoinHandle {
 		let func_ptr: usize = unsafe { mem::transmute(entry_point) };
 
 		let handle = sp_io::runtime_tasks::spawn(
@@ -211,7 +215,6 @@ mod inner {
 		);
 		DataJoinHandle { handle }
 	}
-
 }
 
 pub use inner::spawn;
