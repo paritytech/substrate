@@ -97,7 +97,7 @@ fn submit_candidates_with_self_vote<T: Config>(c: u32, prefix: &'static str)
 
 /// Submit one voter.
 fn submit_voter<T: Config>(caller: T::AccountId, votes: Vec<T::AccountId>, stake: BalanceOf<T>)
-	-> frame_support::dispatch::DispatchResultWithPostInfo
+	-> frame_support::dispatch::DispatchResult
 {
 	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
 }
@@ -453,8 +453,9 @@ benchmarks! {
 		// -> e * MAXIMUM_VOTE`, but we cannot express that now with the benchmarks. So what we do
 		// is: when c is being iterated, v, and e are max and fine. when v is being iterated, e is
 		// being set to max and this is a problem. In these cases, we cap e to a lower value, namely
-		// v * MAXIMUM_VOTE. when e is being iterated, v is at max, and again fine.
-		// all in all, votes_per_voter can never be more than MAXIMUM_VOTE.
+		// v * MAXIMUM_VOTE. when e is being iterated, v is at max, and again fine. all in all,
+		// votes_per_voter can never be more than MAXIMUM_VOTE. Note that this might cause `v` to be
+		// an overestimate.
 		let votes_per_voter = (e / v).min(MAXIMUM_VOTE as u32);
 
 		let all_candidates = submit_candidates_with_self_vote::<T>(c, "candidates")?;
@@ -467,6 +468,64 @@ benchmarks! {
 		assert_eq!(
 			<Elections<T>>::runners_up().len() as u32,
 			T::DesiredRunnersUp::get().min(c.saturating_sub(T::DesiredMembers::get())),
+		);
+
+		#[cfg(test)]
+		{
+			// reset members in between benchmark tests.
+			use crate::tests::MEMBERS;
+			MEMBERS.with(|m| *m.borrow_mut() = vec![]);
+		}
+	}
+
+	#[extra]
+	election_phragmen_c_e {
+		let c in 1 .. MAX_CANDIDATES;
+		let e in MAX_VOTERS .. MAX_VOTERS * MAXIMUM_VOTE as u32;
+		let fixed_v = MAX_VOTERS;
+		clean::<T>();
+
+		let votes_per_voter = e / fixed_v;
+
+		let all_candidates = submit_candidates_with_self_vote::<T>(c, "candidates")?;
+		let _ = distribute_voters::<T>(all_candidates, fixed_v, votes_per_voter as usize)?;
+	}: {
+		<Elections<T>>::on_initialize(T::TermDuration::get());
+	}
+	verify {
+		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get().min(c));
+		assert_eq!(
+			<Elections<T>>::runners_up().len() as u32,
+			T::DesiredRunnersUp::get().min(c.saturating_sub(T::DesiredMembers::get())),
+		);
+
+		#[cfg(test)]
+		{
+			// reset members in between benchmark tests.
+			use crate::tests::MEMBERS;
+			MEMBERS.with(|m| *m.borrow_mut() = vec![]);
+		}
+	}
+
+	#[extra]
+	election_phragmen_v {
+		let v in 4 .. 16;
+		let fixed_c = MAX_CANDIDATES;
+		let fixed_e = 64;
+		clean::<T>();
+
+		let votes_per_voter = fixed_e / v;
+
+		let all_candidates = submit_candidates_with_self_vote::<T>(fixed_c, "candidates")?;
+		let _ = distribute_voters::<T>(all_candidates, v, votes_per_voter as usize)?;
+	}: {
+		<Elections<T>>::on_initialize(T::TermDuration::get());
+	}
+	verify {
+		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get().min(fixed_c));
+		assert_eq!(
+			<Elections<T>>::runners_up().len() as u32,
+			T::DesiredRunnersUp::get().min(fixed_c.saturating_sub(T::DesiredMembers::get())),
 		);
 
 		#[cfg(test)]
@@ -543,14 +602,19 @@ mod tests {
 		});
 
 		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
-			let result = test_benchmark_election_phragmen::<Test>();
-			let is_ok = result.is_ok();
-			let is_expected_error = std::matches!(
-				result,
-				Err("in the test setup, we only want to run for component `v` when it is max. This error message is expected.")
-			);
-			assert!(is_ok || is_expected_error);
+			assert_ok!(test_benchmark_election_phragmen::<Test>());
+		});
 
+		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
+			assert_ok!(test_benchmark_election_phragmen::<Test>());
+		});
+
+		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
+			assert_ok!(test_benchmark_election_phragmen_c_e::<Test>());
+		});
+
+		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
+			assert_ok!(test_benchmark_election_phragmen_v::<Test>());
 		});
 	}
 }
