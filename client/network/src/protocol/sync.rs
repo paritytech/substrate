@@ -115,6 +115,9 @@ mod rep {
 
 	/// Reputation change when a peer sent us invlid ancestry result.
 	pub const UNKNOWN_ANCESTOR:Rep = Rep::new(-(1 << 16), "DB Error");
+
+	/// Peer response data does not have requested bits.
+	pub const BAD_RESPONSE: Rep = Rep::new(-(1 << 12), "Incomplete response");
 }
 
 enum PendingRequests {
@@ -1672,6 +1675,30 @@ fn validate_blocks<Block: BlockT>(
 			);
 
 			return Err(BadPeer(who.clone(), rep::NOT_REQUESTED))
+		}
+
+		if request.fields.contains(message::BlockAttributes::HEADER)
+			&& blocks.iter().any(|b| b.header.is_none())
+		{
+			trace!(
+				target: "sync",
+				"Missing requested header for a block in response from {}.",
+				who,
+			);
+
+			return Err(BadPeer(who.clone(), rep::BAD_RESPONSE))
+		}
+
+		if request.fields.contains(message::BlockAttributes::BODY)
+			&& blocks.iter().any(|b| b.body.is_none())
+		{
+			trace!(
+				target: "sync",
+				"Missing requested body for a block in response from {}.",
+				who,
+			);
+
+			return Err(BadPeer(who.clone(), rep::BAD_RESPONSE))
 		}
 	}
 
