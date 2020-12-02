@@ -169,7 +169,7 @@ fn should_construct_larger_mmr_correctly() {
 }
 
 #[test]
-fn should_generate_proofs_correclty() {
+fn should_generate_proofs_correctly() {
 	let _ = env_logger::try_init();
 	let mut ext = new_test_ext();
 	// given
