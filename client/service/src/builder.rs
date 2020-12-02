@@ -50,7 +50,7 @@ use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
 use std::sync::Arc;
 use wasm_timer::SystemTime;
-use sc_telemetry::{telemetry, SUBSTRATE_INFO};
+use sc_telemetry::{telemetry, TelemetryConnectionSinks, SUBSTRATE_INFO};
 use sp_transaction_pool::MaintainedTransactionPool;
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
@@ -177,7 +177,6 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 	Arc<TFullBackend<TBl>>,
 	KeystoreContainer,
 	TaskManager,
-	Option<sc_telemetry::Telemetry>,
 );
 
 type TLightParts<TBl, TRtApi, TExecDisp> = (
@@ -186,7 +185,6 @@ type TLightParts<TBl, TRtApi, TExecDisp> = (
 	KeystoreContainer,
 	TaskManager,
 	Arc<OnDemand<TBl>>,
-	Option<sc_telemetry::Telemetry>,
 );
 
 /// Light client backend type with a specific hash type.
@@ -273,7 +271,6 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	let telemetry = init_telemetry(&config);
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
 	let task_manager = {
@@ -332,7 +329,6 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		backend,
 		keystore_container,
 		task_manager,
-		telemetry,
 	))
 }
 
@@ -343,7 +339,6 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	let telemetry = init_telemetry(&config);
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
@@ -384,7 +379,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 	)?);
 
-	Ok((client, backend, keystore_container, task_manager, on_demand, telemetry))
+	Ok((client, backend, keystore_container, task_manager, on_demand))
 }
 
 /// Create an instance of db-backed client.
@@ -459,8 +454,6 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub network_status_sinks: NetworkStatusSinks<TBl>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-	/// Telemetry object.
-	pub telemetry: Option<sc_telemetry::Telemetry>,
 }
 
 /// Build a shared offchain workers instance.
@@ -507,7 +500,7 @@ pub fn build_offchain_workers<TBl, TBackend, TCl>(
 /// Spawn the tasks that are required to run a node.
 pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
-) -> Result<RpcHandlers, Error>
+) -> Result<(RpcHandlers, Option<TelemetryConnectionSinks>), Error>
 	where
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
@@ -540,7 +533,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		network,
 		network_status_sinks,
 		system_rpc_tx,
-		telemetry,
 	} = params;
 
 	let chain_info = client.usage_info().chain;
@@ -551,15 +543,11 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 	)?;
 
-	if let Some(telemetry) = telemetry {
-		spawn_telemetry_worker(
-			telemetry,
-			&mut config,
-			network.clone(),
-			task_manager.spawn_handle(),
-			client.clone(),
-		);
-	}
+	let telemetry_connection_sinks = init_telemetry(
+		&mut config,
+		network.clone(),
+		client.clone(),
+	)?;
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
 	telemetry!(
@@ -635,7 +623,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
 
-	Ok(rpc_handlers)
+	Ok((rpc_handlers, telemetry_connection_sinks))
 }
 
 async fn transaction_notifications<TBl, TExPool>(
@@ -660,22 +648,17 @@ async fn transaction_notifications<TBl, TExPool>(
 		.await;
 }
 
-fn init_telemetry(config: &Configuration) -> Option<sc_telemetry::Telemetry> {
+fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
+	config: &mut Configuration,
+	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	client: Arc<TCl>,
+) -> Result<Option<sc_telemetry::TelemetryConnectionSinks>, std::io::Error> {
 	let endpoints = match config.telemetry_endpoints.clone() {
 		// Don't initialise telemetry if `telemetry_endpoints` == Some([])
 		Some(endpoints) if !endpoints.is_empty() => endpoints,
-		_ => return None,
+		_ => return Ok(None),
 	};
-	Some(config.telemetries.build_telemetry(endpoints))
-}
 
-fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(
-	telemetry: sc_telemetry::Telemetry,
-	config: &mut Configuration,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	spawn_handle: SpawnTaskHandle,
-	client: Arc<TCl>,
-) {
 	let genesis_hash = match client.block_hash(Zero::zero()) {
 		Ok(Some(hash)) => hash,
 		_ => Default::default(),
@@ -691,28 +674,19 @@ fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(
 		.map(|dur| dur.as_millis())
 		.unwrap_or(0);
 
-	spawn_handle.spawn(
-		"telemetry-worker",
-		telemetry
-			.for_each(move |event| {
-				// Safe-guard in case we add more events in the future.
-				let sc_telemetry::TelemetryEvent::Connected = event;
+	let json = serde_json::json! {{
+		"name": name.clone(),
+		"implementation": impl_name.clone(),
+		"version": impl_version.clone(),
+		"config": "",
+		"chain": chain_name.clone(),
+		"genesis_hash": format!("{:?}", genesis_hash),
+		"authority": is_authority,
+		"startup_time": startup_time.to_string(),
+		"network_id": network_id.clone()
+	}};
 
-				telemetry!(SUBSTRATE_INFO; "system.connected";
-					"name" => name.clone(),
-					"implementation" => impl_name.clone(),
-					"version" => impl_version.clone(),
-					"config" => "",
-					"chain" => chain_name.clone(),
-					"genesis_hash" => ?genesis_hash,
-					"authority" => is_authority,
-					"startup_time" => startup_time.to_string(),
-					"network_id" => network_id.clone()
-				);
-
-				ready(())
-			})
-	);
+	Some(config.telemetries.start_telemetry(endpoints, json)).transpose()
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(

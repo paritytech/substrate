@@ -46,7 +46,7 @@ pub(crate) use node_pool::NodePool;
 
 /// Timeout after which a connection attempt is considered failed. Includes the WebSocket HTTP
 /// upgrading.
-const CONNECT_TIMEOUT: time::Duration = time::Duration::from_secs(20);
+pub(crate) const CONNECT_TIMEOUT: time::Duration = time::Duration::from_secs(20);
 
 /// Event generated when polling the worker.
 #[derive(Debug)]
@@ -205,7 +205,7 @@ impl TelemetryWorker {
 /// For some context, we put this object around the `wasm_ext::ExtTransport` in order to make sure
 /// that each telemetry message maps to one single call to `write` in the WASM FFI.
 #[pin_project::pin_project]
-struct StreamSink<T>(#[pin] T, Option<Vec<u8>>);
+pub(crate) struct StreamSink<T>(#[pin] T, Option<Vec<u8>>);
 
 impl<T> From<T> for StreamSink<T> {
 	fn from(inner: T) -> StreamSink<T> {

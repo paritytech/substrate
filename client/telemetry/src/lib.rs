@@ -40,11 +40,15 @@
 #![warn(missing_docs)]
 
 use futures::{channel::mpsc, prelude::*};
-use libp2p::{wasm_ext, Multiaddr};
+use libp2p::{
+	core::transport::{OptionalTransport, timeout::TransportTimeout},
+	wasm_ext, Multiaddr, Transport,
+};
 use log::{error, warn};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{
 	collections::{HashMap, HashSet},
+	io,
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
@@ -65,6 +69,7 @@ pub mod worker;
 
 pub use layer::*;
 use worker::node_pool::*;
+use worker::{CONNECT_TIMEOUT, StreamSink}; // TODO mod
 
 /// List of telemetry servers we want to talk to. Contains the URL of the server, and the
 /// maximum verbosity level.
@@ -261,7 +266,7 @@ pub struct Telemetries {
 	receiver: mpsc::Receiver<(Id, u8, String)>,
 	sender: mpsc::Sender<(Id, u8, String)>,
 	node_map: HashMap<Id, Vec<(u8, Multiaddr)>>,
-	connection_messages: HashMap<Id, String>,
+	connection_messages: HashMap<Id, serde_json::Value>,
 	connection_sinks: HashMap<Id, TelemetryConnectionSinks>,
 	node_pool: HashMap<Multiaddr, crate::worker::node::Node<crate::worker::WsTrans>>, // TODO mod
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
@@ -303,19 +308,65 @@ impl Telemetries {
 	/// Create a new [`Telemetry`] for the endpoints provided in argument.
 	///
 	/// The `endpoints` argument is a collection of telemetry WebSocket servers with a corresponding
-	/// verbosity level.
-	pub fn build_telemetry(&self, endpoints: TelemetryEndpoints) -> Telemetry {
-		let (telemetry, sender) = Telemetry::new(
-			endpoints,
-			self.wasm_external_transport.clone(),
-			None, // TODO
-		);
-		let id = telemetry.span.id().expect("the span is enabled; qed");
+	/// verbosity level. TODO doc
+	pub fn start_telemetry(
+		&mut self,
+		endpoints: TelemetryEndpoints,
+		connection_message: serde_json::Value,
+	) -> Result<TelemetryConnectionSinks, io::Error> {
+		let endpoints = endpoints.0;
 
-		//self.senders.insert(id, sender);
-		// TODO
+		let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
+		let id = span.id().expect("the span is enabled; qed");
+		{
+			let id = id.clone();
+			tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&id));
+		}
+		let transport = match self.wasm_external_transport.clone() {
+			Some(t) => OptionalTransport::some(t),
+			None => OptionalTransport::none()
+		}.map((|inner, _| StreamSink::from(inner)) as fn(_, _) -> _);
 
-		telemetry
+		// The main transport is the `wasm_external_transport`, but if we're on desktop we add
+		// support for TCP+WebSocket+DNS as a fallback. In practice, you're not expected to pass
+		// an external transport on desktop and the fallback is used all the time.
+		#[cfg(not(target_os = "unknown"))]
+		let transport = transport.or_transport({
+			let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new())?;
+			libp2p::websocket::framed::WsConfig::new(inner)
+				.and_then(|connec, _| {
+					let connec = connec
+						.with(|item| {
+							let item = libp2p::websocket::framed::OutgoingData::Binary(item);
+							future::ready(Ok::<_, io::Error>(item))
+						})
+						.try_filter(|item| future::ready(item.is_data()))
+						.map_ok(|data| data.into_bytes());
+					future::ready(Ok::<_, io::Error>(connec))
+				})
+		});
+
+		let transport = TransportTimeout::new(
+			transport.map(|out, _| {
+				let out = out
+					.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+					.sink_map_err(|err| io::Error::new(io::ErrorKind::Other, err));
+				Box::pin(out) as Pin<Box<_>>
+			}),
+			CONNECT_TIMEOUT
+		).boxed();
+
+		for (addr, verbosity) in endpoints {
+			let node = crate::worker::node::Node::new(transport.clone(), addr.clone());
+			self.node_pool.insert(addr.clone(), node);
+			self.node_map.entry(id.clone()).or_insert_with(Vec::new)
+				.push((verbosity, addr));
+		}
+
+		let connection_sink = TelemetryConnectionSinks::default();
+		self.connection_sinks.insert(id.clone(), connection_sink.clone());
+
+		Ok(connection_sink)
 	}
 
 	/// TODO
@@ -387,8 +438,12 @@ impl Telemetries {
 					if let Some(connection_sink) = connection_sinks.get(&id) {
 						connection_sink.fire();
 					}
-					if let Some(message) = connection_messages.get(&id) {
-						let _ = node.send_message(message.clone()); // TODO probably dont need to clone
+					if let Some(json) = connection_messages.get(&id) {
+						let mut json = json.clone();
+						let obj = json.as_object_mut().expect("todo");
+						obj.insert("msg".into(), "system.connected".into());
+						obj.insert("ts".into(), chrono::Local::now().to_rfc3339().into());
+						let _ = node.send_message(serde_json::to_string(obj).expect("todo"));
 					}
 				}
 
