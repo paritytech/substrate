@@ -25,7 +25,7 @@ use std::sync::Arc;
 #[derive(Debug, Default)]
 /// A collection of nodes connecting to a telemetry server and identified by address.
 pub struct NodePool {
-	nodes: Mutex<HashMap<Multiaddr, Arc<Mutex<Node<WsTrans>>>>>, // TODO remove inner Arc<Mutex<>>
+	nodes: HashMap<Multiaddr, Node<WsTrans>>, // TODO remove inner Arc<Mutex<>>
 }
 
 impl NodePool {
@@ -35,6 +35,8 @@ impl NodePool {
 		transport: WsTrans,
 		addr: Multiaddr,
 	) -> (Arc<Mutex<Node<WsTrans>>>, bool) {
+		todo!();
+		/*
 		let mut nodes = self.nodes.lock();
 		let entry = nodes.entry(addr.clone());
 		let new = matches!(entry, Entry::Vacant(..));
@@ -45,9 +47,10 @@ impl NodePool {
 				.clone(),
 			new,
 		)
+		*/
 	}
 
-	pub(crate) fn lock(&self) -> MutexGuard<HashMap<Multiaddr, Arc<Mutex<Node<WsTrans>>>>> {
-		self.nodes.lock()
+	pub(crate) fn lock(&mut self) -> &mut HashMap<Multiaddr, Node<WsTrans>> {
+		&mut self.nodes
 	}
 }

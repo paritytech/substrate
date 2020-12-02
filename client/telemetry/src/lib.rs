@@ -44,7 +44,7 @@ use libp2p::{wasm_ext, Multiaddr};
 use log::{error, warn};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{
-	collections::HashMap,
+	collections::{HashMap, HashSet},
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
@@ -254,13 +254,14 @@ impl Stream for Telemetry {
 /// An object that keeps track of all the [`Telemetry`] created by its `build_telemetry()` method.
 ///
 /// [`Telemetry`] created through this object re-use connections if possible.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Telemetries {
 	receiver: Arc<mpsc::Receiver<(Id, u8, String)>>,
 	sender: mpsc::Sender<(Id, u8, String)>,
 	node_map: HashMap<Id, Vec<(u8, Multiaddr)>>,
+	connection_messages: HashMap<Id, String>,
 	senders: Senders,
-	node_pool: Arc<NodePool>,
+	node_pool: HashMap<Multiaddr, crate::worker::node::Node<crate::worker::WsTrans>>, // TODO mod
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
 }
 
@@ -273,6 +274,7 @@ impl Telemetries {
 			receiver: Arc::new(receiver), // TODO remove Arc
 			sender,
 			node_map: Default::default(),
+			connection_messages: Default::default(),
 			senders: Default::default(),
 			node_pool: Default::default(),
 			wasm_external_transport: None,
@@ -324,11 +326,17 @@ impl Telemetries {
 			receiver,
 			sender,
 			node_map,
+			connection_messages,
 			senders,
-			node_pool,
+			mut node_pool,
 			wasm_external_transport,
 		} = self;
 		let mut receiver = Arc::try_unwrap(receiver).expect("todo, remove");
+		let mut node_first_connect: HashSet<(Multiaddr, Id)> = node_map
+			.iter()
+			.map(|(id, addrs)| addrs.iter().map(move |(_, x)| (x.to_owned(), id.to_owned())))
+			.flatten()
+			.collect();
 
 		while let Some((id, verbosity, message)) = receiver.next().await {
 			let before = Instant::now();
@@ -346,8 +354,7 @@ impl Telemetries {
 			};
 
 			for (node_max_verbosity, addr) in nodes {
-				let node_pool = node_pool.lock();
-				let node = if let Some(node) = node_pool.get(addr) {
+				let mut node = if let Some(node) = node_pool.get_mut(addr) {
 					node
 				} else {
 					log::error!(
@@ -357,7 +364,6 @@ impl Telemetries {
 					);
 					continue;
 				};
-				let mut node = node.lock();
 
 				if verbosity > *node_max_verbosity {
 					log::trace!(
@@ -366,6 +372,17 @@ impl Telemetries {
 						addr,
 						verbosity);
 					continue;
+				}
+
+				if !matches!(node.next().await, Some(crate::worker::node::NodeEvent::Connected)) {
+					node_first_connect.insert((addr.to_owned(), id.to_owned()));
+					continue;
+				}
+
+				if node_first_connect.remove(&(addr.to_owned(), id.clone())) {
+					if let Some(message) = connection_messages.get(&id) {
+						let _ = node.send_message(message.clone()); // TODO probably dont need to clone
+					}
 				}
 
 				// `send_message` returns an error if we're not connected, which we silently ignore.

@@ -39,7 +39,7 @@ use log::{trace, error};
 use parking_lot::Mutex;
 use std::{io, pin::Pin, sync::Arc, task::Context, task::Poll, time};
 
-mod node;
+pub(crate) mod node;
 pub(crate) mod node_pool;
 
 pub(crate) use node_pool::NodePool;
