@@ -250,8 +250,8 @@ async fn build_network_future<
 					network.service().announce_block(notification.hash, Vec::new());
 				}
 
-				if let sp_consensus::BlockOrigin::Own = notification.origin {
-					network.service().own_block_imported(
+				if notification.is_new_best {
+					network.service().new_best_block_imported(
 						notification.hash,
 						notification.header.number().clone(),
 					);
@@ -401,7 +401,7 @@ fn start_rpc_servers<
 >(
 	config: &Configuration,
 	mut gen_handler: H,
-	rpc_metrics: Option<&sc_rpc_server::RpcMetrics>
+	rpc_metrics: sc_rpc_server::RpcMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
 		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
@@ -434,7 +434,7 @@ fn start_rpc_servers<
 		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(
 			&*path, gen_handler(
 				sc_rpc::DenyUnsafe::No,
-				sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "ipc")
+				sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc")
 			)
 		)),
 		maybe_start_server(
@@ -444,7 +444,7 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "http")
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http")
 				),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
@@ -456,7 +456,7 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "ws")
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws")
 				),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
@@ -471,7 +471,7 @@ fn start_rpc_servers<
 >(
 	_: &Configuration,
 	_: H,
-	_: Option<&sc_rpc_server::RpcMetrics>
+	_: sc_rpc_server::RpcMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }

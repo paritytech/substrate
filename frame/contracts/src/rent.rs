@@ -18,7 +18,7 @@
 
 use crate::{
 	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, RawEvent,
-	TombstoneContractInfo, Trait, CodeHash, Config, Error,
+	TombstoneContractInfo, Config, CodeHash, ConfigCache, Error,
 };
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
@@ -36,11 +36,11 @@ use sp_runtime::{
 ///
 /// This amount respects the contract's rent allowance and the subsistence deposit.
 /// Because of that, charging the amount cannot remove the contract.
-struct OutstandingAmount<T: Trait> {
+struct OutstandingAmount<T: Config> {
 	amount: BalanceOf<T>,
 }
 
-impl<T: Trait> OutstandingAmount<T> {
+impl<T: Config> OutstandingAmount<T> {
 	/// Create the new outstanding amount.
 	///
 	/// The amount should be always withdrawable and it should not kill the account.
@@ -67,7 +67,7 @@ impl<T: Trait> OutstandingAmount<T> {
 	}
 }
 
-enum Verdict<T: Trait> {
+enum Verdict<T: Config> {
 	/// The contract is exempted from paying rent.
 	///
 	/// For example, it already paid its rent in the current block, or it has enough deposit for not
@@ -90,7 +90,7 @@ pub struct Rent<T>(sp_std::marker::PhantomData<T>);
 
 impl<T> Rent<T>
 where
-	T: Trait,
+	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
 	/// Returns a fee charged per block from the contract.
@@ -129,7 +129,7 @@ where
 		free_balance: &BalanceOf<T>,
 		contract: &AliveContractInfo<T>,
 	) -> Option<BalanceOf<T>> {
-		let subsistence_threshold = Config::<T>::subsistence_threshold_uncached();
+		let subsistence_threshold = ConfigCache::<T>::subsistence_threshold_uncached();
 		// Reserved balance contributes towards the subsistence threshold to stay consistent
 		// with the existential deposit where the reserved balance is also counted.
 		if *total_balance < subsistence_threshold {

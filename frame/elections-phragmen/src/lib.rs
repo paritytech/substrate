@@ -87,7 +87,7 @@
 //!
 //! ### Module Information
 //!
-//! - [`election_sp_phragmen::Trait`](./trait.Trait.html)
+//! - [`election_sp_phragmen::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 
@@ -122,9 +122,9 @@ pub use weights::WeightInfo;
 pub const MAXIMUM_VOTE: usize = 16;
 
 type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// Migrations to version [`3.0.0`], as denoted by the changelog.
 pub mod migrations_3_0_0 {
@@ -135,7 +135,7 @@ pub mod migrations_3_0_0 {
 		Twox64Concat,
 	};
 
-	pub fn apply<T: Trait>(
+	pub fn apply<T: Config>(
 		old_voter_bond: BalanceOf<T>,
 		old_candidacy_bond: BalanceOf<T>,
 	) -> Weight {
@@ -163,7 +163,7 @@ pub mod migrations_3_0_0 {
 	/// Migrate from the old legacy voting bond (fixed) to the new one (per-vote dynamic).
 	///
 	/// Will only be triggered if storage version is V1.
-	pub fn migrate_voters_to_recorded_deposit<T: Trait>(old_deposit: BalanceOf<T>) {
+	pub fn migrate_voters_to_recorded_deposit<T: Config>(old_deposit: BalanceOf<T>) {
 		let mut count = 0;
 		<StorageKeyIterator<T::AccountId, (BalanceOf<T>, Vec<T::AccountId>), Twox64Concat>>::new(
 			<Voting<T>>::module_prefix(),
@@ -182,7 +182,7 @@ pub mod migrations_3_0_0 {
 	/// Migrate all candidates to recorded deposit.
 	///
 	/// Will only be triggered if storage version is V1.
-	pub fn migrate_candidates_to_recorded_deposit<T: Trait>(old_deposit: BalanceOf<T>) {
+	pub fn migrate_candidates_to_recorded_deposit<T: Config>(old_deposit: BalanceOf<T>) {
 		let _ = <Candidates<T>>::translate::<Vec<T::AccountId>, _>(|maybe_old_candidates| {
 			maybe_old_candidates.map(|old_candidates| {
 				frame_support::debug::info!("migrated {} candidate accounts.", old_candidates.len());
@@ -194,7 +194,7 @@ pub mod migrations_3_0_0 {
 		});
 	}
 
-	pub fn migrate_members_to_recorded_deposit<T: Trait>(deposit: BalanceOf<T>) {
+	pub fn migrate_members_to_recorded_deposit<T: Config>(deposit: BalanceOf<T>) {
 		let _ = <Members<T>>::translate::<Vec<(T::AccountId, BalanceOf<T>)>, _>(
 			|maybe_old_members| {
 				maybe_old_members.map(|old_members| {
@@ -215,7 +215,7 @@ pub mod migrations_3_0_0 {
 		);
 	}
 
-	pub fn migrate_runners_up_to_recorded_deposit<T: Trait>(deposit: BalanceOf<T>) -> Weight {
+	pub fn migrate_runners_up_to_recorded_deposit<T: Config>(deposit: BalanceOf<T>) -> Weight {
 		let _ = <RunnersUp<T>>::translate::<Vec<(T::AccountId, BalanceOf<T>)>, _>(
 			|maybe_old_runners_up| {
 				maybe_old_runners_up.map(|old_runners_up| {
@@ -273,9 +273,9 @@ pub struct SeatHolder<AccountId, Balance> {
 	pub deposit: Balance,
 }
 
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.c
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Identifier for the elections-phragmen pallet's lock
 	type ModuleId: Get<LockIdentifier>;
@@ -329,7 +329,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as PhragmenElection {
+	trait Store for Module<T: Config> as PhragmenElection {
 		/// The current elected members.
 		///
 		/// Invariant: Always sorted based on account id.
@@ -396,7 +396,7 @@ decl_storage! {
 }
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Cannot vote when no candidates or members exist.
 		UnableToVote,
 		/// Must vote for at least one candidate.
@@ -437,7 +437,7 @@ decl_error! {
 decl_event!(
 	pub enum Event<T> where
 		Balance = BalanceOf<T>,
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::AccountId,
 	{
 		/// A new term with \[new_members\]. This indicates that enough candidates existed to run the
 		/// election, not that enough have has been elected. The inner value must be examined for
@@ -465,7 +465,7 @@ decl_event!(
 );
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 		fn deposit_event() = default;
 
@@ -746,7 +746,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// The deposit value of `count` votes.
 	fn deposit_of(count: usize) -> BalanceOf<T> {
 		T::VotingBondBase::get().saturating_add(
@@ -1141,7 +1141,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Contains<T::AccountId> for Module<T> {
+impl<T: Config> Contains<T::AccountId> for Module<T> {
 	fn contains(who: &T::AccountId) -> bool {
 		Self::is_member(who)
 	}
@@ -1160,7 +1160,7 @@ impl<T: Trait> Contains<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> ContainsLengthBound for Module<T> {
+impl<T: Config> ContainsLengthBound for Module<T> {
 	fn min_len() -> usize { 0 }
 
 	/// Implementation uses a parameter type so calling is cost-free.
@@ -1191,7 +1191,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
@@ -1223,7 +1223,7 @@ mod tests {
 		pub const ExistentialDeposit: u64 = 1;
 	}
 
-	impl pallet_balances::Trait for Test {
+	impl pallet_balances::Config for Test {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
@@ -1292,7 +1292,7 @@ mod tests {
 		pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 	}
 
-	impl Trait for Test {
+	impl Config for Test {
 		type ModuleId = ElectionsPhragmenModuleId;
 		type Event = Event;
 		type Currency = Balances;
@@ -1522,9 +1522,9 @@ mod tests {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Elections::desired_members(), 2);
 			assert_eq!(Elections::desired_runners_up(), 0);
-			assert_eq!(<Test as Trait>::VotingBondBase::get(), 2);
-			assert_eq!(<Test as Trait>::VotingBondFactor::get(), 0);
-			assert_eq!(<Test as Trait>::CandidacyBond::get(), 3);
+			assert_eq!(<Test as Config>::VotingBondBase::get(), 2);
+			assert_eq!(<Test as Config>::VotingBondFactor::get(), 0);
+			assert_eq!(<Test as Config>::CandidacyBond::get(), 3);
 			assert_eq!(Elections::term_duration(), 5);
 			assert_eq!(Elections::election_rounds(), 0);
 

@@ -30,7 +30,7 @@ const BALANCE_FACTOR: u32 = 250;
 const MAX_VOTERS: u32 = 500;
 const MAX_CANDIDATES: u32 = 200;
 
-type Lookup<T> = <<T as frame_system::Trait>::Lookup as StaticLookup>::Source;
+type Lookup<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 macro_rules! whitelist {
 	($acc:ident) => {
@@ -41,7 +41,7 @@ macro_rules! whitelist {
 }
 
 /// grab new account with infinite balance.
-fn endowed_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
+fn endowed_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let account: T::AccountId = account(name, index, 0);
 	let amount = default_stake::<T>(BALANCE_FACTOR);
 	let _ = T::Currency::make_free_balance_be(&account, amount);
@@ -53,23 +53,23 @@ fn endowed_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 }
 
 /// Account to lookup type of system trait.
-fn as_lookup<T: Trait>(account: T::AccountId) -> Lookup<T> {
+fn as_lookup<T: Config>(account: T::AccountId) -> Lookup<T> {
 	T::Lookup::unlookup(account)
 }
 
 /// Get a reasonable amount of stake based on the execution trait's configuration
-fn default_stake<T: Trait>(factor: u32) -> BalanceOf<T> {
+fn default_stake<T: Config>(factor: u32) -> BalanceOf<T> {
 	let factor = BalanceOf::<T>::from(factor);
 	T::Currency::minimum_balance() * factor
 }
 
 /// Get the current number of candidates.
-fn candidate_count<T: Trait>() -> u32 {
+fn candidate_count<T: Config>() -> u32 {
 	<Candidates<T>>::decode_len().unwrap_or(0usize) as u32
 }
 
 /// Add `c` new candidates.
-fn submit_candidates<T: Trait>(c: u32, prefix: &'static str)
+fn submit_candidates<T: Config>(c: u32, prefix: &'static str)
 	-> Result<Vec<T::AccountId>, &'static str>
 {
 	(0..c).map(|i| {
@@ -83,7 +83,7 @@ fn submit_candidates<T: Trait>(c: u32, prefix: &'static str)
 }
 
 /// Add `c` new candidates with self vote.
-fn submit_candidates_with_self_vote<T: Trait>(c: u32, prefix: &'static str)
+fn submit_candidates_with_self_vote<T: Config>(c: u32, prefix: &'static str)
 	-> Result<Vec<T::AccountId>, &'static str>
 {
 	let candidates = submit_candidates::<T>(c, prefix)?;
@@ -96,7 +96,7 @@ fn submit_candidates_with_self_vote<T: Trait>(c: u32, prefix: &'static str)
 
 
 /// Submit one voter.
-fn submit_voter<T: Trait>(caller: T::AccountId, votes: Vec<T::AccountId>, stake: BalanceOf<T>)
+fn submit_voter<T: Config>(caller: T::AccountId, votes: Vec<T::AccountId>, stake: BalanceOf<T>)
 	-> frame_support::dispatch::DispatchResultWithPostInfo
 {
 	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
@@ -104,7 +104,7 @@ fn submit_voter<T: Trait>(caller: T::AccountId, votes: Vec<T::AccountId>, stake:
 
 /// create `num_voter` voters who randomly vote for at most `votes` of `all_candidates` if
 /// available.
-fn distribute_voters<T: Trait>(mut all_candidates: Vec<T::AccountId>, num_voters: u32, votes: usize)
+fn distribute_voters<T: Config>(mut all_candidates: Vec<T::AccountId>, num_voters: u32, votes: usize)
 	-> Result<(), &'static str>
 {
 	let stake = default_stake::<T>(BALANCE_FACTOR);
@@ -124,7 +124,7 @@ fn distribute_voters<T: Trait>(mut all_candidates: Vec<T::AccountId>, num_voters
 
 /// Fill the seats of members and runners-up up until `m`. Note that this might include either only
 /// members, or members and runners-up.
-fn fill_seats_up_to<T: Trait>(m: u32) -> Result<Vec<T::AccountId>, &'static str> {
+fn fill_seats_up_to<T: Config>(m: u32) -> Result<Vec<T::AccountId>, &'static str> {
 	let _ = submit_candidates_with_self_vote::<T>(m, "fill_seats_up_to")?;
 	assert_eq!(<Elections<T>>::candidates().len() as u32, m, "wrong number of candidates.");
 	<Elections<T>>::do_phragmen();
@@ -144,7 +144,7 @@ fn fill_seats_up_to<T: Trait>(m: u32) -> Result<Vec<T::AccountId>, &'static str>
 }
 
 /// removes all the storage items to reverse any genesis state.
-fn clean<T: Trait>() {
+fn clean<T: Config>() {
 	<Members<T>>::kill();
 	<Candidates<T>>::kill();
 	<RunnersUp<T>>::kill();

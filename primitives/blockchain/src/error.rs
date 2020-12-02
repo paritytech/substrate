@@ -22,12 +22,14 @@ use sp_state_machine;
 use sp_runtime::transaction_validity::TransactionValidityError;
 use sp_consensus;
 use codec::Error as CodecError;
+use sp_api::ApiError;
 
 /// Client Result type alias
 pub type Result<T> = result::Result<T, Error>;
 
 /// Error when the runtime failed to apply an extrinsic.
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum ApplyExtrinsicFailed {
 	/// The transaction cannot be included into the current block.
 	///
@@ -35,114 +37,142 @@ pub enum ApplyExtrinsicFailed {
 	/// unappliable onto the current block.
 	#[error("Extrinsic is not valid: {0:?}")]
 	Validity(#[from] TransactionValidityError),
-	/// This is used for miscellaneous errors that can be represented by string and not handleable.
-	///
-	/// This will become obsolete with complete migration to v4 APIs.
-	#[error("Extrinsic failed: {0}")]
-	Msg(String),
+
+	#[error("Application specific error")]
+	Application(#[source] Box<dyn 'static + std::error::Error + Send + Sync>),
 }
 
 /// Substrate Client error
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
+#[non_exhaustive]
 pub enum Error {
-	/// Consensus Error
+	#[error("Cancelled oneshot channel {0}")]
+	OneShotCancelled(#[from] futures::channel::oneshot::Canceled),
+
 	#[error(transparent)]
 	Consensus(#[from] sp_consensus::Error),
-	/// Backend error.
+
 	#[error("Backend error: {0}")]
 	Backend(String),
-	/// Unknown block.
+
 	#[error("UnknownBlock: {0}")]
 	UnknownBlock(String),
-	/// The `apply_extrinsic` is not valid due to the given `TransactionValidityError`.
+
 	#[error(transparent)]
 	ApplyExtrinsicFailed(#[from] ApplyExtrinsicFailed),
-	/// Execution error.
+
+	#[error("Child type is invalid")]
+	InvalidChildType,
+
+	#[error("RemoteBodyRequest: invalid extrinsics root expected: {expected} but got {received}")]
+	ExtrinsicRootInvalid { received: String, expected: String },
+
+	// `inner` cannot be made member, since it lacks `std::error::Error` trait bounds.
 	#[error("Execution failed: {0:?}")]
 	Execution(Box<dyn sp_state_machine::Error>),
-	/// Blockchain error.
+
 	#[error("Blockchain")]
 	Blockchain(#[source] Box<Error>),
-	/// Invalid authorities set received from the runtime.
+
+	/// A error used by various storage subsystems.
+	///
+	/// Eventually this will be replaced.
+	#[error("{0}")]
+	StorageChanges(sp_state_machine::DefaultError),
+
+	#[error("Invalid child storage key")]
+	InvalidChildStorageKey,
+
 	#[error("Current state of blockchain has invalid authorities set")]
 	InvalidAuthoritiesSet,
-	/// Could not get runtime version.
+
 	#[error("Failed to get runtime version: {0}")]
 	VersionInvalid(String),
-	/// Genesis config is invalid.
+
 	#[error("Genesis config provided is invalid")]
 	GenesisInvalid,
-	/// Error decoding header justification.
+
 	#[error("error decoding justification for header")]
 	JustificationDecode,
-	/// Justification for header is correctly encoded, but invalid.
+
 	#[error("bad justification for header: {0}")]
 	BadJustification(String),
-	/// Not available on light client.
+
 	#[error("This method is not currently available when running in light client mode")]
 	NotAvailableOnLightClient,
-	/// Invalid remote CHT-based proof.
+
 	#[error("Remote node has responded with invalid header proof")]
 	InvalidCHTProof,
-	/// Remote fetch has been cancelled.
+
 	#[error("Remote data fetch has been cancelled")]
 	RemoteFetchCancelled,
-	/// Remote fetch has been failed.
+
 	#[error("Remote data fetch has been failed")]
 	RemoteFetchFailed,
-	/// Error decoding call result.
+
 	#[error("Error decoding call result of {0}")]
 	CallResultDecode(&'static str, #[source] CodecError),
-	/// Error converting a parameter between runtime and node.
-	#[error("Error converting `{0}` between runtime and node")]
-	RuntimeParamConversion(String),
-	/// Changes tries are not supported.
+
+	#[error(transparent)]
+	RuntimeApiCodecError(#[from] ApiError),
+
+	#[error("Runtime :code missing in storage")]
+	RuntimeCodeMissing,
+
 	#[error("Changes tries are not supported by the runtime")]
 	ChangesTriesNotSupported,
-	/// Error reading changes tries configuration.
+
 	#[error("Error reading changes tries configuration")]
 	ErrorReadingChangesTriesConfig,
-	/// Key changes query has failed.
+
 	#[error("Failed to check changes proof: {0}")]
 	ChangesTrieAccessFailed(String),
-	/// Last finalized block not parent of current.
+
 	#[error("Did not finalize blocks in sequential order.")]
 	NonSequentialFinalization(String),
-	/// Safety violation: new best block not descendent of last finalized.
+
 	#[error("Potential long-range attack: block not in finalized chain.")]
 	NotInFinalizedChain,
-	/// Hash that is required for building CHT is missing.
+
 	#[error("Failed to get hash of block for building CHT")]
 	MissingHashRequiredForCHT,
-	/// Invalid calculated state root on block import.
+
 	#[error("Calculated state root does not match.")]
 	InvalidStateRoot,
-	/// Incomplete block import pipeline.
+
 	#[error("Incomplete block import pipeline.")]
 	IncompletePipeline,
+
 	#[error("Transaction pool not ready for block production.")]
 	TransactionPoolNotReady,
+
 	#[error("Database")]
 	DatabaseError(#[from] sp_database::error::DatabaseError),
-	/// A convenience variant for String
-	#[error("{0}")]
-	Msg(String),
+
+	#[error("Failed to get header for hash {0}")]
+	MissingHeader(String),
+
+
+	#[error("State Database error: {0}")]
+	StateDatabase(String),
+
+	#[error(transparent)]
+	Application(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+
+	// Should be removed/improved once
+	// the storage `fn`s returns typed errors.
+	#[error("Runtime code error: {0}")]
+	RuntimeCode(&'static str),
+
+	// Should be removed/improved once
+	// the storage `fn`s returns typed errors.
+	#[error("Storage error: {0}")]
+	Storage(String),
 }
 
-impl<'a> From<&'a str> for Error {
-	fn from(s: &'a str) -> Self {
-		Error::Msg(s.into())
-	}
-}
-
-impl From<String> for Error {
-	fn from(s: String) -> Self {
-		Error::Msg(s)
-	}
-}
-
-impl From<Box<dyn sp_state_machine::Error + Send + Sync>> for Error {
-	fn from(e: Box<dyn sp_state_machine::Error + Send + Sync>) -> Self {
+impl From<Box<dyn sp_state_machine::Error + Send + Sync + 'static>> for Error {
+	fn from(e: Box<dyn sp_state_machine::Error + Send + Sync + 'static>) -> Self {
 		Self::from_state(e)
 	}
 }
@@ -162,5 +192,12 @@ impl Error {
 	/// Chain a state error.
 	pub fn from_state(e: Box<dyn sp_state_machine::Error>) -> Self {
 		Error::Execution(e)
+	}
+
+	/// Construct from a state db error.
+	// Can not be done directly, since that would make cargo run out of stack if
+	// `sc-state-db` is lib is added as dependency.
+	pub fn from_state_db<E>(e: E) -> Self where E: std::fmt::Debug {
+		Error::StateDatabase(format!("{:?}", e))
 	}
 }

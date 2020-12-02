@@ -59,7 +59,7 @@ pub trait WeightInfo {
 
 /// Weights for pallet_elections_phragmen using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
+impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn vote_equal(v: u32, ) -> Weight {
 		(57_585_000 as Weight)
 			.saturating_add((409_000 as Weight).saturating_mul(v as Weight))
