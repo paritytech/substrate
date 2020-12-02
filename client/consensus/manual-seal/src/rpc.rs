@@ -26,7 +26,7 @@ use futures::{
 	SinkExt
 };
 use serde::{Deserialize, Serialize};
-use sp_runtime::Justifications;
+use sp_runtime::Justification;
 pub use self::gen_client::Client as ManualSealClient;
 
 /// Future's type for jsonrpc
@@ -60,7 +60,7 @@ pub enum EngineCommand<Hash> {
 		/// sender to report errors/success to the rpc.
 		sender: Sender<()>,
 		/// finalization justification
-		justification: Option<Justifications>,
+		justification: Option<Justification>,
 	}
 }
 
@@ -81,7 +81,7 @@ pub trait ManualSealApi<Hash> {
 	fn finalize_block(
 		&self,
 		hash: Hash,
-		justification: Option<Justifications>
+		justification: Option<Justification>
 	) -> FutureResult<bool>;
 }
 
@@ -129,7 +129,7 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 		Box::new(future.map_err(Error::from).compat())
 	}
 
-	fn finalize_block(&self, hash: Hash, justification: Option<Justifications>) -> FutureResult<bool> {
+	fn finalize_block(&self, hash: Hash, justification: Option<Justification>) -> FutureResult<bool> {
 		let mut sink = self.import_block_channel.clone();
 		let future = async move {
 			let (sender, receiver) = oneshot::channel();

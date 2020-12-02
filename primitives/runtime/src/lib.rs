@@ -105,6 +105,12 @@ pub type Justification = (ConsensusEngineId, EncodedJustification);
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Justifications(pub Vec<Justification>);
 
+impl From<Justification> for Justifications {
+	fn from(justification: Justification) -> Self {
+		Self(vec![justification])
+	}
+}
+
 use traits::{Verify, Lazy};
 
 /// A module identifier. These are per module and should be stored in a registry somewhere.

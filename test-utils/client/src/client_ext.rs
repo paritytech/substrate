@@ -24,7 +24,7 @@ use sp_consensus::{
 	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError,
 	ForkChoiceStrategy,
 };
-use sp_runtime::Justifications;
+use sp_runtime::{Justification, Justifications};
 use sp_runtime::traits::{Block as BlockT};
 use sp_runtime::generic::BlockId;
 use codec::alloc::collections::hash_map::HashMap;
@@ -35,7 +35,7 @@ pub trait ClientExt<Block: BlockT>: Sized {
 	fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justifications>,
+		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Returns hash of the genesis block.
@@ -73,7 +73,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justifications>,
+		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
 		Finalizer::finalize_block(self, id, justification, true)
 	}

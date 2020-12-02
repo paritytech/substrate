@@ -37,7 +37,7 @@ use sp_core::{
 use sp_keystore::SyncCryptoStorePtr;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
-	Justifications, BuildStorage,
+	Justification, Justifications, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
 		Block as BlockT, Header as HeaderT, Zero, NumberFor,
@@ -1808,11 +1808,12 @@ impl<B, E, Block, RA> Finalizer<Block, B> for Client<B, E, Block, RA> where
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		id: BlockId<Block>,
-		justification: Option<Justifications>,
+		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		let last_best = self.backend.blockchain().info().best_hash;
 		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
+		let justification = justification.map(Justifications::from);
 		self.apply_finality_with_block_hash(
 			operation,
 			to_finalize_hash,
@@ -1825,7 +1826,7 @@ impl<B, E, Block, RA> Finalizer<Block, B> for Client<B, E, Block, RA> where
 	fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justifications>,
+		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		self.lock_import_and_run(|operation| {
@@ -1844,7 +1845,7 @@ impl<B, E, Block, RA> Finalizer<Block, B> for &Client<B, E, Block, RA> where
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		id: BlockId<Block>,
-		justification: Option<Justifications>,
+		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		(**self).apply_finality(operation, id, justification, notify)
@@ -1853,7 +1854,7 @@ impl<B, E, Block, RA> Finalizer<Block, B> for &Client<B, E, Block, RA> where
 	fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justifications>,
+		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		(**self).finalize_block(id, justification, notify)

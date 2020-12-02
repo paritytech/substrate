@@ -620,11 +620,12 @@ where
 		initial_sync: bool,
 	) -> Result<(), ConsensusError> {
 		let grandpa_justification =
+			// WIP(JON): insert check for >1 grandpa justifications?
 			match justification.0.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
 				Some((_, grandpa_justification)) => grandpa_justification,
 				None => {
 					return Err(ConsensusError::ClientImport(
-						"JON(WIP): expected a grandpa justification.".into(),
+						"WIP(JON): expected a grandpa justification.".into(),
 					))
 				}
 			};

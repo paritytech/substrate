@@ -57,7 +57,7 @@ use sp_core::H256;
 use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_runtime::Justifications;
+use sp_runtime::{Justification, Justifications};
 use substrate_test_runtime_client::{self, AccountKeyring};
 use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
@@ -202,7 +202,7 @@ impl PeersClient {
 	pub fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justifications>,
+		justification: Option<Justification>,
 		notify: bool
 	) -> ClientResult<()> {
 		match *self {
@@ -953,7 +953,9 @@ impl JustificationImport<Block> for ForceFinalized {
 		_number: NumberFor<Block>,
 		justification: Justifications,
 	) -> Result<(), Self::Error> {
-		self.0.finalize_block(BlockId::Hash(hash), Some(justification), true)
+		// WIP(JON): Just finalize with the first Justification. TODO is to append the other ones as well
+		let justification = justification.0.first().cloned();
+		self.0.finalize_block(BlockId::Hash(hash), justification, true)
 			.map_err(|_| ConsensusError::InvalidJustification.into())
 	}
 }
