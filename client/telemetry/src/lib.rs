@@ -52,6 +52,8 @@ use std::{
 };
 use wasm_timer::Instant;
 use tracing::Id;
+use parking_lot::Mutex;
+use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender}};
 
 pub use chrono;
 pub use libp2p::wasm_ext::ExtTransport;
@@ -260,6 +262,7 @@ pub struct Telemetries {
 	sender: mpsc::Sender<(Id, u8, String)>,
 	node_map: HashMap<Id, Vec<(u8, Multiaddr)>>,
 	connection_messages: HashMap<Id, String>,
+	connection_sinks: HashMap<Id, TelemetryConnectionSinks>,
 	senders: Senders,
 	node_pool: HashMap<Multiaddr, crate::worker::node::Node<crate::worker::WsTrans>>, // TODO mod
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
@@ -275,6 +278,7 @@ impl Telemetries {
 			sender,
 			node_map: Default::default(),
 			connection_messages: Default::default(),
+			connection_sinks: Default::default(),
 			senders: Default::default(),
 			node_pool: Default::default(),
 			wasm_external_transport: None,
@@ -327,6 +331,7 @@ impl Telemetries {
 			sender,
 			node_map,
 			connection_messages,
+			connection_sinks,
 			senders,
 			mut node_pool,
 			wasm_external_transport,
@@ -354,7 +359,7 @@ impl Telemetries {
 			};
 
 			for (node_max_verbosity, addr) in nodes {
-				let mut node = if let Some(node) = node_pool.get_mut(addr) {
+				let node = if let Some(node) = node_pool.get_mut(addr) {
 					node
 				} else {
 					log::error!(
@@ -374,12 +379,17 @@ impl Telemetries {
 					continue;
 				}
 
+				// Disconnection
 				if !matches!(node.next().await, Some(crate::worker::node::NodeEvent::Connected)) {
 					node_first_connect.insert((addr.to_owned(), id.to_owned()));
 					continue;
 				}
 
+				// Reconnection handling
 				if node_first_connect.remove(&(addr.to_owned(), id.clone())) {
+					if let Some(connection_sink) = connection_sinks.get(&id) {
+						connection_sink.fire();
+					}
 					if let Some(message) = connection_messages.get(&id) {
 						let _ = node.send_message(message.clone()); // TODO probably dont need to clone
 					}
@@ -396,6 +406,25 @@ impl Telemetries {
 				);
 			}
 		}
+	}
+}
+
+/// Sinks to propagate telemetry connection established events.
+#[derive(Default, Clone, Debug)]
+pub struct TelemetryConnectionSinks(Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
+
+impl TelemetryConnectionSinks {
+	/// Get event stream for telemetry connection established events.
+	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
+		let (sink, stream) =tracing_unbounded("mpsc_telemetry_on_connect");
+		self.0.lock().push(sink);
+		stream
+	}
+
+	pub(crate) fn fire(&self) {
+		self.0.lock().retain(|sink| {
+			sink.unbounded_send(()).is_ok()
+		});
 	}
 }
 

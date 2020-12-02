@@ -17,8 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
-	TelemetryConnectionSinks, RpcHandlers, NetworkStatusSinks,
+	error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm, RpcHandlers, NetworkStatusSinks,
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
 	metrics::MetricsService,
 	client::{light, Client, ClientConfig},
@@ -460,8 +459,6 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub network_status_sinks: NetworkStatusSinks<TBl>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-	/// Shared Telemetry connection sinks,
-	pub telemetry_connection_sinks: TelemetryConnectionSinks,
 	/// Telemetry object.
 	pub telemetry: Option<sc_telemetry::Telemetry>,
 }
@@ -543,7 +540,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		network,
 		network_status_sinks,
 		system_rpc_tx,
-		telemetry_connection_sinks,
 		telemetry,
 	} = params;
 
@@ -559,7 +555,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		spawn_telemetry_worker(
 			telemetry,
 			&mut config,
-			telemetry_connection_sinks.clone(),
 			network.clone(),
 			task_manager.spawn_handle(),
 			client.clone(),
@@ -677,7 +672,6 @@ fn init_telemetry(config: &Configuration) -> Option<sc_telemetry::Telemetry> {
 fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	telemetry: sc_telemetry::Telemetry,
 	config: &mut Configuration,
-	telemetry_connection_sinks: TelemetryConnectionSinks,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
@@ -716,9 +710,6 @@ fn spawn_telemetry_worker<TBl: BlockT, TCl: BlockBackend<TBl>>(
 					"network_id" => network_id.clone()
 				);
 
-				telemetry_connection_sinks.0.lock().retain(|sink| {
-					sink.unbounded_send(()).is_ok()
-				});
 				ready(())
 			})
 	);

@@ -39,7 +39,6 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
 use std::task::Poll;
-use parking_lot::Mutex;
 
 use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
@@ -48,7 +47,7 @@ use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
-use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
+use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver}};
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -158,19 +157,6 @@ impl<Block: BlockT> NetworkStatusSinks<Block> {
 		stream
 	}
 
-}
-
-/// Sinks to propagate telemetry connection established events.
-#[derive(Default, Clone)]
-pub struct TelemetryConnectionSinks(Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
-
-impl TelemetryConnectionSinks {
-	/// Get event stream for telemetry connection established events.
-	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
-		let (sink, stream) =tracing_unbounded("mpsc_telemetry_on_connect");
-		self.0.lock().push(sink);
-		stream
-	}
 }
 
 /// An imcomplete set of chain components, but enough to run the chain ops subcommands.
