@@ -258,12 +258,12 @@ impl Stream for Telemetry {
 /// [`Telemetry`] created through this object re-use connections if possible.
 #[derive(Debug)]
 pub struct Telemetries {
-	receiver: Arc<mpsc::Receiver<(Id, u8, String)>>,
+	receiver: mpsc::Receiver<(Id, u8, String)>,
 	sender: mpsc::Sender<(Id, u8, String)>,
 	node_map: HashMap<Id, Vec<(u8, Multiaddr)>>,
 	connection_messages: HashMap<Id, String>,
 	connection_sinks: HashMap<Id, TelemetryConnectionSinks>,
-	senders: Senders,
+	senders: Senders, // TODO remove
 	node_pool: HashMap<Multiaddr, crate::worker::node::Node<crate::worker::WsTrans>>, // TODO mod
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
 }
@@ -274,7 +274,7 @@ impl Telemetries {
 		let (sender, receiver) = mpsc::channel(16);
 
 		Self {
-			receiver: Arc::new(receiver), // TODO remove Arc
+			receiver,
 			sender,
 			node_map: Default::default(),
 			connection_messages: Default::default(),
@@ -327,7 +327,7 @@ impl Telemetries {
 	/// TODO
 	pub async fn run(self) {
 		let Self {
-			receiver,
+			mut receiver,
 			sender,
 			node_map,
 			connection_messages,
@@ -336,7 +336,6 @@ impl Telemetries {
 			mut node_pool,
 			wasm_external_transport,
 		} = self;
-		let mut receiver = Arc::try_unwrap(receiver).expect("todo, remove");
 		let mut node_first_connect: HashSet<(Multiaddr, Id)> = node_map
 			.iter()
 			.map(|(id, addrs)| addrs.iter().map(move |(_, x)| (x.to_owned(), id.to_owned())))
