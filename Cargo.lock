@@ -8662,6 +8662,7 @@ version = "2.0.0"
 dependencies = [
  "log",
  "parity-scale-codec",
+ "parking_lot 0.10.2",
  "sp-core",
  "sp-externalities",
  "sp-io",
@@ -8669,6 +8670,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-state-machine",
  "sp-std",
+ "sp-wasm-interface",
 ]
 
 [[package]]
@@ -8766,6 +8768,7 @@ dependencies = [
 name = "sp-wasm-interface"
 version = "2.0.0"
 dependencies = [
+ "derive_more",
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "sp-std",

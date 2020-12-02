@@ -1165,20 +1165,21 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 	assert!(ext.storage_root().as_slice() != &root[..]);
 
 	use sp_externalities::ExternalitiesExt;
-	use sp_core::traits::RuntimeSpawnExt;
+	use sp_std::boxed::Box;
+	use sp_core::traits::{RuntimeSpawn, RuntimeSpawnExt};
 
-	let runtime_ext = unimplemented!();
+	let runtime_ext = sp_tasks::inline_spawn::HostRuntimeInstanceSpawn::new();
+	let runtime_ext: Box<dyn RuntimeSpawn> = Box::new(runtime_ext);
 
-	let dyn_ext: &mut dyn Externalities = &mut ext;
+	let mut dyn_ext: &mut dyn Externalities = &mut ext;
 	// use inline only extension.
-	// TODO method not found (not in no_std)
 	dyn_ext.register_extension::<RuntimeSpawnExt>(RuntimeSpawnExt(runtime_ext)).unwrap();
 
 	fn worker_test(_inp: Vec<u8>) -> Vec<u8> {
 		let mut result = Vec::<u8>::default();
-//		assert!(sp_io::storage::get(&[0]).is_some());
-//		assert!(sp_io::storage::get(b"value3").is_some());
-//		assert!(sp_io::storage::get(b"xyz").is_none());
+		assert!(sp_io::storage::get(&[0]).is_some());
+		assert!(sp_io::storage::get(b"value3").is_some());
+		assert!(sp_io::storage::get(b"xyz").is_none());
 		result.push(42);
 		result
 	}
@@ -1207,41 +1208,44 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		kind: u8,
 	) -> u64 {
 		sp_externalities::with_externalities(|mut ext| {
+			let ext_unsafe = ext as *mut dyn Externalities;
 			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
 				.expect("Inline runtime extension improperly set.");
-			0
+			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+			// a given id, to make this safer.
+			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+			let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, kind, ext_unsafe);
+			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
+			result
 		}).unwrap()
-/*		let ext_unsafe = *self as *mut dyn Externalities;
-		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
-			.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		// Unsafe usage here means that `spawn_call` shall never attempt to access
-		// or deregister this `RuntimeSpawnExt` from the unchecked ext2.
-		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-		// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
-		// a given id, to make this safer.
-		let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, kind, ext_unsafe);
-		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
-		result*/
 	}
 
 	fn host_runtime_tasks_join(handle: u64) -> Option<Vec<u8>> {
-		None
-/*		let ext_unsafe = *self as *mut dyn Externalities;
-		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
-			.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-		let result = runtime_spawn.join(handle, ext_unsafe);
-		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
-		result*/
+		sp_externalities::with_externalities(|mut ext| {
+			let ext_unsafe = ext as *mut dyn Externalities;
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Inline runtime extension improperly set.");
+			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+			// a given id, to make this safer.
+			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+			let result = runtime_spawn.join(handle, ext_unsafe);
+			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
+			result
+		}).unwrap()
 	}
 
 	fn host_runtime_tasks_dismiss(handle: u64) {
-		/*
-		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
-			.expect("Cannot kill without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		runtime_spawn.dismiss(handle);
-		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
-		*/
+		sp_externalities::with_externalities(|mut ext| {
+			let ext_unsafe = ext as *mut dyn Externalities;
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Inline runtime extension improperly set.");
+			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+			// a given id, to make this safer.
+			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+			let result = runtime_spawn.dismiss(handle);
+			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
+			result
+		}).unwrap()
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1268,8 +1272,8 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		let handle = sp_tasks::spawn(worker_test, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
 		sp_io::storage::set(b"xyz", b"test");
 		assert!(sp_io::storage::get(b"xyz").is_some());
-/*		let res = handle.join().expect("expected result for task");
-		assert!(res.get(0) == Some(&42));*/
+		let res = handle.join().expect("expected result for task");
+		assert!(res.get(0) == Some(&42));
 	});
 }
 

@@ -24,6 +24,7 @@ use sp_std::{
 	borrow::Cow, marker::PhantomData, mem, iter::Iterator, result, vec::Vec,
 };
 
+pub mod wasm_runtime;
 #[cfg(feature = "std")]
 mod wasmi_impl;
 

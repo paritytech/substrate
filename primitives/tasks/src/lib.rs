@@ -60,9 +60,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod async_externalities;
+pub mod inline_spawn;
 
 #[cfg(feature = "std")]
-pub use async_externalities::{new_async_externalities, new_inline_only_externalities, AsyncExternalities, AsyncExt};
+pub use async_externalities::new_async_externalities;
+pub use async_externalities::{new_inline_only_externalities, AsyncExternalities, AsyncExt};
 
 use sp_std::vec::Vec;
 
@@ -237,7 +239,7 @@ mod tests {
 	fn basic() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			let a1 = spawn(async_runner, vec![5, 2, 1], AsyncStateType::Stateless).join();
-			assert_eq!(a1, vec![1, 2, 5]);
+			assert_eq!(a1, Some(vec![1, 2, 5]));
 		})
 	}
 
@@ -272,7 +274,7 @@ mod tests {
 				let result = handle.join();
 				data.sort();
 
-				assert_eq!(result, data);
+				assert_eq!(result, Some(data));
 			}
 		}).expect("Failed to run with externalities");
 	}

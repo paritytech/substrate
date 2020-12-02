@@ -543,25 +543,13 @@ impl RuntimeInstanceSpawn {
 		module: &Option<Arc<dyn WasmModule>>,
 		tasks: &Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
 	) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
-		Some(match module.as_ref().map(|m| m.new_instance()) {
-			Some(Ok(val)) => AssertUnwindSafe(val),
-			Some(Err(e)) => {
-				log::error!(
-					target: "executor",
-					"Failed to create new instance for module for async context: {}",
-					e,
-				);
-
-				tasks.lock().finished();
-				return None;
-			}
-			None => {
-				log::error!(target: "executor", "No module for a wasm task.");
-				tasks.lock().finished();
-				return None;
-			},
-		})
+		let result = Self::instantiate_inline(module);
+		if result.is_none() {
+			tasks.lock().finished();
+		}
+		result
 	}
+
 	fn instantiate_inline(
 		module: &Option<Arc<dyn WasmModule>>,
 	) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {

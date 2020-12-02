@@ -16,8 +16,21 @@
 
 //! Definitions for a wasm runtime.
 
-use crate::error::Error;
-use sp_wasm_interface::Value;
+use crate::Value;
+use sp_std::vec::Vec;
+use sp_std::boxed::Box;
+
+#[cfg(feature = "std")]
+pub type ErrorInfo = String;
+
+#[cfg(not(feature = "std"))]
+pub type ErrorInfo = ();
+
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(derive_more::Display, derive_more::From))]
+pub enum Error {
+	RuntimePanicked(ErrorInfo),
+}
 
 /// A method to be used to find the entrypoint when calling into the runtime
 ///
