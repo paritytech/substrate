@@ -1132,6 +1132,9 @@ pub mod pallet_prelude {
 /// More precisely the store trait contains an associated type for each storage. It is implemented
 /// for `Pallet` allowing to access the storage from pallet struct.
 ///
+/// Thus when defining a storage named `Foo`, it can later be accessed from `Pallet` using
+/// `<Pallet as Store>::Foo`.
+///
 /// ### Macro expansion:
 ///
 /// The macro add this attribute to the struct definition:
