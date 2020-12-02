@@ -1,0 +1,35 @@
+[package]
+name = "node-e2e-tests"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+substrate-test-runner = { version = "0.8.0", path = "../../../test-utils/substrate-test-runner" }
+
+frame-system = { version = "2.0.0", path = "../../../frame/system" }
+frame-support = { path = "../../../frame/support", version = "2.0.0" }
+pallet-balances = { path = "../../../frame/balances", version = "2.0.0" }
+pallet-sudo = { path = "../../../frame/sudo", version = "2.0.0" }
+pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transaction-payment" }
+
+node-runtime = { path = "../runtime", version = "2.0.0" }
+node-primitives = { version = "2.0.0", path = "../primitives" }
+node-cli = { path = "../cli", version = "2.0.0" }
+
+grandpa = { version = "0.8.0", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
+sp-consensus-babe = { version = "0.8.0", path = "../../../primitives/consensus/babe" }
+sc-consensus-babe = { version = "0.8.0", path = "../../../client/consensus/babe" }
+sc-consensus-manual-seal = { version = "0.8.0", path = "../../../client/consensus/manual-seal" }
+sc-service = { version = "0.8.0", default-features = false, path = "../../../client/service" }
+sc-executor = { version = "0.8.0", path = "../../../client/executor" }
+sc-consensus = { version = "0.8.0", path = "../../../client/consensus/common" }
+
+sp-runtime = { path = "../../../primitives/runtime", version = "2.0.0" }
+sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
+sp-api = { version = "2.0.0",  path = "../../../primitives/api" }
+sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
+sp-keystore = { version = "0.8.0", path = "../../../primitives/keystore" }
+
+# e2e tests
+pallet-balances-e2e-tests = { path = "../../../frame/balances/e2e-tests", version = "2.0.0" }

@@ -258,10 +258,20 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
 	) -> Self {
-		let mut host_functions = D::ExtendHostFunctions::host_functions();
+		let extended =  D::ExtendHostFunctions::host_functions();
+		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions()
+			.into_iter()
+			// filter out any host function overrides provided.
+			.filter(|host_fn| {
+				extended.iter()
+					.find(|ext_host_fn| host_fn.name() == ext_host_fn.name())
+					.is_none()
+			})
+			.collect::<Vec<_>>();
+
 
 		// Add the custom host functions provided by the user.
-		host_functions.extend(sp_io::SubstrateHostFunctions::host_functions());
+		host_functions.extend(extended);
 		let wasm_executor = WasmExecutor::new(
 			fallback_method,
 			default_heap_pages,
