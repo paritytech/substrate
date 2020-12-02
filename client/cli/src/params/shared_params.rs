@@ -46,9 +46,11 @@ pub struct SharedParams {
 	#[structopt(short = "l", long, value_name = "LOG_PATTERN")]
 	pub log: Vec<String>,
 
-	/// Disable log reloading at runtime. 
+	/// Disable feature to dynamically update and reload the log filter.
 	///
-	/// By default this feature is enabled, however it leads to a small performance decrease. 
+	/// By default this feature is enabled, however it leads to a small performance decrease.
+	/// The `system_addLogFilter` and `system_resetLogFilter` RPCs will have no effect with this
+	/// option set.
 	#[structopt(long = "disable-log-reloading")]
 	pub disable_log_reloading: bool,
 
