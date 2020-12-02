@@ -1158,9 +1158,57 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		None,
 	);
 	assert!(ext.storage(b"value3").is_some());
+	assert!(ext.storage(b"xyz").is_none());
+
 	assert!(ext.storage_root().as_slice() == &root[..]);
 	ext.place_storage(vec![0], Some(vec![1]));
 	assert!(ext.storage_root().as_slice() != &root[..]);
+
+	fn worker_test(_inp: Vec<u8>) -> Vec<u8> {
+		let mut result = Vec::<u8>::default();
+//		assert!(sp_io::storage::get(&[0]).is_some());
+//		assert!(sp_io::storage::get(b"value3").is_some());
+//		assert!(sp_io::storage::get(b"xyz").is_none());
+		result.push(42);
+		result
+	}
+
+	fn host_storage_set(key: &[u8], value: &[u8]) {
+		sp_externalities::with_externalities(|ext|
+			ext.place_storage(key.to_vec(), Some(value.to_vec()))
+		).unwrap();
+	}
+
+	fn host_storage_get(key: &[u8]) -> Option<Vec<u8>> {
+		sp_externalities::with_externalities(|ext|
+			ext.storage(key).clone()
+		).unwrap()
+	}
+
+	#[cfg(not(feature = "std"))]
+	let _guard = unsafe {(
+		sp_io::storage::host_get.replace_implementation(host_storage_get),
+		sp_io::storage::host_set.replace_implementation(host_storage_set),
+	)};
+
+	sp_externalities::set_and_run_with_externalities(&mut ext, || {
+		sp_externalities::with_externalities(|ext| {
+			assert!(ext.storage(&[0]).is_some());
+			assert!(ext.storage(b"value3").is_some());
+			assert!(ext.storage(b"xyz").is_none());
+		}).unwrap();
+
+		assert!(sp_io::storage::get(&[0]).is_some());
+		assert!(sp_io::storage::get(b"value3").is_some());
+		assert!(sp_io::storage::get(b"xyz").is_none());
+		sp_tasks::set_capacity(4);
+		let handle = sp_tasks::spawn(worker_test, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
+		sp_io::storage::set(b"xyz", b"test");
+		assert!(sp_io::storage::get(b"xyz").is_some());
+		let res = handle.join().expect("expected result for task");
+		assert!(res.get(0) == Some(&42));
+	});
+
 }
 
 fn test_tasks() {
@@ -1184,7 +1232,7 @@ fn test_tasks() {
 	let handle = sp_tasks::spawn(tokill, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
 	let res = handle.dismiss();
 	fn do_panic(_inp: Vec<u8>) -> Vec<u8> {
-		panic!("heloo");
+		panic!("Expected test panic.");
 	}
 	let handle = sp_tasks::spawn(do_panic, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
 	// Dismiss don't panic
@@ -1285,7 +1333,9 @@ mod tests {
 		);
 		let proof = sp_state_machine::prove_read(backend, vec![b"value3"]).unwrap();
 		let client = TestClientBuilder::new()
-			.set_execution_strategy(ExecutionStrategy::Both)
+//			.set_execution_strategy(ExecutionStrategy::NativeElseWasm)
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+//			.set_execution_strategy(ExecutionStrategy::Both)
 			.build();
 		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.chain_info().best_number);
