@@ -626,17 +626,17 @@ decl_module! {
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
 				return Ok((
-							Some(T::WeightInfo::close_early_approved(len as u32, seats, proposal_count).saturating_add(proposal_weight)),
-							Pays::No
-						).into());
+					Some(T::WeightInfo::close_early_approved(len as u32, seats, proposal_count).saturating_add(proposal_weight)),
+					Pays::No
+				).into());
 
 			} else if disapproved {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 				return Ok((
-							Some(T::WeightInfo::close_early_disapproved(seats, proposal_count)),
-							Pays::No
-						).into());
+					Some(T::WeightInfo::close_early_disapproved(seats, proposal_count)),
+					Pays::No
+				).into());
 			}
 
 			// Only allow actual closing of the proposal after the voting period has ended.
@@ -664,16 +664,16 @@ decl_module! {
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
 				return Ok((
-							Some(T::WeightInfo::close_approved(len as u32, seats, proposal_count).saturating_add(proposal_weight)),
-							Pays::No
-						).into());
+					Some(T::WeightInfo::close_approved(len as u32, seats, proposal_count).saturating_add(proposal_weight)),
+					Pays::No
+				).into());
 			} else {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 				return Ok((
-							Some(T::WeightInfo::close_disapproved(seats, proposal_count)),
-							Pays::No
-						).into());
+					Some(T::WeightInfo::close_disapproved(seats, proposal_count)),
+					Pays::No
+				).into());
 			}
 		}
 
@@ -1483,7 +1483,6 @@ mod tests {
 				)
 			);
 
-			// hello
 			// Duplicate vote, expecting error with Pays::Yes ...
 			let vote_rval: DispatchResultWithPostInfo = Collective::vote(Origin::signed(2), hash.clone(), 0, true);
 			match vote_rval {
