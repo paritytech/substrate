@@ -1089,11 +1089,11 @@ impl GenericProto {
 					.filter(|(_, s)| matches!(s, ConnectionState::OpenDesiredByRemote))
 				{
 					debug!(target: "sub-libp2p", "Handler({:?}, {:?}) <= Close({:?})",
-						incoming.peer_id, connec_id, set_id);
+						incoming.peer_id, connec_id, incoming.set_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: incoming.peer_id.clone(),
 						handler: NotifyHandler::One(*connec_id),
-						event: NotifsHandlerIn::Close { protocol_index: set_id.into() },
+						event: NotifsHandlerIn::Close { protocol_index: incoming.set_id.into() },
 					});
 					*connec_state = ConnectionState::Closing;
 				}
@@ -1959,7 +1959,7 @@ impl NetworkBehaviour for GenericProto {
 			}
 
 			NotifsHandlerOut::CustomMessage { message } => {
-				if self.is_open(&source, set_id) {
+				if self.is_open(&source, sc_peerset::SetId::from(0)) {  // TODO: using set 0 here is hacky
 					trace!(target: "sub-libp2p", "Handler({:?}) => Message", source);
 					trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
 					let event = GenericProtoOut::LegacyMessage {
@@ -1988,8 +1988,8 @@ impl NetworkBehaviour for GenericProto {
 						set_id,
 						message.len()
 					);
-					trace!(target: "sub-libp2p", "External API <= Message({:?}, {}, {:?})",
-						protocol, source, set_id);
+					trace!(target: "sub-libp2p", "External API <= Message({}, {:?})",
+						source, set_id);
 					let event = GenericProtoOut::Notification {
 						peer_id: source,
 						set_id,

@@ -133,9 +133,6 @@ pub struct NotifsHandler {
 	/// Remote we are connected to.
 	peer_id: PeerId,
 
-	/// State of this handler.
-	state: State,
-
 	/// Configuration for the legacy protocol upgrade.
 	legacy_protocol: RegisteredProtocol,
 
@@ -234,8 +231,6 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 	}
 
 	fn into_handler(self, peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
-		let num_out_proto = self.out_protocols.len();
-
 		NotifsHandler {
 			protocols: self.protocols.into_iter().map(|(name, in_upgrade, handshake)| {
 				Protocol {
@@ -246,7 +241,7 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 						pending_opening: false,
 					}
 				}
-			}),
+			}).collect(),
 			peer_id: peer_id.clone(),
 			endpoint: connected_point.clone(),
 			when_connection_open: Instant::now(),
@@ -530,32 +525,29 @@ impl ProtocolsHandler for NotifsHandler {
 	) {
 		match out {
 			// Received notifications substream.
-			EitherOutput::First(((_remote_handshake, mut proto), num)) => {
-				match self.protocols[num].state {
+			EitherOutput::First(((_remote_handshake, mut new_substream), protocol_index)) => {
+				match self.protocols[protocol_index].state {
 					State::Closed { pending_opening } => {
 						self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
 							NotifsHandlerOut::OpenDesiredByRemote {
-								protocol: self.protocols[num].name.clone(),
+								protocol_index,
 							}
 						));
 
-						self.protocols[num].state = State::OpenDesiredByRemote {
-							in_substream: Some(proto),
+						self.protocols[protocol_index].state = State::OpenDesiredByRemote {
+							in_substream: new_substream,
 							pending_opening,
 						};
 					},
 					State::OpenDesiredByRemote { ref mut in_substream, .. } => {
-						if in_substream.is_some() {
-							// If a substream already exists, silently drop the new one.
-							// Note that we drop the substream, which will send an equivalent to a
-							// TCP "RST" to the remote and force-close the substream. It might
-							// seem like an unclean way to get rid of a substream. However, keep
-							// in mind that it is invalid for the remote to open multiple such
-							// substreams, and therefore sending a "RST" is the most correct thing
-							// to do.
-							return;
-						}
-						*in_substream = Some(proto);
+						// If a substream already exists, silently drop the new one.
+						// Note that we drop the substream, which will send an equivalent to a
+						// TCP "RST" to the remote and force-close the substream. It might
+						// seem like an unclean way to get rid of a substream. However, keep
+						// in mind that it is invalid for the remote to open multiple such
+						// substreams, and therefore sending a "RST" is the most correct thing
+						// to do.
+						return;
 					},
 					State::Opening { ref mut in_substream, .. } |
 					State::Open { ref mut in_substream, .. } => {
@@ -564,11 +556,11 @@ impl ProtocolsHandler for NotifsHandler {
 							return;
 						}
 
-						// We create `handshake_message` on a separate line to be sure
-						// that the lock is released as soon as possible.
-						let handshake_message = self.protocols[num].handshake.read().clone();
-						proto.send_handshake(handshake_message);
-						*in_substream = Some(proto);
+						// Create `handshake_message` on a separate line to be sure that the
+						// lock is released as soon as possible.
+						let handshake_message = self.protocols[protocol_index].handshake.read().clone();
+						new_substream.send_handshake(handshake_message);
+						*in_substream = Some(new_substream);
 					},
 				};
 			}
@@ -591,9 +583,9 @@ impl ProtocolsHandler for NotifsHandler {
 	fn inject_fully_negotiated_outbound(
 		&mut self,
 		(handshake, substream): <Self::OutboundProtocol as OutboundUpgrade<NegotiatedSubstream>>::Output,
-		num: Self::OutboundOpenInfo
+		protocol_index: Self::OutboundOpenInfo
 	) {
-		match self.protocols[num].state {
+		match self.protocols[protocol_index].state {
 			State::Closed { ref mut pending_opening } |
 			State::OpenDesiredByRemote { ref mut pending_opening, .. } => {
 				debug_assert!(*pending_opening);
@@ -614,7 +606,7 @@ impl ProtocolsHandler for NotifsHandler {
 					}),
 				};
 
-				self.protocols[num].state = State::Open {
+				self.protocols[protocol_index].state = State::Open {
 					notifications_sink_rx: stream::select(async_rx.fuse(), sync_rx.fuse()),
 					out_substream: Some(substream),
 					in_substream: in_substream.take(),
@@ -622,7 +614,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
 					NotifsHandlerOut::OpenResultOk {
-						protocol: self.protocols[num].clone(),
+						protocol_index,
 						endpoint: self.endpoint.clone(),
 						received_handshake: handshake,
 						notifications_sink
@@ -634,62 +626,44 @@ impl ProtocolsHandler for NotifsHandler {
 
 	fn inject_event(&mut self, message: NotifsHandlerIn) {
 		match message {
-			NotifsHandlerIn::Open { protocol } => {
-				let num = match self.protocols.iter().position(|p| p.name == protocol) {
-					Some(n) => n,
-					None => {
-						error!(target: "sub-libp2p", "Open message with unknown protocol");
-						debug_assert!(false);
-						return;
-					}
-				};
-
-				match self.protocols[num].state {
-					State::Closed { .. } | State::OpenDesiredByRemote { .. } => {
-						let (pending_opening, mut in_substreams) = match self.protocols[num].state {
-							State::Closed { pending_opening } => (pending_opening, None),
-							State::OpenDesiredByRemote { pending_opening, in_substreams } =>
-								(pending_opening, Some(mem::replace(in_substreams, Vec::new()))),
-							_ => unreachable!()
-						};
-
-						debug_assert_eq!(pending_opening.len(), self.out_protocols.len());
-						for (n, is_pending) in pending_opening.iter().enumerate() {
-							if *is_pending {
-								continue;
-							}
-
+			NotifsHandlerIn::Open { protocol_index } => {
+				match self.protocols[protocol_index].state {
+					State::Closed { pending_opening } => {
+						if !pending_opening {
 							let proto = NotificationsOut::new(
-								self.out_protocols[n].0.clone(),
-								self.out_protocols[n].1.read().clone()
+								self.protocols[protocol_index].name.clone(),
+								self.protocols[protocol_index].handshake.read().clone()
 							);
 
 							self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-								protocol: SubstreamProtocol::new(proto, n)
+								protocol: SubstreamProtocol::new(proto, protocol_index)
 									.with_timeout(OPEN_TIMEOUT),
 							});
 						}
 
-						if let Some(in_substreams) = in_substreams.as_mut() {
-							for (num, substream) in in_substreams.iter_mut().enumerate() {
-								let substream = match substream.as_mut() {
-									Some(s) => s,
-									None => continue,
-								};
+						self.protocols[protocol_index].state = State::Opening {
+							in_substream: None,
+						};
+					},
+					State::OpenDesiredByRemote { pending_opening, in_substream } => {
+						let handshake_message = self.protocols[protocol_index].handshake.read().clone();
 
-								let handshake_message = self.in_protocols[num].1.read().clone();
-								substream.send_handshake(handshake_message);
-							}
+						if !pending_opening {
+							let proto = NotificationsOut::new(
+								self.protocols[protocol_index].name.clone(),
+								handshake_message.clone()
+							);
+
+							self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+								protocol: SubstreamProtocol::new(proto, protocol_index)
+									.with_timeout(OPEN_TIMEOUT),
+							});
 						}
 
-						self.state = State::Opening {
-							pending_handshake: None,
-							in_substreams: if let Some(in_substreams) = in_substreams {
-								in_substreams
-							} else {
-								(0..self.in_protocols.len()).map(|_| None).collect()
-							},
-							out_substreams: (0..self.out_protocols.len()).map(|_| None).collect(),
+						in_substream.send_handshake(handshake_message);
+
+						self.protocols[protocol_index].state = State::Opening {
+							in_substream: Some(in_substream),
 						};
 					},
 					State::Opening { .. } |
@@ -702,41 +676,31 @@ impl ProtocolsHandler for NotifsHandler {
 				}
 			},
 
-			NotifsHandlerIn::Close { protocol } => {
-				let num = match self.protocols.iter().position(|p| p.name == protocol) {
-					Some(n) => n,
-					None => {
-						error!(target: "sub-libp2p", "Close message with unknown protocol");
-						debug_assert!(false);
-						return;
-					}
-				};
-
+			NotifsHandlerIn::Close { protocol_index } => {
 				for mut substream in self.legacy_substreams.drain(..) {
 					substream.shutdown();
 					self.legacy_shutdown.push(substream);
 				}
 
-				match self.protocols[num].state {
+				match self.protocols[protocol_index].state {
 					State::Open { .. } => {
-						let pending_opening = self.out_protocols.iter().map(|_| false).collect();
-						self.state = State::Closed {
-							pending_opening,
+						self.protocols[protocol_index].state = State::Closed {
+							pending_opening: false,
 						};
 					},
 					State::Opening { .. } => {
-						self.state = State::Closed {
+						self.protocols[protocol_index].state = State::Closed {
 							pending_opening: true,
 						};
 
 						self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
 							NotifsHandlerOut::OpenResultErr {
-								protocol: protocol.clone(),
+								protocol_index,
 							}
 						));
 					},
 					State::OpenDesiredByRemote { pending_opening, .. } => {
-						self.state = State::Closed {
+						self.protocols[protocol_index].state = State::Closed {
 							pending_opening,
 						};
 					}
@@ -771,7 +735,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
 					NotifsHandlerOut::OpenResultErr {
-						protocol: self.protocols[num].name.clone(),
+						protocol_index: num,
 					}
 				));
 			}
@@ -819,8 +783,8 @@ impl ProtocolsHandler for NotifsHandler {
 						None | Some(Poll::Pending) => continue,
 						Some(Poll::Ready(Some(Ok(message)))) => {
 							let event = NotifsHandlerOut::Notification {
+								protocol_index: num,
 								message,
-								protocol_name: self.in_protocols[num].0.protocol_name().clone(),
 							};
 							return Poll::Ready(ProtocolsHandlerEvent::Custom(event))
 						},

@@ -154,7 +154,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		)?;
 		for extra_set in &params.network_config.extra_sets {
 			ensure_addresses_consistent_with_transport(
-				extra_set.1.reserved_nodes.iter().map(|x| &x.multiaddr),
+				extra_set.reserved_nodes.iter().map(|x| &x.multiaddr),
 				&params.network_config.transport,
 			)?;
 		}
@@ -644,7 +644,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Need a better solution to manage authorized peers, but now just use reserved peers for
 	/// prototyping.
 	pub fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
-		self.peerset.set_reserved_peers(sc_peerset::SetId(0), peers)
+		self.peerset.set_reserved_peers(sc_peerset::SetId::from(0), peers)
 		// TODO: set 1?
 	}
 
@@ -945,7 +945,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset.remove_reserved_peer(sc_peerset::SetId(0), peer);
+		self.peerset.remove_reserved_peer(sc_peerset::SetId::from(0), peer);
 		// TODO: set 1?
 	}
 
@@ -960,7 +960,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		if peer_id == self.local_peer_id {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
 		}
-		self.peerset.add_reserved_peer(sc_peerset::SetId(0), peer_id.clone());
+		self.peerset.add_reserved_peer(sc_peerset::SetId::from(0), peer_id.clone());
 		// TODO: set 1?
 		let _ = self
 			.to_worker
