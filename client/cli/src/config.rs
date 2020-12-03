@@ -26,6 +26,7 @@ use crate::{
 };
 use log::warn;
 use names::{Generator, Name};
+use parking_lot::Mutex;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
 	BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
@@ -35,6 +36,7 @@ use sc_service::config::{
 use sc_service::{ChainSpec, TracingReceiver};
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// The maximum number of characters for a node name.
 pub(crate) const NODE_NAME_MAX_LENGTH: usize = 64;
@@ -455,7 +457,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		&self,
 		cli: &C,
 		task_executor: TaskExecutor,
-		telemetries: sc_telemetry::Telemetries,
+		telemetries: Arc<Mutex<sc_telemetry::Telemetries>>,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;

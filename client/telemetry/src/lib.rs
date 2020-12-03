@@ -366,6 +366,7 @@ impl Telemetries {
 
 		let connection_sink = TelemetryConnectionSinks::default();
 		self.connection_sinks.insert(id.clone(), connection_sink.clone());
+		self.connection_messages.insert(id.clone(), connection_message);
 
 		Ok(connection_sink)
 	}
@@ -401,7 +402,7 @@ impl Telemetries {
 				log::error!(
 					target: "telemetry",
 					"Received telemetry log for unknown id ({:?}): {}",
-					id,
+					(id, node_map.keys().collect::<Vec<_>>()),
 					message,
 				);
 				continue;

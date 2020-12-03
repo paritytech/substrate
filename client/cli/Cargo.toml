@@ -44,6 +44,7 @@ chrono = "0.4.10"
 serde = "1.0.111"
 tracing = "0.1.22"
 thiserror = "1.0.21"
+parking_lot = "0.10.0"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "5.0.0"

@@ -686,7 +686,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 		"network_id": network_id.clone()
 	}};
 
-	Some(config.telemetries.start_telemetry(endpoints, json)).transpose()
+	Some(config.telemetries.lock().start_telemetry(endpoints, json)).transpose()
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
