@@ -561,47 +561,50 @@ impl RuntimeInstanceSpawn {
 				task_receiver_locked.recv()
 			}.expect("Sender dropped, closing all instance.") {
 				dismiss_handles.register_worker(handle, thread_id);
-				let async_ext = match new_async_externalities(scheduler.clone(), ext) {
-					Ok(val) => val,
-					Err(e) => {
-						log::error!(
-							target: "executor",
-							"Failed to setup externalities for async context: {}",
-							e,
-						);
-
-						// TODO send back message and count (to run non asynch at some point).
-						// tasks.lock().finished();
-						continue;
-					}
-				};
-				let mut async_ext = match async_ext.with_runtime_spawn(runtime_spawn.clone()) {
-					Ok(val) => val,
-					Err(e) => {
-						log::error!(
-							target: "executor",
-							"Failed to setup runtime extension for async externalities: {}",
-							e,
-						);
-
-						// TODO send back message and count (to run non asynch at some point).
-						// tasks.lock().finished(); -> wrap in an process_task_queu and return
-						// HardPanic should do.
-						continue;
-					}
-				};
 				let mut instance: Option<AssertUnwindSafe<Box<dyn WasmInstance>>> = None;
-				let instance_ref = InlineInstantiateRef {
-					module: &*module,
-					instance: &mut instance,
+				let async_ext = || {
+					let async_ext = match new_async_externalities(scheduler.clone(), ext) {
+						Ok(val) => val,
+						Err(e) => {
+							log::error!(
+								target: "executor",
+								"Failed to setup externalities for async context: {}",
+								e,
+							);
+
+							return None;
+						}
+					};
+					let async_ext = match async_ext.with_runtime_spawn(runtime_spawn.clone()) {
+						Ok(val) => val,
+						Err(e) => {
+							log::error!(
+								target: "executor",
+								"Failed to setup runtime extension for async externalities: {}",
+								e,
+							);
+
+							return None;
+						}
+					};
+					Some(async_ext)
 				};
 
-				let result = sc_executor_common::inline_spawn::process_task::<(), _>(
-					task,
-					async_ext,
-					handle,
-					instance_ref,
-				);
+				let result = if let Some(mut async_ext) = async_ext() {
+					let instance_ref = InlineInstantiateRef {
+						module: &*module,
+						instance: &mut instance,
+					};
+
+					sc_executor_common::inline_spawn::process_task::<(), _>(
+						task,
+						async_ext,
+						handle,
+						instance_ref,
+					)
+				} else {
+					WorkerResult::HardPanic
+				};
 
 				let mut end = false;
 				if let &WorkerResult::Panic = &result {
@@ -717,10 +720,12 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					guard: &mut instance,
 				};
 
+				let runtime_spawn = Box::new(self.rec_clone());
 				sc_executor_common::inline_spawn::process_task_inline::<(), _>(
 					task.task,
 					task.ext,
 					handle,
+					runtime_spawn,
 					instance_ref,
 				)
 			},

@@ -72,12 +72,12 @@ impl HostLocalFunction for HostLocal {
 
 /// Helper inner struct to implement `RuntimeSpawn` extension.
 /// TODO maybe RunningTask param is useless
-pub struct RuntimeInstanceSpawn<RunningTask, HostLocalFunction = ()> {
+pub struct RuntimeInstanceSpawn<HostLocalFunction = ()> {
 	#[cfg(feature = "std")]
 	module: Option<Box<dyn WasmModule>>,
 	#[cfg(feature = "std")]
 	instance: Option<AssertUnwindSafe<Box<dyn WasmInstance>>>,
-	tasks: BTreeMap<u64, RunningTask>,
+	tasks: BTreeMap<u64, PendingInlineTask>,
 	counter: u64,
 	_ph: PhantomData<HostLocalFunction>,
 }
@@ -239,6 +239,7 @@ pub fn process_task_inline<
 	task: Task,
 	ext: AsyncExt,
 	handle: u64,
+	runtime_ext: Box<dyn RuntimeSpawn>,
 	#[cfg(feature = "std")]
 	mut instance_ref: I,
 ) -> WorkerResult {
@@ -253,6 +254,19 @@ pub fn process_task_inline<
 			return WorkerResult::HardPanic;
 		}
 	};
+	let async_ext = match async_ext.with_runtime_spawn(runtime_ext) {
+		Ok(val) => val,
+		Err(e) => {
+			log_error!(
+				target: "executor",
+				"Failed to setup runtime extension for async externalities: {}",
+				e,
+			);
+
+			return WorkerResult::HardPanic;
+		}
+	};
+
 	#[cfg(feature = "std")]
 	{
 		process_task::<HostLocal, _>(task, async_ext, handle, instance_ref)
@@ -348,7 +362,7 @@ pub fn process_task<
 	}
 }
 
-impl<RunningTask, HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask, HostLocal> {
+impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 	// TODO
 	#[cfg(feature = "std")]
 	pub fn with_module(module: Box<dyn WasmModule>) -> Self {
@@ -376,7 +390,7 @@ impl<RunningTask, HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask
 	}
 }
 
-impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<PendingInlineTask, HostLocal> {
+impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 	fn spawn_call_inner(
 		&mut self,
 		task: Task,
@@ -418,7 +432,12 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<PendingInlineTask, HostL
 	}
 
 	/// Base implementation for `RuntimeSpawn` method.
-	pub fn join(&mut self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
+	pub fn join(
+		&mut self,
+		handle: u64,
+		calling_ext: &mut dyn Externalities,
+		spawn_rec: Box<dyn RuntimeSpawn>,
+	) -> Option<Vec<u8>> {
 		let worker_result = match self.tasks.remove(&handle) {
 			Some(task) => {
 				#[cfg(feature = "std")]
@@ -427,10 +446,10 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<PendingInlineTask, HostL
 						module: &self.module,
 						instance: &mut self.instance,
 					};
-					process_task_inline::<HostLocal, _>(task.task, task.ext, handle, instance_ref)
+					process_task_inline::<HostLocal, _>(task.task, task.ext, handle, spawn_rec, instance_ref)
 				}
 				#[cfg(not(feature = "std"))]
-				process_task_inline::<HostLocal>(task.task, task.ext, handle)
+				process_task_inline::<HostLocal>(task.task, task.ext, handle, spawn_rec)
 			},
 			// handle has been removed due to dismiss or
 			// invalid externality condition.
@@ -444,10 +463,11 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<PendingInlineTask, HostL
 
 /// Inline instance spawn, to use with nodes that can manage threads.
 #[cfg(feature = "std")]
-pub struct RuntimeInstanceSpawnSend<RunningTask>(Arc<Mutex<RuntimeInstanceSpawn<RunningTask>>>);
+#[derive(Clone)]
+pub struct RuntimeInstanceSpawnSend(Arc<Mutex<RuntimeInstanceSpawn>>);
 
 #[cfg(feature = "std")]
-impl RuntimeSpawn for RuntimeInstanceSpawnSend<PendingInlineTask> {
+impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 	fn spawn_call_native(
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
@@ -470,7 +490,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend<PendingInlineTask> {
 	}
 
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
-		self.0.lock().join(handle, calling_ext)
+		self.0.lock().join(handle, calling_ext, Box::new(self.clone()))
 	}
 
 	fn dismiss(&self, handle: u64) {
@@ -485,11 +505,12 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend<PendingInlineTask> {
 
 /// Inline instance spawn, to use with environment that do not use threads
 /// and allows running an unsafe `Send` declaration.
-pub struct RuntimeInstanceSpawnForceSend<RunningTask>(Rc<RefCell<RuntimeInstanceSpawn<RunningTask, HostLocal>>>);
+#[derive(Clone)]
+pub struct RuntimeInstanceSpawnForceSend(Rc<RefCell<RuntimeInstanceSpawn<HostLocal>>>);
 
-unsafe impl Send for RuntimeInstanceSpawnForceSend<PendingInlineTask> { }
+unsafe impl Send for RuntimeInstanceSpawnForceSend { }
 
-impl RuntimeSpawn for RuntimeInstanceSpawnForceSend<PendingInlineTask> {
+impl RuntimeSpawn for RuntimeInstanceSpawnForceSend {
 	fn spawn_call_native(
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
@@ -512,7 +533,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawnForceSend<PendingInlineTask> {
 	}
 
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
-		self.0.borrow_mut().join(handle, calling_ext)
+		self.0.borrow_mut().join(handle, calling_ext, Box::new(self.clone()))
 	}
 
 	fn dismiss(&self, handle: u64) {
@@ -524,7 +545,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawnForceSend<PendingInlineTask> {
 	}
 }
 
-impl RuntimeInstanceSpawnForceSend<PendingInlineTask> {
+impl RuntimeInstanceSpawnForceSend {
 	// TODO
 	pub fn new() -> Self {
 		RuntimeInstanceSpawnForceSend(Rc::new(RefCell::new(RuntimeInstanceSpawn::new())))
@@ -533,4 +554,4 @@ impl RuntimeInstanceSpawnForceSend<PendingInlineTask> {
 
 /// Alias to an inline implementation that can be use when runtime interface
 /// is skipped.
-pub type HostRuntimeInstanceSpawn = RuntimeInstanceSpawnForceSend<PendingInlineTask>;
+pub type HostRuntimeInstanceSpawn = RuntimeInstanceSpawnForceSend;
