@@ -345,8 +345,8 @@ mod tests {
 	}
 
 	mod event_module {
-		use super::system;
 		use crate::dispatch::DispatchResult;
+		use super::system;
 
 		pub trait Config: system::Config {
 			type Balance;

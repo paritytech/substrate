@@ -34,13 +34,11 @@
 // --output=./frame/balances/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
+
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{
-	traits::Get,
-	weights::{constants::RocksDbWeight, Weight},
-};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_balances.
@@ -50,6 +48,7 @@ pub trait WeightInfo {
 	fn set_balance_creating() -> Weight;
 	fn set_balance_killing() -> Weight;
 	fn force_transfer() -> Weight;
+
 }
 
 /// Weights for pallet_balances using the Substrate node and recommended hardware.
@@ -59,27 +58,33 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		(94_088_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+
 	}
 	fn transfer_keep_alive() -> Weight {
 		(64_828_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+
 	}
 	fn set_balance_creating() -> Weight {
 		(36_151_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+
 	}
 	fn set_balance_killing() -> Weight {
 		(45_505_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+
 	}
 	fn force_transfer() -> Weight {
 		(92_986_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+
 	}
+
 }
 
 // For backwards compatibility and tests
@@ -88,25 +93,31 @@ impl WeightInfo for () {
 		(94_088_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+
 	}
 	fn transfer_keep_alive() -> Weight {
 		(64_828_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+
 	}
 	fn set_balance_creating() -> Weight {
 		(36_151_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+
 	}
 	fn set_balance_killing() -> Weight {
 		(45_505_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+
 	}
 	fn force_transfer() -> Weight {
 		(92_986_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+
 	}
+
 }

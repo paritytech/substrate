@@ -37,20 +37,18 @@
 
 use frame_support::{debug, traits::KeyOwnerProofSystem};
 use sp_consensus_babe::{EquivocationProof, SlotNumber};
-use sp_runtime::{
-	transaction_validity::{
-		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
-		TransactionValidityError, ValidTransaction,
-	},
-	DispatchResult, Perbill,
+use sp_runtime::transaction_validity::{
+	InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+	TransactionValidityError, ValidTransaction,
 };
+use sp_runtime::{DispatchResult, Perbill};
 use sp_staking::{
 	offence::{Kind, Offence, OffenceError, ReportOffence},
 	SessionIndex,
 };
 use sp_std::prelude::*;
 
-use crate::{Call, Config, Module};
+use crate::{Call, Module, Config};
 
 /// A trait with utility methods for handling equivocation reports in BABE.
 /// The trait provides methods for reporting an offence triggered by a valid

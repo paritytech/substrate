@@ -151,44 +151,38 @@
 
 #[macro_use]
 mod tests;
-mod benchmarking;
-mod tests_composite;
 mod tests_local;
+mod tests_composite;
+mod benchmarking;
 pub mod weights;
 
-pub use self::imbalances::{NegativeImbalance, PositiveImbalance};
-use codec::{Codec, Decode, Encode};
+use sp_std::prelude::*;
+use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
+use codec::{Codec, Encode, Decode};
 use frame_support::{
-	decl_error, decl_event, decl_module, decl_storage, ensure,
+	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
 	traits::{
-		BalanceStatus as Status, Currency, ExistenceRequirement,
-		ExistenceRequirement::{AllowDeath, KeepAlive},
-		Get, Imbalance, IsDeadAccount, LockIdentifier, LockableCurrency, OnKilledAccount,
-		OnUnbalanced, ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons,
-	},
-	Parameter, StorageValue,
+		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
+		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
+		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
+		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status,
+	}
 };
-use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::{
+	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
-		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member,
-		Saturating, StaticLookup, Zero,
+		Zero, AtLeast32BitUnsigned, StaticLookup, Member, CheckedAdd, CheckedSub,
+		MaybeSerializeDeserialize, Saturating, Bounded,
 	},
-	DispatchError, DispatchResult, RuntimeDebug,
 };
-use sp_std::{cmp, convert::Infallible, fmt::Debug, mem, ops::BitOr, prelude::*, result};
+use frame_system::{self as system, ensure_signed, ensure_root};
+pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 pub use weights::WeightInfo;
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Config {
 	/// The balance of an account.
-	type Balance: Parameter
-		+ Member
-		+ AtLeast32BitUnsigned
-		+ Codec
-		+ Default
-		+ Copy
-		+ MaybeSerializeDeserialize
-		+ Debug;
+	type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
+		MaybeSerializeDeserialize + Debug;
 
 	/// The minimum amount required to keep an account open.
 	type ExistentialDeposit: Get<Self::Balance>;
@@ -206,14 +200,8 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Config {
 
 pub trait Config<I: Instance = DefaultInstance>: frame_system::Config {
 	/// The balance of an account.
-	type Balance: Parameter
-		+ Member
-		+ AtLeast32BitUnsigned
-		+ Codec
-		+ Default
-		+ Copy
-		+ MaybeSerializeDeserialize
-		+ Debug;
+	type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
+		MaybeSerializeDeserialize + Debug;
 
 	/// Handler for the unbalanced reduction when removing a dust account.
 	type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
@@ -716,15 +704,15 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 // of the inner member.
 mod imbalances {
 	use super::{
-		result, Config, DefaultInstance, Imbalance, Instance, Saturating, StorageValue, TryDrop,
-		Zero,
+		result, DefaultInstance, Imbalance, Config, Zero, Instance, Saturating,
+		StorageValue, TryDrop,
 	};
 	use sp_std::mem;
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been created without any equal and opposite accounting.
 	#[must_use]
-	pub struct PositiveImbalance<T: Config<I>, I: Instance = DefaultInstance>(T::Balance);
+	pub struct PositiveImbalance<T: Config<I>, I: Instance=DefaultInstance>(T::Balance);
 
 	impl<T: Config<I>, I: Instance> PositiveImbalance<T, I> {
 		/// Create a new positive imbalance from a balance.
@@ -736,7 +724,7 @@ mod imbalances {
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been destroyed without any equal and opposite accounting.
 	#[must_use]
-	pub struct NegativeImbalance<T: Config<I>, I: Instance = DefaultInstance>(T::Balance);
+	pub struct NegativeImbalance<T: Config<I>, I: Instance=DefaultInstance>(T::Balance);
 
 	impl<T: Config<I>, I: Instance> NegativeImbalance<T, I> {
 		/// Create a new negative imbalance from a balance.
@@ -850,21 +838,24 @@ mod imbalances {
 	impl<T: Config<I>, I: Instance> Drop for PositiveImbalance<T, I> {
 		/// Basic drop handler will just square up the total issuance.
 		fn drop(&mut self) {
-			<super::TotalIssuance<T, I>>::mutate(|v| *v = v.saturating_add(self.0));
+			<super::TotalIssuance<T, I>>::mutate(
+				|v| *v = v.saturating_add(self.0)
+			);
 		}
 	}
 
 	impl<T: Config<I>, I: Instance> Drop for NegativeImbalance<T, I> {
 		/// Basic drop handler will just square up the total issuance.
 		fn drop(&mut self) {
-			<super::TotalIssuance<T, I>>::mutate(|v| *v = v.saturating_sub(self.0));
+			<super::TotalIssuance<T, I>>::mutate(
+				|v| *v = v.saturating_sub(self.0)
+			);
 		}
 	}
 }
 
-impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
-where
-	T::Balance: MaybeSerializeDeserialize + Debug,
+impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
+	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Balance = T::Balance;
 	type PositiveImbalance = PositiveImbalance<T, I>;
@@ -1112,9 +1103,8 @@ where
 	}
 }
 
-impl<T: Config<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
-where
-	T::Balance: MaybeSerializeDeserialize + Debug,
+impl<T: Config<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>  where
+	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	/// Check if `who` can reserve `value` from their free balance.
 	///
@@ -1243,7 +1233,7 @@ impl<T: Config<I>, I: Instance> OnKilledAccount<T::AccountId> for Module<T, I> {
 
 impl<T: Config<I>, I: Instance> LockableCurrency<T::AccountId> for Module<T, I>
 where
-	T::Balance: MaybeSerializeDeserialize + Debug,
+	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Moment = T::BlockNumber;
 
@@ -1257,16 +1247,9 @@ where
 		amount: T::Balance,
 		reasons: WithdrawReasons,
 	) {
-		if amount.is_zero() || reasons.is_empty() {
-			return;
-		}
-		let mut new_lock = Some(BalanceLock {
-			id,
-			amount,
-			reasons: reasons.into(),
-		});
-		let mut locks = Self::locks(who)
-			.into_iter()
+		if amount.is_zero() || reasons.is_empty() { return }
+		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
+		let mut locks = Self::locks(who).into_iter()
 			.filter_map(|l| if l.id == id { new_lock.take() } else { Some(l) })
 			.collect::<Vec<_>>();
 		if let Some(lock) = new_lock {
@@ -1283,18 +1266,10 @@ where
 		amount: T::Balance,
 		reasons: WithdrawReasons,
 	) {
-		if amount.is_zero() || reasons.is_empty() {
-			return;
-		}
-		let mut new_lock = Some(BalanceLock {
-			id,
-			amount,
-			reasons: reasons.into(),
-		});
-		let mut locks = Self::locks(who)
-			.into_iter()
-			.filter_map(|l| {
-				if l.id == id {
+		if amount.is_zero() || reasons.is_empty() { return }
+		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
+		let mut locks = Self::locks(who).into_iter().filter_map(|l|
+			if l.id == id {
 				new_lock.take().map(|nl| {
 					BalanceLock {
 						id: l.id,
@@ -1304,8 +1279,7 @@ where
 				})
 			} else {
 				Some(l)
-			})
-			.collect::<Vec<_>>();
+			}).collect::<Vec<_>>();
 		if let Some(lock) = new_lock {
 			locks.push(lock)
 		}
@@ -1322,9 +1296,8 @@ where
 	}
 }
 
-impl<T: Config<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I>
-where
-	T::Balance: MaybeSerializeDeserialize + Debug,
+impl<T: Config<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I> where
+	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		// this should always be exactly equivalent to `Self::account(who).total().is_zero()` if ExistentialDeposit > 0

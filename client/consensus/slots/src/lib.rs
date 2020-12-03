@@ -23,39 +23,28 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-mod aux_schema;
 mod slots;
+mod aux_schema;
 
-pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 pub use slots::SlotInfo;
 use slots::Slots;
+pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
+use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
 use codec::{Decode, Encode};
-use futures::{
-	future::{self, Either},
-	prelude::*,
-};
+use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
 use log::{debug, error, info, warn};
 use parking_lot::Mutex;
-use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
-use sp_api::{ApiRef, ProvideRuntimeApi};
+use sp_api::{ProvideRuntimeApi, ApiRef};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{
-	BlockImport, CanAuthorWith, Proposer, RecordProof, SelectChain, SlotData, SyncOracle,
-};
+use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData, RecordProof};
 use sp_inherents::{InherentData, InherentDataProviders};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header, NumberFor},
+	traits::{Block as BlockT, Header, HashFor, NumberFor}
 };
-use std::{
-	fmt::Debug,
-	ops::Deref,
-	pin::Pin,
-	sync::Arc,
-	time::{Duration, Instant},
-};
+use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
@@ -141,7 +130,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	/// Notifies the given slot. Similar to `claim_slot`, but will be called no matter whether we
 	/// need to author blocks or not.
-	fn notify_slot(&self, _header: &B::Header, _slot_number: u64, _epoch_data: &Self::EpochData) {}
+	fn notify_slot(
+		&self,
+		_header: &B::Header,
+		_slot_number: u64,
+		_epoch_data: &Self::EpochData,
+	) {}
 
 	/// Return the pre digest data to include in a block authored with the given claim.
 	fn pre_digest_data(
@@ -215,8 +209,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let (timestamp, slot_number) = (slot_info.timestamp, slot_info.number);
 
 		let slot_remaining_duration = self.slot_remaining_duration(&slot_info);
-		let proposing_remaining_duration =
-			self.proposing_remaining_duration(&chain_head, &slot_info);
+		let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
 
 		let proposing_remaining = match proposing_remaining_duration {
 			Some(r) if r.as_secs() == 0 && r.as_nanos() == 0 => {
@@ -227,7 +220,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				);
 
 				return Box::pin(future::ready(None));
-			}
+			},
 			Some(r) => Box::new(Delay::new(r)) as Box<dyn Future<Output = ()> + Unpin + Send>,
 			None => Box::new(future::pending()) as Box<_>,
 		};
@@ -299,51 +292,43 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let logs = self.pre_digest_data(slot_number, &claim);
 
 		// deadline our production to approx. the end of the slot
-		let proposing = awaiting_proposer.and_then(move |proposer| {
-			proposer.propose(
+		let proposing = awaiting_proposer.and_then(move |proposer| proposer.propose(
 			slot_info.inherent_data,
 			sp_runtime::generic::Digest {
 				logs,
 			},
 			slot_remaining_duration,
 			RecordProof::No,
-		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)))
-		});
+		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e))));
 
 		let proposal_work =
 			futures::future::select(proposing, proposing_remaining).map(move |v| match v {
 				Either::Left((b, _)) => b.map(|b| (b, claim)),
 				Either::Right(_) => {
-					info!(
-						"⌛️ Discarding proposal for slot {}; block production took too long",
-						slot_number
-					);
+					info!("⌛️ Discarding proposal for slot {}; block production took too long", slot_number);
 					// If the node was compiled with debug, tell the user to use release optimizations.
-					#[cfg(build_type = "debug")]
+					#[cfg(build_type="debug")]
 					info!("👉 Recompile your node in `--release` mode to mitigate this problem.");
 					telemetry!(CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
 						"slot" => slot_number,
 					);
 
-					Err(sp_consensus::Error::ClientImport(
-						"Timeout in the Slots proposer".into(),
-					))
-				}
+					Err(sp_consensus::Error::ClientImport("Timeout in the Slots proposer".into()))
+				},
 			});
 
 		let block_import_params_maker = self.block_import_params();
 		let block_import = self.block_import();
 		let logging_target = self.logging_target();
 
-		proposal_work
-			.and_then(move |(proposal, claim)| async move {
-				let (block, storage_proof) = (proposal.block, proposal.proof);
-				let (header, body) = block.clone().deconstruct();
-				let header_num = *header.number();
-				let header_hash = header.hash();
-				let parent_hash = *header.parent_hash();
+		proposal_work.and_then(move |(proposal, claim)| async move {
+			let (block, storage_proof) = (proposal.block, proposal.proof);
+			let (header, body) = block.clone().deconstruct();
+			let header_num = *header.number();
+			let header_hash = header.hash();
+			let parent_hash = *header.parent_hash();
 
-				let block_import_params = block_import_params_maker(
+			let block_import_params = block_import_params_maker(
 				header,
 				&header_hash,
 				body,
@@ -352,7 +337,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				epoch_data,
 			)?;
 
-				info!(
+			info!(
 				"🔖 Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 				header_num,
 				block_import_params.post_hash(),
@@ -365,32 +350,25 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				"hash_previously" => ?header_hash,
 			);
 
-				if let Err(err) = block_import
-					.lock()
-					.import_block(block_import_params, Default::default())
-				{
-					warn!(
-						target: logging_target,
-						"Error with block built on {:?}: {:?}", parent_hash, err,
-					);
+			if let Err(err) = block_import.lock().import_block(block_import_params, Default::default()) {
+				warn!(
+					target: logging_target,
+					"Error with block built on {:?}: {:?}",
+					parent_hash,
+					err,
+				);
 
-					telemetry!(
-						CONSENSUS_WARN; "slots.err_with_block_built_on";
-						"hash" => ?parent_hash,
-						"err" => ?err,
-					);
-				}
+				telemetry!(
+					CONSENSUS_WARN; "slots.err_with_block_built_on";
+					"hash" => ?parent_hash,
+					"err" => ?err,
+				);
+			}
 
-				Ok(SlotResult {
-					block,
-					storage_proof,
-				})
-			})
-			.then(|r| async move {
-				r.map_err(|e| warn!(target: "slots", "Encountered consensus error: {:?}", e))
-					.ok()
-			})
-			.boxed()
+			Ok(SlotResult { block, storage_proof })
+		}).then(|r| async move {
+			r.map_err(|e| warn!(target: "slots", "Encountered consensus error: {:?}", e)).ok()
+		}).boxed()
 	}
 }
 
@@ -493,12 +471,11 @@ pub enum CheckedHeader<H, S> {
 	Checked(H, S),
 }
 
+
+
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
-pub enum Error<T>
-where
-	T: Debug,
-{
+pub enum Error<T> where T: Debug {
 	#[error("Slot duration is invalid: {0:?}")]
 	SlotDurationInvalid(SlotDuration<T>),
 }
@@ -519,8 +496,7 @@ impl<T> Deref for SlotDuration<T> {
 impl<T: SlotData> SlotData for SlotDuration<T> {
 	/// Get the slot duration in milliseconds.
 	fn slot_duration(&self) -> u64
-	where
-		T: SlotData,
+		where T: SlotData,
 	{
 		self.0.slot_duration()
 	}
@@ -534,8 +510,7 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 	///
 	/// `slot_key` is marked as `'static`, as it should really be a
 	/// compile-time constant.
-	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> sp_blockchain::Result<Self>
-	where
+	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> sp_blockchain::Result<Self> where
 		C: sc_client_api::backend::AuxStore,
 		C: ProvideRuntimeApi<B>,
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> sp_blockchain::Result<T>,
@@ -568,9 +543,7 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 		}?;
 
 		if slot_duration.slot_duration() == 0u64 {
-			return Err(sp_blockchain::Error::Application(Box::new(
-				Error::SlotDurationInvalid(slot_duration),
-			)));
+			return Err(sp_blockchain::Error::Application(Box::new(Error::SlotDurationInvalid(slot_duration))))
 		}
 
 		Ok(slot_duration)
@@ -683,7 +656,7 @@ impl<N: BaseArithmetic> Default for BackoffAuthoringOnFinalizedHeadLagging<N> {
 
 impl<N> BackoffAuthoringBlocksStrategy<N> for BackoffAuthoringOnFinalizedHeadLagging<N>
 where
-	N: BaseArithmetic + Copy,
+	N: BaseArithmetic + Copy
 {
 	fn should_backoff(
 		&self,
@@ -699,8 +672,8 @@ where
 		}
 
 		let unfinalized_block_length = chain_head_number - finalized_number;
-		let interval =
-			unfinalized_block_length.saturating_sub(self.unfinalized_slack) / self.authoring_bias;
+		let interval = unfinalized_block_length.saturating_sub(self.unfinalized_slack)
+			/ self.authoring_bias;
 		let interval = interval.min(self.max_interval);
 
 		// We're doing arithmetic between block and slot numbers.
@@ -735,10 +708,10 @@ impl<N> BackoffAuthoringBlocksStrategy<N> for () {
 
 #[cfg(test)]
 mod test {
-	use crate::{BackoffAuthoringBlocksStrategy, BackoffAuthoringOnFinalizedHeadLagging};
-	use sp_api::NumberFor;
 	use std::time::{Duration, Instant};
+	use crate::{BackoffAuthoringOnFinalizedHeadLagging, BackoffAuthoringBlocksStrategy};
 	use substrate_test_runtime_client::runtime::Block;
+	use sp_api::NumberFor;
 
 	const SLOT_DURATION: Duration = Duration::from_millis(6000);
 
@@ -856,8 +829,13 @@ mod test {
 
 		let should_backoff: Vec<bool> = (slot_now..300)
 			.map(move |s| {
-				let b =
-					strategy.should_backoff(head_number, head_slot, finalized_number, s, "slots");
+				let b = strategy.should_backoff(
+					head_number,
+					head_slot,
+					finalized_number,
+					s,
+					"slots",
+				);
 				// Chain is still advancing (by someone else)
 				head_number += 1;
 				head_slot = s;
@@ -897,9 +875,7 @@ mod test {
 
 		// Should backoff (true) until we are `max_interval` number of slots ahead of the chain
 		// head slot, then we never backoff (false).
-		let expected: Vec<bool> = (slot_now..200)
-			.map(|s| s <= max_interval + head_slot)
-			.collect();
+		let expected: Vec<bool> = (slot_now..200).map(|s| s <= max_interval + head_slot).collect();
 		assert_eq!(should_backoff, expected);
 	}
 
@@ -944,27 +920,32 @@ mod test {
 		// Gradually start to backoff more and more frequently
 		let expected = [
 			false, false, false, false, false, // no effect
-			true, false, true, false, // 1:1
-			true, true, false, true, true, false, // 2:1
-			true, true, true, false, true, true, true, false, // 3:1
-			true, true, true, true, false, true, true, true, true, false, // 4:1
-			true, true, true, true, true, false, true, true, true, true, true, false, // 5:1
-			true, true, true, true, true, true, false, true, true, true, true, true, true,
-			false, // 6:1
-			true, true, true, true, true, true, true, false, true, true, true, true, true, true,
-			true, false, // 7:1
-			true, true, true, true, true, true, true, true, false, true, true, true, true, true,
-			true, true, true, false, // 8:1
-			true, true, true, true, true, true, true, true, true, false, true, true, true, true,
-			true, true, true, true, true, false, // 9:1
-			true, true, true, true, true, true, true, true, true, true, false, true, true, true,
-			true, true, true, true, true, true, true, false, // 10:1
-			true, true, true, true, true, true, true, true, true, true, true, false, true, true,
-			true, true, true, true, true, true, true, true, true, false, // 11:1
-			true, true, true, true, true, true, true, true, true, true, true, true, false, true,
-			true, true, true, true, true, true, true, true, true, true, true, false, // 12:1
+			true, false,
+			true, false, // 1:1
+			true, true, false,
+			true, true, false, // 2:1
+			true, true, true, false,
+			true, true, true, false, // 3:1
+			true, true, true, true, false,
+			true, true, true, true, false, // 4:1
+			true, true, true, true, true, false,
+			true, true, true, true, true, false, // 5:1
+			true, true, true, true, true, true, false,
+			true, true, true, true, true, true, false, // 6:1
+			true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, false, // 7:1
+			true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, false, // 8:1
+			true, true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, true, false, // 9:1
+			true, true, true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, true, true, false, // 10:1
+			true, true, true, true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, true, true, true, false, // 11:1
+			true, true, true, true, true, true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, true, true, true, true, true, true, false, // 12:1
 			true, true, true, true,
-		];
+	];
 
 		assert_eq!(backoff.as_slice(), &expected[..]);
 	}
@@ -1022,12 +1003,12 @@ mod test {
 		// number of slots_claimed.
 		let expected_distance = param.max_interval as usize + 1;
 		assert_eq!(last_slot - last_two_claimed.next().unwrap(), 92);
-		assert_eq!(
-			last_slot - last_two_claimed.next().unwrap(),
-			92 + expected_distance
-		);
+		assert_eq!(last_slot - last_two_claimed.next().unwrap(), 92 + expected_distance);
 
-		let intervals: Vec<_> = slots_claimed.windows(2).map(|x| x[1] - x[0]).collect();
+		let intervals: Vec<_> = slots_claimed
+			.windows(2)
+			.map(|x| x[1] - x[0])
+			.collect();
 
 		// The key thing is that the distance between claimed slots is capped to `max_interval + 1`
 		// assert_eq!(max_observed_interval, Some(&expected_distance));
@@ -1035,7 +1016,7 @@ mod test {
 
 		// But lets assert all distances, which we expect to grow linearly until `max_interval + 1`
 		let expected_intervals: Vec<_> = (0..497)
-			.map(|i| (i / 2).max(1).min(expected_distance))
+			.map(|i| (i/2).max(1).min(expected_distance) )
 			.collect();
 
 		assert_eq!(intervals, expected_intervals);
@@ -1061,8 +1042,8 @@ mod test {
 		};
 
 		// Number of blocks until we reach the max interval
-		let block_for_max_interval =
-			param.max_interval * param.authoring_bias + param.unfinalized_slack;
+		let block_for_max_interval
+			= param.max_interval * param.authoring_bias + param.unfinalized_slack;
 
 		while head_state.head_number < block_for_max_interval {
 			if should_backoff(&head_state) {
@@ -1086,7 +1067,7 @@ mod test {
 	// or
 	//	(start_slot + C) + M * X*(X+1)/2
 	fn expected_time_to_reach_max_interval(
-		param: &BackoffAuthoringOnFinalizedHeadLagging<u64>,
+		param: &BackoffAuthoringOnFinalizedHeadLagging<u64>
 	) -> (u64, u64) {
 		let c = param.unfinalized_slack;
 		let m = param.authoring_bias;

@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures::{future::FutureExt, ready, stream::Stream};
+use futures::stream::Stream;
+use futures::future::FutureExt;
+use futures::ready;
 use futures_timer::Delay;
-use std::{
-	pin::Pin,
-	task::{Context, Poll},
-	time::Duration,
-};
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use std::time::Duration;
 
 /// Exponentially increasing interval
 ///
