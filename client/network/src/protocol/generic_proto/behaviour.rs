@@ -650,13 +650,17 @@ impl GenericProto {
 			Some(sink) => sink
 		};
 
+		let message = message.into();
+
 		trace!(
 			target: "sub-libp2p",
-			"External API => Notification({:?}, {:?})",
+			"External API => Notification({:?}, {:?}, {} bytes)",
 			target,
 			protocol_name,
+			message.len(),
 		);
-		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
+		trace!(target: "sub-libp2p", "Handler({:?}) <= Sync notification", target);
+
 		notifs_sink.send_sync_notification(
 			protocol_name,
 			message
@@ -1930,9 +1934,10 @@ impl NetworkBehaviour for GenericProto {
 				if self.is_open(&source) {
 					trace!(
 						target: "sub-libp2p",
-						"Handler({:?}) => Notification({:?})",
+						"Handler({:?}) => Notification({:?}, {} bytes)",
 						source,
 						protocol_name,
+						message.len()
 					);
 					trace!(target: "sub-libp2p", "External API <= Message({:?}, {:?})", protocol_name, source);
 					let event = GenericProtoOut::Notification {
@@ -1945,9 +1950,10 @@ impl NetworkBehaviour for GenericProto {
 				} else {
 					trace!(
 						target: "sub-libp2p",
-						"Handler({:?}) => Post-close notification({:?})",
+						"Handler({:?}) => Post-close notification({:?}, {} bytes)",
 						source,
 						protocol_name,
+						message.len()
 					);
 				}
 			}
