@@ -425,6 +425,16 @@ impl<'a> ConnectedPeer<'a> {
 			);
 		}
 	}
+
+	/// Returns the reputation value of the node.
+	///
+	/// > **Note**: Reputation values aren't specific to a set but are global per peer.
+	pub fn reputation(&self) -> i32 {
+		self.state
+			.nodes
+			.get(&*self.peer_id)
+			.map_or(0, |p| p.reputation)
+	}
 }
 
 /// A peer that is not connected to us.
