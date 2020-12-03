@@ -547,7 +547,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		&mut config,
 		network.clone(),
 		client.clone(),
-	)?;
+	);
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
 	telemetry!(
@@ -652,11 +652,17 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	config: &mut Configuration,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
-) -> Result<Option<sc_telemetry::TelemetryConnectionSinks>, std::io::Error> {
+) -> Option<sc_telemetry::TelemetryConnectionSinks> {
+	let telemetry_handle = if let Some(handle) = config.telemetry_handle.as_mut() {
+		handle
+	} else {
+		return None;
+	};
+
 	let endpoints = match config.telemetry_endpoints.clone() {
 		// Don't initialise telemetry if `telemetry_endpoints` == Some([])
 		Some(endpoints) if !endpoints.is_empty() => endpoints,
-		_ => return Ok(None),
+		_ => return None,
 	};
 
 	let genesis_hash = match client.block_hash(Zero::zero()) {
@@ -686,7 +692,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 		"network_id": network_id.clone()
 	}};
 
-	Some(config.telemetries.start_telemetry(endpoints, json)).transpose()
+	Some(telemetry_handle.start_telemetry(endpoints, json))
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(

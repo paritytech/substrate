@@ -159,7 +159,7 @@ fn get_default_subscriber_and_telemetries_internal(
 		sc_telemetry::Telemetries::with_wasm_external_transport(telemetry_external_transport)
 	} else {
 		sc_telemetry::Telemetries::new()
-	};
+	}.map_err(|err| format!("Could not initialize telemetry: {}", err))?;
 	let sender = telemetries.sender();
 	let telemetry_layer = sc_telemetry::TelemetryLayer::new(sender);
 	let event_format = EventFormat {

@@ -41,7 +41,7 @@ async fn start_inner(chain_spec: Option<String>, log_directives: String) -> Resu
 		None => crate::chain_spec::development_config(),
 	};
 
-	let config = browser_configuration(chain_spec, telemetries, transport).await?;
+	let config = browser_configuration(chain_spec, Some(telemetries.handle()), transport).await?;
 
 	info!("Substrate browser node");
 	info!("✌️  version {}", config.impl_version);

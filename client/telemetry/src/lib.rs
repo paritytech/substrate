@@ -48,6 +48,7 @@ use log::{error, warn};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{
 	collections::{HashMap, HashSet},
+	fmt,
 	io,
 	pin::Pin,
 	sync::Arc,
@@ -258,6 +259,8 @@ impl Stream for Telemetry {
 	}
 }
 
+pub(crate) type InitPayload = (Id, TelemetryEndpoints, serde_json::Value, TelemetryConnectionSinks);
+
 /// An object that keeps track of all the [`Telemetry`] created by its `build_telemetry()` method.
 ///
 /// [`Telemetry`] created through this object re-use connections if possible.
@@ -265,27 +268,24 @@ impl Stream for Telemetry {
 pub struct Telemetries {
 	receiver: mpsc::Receiver<(Id, u8, String)>,
 	sender: mpsc::Sender<(Id, u8, String)>,
-	node_map: HashMap<Id, Vec<(u8, Multiaddr)>>,
-	connection_messages: HashMap<Id, serde_json::Value>,
-	connection_sinks: HashMap<Id, TelemetryConnectionSinks>,
-	node_pool: HashMap<Multiaddr, crate::worker::node::Node<crate::worker::WsTrans>>, // TODO mod
-	wasm_external_transport: Option<wasm_ext::ExtTransport>,
+	init_receiver: mpsc::UnboundedReceiver<InitPayload>,
+	init_sender: mpsc::UnboundedSender<InitPayload>,
+	transport: crate::worker::WsTrans,
 }
 
 impl Telemetries {
 	/// TODO
-	pub fn new() -> Self {
+	pub fn new() -> Result<Self, io::Error> {
 		let (sender, receiver) = mpsc::channel(16);
+		let (init_sender, init_receiver) = mpsc::unbounded();
 
-		Self {
+		Ok(Self {
 			receiver,
 			sender,
-			node_map: Default::default(),
-			connection_messages: Default::default(),
-			connection_sinks: Default::default(),
-			node_pool: Default::default(),
-			wasm_external_transport: None,
-		}
+			init_receiver,
+			init_sender,
+			transport: Self::initialize_transport(None)?,
+		})
 	}
 
 	/// Create a [`Telemetries`] object using an `ExtTransport`.
@@ -298,32 +298,23 @@ impl Telemetries {
 	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
 	/// >                internal buffering going on. In the context of WebSockets, each `write`
 	/// >                must be one individual WebSockets frame.
-	pub fn with_wasm_external_transport(wasm_external_transport: wasm_ext::ExtTransport) -> Self {
-		Self {
-			wasm_external_transport: Some(wasm_external_transport),
-			..Self::new()
-		}
+	pub fn with_wasm_external_transport(wasm_external_transport: wasm_ext::ExtTransport) -> Result<Self, io::Error> {
+		let (sender, receiver) = mpsc::channel(16);
+		let (init_sender, init_receiver) = mpsc::unbounded();
+
+		Ok(Self {
+			receiver,
+			sender,
+			init_receiver,
+			init_sender,
+			transport: Self::initialize_transport(Some(wasm_external_transport))?,
+		})
 	}
 
-	/// Create a new [`Telemetry`] for the endpoints provided in argument.
-	///
-	/// The `endpoints` argument is a collection of telemetry WebSocket servers with a corresponding
-	/// verbosity level. TODO doc
-	pub fn start_telemetry(
-		&mut self,
-		endpoints: TelemetryEndpoints,
-		connection_message: serde_json::Value,
-	) -> Result<TelemetryConnectionSinks, io::Error> {
-		let endpoints = endpoints.0;
-
-		let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
-		let id = span.id().expect("the span is enabled; qed");
-		{
-			let id = id.clone();
-			// TODO where to drop span?
-			tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&id));
-		}
-		let transport = match self.wasm_external_transport.clone() {
+	fn initialize_transport(
+		wasm_external_transport: Option<wasm_ext::ExtTransport>,
+	) -> Result<crate::worker::WsTrans, io::Error> {
+		let transport = match wasm_external_transport.clone() {
 			Some(t) => OptionalTransport::some(t),
 			None => OptionalTransport::none()
 		}.map((|inner, _| StreamSink::from(inner)) as fn(_, _) -> _);
@@ -347,7 +338,7 @@ impl Telemetries {
 				})
 		});
 
-		let transport = TransportTimeout::new(
+		Ok(TransportTimeout::new(
 			transport.map(|out, _| {
 				let out = out
 					.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
@@ -355,19 +346,12 @@ impl Telemetries {
 				Box::pin(out) as Pin<Box<_>>
 			}),
 			CONNECT_TIMEOUT
-		).boxed();
+		).boxed())
+	}
 
-		for (addr, verbosity) in endpoints {
-			let node = crate::worker::node::Node::new(transport.clone(), addr.clone());
-			self.node_pool.insert(addr.clone(), node);
-			self.node_map.entry(id.clone()).or_insert_with(Vec::new)
-				.push((verbosity, addr));
-		}
-
-		let connection_sink = TelemetryConnectionSinks::default();
-		self.connection_sinks.insert(id.clone(), connection_sink.clone());
-
-		Ok(connection_sink)
+	/// TODO
+	pub fn handle(&self) -> TelemetryHandle {
+		TelemetryHandle(self.init_sender.clone())
 	}
 
 	/// TODO
@@ -379,19 +363,38 @@ impl Telemetries {
 	pub async fn run(self) {
 		let Self {
 			mut receiver,
-			sender,
-			node_map,
-			connection_messages,
-			connection_sinks,
-			mut node_pool,
-			wasm_external_transport,
+			sender: _sender,
+			mut init_receiver,
+			init_sender,
+			transport,
 		} = self;
-		let mut node_first_connect: HashSet<(Multiaddr, Id)> = node_map
-			.iter()
-			.map(|(id, addrs)| addrs.iter().map(move |(_, x)| (x.to_owned(), id.to_owned())))
-			.flatten()
-			.collect();
 
+		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
+		let mut connection_messages: HashMap<Id, serde_json::Value> = HashMap::new();
+		let mut connection_sinks: HashMap<Id, TelemetryConnectionSinks> = HashMap::new();
+		let mut node_pool: HashMap<Multiaddr, crate::worker::node::Node<crate::worker::WsTrans>> = HashMap::new(); // TODO mod
+
+		let mut node_first_connect: HashSet<(Multiaddr, Id)> = HashSet::new();
+
+		// initialize the telemetry nodes
+		init_sender.close_channel();
+		while let Some((id, endpoints, connection_message, connection_sink)) = init_receiver.next().await
+		{
+			let endpoints = endpoints.0;
+
+			for (addr, verbosity) in endpoints {
+				let node = crate::worker::node::Node::new(transport.clone(), addr.clone());
+				node_pool.insert(addr.clone(), node);
+				node_map.entry(id.clone()).or_insert_with(Vec::new)
+					.push((verbosity, addr.clone()));
+				node_first_connect.insert((addr, id.clone()));
+			}
+
+			let connection_sink = TelemetryConnectionSinks::default();
+			connection_sinks.insert(id.clone(), connection_sink.clone());
+		}
+
+		// loop indefinitely over telemetry messages
 		while let Some((id, verbosity, message)) = receiver.next().await {
 			let before = Instant::now();
 
@@ -459,6 +462,42 @@ impl Telemetries {
 				);
 			}
 		}
+	}
+}
+
+/// TODO
+#[derive(Clone, Debug)]
+pub struct TelemetryHandle(mpsc::UnboundedSender<InitPayload>);
+
+impl TelemetryHandle {
+	/// Create a new [`Telemetry`] for the endpoints provided in argument.
+	///
+	/// The `endpoints` argument is a collection of telemetry WebSocket servers with a corresponding
+	/// verbosity level. TODO doc
+	pub fn start_telemetry(
+		&mut self,
+		endpoints: TelemetryEndpoints,
+		connection_message: serde_json::Value,
+	) -> TelemetryConnectionSinks {
+		let connection_sink = TelemetryConnectionSinks::default();
+
+		let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
+		let id = span.id().expect("the span is enabled; qed");
+		{
+			let id = id.clone();
+			// TODO where to drop span?
+			tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&id));
+		}
+
+		if let Err(err) = self.0.unbounded_send((id, endpoints, connection_message, connection_sink.clone())) {
+			error!(
+				target: "telemetry",
+				"Could not initialize telemetry: {}",
+				err,
+			);
+		}
+
+		connection_sink
 	}
 }
 

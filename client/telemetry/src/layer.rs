@@ -131,6 +131,7 @@ impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
 ///
 /// This is used by [`TelemetryLayer`] to route the log events to the correct channel based on the
 /// span's ID.
+// TODO remove
 #[derive(Default, Debug, Clone)]
 pub struct Senders(
 	Arc<Mutex<HashMap<Id, std::panic::AssertUnwindSafe<mpsc::Sender<(u8, String)>>>>>,

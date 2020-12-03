@@ -455,7 +455,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		&self,
 		cli: &C,
 		task_executor: TaskExecutor,
-		telemetries: sc_telemetry::Telemetries,
+		telemetry_handle: Option<sc_telemetry::TelemetryHandle>,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
@@ -526,7 +526,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			role,
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
-			telemetries,
+			telemetry_handle,
 		})
 	}
 

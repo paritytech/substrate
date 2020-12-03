@@ -57,7 +57,7 @@ pub fn init_logging_and_telemetry(
 /// This configuration contains good defaults for a browser light client.
 pub async fn browser_configuration<G, E>(
 	chain_spec: GenericChainSpec<G, E>,
-	telemetries: sc_telemetry::Telemetries,
+	telemetry_handle: Option<sc_telemetry::TelemetryHandle>,
 	transport: ExtTransport,
 ) -> Result<Configuration, Box<dyn std::error::Error>>
 where
@@ -88,7 +88,7 @@ where
 			async {}
 		}).into(),
 		telemetry_external_transport: Some(transport),
-		telemetries,
+		telemetry_handle,
 		role: Role::Light,
 		database: {
 			info!("Opening Indexed DB database '{}'...", name);

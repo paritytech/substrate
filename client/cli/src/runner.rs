@@ -141,8 +141,7 @@ impl<C: SubstrateCli> Runner<C> {
 			config: command.create_configuration(
 				cli,
 				task_executor.into(),
-				//telemetries.clone(),
-				sc_telemetry::Telemetries::new(), // TODO
+				Some(telemetries.handle()),
 			)?,
 			tokio_runtime,
 			telemetries,

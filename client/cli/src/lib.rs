@@ -215,9 +215,9 @@ pub trait SubstrateCli: Sized {
 		&self,
 		command: &T,
 		task_executor: TaskExecutor,
-		telemetries: sc_telemetry::Telemetries,
+		telemetry_handle: Option<sc_telemetry::TelemetryHandle>,
 	) -> error::Result<Configuration> {
-		command.create_configuration(self, task_executor, telemetries)
+		command.create_configuration(self, task_executor, telemetry_handle)
 	}
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
