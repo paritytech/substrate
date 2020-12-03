@@ -693,7 +693,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									DiscoveryOut::ValueNotFound(e.into_key(), stats.duration().unwrap_or_else(Default::default))
 								}
 								Err(e) => {
-									warn!(target: "sub-libp2p",
+									debug!(target: "sub-libp2p",
 										"Libp2p => Failed to get record: {:?}", e);
 									DiscoveryOut::ValueNotFound(e.into_key(), stats.duration().unwrap_or_else(Default::default))
 								}
@@ -704,7 +704,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							let ev = match res {
 								Ok(ok) => DiscoveryOut::ValuePut(ok.key, stats.duration().unwrap_or_else(Default::default)),
 								Err(e) => {
-									warn!(target: "sub-libp2p",
+									debug!(target: "sub-libp2p",
 										"Libp2p => Failed to put record: {:?}", e);
 									DiscoveryOut::ValuePutFailed(e.into_key(), stats.duration().unwrap_or_else(Default::default))
 								}
@@ -716,7 +716,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								Ok(ok) => debug!(target: "sub-libp2p",
 									"Libp2p => Record republished: {:?}",
 									ok.key),
-								Err(e) => warn!(target: "sub-libp2p",
+								Err(e) => debug!(target: "sub-libp2p",
 									"Libp2p => Republishing of record {:?} failed with: {:?}",
 									e.key(), e)
 							}
@@ -736,8 +736,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							handler,
 							event: (pid.clone(), event)
 						}),
-					NetworkBehaviourAction::ReportObservedAddr { address } =>
-						return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+					NetworkBehaviourAction::ReportObservedAddr { address, score } =>
+						return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
 				}
 			}
 		}
@@ -767,8 +767,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
 				NetworkBehaviourAction::NotifyHandler { event, .. } =>
 					match event {},		// `event` is an enum with no variant
-				NetworkBehaviourAction::ReportObservedAddr { address } =>
-					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+				NetworkBehaviourAction::ReportObservedAddr { address, score } =>
+					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
 			}
 		}
 

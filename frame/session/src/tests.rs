@@ -285,7 +285,7 @@ fn session_keys_generate_output_works_as_set_keys_input() {
 		assert_ok!(
 			Session::set_keys(
 				Origin::signed(2),
-				<mock::Test as Trait>::Keys::decode(&mut &new_keys[..]).expect("Decode keys"),
+				<mock::Test as Config>::Keys::decode(&mut &new_keys[..]).expect("Decode keys"),
 				vec![],
 			)
 		);

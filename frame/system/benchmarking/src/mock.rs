@@ -38,7 +38,7 @@ pub struct Call;
 
 impl Dispatchable for Call {
 	type Origin = ();
-	type Trait = ();
+	type Config = ();
 	type Info = DispatchInfo;
 	type PostInfo = PostDispatchInfo;
 	fn dispatch(self, _origin: Self::Origin)
@@ -50,7 +50,7 @@ impl Dispatchable for Call {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = AccountIndex;
@@ -78,7 +78,7 @@ impl frame_system::Trait for Test {
 	type SystemWeightInfo = ();
 }
 
-impl crate::Trait for Test {}
+impl crate::Config for Test {}
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();

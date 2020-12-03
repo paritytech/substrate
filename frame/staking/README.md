@@ -90,7 +90,7 @@ valid behavior_ while _punishing any misbehavior or lack of availability_.
 
 Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
 `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-validator as well as its nominators. Only the [`Trait::MaxNominatorRewardedPerValidator`]
+validator as well as its nominators. Only the [`Config::MaxNominatorRewardedPerValidator`]
 biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
 nominator's account.
 
@@ -137,10 +137,10 @@ use frame_support::{decl_module, dispatch};
 use frame_system::ensure_signed;
 use pallet_staking::{self as staking};
 
-pub trait Trait: staking::Trait {}
+pub trait Config: staking::Config {}
 
 decl_module! {
-    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+    pub struct Module<T: Config> for enum Call where origin: T::Origin {
         /// Reward a validator.
         #[weight = 0]
         pub fn reward_myself(origin) -> dispatch::DispatchResult {

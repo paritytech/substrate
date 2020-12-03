@@ -528,13 +528,12 @@ mod tests {
 
 	impl Arbitrary for ArbitraryPeerSyncState {
 		fn arbitrary<G: Gen>(g: &mut G) -> Self {
-			let s = match g.gen::<u8>() % 5 {
+			let s = match g.gen::<u8>() % 4 {
 				0 => PeerSyncState::Available,
 				// TODO: 1 => PeerSyncState::AncestorSearch(g.gen(), AncestorSearchState<B>),
 				1 => PeerSyncState::DownloadingNew(g.gen::<BlockNumber>()),
 				2 => PeerSyncState::DownloadingStale(Hash::random()),
-				3 => PeerSyncState::DownloadingJustification(Hash::random()),
-				_ => PeerSyncState::DownloadingFinalityProof(Hash::random())
+				_ => PeerSyncState::DownloadingJustification(Hash::random()),
 			};
 			ArbitraryPeerSyncState(s)
 		}

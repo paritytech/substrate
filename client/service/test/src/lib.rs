@@ -542,7 +542,8 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 
 			make_block_and_import(&first_service, first_user_data);
 		}
-		network.full_nodes[0].1.network().update_chain();
+		let info = network.full_nodes[0].1.client().info();
+		network.full_nodes[0].1.network().new_best_block_imported(info.best_hash, info.best_number);
 		network.full_nodes[0].3.clone()
 	};
 
