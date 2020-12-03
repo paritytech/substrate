@@ -422,6 +422,7 @@ where
 		self.overlay.clear_child_storage(child_info);
 		self.backend.for_keys_in_child_storage(child_info, |key| {
 			self.overlay.set_child_storage(child_info, key.to_vec(), None);
+			true
 		});
 	}
 

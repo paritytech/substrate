@@ -350,7 +350,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		}
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+	fn for_keys_in_child_storage<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
 		f: F,

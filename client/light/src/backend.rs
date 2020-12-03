@@ -441,7 +441,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(
+	fn for_keys_in_child_storage<A: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
 		action: A,

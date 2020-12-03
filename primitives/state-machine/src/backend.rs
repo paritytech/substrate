@@ -94,7 +94,8 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	) -> Result<Option<StorageKey>, Self::Error>;
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+	/// Aborts as soon as `f` returns false.
+	fn for_keys_in_child_storage<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
 		f: F,
@@ -263,7 +264,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).child_storage(child_info, key)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+	fn for_keys_in_child_storage<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
 		f: F,
