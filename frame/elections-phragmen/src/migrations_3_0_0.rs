@@ -39,9 +39,15 @@ struct Voter<AccountId, Balance> {
 	deposit: Balance,
 }
 
+/// Trait to implement to give information about types used for migration
 pub trait V2ToV3 {
+	/// elections-phragmen module, used to check storage version.
 	type Module: GetPalletVersion;
+
+	/// System config account id
 	type AccountId: 'static + FullCodec;
+
+	/// Elections-phragmen currency balance.
 	type Balance: 'static + FullCodec + Copy;
 }
 
