@@ -510,6 +510,9 @@ decl_module! {
 		/// The weight of runtime database operations the runtime can invoke.
 		const DbWeight: RuntimeDbWeight = T::DbWeight::get();
 
+		/// The weight configuration (limits & base values) for each class of extrinsics and block.
+		const BlockWeights: limits::BlockWeights = T::BlockWeights::get();
+
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if !UpgradedToU32RefCount::get() {
 				Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)|

@@ -94,7 +94,7 @@ pub type ValidationResult = Result<BlockWeights, ValidationErrors>;
 const DEFAULT_NORMAL_RATIO: Perbill = Perbill::from_percent(75);
 
 /// `DispatchClass`-specific weight configuration.
-#[derive(RuntimeDebug, Clone)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
 pub struct WeightsPerClass {
 	/// Base weight of single extrinsic of given class.
 	pub base_extrinsic: Weight,
@@ -186,7 +186,7 @@ pub struct WeightsPerClass {
 ///
 /// As a consequence of `reserved` space, total consumed block weight might exceed `max_block`
 /// value, so this parameter should rather be thought of as "target block weight" than a hard limit.
-#[derive(RuntimeDebug, Clone)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
 pub struct BlockWeights {
 	/// Base weight of block execution.
 	pub base_block: Weight,
