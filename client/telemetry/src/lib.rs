@@ -370,10 +370,10 @@ impl Telemetries {
 		} = self;
 
 		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
+		let mut node_map_inv: HashMap<Multiaddr, Vec<Id>> = HashMap::new();
 		let mut connection_messages: HashMap<Id, serde_json::Value> = HashMap::new();
 		let mut connection_sinks: HashMap<Id, TelemetryConnectionSinks> = HashMap::new();
 		let mut node_pool: HashMap<Multiaddr, crate::worker::node::Node<crate::worker::WsTrans>> = HashMap::new(); // TODO mod
-
 		let mut node_first_connect: HashSet<(Multiaddr, Id)> = HashSet::new();
 
 		// initialize the telemetry nodes
@@ -387,11 +387,13 @@ impl Telemetries {
 				node_pool.insert(addr.clone(), node);
 				node_map.entry(id.clone()).or_insert_with(Vec::new)
 					.push((verbosity, addr.clone()));
+				node_map_inv.entry(addr.clone()).or_insert_with(Vec::new).push(id.clone());
 				node_first_connect.insert((addr, id.clone()));
 			}
 
 			let connection_sink = TelemetryConnectionSinks::default();
 			connection_sinks.insert(id.clone(), connection_sink.clone());
+			connection_messages.insert(id.clone(), connection_message);
 		}
 
 		// loop indefinitely over telemetry messages
@@ -431,23 +433,33 @@ impl Telemetries {
 					continue;
 				}
 
-				// Disconnection
-				if !matches!(node.next().await, Some(crate::worker::node::NodeEvent::Connected)) {
-					node_first_connect.insert((addr.to_owned(), id.to_owned()));
-					continue;
+				// Detect re-connection
+				let node_status = node.next().await;
+				if matches!(node_status, Some(crate::worker::node::NodeEvent::Connected)) {
+					// All the instances must re-send the connection message
+					node_first_connect.extend(
+						node_map_inv.get(addr)
+							.iter()
+							.map(|x| x.iter())
+							.flatten()
+							.map(|id| (addr.clone(), id.to_owned())),
+					);
 				}
 
 				// Reconnection handling
-				if node_first_connect.remove(&(addr.to_owned(), id.clone())) {
-					if let Some(connection_sink) = connection_sinks.get(&id) {
-						connection_sink.fire();
-					}
-					if let Some(json) = connection_messages.get(&id) {
-						let mut json = json.clone();
-						let obj = json.as_object_mut().expect("todo");
-						obj.insert("msg".into(), "system.connected".into());
-						obj.insert("ts".into(), chrono::Local::now().to_rfc3339().into());
-						let _ = node.send_message(serde_json::to_string(obj).expect("todo"));
+				if matches!(node_status, Some(crate::worker::node::NodeEvent::Connected) | None) {
+					if node_first_connect.remove(&(addr.to_owned(), id.clone())) {
+						if let Some(connection_sink) = connection_sinks.get(&id) {
+							connection_sink.fire();
+						}
+						if let Some(json) = connection_messages.get(&id) {
+							let mut json = json.clone();
+							let obj = json.as_object_mut().expect("todo");
+							obj.insert("msg".into(), "system.connected".into());
+							obj.insert("ts".into(), chrono::Local::now().to_rfc3339().into());
+							obj.insert("id".into(), id.into_u64().into());
+							let _ = node.send_message(serde_json::to_string(obj).expect("todo"));
+						}
 					}
 				}
 

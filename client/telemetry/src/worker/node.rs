@@ -52,6 +52,21 @@ enum NodeSocket<TTrans: Transport> {
 	Poisoned,
 }
 
+impl<TTrans: Transport> fmt::Debug for NodeSocket<TTrans> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		use NodeSocket::*;
+		f.write_str(
+			match self {
+				Connected(_) => "Connected",
+				Dialing(_) => "Dialing",
+				ReconnectNow => "ReconnectNow",
+				WaitingReconnect(_) => "WaitingReconnect",
+				Poisoned => "Poisoned",
+			},
+		)
+	}
+}
+
 struct NodeSocketConnected<TTrans: Transport> {
 	/// Where to send data.
 	sink: TTrans::Output,
@@ -210,7 +225,10 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr) {
 						Poll::Ready(Ok(v)) => match v {},
 						Poll::Pending => {
-							break NodeSocket::Connected(conn)
+							self.socket = NodeSocket::Connected(conn);
+							// NOTE: return None means nothing special is happening but we are
+							//       connected
+							return Poll::Ready(None);
 						},
 						Poll::Ready(Err(err)) => {
 							warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
