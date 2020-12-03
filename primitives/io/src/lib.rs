@@ -279,7 +279,7 @@ pub trait DefaultChildStorage {
 		storage_key: &[u8],
 	) {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.kill_child_storage(&child_info);
+		self.kill_child_storage(&child_info, u32::max_value());
 	}
 
 	/// Check a child storage key.
