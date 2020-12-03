@@ -197,6 +197,13 @@ pub enum NativeOrEncoded<R> {
 }
 
 #[cfg(feature = "std")]
+impl<R> From<R> for NativeOrEncoded<R> {
+	fn from(val: R) -> Self {
+		Self::Native(val)
+	}
+}
+
+#[cfg(feature = "std")]
 impl<R: codec::Encode> sp_std::fmt::Debug for NativeOrEncoded<R> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		hexdisplay::HexDisplay::from(&self.as_encoded().as_ref()).fmt(f)

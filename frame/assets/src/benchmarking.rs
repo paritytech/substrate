@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Staking pallet benchmarking.
+//! Assets pallet benchmarking.
 
 use super::*;
 use sp_runtime::traits::Bounded;
@@ -26,7 +26,7 @@ use crate::Module as Assets;
 
 const SEED: u32 = 0;
 
-fn create_default_asset<T: Trait>(max_zombies: u32)
+fn create_default_asset<T: Config>(max_zombies: u32)
 	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
 {
 	let caller: T::AccountId = whitelisted_caller();
@@ -37,12 +37,12 @@ fn create_default_asset<T: Trait>(max_zombies: u32)
 		Default::default(),
 		caller_lookup.clone(),
 		max_zombies,
-		1.into(),
+		1u32.into(),
 	).is_ok());
 	(caller, caller_lookup)
 }
 
-fn create_default_minted_asset<T: Trait>(max_zombies: u32, amount: T::Balance)
+fn create_default_minted_asset<T: Config>(max_zombies: u32, amount: T::Balance)
 	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
 {
 	let (caller, caller_lookup)  = create_default_asset::<T>(max_zombies);
@@ -55,18 +55,18 @@ fn create_default_minted_asset<T: Trait>(max_zombies: u32, amount: T::Balance)
 	(caller, caller_lookup)
 }
 
-fn add_zombies<T: Trait>(minter: T::AccountId, n: u32) {
+fn add_zombies<T: Config>(minter: T::AccountId, n: u32) {
 	let origin = SystemOrigin::Signed(minter);
 	for i in 0..n {
 		let target = account("zombie", i, SEED);
 		let target_lookup = T::Lookup::unlookup(target);
-		assert!(Assets::<T>::mint(origin.clone().into(), Default::default(), target_lookup, 100.into()).is_ok());
+		assert!(Assets::<T>::mint(origin.clone().into(), Default::default(), target_lookup, 100u32.into()).is_ok());
 	}
 }
 
-fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
+fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	let events = frame_system::Module::<T>::events();
-	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
+	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	// compare to the last event record
 	let frame_system::EventRecord { event, .. } = &events[events.len() - 1];
 	assert_eq!(event, &system_event);
@@ -79,7 +79,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, 1, 1.into())
+	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, 1, 1u32.into())
 	verify {
 		assert_last_event::<T>(RawEvent::Created(Default::default(), caller.clone(), caller).into());
 	}
@@ -87,7 +87,7 @@ benchmarks! {
 	force_create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-	}: _(SystemOrigin::Root, Default::default(), caller_lookup, 1, 1.into())
+	}: _(SystemOrigin::Root, Default::default(), caller_lookup, 1, 1u32.into())
 	verify {
 		assert_last_event::<T>(RawEvent::ForceCreated(Default::default(), caller).into());
 	}
@@ -112,14 +112,14 @@ benchmarks! {
 
 	mint {
 		let (caller, caller_lookup) = create_default_asset::<T>(10);
-		let amount = T::Balance::from(100);
+		let amount = T::Balance::from(100u32);
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, amount)
 	verify {
 		assert_last_event::<T>(RawEvent::Issued(Default::default(), caller, amount).into());
 	}
 
 	burn {
-		let amount = T::Balance::from(100);
+		let amount = T::Balance::from(100u32);
 		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, amount);
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, amount)
 	verify {
@@ -127,7 +127,7 @@ benchmarks! {
 	}
 
 	transfer {
-		let amount = T::Balance::from(100);
+		let amount = T::Balance::from(100u32);
 		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, amount);
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
@@ -137,7 +137,7 @@ benchmarks! {
 	}
 
 	force_transfer {
-		let amount = T::Balance::from(100);
+		let amount = T::Balance::from(100u32);
 		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, amount);
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
@@ -147,14 +147,14 @@ benchmarks! {
 	}
 
 	freeze {
-		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100.into());
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup)
 	verify {
 		assert_last_event::<T>(RawEvent::Frozen(Default::default(), caller).into());
 	}
 
 	thaw {
-		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100.into());
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
 		Assets::<T>::freeze(
 			SystemOrigin::Signed(caller.clone()).into(),
 			Default::default(),

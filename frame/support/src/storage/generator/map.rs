@@ -325,20 +325,22 @@ mod test_iterators {
 		storage::{generator::StorageMap, IterableStorageMap, unhashed},
 	};
 
-	pub trait Trait {
+	pub trait Config: 'static {
 		type Origin;
 		type BlockNumber;
+		type PalletInfo: crate::traits::PalletInfo;
+		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
 
 	crate::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 	struct NoDef(u32);
 
 	crate::decl_storage! {
-		trait Store for Module<T: Trait> as Test {
+		trait Store for Module<T: Config> as Test {
 			Map: map hasher(blake2_128_concat) u16 => u64;
 		}
 	}

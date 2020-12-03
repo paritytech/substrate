@@ -112,23 +112,21 @@ macro_rules! afg_log {
 mod authorities;
 mod aux_schema;
 mod communication;
-mod consensus_changes;
 mod environment;
 mod finality_proof;
 mod import;
 mod justification;
-mod light_import;
 mod notification;
 mod observer;
 mod until_imported;
 mod voting_rule;
 
 pub use authorities::{SharedAuthoritySet, AuthoritySet};
+pub use communication::GRANDPA_PROTOCOL_NAME;
 pub use finality_proof::{FinalityProofFragment, FinalityProofProvider, StorageAndProofProvider};
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
-pub use light_import::{light_block_import, GrandpaLightBlockImport};
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
@@ -588,7 +586,6 @@ where
 			select_chain.clone(),
 			persistent_data.authority_set.clone(),
 			voter_commands_tx,
-			persistent_data.consensus_changes.clone(),
 			authority_set_hard_forks,
 			justification_sender.clone(),
 		),
@@ -624,7 +621,7 @@ fn global_communication<BE, Block: BlockT, C, N>(
 	N: NetworkT<Block>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	let is_voter = is_voter(voters, keystore).is_some();
+	let is_voter = local_authority_id(voters, keystore).is_some();
 
 	// verification stream
 	let (global_in, global_out) = network.global_communication(
@@ -656,6 +653,10 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	/// A link to the block import worker.
 	pub link: LinkHalf<Block, C, SC>,
 	/// The Network instance.
+	///
+	/// It is assumed that this network will feed us Grandpa notifications. When using the
+	/// `sc_network` crate, it is assumed that the Grandpa notifications protocol has been passed
+	/// to the configuration of the networking.
 	pub network: N,
 	/// If supplied, can be used to hook on telemetry connection established events.
 	pub telemetry_on_connect: Option<TracingUnboundedReceiver<()>>,
@@ -671,7 +672,8 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 	grandpa_params: GrandpaParams<Block, C, N, SC, VR>,
-) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
+) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static>
+where
 	Block::Hash: Ord,
 	BE: Backend<Block> + 'static,
 	N: NetworkT<Block> + Send + Sync + Clone + 'static,
@@ -719,21 +721,27 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		let authorities = persistent_data.authority_set.clone();
 		let events = telemetry_on_connect
 			.for_each(move |_| {
-				let curr = authorities.current_authorities();
-				let mut auths = curr.iter().map(|(p, _)| p);
-				let maybe_authority_id = authority_id(&mut auths, conf.keystore.as_ref())
+				let current_authorities = authorities.current_authorities();
+				let set_id = authorities.set_id();
+				let authority_id = local_authority_id(&current_authorities, conf.keystore.as_ref())
 					.unwrap_or_default();
 
-				telemetry!(CONSENSUS_INFO; "afg.authority_set";
-					"authority_id" => maybe_authority_id.to_string(),
-					"authority_set_id" => ?authorities.set_id(),
-					"authorities" => {
-						let authorities: Vec<String> = curr.iter()
-							.map(|(id, _)| id.to_string()).collect();
-						serde_json::to_string(&authorities)
-							.expect("authorities is always at least an empty vector; elements are always of type string")
-					}
+				let authorities = current_authorities
+					.iter()
+					.map(|(id, _)| id.to_string())
+					.collect::<Vec<_>>();
+
+				let authorities = serde_json::to_string(&authorities).expect(
+					"authorities is always at least an empty vector; \
+					 elements are always of type string",
 				);
+
+				telemetry!(CONSENSUS_INFO; "afg.authority_set";
+					"authority_id" => authority_id.to_string(),
+					"authority_set_id" => ?set_id,
+					"authorities" => authorities,
+				);
+
 				future::ready(())
 			});
 		future::Either::Left(events)
@@ -837,7 +845,6 @@ where
 			network: network.clone(),
 			set_id: persistent_data.authority_set.set_id(),
 			authority_set: persistent_data.authority_set.clone(),
-			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
 			justification_sender: Some(justification_sender),
@@ -864,7 +871,7 @@ where
 	fn rebuild_voter(&mut self) {
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
 
-		let authority_id = is_voter(&self.env.voters, self.env.config.keystore.as_ref())
+		let authority_id = local_authority_id(&self.env.voters, self.env.config.keystore.as_ref())
 			.unwrap_or_default();
 
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
@@ -874,17 +881,24 @@ where
 		);
 
 		let chain_info = self.env.client.info();
+
+		let authorities = self
+			.env
+			.voters
+			.iter()
+			.map(|(id, _)| id.to_string())
+			.collect::<Vec<_>>();
+
+		let authorities = serde_json::to_string(&authorities).expect(
+			"authorities is always at least an empty vector; elements are always of type string",
+		);
+
 		telemetry!(CONSENSUS_INFO; "afg.authority_set";
 			"number" => ?chain_info.finalized_number,
 			"hash" => ?chain_info.finalized_hash,
 			"authority_id" => authority_id.to_string(),
 			"authority_set_id" => ?self.env.set_id,
-			"authorities" => {
-				let authorities: Vec<String> = self.env.voters
-					.iter().map(|(id, _)| id.to_string()).collect();
-				serde_json::to_string(&authorities)
-					.expect("authorities is always at least an empty vector; elements are always of type string")
-			},
+			"authorities" => authorities,
 		);
 
 		match &*self.env.voter_set_state.read() {
@@ -975,7 +989,6 @@ where
 					select_chain: self.env.select_chain.clone(),
 					config: self.env.config.clone(),
 					authority_set: self.env.authority_set.clone(),
-					consensus_changes: self.env.consensus_changes.clone(),
 					network: self.env.network.clone(),
 					voting_rule: self.env.voting_rule.clone(),
 					metrics: self.env.metrics.clone(),
@@ -1057,33 +1070,12 @@ where
 	}
 }
 
-/// When GRANDPA is not initialized we still need to register the finality
-/// tracker inherent provider which might be expected by the runtime for block
-/// authoring. Additionally, we register a gossip message validator that
-/// discards all GRANDPA messages (otherwise, we end up banning nodes that send
-/// us a `Neighbor` message, since there is no registered gossip validator for
-/// the engine id defined in the message.)
-pub fn setup_disabled_grandpa<Block: BlockT, N>(network: N) -> Result<(), sp_consensus::Error>
-where
-	N: NetworkT<Block> + Send + Clone + 'static,
-{
-	// We register the GRANDPA protocol so that we don't consider it an anomaly
-	// to receive GRANDPA messages on the network. We don't process the
-	// messages.
-	network.register_notifications_protocol(
-		communication::GRANDPA_ENGINE_ID,
-		From::from(communication::GRANDPA_PROTOCOL_NAME),
-	);
-
-	Ok(())
-}
-
-/// Checks if this node is a voter in the given voter set.
-///
-/// Returns the key pair of the node that is being used in the current voter set or `None`.
-fn is_voter(
-	voters: &Arc<VoterSet<AuthorityId>>,
-	keystore: Option<& SyncCryptoStorePtr>,
+/// Checks if this node has any available keys in the keystore for any authority id in the given
+/// voter set.  Returns the authority id for which keys are available, or `None` if no keys are
+/// available.
+fn local_authority_id(
+	voters: &VoterSet<AuthorityId>,
+	keystore: Option<&SyncCryptoStorePtr>,
 ) -> Option<AuthorityId> {
 	match keystore {
 		Some(keystore) => voters
@@ -1092,23 +1084,6 @@ fn is_voter(
 				SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
 			})
 			.map(|(p, _)| p.clone()),
-		None => None,
-	}
-}
-
-/// Returns the authority id of this node, if available.
-fn authority_id<'a, I>(
-	authorities: &mut I,
-	keystore: Option<&SyncCryptoStorePtr>,
-) -> Option<AuthorityId> where
-	I: Iterator<Item = &'a AuthorityId>,
-{
-	match keystore {
-		Some(keystore) => {
-			authorities
-				.find(|p| SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)]))
-				.cloned()
-		},
 		None => None,
 	}
 }

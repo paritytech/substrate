@@ -15,7 +15,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
-integer-sqrt = { version = "0.1.2" }
 serde = { version = "1.0.102", optional = true }
 static_assertions = "1.1.0"
 hex-literal = { version = "0.3.1", optional = true }
@@ -81,7 +80,7 @@ pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-featur
 pallet-vesting = { version = "2.0.0", default-features = false, path = "../../../frame/vesting" }
 
 [build-dependencies]
-wasm-builder-runner = { version = "2.0.0", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+substrate-wasm-builder = { version = "3.0.0", path = "../../../utils/wasm-builder" }
 
 [dev-dependencies]
 sp-io = { version = "2.0.0", path = "../../../primitives/io" }

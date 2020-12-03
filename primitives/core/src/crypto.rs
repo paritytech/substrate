@@ -470,6 +470,10 @@ ss58_address_format!(
 		(12, "polymath", "Polymath network, standard account (*25519).")
 	SubstraTeeAccount =>
 		(13, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
+	TotemAccount =>
+		(14, "totem", "Any Totem Live Accounting network standard account (*25519).")
+	SynesthesiaAccount =>
+		(15, "synesthesia", "Synesthesia mainnet, standard account (*25519).")
 	KulupuAccount =>
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
 	DarkAccount =>
@@ -615,6 +619,16 @@ pub trait Public:
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 
+impl AccountId32 {
+	/// Create a new instance from its raw inner byte value.
+	///
+	/// Equivalent to this types `From<[u8; 32]>` implementation. For the lack of const
+	/// support in traits we have this constructor.
+	pub const fn new(inner: [u8; 32]) -> Self {
+		Self(inner)
+	}
+}
+
 impl UncheckedFrom<crate::hash::H256> for AccountId32 {
 	fn unchecked_from(h: crate::hash::H256) -> Self {
 		AccountId32(h.into())
@@ -649,8 +663,8 @@ impl AsMut<[u8; 32]> for AccountId32 {
 }
 
 impl From<[u8; 32]> for AccountId32 {
-	fn from(x: [u8; 32]) -> AccountId32 {
-		AccountId32(x)
+	fn from(x: [u8; 32]) -> Self {
+		Self::new(x)
 	}
 }
 

@@ -32,6 +32,7 @@ use substrate_test_runtime_client::{
 	sp_consensus::BlockOrigin,
 	runtime,
 };
+use sc_rpc_api::DenyUnsafe;
 use sp_runtime::generic::BlockId;
 use crate::testing::TaskExecutor;
 use futures::{executor, compat::Future01CompatExt};
@@ -58,7 +59,11 @@ fn should_return_storage() {
 		.add_extra_storage(b":map:acc2".to_vec(), vec![1, 2, 3])
 		.build();
 	let genesis_hash = client.genesis_hash();
-	let (client, child) = new_full(Arc::new(client), SubscriptionManager::new(Arc::new(TaskExecutor)));
+	let (client, child) = new_full(
+		Arc::new(client),
+		SubscriptionManager::new(Arc::new(TaskExecutor)),
+		DenyUnsafe::No,
+	);
 	let key = StorageKey(KEY.to_vec());
 
 	assert_eq!(
@@ -96,7 +101,11 @@ fn should_return_child_storage() {
 		.add_child_storage(&child_info, "key", vec![42_u8])
 		.build());
 	let genesis_hash = client.genesis_hash();
-	let (_client, child) = new_full(client, SubscriptionManager::new(Arc::new(TaskExecutor)));
+	let (_client, child) = new_full(
+		client,
+		SubscriptionManager::new(Arc::new(TaskExecutor)),
+		DenyUnsafe::No,
+	);
 	let child_key = prefixed_storage_key();
 	let key = StorageKey(b"key".to_vec());
 
@@ -131,7 +140,11 @@ fn should_return_child_storage() {
 fn should_call_contract() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 	let genesis_hash = client.genesis_hash();
-	let (client, _child) = new_full(client, SubscriptionManager::new(Arc::new(TaskExecutor)));
+	let (client, _child) = new_full(
+		client,
+		SubscriptionManager::new(Arc::new(TaskExecutor)),
+		DenyUnsafe::No,
+	);
 
 	assert_matches!(
 		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()).wait(),
@@ -145,7 +158,11 @@ fn should_notify_about_storage_changes() {
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+		let (api, _child) = new_full(
+			client.clone(),
+			SubscriptionManager::new(Arc::new(TaskExecutor)),
+			DenyUnsafe::No,
+		);
 
 		api.subscribe_storage(Default::default(), subscriber, None.into());
 
@@ -179,7 +196,11 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+		let (api, _child) = new_full(
+			client.clone(),
+			SubscriptionManager::new(Arc::new(TaskExecutor)),
+			DenyUnsafe::No,
+		);
 
 		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
@@ -217,7 +238,11 @@ fn should_send_initial_storage_changes_and_notifications() {
 #[test]
 fn should_query_storage() {
 	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
-		let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+		let (api, _child) = new_full(
+			client.clone(),
+			SubscriptionManager::new(Arc::new(TaskExecutor)),
+			DenyUnsafe::No,
+		);
 
 		let mut add_block = |nonce| {
 			let mut builder = client.new_block(Default::default()).unwrap();
@@ -434,7 +459,11 @@ fn should_split_ranges() {
 #[test]
 fn should_return_runtime_version() {
 	let client = Arc::new(substrate_test_runtime_client::new());
-	let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+	let (api, _child) = new_full(
+		client.clone(),
+		SubscriptionManager::new(Arc::new(TaskExecutor)),
+		DenyUnsafe::No,
+	);
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",3],\
@@ -457,7 +486,11 @@ fn should_notify_on_runtime_version_initially() {
 
 	{
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+		let (api, _child) = new_full(
+			client.clone(),
+			SubscriptionManager::new(Arc::new(TaskExecutor)),
+			DenyUnsafe::No,
+		);
 
 		api.subscribe_runtime_version(Default::default(), subscriber);
 

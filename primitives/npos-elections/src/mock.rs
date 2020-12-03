@@ -308,7 +308,7 @@ pub(crate) fn create_stake_of(stakes: &[(AccountId, VoteWeight)])
 pub fn check_assignments_sum<T: PerThing>(assignments: Vec<Assignment<AccountId, T>>) {
 	for Assignment { distribution, .. } in assignments {
 		let mut sum: u128 = Zero::zero();
-		distribution.iter().for_each(|(_, p)| sum += p.deconstruct().saturated_into());
+		distribution.iter().for_each(|(_, p)| sum += p.deconstruct().saturated_into::<u128>());
 		assert_eq!(sum, T::ACCURACY.saturated_into(), "Assignment ratio sum is not 100%");
 	}
 }

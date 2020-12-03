@@ -170,8 +170,16 @@ impl RuntimeLogger {
 	/// This is a no-op when running natively (`std`).
 	#[cfg(not(feature = "std"))]
 	pub fn init() {
-		static LOGGER: RuntimeLogger = RuntimeLogger;;
+		static LOGGER: RuntimeLogger = RuntimeLogger;
 		let _ = log::set_logger(&LOGGER);
+
+		// Set max level to `TRACE` to ensure we propagate
+		// all log entries to the native side that will do the
+		// final filtering on what should be printed.
+		//
+		// If we don't set any level, logging is disabled
+		// completly.
+		log::set_max_level(log::LevelFilter::Trace);
 	}
 }
 
@@ -197,4 +205,43 @@ impl log::Log for RuntimeLogger {
 	}
 
 	fn flush(&self) {}
+}
+
+#[cfg(test)]
+mod tests {
+	use substrate_test_runtime_client::{
+		ExecutionStrategy, TestClientBuilderExt, DefaultTestClientBuilderExt,
+		TestClientBuilder, runtime::TestAPI,
+	};
+	use sp_api::ProvideRuntimeApi;
+	use sp_runtime::generic::BlockId;
+
+	#[test]
+	fn ensure_runtime_logger_works() {
+		let executable = std::env::current_exe().unwrap();
+		let output = std::process::Command::new(executable)
+			.env("RUN_TEST", "1")
+			.env("RUST_LOG", "trace")
+			.args(&["--nocapture", "ensure_runtime_logger_works_implementation"])
+			.output()
+			.unwrap();
+
+		let output = dbg!(String::from_utf8(output.stderr).unwrap());
+		assert!(output.contains("Hey I'm runtime"));
+	}
+
+	/// This is no actual test. It will be called by `ensure_runtime_logger_works`
+	/// to check that the runtime can print from the wasm side using the
+	/// `RuntimeLogger`.
+	#[test]
+	fn ensure_runtime_logger_works_implementation() {
+		if std::env::var("RUN_TEST").is_ok() {
+			sp_tracing::try_init_simple();
+
+			let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+			let runtime_api = client.runtime_api();
+			let block_id = BlockId::Number(0);
+			runtime_api.do_trace_log(&block_id).expect("Logging should not fail");
+		}
+	}
 }

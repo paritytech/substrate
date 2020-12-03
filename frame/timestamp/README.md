@@ -2,9 +2,9 @@
 
 The Timestamp module provides functionality to get and set the on-chain time.
 
-- [`timestamp::Trait`](https://docs.rs/pallet-timestamppallet-timestamp/latest/pallet_timestamp/trait.Trait.html)
-- [`Call`](https://docs.rs/pallet-timestamppallet-timestamp/latest/pallet_timestamp/enum.Call.html)
-- [`Module`](https://docs.rs/pallet-timestamppallet-timestamp/latest/pallet_timestamp/struct.Module.html)
+- [`timestamp::Trait`](https://docs.rs/pallet-timestamp/latest/pallet_timestamp/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-timestamp/latest/pallet_timestamp/enum.Call.html)
+- [`Module`](https://docs.rs/pallet-timestamp/latest/pallet_timestamp/struct.Module.html)
 
 ## Overview
 
@@ -29,7 +29,7 @@ because of cumulative calculation errors and hence should be avoided.
 * `get` - Gets the current time for the current block. If this function is called prior to
 setting the timestamp, it will return the timestamp of the previous block.
 
-### Trait Getters
+### Config Getters
 
 * `MinimumPeriod` - Gets the minimum (and advised) period between blocks for the chain.
 
@@ -48,10 +48,10 @@ trait from the timestamp trait.
 use frame_support::{decl_module, dispatch};
 use frame_system::ensure_signed;
 
-pub trait Trait: timestamp::Trait {}
+pub trait Config: timestamp::Config {}
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		#[weight = 0]
 		pub fn get_time(origin) -> dispatch::DispatchResult {
 			let _sender = ensure_signed(origin)?;
@@ -69,6 +69,6 @@ the Timestamp module for session management.
 
 ## Related Modules
 
-* [Session](https://docs.rs/pallet-timestamppallet-session/latest/pallet_session/)
+* [Session](https://docs.rs/pallet-session/latest/pallet_session/)
 
 License: Apache-2.0

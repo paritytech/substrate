@@ -31,6 +31,7 @@ use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
 use sc_service::{
 	TaskManager,
+	SpawnTaskHandle,
 	GenericChainSpec,
 	ChainSpecExtension,
 	Configuration,
@@ -75,6 +76,7 @@ pub trait TestNetNode: Clone + Future<Item = (), Error = sc_service::Error> + Se
 	fn client(&self) -> Arc<Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>>;
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
 	fn network(&self) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>;
+	fn spawn_handle(&self) -> SpawnTaskHandle;
 }
 
 pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
@@ -146,6 +148,9 @@ TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool>
 	}
 	fn network(&self) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as BlockT>::Hash>> {
 		self.network.clone()
+	}
+	fn spawn_handle(&self) -> SpawnTaskHandle {
+		self.task_manager.lock().spawn_handle()
 	}
 }
 
@@ -225,7 +230,6 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		enable_mdns: false,
 		allow_private_ipv4: true,
 		wasm_external_transport: None,
-		use_yamux_flow_control: true,
 	};
 
 	Configuration {
@@ -248,6 +252,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		pruning: Default::default(),
 		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
+		wasm_runtime_overrides: Default::default(),
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ipc: None,
@@ -537,7 +542,8 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 
 			make_block_and_import(&first_service, first_user_data);
 		}
-		network.full_nodes[0].1.network().update_chain();
+		let info = network.full_nodes[0].1.client().info();
+		network.full_nodes[0].1.network().new_best_block_imported(info.best_hash, info.best_number);
 		network.full_nodes[0].3.clone()
 	};
 

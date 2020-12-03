@@ -335,15 +335,19 @@ pub struct LocalizedSignature {
 
 /// An error type for SS58 decoding.
 #[cfg(feature = "std")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, thiserror::Error)]
 pub enum PublicError {
 	/// Bad alphabet.
+	#[error("Base 58 requirement is violated")]
 	BadBase58,
 	/// Bad length.
+	#[error("Length is bad")]
 	BadLength,
 	/// Unknown version.
+	#[error("Unknown version")]
 	UnknownVersion,
 	/// Invalid checksum.
+	#[error("Invalid checksum")]
 	InvalidChecksum,
 }
 
