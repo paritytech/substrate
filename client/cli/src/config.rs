@@ -408,22 +408,18 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 	/// Get the tracing targets from the current object (if any)
 	///
-	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
+	/// By default this is retrieved from [`SharedParams`] if it is available. Otherwise its
 	/// `None`.
 	fn tracing_targets(&self) -> Result<Option<String>> {
-		Ok(self.import_params()
-			.map(|x| x.tracing_targets())
-			.unwrap_or_else(|| Default::default()))
+		Ok(self.shared_params().tracing_targets())
 	}
 
 	/// Get the TracingReceiver value from the current object
 	///
-	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
+	/// By default this is retrieved from [`SharedParams`] if it is available. Otherwise its
 	/// `TracingReceiver::default()`.
 	fn tracing_receiver(&self) -> Result<TracingReceiver> {
-		Ok(self.import_params()
-			.map(|x| x.tracing_receiver())
-			.unwrap_or_default())
+		Ok(self.shared_params().tracing_receiver())
 	}
 
 	/// Get the node key from the current object
@@ -520,6 +516,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			dev_key_seed: self.dev_key_seed(is_dev)?,
 			tracing_targets: self.tracing_targets()?,
 			tracing_receiver: self.tracing_receiver()?,
+			disable_log_reloading: self.is_log_filter_reloading_disabled()?,
 			chain_spec,
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
@@ -540,6 +537,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.shared_params().log_filters().join(","))
 	}
 
+	/// Is log reloading disabled (enabled by default)
+	fn is_log_filter_reloading_disabled(&self) -> Result<bool> {
+		Ok(self.shared_params().is_log_filter_reloading_disabled())
+	}
+
 	/// Initialize substrate. This must be done only once per process.
 	///
 	/// This method:
@@ -551,6 +553,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let logger_pattern = self.log_filters()?;
 		let tracing_receiver = self.tracing_receiver()?;
 		let tracing_targets = self.tracing_targets()?;
+		let disable_log_reloading = self.is_log_filter_reloading_disabled()?;
 		let telemetry_external_transport = self.telemetry_external_transport()?;
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
@@ -560,6 +563,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			tracing_receiver,
 			tracing_targets.as_ref().map(|x| x.as_str()),
 			telemetry_external_transport,
+			disable_log_reloading,
 		)?;
 
 		if let Some(new_limit) = fdlimit::raise_fd_limit() {

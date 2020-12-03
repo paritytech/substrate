@@ -29,12 +29,22 @@ pub use sc_tracing_proc_macro::*;
 
 use tracing::Subscriber;
 use tracing_subscriber::{
-	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, registry::LookupSpan,
-	FmtSubscriber, Layer,
+	filter::Directive, fmt::time::ChronoLocal, layer::{self, SubscriberExt}, registry::LookupSpan,
+	FmtSubscriber, Layer, EnvFilter, fmt::{SubscriberBuilder, format, FormatFields, MakeWriter, FormatEvent, Formatter, Layer as FmtLayer},
+	Registry,
 };
 
 pub use event_format::*;
 pub use layers::*;
+
+macro_rules! disable_log_reloading {
+	($builder:expr) => {{
+		let builder = $builder.with_filter_reloading();
+		let handle = builder.reload_handle();
+		crate::set_reload_handle(handle);
+		builder
+	}};
+}
 
 /// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects.
 ///
@@ -42,6 +52,7 @@ pub use layers::*;
 pub fn get_default_subscriber_and_telemetries(
 	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
+	disable_log_reloading: bool,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
@@ -49,10 +60,19 @@ pub fn get_default_subscriber_and_telemetries(
 	),
 	String,
 > {
-	get_default_subscriber_and_telemetries_internal(
-		parse_directives(pattern),
-		telemetry_external_transport,
-	)
+	if disable_log_reloading {
+		get_default_subscriber_and_telemetries_internal(
+			parse_directives(pattern),
+			telemetry_external_transport,
+			Box::new(|builder| disable_log_reloading!(builder)),
+		)
+	} else {
+		get_default_subscriber_and_telemetries_internal(
+			parse_directives(pattern),
+			telemetry_external_transport,
+			Box::new(|builder| builder),
+		)
+	}
 }
 
 /// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects with
@@ -64,6 +84,7 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 	tracing_receiver: crate::TracingReceiver,
 	profiling_targets: &str,
+	disable_log_reloading: bool,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
@@ -76,6 +97,7 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 			.into_iter()
 			.chain(parse_directives(profiling_targets).into_iter()),
 		telemetry_external_transport,
+		Box::new(|builder| builder),
 	)?;
 	let profiling = crate::ProfilingLayer::new(tracing_receiver, profiling_targets);
 
@@ -84,46 +106,54 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 
 // Common implementation for `get_default_subscriber_and_telemetries` and
 // `get_default_subscriber_and_telemetries_with_profiling`.
-fn get_default_subscriber_and_telemetries_internal(
+fn get_default_subscriber_and_telemetries_internal<N, E, F, W>(
 	extra_directives: impl IntoIterator<Item = Directive>,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
+	builder_hook: Box<dyn Fn(SubscriberBuilder<format::DefaultFields, EventFormat<ChronoLocal>, EnvFilter, fn() -> std::io::Stderr>) -> SubscriberBuilder<N, E, F, W>>,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
 		sc_telemetry::Telemetries,
 	),
 	String,
-> {
+>
+where
+	N: for<'writer> FormatFields<'writer> + 'static,
+	E: FormatEvent<Registry, N> + 'static,
+	W: MakeWriter + 'static,
+	F: layer::Layer<Formatter<N, E, W>> + Send + Sync + 'static,
+	FmtLayer<Registry, N, E, W>: layer::Layer<Registry> + Send + Sync + 'static,
+{
+	use crate::parse_default_directive;
+
 	if let Err(e) = tracing_log::LogTracer::init() {
 		return Err(format!("Registering Substrate logger failed: {:}!", e));
 	}
 
-	let mut env_filter = tracing_subscriber::EnvFilter::default()
+	// Initialize filter - ensure to use `parse_default_directive` for any defaults to persist
+	// after log filter reloading by RPC
+	let mut env_filter = EnvFilter::default()
+		// Enable info
+		.add_directive(parse_default_directive("info")
+			.expect("provided directive is valid"))
 		// Disable info logging by default for some modules.
-		.add_directive("ws=off".parse().expect("provided directive is valid"))
-		.add_directive("yamux=off".parse().expect("provided directive is valid"))
-		.add_directive(
-			"cranelift_codegen=off"
-				.parse()
-				.expect("provided directive is valid"),
-		)
+		.add_directive(parse_default_directive("ws=off")
+			.expect("provided directive is valid"))
+		.add_directive(parse_default_directive("yamux=off")
+			.expect("provided directive is valid"))
+		.add_directive(parse_default_directive("cranelift_codegen=off")
+			.expect("provided directive is valid"))
 		// Set warn logging by default for some modules.
-		.add_directive(
-			"cranelift_wasm=warn"
-				.parse()
-				.expect("provided directive is valid"),
-		)
-		.add_directive("hyper=warn".parse().expect("provided directive is valid"))
-		// Enable info for others.
-		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
+		.add_directive(parse_default_directive("cranelift_wasm=warn")
+			.expect("provided directive is valid"))
+		.add_directive(parse_default_directive("hyper=warn")
+			.expect("provided directive is valid"));
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		if lvl != "" {
-			// We're not sure if log or tracing is available at this moment, so silently ignore the
-			// parse error.
-			for directive in parse_directives(lvl) {
-				env_filter = env_filter.add_directive(directive);
-			}
+		// We're not sure if log or tracing is available at this moment, so silently ignore the
+		// parse error.
+		for directive in parse_directives(lvl) {
+			env_filter = env_filter.add_directive(directive);
 		}
 	}
 
@@ -140,12 +170,11 @@ fn get_default_subscriber_and_telemetries_internal(
 	};
 
 	// Always log the special target `sc_tracing`, overrides global level.
+	// Required because profiling traces are emitted via `sc_tracing`
 	// NOTE: this must be done after we check the `max_level_hint` otherwise
 	// it is always raised to `TRACE`.
 	env_filter = env_filter.add_directive(
-		"sc_tracing=trace"
-			.parse()
-			.expect("provided directive is valid"),
+		parse_default_directive("sc_tracing=trace").expect("provided directive is valid")
 	);
 
 	let enable_color = atty::is(atty::Stream::Stderr);
@@ -170,16 +199,24 @@ fn get_default_subscriber_and_telemetries_internal(
 		enable_color,
 	};
 	let builder = FmtSubscriber::builder()
-		.with_env_filter(env_filter)
+		.with_env_filter(env_filter);
+
+	#[cfg(not(target_os = "unknown"))]
+	let builder = builder
 		.with_writer(
-			#[cfg(not(target_os = "unknown"))]
-			std::io::stderr,
-			#[cfg(target_os = "unknown")]
-			std::io::sink,
+			std::io::stderr as _,
+		);
+
+	#[cfg(target_os = "unknown")]
+	let builder = builder
+		.with_writer(
+			std::io::sink as _,
 		);
 
 	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.event_format(event_format);
+
+	let builder = builder_hook(builder);
 
 	let subscriber = builder.finish().with(PrefixLayer).with(telemetry_layer);
 
@@ -206,7 +243,7 @@ mod tests {
 
 	fn init_logger(pattern: &str) -> tracing::subscriber::DefaultGuard {
 		let (subscriber, _telemetries) =
-			get_default_subscriber_and_telemetries(pattern, None).unwrap();
+			get_default_subscriber_and_telemetries(pattern, None, false).unwrap();
 		tracing::subscriber::set_default(subscriber)
 	}
 
