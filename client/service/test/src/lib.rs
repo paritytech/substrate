@@ -263,7 +263,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		telemetry_external_transport: None,
-		telemetries: Arc::new(Mutex::new(sc_telemetry::Telemetries::new())),
+		telemetries: sc_telemetry::Telemetries::new(),
 		default_heap_pages: None,
 		offchain_worker: Default::default(),
 		force_authoring: false,

@@ -24,7 +24,6 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use parking_lot::Mutex;
 use sc_service::{Configuration, TaskType, TaskManager};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::marker::PhantomData;
@@ -114,7 +113,7 @@ where
 pub struct Runner<C: SubstrateCli> {
 	config: Configuration,
 	tokio_runtime: tokio::runtime::Runtime,
-	telemetries: Arc<Mutex<sc_telemetry::Telemetries>>,
+	telemetries: Arc<sc_telemetry::Telemetries>,
 	phantom: PhantomData<C>,
 }
 
@@ -136,13 +135,14 @@ impl<C: SubstrateCli> Runner<C> {
 						.map(drop),
 			}
 		};
-		let telemetries = Arc::new(Mutex::new(telemetries));
+		let telemetries = Arc::new(telemetries);
 
 		Ok(Runner {
 			config: command.create_configuration(
 				cli,
 				task_executor.into(),
-				telemetries.clone(),
+				//telemetries.clone(),
+				sc_telemetry::Telemetries::new(), // TODO
 			)?,
 			tokio_runtime,
 			telemetries,
@@ -192,12 +192,10 @@ impl<C: SubstrateCli> Runner<C> {
 		self.print_node_infos();
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
 		let telemetries = Arc::try_unwrap(self.telemetries)
-			.map_err(|arc| format!(
-				"Could not initialize telemetries! There are still {} node Configuration pending. \
-				You must run them or drop them.",
-				Arc::strong_count(&arc),
+			.map_err(|_| String::from(
+				"Could not initialize telemetries! \
+				Maybe some node Configuration are pending?"
 			))?;
-		let telemetries = telemetries.into_inner();
 		task_manager.spawn_handle().spawn("telemetries", telemetries.run());
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
 		self.tokio_runtime.block_on(task_manager.clean_shutdown());

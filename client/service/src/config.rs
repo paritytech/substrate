@@ -32,7 +32,6 @@ pub use sc_telemetry::TelemetryEndpoints;
 use prometheus_endpoint::Registry;
 #[cfg(not(target_os = "unknown"))]
 use tempfile::TempDir;
-use parking_lot::Mutex;
 
 /// Service configuration.
 #[derive(Debug)]
@@ -89,7 +88,7 @@ pub struct Configuration {
 	/// endpoint, this transport will be tried in priority before all others.
 	pub telemetry_external_transport: Option<ExtTransport>,
 	/// All the telemetries.
-	pub telemetries: Arc<Mutex<sc_telemetry::Telemetries>>,
+	pub telemetries: sc_telemetry::Telemetries,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.

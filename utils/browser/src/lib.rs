@@ -28,10 +28,8 @@ use futures::{
 	prelude::*, channel::{oneshot, mpsc}, compat::*, future::{ready, ok, select}
 };
 use std::pin::Pin;
-use std::sync::Arc;
 use sc_chain_spec::Extension;
 use libp2p_wasm_ext::{ExtTransport, ffi};
-use parking_lot::Mutex;
 
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 
@@ -41,7 +39,7 @@ pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 /// can be used for network transport.
 pub fn init_logging_and_telemetry(
 	pattern: &str,
-) -> Result<(Arc<Mutex<sc_telemetry::Telemetries>>, ExtTransport), String> {
+) -> Result<(sc_telemetry::Telemetries, ExtTransport), String> {
 	let transport = ExtTransport::new(ffi::websocket_transport());
 	let (subscriber, telemetries) = sc_tracing::logging::get_default_subscriber_and_telemetries(
 		pattern,
@@ -51,7 +49,7 @@ pub fn init_logging_and_telemetry(
 	tracing::subscriber::set_global_default(subscriber)
 		.map_err(|e| format!("could not set global default subscriber: {}", e))?;
 
-	Ok((Arc::new(Mutex::new(telemetries)), transport))
+	Ok((telemetries, transport))
 }
 
 /// Create a service configuration from a chain spec.
@@ -59,7 +57,7 @@ pub fn init_logging_and_telemetry(
 /// This configuration contains good defaults for a browser light client.
 pub async fn browser_configuration<G, E>(
 	chain_spec: GenericChainSpec<G, E>,
-	telemetries: Arc<Mutex<sc_telemetry::Telemetries>>,
+	telemetries: sc_telemetry::Telemetries,
 	transport: ExtTransport,
 ) -> Result<Configuration, Box<dyn std::error::Error>>
 where

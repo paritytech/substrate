@@ -38,8 +38,6 @@ pub use runner::*;
 pub use sc_service::{ChainSpec, Role};
 use sc_service::{Configuration, TaskExecutor};
 pub use sp_version::RuntimeVersion;
-use parking_lot::Mutex;
-use std::sync::Arc;
 use std::io::Write;
 pub use structopt;
 use structopt::{
@@ -217,7 +215,7 @@ pub trait SubstrateCli: Sized {
 		&self,
 		command: &T,
 		task_executor: TaskExecutor,
-		telemetries: Arc<Mutex<sc_telemetry::Telemetries>>,
+		telemetries: sc_telemetry::Telemetries,
 	) -> error::Result<Configuration> {
 		command.create_configuration(self, task_executor, telemetries)
 	}
