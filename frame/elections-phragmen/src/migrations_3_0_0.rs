@@ -51,16 +51,9 @@ pub trait V2ToV3 {
 	type Balance: 'static + FullCodec + Copy;
 }
 
-struct __PhragmenElection;
-impl frame_support::traits::PalletInfo for __PhragmenElection {
-	fn index<P: 'static>() -> Option<usize> { unreachable!() }
-	fn name<P: 'static>() -> Option<&'static str> { Some("PhragmenElection") }
-}
-
 struct __Candidates;
 impl frame_support::traits::StorageInstance for __Candidates {
-	type Pallet = ();
-	type PalletInfo = __PhragmenElection;
+	fn pallet_prefix() -> &'static str { "PhragmenElection" }
 	const STORAGE_PREFIX: &'static str = "Candidates";
 }
 
@@ -69,8 +62,7 @@ type Candidates<T: V2ToV3> = StorageValue<__Candidates, Vec<(T::AccountId, T::Ba
 
 struct __Members;
 impl frame_support::traits::StorageInstance for __Members {
-	type Pallet = ();
-	type PalletInfo = __PhragmenElection;
+	fn pallet_prefix() -> &'static str { "PhragmenElection" }
 	const STORAGE_PREFIX: &'static str = "Members";
 }
 #[allow(type_alias_bounds)]
@@ -78,8 +70,7 @@ type Members<T: V2ToV3> = StorageValue<__Members, Vec<SeatHolder<T::AccountId, T
 
 struct __RunnersUp;
 impl frame_support::traits::StorageInstance for __RunnersUp {
-	type Pallet = ();
-	type PalletInfo = __PhragmenElection;
+	fn pallet_prefix() -> &'static str { "PhragmenElection" }
 	const STORAGE_PREFIX: &'static str = "RunnersUp";
 }
 #[allow(type_alias_bounds)]
@@ -87,8 +78,7 @@ type RunnersUp<T: V2ToV3> = StorageValue<__RunnersUp, Vec<SeatHolder<T::AccountI
 
 struct __Voting;
 impl frame_support::traits::StorageInstance for __Voting {
-	type Pallet = ();
-	type PalletInfo = __PhragmenElection;
+	fn pallet_prefix() -> &'static str { "PhragmenElection" }
 	const STORAGE_PREFIX: &'static str = "Voting";
 }
 #[allow(type_alias_bounds)]
