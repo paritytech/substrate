@@ -73,7 +73,7 @@ use libp2p::swarm::{
 	SwarmEvent,
 	protocols_handler::NodeHandlerWrapperError
 };
-use log::{error, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use metrics::{Metrics, MetricSources, Histogram, HistogramVec};
 use parking_lot::Mutex;
 use sc_peerset::PeersetHandle;
@@ -1045,19 +1045,25 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// invalid peer ID (which includes the local peer ID).
 	fn split_multiaddr_and_peer_id(&self, peers: HashSet<Multiaddr>) -> Result<Vec<(PeerId, Multiaddr)>, String> {
 		peers.into_iter()
-			.map(|mut addr| {
+			.filter_map(|mut addr| {
 				let peer = match addr.pop() {
-					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
-						.map_err(|_| "Invalid PeerId format".to_string())?,
-					_ => return Err("Missing PeerId from address".to_string()),
+					Some(multiaddr::Protocol::P2p(key)) => match PeerId::from_multihash(key) {
+						Ok(peer) => peer,
+						_ => return Some(Err("Invalid PeerId format".to_string())),
+					}
+					_ => return Some(Err("Missing PeerId from address".to_string())),
 				};
 
-				// Make sure the local peer ID is never added to the PSM
-				// or added as a "known address", even if given.
 				if peer == self.local_peer_id {
-					Err("Local peer ID in priority group.".to_string())
+					// Make sure the local peer ID is never added to the PSM
+					// or added as a "known address", even if given.
+					debug!(
+						target: "sub-libp2p",
+						"Ignoring local peer ID when trying to add to/remove from a priority group",
+					);
+					None
 				} else {
-					Ok((peer, addr))
+					Some(Ok((peer, addr)))
 				}
 			})
 			.collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()
