@@ -376,7 +376,6 @@ enum NotificationsSinkMessage {
 	/// Message emitted by [`NotificationsSink::reserve_notification`] and
 	/// [`NotificationsSink::write_notification_now`].
 	Notification {
-		protocol_name: Cow<'static, str>,
 		message: Vec<u8>,
 	},
 
@@ -401,12 +400,10 @@ impl NotificationsSink {
 	/// This method will be removed in a future version.
 	pub fn send_sync_notification<'a>(
 		&'a self,
-		protocol_name: Cow<'static, str>,
 		message: impl Into<Vec<u8>>
 	) {
 		let mut lock = self.inner.sync_channel.lock();
 		let result = lock.try_send(NotificationsSinkMessage::Notification {
-			protocol_name,
 			message: message.into()
 		});
 
@@ -424,12 +421,12 @@ impl NotificationsSink {
 	///
 	/// The protocol name is expected to be checked ahead of calling this method. It is a logic
 	/// error to send a notification using an unknown protocol.
-	pub async fn reserve_notification<'a>(&'a self, protocol_name: Cow<'static, str>) -> Result<Ready<'a>, ()> {
+	pub async fn reserve_notification<'a>(&'a self) -> Result<Ready<'a>, ()> {
 		let mut lock = self.inner.async_channel.lock().await;
 
 		let poll_ready = future::poll_fn(|cx| lock.poll_ready(cx)).await;
 		if poll_ready.is_ok() {
-			Ok(Ready { protocol_name, lock })
+			Ok(Ready { lock })
 		} else {
 			Err(())
 		}
@@ -442,17 +439,9 @@ impl NotificationsSink {
 pub struct Ready<'a> {
 	/// Guarded channel. The channel inside is guaranteed to not be full.
 	lock: FuturesMutexGuard<'a, mpsc::Sender<NotificationsSinkMessage>>,
-	/// Name of the protocol. Should match one of the protocols passed at initialization.
-	protocol_name: Cow<'static, str>,
 }
 
 impl<'a> Ready<'a> {
-	/// Returns the name of the protocol. Matches the one passed to
-	/// [`NotificationsSink::reserve_notification`].
-	pub fn protocol_name(&self) -> &Cow<'static, str> {
-		&self.protocol_name
-	}
-
 	/// Consumes this slots reservation and actually queues the notification.
 	///
 	/// Returns an error if the substream has been closed.
@@ -461,7 +450,6 @@ impl<'a> Ready<'a> {
 		notification: impl Into<Vec<u8>>
 	) -> Result<(), ()> {
 		self.lock.start_send(NotificationsSinkMessage::Notification {
-			protocol_name: self.protocol_name,
 			message: notification.into(),
 		}).map_err(|_| ())
 	}
@@ -709,7 +697,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 				self.events_queue.push_back(
 					ProtocolsHandlerEvent::Custom(NotifsHandlerOut::CloseResult {
-						protocol,
+						protocol_index,
 					})
 				);
 			},
@@ -751,7 +739,7 @@ impl ProtocolsHandler for NotifsHandler {
 		}
 
 		// `Yes` if any protocol has some activity.
-		if self.protocols.iter().any(|p| !matches!(p, State::Closed { .. })) {
+		if self.protocols.iter().any(|p| !matches!(p.state, State::Closed { .. })) {
 			return KeepAlive::Yes;
 		}
 
@@ -770,193 +758,147 @@ impl ProtocolsHandler for NotifsHandler {
 			return Poll::Ready(ev);
 		}
 
-		// TODO: finish PR
+		for protocol_index in 0..self.protocols.len() {
+			// Poll inbound substreams.
+			// Inbound substreams being closed is always tolerated, except for the
+			// `OpenDesiredByRemote` state which might need to be switched back to `Closed`.
+			match &mut self.protocols[protocol_index].state {
+				State::Closed { .. } |
+				State::Open { in_substream: None, .. } |
+				State::Opening { in_substream: None } => {}
 
-		// Poll inbound substreams.
-		// Inbound substreams being closed is always tolerated, except for the
-		// `OpenDesiredByRemote` state which might need to be switched back to `Closed`.
-		match &mut self.state {
-			State::Closed { .. } => {}
-			State::Open { in_substreams, .. } => {
-				for (num, substream) in in_substreams.iter_mut().enumerate() {
-					match substream.as_mut().map(|s| Stream::poll_next(Pin::new(s), cx)) {
-						None | Some(Poll::Pending) => continue,
-						Some(Poll::Ready(Some(Ok(message)))) => {
+				State::Open { in_substream: in_substream @ Some(_), .. } => {
+					match Stream::poll_next(Pin::new(in_substream.as_mut().unwrap()), cx) {
+						Poll::Pending => continue,
+						Poll::Ready(Some(Ok(message))) => {
 							let event = NotifsHandlerOut::Notification {
-								protocol_index: num,
+								protocol_index,
 								message,
 							};
 							return Poll::Ready(ProtocolsHandlerEvent::Custom(event))
 						},
-						Some(Poll::Ready(None)) | Some(Poll::Ready(Some(Err(_)))) =>
-							*substream = None,
+						Poll::Ready(None) | Poll::Ready(Some(Err(_))) =>
+							*in_substream = None,
+					}
+				}
+
+				State::OpenDesiredByRemote { in_substream, pending_opening } => {
+					match NotificationsInSubstream::poll_process(Pin::new(&mut in_substream), cx) {
+						Poll::Pending => {},
+						Poll::Ready(Ok(void)) => match void {},
+						Poll::Ready(Err(_)) => {
+							self.protocols[protocol_index].state = State::Closed {
+								pending_opening: *pending_opening,
+							};
+							return Poll::Ready(ProtocolsHandlerEvent::Custom(
+								NotifsHandlerOut::CloseDesired { protocol_index }
+							))
+						},
+					}
+				}
+
+				State::Opening { in_substream: in_substream @ Some(_), .. } => {
+					match NotificationsInSubstream::poll_process(Pin::new(in_substream.as_mut().unwrap()), cx) {
+						Poll::Pending => continue,
+						Poll::Ready(Ok(void)) => match void {},
+						Poll::Ready(Err(_)) => *in_substream = None,
 					}
 				}
 			}
 
-			State::OpenDesiredByRemote { in_substreams, .. } |
-			State::Opening { in_substreams, .. } => {
-				for substream in in_substreams {
-					match substream.as_mut().map(|s| NotificationsInSubstream::poll_process(Pin::new(s), cx)) {
-						None | Some(Poll::Pending) => continue,
-						Some(Poll::Ready(Ok(void))) => match void {},
-						Some(Poll::Ready(Err(_))) => *substream = None,
-					}
+			// Poll outbound substream.
+			match &mut self.protocols[protocol_index].state {
+				State::Open { out_substream: out_substream @ Some(_), .. } => {
+					match Sink::poll_flush(Pin::new(out_substream.as_mut().unwrap()), cx) {
+						Poll::Pending | Poll::Ready(Ok(())) => continue,
+						Poll::Ready(Err(_)) => {
+							*out_substream = None;
+							let event = NotifsHandlerOut::CloseDesired { protocol_index };
+							return Poll::Ready(ProtocolsHandlerEvent::Custom(event));
+						}
+					};
 				}
+
+				State::Closed { .. } |
+				State::Opening { .. } |
+				State::Open { out_substream: None, .. } |
+				State::OpenDesiredByRemote { .. } => {}
 			}
-		}
 
-		// Since the previous block might have closed inbound substreams, make sure that we can
-		// stay in `OpenDesiredByRemote` state.
-		if let State::OpenDesiredByRemote { in_substreams, pending_opening } = &mut self.state {
-			if !in_substreams.iter().any(|s| s.is_some()) {
-				self.state = State::Closed {
-					pending_opening: mem::replace(pending_opening, Vec::new()),
-				};
-				return Poll::Ready(ProtocolsHandlerEvent::Custom(
-					NotifsHandlerOut::CloseDesired
-				))
-			}
-		}
+			if let State::Open { notifications_sink_rx, out_substream: Some(out_substream), .. }
+				= &mut self.protocols[protocol_index].state
+			{
+				loop {
+					// Before we poll the notifications sink receiver, check that the substream
+					// is ready to accept a message.
+					match out_substream.poll_ready_unpin(cx) {
+						Poll::Ready(_) => {},
+						Poll::Pending => break
+					}
 
-		// Poll outbound substreams.
-		match &mut self.state {
-			State::Open { out_substreams, want_closed, .. } => {
-				let mut any_closed = false;
-
-				for substream in out_substreams.iter_mut() {
-					match substream.as_mut().map(|s| Sink::poll_flush(Pin::new(s), cx)) {
-						None | Some(Poll::Pending) | Some(Poll::Ready(Ok(()))) => continue,
-						Some(Poll::Ready(Err(_))) => {}
+					// Now that all substreams are ready for a message, grab what to send.
+					let message = match notifications_sink_rx.poll_next_unpin(cx) {
+						Poll::Ready(Some(msg)) => msg,
+						Poll::Ready(None) | Poll::Pending => break,
 					};
 
-					// Reached if the substream has been closed.
-					*substream = None;
-					any_closed = true;
-				}
+					match message {
+						NotificationsSinkMessage::Notification { message } => {
+							let _ = out_substream.start_send_unpin(message);
 
-				if any_closed {
-					if !*want_closed {
-						*want_closed = true;
-						return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsHandlerOut::CloseDesired));
-					}
-				}
-			}
-
-			State::Opening { out_substreams, pending_handshake, .. } => {
-				debug_assert!(out_substreams.iter().any(|s| s.is_none()));
-
-				for (num, substream) in out_substreams.iter_mut().enumerate() {
-					match substream {
-						None | Some(None) => continue,
-						Some(Some(substream)) => match Sink::poll_flush(Pin::new(substream), cx) {
-							Poll::Pending | Poll::Ready(Ok(())) => continue,
-							Poll::Ready(Err(_)) => {}
+							// Calling `start_send_unpin` only queues the message. Actually
+							// emitting the message is done with `poll_flush`. In order to
+							// not introduce too much complexity, this flushing is done earlier
+							// in the body of this `poll()` method. As such, we schedule a task
+							// wake-up now in order to guarantee that `poll()` will be called
+							// again and the flush happening.
+							// At the time of the writing of this comment, a rewrite of this
+							// code is being planned. If you find this comment in the wild and
+							// the rewrite didn't happen, please consider a refactor.
+							cx.waker().wake_by_ref();
 						}
-					}
-
-					// Reached if the substream has been closed.
-					*substream = Some(None);
-					if num == 0 {
-						// Cancel the handshake.
-						*pending_handshake = None;
-					}
-				}
-			}
-
-			State::Closed { .. } |
-			State::OpenDesiredByRemote { .. } => {}
-		}
-
-		if let State::Open { notifications_sink_rx, out_substreams, .. } = &mut self.state {
-			'poll_notifs_sink: loop {
-				// Before we poll the notifications sink receiver, check that all the notification
-				// channels are ready to send a message.
-				// TODO: it is planned that in the future we switch to one `NotificationsSink` per
-				// protocol, in which case each sink should wait only for its corresponding handler
-				// to be ready, and not all handlers
-				// see https://github.com/paritytech/substrate/issues/5670
-				for substream in out_substreams.iter_mut() {
-					match substream.as_mut().map(|s| s.poll_ready_unpin(cx)) {
-						None | Some(Poll::Ready(_)) => {},
-						Some(Poll::Pending) => break 'poll_notifs_sink
-					}
-				}
-
-				// Now that all substreams are ready for a message, grab what to send.
-				let message = match notifications_sink_rx.poll_next_unpin(cx) {
-					Poll::Ready(Some(msg)) => msg,
-					Poll::Ready(None) | Poll::Pending => break,
-				};
-
-				match message {
-					NotificationsSinkMessage::Notification {
-						protocol_name,
-						message
-					} => {
-						if let Some(pos) = self.out_protocols.iter().position(|(n, _)| *n == protocol_name) {
-							if let Some(substream) = out_substreams[pos].as_mut() {
-								let _ = substream.start_send_unpin(message);
-								// Calling `start_send_unpin` only queues the message. Actually
-								// emitting the message is done with `poll_flush`. In order to
-								// not introduce too much complexity, this flushing is done earlier
-								// in the body of this `poll()` method. As such, we schedule a task
-								// wake-up now in order to guarantee that `poll()` will be called
-								// again and the flush happening.
-								// At the time of the writing of this comment, a rewrite of this
-								// code is being planned. If you find this comment in the wild and
-								// the rewrite didn't happen, please consider a refactor.
-								cx.waker().wake_by_ref();
-								continue 'poll_notifs_sink;
-							}
-
-						} else {
-							log::warn!(
-								target: "sub-libp2p",
-								"Tried to send a notification on non-registered protocol: {:?}",
-								protocol_name
+						NotificationsSinkMessage::ForceClose => {
+							return Poll::Ready(
+								ProtocolsHandlerEvent::Close(NotifsHandlerError::SyncNotificationsClogged)
 							);
 						}
 					}
-					NotificationsSinkMessage::ForceClose => {
-						return Poll::Ready(
-							ProtocolsHandlerEvent::Close(NotifsHandlerError::SyncNotificationsClogged)
-						);
-					}
 				}
 			}
-		}
 
-		// The legacy substreams are polled only if the state is `Open`. Otherwise, it would be
-		// possible to receive notifications that would need to get silently discarded.
-		if matches!(self.state, State::Open { .. }) {
-			for n in (0..self.legacy_substreams.len()).rev() {
-				let mut substream = self.legacy_substreams.swap_remove(n);
-				let poll_outcome = Pin::new(&mut substream).poll_next(cx);
-				match poll_outcome {
-					Poll::Pending => self.legacy_substreams.push(substream),
-					Poll::Ready(Some(Ok(RegisteredProtocolEvent::Message(message)))) => {
-						self.legacy_substreams.push(substream);
-						return Poll::Ready(ProtocolsHandlerEvent::Custom(
-							NotifsHandlerOut::CustomMessage { message }
-						))
-					},
-					Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged))) => {
-						return Poll::Ready(ProtocolsHandlerEvent::Close(
-							NotifsHandlerError::SyncNotificationsClogged
-						))
-					}
-					Poll::Ready(None) | Poll::Ready(Some(Err(_))) => {
-						if matches!(poll_outcome, Poll::Ready(None)) {
-							self.legacy_shutdown.push(substream);
+			// The legacy substreams are polled only if the state is `Open`. Otherwise, it would be
+			// possible to receive notifications that would need to get silently discarded.
+			if matches!(self.protocols[0].state, State::Open { .. }) {
+				for n in (0..self.legacy_substreams.len()).rev() {
+					let mut substream = self.legacy_substreams.swap_remove(n);
+					let poll_outcome = Pin::new(&mut substream).poll_next(cx);
+					match poll_outcome {
+						Poll::Pending => self.legacy_substreams.push(substream),
+						Poll::Ready(Some(Ok(RegisteredProtocolEvent::Message(message)))) => {
+							self.legacy_substreams.push(substream);
+							return Poll::Ready(ProtocolsHandlerEvent::Custom(
+								NotifsHandlerOut::CustomMessage { message }
+							))
+						},
+						Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged))) => {
+							return Poll::Ready(ProtocolsHandlerEvent::Close(
+								NotifsHandlerError::SyncNotificationsClogged
+							))
 						}
+						Poll::Ready(None) | Poll::Ready(Some(Err(_))) => {
+							if matches!(poll_outcome, Poll::Ready(None)) {
+								self.legacy_shutdown.push(substream);
+							}
 
-						if let State::Open { want_closed, .. } = &mut self.state {
-							if !*want_closed {
-								*want_closed = true;
-								return Poll::Ready(ProtocolsHandlerEvent::Custom(
-									NotifsHandlerOut::CloseDesired
-								))
+							if let State::Open { out_substream, .. } = &mut self.protocols[0].state {
+								if !out_substream.is_some() {
+									*out_substream = None;
+									return Poll::Ready(ProtocolsHandlerEvent::Custom(
+										NotifsHandlerOut::CloseDesired {
+											protocol_index: 0,
+										}
+									))
+								}
 							}
 						}
 					}
