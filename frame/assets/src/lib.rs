@@ -109,6 +109,10 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+pub mod weights;
+
 use sp_std::{fmt::Debug};
 use sp_runtime::{RuntimeDebug, traits::{
 	Member, AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd
@@ -116,14 +120,10 @@ use sp_runtime::{RuntimeDebug, traits::{
 use codec::{Encode, Decode, HasCompact};
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 	traits::{Currency, ReservableCurrency, EnsureOrigin, Get, BalanceStatus::Reserved},
-	dispatch::{DispatchResult, DispatchError}, weights::Weight
+	dispatch::{DispatchResult, DispatchError},
 };
 use frame_system::ensure_signed;
-
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
-
-mod default_weight;
+pub use weights::WeightInfo;
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
@@ -275,22 +275,6 @@ decl_error! {
 		/// A mint operation lead to an overflow.
 		Overflow,
 	}
-}
-
-pub trait WeightInfo {
-	fn create() -> Weight;
-	fn force_create() -> Weight;
-	fn destroy(z: u32, ) -> Weight;
-	fn force_destroy(z: u32, ) -> Weight;
-	fn mint() -> Weight;
-	fn burn() -> Weight;
-	fn transfer() -> Weight;
-	fn force_transfer() -> Weight;
-	fn freeze() -> Weight;
-	fn thaw() -> Weight;
-	fn transfer_ownership() -> Weight;
-	fn set_team() -> Weight;
-	fn set_max_zombies() -> Weight;
 }
 
 decl_module! {
