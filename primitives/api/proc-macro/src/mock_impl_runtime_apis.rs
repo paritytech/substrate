@@ -69,7 +69,9 @@ fn implement_common_api_traits(
 ) -> Result<TokenStream> {
 	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 
-	let error_type = error_type.map(|e| quote!(#e)).unwrap_or_else(|| quote!(String));
+	let error_type = error_type
+		.map(|e| quote!(#e))
+		.unwrap_or_else(|| quote!( #crate_::ApiError ) );
 
 	// Quote using the span from `error_type` to generate nice error messages when the type is
 	// not implementing a trait or similar.

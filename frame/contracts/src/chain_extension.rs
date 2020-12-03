@@ -25,7 +25,7 @@
 //! callable by a contract.
 //!
 //! In order to create a chain extension the runtime author implements the [`ChainExtension`]
-//! trait and declares it in this pallet's [configuration Trait](crate::Trait). All types
+//! trait and declares it in this pallet's [configuration Trait](crate::Config). All types
 //! required for this endeavour are defined or re-exported in this module. There is an
 //! implementation on `()` which can be used to signal that no chain extension is available.
 //!
@@ -60,7 +60,7 @@ use sp_std::{
 	vec::Vec,
 };
 
-pub use frame_system::Trait as SysTrait;
+pub use frame_system::Config as SysConfig;
 pub use pallet_contracts_primitives::ReturnFlags;
 pub use sp_core::crypto::UncheckedFrom;
 pub use crate::exec::Ext;
@@ -93,7 +93,7 @@ pub trait ChainExtension {
 	/// behaviour.
 	fn call<E: Ext>(func_id: u32, env: Environment<E, InitState>) -> Result<RetVal>
 	where
-		<E::T as SysTrait>::AccountId: UncheckedFrom<<E::T as SysTrait>::Hash> + AsRef<[u8]>;
+		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>;
 
 	/// Determines whether chain extensions are enabled for this chain.
 	///
@@ -111,7 +111,7 @@ pub trait ChainExtension {
 impl ChainExtension for () {
 	fn call<E: Ext>(_func_id: u32, mut _env: Environment<E, InitState>) -> Result<RetVal>
 	where
-		<E::T as SysTrait>::AccountId: UncheckedFrom<<E::T as SysTrait>::Hash> + AsRef<[u8]>,
+		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
 		// Never called since [`Self::enabled()`] is set to `false`. Because we want to
 		// avoid panics at all costs we supply a sensible error value here instead
@@ -151,7 +151,7 @@ pub struct Environment<'a, 'b, E: Ext, S: state::State> {
 /// Functions that are available in every state of this type.
 impl<'a, 'b, E: Ext, S: state::State> Environment<'a, 'b, E, S>
 where
-	<E::T as SysTrait>::AccountId: UncheckedFrom<<E::T as SysTrait>::Hash> + AsRef<[u8]>,
+	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 {
 	/// Charge the passed `amount` of weight from the overall limit.
 	///
@@ -256,7 +256,7 @@ impl<'a, 'b, E: Ext, S: state::PrimOut> Environment<'a, 'b, E, S> {
 /// Functions to use the input arguments as pointer to a buffer.
 impl<'a, 'b, E: Ext, S: state::BufIn> Environment<'a, 'b, E, S>
 where
-	<E::T as SysTrait>::AccountId: UncheckedFrom<<E::T as SysTrait>::Hash> + AsRef<[u8]>,
+	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 {
 	/// Reads `min(max_len, in_len)` from contract memory.
 	///
@@ -320,7 +320,7 @@ where
 /// Functions to use the output arguments as pointer to a buffer.
 impl<'a, 'b, E: Ext, S: state::BufOut> Environment<'a, 'b, E, S>
 where
-	<E::T as SysTrait>::AccountId: UncheckedFrom<<E::T as SysTrait>::Hash> + AsRef<[u8]>,
+	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 {
 	/// Write the supplied buffer to contract memory.
 	///

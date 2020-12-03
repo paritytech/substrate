@@ -17,7 +17,7 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
-	HostFnWeights, Schedule, Trait, CodeHash, BalanceOf, Error,
+	HostFnWeights, Schedule, Config, CodeHash, BalanceOf, Error,
 	exec::{Ext, StorageKey, TopicOf},
 	gas::{Gas, GasMeter, Token, GasMeterResult},
 	wasm::env_def::ConvertibleToWasm,
@@ -201,7 +201,7 @@ pub enum RuntimeToken {
 	ChainExtension(u64),
 }
 
-impl<T: Trait> Token<T> for RuntimeToken
+impl<T: Config> Token<T> for RuntimeToken
 where
 	T::AccountId: UncheckedFrom<T::Hash>, T::AccountId: AsRef<[u8]>
 {
@@ -300,8 +300,8 @@ pub struct Runtime<'a, E: Ext + 'a> {
 impl<'a, E> Runtime<'a, E>
 where
 	E: Ext + 'a,
-	<E::T as frame_system::Trait>::AccountId:
-		UncheckedFrom<<E::T as frame_system::Trait>::Hash> + AsRef<[u8]>
+	<E::T as frame_system::Config>::AccountId:
+		UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>
 {
 	pub fn new(
 		ext: &'a mut E,
@@ -688,7 +688,7 @@ define_env!(Env, <E: Ext>,
 		value_len: u32
 	) -> ReturnCode => {
 		ctx.charge_gas(RuntimeToken::Transfer)?;
-		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
+		let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(account_ptr, account_len)?;
 		let value: BalanceOf<<E as Ext>::T> =
 			ctx.read_sandbox_memory_as(value_ptr, value_len)?;
@@ -747,7 +747,7 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> ReturnCode => {
 		ctx.charge_gas(RuntimeToken::CallBase(input_data_len))?;
-		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
+		let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(callee_ptr, callee_len)?;
 		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr, value_len)?;
 		let input_data = ctx.read_sandbox_memory(input_data_ptr, input_data_len)?;
@@ -907,7 +907,7 @@ define_env!(Env, <E: Ext>,
 		beneficiary_len: u32
 	) => {
 		ctx.charge_gas(RuntimeToken::Terminate)?;
-		let beneficiary: <<E as Ext>::T as frame_system::Trait>::AccountId =
+		let beneficiary: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(beneficiary_ptr, beneficiary_len)?;
 
 		ctx.ext.terminate(&beneficiary)?;
@@ -1148,7 +1148,7 @@ define_env!(Env, <E: Ext>,
 		delta_count: u32
 	) => {
 		ctx.charge_gas(RuntimeToken::RestoreTo(delta_count))?;
-		let dest: <<E as Ext>::T as frame_system::Trait>::AccountId =
+		let dest: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(dest_ptr, dest_len)?;
 		let code_hash: CodeHash<<E as Ext>::T> =
 			ctx.read_sandbox_memory_as(code_hash_ptr, code_hash_len)?;
@@ -1393,11 +1393,11 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> u32 => {
 		use crate::chain_extension::{ChainExtension, Environment, RetVal};
-		if <E::T as Trait>::ChainExtension::enabled() == false {
+		if <E::T as Config>::ChainExtension::enabled() == false {
 			Err(Error::<E::T>::NoChainExtension)?;
 		}
 		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
-		match <E::T as Trait>::ChainExtension::call(func_id, env)? {
+		match <E::T as Config>::ChainExtension::call(func_id, env)? {
 			RetVal::Converging(val) => Ok(val),
 			RetVal::Diverging{flags, data} => Err(TrapReason::Return(ReturnData {
 				flags: flags.bits(),

@@ -137,7 +137,9 @@ where
 		)?;
 		let state = self.backend.state_at(*id)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-		let runtime_code = self.check_override(state_runtime_code.runtime_code()?, id)?;
+		let runtime_code = state_runtime_code.runtime_code()
+			.map_err(sp_blockchain::Error::RuntimeCode)?;
+		let runtime_code = self.check_override(runtime_code, id)?;
 
 		let return_data = StateMachine::new(
 			&state,
@@ -211,7 +213,10 @@ where
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_state);
 				// It is important to extract the runtime code here before we create the proof
 				// recorder.
-				let runtime_code = self.check_override(state_runtime_code.runtime_code()?, at)?;
+				
+				let runtime_code = state_runtime_code.runtime_code()
+					.map_err(sp_blockchain::Error::RuntimeCode)?;
+				let runtime_code = self.check_override(runtime_code, at)?;
 
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
@@ -236,7 +241,9 @@ where
 			},
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-				let runtime_code = self.check_override(state_runtime_code.runtime_code()?, at)?;
+				let runtime_code = state_runtime_code.runtime_code()
+					.map_err(sp_blockchain::Error::RuntimeCode)?;
+				let runtime_code = self.check_override(runtime_code, at)?;
 
 				let mut state_machine = StateMachine::new(
 					&state,
@@ -273,7 +280,9 @@ where
 			None,
 		);
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-		self.executor.runtime_version(&mut ext, &state_runtime_code.runtime_code()?)
+		let runtime_code = state_runtime_code.runtime_code()
+			.map_err(sp_blockchain::Error::RuntimeCode)?;
+		self.executor.runtime_version(&mut ext, &runtime_code)
 			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}
 
@@ -284,6 +293,9 @@ where
 		method: &str,
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(trie_state);
+		let runtime_code = state_runtime_code.runtime_code()
+			.map_err(sp_blockchain::Error::RuntimeCode)?;
 		sp_state_machine::prove_execution_on_trie_backend::<_, _, NumberFor<Block>, _, _>(
 			trie_state,
 			overlay,
@@ -291,7 +303,7 @@ where
 			self.spawn_handle.clone(),
 			method,
 			call_data,
-			&sp_state_machine::backend::BackendRuntimeCode::new(trie_state).runtime_code()?,
+			&runtime_code,
 		)
 		.map_err(Into::into)
 	}
