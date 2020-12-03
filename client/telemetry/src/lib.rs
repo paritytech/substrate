@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Telemetry utilities.
+//! Telemetry utilities. TODO update doc
 //!
 //! You can collect telemetries for a substrate node by creating a `Telemetry` object. For every
 //! substrate node there must be only one `Telemetry` object. This `Telemetry` object can connect to
@@ -66,10 +66,11 @@ pub use serde_json;
 pub use tracing;
 
 mod layer;
+mod node;
 pub mod worker;
 
 pub use layer::*;
-use worker::node_pool::*;
+use node::{Node, NodeEvent};
 use worker::{CONNECT_TIMEOUT, StreamSink}; // TODO mod
 
 /// List of telemetry servers we want to talk to. Contains the URL of the server, and the
@@ -142,122 +143,15 @@ pub const CONSENSUS_WARN: u8 = 4;
 /// Consensus INFO log level.
 pub const CONSENSUS_INFO: u8 = 1;
 
-/// Telemetry object. Implements `Future` and must be polled regularly.
-///
-/// Dropping unregisters the telemetry.
-#[derive(Debug)]
-pub struct Telemetry {
-	inner: TelemetryInner,
-	span: tracing::Span,
-}
-
+/*
+ * TODO
 impl Drop for Telemetry {
 	fn drop(&mut self) {
 		let span_id = self.span.id().expect("the span is enabled; qed");
 		tracing::dispatcher::get_default(move |dispatch| dispatch.exit(&span_id));
 	}
 }
-
-#[derive(Debug)]
-struct TelemetryInner {
-	/// Worker for the telemetry. `None` if it failed to initialize.
-	worker: Option<worker::TelemetryWorker>,
-	/// Receives log entries for them to be dispatched to the worker.
-	receiver: mpsc::Receiver<(u8, String)>,
-}
-
-impl Telemetry {
-	/// Initializes the telemetry. See the crate root documentation for more information.
-	pub fn new(
-		endpoints: TelemetryEndpoints,
-		wasm_external_transport: Option<wasm_ext::ExtTransport>,
-		node_pool: Option<()>,
-	) -> (Self, mpsc::Sender<(u8, String)>) {
-		let endpoints = endpoints.0;
-
-		let (sender, receiver) = mpsc::channel(16);
-
-		let worker = match worker::TelemetryWorker::new(
-			endpoints,
-			wasm_external_transport,
-			None,
-		) {
-			Ok(w) => Some(w),
-			Err(err) => {
-				error!(target: "telemetry", "Failed to initialize telemetry worker: {:?}", err);
-				None
-			}
-		};
-
-		let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
-		let span_id = span.id().expect("the span is enabled; qed");
-		tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&span_id));
-
-		(
-			Self {
-				inner: TelemetryInner {
-					worker,
-					receiver,
-				},
-				span,
-			},
-			sender,
-		)
-	}
-}
-
-/// Event generated when polling the worker.
-#[derive(Debug)]
-pub enum TelemetryEvent {
-	/// We have established a connection to one of the telemetry endpoint, either for the first
-	/// time or after having been disconnected earlier.
-	Connected,
-}
-
-impl Stream for Telemetry {
-	type Item = TelemetryEvent;
-
-	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		let before = Instant::now();
-
-		let mut has_connected = false;
-
-		// The polling pattern is: poll the worker so that it processes its queue, then add one
-		// message from the receiver (if possible), then poll the worker again, and so on.
-		loop {
-			if let Some(worker) = self.inner.worker.as_mut() {
-				while let Poll::Ready(event) = worker.poll(cx) {
-					// Right now we only have one possible event. This line is here in order to not
-					// forget to handle any possible new event type.
-					let worker::TelemetryWorkerEvent::Connected = event;
-					has_connected = true;
-				}
-			}
-
-			if let Poll::Ready(Some((
-				verbosity,
-				json,
-			))) = Stream::poll_next(Pin::new(&mut self.inner.receiver), cx)
-			{
-				if let Some(worker) = self.inner.worker.as_mut() {
-					let _ = worker.log(verbosity, json.as_str());
-				}
-			} else {
-				break;
-			}
-		}
-
-		if before.elapsed() > Duration::from_millis(200) {
-			warn!(target: "telemetry", "Polling the telemetry took more than 200ms");
-		}
-
-		if has_connected {
-			Poll::Ready(Some(TelemetryEvent::Connected))
-		} else {
-			Poll::Pending
-		}
-	}
-}
+*/
 
 pub(crate) type InitPayload = (Id, TelemetryEndpoints, serde_json::Value, TelemetryConnectionSinks);
 
@@ -373,7 +267,7 @@ impl Telemetries {
 		let mut node_map_inv: HashMap<Multiaddr, Vec<Id>> = HashMap::new();
 		let mut connection_messages: HashMap<Id, serde_json::Value> = HashMap::new();
 		let mut connection_sinks: HashMap<Id, TelemetryConnectionSinks> = HashMap::new();
-		let mut node_pool: HashMap<Multiaddr, crate::worker::node::Node<crate::worker::WsTrans>> = HashMap::new(); // TODO mod
+		let mut node_pool: HashMap<Multiaddr, Node<crate::worker::WsTrans>> = HashMap::new(); // TODO mod
 		let mut node_first_connect: HashSet<(Multiaddr, Id)> = HashSet::new();
 
 		// initialize the telemetry nodes
@@ -383,7 +277,7 @@ impl Telemetries {
 			let endpoints = endpoints.0;
 
 			for (addr, verbosity) in endpoints {
-				let node = crate::worker::node::Node::new(transport.clone(), addr.clone());
+				let node = Node::new(transport.clone(), addr.clone());
 				node_pool.insert(addr.clone(), node);
 				node_map.entry(id.clone()).or_insert_with(Vec::new)
 					.push((verbosity, addr.clone()));
@@ -435,7 +329,7 @@ impl Telemetries {
 
 				// Detect re-connection
 				let node_status = node.next().await;
-				if matches!(node_status, Some(crate::worker::node::NodeEvent::Connected)) {
+				if matches!(node_status, Some(NodeEvent::Connected)) {
 					// All the instances must re-send the connection message
 					node_first_connect.extend(
 						node_map_inv.get(addr)
@@ -447,7 +341,7 @@ impl Telemetries {
 				}
 
 				// Reconnection handling
-				if matches!(node_status, Some(crate::worker::node::NodeEvent::Connected) | None) {
+				if matches!(node_status, Some(NodeEvent::Connected) | None) {
 					if node_first_connect.remove(&(addr.to_owned(), id.clone())) {
 						if let Some(connection_sink) = connection_sinks.get(&id) {
 							connection_sink.fire();

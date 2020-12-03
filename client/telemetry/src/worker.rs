@@ -39,31 +39,9 @@ use log::{trace, error};
 use parking_lot::Mutex;
 use std::{io, pin::Pin, sync::Arc, task::Context, task::Poll, time};
 
-pub(crate) mod node;
-pub(crate) mod node_pool;
-
-pub(crate) use node_pool::NodePool;
-
 /// Timeout after which a connection attempt is considered failed. Includes the WebSocket HTTP
 /// upgrading.
 pub(crate) const CONNECT_TIMEOUT: time::Duration = time::Duration::from_secs(20);
-
-/// Event generated when polling the worker.
-#[derive(Debug)]
-pub enum TelemetryWorkerEvent {
-	/// We have established a connection to one of the telemetry endpoint, either for the first
-	/// time or after having been disconnected earlier.
-	Connected,
-}
-
-/// Telemetry processing machine.
-#[derive(Debug)]
-pub struct TelemetryWorker {
-	/// List of nodes with their maximum verbosity level.
-	nodes: Vec<(Arc<Mutex<node::Node<WsTrans>>>, u8)>,
-	/// Force `poll()` to return `Connected`.
-	force_connected: bool,
-}
 
 /// A trait that implements `Stream` and `Sink`.
 pub trait StreamAndSink<I>: Stream + Sink<I> {}
@@ -77,127 +55,6 @@ pub type WsTrans = libp2p::core::transport::Boxed<
 		Error = io::Error
 	> + Send>>
 >;
-
-impl TelemetryWorker {
-	/// Builds a new `TelemetryWorker`.
-	///
-	/// The endpoints must be a list of targets, plus a verbosity level. When you send a message
-	/// to the telemetry, only the targets whose verbosity is higher than the verbosity of the
-	/// message will receive it.
-	///
-	/// It can re-use `Node` (connections) if a `NodePool` is provided and share the same address of
-	/// connection. Otherwise new `Node` are created.
-	pub fn new(
-		endpoints: impl IntoIterator<Item = (Multiaddr, u8)>,
-		wasm_external_transport: impl Into<Option<wasm_ext::ExtTransport>>,
-		node_pool: Option<&NodePool>,
-	) -> Result<Self, io::Error> {
-		let transport = match wasm_external_transport.into() {
-			Some(t) => OptionalTransport::some(t),
-			None => OptionalTransport::none()
-		}.map((|inner, _| StreamSink::from(inner)) as fn(_, _) -> _);
-
-		// The main transport is the `wasm_external_transport`, but if we're on desktop we add
-		// support for TCP+WebSocket+DNS as a fallback. In practice, you're not expected to pass
-		// an external transport on desktop and the fallback is used all the time.
-		#[cfg(not(target_os = "unknown"))]
-		let transport = transport.or_transport({
-			let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new())?;
-			libp2p::websocket::framed::WsConfig::new(inner)
-				.and_then(|connec, _| {
-					let connec = connec
-						.with(|item| {
-							let item = libp2p::websocket::framed::OutgoingData::Binary(item);
-							future::ready(Ok::<_, io::Error>(item))
-						})
-						.try_filter(|item| future::ready(item.is_data()))
-						.map_ok(|data| data.into_bytes());
-					future::ready(Ok::<_, io::Error>(connec))
-				})
-		});
-
-		let transport = TransportTimeout::new(
-			transport.map(|out, _| {
-				let out = out
-					.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-					.sink_map_err(|err| io::Error::new(io::ErrorKind::Other, err));
-				Box::pin(out) as Pin<Box<_>>
-			}),
-			CONNECT_TIMEOUT
-		).boxed();
-
-		let mut force_connected = false;
-		let nodes = endpoints.into_iter().map(|(addr, verbosity)| {
-			let node = if let Some(node_pool) = node_pool {
-				/*
-				let (node, is_new) = node_pool.get_or_create(transport.clone(), addr);
-				if !is_new {
-					force_connected = true;
-				}
-				node
-				*/
-				todo!("remove")
-			} else {
-				Arc::new(Mutex::new(node::Node::new(transport.clone(), addr)))
-			};
-			(node, verbosity)
-		}).collect();
-
-		Ok(TelemetryWorker {
-			nodes,
-			force_connected,
-		})
-	}
-
-	/// Polls the worker for events that happened.
-	pub fn poll(&mut self, cx: &mut Context) -> Poll<TelemetryWorkerEvent> {
-		if self.force_connected {
-			self.force_connected = false;
-			return Poll::Ready(TelemetryWorkerEvent::Connected);
-		}
-
-		for (node, _) in &mut self.nodes {
-			loop {
-				match node::Node::poll(Pin::new(&mut node.lock()), cx) {
-					Poll::Ready(node::NodeEvent::Connected) =>
-						return Poll::Ready(TelemetryWorkerEvent::Connected),
-					Poll::Ready(node::NodeEvent::Disconnected(_)) => continue,
-					Poll::Pending => break,
-				}
-			}
-		}
-
-		Poll::Pending
-	}
-
-	/// Process telemetry message given its verbosity.
-	pub fn log(&mut self, msg_verbosity: u8, json: &str) -> Result<(), ()> {
-		// None of the nodes want that verbosity, so just return without doing any serialization.
-		if self.nodes.iter().all(|(_, node_max_verbosity)| msg_verbosity > *node_max_verbosity) {
-			trace!(
-				target: "telemetry",
-				"Skipping log entry because verbosity {:?} is too high for all endpoints",
-				msg_verbosity
-			);
-			return Ok(())
-		}
-
-		for (node, node_max_verbosity) in &mut self.nodes {
-			let mut node = node.lock();
-
-			if msg_verbosity > *node_max_verbosity {
-				trace!(target: "telemetry", "Skipping {:?} for log entry with verbosity {:?}",
-					node.addr(), msg_verbosity);
-				continue;
-			}
-
-			// `send_message` returns an error if we're not connected, which we silently ignore.
-			let _ = node.send_message(json);
-		}
-
-		Ok(())
-	}
-}
 
 /// Wraps around an `AsyncWrite` and implements `Sink`. Guarantees that each item being sent maps
 /// to one call of `write`.
