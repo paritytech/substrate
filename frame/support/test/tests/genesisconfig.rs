@@ -15,27 +15,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub trait Trait {
-	type BlockNumber: codec::Codec + codec::EncodeLike + Default;
-	type Origin;
-}
+pub trait Config: frame_support_test::Config {}
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
 }
 
 frame_support::decl_storage! {
-	trait Store for Module<T: Trait> as Test {
+	trait Store for Module<T: Config> as Test {
 		pub AppendableDM config(t): double_map hasher(identity) u32, hasher(identity) T::BlockNumber => Vec<u32>;
 	}
 }
 
 struct Test;
 
-impl Trait for Test {
+impl frame_support_test::Config for Test {
 	type BlockNumber = u32;
 	type Origin = ();
+	type PalletInfo = ();
+	type DbWeight = ();
 }
+
+impl Config for Test {}
 
 #[test]
 fn init_genesis_config() {

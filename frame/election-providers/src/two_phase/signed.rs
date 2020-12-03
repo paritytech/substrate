@@ -23,7 +23,7 @@ use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::is_score_better;
 use sp_runtime::Perbill;
 
-impl<T: Trait> Module<T>
+impl<T: Config> Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {

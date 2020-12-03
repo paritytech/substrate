@@ -20,7 +20,7 @@
 //! The System module provides low-level access to core types and cross-cutting utilities.
 //! It acts as the base layer for other pallets to interact with the Substrate framework components.
 //!
-//! - [`system::Trait`](./trait.Trait.html)
+//! - [`system::Config`](./trait.Config.html)
 //!
 //! ## Overview
 //!
@@ -74,10 +74,10 @@
 //! use frame_support::{decl_module, dispatch};
 //! use frame_system::{self as system, ensure_signed};
 //!
-//! pub trait Trait: system::Trait {}
+//! pub trait Config: system::Config {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //! 		#[weight = 0]
 //! 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
@@ -136,10 +136,10 @@ pub mod offchain;
 pub(crate) mod mock;
 
 mod extensions;
-mod weights;
+mod weight;
+pub mod weights;
 #[cfg(test)]
 mod tests;
-mod default_weights;
 
 pub use extensions::{
 	check_mortality::CheckMortality, check_genesis::CheckGenesis, check_nonce::CheckNonce,
@@ -148,6 +148,7 @@ pub use extensions::{
 };
 // Backward compatible re-export.
 pub use extensions::check_mortality::CheckMortality as CheckEra;
+pub use weights::WeightInfo;
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -159,17 +160,7 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::ordered_trie_root(xts)
 }
 
-pub trait WeightInfo {
-	fn remark() -> Weight;
-	fn set_heap_pages() -> Weight;
-	fn set_changes_trie_config() -> Weight;
-	fn set_storage(i: u32, ) -> Weight;
-	fn kill_storage(i: u32, ) -> Weight;
-	fn kill_prefix(p: u32, ) -> Weight;
-	fn suicide() -> Weight;
-}
-
-pub trait Trait: 'static + Eq + Clone {
+pub trait Config: 'static + Eq + Clone {
 	/// The basic call filter to use in Origin. All origins are built with this filter as base,
 	/// except Root.
 	type BaseCallFilter: Filter<Self::Call>;
@@ -279,8 +270,8 @@ pub trait Trait: 'static + Eq + Clone {
 	type SystemWeightInfo: WeightInfo;
 }
 
-pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
-pub type DigestItemOf<T> = generic::DigestItem<<T as Trait>::Hash>;
+pub type DigestOf<T> = generic::Digest<<T as Config>::Hash>;
+pub type DigestItemOf<T> = generic::DigestItem<<T as Config>::Hash>;
 
 pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
@@ -338,7 +329,7 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 }
 
 /// Exposed trait-generic origin type.
-pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
+pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 
 // Create a Hash with 69 for each byte,
 // only used to build genesis config.
@@ -399,7 +390,7 @@ impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as System {
+	trait Store for Module<T: Config> as System {
 		/// The full account information for a particular account ID.
 		pub Account get(fn account):
 			map hasher(blake2_128_concat) T::AccountId => AccountInfo<T::Index, T::AccountData>;
@@ -408,7 +399,7 @@ decl_storage! {
 		ExtrinsicCount: Option<u32>;
 
 		/// The current weight for the block.
-		BlockWeight get(fn block_weight): weights::ExtrinsicsWeight;
+		BlockWeight get(fn block_weight): weight::ExtrinsicsWeight;
 
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
@@ -487,7 +478,7 @@ decl_storage! {
 
 decl_event!(
 	/// Event for the System module.
-	pub enum Event<T> where AccountId = <T as Trait>::AccountId {
+	pub enum Event<T> where AccountId = <T as Config>::AccountId {
 		/// An extrinsic completed successfully. \[info\]
 		ExtrinsicSuccess(DispatchInfo),
 		/// An extrinsic failed. \[error, info\]
@@ -503,7 +494,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the System module
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// The name of specification does not match between the current runtime
 		/// and the new runtime.
 		InvalidSpecName,
@@ -522,7 +513,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 		type Error = Error<T>;
 
 		/// The maximum number of blocks to allow in mortal eras.
@@ -570,7 +561,7 @@ decl_module! {
 		/// - Base Weight: 0.665 µs, independent of remark length.
 		/// - No DB operations.
 		/// # </weight>
-		#[weight = T::SystemWeightInfo::remark()]
+		#[weight = T::SystemWeightInfo::remark(_remark.len() as u32)]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
@@ -906,7 +897,7 @@ pub enum RefStatus {
 	Unreferenced,
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Deposits an event into this block's event record.
 	pub fn deposit_event(event: impl Into<T::Event>) {
 		Self::deposit_event_indexed(&[], event.into());
@@ -1261,7 +1252,7 @@ impl<T: Trait> Module<T> {
 
 /// Event handler which calls on_created_account when it happens.
 pub struct CallOnCreatedAccount<T>(PhantomData<T>);
-impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {
+impl<T: Config> Happened<T::AccountId> for CallOnCreatedAccount<T> {
 	fn happened(who: &T::AccountId) {
 		Module::<T>::on_created_account(who.clone());
 	}
@@ -1269,15 +1260,15 @@ impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {
 
 /// Event handler which calls kill_account when it happens.
 pub struct CallKillAccount<T>(PhantomData<T>);
-impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
+impl<T: Config> Happened<T::AccountId> for CallKillAccount<T> {
 	fn happened(who: &T::AccountId) {
 		Module::<T>::kill_account(who)
 	}
 }
 
-impl<T: Trait> BlockNumberProvider for Module<T>
+impl<T: Config> BlockNumberProvider for Module<T>
 {
-	type BlockNumber = <T as Trait>::BlockNumber;
+	type BlockNumber = <T as Config>::BlockNumber;
 
 	fn current_block_number() -> Self::BlockNumber {
 		Module::<T>::block_number()
@@ -1287,7 +1278,7 @@ impl<T: Trait> BlockNumberProvider for Module<T>
 // Implement StoredMap for a simple single-item, kill-account-on-remove system. This works fine for
 // storing a single item which is required to not be empty/default for the account to exist.
 // Anything more complex will need more sophisticated logic.
-impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
+impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 	fn get(k: &T::AccountId) -> T::AccountData {
 		Account::<T>::get(k).data
 	}
@@ -1354,7 +1345,7 @@ pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S
 }
 
 
-impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T> {
+impl<T: Config> IsDeadAccount<T::AccountId> for Module<T> {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		!Account::<T>::contains_key(who)
 	}
@@ -1367,7 +1358,7 @@ impl<T> Default for ChainContext<T> {
 	}
 }
 
-impl<T: Trait> Lookup for ChainContext<T> {
+impl<T: Config> Lookup for ChainContext<T> {
 	type Source = <T::Lookup as StaticLookup>::Source;
 	type Target = <T::Lookup as StaticLookup>::Target;
 

@@ -26,7 +26,9 @@
 use sp_std::{fmt::Debug, prelude::*};
 
 use sp_arithmetic::PerThing;
-use sp_npos_elections::{CompactSolution, ExtendedBalance, PerThing128, Supports, VoteWeight};
+/// Re-export some type as they are used in the interface.
+pub use sp_npos_elections::{CompactSolution, ExtendedBalance, PerThing128, VoteWeight, Supports};
+
 
 /// Something that can provide the data to something else that implements [`ElectionProvider`], such
 /// as the [`two_phase`] module.

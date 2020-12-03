@@ -25,6 +25,7 @@ use frame_support::assert_ok;
 use rand::{seq::SliceRandom, thread_rng};
 use sp_npos_elections::{ExtendedBalance, VoteWeight};
 use sp_runtime::{InnerOf, PerU16};
+use std::convert::TryInto;
 
 const SEED: u32 = 0;
 
@@ -34,7 +35,7 @@ const SEED: u32 = 0;
 /// Generate mock on-chain snapshots.
 ///
 /// This emulates the start of signed phase, where snapshots are received from an upstream crate.
-fn mock_snapshot<T: Trait>(
+fn mock_snapshot<T: Config>(
 	witness: WitnessData,
 ) -> (
 	Vec<T::AccountId>,
@@ -43,20 +44,19 @@ fn mock_snapshot<T: Trait>(
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {
+	let stake: u64 = 1000_000;
 	// first generates random targets.
 	let targets: Vec<T::AccountId> = (0..witness.targets)
 		.map(|i| account("Targets", i, SEED))
 		.collect();
 
-	// generate targets, each voting for a random subset of the targets.\
+	// generate voters, each voting for a random subset of the targets.
 	let mut voters = (0..(witness.voters - witness.targets))
 		.map(|i| {
 			let mut rng = thread_rng();
-			let stake = 1000_000u64;
 			let to_vote = rand::random::<usize>() % <CompactOf<T>>::LIMIT + 1;
 			let votes = targets.as_slice().choose_multiple(&mut rng, to_vote).cloned().collect::<Vec<_>>();
 			let voter = account::<T::AccountId>("Voter", i, SEED);
-
 			(voter, stake, votes)
 		})
 		.collect::<Vec<_>>();
@@ -64,12 +64,12 @@ where
 	// targets should have self vote. This is very helpful, because it ensure that by doing the trim,
 	// we almost never reduce the number of unique targets. For this cause, we also make the self
 	// vote heavier, to ensure that trimming only removes a voter here and there, not a target.
-	voters.extend(targets.iter().map(|t| (t.clone(), 1000_000_0u64, vec![t.clone()])));
+	voters.extend(targets.iter().map(|t| (t.clone(), stake, vec![t.clone()])));
 
 	(targets, voters)
 }
 
-fn put_mock_snapshot<T: Trait>(witness: WitnessData, desired_targets: u32)
+fn put_mock_snapshot<T: Config>(witness: WitnessData, desired_targets: u32)
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {
@@ -82,9 +82,10 @@ where
 /// Creates a **valid** solution with exactly the given size.
 ///
 /// The snapshot size must be bigger, otherwise this will panic.
-fn solution_with_size<T: Trait>(active_voters: u32, winners_count: u32) -> RawSolution<CompactOf<T>>
+fn solution_with_size<T: Config>(active_voters: u32, winners_count: u32) -> RawSolution<CompactOf<T>>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	<InnerOf<CompactAccuracyOf<T>> as std::convert::TryFrom<usize>>::Error: std::fmt::Debug,
 {
 	let voters = <TwoPhase<T>>::snapshot_voters().unwrap();
 	let targets = <TwoPhase<T>>::snapshot_targets().unwrap();
@@ -99,6 +100,7 @@ where
 	let voter_index = crate::voter_index_fn!(voters, T::AccountId, T);
 	let voter_at = crate::voter_at_fn!(voters, T::AccountId, T);
 	let target_at = crate::target_at_fn!(targets, T::AccountId, T);
+	let target_index = crate::target_index_fn!(targets, T::AccountId, T);
 	let stake_of = crate::stake_of_fn!(voters, T::AccountId);
 
 	// First chose random winners.
@@ -112,8 +114,8 @@ where
 	let mut assignments = winners
 		.iter()
 		.map(|w| Assignment {
-			who: *w,
-			distribution: vec![(w, PerU16::one())],
+			who: w.clone(),
+			distribution: vec![(w.clone(), <CompactAccuracyOf<T>>::one())],
 		})
 		.collect::<Vec<_>>();
 
@@ -123,6 +125,8 @@ where
 		.filter(|(x, _, z)| *x != z[0])
 		.cloned()
 		.collect::<Vec<_>>();
+
+	// add from `voters_pool` to `assignments` until we have enough.
 	while assignments.len() < active_voters as usize {
 		// pop one of the voters.
 		let (who, _, votes) = voters_pool.remove(rand::random::<usize>() % voters_pool.len());
@@ -132,16 +136,18 @@ where
 			.filter(|v| winners.contains(v))
 			.cloned()
 			.collect::<Vec<_>>();
+
 		// if any, add assignment to all of them.
 		if winner_intersection.len() > 0 {
 			assignments.push(Assignment {
 				who,
 				distribution: winner_intersection
-					.into_iter()
+					.iter()
 					.map(|w| {
+						let percent: InnerOf<CompactAccuracyOf<T>> = (100 / winner_intersection.len()).try_into().unwrap();
 						(
-							w,
-							PerU16::from_percent((100 / winner_intersection.len()) as u16),
+							w.clone(),
+							<CompactAccuracyOf<T>>::from_percent(percent),
 						)
 					})
 					.collect::<Vec<_>>(),
@@ -149,14 +155,16 @@ where
 		}
 	}
 
-	let compact = <CompactOf<T>>::from_assignment(assignments, &voter_index, &target_index);
+	let compact = <CompactOf<T>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
+	let score = compact.clone().score(winners, stake_of, voter_at, target_at).unwrap();
 
-	unimplemented!()
+	RawSolution { compact, score }
 }
 
 benchmarks! {
 	where_clause { where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>, }
 	_{}
+
 	submit_signed {}: {} verify {}
 	submit_unsigned {}: {} verify {}
 	open_signed_phase {}: {} verify {}
@@ -174,7 +182,7 @@ benchmarks! {
 		// number of desired targets. Must be a subset of `t` component.
 		let d in 20 .. 40;
 
-		println!("running v  {}, t {}, a {}, d {}", v, t, a, d);
+		println!("running v {}, t {}, a {}, d {}", v, t, a, d);
 
 		let witness = WitnessData { voters: v, targets: t };
 		put_mock_snapshot::<T>(witness, d);

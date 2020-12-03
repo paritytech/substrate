@@ -40,7 +40,7 @@
 //!
 //!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
 //! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
-//! on-chain for a number of blocks. A maximum of [`Trait::MaxSignedSubmissions`] solutions are
+//! on-chain for a number of blocks. A maximum of [`Config::MaxSignedSubmissions`] solutions are
 //! stored. The queue is always sorted based on score (worse -> best).
 //!
 //! Upon arrival of a new solution:
@@ -139,9 +139,9 @@ pub mod unsigned;
 
 /// The compact solution type used by this crate. This is provided from the [`ElectionDataProvider`]
 /// implementer.
-pub type CompactOf<T> = <<T as Trait>::ElectionDataProvider as ElectionDataProvider<
-	<T as frame_system::Trait>::AccountId,
-	<T as frame_system::Trait>::BlockNumber,
+pub type CompactOf<T> = <<T as Config>::ElectionDataProvider as ElectionDataProvider<
+	<T as frame_system::Config>::AccountId,
+	<T as frame_system::Config>::BlockNumber,
 >>::CompactSolution;
 
 /// The voter index. Derived from [`CompactOf`].
@@ -152,12 +152,12 @@ pub type CompactTargetIndexOf<T> = <CompactOf<T> as CompactSolution>::Target;
 pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::VoteWeight;
 
 type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 type PositiveImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// Current phase of the pallet.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
@@ -353,12 +353,12 @@ impl WeightInfo for () {
 	}
 }
 
-pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>>
+pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<Self>>>,
 {
 	/// Event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Currency type.
 	type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
@@ -397,7 +397,7 @@ where
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as TwoPhaseElectionProvider where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> {
+	trait Store for Module<T: Config> as TwoPhaseElectionProvider where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> {
 		/// Internal counter ofr the number of rounds.
 		///
 		/// This is useful for de-duplication of transactions submitted to the pool, and general
@@ -432,7 +432,7 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where <T as frame_system::Trait>::AccountId {
+	pub enum Event<T> where <T as frame_system::Config>::AccountId {
 		/// A solution was stored with the given compute.
 		///
 		/// If the solution is signed, this means that it hasn't yet been processed. If the solution
@@ -449,7 +449,7 @@ decl_event!(
 );
 
 frame_support::decl_error! {
-	pub enum PalletError for Module<T: Trait> where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> {
+	pub enum PalletError for Module<T: Config> where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> {
 		/// Submission was too early.
 		EarlySubmission,
 		/// Submission was too weak, score-wise.
@@ -462,7 +462,7 @@ frame_support::decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call
+	pub struct Module<T: Config> for enum Call
 	where
 		origin: T::Origin,
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
@@ -587,7 +587,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T>
+impl<T: Config> Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {
@@ -671,7 +671,6 @@ where
 
 		// Finally, check that the claimed score was indeed correct.
 		let known_score = supports.evaluate();
-		dbg!(known_score, score);
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
 		// let supports = supports.flatten();
@@ -696,7 +695,7 @@ where
 	}
 }
 
-impl<T: Trait> ElectionProvider<T::AccountId> for Module<T>
+impl<T: Config> ElectionProvider<T::AccountId> for Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {

@@ -57,7 +57,6 @@ where
 		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
 		enable_mdns: false,
-		use_yamux_flow_control: true,
 	};
 
 	let config = Configuration {
@@ -99,12 +98,12 @@ where
 		tracing_targets: Default::default(),
 		transaction_pool: Default::default(),
 		wasm_method: Default::default(),
+		wasm_runtime_overrides: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
 		base_path: None,
 		informant_output_format: sc_informant::OutputFormat {
 			enable_color: false,
-			prefix: String::new(),
 		},
 	};
 

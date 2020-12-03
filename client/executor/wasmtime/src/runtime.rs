@@ -18,14 +18,14 @@
 
 use crate::host::HostState;
 use crate::imports::{Imports, resolve_imports};
-use crate::instance_wrapper::{ModuleWrapper, InstanceWrapper, GlobalsSnapshot};
+use crate::instance_wrapper::{ModuleWrapper, InstanceWrapper, GlobalsSnapshot, EntryPoint};
 use crate::state_holder;
 
 use std::rc::Rc;
 use std::sync::Arc;
 use sc_executor_common::{
-	error::{Error, Result, WasmError},
-	wasm_runtime::{WasmModule, WasmInstance},
+	error::{Result, WasmError},
+	wasm_runtime::{WasmModule, WasmInstance, InvokeMethod},
 };
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
@@ -90,7 +90,7 @@ pub struct WasmtimeInstance {
 unsafe impl Send for WasmtimeInstance {}
 
 impl WasmInstance for WasmtimeInstance {
-	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
+	fn call(&self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
 		let entrypoint = self.instance_wrapper.resolve_entrypoint(method)?;
 		let allocator = FreeingBumpHeapAllocator::new(self.heap_base);
 
@@ -146,28 +146,14 @@ pub fn create_runtime(
 fn perform_call(
 	data: &[u8],
 	instance_wrapper: Rc<InstanceWrapper>,
-	entrypoint: wasmtime::Func,
+	entrypoint: EntryPoint,
 	mut allocator: FreeingBumpHeapAllocator,
 ) -> Result<Vec<u8>> {
 	let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
 
 	let host_state = HostState::new(allocator, instance_wrapper.clone());
-	let ret = state_holder::with_initialized_state(&host_state, || {
-		match entrypoint.call(&[
-			wasmtime::Val::I32(u32::from(data_ptr) as i32),
-			wasmtime::Val::I32(u32::from(data_len) as i32),
-		]) {
-			Ok(results) => {
-				let retval = results[0].unwrap_i64() as u64;
-				Ok(unpack_ptr_and_len(retval))
-			}
-			Err(trap) => {
-				return Err(Error::from(format!(
-					"Wasm execution trapped: {}",
-					trap
-				)));
-			}
-		}
+	let ret = state_holder::with_initialized_state(&host_state, || -> Result<_> {
+		Ok(unpack_ptr_and_len(entrypoint.call(data_ptr, data_len)?))
 	});
 	let (output_ptr, output_len) = ret?;
 	let output = extract_output_data(&instance_wrapper, output_ptr, output_len)?;

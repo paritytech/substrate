@@ -536,10 +536,10 @@ macro_rules! implement_fixed {
 			}
 		}
 
-		impl<P: PerThing> From<P> for $name {
+		impl<P: PerThing> From<P> for $name where P::Inner: FixedPointOperand {
 			fn from(p: P) -> Self {
-				let accuracy = P::ACCURACY.saturated_into();
-				let value = p.deconstruct().saturated_into();
+				let accuracy = P::ACCURACY;
+				let value = p.deconstruct();
 				$name::saturating_from_rational(value, accuracy)
 			}
 		}

@@ -25,7 +25,7 @@ frame-support = { version = "2.0.0", default-features = false, path = "../suppor
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 pallet-session = { version = "2.0.0", default-features = false, features = ["historical"], path = "../session" }
 pallet-authorship = { version = "2.0.0", default-features = false, path = "../authorship" }
-frame-election-providers = { version = "2.0.0", default-features = false, path = "../election-providers" }
+sp-election-providers = { version = "2.0.0", default-features = false, path = "../../primitives/election-providers" }
 sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../primitives/application-crypto" }
 
 # Optional imports for benchmarking
@@ -38,6 +38,7 @@ sp-storage = { version = "2.0.0", path = "../../primitives/storage" }
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
 pallet-balances = { version = "2.0.0", path = "../balances" }
 pallet-timestamp = { version = "2.0.0", path = "../timestamp" }
+frame-election-providers = { version = "2.0.0", default-features = false, path = "../election-providers" }
 pallet-staking-reward-curve = { version = "2.0.0",  path = "../staking/reward-curve" }
 substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
 frame-benchmarking = { version = "2.0.0", path = "../benchmarking" }
@@ -60,7 +61,7 @@ std = [
 	"frame-system/std",
 	"pallet-authorship/std",
 	"sp-application-crypto/std",
-	"frame-election-providers/std",
+	"sp-election-providers/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

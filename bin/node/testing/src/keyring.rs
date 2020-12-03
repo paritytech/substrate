@@ -94,7 +94,7 @@ pub fn sign(xt: CheckedExtrinsic, spec_version: u32, tx_version: u32, genesis_ha
 				}
 			}).into();
 			UncheckedExtrinsic {
-				signature: Some((pallet_indices::address::Address::Id(signed), signature, extra)),
+				signature: Some((sp_runtime::MultiAddress::Id(signed), signature, extra)),
 				function: payload.0,
 			}
 		}

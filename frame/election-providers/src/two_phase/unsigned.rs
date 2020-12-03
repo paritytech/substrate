@@ -40,7 +40,7 @@ pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
 /// Default number of blocks for which the unsigned transaction should stay in the pool
 pub(crate) const DEFAULT_LONGEVITY: u64 = 25;
 
-impl<T: Trait> Module<T>
+impl<T: Config> Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {
@@ -291,13 +291,13 @@ where
 	/// Mine a new solution, and submit it back to the chian as an unsigned transaction.
 	pub(crate) fn mine_and_submit() -> Result<(), Error> {
 		let balancing = Self::get_balancing_iters();
-		Self::mine_solution(balancing).and_then(|raw_solution| {
-			// submit the raw solution to the pool.
-			let call = Call::submit_unsigned(raw_solution).into();
+		let raw_solution = Self::mine_solution(balancing)?;
 
-			SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
-				.map_err(|_| Error::PoolSubmissionFailed)
-		})
+		// submit the raw solution to the pool.
+		let call = Call::submit_unsigned(raw_solution).into();
+
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
+			.map_err(|_| Error::PoolSubmissionFailed)
 	}
 
 	pub(crate) fn pre_dispatch_checks(solution: &RawSolution<CompactOf<T>>) -> DispatchResult {
@@ -322,7 +322,7 @@ where
 }
 
 #[allow(deprecated)]
-impl<T: Trait> ValidateUnsigned for Module<T>
+impl<T: Config> ValidateUnsigned for Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {

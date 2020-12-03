@@ -91,7 +91,7 @@ frame_support::impl_outer_origin! {
 	pub enum Origin for Runtime where system = frame_system {}
 }
 
-impl frame_system::Trait for Runtime {
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
@@ -123,7 +123,7 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
 
-impl pallet_balances::Trait for Runtime {
+impl pallet_balances::Config for Runtime {
 	type Balance = Balance;
 	type Event = ();
 	type DustRemoval = ();
@@ -195,7 +195,7 @@ parameter_types_thread_local! {
 	static SOLUTION_IMPROVEMENT_THRESHOLD: Perbill = Perbill::zero();
 }
 
-impl crate::two_phase::Trait for Runtime {
+impl crate::two_phase::Config for Runtime {
 	type Event = ();
 	type Currency = Balances;
 	type SignedPhase = SignedPhase;

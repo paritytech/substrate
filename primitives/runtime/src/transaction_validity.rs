@@ -184,6 +184,21 @@ impl From<UnknownTransaction> for TransactionValidityError {
 	}
 }
 
+#[cfg(feature = "std")]
+impl std::error::Error for TransactionValidityError {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		None
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for TransactionValidityError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s: &'static str = (*self).into();
+		write!(f, "{}", s)
+	}
+}
+
 /// Information on a transaction's validity and, if valid, on how it relates to other transactions.
 pub type TransactionValidity = Result<ValidTransaction, TransactionValidityError>;
 

@@ -8,12 +8,14 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "A crate that hosts a common definitions that are relevant for the pallet-contracts."
 readme = "README.md"
+publish = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 # This crate should not rely on any of the frame primitives.
+bitflags = "1.0"
 codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }

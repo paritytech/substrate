@@ -85,8 +85,6 @@ pub enum Event<B: Block> {
 	/// A response to a block request has arrived.
 	Response {
 		peer: PeerId,
-		/// The original request passed to `send_request`.
-		original_request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>,
 		/// Time elapsed between the start of the request and the response.
 		request_duration: Duration,
@@ -99,8 +97,6 @@ pub enum Event<B: Block> {
 	/// > For that, you must check the value returned by `send_request`.
 	RequestCancelled {
 		peer: PeerId,
-		/// The original request passed to `send_request`.
-		original_request: message::BlockRequest<B>,
 		/// Time elapsed between the start of the request and the cancellation.
 		request_duration: Duration,
 	},
@@ -108,8 +104,6 @@ pub enum Event<B: Block> {
 	/// A request has timed out.
 	RequestTimeout {
 		peer: PeerId,
-		/// The original request passed to `send_request`.
-		original_request: message::BlockRequest<B>,
 		/// Time elapsed between the start of the request and the timeout.
 		request_duration: Duration,
 	}
@@ -515,7 +509,6 @@ where
 					);
 					let ev = Event::RequestCancelled {
 						peer: peer_id.clone(),
-						original_request: ongoing_request.request.clone(),
 						request_duration: ongoing_request.emitted.elapsed(),
 					};
 					self.pending_events.push_back(NetworkBehaviourAction::GenerateEvent(ev));
@@ -670,7 +663,6 @@ where
 						let id = original_request.id;
 						let ev = Event::Response {
 							peer,
-							original_request,
 							response: message::BlockResponse::<B> { id, blocks },
 							request_duration,
 						};
@@ -713,7 +705,6 @@ where
 					);
 					let ev = Event::RequestTimeout {
 						peer: peer.clone(),
-						original_request,
 						request_duration,
 					};
 					return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));

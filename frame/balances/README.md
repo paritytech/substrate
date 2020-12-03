@@ -62,7 +62,7 @@ dealing with accounts that allow liquidity restrictions.
 - [`Imbalance`](https://docs.rs/frame-support/latest/frame_support/traits/trait.Imbalance.html): Functions for handling
 imbalances between total issuance in the system and account balances. Must be used when a function
 creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-- [`IsDeadAccount`](https://docs.rs/frame-system/latest/frame_system/trait.IsDeadAccount.html): Determiner to say whether a
+- [`IsDeadAccount`](https://docs.rs/frame-support/latest/frame_support/traits/trait.IsDeadAccount.html): Determiner to say whether a
 given account is unused.
 
 ## Interface
@@ -83,8 +83,8 @@ The Contract module uses the `Currency` trait to handle gas payment, and its typ
 ```rust
 use frame_support::traits::Currency;
 
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 ```
 
@@ -93,11 +93,11 @@ The Staking module uses the `LockableCurrency` trait to lock a stash account's f
 ```rust
 use frame_support::traits::{WithdrawReasons, LockableCurrency};
 use sp_runtime::traits::Bounded;
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 }
 
-fn update_ledger<T: Trait>(
+fn update_ledger<T: Config>(
 	controller: &T::AccountId,
 	ledger: &StakingLedger<T>
 ) {
@@ -117,6 +117,6 @@ The Balances module depends on the [`GenesisConfig`](https://docs.rs/pallet-bala
 
 ## Assumptions
 
-* Total issued balanced of all accounts should be less than `Trait::Balance::max_value()`.
+* Total issued balanced of all accounts should be less than `Config::Balance::max_value()`.
 
 License: Apache-2.0
