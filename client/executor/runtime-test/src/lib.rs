@@ -353,7 +353,7 @@ sp_core::wasm_export_functions! {
 	}
 
 	pub fn panicker(_: Vec<u8>) -> Vec<u8> {
-		panic!()
+		panic!("Expected panic")
 	}
 
 	pub fn parallel_incrementer(data: Vec<u8>) -> Vec<u8> {

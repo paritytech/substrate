@@ -499,6 +499,9 @@ enum Processing {
 impl RuntimeInstanceSpawn {
 	fn rec_clone(&self) -> Self {
 		let mut result = self.clone();
+		// For inline recursive call would dead lock,
+		// this instance is the one for inline, reinit here.
+		result.instance = Arc::new(parking_lot::Mutex::new(None));
 		result.recursive_level += 1;
 		result
 	}
@@ -615,8 +618,6 @@ impl RuntimeInstanceSpawn {
 				}
 				if let &WorkerResult::HardPanic = &result {
 					end = true;
-					dismiss_handles.finished_worker(handle);
-					tasks.lock().finished();
 				}
 				if let Err(_) = result_sender.send(Some(result)) {
 					// Closed channel, remove this thread instance.
