@@ -6389,7 +6389,6 @@ dependencies = [
  "fdlimit",
  "futures 0.3.8",
  "hex",
- "lazy_static",
  "libp2p",
  "log",
  "names",
@@ -7139,11 +7138,13 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sc-block-builder",
+ "sc-cli",
  "sc-client-api",
  "sc-executor",
  "sc-keystore",
  "sc-network",
  "sc-rpc-api",
+ "sc-tracing",
  "sc-transaction-pool",
  "serde_json",
  "sp-api",
@@ -7381,9 +7382,13 @@ dependencies = [
 name = "sc-tracing"
 version = "2.0.0"
 dependencies = [
+ "ansi_term 0.12.1",
  "erased-serde",
+ "lazy_static",
  "log",
+ "once_cell",
  "parking_lot 0.10.2",
+ "regex",
  "rustc-hash",
  "sc-telemetry",
  "serde",
@@ -7392,6 +7397,7 @@ dependencies = [
  "sp-tracing",
  "tracing",
  "tracing-core",
+ "tracing-log",
  "tracing-subscriber",
 ]
 
