@@ -224,8 +224,13 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				for #prefix_struct_ident<#type_use_gen>
 				#config_where_clause
 			{
-				type PalletInfo = <T as #frame_system::Config>::PalletInfo;
-				type Pallet = Pallet<#type_use_gen>;
+				fn pallet_prefix() -> &'static str {
+					<
+						<T as #frame_system::Config>::PalletInfo
+						as #frame_support::traits::PalletInfo
+					>::name::<Pallet<#type_use_gen>>()
+						.expect("Every active pallet has a name in the runtime; qed")
+				}
 				const STORAGE_PREFIX: &'static str = #prefix_struct_const;
 			}
 		)
