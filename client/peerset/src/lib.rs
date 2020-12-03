@@ -640,8 +640,6 @@ impl Peerset {
 	/// Must only be called after the PSM has either generated a `Connect` message with this
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
 	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId) {
-		trace!(target: "peerset", "Dropping {:?}", peer_id);
-
 		// We want reputations to be up-to-date before adjusting them.
 		self.update_time();
 
@@ -649,6 +647,8 @@ impl Peerset {
 			peersstate::Peer::Connected(mut entry) => {
 				// Decrease the node's reputation so that we don't try it again and again and again.
 				entry.add_reputation(DISCONNECT_REPUTATION_CHANGE);
+				trace!(target: "peerset", "Dropping {}: {:+} to {}",
+					peer_id, DISCONNECT_REPUTATION_CHANGE, entry.reputation());
 				entry.disconnect();
 			}
 			peersstate::Peer::NotConnected(_) | peersstate::Peer::Unknown(_) =>
