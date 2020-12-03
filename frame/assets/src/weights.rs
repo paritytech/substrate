@@ -36,9 +36,12 @@ pub trait WeightInfo {
 	fn force_transfer() -> Weight;
 	fn freeze() -> Weight;
 	fn thaw() -> Weight;
+	fn freeze_asset() -> Weight;
+	fn thaw_asset() -> Weight;
 	fn transfer_ownership() -> Weight;
 	fn set_team() -> Weight;
 	fn set_max_zombies() -> Weight;
+	fn set_metadata(n: u32, s: u32, ) -> Weight;
 }
 
 pub struct SubstrateWeight<T>(PhantomData<T>);
@@ -97,6 +100,16 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
+	fn freeze_asset() -> Weight {
+		(43_141_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn thaw_asset() -> Weight {
+		(42_965_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
 	fn transfer_ownership() -> Weight {
 		(30_110_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
@@ -108,6 +121,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn set_max_zombies() -> Weight {
+		(56_445_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn set_metadata(_n: u32, _s: u32) -> Weight {
 		(56_445_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -169,6 +187,16 @@ impl crate::WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
+	fn freeze_asset() -> Weight {
+		(43_141_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn thaw_asset() -> Weight {
+		(42_965_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
 	fn transfer_ownership() -> Weight {
 		(30_110_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
@@ -180,6 +208,11 @@ impl crate::WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn set_max_zombies() -> Weight {
+		(56_445_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn set_metadata(_n: u32, _s: u32) -> Weight {
 		(56_445_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))

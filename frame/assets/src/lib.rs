@@ -619,10 +619,6 @@ decl_module! {
 				.ok_or(Error::<T>::BalanceLow)?;
 
 			let dest = T::Lookup::lookup(target)?;
-			if dest == origin {
-				return Ok(())
-			}
-
 			Asset::<T>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 				ensure!(!details.is_frozen, Error::<T>::Frozen);
@@ -794,8 +790,7 @@ decl_module! {
 		/// Emits `Frozen`.
 		///
 		/// Weight: `O(1)`
-		//#[weight = T::WeightInfo::freeze_asset()]
-		#[weight = 0]
+		#[weight = T::WeightInfo::freeze_asset()]
 		fn freeze_asset(origin, #[compact] id: T::AssetId) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -819,8 +814,7 @@ decl_module! {
 		/// Emits `Thawed`.
 		///
 		/// Weight: `O(1)`
-		//#[weight = T::WeightInfo::thaw()]
-		#[weight = 0]
+		#[weight = T::WeightInfo::thaw_asset()]
 		fn thaw_asset(origin, #[compact] id: T::AssetId) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -968,8 +962,7 @@ decl_module! {
 		/// Emits `MaxZombiesChanged`.
 		///
 		/// Weight: `O(1)`
-		//#[weight = T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32)]
-		#[weight = 0]
+		#[weight = T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32)]
 		fn set_metadata(origin,
 			#[compact] id: T::AssetId,
 			name: Vec<u8>,
