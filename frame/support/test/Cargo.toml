@@ -21,7 +21,7 @@ sp-inherents = { version = "2.0.0", default-features = false, path = "../../../p
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
-trybuild = "1.0.33"
+trybuild = { git = "https://github.com/bkchr/trybuild.git", branch = "bkchr-use-workspace-cargo-lock" }
 pretty_assertions = "0.6.1"
 rustversion = "1.0.0"
 frame-metadata = { version = "12.0.0", default-features = false, path = "../../metadata" }
