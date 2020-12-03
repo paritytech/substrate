@@ -794,7 +794,8 @@ decl_module! {
 		/// Emits `Frozen`.
 		///
 		/// Weight: `O(1)`
-		#[weight = T::WeightInfo::freeze_asset()]
+		//#[weight = T::WeightInfo::freeze_asset()]
+		#[weight = 0]
 		fn freeze_asset(origin, #[compact] id: T::AssetId) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -818,7 +819,8 @@ decl_module! {
 		/// Emits `Thawed`.
 		///
 		/// Weight: `O(1)`
-		#[weight = T::WeightInfo::thaw()]
+		//#[weight = T::WeightInfo::thaw()]
+		#[weight = 0]
 		fn thaw_asset(origin, #[compact] id: T::AssetId) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -966,7 +968,8 @@ decl_module! {
 		/// Emits `MaxZombiesChanged`.
 		///
 		/// Weight: `O(1)`
-		#[weight = T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32)]
+		//#[weight = T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32)]
+		#[weight = 0]
 		fn set_metadata(origin,
 			#[compact] id: T::AssetId,
 			name: Vec<u8>,

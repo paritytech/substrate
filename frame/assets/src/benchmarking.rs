@@ -166,14 +166,14 @@ benchmarks! {
 	}
 
 	freeze_asset {
-		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100.into());
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default())
 	verify {
 		assert_last_event::<T>(RawEvent::AssetFrozen(Default::default()).into());
 	}
 
 	thaw_asset {
-		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100.into());
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
 		Assets::<T>::freeze_asset(
 			SystemOrigin::Signed(caller.clone()).into(),
 			Default::default(),
