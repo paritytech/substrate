@@ -320,6 +320,7 @@ impl Telemetries {
 		let id = span.id().expect("the span is enabled; qed");
 		{
 			let id = id.clone();
+			// TODO where to drop span?
 			tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&id));
 		}
 		let transport = match self.wasm_external_transport.clone() {
