@@ -1340,7 +1340,8 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[pallet::storage]
 /// #[pallet::getter(fn $getter_name)] // optional
-/// $vis type $StorageName<$some_generic> $optional_where_clause = $StorageType<_, $some_generics, ...>;
+/// $vis type $StorageName<$some_generic> $optional_where_clause
+/// 	= $StorageType<_, $some_generics, ...>;
 /// ```
 /// I.e. it must be a type alias, with generics: `T` or `T: Config`, aliased type must be one
 /// of `StorageValue`, `StorageMap` or `StorageDoubleMap` (defined in frame_support).

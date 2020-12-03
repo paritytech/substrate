@@ -187,7 +187,9 @@ pub mod pallet {
 	pub type Value<T> = StorageValue<_, u32>;
 
 	#[pallet::type_value]
-	pub fn MyDefault<T: Config>() -> u16 where T::AccountId: From<SomeType7> + From<SomeType1> + SomeAssociation1 {
+	pub fn MyDefault<T: Config>() -> u16
+	where T::AccountId: From<SomeType7> + From<SomeType1> + SomeAssociation1
+	{
 		T::AccountId::from(SomeType7); // Test where clause works
 		4u16
 	}

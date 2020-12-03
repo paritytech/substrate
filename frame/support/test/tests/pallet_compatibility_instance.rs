@@ -35,7 +35,8 @@ mod pallet_old {
 			Dummy get(fn dummy) config(): Option<T::Balance>;
 			Bar get(fn bar) config(): map hasher(blake2_128_concat) T::AccountId => T::Balance;
 			Foo get(fn foo) config(): T::Balance = 3.into();
-			Double get(fn double): double_map hasher(blake2_128_concat) u32, hasher(twox_64_concat) u64 => u16;
+			Double get(fn double):
+				double_map hasher(blake2_128_concat) u32, hasher(twox_64_concat) u64 => u16;
 		}
 	}
 
@@ -47,7 +48,9 @@ mod pallet_old {
 	);
 
 	decl_module! {
-		pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+		pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call
+		where origin: T::Origin
+		{
 			type Error = Error<T, I>;
 			fn deposit_event() = default;
 			const SomeConst: T::Balance = T::SomeConst::get();
@@ -112,7 +115,10 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[pallet::weight(<T::Balance as Into<Weight>>::into(new_value.clone()))]
-		fn set_dummy(origin: OriginFor<T>, #[pallet::compact] new_value: T::Balance) -> DispatchResultWithPostInfo {
+		fn set_dummy(
+			origin: OriginFor<T>,
+			#[pallet::compact] new_value: T::Balance
+		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 
 			<Dummy<T, I>>::put(&new_value);
@@ -300,12 +306,16 @@ mod test {
 	#[test]
 	fn types() {
 		assert_eq!(
-			pallet_old::Event::<Runtime>::decode(&mut &pallet::Event::<Runtime>::Dummy(10).encode()[..]).unwrap(),
+			pallet_old::Event::<Runtime>::decode(
+				&mut &pallet::Event::<Runtime>::Dummy(10).encode()[..]
+			).unwrap(),
 			pallet_old::Event::<Runtime>::Dummy(10),
 		);
 
 		assert_eq!(
-			pallet_old::Call::<Runtime>::decode(&mut &pallet::Call::<Runtime>::set_dummy(10).encode()[..]).unwrap(),
+			pallet_old::Call::<Runtime>::decode(
+				&mut &pallet::Call::<Runtime>::set_dummy(10).encode()[..]
+			).unwrap(),
 			pallet_old::Call::<Runtime>::set_dummy(10),
 		);
 	}

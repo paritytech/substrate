@@ -289,12 +289,16 @@ mod test {
 	#[test]
 	fn types() {
 		assert_eq!(
-			pallet_old::Event::<Runtime>::decode(&mut &pallet::Event::<Runtime>::Dummy(10).encode()[..]).unwrap(),
+			pallet_old::Event::<Runtime>::decode(
+				&mut &pallet::Event::<Runtime>::Dummy(10).encode()[..]
+			).unwrap(),
 			pallet_old::Event::<Runtime>::Dummy(10),
 		);
 
 		assert_eq!(
-			pallet_old::Call::<Runtime>::decode(&mut &pallet::Call::<Runtime>::set_dummy(10).encode()[..]).unwrap(),
+			pallet_old::Call::<Runtime>::decode(
+				&mut &pallet::Call::<Runtime>::set_dummy(10).encode()[..]
+			).unwrap(),
 			pallet_old::Call::<Runtime>::set_dummy(10),
 		);
 	}

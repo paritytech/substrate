@@ -88,7 +88,10 @@ pub mod pallet {
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
 		#[frame_support::transactional]
-		fn foo_transactional(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
+		fn foo_transactional(
+			origin: OriginFor<T>,
+			#[pallet::compact] _foo: u32
+		) -> DispatchResultWithPostInfo {
 			let _ = origin;
 			Ok(().into())
 		}
@@ -239,7 +242,9 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Event<T>},
 		Example: pallet::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
-		Instance1Example: pallet::<Instance1>::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
+		Instance1Example: pallet::<Instance1>::{
+			Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned
+		},
 	}
 );
 

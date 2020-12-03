@@ -109,7 +109,9 @@ impl PalletEventAttr {
 }
 
 /// Parse for syntax `$Type = "$SomeString"`.
-fn parse_event_metadata_element(input: syn::parse::ParseStream) -> syn::Result<(syn::Type, String)> {
+fn parse_event_metadata_element(
+	input: syn::parse::ParseStream
+) -> syn::Result<(syn::Type, String)> {
 	let typ = input.parse::<syn::Type>()?;
 	input.parse::<syn::Token![=]>()?;
 	let ident = input.parse::<syn::LitStr>()?;
