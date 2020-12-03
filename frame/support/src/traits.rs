@@ -1740,7 +1740,7 @@ pub trait Instance: 'static {
 /// NOTE: These information can be used to define storages in pallet such as a `StorageMap` which
 /// can use keys after `twox_128(pallet_prefix())++twox_128(STORAGE_PREFIX)`
 pub trait StorageInstance {
-	/// Prefix given to a pallet to isolate from other pallets.
+	/// Prefix of a pallet to isolate it from other pallets.
 	fn pallet_prefix() -> &'static str;
 
 	/// Prefix given to a storage to isolate from other storages in the pallet.
