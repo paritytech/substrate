@@ -56,7 +56,7 @@ use frame_support::{
 	},
 	ensure,
 	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
-	weights::{DispatchClass, GetDispatchInfo, Weight},
+	weights::{DispatchClass, GetDispatchInfo, Weight, Pays},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -515,6 +515,9 @@ decl_module! {
 			let position_yes = voting.ayes.iter().position(|a| a == &who);
 			let position_no = voting.nays.iter().position(|a| a == &who);
 
+			// first vote of member in the motion
+			let is_account_voting_first_time = position_yes.is_none() && position_no.is_none();
+
 			if approve {
 				if position_yes.is_none() {
 					voting.ayes.push(who.clone());
@@ -541,7 +544,18 @@ decl_module! {
 
 			Voting::<T, I>::insert(&proposal, voting);
 
-			Ok(Some(T::WeightInfo::vote(members.len() as u32)).into())
+			if is_account_voting_first_time {
+				Ok((
+					Some(T::WeightInfo::vote(members.len() as u32)),
+					Pays::No,
+				).into())
+			}
+			else {
+				Ok((
+					Some(T::WeightInfo::vote(members.len() as u32)),
+					Pays::Yes,
+				).into())
+			}
 		}
 
 		/// Close a vote that is either approved, disapproved or whose voting period has ended.
@@ -611,15 +625,17 @@ decl_module! {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
-				return Ok(Some(
-					T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
-						.saturating_add(proposal_weight)
+				return Ok((
+					Some(T::WeightInfo::close_early_approved(len as u32, seats, proposal_count).saturating_add(proposal_weight)),
+					Pays::No
 				).into());
+
 			} else if disapproved {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
-				return Ok(Some(
-					T::WeightInfo::close_early_disapproved(seats, proposal_count)
+				return Ok((
+					Some(T::WeightInfo::close_early_disapproved(seats, proposal_count)),
+					Pays::No
 				).into());
 			}
 
@@ -647,15 +663,16 @@ decl_module! {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
-				return Ok(Some(
-					T::WeightInfo::close_approved(len as u32, seats, proposal_count)
-						.saturating_add(proposal_weight)
+				return Ok((
+					Some(T::WeightInfo::close_approved(len as u32, seats, proposal_count).saturating_add(proposal_weight)),
+					Pays::No
 				).into());
 			} else {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
-				return Ok(Some(
-					T::WeightInfo::close_disapproved(seats, proposal_count)
+				return Ok((
+					Some(T::WeightInfo::close_disapproved(seats, proposal_count)),
+					Pays::No
 				).into());
 			}
 		}
@@ -1437,6 +1454,186 @@ mod tests {
 					)),
 					topics: vec![],
 				}
+			]);
+		});
+	}
+
+	#[test]
+	fn motions_all_first_vote_free_works() {
+		new_test_ext().execute_with(|| {
+			let proposal = make_proposal(42);
+			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+			let hash: H256 = proposal.blake2_256().into();
+			let end = 4;
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len));
+			assert_eq!(
+				Collective::voting(&hash),
+				Some(Votes { index: 0, threshold: 2, ayes: vec![1], nays: vec![], end })
+			);
+
+			// For the motion, acc 2's first vote, expecting Ok with Pays::No ...
+			assert_eq!( Collective::vote(Origin::signed(2), hash.clone(), 0, true),
+				Ok(
+					PostDispatchInfo {
+						actual_weight: Some(
+							207711000,
+						),
+						pays_fee: Pays::No,
+					}
+				)
+			);
+
+			// Duplicate vote, expecting error with Pays::Yes ...
+			let vote_rval: DispatchResultWithPostInfo = Collective::vote(Origin::signed(2), hash.clone(), 0, true);
+			match vote_rval {
+				Ok(_) => {
+					println!( "@[{:#?}::{:#?}]::vote-fee() | Should not Occur",
+						file!(),
+						line!() );
+				},
+				Err(err) => {
+					assert_eq!( err.post_info.pays_fee, Pays::Yes );
+				},
+			}
+
+			// Modifying vote, expecting ok with Pays::Yes ...
+			assert_eq!( Collective::vote(Origin::signed(2), hash.clone(), 0, false),
+				Ok(
+					PostDispatchInfo {
+						actual_weight: Some(
+							207711000,
+						),
+						pays_fee: Pays::Yes,
+					}
+				)
+			);
+
+			// For the motion, acc 3's first vote, expecting Ok with Pays::No ...
+			assert_eq!( Collective::vote(Origin::signed(3), hash.clone(), 0, true),
+				Ok(
+					PostDispatchInfo {
+						actual_weight: Some(
+							207711000,
+						),
+						pays_fee: Pays::No,
+					}
+				)
+			);
+
+			// acc 3 modify the vote, expecting Ok with Pays::Yes ...
+			assert_eq!( Collective::vote(Origin::signed(3), hash.clone(), 0, false),
+				Ok(
+					PostDispatchInfo {
+						actual_weight: Some(
+							207711000,
+						),
+						pays_fee: Pays::Yes,
+					}
+				)
+			);
+
+			// Test close() Extrincis | Check DispatchResultWithPostInfo with Pay Info
+
+			let proposal_weight = proposal.get_dispatch_info().weight;
+
+			// trying to close the valid proposal, Expecting OK with Pays::No
+			assert_eq!(
+				Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len),
+				Ok(
+					PostDispatchInfo {
+						actual_weight: Some(
+							437711000,
+						),
+						pays_fee: Pays::No,
+					},
+				)
+			);
+
+			// trying to close the proposal, which is already closed. Expecting error "ProposalMissing" with Pays::Yes
+			let close_rval: DispatchResultWithPostInfo = Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len);
+			match close_rval {
+				Ok(_) => {
+					println!( "@[{:#?}::{:#?}]::vote-fee() | Should not Occur",
+						file!(),
+						line!() );
+				},
+				Err(err) => {
+					assert_eq!( err.post_info.pays_fee, Pays::Yes );
+				},
+			}
+
+			// Verify the events pool
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::collective_Instance1(RawEvent::Proposed(
+						1,
+						0,
+						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
+						2
+					)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::collective_Instance1(RawEvent::Voted(
+						2,
+						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
+						true,
+						2,
+						0
+					)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::collective_Instance1(RawEvent::Voted(
+						2,
+						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
+						false,
+						1,
+						1
+					)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::collective_Instance1(RawEvent::Voted(
+						3,
+						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
+						true,
+						2,
+						1
+					)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::collective_Instance1(RawEvent::Voted(
+						3,
+						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
+						false,
+						1,
+						2
+					)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::collective_Instance1(RawEvent::Closed(
+						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
+						1,
+						2,
+					)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::collective_Instance1(RawEvent::Disapproved(
+						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
+					)),
+					topics: vec![],
+				},
 			]);
 		});
 	}
