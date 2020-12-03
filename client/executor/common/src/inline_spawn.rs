@@ -43,7 +43,7 @@ use std::panic::{AssertUnwindSafe, UnwindSafe};
 #[cfg(feature = "std")]
 pub use log::error as log_error;
 
-/// In no_std we skip logs for state_machine, this macro
+/// In no_std we skip log, this macro
 /// is a noops.
 #[cfg(not(feature = "std"))]
 macro_rules! log_error {
@@ -175,7 +175,174 @@ pub fn instantiate(
 			return None;
 		},
 	})
-}	
+}
+
+/// Obtain externality and get id for worker.
+pub fn spawn_call_ext(
+	handle: u64,
+	kind: u8,
+	calling_ext: &mut dyn Externalities,
+) -> AsyncExt {
+	match AsyncStateType::from_u8(kind)
+		// TODO better message
+		.expect("Only from existing kind") {
+		AsyncStateType::Stateless => {
+			AsyncExt::stateless_ext()
+		},
+		AsyncStateType::ReadLastBlock => {
+			let backend = calling_ext.get_past_async_backend()
+				.expect("Unsupported spawn kind.");
+			AsyncExt::previous_block_read(backend)
+		},
+		AsyncStateType::ReadAtSpawn => {
+			let backend = calling_ext.get_async_backend(handle)
+				.expect("Unsupported spawn kind.");
+			AsyncExt::state_at_spawn_read(backend, handle)
+		},
+	}
+}
+
+/// Technical trait to factor code.
+/// It access the instance lazilly from a module.
+#[cfg(feature = "std")]
+pub trait LazyInstanciate<'a> {
+	fn instantiate(self) -> Option<&'a AssertUnwindSafe<Box<dyn WasmInstance>>>;
+}
+
+#[cfg(feature = "std")]
+struct InlineInstantiate<'a> {
+	module: &'a Option<Box<dyn WasmModule>>,
+	instance: &'a mut Option<AssertUnwindSafe<Box<dyn WasmInstance>>>,
+}
+
+#[cfg(feature = "std")]
+impl<'a> LazyInstanciate<'a> for InlineInstantiate<'a> {
+	fn instantiate(self) -> Option<&'a AssertUnwindSafe<Box<dyn WasmInstance>>> {
+		if self.instance.is_none() {
+			*self.instance = if let Some(instance) = instantiate(self.module.as_ref().map(AsRef::as_ref)) {
+				Some(instance)
+			} else {
+				return None
+			}
+		};
+		self.instance.as_ref()
+	}
+}
+
+pub fn join_inline<
+	'a,
+	HostLocal: HostLocalFunction,
+	#[cfg(feature = "std")]
+	I: LazyInstanciate<'a> + 'a,
+>(
+	task: PendingInlineTask,
+	handle: u64,
+	calling_ext: &mut dyn Externalities,
+	#[cfg(feature = "std")]
+	mut instance_ref: I,
+) -> WorkerResult {
+	match task {
+		PendingInlineTask {
+			ext,
+			task: Task::Wasm(WasmTask { dispatcher_ref, func, data }),
+		} => {
+			let need_resolve = ext.need_resolve();
+
+			let mut async_ext = match new_inline_only_externalities(ext) {
+				Ok(val) => val,
+				Err(e) => {
+					log_error!(
+						target: "executor",
+						"Failed to setup externalities for inline async context: {}",
+						e,
+					);
+					return WorkerResult::HardPanic;
+				}
+			};
+
+			#[cfg(feature = "std")]
+			let result = if HostLocal::HOST_LOCAL {
+				panic!("HOST_LOCAL is only expected for a wasm call");
+			} else {
+				let instance = if let Some(instance) = instance_ref.instantiate() {
+					instance
+				} else {
+					return WorkerResult::HardPanic;
+				};
+				with_externalities_safe(
+					&mut async_ext,
+					|| instance.call(
+						InvokeMethod::TableWithWrapper { dispatcher_ref, func },
+						&data[..],
+					)
+				)
+			};
+			#[cfg(not(feature = "std"))]
+			let result: Result<Result<_, ()>, _> = if HostLocal::HOST_LOCAL {
+				let f: fn(Vec<u8>) -> Vec<u8> = unsafe { sp_std::mem::transmute(func) };
+				with_externalities_safe(
+					&mut async_ext,
+					|| Ok(f(data)),
+				)
+			} else {
+				panic!("No no_std wasm runner");
+			};
+
+			match result {
+				// TODO if we knew tihs is stateless, we could return valid
+				Ok(Ok(result)) => if need_resolve {
+					WorkerResult::CallAt(result, handle)
+				} else {
+					WorkerResult::Valid(result)
+				},
+				Ok(Err(error)) => {
+					log_error!("Wasm instance error in : {:?}", error);
+					WorkerResult::HardPanic
+				},
+				Err(error) => {
+					log_error!("Panic error in sinlined task: {:?}", error);
+					WorkerResult::Panic
+				}
+			}
+		},
+		PendingInlineTask {
+			ext,
+			task: Task::Native(NativeTask { func, data }),
+		} => {
+			// TODO factor code with wasm
+			let need_resolve = ext.need_resolve();
+			let mut async_ext = match new_inline_only_externalities(ext) {
+				Ok(val) => val,
+				Err(e) => {
+					log_error!(
+						target: "executor",
+						"Failed to setup externalities for inline async context: {}",
+						e,
+					);
+					return WorkerResult::HardPanic;
+				}
+			};
+			match with_externalities_safe(
+				&mut async_ext,
+				|| func(data),
+			) {
+				// TODO Here if we got info about task being stateless, we could
+				// directly return Valid
+				Ok(result) => if need_resolve {
+					WorkerResult::CallAt(result, handle)
+				} else {
+					WorkerResult::Valid(result)
+				},
+				Err(error) => {
+					log_error!("Panic error in sinlined task: {:?}", error);
+					WorkerResult::Panic
+				}
+			}
+		},
+	}
+}
+
+
 
 impl<RunningTask, HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask, HostLocal> {
 	// TODO
@@ -199,44 +366,8 @@ impl<RunningTask, HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask
 		}
 	}
 
-	/// Obtain externality and get id for worker.
-	pub fn spawn_call_ext(
-		&mut self,
-		kind: u8,
-		calling_ext: &mut dyn Externalities,
-	) -> (AsyncExt, u64) {
-		let new_handle = self.counter;
-		self.counter += 1;
-		(match AsyncStateType::from_u8(kind)
-			// TODO better message
-			.expect("Only from existing kind") {
-			AsyncStateType::Stateless => {
-				AsyncExt::stateless_ext()
-			},
-			AsyncStateType::ReadLastBlock => {
-				let backend = calling_ext.get_past_async_backend()
-					.expect("Unsupported spawn kind.");
-				AsyncExt::previous_block_read(backend)
-			},
-			AsyncStateType::ReadAtSpawn => {
-				let backend = calling_ext.get_async_backend(new_handle)
-					.expect("Unsupported spawn kind.");
-				AsyncExt::state_at_spawn_read(backend, new_handle)
-			},
-		}, new_handle)
-	}
-
 	fn remove(&mut self, handle: u64) -> Option<RunningTask> {
 		self.tasks.remove(&handle)
-	}
-
-	fn insert(
-		&mut self,
-		handle: u64,
-		task: RunningTask,
-	) {
-		// TODO  could be in spawn_call_inner directly (see how we factor that with client executor
-		self.tasks.insert(handle, task);
 	}
 
 	/// Base implementation for `RuntimeSpawn` method.
@@ -252,9 +383,11 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<PendingInlineTask, HostL
 		kind: u8,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		let (ext, handle) = self.spawn_call_ext(kind, calling_ext);
+		let handle = self.counter;
+		self.counter += 1;
+		let ext = spawn_call_ext(handle, kind, calling_ext);
 
-		self.insert(handle, PendingInlineTask {task, ext});
+		self.tasks.insert(handle, PendingInlineTask {task, ext});
 
 		handle
 	}
@@ -286,118 +419,25 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<PendingInlineTask, HostL
 
 	/// Base implementation for `RuntimeSpawn` method.
 	pub fn join(&mut self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
-		let mut worker_result = || match self.remove(handle) {
-			Some(PendingInlineTask {
-				ext,
-				task: Task::Wasm(WasmTask { dispatcher_ref, func, data }),
-			}) => {
-				let need_resolve = ext.need_resolve();
-
-				let mut async_ext = match new_inline_only_externalities(ext) {
-					Ok(val) => val,
-					Err(e) => {
-						log_error!(
-							target: "executor",
-							"Failed to setup externalities for inline async context: {}",
-							e,
-						);
-						return WorkerResult::HardPanic;
-					}
-				};
-
+		let worker_result = match self.remove(handle) {
+			Some(task) => {
 				#[cfg(feature = "std")]
-				let result = if HostLocal::HOST_LOCAL {
-					panic!("HOST_LOCAL is only expected for a wasm call");
-				} else {
-					// TODO put instanciation outside (need join over &self!! to reduce locks)
-					// eg first prepare join returning the task and second run without lock
-					let mut instance = &mut self.instance;
-					if instance.is_none() {
-						*instance = if let Some(instance) = instantiate(self.module.as_ref().map(AsRef::as_ref)) {
-							Some(instance)
-						} else {
-							return WorkerResult::HardPanic;
-						};
-					}
-
-					let instance = instance.as_ref().expect("Lazy init at start");
-
-					with_externalities_safe(
-						&mut async_ext,
-						|| instance.call(
-							InvokeMethod::TableWithWrapper { dispatcher_ref, func },
-							&data[..],
-						)
-					)
-				};
+				{
+					let instance_ref = InlineInstantiate {
+						module: &self.module,
+						instance: &mut self.instance,
+					};
+					join_inline::<HostLocal, _>(task, handle, calling_ext, instance_ref)
+				}
 				#[cfg(not(feature = "std"))]
-				let result: Result<Result<_, ()>, _> = if HostLocal::HOST_LOCAL {
-					let f: fn(Vec<u8>) -> Vec<u8> = unsafe { sp_std::mem::transmute(func) };
-					with_externalities_safe(
-						&mut async_ext,
-						|| Ok(f(data)),
-					)
-				} else {
-					panic!("No no_std wasm runner");
-				};
-
-				match result {
-					// TODO if we knew tihs is stateless, we could return valid
-					Ok(Ok(result)) => if need_resolve {
-						WorkerResult::CallAt(result, handle)
-					} else {
-						WorkerResult::Valid(result)
-					},
-					Ok(Err(error)) => {
-						log_error!("Wasm instance error in : {:?}", error);
-						WorkerResult::HardPanic
-					},
-					Err(error) => {
-						log_error!("Panic error in sinlined task: {:?}", error);
-						WorkerResult::Panic
-					}
-				}
-			},
-			Some(PendingInlineTask {
-				ext,
-				task: Task::Native(NativeTask { func, data }),
-			}) => {
-				// TODO factor code with wasm
-				let need_resolve = ext.need_resolve();
-				let mut async_ext = match new_inline_only_externalities(ext) {
-					Ok(val) => val,
-					Err(e) => {
-						log_error!(
-							target: "executor",
-							"Failed to setup externalities for inline async context: {}",
-							e,
-						);
-						return WorkerResult::HardPanic;
-					}
-				};
-				match with_externalities_safe(
-					&mut async_ext,
-					|| func(data),
-				) {
-					// TODO Here if we got info about task being stateless, we could
-					// directly return Valid
-					Ok(result) => if need_resolve {
-						WorkerResult::CallAt(result, handle)
-					} else {
-						WorkerResult::Valid(result)
-					},
-					Err(error) => {
-						log_error!("Panic error in sinlined task: {:?}", error);
-						WorkerResult::Panic
-					}
-				}
+				join_inline::<HostLocal>(task, handle, calling_ext)
 			},
 			// handle has been removed due to dismiss or
 			// invalid externality condition.
 			None => WorkerResult::Invalid,
 		};
 
-		calling_ext.resolve_worker_result(worker_result())
+		calling_ext.resolve_worker_result(worker_result)
 	}
 
 }
