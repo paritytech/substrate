@@ -53,7 +53,7 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Convert an arbitrary block ID into a block hash.
 	fn block_number_from_id(&self, id: &BlockId<Block>) -> Result<Option<NumberFor<Block>>> {
 		match *id {
-			BlockId::Hash(_) => Ok(self.header(*id)?.map(|h| h.number().clone())),
+			BlockId::Hash(h) => self.number(h),
 			BlockId::Number(n) => Ok(Some(n)),
 		}
 	}
