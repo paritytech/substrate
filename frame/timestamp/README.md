@@ -29,7 +29,7 @@ because of cumulative calculation errors and hence should be avoided.
 * `get` - Gets the current time for the current block. If this function is called prior to
 setting the timestamp, it will return the timestamp of the previous block.
 
-### Trait Getters
+### Config Getters
 
 * `MinimumPeriod` - Gets the minimum (and advised) period between blocks for the chain.
 
@@ -48,10 +48,10 @@ trait from the timestamp trait.
 use frame_support::{decl_module, dispatch};
 use frame_system::ensure_signed;
 
-pub trait Trait: timestamp::Trait {}
+pub trait Config: timestamp::Config {}
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		#[weight = 0]
 		pub fn get_time(origin) -> dispatch::DispatchResult {
 			let _sender = ensure_signed(origin)?;

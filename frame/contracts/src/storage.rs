@@ -18,7 +18,7 @@
 
 use crate::{
 	exec::{AccountIdOf, StorageKey},
-	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Trait, TrieId,
+	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Config, TrieId,
 	AccountCounter,
 };
 use sp_std::prelude::*;
@@ -37,7 +37,7 @@ pub struct Storage<T>(PhantomData<T>);
 
 impl<T> Storage<T>
 where
-	T: Trait,
+	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
 	/// Reads a storage kv pair of a contract.

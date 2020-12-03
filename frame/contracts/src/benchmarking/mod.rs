@@ -50,7 +50,7 @@ const API_BENCHMARK_BATCHES: u32 = 20;
 const INSTR_BENCHMARK_BATCHES: u32 = 1;
 
 /// An instantiated and deployed contract.
-struct Contract<T: Trait> {
+struct Contract<T: Config> {
 	caller: T::AccountId,
 	account_id: T::AccountId,
 	addr: <T::Lookup as StaticLookup>::Source,
@@ -72,14 +72,14 @@ impl Endow {
 	/// The maximum amount of balance a caller can transfer without being brought below
 	/// the existential deposit. This assumes that every caller is funded with the amount
 	/// returned by `caller_funding`.
-	fn max<T:Trait>() -> BalanceOf<T> {
+	fn max<T:Config>() -> BalanceOf<T> {
 		caller_funding::<T>().saturating_sub(T::Currency::minimum_balance())
 	}
 }
 
-impl<T: Trait> Contract<T>
+impl<T: Config> Contract<T>
 where
-	T: Trait,
+	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	/// Create new contract and use a default account id as instantiator.
@@ -115,7 +115,7 @@ where
 				// storage_size cannot be zero because otherwise a contract that is just above
 				// the subsistence threshold does not pay rent given a large enough subsistence
 				// threshold. But we need rent payments to occur in order to benchmark for worst cases.
-				let storage_size = Config::<T>::subsistence_threshold_uncached()
+				let storage_size = ConfigCache::<T>::subsistence_threshold_uncached()
 					.checked_div(&T::RentDepositOffset::get())
 					.unwrap_or_else(Zero::zero);
 
@@ -212,16 +212,16 @@ where
 /// A `Contract` that was evicted after accumulating some storage.
 ///
 /// This is used to benchmark contract resurrection.
-struct Tombstone<T: Trait> {
+struct Tombstone<T: Config> {
 	/// The contract that was evicted.
 	contract: Contract<T>,
 	/// The storage the contract held when it was avicted.
 	storage: Vec<(StorageKey, Vec<u8>)>,
 }
 
-impl<T: Trait> Tombstone<T>
+impl<T: Config> Tombstone<T>
 where
-	T: Trait,
+	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	/// Create and evict a new contract with the supplied storage item count and size each.
@@ -243,7 +243,7 @@ where
 }
 
 /// Generate `stor_num` storage items. Each has the size `stor_size`.
-fn create_storage<T: Trait>(
+fn create_storage<T: Config>(
 	stor_num: u32,
 	stor_size: u32
 ) -> Result<Vec<(StorageKey, Vec<u8>)>, &'static str> {
@@ -257,7 +257,7 @@ fn create_storage<T: Trait>(
 }
 
 /// The funding that each account that either calls or instantiates contracts is funded with.
-fn caller_funding<T: Trait>() -> BalanceOf<T> {
+fn caller_funding<T: Config>() -> BalanceOf<T> {
 	BalanceOf::<T>::max_value() / 2u32.into()
 }
 
@@ -299,7 +299,7 @@ benchmarks! {
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let data = vec![42u8; (n * 1024) as usize];
 		let salt = vec![42u8; (s * 1024) as usize];
-		let endowment = Config::<T>::subsistence_threshold_uncached();
+		let endowment = ConfigCache::<T>::subsistence_threshold_uncached();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_mem();
@@ -374,7 +374,7 @@ benchmarks! {
 		// the caller should get the reward for being a good snitch
 		assert_eq!(
 			T::Currency::free_balance(&instance.caller),
-			caller_funding::<T>() - instance.endowment + <T as Trait>::SurchargeReward::get(),
+			caller_funding::<T>() - instance.endowment + <T as Config>::SurchargeReward::get(),
 		);
 	}
 
@@ -1127,7 +1127,7 @@ benchmarks! {
 			.collect::<Vec<_>>();
 		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
 		let account_bytes = accounts.iter().flat_map(|x| x.encode()).collect();
-		let value = Config::<T>::subsistence_threshold_uncached();
+		let value = ConfigCache::<T>::subsistence_threshold_uncached();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
@@ -1334,7 +1334,7 @@ benchmarks! {
 		let hash_len = hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
 		let hashes_bytes = hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
 		let hashes_len = hashes_bytes.len();
-		let value = Config::<T>::subsistence_threshold_uncached();
+		let value = ConfigCache::<T>::subsistence_threshold_uncached();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
@@ -1454,7 +1454,7 @@ benchmarks! {
 		let input_len = inputs.get(0).map(|x| x.len()).unwrap_or(0);
 		let input_bytes = inputs.iter().cloned().flatten().collect::<Vec<_>>();
 		let inputs_len = input_bytes.len();
-		let value = Config::<T>::subsistence_threshold_uncached();
+		let value = ConfigCache::<T>::subsistence_threshold_uncached();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();

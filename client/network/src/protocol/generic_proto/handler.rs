@@ -684,6 +684,7 @@ impl ProtocolsHandler for NotifsHandler {
 							_ => unreachable!()
 						};
 
+						debug_assert_eq!(pending_opening.len(), self.out_protocols.len());
 						for (n, is_pending) in pending_opening.iter().enumerate() {
 							if *is_pending {
 								continue;
@@ -740,8 +741,9 @@ impl ProtocolsHandler for NotifsHandler {
 
 				match &mut self.state {
 					State::Open { .. } => {
+						let pending_opening = self.out_protocols.iter().map(|_| false).collect();
 						self.state = State::Closed {
-							pending_opening: Vec::new(),
+							pending_opening,
 						};
 					},
 					State::Opening { out_substreams, .. } => {
