@@ -399,18 +399,30 @@ mod test {
 		assert_eq!(benchmark.base_weight, base * 1_000);
 		assert_eq!(
 			benchmark.component_weight,
-			vec![ComponentSlope { name: component.to_string(), slope: slope * 1_000 }]
+			vec![ComponentSlope {
+				name: component.to_string(),
+				slope: slope * 1_000,
+				error: 0,
+			}]
 		);
 		// DB Reads/Writes are untouched
 		assert_eq!(benchmark.base_reads, base);
 		assert_eq!(
 			benchmark.component_reads,
-			vec![ComponentSlope { name: component.to_string(), slope: slope }]
+			vec![ComponentSlope {
+				name: component.to_string(),
+				slope,
+				error: 0,
+			}]
 		);
 		assert_eq!(benchmark.base_writes, base);
 		assert_eq!(
 			benchmark.component_writes,
-			vec![ComponentSlope { name: component.to_string(), slope: slope }]
+			vec![ComponentSlope {
+				name: component.to_string(),
+				slope,
+				error: 0,
+			}]
 		);
 	}
 
