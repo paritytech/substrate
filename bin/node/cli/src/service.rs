@@ -164,7 +164,7 @@ pub struct NewFullBase {
 
 /// Creates a full service from the configuration.
 pub fn new_full_base(
-	config: Configuration,
+	mut config: Configuration,
 	with_startup_data: impl FnOnce(
 		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
 		&sc_consensus_babe::BabeLink<Block>,
@@ -177,6 +177,8 @@ pub fn new_full_base(
 	} = new_partial(&config)?;
 
 	let shared_voter_state = rpc_setup;
+
+	config.network.notifications_protocols.push(grandpa::GRANDPA_PROTOCOL_NAME.into());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -315,8 +317,6 @@ pub fn new_full_base(
 			"grandpa-voter",
 			grandpa::run_grandpa_voter(grandpa_config)?
 		);
-	} else {
-		grandpa::setup_disabled_grandpa(network.clone())?;
 	}
 
 	network_starter.start_network();
@@ -338,13 +338,15 @@ pub fn new_full(config: Configuration)
 	})
 }
 
-pub fn new_light_base(config: Configuration) -> Result<(
+pub fn new_light_base(mut config: Configuration) -> Result<(
 	TaskManager, RpcHandlers, Arc<LightClient>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
 	let (client, backend, keystore_container, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
+
+	config.network.notifications_protocols.push(grandpa::GRANDPA_PROTOCOL_NAME.into());
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
