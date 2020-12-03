@@ -42,7 +42,7 @@ use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
 use sp_externalities::{ExternalitiesExt as _, AsyncBackend, WorkerResult};
 use sp_tasks::{new_async_externalities, new_inline_only_externalities, AsyncExt, AsyncStateType};
-use sp_tasks::inline_spawn::{WasmTask, NativeTask, Task, PendingInlineTask};
+use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task, PendingInlineTask};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -53,14 +53,14 @@ const DEFAULT_HEAP_PAGES: u64 = 1024;
 pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	Ok(sp_tasks::inline_spawn::with_externalities_safe(ext, f)?)
+	Ok(sc_executor_common::inline_spawn::with_externalities_safe(ext, f)?)
 }
 
 fn instantiate(
 	module: &Option<Arc<dyn WasmModule>>,
 	tasks: &Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
 ) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
-	let result = instantiate_inline(module.as_ref().map(AsRef::as_ref)));
+	let result = instantiate_inline(module);
 	if result.is_none() {
 		tasks.lock().finished();
 	}
@@ -69,9 +69,8 @@ fn instantiate(
 
 fn instantiate_inline(
 	module: &Option<Arc<dyn WasmModule>>,
-	tasks: &Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
 ) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
-	sp_tasks::inline_spawn::instantiate(module.as_ref().map(AsRef::as_ref)));
+	sc_executor_common::inline_spawn::instantiate(module.as_ref().map(AsRef::as_ref))
 }
 
 /// Delegate for dispatching a CodeExecutor call.
@@ -520,7 +519,7 @@ impl RuntimeInstanceSpawn {
 		module: &Option<Arc<dyn WasmModule>>,
 		tasks: &Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
 	) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
-		let result = instantiate_inline(module.as_ref().map(AsRef::as_ref));
+		let result = instantiate_inline(module);
 		if result.is_none() {
 			tasks.lock().finished();
 		}

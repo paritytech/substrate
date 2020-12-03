@@ -45,6 +45,7 @@ parity-util-mem = { version = "0.7.0", default-features = false, features = ["pr
 sc-service = { version = "0.8.0", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
 sp-state-machine = { version = "0.8.0", default-features = false, path = "../../primitives/state-machine" }
 sp-externalities = { version = "0.8.0", default-features = false, path = "../../primitives/externalities" }
+sc-executor-common = { version = "0.8.0", default-features = false, path = "../../client/executor/common" }
 
 # 3rd party
 cfg-if = "0.1.10"
@@ -93,6 +94,7 @@ std = [
 	"frame-system/std",
 	"pallet-timestamp/std",
 	"sc-service",
+	"sc-executor-common/std",
 	"sp-finality-grandpa/std",
 	"sp-tasks/std",
 	"sp-trie/std",

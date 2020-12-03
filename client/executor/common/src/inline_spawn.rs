@@ -22,10 +22,9 @@
 //! As a minimal implementation it can run in no_std (with alloc), but do not
 //! actually spawn threads, all execution is done inline in the parent thread.
 
-use crate::{new_inline_only_externalities, AsyncExt, AsyncStateType};
+use sp_tasks::{new_inline_only_externalities, AsyncExt, AsyncStateType};
 use sp_core::traits::RuntimeSpawn;
 use sp_externalities::{WorkerResult, Externalities};
-use sp_wasm_interface::wasm_runtime::{WasmInstance, WasmModule, Error, InvokeMethod};
 use sp_std::rc::Rc;
 use sp_std::cell::RefCell;
 use sp_std::collections::btree_map::BTreeMap;
@@ -34,13 +33,27 @@ use sp_std::boxed::Box;
 use sp_std::vec::Vec;
 use sp_std::marker::PhantomData;
 #[cfg(feature = "std")]
+use crate::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
+#[cfg(feature = "std")]
+use crate::error::Error;
+#[cfg(feature = "std")]
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
 use std::panic::{AssertUnwindSafe, UnwindSafe};
 #[cfg(feature = "std")]
 pub use log::error as log_error;
+
+/// In no_std we skip logs for state_machine, this macro
+/// is a noops.
 #[cfg(not(feature = "std"))]
-use sp_state_machine::log_error;
+macro_rules! log_error {
+	(target: $target:expr, $($arg:tt)+) => (
+		()
+	);
+	($($arg:tt)+) => (
+		()
+	);
+}
 
 /// Indicate if this run as a local
 /// function without runtime boundaries.
@@ -60,11 +73,10 @@ impl HostLocalFunction for HostLocal {
 /// Helper inner struct to implement `RuntimeSpawn` extension.
 /// TODO maybe RunningTask param is useless
 pub struct RuntimeInstanceSpawn<RunningTask, HostLocalFunction = ()> {
+	#[cfg(feature = "std")]
 	module: Option<Box<dyn WasmModule>>,
 	#[cfg(feature = "std")]
 	instance: Option<AssertUnwindSafe<Box<dyn WasmInstance>>>,
-	#[cfg(not(feature = "std"))]
-	instance: Option<Box<dyn WasmInstance>>,
 	tasks: BTreeMap<u64, RunningTask>,
 	counter: u64,
 	_ph: PhantomData<HostLocalFunction>,
@@ -109,7 +121,7 @@ pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Resul
 /// the parent thread on join (not if dismissed since inline processing
 /// is lazy).
 #[cfg(not(feature = "std"))]
-pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U, Error>
+fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U, ()>
 	where F: FnOnce() -> U
 {
 	Ok(sp_externalities::set_and_run_with_externalities(
@@ -167,9 +179,19 @@ pub fn instantiate(
 
 impl<RunningTask, HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask, HostLocal> {
 	// TODO
-	pub fn new(module: Option<Box<dyn WasmModule>>) -> Self {
+	#[cfg(feature = "std")]
+	pub fn with_module(module: Box<dyn WasmModule>) -> Self {
+		let mut result = Self::new();
+		result.module = Some(module);
+		result
+	}
+
+	/// TODO
+	pub fn new() -> Self {
 		RuntimeInstanceSpawn {
-			module,
+			#[cfg(feature = "std")]
+			module: None,
+			#[cfg(feature = "std")]
 			instance: None,
 			tasks: BTreeMap::new(),
 			counter: 0,
@@ -465,7 +487,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawnForceSend<PendingInlineTask> {
 impl RuntimeInstanceSpawnForceSend<PendingInlineTask> {
 	// TODO
 	pub fn new() -> Self {
-		RuntimeInstanceSpawnForceSend(Rc::new(RefCell::new(RuntimeInstanceSpawn::new(None))))
+		RuntimeInstanceSpawnForceSend(Rc::new(RefCell::new(RuntimeInstanceSpawn::new())))
 	}
 }
 

@@ -21,18 +21,11 @@
 use sp_serializer;
 use wasmi;
 
-#[cfg(feature = "std")]
-pub type ErrorInfo = String;
-
-#[cfg(not(feature = "std"))]
-pub type ErrorInfo = ();
-
 /// Result type alias.
-pub type Result<T> = sp_std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type.
-#[derive(Debug)]
-#[cfg_attr(feature = "std", derive(derive_more::Display, derive_more::From))]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Unserializable Data
 	InvalidData(sp_serializer::Error),
@@ -41,35 +34,35 @@ pub enum Error {
 	/// Wasmi loading/instantiating error
 	Wasmi(wasmi::Error),
 	/// Error in the API. Parameter is an error message.
-	#[cfg_attr(feature = "std", from(ignore))]
-	ApiError(ErrorInfo),
+	#[from(ignore)]
+	ApiError(String),
 	/// Method is not found
-	#[cfg_attr(feature = "std", display(fmt="Method not found: '{}'", _0))]
-	#[cfg_attr(feature = "std", from(ignore))]
-	MethodNotFound(ErrorInfo),
+	#[display(fmt="Method not found: '{}'", _0)]
+	#[from(ignore)]
+	MethodNotFound(String),
 	/// Code is invalid (expected single byte)
-	#[cfg_attr(feature = "std", display(fmt="Invalid Code: {}", _0))]
-	#[cfg_attr(feature = "std", from(ignore))]
-	InvalidCode(ErrorInfo),
+	#[display(fmt="Invalid Code: {}", _0)]
+	#[from(ignore)]
+	InvalidCode(String),
 	/// Could not get runtime version.
-	#[cfg_attr(feature = "std", display(fmt="On-chain runtime does not specify version"))]
+	#[display(fmt="On-chain runtime does not specify version")]
 	VersionInvalid,
 	/// Externalities have failed.
-	#[cfg_attr(feature = "std", display(fmt="Externalities error"))]
+	#[display(fmt="Externalities error")]
 	Externalities,
 	/// Invalid index.
-	#[cfg_attr(feature = "std", display(fmt="Invalid index provided"))]
+	#[display(fmt="Invalid index provided")]
 	InvalidIndex,
 	/// Invalid return type.
-	#[cfg_attr(feature = "std", display(fmt="Invalid type returned (should be u64)"))]
+	#[display(fmt="Invalid type returned (should be u64)")]
 	InvalidReturn,
 	/// Runtime failed.
-	#[cfg_attr(feature = "std", display(fmt="Runtime error"))]
+	#[display(fmt="Runtime error")]
 	Runtime,
 	/// Runtime panicked.
 	#[display(fmt="Runtime panicked: {}", _0)]
 	#[from(ignore)]
-	RuntimePanicked(ErrorInfo),
+	RuntimePanicked(String),
 	/// Invalid memory reference.
 	#[display(fmt="Invalid memory reference")]
 	InvalidMemoryReference,
@@ -81,13 +74,13 @@ pub enum Error {
 	#[display(fmt="The runtime has the `start` function")]
 	RuntimeHasStartFn,
 	/// Some other error occurred
-	Other(ErrorInfo),
+	Other(String),
 	/// Some error occurred in the allocator
-	#[cfg_attr(feature = "std", display(fmt="Error in allocator: {}", _0))]
-	Allocator(AllocatorError),
+	#[display(fmt="Error in allocator: {}", _0)]
+	Allocator(sp_allocator::Error),
 	/// Execution of a host function failed.
 	#[display(fmt="Host function {} execution failed with: {}", _0, _1)]
-	FunctionExecution(ErrorInfo, ErrorInfo),
+	FunctionExecution(String, String),
 	/// No table is present.
 	///
 	/// Call was requested that requires table but none was present in the instance.
@@ -109,7 +102,6 @@ pub enum Error {
 	FunctionRefIsNull(u32),
 }
 
-#[cfg(feature = "std")]
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
@@ -121,17 +113,14 @@ impl std::error::Error for Error {
 	}
 }
 
-#[cfg(feature = "std")]
 impl wasmi::HostError for Error {}
 
-#[cfg(feature = "std")]
 impl From<&'static str> for Error {
 	fn from(err: &'static str) -> Error {
 		Error::Other(err.into())
 	}
 }
 
-#[cfg(feature = "std")]
 impl From<WasmError> for Error {
 	fn from(err: WasmError) -> Error {
 		Error::Other(err.to_string())
@@ -139,8 +128,7 @@ impl From<WasmError> for Error {
 }
 
 /// Type for errors occurring during Wasm runtime construction.
-#[derive(Debug)]
-#[cfg_attr(feature = "std", derive(derive_more::Display))]
+#[derive(Debug, derive_more::Display)]
 pub enum WasmError {
 	/// Code could not be read from the state.
 	CodeNotFound,
@@ -149,7 +137,7 @@ pub enum WasmError {
 	/// Failure to erase the wasm memory.
 	///
 	/// Depending on the implementation might mean failure of allocating memory.
-	ErasingFailed(ErrorInfo),
+	ErasingFailed(String),
 	/// Wasm code failed validation.
 	InvalidModule,
 	/// Wasm code could not be deserialized.
@@ -159,30 +147,7 @@ pub enum WasmError {
 	/// The number of heap pages requested is disallowed by the module.
 	InvalidHeapPages,
 	/// Instantiation error.
-	Instantiation(ErrorInfo),
+	Instantiation(String),
 	/// Other error happenend.
-	Other(ErrorInfo),
-}
-
-/// The error type used by the allocators.
-#[derive(Debug)]
-#[cfg_attr(feature = "std", derive(derive_more::Display))]
-pub enum AllocatorError {
-	/// Someone tried to allocate more memory than the allowed maximum per allocation.
-	#[cfg_attr(feature = "std", display(fmt="Requested allocation size is too large"))]
-	RequestedAllocationTooLarge,
-	/// Allocator run out of space.
-	#[cfg_attr(feature = "std", display(fmt="Allocator ran out of space"))]
-	AllocatorOutOfSpace,
-	/// Some other error occurred.
-	Other(&'static str)
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for AllocatorError {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			_ => None,
-		}
-	}
+	Other(String),
 }

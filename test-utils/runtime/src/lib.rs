@@ -1168,7 +1168,7 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 	use sp_std::boxed::Box;
 	use sp_core::traits::{RuntimeSpawn, RuntimeSpawnExt};
 
-	let runtime_ext = sp_tasks::inline_spawn::HostRuntimeInstanceSpawn::new();
+	let runtime_ext = sc_executor_common::inline_spawn::HostRuntimeInstanceSpawn::new();
 	let runtime_ext: Box<dyn RuntimeSpawn> = Box::new(runtime_ext);
 
 	let mut dyn_ext: &mut dyn Externalities = &mut ext;

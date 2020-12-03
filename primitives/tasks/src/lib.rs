@@ -60,7 +60,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod async_externalities;
-pub mod inline_spawn;
 
 #[cfg(feature = "std")]
 pub use async_externalities::new_async_externalities;

@@ -23,7 +23,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
+mod error;
 mod freeing_bump;
 
 pub use freeing_bump::FreeingBumpHeapAllocator;
-pub use sp_wasm_interface::error::AllocatorError as Error;
+pub use error::Error;
