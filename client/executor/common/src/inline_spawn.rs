@@ -210,7 +210,7 @@ pub trait LazyInstanciate<'a> {
 }
 
 #[cfg(feature = "std")]
-struct InlineInstantiate<'a> {
+pub struct InlineInstantiate<'a> {
 	module: &'a Option<Box<dyn WasmModule>>,
 	instance: &'a mut Option<AssertUnwindSafe<Box<dyn WasmInstance>>>,
 }
@@ -229,36 +229,58 @@ impl<'a> LazyInstanciate<'a> for InlineInstantiate<'a> {
 	}
 }
 
-pub fn join_inline<
+/// Run a given task inline.
+pub fn process_task_inline<
 	'a,
 	HostLocal: HostLocalFunction,
 	#[cfg(feature = "std")]
 	I: LazyInstanciate<'a> + 'a,
 >(
-	task: PendingInlineTask,
+	task: Task,
+	ext: AsyncExt,
 	handle: u64,
-	calling_ext: &mut dyn Externalities,
 	#[cfg(feature = "std")]
 	mut instance_ref: I,
 ) -> WorkerResult {
-	match task {
-		PendingInlineTask {
-			ext,
-			task: Task::Wasm(WasmTask { dispatcher_ref, func, data }),
-		} => {
-			let need_resolve = ext.need_resolve();
+	let async_ext = match new_inline_only_externalities(ext) {
+		Ok(val) => val,
+		Err(e) => {
+			log_error!(
+				target: "executor",
+				"Failed to setup externalities for inline async context: {}",
+				e,
+			);
+			return WorkerResult::HardPanic;
+		}
+	};
+	#[cfg(feature = "std")]
+	{
+		process_task::<HostLocal, _>(task, async_ext, handle, instance_ref)
+	}
+	#[cfg(not(feature = "std"))]
+	{
+		process_task::<HostLocal>(task, async_ext, handle)
+	}
+}
 
-			let mut async_ext = match new_inline_only_externalities(ext) {
-				Ok(val) => val,
-				Err(e) => {
-					log_error!(
-						target: "executor",
-						"Failed to setup externalities for inline async context: {}",
-						e,
-					);
-					return WorkerResult::HardPanic;
-				}
-			};
+
+/// Run a given task.
+pub fn process_task<
+	'a,
+	HostLocal: HostLocalFunction,
+	#[cfg(feature = "std")]
+	I: LazyInstanciate<'a> + 'a,
+>(
+	task: Task,
+	mut async_ext: sp_tasks::AsyncExternalities,
+	handle: u64,
+	#[cfg(feature = "std")]
+	mut instance_ref: I,
+) -> WorkerResult {
+	let need_resolve = async_ext.need_resolve();
+
+	match task {
+		Task::Wasm(WasmTask { dispatcher_ref, func, data }) => {
 
 			#[cfg(feature = "std")]
 			let result = if HostLocal::HOST_LOCAL {
@@ -305,23 +327,7 @@ pub fn join_inline<
 				}
 			}
 		},
-		PendingInlineTask {
-			ext,
-			task: Task::Native(NativeTask { func, data }),
-		} => {
-			// TODO factor code with wasm
-			let need_resolve = ext.need_resolve();
-			let mut async_ext = match new_inline_only_externalities(ext) {
-				Ok(val) => val,
-				Err(e) => {
-					log_error!(
-						target: "executor",
-						"Failed to setup externalities for inline async context: {}",
-						e,
-					);
-					return WorkerResult::HardPanic;
-				}
-			};
+		Task::Native(NativeTask { func, data }) => {
 			match with_externalities_safe(
 				&mut async_ext,
 				|| func(data),
@@ -341,8 +347,6 @@ pub fn join_inline<
 		},
 	}
 }
-
-
 
 impl<RunningTask, HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask, HostLocal> {
 	// TODO
@@ -366,13 +370,9 @@ impl<RunningTask, HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask
 		}
 	}
 
-	fn remove(&mut self, handle: u64) -> Option<RunningTask> {
-		self.tasks.remove(&handle)
-	}
-
 	/// Base implementation for `RuntimeSpawn` method.
 	pub fn dismiss(&mut self, handle: u64) {
-		self.remove(handle);
+		self.tasks.remove(&handle);
 	}
 }
 
@@ -419,7 +419,7 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<PendingInlineTask, HostL
 
 	/// Base implementation for `RuntimeSpawn` method.
 	pub fn join(&mut self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
-		let worker_result = match self.remove(handle) {
+		let worker_result = match self.tasks.remove(&handle) {
 			Some(task) => {
 				#[cfg(feature = "std")]
 				{
@@ -427,10 +427,10 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<PendingInlineTask, HostL
 						module: &self.module,
 						instance: &mut self.instance,
 					};
-					join_inline::<HostLocal, _>(task, handle, calling_ext, instance_ref)
+					process_task_inline::<HostLocal, _>(task.task, task.ext, handle, instance_ref)
 				}
 				#[cfg(not(feature = "std"))]
-				join_inline::<HostLocal>(task, handle, calling_ext)
+				process_task_inline::<HostLocal>(task.task, task.ext, handle)
 			},
 			// handle has been removed due to dismiss or
 			// invalid externality condition.

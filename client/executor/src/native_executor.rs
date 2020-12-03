@@ -41,7 +41,7 @@ use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
 use sp_externalities::{ExternalitiesExt as _, AsyncBackend, WorkerResult};
-use sp_tasks::{new_async_externalities, new_inline_only_externalities, AsyncExt, AsyncStateType};
+use sp_tasks::{new_async_externalities, AsyncExt, AsyncStateType};
 use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task, PendingInlineTask, spawn_call_ext};
 
 /// Default num of pages for the heap
@@ -54,17 +54,6 @@ pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Resul
 	where F: UnwindSafe + FnOnce() -> U
 {
 	Ok(sc_executor_common::inline_spawn::with_externalities_safe(ext, f)?)
-}
-
-fn instantiate(
-	module: &Option<Arc<dyn WasmModule>>,
-	tasks: &Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
-) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
-	let result = instantiate_inline(module);
-	if result.is_none() {
-		tasks.lock().finished();
-	}
-	result
 }
 
 fn instantiate_inline(
@@ -193,6 +182,25 @@ impl<'a, 'b> sc_executor_common::inline_spawn::LazyInstanciate<'a> for InlineIns
 		}
 
 		self.guard.as_ref()
+	}
+}
+
+
+struct InlineInstantiateRef<'a> {
+	module: &'a Option<Arc<dyn WasmModule>>,
+	instance: &'a mut Option<AssertUnwindSafe<Box<dyn WasmInstance>>>,
+}
+
+impl<'a> sc_executor_common::inline_spawn::LazyInstanciate<'a> for InlineInstantiateRef<'a> {
+	fn instantiate(self) -> Option<&'a AssertUnwindSafe<Box<dyn WasmInstance>>> {
+		if self.instance.is_none() {
+			*self.instance = if let Some(instance) = instantiate_inline(self.module) {
+				Some(instance)
+			} else {
+				return None
+			}
+		};
+		self.instance.as_ref()
 	}
 }
 
@@ -534,17 +542,6 @@ impl RuntimeInstanceSpawn {
 		self.task_sender.send(task).expect("TODO mgmt");
 	}
 
-	fn instantiate(
-		module: &Option<Arc<dyn WasmModule>>,
-		tasks: &Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
-	) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
-		let result = instantiate_inline(module);
-		if result.is_none() {
-			tasks.lock().finished();
-		}
-		result
-	}
-
 	// TODO should make a variant without module instantiation for native
 	fn spawn_new(&self) -> bool {
 		let module = self.module.clone();
@@ -588,73 +585,41 @@ impl RuntimeInstanceSpawn {
 						);
 
 						// TODO send back message and count (to run non asynch at some point).
-						// tasks.lock().finished();
+						// tasks.lock().finished(); -> wrap in an process_task_queu and return
+						// HardPanic should do.
 						continue;
 					}
 				};
-				let need_resolve = async_ext.need_resolve();
-				let result = match task {
-					Task::Wasm(WasmTask { dispatcher_ref, func, data }) => {
-						let mut instance = if let Some(instance) = Self::instantiate(&*module, &tasks) {
-							instance
-						} else {
-							return;
-						};
-
-						match with_externalities_safe(
-							&mut async_ext,
-							|| instance.call(
-								InvokeMethod::TableWithWrapper { dispatcher_ref, func },
-								&data[..],
-							)
-						) {
-							Ok(result) => {
-								match result {
-									Ok(output) => if need_resolve {
-										WorkerResult::CallAt(output, handle)
-									} else {
-										WorkerResult::Valid(output)
-									},
-									Err(error) => {
-										log::error!("Call error in spawned task: {:?}", error);
-										WorkerResult::HardPanic
-									},
-								}
-							},
-							Err(error) => {
-								log::error!("Panic error in spawned task: {:?}", error);
-								instance = if let Some(instance) = Self::instantiate(&*module, &tasks) {
-									instance
-								} else {
-									dismiss_handles.finished_worker(handle);
-									tasks.lock().finished();
-									return;
-								};
-								WorkerResult::Panic
-							}
-						}
-					},
-					Task::Native(NativeTask { func, data }) => {
-						// We do not instantiate, this assume we never run both Wasm and
-						// native for a single instance spawn.
-						match with_externalities_safe(
-							&mut async_ext,
-							|| func(data)
-						) {
-							Ok(result) => if need_resolve {
-								WorkerResult::CallAt(result, handle)
-							} else {
-								WorkerResult::Valid(result)
-							},
-							Err(error) => {
-								log::error!("Panic error in spawned task: {:?}", error);
-								WorkerResult::Panic
-							}
-						}
-					},
+				let mut instance: Option<AssertUnwindSafe<Box<dyn WasmInstance>>> = None;
+				let instance_ref = InlineInstantiateRef {
+					module: &*module,
+					instance: &mut instance,
 				};
+
+				let result = sc_executor_common::inline_spawn::process_task::<(), _>(
+					task,
+					async_ext,
+					handle,
+					instance_ref,
+				);
+
+				let mut end = false;
+				if let &WorkerResult::Panic = &result {
+					log::error!("Panic error in spawned task, dropping instance");
+					// Here we don't just shut all because panic will only transmit to parent
+					// if 'join' is call, if 'dismiss' is call then it is fine to ignore a panic.
+					instance = None; // will be lazilly re-instantiated
+				}
+				if let &WorkerResult::HardPanic = &result {
+					end = true;
+					dismiss_handles.finished_worker(handle);
+					tasks.lock().finished();
+				}
 				if let Err(_) = result_sender.send(Some(result)) {
 					// Closed channel, remove this thread instance.
+					end = true;
+				}
+				if end {
 					dismiss_handles.finished_worker(handle);
 					tasks.lock().finished();
 					return;
@@ -752,10 +717,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					guard: &mut instance,
 				};
 
-				sc_executor_common::inline_spawn::join_inline::<(), _>(
-					task,
+				sc_executor_common::inline_spawn::process_task_inline::<(), _>(
+					task.task,
+					task.ext,
 					handle,
-					calling_ext,
 					instance_ref,
 				)
 			},
