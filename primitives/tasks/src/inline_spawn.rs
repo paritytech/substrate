@@ -58,19 +58,16 @@ impl HostLocalFunction for HostLocal {
 }
 
 /// Helper inner struct to implement `RuntimeSpawn` extension.
+/// TODO maybe RunningTask param is useless
 pub struct RuntimeInstanceSpawn<RunningTask, HostLocalFunction = ()> {
 	module: Option<Box<dyn WasmModule>>,
 	#[cfg(feature = "std")]
 	instance: Option<AssertUnwindSafe<Box<dyn WasmInstance>>>,
 	#[cfg(not(feature = "std"))]
 	instance: Option<Box<dyn WasmInstance>>,
-	tasks: RuntimeInstanceSpawnInfo<RunningTask>,
+	tasks: BTreeMap<u64, RunningTask>,
 	counter: u64,
 	_ph: PhantomData<HostLocalFunction>,
-}
-
-/// Wasm module trait, this is usually define at a client level.
-pub trait Module {
 }
 
 /// Set up the externalities and safe calling environment to execute runtime calls.
@@ -121,42 +118,52 @@ pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Resul
 	))
 }
 
-/// Task info for this instance.
-/// Instance is local to a wasm call.
-pub struct RuntimeInstanceSpawnInfo<RunningTask> {
-	// TODO rename Running Task, it is only pending
-	tasks: BTreeMap<u64, RunningTask>,
-
-	// TODO split struct (the two fields are unused).
-	// consider atomic instead (depending on usefullness
-	// of this struct
-	nb_runing: usize,
-	capacity: usize,
+/// TODO
+pub struct WasmTask {
+	pub dispatcher_ref: u32,
+	pub data: Vec<u8>,
+	pub func: u32,
 }
 
-// TODO naming is bad (inline are not running)
-pub struct RunningTask(PendingInlineTask);
-
-struct WasmTask {
-	dispatcher_ref: u32,
-	data: Vec<u8>,
-	func: u32,
+/// TODO
+pub struct NativeTask {
+	pub data: Vec<u8>,
+	pub func: fn(Vec<u8>) -> Vec<u8>,
 }
 
-struct NativeTask {
-	data: Vec<u8>,
-	func: fn(Vec<u8>) -> Vec<u8>,
-}
-
-enum Task {
+/// TODO
+pub enum Task {
 	Native(NativeTask),
 	Wasm(WasmTask),
 }
 
-struct PendingInlineTask {
-	task: Task,
-	ext: AsyncExt,
+/// TODO
+pub struct PendingInlineTask {
+	pub task: Task,
+	pub ext: AsyncExt,
 }
+
+#[cfg(feature = "std")]
+/// TODO
+pub fn instantiate(
+	module: Option<&dyn WasmModule>,
+) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
+	Some(match module.map(|m| m.new_instance()) {
+		Some(Ok(val)) => AssertUnwindSafe(val),
+		Some(Err(e)) => {
+			log_error!(
+				target: "executor",
+				"Failed to create new instance for module for async context: {}",
+				e,
+			);
+			return None;
+		}
+		None => {
+			log_error!(target: "executor", "No module for a wasm task.");
+			return None;
+		},
+	})
+}	
 
 impl<RunningTask, HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask, HostLocal> {
 	// TODO
@@ -164,38 +171,11 @@ impl<RunningTask, HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask
 		RuntimeInstanceSpawn {
 			module,
 			instance: None,
-			tasks: RuntimeInstanceSpawnInfo {
-				tasks: BTreeMap::new(),
-				nb_runing: 0,
-				capacity: 0,
-			},
+			tasks: BTreeMap::new(),
 			counter: 0,
 			_ph: PhantomData,
 		}
 	}
-
-	#[cfg(feature = "std")]
-	fn instantiate_inline(
-		module: &Option<Box<dyn WasmModule>>,
-	) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
-		// TODO factor code with instantiate (FnOnce as param)
-		Some(match module.as_ref().map(|m| m.new_instance()) {
-			Some(Ok(val)) => AssertUnwindSafe(val),
-			Some(Err(e)) => {
-				log_error!(
-					target: "executor",
-					"Failed to create new instance for module for async context: {}",
-					e,
-				);
-				return None;
-			}
-			None => {
-				log_error!(target: "executor", "No module for a wasm task.");
-				return None;
-			},
-		})
-	}
-
 
 	/// Obtain externality and get id for worker.
 	pub fn spawn_call_ext(
@@ -225,7 +205,7 @@ impl<RunningTask, HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask
 	}
 
 	fn remove(&mut self, handle: u64) -> Option<RunningTask> {
-		self.tasks.tasks.remove(&handle)
+		self.tasks.remove(&handle)
 	}
 
 	fn insert(
@@ -234,7 +214,7 @@ impl<RunningTask, HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask
 		task: RunningTask,
 	) {
 		// TODO  could be in spawn_call_inner directly (see how we factor that with client executor
-		self.tasks.tasks.insert(handle, task);
+		self.tasks.insert(handle, task);
 	}
 
 	/// Base implementation for `RuntimeSpawn` method.
@@ -243,7 +223,7 @@ impl<RunningTask, HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask
 	}
 }
 
-impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask, HostLocal> {
+impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<PendingInlineTask, HostLocal> {
 	fn spawn_call_inner(
 		&mut self,
 		task: Task,
@@ -252,7 +232,7 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask, HostLocal> 
 	) -> u64 {
 		let (ext, handle) = self.spawn_call_ext(kind, calling_ext);
 
-		self.insert(handle, RunningTask(PendingInlineTask {task, ext}));
+		self.insert(handle, PendingInlineTask {task, ext});
 
 		handle
 	}
@@ -285,9 +265,10 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask, HostLocal> 
 	/// Base implementation for `RuntimeSpawn` method.
 	pub fn join(&mut self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
 		let mut worker_result = || match self.remove(handle) {
-			Some(RunningTask(
-				PendingInlineTask { ext, task: Task::Wasm(WasmTask { dispatcher_ref, func, data }) },
-			)) => {
+			Some(PendingInlineTask {
+				ext,
+				task: Task::Wasm(WasmTask { dispatcher_ref, func, data }),
+			}) => {
 				let need_resolve = ext.need_resolve();
 
 				let mut async_ext = match new_inline_only_externalities(ext) {
@@ -310,7 +291,7 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask, HostLocal> 
 					// eg first prepare join returning the task and second run without lock
 					let mut instance = &mut self.instance;
 					if instance.is_none() {
-						*instance = if let Some(instance) = Self::instantiate_inline(&self.module) {
+						*instance = if let Some(instance) = instantiate(self.module.as_ref().map(AsRef::as_ref)) {
 							Some(instance)
 						} else {
 							return WorkerResult::HardPanic;
@@ -355,9 +336,10 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask, HostLocal> 
 					}
 				}
 			},
-			Some(RunningTask(
-				PendingInlineTask { ext, task: Task::Native(NativeTask { func, data }) },
-			)) => {
+			Some(PendingInlineTask {
+				ext,
+				task: Task::Native(NativeTask { func, data }),
+			}) => {
 				// TODO factor code with wasm
 				let need_resolve = ext.need_resolve();
 				let mut async_ext = match new_inline_only_externalities(ext) {
@@ -403,7 +385,7 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<RunningTask, HostLocal> 
 pub struct RuntimeInstanceSpawnSend<RunningTask>(Arc<Mutex<RuntimeInstanceSpawn<RunningTask>>>);
 
 #[cfg(feature = "std")]
-impl RuntimeSpawn for RuntimeInstanceSpawnSend<RunningTask> {
+impl RuntimeSpawn for RuntimeInstanceSpawnSend<PendingInlineTask> {
 	fn spawn_call_native(
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
@@ -443,9 +425,9 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend<RunningTask> {
 /// and allows running an unsafe `Send` declaration.
 pub struct RuntimeInstanceSpawnForceSend<RunningTask>(Rc<RefCell<RuntimeInstanceSpawn<RunningTask, HostLocal>>>);
 
-unsafe impl Send for RuntimeInstanceSpawnForceSend<RunningTask> { }
+unsafe impl Send for RuntimeInstanceSpawnForceSend<PendingInlineTask> { }
 
-impl RuntimeSpawn for RuntimeInstanceSpawnForceSend<RunningTask> {
+impl RuntimeSpawn for RuntimeInstanceSpawnForceSend<PendingInlineTask> {
 	fn spawn_call_native(
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
@@ -480,7 +462,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawnForceSend<RunningTask> {
 	}
 }
 
-impl RuntimeInstanceSpawnForceSend<RunningTask> {
+impl RuntimeInstanceSpawnForceSend<PendingInlineTask> {
 	// TODO
 	pub fn new() -> Self {
 		RuntimeInstanceSpawnForceSend(Rc::new(RefCell::new(RuntimeInstanceSpawn::new(None))))
@@ -489,4 +471,4 @@ impl RuntimeInstanceSpawnForceSend<RunningTask> {
 
 /// Alias to an inline implementation that can be use when runtime interface
 /// is skipped.
-pub type HostRuntimeInstanceSpawn = RuntimeInstanceSpawnForceSend<RunningTask>;
+pub type HostRuntimeInstanceSpawn = RuntimeInstanceSpawnForceSend<PendingInlineTask>;

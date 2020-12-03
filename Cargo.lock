@@ -6931,7 +6931,6 @@ dependencies = [
  "sp-panic-handler",
  "sp-runtime",
  "sp-runtime-interface",
- "sp-serializer",
  "sp-state-machine",
  "sp-tasks",
  "sp-tracing",
@@ -6954,7 +6953,6 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
- "sp-allocator",
  "sp-core",
  "sp-runtime-interface",
  "sp-serializer",
@@ -8771,6 +8769,7 @@ dependencies = [
  "derive_more",
  "impl-trait-for-tuples",
  "parity-scale-codec",
+ "sp-serializer",
  "sp-std",
  "wasmi",
 ]

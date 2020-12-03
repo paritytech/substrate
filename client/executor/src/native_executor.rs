@@ -42,6 +42,7 @@ use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
 use sp_externalities::{ExternalitiesExt as _, AsyncBackend, WorkerResult};
 use sp_tasks::{new_async_externalities, new_inline_only_externalities, AsyncExt, AsyncStateType};
+use sp_tasks::inline_spawn::{WasmTask, NativeTask, Task, PendingInlineTask};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -52,28 +53,25 @@ const DEFAULT_HEAP_PAGES: u64 = 1024;
 pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	// TODO here externalities is used as environmental and inherently is
-	// making the `AssertUnwindSafe` assertion, that is not true.
-	// Worst case is probably locked mutex, so not that harmfull.
-	// The thread scenario adds a bit over it but there was already
-	// locked backend.
-	sp_externalities::set_and_run_with_externalities(
-		ext,
-		move || {
-			// Substrate uses custom panic hook that terminates process on panic. Disable
-			// termination for the native call.
-			let _guard = sp_panic_handler::AbortGuard::force_unwind();
-			std::panic::catch_unwind(f).map_err(|e| {
-				if let Some(err) = e.downcast_ref::<String>() {
-					Error::RuntimePanicked(err.clone())
-				} else if let Some(err) = e.downcast_ref::<&'static str>() {
-					Error::RuntimePanicked(err.to_string())
-				} else {
-					Error::RuntimePanicked("Unknown panic".into())
-				}
-			})
-		},
-	)
+	Ok(sp_tasks::inline_spawn::with_externalities_safe(ext, f)?)
+}
+
+fn instantiate(
+	module: &Option<Arc<dyn WasmModule>>,
+	tasks: &Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
+) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
+	let result = instantiate_inline(module.as_ref().map(AsRef::as_ref)));
+	if result.is_none() {
+		tasks.lock().finished();
+	}
+	result
+}
+
+fn instantiate_inline(
+	module: &Option<Arc<dyn WasmModule>>,
+	tasks: &Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
+) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
+	sp_tasks::inline_spawn::instantiate(module.as_ref().map(AsRef::as_ref)));
 }
 
 /// Delegate for dispatching a CodeExecutor call.
@@ -417,32 +415,11 @@ enum RunningTask {
 	Inline(PendingInlineTask),
 }
 
-struct WasmTask {
-	dispatcher_ref: u32,
-	data: Vec<u8>,
-	func: u32,
-}
-
-struct NativeTask {
-	data: Vec<u8>,
-	func: fn(Vec<u8>) -> Vec<u8>,
-}
-
-enum Task {
-	Native(NativeTask),
-	Wasm(WasmTask),
-}
-
 struct PendingTask {
 	handle: u64,
 	task: Task,
 	ext: AsyncExt,
 	result_sender: mpsc::Sender<Option<WorkerResult>>,
-}
-
-struct PendingInlineTask {
-	task: Task,
-	ext: AsyncExt,
 }
 
 impl RuntimeInstanceSpawnInfo {
@@ -543,32 +520,11 @@ impl RuntimeInstanceSpawn {
 		module: &Option<Arc<dyn WasmModule>>,
 		tasks: &Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
 	) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
-		let result = Self::instantiate_inline(module);
+		let result = instantiate_inline(module.as_ref().map(AsRef::as_ref));
 		if result.is_none() {
 			tasks.lock().finished();
 		}
 		result
-	}
-
-	fn instantiate_inline(
-		module: &Option<Arc<dyn WasmModule>>,
-	) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
-		// TODO factor code with instantiate (FnOnce as param)
-		Some(match module.as_ref().map(|m| m.new_instance()) {
-			Some(Ok(val)) => AssertUnwindSafe(val),
-			Some(Err(e)) => {
-				log::error!(
-					target: "executor",
-					"Failed to create new instance for module for async context: {}",
-					e,
-				);
-				return None;
-			}
-			None => {
-				log::error!(target: "executor", "No module for a wasm task.");
-				return None;
-			},
-		})
 	}
 
 	// TODO should make a variant without module instantiation for native
@@ -801,7 +757,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 				let need_resolve = ext.need_resolve();
 				let mut instance = self.instance.lock();
 				if instance.is_none() {
-					*instance = if let Some(instance) = Self::instantiate_inline(&self.module) {
+					*instance = if let Some(instance) = instantiate_inline(&self.module) {
 						Some(instance)
 					} else {
 						return WorkerResult::HardPanic;

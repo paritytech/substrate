@@ -25,6 +25,7 @@ use sp_std::{
 };
 
 pub mod wasm_runtime;
+pub mod error;
 #[cfg(feature = "std")]
 mod wasmi_impl;
 

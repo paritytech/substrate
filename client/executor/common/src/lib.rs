@@ -18,7 +18,7 @@
 
 #![warn(missing_docs)]
 
-pub mod error;
 pub mod sandbox;
 pub mod util;
-pub mod wasm_runtime;
+pub use sp_wasm_interface::wasm_runtime;
+pub use sp_wasm_interface::error;
