@@ -1052,6 +1052,24 @@ macro_rules! impl_benchmark_test {
 /// ```
 ///
 /// At the end of `dispatch_benchmark`, you should return this batches object.
+///
+/// In the case where you have multiple instances of a pallet that you need to separately benchmark,
+/// the name of your module struct will be used as a suffix to your outputted weight file. For
+/// example:
+///
+/// ```
+/// add_benchmark!(params, batches, pallet_balances, Balances); // pallet_balances.rs
+/// add_benchmark!(params, batches, pallet_collective, Council); // pallet_collective_council.rs
+/// add_benchmark!(params, batches, pallet_collective, TechnicalCommittee); // pallet_collective_technical_committee.rs
+/// ```
+///
+/// You can manipulate this suffixed string by using a type alias if needed. For example:
+///
+/// ```
+/// type Council2 = TechnicalCommittee;
+/// add_benchmark!(params, batches, pallet_collective, Council2); // pallet_collective_council2.rs
+/// ```
+
 #[macro_export]
 macro_rules! add_benchmark {
 	( $params:ident, $batches:ident, $name:ident, $( $location:tt )* ) => (
