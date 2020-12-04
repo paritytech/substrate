@@ -1057,7 +1057,7 @@ macro_rules! impl_benchmark_test {
 /// the name of your module struct will be used as a suffix to your outputted weight file. For
 /// example:
 ///
-/// ```
+/// ```ignore
 /// add_benchmark!(params, batches, pallet_balances, Balances); // pallet_balances.rs
 /// add_benchmark!(params, batches, pallet_collective, Council); // pallet_collective_council.rs
 /// add_benchmark!(params, batches, pallet_collective, TechnicalCommittee); // pallet_collective_technical_committee.rs
@@ -1065,7 +1065,7 @@ macro_rules! impl_benchmark_test {
 ///
 /// You can manipulate this suffixed string by using a type alias if needed. For example:
 ///
-/// ```
+/// ```ignore
 /// type Council2 = TechnicalCommittee;
 /// add_benchmark!(params, batches, pallet_collective, Council2); // pallet_collective_council_2.rs
 /// ```
