@@ -2015,4 +2015,5 @@ pub mod pallet_prelude {
 /// 	}
 /// 	```
 /// * use the newest nightly possible.
+///
 pub use frame_support_procedural::pallet;
