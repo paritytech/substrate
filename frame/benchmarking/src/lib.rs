@@ -1067,7 +1067,7 @@ macro_rules! impl_benchmark_test {
 ///
 /// ```
 /// type Council2 = TechnicalCommittee;
-/// add_benchmark!(params, batches, pallet_collective, Council2); // pallet_collective_council2.rs
+/// add_benchmark!(params, batches, pallet_collective, Council2); // pallet_collective_council_2.rs
 /// ```
 
 #[macro_export]
