@@ -503,8 +503,6 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn register_notifications_protocol(&self, _: Cow<'static, str>) {}
-
 		fn announce(&self, _: B::Hash, _: Vec<u8>) {
 			unimplemented!();
 		}
