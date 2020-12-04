@@ -549,8 +549,7 @@ decl_module! {
 					Some(T::WeightInfo::vote(members.len() as u32)),
 					Pays::No,
 				).into())
-			}
-			else {
+			} else {
 				Ok((
 					Some(T::WeightInfo::vote(members.len() as u32)),
 					Pays::Yes,
