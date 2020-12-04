@@ -368,15 +368,17 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue
 
 /// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorage<H: Hasher>: Send + Sync + Clone {
-	/// TODO here for type with inner reference we do some
-	/// clone.
+	/// This is the storage to use with thread workers.
+	/// Most of the time it is the same as this trait.
 	type AsyncStorage: TrieBackendStorage<H> + 'static;
 	/// Type of in-memory overlay.
 	type Overlay: hash_db::HashDB<H, DBValue> + Default + Consolidate;
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 
-	/// TODO
+	/// Most of `TrieBackendStorage` are 'static, still some are
+	/// not, in this case we cannot use async storage and return either
+	/// None or a different type.
 	fn async_storage(&self) -> Option<Self::AsyncStorage>;
 }
 
@@ -396,12 +398,12 @@ impl<H: Hasher + 'static> TrieBackendStorage<H> for NoopsBackenStorage<H> {
 	type Overlay = MemoryDB<H>;
 
 	#[cfg(feature = "std")]
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
+	fn get(&self, _key: &H::Out, _prefix: Prefix) -> Result<Option<DBValue>> {
 		Err("Dummy storage should not be call".into())
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
+	fn get(&self, _key: &H::Out, _prefix: Prefix) -> Result<Option<DBValue>> {
 		Err(crate::DefaultError)
 	}
 

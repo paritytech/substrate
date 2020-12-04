@@ -185,26 +185,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> ProvingBackend<'a, S, H>
 impl<S: TrieBackendStorage<H>, H: Hasher> AsyncProvingBackend<S, H>
 	where H::Out: Codec
 {
-	/// Create new proving backend.
-	/// TODO maybe not all new are used??
-	pub fn new(backend: TrieBackend<S, H>) -> Self {
-		let proof_recorder = Default::default();
-		Self::new_with_recorder(backend, proof_recorder)
-	}
-
-	/// Create new proving backend with the given recorder.
-	pub fn new_with_recorder(
-		backend: TrieBackend<S, H>,
-		proof_recorder: ProofRecorder<H>,
-	) -> Self {
-		let root = backend.essence().root().clone();
-		let recorder = AsyncProofRecorderBackend {
-			backend: backend.into_storage(),
-			proof_recorder,
-		};
-		AsyncProvingBackend(TrieBackend::new(recorder, root))
-	}
-
+	#[allow(dead_code)] // TODO implement joining different collected proofs.
 	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self) -> StorageProof {
 		let trie_nodes = self.0.essence().backend_storage().proof_recorder
@@ -235,7 +216,10 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'static + Hasher> TrieBackendStorage<
 		self.backend.async_storage().map(|backend| {
 			AsyncProofRecorderBackend {
 				backend,
-				proof_recorder: self.proof_recorder.clone(),
+				// Here using existing recorder would be incorrect as we only need
+				// to record change when and if the async worker does join.
+				// TODO joining and merging proof_recorder is unimplemented
+				proof_recorder: Default::default(),
 			}
 		})
 	}
@@ -261,7 +245,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher + 'static> TrieBackendStorage<H>
 		self.backend.async_storage().map(|backend| {
 			AsyncProofRecorderBackend {
 				backend,
-				proof_recorder: self.proof_recorder.clone(),
+				// Here using existing recorder would be incorrect as we only need
+				// to record change when and if the async worker does join.
+				proof_recorder: Default::default(),
 			}
 		})
 	}
@@ -404,15 +390,13 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	}
 
 	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
-		None
-/*		Some(Box::new(crate::backend::AsyncBackendAdapter::new(AsyncProvingBackend(
-			TrieBackend::new(AsyncProofRecorderBackend {
-					backend: self.0.essence().backend_storage().backend.clone(),
-					proof_recorder: self.0.essence().backend_storage().proof_recorder.clone(),
-				},
-				self.0.essence().root().clone(),
-			)
-		))))*/
+		if let Some(async_storage) = self.0.backend_storage().async_storage() {
+			Some(Box::new(crate::backend::AsyncBackendAdapter::new(AsyncProvingBackend(
+				TrieBackend::new(async_storage, self.0.essence().root().clone())
+			))))
+		} else {
+			None
+		}
 	}
 }
 
@@ -514,8 +498,13 @@ impl<S, H> Backend<H> for AsyncProvingBackend<S, H>
 	}
 
 	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
-		let inner: AsyncProvingBackend<S, H> = self.clone();
-		Some(Box::new(crate::backend::AsyncBackendAdapter::new(inner)))
+		if let Some(async_storage) = self.0.backend_storage().async_storage() {
+			Some(Box::new(crate::backend::AsyncBackendAdapter::new(AsyncProvingBackend(
+				TrieBackend::new(async_storage, self.0.essence().root().clone())
+			))))
+		} else {
+			None
+		}
 	}
 }
 

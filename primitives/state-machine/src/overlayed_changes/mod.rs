@@ -130,12 +130,8 @@ impl Markers {
 			.expect("Initialized above"), len)
 	}
 
-	fn current_transaction(&mut self) -> (&mut Vec<TaskId>, usize) {
-		Self::current_transaction_internal(&mut self.transactions)
-	}
-
 	fn set_marker(&mut self, marker: TaskId) {
-		let (mut tx, index) = Self::current_transaction_internal(&mut self.transactions);
+		let (tx, index) = Self::current_transaction_internal(&mut self.transactions);
 		self.markers.insert(marker, MarkerDesc {
 			transaction_depth: index,
 		});
@@ -176,7 +172,7 @@ impl Markers {
 			WorkerResult::CallAt(result, marker) => {
 				match self.markers.remove(&marker) {
 					Some(marker_desc) => {
-						if let Some(mut markers) = self.transactions.get_mut(marker_desc.transaction_depth) {
+						if let Some(markers) = self.transactions.get_mut(marker_desc.transaction_depth) {
 							if let Some(ix) = markers.iter().position(|id| id == &marker) {
 								markers.remove(ix);
 							}
