@@ -22,17 +22,18 @@ wasmi = { version = "0.6.2", optional = true }
 sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
 sp-allocator = { version = "2.0.0", optional = true, path = "../../../primitives/allocator" }
 sp-wasm-interface = { version = "2.0.0", optional = true, path = "../../../primitives/wasm-interface" }
-sp-runtime-interface = { version = "2.0.0", optional = true, path = "../../../primitives/runtime-interface" }
 sp-serializer = { version = "2.0.0", optional = true, path = "../../../primitives/serializer" }
 sp-tasks = { version = "2.0.0", default-features = false, path = "../../../primitives/tasks" }
 sp-externalities = { version = "0.8.0", default-features = false, path = "../../../primitives/externalities" }
 sp-panic-handler = { version = "2.0.0", optional = true, path = "../../../primitives/panic-handler" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
 parking_lot = { version = "0.10.0", optional = true }
+thiserror = { version = "1.0.21", optional = true }
 
 [features]
 default = [ "std" ]
 std = [
+  "thiserror",
   "log",
 	"derive_more",
 	"parity-wasm",
@@ -41,7 +42,6 @@ std = [
   "sp-allocator",
   "sp-panic-handler",
   "sp-wasm-interface",
-  "sp-runtime-interface",
   "sp-serializer",
   "parking_lot",
   "sp-core/std",

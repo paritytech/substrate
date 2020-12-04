@@ -58,7 +58,7 @@ pub trait WeightInfo {
 
 /// Weights for pallet_collective using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
+impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn set_members(m: u32, n: u32, p: u32, ) -> Weight {
 		(0 as Weight)
 			.saturating_add((20_933_000 as Weight).saturating_mul(m as Weight))

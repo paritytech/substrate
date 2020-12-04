@@ -45,9 +45,6 @@
 # Contracts
 /frame/contracts/ @athei
 
-# EVM
-/frame/evm/ @sorpaas
-
 # NPoS and election
 /frame/staking/ @kianenigma
 /frame/elections/ @kianenigma

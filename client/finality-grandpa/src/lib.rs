@@ -112,23 +112,21 @@ macro_rules! afg_log {
 mod authorities;
 mod aux_schema;
 mod communication;
-mod consensus_changes;
 mod environment;
 mod finality_proof;
 mod import;
 mod justification;
-mod light_import;
 mod notification;
 mod observer;
 mod until_imported;
 mod voting_rule;
 
 pub use authorities::{SharedAuthoritySet, AuthoritySet};
+pub use communication::GRANDPA_PROTOCOL_NAME;
 pub use finality_proof::{FinalityProofFragment, FinalityProofProvider, StorageAndProofProvider};
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
-pub use light_import::{light_block_import, GrandpaLightBlockImport};
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
@@ -588,7 +586,6 @@ where
 			select_chain.clone(),
 			persistent_data.authority_set.clone(),
 			voter_commands_tx,
-			persistent_data.consensus_changes.clone(),
 			authority_set_hard_forks,
 			justification_sender.clone(),
 		),
@@ -656,6 +653,10 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	/// A link to the block import worker.
 	pub link: LinkHalf<Block, C, SC>,
 	/// The Network instance.
+	///
+	/// It is assumed that this network will feed us Grandpa notifications. When using the
+	/// `sc_network` crate, it is assumed that the Grandpa notifications protocol has been passed
+	/// to the configuration of the networking.
 	pub network: N,
 	/// If supplied, can be used to hook on telemetry connection established events.
 	pub telemetry_on_connect: Option<TracingUnboundedReceiver<()>>,
@@ -844,7 +845,6 @@ where
 			network: network.clone(),
 			set_id: persistent_data.authority_set.set_id(),
 			authority_set: persistent_data.authority_set.clone(),
-			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
 			justification_sender: Some(justification_sender),
@@ -989,7 +989,6 @@ where
 					select_chain: self.env.select_chain.clone(),
 					config: self.env.config.clone(),
 					authority_set: self.env.authority_set.clone(),
-					consensus_changes: self.env.consensus_changes.clone(),
 					network: self.env.network.clone(),
 					voting_rule: self.env.voting_rule.clone(),
 					metrics: self.env.metrics.clone(),
@@ -1069,27 +1068,6 @@ where
 
 		Future::poll(Pin::new(&mut self.network), cx)
 	}
-}
-
-/// When GRANDPA is not initialized we still need to register the finality
-/// tracker inherent provider which might be expected by the runtime for block
-/// authoring. Additionally, we register a gossip message validator that
-/// discards all GRANDPA messages (otherwise, we end up banning nodes that send
-/// us a `Neighbor` message, since there is no registered gossip validator for
-/// the engine id defined in the message.)
-pub fn setup_disabled_grandpa<Block: BlockT, N>(network: N) -> Result<(), sp_consensus::Error>
-where
-	N: NetworkT<Block> + Send + Clone + 'static,
-{
-	// We register the GRANDPA protocol so that we don't consider it an anomaly
-	// to receive GRANDPA messages on the network. We don't process the
-	// messages.
-	network.register_notifications_protocol(
-		communication::GRANDPA_ENGINE_ID,
-		From::from(communication::GRANDPA_PROTOCOL_NAME),
-	);
-
-	Ok(())
 }
 
 /// Checks if this node has any available keys in the keystore for any authority id in the given

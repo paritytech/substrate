@@ -1109,7 +1109,7 @@ mod tracing_setup {
 	};
 	use super::{wasm_tracing, Crossing};
 
-	const TRACING_SET : AtomicBool = AtomicBool::new(false);
+	static TRACING_SET: AtomicBool = AtomicBool::new(false);
 
 
 	/// The PassingTracingSubscriber implements `tracing_core::Subscriber`
