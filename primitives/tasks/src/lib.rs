@@ -145,12 +145,9 @@ pub fn set_capacity(capacity: u32) {
 
 #[cfg(feature = "std")]
 mod inner {
-	use std::panic::AssertUnwindSafe;
-	use std::sync::{mpsc, Arc, atomic::{AtomicU64, Ordering}};
-	use std::collections::HashMap;
 	use sp_externalities::{Externalities, ExternalitiesExt as _};
 	use sp_core::traits::RuntimeSpawnExt;
-	use crate::{AsyncExt, WorkerType};
+	use crate::WorkerType;
 	use super::DataJoinHandle;
 
 	/// Spawn new runtime task (native).

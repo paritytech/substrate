@@ -291,8 +291,8 @@ impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackend for AsyncBackendAda
 	}
 }
 
-// TODO remove bound?
 impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackendAdapter<H, B> {
+	/// Get an async backend from an existing backend.
 	pub fn new(backend: B) -> Self {
 		AsyncBackendAdapter(backend, sp_std::marker::PhantomData)
 	}
@@ -367,6 +367,11 @@ impl AsyncBackend for AsyncBackendAt {
 }
 
 impl AsyncBackendAt {
+	/// Instantiate new backend from existing backend and the parent worker current change.
+	/// 
+	/// This is cloning the current changes from the parent worker. That is not a light
+	/// operation, but at this state of the implementation this is the easiest and
+	/// safest way to proceed.
 	pub fn new(backend: Box<dyn AsyncBackend>, overlay: &crate::OverlayedChanges) -> Self {
 		AsyncBackendAt {
 			backend,

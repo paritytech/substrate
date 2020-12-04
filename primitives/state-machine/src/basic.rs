@@ -337,15 +337,14 @@ impl Externalities for BasicExternalities {
 		unimplemented!("TODO empty one")
 	}
 
-	fn get_async_backend(&mut self, marker: TaskId) -> Option<Box<dyn AsyncBackend>> {
+	fn get_async_backend(&mut self, _marker: TaskId) -> Option<Box<dyn AsyncBackend>> {
 		unimplemented!("TODO from self.storage cloned")
 	}
 
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
-		// No transaction, works as read (TODO not true for worker in write mode).
+		// No transaction, works as read (TODO this will not be true for worker in write mode).
 		state_update.read_resolve()
 	}
-
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {
