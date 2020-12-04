@@ -1165,7 +1165,6 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 	assert!(ext.storage_root().as_slice() != &root[..]);
 
 	use sp_externalities::ExternalitiesExt;
-	use sp_std::boxed::Box;
 	use sp_core::traits::{RuntimeSpawn, RuntimeSpawnExt};
 	use sc_executor_common::inline_spawn::hosted_runtime::HostRuntimeInstanceSpawn;
 	#[cfg(not(feature = "std"))]
@@ -1234,8 +1233,6 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 }
 
 fn test_tasks() {
-	// TODO test (and implement) that without registring stuff we can use task (default to inline
-	// when extension is missing).
 	sp_tasks::set_capacity(4);
 
 	fn todo(_inp: Vec<u8>) -> Vec<u8> {
@@ -1252,7 +1249,7 @@ fn test_tasks() {
 		loop { }
 	}
 	let handle = sp_tasks::spawn(tokill, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
-	let res = handle.dismiss();
+	handle.dismiss();
 	fn do_panic(_inp: Vec<u8>) -> Vec<u8> {
 		panic!("Expected test panic.");
 	}
@@ -1271,7 +1268,7 @@ fn test_tasks() {
 	// state stay correct for last block
 	assert!(handle.join().is_some());
 	
-// TODO	unimplemented!("join, kill and consort");
+	// TODO	unimplemented!("join, kill and consort");
 }
 
 

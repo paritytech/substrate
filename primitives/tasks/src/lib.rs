@@ -67,13 +67,21 @@ pub use async_externalities::{new_inline_only_externalities, AsyncExternalities,
 
 use sp_std::vec::Vec;
 
-/// Type for `AsyncState`.
-/// TODO rename to stick with doc for all ASyncExt builders.
+/// Differents workers execution mode `AsyncState`, it results
+/// in differents `AsyncExt externality.
 #[derive(Debug)]
 #[repr(u8)]
 pub enum AsyncStateType {
+	/// Externalities do not access state, so we join
 	Stateless = 0,
+
+	/// Externalities access read only the backend unmodified state.
 	ReadLastBlock = 1,
+
+	/// Externalities access read only the backend unmodified state,
+	/// and the change at the time of spawn.
+	/// In this case when joining we return an identifier of the
+	/// state at launch.
 	ReadAtSpawn = 2,
 }
 
@@ -101,7 +109,7 @@ impl AsyncStateType {
 		match *self {
 			AsyncStateType::Stateless => false,
 			AsyncStateType::ReadLastBlock => false,
-			AsyncStateType::ReadAtSpawn => false,
+			AsyncStateType::ReadAtSpawn => true,
 		}
 	}
 }

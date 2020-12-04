@@ -60,6 +60,10 @@ macro_rules! log_error {
 /// If it does, it is safe to assume
 /// that a wasm pointer can be call directly.
 pub trait HostLocalFunction: Copy + 'static {
+	/// Associated boolean constant indicating if
+	/// a struct is being use in the hosting context.
+	///
+	/// It defaults to false.
 	const HOST_LOCAL: bool = false;
 }
 
@@ -81,7 +85,7 @@ pub struct RuntimeInstanceSpawn<HostLocalFunction = ()> {
 	module: Option<Box<dyn WasmModule>>,
 	#[cfg(feature = "std")]
 	instance: Option<AssertUnwindSafe<Box<dyn WasmInstance>>>,
-	tasks: BTreeMap<u64, PendingInlineTask>,
+	tasks: BTreeMap<u64, PendingTask>,
 	counter: u64,
 	_ph: PhantomData<HostLocalFunction>,
 }
@@ -134,28 +138,41 @@ fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U,
 	))
 }
 
-/// TODO
+/// A call for wasm context.
 pub struct WasmTask {
+	/// Pointer to its dispatcher function:
+	/// a wasm function that redirect the calls.
 	pub dispatcher_ref: u32,
+	/// Input data for this task call.
 	pub data: Vec<u8>,
+	/// Pointer to the actual wasm function.
 	pub func: u32,
 }
 
-/// TODO
+/// A native call, it directly access the function
+/// to call.
 pub struct NativeTask {
-	pub data: Vec<u8>,
+	/// Function to call with this task.
 	pub func: fn(Vec<u8>) -> Vec<u8>,
+	/// Input data for this task call.
+	pub data: Vec<u8>,
 }
 
-/// TODO
+/// A worker task, this is a callable function.
 pub enum Task {
+	/// See `NativeTask`.
 	Native(NativeTask),
+	/// See `WasmTask`.
 	Wasm(WasmTask),
 }
 
-/// TODO
-pub struct PendingInlineTask {
+/// A task and its context that is waiting
+/// to be processed or dismissed.
+pub struct PendingTask {
+	/// The actual `Task`.
 	pub task: Task,
+	/// The associated `Externalities`
+	/// this task will get access to.
 	pub ext: AsyncExt,
 }
 
@@ -210,9 +227,16 @@ pub fn spawn_call_ext(
 /// It access the instance lazilly from a module.
 #[cfg(feature = "std")]
 pub trait LazyInstanciate<'a> {
+	/// Calling this function consume the lazy instantiate struct (similar
+	/// semantic as `FnOnce`, and return a pointer to the existing or instantiated
+	/// wasm instance.
+	///
+	/// Can return `None` when no module was defined or an error occurs, this should
+	/// be considered as a panicking situation.
 	fn instantiate(self) -> Option<&'a AssertUnwindSafe<Box<dyn WasmInstance>>>;
 }
 
+/// Lazy instantiaty for wasm instance.
 #[cfg(feature = "std")]
 pub struct InlineInstantiate<'a> {
 	module: &'a Option<Box<dyn WasmModule>>,
@@ -245,7 +269,7 @@ pub fn process_task_inline<
 	handle: u64,
 	runtime_ext: Box<dyn RuntimeSpawn>,
 	#[cfg(feature = "std")]
-	mut instance_ref: I,
+	instance_ref: I,
 ) -> WorkerResult {
 	let async_ext = match new_inline_only_externalities(ext) {
 		Ok(val) => val,
@@ -293,7 +317,7 @@ pub fn process_task<
 	mut async_ext: sp_tasks::AsyncExternalities,
 	handle: u64,
 	#[cfg(feature = "std")]
-	mut instance_ref: I,
+	instance_ref: I,
 ) -> WorkerResult {
 	let need_resolve = async_ext.need_resolve();
 
@@ -367,7 +391,8 @@ pub fn process_task<
 }
 
 impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
-	// TODO
+	/// Instantiate an inline instance spawn with
+	/// support for wasm workers and sp_io calls.
 	#[cfg(feature = "std")]
 	pub fn with_module(module: Box<dyn WasmModule>) -> Self {
 		let mut result = Self::new();
@@ -375,7 +400,10 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 		result
 	}
 
-	/// TODO
+	/// Instantiate an inline instance spawn without
+	/// a wasm module.
+	/// This can be use if we are sure native only will
+	/// be use or if we are not using sp_io calls.
 	pub fn new() -> Self {
 		RuntimeInstanceSpawn {
 			#[cfg(feature = "std")]
@@ -405,7 +433,7 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 		self.counter += 1;
 		let ext = spawn_call_ext(handle, kind, calling_ext);
 
-		self.tasks.insert(handle, PendingInlineTask {task, ext});
+		self.tasks.insert(handle, PendingTask {task, ext});
 
 		handle
 	}
@@ -572,7 +600,7 @@ pub mod hosted_runtime {
 	pub type HostRuntimeInstanceSpawn = RuntimeInstanceSpawnForceSend<HostLocal>;
 
 	/// Hosted runtime variant of sp_io `RuntimeTasks` `set_capacity`.
-	/// 
+	///
 	/// Warning this is actually a noops, if at some point there is
 	/// hosted threads, it will need the boilerpalte code to call
 	/// current externality.
@@ -619,15 +647,9 @@ pub mod hosted_runtime {
 	/// Hosted runtime variant of sp_io `RuntimeTasks` `spawn`.
 	pub fn host_runtime_tasks_dismiss(handle: u64) {
 		sp_externalities::with_externalities(|mut ext| {
-			let ext_unsafe = ext as *mut dyn Externalities;
 			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
 				.expect("Inline runtime extension improperly set.");
-			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
-			// a given id, to make this safer.
-			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-			let result = runtime_spawn.dismiss(handle);
-			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
-			result
+			runtime_spawn.dismiss(handle)
 		}).unwrap()
 	}
 }

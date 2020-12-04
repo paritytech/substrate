@@ -54,32 +54,6 @@ use sp_core::hexdisplay::HexDisplay;
 
 const KIND_WITH_BACKEND: &str = "This async kind is only buildable with a backend.";
 
-/// TODO doc
-pub enum AsyncState {
-	/// Externalities do not access state, so we join
-	None,
-	/// Externalities access read only the backend unmodified state.
-	ReadLastBlock(AsyncExt),
-	/// Externalities access read only the backend unmodified state,
-	/// and the change at the time of spawn.
-	/// In this case when joining we return an identifier of the
-	/// state at launch.
-	ReadAtSpawn(AsyncExt),
-}
-
-impl Default for AsyncState {
-	fn default() -> Self {
-		AsyncState::None
-	}
-}
-
-pub enum AsyncStateResult {
-	/// Result is always valid, for `AsyncState::None`
-	/// and `AsyncState::ReadLastBlock`.
-	StateLess(Vec<u8>),
-	ReadOnly(Vec<u8>, TaskId),
-}
-
 /// Async view on state machine Ext.
 /// It contains its own set of state and rules,
 /// and returns its changes on `join`.

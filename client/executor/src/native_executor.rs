@@ -39,10 +39,10 @@ use sp_core::{
 };
 use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
-use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
-use sp_externalities::{ExternalitiesExt as _, AsyncBackend, WorkerResult};
-use sp_tasks::{new_async_externalities, AsyncExt, AsyncStateType};
-use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task, PendingInlineTask, spawn_call_ext};
+use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule};
+use sp_externalities::{ExternalitiesExt as _, WorkerResult};
+use sp_tasks::{new_async_externalities, AsyncExt};
+use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task, PendingTask as PendingInlineTask, spawn_call_ext};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
