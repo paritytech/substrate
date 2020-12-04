@@ -250,7 +250,7 @@ pub fn write_results(
 		// If a user only specified a directory...
 		if file_path.is_dir() {
 			// Check if there might be multiple instances benchmarked.
-			if all_results.keys().find(|(p, i)| p == pallet && i != instance).is_some() {
+			if all_results.keys().any(|(p, i)| p == pallet && i != instance) {
 				// Create new file: "path/to/pallet_name_instance_name.rs".
 				file_path.push(pallet.clone() + "_" + &instance.to_snake_case());
 			} else {
