@@ -656,7 +656,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// >			between the remote voluntarily closing a substream or a network error
 	/// >			preventing the message from being delivered.
 	///
-	/// The protocol must have been registered with `register_notifications_protocol` or
+	/// The protocol must have been registered with
 	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
 	///
 	pub fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
@@ -717,7 +717,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// return an error. It is however possible for the entire connection to be abruptly closed,
 	/// in which case enqueued notifications will be lost.
 	///
-	/// The protocol must have been registered with `register_notifications_protocol` or
+	/// The protocol must have been registered with
 	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
 	///
 	/// # Usage
@@ -842,28 +842,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			// closed, and we legitimately report this situation as a "ConnectionClosed".
 			Err(_) => Err(RequestFailure::Network(OutboundFailure::ConnectionClosed)),
 		}
-	}
-
-	/// Registers a new notifications protocol.
-	///
-	/// After a protocol has been registered, you can call `write_notifications`.
-	///
-	/// **Important**: This method is a work-around, and you are instead strongly encouraged to
-	/// pass the protocol in the `NetworkConfiguration::notifications_protocols` list instead.
-	/// If you have no other choice but to use this method, you are very strongly encouraged to
-	/// call it very early on. Any connection open will retain the protocols that were registered
-	/// then, and not any new one.
-	///
-	/// Please call `event_stream` before registering a protocol, otherwise you may miss events
-	/// about the protocol that you have registered.
-	// TODO: remove this method after https://github.com/paritytech/substrate/issues/6827
-	pub fn register_notifications_protocol(
-		&self,
-		protocol_name: impl Into<Cow<'static, str>>,
-	) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::RegisterNotifProtocol {
-			protocol_name: protocol_name.into(),
-		});
 	}
 
 	/// You may call this when new transactons are imported by the transaction pool.
@@ -1222,9 +1200,6 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
-	RegisterNotifProtocol {
-		protocol_name: Cow<'static, str>,
-	},
 	DisconnectPeer(PeerId),
 	NewBestBlockImported(B::Hash, NumberFor<B>),
 }
@@ -1359,8 +1334,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						},
 					}
 				},
-				ServiceToWorkerMsg::RegisterNotifProtocol { protocol_name } =>
-					this.network_service.register_notifications_protocol(protocol_name),
 				ServiceToWorkerMsg::DisconnectPeer(who) =>
 					this.network_service.user_protocol_mut().disconnect_peer(&who),
 				ServiceToWorkerMsg::NewBestBlockImported(hash, number) =>

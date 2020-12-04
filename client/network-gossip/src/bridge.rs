@@ -72,11 +72,7 @@ impl<B: BlockT> GossipEngine<B> {
 		validator: Arc<dyn Validator<B>>,
 	) -> Self where B: 'static {
 		let protocol = protocol.into();
-
-		// We grab the event stream before registering the notifications protocol, otherwise we
-		// might miss events.
 		let network_event_stream = network.event_stream();
-		network.register_notifications_protocol(protocol.clone());
 
 		GossipEngine {
 			state_machine: ConsensusGossip::new(validator, protocol.clone()),
@@ -334,8 +330,6 @@ mod tests {
 		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {
 			unimplemented!();
 		}
-
-		fn register_notifications_protocol(&self, _: Cow<'static, str>) {}
 
 		fn announce(&self, _: B::Hash, _: Vec<u8>) {
 			unimplemented!();
