@@ -51,7 +51,7 @@ tracing = "0.1.22"
 tracing-subscriber = "0.2.15"
 
 [features]
-default = [ "std" ]
+default = [ "std", "abort-future" ]
 # This crate does not have `no_std` support, we just require this for tests
 std = [
   "abort-future"

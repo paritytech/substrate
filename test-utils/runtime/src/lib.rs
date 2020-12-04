@@ -1167,10 +1167,11 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 	use sp_externalities::ExternalitiesExt;
 	use sp_std::boxed::Box;
 	use sp_core::traits::{RuntimeSpawn, RuntimeSpawnExt};
+	use sc_executor_common::inline_spawn::hosted_runtime::HostRuntimeInstanceSpawn;
+	#[cfg(not(feature = "std"))]
 	use sc_executor_common::inline_spawn::hosted_runtime::{
-		HostRuntimeInstanceSpawn, host_runtime_tasks_set_capacity,
-		host_runtime_tasks_spawn, host_runtime_tasks_join,
-		host_runtime_tasks_dismiss,
+		host_runtime_tasks_set_capacity, host_runtime_tasks_spawn,
+		host_runtime_tasks_join, host_runtime_tasks_dismiss,
 	};
 
 	let runtime_ext = HostRuntimeInstanceSpawn::new();
@@ -1189,12 +1190,14 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		result
 	}
 
+	#[cfg(not(feature = "std"))]
 	fn host_storage_set(key: &[u8], value: &[u8]) {
 		sp_externalities::with_externalities(|ext|
 			ext.place_storage(key.to_vec(), Some(value.to_vec()))
 		).unwrap();
 	}
 
+	#[cfg(not(feature = "std"))]
 	fn host_storage_get(key: &[u8]) -> Option<Vec<u8>> {
 		sp_externalities::with_externalities(|ext|
 			ext.storage(key).clone()
@@ -1255,7 +1258,7 @@ fn test_tasks() {
 	}
 	let handle = sp_tasks::spawn(do_panic, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
 	// Dismiss don't panic
-	let res = handle.dismiss();
+	handle.dismiss();
 
 	sp_io::storage::start_transaction();
 	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);

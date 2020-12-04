@@ -172,7 +172,7 @@ struct InlineInstantiate<'a, 'b> {
 }
 
 impl<'a, 'b> sc_executor_common::inline_spawn::LazyInstanciate<'a> for InlineInstantiate<'a, 'b> {
-	fn instantiate(mut self) -> Option<&'a AssertUnwindSafe<Box<dyn WasmInstance>>> {
+	fn instantiate(self) -> Option<&'a AssertUnwindSafe<Box<dyn WasmInstance>>> {
 		if self.guard.is_none() {
 			**self.guard = if let Some(instance) = instantiate_inline(self.module) {
 				Some(instance)
@@ -342,7 +342,7 @@ pub struct RuntimeInstanceSpawn {
 }
 
 
-#[cfg(all(unix, feature = "abort-future", feature = "std"))]
+#[cfg(all(feature = "abort-future", feature = "std"))]
 mod dismiss_handle {
 	use super::*;
 	use std::collections::BTreeMap;
@@ -384,9 +384,6 @@ mod dismiss_handle {
 				lock.running.remove(&pthread_id);
 			}
 		}
-		pub(super) fn finished_thread(&self, thread: u64) {
-			self.0.lock().running.remove(&thread);
-		}
 		pub(super) fn dismiss_thread(&self, worker: u64) {
 			let mut lock = self.0.lock();
 			if let Some(handle_id) = lock.workers.remove(&worker) {
@@ -398,7 +395,7 @@ mod dismiss_handle {
 	}
 }
 
-#[cfg(not(all(unix, feature = "abort-future", feature = "std")))]
+#[cfg(not(all(feature = "abort-future", feature = "std")))]
 mod dismiss_handle {
 	use super::*;
 
@@ -410,8 +407,6 @@ mod dismiss_handle {
 			0
 		}
 		pub(super) fn register_new_thread(&self, _handle: Option<RemoteHandle>, _thread_id: u64) {
-		}
-		pub(super) fn finished_thread(&self, _thread: u64) {
 		}
 		pub(super) fn register_worker(&self, _worker: u64, _thread_id: u64) {
 		}
@@ -559,12 +554,12 @@ impl RuntimeInstanceSpawn {
 			"executor-extra-runtime-instance",
 			Box::pin(async move {
 			let task_receiver = task_receiver.clone();
-			while let PendingTask { handle, task, ext, result_sender } = { 
+			let mut instance: Option<AssertUnwindSafe<Box<dyn WasmInstance>>> = None;
+			while let Ok(PendingTask { handle, task, ext, result_sender }) = {
 				let task_receiver_locked = task_receiver.lock();
 				task_receiver_locked.recv()
-			}.expect("Sender dropped, closing all instance.") {
+			} {
 				dismiss_handles.register_worker(handle, thread_id);
-				let mut instance: Option<AssertUnwindSafe<Box<dyn WasmInstance>>> = None;
 				let async_ext = || {
 					let async_ext = match new_async_externalities(scheduler.clone(), ext) {
 						Ok(val) => val,
@@ -593,7 +588,7 @@ impl RuntimeInstanceSpawn {
 					Some(async_ext)
 				};
 
-				let result = if let Some(mut async_ext) = async_ext() {
+				let result = if let Some(async_ext) = async_ext() {
 					let instance_ref = InlineInstantiateRef {
 						module: &*module,
 						instance: &mut instance,
@@ -629,7 +624,7 @@ impl RuntimeInstanceSpawn {
 					return;
 				}
 			}
-
+			log::error!("Sender dropped, closing all instance.");
 			tasks.lock().finished();
 		}));
 		if let Some(thread_handle) = thread_handle {
