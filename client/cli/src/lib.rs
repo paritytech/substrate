@@ -242,34 +242,64 @@ pub fn init_logging_and_telemetry(
 	disable_log_reloading: bool,
 ) -> std::result::Result<sc_telemetry::Telemetries, String> {
 	Ok(if let Some(profiling_targets) = profiling_targets {
-		let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries_with_profiling(
-			pattern,
-			telemetry_external_transport,
-			tracing_receiver,
-			profiling_targets,
-			disable_log_reloading,
-		)?;
+		if disable_log_reloading {
+			let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries_with_profiling(
+				pattern,
+				telemetry_external_transport,
+				tracing_receiver,
+				profiling_targets,
+			)?;
 
-		if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-			return Err(format!(
-				"Registering Substrate tracing subscriber failed: {:}!", e
-			))
+			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+				return Err(format!(
+					"Registering Substrate tracing subscriber failed: {:}!", e
+				))
+			}
+
+			telemetries
+		} else {
+			let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries_with_profiling_and_log_reloading(
+				pattern,
+				telemetry_external_transport,
+				tracing_receiver,
+				profiling_targets,
+			)?;
+
+			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+				return Err(format!(
+					"Registering Substrate tracing subscriber failed: {:}!", e
+				))
+			}
+
+			telemetries
 		}
-
-		telemetries
 	} else {
-		let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries(
-			pattern,
-			telemetry_external_transport,
-			disable_log_reloading,
-		)?;
+		if disable_log_reloading {
+			let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries(
+				pattern,
+				telemetry_external_transport,
+			)?;
 
-		if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-			return Err(format!(
-				"Registering Substrate tracing subscriber failed: {:}!", e
-			))
+			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+				return Err(format!(
+					"Registering Substrate tracing subscriber failed: {:}!", e
+				))
+			}
+
+			telemetries
+		} else {
+			let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries_with_log_reloading(
+				pattern,
+				telemetry_external_transport,
+			)?;
+
+			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+				return Err(format!(
+					"Registering Substrate tracing subscriber failed: {:}!", e
+				))
+			}
+
+			telemetries
 		}
-
-		telemetries
 	})
 }

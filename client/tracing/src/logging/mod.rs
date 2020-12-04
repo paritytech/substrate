@@ -49,10 +49,9 @@ macro_rules! disable_log_reloading {
 /// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects.
 ///
 /// When running in a browser, the `telemetry_external_transport` should be provided.
-pub fn get_default_subscriber_and_telemetries(
+pub fn get_default_subscriber_and_telemetries_with_log_reloading(
 	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
-	disable_log_reloading: bool,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
@@ -60,19 +59,29 @@ pub fn get_default_subscriber_and_telemetries(
 	),
 	String,
 > {
-	if disable_log_reloading {
-		get_default_subscriber_and_telemetries_internal(
-			parse_directives(pattern),
-			telemetry_external_transport,
-			Box::new(|builder| disable_log_reloading!(builder)),
-		)
-	} else {
-		get_default_subscriber_and_telemetries_internal(
-			parse_directives(pattern),
-			telemetry_external_transport,
-			Box::new(|builder| builder),
-		)
-	}
+	get_default_subscriber_and_telemetries_internal(
+		parse_directives(pattern),
+		telemetry_external_transport,
+		|builder| disable_log_reloading!(builder),
+	)
+}
+
+/// TODO
+pub fn get_default_subscriber_and_telemetries(
+	pattern: &str,
+	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
+) -> std::result::Result<
+	(
+		impl Subscriber + for<'a> LookupSpan<'a>,
+		sc_telemetry::Telemetries,
+	),
+	String,
+> {
+	get_default_subscriber_and_telemetries_internal(
+		parse_directives(pattern),
+		telemetry_external_transport,
+		|builder| builder,
+	)
 }
 
 /// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects with
@@ -84,7 +93,6 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 	tracing_receiver: crate::TracingReceiver,
 	profiling_targets: &str,
-	disable_log_reloading: bool,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
@@ -97,7 +105,35 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 			.into_iter()
 			.chain(parse_directives(profiling_targets).into_iter()),
 		telemetry_external_transport,
-		Box::new(|builder| builder),
+		|builder| builder,
+	)?;
+	let profiling = crate::ProfilingLayer::new(tracing_receiver, profiling_targets);
+
+	Ok((subscriber.with(profiling), telemetries))
+}
+
+/// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects with
+/// profiling enabled.
+///
+/// When running in a browser, the `telemetry_external_transport` should be provided.
+pub fn get_default_subscriber_and_telemetries_with_profiling_and_log_reloading(
+	pattern: &str,
+	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
+	tracing_receiver: crate::TracingReceiver,
+	profiling_targets: &str,
+) -> std::result::Result<
+	(
+		impl Subscriber + for<'a> LookupSpan<'a>,
+		sc_telemetry::Telemetries,
+	),
+	String,
+> {
+	let (subscriber, telemetries) = get_default_subscriber_and_telemetries_internal(
+		parse_directives(pattern)
+			.into_iter()
+			.chain(parse_directives(profiling_targets).into_iter()),
+		telemetry_external_transport,
+		|builder| disable_log_reloading!(builder),
 	)?;
 	let profiling = crate::ProfilingLayer::new(tracing_receiver, profiling_targets);
 
@@ -109,7 +145,7 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 fn get_default_subscriber_and_telemetries_internal<N, E, F, W>(
 	extra_directives: impl IntoIterator<Item = Directive>,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
-	builder_hook: Box<dyn Fn(SubscriberBuilder<format::DefaultFields, EventFormat<ChronoLocal>, EnvFilter, fn() -> std::io::Stderr>) -> SubscriberBuilder<N, E, F, W>>,
+	builder_hook: impl Fn(SubscriberBuilder<format::DefaultFields, EventFormat<ChronoLocal>, EnvFilter, fn() -> std::io::Stderr>) -> SubscriberBuilder<N, E, F, W>,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
