@@ -88,8 +88,8 @@ type Voting<T: V2ToV3> = StorageMap<__Voting, Twox64Concat, T::AccountId, Voter<
 ///
 /// ### Warning
 ///
-/// This code will **ONLY** check that the storage version is less than 2_0_0. Further check
-/// might be needed at the user runtime.
+/// This code will **ONLY** check that the storage version is less than or equal to 2_0_0.
+/// Further check might be needed at the user runtime.
 ///
 /// Be aware that this migration is intended to be used only for the mentioned versions. Use
 /// with care and run at your own risk.
