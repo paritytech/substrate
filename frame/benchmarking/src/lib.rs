@@ -1056,6 +1056,7 @@ macro_rules! impl_benchmark_test {
 macro_rules! add_benchmark {
 	( $params:ident, $batches:ident, $name:ident, $( $location:tt )* ) => (
 		let name_string = stringify!($name).as_bytes();
+		let instance_string = stringify!($( $location )* ).as_bytes();
 		let (config, whitelist) = $params;
 		let $crate::BenchmarkConfig {
 			pallet,
@@ -1071,6 +1072,9 @@ macro_rules! add_benchmark {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
 				for benchmark in $( $location )*::benchmarks(*extra).into_iter() {
 					$batches.push($crate::BenchmarkBatch {
+						pallet: name_string.to_vec(),
+						instance: instance_string.to_vec(),
+						benchmark: benchmark.to_vec(),
 						results: $( $location )*::run_benchmark(
 							benchmark,
 							&lowest_range_values[..],
@@ -1080,12 +1084,13 @@ macro_rules! add_benchmark {
 							whitelist,
 							*verify,
 						)?,
-						pallet: name_string.to_vec(),
-						benchmark: benchmark.to_vec(),
 					});
 				}
 			} else {
 				$batches.push($crate::BenchmarkBatch {
+					pallet: name_string.to_vec(),
+					instance: instance_string.to_vec(),
+					benchmark: benchmark.clone(),
 					results: $( $location )*::run_benchmark(
 						&benchmark[..],
 						&lowest_range_values[..],
@@ -1095,8 +1100,6 @@ macro_rules! add_benchmark {
 						whitelist,
 						*verify,
 					)?,
-					pallet: name_string.to_vec(),
-					benchmark: benchmark.clone(),
 				});
 			}
 		}
