@@ -358,7 +358,7 @@ impl Telemetries {
 				}
 
 				// `send_message` returns an error if we're not connected, which we silently ignore.
-				let _ = node.send_message(message.clone()); // TODO probably dont need to clone
+				let res = node.send_message(message.clone()); // TODO probably dont need to clone
 			}
 
 			if before.elapsed() > Duration::from_millis(200) {

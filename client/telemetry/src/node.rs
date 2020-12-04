@@ -132,8 +132,10 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 				pending.push_back(payload.into());
 				Ok(())
 			} else {
+				/*
 				warn!(target: "telemetry", "⚠️  Rejected log entry because queue is full for {:?}",
 					self.addr);
+				*/
 				Err(())
 			}
 		} else {
@@ -241,6 +243,7 @@ where TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
 		cx: &mut Context,
 		my_addr: &Multiaddr,
 	) -> Poll<Result<futures::never::Never, ConnectionError<TSinkErr>>> {
+		let nothing_pending = self.pending.len();
 
 		while let Some(item) = self.pending.pop_front() {
 			if let Poll::Ready(result) = Sink::poll_ready(Pin::new(&mut self.sink), cx) {
@@ -249,9 +252,12 @@ where TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
 				}
 
 				let item_len = item.len();
+				//log::error!(target: "telemetry", "##### sending");
 				if let Err(err) = Sink::start_send(Pin::new(&mut self.sink), item) {
+					//log::error!(target: "telemetry", "##### fail");
 					return Poll::Ready(Err(ConnectionError::Sink(err)))
 				}
+				//log::error!(target: "telemetry", "##### success");
 				trace!(
 					target: "telemetry", "Successfully sent {:?} bytes message to {}",
 					item_len, my_addr
@@ -272,23 +278,37 @@ where TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
 				Poll::Pending => {
 					if self.timeout.is_none() {
 						self.timeout = Some(Delay::new(Duration::from_secs(10)));
+						log::error!(target: "telemetry", "##### reset timeout");
+					} else {
+						// TODO browser always go here
+						//log::error!(target: "telemetry", "##### kept timeout");
 					}
 				},
 				Poll::Ready(Err(err)) => {
 					self.timeout = None;
+					log::error!(target: "telemetry", "##### remove timeout");
 					return Poll::Ready(Err(ConnectionError::Sink(err)))
 				},
 				Poll::Ready(Ok(())) => {
+					log::error!(target: "telemetry", "##### remove timeout");
+					// TODO native always go there
 					self.timeout = None;
 					self.need_flush = false;
 				},
 			}
 		}
 
+		if nothing_pending == 0 {
+			log::error!(target: "telemetry", "##### reset timeout");
+			self.timeout = None;
+		}
+		//log::error!(target: "telemetry", "##### no reset timeout: {}", nothing_pending);
+
 		if let Some(timeout) = self.timeout.as_mut() {
 			match Future::poll(Pin::new(timeout), cx) {
 				Poll::Pending => {},
 				Poll::Ready(()) => {
+					log::error!(target: "telemetry", "##### timeout!");
 					self.timeout = None;
 					return Poll::Ready(Err(ConnectionError::Timeout))
 				}
