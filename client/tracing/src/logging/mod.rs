@@ -46,26 +46,6 @@ macro_rules! disable_log_reloading {
 	}};
 }
 
-/// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects.
-///
-/// When running in a browser, the `telemetry_external_transport` should be provided.
-pub fn get_default_subscriber_and_telemetries_with_log_reloading(
-	pattern: &str,
-	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
-) -> std::result::Result<
-	(
-		impl Subscriber + for<'a> LookupSpan<'a>,
-		sc_telemetry::Telemetries,
-	),
-	String,
-> {
-	get_default_subscriber_and_telemetries_internal(
-		parse_directives(pattern),
-		telemetry_external_transport,
-		|builder| disable_log_reloading!(builder),
-	)
-}
-
 /// TODO
 pub fn get_default_subscriber_and_telemetries(
 	pattern: &str,
@@ -81,6 +61,27 @@ pub fn get_default_subscriber_and_telemetries(
 		parse_directives(pattern),
 		telemetry_external_transport,
 		|builder| builder,
+	)
+}
+
+/// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects.
+///
+/// When running in a browser, the `telemetry_external_transport` should be provided.
+#[cfg(not(target_os = "unknown"))]
+pub fn get_default_subscriber_and_telemetries_with_log_reloading(
+	pattern: &str,
+	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
+) -> std::result::Result<
+	(
+		impl Subscriber + for<'a> LookupSpan<'a>,
+		sc_telemetry::Telemetries,
+	),
+	String,
+> {
+	get_default_subscriber_and_telemetries_internal(
+		parse_directives(pattern),
+		telemetry_external_transport,
+		|builder| disable_log_reloading!(builder),
 	)
 }
 
@@ -116,6 +117,7 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 /// profiling enabled.
 ///
 /// When running in a browser, the `telemetry_external_transport` should be provided.
+#[cfg(not(target_os = "unknown"))]
 pub fn get_default_subscriber_and_telemetries_with_profiling_and_log_reloading(
 	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
@@ -246,12 +248,13 @@ where
 	#[cfg(target_os = "unknown")]
 	let builder = builder
 		.with_writer(
-			std::io::sink as _,
+			std::io::sink,
 		);
 
 	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.event_format(event_format);
 
+	#[cfg(not(target_os = "unknown"))]
 	let builder = builder_hook(builder);
 
 	let subscriber = builder.finish().with(PrefixLayer).with(telemetry_layer);

@@ -56,5 +56,7 @@ async fn start_inner(chain_spec: Option<String>, log_directives: String) -> Resu
 			.map(|(components, rpc_handlers, _, _, _, _)| (components, rpc_handlers))
 			.map_err(|e| format!("{:?}", e))?;
 
+	task_manager.spawn_handle().spawn("telemetry", telemetries.run());
+
 	Ok(browser_utils::start_client(task_manager, rpc_handlers))
 }
