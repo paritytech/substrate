@@ -27,7 +27,6 @@ use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 };
 use sp_runtime::RuntimeDebug;
-use sp_core::traits::WorkerResult;
 
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;

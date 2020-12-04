@@ -749,7 +749,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 }
 
 impl RuntimeInstanceSpawn {
-	pub fn new(
+	/// Instantiate a new `RuntimeInstanceSpawn`.
+	/// 
+	/// Usualy one should rather be using `register_on_externalities`.
+	fn new(
 		module: Option<Arc<dyn WasmModule>>,
 		scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 		capacity: usize,
@@ -769,6 +772,12 @@ impl RuntimeInstanceSpawn {
 		}
 	}
 
+	/// Allows to register an `RunstimeSpawn` without a
+	/// wasm module.
+	/// 
+	/// In most case `register_on_externalities` should be use,
+	/// this function is mostly for testing purpose (when
+	/// it is guaranteed to run in native mode).
 	pub fn with_externalities_and_module(
 		module: Option<Arc<dyn WasmModule>>,
 		mut ext: &mut dyn Externalities,

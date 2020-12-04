@@ -84,13 +84,12 @@ use sc_executor::RuntimeInstanceSpawn;
 use sp_core::Pair;
 use sp_core::traits::RuntimeSpawnExt;
 use sp_core::offchain::{
-	testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
-	OffchainExt, TransactionPoolExt,
+	testing::TestTransactionPoolExt, TransactionPoolExt,
 };
 
 fn test_ext() -> sp_io::TestExternalities {
 	let mut ext = sp_io::TestExternalities::default();
-	let (pool, pool_state) = TestTransactionPoolExt::new();
+	let (pool, _pool_state) = TestTransactionPoolExt::new();
 
 	ext.register_extension(TransactionPoolExt::new(pool));
 	let runtime_spawn = RuntimeInstanceSpawn::with_externalities_and_module(None, &mut ext.ext())

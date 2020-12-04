@@ -59,13 +59,17 @@ macro_rules! log_error {
 /// function without runtime boundaries.
 /// If it does, it is safe to assume
 /// that a wasm pointer can be call directly.
-pub trait HostLocalFunction {
+pub trait HostLocalFunction: Copy + 'static {
 	const HOST_LOCAL: bool = false;
 }
 
 impl HostLocalFunction for () { }
 
-struct HostLocal;
+/// `HostLocalFunction` implementation that
+/// indicate we are using hosted runtime.
+#[derive(Clone, Copy)]
+pub struct HostLocal;
+
 impl HostLocalFunction for HostLocal {
 	const HOST_LOCAL: bool = true;
 }
@@ -502,15 +506,16 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 	}
 }
 
-
-/// Inline instance spawn, to use with environment that do not use threads
-/// and allows running an unsafe `Send` declaration.
+/// Inline instance spawn, this run all workers lazilly when `join` is called.
+///
+/// Warning to use only with environment that do not use threads (mainly wasm)
+/// and thus allows the unsafe `Send` declaration.
 #[derive(Clone)]
-pub struct RuntimeInstanceSpawnForceSend(Rc<RefCell<RuntimeInstanceSpawn<HostLocal>>>);
+pub struct RuntimeInstanceSpawnForceSend<HostLocal>(Rc<RefCell<RuntimeInstanceSpawn<HostLocal>>>);
 
-unsafe impl Send for RuntimeInstanceSpawnForceSend { }
+unsafe impl<HostLocal> Send for RuntimeInstanceSpawnForceSend<HostLocal> { }
 
-impl RuntimeSpawn for RuntimeInstanceSpawnForceSend {
+impl<HostLocal: HostLocalFunction> RuntimeSpawn for RuntimeInstanceSpawnForceSend<HostLocal> {
 	fn spawn_call_native(
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
@@ -545,13 +550,84 @@ impl RuntimeSpawn for RuntimeInstanceSpawnForceSend {
 	}
 }
 
-impl RuntimeInstanceSpawnForceSend {
-	// TODO
+impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawnForceSend<HostLocal> {
+	/// Instantial a new inline `RuntimeSpawn`.
+	///
+	/// Warning this is implementing `Send` when it should not and
+	/// should never be use in environment supporting threads.
 	pub fn new() -> Self {
 		RuntimeInstanceSpawnForceSend(Rc::new(RefCell::new(RuntimeInstanceSpawn::new())))
 	}
 }
 
-/// Alias to an inline implementation that can be use when runtime interface
-/// is skipped.
-pub type HostRuntimeInstanceSpawn = RuntimeInstanceSpawnForceSend;
+/// Variant to use when the calls do not use the runtime interface.
+/// For instance doing a proof verification in wasm.
+pub mod hosted_runtime {
+	use super::*;
+	use sp_core::traits::RuntimeSpawnExt;
+	use sp_externalities::ExternalitiesExt;
+
+	/// Alias to an inline implementation that can be use when runtime interface
+	/// is skipped.
+	pub type HostRuntimeInstanceSpawn = RuntimeInstanceSpawnForceSend<HostLocal>;
+
+	/// Hosted runtime variant of sp_io `RuntimeTasks` `set_capacity`.
+	/// 
+	/// Warning this is actually a noops, if at some point there is
+	/// hosted threads, it will need the boilerpalte code to call
+	/// current externality.
+	pub fn host_runtime_tasks_set_capacity(_capacity: u32) {
+		// Ignore (this implementation only run inline, so no
+		// need to call extension).
+	}
+
+	/// Hosted runtime variant of sp_io `RuntimeTasks` `spawn`.
+	pub fn host_runtime_tasks_spawn(
+		dispatcher_ref: u32,
+		entry: u32,
+		payload: Vec<u8>,
+		kind: u8,
+	) -> u64 {
+		sp_externalities::with_externalities(|mut ext| {
+			let ext_unsafe = ext as *mut dyn Externalities;
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Inline runtime extension improperly set.");
+			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+			// a given id, to make this safer.
+			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+			let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, kind, ext_unsafe);
+			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
+			result
+		}).unwrap()
+	}
+
+	/// Hosted runtime variant of sp_io `RuntimeTasks` `spawn`.
+	pub fn host_runtime_tasks_join(handle: u64) -> Option<Vec<u8>> {
+		sp_externalities::with_externalities(|mut ext| {
+			let ext_unsafe = ext as *mut dyn Externalities;
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Inline runtime extension improperly set.");
+			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+			// a given id, to make this safer.
+			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+			let result = runtime_spawn.join(handle, ext_unsafe);
+			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
+			result
+		}).unwrap()
+	}
+
+	/// Hosted runtime variant of sp_io `RuntimeTasks` `spawn`.
+	pub fn host_runtime_tasks_dismiss(handle: u64) {
+		sp_externalities::with_externalities(|mut ext| {
+			let ext_unsafe = ext as *mut dyn Externalities;
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Inline runtime extension improperly set.");
+			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+			// a given id, to make this safer.
+			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+			let result = runtime_spawn.dismiss(handle);
+			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
+			result
+		}).unwrap()
+	}
+}
