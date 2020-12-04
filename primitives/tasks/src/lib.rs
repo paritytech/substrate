@@ -23,13 +23,13 @@
 //! NOTE: When using in actual runtime, make sure you don't produce unbounded parallelism.
 //! So this is bad example to use it:
 //! ```rust
-//!    use sp_tasks::AsyncStateType;
+//!    use sp_tasks::WorkerType;
 //!    fn my_parallel_computator(data: Vec<u8>) -> Vec<u8> {
 //!        unimplemented!()
 //!    }
 //!    fn test(dynamic_variable: i32) {
 //!       for _ in 0..dynamic_variable {
-//!					sp_tasks::spawn(my_parallel_computator, vec![], AsyncStateType::Stateless);
+//!					sp_tasks::spawn(my_parallel_computator, vec![], WorkerType::Stateless);
 //!				}
 //!    }
 //! ```
@@ -37,7 +37,7 @@
 //! While this is a good example:
 //! ```rust
 //!    use codec::Encode;
-//!    use sp_tasks::AsyncStateType;
+//!    use sp_tasks::WorkerType;
 //!    static STATIC_VARIABLE: i32 = 4;
 //!
 //!    fn my_parallel_computator(data: Vec<u8>) -> Vec<u8> {
@@ -48,7 +48,7 @@
 //!        let parallel_tasks = (0..STATIC_VARIABLE).map(|idx| sp_tasks::spawn(
 //!            my_parallel_computator,
 //!            computation_payload.chunks(10).nth(idx as _).encode(),
-//!            AsyncStateType::Stateless,
+//!            WorkerType::Stateless,
 //!        ));
 //!    }
 //! ```
@@ -71,7 +71,7 @@ use sp_std::vec::Vec;
 /// in differents `AsyncExt externality.
 #[derive(Debug)]
 #[repr(u8)]
-pub enum AsyncStateType {
+pub enum WorkerType {
 	/// Externalities do not access state, so we join
 	Stateless = 0,
 
@@ -85,19 +85,19 @@ pub enum AsyncStateType {
 	ReadAtSpawn = 2,
 }
 
-impl Default for AsyncStateType {
+impl Default for WorkerType {
 	fn default() -> Self {
-		AsyncStateType::Stateless
+		WorkerType::Stateless
 	}
 }
 
-impl AsyncStateType {
+impl WorkerType {
 	/// Similar purpose as `TryFrom<u8>`.
-	pub fn from_u8(kind: u8) -> Option<AsyncStateType> {
+	pub fn from_u8(kind: u8) -> Option<WorkerType> {
 		Some(match kind {
-			0 => AsyncStateType::Stateless,
-			1 => AsyncStateType::ReadLastBlock,
-			2 => AsyncStateType::ReadAtSpawn,
+			0 => WorkerType::Stateless,
+			1 => WorkerType::ReadLastBlock,
+			2 => WorkerType::ReadAtSpawn,
 			_ => return None,
 		})
 	}
@@ -107,9 +107,9 @@ impl AsyncStateType {
 	/// parent externalities.
 	pub fn need_resolve(&self) -> bool {
 		match *self {
-			AsyncStateType::Stateless => false,
-			AsyncStateType::ReadLastBlock => false,
-			AsyncStateType::ReadAtSpawn => true,
+			WorkerType::Stateless => false,
+			WorkerType::ReadLastBlock => false,
+			WorkerType::ReadAtSpawn => true,
 		}
 	}
 }
@@ -150,7 +150,7 @@ mod inner {
 	use std::collections::HashMap;
 	use sp_externalities::{Externalities, ExternalitiesExt as _};
 	use sp_core::traits::RuntimeSpawnExt;
-	use crate::{AsyncExt, AsyncStateType};
+	use crate::{AsyncExt, WorkerType};
 	use super::DataJoinHandle;
 
 	/// Spawn new runtime task (native).
@@ -158,7 +158,7 @@ mod inner {
 	pub fn spawn(
 		entry_point: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: AsyncStateType,
+		kind: WorkerType,
 	) -> DataJoinHandle {
 		let handle = sp_externalities::with_externalities(|mut ext|{
 			let ext_unsafe = ext as *mut dyn Externalities;
@@ -185,7 +185,7 @@ mod inner {
 mod inner {
 	use core::mem;
 	use sp_std::prelude::*;
-	use crate::AsyncStateType;
+	use crate::WorkerType;
 	use super::DataJoinHandle;
 
 	/// Dispatch wrapper for wasm blob.
@@ -212,7 +212,7 @@ mod inner {
 	pub fn spawn(
 		entry_point: fn(Vec<u8>) -> Vec<u8>,
 		payload: Vec<u8>,
-		kind: AsyncStateType,
+		kind: WorkerType,
 	) -> DataJoinHandle {
 		let func_ptr: usize = unsafe { mem::transmute(entry_point) };
 

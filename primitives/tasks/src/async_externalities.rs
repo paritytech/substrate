@@ -22,17 +22,17 @@
 //!
 //! Allowed ext function, cummulative (kind bellow got access to parent capability):
 //!
-//! - AsyncStateType::Stateless: None
+//! - WorkerType::Stateless: None
 //!		- extension (only thread extension if not inline) so purely technical
 //!		(also true for all other kind).
 //!		- resolve_worker_result
-//! - AsyncStateType::ReadLastBlock
+//! - WorkerType::ReadLastBlock
 //!		- storage
 //!		- child_storage
 //!		- next_storage_key
 //!		- next_child_storage_key
 //!		- get_past_async_backend (warning this is only for this type, not inherited)
-//! - AsyncStateType::ReadAtSpawn
+//! - WorkerType::ReadAtSpawn
 //!		- get_async_backend
 // TODO consider moving part of it to state machine (removing the current
 // dep on state machine).
@@ -47,7 +47,7 @@ use sp_core::{
 	traits::{SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
 use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend, WorkerResult};
-use crate::AsyncStateType;
+use crate::WorkerType;
 use sp_state_machine::ext_tools::{EXT_NOT_ALLOWED_TO_FAIL, guard};
 use sp_state_machine::trace;
 use sp_core::hexdisplay::HexDisplay;
@@ -60,7 +60,7 @@ const KIND_WITH_BACKEND: &str = "This async kind is only buildable with a backen
 /// TODO consider moving in state-machine crate
 /// and have just `dyn Ext + Send + Sync`
 pub struct AsyncExt {
-	kind: AsyncStateType,
+	kind: WorkerType,
 	// Actually unused at this point, is for write variant.
 	// TODO consider Optional, also this is copy, this could synch.
 	overlay: sp_state_machine::OverlayedChanges,
@@ -83,7 +83,7 @@ impl AsyncExt {
 	/// TODO make panic in thread panic the master threaod too !!!
 	pub fn stateless_ext() -> Self {
 		AsyncExt {
-			kind: AsyncStateType::Stateless,
+			kind: WorkerType::Stateless,
 			overlay: Default::default(),
 			spawn_id: None,
 			backend: None,
@@ -97,7 +97,7 @@ impl AsyncExt {
 	/// assert the thread did join.
 	pub fn previous_block_read(backend: Box<dyn AsyncBackend>) -> Self {
 		AsyncExt {
-			kind: AsyncStateType::ReadLastBlock,
+			kind: WorkerType::ReadLastBlock,
 			overlay: Default::default(),
 			spawn_id: None,
 			backend: Some(backend),
@@ -121,7 +121,7 @@ impl AsyncExt {
 		spawn_id: TaskId,
 	) -> Self {
 		AsyncExt {
-			kind: AsyncStateType::ReadAtSpawn,
+			kind: WorkerType::ReadAtSpawn,
 			overlay: Default::default(),
 			spawn_id: Some(spawn_id),
 			backend: Some(backend),
@@ -202,11 +202,11 @@ type StorageValue = Vec<u8>;
 impl AsyncExternalities {
 	fn guard_stateless(&self, panic: &'static str) {
 		match self.state.kind {
-			AsyncStateType::Stateless => {
+			WorkerType::Stateless => {
 				panic!(panic)
 			},
-			AsyncStateType::ReadLastBlock
-			| AsyncStateType::ReadAtSpawn => (),
+			WorkerType::ReadLastBlock
+			| WorkerType::ReadAtSpawn => (),
 		}
 	}
 
@@ -415,11 +415,11 @@ impl Externalities for AsyncExternalities {
 	// TODO change api.
 	fn get_past_async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
 		match self.state.kind {
-			AsyncStateType::Stateless
-			| AsyncStateType::ReadAtSpawn => {
+			WorkerType::Stateless
+			| WorkerType::ReadAtSpawn => {
 				panic!("Spawning a ReadLastBlock worker is only possible from a ReadLastBlock worker");
 			},
-			AsyncStateType::ReadLastBlock => (),
+			WorkerType::ReadLastBlock => (),
 		}
 
 		self.state.backend.as_ref().expect(KIND_WITH_BACKEND).async_backend()
@@ -427,11 +427,11 @@ impl Externalities for AsyncExternalities {
 
 	fn get_async_backend(&mut self, marker: TaskId) -> Option<Box<dyn AsyncBackend>> {
 		match self.state.kind {
-			AsyncStateType::Stateless
-			| AsyncStateType::ReadLastBlock => {
+			WorkerType::Stateless
+			| WorkerType::ReadLastBlock => {
 				panic!("Spawning a ReadAtSpawn worker is only possible from a ReadAtSpawn worker");
 			},
-			AsyncStateType::ReadAtSpawn => (),
+			WorkerType::ReadAtSpawn => (),
 		}
 
 		self.state.overlay.set_marker(marker);
@@ -447,11 +447,11 @@ impl Externalities for AsyncExternalities {
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		/* actually overlay with no stored info is the same
 		match self.state.kind {
-			AsyncStateType::ReadLastBlock
-			| AsyncStateType::Stateless => {
+			WorkerType::ReadLastBlock
+			| WorkerType::Stateless => {
 				state_update.read_resolve()
 			},
-			AsyncStateType::ReadAtSpawn => {
+			WorkerType::ReadAtSpawn => {
 		*/
 		self.state.overlay.resolve_worker_result(state_update)
 //			},

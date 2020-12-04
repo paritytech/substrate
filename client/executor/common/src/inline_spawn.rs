@@ -22,7 +22,7 @@
 //! As a minimal implementation it can run in no_std (with alloc), but do not
 //! actually spawn threads, all execution is done inline in the parent thread.
 
-use sp_tasks::{new_inline_only_externalities, AsyncExt, AsyncStateType};
+use sp_tasks::{new_inline_only_externalities, AsyncExt, WorkerType};
 use sp_core::traits::RuntimeSpawn;
 use sp_externalities::{WorkerResult, Externalities};
 use sp_std::rc::Rc;
@@ -204,18 +204,18 @@ pub fn spawn_call_ext(
 	kind: u8,
 	calling_ext: &mut dyn Externalities,
 ) -> AsyncExt {
-	match AsyncStateType::from_u8(kind)
+	match WorkerType::from_u8(kind)
 		// TODO better message
 		.expect("Only from existing kind") {
-		AsyncStateType::Stateless => {
+		WorkerType::Stateless => {
 			AsyncExt::stateless_ext()
 		},
-		AsyncStateType::ReadLastBlock => {
+		WorkerType::ReadLastBlock => {
 			let backend = calling_ext.get_past_async_backend()
 				.expect("Unsupported spawn kind.");
 			AsyncExt::previous_block_read(backend)
 		},
-		AsyncStateType::ReadAtSpawn => {
+		WorkerType::ReadAtSpawn => {
 			let backend = calling_ext.get_async_backend(handle)
 				.expect("Unsupported spawn kind.");
 			AsyncExt::state_at_spawn_read(backend, handle)

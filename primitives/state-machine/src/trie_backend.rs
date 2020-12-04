@@ -259,7 +259,6 @@ impl<S, H> Backend<H> for TrieBackend<S, H> where
 
 	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
 		use crate::backend::AsyncBackendAdapter;
-		use sp_externalities::AsyncBackend;
 
 		//	type AsyncBackend = TrieBackend<S::AsyncStorage, H>;
 		self.essence.async_backend().map(|essence| {

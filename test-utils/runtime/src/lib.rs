@@ -1224,7 +1224,7 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		assert!(sp_io::storage::get(b"value3").is_some());
 		assert!(sp_io::storage::get(b"xyz").is_none());
 		sp_tasks::set_capacity(4);
-		let handle = sp_tasks::spawn(worker_test, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
+		let handle = sp_tasks::spawn(worker_test, Vec::new(), sp_tasks::WorkerType::ReadAtSpawn);
 		sp_io::storage::set(b"xyz", b"test");
 		assert!(sp_io::storage::get(b"xyz").is_some());
 		let res = handle.join().expect("expected result for task");
@@ -1241,29 +1241,29 @@ fn test_tasks() {
 		result.push(42);
 		result
 	}
-	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
+	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::WorkerType::ReadAtSpawn);
 	let res = handle.join().expect("expected result for task");
 	assert!(res.get(0) == Some(&42));
 
 	fn tokill(_inp: Vec<u8>) -> Vec<u8> {
 		loop { }
 	}
-	let handle = sp_tasks::spawn(tokill, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
+	let handle = sp_tasks::spawn(tokill, Vec::new(), sp_tasks::WorkerType::ReadAtSpawn);
 	handle.dismiss();
 	fn do_panic(_inp: Vec<u8>) -> Vec<u8> {
 		panic!("Expected test panic.");
 	}
-	let handle = sp_tasks::spawn(do_panic, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
+	let handle = sp_tasks::spawn(do_panic, Vec::new(), sp_tasks::WorkerType::ReadAtSpawn);
 	// Dismiss don't panic
 	handle.dismiss();
 
 	sp_io::storage::start_transaction();
-	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::AsyncStateType::ReadAtSpawn);
+	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::WorkerType::ReadAtSpawn);
 	// invalidate state for handle
 	sp_io::storage::rollback_transaction();
 	assert!(handle.join().is_none());
 	sp_io::storage::start_transaction();
-	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::AsyncStateType::ReadLastBlock);
+	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::WorkerType::ReadLastBlock);
 	sp_io::storage::rollback_transaction();
 	// state stay correct for last block
 	assert!(handle.join().is_some());
