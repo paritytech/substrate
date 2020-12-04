@@ -373,6 +373,7 @@ mod test {
 
 		return BenchmarkBatch {
 			pallet: [pallet.to_vec(), b"_pallet".to_vec()].concat(),
+			instance: b"instance".to_vec(),
 			benchmark: [benchmark.to_vec(), b"_benchmark".to_vec()].concat(),
 			results,
 		}
@@ -413,15 +414,21 @@ mod test {
 			test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
 		]).unwrap();
 
-		let first_benchmark = &mapped_results.get("first_pallet").unwrap()[0];
+		let first_benchmark = &mapped_results.get(
+			&("first_pallet".to_string(), "instance".to_string())
+		).unwrap()[0];
 		assert_eq!(first_benchmark.name, "first_benchmark");
 		check_data(first_benchmark, "a", 10, 3);
 
-		let second_benchmark = &mapped_results.get("first_pallet").unwrap()[1];
+		let second_benchmark = &mapped_results.get(
+			&("first_pallet".to_string(), "instance".to_string())
+		).unwrap()[1];
 		assert_eq!(second_benchmark.name, "second_benchmark");
 		check_data(second_benchmark, "b", 9, 2);
 
-		let second_pallet_benchmark = &mapped_results.get("second_pallet").unwrap()[0];
+		let second_pallet_benchmark = &mapped_results.get(
+			&("second_pallet".to_string(), "instance".to_string())
+		).unwrap()[0];
 		assert_eq!(second_pallet_benchmark.name, "first_benchmark");
 		check_data(second_pallet_benchmark, "c", 3, 4);
 	}
