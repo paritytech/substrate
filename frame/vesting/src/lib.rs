@@ -54,7 +54,7 @@ use sp_std::prelude::*;
 use sp_std::fmt::Debug;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
-	StaticLookup, Zero, AtLeast32BitUnsigned, MaybeSerializeDeserialize, Convert
+	Saturating, StaticLookup, Zero, AtLeast32BitUnsigned, MaybeSerializeDeserialize, Convert
 }};
 use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
 use frame_support::traits::{
@@ -141,12 +141,21 @@ decl_storage! {
 			for &(ref who, begin, length, liquid) in config.vesting.iter() {
 				let balance = T::Currency::free_balance(who);
 				assert!(!balance.is_zero(), "Currencies must be init'd before vesting");
-				// Total genesis `balance` minus `liquid` equals funds locked for vesting
-				let locked = balance.saturating_sub(liquid);
+
+				// Compute unlocked balance as free balance minus sum of all locked balances of
+				// existing vesting schedules
+				let mut vesting_schedules = Vesting::<T>::get(who);
+				let locked_so_far: BalanceOf<T> = vesting_schedules.iter().fold(Zero::zero(),
+					| sum, vesting | sum.saturating_add(vesting.locked));
+				let unlocked_balance = balance.saturating_sub(locked_so_far);
+
+				assert!(unlocked_balance > liquid,
+					"Must have more balance not yet locked by other vesting schedules than requested liquidity");
+				let locked = unlocked_balance.saturating_sub(liquid);
+
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
 
-				let mut vesting_schedules = Vesting::<T>::get(who);
 				vesting_schedules.push(VestingInfo {
 					locked: locked,
 					per_block: per_block,
@@ -154,8 +163,10 @@ decl_storage! {
 				});
 				Vesting::<T>::insert(who, vesting_schedules);
 
+				let new_balance_to_lock = locked_so_far.saturating_add(locked);
+
 				let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
-				T::Currency::set_lock(VESTING_ID, who, locked, reasons);
+				T::Currency::set_lock(VESTING_ID, who, new_balance_to_lock, reasons);
 			}
 		})
 	}
@@ -178,7 +189,7 @@ decl_error! {
 		/// The account given is not vesting.
 		NotVesting,
 		/// An existing vesting schedule already exists for this account that cannot be clobbered.
-		ExistingVestingSchedule,
+		TooManyVestingSchedules,
 		/// Amount being transferred is too low to create a vesting schedule.
 		AmountLow,
 	}
@@ -264,7 +275,8 @@ decl_module! {
 			ensure!(schedule.locked >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 
 			let who = T::Lookup::lookup(target)?;
-			ensure!(!Vesting::<T>::contains_key(&who), Error::<T>::ExistingVestingSchedule);
+			let vesting_schedules = Vesting::<T>::get(&who);
+			ensure!((vesting_schedules.len() as u32) < T::MaxVestingSchedules::get(), Error::<T>::TooManyVestingSchedules);
 
 			T::Currency::transfer(&transactor, &who, schedule.locked, ExistenceRequirement::AllowDeath)?;
 
@@ -303,7 +315,8 @@ decl_module! {
 
 			let target = T::Lookup::lookup(target)?;
 			let source = T::Lookup::lookup(source)?;
-			ensure!(!Vesting::<T>::contains_key(&target), Error::<T>::ExistingVestingSchedule);
+			let vesting_schedules = Vesting::<T>::get(&target);
+			ensure!((vesting_schedules.len() as u32) < T::MaxVestingSchedules::get(), Error::<T>::TooManyVestingSchedules);
 
 			T::Currency::transfer(&source, &target, schedule.locked, ExistenceRequirement::AllowDeath)?;
 
@@ -316,13 +329,14 @@ decl_module! {
 }
 
 impl<T: Config> Module<T> {
-	/// (Re)set or remove the module's currency lock on `who`'s account in accordance with their
-	/// current unvested amount.
+	/// (Re)set or remove the module's currency lock on `who`'s account in accordance with the sum
+	///  of current unvested amounts in the vesting schedules
 	fn update_lock(who: T::AccountId) -> DispatchResult {
 		let vesting_schedules = Self::vesting(&who);
-		let vesting = vesting_schedules.last().ok_or(Error::<T>::NotVesting)?;
+		ensure!(vesting_schedules.len() != 0, Error::<T>::NotVesting);
+
 		let now = <frame_system::Module<T>>::block_number();
-		let locked_now = vesting.locked_at::<T::BlockNumberToBalance>(now);
+		let locked_now: BalanceOf<T>  = vesting_schedules.iter().fold(Zero::zero(), |sum, vesting| sum.saturating_add(vesting.locked_at::<T::BlockNumberToBalance>(now)));
 
 		if locked_now.is_zero() {
 			T::Currency::remove_lock(VESTING_ID, &who);
@@ -331,6 +345,10 @@ impl<T: Config> Module<T> {
 		} else {
 			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 			T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons);
+			let remaining_schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>> = vesting_schedules.into_iter().filter(|vesting| vesting.locked_at::<T::BlockNumberToBalance>(now) != Zero::zero()).collect();
+
+			Vesting::<T>::insert(&who, remaining_schedules);
+
 			Self::deposit_event(RawEvent::VestingUpdated(who, locked_now));
 		}
 		Ok(())
@@ -345,15 +363,16 @@ impl<T: Config> VestingSchedule<T::AccountId> for Module<T> where
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	fn vesting_balance(who: &T::AccountId) -> Option<BalanceOf<T>> {
+		let now = <frame_system::Module<T>>::block_number();
 		let vesting_schedules = Self::vesting(who);
-		println!("{:?}", vesting_schedules);
-		if let Some(v) = vesting_schedules.last() {
-			let now = <frame_system::Module<T>>::block_number();
-			let locked_now = v.locked_at::<T::BlockNumberToBalance>(now);
-			Some(T::Currency::free_balance(who).min(locked_now))
-		} else {
-			None
+		if vesting_schedules.len() == 0 {
+			return None
 		}
+
+		let total_vested: BalanceOf<T> = vesting_schedules.iter().fold(Zero::zero(),
+			|sum, vesting| sum.saturating_add(vesting.locked_at::<T::BlockNumberToBalance>(now)));
+
+		return Some(T::Currency::free_balance(who).min(total_vested))
 	}
 
 	/// Adds a vesting schedule to a given account.
@@ -373,8 +392,9 @@ impl<T: Config> VestingSchedule<T::AccountId> for Module<T> where
 		starting_block: T::BlockNumber
 	) -> DispatchResult {
 		if locked.is_zero() { return Ok(()) }
-		if Vesting::<T>::contains_key(who) {
-			Err(Error::<T>::ExistingVestingSchedule)?
+		let vesting_schedules = Vesting::<T>::get(who);
+		if vesting_schedules.len() as u32 >= T::MaxVestingSchedules::get() {
+			Err(Error::<T>::TooManyVestingSchedules)?
 		}
 		let vesting_schedule = VestingInfo {
 			locked,
@@ -460,7 +480,7 @@ mod tests {
 		type WeightInfo = ();
 	}
 	parameter_types! {
-		pub const MaxVestingSchedules: u32 = 20;
+		pub const MaxVestingSchedules: u32 = 2;
 		pub const MinVestedTransfer: u64 = 256 * 2;
 		pub static ExistentialDeposit: u64 = 0;
 	}
@@ -501,14 +521,20 @@ mod tests {
 					(2, 20 * self.existential_deposit),
 					(3, 30 * self.existential_deposit),
 					(4, 40 * self.existential_deposit),
-					(12, 10 * self.existential_deposit)
+					(12, 10 * self.existential_deposit),
+					(100, 20 * self.existential_deposit),
+					(101, 20 * self.existential_deposit)
 				],
 			}.assimilate_storage(&mut t).unwrap();
 			GenesisConfig::<Test> {
 				vesting: vec![
 					(1, 0, 10, 5 * self.existential_deposit),
 					(2, 10, 20, 0),
-					(12, 10, 20, 5 * self.existential_deposit)
+					(12, 10, 20, 5 * self.existential_deposit),
+					(100, 0, 10, 10),
+					(100, 0, 10, 0),
+					(101, 0, 10, 10),
+					(101, 20, 5, 0)
 				],
 			}.assimilate_storage(&mut t).unwrap();
 			let mut ext = sp_io::TestExternalities::new(t);
@@ -572,6 +598,69 @@ mod tests {
 				assert_eq!(Vesting::vesting_balance(&2), Some(0)); // Account 2 has fully vested by block 30
 				assert_eq!(Vesting::vesting_balance(&12), Some(0)); // Account 2 has fully vested by block 30
 
+			});
+	}
+
+	#[test]
+	fn check_multiple_vesting_schedules_with_same_per_block_and_amount_locked() {
+		ExtBuilder::default()
+			.existential_deposit(1)
+			.build()
+			.execute_with(|| {
+				let vestings = Vesting::vesting(&100);
+				assert_eq!(vestings.len(), 2); // Account has 2 vesting schedules
+
+				// Vesting schedules are the same: unlocking 1 per block up to a total of 10
+				assert_eq!(Vesting::vesting_balance(&100), Some(2 * 9));
+
+				System::set_block_number(5);
+				assert_eq!(System::block_number(), 5);
+				assert_eq!(Vesting::vesting_balance(&100), Some(2 * 5));
+
+				System::set_block_number(10);
+				assert_eq!(System::block_number(), 10);
+
+				// Account has fully vested by block 10
+				assert_eq!(Vesting::vesting_balance(&100), Some(0));
+			});
+	}
+
+	#[test]
+	fn check_multiple_disjoint_vesting_schedules() {
+		ExtBuilder::default()
+			.existential_deposit(1)
+			.build()
+			.execute_with(|| {
+				let vestings = Vesting::vesting(&101);
+				assert_eq!(vestings.len(), 2); // Account has 2 vesting schedules
+
+				// Vesting schedule 1 starts at block 0 unlocking 1 per block up to a total of 10
+				// Vesting schedule 2 starts at block 20 unlocking 2 per block up to a total of 5
+				assert_eq!(Vesting::vesting_balance(&101), Some(9 + 10));
+
+				System::set_block_number(10);
+				assert_eq!(System::block_number(), 10);
+				assert_eq!(Vesting::vesting_balance(&101), Some(10));
+
+				// vest prunes finished schedule
+				assert_ok!(Vesting::vest(Some(101).into()));
+				let vestings = Vesting::vesting(&101);
+				assert_eq!(vestings.len(), 1); // Account now only has 1 vesting schedule
+
+				// first block of second schedule unlocks 2
+				System::set_block_number(21);
+				assert_eq!(System::block_number(), 21);
+				assert_eq!(Vesting::vesting_balance(&101), Some(10 - 2));
+
+				// Account has fully vested by block 25
+				System::set_block_number(25);
+				assert_eq!(System::block_number(), 25);
+				assert_eq!(Vesting::vesting_balance(&101), Some(0));
+				//
+				// vest removes last schedule
+				assert_ok!(Vesting::vest(Some(101).into()));
+				let vestings = Vesting::vesting(&101);
+				assert_eq!(vestings.len(), 0); // Account now only has 1 vesting schedule
 			});
 	}
 
@@ -735,15 +824,23 @@ mod tests {
 				};
 				assert_eq!(Vesting::vesting(&2).last(), Some(&user2_vesting_schedule));
 
-				// The vesting schedule we will try to create, fails due to pre-existence of schedule.
+				// The first vesting schedule we will try to create is ok as we can have at most
+				// 2 vesting schedules per account
 				let new_vesting_schedule = VestingInfo {
 					locked: 256 * 5,
 					per_block: 64, // Vesting over 20 blocks
 					starting_block: 10,
 				};
+				Vesting::vested_transfer(Some(4).into(), 2, new_vesting_schedule)
+					.expect("Should be happy to add second vesting schedule");
+				assert_eq!(Vesting::vesting(&2).last(), Some(&new_vesting_schedule));
+				assert_eq!(Vesting::vesting(&2).len(), 2);
+
+				// The second vesting schedule we will try to create should fail as we can have at
+				// most 2 vesting schedules per account
 				assert_noop!(
 					Vesting::vested_transfer(Some(4).into(), 2, new_vesting_schedule),
-					Error::<Test>::ExistingVestingSchedule,
+					Error::<Test>::TooManyVestingSchedules,
 				);
 
 				// Fails due to too low transfer amount.
@@ -825,15 +922,19 @@ mod tests {
 				};
 				assert_eq!(Vesting::vesting(&2).last(), Some(&user2_vesting_schedule));
 
-				// The vesting schedule we will try to create, fails due to pre-existence of schedule.
+				// The first vesting schedule we will try to create will be ok, but the second fails
+				// as we can only have a maximum of 2 vesting schedules
 				let new_vesting_schedule = VestingInfo {
 					locked: 256 * 5,
 					per_block: 64, // Vesting over 20 blocks
 					starting_block: 10,
 				};
+				Vesting::force_vested_transfer(RawOrigin::Root.into(), 4, 2, new_vesting_schedule)
+					.expect("Should be happy to add a second vesting schedules");
+
 				assert_noop!(
 					Vesting::force_vested_transfer(RawOrigin::Root.into(), 4, 2, new_vesting_schedule),
-					Error::<Test>::ExistingVestingSchedule,
+					Error::<Test>::TooManyVestingSchedules,
 				);
 
 				// Fails due to too low transfer amount.
