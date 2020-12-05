@@ -256,3 +256,104 @@ fn free_works(){
 	});
 
 }
+
+#[test]
+fn assign_works(){
+	new_test_ext().execute_with(|| {
+
+		// Test data
+		let name = b"shawntabrizi";
+		let name_hash = blake2_256(name);
+		
+		// setup a claimed name to assign
+		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
+		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+		assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
+
+		// non owner calls should fail
+		assert_err!(NameService::assign(Origin::signed(2), name_hash, Some(4)), Error::<Test>::NotOwner);
+
+		// owner can assign accountID
+		assert_ok!(NameService::assign(Origin::signed(1), name_hash, Some(4)));
+		assert_eq!(Lookup::<Test>::get(&name_hash), Some(4));
+
+		// owner can unassign accountId
+		assert_ok!(NameService::assign(Origin::signed(1), name_hash, None));
+		assert_eq!(Lookup::<Test>::get(&name_hash), None);
+	});
+}
+
+#[test]
+fn unassign_works(){
+	new_test_ext().execute_with(|| {
+
+		// Test data
+		let name_hash = blake2_256(b"shawntabrizi");
+		
+		// setup an assigned name to test
+		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
+		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+		assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
+		assert_ok!(NameService::assign(Origin::signed(1), name_hash, Some(1)));
+
+		// non assigned account call should fail
+		assert_err!(NameService::unassign(Origin::signed(2), name_hash), Error::<Test>::NotAssigned);
+
+		// assigned account call should pass
+		assert_ok!(NameService::unassign(Origin::signed(1), name_hash));
+		assert_eq!(Lookup::<Test>::get(&name_hash), None);
+	});
+}
+
+#[test]
+fn make_permanent_works(){
+	new_test_ext().execute_with(|| {
+
+	// Test data
+	let name_hash = blake2_256(b"shawntabrizi");
+
+	// setup an assigned name to test
+	assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
+	run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+	assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
+
+	// call from non permeance account should fail
+	assert_err!(NameService::make_permanent(Origin::signed(1), name_hash), BadOrigin);
+
+	// call from permeance accout should pass
+	assert_ok!(NameService::make_permanent(Origin::signed(200), name_hash));
+	let stored_data = Registration::<Test>::get(&name_hash);
+	assert_eq!(stored_data, NameStatus::Owned {
+			who: 1,
+			expiration: None,
+		});
+	});
+}
+
+#[test]
+fn extend_ownership_works(){
+	new_test_ext().execute_with(|| {
+
+	// Test data
+	let name_hash = blake2_256(b"shawntabrizi");
+
+	// call with non claimed name should fail
+	assert_err!(NameService::extend_ownership(Origin::signed(1), name_hash), Error::<Test>::UnexpectedState);
+
+	// setup an assigned name to test
+	assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
+	run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+	assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
+
+	// call to extend ownership should pass
+	assert_ok!(NameService::extend_ownership(Origin::signed(2), name_hash));
+	// balance of caller should reduce by the extension fee
+	assert_eq!(Balances::free_balance(&2), 200.saturating_sub(5));
+	
+	let stored_data = Registration::<Test>::get(&name_hash);
+	assert_eq!(stored_data, NameStatus::Owned {
+		who: 1,
+		expiration: Some(210)
+		});
+	});
+}
