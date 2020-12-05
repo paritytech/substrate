@@ -120,6 +120,12 @@ fn bid_works(){
 		let name = b"shawntabrizi";
 		let name_hash = blake2_256(name);
 
+		// call with less than MinBid should fail
+		assert_err!(
+			NameService::bid(Origin::signed(1), name_hash, <mock::Test as Trait>::MinBid::get().saturating_sub(1)),
+			Error::<Test>::InvalidBid
+		);
+
 		// create bid works correctly
 		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 5));
 		let stored_data = Registration::<Test>::get(&name_hash);
@@ -159,4 +165,94 @@ fn bid_works(){
 		run_to_block(12);
 		assert_err!(NameService::bid(Origin::signed(2), name_hash, 25), Error::<Test>::InvalidBid);
 	})
+}
+
+#[test]
+fn claim_works(){
+	new_test_ext().execute_with(|| {
+
+		// Test data
+		let name = b"shawntabrizi";
+		let name_hash = blake2_256(name);
+
+		// claim to non existent name should fail
+		assert_err!(NameService::claim(Origin::signed(1), name_hash, 1), Error::<Test>::InvalidClaim);
+
+		// setup a bid to claim
+		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
+
+		// claim before bid expiry should fail
+		assert_err!(NameService::claim(Origin::signed(1), name_hash, 1), Error::<Test>::NotExpired);
+
+		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+
+		// cannot invoke with less than one period
+		assert_err!(NameService::claim(Origin::signed(1), name_hash, 0), Error::<Test>::InvalidClaim);
+
+		// call by not current bidder should fail
+		assert_err!(NameService::claim(Origin::signed(2), name_hash, 1), Error::<Test>::NotBidder);
+
+		// claim by successful bidder should pass
+		assert_ok!(NameService::claim(Origin::signed(1), name_hash, 2));
+		assert_eq!(Balances::free_balance(&1), 60);
+
+		let stored_data = Registration::<Test>::get(&name_hash);
+		assert_eq!(stored_data, NameStatus::Owned {
+			who: 1,
+			expiration: Some(<mock::Test as Trait>::OwnershipPeriod::get()
+				.saturating_mul(2)
+				.saturating_add(<mock::Test as Trait>::BiddingPeriod::get())),
+		});
+
+		// call to previously claimed name should fail
+		assert_err!(NameService::claim(Origin::signed(1), name_hash, 1), Error::<Test>::InvalidClaim);
+	});
+}
+
+#[test]
+fn free_works(){
+
+	new_test_ext().execute_with(|| {
+
+		// Test data
+		let name = b"shawntabrizi";
+		let name_hash = blake2_256(name);
+
+		// free non existent name should fail
+		assert_err!(NameService::free(Origin::signed(1), name_hash), Error::<Test>::AlreadyAvailable);
+
+		// setup a bid to free
+		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
+
+		// free a name in bidding period should fail
+		assert_err!(NameService::free(Origin::signed(2), name_hash), Error::<Test>::NotExpired);
+
+		// free should wait for claim period
+		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+		assert_err!(NameService::free(Origin::signed(2), name_hash), Error::<Test>::NotExpired);
+
+		// call after (bid_end+bidding+claim+1) period should pass
+		let ideal_block = <mock::Test as Trait>::BiddingPeriod::get().saturating_add(<mock::Test as Trait>::ClaimPeriod::get());
+		run_to_block(ideal_block.saturating_add(11));
+		assert_ok!(NameService::free(Origin::signed(1), name_hash));
+
+		let stored_data = Registration::<Test>::get(&name_hash);
+		assert_eq!(stored_data, NameStatus::default());
+
+		// original bidder reserve balance is slashed
+		assert_eq!(Balances::free_balance(&1), 90);
+		assert_eq!(Balances::reserved_balance(&1), 0);
+
+		// setup a claimed name to free
+		assert_ok!(NameService::bid(Origin::signed(2), name_hash, 10));
+		run_to_block(100);
+		assert_ok!(NameService::claim(Origin::signed(2), name_hash, 1));
+
+		// only current owner should be able to free non expired name
+		assert_err!(NameService::free(Origin::signed(1), name_hash), Error::<Test>::NotExpired);
+		assert_ok!(NameService::free(Origin::signed(2), name_hash));
+		let stored_data = Registration::<Test>::get(&name_hash);
+		assert_eq!(stored_data, NameStatus::default());
+	});
+
 }
