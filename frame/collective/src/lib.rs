@@ -486,10 +486,10 @@ decl_module! {
 
 		/// Add an aye or nay vote for the sender to the given proposal.
 		///
-		/// And transaction fee is free for First time voters.
-		///
 		/// Requires the sender to be a member.
 		///
+		/// Transaction fees will be waived if the member is voting on any particular proposal
+		/// for the first time and the call is successful. Subsequent vote changes will charge a fee.
 		/// # <weight>
 		/// ## Weight
 		/// - `O(M)` where `M` is members-count (code- and governance-bounded)
