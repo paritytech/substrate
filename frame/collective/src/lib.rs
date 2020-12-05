@@ -624,7 +624,7 @@ decl_module! {
 				let (proposal, len) = Self::validate_and_get_proposal(
 					&proposal_hash,
 					length_bound,
-					proposal_weight_bound
+					proposal_weight_bound,
 				)?;
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
@@ -632,7 +632,7 @@ decl_module! {
 				return Ok((
 					Some(T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
 					.saturating_add(proposal_weight)),
-					Pays::No
+					Pays::No,
 				).into());
 
 			} else if disapproved {
@@ -640,7 +640,7 @@ decl_module! {
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 				return Ok((
 					Some(T::WeightInfo::close_early_disapproved(seats, proposal_count)),
-					Pays::No
+					Pays::No,
 				).into());
 			}
 
@@ -663,7 +663,7 @@ decl_module! {
 				let (proposal, len) = Self::validate_and_get_proposal(
 					&proposal_hash,
 					length_bound,
-					proposal_weight_bound
+					proposal_weight_bound,
 				)?;
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
@@ -678,7 +678,7 @@ decl_module! {
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 				return Ok((
 					Some(T::WeightInfo::close_disapproved(seats, proposal_count)),
-					Pays::No
+					Pays::No,
 				).into());
 			}
 		}
@@ -1476,7 +1476,7 @@ mod tests {
 					Origin::signed(1),
 					2,
 					Box::new(proposal.clone()),
-					proposal_len
+					proposal_len,
 				)
 			);
 			assert_eq!(
@@ -1502,7 +1502,7 @@ mod tests {
 				Origin::signed(2),
 				hash.clone(),
 				0,
-				true
+				true,
 			);
 			match vote_rval {
 				Ok(_) => {
@@ -1564,7 +1564,7 @@ mod tests {
 					hash.clone(),
 					0,
 					proposal_weight,
-					proposal_len
+					proposal_len,
 				),
 				Ok(
 					PostDispatchInfo {
@@ -1583,7 +1583,7 @@ mod tests {
 				hash.clone(),
 				0,
 				proposal_weight,
-				proposal_len
+				proposal_len,
 			);
 			match close_rval {
 				Ok(_) => {
