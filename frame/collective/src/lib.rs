@@ -671,7 +671,7 @@ decl_module! {
 				return Ok((
 					Some(T::WeightInfo::close_approved(len as u32, seats, proposal_count)
 					.saturating_add(proposal_weight)),
-					Pays::No
+					Pays::No,
 				).into());
 			} else {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
