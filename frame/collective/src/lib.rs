@@ -563,7 +563,8 @@ decl_module! {
 		///
 		/// May be called by any signed account in order to finish voting and close the proposal.
 		///
-		/// And transaction fee is free for successful close.
+		/// If the close operation completes successfully (with either approval or disapproval),
+		/// the transaction fee will be waived.
 		///
 		/// If called before the end of the voting period it will only close the vote if it is
 		/// has enough votes to be approved or disapproved.
