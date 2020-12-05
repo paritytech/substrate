@@ -1505,12 +1505,15 @@ mod tests {
 				true,
 			);
 			match vote_rval {
-				Ok(_) => {
+				Ok(rval) => {
 					// Forced Panic, Invalid case, should not occur.
-					assert!(false);
+					panic!(
+						"Invalid State::Duplicate vote, error expected - invalid rval {:#?}",
+						rval,
+					);
 				},
 				Err(err) => {
-					assert_eq!( err.post_info.pays_fee, Pays::Yes );
+					assert_eq!(err.post_info.pays_fee, Pays::Yes);
 				},
 			}
 
@@ -1586,12 +1589,15 @@ mod tests {
 				proposal_len,
 			);
 			match close_rval {
-				Ok(_) => {
+				Ok(rval) => {
 					// Forced Panic, Invalid case, should not occur.
-					assert!(false);
+					panic!(
+						"Invalid State::trying to close the invalid proposal, invalid rval {:#?}",
+						rval,
+					);
 				},
 				Err(err) => {
-					assert_eq!( err.post_info.pays_fee, Pays::Yes );
+					assert_eq!(err.post_info.pays_fee, Pays::Yes);
 				},
 			}
 		});
