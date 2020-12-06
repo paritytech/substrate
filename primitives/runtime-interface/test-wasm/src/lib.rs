@@ -120,6 +120,16 @@ pub trait TestApi {
 	fn test_versionning(&self, data: u32) -> bool {
 		data == 42
 	}
+
+	/// Returns the input values as tuple.
+	fn return_input_as_tuple(
+		a: Vec<u8>,
+		b: u32,
+		c: Option<Vec<u32>>,
+		d: u8,
+	) -> (Vec<u8>, u32, Option<Vec<u32>>, u8) {
+		(a, b, c, d)
+	}
 }
 
 /// This function is not used, but we require it for the compiler to include `sp-io`.
@@ -257,5 +267,19 @@ wasm_export_functions! {
 
 		assert!(!test_api::test_versionning(50));
 		assert!(!test_api::test_versionning(102));
+	}
+
+	fn test_return_input_as_tuple() {
+		let a = vec![1, 3, 4, 5];
+		let b = 10000;
+		let c = Some(vec![2, 3]);
+		let d = 5;
+
+		let res = test_api::return_input_as_tuple(a.clone(), b, c.clone(), d);
+
+		assert_eq!(a, res.0);
+		assert_eq!(b, res.1);
+		assert_eq!(c, res.2);
+		assert_eq!(d, res.3);
 	}
 }
