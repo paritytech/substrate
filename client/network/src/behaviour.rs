@@ -243,35 +243,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		self.request_responses.send_request(target, protocol, request)
 	}
 
-	/// Registers a new notifications protocol.
-	///
-	/// Please call `event_stream` before registering a protocol, otherwise you may miss events
-	/// about the protocol that you have registered.
-	///
-	/// You are very strongly encouraged to call this method very early on. Any connection open
-	/// will retain the protocols that were registered then, and not any new one.
-	pub fn register_notifications_protocol(
-		&mut self,
-		protocol: impl Into<Cow<'static, str>>,
-	) {
-		let protocol = protocol.into();
-
-		// This is the message that we will send to the remote as part of the initial handshake.
-		// At the moment, we force this to be an encoded `Roles`.
-		let handshake_message = Roles::from(&self.role).encode();
-
-		let list = self.substrate.register_notifications_protocol(protocol.clone(), handshake_message);
-		for (remote, roles, notifications_sink) in list {
-			let role = reported_roles_to_observed_role(&self.role, remote, roles);
-			self.events.push_back(BehaviourOut::NotificationStreamOpened {
-				remote: remote.clone(),
-				protocol: protocol.clone(),
-				role,
-				notifications_sink: notifications_sink.clone(),
-			});
-		}
-	}
-
 	/// Returns a shared reference to the user protocol.
 	pub fn user_protocol(&self) -> &Protocol<B, H> {
 		&self.substrate
@@ -470,7 +441,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<peer_info::PeerInfoEven
 		for addr in listen_addrs {
 			self.discovery.add_self_reported_address(&peer_id, protocols.iter(), addr);
 		}
-		self.substrate.add_discovered_nodes(iter::once(peer_id));
+		self.substrate.add_default_set_discovered_nodes(iter::once(peer_id));
 	}
 }
 
@@ -485,7 +456,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 				// implementation for `PeerInfoEvent`.
 			}
 			DiscoveryOut::Discovered(peer_id) => {
-				self.substrate.add_discovered_nodes(sc_peerset::SetId::from(0), iter::once(peer_id));  // TODO: correct set?
+				self.substrate.add_default_set_discovered_nodes(iter::once(peer_id));
 			}
 			DiscoveryOut::ValueFound(results, duration) => {
 				self.events.push_back(BehaviourOut::Dht(DhtEvent::ValueFound(results), duration));

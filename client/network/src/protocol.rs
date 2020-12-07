@@ -220,12 +220,6 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	behaviour: GenericProto,
 	/// List of notifications protocols that have been registered.
 	notification_protocols: Vec<Cow<'static, str>>,
-	/// For each protocol name, the legacy equivalent.
-	legacy_equiv_by_name: HashMap<Cow<'static, str>, Fallback>,
-	/// Name of the protocol used for transactions.
-	transactions_protocol: Cow<'static, str>,
-	/// Name of the protocol used for block announces.
-	block_announces_protocol: Cow<'static, str>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
@@ -334,17 +328,6 @@ fn build_status_message<B: BlockT>(protocol_config: &ProtocolConfig, chain: &Arc
 	Message::<B>::Status(status).encode()
 }
 
-/// Fallback mechanism to use to send a notification if no substream is open.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Fallback {
-	/// Formerly-known as `Consensus` messages. Now regular notifications.
-	Consensus,
-	/// The message is the bytes encoding of a `Transactions<E>` (which is itself defined as a `Vec<E>`).
-	Transactions,
-	/// The message is the bytes encoding of a `BlockAnnounce<H>`.
-	BlockAnnounce,
-}
-
 impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Create a new instance.
 	pub fn new(
@@ -378,8 +361,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let (peerset, peerset_handle) = sc_peerset::Peerset::from_config(peerset_config);
 
-		let mut legacy_equiv_by_name = HashMap::new();
-
 		let transactions_protocol: Cow<'static, str> = Cow::from({
 			let mut proto = String::new();
 			proto.push_str("/");
@@ -387,7 +368,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			proto.push_str("/transactions/1");
 			proto
 		});
-		legacy_equiv_by_name.insert(transactions_protocol.clone(), Fallback::Transactions);
 
 		let block_announces_protocol: Cow<'static, str> = Cow::from({
 			let mut proto = String::new();
@@ -396,7 +376,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			proto.push_str("/block-announces/1");
 			proto
 		});
-		legacy_equiv_by_name.insert(block_announces_protocol.clone(), Fallback::BlockAnnounce);
 
 		let behaviour = {
 			let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
@@ -407,10 +386,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				versions,
 				build_status_message(&config, &chain),
 				peerset,
-				// As documented in `GenericProto`, the first protocol in the list is always the
-				// one carrying the handshake reported in the `CustomProtocolOpen` event.
-				iter::once((block_announces_protocol.clone(), block_announces_handshake))
-					.chain(iter::once((transactions_protocol.clone(), vec![]))),
+				iter::once((block_announces_protocol, block_announces_handshake))
+					.chain(iter::once((transactions_protocol, vec![]))),
 			)
 		};
 
@@ -433,9 +410,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
 			notification_protocols: Vec::new(),
-			legacy_equiv_by_name,
-			transactions_protocol,
-			block_announces_protocol,
 			metrics: if let Some(r) = metrics_registry {
 				Some(Metrics::register(r)?)
 			} else {
@@ -457,9 +431,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.behaviour.is_open(peer_id)
 	}
 
-	/// Returns the list of all the peers that the peerset currently requests us to be connected to.
+	/// Returns the list of all the peers that the peerset currently requests us to be connected
+	/// to on the default set.
 	pub fn requested_peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.behaviour.requested_peers()
+		self.behaviour.requested_peers(sc_peerset::SetId::from(0))
 	}
 
 	/// Returns the number of discovered nodes that we keep in memory.
@@ -533,7 +508,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			build_status_message(&self.config, &self.context_data.chain),
 		);
 		self.behaviour.set_notif_protocol_handshake(
-			&self.block_announces_protocol,
+			sc_peerset::SetId::from(0),
 			BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
 		);
 	}
@@ -879,37 +854,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	/// Registers a new notifications protocol.
-	///
-	/// While registering a protocol while we already have open connections is discouraged, we
-	/// nonetheless handle it by notifying that we opened channels with everyone. This function
-	/// returns a list of substreams to open as a result.
-	pub fn register_notifications_protocol<'a>(
-		&'a mut self,
-		protocol: impl Into<Cow<'static, str>>,
-		handshake_message: Vec<u8>,
-	) -> impl Iterator<Item = (&'a PeerId, Roles, &'a NotificationsSink)> + 'a {
-		let protocol = protocol.into();
-
-		if self.notification_protocols.iter().any(|p| *p == protocol) {
-			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol);
-		} else {
-			self.notification_protocols.push(protocol.clone());
-			self.behaviour.register_notif_protocol(protocol.clone(), handshake_message);
-			self.legacy_equiv_by_name.insert(protocol, Fallback::Consensus);
-		}
-
-		let behaviour = &self.behaviour;
-		self.context_data.peers.iter().filter_map(move |(peer_id, peer)| {
-			if let Some(notifications_sink) = behaviour.notifications_sink(peer_id) {
-				Some((peer_id, peer.info.roles, notifications_sink))
-			} else {
-				log::error!("State mismatch: no notifications sink for opened peer {:?}", peer_id);
-				None
-			}
-		})
-	}
-
 	/// Called when peer sends us new transactions
 	fn on_transactions(
 		&mut self,
@@ -1019,7 +963,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
 				self.behaviour.write_notification(
 					who,
-					self.transactions_protocol.clone(),
+					sc_peerset::SetId::from(1),
 					to_send.encode()
 				);
 			}
@@ -1085,7 +1029,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 				self.behaviour.write_notification(
 					who,
-					self.block_announces_protocol.clone(),
+					sc_peerset::SetId::from(0),
 					message.encode()
 				);
 			}
@@ -1260,12 +1204,12 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.on_justification_import(hash, number, success)
 	}
 
-	/// Notify the protocol that we have learned about the existence of nodes.
+	/// Notify the protocol that we have learned about the existence of nodes on the default set.
 	///
 	/// Can be called multiple times with the same `PeerId`s.
-	pub fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
+	pub fn add_default_set_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		self.behaviour.add_discovered_nodes(sc_peerset::SetId::from(0), peer_ids);
-		self.behaviour.add_discovered_nodes(sc_peerset::SetId::from(1), peer_ids);
+		self.behaviour.add_discovered_nodes(sc_peerset::SetId::from(1), peer_ids);  // TODO: no
 	}
 
 	fn format_stats(&self) -> String {
@@ -1541,10 +1485,10 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					}
 				}
 			}
-			GenericProtoOut::CustomProtocolReplaced { peer_id, notifications_sink, .. } => {
+			GenericProtoOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } => {
 				CustomMessageOutcome::NotificationStreamReplaced {
 					remote: peer_id,
-					protocols: self.notification_protocols.clone(),
+					protocols: self.notification_protocols.clone(),  // TODO: update
 					notifications_sink,
 				}
 			},
@@ -1561,23 +1505,9 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			},
 			GenericProtoOut::LegacyMessage { peer_id, message } =>
 				self.on_custom_message(peer_id, message),
-			GenericProtoOut::Notification { peer_id, protocol_name, message } =>
-				match self.legacy_equiv_by_name.get(&protocol_name) {
-					Some(Fallback::Consensus) => {
-						CustomMessageOutcome::NotificationsReceived {
-							remote: peer_id,
-							messages: vec![(protocol_name, message.freeze())],
-						}
-					}
-					Some(Fallback::Transactions) => {
-						if let Ok(m) = message::Transactions::decode(&mut message.as_ref()) {
-							self.on_transactions(peer_id, m);
-						} else {
-							warn!(target: "sub-libp2p", "Failed to decode transactions list");
-						}
-						CustomMessageOutcome::None
-					}
-					Some(Fallback::BlockAnnounce) => {
+			GenericProtoOut::Notification { peer_id, set_id, message } =>
+				match usize::from(set_id) {
+					0 => {
 						if let Ok(announce) = message::BlockAnnounce::decode(&mut message.as_ref()) {
 							self.push_block_announce_validation(peer_id, announce);
 
@@ -1593,9 +1523,19 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 							CustomMessageOutcome::None
 						}
 					}
-					None => {
-						debug!(target: "sub-libp2p", "Received notification from unknown protocol {:?}", protocol_name);
+					1 => {
+						if let Ok(m) = message::Transactions::decode(&mut message.as_ref()) {
+							self.on_transactions(peer_id, m);
+						} else {
+							warn!(target: "sub-libp2p", "Failed to decode transactions list");
+						}
 						CustomMessageOutcome::None
+					}
+					_ => {
+						CustomMessageOutcome::NotificationsReceived {
+							remote: peer_id,
+							messages: vec![(protocol_name, message.freeze())],
+						}
 					}
 				}
 		};

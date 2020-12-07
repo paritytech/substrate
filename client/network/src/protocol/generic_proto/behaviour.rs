@@ -401,29 +401,17 @@ impl GenericProto {
 		}
 	}
 
-	/// Registers a new notifications protocol.
-	///
-	/// You are very strongly encouraged to call this method very early on. Any open connection
-	/// will retain the protocols that were registered then, and not any new one.
-	pub fn register_notif_protocol(
-		&mut self,
-		protocol_name: impl Into<Cow<'static, str>>,
-		handshake_msg: impl Into<Vec<u8>>
-	) {
-		assert!(self.peers.is_empty());  // TODO: see register_notif_protocol removal
-		self.notif_protocols.push((protocol_name.into(), Arc::new(RwLock::new(handshake_msg.into()))));
-	}
-
 	/// Modifies the handshake of the given notifications protocol.
-	///
-	/// Has no effect if the protocol is unknown.
 	pub fn set_notif_protocol_handshake(
 		&mut self,
-		protocol_name: &str,
+		set_id: sc_peerset::SetId,
 		handshake_message: impl Into<Vec<u8>>
 	) {
-		if let Some(protocol) = self.notif_protocols.iter_mut().find(|(name, _)| name == protocol_name) {
-			*protocol.1.write() = handshake_message.into();
+		if let Some(p) = self.notif_protocols.get_mut(usize::from(set_id)) {
+			*p.1.write() = handshake_message.into();
+		} else {
+			log::error!(target: "sub-libp2p", "Unknown handshake change set: {:?}", set_id);
+			debug_assert!(false);
 		}
 	}
 
@@ -604,8 +592,10 @@ impl GenericProto {
 	}
 
 	/// Returns the list of all the peers that the peerset currently requests us to be connected to.
-	pub fn requested_peers<'a>(&'a self) -> impl Iterator<Item = &'a PeerId> + 'a {
-		self.peers.iter().filter(|(_, state)| state.is_requested()).map(|(id, _)| id)
+	pub fn requested_peers<'a>(&'a self, set_id: sc_peerset::SetId) -> impl Iterator<Item = &'a PeerId> + 'a {
+		self.peers.iter()
+			.filter(move |((_, set), state)| *set == set_id && state.is_requested())
+			.map(|((id, _), _)| id)
 	}
 
 	/// Returns true if we try to open protocols with the given peer.
@@ -659,10 +649,10 @@ impl GenericProto {
 	pub fn write_notification(
 		&mut self,
 		target: &PeerId,
-		protocol_name: Cow<'static, str>,
+		set_id: sc_peerset::SetId,
 		message: impl Into<Vec<u8>>,
 	) {
-		let notifs_sink = match self.peers.get(&(target.clone(), todo!())).and_then(|p| p.get_open()) {
+		let notifs_sink = match self.peers.get(&(target.clone(), set_id)).and_then(|p| p.get_open()) {
 			None => {
 				debug!(target: "sub-libp2p",
 					"Tried to sent notification to {:?} without an open channel.",
@@ -678,15 +668,12 @@ impl GenericProto {
 			target: "sub-libp2p",
 			"External API => Notification({:?}, {:?}, {} bytes)",
 			target,
-			protocol_name,
+			set_id,
 			message.len(),
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Sync notification", target);
 
-		notifs_sink.send_sync_notification(
-			protocol_name,
-			message
-		);
+		notifs_sink.send_sync_notification(message);
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.

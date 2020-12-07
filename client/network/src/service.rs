@@ -154,7 +154,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		)?;
 		for extra_set in &params.network_config.extra_sets {
 			ensure_addresses_consistent_with_transport(
-				extra_set.reserved_nodes.iter().map(|x| &x.multiaddr),
+				extra_set.set_config.reserved_nodes.iter().map(|x| &x.multiaddr),
 				&params.network_config.transport,
 			)?;
 		}
@@ -361,9 +361,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				}
 			};
 
-			for protocol in &params.network_config.notifications_protocols {
-				behaviour.register_notifications_protocol(protocol.clone());
-			}
 			let (transport, bandwidth) = {
 				let (config_mem, config_wasm) = match params.network_config.transport {
 					TransportConfig::MemoryOnly => (true, None),
@@ -709,7 +706,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			message.len()
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Sync notification", target);
-		sink.send_sync_notification(protocol, message);
+		sink.send_sync_notification(message);
 	}
 
 	/// Obtains a [`NotificationSender`] for a connected peer, if it exists.
@@ -1145,7 +1142,7 @@ impl NotificationSender {
 	/// Returns a future that resolves when the `NotificationSender` is ready to send a notification.
 	pub async fn ready<'a>(&'a self) -> Result<NotificationSenderReady<'a>, NotificationSenderError> {
 		Ok(NotificationSenderReady {
-			ready: match self.sink.reserve_notification(self.protocol_name.clone()).await {
+			ready: match self.sink.reserve_notification().await {
 				Ok(r) => r,
 				Err(()) => return Err(NotificationSenderError::Closed),
 			},
