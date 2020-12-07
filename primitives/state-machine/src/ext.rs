@@ -432,10 +432,11 @@ where
 				if let Some(num) = num_deleted.checked_add(1) {
 					num_deleted = num;
 				} else {
+					all_deleted = false;
 					return false;
 				}
 				self.overlay.set_child_storage(child_info, key.to_vec(), None);
-				num_deleted <= limit
+				true
 			});
 			all_deleted
 		} else {
