@@ -1565,6 +1565,7 @@ impl NetworkBehaviour for GenericProto {
 									connec_state,
 									ConnectionState::OpeningThenClosing
 								));
+								*entry.into_mut() = PeerState::Disabled { connections, backoff_until };
 							}
 						} else {
 							error!(
@@ -1652,6 +1653,7 @@ impl NetworkBehaviour for GenericProto {
 						};
 
 						if matches!(connections[pos].1, ConnectionState::Closing) {
+							*entry.into_mut() = PeerState::Enabled { connections };
 							return;
 						}
 
@@ -1683,7 +1685,7 @@ impl NetworkBehaviour for GenericProto {
 									notifications_sink: replacement_sink,
 								};
 								self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
-								*entry.into_mut() = PeerState::Enabled { connections, };
+								*entry.into_mut() = PeerState::Enabled { connections };
 							}
 
 						} else {
