@@ -39,7 +39,7 @@ use self::{
 use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use frame_system::{Module as System, RawOrigin};
 use parity_wasm::elements::{Instruction, ValueType, BlockType};
-use sp_runtime::traits::{Hash, Bounded};
+use sp_runtime::traits::{Hash, Bounded, Zero};
 use sp_std::{default::Default, convert::{TryInto}, vec::Vec, vec};
 use pallet_contracts_primitives::RentProjection;
 
@@ -232,7 +232,7 @@ where
 		System::<T>::set_block_number(
 			contract.eviction_at()? + T::SignedClaimHandicap::get() + 5u32.into()
 		);
-		Rent::<T>::collect(&contract.account_id);
+		Rent::<T>::snitch_contract_should_be_evicted(&contract.account_id, Zero::zero());
 		contract.ensure_tombstone()?;
 
 		Ok(Tombstone {

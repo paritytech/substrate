@@ -775,15 +775,6 @@ fn deduct_blocks() {
 }
 
 #[test]
-fn call_contract_removals() {
-	removals(|addr| {
-		// Call on already-removed account might fail, and this is fine.
-		let _ = Contracts::call(Origin::signed(ALICE), addr, 0, GAS_LIMIT, call::null());
-		true
-	});
-}
-
-#[test]
 fn inherent_claim_surcharge_contract_removals() {
 	removals(|addr| Contracts::claim_surcharge(Origin::none(), addr, Some(ALICE)).is_ok());
 }
@@ -1046,25 +1037,23 @@ fn call_removed_contract() {
 			// Advance blocks
 			initialize_block(10);
 
-			// Calling contract should remove contract and fail.
+			// Calling contract should deny access because rent cannot be paid.
 			assert_err_ignore_postinfo!(
 				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null()),
 				Error::<Test>::NotCallable
 			);
-			// Calling a contract that is about to evict shall emit an event.
-			assert_eq!(System::events(), vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::Evicted(addr.clone(), true)),
-					topics: vec![],
-				},
-			]);
+			// No event is generated because the contract is not actually removed.
+			assert_eq!(System::events(), vec![]);
 
 			// Subsequent contract calls should also fail.
 			assert_err_ignore_postinfo!(
-				Contracts::call(Origin::signed(ALICE), addr, 0, GAS_LIMIT, call::null()),
+				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null()),
 				Error::<Test>::NotCallable
 			);
+
+			// A snitch can now remove the contract
+			assert_ok!(Contracts::claim_surcharge(Origin::none(), addr.clone(), Some(ALICE)));
+			assert!(ContractInfoOf::<Test>::get(&addr).unwrap().get_tombstone().is_some());
 		})
 }
 
@@ -1193,13 +1182,17 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			initialize_block(5);
 
 			// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
-			// we expect that it will get removed leaving tombstone.
+			// we expect that it is no longer callable but keeps existing until someone
+			// calls `claim_surcharge`.
 			assert_err_ignore_postinfo!(
 				Contracts::call(
 					Origin::signed(ALICE), addr_bob.clone(), 0, GAS_LIMIT, call::null()
 				),
 				Error::<Test>::NotCallable
 			);
+			assert_eq!(System::events(), vec![]);
+			assert!(ContractInfoOf::<Test>::get(&addr_bob).unwrap().get_alive().is_some());
+			assert_ok!(Contracts::claim_surcharge(Origin::none(), addr_bob.clone(), Some(ALICE)));
 			assert!(ContractInfoOf::<Test>::get(&addr_bob).unwrap().get_tombstone().is_some());
 			assert_eq!(System::events(), vec![
 				EventRecord {

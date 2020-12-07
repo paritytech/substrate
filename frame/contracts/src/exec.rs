@@ -267,12 +267,12 @@ where
 			Err(Error::<T>::MaxCallDepthReached)?
 		}
 
-		// Assumption: `collect` doesn't collide with overlay because
-		// `collect` will be done on first call and destination contract and balance
-		// cannot be changed before the first call
-		// We do not allow 'calling' plain accounts. For transfering value
-		// `seal_transfer` must be used.
-		let contract = if let Some(ContractInfo::Alive(info)) = Rent::<T>::collect(&dest) {
+		// This charges the rent and denies access to a contract that is in need of
+		// eviction by returning `None`. We cannot evict eagerly here because those
+		// changes would be rolled back in case this contract is called by another
+		// contract.
+		// See: https://github.com/paritytech/substrate/issues/6439#issuecomment-648754324
+		let contract = if let Some(ContractInfo::Alive(info)) = Rent::<T>::charge(&dest) {
 			info
 		} else {
 			Err(Error::<T>::NotCallable)?

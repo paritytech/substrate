@@ -23,9 +23,11 @@ use crate::{
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_core::crypto::UncheckedFrom;
-use frame_support::storage::child;
-use frame_support::traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReasons};
-use frame_support::StorageMap;
+use frame_support::{
+	debug, StorageMap,
+	storage::child,
+	traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReasons},
+};
 use pallet_contracts_primitives::{ContractAccessError, RentProjection, RentProjectionResult};
 use sp_runtime::{
 	DispatchError,
@@ -73,10 +75,6 @@ enum Verdict<T: Config> {
 	/// For example, it already paid its rent in the current block, or it has enough deposit for not
 	/// paying rent at all.
 	Exempt,
-	/// Funds dropped below the subsistence deposit.
-	///
-	/// Remove the contract along with it's storage.
-	Kill,
 	/// The contract cannot afford payment within its rent budget so it gets evicted. However,
 	/// because its balance is greater than the subsistence threshold it leaves a tombstone.
 	Evict {
@@ -180,11 +178,17 @@ where
 		let rent_budget = match Self::rent_budget(&total_balance, &free_balance, contract) {
 			Some(rent_budget) => rent_budget,
 			None => {
-				// The contract's total balance is already below subsistence threshold. That
-				// indicates that the contract cannot afford to leave a tombstone.
-				//
-				// So cleanly wipe the contract.
-				return Verdict::Kill;
+				// All functions that allow a contract to transfer balance enforce
+				// that the contract always stays above the subsistence threshold.
+				// We want the rent system to always leave a tombstone to prevent the
+				// accidental loss of a contract. Ony `seal_terminate` can remove a
+				// contract without a tombstone. Therefore this case should be never
+				// hit.
+				debug::error!(
+					"Tombstoned a contract that is below the subsistence threshold: {:?}",
+					account
+				);
+				0u32.into()
 			}
 		};
 
@@ -233,16 +237,11 @@ where
 		alive_contract_info: AliveContractInfo<T>,
 		current_block_number: T::BlockNumber,
 		verdict: Verdict<T>,
+		allow_eviction: bool,
 	) -> Option<ContractInfo<T>> {
 		match verdict {
 			Verdict::Exempt => return Some(ContractInfo::Alive(alive_contract_info)),
-			Verdict::Kill => {
-				<ContractInfoOf<T>>::remove(account);
-				child::kill_storage(
-					&alive_contract_info.child_trie_info(),
-					None,
-				);
-				<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), false));
+			Verdict::Evict { amount: _ } if !allow_eviction => {
 				None
 			}
 			Verdict::Evict { amount } => {
@@ -286,9 +285,10 @@ where
 
 	/// Make account paying the rent for the current block number
 	///
-	/// NOTE this function performs eviction eagerly. All changes are read and written directly to
-	/// storage.
-	pub fn collect(account: &T::AccountId) -> Option<ContractInfo<T>> {
+	/// This functions does **not** evict the contract. It returns `None` in case the
+	/// contract is in need of eviction. [`snitch_contract_should_be_evicted`] must
+	/// be called to perform the eviction.
+	pub fn charge(account: &T::AccountId) -> Option<ContractInfo<T>> {
 		let contract_info = <ContractInfoOf<T>>::get(account);
 		let alive_contract_info = match contract_info {
 			None | Some(ContractInfo::Tombstone(_)) => return contract_info,
@@ -302,7 +302,7 @@ where
 			Zero::zero(),
 			&alive_contract_info,
 		);
-		Self::enact_verdict(account, alive_contract_info, current_block_number, verdict)
+		Self::enact_verdict(account, alive_contract_info, current_block_number, verdict, false)
 	}
 
 	/// Process a report that a contract under the given address should be evicted.
@@ -321,8 +321,8 @@ where
 		account: &T::AccountId,
 		handicap: T::BlockNumber,
 	) -> bool {
-		let contract_info = <ContractInfoOf<T>>::get(account);
-		let alive_contract_info = match contract_info {
+		let contract = <ContractInfoOf<T>>::get(account);
+		let contract = match contract {
 			None | Some(ContractInfo::Tombstone(_)) => return false,
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
@@ -331,13 +331,13 @@ where
 			account,
 			current_block_number,
 			handicap,
-			&alive_contract_info,
+			&contract,
 		);
 
 		// Enact the verdict only if the contract gets removed.
 		match verdict {
-			Verdict::Kill | Verdict::Evict { .. } => {
-				Self::enact_verdict(account, alive_contract_info, current_block_number, verdict);
+			Verdict::Evict { .. } => {
+				Self::enact_verdict(account, contract, current_block_number, verdict, true);
 				true
 			}
 			_ => false,
@@ -371,7 +371,7 @@ where
 			&alive_contract_info,
 		);
 		let new_contract_info =
-			Self::enact_verdict(account, alive_contract_info, current_block_number, verdict);
+			Self::enact_verdict(account, alive_contract_info, current_block_number, verdict, false);
 
 		// Check what happened after enaction of the verdict.
 		let alive_contract_info = match new_contract_info {
