@@ -23,6 +23,7 @@ codec = { package = "parity-scale-codec", version = "1.3.1", default-features = 
 static_assertions = "1.0.0"
 primitive-types = { version = "0.7.0", default-features = false }
 sp-storage = { version = "2.0.0", default-features = false, path = "../storage" }
+impl-trait-for-tuples = "0.1.3"
 
 [dev-dependencies]
 sp-runtime-interface-test-wasm = { version = "2.0.0", path = "test-wasm" }

@@ -630,7 +630,7 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
-		#[should_panic = "the balance of any account should always be more than existential deposit."]
+		#[should_panic = "the balance of any account should always be at least the existential deposit."]
 		fn cannot_set_genesis_value_below_ed() {
 			($existential_deposit).with(|v| *v.borrow_mut() = 11);
 			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>().unwrap();
