@@ -384,7 +384,6 @@ impl<H: Hasher + 'static> StateBackend<H> for GenesisOrUnavailableState<H>
 	type Error = ClientError;
 	type Transaction = <InMemoryBackend<H> as StateBackend<H>>::Transaction;
 	type TrieBackendStorage = <InMemoryBackend<H> as StateBackend<H>>::TrieBackendStorage;
-	const ALLOW_ASYNC: bool = <InMemoryBackend<H> as StateBackend<H>>::ALLOW_ASYNC;
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {

@@ -301,7 +301,6 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	type Error = String;
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
-	const ALLOW_ASYNC: bool = false;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.0.storage(key)
@@ -409,7 +408,6 @@ impl<S, H> Backend<H> for AsyncProvingBackend<S, H>
 	type Error = String;
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
-	const ALLOW_ASYNC: bool = true;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.0.storage(key)
