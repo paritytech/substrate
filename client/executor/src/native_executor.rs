@@ -498,13 +498,13 @@ impl RuntimeInstanceSpawn {
 			counter: Default::default(),
 			tasks: Default::default(),
 			recursive_level: self.recursive_level + 1,
+			dismiss_handles: Default::default(),
 
 			module: self.module.clone(),
 			infos: self.infos.clone(),
 			scheduler: self.scheduler.clone(),
 			task_receiver: self.task_receiver.clone(),
 			task_sender: self.task_sender.clone(),
-			dismiss_handles: self.dismiss_handles.clone(),// TODO spawn a new one.
 		}
 	}
 
