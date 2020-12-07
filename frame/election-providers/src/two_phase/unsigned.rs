@@ -46,13 +46,20 @@ where
 {
 	/// Min a new npos solution.
 	pub fn mine_solution(iters: usize) -> Result<RawSolution<CompactOf<T>>, Error> {
-		let desired_targets = Self::desired_targets() as usize;
-		let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
-		let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
+		let RoundSnapshot {
+			desired_targets,
+			voters,
+			targets,
+		} = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
 
-		seq_phragmen::<_, CompactAccuracyOf<T>>(desired_targets, targets, voters, Some((iters, 0)))
-			.map_err(Into::into)
-			.and_then(Self::prepare_election_result)
+		seq_phragmen::<_, CompactAccuracyOf<T>>(
+			desired_targets as usize,
+			targets,
+			voters,
+			Some((iters, 0)),
+		)
+		.map_err(Into::into)
+		.and_then(Self::prepare_election_result)
 	}
 
 	/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
@@ -62,9 +69,10 @@ where
 	pub fn prepare_election_result(
 		election_result: ElectionResult<T::AccountId, CompactAccuracyOf<T>>,
 	) -> Result<RawSolution<CompactOf<T>>, Error> {
-		// storage items.
-		let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
-		let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
+		// storage items. Note: we have already read this from storage, they must be in cache.
+		let RoundSnapshot {
+			voters, targets, ..
+		} = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
 
 		// closures.
 		let voter_index = crate::voter_index_fn!(voters, T::AccountId, T);
@@ -91,7 +99,7 @@ where
 		// TODO
 		let maximum_allowed_voters =
 			Self::maximum_compact_len::<T::WeightInfo>(0, Default::default(), 0);
-		let compact = Self::trim_compact(compact.len() as u32, compact, &voter_index)?;
+		let compact = Self::trim_compact(compact.voters_count() as u32, compact, &voter_index)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);
@@ -142,10 +150,10 @@ where
 	where
 		for<'r> FN: Fn(&'r T::AccountId) -> Option<CompactVoterIndexOf<T>>,
 	{
-		match compact.len().checked_sub(maximum_allowed_voters as usize) {
+		match compact.voters_count().checked_sub(maximum_allowed_voters as usize) {
 			Some(to_remove) if to_remove > 0 => {
 				// grab all voters and sort them by least stake.
-				let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
+				let RoundSnapshot { voters, .. } = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
 				let mut voters_sorted = voters
 					.into_iter()
 					.map(|(who, stake, _)| (who.clone(), stake))
@@ -300,7 +308,9 @@ where
 			.map_err(|_| Error::PoolSubmissionFailed)
 	}
 
-	pub(crate) fn pre_dispatch_checks(solution: &RawSolution<CompactOf<T>>) -> DispatchResult {
+	pub(crate) fn unsigned_pre_dispatch_checks(
+		solution: &RawSolution<CompactOf<T>>,
+	) -> DispatchResult {
 		// ensure solution is timely. Don't panic yet. This is a cheap check.
 		ensure!(
 			Self::current_phase().is_unsigned_open(),
@@ -337,7 +347,7 @@ where
 				}
 			}
 
-			if let Err(_why) = Self::pre_dispatch_checks(solution) {
+			if let Err(_why) = Self::unsigned_pre_dispatch_checks(solution) {
 				return InvalidTransaction::Custom(99).into(); // TODO
 			}
 
@@ -359,7 +369,8 @@ where
 
 	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 		if let Call::submit_unsigned(solution) = call {
-			Self::pre_dispatch_checks(solution).map_err(|_| InvalidTransaction::Custom(99).into())
+			Self::unsigned_pre_dispatch_checks(solution)
+				.map_err(|_| InvalidTransaction::Custom(99).into())
 		} else {
 			Err(InvalidTransaction::Call.into())
 		}
@@ -662,9 +673,8 @@ mod tests {
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
 
 			// ensure we have snapshots in place.
-			assert!(TwoPhase::snapshot_voters().is_some());
-			assert!(TwoPhase::snapshot_targets().is_some());
-			assert_eq!(TwoPhase::desired_targets(), 2);
+			assert!(TwoPhase::snapshot().is_some());
+			assert_eq!(TwoPhase::snapshot().unwrap().desired_targets, 2);
 
 			// mine seq_phragmen solution with 2 iters.
 			let solution = TwoPhase::mine_solution(2).unwrap();
@@ -692,7 +702,7 @@ mod tests {
 
 				roll_to(15);
 				assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
-				assert_eq!(TwoPhase::desired_targets(), 1);
+				assert_eq!(TwoPhase::snapshot().unwrap().desired_targets, 1);
 
 				// an initial solution
 				let result = ElectionResult {

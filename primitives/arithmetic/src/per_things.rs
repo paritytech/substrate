@@ -67,7 +67,12 @@ pub trait PerThing:
 		let b = Self::ACCURACY;
 		// if Self::ACCURACY % 100 > 0 then we need the correction for accuracy
 		let c = rational_mul_correction::<Self::Inner, Self>(b, a, 100.into(), Rounding::Nearest);
-		Self::from_parts(a / 100.into() * b + c)
+		// TODO: this will fail with
+		// [primitives/arithmetic/src/per_things.rs:70] a = 100
+		// [primitives/arithmetic/src/per_things.rs:70] b = 65535
+		// [primitives/arithmetic/src/per_things.rs:70] c = 35
+		let base: Self::Inner = 100.into();
+		Self::from_parts(a / base.saturating_mul(b).saturating_add(c))
 	}
 
 	/// Return the product of multiplication of this value by itself.
@@ -334,7 +339,7 @@ macro_rules! implement_per_thing {
 				&self.0
 			}
 			fn decode_from(x: Self::As) -> Self {
-				// Saturates if `x` is more than `$max` internally. 
+				// Saturates if `x` is more than `$max` internally.
 				Self::from_parts(x)
 			}
 		}

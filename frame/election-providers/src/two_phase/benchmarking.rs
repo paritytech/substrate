@@ -24,78 +24,103 @@ pub use frame_benchmarking::{account, benchmarks, whitelist_account, whitelisted
 use frame_support::assert_ok;
 use rand::{seq::SliceRandom, thread_rng};
 use sp_npos_elections::{ExtendedBalance, VoteWeight};
-use sp_runtime::{InnerOf, PerU16};
+use sp_runtime::InnerOf;
 use std::convert::TryInto;
 
 const SEED: u32 = 0;
 
-// TODO: the entire snapshot can probably live in a single place.. we most often Read and write it
-// at the same time.
-
-/// Generate mock on-chain snapshots.
+/// Creates a **valid** solution with exactly the given size.
 ///
-/// This emulates the start of signed phase, where snapshots are received from an upstream crate.
-fn mock_snapshot<T: Config>(
+/// The snapshot is also created internally.
+///
+/// The snapshot size must be bigger, otherwise this will panic.
+fn solution_with_size<T: Config>(
 	witness: WitnessData,
-) -> (
-	Vec<T::AccountId>,
-	Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-)
+	active_voters_count: u32,
+	winners_count: u32,
+) -> RawSolution<CompactOf<T>>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	<InnerOf<CompactAccuracyOf<T>> as std::convert::TryFrom<usize>>::Error: std::fmt::Debug,
 {
+	assert!(witness.targets >= winners_count, "must have enough targets");
+	assert!(
+		witness.voters >= active_voters_count,
+		"must have enough voters"
+	);
+
 	let stake: u64 = 1000_000;
 	// first generates random targets.
 	let targets: Vec<T::AccountId> = (0..witness.targets)
 		.map(|i| account("Targets", i, SEED))
 		.collect();
 
-	// generate voters, each voting for a random subset of the targets.
-	let mut voters = (0..(witness.voters - witness.targets))
+	let mut rng = thread_rng();
+	// decide who are the winners.
+	let winners = targets
+		.as_slice()
+		.choose_multiple(&mut rng, winners_count as usize)
+		.cloned()
+		.collect::<Vec<_>>();
+
+	// generate first active voters who must vote for a subset of winners.
+	// TODO: this could lead to an underestimate, the active voters should only vote for winners to
+	// maximize all the iterations.
+	let active_voters = (0..active_voters_count)
 		.map(|i| {
-			let mut rng = thread_rng();
-			let to_vote = rand::random::<usize>() % <CompactOf<T>>::LIMIT + 1;
-			let votes = targets.as_slice().choose_multiple(&mut rng, to_vote).cloned().collect::<Vec<_>>();
+			// chose a random number of votes to give to the winners, and whatever is left is given
+			// to everyone.
+			let votes_to_winners = rand::random::<usize>() % <CompactOf<T>>::LIMIT + 1;
+			let votes_to_everyone = <CompactOf<T>>::LIMIT - votes_to_winners;
+
+			let winner_votes = winners
+				.as_slice()
+				.choose_multiple(&mut rng, votes_to_winners)
+				.cloned();
+			let rest_votes = targets
+				.as_slice()
+				.choose_multiple(&mut rng, votes_to_everyone as usize)
+				.cloned();
+
+			let votes = winner_votes.chain(rest_votes).collect::<Vec<_>>();
 			let voter = account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, votes)
 		})
 		.collect::<Vec<_>>();
 
-	// targets should have self vote. This is very helpful, because it ensure that by doing the trim,
-	// we almost never reduce the number of unique targets. For this cause, we also make the self
-	// vote heavier, to ensure that trimming only removes a voter here and there, not a target.
-	voters.extend(targets.iter().map(|t| (t.clone(), stake, vec![t.clone()])));
+	// rest of the voters. They can only vote for non-winners.
+	let non_winners = targets
+		.iter()
+		.filter(|t| !winners.contains(t))
+		.cloned()
+		.collect::<Vec<T::AccountId>>();
+	let rest_voters = (active_voters_count..witness.voters)
+		.map(|i| {
+			let votes = (&non_winners)
+				.choose_multiple(&mut rng, <CompactOf<T>>::LIMIT)
+				.cloned()
+				.collect::<Vec<T::AccountId>>();
+			let voter = account::<T::AccountId>("Voter", i, SEED);
+			(voter, stake, votes)
+		})
+		.collect::<Vec<_>>();
 
-	(targets, voters)
-}
+	dbg!(active_voters.len(), rest_voters.len(), winners.len());
+	// active_voters.extend(rest_voters);
+	let mut all_voters = active_voters.clone();
+	all_voters.extend(rest_voters);
 
-fn put_mock_snapshot<T: Config>(witness: WitnessData, desired_targets: u32)
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-{
-	let (targets, voters) = mock_snapshot::<T>(witness);
-	<SnapshotTargets<T>>::put(targets);
-	<SnapshotVoters<T>>::put(voters);
-	DesiredTargets::put(desired_targets);
-}
+	assert_eq!(active_voters.len() as u32, active_voters_count);
+	assert_eq!(all_voters.len() as u32, witness.voters);
+	assert_eq!(winners.len() as u32, winners_count);
 
-/// Creates a **valid** solution with exactly the given size.
-///
-/// The snapshot size must be bigger, otherwise this will panic.
-fn solution_with_size<T: Config>(active_voters: u32, winners_count: u32) -> RawSolution<CompactOf<T>>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	<InnerOf<CompactAccuracyOf<T>> as std::convert::TryFrom<usize>>::Error: std::fmt::Debug,
-{
-	let voters = <TwoPhase<T>>::snapshot_voters().unwrap();
-	let targets = <TwoPhase<T>>::snapshot_targets().unwrap();
+	let voters = active_voters;
 
-	// else we cannot support this, self vote is a must.
-	assert!(active_voters >= winners_count);
-	// else we won't have enough voters.
-	assert!(voters.len() >= active_voters as usize);
-	// else we won't have enough winners
-	assert!(targets.len() >= winners_count as usize);
+	<Snapshot<T>>::put(RoundSnapshot {
+		desired_targets: winners_count,
+		voters: all_voters,
+		targets: targets.clone(),
+	});
 
 	let voter_index = crate::voter_index_fn!(voters, T::AccountId, T);
 	let voter_at = crate::voter_at_fn!(voters, T::AccountId, T);
@@ -103,66 +128,37 @@ where
 	let target_index = crate::target_index_fn!(targets, T::AccountId, T);
 	let stake_of = crate::stake_of_fn!(voters, T::AccountId);
 
-	// First chose random winners.
-	let mut rng = rand::thread_rng();
-	let winners = targets
-		.as_slice()
-		.choose_multiple(&mut rng, winners_count as usize)
-		.cloned()
-		.collect::<Vec<_>>();
-
-	let mut assignments = winners
+	let assignments = voters
 		.iter()
-		.map(|w| Assignment {
-			who: w.clone(),
-			distribution: vec![(w.clone(), <CompactAccuracyOf<T>>::one())],
+		.map(|(voter, _stake, votes)| {
+			let percent_per_edge: InnerOf<CompactAccuracyOf<T>> =
+				(100 / votes.len()).try_into().unwrap();
+			Assignment {
+				who: voter.clone(),
+				distribution: votes
+					.iter()
+					.map(|t| (t.clone(), <CompactAccuracyOf<T>>::from_percent(percent_per_edge)))
+					.collect::<Vec<_>>(),
+			}
 		})
 		.collect::<Vec<_>>();
 
-	// all external voters who are not self vote.
-	let mut voters_pool = voters
-		.iter()
-		.filter(|(x, _, z)| *x != z[0])
-		.cloned()
-		.collect::<Vec<_>>();
-
-	// add from `voters_pool` to `assignments` until we have enough.
-	while assignments.len() < active_voters as usize {
-		// pop one of the voters.
-		let (who, _, votes) = voters_pool.remove(rand::random::<usize>() % voters_pool.len());
-		// see if it votes for any of the winners.
-		let winner_intersection = votes
-			.iter()
-			.filter(|v| winners.contains(v))
-			.cloned()
-			.collect::<Vec<_>>();
-
-		// if any, add assignment to all of them.
-		if winner_intersection.len() > 0 {
-			assignments.push(Assignment {
-				who,
-				distribution: winner_intersection
-					.iter()
-					.map(|w| {
-						let percent: InnerOf<CompactAccuracyOf<T>> = (100 / winner_intersection.len()).try_into().unwrap();
-						(
-							w.clone(),
-							<CompactAccuracyOf<T>>::from_percent(percent),
-						)
-					})
-					.collect::<Vec<_>>(),
-			})
-		}
-	}
-
-	let compact = <CompactOf<T>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
-	let score = compact.clone().score(winners, stake_of, voter_at, target_at).unwrap();
+	let compact =
+		<CompactOf<T>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
+	let score = compact
+		.clone()
+		.score(&winners, stake_of, voter_at, target_at)
+		.unwrap();
 
 	RawSolution { compact, score }
 }
 
 benchmarks! {
-	where_clause { where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>, }
+	where_clause {
+		where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+		// TODO: do I really need this?
+		<InnerOf<CompactAccuracyOf<T>> as std::convert::TryFrom<usize>>::Error: std::fmt::Debug,
+	}
 	_{}
 
 	submit_signed {}: {} verify {}
@@ -172,42 +168,24 @@ benchmarks! {
 
 	// This is checking a valid solution. The worse case is indeed a valid solution.
 	feasibility_check {
-		// number of votes in snapshot.
+		// number of voters in snapshot.
 		let v in 200 .. 300;
 		// number of targets in snapshot.
-		let t in 50 .. 80;
-		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
-		// a subset of `v` component.
-		let a in 20 .. 80;
+		let t in 80 .. 140;
+		// number of assignments, i.e. compact.voters_count(). This means the active nominators,
+		// thus must be a subset of `v` component.
+		let a in 80 .. 140;
 		// number of desired targets. Must be a subset of `t` component.
-		let d in 20 .. 40;
+		let d in 30 .. 60;
 
 		println!("running v {}, t {}, a {}, d {}", v, t, a, d);
 
 		let witness = WitnessData { voters: v, targets: t };
-		put_mock_snapshot::<T>(witness, d);
+		let raw_solution = solution_with_size::<T>(witness, a, d);
 
-		let voters = <TwoPhase<T>>::snapshot_voters().unwrap();
-		let targets = <TwoPhase<T>>::snapshot_targets().unwrap();
+		assert_eq!(raw_solution.compact.voters_count() as u32, a);
+		assert_eq!(raw_solution.compact.unique_targets().len() as u32, d);
 
-		let voter_index = crate::voter_index_fn!(voters, T::AccountId, T);
-		let voter_at = crate::voter_at_fn!(voters, T::AccountId, T);
-		let target_at = crate::target_at_fn!(targets, T::AccountId, T);
-		let stake_of = crate::stake_of_fn!(voters, T::AccountId);
-
-		// the score at this point is not usable -- It might change when we resize the compact.
-		let RawSolution { compact, score: _ } = <TwoPhase<T>>::mine_solution(0).unwrap();
-		let compact = <TwoPhase<T>>::trim_compact(a, compact, voter_index).unwrap();
-
-		assert_eq!(compact.len() as u32, a);
-		assert_eq!(compact.unique_targets().len() as u32, d);
-
-		// re-calc score.
-		let winners = compact.unique_targets().iter().map(|i| target_at(*i).unwrap()).collect::<Vec<_>>();
-		let score = compact
-			.clone()
-			.score(&winners, stake_of, voter_at, target_at).unwrap();
-		let raw_solution = RawSolution { compact, score };
 		let compute = ElectionCompute::Unsigned;
 	}: {
 		assert_ok!(<TwoPhase<T>>::feasibility_check(raw_solution, compute));

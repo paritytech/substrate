@@ -1,7 +1,6 @@
 use super::*;
 use frame_support::{parameter_types, traits::OnInitialize};
 use parking_lot::RwLock;
-use rand::seq::SliceRandom;
 use sp_core::{
 	offchain::{
 		testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
@@ -12,7 +11,7 @@ use sp_core::{
 use sp_election_providers::ElectionDataProvider;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
-	Assignment, CompactSolution, ElectionResult, EvaluateSupport,
+	CompactSolution, ElectionResult, EvaluateSupport,
 };
 use sp_runtime::{
 	testing::Header,
@@ -54,9 +53,12 @@ pub fn balances(who: &AccountId) -> (Balance, Balance) {
 ///
 /// This is a good example of what an offchain miner would do.
 pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
-	let voters = TwoPhase::snapshot_voters().unwrap();
-	let targets = TwoPhase::snapshot_targets().unwrap();
-	let desired = TwoPhase::desired_targets() as usize;
+	let RoundSnapshot {
+		voters,
+		targets,
+		desired_targets,
+	} = TwoPhase::snapshot().unwrap();
+	let desired = desired_targets as usize;
 
 	// closures
 	let voter_index = crate::voter_index_fn!(voters, AccountId, Runtime);

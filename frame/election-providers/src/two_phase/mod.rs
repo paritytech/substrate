@@ -17,7 +17,7 @@
 
 //! # Two phase election provider pallet.
 //!
-//! As the name suggests, this election provider has two distinct phases (see [`Phase`]), signed and
+//! As the name suggests, this election-provider has two distinct phases (see [`Phase`]), signed and
 //! unsigned.
 //!
 //! ## Phases
@@ -41,13 +41,13 @@
 //!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
 //! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
 //! on-chain for a number of blocks. A maximum of [`Config::MaxSignedSubmissions`] solutions are
-//! stored. The queue is always sorted based on score (worse -> best).
+//! stored. The queue is always sorted based on score (worse to best).
 //!
 //! Upon arrival of a new solution:
 //!
-//! 1. If the queue is not full, it is stored.
+//! 1. If the queue is not full, it is stored in the appropriate index.
 //! 2. If the queue is full but the submitted solution is better than one of the queued ones, the
-//!    worse solution is discarded (TODO: what to do with the bond?) and the new solution is stored
+//!    worse solution is discarded (TODO: must return the bond here) and the new solution is stored
 //!    in the correct index.
 //! 3. If the queue is full and the solution is not an improvement compared to any of the queued
 //!    ones, it is instantly rejected and no additional bond is reserved.
@@ -58,7 +58,7 @@
 //! Upon the end of the signed phase, the solutions are examined from worse to best (i.e. `pop()`ed
 //! until drained). Each solution undergoes an expensive [`Module::feasibility_check`], which ensure
 //! the score claimed by this score was correct, among other checks. At each step, if the current
-//! best solution is passes the feasibility check, it is considered to be the best one. The sender
+//! best solution passes the feasibility check, it is considered to be the best one. The sender
 //! of the origin is rewarded, and the rest of the queued solutions get their deposit back, without
 //! being checked.
 //!
@@ -127,8 +127,9 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
+// TODO: make this only test.
 #[cfg(any(feature = "runtime-benchmarks", test))]
-pub mod benchmarking;
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[macro_use]
@@ -166,7 +167,8 @@ pub enum Phase<Bn> {
 	Off,
 	/// Signed phase is open.
 	Signed,
-	/// Unsigned phase is open.
+	/// Unsigned phase. First element is whether it is open or not, second the starting block
+	/// number.
 	Unsigned((bool, Bn)),
 }
 
@@ -222,8 +224,10 @@ impl Default for ElectionCompute {
 
 /// A raw, unchecked solution.
 ///
+/// This is what will get submitted to the chain.
+///
 /// Such a solution should never become effective in anyway before being checked by the
-/// [`Module::feasibility_check`]
+/// [`Module::feasibility_check`].
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct RawSolution<C> {
 	/// Compact election edges.
@@ -247,11 +251,13 @@ pub struct SignedSubmission<A, B: HasCompact, C> {
 	solution: RawSolution<C>,
 }
 
-/// A checked and parsed solution, ready to be enacted.
+/// A checked solution, ready to be enacted.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct ReadySolution<A> {
-	/// The final supports of the solution. This is target-major vector, storing each winners, total
-	/// backing, and each individual backer.
+	/// The final supports of the solution.
+	///
+	/// This is target-major vector, storing each winners, total backing, and each individual
+	/// backer.
 	supports: Supports<A>,
 	/// The score of the solution.
 	///
@@ -278,7 +284,24 @@ pub struct WitnessData {
 	targets: u32,
 }
 
-/// The crate errors. Note that this is different from the [`PalletError`].
+/// A snapshot of all the data that is needed for en entire round. They are provided by
+/// [`ElectionDataProvider`] at the beginning of the signed phase and are kept around until the
+/// round is finished.
+///
+/// These are stored together because they are often times accessed together.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+pub struct RoundSnapshot<A> {
+	/// All of the voters.
+	pub voters: Vec<(A, VoteWeight, Vec<A>)>,
+	/// All of the targets.
+	pub targets: Vec<A>,
+	/// Desired number of winners to be elected for this round.
+	pub desired_targets: u32,
+}
+
+/// The crate errors.
+///
+/// Note that this is different from the [`PalletError`].
 #[derive(RuntimeDebug, Eq, PartialEq)]
 pub enum Error {
 	/// A feasibility error.
@@ -307,6 +330,12 @@ impl From<sp_npos_elections::Error> for Error {
 	}
 }
 
+impl From<FeasibilityError> for Error {
+	fn from(e: FeasibilityError) -> Self {
+		Error::Feasibility(e)
+	}
+}
+
 /// Errors that can happen in the feasibility check.
 #[derive(RuntimeDebug, Eq, PartialEq)]
 pub enum FeasibilityError {
@@ -317,7 +346,7 @@ pub enum FeasibilityError {
 	/// This must be an internal error of the chain.
 	SnapshotUnavailable,
 	/// Internal error from the election crate.
-	NposElectionError(sp_npos_elections::Error),
+	NposElection(sp_npos_elections::Error),
 	/// A vote is invalid.
 	InvalidVote,
 	/// A voter is invalid.
@@ -330,11 +359,10 @@ pub enum FeasibilityError {
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
 	fn from(e: sp_npos_elections::Error) -> Self {
-		FeasibilityError::NposElectionError(e)
+		FeasibilityError::NposElection(e)
 	}
 }
 
-/// The weights for this pallet.
 pub trait WeightInfo {
 	fn feasibility_check() -> Weight;
 	fn submit() -> Weight;
@@ -374,6 +402,7 @@ where
 	type SignedRewardBase: Get<BalanceOf<Self>>;
 	type SignedRewardFactor: Get<Perbill>;
 	type SignedRewardMax: Get<Option<BalanceOf<Self>>>;
+
 	type SignedDepositBase: Get<BalanceOf<Self>>;
 	type SignedDepositByte: Get<BalanceOf<Self>>;
 	type SignedDepositWeight: Get<BalanceOf<Self>>;
@@ -381,7 +410,10 @@ where
 	/// The minimum amount of improvement to the solution score that defines a solution as "better".
 	type SolutionImprovementThreshold: Get<Perbill>;
 
+	/// Maximum number of iteration of balancing that will be executed in the embedded miner of the
+	/// pallet.
 	type UnsignedMaxIterations: Get<u32>;
+	/// The priority of the unsigned transaction submitted in the unsigned-phase
 	type UnsignedPriority: Get<TransactionPriority>;
 
 	/// Handler for the slashed deposits.
@@ -398,7 +430,7 @@ where
 
 decl_storage! {
 	trait Store for Module<T: Config> as TwoPhaseElectionProvider where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> {
-		/// Internal counter ofr the number of rounds.
+		/// Internal counter for the number of rounds.
 		///
 		/// This is useful for de-duplication of transactions submitted to the pool, and general
 		/// diagnostics of the module.
@@ -414,20 +446,10 @@ decl_storage! {
 		/// Current best solution, signed or unsigned.
 		pub QueuedSolution get(fn queued_solution): Option<ReadySolution<T::AccountId>>;
 
-		/// Snapshot of all Voters.
+		/// Snapshot data of the round.
 		///
 		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-		pub SnapshotTargets get(fn snapshot_targets): Option<Vec<T::AccountId>>;
-
-		/// Snapshot of all targets.
-		///
-		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-		pub SnapshotVoters get(fn snapshot_voters): Option<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>>;
-
-		/// Desired number of targets to elect.
-		///
-		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-		pub DesiredTargets get(fn desired_targets): u32;
+		pub Snapshot get(fn snapshot): Option<RoundSnapshot<T::AccountId>>;
 	}
 }
 
@@ -520,8 +542,8 @@ decl_module! {
 		///
 		/// The dispatch origin fo this call must be __signed__.
 		///
-		/// The solution potentially queued, based on the claimed score and processed at the end of
-		/// the signed phase.
+		/// The solution is potentially queued, based on the claimed score and processed at the end
+		/// of the signed phase.
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
@@ -539,6 +561,7 @@ decl_module! {
 			let index = maybe_index.expect("Option checked to be `Some`; qed.");
 
 			// collect deposit. Thereafter, the function cannot fail.
+			// TODO: ensure this index is correct.
 			let deposit = signed_submissions[index].deposit;
 			T::Currency::reserve(&who, deposit).map_err(|_| PalletError::<T>::CannotPayDeposit)?;
 
@@ -571,7 +594,7 @@ decl_module! {
 			// check phase and score.
 			// TODO: since we do this in pre-dispatch, we can just ignore it
 			// here.
-			let _ = Self::pre_dispatch_checks(&solution)?;
+			let _ = Self::unsigned_pre_dispatch_checks(&solution)?;
 
 			let ready =
 				Self::feasibility_check(solution, ElectionCompute::Unsigned)
@@ -611,18 +634,23 @@ where
 		// TODO: dupe in compact.
 		let winners = compact.unique_targets();
 
+		// read the entire snapshot.
+		// TODO: maybe we can store desired_targets separately if it
+		// happens to make a difference to the weight. For now I think it will not and we always
+		// want to charge the full weight of this call anyhow.
+		let RoundSnapshot {
+			voters: snapshot_voters,
+			targets: snapshot_targets,
+			desired_targets,
+		} = Self::snapshot().ok_or(FeasibilityError::SnapshotUnavailable)?;
+
 		// Ensure that we have received enough winners.
 		ensure!(
-			winners.len() as u32 == Self::desired_targets(),
+			winners.len() as u32 == desired_targets,
 			FeasibilityError::WrongWinnerCount
 		);
 
 		// ----- Start building. First, we need some closures.
-		let snapshot_voters =
-			Self::snapshot_voters().ok_or(FeasibilityError::SnapshotUnavailable)?;
-		let snapshot_targets =
-			Self::snapshot_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
-
 		let voter_at = crate::voter_at_fn!(snapshot_voters, T::AccountId, T);
 		let target_at = crate::target_at_fn!(snapshot_targets, T::AccountId, T);
 
@@ -644,8 +672,8 @@ where
 			.map(|Assignment { who, distribution }| {
 				snapshot_voters.iter().find(|(v, _, _)| v == who).map_or(
 					Err(FeasibilityError::InvalidVoter),
-					|(_, _, t)| {
-						if distribution.iter().map(|(x, _)| x).all(|x| t.contains(x))
+					|(_voter, _stake, targets)| {
+						if distribution.iter().map(|(d, _)| d).all(|d| targets.contains(d))
 							&& T::ElectionDataProvider::feasibility_check_assignment::<
 								CompactAccuracyOf<T>,
 							>(who, distribution)
@@ -683,11 +711,13 @@ where
 
 	/// On-chain fallback of election.
 	fn onchain_fallback() -> Result<Supports<T::AccountId>, Error> {
-		let desired_targets = Self::desired_targets() as usize;
-		let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
-		let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
-		<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<Perbill>(
+		let RoundSnapshot {
 			desired_targets,
+			voters,
+			targets,
+		} = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
+		<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<Perbill>(
+			desired_targets as usize,
 			targets,
 			voters,
 		)
@@ -723,8 +753,7 @@ where
 				// reset phase.
 				<CurrentPhase<T>>::put(Phase::Off);
 				// clear snapshots.
-				<SnapshotVoters<T>>::kill();
-				<SnapshotTargets<T>>::kill();
+				<Snapshot<T>>::kill();
 
 				Self::deposit_event(RawEvent::ElectionFinalized(Some(compute)));
 				log!(info, "Finalized election round with compute {:?}.", compute);
@@ -761,40 +790,40 @@ mod tests {
 
 			roll_to(4);
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
-			assert!(TwoPhase::snapshot_voters().is_none());
+			assert!(TwoPhase::snapshot().is_none());
 			assert_eq!(TwoPhase::round(), 0);
 
 			roll_to(5);
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
-			assert!(TwoPhase::snapshot_voters().is_some());
+			assert!(TwoPhase::snapshot().is_some());
 			assert_eq!(TwoPhase::round(), 1);
 
 			roll_to(14);
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
-			assert!(TwoPhase::snapshot_voters().is_some());
+			assert!(TwoPhase::snapshot().is_some());
 			assert_eq!(TwoPhase::round(), 1);
 
 			roll_to(15);
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
-			assert!(TwoPhase::snapshot_voters().is_some());
+			assert!(TwoPhase::snapshot().is_some());
 
 			roll_to(19);
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
-			assert!(TwoPhase::snapshot_voters().is_some());
+			assert!(TwoPhase::snapshot().is_some());
 
 			roll_to(20);
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
-			assert!(TwoPhase::snapshot_voters().is_some());
+			assert!(TwoPhase::snapshot().is_some());
 
 			// we close when upstream tells us to elect.
 			roll_to(21);
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
-			assert!(TwoPhase::snapshot_voters().is_some());
+			assert!(TwoPhase::snapshot().is_some());
 
 			TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
 				.unwrap();
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
-			assert!(TwoPhase::snapshot_voters().is_none());
+			assert!(TwoPhase::snapshot().is_none());
 			assert_eq!(TwoPhase::round(), 1);
 		})
 	}

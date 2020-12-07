@@ -124,7 +124,7 @@ pub mod onchain {
 pub mod two_phase {
 	//! # Two phase election provider pallet.
 	//!
-	//! As the name suggests, this election provider has two distinct phases (see [`Phase`]), signed and
+	//! As the name suggests, this election-provider has two distinct phases (see [`Phase`]), signed and
 	//! unsigned.
 	//!
 	//! ## Phases
@@ -147,14 +147,14 @@ pub mod two_phase {
 	//!
 	//!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
 	//! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
-	//! on-chain for a number of blocks. A maximum of [`Trait::MaxSignedSubmissions`] solutions are
-	//! stored. The queue is always sorted based on score (worse -> best).
+	//! on-chain for a number of blocks. A maximum of [`Config::MaxSignedSubmissions`] solutions are
+	//! stored. The queue is always sorted based on score (worse to best).
 	//!
 	//! Upon arrival of a new solution:
 	//!
-	//! 1. If the queue is not full, it is stored.
+	//! 1. If the queue is not full, it is stored in the appropriate index.
 	//! 2. If the queue is full but the submitted solution is better than one of the queued ones, the
-	//!    worse solution is discarded (TODO: what to do with the bond?) and the new solution is stored
+	//!    worse solution is discarded (TODO: must return the bond here) and the new solution is stored
 	//!    in the correct index.
 	//! 3. If the queue is full and the solution is not an improvement compared to any of the queued
 	//!    ones, it is instantly rejected and no additional bond is reserved.
@@ -165,7 +165,7 @@ pub mod two_phase {
 	//! Upon the end of the signed phase, the solutions are examined from worse to best (i.e. `pop()`ed
 	//! until drained). Each solution undergoes an expensive [`Module::feasibility_check`], which ensure
 	//! the score claimed by this score was correct, among other checks. At each step, if the current
-	//! best solution is passes the feasibility check, it is considered to be the best one. The sender
+	//! best solution passes the feasibility check, it is considered to be the best one. The sender
 	//! of the origin is rewarded, and the rest of the queued solutions get their deposit back, without
 	//! being checked.
 	//!
@@ -243,37 +243,39 @@ pub mod two_phase {
 		use sp_arithmetic::traits::SaturatedConversion;
 		use sp_npos_elections::is_score_better;
 		use sp_runtime::Perbill;
-		impl<T: Trait> Module<T>
+		impl<T: Config> Module<T>
 		where
 			ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 		{
 			/// Start the signed phase.
-            ///
-            /// Upon calling this, auxillary data for election is stored and signed solutions will be
-            /// accepted.
-            ///
-            /// The signed phase must always start before the unsigned phase.
-            pub fn start_signed_phase() {
-                let targets = T::ElectionDataProvider::targets();
-                let voters = T::ElectionDataProvider::voters();
-                let desired_targets = T::ElectionDataProvider::desired_targets();
-                <SnapshotTargets<T>>::put(targets);
-                <SnapshotVoters<T>>::put(voters);
-                DesiredTargets::put(desired_targets);
-            }
-            /// Finish the singed phase. Process the signed submissions from best to worse until a valid one
+			///
+			/// Upon calling this, auxillary data for election is stored and signed solutions will be
+			/// accepted.
+			///
+			/// The signed phase must always start before the unsigned phase.
+			pub fn start_signed_phase() {
+				let targets = T::ElectionDataProvider::targets();
+				let voters = T::ElectionDataProvider::voters();
+				let desired_targets = T::ElectionDataProvider::desired_targets();
+				<Snapshot<T>>::put(RoundSnapshot {
+					voters,
+					targets,
+					desired_targets,
+				});
+			}
+			/// Finish the singed phase. Process the signed submissions from best to worse until a valid one
 			/// is found, rewarding the best oen and slashing the invalid ones along the way.
 			///
 			/// Returns true if we have a good solution in the signed phase.
 			///
 			/// This drains the [`SignedSubmissions`], potentially storing the best valid one in
 			/// [`QueuedSolution`].
-            pub fn finalize_signed_phase() -> bool {
-                let mut all_submission: Vec<SignedSubmission<_, _, _>> =
-                    <SignedSubmissions<T>>::take();
-                let mut found_solution = false;
-                while let Some(best) = all_submission.pop() {
-                    let SignedSubmission {
+			pub fn finalize_signed_phase() -> bool {
+				let mut all_submission: Vec<SignedSubmission<_, _, _>> =
+					<SignedSubmissions<T>>::take();
+				let mut found_solution = false;
+				while let Some(best) = all_submission.pop() {
+					let SignedSubmission {
                         solution,
                         who,
                         deposit,
@@ -428,7 +430,7 @@ pub mod two_phase {
 		pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
 		/// Default number of blocks for which the unsigned transaction should stay in the pool
 		pub(crate) const DEFAULT_LONGEVITY: u64 = 25;
-		impl<T: Trait> Module<T>
+		impl<T: Config> Module<T>
 		where
 			ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 		{
@@ -438,13 +440,13 @@ pub mod two_phase {
 				let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
 				let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
 				seq_phragmen::<_, CompactAccuracyOf<T>>(
-                    desired_targets,
-                    targets,
-                    voters,
-                    Some((iters, 0)),
-                )
-                .map_err(Into::into)
-                .and_then(Self::prepare_election_result)
+					desired_targets,
+					targets,
+					voters,
+					Some((iters, 0)),
+				)
+				.map_err(Into::into)
+				.and_then(Self::prepare_election_result)
 			}
 			/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
 			/// is ready to be submitted to the chain.
@@ -457,18 +459,18 @@ pub mod two_phase {
 				let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
 				let voter_index =
 					|who: &T::AccountId| -> Option<crate::two_phase::CompactVoterIndexOf<T>> {
-                        voters . iter ( ) . position ( | ( x , _ , _ ) | x == who ) . and_then ( | i | < usize as crate :: TryInto < crate :: two_phase :: CompactVoterIndexOf < T > > > :: try_into ( i ) . ok ( ) )
-                    };
-                let target_index =
-                    |who: &T::AccountId| -> Option<crate::two_phase::CompactTargetIndexOf<T>> {
-                        targets . iter ( ) . position ( | x | x == who ) . and_then ( | i | < usize as crate :: TryInto < crate :: two_phase :: CompactTargetIndexOf < T > > > :: try_into ( i ) . ok ( ) )
-                    };
-                let voter_at =
-                    |i: crate::two_phase::CompactVoterIndexOf<T>| -> Option<T::AccountId> {
-                        < crate :: two_phase :: CompactVoterIndexOf < T > as crate :: TryInto < usize > > :: try_into ( i ) . ok ( ) . and_then ( | i | voters . get ( i ) . map ( | ( x , _ , _ ) | x ) . cloned ( ) )
-                    };
-                let target_at =
-                    |i: crate::two_phase::CompactTargetIndexOf<T>| -> Option<T::AccountId> {
+						voters . iter ( ) . position ( | ( x , _ , _ ) | x == who ) . and_then ( | i | < usize as crate :: TryInto < crate :: two_phase :: CompactVoterIndexOf < T > > > :: try_into ( i ) . ok ( ) )
+					};
+				let target_index =
+					|who: &T::AccountId| -> Option<crate::two_phase::CompactTargetIndexOf<T>> {
+						targets . iter ( ) . position ( | x | x == who ) . and_then ( | i | < usize as crate :: TryInto < crate :: two_phase :: CompactTargetIndexOf < T > > > :: try_into ( i ) . ok ( ) )
+					};
+				let voter_at =
+					|i: crate::two_phase::CompactVoterIndexOf<T>| -> Option<T::AccountId> {
+						< crate :: two_phase :: CompactVoterIndexOf < T > as crate :: TryInto < usize > > :: try_into ( i ) . ok ( ) . and_then ( | i | voters . get ( i ) . map ( | ( x , _ , _ ) | x ) . cloned ( ) )
+					};
+				let target_at =
+					|i: crate::two_phase::CompactTargetIndexOf<T>| -> Option<T::AccountId> {
                         < crate :: two_phase :: CompactTargetIndexOf < T > as crate :: TryInto < usize > > :: try_into ( i ) . ok ( ) . and_then ( | i | targets . get ( i ) . cloned ( ) )
                     };
                 let stake_of = |who: &T::AccountId| -> crate::VoteWeight {
@@ -487,16 +489,16 @@ pub mod two_phase {
                     &stake_of,
                 )
                 .map_err::<Error, _>(Into::into)?;
-                sp_npos_elections::reduce(&mut staked);
-                let ratio = sp_npos_elections::assignment_staked_to_ratio_normalized(staked)?;
-                let compact = <CompactOf<T>>::from_assignment(ratio, &voter_index, &target_index)?;
-                let maximum_allowed_voters =
-                    Self::maximum_compact_len::<T::WeightInfo>(0, Default::default(), 0);
-                let compact = Self::trim_compact(compact.len() as u32, compact, &voter_index)?;
-                let winners = sp_npos_elections::to_without_backing(winners);
+				sp_npos_elections::reduce(&mut staked);
+				let ratio = sp_npos_elections::assignment_staked_to_ratio_normalized(staked)?;
+				let compact = <CompactOf<T>>::from_assignment(ratio, &voter_index, &target_index)?;
+				let maximum_allowed_voters =
+					Self::maximum_compact_len::<T::WeightInfo>(0, Default::default(), 0);
+				let compact = Self::trim_compact(compact.len() as u32, compact, &voter_index)?;
+				let winners = sp_npos_elections::to_without_backing(winners);
 				let score = compact
-                    .clone()
-                    .score(&winners, stake_of, voter_at, target_at)?;
+					.clone()
+					.score(&winners, stake_of, voter_at, target_at)?;
 				Ok(RawSolution { compact, score })
 			}
 			/// Get a random number of iterations to run the balancing in the OCW.
@@ -551,11 +553,11 @@ pub mod two_phase {
 							.iter()
 							.map(|(who, stake)| (nominator_index(&who), stake))
 						{
-                            let index = maybe_index.ok_or(Error::SnapshotUnAvailable)?;
-                            if compact.remove_voter(index) {
-                                removed += 1
-                            }
-                            if removed >= to_remove {
+							let index = maybe_index.ok_or(Error::SnapshotUnAvailable)?;
+							if compact.remove_voter(index) {
+								removed += 1
+							}
+							if removed >= to_remove {
                                 break;
                             }
 						}
@@ -648,15 +650,13 @@ pub mod two_phase {
 				let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 				let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
 				let mutate_stat = storage.mutate::<_, &'static str, _>(
-					|maybe_head: Option<Option<T::BlockNumber>>| {
-						match maybe_head {
-                        Some(Some(head)) if now < head => Err("fork."),
-                        Some(Some(head)) if now >= head && now <= head + threshold => {
-                            Err("recently executed.")
-                        }
-                        Some(Some(head)) if now > head + threshold => Ok(now),
-                        _ => Ok(now),
-                    }
+					|maybe_head: Option<Option<T::BlockNumber>>| match maybe_head {
+						Some(Some(head)) if now < head => Err("fork."),
+						Some(Some(head)) if now >= head && now <= head + threshold => {
+							Err("recently executed.")
+						}
+						Some(Some(head)) if now > head + threshold => Ok(now),
+						_ => Ok(now),
 					},
 				);
 				match mutate_stat {
@@ -668,13 +668,12 @@ pub mod two_phase {
 			/// Mine a new solution, and submit it back to the chian as an unsigned transaction.
 			pub(crate) fn mine_and_submit() -> Result<(), Error> {
 				let balancing = Self::get_balancing_iters();
-				Self::mine_solution(balancing).and_then(|raw_solution| {
-					let call = Call::submit_unsigned(raw_solution).into();
-					SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
-						.map_err(|_| Error::PoolSubmissionFailed)
-				})
+				let raw_solution = Self::mine_solution(balancing)?;
+				let call = Call::submit_unsigned(raw_solution).into();
+				SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
+					.map_err(|_| Error::PoolSubmissionFailed)
 			}
-			pub(crate) fn pre_dispatch_checks(
+			pub(crate) fn unsigned_pre_dispatch_checks(
 				solution: &RawSolution<CompactOf<T>>,
 			) -> DispatchResult {
 				{
@@ -701,7 +700,7 @@ pub mod two_phase {
 			}
 		}
 		#[allow(deprecated)]
-		impl<T: Trait> ValidateUnsigned for Module<T>
+		impl<T: Config> ValidateUnsigned for Module<T>
 		where
 			ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 		{
@@ -744,9 +743,9 @@ pub mod two_phase {
 	}
 	/// The compact solution type used by this crate. This is provided from the [`ElectionDataProvider`]
 	/// implementer.
-	pub type CompactOf<T> = <<T as Trait>::ElectionDataProvider as ElectionDataProvider<
-		<T as frame_system::Trait>::AccountId,
-		<T as frame_system::Trait>::BlockNumber,
+	pub type CompactOf<T> = <<T as Config>::ElectionDataProvider as ElectionDataProvider<
+		<T as frame_system::Config>::AccountId,
+		<T as frame_system::Config>::BlockNumber,
 	>>::CompactSolution;
 	/// The voter index. Derived from [`CompactOf`].
 	pub type CompactVoterIndexOf<T> = <CompactOf<T> as CompactSolution>::Voter;
@@ -755,12 +754,12 @@ pub mod two_phase {
 	/// The accuracy of the election. Derived from [`CompactOf`].
 	pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::VoteWeight;
 	type BalanceOf<T> =
-		<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-	type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<
-		<T as frame_system::Trait>::AccountId,
+		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
+		<T as frame_system::Config>::AccountId,
 	>>::PositiveImbalance;
-	type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<
-		<T as frame_system::Trait>::AccountId,
+	type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+		<T as frame_system::Config>::AccountId,
 	>>::NegativeImbalance;
 	/// Current phase of the pallet.
 	pub enum Phase<Bn> {
@@ -768,19 +767,20 @@ pub mod two_phase {
 		Off,
 		/// Signed phase is open.
 		Signed,
-		/// Unsigned phase is open.
+		/// Unsigned phase. First element is whether it is open or not, second the starting block
+		/// number.
 		Unsigned((bool, Bn)),
 	}
-    impl<Bn> ::core::marker::StructuralPartialEq for Phase<Bn> {}
-    #[automatically_derived]
-    #[allow(unused_qualifications)]
-    impl<Bn: ::core::cmp::PartialEq> ::core::cmp::PartialEq for Phase<Bn> {
-        #[inline]
-        fn eq(&self, other: &Phase<Bn>) -> bool {
-            {
-                let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
-                let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
-                if true && __self_vi == __arg_1_vi {
+	impl<Bn> ::core::marker::StructuralPartialEq for Phase<Bn> {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<Bn: ::core::cmp::PartialEq> ::core::cmp::PartialEq for Phase<Bn> {
+		#[inline]
+		fn eq(&self, other: &Phase<Bn>) -> bool {
+			{
+				let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
+				let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
+				if true && __self_vi == __arg_1_vi {
                     match (&*self, &*other) {
                         (&Phase::Unsigned(ref __self_0), &Phase::Unsigned(ref __arg_1_0)) => {
                             (*__self_0) == (*__arg_1_0)
@@ -807,25 +807,25 @@ pub mod two_phase {
                 } else {
                     true
                 }
-            }
-        }
-    }
-    impl<Bn> ::core::marker::StructuralEq for Phase<Bn> {}
-    #[automatically_derived]
-    #[allow(unused_qualifications)]
-    impl<Bn: ::core::cmp::Eq> ::core::cmp::Eq for Phase<Bn> {
-        #[inline]
-        #[doc(hidden)]
-        fn assert_receiver_is_total_eq(&self) -> () {
-            {
-                let _: ::core::cmp::AssertParamIsEq<(bool, Bn)>;
-            }
-        }
-    }
-    #[automatically_derived]
-    #[allow(unused_qualifications)]
-    impl<Bn: ::core::clone::Clone> ::core::clone::Clone for Phase<Bn> {
-        #[inline]
+			}
+		}
+	}
+	impl<Bn> ::core::marker::StructuralEq for Phase<Bn> {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<Bn: ::core::cmp::Eq> ::core::cmp::Eq for Phase<Bn> {
+		#[inline]
+		#[doc(hidden)]
+		fn assert_receiver_is_total_eq(&self) -> () {
+			{
+				let _: ::core::cmp::AssertParamIsEq<(bool, Bn)>;
+			}
+		}
+	}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<Bn: ::core::clone::Clone> ::core::clone::Clone for Phase<Bn> {
+		#[inline]
         fn clone(&self) -> Phase<Bn> {
             match (&*self,) {
                 (&Phase::Off,) => Phase::Off,
@@ -835,87 +835,91 @@ pub mod two_phase {
                 }
             }
         }
-    }
+	}
     #[automatically_derived]
     #[allow(unused_qualifications)]
     impl<Bn: ::core::marker::Copy> ::core::marker::Copy for Phase<Bn> {}
-    const _: () = {
-        #[allow(unknown_lints)]
-        #[allow(rust_2018_idioms)]
-        extern crate codec as _parity_scale_codec;
-        impl<Bn> _parity_scale_codec::Encode for Phase<Bn>
-        where
-            Bn: _parity_scale_codec::Encode,
-            (bool, Bn): _parity_scale_codec::Encode,
-        {
-            fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
-                match *self {
-                    Phase::Off => {
-                        dest.push_byte(0usize as u8);
-                    }
-                    Phase::Signed => {
-                        dest.push_byte(1usize as u8);
-                    }
-                    Phase::Unsigned(ref aa) => {
-                        dest.push_byte(2usize as u8);
-                        dest.push(aa);
-                    }
-                    _ => (),
-                }
-            }
-        }
-        impl<Bn> _parity_scale_codec::EncodeLike for Phase<Bn>
-        where
-            Bn: _parity_scale_codec::Encode,
-            (bool, Bn): _parity_scale_codec::Encode,
-        {
-        }
-    };
-    const _: () = {
-        #[allow(unknown_lints)]
-        #[allow(rust_2018_idioms)]
-        extern crate codec as _parity_scale_codec;
-        impl<Bn> _parity_scale_codec::Decode for Phase<Bn>
-        where
-            Bn: _parity_scale_codec::Decode,
-            (bool, Bn): _parity_scale_codec::Decode,
-        {
-            fn decode<DecIn: _parity_scale_codec::Input>(
-                input: &mut DecIn,
-            ) -> core::result::Result<Self, _parity_scale_codec::Error> {
-                match input.read_byte()? {
-                    x if x == 0usize as u8 => Ok(Phase::Off),
-                    x if x == 1usize as u8 => Ok(Phase::Signed),
-                    x if x == 2usize as u8 => Ok(Phase::Unsigned({
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => return Err("Error decoding field Phase :: Unsigned.0".into()),
-                            Ok(a) => a,
-                        }
-                    })),
-                    x => Err("No such variant in enum Phase".into()),
-                }
-            }
-        }
-    };
-    impl<Bn> core::fmt::Debug for Phase<Bn>
-    where
-        Bn: core::fmt::Debug,
-    {
-        fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
-            match self {
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl<Bn> _parity_scale_codec::Encode for Phase<Bn>
+		where
+			Bn: _parity_scale_codec::Encode,
+			(bool, Bn): _parity_scale_codec::Encode,
+		{
+			fn encode_to<__CodecOutputEdqy: _parity_scale_codec::Output>(
+				&self,
+				__codec_dest_edqy: &mut __CodecOutputEdqy,
+			) {
+				match *self {
+					Phase::Off => {
+						__codec_dest_edqy.push_byte(0usize as u8);
+					}
+					Phase::Signed => {
+						__codec_dest_edqy.push_byte(1usize as u8);
+					}
+					Phase::Unsigned(ref aa) => {
+						__codec_dest_edqy.push_byte(2usize as u8);
+						__codec_dest_edqy.push(aa);
+					}
+					_ => (),
+				}
+			}
+		}
+		impl<Bn> _parity_scale_codec::EncodeLike for Phase<Bn>
+		where
+			Bn: _parity_scale_codec::Encode,
+			(bool, Bn): _parity_scale_codec::Encode,
+		{
+		}
+	};
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl<Bn> _parity_scale_codec::Decode for Phase<Bn>
+		where
+			Bn: _parity_scale_codec::Decode,
+			(bool, Bn): _parity_scale_codec::Decode,
+		{
+			fn decode<__CodecInputEdqy: _parity_scale_codec::Input>(
+				__codec_input_edqy: &mut __CodecInputEdqy,
+			) -> core::result::Result<Self, _parity_scale_codec::Error> {
+				match __codec_input_edqy.read_byte()? {
+					__codec_x_edqy if __codec_x_edqy == 0usize as u8 => Ok(Phase::Off),
+					__codec_x_edqy if __codec_x_edqy == 1usize as u8 => Ok(Phase::Signed),
+					__codec_x_edqy if __codec_x_edqy == 2usize as u8 => Ok(Phase::Unsigned({
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => return Err("Error decoding field Phase :: Unsigned.0".into()),
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					})),
+					_ => Err("No such variant in enum Phase".into()),
+				}
+			}
+		}
+	};
+	impl<Bn> core::fmt::Debug for Phase<Bn>
+	where
+		Bn: core::fmt::Debug,
+	{
+		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+			match self {
                 Self::Off => fmt.debug_tuple("Phase::Off").finish(),
                 Self::Signed => fmt.debug_tuple("Phase::Signed").finish(),
                 Self::Unsigned(ref a0) => fmt.debug_tuple("Phase::Unsigned").field(a0).finish(),
                 _ => Ok(()),
             }
-        }
-    }
-    impl<Bn> Default for Phase<Bn> {
-        fn default() -> Self {
-            Phase::Off
-        }
-    }
+		}
+	}
+	impl<Bn> Default for Phase<Bn> {
+		fn default() -> Self {
+			Phase::Off
+		}
+	}
     impl<Bn: PartialEq + Eq> Phase<Bn> {
         /// Weather the phase is signed or not.
         pub fn is_signed(&self) -> bool {
@@ -1001,80 +1005,89 @@ pub mod two_phase {
             }
         }
     }
-    #[automatically_derived]
-    #[allow(unused_qualifications)]
-    impl ::core::marker::Copy for ElectionCompute {}
-    const _: () = {
-        #[allow(unknown_lints)]
-        #[allow(rust_2018_idioms)]
-        extern crate codec as _parity_scale_codec;
-        impl _parity_scale_codec::Encode for ElectionCompute {
-            fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
-                match *self {
-                    ElectionCompute::OnChain => {
-                        dest.push_byte(0usize as u8);
-                    }
-                    ElectionCompute::Signed => {
-                        dest.push_byte(1usize as u8);
-                    }
-                    ElectionCompute::Unsigned => {
-                        dest.push_byte(2usize as u8);
-                    }
-                    _ => (),
-                }
-            }
-        }
-        impl _parity_scale_codec::EncodeLike for ElectionCompute {}
-    };
-    const _: () = {
-        #[allow(unknown_lints)]
-        #[allow(rust_2018_idioms)]
-        extern crate codec as _parity_scale_codec;
-        impl _parity_scale_codec::Decode for ElectionCompute {
-            fn decode<DecIn: _parity_scale_codec::Input>(
-                input: &mut DecIn,
-            ) -> core::result::Result<Self, _parity_scale_codec::Error> {
-                match input.read_byte()? {
-                    x if x == 0usize as u8 => Ok(ElectionCompute::OnChain),
-                    x if x == 1usize as u8 => Ok(ElectionCompute::Signed),
-                    x if x == 2usize as u8 => Ok(ElectionCompute::Unsigned),
-                    x => Err("No such variant in enum ElectionCompute".into()),
-                }
-            }
-        }
-    };
-    impl core::fmt::Debug for ElectionCompute {
-        fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
-            match self {
-                Self::OnChain => fmt.debug_tuple("ElectionCompute::OnChain").finish(),
-                Self::Signed => fmt.debug_tuple("ElectionCompute::Signed").finish(),
-                Self::Unsigned => fmt.debug_tuple("ElectionCompute::Unsigned").finish(),
-                _ => Ok(()),
-            }
-        }
-    }
-    impl Default for ElectionCompute {
-        fn default() -> Self {
-            ElectionCompute::OnChain
-        }
-    }
-    /// A raw, unchecked solution.
-    ///
-    /// Such a solution should never become effective in anyway before being checked by the
-    /// [`Module::feasibility_check`]
-    pub struct RawSolution<C> {
-        /// Compact election edges.
-        compact: C,
-        /// The _claimed_ score of the solution.
-        score: ElectionScore,
-    }
-    impl<C> ::core::marker::StructuralPartialEq for RawSolution<C> {}
-    #[automatically_derived]
-    #[allow(unused_qualifications)]
-    impl<C: ::core::cmp::PartialEq> ::core::cmp::PartialEq for RawSolution<C> {
-        #[inline]
-        fn eq(&self, other: &RawSolution<C>) -> bool {
-            match *other {
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::marker::Copy for ElectionCompute {}
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl _parity_scale_codec::Encode for ElectionCompute {
+			fn encode_to<__CodecOutputEdqy: _parity_scale_codec::Output>(
+				&self,
+				__codec_dest_edqy: &mut __CodecOutputEdqy,
+			) {
+				match *self {
+					ElectionCompute::OnChain => {
+						__codec_dest_edqy.push_byte(0usize as u8);
+					}
+					ElectionCompute::Signed => {
+						__codec_dest_edqy.push_byte(1usize as u8);
+					}
+					ElectionCompute::Unsigned => {
+						__codec_dest_edqy.push_byte(2usize as u8);
+					}
+					_ => (),
+				}
+			}
+		}
+		impl _parity_scale_codec::EncodeLike for ElectionCompute {}
+	};
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl _parity_scale_codec::Decode for ElectionCompute {
+			fn decode<__CodecInputEdqy: _parity_scale_codec::Input>(
+				__codec_input_edqy: &mut __CodecInputEdqy,
+			) -> core::result::Result<Self, _parity_scale_codec::Error> {
+				match __codec_input_edqy.read_byte()? {
+					__codec_x_edqy if __codec_x_edqy == 0usize as u8 => {
+						Ok(ElectionCompute::OnChain)
+					}
+					__codec_x_edqy if __codec_x_edqy == 1usize as u8 => Ok(ElectionCompute::Signed),
+					__codec_x_edqy if __codec_x_edqy == 2usize as u8 => {
+						Ok(ElectionCompute::Unsigned)
+					}
+					_ => Err("No such variant in enum ElectionCompute".into()),
+				}
+			}
+		}
+	};
+	impl core::fmt::Debug for ElectionCompute {
+		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+			match self {
+				Self::OnChain => fmt.debug_tuple("ElectionCompute::OnChain").finish(),
+				Self::Signed => fmt.debug_tuple("ElectionCompute::Signed").finish(),
+				Self::Unsigned => fmt.debug_tuple("ElectionCompute::Unsigned").finish(),
+				_ => Ok(()),
+			}
+		}
+	}
+	impl Default for ElectionCompute {
+		fn default() -> Self {
+			ElectionCompute::OnChain
+		}
+	}
+	/// A raw, unchecked solution.
+	///
+	/// This is what will get submitted to the chain.
+	///
+	/// Such a solution should never become effective in anyway before being checked by the
+	/// [`Module::feasibility_check`].
+	pub struct RawSolution<C> {
+		/// Compact election edges.
+		compact: C,
+		/// The _claimed_ score of the solution.
+		score: ElectionScore,
+	}
+	impl<C> ::core::marker::StructuralPartialEq for RawSolution<C> {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<C: ::core::cmp::PartialEq> ::core::cmp::PartialEq for RawSolution<C> {
+		#[inline]
+		fn eq(&self, other: &RawSolution<C>) -> bool {
+			match *other {
                 RawSolution {
                     compact: ref __self_1_0,
                     score: ref __self_1_1,
@@ -1099,13 +1112,13 @@ pub mod two_phase {
                     } => (*__self_0_0) != (*__self_1_0) || (*__self_0_1) != (*__self_1_1),
                 },
             }
-        }
-    }
-    impl<C> ::core::marker::StructuralEq for RawSolution<C> {}
-    #[automatically_derived]
-    #[allow(unused_qualifications)]
-    impl<C: ::core::cmp::Eq> ::core::cmp::Eq for RawSolution<C> {
-        #[inline]
+		}
+	}
+	impl<C> ::core::marker::StructuralEq for RawSolution<C> {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<C: ::core::cmp::Eq> ::core::cmp::Eq for RawSolution<C> {
+		#[inline]
         #[doc(hidden)]
         fn assert_receiver_is_total_eq(&self) -> () {
             {
@@ -1113,7 +1126,7 @@ pub mod two_phase {
                 let _: ::core::cmp::AssertParamIsEq<ElectionScore>;
             }
         }
-    }
+	}
     #[automatically_derived]
     #[allow(unused_qualifications)]
     impl<C: ::core::clone::Clone> ::core::clone::Clone for RawSolution<C> {
@@ -1130,80 +1143,85 @@ pub mod two_phase {
             }
         }
     }
-    const _: () = {
-        #[allow(unknown_lints)]
-        #[allow(rust_2018_idioms)]
-        extern crate codec as _parity_scale_codec;
-        impl<C> _parity_scale_codec::Encode for RawSolution<C>
-        where
-            C: _parity_scale_codec::Encode,
-            C: _parity_scale_codec::Encode,
-        {
-            fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
-                dest.push(&self.compact);
-                dest.push(&self.score);
-            }
-        }
-        impl<C> _parity_scale_codec::EncodeLike for RawSolution<C>
-        where
-            C: _parity_scale_codec::Encode,
-            C: _parity_scale_codec::Encode,
-        {
-        }
-    };
-    const _: () = {
-        #[allow(unknown_lints)]
-        #[allow(rust_2018_idioms)]
-        extern crate codec as _parity_scale_codec;
-        impl<C> _parity_scale_codec::Decode for RawSolution<C>
-        where
-            C: _parity_scale_codec::Decode,
-            C: _parity_scale_codec::Decode,
-        {
-            fn decode<DecIn: _parity_scale_codec::Input>(
-                input: &mut DecIn,
-            ) -> core::result::Result<Self, _parity_scale_codec::Error> {
-                Ok(RawSolution {
-                    compact: {
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => return Err("Error decoding field RawSolution.compact".into()),
-                            Ok(a) => a,
-                        }
-                    },
-                    score: {
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => return Err("Error decoding field RawSolution.score".into()),
-                            Ok(a) => a,
-                        }
-                    },
-                })
-            }
-        }
-    };
-    impl<C> core::fmt::Debug for RawSolution<C>
-    where
-        C: core::fmt::Debug,
-    {
-        fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
-            fmt.debug_struct("RawSolution")
-                .field("compact", &self.compact)
-                .field("score", &self.score)
-                .finish()
-        }
-    }
-    #[automatically_derived]
-    #[allow(unused_qualifications)]
-    impl<C: ::core::default::Default> ::core::default::Default for RawSolution<C> {
-        #[inline]
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl<C> _parity_scale_codec::Encode for RawSolution<C>
+		where
+			C: _parity_scale_codec::Encode,
+			C: _parity_scale_codec::Encode,
+		{
+			fn encode_to<__CodecOutputEdqy: _parity_scale_codec::Output>(
+				&self,
+				__codec_dest_edqy: &mut __CodecOutputEdqy,
+			) {
+				__codec_dest_edqy.push(&self.compact);
+				__codec_dest_edqy.push(&self.score);
+			}
+		}
+		impl<C> _parity_scale_codec::EncodeLike for RawSolution<C>
+		where
+			C: _parity_scale_codec::Encode,
+			C: _parity_scale_codec::Encode,
+		{
+		}
+	};
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl<C> _parity_scale_codec::Decode for RawSolution<C>
+		where
+			C: _parity_scale_codec::Decode,
+			C: _parity_scale_codec::Decode,
+		{
+			fn decode<__CodecInputEdqy: _parity_scale_codec::Input>(
+				__codec_input_edqy: &mut __CodecInputEdqy,
+			) -> core::result::Result<Self, _parity_scale_codec::Error> {
+				Ok(RawSolution {
+					compact: {
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => return Err("Error decoding field RawSolution.compact".into()),
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					},
+					score: {
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => return Err("Error decoding field RawSolution.score".into()),
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					},
+				})
+			}
+		}
+	};
+	impl<C> core::fmt::Debug for RawSolution<C>
+	where
+		C: core::fmt::Debug,
+	{
+		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+			fmt.debug_struct("RawSolution")
+				.field("compact", &self.compact)
+				.field("score", &self.score)
+				.finish()
+		}
+	}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<C: ::core::default::Default> ::core::default::Default for RawSolution<C> {
+		#[inline]
         fn default() -> RawSolution<C> {
             RawSolution {
                 compact: ::core::default::Default::default(),
                 score: ::core::default::Default::default(),
             }
         }
-    }
+	}
     /// A raw, unchecked signed submission.
     ///
     /// This is just a wrapper around [`RawSolution`] and some additional info.
@@ -1315,151 +1333,160 @@ pub mod two_phase {
             }
         }
     }
-    const _: () = {
-        #[allow(unknown_lints)]
-        #[allow(rust_2018_idioms)]
-        extern crate codec as _parity_scale_codec;
-        impl<A, B: HasCompact, C> _parity_scale_codec::Encode for SignedSubmission<A, B, C>
-        where
-            A: _parity_scale_codec::Encode,
-            A: _parity_scale_codec::Encode,
-            B: _parity_scale_codec::Encode,
-            B: _parity_scale_codec::Encode,
-            B: _parity_scale_codec::Encode,
-            B: _parity_scale_codec::Encode,
-            RawSolution<C>: _parity_scale_codec::Encode,
-            RawSolution<C>: _parity_scale_codec::Encode,
-        {
-            fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
-                dest.push(&self.who);
-                dest.push(&self.deposit);
-                dest.push(&self.reward);
-                dest.push(&self.solution);
-            }
-        }
-        impl<A, B: HasCompact, C> _parity_scale_codec::EncodeLike for SignedSubmission<A, B, C>
-        where
-            A: _parity_scale_codec::Encode,
-            A: _parity_scale_codec::Encode,
-            B: _parity_scale_codec::Encode,
-            B: _parity_scale_codec::Encode,
-            B: _parity_scale_codec::Encode,
-            B: _parity_scale_codec::Encode,
-            RawSolution<C>: _parity_scale_codec::Encode,
-            RawSolution<C>: _parity_scale_codec::Encode,
-        {
-        }
-    };
-    const _: () = {
-        #[allow(unknown_lints)]
-        #[allow(rust_2018_idioms)]
-        extern crate codec as _parity_scale_codec;
-        impl<A, B: HasCompact, C> _parity_scale_codec::Decode for SignedSubmission<A, B, C>
-        where
-            A: _parity_scale_codec::Decode,
-            A: _parity_scale_codec::Decode,
-            B: _parity_scale_codec::Decode,
-            B: _parity_scale_codec::Decode,
-            B: _parity_scale_codec::Decode,
-            B: _parity_scale_codec::Decode,
-            RawSolution<C>: _parity_scale_codec::Decode,
-            RawSolution<C>: _parity_scale_codec::Decode,
-        {
-            fn decode<DecIn: _parity_scale_codec::Input>(
-                input: &mut DecIn,
-            ) -> core::result::Result<Self, _parity_scale_codec::Error> {
-                Ok(SignedSubmission {
-                    who: {
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => {
-                                return Err("Error decoding field SignedSubmission.who".into())
-                            }
-                            Ok(a) => a,
-                        }
-                    },
-                    deposit: {
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => {
-                                return Err("Error decoding field SignedSubmission.deposit".into())
-                            }
-                            Ok(a) => a,
-                        }
-                    },
-                    reward: {
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => {
-                                return Err("Error decoding field SignedSubmission.reward".into())
-                            }
-                            Ok(a) => a,
-                        }
-                    },
-                    solution: {
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => {
-                                return Err("Error decoding field SignedSubmission.solution".into())
-                            }
-                            Ok(a) => a,
-                        }
-                    },
-                })
-            }
-        }
-    };
-    impl<A, B: HasCompact, C> core::fmt::Debug for SignedSubmission<A, B, C>
-    where
-        A: core::fmt::Debug,
-        B: core::fmt::Debug,
-        C: core::fmt::Debug,
-    {
-        fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
-            fmt.debug_struct("SignedSubmission")
-                .field("who", &self.who)
-                .field("deposit", &self.deposit)
-                .field("reward", &self.reward)
-                .field("solution", &self.solution)
-                .finish()
-        }
-    }
-    /// A checked and parsed solution, ready to be enacted.
-    pub struct ReadySolution<A> {
-        /// The final supports of the solution. This is target-major vector, storing each winners, total
-        /// backing, and each individual backer.
-        supports: Supports<A>,
-        /// The score of the solution.
-        ///
-        /// This is needed to potentially challenge the solution.
-        score: ElectionScore,
-        /// How this election was computed.
-        compute: ElectionCompute,
-    }
-    impl<A> ::core::marker::StructuralPartialEq for ReadySolution<A> {}
-    #[automatically_derived]
-    #[allow(unused_qualifications)]
-    impl<A: ::core::cmp::PartialEq> ::core::cmp::PartialEq for ReadySolution<A> {
-        #[inline]
-        fn eq(&self, other: &ReadySolution<A>) -> bool {
-            match *other {
-                ReadySolution {
-                    supports: ref __self_1_0,
-                    score: ref __self_1_1,
-                    compute: ref __self_1_2,
-                } => match *self {
-                    ReadySolution {
-                        supports: ref __self_0_0,
-                        score: ref __self_0_1,
-                        compute: ref __self_0_2,
-                    } => {
-                        (*__self_0_0) == (*__self_1_0)
-                            && (*__self_0_1) == (*__self_1_1)
-                            && (*__self_0_2) == (*__self_1_2)
-                    }
-                },
-            }
-        }
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl<A, B: HasCompact, C> _parity_scale_codec::Encode for SignedSubmission<A, B, C>
+		where
+			A: _parity_scale_codec::Encode,
+			A: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			RawSolution<C>: _parity_scale_codec::Encode,
+			RawSolution<C>: _parity_scale_codec::Encode,
+		{
+			fn encode_to<__CodecOutputEdqy: _parity_scale_codec::Output>(
+				&self,
+				__codec_dest_edqy: &mut __CodecOutputEdqy,
+			) {
+				__codec_dest_edqy.push(&self.who);
+				__codec_dest_edqy.push(&self.deposit);
+				__codec_dest_edqy.push(&self.reward);
+				__codec_dest_edqy.push(&self.solution);
+			}
+		}
+		impl<A, B: HasCompact, C> _parity_scale_codec::EncodeLike for SignedSubmission<A, B, C>
+		where
+			A: _parity_scale_codec::Encode,
+			A: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			B: _parity_scale_codec::Encode,
+			RawSolution<C>: _parity_scale_codec::Encode,
+			RawSolution<C>: _parity_scale_codec::Encode,
+		{
+		}
+	};
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl<A, B: HasCompact, C> _parity_scale_codec::Decode for SignedSubmission<A, B, C>
+		where
+			A: _parity_scale_codec::Decode,
+			A: _parity_scale_codec::Decode,
+			B: _parity_scale_codec::Decode,
+			B: _parity_scale_codec::Decode,
+			B: _parity_scale_codec::Decode,
+			B: _parity_scale_codec::Decode,
+			RawSolution<C>: _parity_scale_codec::Decode,
+			RawSolution<C>: _parity_scale_codec::Decode,
+		{
+			fn decode<__CodecInputEdqy: _parity_scale_codec::Input>(
+				__codec_input_edqy: &mut __CodecInputEdqy,
+			) -> core::result::Result<Self, _parity_scale_codec::Error> {
+				Ok(SignedSubmission {
+					who: {
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => {
+								return Err("Error decoding field SignedSubmission.who".into())
+							}
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					},
+					deposit: {
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => {
+								return Err("Error decoding field SignedSubmission.deposit".into())
+							}
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					},
+					reward: {
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => {
+								return Err("Error decoding field SignedSubmission.reward".into())
+							}
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					},
+					solution: {
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => {
+								return Err("Error decoding field SignedSubmission.solution".into())
+							}
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					},
+				})
+			}
+		}
+	};
+	impl<A, B: HasCompact, C> core::fmt::Debug for SignedSubmission<A, B, C>
+	where
+		A: core::fmt::Debug,
+		B: core::fmt::Debug,
+		C: core::fmt::Debug,
+	{
+		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+			fmt.debug_struct("SignedSubmission")
+				.field("who", &self.who)
+				.field("deposit", &self.deposit)
+				.field("reward", &self.reward)
+				.field("solution", &self.solution)
+				.finish()
+		}
+	}
+	/// A checked solution, ready to be enacted.
+	pub struct ReadySolution<A> {
+		/// The final supports of the solution.
+		///
+		/// This is target-major vector, storing each winners, total backing, and each individual
+		/// backer.
+		supports: Supports<A>,
+		/// The score of the solution.
+		///
+		/// This is needed to potentially challenge the solution.
+		score: ElectionScore,
+		/// How this election was computed.
+		compute: ElectionCompute,
+	}
+	impl<A> ::core::marker::StructuralPartialEq for ReadySolution<A> {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<A: ::core::cmp::PartialEq> ::core::cmp::PartialEq for ReadySolution<A> {
+		#[inline]
+		fn eq(&self, other: &ReadySolution<A>) -> bool {
+			match *other {
+				ReadySolution {
+					supports: ref __self_1_0,
+					score: ref __self_1_1,
+					compute: ref __self_1_2,
+				} => match *self {
+					ReadySolution {
+						supports: ref __self_0_0,
+						score: ref __self_0_1,
+						compute: ref __self_0_2,
+					} => {
+						(*__self_0_0) == (*__self_1_0)
+							&& (*__self_0_1) == (*__self_1_1)
+							&& (*__self_0_2) == (*__self_1_2)
+					}
+				},
+			}
+		}
         #[inline]
         fn ne(&self, other: &ReadySolution<A>) -> bool {
             match *other {
@@ -1479,13 +1506,13 @@ pub mod two_phase {
                     }
                 },
             }
-        }
-    }
-    impl<A> ::core::marker::StructuralEq for ReadySolution<A> {}
-    #[automatically_derived]
-    #[allow(unused_qualifications)]
-    impl<A: ::core::cmp::Eq> ::core::cmp::Eq for ReadySolution<A> {
-        #[inline]
+		}
+	}
+	impl<A> ::core::marker::StructuralEq for ReadySolution<A> {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<A: ::core::cmp::Eq> ::core::cmp::Eq for ReadySolution<A> {
+		#[inline]
         #[doc(hidden)]
         fn assert_receiver_is_total_eq(&self) -> () {
             {
@@ -1494,7 +1521,7 @@ pub mod two_phase {
                 let _: ::core::cmp::AssertParamIsEq<ElectionCompute>;
             }
         }
-    }
+	}
     #[automatically_derived]
     #[allow(unused_qualifications)]
     impl<A: ::core::clone::Clone> ::core::clone::Clone for ReadySolution<A> {
@@ -1513,28 +1540,31 @@ pub mod two_phase {
             }
         }
     }
-    const _: () = {
-        #[allow(unknown_lints)]
-        #[allow(rust_2018_idioms)]
-        extern crate codec as _parity_scale_codec;
-        impl<A> _parity_scale_codec::Encode for ReadySolution<A>
-        where
-            Supports<A>: _parity_scale_codec::Encode,
-            Supports<A>: _parity_scale_codec::Encode,
-        {
-            fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
-                dest.push(&self.supports);
-                dest.push(&self.score);
-                dest.push(&self.compute);
-            }
-        }
-        impl<A> _parity_scale_codec::EncodeLike for ReadySolution<A>
-        where
-            Supports<A>: _parity_scale_codec::Encode,
-            Supports<A>: _parity_scale_codec::Encode,
-        {
-        }
-    };
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl<A> _parity_scale_codec::Encode for ReadySolution<A>
+		where
+			Supports<A>: _parity_scale_codec::Encode,
+			Supports<A>: _parity_scale_codec::Encode,
+		{
+			fn encode_to<__CodecOutputEdqy: _parity_scale_codec::Output>(
+				&self,
+				__codec_dest_edqy: &mut __CodecOutputEdqy,
+			) {
+				__codec_dest_edqy.push(&self.supports);
+				__codec_dest_edqy.push(&self.score);
+				__codec_dest_edqy.push(&self.compute);
+			}
+		}
+		impl<A> _parity_scale_codec::EncodeLike for ReadySolution<A>
+		where
+			Supports<A>: _parity_scale_codec::Encode,
+			Supports<A>: _parity_scale_codec::Encode,
+		{
+		}
+	};
 	const _: () = {
 		#[allow(unknown_lints)]
 		#[allow(rust_2018_idioms)]
@@ -1544,36 +1574,39 @@ pub mod two_phase {
 			Supports<A>: _parity_scale_codec::Decode,
 			Supports<A>: _parity_scale_codec::Decode,
 		{
-			fn decode<DecIn: _parity_scale_codec::Input>(
-				input: &mut DecIn,
+			fn decode<__CodecInputEdqy: _parity_scale_codec::Input>(
+				__codec_input_edqy: &mut __CodecInputEdqy,
 			) -> core::result::Result<Self, _parity_scale_codec::Error> {
 				Ok(ReadySolution {
-                    supports: {
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => {
-                                return Err("Error decoding field ReadySolution.supports".into())
-                            }
-                            Ok(a) => a,
-                        }
-                    },
-                    score: {
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => return Err("Error decoding field ReadySolution.score".into()),
-                            Ok(a) => a,
-                        }
-                    },
-                    compute: {
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => {
-                                return Err("Error decoding field ReadySolution.compute".into())
-                            }
-                            Ok(a) => a,
-                        }
-                    },
-                })
+					supports: {
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => {
+								return Err("Error decoding field ReadySolution.supports".into())
+							}
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					},
+					score: {
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => return Err("Error decoding field ReadySolution.score".into()),
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					},
+					compute: {
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => {
+								return Err("Error decoding field ReadySolution.compute".into())
+							}
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					},
+				})
 			}
 		}
 	};
@@ -1682,12 +1715,15 @@ pub mod two_phase {
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
 		impl _parity_scale_codec::Encode for WitnessData {
-			fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
+			fn encode_to<__CodecOutputEdqy: _parity_scale_codec::Output>(
+				&self,
+				__codec_dest_edqy: &mut __CodecOutputEdqy,
+			) {
 				{
-					dest . push ( & < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: EncodeAsRef < '_ , u32 > > :: from ( & self . voters ) ) ;
+					__codec_dest_edqy . push ( & < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: EncodeAsRef < '_ , u32 > > :: from ( & self . voters ) ) ;
 				}
 				{
-					dest . push ( & < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: EncodeAsRef < '_ , u32 > > :: from ( & self . targets ) ) ;
+					__codec_dest_edqy . push ( & < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: EncodeAsRef < '_ , u32 > > :: from ( & self . targets ) ) ;
 				}
 			}
 		}
@@ -1698,22 +1734,22 @@ pub mod two_phase {
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
 		impl _parity_scale_codec::Decode for WitnessData {
-			fn decode<DecIn: _parity_scale_codec::Input>(
-				input: &mut DecIn,
+			fn decode<__CodecInputEdqy: _parity_scale_codec::Input>(
+				__codec_input_edqy: &mut __CodecInputEdqy,
 			) -> core::result::Result<Self, _parity_scale_codec::Error> {
 				Ok(WitnessData {
 					voters: {
-						let res = < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: Decode > :: decode ( input ) ;
-						match res {
+						let __codec_res_edqy = < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: Decode > :: decode ( __codec_input_edqy ) ;
+						match __codec_res_edqy {
 							Err(_) => return Err("Error decoding field WitnessData.voters".into()),
-							Ok(a) => a.into(),
+							Ok(__codec_res_edqy) => __codec_res_edqy.into(),
 						}
 					},
 					targets: {
-						let res = < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: Decode > :: decode ( input ) ;
-						match res {
+						let __codec_res_edqy = < < u32 as _parity_scale_codec :: HasCompact > :: Type as _parity_scale_codec :: Decode > :: decode ( __codec_input_edqy ) ;
+						match __codec_res_edqy {
 							Err(_) => return Err("Error decoding field WitnessData.targets".into()),
-							Ok(a) => a.into(),
+							Ok(__codec_res_edqy) => __codec_res_edqy.into(),
 						}
 					},
 				})
@@ -1739,7 +1775,203 @@ pub mod two_phase {
 			}
 		}
 	}
-	/// The crate errors. Note that this is different from the [`PalletError`].
+	/// A snapshot of all the data that is needed for en entire round. They are provided by
+	/// [`ElectionDataProvider`] at the beginning of the signed phase and are kept around until the
+	/// round is finished.
+	///
+	/// These are stored together because they are often times accessed together.
+	pub struct RoundSnapshot<A> {
+		/// All of the voters.
+		pub voters: Vec<(A, VoteWeight, Vec<A>)>,
+		/// All of the targets.
+		pub targets: Vec<A>,
+		/// Desired number of winners to be elected for this round.
+		pub desired_targets: u32,
+	}
+	impl<A> ::core::marker::StructuralPartialEq for RoundSnapshot<A> {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<A: ::core::cmp::PartialEq> ::core::cmp::PartialEq for RoundSnapshot<A> {
+		#[inline]
+		fn eq(&self, other: &RoundSnapshot<A>) -> bool {
+			match *other {
+				RoundSnapshot {
+					voters: ref __self_1_0,
+					targets: ref __self_1_1,
+					desired_targets: ref __self_1_2,
+				} => match *self {
+					RoundSnapshot {
+						voters: ref __self_0_0,
+						targets: ref __self_0_1,
+						desired_targets: ref __self_0_2,
+					} => {
+						(*__self_0_0) == (*__self_1_0)
+							&& (*__self_0_1) == (*__self_1_1)
+							&& (*__self_0_2) == (*__self_1_2)
+					}
+				},
+			}
+		}
+		#[inline]
+		fn ne(&self, other: &RoundSnapshot<A>) -> bool {
+			match *other {
+				RoundSnapshot {
+					voters: ref __self_1_0,
+					targets: ref __self_1_1,
+					desired_targets: ref __self_1_2,
+				} => match *self {
+					RoundSnapshot {
+						voters: ref __self_0_0,
+						targets: ref __self_0_1,
+						desired_targets: ref __self_0_2,
+					} => {
+						(*__self_0_0) != (*__self_1_0)
+							|| (*__self_0_1) != (*__self_1_1)
+							|| (*__self_0_2) != (*__self_1_2)
+					}
+				},
+			}
+		}
+	}
+	impl<A> ::core::marker::StructuralEq for RoundSnapshot<A> {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<A: ::core::cmp::Eq> ::core::cmp::Eq for RoundSnapshot<A> {
+		#[inline]
+		#[doc(hidden)]
+		fn assert_receiver_is_total_eq(&self) -> () {
+			{
+				let _: ::core::cmp::AssertParamIsEq<Vec<(A, VoteWeight, Vec<A>)>>;
+				let _: ::core::cmp::AssertParamIsEq<Vec<A>>;
+				let _: ::core::cmp::AssertParamIsEq<u32>;
+			}
+		}
+	}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<A: ::core::clone::Clone> ::core::clone::Clone for RoundSnapshot<A> {
+		#[inline]
+		fn clone(&self) -> RoundSnapshot<A> {
+			match *self {
+				RoundSnapshot {
+					voters: ref __self_0_0,
+					targets: ref __self_0_1,
+					desired_targets: ref __self_0_2,
+				} => RoundSnapshot {
+					voters: ::core::clone::Clone::clone(&(*__self_0_0)),
+					targets: ::core::clone::Clone::clone(&(*__self_0_1)),
+					desired_targets: ::core::clone::Clone::clone(&(*__self_0_2)),
+				},
+			}
+		}
+	}
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl<A> _parity_scale_codec::Encode for RoundSnapshot<A>
+		where
+			Vec<(A, VoteWeight, Vec<A>)>: _parity_scale_codec::Encode,
+			Vec<(A, VoteWeight, Vec<A>)>: _parity_scale_codec::Encode,
+			Vec<A>: _parity_scale_codec::Encode,
+			Vec<A>: _parity_scale_codec::Encode,
+		{
+			fn encode_to<__CodecOutputEdqy: _parity_scale_codec::Output>(
+				&self,
+				__codec_dest_edqy: &mut __CodecOutputEdqy,
+			) {
+				__codec_dest_edqy.push(&self.voters);
+				__codec_dest_edqy.push(&self.targets);
+				__codec_dest_edqy.push(&self.desired_targets);
+			}
+		}
+		impl<A> _parity_scale_codec::EncodeLike for RoundSnapshot<A>
+		where
+			Vec<(A, VoteWeight, Vec<A>)>: _parity_scale_codec::Encode,
+			Vec<(A, VoteWeight, Vec<A>)>: _parity_scale_codec::Encode,
+			Vec<A>: _parity_scale_codec::Encode,
+			Vec<A>: _parity_scale_codec::Encode,
+		{
+		}
+	};
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl<A> _parity_scale_codec::Decode for RoundSnapshot<A>
+		where
+			Vec<(A, VoteWeight, Vec<A>)>: _parity_scale_codec::Decode,
+			Vec<(A, VoteWeight, Vec<A>)>: _parity_scale_codec::Decode,
+			Vec<A>: _parity_scale_codec::Decode,
+			Vec<A>: _parity_scale_codec::Decode,
+		{
+			fn decode<__CodecInputEdqy: _parity_scale_codec::Input>(
+				__codec_input_edqy: &mut __CodecInputEdqy,
+			) -> core::result::Result<Self, _parity_scale_codec::Error> {
+				Ok(RoundSnapshot {
+					voters: {
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => {
+								return Err("Error decoding field RoundSnapshot.voters".into())
+							}
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					},
+					targets: {
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => {
+								return Err("Error decoding field RoundSnapshot.targets".into())
+							}
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					},
+					desired_targets: {
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => {
+								return Err(
+									"Error decoding field RoundSnapshot.desired_targets".into()
+								)
+							}
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					},
+				})
+			}
+		}
+	};
+	impl<A> core::fmt::Debug for RoundSnapshot<A>
+	where
+		A: core::fmt::Debug,
+	{
+		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+			fmt.debug_struct("RoundSnapshot")
+				.field("voters", &self.voters)
+				.field("targets", &self.targets)
+				.field("desired_targets", &self.desired_targets)
+				.finish()
+		}
+	}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<A: ::core::default::Default> ::core::default::Default for RoundSnapshot<A> {
+		#[inline]
+		fn default() -> RoundSnapshot<A> {
+			RoundSnapshot {
+				voters: ::core::default::Default::default(),
+				targets: ::core::default::Default::default(),
+				desired_targets: ::core::default::Default::default(),
+			}
+		}
+	}
+	/// The crate errors.
+	///
+	/// Note that this is different from the [`PalletError`].
 	pub enum Error {
 		/// A feasibility error.
 		Feasibility(FeasibilityError),
@@ -1757,21 +1989,21 @@ pub mod two_phase {
 	impl core::fmt::Debug for Error {
 		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
 			match self {
-                Self::Feasibility(ref a0) => {
-                    fmt.debug_tuple("Error::Feasibility").field(a0).finish()
-                }
-                Self::OnChainFallback(ref a0) => {
-                    fmt.debug_tuple("Error::OnChainFallback").field(a0).finish()
-                }
-                Self::NposElections(ref a0) => {
-                    fmt.debug_tuple("Error::NposElections").field(a0).finish()
-                }
-                Self::SnapshotUnAvailable => fmt.debug_tuple("Error::SnapshotUnAvailable").finish(),
-                Self::PoolSubmissionFailed => {
-                    fmt.debug_tuple("Error::PoolSubmissionFailed").finish()
-                }
-                _ => Ok(()),
-            }
+				Self::Feasibility(ref a0) => {
+					fmt.debug_tuple("Error::Feasibility").field(a0).finish()
+				}
+				Self::OnChainFallback(ref a0) => {
+					fmt.debug_tuple("Error::OnChainFallback").field(a0).finish()
+				}
+				Self::NposElections(ref a0) => {
+					fmt.debug_tuple("Error::NposElections").field(a0).finish()
+				}
+				Self::SnapshotUnAvailable => fmt.debug_tuple("Error::SnapshotUnAvailable").finish(),
+				Self::PoolSubmissionFailed => {
+					fmt.debug_tuple("Error::PoolSubmissionFailed").finish()
+				}
+				_ => Ok(()),
+			}
 		}
 	}
 	impl ::core::marker::StructuralEq for Error {}
@@ -1798,48 +2030,48 @@ pub mod two_phase {
 				let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
 				let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
 				if true && __self_vi == __arg_1_vi {
-                    match (&*self, &*other) {
-                        (&Error::Feasibility(ref __self_0), &Error::Feasibility(ref __arg_1_0)) => {
-                            (*__self_0) == (*__arg_1_0)
-                        }
-                        (
-                            &Error::OnChainFallback(ref __self_0),
-                            &Error::OnChainFallback(ref __arg_1_0),
-                        ) => (*__self_0) == (*__arg_1_0),
-                        (
-                            &Error::NposElections(ref __self_0),
-                            &Error::NposElections(ref __arg_1_0),
-                        ) => (*__self_0) == (*__arg_1_0),
-                        _ => true,
-                    }
-                } else {
-                    false
-                }
-            }
-        }
-        #[inline]
-        fn ne(&self, other: &Error) -> bool {
-            {
-                let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
-                let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
-                if true && __self_vi == __arg_1_vi {
-                    match (&*self, &*other) {
-                        (&Error::Feasibility(ref __self_0), &Error::Feasibility(ref __arg_1_0)) => {
-                            (*__self_0) != (*__arg_1_0)
-                        }
-                        (
-                            &Error::OnChainFallback(ref __self_0),
-                            &Error::OnChainFallback(ref __arg_1_0),
-                        ) => (*__self_0) != (*__arg_1_0),
-                        (
-                            &Error::NposElections(ref __self_0),
-                            &Error::NposElections(ref __arg_1_0),
-                        ) => (*__self_0) != (*__arg_1_0),
-                        _ => false,
-                    }
-                } else {
-                    true
-                }
+					match (&*self, &*other) {
+						(&Error::Feasibility(ref __self_0), &Error::Feasibility(ref __arg_1_0)) => {
+							(*__self_0) == (*__arg_1_0)
+						}
+						(
+							&Error::OnChainFallback(ref __self_0),
+							&Error::OnChainFallback(ref __arg_1_0),
+						) => (*__self_0) == (*__arg_1_0),
+						(
+							&Error::NposElections(ref __self_0),
+							&Error::NposElections(ref __arg_1_0),
+						) => (*__self_0) == (*__arg_1_0),
+						_ => true,
+					}
+				} else {
+					false
+				}
+			}
+		}
+		#[inline]
+		fn ne(&self, other: &Error) -> bool {
+			{
+				let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
+				let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
+				if true && __self_vi == __arg_1_vi {
+					match (&*self, &*other) {
+						(&Error::Feasibility(ref __self_0), &Error::Feasibility(ref __arg_1_0)) => {
+							(*__self_0) != (*__arg_1_0)
+						}
+						(
+							&Error::OnChainFallback(ref __self_0),
+							&Error::OnChainFallback(ref __arg_1_0),
+						) => (*__self_0) != (*__arg_1_0),
+						(
+							&Error::NposElections(ref __self_0),
+							&Error::NposElections(ref __arg_1_0),
+						) => (*__self_0) != (*__arg_1_0),
+						_ => false,
+					}
+				} else {
+					true
+				}
 			}
 		}
 	}
@@ -1853,6 +2085,11 @@ pub mod two_phase {
 			Error::NposElections(e)
 		}
 	}
+	impl From<FeasibilityError> for Error {
+		fn from(e: FeasibilityError) -> Self {
+			Error::Feasibility(e)
+		}
+	}
 	/// Errors that can happen in the feasibility check.
 	pub enum FeasibilityError {
 		/// Wrong number of winners presented.
@@ -1862,7 +2099,7 @@ pub mod two_phase {
 		/// This must be an internal error of the chain.
 		SnapshotUnavailable,
 		/// Internal error from the election crate.
-		NposElectionError(sp_npos_elections::Error),
+		NposElection(sp_npos_elections::Error),
 		/// A vote is invalid.
 		InvalidVote,
 		/// A voter is invalid.
@@ -1872,39 +2109,39 @@ pub mod two_phase {
 		/// The given score was invalid.
 		InvalidScore,
 	}
-    impl core::fmt::Debug for FeasibilityError {
-        fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
-            match self {
-                Self::WrongWinnerCount => fmt
-                    .debug_tuple("FeasibilityError::WrongWinnerCount")
-                    .finish(),
-                Self::SnapshotUnavailable => fmt
-                    .debug_tuple("FeasibilityError::SnapshotUnavailable")
-                    .finish(),
-                Self::NposElectionError(ref a0) => fmt
-                    .debug_tuple("FeasibilityError::NposElectionError")
-                    .field(a0)
-                    .finish(),
-                Self::InvalidVote => fmt.debug_tuple("FeasibilityError::InvalidVote").finish(),
-                Self::InvalidVoter => fmt.debug_tuple("FeasibilityError::InvalidVoter").finish(),
-                Self::InvalidWinner => fmt.debug_tuple("FeasibilityError::InvalidWinner").finish(),
-                Self::InvalidScore => fmt.debug_tuple("FeasibilityError::InvalidScore").finish(),
-                _ => Ok(()),
-            }
-        }
-    }
-    impl ::core::marker::StructuralEq for FeasibilityError {}
-    #[automatically_derived]
-    #[allow(unused_qualifications)]
-    impl ::core::cmp::Eq for FeasibilityError {
-        #[inline]
-        #[doc(hidden)]
-        fn assert_receiver_is_total_eq(&self) -> () {
-            {
-                let _: ::core::cmp::AssertParamIsEq<sp_npos_elections::Error>;
-            }
-        }
-    }
+	impl core::fmt::Debug for FeasibilityError {
+		fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+			match self {
+				Self::WrongWinnerCount => fmt
+					.debug_tuple("FeasibilityError::WrongWinnerCount")
+					.finish(),
+				Self::SnapshotUnavailable => fmt
+					.debug_tuple("FeasibilityError::SnapshotUnavailable")
+					.finish(),
+				Self::NposElection(ref a0) => fmt
+					.debug_tuple("FeasibilityError::NposElection")
+					.field(a0)
+					.finish(),
+				Self::InvalidVote => fmt.debug_tuple("FeasibilityError::InvalidVote").finish(),
+				Self::InvalidVoter => fmt.debug_tuple("FeasibilityError::InvalidVoter").finish(),
+				Self::InvalidWinner => fmt.debug_tuple("FeasibilityError::InvalidWinner").finish(),
+				Self::InvalidScore => fmt.debug_tuple("FeasibilityError::InvalidScore").finish(),
+				_ => Ok(()),
+			}
+		}
+	}
+	impl ::core::marker::StructuralEq for FeasibilityError {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl ::core::cmp::Eq for FeasibilityError {
+		#[inline]
+		#[doc(hidden)]
+		fn assert_receiver_is_total_eq(&self) -> () {
+			{
+				let _: ::core::cmp::AssertParamIsEq<sp_npos_elections::Error>;
+			}
+		}
+	}
 	impl ::core::marker::StructuralPartialEq for FeasibilityError {}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
@@ -1914,66 +2151,50 @@ pub mod two_phase {
 			{
 				let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
 				let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
-                if true && __self_vi == __arg_1_vi {
-                    match (&*self, &*other) {
-                        (
-                            &FeasibilityError::NposElectionError(ref __self_0),
-                            &FeasibilityError::NposElectionError(ref __arg_1_0),
-                        ) => (*__self_0) == (*__arg_1_0),
-                        _ => true,
-                    }
-                } else {
-                    false
-                }
-            }
-        }
-        #[inline]
-        fn ne(&self, other: &FeasibilityError) -> bool {
-            {
-                let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
-                let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
-                if true && __self_vi == __arg_1_vi {
-                    match (&*self, &*other) {
-                        (
-                            &FeasibilityError::NposElectionError(ref __self_0),
-                            &FeasibilityError::NposElectionError(ref __arg_1_0),
-                        ) => (*__self_0) != (*__arg_1_0),
-                        _ => false,
-                    }
-                } else {
-                    true
-                }
+				if true && __self_vi == __arg_1_vi {
+					match (&*self, &*other) {
+						(
+							&FeasibilityError::NposElection(ref __self_0),
+							&FeasibilityError::NposElection(ref __arg_1_0),
+						) => (*__self_0) == (*__arg_1_0),
+						_ => true,
+					}
+				} else {
+					false
+				}
+			}
+		}
+		#[inline]
+		fn ne(&self, other: &FeasibilityError) -> bool {
+			{
+				let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
+				let __arg_1_vi = unsafe { ::core::intrinsics::discriminant_value(&*other) };
+				if true && __self_vi == __arg_1_vi {
+					match (&*self, &*other) {
+						(
+							&FeasibilityError::NposElection(ref __self_0),
+							&FeasibilityError::NposElection(ref __arg_1_0),
+						) => (*__self_0) != (*__arg_1_0),
+						_ => false,
+					}
+				} else {
+					true
+				}
 			}
 		}
 	}
 	impl From<sp_npos_elections::Error> for FeasibilityError {
 		fn from(e: sp_npos_elections::Error) -> Self {
-			FeasibilityError::NposElectionError(e)
+			FeasibilityError::NposElection(e)
 		}
 	}
-	/// The weights for this pallet.
-	pub trait WeightInfo {
-		fn feasibility_check() -> Weight;
-		fn submit() -> Weight;
-		fn submit_unsigned() -> Weight;
-	}
-	impl WeightInfo for () {
-		fn feasibility_check() -> Weight {
-			Default::default()
-		}
-		fn submit() -> Weight {
-			Default::default()
-		}
-		fn submit_unsigned() -> Weight {
-			Default::default()
-		}
-	}
-	pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>>
+	pub trait WeightInfo {}
+	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<Self>>>,
 	{
 		/// Event type.
-		type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+		type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 		/// Currency type.
 		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
 		/// Duration of the signed phase.
@@ -1990,7 +2211,10 @@ pub mod two_phase {
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 		/// The minimum amount of improvement to the solution score that defines a solution as "better".
 		type SolutionImprovementThreshold: Get<Perbill>;
+		/// Maximum number of iteration of balancing that will be executed in the embedded miner of the
+		/// pallet.
 		type UnsignedMaxIterations: Get<u32>;
+		/// The priority of the unsigned transaction submitted in the unsigned-phase
 		type UnsignedPriority: Get<TransactionPriority>;
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -1999,7 +2223,7 @@ pub mod two_phase {
 		/// Something that will provide the election data.
 		type ElectionDataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 		/// The weight of the pallet.
-		type WeightInfo: WeightInfo;
+		type WeightInfo;
 	}
 	use self::sp_api_hidden_includes_decl_storage::hidden_include::{
 		IterableStorageDoubleMap as _, IterableStorageMap as _, StorageDoubleMap as _,
@@ -2014,11 +2238,9 @@ pub mod two_phase {
 		type CurrentPhase;
 		type SignedSubmissions;
 		type QueuedSolution;
-		type SnapshotTargets;
-		type SnapshotVoters;
-		type DesiredTargets;
+		type Snapshot;
 	}
-	impl<T: Trait + 'static> Store for Module<T>
+	impl<T: Config + 'static> Store for Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -2026,15 +2248,13 @@ pub mod two_phase {
 		type CurrentPhase = CurrentPhase<T>;
 		type SignedSubmissions = SignedSubmissions<T>;
 		type QueuedSolution = QueuedSolution<T>;
-		type SnapshotTargets = SnapshotTargets<T>;
-		type SnapshotVoters = SnapshotVoters<T>;
-		type DesiredTargets = DesiredTargets;
+		type Snapshot = Snapshot<T>;
 	}
-	impl<T: Trait + 'static> Module<T>
+	impl<T: Config + 'static> Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
-		/// Internal counter ofr the number of rounds.
+		/// Internal counter for the number of rounds.
 		///
 		/// This is useful for de-duplication of transactions submitted to the pool, and general
 		/// diagnostics of the module.
@@ -2056,23 +2276,11 @@ pub mod two_phase {
 		pub fn queued_solution() -> Option<ReadySolution<T::AccountId>> {
 			< QueuedSolution < T > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < ReadySolution < T :: AccountId > > > :: get ( )
 		}
-		/// Snapshot of all Voters.
+		/// Snapshot data of the round.
 		///
 		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-		pub fn snapshot_targets() -> Option<Vec<T::AccountId>> {
-			< SnapshotTargets < T > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < Vec < T :: AccountId > > > :: get ( )
-		}
-		/// Snapshot of all targets.
-		///
-		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-		pub fn snapshot_voters() -> Option<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
-			< SnapshotVoters < T > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < Vec < ( T :: AccountId , VoteWeight , Vec < T :: AccountId > ) > > > :: get ( )
-		}
-		/// Desired number of targets to elect.
-		///
-		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-		pub fn desired_targets() -> u32 {
-			< DesiredTargets < > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < u32 > > :: get ( )
+		pub fn snapshot() -> Option<RoundSnapshot<T::AccountId>> {
+			< Snapshot < T > as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: storage :: StorageValue < RoundSnapshot < T :: AccountId > > > :: get ( )
 		}
 	}
 	#[doc(hidden)]
@@ -2088,7 +2296,7 @@ pub mod two_phase {
 			self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>,
 		> = self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell::new();
 	#[cfg(feature = "std")]
-	impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
+	impl<T: Config> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
 		for __GetByteStructRound<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
@@ -2105,11 +2313,11 @@ pub mod two_phase {
 				.clone()
 		}
 	}
-	unsafe impl<T: Trait> Send for __GetByteStructRound<T> where
+	unsafe impl<T: Config> Send for __GetByteStructRound<T> where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
 	{
 	}
-	unsafe impl<T: Trait> Sync for __GetByteStructRound<T> where
+	unsafe impl<T: Config> Sync for __GetByteStructRound<T> where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
 	{
 	}
@@ -2126,7 +2334,7 @@ pub mod two_phase {
 			self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>,
 		> = self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell::new();
 	#[cfg(feature = "std")]
-	impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
+	impl<T: Config> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
 		for __GetByteStructCurrentPhase<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
@@ -2143,187 +2351,29 @@ pub mod two_phase {
 				.clone()
 		}
 	}
-	unsafe impl<T: Trait> Send for __GetByteStructCurrentPhase<T> where
+	unsafe impl<T: Config> Send for __GetByteStructCurrentPhase<T> where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
 	{
 	}
-	unsafe impl<T: Trait> Sync for __GetByteStructCurrentPhase<T> where
+	unsafe impl<T: Config> Sync for __GetByteStructCurrentPhase<T> where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
 	{
 	}
-    #[doc(hidden)]
-    pub struct __GetByteStructSignedSubmissions<T>(
-        pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
-            (T),
-        >,
-    );
-    #[cfg(feature = "std")]
-    #[allow(non_upper_case_globals)]
-    static __CACHE_GET_BYTE_STRUCT_SignedSubmissions:
-        self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell<
-            self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>,
-        > =
-        self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell::new();
-    #[cfg(feature = "std")]
-    impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
-        for __GetByteStructSignedSubmissions<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn default_byte(
-            &self,
-        ) -> self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>
-        {
-            use self::sp_api_hidden_includes_decl_storage::hidden_include::codec::Encode;
-            __CACHE_GET_BYTE_STRUCT_SignedSubmissions . get_or_init ( | | { let def_val : Vec < SignedSubmission < T :: AccountId , BalanceOf < T > , CompactOf < T > > > = Default :: default ( ) ; < Vec < SignedSubmission < T :: AccountId , BalanceOf < T > , CompactOf < T > > > as Encode > :: encode ( & def_val ) } ) . clone ( )
-        }
-    }
-    unsafe impl<T: Trait> Send for __GetByteStructSignedSubmissions<T> where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
-    {
-    }
-    unsafe impl<T: Trait> Sync for __GetByteStructSignedSubmissions<T> where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
-    {
-    }
-    #[doc(hidden)]
-    pub struct __GetByteStructQueuedSolution<T>(
-        pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
-            (T),
-        >,
-    );
-    #[cfg(feature = "std")]
-    #[allow(non_upper_case_globals)]
-    static __CACHE_GET_BYTE_STRUCT_QueuedSolution:
-        self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell<
-            self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>,
-        > =
-        self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell::new();
-    #[cfg(feature = "std")]
-    impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
-        for __GetByteStructQueuedSolution<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn default_byte(
-            &self,
-        ) -> self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>
-        {
-            use self::sp_api_hidden_includes_decl_storage::hidden_include::codec::Encode;
-            __CACHE_GET_BYTE_STRUCT_QueuedSolution
-                .get_or_init(|| {
-                    let def_val: Option<ReadySolution<T::AccountId>> = Default::default();
-                    <Option<ReadySolution<T::AccountId>> as Encode>::encode(&def_val)
-                })
-                .clone()
-        }
-    }
-    unsafe impl<T: Trait> Send for __GetByteStructQueuedSolution<T> where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
-    {
-    }
-    unsafe impl<T: Trait> Sync for __GetByteStructQueuedSolution<T> where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
-    {
-    }
-    #[doc(hidden)]
-    pub struct __GetByteStructSnapshotTargets<T>(
-        pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
-            (T),
-        >,
-    );
-    #[cfg(feature = "std")]
-    #[allow(non_upper_case_globals)]
-    static __CACHE_GET_BYTE_STRUCT_SnapshotTargets:
-        self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell<
-            self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>,
-        > =
-        self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell::new();
-    #[cfg(feature = "std")]
-    impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
-        for __GetByteStructSnapshotTargets<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn default_byte(
-            &self,
-        ) -> self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>
-        {
-            use self::sp_api_hidden_includes_decl_storage::hidden_include::codec::Encode;
-            __CACHE_GET_BYTE_STRUCT_SnapshotTargets
-                .get_or_init(|| {
-                    let def_val: Option<Vec<T::AccountId>> = Default::default();
-                    <Option<Vec<T::AccountId>> as Encode>::encode(&def_val)
-                })
-                .clone()
-        }
-    }
-    unsafe impl<T: Trait> Send for __GetByteStructSnapshotTargets<T> where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
-    {
-    }
-    unsafe impl<T: Trait> Sync for __GetByteStructSnapshotTargets<T> where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
-    {
-    }
-    #[doc(hidden)]
-    pub struct __GetByteStructSnapshotVoters<T>(
-        pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
-            (T),
-        >,
-    );
-    #[cfg(feature = "std")]
-    #[allow(non_upper_case_globals)]
-    static __CACHE_GET_BYTE_STRUCT_SnapshotVoters:
-        self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell<
-            self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>,
-        > =
-        self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell::new();
-    #[cfg(feature = "std")]
-    impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
-        for __GetByteStructSnapshotVoters<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn default_byte(
-            &self,
-        ) -> self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>
-        {
-            use self::sp_api_hidden_includes_decl_storage::hidden_include::codec::Encode;
-            __CACHE_GET_BYTE_STRUCT_SnapshotVoters
-                .get_or_init(|| {
-                    let def_val: Option<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> =
-                        Default::default();
-                    <Option<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> as Encode>::encode(
-                        &def_val,
-                    )
-                })
-                .clone()
-        }
-    }
-    unsafe impl<T: Trait> Send for __GetByteStructSnapshotVoters<T> where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
-    {
-    }
-    unsafe impl<T: Trait> Sync for __GetByteStructSnapshotVoters<T> where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
-    {
-    }
-    #[doc(hidden)]
-    pub struct __GetByteStructDesiredTargets<T>(
-        pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
-            (T),
-        >,
-    );
-    #[cfg(feature = "std")]
+	#[doc(hidden)]
+	pub struct __GetByteStructSignedSubmissions<T>(
+		pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
+			(T),
+		>,
+	);
+	#[cfg(feature = "std")]
 	#[allow(non_upper_case_globals)]
-    static __CACHE_GET_BYTE_STRUCT_DesiredTargets:
+	static __CACHE_GET_BYTE_STRUCT_SignedSubmissions:
 		self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell<
 			self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>,
 		> = self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell::new();
 	#[cfg(feature = "std")]
-	impl<T: Trait> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
-		for __GetByteStructDesiredTargets<T>
+	impl<T: Config> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
+		for __GetByteStructSignedSubmissions<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -2331,30 +2381,101 @@ pub mod two_phase {
 			&self,
 		) -> self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8> {
 			use self::sp_api_hidden_includes_decl_storage::hidden_include::codec::Encode;
-			__CACHE_GET_BYTE_STRUCT_DesiredTargets
+			__CACHE_GET_BYTE_STRUCT_SignedSubmissions . get_or_init ( | | { let def_val : Vec < SignedSubmission < T :: AccountId , BalanceOf < T > , CompactOf < T > > > = Default :: default ( ) ; < Vec < SignedSubmission < T :: AccountId , BalanceOf < T > , CompactOf < T > > > as Encode > :: encode ( & def_val ) } ) . clone ( )
+		}
+	}
+	unsafe impl<T: Config> Send for __GetByteStructSignedSubmissions<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	unsafe impl<T: Config> Sync for __GetByteStructSignedSubmissions<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	#[doc(hidden)]
+	pub struct __GetByteStructQueuedSolution<T>(
+		pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
+			(T),
+		>,
+	);
+	#[cfg(feature = "std")]
+	#[allow(non_upper_case_globals)]
+	static __CACHE_GET_BYTE_STRUCT_QueuedSolution:
+		self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell<
+			self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>,
+		> = self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell::new();
+	#[cfg(feature = "std")]
+	impl<T: Config> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
+		for __GetByteStructQueuedSolution<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn default_byte(
+			&self,
+		) -> self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8> {
+			use self::sp_api_hidden_includes_decl_storage::hidden_include::codec::Encode;
+			__CACHE_GET_BYTE_STRUCT_QueuedSolution
 				.get_or_init(|| {
-					let def_val: u32 = Default::default();
-					<u32 as Encode>::encode(&def_val)
+					let def_val: Option<ReadySolution<T::AccountId>> = Default::default();
+					<Option<ReadySolution<T::AccountId>> as Encode>::encode(&def_val)
 				})
 				.clone()
 		}
 	}
-	unsafe impl<T: Trait> Send for __GetByteStructDesiredTargets<T> where
+	unsafe impl<T: Config> Send for __GetByteStructQueuedSolution<T> where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
 	{
 	}
-	unsafe impl<T: Trait> Sync for __GetByteStructDesiredTargets<T> where
+	unsafe impl<T: Config> Sync for __GetByteStructQueuedSolution<T> where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
 	{
 	}
-	impl<T: Trait + 'static> Module<T>
+	#[doc(hidden)]
+	pub struct __GetByteStructSnapshot<T>(
+		pub  self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
+			(T),
+		>,
+	);
+	#[cfg(feature = "std")]
+	#[allow(non_upper_case_globals)]
+	static __CACHE_GET_BYTE_STRUCT_Snapshot:
+		self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell<
+			self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8>,
+		> = self::sp_api_hidden_includes_decl_storage::hidden_include::once_cell::sync::OnceCell::new();
+	#[cfg(feature = "std")]
+	impl<T: Config> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::DefaultByte
+		for __GetByteStructSnapshot<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn default_byte(
+			&self,
+		) -> self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::vec::Vec<u8> {
+			use self::sp_api_hidden_includes_decl_storage::hidden_include::codec::Encode;
+			__CACHE_GET_BYTE_STRUCT_Snapshot
+				.get_or_init(|| {
+					let def_val: Option<RoundSnapshot<T::AccountId>> = Default::default();
+					<Option<RoundSnapshot<T::AccountId>> as Encode>::encode(&def_val)
+				})
+				.clone()
+		}
+	}
+	unsafe impl<T: Config> Send for __GetByteStructSnapshot<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	unsafe impl<T: Config> Sync for __GetByteStructSnapshot<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	impl<T: Config + 'static> Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		#[doc(hidden)]
 		pub fn storage_metadata(
 		) -> self::sp_api_hidden_includes_decl_storage::hidden_include::metadata::StorageMetadata {
-			self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageMetadata { prefix : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "TwoPhaseElectionProvider" ) , entries : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Round" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "u32" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructRound :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Internal counter ofr the number of rounds." , "" , " This is useful for de-duplication of transactions submitted to the pool, and general" , " diagnostics of the module." , "" , " This is merely incremented once per every time that signed phase starts." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "CurrentPhase" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Phase<T::BlockNumber>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructCurrentPhase :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Current phase." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SignedSubmissions" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSignedSubmissions :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Sorted (worse -> best) list of unchecked, signed solutions." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "QueuedSolution" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "ReadySolution<T::AccountId>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructQueuedSolution :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Current best solution, signed or unsigned." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SnapshotTargets" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<T::AccountId>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSnapshotTargets :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Snapshot of all Voters." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SnapshotVoters" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSnapshotVoters :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Snapshot of all targets." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "DesiredTargets" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "u32" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructDesiredTargets :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Desired number of targets to elect." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } ] [ .. ] ) , }
+			self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageMetadata { prefix : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "TwoPhaseElectionProvider" ) , entries : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Round" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "u32" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructRound :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Internal counter for the number of rounds." , "" , " This is useful for de-duplication of transactions submitted to the pool, and general" , " diagnostics of the module." , "" , " This is merely incremented once per every time that signed phase starts." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "CurrentPhase" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Phase<T::BlockNumber>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructCurrentPhase :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Current phase." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "SignedSubmissions" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Default , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSignedSubmissions :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Sorted (worse -> best) list of unchecked, signed solutions." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "QueuedSolution" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "ReadySolution<T::AccountId>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructQueuedSolution :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Current best solution, signed or unsigned." ] ) , } , self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryMetadata { name : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "Snapshot" ) , modifier : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryModifier :: Optional , ty : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: StorageEntryType :: Plain ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( "RoundSnapshot<T::AccountId>" ) ) , default : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DefaultByteGetter ( & __GetByteStructSnapshot :: < T > ( self :: sp_api_hidden_includes_decl_storage :: hidden_include :: sp_std :: marker :: PhantomData ) ) ) , documentation : self :: sp_api_hidden_includes_decl_storage :: hidden_include :: metadata :: DecodeDifferent :: Encode ( & [ " Snapshot data of the round." , "" , " This is created at the beginning of the signed phase and cleared upon calling `elect`." ] ) , } ] [ .. ] ) , }
 		}
 	}
 	/// Hidden instance generated to be internally used when module is used without
@@ -2398,18 +2519,22 @@ pub mod two_phase {
 		#[allow(unknown_lints)]
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
-        impl _parity_scale_codec::Encode for __InherentHiddenInstance {
-            fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {}
-        }
-        impl _parity_scale_codec::EncodeLike for __InherentHiddenInstance {}
+		impl _parity_scale_codec::Encode for __InherentHiddenInstance {
+			fn encode_to<__CodecOutputEdqy: _parity_scale_codec::Output>(
+				&self,
+				__codec_dest_edqy: &mut __CodecOutputEdqy,
+			) {
+			}
+		}
+		impl _parity_scale_codec::EncodeLike for __InherentHiddenInstance {}
 	};
 	const _: () = {
 		#[allow(unknown_lints)]
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
 		impl _parity_scale_codec::Decode for __InherentHiddenInstance {
-			fn decode<DecIn: _parity_scale_codec::Input>(
-				input: &mut DecIn,
+			fn decode<__CodecInputEdqy: _parity_scale_codec::Input>(
+				__codec_input_edqy: &mut __CodecInputEdqy,
 			) -> core::result::Result<Self, _parity_scale_codec::Error> {
 				Ok(__InherentHiddenInstance)
 			}
@@ -2425,7 +2550,7 @@ pub mod two_phase {
 	{
 		const PREFIX: &'static str = "TwoPhaseElectionProvider";
 	}
-	/// Internal counter ofr the number of rounds.
+	/// Internal counter for the number of rounds.
 	///
 	/// This is useful for de-duplication of transactions submitted to the pool, and general
 	/// diagnostics of the module.
@@ -2454,14 +2579,14 @@ pub mod two_phase {
 		}
 	}
 	/// Current phase.
-	pub struct CurrentPhase<T: Trait>(
+	pub struct CurrentPhase<T: Config>(
 		self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
 				(T,),
 			>,
 	)
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
-	impl<T: Trait>
+	impl<T: Config>
 		self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
 			Phase<T::BlockNumber>,
 		> for CurrentPhase<T>
@@ -2483,14 +2608,14 @@ pub mod two_phase {
 		}
 	}
 	/// Sorted (worse -> best) list of unchecked, signed solutions.
-	pub struct SignedSubmissions<T: Trait>(
+	pub struct SignedSubmissions<T: Config>(
 		self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
 				(T,),
 			>,
 	)
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
-	impl<T: Trait>
+	impl<T: Config>
 		self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
 			Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
 		> for SignedSubmissions<T>
@@ -2516,14 +2641,14 @@ pub mod two_phase {
 		}
 	}
 	/// Current best solution, signed or unsigned.
-	pub struct QueuedSolution<T: Trait>(
+	pub struct QueuedSolution<T: Config>(
 		self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
 				(T,),
 			>,
 	)
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
-	impl<T: Trait>
+	impl<T: Config>
 		self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
 			ReadySolution<T::AccountId>,
 		> for QueuedSolution<T>
@@ -2531,137 +2656,77 @@ pub mod two_phase {
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		type Query = Option<ReadySolution<T::AccountId>>;
-        fn module_prefix() -> &'static [u8] {
-            < __InherentHiddenInstance as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: traits :: Instance > :: PREFIX . as_bytes ( )
-        }
-        fn storage_prefix() -> &'static [u8] {
-            b"QueuedSolution"
-        }
-        fn from_optional_value_to_query(v: Option<ReadySolution<T::AccountId>>) -> Self::Query {
-            v.or_else(|| Default::default())
-        }
-        fn from_query_to_optional_value(v: Self::Query) -> Option<ReadySolution<T::AccountId>> {
-            v
-        }
+		fn module_prefix() -> &'static [u8] {
+			< __InherentHiddenInstance as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: traits :: Instance > :: PREFIX . as_bytes ( )
+		}
+		fn storage_prefix() -> &'static [u8] {
+			b"QueuedSolution"
+		}
+		fn from_optional_value_to_query(v: Option<ReadySolution<T::AccountId>>) -> Self::Query {
+			v.or_else(|| Default::default())
+		}
+		fn from_query_to_optional_value(v: Self::Query) -> Option<ReadySolution<T::AccountId>> {
+			v
+		}
 	}
-    /// Snapshot of all Voters.
-    ///
-    /// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-    pub struct SnapshotTargets<T: Trait>(
-        self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
-                (T,),
-            >,
-    )
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
-    impl<T: Trait>
-        self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
-            Vec<T::AccountId>,
-        > for SnapshotTargets<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        type Query = Option<Vec<T::AccountId>>;
-        fn module_prefix() -> &'static [u8] {
-            < __InherentHiddenInstance as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: traits :: Instance > :: PREFIX . as_bytes ( )
-        }
-        fn storage_prefix() -> &'static [u8] {
-            b"SnapshotTargets"
-        }
-        fn from_optional_value_to_query(v: Option<Vec<T::AccountId>>) -> Self::Query {
-            v.or_else(|| Default::default())
-        }
-        fn from_query_to_optional_value(v: Self::Query) -> Option<Vec<T::AccountId>> {
-            v
-        }
-    }
-    /// Snapshot of all targets.
-    ///
-    /// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-    pub struct SnapshotVoters<T: Trait>(
-        self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
-                (T,),
-            >,
-    )
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
-    impl<T: Trait>
-        self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
-            Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-        > for SnapshotVoters<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        type Query = Option<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>>;
-        fn module_prefix() -> &'static [u8] {
-            < __InherentHiddenInstance as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: traits :: Instance > :: PREFIX . as_bytes ( )
-        }
-        fn storage_prefix() -> &'static [u8] {
-            b"SnapshotVoters"
-        }
-        fn from_optional_value_to_query(
-            v: Option<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>>,
-        ) -> Self::Query {
-            v.or_else(|| Default::default())
-        }
-        fn from_query_to_optional_value(
-            v: Self::Query,
-        ) -> Option<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
-            v
-        }
-    }
-    /// Desired number of targets to elect.
-    ///
-    /// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-    pub struct DesiredTargets(
-        self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<()>,
-    );
-    impl
-        self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
-            u32,
-        > for DesiredTargets
-    {
-        type Query = u32;
-        fn module_prefix() -> &'static [u8] {
-            < __InherentHiddenInstance as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: traits :: Instance > :: PREFIX . as_bytes ( )
-        }
-        fn storage_prefix() -> &'static [u8] {
-            b"DesiredTargets"
-        }
-        fn from_optional_value_to_query(v: Option<u32>) -> Self::Query {
-            v.unwrap_or_else(|| Default::default())
-        }
-        fn from_query_to_optional_value(v: Self::Query) -> Option<u32> {
-            Some(v)
-        }
-    }
-    /// [`RawEvent`] specialized for the configuration [`Trait`]
-    ///
-    /// [`RawEvent`]: enum.RawEvent.html
-    /// [`Trait`]: trait.Trait.html
-    pub type Event<T> = RawEvent<<T as frame_system::Trait>::AccountId>;
-    /// Events for this module.
-    ///
-    pub enum RawEvent<AccountId> {
-        /// A solution was stored with the given compute.
-        ///
-        /// If the solution is signed, this means that it hasn't yet been processed. If the solution
-        /// is unsigned, this means that it has also been processed.
-        SolutionStored(ElectionCompute),
-        /// The election has been finalized, with `Some` of the given computation, or else if the
-        /// election failed, `None`.
-        ElectionFinalized(Option<ElectionCompute>),
-        /// An account has been rewarded for their signed submission being finalized.
-        Rewarded(AccountId),
-        /// An account has been slashed for submitting an invalid signed submission.
-        Slashed(AccountId),
-    }
-    #[automatically_derived]
-    #[allow(unused_qualifications)]
-    impl<AccountId: ::core::clone::Clone> ::core::clone::Clone for RawEvent<AccountId> {
-        #[inline]
-        fn clone(&self) -> RawEvent<AccountId> {
-            match (&*self,) {
+	/// Snapshot data of the round.
+	///
+	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
+	pub struct Snapshot<T: Config>(
+		self::sp_api_hidden_includes_decl_storage::hidden_include::sp_std::marker::PhantomData<
+				(T,),
+			>,
+	)
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
+	impl<T: Config>
+		self::sp_api_hidden_includes_decl_storage::hidden_include::storage::generator::StorageValue<
+			RoundSnapshot<T::AccountId>,
+		> for Snapshot<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		type Query = Option<RoundSnapshot<T::AccountId>>;
+		fn module_prefix() -> &'static [u8] {
+			< __InherentHiddenInstance as self :: sp_api_hidden_includes_decl_storage :: hidden_include :: traits :: Instance > :: PREFIX . as_bytes ( )
+		}
+		fn storage_prefix() -> &'static [u8] {
+			b"Snapshot"
+		}
+		fn from_optional_value_to_query(v: Option<RoundSnapshot<T::AccountId>>) -> Self::Query {
+			v.or_else(|| Default::default())
+		}
+		fn from_query_to_optional_value(v: Self::Query) -> Option<RoundSnapshot<T::AccountId>> {
+			v
+		}
+	}
+	/// [`RawEvent`] specialized for the configuration [`Config`]
+	///
+	/// [`RawEvent`]: enum.RawEvent.html
+	/// [`Config`]: trait.Config.html
+	pub type Event<T> = RawEvent<<T as frame_system::Config>::AccountId>;
+	/// Events for this module.
+	///
+	pub enum RawEvent<AccountId> {
+		/// A solution was stored with the given compute.
+		///
+		/// If the solution is signed, this means that it hasn't yet been processed. If the solution
+		/// is unsigned, this means that it has also been processed.
+		SolutionStored(ElectionCompute),
+		/// The election has been finalized, with `Some` of the given computation, or else if the
+		/// election failed, `None`.
+		ElectionFinalized(Option<ElectionCompute>),
+		/// An account has been rewarded for their signed submission being finalized.
+		Rewarded(AccountId),
+		/// An account has been slashed for submitting an invalid signed submission.
+		Slashed(AccountId),
+	}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<AccountId: ::core::clone::Clone> ::core::clone::Clone for RawEvent<AccountId> {
+		#[inline]
+		fn clone(&self) -> RawEvent<AccountId> {
+			match (&*self,) {
                 (&RawEvent::SolutionStored(ref __self_0),) => {
                     RawEvent::SolutionStored(::core::clone::Clone::clone(&(*__self_0)))
                 }
@@ -2675,13 +2740,13 @@ pub mod two_phase {
                     RawEvent::Slashed(::core::clone::Clone::clone(&(*__self_0)))
                 }
             }
-        }
-    }
-    impl<AccountId> ::core::marker::StructuralPartialEq for RawEvent<AccountId> {}
-    #[automatically_derived]
-    #[allow(unused_qualifications)]
-    impl<AccountId: ::core::cmp::PartialEq> ::core::cmp::PartialEq for RawEvent<AccountId> {
-        #[inline]
+		}
+	}
+	impl<AccountId> ::core::marker::StructuralPartialEq for RawEvent<AccountId> {}
+	#[automatically_derived]
+	#[allow(unused_qualifications)]
+	impl<AccountId: ::core::cmp::PartialEq> ::core::cmp::PartialEq for RawEvent<AccountId> {
+		#[inline]
         fn eq(&self, other: &RawEvent<AccountId>) -> bool {
             {
                 let __self_vi = unsafe { ::core::intrinsics::discriminant_value(&*self) };
@@ -2737,7 +2802,7 @@ pub mod two_phase {
                 }
             }
         }
-    }
+	}
     impl<AccountId> ::core::marker::StructuralEq for RawEvent<AccountId> {}
     #[automatically_derived]
     #[allow(unused_qualifications)]
@@ -2753,105 +2818,117 @@ pub mod two_phase {
             }
         }
     }
-    const _: () = {
-        #[allow(unknown_lints)]
-        #[allow(rust_2018_idioms)]
-        extern crate codec as _parity_scale_codec;
-        impl<AccountId> _parity_scale_codec::Encode for RawEvent<AccountId>
-        where
-            AccountId: _parity_scale_codec::Encode,
-            AccountId: _parity_scale_codec::Encode,
-            AccountId: _parity_scale_codec::Encode,
-            AccountId: _parity_scale_codec::Encode,
-        {
-            fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
-                match *self {
-                    RawEvent::SolutionStored(ref aa) => {
-                        dest.push_byte(0usize as u8);
-                        dest.push(aa);
-                    }
-                    RawEvent::ElectionFinalized(ref aa) => {
-                        dest.push_byte(1usize as u8);
-                        dest.push(aa);
-                    }
-                    RawEvent::Rewarded(ref aa) => {
-                        dest.push_byte(2usize as u8);
-                        dest.push(aa);
-                    }
-                    RawEvent::Slashed(ref aa) => {
-                        dest.push_byte(3usize as u8);
-                        dest.push(aa);
-                    }
-                    _ => (),
-                }
-            }
-        }
-        impl<AccountId> _parity_scale_codec::EncodeLike for RawEvent<AccountId>
-        where
-            AccountId: _parity_scale_codec::Encode,
-            AccountId: _parity_scale_codec::Encode,
-            AccountId: _parity_scale_codec::Encode,
-            AccountId: _parity_scale_codec::Encode,
-        {
-        }
-    };
-    const _: () = {
-        #[allow(unknown_lints)]
-        #[allow(rust_2018_idioms)]
-        extern crate codec as _parity_scale_codec;
-        impl<AccountId> _parity_scale_codec::Decode for RawEvent<AccountId>
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl<AccountId> _parity_scale_codec::Encode for RawEvent<AccountId>
+		where
+			AccountId: _parity_scale_codec::Encode,
+			AccountId: _parity_scale_codec::Encode,
+			AccountId: _parity_scale_codec::Encode,
+			AccountId: _parity_scale_codec::Encode,
+		{
+			fn encode_to<__CodecOutputEdqy: _parity_scale_codec::Output>(
+				&self,
+				__codec_dest_edqy: &mut __CodecOutputEdqy,
+			) {
+				match *self {
+					RawEvent::SolutionStored(ref aa) => {
+						__codec_dest_edqy.push_byte(0usize as u8);
+						__codec_dest_edqy.push(aa);
+					}
+					RawEvent::ElectionFinalized(ref aa) => {
+						__codec_dest_edqy.push_byte(1usize as u8);
+						__codec_dest_edqy.push(aa);
+					}
+					RawEvent::Rewarded(ref aa) => {
+						__codec_dest_edqy.push_byte(2usize as u8);
+						__codec_dest_edqy.push(aa);
+					}
+					RawEvent::Slashed(ref aa) => {
+						__codec_dest_edqy.push_byte(3usize as u8);
+						__codec_dest_edqy.push(aa);
+					}
+					_ => (),
+				}
+			}
+		}
+		impl<AccountId> _parity_scale_codec::EncodeLike for RawEvent<AccountId>
+		where
+			AccountId: _parity_scale_codec::Encode,
+			AccountId: _parity_scale_codec::Encode,
+			AccountId: _parity_scale_codec::Encode,
+			AccountId: _parity_scale_codec::Encode,
+		{
+		}
+	};
+	const _: () = {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl<AccountId> _parity_scale_codec::Decode for RawEvent<AccountId>
 		where
 			AccountId: _parity_scale_codec::Decode,
 			AccountId: _parity_scale_codec::Decode,
 			AccountId: _parity_scale_codec::Decode,
 			AccountId: _parity_scale_codec::Decode,
 		{
-			fn decode<DecIn: _parity_scale_codec::Input>(
-				input: &mut DecIn,
+			fn decode<__CodecInputEdqy: _parity_scale_codec::Input>(
+				__codec_input_edqy: &mut __CodecInputEdqy,
 			) -> core::result::Result<Self, _parity_scale_codec::Error> {
-                match input.read_byte()? {
-                    x if x == 0usize as u8 => Ok(RawEvent::SolutionStored({
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => {
-                                return Err(
-                                    "Error decoding field RawEvent :: SolutionStored.0".into()
-                                )
-                            }
-                            Ok(a) => a,
-                        }
-                    })),
-                    x if x == 1usize as u8 => Ok(RawEvent::ElectionFinalized({
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => {
-                                return Err(
-                                    "Error decoding field RawEvent :: ElectionFinalized.0".into()
-                                )
-                            }
-                            Ok(a) => a,
-                        }
-                    })),
-                    x if x == 2usize as u8 => Ok(RawEvent::Rewarded({
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => {
-                                return Err("Error decoding field RawEvent :: Rewarded.0".into())
-                            }
-                            Ok(a) => a,
-                        }
-                    })),
-                    x if x == 3usize as u8 => Ok(RawEvent::Slashed({
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => {
-                                return Err("Error decoding field RawEvent :: Slashed.0".into())
-                            }
-                            Ok(a) => a,
-                        }
-                    })),
-                    x => Err("No such variant in enum RawEvent".into()),
-                }
+				match __codec_input_edqy.read_byte()? {
+					__codec_x_edqy if __codec_x_edqy == 0usize as u8 => {
+						Ok(RawEvent::SolutionStored({
+							let __codec_res_edqy =
+								_parity_scale_codec::Decode::decode(__codec_input_edqy);
+							match __codec_res_edqy {
+								Err(_) => {
+									return Err(
+										"Error decoding field RawEvent :: SolutionStored.0".into()
+									)
+								}
+								Ok(__codec_res_edqy) => __codec_res_edqy,
+							}
+						}))
+					}
+					__codec_x_edqy if __codec_x_edqy == 1usize as u8 => {
+						Ok(RawEvent::ElectionFinalized({
+							let __codec_res_edqy =
+								_parity_scale_codec::Decode::decode(__codec_input_edqy);
+							match __codec_res_edqy {
+								Err(_) => {
+									return Err(
+										"Error decoding field RawEvent :: ElectionFinalized.0"
+											.into(),
+									)
+								}
+								Ok(__codec_res_edqy) => __codec_res_edqy,
+							}
+						}))
+					}
+					__codec_x_edqy if __codec_x_edqy == 2usize as u8 => Ok(RawEvent::Rewarded({
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => {
+								return Err("Error decoding field RawEvent :: Rewarded.0".into())
+							}
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					})),
+					__codec_x_edqy if __codec_x_edqy == 3usize as u8 => Ok(RawEvent::Slashed({
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => {
+								return Err("Error decoding field RawEvent :: Slashed.0".into())
+							}
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					})),
+					_ => Err("No such variant in enum RawEvent".into()),
+				}
 			}
 		}
 	};
@@ -2924,7 +3001,7 @@ pub mod two_phase {
             ]
 		}
 	}
-	pub enum PalletError<T: Trait>
+	pub enum PalletError<T: Config>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -2942,7 +3019,7 @@ pub mod two_phase {
 		/// The origin failed to pay the deposit.
 		CannotPayDeposit,
 	}
-	impl<T: Trait> ::frame_support::sp_std::fmt::Debug for PalletError<T>
+	impl<T: Config> ::frame_support::sp_std::fmt::Debug for PalletError<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -2953,7 +3030,7 @@ pub mod two_phase {
 			f.write_str(self.as_str())
 		}
 	}
-	impl<T: Trait> PalletError<T>
+	impl<T: Config> PalletError<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -2996,7 +3073,7 @@ pub mod two_phase {
             }
 		}
 	}
-	impl<T: Trait> From<PalletError<T>> for &'static str
+	impl<T: Config> From<PalletError<T>> for &'static str
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3004,7 +3081,7 @@ pub mod two_phase {
 			err.as_str()
 		}
 	}
-	impl<T: Trait> From<PalletError<T>> for ::frame_support::sp_runtime::DispatchError
+	impl<T: Config> From<PalletError<T>> for ::frame_support::sp_runtime::DispatchError
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3018,7 +3095,7 @@ pub mod two_phase {
 			}
 		}
 	}
-	impl<T: Trait> ::frame_support::error::ModuleErrorMetadata for PalletError<T>
+	impl<T: Config> ::frame_support::error::ModuleErrorMetadata for PalletError<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3051,12 +3128,12 @@ pub mod two_phase {
             ]
 		}
 	}
-	pub struct Module<T: Trait>(::frame_support::sp_std::marker::PhantomData<(T,)>)
+	pub struct Module<T: Config>(::frame_support::sp_std::marker::PhantomData<(T,)>)
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<T: ::core::clone::Clone + Trait> ::core::clone::Clone for Module<T>
+	impl<T: ::core::clone::Clone + Config> ::core::clone::Clone for Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3069,17 +3146,17 @@ pub mod two_phase {
 	}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<T: ::core::marker::Copy + Trait> ::core::marker::Copy for Module<T> where
+	impl<T: ::core::marker::Copy + Config> ::core::marker::Copy for Module<T> where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
 	{
 	}
-	impl<T: Trait> ::core::marker::StructuralPartialEq for Module<T> where
+	impl<T: Config> ::core::marker::StructuralPartialEq for Module<T> where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
 	{
 	}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<T: ::core::cmp::PartialEq + Trait> ::core::cmp::PartialEq for Module<T>
+	impl<T: ::core::cmp::PartialEq + Config> ::core::cmp::PartialEq for Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3090,23 +3167,23 @@ pub mod two_phase {
 					Module(ref __self_0_0) => (*__self_0_0) == (*__self_1_0),
 				},
 			}
-        }
-        #[inline]
-        fn ne(&self, other: &Module<T>) -> bool {
-            match *other {
-                Module(ref __self_1_0) => match *self {
-                    Module(ref __self_0_0) => (*__self_0_0) != (*__self_1_0),
-                },
-            }
+		}
+		#[inline]
+		fn ne(&self, other: &Module<T>) -> bool {
+			match *other {
+				Module(ref __self_1_0) => match *self {
+					Module(ref __self_0_0) => (*__self_0_0) != (*__self_1_0),
+				},
+			}
 		}
 	}
-	impl<T: Trait> ::core::marker::StructuralEq for Module<T> where
+	impl<T: Config> ::core::marker::StructuralEq for Module<T> where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
 	{
 	}
 	#[automatically_derived]
 	#[allow(unused_qualifications)]
-	impl<T: ::core::cmp::Eq + Trait> ::core::cmp::Eq for Module<T>
+	impl<T: ::core::cmp::Eq + Config> ::core::cmp::Eq for Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3120,7 +3197,7 @@ pub mod two_phase {
 			}
 		}
 	}
-	impl<T: Trait> core::fmt::Debug for Module<T>
+	impl<T: Config> core::fmt::Debug for Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 		T: core::fmt::Debug,
@@ -3129,8 +3206,8 @@ pub mod two_phase {
 			fmt.debug_tuple("Module").field(&self.0).finish()
 		}
 	}
-	impl<T: frame_system::Trait + Trait>
-		::frame_support::traits::OnInitialize<<T as frame_system::Trait>::BlockNumber> for Module<T>
+	impl<T: frame_system::Config + Config>
+		::frame_support::traits::OnInitialize<<T as frame_system::Config>::BlockNumber> for Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3145,7 +3222,7 @@ pub mod two_phase {
                             "frame_election_providers::two_phase",
                             ::tracing::Level::TRACE,
                             Some("frame/election-providers/src/two_phase/mod.rs"),
-                            Some(464u32),
+                            Some(469u32),
                             Some("frame_election_providers::two_phase"),
                             ::tracing_core::field::FieldSet::new(
                                 &[],
@@ -3209,7 +3286,7 @@ pub mod two_phase {
                                         crate::LOG_TARGET,
                                         "frame_election_providers::two_phase",
                                         "frame/election-providers/src/two_phase/mod.rs",
-                                        488u32,
+                                        493u32,
                                     ),
                                 );
                             }
@@ -3236,7 +3313,7 @@ pub mod two_phase {
                                         crate::LOG_TARGET,
                                         "frame_election_providers::two_phase",
                                         "frame/election-providers/src/two_phase/mod.rs",
-                                        497u32,
+                                        502u32,
                                     ),
                                 );
                             }
@@ -3248,18 +3325,67 @@ pub mod two_phase {
 			}
 		}
 	}
-	impl<T: Trait> ::frame_support::traits::OnRuntimeUpgrade for Module<T> where
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	impl<T: Config> ::frame_support::traits::OnRuntimeUpgrade for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
+		fn on_runtime_upgrade() -> ::frame_support::dispatch::Weight {
+			let __within_span__ = {
+				use ::tracing::__macro_support::Callsite as _;
+				static CALLSITE: ::tracing::__macro_support::MacroCallsite = {
+					use ::tracing::__macro_support::MacroCallsite;
+					static META: ::tracing::Metadata<'static> = {
+						::tracing_core::metadata::Metadata::new(
+							"on_runtime_upgrade",
+							"frame_election_providers::two_phase",
+							::tracing::Level::TRACE,
+							Some("frame/election-providers/src/two_phase/mod.rs"),
+							Some(469u32),
+							Some("frame_election_providers::two_phase"),
+							::tracing_core::field::FieldSet::new(
+								&[],
+								::tracing_core::callsite::Identifier(&CALLSITE),
+							),
+							::tracing::metadata::Kind::SPAN,
+						)
+					};
+					MacroCallsite::new(&META)
+				};
+				let mut interest = ::tracing::subscriber::Interest::never();
+				if ::tracing::Level::TRACE <= ::tracing::level_filters::STATIC_MAX_LEVEL
+					&& ::tracing::Level::TRACE <= ::tracing::level_filters::LevelFilter::current()
+					&& {
+						interest = CALLSITE.interest();
+						!interest.is_never()
+					} && CALLSITE.is_enabled(interest)
+				{
+					let meta = CALLSITE.metadata();
+					::tracing::Span::new(meta, &{ meta.fields().value_set(&[]) })
+				} else {
+					let span = CALLSITE.disabled_span();
+					{};
+					span
+				}
+			};
+			let __tracing_guard__ = __within_span__.enter();
+			frame_support::traits::PalletVersion {
+				major: 2u16,
+				minor: 0u8,
+				patch: 0u8,
+			}
+			.put_into_storage::<<T as frame_system::Config>::PalletInfo, Self>();
+			<<T as frame_system::Config>::DbWeight as ::frame_support::traits::Get<_>>::get()
+				.writes(1)
+		}
 	}
-	impl<T: frame_system::Trait + Trait>
-		::frame_support::traits::OnFinalize<<T as frame_system::Trait>::BlockNumber> for Module<T>
+	impl<T: frame_system::Config + Config>
+		::frame_support::traits::OnFinalize<<T as frame_system::Config>::BlockNumber> for Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 	}
-	impl<T: frame_system::Trait + Trait>
-		::frame_support::traits::OffchainWorker<<T as frame_system::Trait>::BlockNumber> for Module<T>
+	impl<T: frame_system::Config + Config>
+		::frame_support::traits::OffchainWorker<<T as frame_system::Config>::BlockNumber> for Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3285,7 +3411,7 @@ pub mod two_phase {
                                 crate::LOG_TARGET,
                                 "frame_election_providers::two_phase",
                                 "frame/election-providers/src/two_phase/mod.rs",
-                                514u32,
+                                519u32,
                             ),
                         );
 					}
@@ -3293,24 +3419,24 @@ pub mod two_phase {
 			}
 		}
 	}
-	impl<T: Trait> Module<T>
+	impl<T: Config> Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		/// Deposits an event using `frame_system::Module::deposit_event`.
-		fn deposit_event(event: impl Into<<T as Trait>::Event>) {
+		fn deposit_event(event: impl Into<<T as Config>::Event>) {
 			<frame_system::Module<T>>::deposit_event(event.into())
 		}
 	}
 	#[cfg(feature = "std")]
-	impl<T: Trait> ::frame_support::traits::IntegrityTest for Module<T> where
+	impl<T: Config> ::frame_support::traits::IntegrityTest for Module<T> where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
 	{
 	}
 	/// Can also be called using [`Call`].
 	///
 	/// [`Call`]: enum.Call.html
-	impl<T: Trait> Module<T>
+	impl<T: Config> Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3318,8 +3444,8 @@ pub mod two_phase {
 		///
 		/// The dispatch origin fo this call must be __signed__.
 		///
-		/// The solution potentially queued, based on the claimed score and processed at the end of
-		/// the signed phase.
+		/// The solution is potentially queued, based on the claimed score and processed at the end
+		/// of the signed phase.
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
@@ -3339,7 +3465,7 @@ pub mod two_phase {
                             "frame_election_providers::two_phase",
                             ::tracing::Level::TRACE,
                             Some("frame/election-providers/src/two_phase/mod.rs"),
-                            Some(464u32),
+                            Some(469u32),
                             Some("frame_election_providers::two_phase"),
                             ::tracing_core::field::FieldSet::new(
                                 &[],
@@ -3430,7 +3556,7 @@ pub mod two_phase {
                             "frame_election_providers::two_phase",
                             ::tracing::Level::TRACE,
                             Some("frame/election-providers/src/two_phase/mod.rs"),
-                            Some(464u32),
+                            Some(469u32),
                             Some("frame_election_providers::two_phase"),
                             ::tracing_core::field::FieldSet::new(
                                 &[],
@@ -3457,15 +3583,15 @@ pub mod two_phase {
                     {};
                     span
                 }
-            };
-            let __tracing_guard__ = __within_span__.enter();
-            {
-                ensure_none(origin)?;
-                let _ = Self::pre_dispatch_checks(&solution)?;
-                let ready = Self::feasibility_check(solution, ElectionCompute::Unsigned).expect(
-                    "Invalid unsigned submission must produce invalid block and deprive \
+			};
+			let __tracing_guard__ = __within_span__.enter();
+			{
+				ensure_none(origin)?;
+				let _ = Self::unsigned_pre_dispatch_checks(&solution)?;
+				let ready = Self::feasibility_check(solution, ElectionCompute::Unsigned).expect(
+					"Invalid unsigned submission must produce invalid block and deprive \
 						validator from their authoring reward.",
-                );
+				);
 				<QueuedSolution<T>>::put(ready);
 				Self::deposit_event(RawEvent::SolutionStored(ElectionCompute::Unsigned));
 			}
@@ -3475,7 +3601,7 @@ pub mod two_phase {
 	/// Dispatchable calls.
 	///
 	/// Each variant of this enum maps to a dispatchable function from the associated module.
-	pub enum Call<T: Trait>
+	pub enum Call<T: Config>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3490,8 +3616,8 @@ pub mod two_phase {
 		///
 		/// The dispatch origin fo this call must be __signed__.
 		///
-		/// The solution potentially queued, based on the claimed score and processed at the end of
-		/// the signed phase.
+		/// The solution is potentially queued, based on the claimed score and processed at the end
+		/// of the signed phase.
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
@@ -3517,7 +3643,7 @@ pub mod two_phase {
 		#[allow(unknown_lints)]
 		#[allow(rust_2018_idioms)]
 		extern crate codec as _parity_scale_codec;
-		impl<T: Trait> _parity_scale_codec::Encode for Call<T>
+		impl<T: Config> _parity_scale_codec::Encode for Call<T>
 		where
 			ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 			RawSolution<CompactOf<T>>: _parity_scale_codec::Encode,
@@ -3525,21 +3651,24 @@ pub mod two_phase {
 			RawSolution<CompactOf<T>>: _parity_scale_codec::Encode,
 			RawSolution<CompactOf<T>>: _parity_scale_codec::Encode,
 		{
-			fn encode_to<EncOut: _parity_scale_codec::Output>(&self, dest: &mut EncOut) {
+			fn encode_to<__CodecOutputEdqy: _parity_scale_codec::Output>(
+				&self,
+				__codec_dest_edqy: &mut __CodecOutputEdqy,
+			) {
 				match *self {
-                    Call::submit(ref aa) => {
-                        dest.push_byte(0usize as u8);
-                        dest.push(aa);
-                    }
-                    Call::submit_unsigned(ref aa) => {
-                        dest.push_byte(1usize as u8);
-                        dest.push(aa);
-                    }
-                    _ => (),
-                }
+					Call::submit(ref aa) => {
+						__codec_dest_edqy.push_byte(0usize as u8);
+						__codec_dest_edqy.push(aa);
+					}
+					Call::submit_unsigned(ref aa) => {
+						__codec_dest_edqy.push_byte(1usize as u8);
+						__codec_dest_edqy.push(aa);
+					}
+					_ => (),
+				}
 			}
 		}
-		impl<T: Trait> _parity_scale_codec::EncodeLike for Call<T>
+		impl<T: Config> _parity_scale_codec::EncodeLike for Call<T>
 		where
 			ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 			RawSolution<CompactOf<T>>: _parity_scale_codec::Encode,
@@ -3550,48 +3679,54 @@ pub mod two_phase {
 		}
 	};
 	const _: () = {
-        #[allow(unknown_lints)]
-        #[allow(rust_2018_idioms)]
-        extern crate codec as _parity_scale_codec;
-        impl<T: Trait> _parity_scale_codec::Decode for Call<T>
-        where
-            ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-            RawSolution<CompactOf<T>>: _parity_scale_codec::Decode,
-            RawSolution<CompactOf<T>>: _parity_scale_codec::Decode,
-            RawSolution<CompactOf<T>>: _parity_scale_codec::Decode,
-            RawSolution<CompactOf<T>>: _parity_scale_codec::Decode,
-        {
-            fn decode<DecIn: _parity_scale_codec::Input>(
-                input: &mut DecIn,
-            ) -> core::result::Result<Self, _parity_scale_codec::Error> {
-                match input.read_byte()? {
-                    x if x == 0usize as u8 => Ok(Call::submit({
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => return Err("Error decoding field Call :: submit.0".into()),
-                            Ok(a) => a,
-                        }
-                    })),
-                    x if x == 1usize as u8 => Ok(Call::submit_unsigned({
-                        let res = _parity_scale_codec::Decode::decode(input);
-                        match res {
-                            Err(_) => {
-                                return Err("Error decoding field Call :: submit_unsigned.0".into())
-                            }
-                            Ok(a) => a,
-                        }
-                    })),
-                    x => Err("No such variant in enum Call".into()),
-                }
-            }
-        }
-    };
-    impl<T: Trait> ::frame_support::dispatch::GetDispatchInfo for Call<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn get_dispatch_info(&self) -> ::frame_support::dispatch::DispatchInfo {
-            match *self {
+		#[allow(unknown_lints)]
+		#[allow(rust_2018_idioms)]
+		extern crate codec as _parity_scale_codec;
+		impl<T: Config> _parity_scale_codec::Decode for Call<T>
+		where
+			ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Decode,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Decode,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Decode,
+			RawSolution<CompactOf<T>>: _parity_scale_codec::Decode,
+		{
+			fn decode<__CodecInputEdqy: _parity_scale_codec::Input>(
+				__codec_input_edqy: &mut __CodecInputEdqy,
+			) -> core::result::Result<Self, _parity_scale_codec::Error> {
+				match __codec_input_edqy.read_byte()? {
+					__codec_x_edqy if __codec_x_edqy == 0usize as u8 => Ok(Call::submit({
+						let __codec_res_edqy =
+							_parity_scale_codec::Decode::decode(__codec_input_edqy);
+						match __codec_res_edqy {
+							Err(_) => return Err("Error decoding field Call :: submit.0".into()),
+							Ok(__codec_res_edqy) => __codec_res_edqy,
+						}
+					})),
+					__codec_x_edqy if __codec_x_edqy == 1usize as u8 => {
+						Ok(Call::submit_unsigned({
+							let __codec_res_edqy =
+								_parity_scale_codec::Decode::decode(__codec_input_edqy);
+							match __codec_res_edqy {
+								Err(_) => {
+									return Err(
+										"Error decoding field Call :: submit_unsigned.0".into()
+									)
+								}
+								Ok(__codec_res_edqy) => __codec_res_edqy,
+							}
+						}))
+					}
+					_ => Err("No such variant in enum Call".into()),
+				}
+			}
+		}
+	};
+	impl<T: Config> ::frame_support::dispatch::GetDispatchInfo for Call<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn get_dispatch_info(&self) -> ::frame_support::dispatch::DispatchInfo {
+			match *self {
                 Call::submit(ref solution) => {
                     let base_weight = T::WeightInfo::submit();
                     let weight = <dyn ::frame_support::dispatch::WeighData<(
@@ -3640,14 +3775,14 @@ pub mod two_phase {
                     ))
                 }
             }
-        }
-    }
-    impl<T: Trait> ::frame_support::dispatch::GetCallName for Call<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn get_call_name(&self) -> &'static str {
-            match *self {
+		}
+	}
+	impl<T: Config> ::frame_support::dispatch::GetCallName for Call<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn get_call_name(&self) -> &'static str {
+			match *self {
                 Call::submit(ref solution) => {
                     let _ = (solution);
                     "submit"
@@ -3668,29 +3803,63 @@ pub mod two_phase {
                     ))
                 }
             }
-        }
-        fn get_call_names() -> &'static [&'static str] {
-            &["submit", "submit_unsigned"]
-        }
-    }
-    impl<T: Trait> ::frame_support::dispatch::Clone for Call<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn clone(&self) -> Self {
-            match *self {
-                Call::submit(ref solution) => Call::submit((*solution).clone()),
-                Call::submit_unsigned(ref solution) => Call::submit_unsigned((*solution).clone()),
-                _ => ::std::rt::begin_panic("internal error: entered unreachable code"),
-            }
-        }
-    }
-    impl<T: Trait> ::frame_support::dispatch::PartialEq for Call<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn eq(&self, _other: &Self) -> bool {
-            match *self {
+		}
+		fn get_call_names() -> &'static [&'static str] {
+			&["submit", "submit_unsigned"]
+		}
+	}
+	pub use ::frame_support::traits::GetPalletVersion as _;
+	impl<T: Config> ::frame_support::traits::GetPalletVersion for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn current_version() -> ::frame_support::traits::PalletVersion {
+			frame_support::traits::PalletVersion {
+				major: 2u16,
+				minor: 0u8,
+				patch: 0u8,
+			}
+		}
+		fn storage_version() -> Option<::frame_support::traits::PalletVersion> {
+			let key = ::frame_support::traits::PalletVersion::storage_key::<
+				<T as frame_system::Config>::PalletInfo,
+				Self,
+			>()
+			.expect("Every active pallet has a name in the runtime; qed");
+			::frame_support::storage::unhashed::get(&key)
+		}
+	}
+	impl<T: Config> ::frame_support::traits::OnGenesis for Module<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn on_genesis() {
+			frame_support::traits::PalletVersion {
+				major: 2u16,
+				minor: 0u8,
+				patch: 0u8,
+			}
+			.put_into_storage::<<T as frame_system::Config>::PalletInfo, Self>();
+		}
+	}
+	impl<T: Config> ::frame_support::dispatch::Clone for Call<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn clone(&self) -> Self {
+			match *self {
+				Call::submit(ref solution) => Call::submit((*solution).clone()),
+				Call::submit_unsigned(ref solution) => Call::submit_unsigned((*solution).clone()),
+				_ => ::std::rt::begin_panic("internal error: entered unreachable code"),
+			}
+		}
+	}
+	impl<T: Config> ::frame_support::dispatch::PartialEq for Call<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn eq(&self, _other: &Self) -> bool {
+			match *self {
                 Call::submit(ref solution) => {
                     let self_params = (solution,);
                     if let Call::submit(ref solution) = *_other {
@@ -3719,22 +3888,21 @@ pub mod two_phase {
                 }
                 _ => ::std::rt::begin_panic("internal error: entered unreachable code"),
             }
-        }
-    }
-    impl<T: Trait> ::frame_support::dispatch::Eq for Call<T> where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
-    {
-    }
-    impl<T: Trait> ::frame_support::dispatch::fmt::Debug for Call<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        fn fmt(
-            &self,
-            _f: &mut ::frame_support::dispatch::fmt::Formatter,
-        ) -> ::frame_support::dispatch::result::Result<(), ::frame_support::dispatch::fmt::Error>
-        {
-            match *self {
+		}
+	}
+	impl<T: Config> ::frame_support::dispatch::Eq for Call<T> where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+	{
+	}
+	impl<T: Config> ::frame_support::dispatch::fmt::Debug for Call<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		fn fmt(
+			&self,
+			_f: &mut ::frame_support::dispatch::fmt::Formatter,
+		) -> ::frame_support::dispatch::result::Result<(), ::frame_support::dispatch::fmt::Error> {
+			match *self {
                 Call::submit(ref solution) => _f.write_fmt(::core::fmt::Arguments::new_v1(
                     &["", ""],
                     &match (&"submit", &(solution.clone(),)) {
@@ -3757,18 +3925,18 @@ pub mod two_phase {
                 }
                 _ => ::std::rt::begin_panic("internal error: entered unreachable code"),
             }
-        }
-    }
-    impl<T: Trait> ::frame_support::traits::UnfilteredDispatchable for Call<T>
-    where
-        ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-    {
-        type Origin = T::Origin;
-        fn dispatch_bypass_filter(
-            self,
-            _origin: Self::Origin,
-        ) -> ::frame_support::dispatch::DispatchResultWithPostInfo {
-            match self {
+		}
+	}
+	impl<T: Config> ::frame_support::traits::UnfilteredDispatchable for Call<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	{
+		type Origin = T::Origin;
+		fn dispatch_bypass_filter(
+			self,
+			_origin: Self::Origin,
+		) -> ::frame_support::dispatch::DispatchResultWithPostInfo {
+			match self {
                 Call::submit(solution) => <Module<T>>::submit(_origin, solution)
                     .map(Into::into)
                     .map_err(Into::into),
@@ -3787,15 +3955,15 @@ pub mod two_phase {
                     ))
                 }
             }
-        }
-    }
-    impl<T: Trait> ::frame_support::dispatch::Callable<T> for Module<T>
+		}
+	}
+	impl<T: Config> ::frame_support::dispatch::Callable<T> for Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
 		type Call = Call<T>;
 	}
-	impl<T: Trait> Module<T>
+	impl<T: Config> Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3818,8 +3986,8 @@ pub mod two_phase {
                         r"",
                         r" The dispatch origin fo this call must be __signed__.",
                         r"",
-                        r" The solution potentially queued, based on the claimed score and processed at the end of",
-                        r" the signed phase.",
+                        r" The solution is potentially queued, based on the claimed score and processed at the end",
+                        r" of the signed phase.",
                         r"",
                         r" A deposit is reserved and recorded for the solution. Based on the outcome, the solution",
                         r" might be rewarded, slashed, or get all or a part of the deposit back.",
@@ -3855,7 +4023,7 @@ pub mod two_phase {
             ]
 		}
 	}
-	impl<T: 'static + Trait> Module<T>
+	impl<T: 'static + Config> Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3866,7 +4034,7 @@ pub mod two_phase {
 			&[]
 		}
 	}
-	impl<T: Trait> ::frame_support::dispatch::ModuleErrorMetadata for Module<T>
+	impl<T: Config> ::frame_support::dispatch::ModuleErrorMetadata for Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3874,7 +4042,7 @@ pub mod two_phase {
 			<PalletError<T> as ::frame_support::dispatch::ModuleErrorMetadata>::metadata()
 		}
 	}
-	impl<T: Trait> Module<T>
+	impl<T: Config> Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -3906,18 +4074,18 @@ pub mod two_phase {
 				Self::snapshot_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 			let voter_at = |i: crate::two_phase::CompactVoterIndexOf<T>| -> Option<T::AccountId> {
 				<crate::two_phase::CompactVoterIndexOf<T> as crate::TryInto<usize>>::try_into(i)
-                    .ok()
-                    .and_then(|i| snapshot_voters.get(i).map(|(x, _, _)| x).cloned())
-            };
-            let target_at = |i: crate::two_phase::CompactTargetIndexOf<T>| -> Option<T::AccountId> {
-                <crate::two_phase::CompactTargetIndexOf<T> as crate::TryInto<usize>>::try_into(i)
-                    .ok()
-                    .and_then(|i| snapshot_targets.get(i).cloned())
-            };
-            let winners = winners
-                .into_iter()
-                .map(|i| target_at(i).ok_or(FeasibilityError::InvalidWinner))
-                .collect::<Result<Vec<T::AccountId>, FeasibilityError>>()?;
+					.ok()
+					.and_then(|i| snapshot_voters.get(i).map(|(x, _, _)| x).cloned())
+			};
+			let target_at = |i: crate::two_phase::CompactTargetIndexOf<T>| -> Option<T::AccountId> {
+				<crate::two_phase::CompactTargetIndexOf<T> as crate::TryInto<usize>>::try_into(i)
+					.ok()
+					.and_then(|i| snapshot_targets.get(i).cloned())
+			};
+			let winners = winners
+				.into_iter()
+				.map(|i| target_at(i).ok_or(FeasibilityError::InvalidWinner))
+				.collect::<Result<Vec<T::AccountId>, FeasibilityError>>()?;
             let assignments = compact
                 .into_assignment(voter_at, target_at)
                 .map_err::<FeasibilityError, _>(Into::into)?;
@@ -3952,156 +4120,6 @@ pub mod two_phase {
 			let supports = sp_npos_elections::to_supports(&winners, &staked_assignments)
 				.map_err::<FeasibilityError, _>(Into::into)?;
 			let known_score = supports.evaluate();
-			(
-				match known_score {
-					tmp => {
-						{
-							::std::io::_eprint(::core::fmt::Arguments::new_v1_formatted(
-								&["[", ":", "] ", " = ", "\n"],
-								&match (
-									&"frame/election-providers/src/two_phase/mod.rs",
-									&674u32,
-									&"known_score",
-									&&tmp,
-								) {
-									(arg0, arg1, arg2, arg3) => [
-										::core::fmt::ArgumentV1::new(
-											arg0,
-											::core::fmt::Display::fmt,
-										),
-										::core::fmt::ArgumentV1::new(
-											arg1,
-											::core::fmt::Display::fmt,
-										),
-										::core::fmt::ArgumentV1::new(
-											arg2,
-											::core::fmt::Display::fmt,
-										),
-										::core::fmt::ArgumentV1::new(arg3, ::core::fmt::Debug::fmt),
-									],
-								},
-								&[
-									::core::fmt::rt::v1::Argument {
-										position: 0usize,
-										format: ::core::fmt::rt::v1::FormatSpec {
-											fill: ' ',
-											align: ::core::fmt::rt::v1::Alignment::Unknown,
-											flags: 0u32,
-											precision: ::core::fmt::rt::v1::Count::Implied,
-											width: ::core::fmt::rt::v1::Count::Implied,
-										},
-									},
-									::core::fmt::rt::v1::Argument {
-										position: 1usize,
-										format: ::core::fmt::rt::v1::FormatSpec {
-											fill: ' ',
-											align: ::core::fmt::rt::v1::Alignment::Unknown,
-											flags: 0u32,
-											precision: ::core::fmt::rt::v1::Count::Implied,
-											width: ::core::fmt::rt::v1::Count::Implied,
-										},
-									},
-									::core::fmt::rt::v1::Argument {
-										position: 2usize,
-										format: ::core::fmt::rt::v1::FormatSpec {
-											fill: ' ',
-											align: ::core::fmt::rt::v1::Alignment::Unknown,
-											flags: 0u32,
-											precision: ::core::fmt::rt::v1::Count::Implied,
-											width: ::core::fmt::rt::v1::Count::Implied,
-										},
-									},
-									::core::fmt::rt::v1::Argument {
-										position: 3usize,
-										format: ::core::fmt::rt::v1::FormatSpec {
-											fill: ' ',
-											align: ::core::fmt::rt::v1::Alignment::Unknown,
-											flags: 4u32,
-											precision: ::core::fmt::rt::v1::Count::Implied,
-											width: ::core::fmt::rt::v1::Count::Implied,
-										},
-									},
-								],
-							));
-						};
-						tmp
-					}
-				},
-				match score {
-					tmp => {
-						{
-							::std::io::_eprint(::core::fmt::Arguments::new_v1_formatted(
-								&["[", ":", "] ", " = ", "\n"],
-								&match (
-									&"frame/election-providers/src/two_phase/mod.rs",
-									&674u32,
-									&"score",
-									&&tmp,
-								) {
-									(arg0, arg1, arg2, arg3) => [
-										::core::fmt::ArgumentV1::new(
-											arg0,
-											::core::fmt::Display::fmt,
-										),
-										::core::fmt::ArgumentV1::new(
-											arg1,
-											::core::fmt::Display::fmt,
-										),
-										::core::fmt::ArgumentV1::new(
-											arg2,
-											::core::fmt::Display::fmt,
-										),
-										::core::fmt::ArgumentV1::new(arg3, ::core::fmt::Debug::fmt),
-									],
-								},
-								&[
-									::core::fmt::rt::v1::Argument {
-										position: 0usize,
-										format: ::core::fmt::rt::v1::FormatSpec {
-											fill: ' ',
-											align: ::core::fmt::rt::v1::Alignment::Unknown,
-											flags: 0u32,
-											precision: ::core::fmt::rt::v1::Count::Implied,
-											width: ::core::fmt::rt::v1::Count::Implied,
-										},
-									},
-									::core::fmt::rt::v1::Argument {
-										position: 1usize,
-										format: ::core::fmt::rt::v1::FormatSpec {
-											fill: ' ',
-											align: ::core::fmt::rt::v1::Alignment::Unknown,
-											flags: 0u32,
-											precision: ::core::fmt::rt::v1::Count::Implied,
-											width: ::core::fmt::rt::v1::Count::Implied,
-										},
-									},
-									::core::fmt::rt::v1::Argument {
-										position: 2usize,
-										format: ::core::fmt::rt::v1::FormatSpec {
-											fill: ' ',
-											align: ::core::fmt::rt::v1::Alignment::Unknown,
-											flags: 0u32,
-											precision: ::core::fmt::rt::v1::Count::Implied,
-											width: ::core::fmt::rt::v1::Count::Implied,
-										},
-									},
-									::core::fmt::rt::v1::Argument {
-										position: 3usize,
-										format: ::core::fmt::rt::v1::FormatSpec {
-											fill: ' ',
-											align: ::core::fmt::rt::v1::Alignment::Unknown,
-											flags: 4u32,
-											precision: ::core::fmt::rt::v1::Count::Implied,
-											width: ::core::fmt::rt::v1::Count::Implied,
-										},
-									},
-								],
-							));
-						};
-						tmp
-					}
-				},
-			);
 			{
 				if !(known_score == score) {
 					{
@@ -4117,9 +4135,11 @@ pub mod two_phase {
 		}
 		/// On-chain fallback of election.
 		fn onchain_fallback() -> Result<Supports<T::AccountId>, Error> {
-			let desired_targets = Self::desired_targets() as usize;
-			let voters = Self::snapshot_voters().ok_or(Error::SnapshotUnAvailable)?;
-			let targets = Self::snapshot_targets().ok_or(Error::SnapshotUnAvailable)?;
+			let RoundSnapshot {
+				desired_targets,
+				voters,
+				targets,
+			} = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
 			<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<Perbill>(
 				desired_targets,
 				targets,
@@ -4128,7 +4148,7 @@ pub mod two_phase {
 			.map_err(Into::into)
 		}
 	}
-	impl<T: Trait> ElectionProvider<T::AccountId> for Module<T>
+	impl<T: Config> ElectionProvider<T::AccountId> for Module<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	{
@@ -4155,8 +4175,7 @@ pub mod two_phase {
                 )
                 .map(|(supports, compute)| {
                     <CurrentPhase<T>>::put(Phase::Off);
-                    <SnapshotVoters<T>>::kill();
-                    <SnapshotTargets<T>>::kill();
+                    <Snapshot<T>>::kill();
                     Self::deposit_event(RawEvent::ElectionFinalized(Some(compute)));
                     {
                         let lvl = ::log::Level::Info;
@@ -4176,7 +4195,7 @@ pub mod two_phase {
                                     crate::LOG_TARGET,
                                     "frame_election_providers::two_phase",
                                     "frame/election-providers/src/two_phase/mod.rs",
-                                    731u32,
+                                    733u32,
                                 ),
                             );
                         }
@@ -4203,7 +4222,7 @@ pub mod two_phase {
                                     crate::LOG_TARGET,
                                     "frame_election_providers::two_phase",
                                     "frame/election-providers/src/two_phase/mod.rs",
-                                    736u32,
+                                    738u32,
                                 ),
                             );
                         }

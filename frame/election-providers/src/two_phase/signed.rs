@@ -38,9 +38,11 @@ where
 		let voters = T::ElectionDataProvider::voters();
 		let desired_targets = T::ElectionDataProvider::desired_targets();
 
-		<SnapshotTargets<T>>::put(targets);
-		<SnapshotVoters<T>>::put(voters);
-		DesiredTargets::put(desired_targets);
+		<Snapshot<T>>::put(RoundSnapshot {
+			voters,
+			targets,
+			desired_targets,
+		});
 	}
 
 	/// Finish the singed phase. Process the signed submissions from best to worse until a valid one

@@ -157,13 +157,15 @@ pub trait CompactSolution: Sized {
 		target_at: impl Fn(Self::Target) -> Option<A>,
 	) -> Result<Vec<Assignment<A, Self::VoteWeight>>, Error>;
 
-	/// Get the length of all the assignments that this type is encoding. This is basically
-	/// the same as the number of assignments, or the number of voters in total.
-	fn len(&self) -> usize;
+	/// Get the length of all the assignments that this type is encoding.
+	///
+	/// This is basically the same as the number of assignments, or the number of voters in total.
+	fn voters_count(&self) -> usize;
 
 	/// Get the total count of edges.
 	///
-	/// This is effectively in the range of {[`Self::len`], [`Self::len`] * [`Self::LIMIT`]}.
+	/// This is effectively in the range of {[`Self::voters_count`], [`Self::voters_count`] *
+	/// [`Self::LIMIT`]}.
 	fn edge_count(&self) -> usize;
 
 	/// Get the number of unique targets in the whole struct.
@@ -176,7 +178,9 @@ pub trait CompactSolution: Sized {
 
 	/// Get the average edge count.
 	fn average_edge_count(&self) -> usize {
-		self.edge_count().checked_div(self.len()).unwrap_or(0)
+		self.edge_count()
+			.checked_div(self.voters_count())
+			.unwrap_or(0)
 	}
 
 	/// Remove a certain voter.
