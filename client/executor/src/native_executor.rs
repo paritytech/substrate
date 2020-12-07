@@ -528,7 +528,6 @@ impl RuntimeInstanceSpawn {
 		));
 	}
 
-	// TODO should make a variant without module instantiation for native
 	fn spawn_new(&self) -> bool {
 		let module = self.module.clone();
 		let scheduler = self.scheduler.clone();

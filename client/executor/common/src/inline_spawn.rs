@@ -79,7 +79,6 @@ impl HostLocalFunction for HostLocal {
 }
 
 /// Helper inner struct to implement `RuntimeSpawn` extension.
-/// TODO maybe RunningTask param is useless
 pub struct RuntimeInstanceSpawn<HostLocalFunction = ()> {
 	tasks: BTreeMap<u64, PendingTask>,
 	counter: u64,
@@ -179,7 +178,9 @@ pub struct PendingTask {
 }
 
 #[cfg(feature = "std")]
-/// TODO
+/// Instantiate a wasm module.
+/// This function is rather unsafe and should only be
+/// use when `AssertUwindSafe` assertion stands.
 pub fn instantiate(
 	module: Option<&dyn WasmModule>,
 ) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
@@ -207,8 +208,7 @@ pub fn spawn_call_ext(
 	calling_ext: &mut dyn Externalities,
 ) -> AsyncExt {
 	match WorkerType::from_u8(kind)
-		// TODO better message
-		.expect("Only from existing kind") {
+		.expect("Unsupported worker type.") {
 		WorkerType::Stateless => {
 			AsyncExt::stateless_ext()
 		},
@@ -355,7 +355,6 @@ pub fn process_task<
 			};
 
 			match result {
-				// TODO if we knew tihs is stateless, we could return valid
 				Ok(Ok(result)) => if need_resolve {
 					WorkerResult::CallAt(result, handle)
 				} else {
@@ -376,8 +375,6 @@ pub fn process_task<
 				&mut async_ext,
 				|| func(data),
 			) {
-				// TODO Here if we got info about task being stateless, we could
-				// directly return Valid
 				Ok(result) => if need_resolve {
 					WorkerResult::CallAt(result, handle)
 				} else {

@@ -346,33 +346,34 @@ impl WorkerResult {
 /// A unique indentifier for a transactional level.
 pub type TaskId = u64;
 
-/// Backend to use with threads.
+/// Backend to use with workers.
 /// This trait must be usable as `dyn AsyncBackend`,
 /// which is not the case for Backend trait.
 pub trait AsyncBackend: Send {
-	/// TODO
+	/// Read runtime storage.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
-	/// TODO
+	/// Read child runtime storage.
+	///
+	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn child_storage(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>>;
 
-	/// TODO
+	/// Returns the key immediately following the given key, if it exists.
 	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>>;
 
-	/// TODO
+	/// Returns the key immediately following the given key, if it exists, in child storage.
 	fn next_child_storage_key(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8]
 	) -> Option<Vec<u8>>;
 
-	/// TODO this is just some way to clone without having
-	/// AsyncBackend: Clone.
-	/// With no_std dyn clone, we could remove it.
+	/// Alternative to Clone for backend.
+	/// TODO remove Option and panic?
 	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>>;
 }
 
