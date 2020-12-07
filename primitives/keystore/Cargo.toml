@@ -32,7 +32,7 @@ rand_chacha = "0.2.2"
 [features]
 default = ["std"]
 std = [
-    "serde",
+	"serde",
 	"schnorrkel/std",
 	"schnorrkel/serde",
 ]

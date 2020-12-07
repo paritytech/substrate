@@ -50,7 +50,7 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
-	/// Remote URIs to connect to for async keystore support
+	/// Remote URI to connect to for async keystore support
 	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
 	pub database: DatabaseConfig,
