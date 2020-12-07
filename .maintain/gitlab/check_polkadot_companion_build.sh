@@ -9,6 +9,7 @@
 # polkadot companion: paritytech/polkadot#567
 #
 
+set -e
 
 github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
 # use github api v3 in order to access the data without authentication
