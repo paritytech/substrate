@@ -52,7 +52,7 @@ use parity_scale_codec::{Encode, Decode};
 use finality_grandpa::BlockNumberOps;
 use sp_runtime::{
 	Justification, generic::BlockId,
-	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
+	traits::{NumberFor, Block as BlockT, Header as HeaderT, Zero, One},
 };
 use sp_core::storage::StorageKey;
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
@@ -247,6 +247,23 @@ pub struct FinalityProofFragment<Header: HeaderT> {
 /// - all other fragments provide justifications for GRANDPA authorities set changes within requested range.
 type FinalityProof<Header> = Vec<FinalityProofFragment<Header>>;
 
+/// Single fragment of authority set proof.
+///
+/// Finality for block B is proved by providing:
+/// 1) headers of this block;
+/// 2) the justification for the block containing a authority set change digest;
+#[derive(Debug, PartialEq, Encode, Decode)]
+pub(crate) struct AuthoritySetProofFragment<Header: HeaderT> {
+	/// The header of the given block.
+	pub header: Header,
+	/// Justification of the block F.
+	pub justification: Vec<u8>,
+}
+
+/// Proof of authority set is the ordered set of authority set fragments, where:
+/// - last fragment match target block.
+type AuthoritySetProof<Header> = Vec<AuthoritySetProofFragment<Header>>;
+
 /// Finality proof request data.
 #[derive(Debug, Encode, Decode)]
 enum FinalityProofRequest<H: Encode + Decode> {
@@ -425,6 +442,111 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 	}
 }
 
+/// Prepare authority proof for the best possible block starting at a given trusted block.
+///
+/// Started block should be in range of bonding duration.
+/// We only return proof for finalized blocks (with justification).
+///
+/// It is assumed that the caller already have a proof-of-finality for the block 'begin'.
+/// TODO switch to pub(crate)
+pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
+	blockchain: &B,
+	begin: Block::Hash,
+) -> ::sp_blockchain::Result<Vec<u8>>
+	where
+		J: ProvableJustification<Block::Header>,
+
+		NumberFor<Block>: BlockNumberOps, // TODO remove after debugging
+		B: BlockchainBackend<Block>, // TODO remove after debugging
+{
+
+  let begin = BlockId::Hash(begin);
+	let begin_number = blockchain.block_number_from_id(&begin)?
+		.ok_or_else(|| ClientError::Backend("Missing start block".to_string()))?;
+	let end = BlockId::Hash(blockchain.last_finalized()?);
+	let end_number = blockchain.block_number_from_id(&end)?
+		// This error should not happen, we could also panic.
+		.ok_or_else(|| ClientError::Backend("Missing last finalized block".to_string()))?;
+
+	if begin_number > end_number {
+		return Err(ClientError::Backend("Unfinalized start for authority proof".to_string()));
+	}
+
+	// TODO fetch bonding duration and store it to error when not from it.
+
+	// TODO use a cache here and encode on slice.
+	let mut result = Vec::new();
+
+	let mut header = blockchain.expect_header(begin)?;
+	let mut index = *header.number() + One::one();
+
+	while index <= end_number {
+		header = blockchain.expect_header(BlockId::number(index))?;
+
+		if let Some((block_number, sp_finality_grandpa::ScheduledChange {
+			next_authorities: _,
+			delay,
+		})) = crate::import::find_forced_change::<Block>(&header) {
+			let dest = block_number + delay;
+			if dest <= end_number {
+				if let Some(justification) = blockchain.justification(BlockId::Number(index.clone()))? {
+					result.push(AuthoritySetProofFragment {
+						header: header.clone(),
+						justification,
+					});
+				} else {
+					println!("should be unreachable");
+				}
+	
+				let inc = delay == Zero::zero() && block_number == index;
+				index = dest;
+				if inc {
+					index += One::one();
+				}
+				continue;
+			}
+		}
+
+		if let Some(sp_finality_grandpa::ScheduledChange {
+			next_authorities: _,
+			delay,
+		}) = crate::import::find_scheduled_change::<Block>(&header) {
+			let dest = index + delay;
+			if dest <= end_number {
+				if let Some(justification) = blockchain.justification(BlockId::Number(index.clone()))? {
+					result.push(AuthoritySetProofFragment {
+						header: header.clone(),
+						justification,
+					});
+				} else {
+					println!("should be unreachable");
+				}
+				index = dest;
+				if delay == Zero::zero() {
+					index += One::one();
+				}
+				continue;
+			}
+		}
+
+		index = *header.number() + One::one();
+	}
+
+	if result.last().as_ref().map(|head| head.header.number()) != Some(&end_number) {
+		let header = blockchain.expect_header(end)?;
+		if let Some(justification) = blockchain.justification(BlockId::Number(end_number.clone()))? {
+			result.push(AuthoritySetProofFragment {
+				header: header.clone(),
+				justification,
+			});
+		} else {
+			println!("should be unreachable");
+		}
+	}
+
+	Ok(result.encode())
+}
+
 /// Check GRANDPA proof-of-finality for the given block.
 ///
 /// Returns the vector of headers that MUST be validated + imported
@@ -481,6 +603,98 @@ pub(crate) fn check_finality_proof<Block: BlockT, B, J>(
 		"set_id" => ?effects.new_set_id, "finalized_header_hash" => ?effects.block);
 
 	Ok(effects)
+}
+
+/// Check GRANDPA authority change sequence to assert finality of a target block. 
+///
+/// Returns the header of the target block.
+pub fn check_authority_proof<Block: BlockT, J>(
+	current_set_id: u64,
+	current_authorities: AuthorityList,
+	remote_proof: Vec<u8>,
+) -> ClientResult<(Block::Header, u64, AuthorityList)>
+	where
+		NumberFor<Block>: BlockNumberOps,
+		J: Decode + ProvableJustification<Block::Header> + BlockJustification<Block::Header>,
+{
+	// decode finality proof
+	let proof = AuthoritySetProof::<Block::Header>::decode(&mut &remote_proof[..])
+		.map_err(|_| ClientError::BadJustification("failed to decode authority proof".into()))?;
+
+	let last = proof.len() - 1;
+
+	let mut result = (current_set_id, current_authorities, NumberFor::<Block>::zero());
+
+	for (ix, fragment) in proof.into_iter().enumerate() {
+		let is_last = ix == last;
+		result = check_authority_proof_fragment::<Block, J>(
+			result.0,
+			&result.1,
+			&result.2,
+			is_last,
+			&fragment,
+		)?; 
+
+		if is_last {
+			return Ok((fragment.header, result.0, result.1))
+		}
+	}
+
+	// empty proof can't prove anything
+	return Err(ClientError::BadJustification("empty proof of authority".into()));
+}
+
+/// Check finality authority set sequence.
+fn check_authority_proof_fragment<Block: BlockT, J>(
+	current_set_id: u64,
+	current_authorities: &AuthorityList,
+	current_block: &NumberFor<Block>,
+	is_last: bool,
+	authorities_proof: &AuthoritySetProofFragment<Block::Header>,
+) -> ClientResult<(u64, AuthorityList, NumberFor<Block>)>
+	where
+		NumberFor<Block>: BlockNumberOps,
+		J: Decode + ProvableJustification<Block::Header> + BlockJustification<Block::Header>,
+{
+	let justification: J = Decode::decode(&mut authorities_proof.justification.as_slice())
+		.map_err(|_| ClientError::JustificationDecode)?;
+	justification.verify(current_set_id, &current_authorities)?;
+
+	// assert justification is for this header
+	if &justification.number() != authorities_proof.header.number()
+		|| justification.hash().as_ref() != authorities_proof.header.hash().as_ref() {
+		return Err(ClientError::Backend("Invalid authority warp proof, justification do not match header".to_string()));
+	}
+
+	if authorities_proof.header.number() <= current_block {
+		return Err(ClientError::Backend("Invalid authority warp proof".to_string()));
+	}
+	let current_block = authorities_proof.header.number();
+	let mut at_block = None;
+	if let Some(sp_finality_grandpa::ScheduledChange {
+		next_authorities,
+		delay,
+	}) = crate::import::find_scheduled_change::<Block>(&authorities_proof.header) {
+		let dest = *current_block + delay;
+		at_block = Some((dest, next_authorities));
+	}
+	if let Some((block_number, sp_finality_grandpa::ScheduledChange {
+		next_authorities,
+		delay,
+	})) = crate::import::find_forced_change::<Block>(&authorities_proof.header) {
+		let dest = block_number + delay;
+		at_block = Some((dest, next_authorities));
+	}
+
+	// only fragment with no change for target
+	if at_block.is_none() && !is_last {
+		return Err(ClientError::Backend("Invalid authority warp proof".to_string()));
+	}
+	if let Some((at_block, next_authorities)) = at_block {
+		Ok((current_set_id + 1, next_authorities, at_block))
+	} else {
+		Ok((current_set_id, current_authorities.clone(), current_block.clone()))
+	}
 }
 
 /// Check finality proof for the single block.
@@ -551,8 +765,18 @@ impl<Header: HeaderT> AuthoritiesOrEffects<Header> {
 	}
 }
 
+/// Block info extracted from the justification.
+pub trait BlockJustification<Header: HeaderT> {
+	/// Block number justified.
+	fn number(&self) -> Header::Number;
+
+	/// Block hash justified.
+	fn hash(&self) -> Header::Hash;
+}
+
 /// Justification used to prove block finality.
-pub(crate) trait ProvableJustification<Header: HeaderT>: Encode + Decode {
+/// TODO switch back to pub(crate)
+pub trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 	/// Verify justification with respect to authorities set and authorities set id.
 	fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()>;
 
@@ -579,6 +803,15 @@ impl<Block: BlockT> ProvableJustification<Block::Header> for GrandpaJustificatio
 		)?;
 
 		GrandpaJustification::verify(self, set_id, &authorities)
+	}
+}
+
+impl<Block: BlockT> BlockJustification<Block::Header> for GrandpaJustification<Block> {
+	fn number(&self) -> NumberFor<Block> {
+		self.commit.target_number.clone()
+	}
+	fn hash(&self) -> Block::Hash {
+		self.commit.target_hash.clone()
 	}
 }
 

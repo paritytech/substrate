@@ -6484,6 +6484,7 @@ dependencies = [
  "kvdb-rocksdb",
  "linked-hash-map",
  "log",
+ "num-traits",
  "parity-db",
  "parity-scale-codec",
  "parity-util-mem",
@@ -6491,12 +6492,14 @@ dependencies = [
  "quickcheck",
  "sc-client-api",
  "sc-executor",
+ "sc-finality-grandpa",
  "sc-state-db",
  "sp-arithmetic",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
  "sp-database",
+ "sp-finality-grandpa",
  "sp-keyring",
  "sp-runtime",
  "sp-state-machine",
@@ -7229,6 +7232,7 @@ dependencies = [
  "async-std",
  "directories 3.0.1",
  "exit-future",
+ "finality-grandpa",
  "futures 0.1.30",
  "futures 0.3.8",
  "futures-timer 3.0.2",
@@ -8857,6 +8861,7 @@ dependencies = [
 name = "substrate-test-client"
 version = "2.0.0"
 dependencies = [
+ "finality-grandpa",
  "futures 0.1.30",
  "futures 0.3.8",
  "hash-db",

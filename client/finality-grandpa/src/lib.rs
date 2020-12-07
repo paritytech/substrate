@@ -113,7 +113,8 @@ mod authorities;
 mod aux_schema;
 mod communication;
 mod environment;
-mod finality_proof;
+// TODO remove pub
+pub mod finality_proof;
 mod import;
 mod justification;
 mod notification;
