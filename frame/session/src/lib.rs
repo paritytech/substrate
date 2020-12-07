@@ -685,7 +685,11 @@ impl<T: Config> Module<T> {
 
 	/// Upgrade the key type from some old type to a new type. Supports adding
 	/// and removing key types.
-
+	///
+	/// This function should be used with extreme care and only during an
+	/// `on_runtime_upgrade` block. Misuse of this function can put your blockchain
+	/// into an unrecoverable state.
+	///
 	/// Care should be taken that the raw versions of the
 	/// added keys are unique for every `ValidatorId, KeyTypeId` combination.
 	/// This is an invariant that the session module typically maintains internally.
@@ -694,9 +698,10 @@ impl<T: Config> Module<T> {
 	/// it's recommended to initialize the keys to a (unique) dummy value with the expectation
 	/// that all validators should invoke `set_keys` before those keys are actually
 	/// required.
-	pub fn upgrade_keys<Old: OpaqueKeys + Member + Decode>(
-		upgrade: impl Fn(T::ValidatorId, Old) -> T::Keys,
-	) {
+	pub fn upgrade_keys<Old, F>(upgrade: F) where
+		Old: OpaqueKeys + Member + Decode,
+		F: Fn(T::ValidatorId, Old) -> T::Keys,
+	{
 		let old_ids = Old::key_ids();
 		let new_ids = T::Keys::key_ids();
 
@@ -718,7 +723,7 @@ impl<T: Config> Module<T> {
 			Some(new_keys)
 		});
 
-		<QueuedKeys<T>>::translate::<Vec<(T::ValidatorId, Old)>, _>(
+		let _ = <QueuedKeys<T>>::translate::<Vec<(T::ValidatorId, Old)>, _>(
 			|k| {
 				k.map(|k| k.into_iter()
 					.map(|(val, old_keys)| (val.clone(), upgrade(val, old_keys)))
