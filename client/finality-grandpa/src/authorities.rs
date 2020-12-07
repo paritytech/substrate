@@ -712,7 +712,20 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 			.binary_search_by_key(&block_number, |(_, n)| n.clone())
 			.unwrap_or_else(|b| b);
 		if idx < self.authority_set_changes.len() {
-			Some(self.authority_set_changes[idx].clone())
+			let (set_id, block_number) = self.authority_set_changes[idx].clone();
+			// To make sure we have the right set we need to check that the one before it also exists.
+			if idx > 0 {
+				let (prev_set_id, _) = self.authority_set_changes[idx - 1usize];
+				if set_id != prev_set_id + 1u64 {
+					// Without the preceding set_id we don't have a well-defined start.
+					return None;
+				}
+			} else if set_id != 0 {
+				// If this is the first index, yet not the first set id then it's not well
+				// defined that we are in the right set id.
+				return None;
+			}
+			Some((set_id, block_number))
 		} else {
 			None
 		}
@@ -1617,5 +1630,33 @@ mod tests {
 				.canon_hash,
 			"D"
 		);
+	}
+
+	#[test]
+	fn authority_set_changes_for_complete_data() {
+		let mut authority_set_changes = AuthoritySetChanges::empty();
+		authority_set_changes.append(0, 41);
+		authority_set_changes.append(1, 81);
+		authority_set_changes.append(2, 121);
+
+		assert_eq!(authority_set_changes.get_set_id(20), Some((0, 41)));
+		assert_eq!(authority_set_changes.get_set_id(40), Some((0, 41)));
+		assert_eq!(authority_set_changes.get_set_id(41), Some((0, 41)));
+		assert_eq!(authority_set_changes.get_set_id(42), Some((1, 81)));
+		assert_eq!(authority_set_changes.get_set_id(141), None);
+	}
+
+	#[test]
+	fn authority_set_changes_for_incomplete_data() {
+		let mut authority_set_changes = AuthoritySetChanges::empty();
+		authority_set_changes.append(2, 41);
+		authority_set_changes.append(3, 81);
+		authority_set_changes.append(4, 121);
+
+		assert_eq!(authority_set_changes.get_set_id(20), None);
+		assert_eq!(authority_set_changes.get_set_id(40), None);
+		assert_eq!(authority_set_changes.get_set_id(41), None);
+		assert_eq!(authority_set_changes.get_set_id(42), Some((3, 81)));
+		assert_eq!(authority_set_changes.get_set_id(141), None);
 	}
 }
