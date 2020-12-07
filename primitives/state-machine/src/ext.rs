@@ -675,19 +675,19 @@ where
 		self.backend.set_whitelist(new)
 	}
 
-	fn get_past_async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
 		self.backend.async_backend()
+			.expect("Backend cannot run async.")
 	}
 
-	fn get_async_backend(&mut self, marker: TaskId) -> Option<Box<dyn AsyncBackend>> {
-		self.get_past_async_backend().map(|backend| {
-			self.overlay.set_marker(marker);
-			let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
-				backend,
-				self.overlay,
-			));
-			backend
-		})
+	fn get_async_backend(&mut self, marker: TaskId) -> Box<dyn AsyncBackend> {
+		let backend = self.get_past_async_backend();
+		self.overlay.set_marker(marker);
+		let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
+			backend,
+			self.overlay,
+		));
+		backend
 	}
 
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {

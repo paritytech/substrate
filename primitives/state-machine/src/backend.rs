@@ -286,8 +286,9 @@ impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackend for AsyncBackendAda
 		self.0.next_child_storage_key(child_info, key).expect(crate::ext_tools::EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
-	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+	fn async_backend(&self) -> Box<dyn AsyncBackend> {
 		self.0.async_backend()
+			.expect("Backend cannot run async.")
 	}
 }
 
@@ -355,14 +356,13 @@ impl AsyncBackend for AsyncBackendAt {
 		}
 	}
 
-	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
-		self.backend.async_backend().map(|backend| {
-			let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
-				backend,
-				&self.overlay,
-			));
-			backend
-		})
+	fn async_backend(&self) -> Box<dyn AsyncBackend> {
+		let backend = self.backend.async_backend();
+		let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
+			backend,
+			&self.overlay,
+		));
+		backend
 	}
 }
 
@@ -430,8 +430,8 @@ impl AsyncBackend for InlineBackendAt {
 			.flatten()
 	}
 
-	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
-		Some(Box::new(self.clone()))
+	fn async_backend(&self) -> Box<dyn AsyncBackend> {
+		Box::new(self.clone())
 	}
 }
 

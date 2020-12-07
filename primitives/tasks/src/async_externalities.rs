@@ -411,9 +411,7 @@ impl Externalities for AsyncExternalities {
 		unimplemented!("set_whitelist is not supported in AsyncExternalities")
 	}
 
-	// TODO this guard only make sense when renturning non optional
-	// TODO change api.
-	fn get_past_async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
 		match self.state.kind {
 			WorkerType::Stateless
 			| WorkerType::ReadAtSpawn => {
@@ -425,7 +423,7 @@ impl Externalities for AsyncExternalities {
 		self.state.backend.as_ref().expect(KIND_WITH_BACKEND).async_backend()
 	}
 
-	fn get_async_backend(&mut self, marker: TaskId) -> Option<Box<dyn AsyncBackend>> {
+	fn get_async_backend(&mut self, marker: TaskId) -> Box<dyn AsyncBackend> {
 		match self.state.kind {
 			WorkerType::Stateless
 			| WorkerType::ReadLastBlock => {

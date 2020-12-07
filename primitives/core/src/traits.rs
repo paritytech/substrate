@@ -275,11 +275,13 @@ pub trait SpawnNamed: Clone + Send + Sync {
 	///
 	/// The given `name` is used to identify the future in tracing.
 	fn spawn_blocking(&self, name: &'static str, future: BoxFuture);
+
 	/// Spawn the given non-blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
 	fn spawn(&self, name: &'static str, future: BoxFuture);
-	/// Spawn the given non-blocking future if poossible, returns a handle.
+
+	/// Spawn the given non-blocking future if possible, returns a handle.
 	///
 	/// The given `name` is used to identify the future in tracing.
 	fn spawn_with_handle(
@@ -294,12 +296,6 @@ pub trait SpawnHandle: Send {
 	/// Associated future can be dropped
 	/// and remove from pool if a pool is used.
 	fn dismiss(&mut self);
-}
-
-impl SpawnHandle for () {
-	fn dismiss(&mut self) {
-		// () is a noops handle.
-	}
 }
 
 #[cfg(not(feature = "std"))]

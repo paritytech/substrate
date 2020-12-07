@@ -193,7 +193,6 @@ pub trait Storage {
 					runtime_spawn.dismiss(task)
 				}
 			}
-			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 		}
 	}
 
@@ -205,7 +204,6 @@ pub trait Storage {
 	///
 	/// Will panic if there is no open transaction.
 	fn commit_transaction(&mut self) {
-		// TODO factor with rollback
 		let to_drop_tasks = self.storage_commit_transaction()
 			.expect("No open transaction that can be committed.");
 		if to_drop_tasks.len() > 0 {
@@ -214,7 +212,6 @@ pub trait Storage {
 					runtime_spawn.dismiss(task)
 				}
 			}
-			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 		}
 	}
 }
@@ -1259,7 +1256,11 @@ pub trait Sandbox {
 /// This should not be used directly. Use `sp_tasks` for running parallel tasks instead.
 #[runtime_interface]
 pub trait RuntimeTasks {
-	/// TODO doc
+	/// This calls change the number of parallel runtime worker allowed during
+	/// this runtime execution.
+	/// Having a high number allowed does not mean that the underlying client
+	/// will run that number of threads, but means that we must account for
+	/// the possibillity to reach such amount.
 	///
 	/// This should not be used directly. Use `sp_tasks::set_capacity` instead.
 	fn set_capacity(&mut self, capacity: u32) {
@@ -1268,7 +1269,7 @@ pub trait RuntimeTasks {
 		runtime_spawn.set_capacity(capacity);
 	}
 
-	/// Wasm host function for spawning task.
+	/// ost function for spawning task.
 	///
 	/// This should not be used directly. Use `sp_tasks::spawn` instead.
 	fn spawn(&mut self, dispatcher_ref: u32, entry: u32, payload: Vec<u8>, kind: u8) -> u64 {
@@ -1285,7 +1286,7 @@ pub trait RuntimeTasks {
 		result
 	}
 
-	/// Wasm host function for joining a task.
+	/// Host function for joining a task.
 	///
 	/// This should not be used directly. Use `join` of `sp_tasks::spawn` result instead.
 	fn join(&mut self, handle: u64) -> Option<Vec<u8>> {
@@ -1298,7 +1299,11 @@ pub trait RuntimeTasks {
 		result
 	}
 
-	/// TODO doc
+	/// Host function to dismiss a task.
+	///
+	/// This is mostly for cleaning resources, but inner implementation
+	/// only need to ensure that calling join on a handle after dismiss was
+	/// called does return `None`.
 	///
 	/// This should not be used directly. Use `kill` of `sp_tasks::spawn` result instead.
 	fn dismiss(&mut self, handle: u64) {

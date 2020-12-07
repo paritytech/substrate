@@ -333,11 +333,11 @@ impl Externalities for BasicExternalities {
 		unimplemented!("set_whitelist is not supported in Basic")
 	}
 
-	fn get_past_async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
 		unimplemented!("TODO empty one")
 	}
 
-	fn get_async_backend(&mut self, _marker: TaskId) -> Option<Box<dyn AsyncBackend>> {
+	fn get_async_backend(&mut self, _marker: TaskId) -> Box<dyn AsyncBackend> {
 		unimplemented!("TODO from self.storage cloned")
 	}
 

@@ -369,10 +369,8 @@ mod dismiss_handle {
 		pub(super) fn new_thread_id(&self, counter: &Arc<AtomicU64>) -> u64 {
 			counter.fetch_add(1, Ordering::Relaxed)
 		}
-		pub(super) fn register_new_thread(&self, handle: Option<RemoteHandle>, thread_id: u64) {
-			if let Some(handle) = handle {
-				self.0.lock().running.insert(thread_id, handle);
-			}
+		pub(super) fn register_new_thread(&self, handle: RemoteHandle, thread_id: u64) {
+			self.0.lock().running.insert(thread_id, handle);
 		}
 		pub(super) fn register_worker(&self, worker: u64, thread_id: u64) {
 			self.0.lock().workers.insert(worker, thread_id);
@@ -627,9 +625,9 @@ impl RuntimeInstanceSpawn {
 		&self,
 		name: &'static str,
 		future: BoxFuture,
-	) -> Option<Option<RemoteHandle>> {
+	) -> Option<RemoteHandle> {
 		self.scheduler.spawn_with_handle(name, future)
-			.map(|th| Some(th))
+			.map(|th| th)
 	}
 
 	#[cfg(not(feature = "abort-future"))]
@@ -639,9 +637,8 @@ impl RuntimeInstanceSpawn {
 		future: BoxFuture,
 	) -> Option<Option<RemoteHandle>> {
 		self.scheduler.spawn(name, future);
-		Some(None)
+		None
 	}
-
 }
 
 impl RuntimeInstanceSpawn {

@@ -213,13 +213,11 @@ pub fn spawn_call_ext(
 			AsyncExt::stateless_ext()
 		},
 		WorkerType::ReadLastBlock => {
-			let backend = calling_ext.get_past_async_backend()
-				.expect("Unsupported spawn kind.");
+			let backend = calling_ext.get_past_async_backend();
 			AsyncExt::previous_block_read(backend)
 		},
 		WorkerType::ReadAtSpawn => {
-			let backend = calling_ext.get_async_backend(handle)
-				.expect("Unsupported spawn kind.");
+			let backend = calling_ext.get_async_backend(handle);
 			AsyncExt::state_at_spawn_read(backend, handle)
 		},
 	}

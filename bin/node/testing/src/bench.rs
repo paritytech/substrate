@@ -23,7 +23,7 @@
 //! or tests to get consistent, smooth benchmark experience!
 
 use std::{sync::Arc, path::{Path, PathBuf}, collections::BTreeMap};
-
+use futures::future::BoxFuture;
 use node_primitives::Block;
 use crate::client::{Client, Backend};
 use crate::keyring::*;
@@ -50,7 +50,7 @@ use node_runtime::{
 	AccountId,
 	Signature,
 };
-use sp_core::{ExecutionContext, blake2_256, traits::SpawnNamed, Pair, Public, sr25519, ed25519};
+use sp_core::{ExecutionContext, blake2_256, traits::{SpawnNamed, RemoteHandle}, Pair, Public, sr25519, ed25519};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_inherents::InherentData;
@@ -259,13 +259,24 @@ impl TaskExecutor {
 }
 
 impl SpawnNamed for TaskExecutor {
-	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn(&self, _: &'static str, future: BoxFuture<'static, ()>) {
 		self.pool.spawn_ok(future);
 	}
 
-	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_blocking(&self, _: &'static str, future: BoxFuture<'static, ()>) {
 		self.pool.spawn_ok(future);
 	}
+
+	fn spawn_with_handle(
+		&self,
+		_name: &'static str,
+		future: BoxFuture<'static, ()>,
+	) -> Option<RemoteHandle> {
+		self.pool.spawn_ok(future);
+		// no dismiss
+		None
+	}
+
 }
 
 /// Iterator for block content.

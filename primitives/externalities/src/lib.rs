@@ -272,23 +272,14 @@ pub trait Externalities: ExtensionStore {
 
 	/// Get async backend that do not contains current changes.
 	/// (state for previous block).
-	///
-	/// Note that when we return none, primitive for starting thread
-	/// should return a handle with an inline version.
-	/// The inline version here will not require additional data.
-	fn get_past_async_backend(&self) -> Option<Box<dyn AsyncBackend>>;
+	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend>;
 
 	/// Get current async backend, and set a marker on the current state
 	/// to be able to identify changes.
 	/// Adding this checkpoint state allows externalities to kill all tasks
 	/// associated with this state if it gets dropped (by transactional
 	/// rollback).
-	///
-	///	Note that when we return none, primitive for starting thread
-	/// should return a handle with an inline version.
-	/// The inline version here will not require a snapshot of the current
-	/// state, and the marker should be still registerd by this call.
-	fn get_async_backend(&mut self, marker: TaskId) -> Option<Box<dyn AsyncBackend>>;
+	fn get_async_backend(&mut self, marker: TaskId) -> Box<dyn AsyncBackend>;
 
 	/// Resolve worker result does update externality state
 	/// and also apply rules relative to the exernality state.
@@ -373,8 +364,9 @@ pub trait AsyncBackend: Send {
 	) -> Option<Vec<u8>>;
 
 	/// Alternative to Clone for backend.
-	/// TODO remove Option and panic?
-	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>>;
+	/// If dyn_clonable get compatible with no_std, this
+	/// function could be removed.
+	fn async_backend(&self) -> Box<dyn AsyncBackend>;
 }
 
 /// Extension for the [`Externalities`] trait.
