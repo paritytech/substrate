@@ -253,7 +253,7 @@ mod discovery;
 mod light_client_handler;
 mod on_demand_layer;
 mod protocol;
-mod request_responses;
+pub mod request_responses;
 mod schema;
 mod service;
 mod transport;
@@ -263,7 +263,6 @@ pub mod config;
 pub mod error;
 pub mod gossip;
 pub mod network_state;
-pub mod grandpa_warp_sync_request_handler;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};

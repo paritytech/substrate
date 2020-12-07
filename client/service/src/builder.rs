@@ -43,7 +43,7 @@ use sc_keystore::LocalKeystore;
 use log::{info, warn};
 use sc_network::config::{Role, OnDemand};
 use sc_network::NetworkService;
-use sc_network::grandpa_warp_sync_request_handler::{self, GrandpaWarpSyncRequestHandler};
+use sc_grandpa_warp_sync::GrandpaWarpSyncRequestHandler;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo, NumberFor,
@@ -818,11 +818,13 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 }
 
 /// Parameters to pass into `build_network`.
-pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
+pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl, TBackend> {
 	/// The service configuration.
 	pub config: &'a Configuration,
 	/// A shared client returned by `new_full_parts`/`new_light_parts`.
 	pub client: Arc<TCl>,
+	/// A shared backend returned by `new_full_parts`/`new_light_parts`.
+	pub backend: Arc<TBackend>,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// A handle for spawning tasks.
@@ -838,8 +840,8 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
-pub fn build_network<TBl, TExPool, TImpQu, TCl>(
-	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>
+pub fn build_network<TBl, TExPool, TImpQu, TCl, TBackend>(
+	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl, TBackend>
 ) -> Result<
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
@@ -856,9 +858,11 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
+		TBackend: sc_client_api::backend::Backend<TBl> + 'static,
+		NumberFor<TBl>: BlockNumberOps,
 {
 	let BuildNetworkParams {
-		config, client, transaction_pool, spawn_handle, import_queue, on_demand,
+		config, client, backend, transaction_pool, spawn_handle, import_queue, on_demand,
 		block_announce_validator_builder,
 	} = params;
 
@@ -890,12 +894,12 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	let grandpa_warp_sync_request_protocol_config = {
 		if matches!(config.role, Role::Light) {
 			// Allow outgoing requests but deny incoming requests.
-			grandpa_warp_sync_request_handler::generate_protocol_config(protocol_id.clone())
+			sc_grandpa_warp_sync::generate_protocol_config(protocol_id.clone())
 		} else {
 			// Allow both outgoing and incoming requests.
 			let (handler, protocol_config) = GrandpaWarpSyncRequestHandler::new(
 				protocol_id.clone(),
-				client.clone(),
+				backend.clone(),
 			);
 			spawn_handle.spawn("grandpa_warp_sync_request_handler", handler.run());
 			protocol_config

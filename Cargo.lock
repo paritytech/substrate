@@ -6916,6 +6916,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-grandpa-warp-sync"
+version = "0.8.0"
+dependencies = [
+ "derive_more",
+ "futures 0.3.8",
+ "log",
+ "num-traits",
+ "parity-scale-codec",
+ "prost",
+ "sc-client-api",
+ "sc-finality-grandpa",
+ "sc-network",
+ "sp-blockchain",
+ "sp-runtime",
+]
+
+[[package]]
 name = "sc-informant"
 version = "0.8.0"
 dependencies = [
@@ -7252,6 +7269,7 @@ dependencies = [
  "sc-client-db",
  "sc-executor",
  "sc-finality-grandpa",
+ "sc-grandpa-warp-sync",
  "sc-informant",
  "sc-keystore",
  "sc-light",
