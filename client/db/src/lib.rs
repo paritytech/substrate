@@ -257,7 +257,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.usage_info()
 	}
 
-	fn async_backend(&self) -> Option<Box<dyn sp_state_machine::AsyncBackend>> {
+	fn async_backend(&self) -> Box<dyn sp_state_machine::AsyncBackend> {
 		self.state.async_backend()
 	}
 }

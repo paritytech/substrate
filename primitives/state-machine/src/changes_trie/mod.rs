@@ -172,8 +172,8 @@ impl<'a, H: Hasher + 'static, N: BlockNumber> crate::TrieBackendStorage<H> for T
 		self.0.get(key, prefix)
 	}
 
-	fn async_storage(&self) -> Option<Self::AsyncStorage> {
-		None
+	fn async_storage(&self) -> Self::AsyncStorage {
+		panic!("Cannot run async with TrieBackendStorageAdapter")
 	}
 }
 

@@ -369,6 +369,36 @@ pub trait AsyncBackend: Send {
 	fn async_backend(&self) -> Box<dyn AsyncBackend>;
 }
 
+impl AsyncBackend for () {
+	fn storage(&self, _key: &[u8]) -> Option<Vec<u8>> {
+		None
+	}
+
+	fn child_storage(
+		&self,
+		_child_info: &ChildInfo,
+		_key: &[u8],
+	) -> Option<Vec<u8>> {
+		None
+	}
+
+	fn next_storage_key(&self, _key: &[u8]) -> Option<Vec<u8>> {
+		None
+	}
+
+	fn next_child_storage_key(
+		&self,
+		_child_info: &ChildInfo,
+		_key: &[u8]
+	) -> Option<Vec<u8>> {
+		None
+	}
+
+	fn async_backend(&self) -> Box<dyn AsyncBackend> {
+		Box::new(())
+	}
+}
+
 /// Extension for the [`Externalities`] trait.
 pub trait ExternalitiesExt {
 	/// Tries to find a registered extension and returns a mutable reference.

@@ -212,16 +212,14 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'static + Hasher> TrieBackendStorage<
 		Ok(backend_value)
 	}
 
-	fn async_storage(&self) -> Option<Self::AsyncStorage> {
-		self.backend.async_storage().map(|backend| {
-			OwnedProofRecorderBackend {
-				backend,
-				// Here using existing recorder would be incorrect as we only need
-				// to record change when and if the async worker does join.
-				// TODO joining and merging proof_recorder is unimplemented
-				proof_recorder: Default::default(),
-			}
-		})
+	fn async_storage(&self) -> Self::AsyncStorage {
+		OwnedProofRecorderBackend {
+			backend: self.backend.async_storage(),
+			// Here using existing recorder would be incorrect as we only need
+			// to record change when and if the async worker does join.
+			// TODO joining and merging proof_recorder is unimplemented
+			proof_recorder: Default::default(),
+		}
 	}
 }
 
@@ -241,15 +239,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher + 'static> TrieBackendStorage<H>
 		Ok(backend_value)
 	}
 
-	fn async_storage(&self) -> Option<Self::AsyncStorage> {
-		self.backend.async_storage().map(|backend| {
-			OwnedProofRecorderBackend {
-				backend,
-				// Here using existing recorder would be incorrect as we only need
-				// to record change when and if the async worker does join.
-				proof_recorder: Default::default(),
-			}
-		})
+	fn async_storage(&self) -> Self::AsyncStorage {
+		OwnedProofRecorderBackend {
+			backend: self.backend.async_storage(),
+			// Here using existing recorder would be incorrect as we only need
+			// to record change when and if the async worker does join.
+			proof_recorder: Default::default(),
+		}
 	}
 }
 
@@ -385,14 +381,11 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.usage_info()
 	}
 
-	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
-		if let Some(async_storage) = self.0.backend_storage().async_storage() {
-			Some(Box::new(crate::backend::AsyncBackendAdapter::new(OwnedProvingBackend(
-				TrieBackend::new(async_storage, self.0.essence().root().clone())
-			))))
-		} else {
-			None
-		}
+	fn async_backend(&self) -> Box<dyn AsyncBackend> {
+		let async_storage = self.0.backend_storage().async_storage();
+		Box::new(crate::backend::AsyncBackendAdapter::new(OwnedProvingBackend(
+			TrieBackend::new(async_storage, self.0.essence().root().clone())
+		)))
 	}
 }
 
@@ -492,7 +485,7 @@ impl<S, H> Backend<H> for OwnedProvingBackend<S, H>
 		self.0.usage_info()
 	}
 
-	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+	fn async_backend(&self) -> Box<dyn AsyncBackend> {
 		self.0.async_backend()
 	}
 }

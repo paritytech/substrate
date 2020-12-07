@@ -433,11 +433,6 @@ impl Externalities for AsyncExternalities {
 		}
 
 		self.state.overlay.set_marker(marker);
-		// TODO Creating a new backend is only of any use for write
-		/*let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
-			backend,
-			self.overlay,
-		));*/
 
 		self.state.backend.as_ref().expect(KIND_WITH_BACKEND).async_backend()
 	}

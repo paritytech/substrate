@@ -496,8 +496,9 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.state.borrow().as_ref().map_or(sp_state_machine::UsageInfo::empty(), |s| s.usage_info())
 	}
 
-	fn async_backend(&self) -> Option<Box<dyn sp_state_machine::AsyncBackend>> {
-		self.state.borrow().as_ref().and_then(|state| state.async_backend())
+	fn async_backend(&self) -> Box<dyn sp_state_machine::AsyncBackend> {
+		self.state.borrow().as_ref().map(|state| state.async_backend())
+			.unwrap_or_else(|| Box::new(()))
 	}
 }
 

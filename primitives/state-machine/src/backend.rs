@@ -249,7 +249,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn set_whitelist(&self, _: Vec<TrackedStorageKey>) {}
 
 	/// Get backend to use with threads.
-	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>>;
+	fn async_backend(&self) -> Box<dyn AsyncBackend>;
 }
 
 /// Async Backend implemented for a given state machine backend.
@@ -282,7 +282,6 @@ impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackend for AsyncBackendAda
 
 	fn async_backend(&self) -> Box<dyn AsyncBackend> {
 		self.0.async_backend()
-			.expect("Backend cannot run async.")
 	}
 }
 
@@ -453,7 +452,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).usage_info()
 	}
 
-	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+	fn async_backend(&self) -> Box<dyn AsyncBackend> {
 		(*self).async_backend()
 	}
 }

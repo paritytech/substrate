@@ -44,10 +44,6 @@ type Result<V> = sp_std::result::Result<V, crate::DefaultError>;
 pub trait Storage<H: Hasher>: Send + Sync {
 	/// Get a trie node.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
-
-/*	/// Get a storage for async use if possible.
-	/// TODO consider associated type
-	fn async_storage(&self) -> Option<Arc<dyn Storage<H>>>;*/
 }
 
 /// Patricia trie-based pairs storage essence.
@@ -289,13 +285,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		self.keys_values_with_prefix_inner(&self.root, prefix, f, None)
 	}
 
-	/// TODO
-	pub fn async_backend(&self) -> Option<TrieBackendEssence<S::AsyncStorage, H>> {
-		self.storage.async_storage().map(|storage| TrieBackendEssence {
-			storage,
+	/// Backend for workers.
+	pub fn async_backend(&self) -> TrieBackendEssence<S::AsyncStorage, H> {
+		TrieBackendEssence {
+			storage: self.storage.async_storage(),
 			root: self.root.clone(),
 			empty: self.empty.clone(),
-		})
+		}
 	}
 }
 
@@ -380,12 +376,11 @@ pub trait TrieBackendStorage<H: Hasher>: Send + Sync + Clone {
 	/// Most of `TrieBackendStorage` are 'static, still some are
 	/// not, in this case we cannot use async storage and will return
 	/// None or a different type.
-	fn async_storage(&self) -> Option<Self::AsyncStorage>;
+	fn async_storage(&self) -> Self::AsyncStorage;
 }
 
 /// When async_storage returns always `None`,
 /// this can be use as a dummy implementation.
-#[derive(Copy)]
 pub struct NoopsBackenStorage<H>(sp_std::marker::PhantomData<H>);
 
 impl<H> Clone for NoopsBackenStorage<H> {
@@ -408,8 +403,8 @@ impl<H: Hasher + 'static> TrieBackendStorage<H> for NoopsBackenStorage<H> {
 		Err(crate::DefaultError)
 	}
 
-	fn async_storage(&self) -> Option<Self::AsyncStorage> {
-		None
+	fn async_storage(&self) -> Self::AsyncStorage {
+		self.clone()
 	}
 }
 
@@ -423,8 +418,8 @@ impl<H: Hasher + 'static> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Storage::<H>::get(self.deref(), key, prefix)
 	}
-	fn async_storage(&self) -> Option<Self::AsyncStorage> {
-		Some(self.clone())
+	fn async_storage(&self) -> Self::AsyncStorage {
+		self.clone()
 	}
 }
 
@@ -436,9 +431,8 @@ impl<H: Hasher + 'static> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
-	fn async_storage(&self) -> Option<Self::AsyncStorage> {
-		// TODO could also make sense to avoid cloning and force runing single thread
-		Some(self.clone())
+	fn async_storage(&self) -> Self::AsyncStorage {
+		self.clone()
 	}
 }
 
@@ -449,10 +443,8 @@ impl<H: Hasher + 'static> TrieBackendStorage<H> for MemoryDB<H> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
-	fn async_storage(&self) -> Option<Self::AsyncStorage> {
-		// TODO could also make sense to avoid cloning and force runing single thread
-		// then no need for H: 'static
-		Some(self.clone())
+	fn async_storage(&self) -> Self::AsyncStorage {
+		self.clone()
 	}
 }
 

@@ -255,17 +255,12 @@ impl<S, H> Backend<H> for TrieBackend<S, H> where
 		Ok(())
 	}
 
-	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>> {
+	fn async_backend(&self) -> Box<dyn AsyncBackend> {
 		use crate::backend::AsyncBackendAdapter;
 
-		//	type AsyncBackend = TrieBackend<S::AsyncStorage, H>;
-		self.essence.async_backend().map(|essence| {
-			let inner: TrieBackend<S::AsyncStorage, H> = TrieBackend { essence };
-			let inner: AsyncBackendAdapter<H, TrieBackend<S::AsyncStorage, H>> = 
-				AsyncBackendAdapter::new(inner);
-			let backend: Box<dyn AsyncBackend> = Box::new(inner);
-			backend
-		})
+		let inner: TrieBackend<S::AsyncStorage, H> = TrieBackend { essence: self.essence.async_backend()};
+		let inner: AsyncBackendAdapter<H, TrieBackend<S::AsyncStorage, H>> = AsyncBackendAdapter::new(inner);
+		Box::new(inner)
 	}
 }
 

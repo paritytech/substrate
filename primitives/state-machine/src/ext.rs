@@ -675,7 +675,6 @@ where
 
 	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
 		self.backend.async_backend()
-			.expect("Backend cannot run async.")
 	}
 
 	fn get_async_backend(&mut self, marker: TaskId) -> Box<dyn AsyncBackend> {
