@@ -17,7 +17,7 @@
 
 //! # Recovery Pallet
 //!
-//! - [`recovery::Trait`](./trait.Trait.html)
+//! - [`recovery::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
@@ -172,12 +172,12 @@ mod mock;
 mod tests;
 
 type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// Configuration trait.
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> + GetDispatchInfo;
@@ -237,7 +237,7 @@ pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Recovery {
+	trait Store for Module<T: Config> as Recovery {
 		/// The set of recoverable accounts and their recovery configuration.
 		pub Recoverable get(fn recovery_config):
 			map hasher(twox_64_concat) T::AccountId
@@ -262,7 +262,7 @@ decl_storage! {
 decl_event! {
 	/// Events type.
 	pub enum Event<T> where
-		AccountId = <T as system::Trait>::AccountId,
+		AccountId = <T as system::Config>::AccountId,
 	{
 		/// A recovery process has been set up for an \[account\].
 		RecoveryCreated(AccountId),
@@ -284,7 +284,7 @@ decl_event! {
 }
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// User is not allowed to make a call on behalf of this account
 		NotAllowed,
 		/// Threshold must be greater than zero
@@ -321,7 +321,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		/// The base amount of currency needed to reserve for creating a recovery configuration.
@@ -361,7 +361,7 @@ decl_module! {
 		)]
 		fn as_recovered(origin,
 			account: T::AccountId,
-			call: Box<<T as Trait>::Call>
+			call: Box<<T as Config>::Call>
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`
@@ -677,7 +677,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Check that friends list is sorted and has no duplicates.
 	fn is_sorted_and_unique(friends: &Vec<T::AccountId>) -> bool {
 		friends.windows(2).all(|w| w[0] < w[1])
