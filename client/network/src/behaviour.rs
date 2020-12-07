@@ -181,14 +181,14 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		block_requests: block_requests::BlockRequests<B>,
 		light_client_handler: light_client_handler::LightClientHandler<B>,
 		disco_config: DiscoveryConfig,
-		request_response_protocols: Vec<request_responses::ProtocolConfig>,
+		request_response_protocols: impl Iterator<Item = request_responses::ProtocolConfig>,
 	) -> Result<Self, request_responses::RegisterError> {
 		Ok(Behaviour {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
 			discovery: disco_config.finish(),
 			request_responses:
-				request_responses::RequestResponsesBehaviour::new(request_response_protocols.into_iter())?,
+				request_responses::RequestResponsesBehaviour::new(request_response_protocols)?,
 			block_requests,
 			light_client_handler,
 			events: VecDeque::new(),

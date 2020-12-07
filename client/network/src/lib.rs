@@ -263,6 +263,7 @@ pub mod config;
 pub mod error;
 pub mod gossip;
 pub mod network_state;
+pub mod grandpa_warp_sync_request_handler;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};

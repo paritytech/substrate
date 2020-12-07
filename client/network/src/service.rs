@@ -323,6 +323,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config
 			};
 
+			let request_response_protocols = params.network_config.request_response_protocols
+				.into_iter()
+				.chain(std::iter::once(params.grandpa_warp_sync_request_protocol_config));
+
 			let mut behaviour = {
 				let result = Behaviour::new(
 					protocol,
@@ -332,7 +336,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					block_requests,
 					light_client_handler,
 					discovery_config,
-					params.network_config.request_response_protocols,
+					request_response_protocols,
 				);
 
 				match result {
