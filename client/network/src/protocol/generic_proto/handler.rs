@@ -514,7 +514,8 @@ impl ProtocolsHandler for NotifsHandler {
 		match out {
 			// Received notifications substream.
 			EitherOutput::First(((_remote_handshake, mut new_substream), protocol_index)) => {
-				match self.protocols[protocol_index].state {
+				let mut protocol_info = &mut self.protocols[protocol_index];
+				match protocol_info.state {
 					State::Closed { pending_opening } => {
 						self.events_queue.push_back(ProtocolsHandlerEvent::Custom(
 							NotifsHandlerOut::OpenDesiredByRemote {
@@ -522,7 +523,7 @@ impl ProtocolsHandler for NotifsHandler {
 							}
 						));
 
-						self.protocols[protocol_index].state = State::OpenDesiredByRemote {
+						protocol_info.state = State::OpenDesiredByRemote {
 							in_substream: new_substream,
 							pending_opening,
 						};
@@ -546,7 +547,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 						// Create `handshake_message` on a separate line to be sure that the
 						// lock is released as soon as possible.
-						let handshake_message = self.protocols[protocol_index].handshake.read().clone();
+						let handshake_message = protocol_info.handshake.read().clone();
 						new_substream.send_handshake(handshake_message);
 						*in_substream = Some(new_substream);
 					},
@@ -615,12 +616,13 @@ impl ProtocolsHandler for NotifsHandler {
 	fn inject_event(&mut self, message: NotifsHandlerIn) {
 		match message {
 			NotifsHandlerIn::Open { protocol_index } => {
-				match self.protocols[protocol_index].state {
+				let protocol_info = &mut self.protocols[protocol_index];
+				match &mut protocol_info.state {
 					State::Closed { pending_opening } => {
-						if !pending_opening {
+						if !*pending_opening {
 							let proto = NotificationsOut::new(
-								self.protocols[protocol_index].name.clone(),
-								self.protocols[protocol_index].handshake.read().clone()
+								protocol_info.name.clone(),
+								protocol_info.handshake.read().clone()
 							);
 
 							self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
@@ -629,16 +631,16 @@ impl ProtocolsHandler for NotifsHandler {
 							});
 						}
 
-						self.protocols[protocol_index].state = State::Opening {
+						protocol_info.state = State::Opening {
 							in_substream: None,
 						};
 					},
 					State::OpenDesiredByRemote { pending_opening, in_substream } => {
-						let handshake_message = self.protocols[protocol_index].handshake.read().clone();
+						let handshake_message = protocol_info.handshake.read().clone();
 
-						if !pending_opening {
+						if !*pending_opening {
 							let proto = NotificationsOut::new(
-								self.protocols[protocol_index].name.clone(),
+								protocol_info.name.clone(),
 								handshake_message.clone()
 							);
 
@@ -650,7 +652,14 @@ impl ProtocolsHandler for NotifsHandler {
 
 						in_substream.send_handshake(handshake_message);
 
-						self.protocols[protocol_index].state = State::Opening {
+						// The state change is done in two steps because of borrowing issues.
+						let in_substream = match
+							mem::replace(&mut protocol_info.state, State::Opening { in_substream: None })
+						{
+							State::OpenDesiredByRemote { pending_opening, in_substream } => in_substream,
+							_ => unreachable!()
+						};
+						protocol_info.state = State::Opening {
 							in_substream: Some(in_substream),
 						};
 					},
@@ -783,7 +792,7 @@ impl ProtocolsHandler for NotifsHandler {
 				}
 
 				State::OpenDesiredByRemote { in_substream, pending_opening } => {
-					match NotificationsInSubstream::poll_process(Pin::new(&mut in_substream), cx) {
+					match NotificationsInSubstream::poll_process(Pin::new(in_substream), cx) {
 						Poll::Pending => {},
 						Poll::Ready(Ok(void)) => match void {},
 						Poll::Ready(Err(_)) => {

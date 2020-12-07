@@ -549,10 +549,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// everywhere about this. Please don't use this function to retrieve actual information.
 	pub fn network_state(&mut self) -> NetworkState {
 		let swarm = &mut self.network_service;
-		let open = swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
+		// TODO: restore
+		//let open = swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
 
 		let connected_peers = {
-			let swarm = &mut *swarm;
+			/*let swarm = &mut *swarm;
 			open.iter().filter_map(move |peer_id| {
 				let known_addresses = NetworkBehaviour::addresses_of_peer(&mut **swarm, peer_id)
 					.into_iter().collect();
@@ -574,11 +575,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					open: swarm.user_protocol().is_open(&peer_id),
 					known_addresses,
 				}))
-			}).collect()
+			}).collect()*/
+			Default::default()
 		};
 
 		let not_connected_peers = {
-			let swarm = &mut *swarm;
+			/*let swarm = &mut *swarm;
 			swarm.known_peers().into_iter()
 				.filter(|p| open.iter().all(|n| n != p))
 				.map(move |peer_id| {
@@ -590,7 +592,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 							.into_iter().collect(),
 					})
 				})
-				.collect()
+				.collect()*/
+			Default::default()
 		};
 
 		let peer_id = Swarm::<B, H>::local_peer_id(&swarm).to_base58();
@@ -891,8 +894,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Disconnect from a node as soon as possible.
 	///
 	/// This triggers the same effects as if the connection had closed itself spontaneously.
-	pub fn disconnect_peer(&self, who: PeerId) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::DisconnectPeer(who));
+	pub fn disconnect_peer(&self, who: PeerId, protocol: impl Into<Cow<'static, str>>,) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::DisconnectPeer(who, protocol.into()));
 	}
 
 	/// Request a justification for the given block from the network.
@@ -1178,7 +1181,7 @@ impl<'a> NotificationSenderReady<'a> {
 			target: "sub-libp2p",
 			"External API => Notification({:?}, {:?}, {} bytes)",
 			self.peer_id,
-			self.ready.protocol_name(),
+			"", // TODO: self.ready.protocol_name(),
 			notification.len()
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Async notification", self.peer_id);
@@ -1221,7 +1224,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
-	DisconnectPeer(PeerId),
+	DisconnectPeer(PeerId, Cow<'static, str>),
 	NewBestBlockImported(B::Hash, NumberFor<B>),
 }
 
@@ -1355,8 +1358,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						},
 					}
 				},
-				ServiceToWorkerMsg::DisconnectPeer(who) =>
-					this.network_service.user_protocol_mut().disconnect_peer(&who),
+				ServiceToWorkerMsg::DisconnectPeer(who, protocol_name) =>
+					this.network_service.user_protocol_mut().disconnect_peer(&who, &protocol_name),
 				ServiceToWorkerMsg::NewBestBlockImported(hash, number) =>
 					this.network_service.user_protocol_mut().new_best_block_imported(hash, number),
 			}
@@ -1771,12 +1774,7 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 		self.protocol.user_protocol_mut().on_blocks_processed(imported, count, results)
 	}
 	fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
-		self.protocol.user_protocol_mut().justification_import_result(hash.clone(), number, success);
-		if !success {
-			info!("💔 Invalid justification provided by {} for #{}", who, hash);
-			self.protocol.user_protocol_mut().disconnect_peer(&who);
-			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid justification"));
-		}
+		self.protocol.user_protocol_mut().justification_import_result(who, hash.clone(), number, success);
 	}
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.protocol.user_protocol_mut().request_justification(hash, number)

@@ -76,7 +76,7 @@ pub trait Network<B: BlockT> {
 	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange);
 
 	/// Force-disconnect a peer.
-	fn disconnect_peer(&self, who: PeerId);
+	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>);
 
 	/// Send a notification to a peer.
 	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>);
@@ -97,8 +97,8 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 		NetworkService::report_peer(self, peer_id, reputation);
 	}
 
-	fn disconnect_peer(&self, who: PeerId) {
-		NetworkService::disconnect_peer(self, who)
+	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>) {
+		NetworkService::disconnect_peer(self, who, protocol)
 	}
 
 	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {

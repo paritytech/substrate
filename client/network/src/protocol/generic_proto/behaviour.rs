@@ -428,11 +428,11 @@ impl GenericProto {
 		self.peerset.num_discovered_peers()
 	}
 
-	/// Returns the list of all the peers we have an open channel to.
+	/*/// Returns the list of all the peers we have an open channel to.
 	pub fn open_peers<'a>(&'a self) -> impl Iterator<Item = &'a PeerId> + 'a {
 		// TODO: update after PR
 		self.peers.iter().filter(|(_, state)| state.is_open()).map(|(id, _)| id)
-	}
+	}*/
 
 	/// Returns true if we have an open substream to the given peer.
 	pub fn is_open(&self, peer_id: &PeerId, set_id: sc_peerset::SetId) -> bool {
@@ -2040,7 +2040,7 @@ impl NetworkBehaviour for GenericProto {
 
 		while let Poll::Ready(Some((delay_id, peer_id, set_id))) =
 			Pin::new(&mut self.delays).poll_next(cx) {
-			let peer_state = match self.peers.get_mut(&(peer_id, set_id)) {
+			let peer_state = match self.peers.get_mut(&(peer_id.clone(), set_id)) {
 				Some(s) => s,
 				// We intentionally never remove elements from `delays`, and it may
 				// thus contain peers which are now gone. This is a normal situation.
