@@ -38,7 +38,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		sc_finality_grandpa::LinkHalf<Block, FullClient, FullSelectChain>
 	)
 >, ServiceError> {
-	if config.keystore_remotes.len() > 1 {
+	if config.keystore_remote.is_some() {
 		return Err(ServiceError::Other(
 			format!("Remote Keystores are not supported.")))
 	}
@@ -84,7 +84,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 }
 
 fn remote_keystore(_url: &String) -> Result<Arc<LocalKeystore>, &'static str> {
-	// FIXME: here would the concrete keystore been build,
+	// FIXME: here would the concrete keystore be built,
 	//        must return a concrete type (NOT `LocalKeystore`) that
 	//        implements `CryptoStore` and `SyncCryptoStore`
 	Err("Remote Keystore not supported.")
@@ -98,9 +98,9 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		other: (block_import, grandpa_link),
 	} = new_partial(&config)?;
 
-	for url in config.keystore_remotes.iter() {
+	if let Some(url) = &config.keystore_remote {
 		match remote_keystore(url) {
-			Ok(k) => keystore_container.add_remote_keystore(k),
+			Ok(k) => keystore_container.set_remote_keystore(k),
 			Err(e) => {
 				return Err(ServiceError::Other(
 					format!("Error hooking up remote keystore for {}: {}", url, e)))

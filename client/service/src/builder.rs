@@ -221,7 +221,7 @@ impl<T> AsCryptoStoreRef for Arc<T> where T: CryptoStore + SyncCryptoStore + 'st
 
 /// Construct and hold different layers of Keystore wrappers
 pub struct KeystoreContainer {
-	remotes: Vec<Box<dyn AsCryptoStoreRef>>,
+	remote: Option<Box<dyn AsCryptoStoreRef>>,
 	local: Arc<LocalKeystore>,
 }
 
@@ -236,19 +236,23 @@ impl KeystoreContainer {
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
 
-		Ok(Self{remotes: Default::default(), local: keystore})
+		Ok(Self{remote: Default::default(), local: keystore})
 	}
 
-	/// Add another remote keystore
-	pub fn add_remote_keystore<T>(&mut self, remote: Arc<T>)
+	/// Set the remote keystore.
+	/// Should be called right away at startup and not at runtime:
+	/// even though this overrides any previously set remote store, it
+	/// does not reset any references previously handed out - they will
+	/// stick araound.
+	pub fn set_remote_keystore<T>(&mut self, remote: Arc<T>)
 		where T: CryptoStore + SyncCryptoStore + 'static
 	{
-		self.remotes.push(Box::new(remote))
+		self.remote = Some(Box::new(remote))
 	}
 
 	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
 	pub fn keystore(&self) -> Arc<dyn CryptoStore> {
-		if let Some(c) = self.remotes.first() {
+		if let Some(c) = self.remote.as_ref() {
 			c.keystore_ref()
 		} else {
 			self.local.clone()
@@ -257,7 +261,7 @@ impl KeystoreContainer {
 
 	/// Returns the synchrnous keystore wrapper
 	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
-		if let Some(c) = self.remotes.first() {
+		if let Some(c) = self.remote.as_ref() {
 			c.sync_keystore_ref()
 		} else {
 			self.local.clone() as SyncCryptoStorePtr

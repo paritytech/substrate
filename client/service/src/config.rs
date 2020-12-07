@@ -50,8 +50,8 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
-	/// Ordered list of remote URIs to connect to for async keystore support
-	pub keystore_remotes: Vec<String>,
+	/// Remote URIs to connect to for async keystore support
+	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
 	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
