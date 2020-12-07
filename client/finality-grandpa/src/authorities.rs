@@ -721,8 +721,8 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 					return None;
 				}
 			} else if set_id != 0 {
-				// If this is the first index, yet not the first set id then it's not well
-				// defined that we are in the right set id.
+				// If this is the first index, yet not the first set id then it's not well-defined
+				// that we are in the right set id.
 				return None;
 			}
 			Some((set_id, block_number))
