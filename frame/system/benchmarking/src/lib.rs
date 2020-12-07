@@ -31,8 +31,8 @@ use frame_system::{Module as System, Call, RawOrigin, DigestItemOf, AccountInfo}
 
 mod mock;
 
-pub struct Module<T: Trait>(System<T>);
-pub trait Trait: frame_system::Trait {}
+pub struct Module<T: Config>(System<T>);
+pub trait Config: frame_system::Config {}
 
 benchmarks! {
 	_ { }

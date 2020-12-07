@@ -28,19 +28,19 @@ fn runtime_debug_no_bound_display_correctly() {
 	assert_eq!(format!("{:?}", Unnamed(1)), "Unnamed(1)");
 }
 
-trait Trait {
+trait Config {
 	type C: std::fmt::Debug + Clone + Eq + PartialEq;
 }
 
 struct Runtime;
 struct ImplNone;
 
-impl Trait for Runtime {
+impl Config for Runtime {
 	type C = u32;
 }
 
 #[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound)]
-struct StructNamed<T: Trait, U, V> {
+struct StructNamed<T: Config, U, V> {
 	a: u32,
 	b: u64,
 	c: T::C,
@@ -77,7 +77,7 @@ fn test_struct_named() {
 }
 
 #[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound)]
-struct StructUnnamed<T: Trait, U, V>(u32, u64, T::C, core::marker::PhantomData<(U, V)>);
+struct StructUnnamed<T: Config, U, V>(u32, u64, T::C, core::marker::PhantomData<(U, V)>);
 
 #[test]
 fn test_struct_unnamed() {
@@ -109,7 +109,7 @@ fn test_struct_unnamed() {
 }
 
 #[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound)]
-enum Enum<T: Trait, U, V> {
+enum Enum<T: Config, U, V> {
 	VariantUnnamed(u32, u64, T::C, core::marker::PhantomData<(U, V)>),
 	VariantNamed {
 		a: u32,
