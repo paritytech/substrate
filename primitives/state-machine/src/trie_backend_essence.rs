@@ -191,7 +191,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	/// Aborts as soon as `f` returns false.
-	pub fn for_keys_in_child_storage<F: FnMut(&[u8]) -> bool>(
+	pub fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
 		f: F,

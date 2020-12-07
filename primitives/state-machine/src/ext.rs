@@ -424,7 +424,7 @@ where
 		if let Some(limit) = limit {
 			let mut num_deleted: u32 = 0;
 			let mut all_deleted = true;
-			self.backend.for_keys_in_child_storage(child_info, |key| {
+			self.backend.apply_to_child_keys_while(child_info, |key| {
 				if num_deleted == limit {
 					all_deleted = false;
 					return false;
@@ -440,7 +440,7 @@ where
 			});
 			all_deleted
 		} else {
-			self.backend.for_keys_in_child_storage(child_info, |key| {
+			self.backend.apply_to_child_keys_while(child_info, |key| {
 				self.overlay.set_child_storage(child_info, key.to_vec(), None);
 				true
 			});
