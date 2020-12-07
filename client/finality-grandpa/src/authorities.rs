@@ -167,7 +167,9 @@ pub struct AuthoritySet<H, N> {
 	/// is lower than the last finalized block (as signaled in the forced
 	/// change) must be applied beforehand.
 	pending_forced_changes: Vec<PendingChange<H, N>>,
-	/// Track at which blocks the set id changes. This is useful when we need to prove finality.
+	/// Track at which blocks the set id changed. This is useful when we need to prove finality for a
+	/// given block since we can figure out what set the block belongs to and when the set
+	/// started/ended.
 	authority_set_changes: AuthoritySetChanges<N>,
 }
 
@@ -441,7 +443,7 @@ where
 	/// forced change), then the forced change cannot be applied. An error will
 	/// be returned in that case which will prevent block import.
 	pub(crate) fn apply_forced_changes<F, E>(
-		&mut self,
+		&self,
 		best_hash: H,
 		best_number: N,
 		is_descendent_of: &F,
@@ -503,7 +505,8 @@ where
 					"block" => ?change.canon_height
 				);
 
-				self.authority_set_changes.append(self.set_id, median_last_finalized.clone());
+				let mut authority_set_changes = self.authority_set_changes.clone();
+				authority_set_changes.append(self.set_id, median_last_finalized.clone());
 
 				new_set = Some((
 					median_last_finalized,
@@ -512,7 +515,7 @@ where
 						set_id: self.set_id + 1,
 						pending_standard_changes: ForkTree::new(), // new set, new changes.
 						pending_forced_changes: Vec::new(),
-						authority_set_changes: AuthoritySetChanges::empty(),
+						authority_set_changes,
 					},
 				));
 
@@ -686,34 +689,34 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 	}
 }
 
-// Tracks authority set changes. We store the block numbers for the first block of each authority
-// set.
+// Tracks historical authority set changes. We store the block numbers for the first block of each
+// authority set, once they have been finalalized.
 #[derive(Debug, Encode, Decode, Clone, PartialEq)]
 pub struct AuthoritySetChanges<N> {
-    authority_set_changes: Vec<(u64, N)>, // (set_id, block_number)
+	authority_set_changes: Vec<(u64, N)>, // (set_id, block_number)
 }
 
 impl<N: Ord + Clone> AuthoritySetChanges<N> {
-    pub(crate) fn empty() -> Self {
-        Self {
-            authority_set_changes: Default::default(),
-        }
-    }
+	pub(crate) fn empty() -> Self {
+		Self {
+			authority_set_changes: Default::default(),
+		}
+	}
 
-    pub(crate) fn append(&mut self, set_id: u64, block_number: N) {
-        self.authority_set_changes.push((set_id, block_number));
-    }
+	pub(crate) fn append(&mut self, set_id: u64, block_number: N) {
+		self.authority_set_changes.push((set_id, block_number));
+	}
 
-    pub(crate) fn get_set_id(&self, block_number: N) -> Option<(u64, N)> {
+	pub(crate) fn get_set_id(&self, block_number: N) -> Option<(u64, N)> {
 		let idx = self.authority_set_changes
-			.binary_search_by_key(&block_number, |(_set_id, n)| n.clone())
+			.binary_search_by_key(&block_number, |(_, n)| n.clone())
 			.unwrap_or_else(|b| b);
 		if idx < self.authority_set_changes.len() {
 			Some(self.authority_set_changes[idx].clone())
 		} else {
 			None
 		}
-    }
+	}
 }
 
 #[cfg(test)]

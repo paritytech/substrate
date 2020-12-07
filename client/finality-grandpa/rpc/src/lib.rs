@@ -39,7 +39,7 @@ mod report;
 use sc_finality_grandpa::GrandpaJustificationStream;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-use finality::{EncodedFinalityProofs, RpcFinalityProofProvider};
+use finality::{EncodedFinalityProof, RpcFinalityProofProvider};
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 use notification::JustificationNotification;
 
@@ -48,7 +48,7 @@ type FutureResult<T> =
 
 /// Provides RPC methods for interacting with GRANDPA.
 #[rpc]
-pub trait GrandpaApi<Notification, Hash, N> {
+pub trait GrandpaApi<Notification, Hash, Number> {
 	/// RPC Metadata
 	type Metadata;
 
@@ -83,12 +83,12 @@ pub trait GrandpaApi<Notification, Hash, N> {
 	) -> jsonrpc_core::Result<bool>;
 
 	/// Prove finality for the given block number by returning the Justification for the last block
-	/// in the set.
+	/// in the set and all the intermediary headers to link them together.
 	#[rpc(name = "grandpa_proveFinality")]
 	fn prove_finality(
 		&self,
-		block: N,
-	) -> FutureResult<Option<EncodedFinalityProofs>>;
+		block: Number,
+	) -> FutureResult<Option<EncodedFinalityProof>>;
 }
 
 /// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
@@ -171,7 +171,7 @@ where
 	fn prove_finality(
 		&self,
 		block: NumberFor<Block>,
-	) -> FutureResult<Option<EncodedFinalityProofs>> {
+	) -> FutureResult<Option<EncodedFinalityProof>> {
 		let result = self.finality_proof_provider.rpc_prove_finality(block);
 		let future = async move { result }.boxed();
 		Box::new(
@@ -255,8 +255,8 @@ mod tests {
 		fn rpc_prove_finality(
 			&self,
 			_block: NumberFor<Block>
-		) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
-			Ok(Some(EncodedFinalityProofs(
+		) -> Result<Option<EncodedFinalityProof>, sp_blockchain::Error> {
+			Ok(Some(EncodedFinalityProof(
 				self.finality_proof
 					.as_ref()
 					.expect("Don't call rpc_prove_finality without setting the FinalityProof")
@@ -533,7 +533,7 @@ mod tests {
 		let resp = io.handle_request_sync(request, meta);
 		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
 		let result: sp_core::Bytes = serde_json::from_value(resp["result"].take()).unwrap();
-		let fragments: FinalityProof<Header> = Decode::decode(&mut &result[..]).unwrap();
-		assert_eq!(fragments, finality_proof);
+		let finality_proof_rpc: FinalityProof<Header> = Decode::decode(&mut &result[..]).unwrap();
+		assert_eq!(finality_proof_rpc, finality_proof);
 	}
 }

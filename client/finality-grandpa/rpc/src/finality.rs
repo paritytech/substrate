@@ -22,14 +22,16 @@ use sc_finality_grandpa::FinalityProofProvider;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 #[derive(Serialize, Deserialize)]
-pub struct EncodedFinalityProofs(pub sp_core::Bytes);
+pub struct EncodedFinalityProof(pub sp_core::Bytes);
 
 /// Local trait mainly to allow mocking in tests.
 pub trait RpcFinalityProofProvider<Block: BlockT> {
+	/// Prove finality for the given block number by returning a Justification for the last block of
+	/// the authority set.
 	fn rpc_prove_finality(
 		&self,
 		block: NumberFor<Block>,
-	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error>;
+	) -> Result<Option<EncodedFinalityProof>, sp_blockchain::Error>;
 }
 
 impl<B, Block> RpcFinalityProofProvider<Block> for FinalityProofProvider<B, Block>
@@ -41,8 +43,8 @@ where
 	fn rpc_prove_finality(
 		&self,
 		block: NumberFor<Block>,
-	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
+	) -> Result<Option<EncodedFinalityProof>, sp_blockchain::Error> {
 		self.prove_finality(block)
-			.map(|x| x.map(|y| EncodedFinalityProofs(y.into())))
+			.map(|x| x.map(|y| EncodedFinalityProof(y.into())))
 	}
 }
