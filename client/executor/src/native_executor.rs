@@ -331,13 +331,12 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 pub struct RuntimeInstanceSpawn {
 	module: Option<Arc<dyn WasmModule>>,
 	instance: Arc<parking_lot::Mutex<Option<AssertUnwindSafe<Box<dyn WasmInstance>>>>>,
-	// TODO rename Running Task, it is only pending
-	tasks: Arc<parking_lot::Mutex<HashMap<u64, RunningTask>>>,
+	tasks: Arc<parking_lot::Mutex<HashMap<u64, PendingTask>>>,
 	infos: Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
 	counter: Arc<AtomicU64>,
 	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
-	task_receiver: Arc<parking_lot::Mutex<mpsc::Receiver<PendingTask>>>,
-	task_sender: mpsc::Sender<PendingTask>,
+	task_receiver: Arc<parking_lot::Mutex<mpsc::Receiver<RemoteTask>>>,
+	task_sender: mpsc::Sender<RemoteTask>,
 	recursive_level: usize,
 	dismiss_handles: dismiss_handle::DismissHandles,
 }
@@ -428,14 +427,14 @@ pub struct RuntimeInstanceSpawnInfo {
 }
 
 // TODO naming is bad (inline are not running)
-enum RunningTask {
+enum PendingTask {
 	// TODO condvar?
-	Task(mpsc::Receiver<Option<WorkerResult>>),
+	Remote(mpsc::Receiver<Option<WorkerResult>>),
 	// TODO need to ad context of exteranlity init
 	Inline(PendingInlineTask),
 }
 
-struct PendingTask {
+struct RemoteTask {
 	handle: u64,
 	task: Task,
 	ext: AsyncExt,
@@ -511,7 +510,7 @@ impl RuntimeInstanceSpawn {
 	fn insert(
 		&self,
 		handle: u64,
-		task: PendingTask,
+		task: RemoteTask,
 		result_receiver: mpsc::Receiver<Option<WorkerResult>>,
 	) {
 		let mut infos = self.infos.lock();
@@ -520,7 +519,7 @@ impl RuntimeInstanceSpawn {
 				// warning self.tasks is locked when calling spawn_new
 				if !self.spawn_new() {
 					// TODO in this case a useless channel was opened.
-					self.tasks.lock().insert(handle, RunningTask::Inline(PendingInlineTask{
+					self.tasks.lock().insert(handle, PendingTask::Inline(PendingInlineTask{
 						task: task.task,
 						ext: task.ext,
 					}));
@@ -530,14 +529,14 @@ impl RuntimeInstanceSpawn {
 			Processing::Queue => (),
 			Processing::RunInline => {
 				// TODO in this case a useless channel was opened.
-				self.tasks.lock().insert(handle, RunningTask::Inline(PendingInlineTask{
+				self.tasks.lock().insert(handle, PendingTask::Inline(PendingInlineTask{
 					task: task.task,
 					ext: task.ext,
 				}));
 				return;
 			},
 		}
-		self.tasks.lock().insert(handle, RunningTask::Task (
+		self.tasks.lock().insert(handle, PendingTask::Remote (
 			result_receiver,
 		));
 		self.task_sender.send(task).expect("TODO mgmt");
@@ -558,7 +557,7 @@ impl RuntimeInstanceSpawn {
 			Box::pin(async move {
 			let task_receiver = task_receiver.clone();
 			let mut instance: Option<AssertUnwindSafe<Box<dyn WasmInstance>>> = None;
-			while let Ok(PendingTask { handle, task, ext, result_sender }) = {
+			while let Ok(RemoteTask { handle, task, ext, result_sender }) = {
 				let task_receiver_locked = task_receiver.lock();
 				task_receiver_locked.recv()
 			} {
@@ -671,7 +670,7 @@ impl RuntimeInstanceSpawn {
 		let ext = spawn_call_ext(handle, kind, calling_ext);
 		let (result_sender, result_receiver) = mpsc::channel();
 
-		let task = PendingTask { task, ext, result_sender, handle };
+		let task = RemoteTask { task, ext, result_sender, handle };
 		self.insert(handle, task, result_receiver);
 
 		handle
@@ -705,7 +704,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
 		let task = self.tasks.lock().remove(&handle);
 		let worker_result = match task {
-			Some(RunningTask::Task(receiver)) => match receiver.recv() {
+			Some(PendingTask::Remote(receiver)) => match receiver.recv() {
 				Ok(Some(output)) => output,
 				Ok(None)
 				| Err(_) => {
@@ -713,7 +712,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					WorkerResult::Panic
 				},
 			},
-			Some(RunningTask::Inline(task)) => {
+			Some(PendingTask::Inline(task)) => {
 				let mut instance = self.instance.lock();
 				let instance_ref = InlineInstantiate {
 					module: &self.module,
