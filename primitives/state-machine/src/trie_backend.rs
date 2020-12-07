@@ -35,7 +35,6 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	pub (crate) essence: TrieBackendEssence<S, H>,
 }
 
-
 impl<S: TrieBackendStorage<H>, H: Hasher> Clone for TrieBackend<S, H> {
 	fn clone(&self) -> Self {
 		TrieBackend { essence: self.essence.clone() }

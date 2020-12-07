@@ -373,11 +373,12 @@ pub trait TrieBackendStorage<H: Hasher>: Send + Sync + Clone {
 	type AsyncStorage: TrieBackendStorage<H> + 'static;
 	/// Type of in-memory overlay.
 	type Overlay: hash_db::HashDB<H, DBValue> + Default + Consolidate;
+
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 
 	/// Most of `TrieBackendStorage` are 'static, still some are
-	/// not, in this case we cannot use async storage and return either
+	/// not, in this case we cannot use async storage and will return
 	/// None or a different type.
 	fn async_storage(&self) -> Option<Self::AsyncStorage>;
 }
