@@ -195,7 +195,7 @@ where
 	/// This function doesn't affect the account.
 	pub fn destroy_contract(address: &AccountIdOf<T>, trie_id: &TrieId) {
 		<ContractInfoOf<T>>::remove(address);
-		child::kill_storage(&crate::child_trie_info(&trie_id));
+		child::kill_storage(&crate::child_trie_info(&trie_id), None);
 	}
 
 	/// This generator uses inner counter for account id and applies the hash over `AccountId +
