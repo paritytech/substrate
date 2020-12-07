@@ -374,39 +374,6 @@ pub trait AsyncBackend: Send {
 	/// AsyncBackend: Clone.
 	/// With no_std dyn clone, we could remove it.
 	fn async_backend(&self) -> Option<Box<dyn AsyncBackend>>;
-
-}
-
-/// This act as `AsyncBackend` but not `Sync`
-/// or `Send` it can be build with a pointer
-/// to externalities.
-/// TODO this will require that &mut ext
-/// is passed as parameter to join (same as call).
-/// TODO actually this could be probably implemented
-/// just from an handle to current backend and a struct.
-/// TODO in fact we just need to wrap a new externalities
-/// when calling inline, this externalities running over
-/// state snapshot. -> ext would need same set as asyncbackend.
-/// -> it means being able to call with_externalities over &'a
-/// which is not doable with proto containing &mut dyn Externalities
-/// (dyn require static).
-/// -> TODO make a externalities function 'set_inline' with this
-/// as parameter that reset after call.
-/// enum {
-///   Disable
-///   PreviousBlock, // calls directly on backend of ext
-///   PreviousAt(Overlay), // calls the overlay then the backend
-/// }
-///
-/// then still put a set_with_ext but just to filter calls that
-/// are not doable with AsyncExternalities (actually may be able
-/// to reuse async Ext?? by using commpon trait with asyncbackend).
-/// in fact it is same as externalities wrapping externalities with
-/// access to &backend the subset of async backen without Send.
-///
-/// TODO consider to macro `AsyncExt` code (in sp_tasks) with
-/// a non send `InlineExt` variant. Same for associated ext
-pub trait InlineBackend {
 }
 
 /// Extension for the [`Externalities`] trait.

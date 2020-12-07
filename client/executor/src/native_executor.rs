@@ -185,7 +185,6 @@ impl<'a, 'b> sc_executor_common::inline_spawn::LazyInstanciate<'a> for InlineIns
 	}
 }
 
-
 struct InlineInstantiateRef<'a> {
 	module: &'a Option<Arc<dyn WasmModule>>,
 	instance: &'a mut Option<AssertUnwindSafe<Box<dyn WasmInstance>>>,
@@ -332,7 +331,9 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 pub struct RuntimeInstanceSpawn {
 	module: Option<Arc<dyn WasmModule>>,
 	instance: Arc<parking_lot::Mutex<Option<AssertUnwindSafe<Box<dyn WasmInstance>>>>>,
-	tasks: Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
+	// TODO rename Running Task, it is only pending
+	tasks: Arc<parking_lot::Mutex<HashMap<u64, RunningTask>>>,
+	infos: Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
 	counter: Arc<AtomicU64>,
 	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 	task_receiver: Arc<parking_lot::Mutex<mpsc::Receiver<PendingTask>>>,
@@ -420,8 +421,6 @@ mod dismiss_handle {
 /// Task info for this instance.
 /// Instance is local to a wasm call.
 pub struct RuntimeInstanceSpawnInfo {
-	// TODO rename Running Task, it is only pending
-	tasks: HashMap<u64, RunningTask>,
 	// consider atomic instead (depending on usefullness
 	// of this struct
 	nb_runing: usize,
@@ -448,7 +447,6 @@ impl RuntimeInstanceSpawnInfo {
 		capacity: usize,
 	) -> Self {
 		RuntimeInstanceSpawnInfo {
-			tasks: HashMap::new(),
 			nb_runing: 0,
 			capacity,
 		}
@@ -492,17 +490,22 @@ enum Processing {
 }
 
 impl RuntimeInstanceSpawn {
-	fn rec_clone(&self) -> Self {
-		let mut result = self.clone();
-		// For inline recursive call would dead lock,
-		// this instance is the one for inline, reinit here.
-		result.instance = Arc::new(parking_lot::Mutex::new(None));
-		result.recursive_level += 1;
-		result
-	}
+	fn nested_instance(&self) -> Self {
+		RuntimeInstanceSpawn {
+			// For inline recursive call would dead lock,
+			// this instance is the one for inline, reinit here.
+			instance: Arc::new(parking_lot::Mutex::new(None)),
+			counter: Default::default(),
+			tasks: Default::default(),
+			recursive_level: self.recursive_level + 1,
 
-	fn remove(&self, handle: u64) -> Option<RunningTask> {
-		self.tasks.lock().tasks.remove(&handle)
+			module: self.module.clone(),
+			infos: self.infos.clone(),
+			scheduler: self.scheduler.clone(),
+			task_receiver: self.task_receiver.clone(),
+			task_sender: self.task_sender.clone(),
+			dismiss_handles: self.dismiss_handles.clone(),// TODO spawn a new one.
+		}
 	}
 
 	fn insert(
@@ -511,13 +514,13 @@ impl RuntimeInstanceSpawn {
 		task: PendingTask,
 		result_receiver: mpsc::Receiver<Option<WorkerResult>>,
 	) {
-		let mut tasks = self.tasks.lock();
-		match tasks.start(self.recursive_level) {
+		let mut infos = self.infos.lock();
+		match infos.start(self.recursive_level) {
 			Processing::SpawnNew => {
 				// warning self.tasks is locked when calling spawn_new
 				if !self.spawn_new() {
 					// TODO in this case a useless channel was opened.
-					tasks.tasks.insert(handle, RunningTask::Inline(PendingInlineTask{
+					self.tasks.lock().insert(handle, RunningTask::Inline(PendingInlineTask{
 						task: task.task,
 						ext: task.ext,
 					}));
@@ -527,14 +530,14 @@ impl RuntimeInstanceSpawn {
 			Processing::Queue => (),
 			Processing::RunInline => {
 				// TODO in this case a useless channel was opened.
-				tasks.tasks.insert(handle, RunningTask::Inline(PendingInlineTask{
+				self.tasks.lock().insert(handle, RunningTask::Inline(PendingInlineTask{
 					task: task.task,
 					ext: task.ext,
 				}));
 				return;
 			},
 		}
-		tasks.tasks.insert(handle, RunningTask::Task (
+		self.tasks.lock().insert(handle, RunningTask::Task (
 			result_receiver,
 		));
 		self.task_sender.send(task).expect("TODO mgmt");
@@ -545,8 +548,8 @@ impl RuntimeInstanceSpawn {
 		let module = self.module.clone();
 		let scheduler = self.scheduler.clone();
 		let task_receiver = self.task_receiver.clone();
-		let tasks = self.tasks.clone();
-		let runtime_spawn = Box::new(self.rec_clone());
+		let infos = self.infos.clone();
+		let runtime_spawn = Box::new(self.nested_instance());
 		let module = AssertUnwindSafe(module);
 		let dismiss_handles = self.dismiss_handles.clone();
 		let thread_id = dismiss_handles.new_thread_id(&self.counter);
@@ -620,12 +623,12 @@ impl RuntimeInstanceSpawn {
 				}
 				if end {
 					dismiss_handles.finished_worker(handle);
-					tasks.lock().finished();
+					infos.lock().finished();
 					return;
 				}
 			}
 			log::error!("Sender dropped, closing all instance.");
-			tasks.lock().finished();
+			infos.lock().finished();
 		}));
 		if let Some(thread_handle) = thread_handle {
 			self.dismiss_handles.register_new_thread(thread_handle, thread_id);
@@ -700,7 +703,8 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 	}
 
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
-		let worker_result = match self.remove(handle) {
+		let task = self.tasks.lock().remove(&handle);
+		let worker_result = match task {
 			Some(RunningTask::Task(receiver)) => match receiver.recv() {
 				Ok(Some(output)) => output,
 				Ok(None)
@@ -716,7 +720,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					guard: &mut instance,
 				};
 
-				let runtime_spawn = Box::new(self.rec_clone());
+				let runtime_spawn = Box::new(self.nested_instance());
 				sc_executor_common::inline_spawn::process_task_inline::<(), _>(
 					task.task,
 					task.ext,
@@ -735,11 +739,11 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 
 	fn dismiss(&self, handle: u64) {
 		self.dismiss_handles.dismiss_thread(handle);
-		self.remove(handle);
+		self.tasks.lock().remove(&handle);
 	}
 
 	fn set_capacity(&self, capacity: u32) {
-		self.tasks.lock().set_capacity(capacity);
+		self.infos.lock().set_capacity(capacity);
 	}
 }
 
@@ -758,7 +762,8 @@ impl RuntimeInstanceSpawn {
 			module,
 			scheduler,
 			counter: Arc::new(0.into()),
-			tasks: Arc::new(parking_lot::Mutex::new(infos)),
+			tasks: Arc::new(parking_lot::Mutex::new(Default::default())),
+			infos: Arc::new(parking_lot::Mutex::new(infos)),
 			task_receiver: Arc::new(parking_lot::Mutex::new(task_receiver)),
 			task_sender,
 			instance: Arc::new(parking_lot::Mutex::new(None)),
