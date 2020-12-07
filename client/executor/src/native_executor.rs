@@ -42,7 +42,7 @@ use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule};
 use sp_externalities::{ExternalitiesExt as _, WorkerResult};
 use sp_tasks::{new_async_externalities, AsyncExt};
-use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task, PendingTask as PendingInlineTask, spawn_call_ext};
+use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task, PendingTask as InlineTask, spawn_call_ext};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -326,7 +326,6 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 }
 
 /// Helper inner struct to implement `RuntimeSpawn` extension.
-/// TODO consider Arc outside of the spawn: to many here
 #[derive(Clone)]
 pub struct RuntimeInstanceSpawn {
 	module: Option<Arc<dyn WasmModule>>,
@@ -426,12 +425,9 @@ pub struct RuntimeInstanceSpawnInfo {
 	capacity: usize,
 }
 
-// TODO naming is bad (inline are not running)
 enum PendingTask {
-	// TODO condvar?
 	Remote(mpsc::Receiver<Option<WorkerResult>>),
-	// TODO need to ad context of exteranlity init
-	Inline(PendingInlineTask),
+	Inline(InlineTask),
 }
 
 struct RemoteTask {
@@ -456,12 +452,6 @@ impl RuntimeInstanceSpawnInfo {
 			self.nb_runing += 1;
 			Processing::SpawnNew
 		} else {
-			// Note that this does not prevent
-			// from deadlocking in case there
-			// is multiple recursive call in paralell.
-			// TODO also consider model where recursive
-			// call must be declare first hand (depth replaced
-			// by recursive declared) or it run inline.
 			if self.capacity > depth {
 				Processing::Queue
 			} else {
@@ -510,36 +500,32 @@ impl RuntimeInstanceSpawn {
 	fn insert(
 		&self,
 		handle: u64,
-		task: RemoteTask,
-		result_receiver: mpsc::Receiver<Option<WorkerResult>>,
+		task: Task,
+		ext: AsyncExt,
 	) {
 		let mut infos = self.infos.lock();
 		match infos.start(self.recursive_level) {
 			Processing::SpawnNew => {
 				// warning self.tasks is locked when calling spawn_new
 				if !self.spawn_new() {
-					// TODO in this case a useless channel was opened.
-					self.tasks.lock().insert(handle, PendingTask::Inline(PendingInlineTask{
-						task: task.task,
-						ext: task.ext,
-					}));
+					let task = InlineTask { task, ext };
+					self.tasks.lock().insert(handle, PendingTask::Inline(task));
 					return;
 				}
 			},
 			Processing::Queue => (),
 			Processing::RunInline => {
-				// TODO in this case a useless channel was opened.
-				self.tasks.lock().insert(handle, PendingTask::Inline(PendingInlineTask{
-					task: task.task,
-					ext: task.ext,
-				}));
+				let task = InlineTask { task, ext };
+				self.tasks.lock().insert(handle, PendingTask::Inline(task));
 				return;
 			},
 		}
+		let (result_sender, result_receiver) = mpsc::channel();
+		let task = RemoteTask { task, ext, result_sender, handle };
+		self.task_sender.send(task).expect("Receiver is in scope");
 		self.tasks.lock().insert(handle, PendingTask::Remote (
 			result_receiver,
 		));
-		self.task_sender.send(task).expect("TODO mgmt");
 	}
 
 	// TODO should make a variant without module instantiation for native
@@ -668,10 +654,8 @@ impl RuntimeInstanceSpawn {
 	) -> u64 {
 		let handle = self.counter.fetch_add(1, Ordering::Relaxed);
 		let ext = spawn_call_ext(handle, kind, calling_ext);
-		let (result_sender, result_receiver) = mpsc::channel();
 
-		let task = RemoteTask { task, ext, result_sender, handle };
-		self.insert(handle, task, result_receiver);
+		self.insert(handle, task, ext);
 
 		handle
 	}
