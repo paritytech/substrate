@@ -462,14 +462,14 @@ pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
 
   let begin = BlockId::Hash(begin);
 	let begin_number = blockchain.block_number_from_id(&begin)?
-		.ok_or_else(|| ClientError::Msg("Missing start block".to_string()))?;
+		.ok_or_else(|| ClientError::Backend("Missing start block".to_string()))?;
 	let end = BlockId::Hash(blockchain.last_finalized()?);
 	let end_number = blockchain.block_number_from_id(&end)?
 		// This error should not happen, we could also panic.
-		.ok_or_else(|| ClientError::Msg("Missing last finalized block".to_string()))?;
+		.ok_or_else(|| ClientError::Backend("Missing last finalized block".to_string()))?;
 
 	if begin_number > end_number {
-		return Err(ClientError::Msg("Unfinalized start for authority proof".to_string()));
+		return Err(ClientError::Backend("Unfinalized start for authority proof".to_string()));
 	}
 
 	// TODO fetch bonding duration and store it to error when not from it.
@@ -663,11 +663,11 @@ fn check_authority_proof_fragment<Block: BlockT, J>(
 	// assert justification is for this header
 	if &justification.number() != authorities_proof.header.number()
 		|| justification.hash().as_ref() != authorities_proof.header.hash().as_ref() {
-		return Err(ClientError::Msg("Invalid authority warp proof, justification do not match header".to_string()));
+		return Err(ClientError::Backend("Invalid authority warp proof, justification do not match header".to_string()));
 	}
 
 	if authorities_proof.header.number() <= current_block {
-		return Err(ClientError::Msg("Invalid authority warp proof".to_string()));
+		return Err(ClientError::Backend("Invalid authority warp proof".to_string()));
 	}
 	let current_block = authorities_proof.header.number();
 	let mut at_block = None;
@@ -688,7 +688,7 @@ fn check_authority_proof_fragment<Block: BlockT, J>(
 
 	// only fragment with no change for target
 	if at_block.is_none() && !is_last {
-		return Err(ClientError::Msg("Invalid authority warp proof".to_string()));
+		return Err(ClientError::Backend("Invalid authority warp proof".to_string()));
 	}
 	if let Some((at_block, next_authorities)) = at_block {
 		Ok((current_set_id + 1, next_authorities, at_block))

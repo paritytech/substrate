@@ -8879,6 +8879,7 @@ dependencies = [
  "sp-consensus",
  "sp-core",
  "sp-keyring",
+ "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
 ]
