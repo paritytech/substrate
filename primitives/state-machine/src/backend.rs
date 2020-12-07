@@ -31,6 +31,7 @@ use sp_std::{vec::Vec, boxed::Box};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 use sp_externalities::AsyncBackend;
+use super::EXT_NOT_ALLOWED_TO_FAIL;
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -256,7 +257,7 @@ pub struct AsyncBackendAdapter<H, B>(B, sp_std::marker::PhantomData<H>);
 
 impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackend for AsyncBackendAdapter<H, B> {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.0.storage(key).expect(crate::ext_tools::EXT_NOT_ALLOWED_TO_FAIL)
+		self.0.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn child_storage(
@@ -264,11 +265,11 @@ impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackend for AsyncBackendAda
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		self.0.child_storage(child_info, key).expect(crate::ext_tools::EXT_NOT_ALLOWED_TO_FAIL)
+		self.0.child_storage(child_info, key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.0.next_storage_key(key).expect(crate::ext_tools::EXT_NOT_ALLOWED_TO_FAIL)
+		self.0.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn next_child_storage_key(
@@ -276,7 +277,7 @@ impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackend for AsyncBackendAda
 		child_info: &ChildInfo,
 		key: &[u8]
 	) -> Option<Vec<u8>> {
-		self.0.next_child_storage_key(child_info, key).expect(crate::ext_tools::EXT_NOT_ALLOWED_TO_FAIL)
+		self.0.next_child_storage_key(child_info, key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn async_backend(&self) -> Box<dyn AsyncBackend> {
@@ -370,61 +371,6 @@ impl AsyncBackendAt {
 			backend,
 			overlay: overlay.clone(),
 		}
-	}
-}
-
-/// When backend do not allow using a thread,
-/// then we use this `InlineBackend` variant
-/// which will run inline on join.
-/// The backend used will then be the actual
-/// state machine one.
-/// TODO this doc seem irrelevant, audit this struct
-/// usage?? probably for memory only.
-#[derive(Clone)]
-pub struct InlineBackendAt {
-	// TODO could also extract current value to reduce size.
-	overlay: crate::OverlayedChanges,
-}
-
-impl AsyncBackend for InlineBackendAt {
-	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay.storage(key).flatten().map(|v| v.to_vec())
-	}
-
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
-		self.overlay.child_storage(child_info, key).flatten().map(|x| x.to_vec())
-	}
-
-	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay.next_storage_key_change(key)
-			.map(|overlay_key| if overlay_key.1.value().is_some() {
-				Some(overlay_key.0.to_vec())
-			} else {
-				None
-			})
-			.flatten()
-	}
-
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8]
-	) -> Option<Vec<u8>> {
-		self.overlay.next_child_storage_key_change(child_info.storage_key(), key)
-			.map(|overlay_key| if overlay_key.1.value().is_some() {
-				Some(overlay_key.0.to_vec())
-			} else {
-				None
-			})
-			.flatten()
-	}
-
-	fn async_backend(&self) -> Box<dyn AsyncBackend> {
-		Box::new(self.clone())
 	}
 }
 

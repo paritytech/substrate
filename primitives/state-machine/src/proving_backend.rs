@@ -120,7 +120,7 @@ pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: Hasher + 'static
 	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
 );
 
-/// TODO
+/// A proving backend for workers.
 pub struct AsyncProvingBackend<S: TrieBackendStorage<H>, H: Hasher + 'static> (
 	TrieBackend<AsyncProofRecorderBackend<S, H>, H>,
 );

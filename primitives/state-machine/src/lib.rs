@@ -49,10 +49,8 @@ pub use execution::*;
 pub use log::{debug, warn, trace, error as log_error};
 pub use sp_externalities::AsyncBackend;
 
-/// TODO
-pub mod ext_tools {
-	pub use crate::ext::{guard, EXT_NOT_ALLOWED_TO_FAIL};
-}
+const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
+pub use crate::ext::guard as ext_guard;
 
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.

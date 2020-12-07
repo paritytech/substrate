@@ -48,7 +48,7 @@ use sp_core::{
 };
 use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend, WorkerResult};
 use crate::WorkerType;
-use sp_state_machine::ext_tools::guard;
+use sp_state_machine::ext_guard as guard;
 use sp_state_machine::trace;
 use sp_core::hexdisplay::HexDisplay;
 

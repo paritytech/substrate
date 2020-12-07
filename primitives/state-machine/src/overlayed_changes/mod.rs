@@ -184,15 +184,12 @@ impl Markers {
 			},
 			WorkerResult::Valid(result) => Some(result),
 			WorkerResult::Invalid => None,
-			WorkerResult::Panic => {
-				// TODO at this point a Panic should result in panic from parent
-				// but we could also change it to Invalid result here.
+			WorkerResult::HardPanic
+			| WorkerResult::Panic => {
+				// Hard panic distinction is mainly for implementation
+				// purpose, here both will be handled as a panic in
+				// the parent worker.
 				panic!("Panic from a worker")
-			},
-			WorkerResult::HardPanic => {
-				// TODO when sure panic shall panic parent, hard panic should be remove in favor of only
-				// panic even if there can be a small difference
-				panic!("Hard panic from a worker")
 			},
 		}
 	}
@@ -212,7 +209,7 @@ pub struct OverlayedChanges {
 	collect_extrinsics: bool,
 	/// Collect statistic on this execution.
 	stats: StateMachineStats,
-	/// TODO
+	/// Marker keeping trace of worker async externalities in use.
 	markers: Markers,
 }
 
@@ -473,12 +470,15 @@ impl OverlayedChanges {
 		self.top.transaction_depth()
 	}
 
-	/// TODO
+	/// Add marker of given worker at current transaction.
 	pub fn set_marker(&mut self, marker: TaskId) {
 		self.markers.set_marker(marker);
 	}
 
-	/// TODO
+	/// Check if worker result is compatible with changes
+	/// that happens in parent worker state.
+	///
+	/// Return `None` when the worker execution should be invalidated.
 	pub fn resolve_worker_result(&mut self, result: WorkerResult) -> Option<Vec<u8>> {
 		self.markers.resolve_worker_result(result)
 	}
