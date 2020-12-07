@@ -36,7 +36,9 @@ const LOG_TARGET: &str = "grandpa-warp-sync-request-handler";
 pub fn generate_protocol_config(protocol_id: ProtocolId) -> ProtocolConfig {
 	ProtocolConfig {
 		name: generate_protocol_name(protocol_id).into(),
+		// todo
 		max_request_size: 1024 * 1024,
+		// todo
 		max_response_size: 16 * 1024 * 1024,
 		request_timeout: Duration::from_secs(40),
 		inbound_queue: None,
@@ -54,14 +56,14 @@ fn generate_protocol_name(protocol_id: ProtocolId) -> String {
 
 #[derive(codec::Decode)]
 struct Request<B: BlockT> {
-    begin: B::Hash
+	begin: B::Hash
 }
 
 /// Handler for incoming block requests from a remote peer.
 pub struct GrandpaWarpSyncRequestHandler<TBackend, TBlock> {
-    backend: Arc<TBackend>,
-    request_receiver: mpsc::Receiver<IncomingRequest>,
-    _phantom: std::marker::PhantomData<TBlock>
+	backend: Arc<TBackend>,
+	request_receiver: mpsc::Receiver<IncomingRequest>,
+	_phantom: std::marker::PhantomData<TBlock>
 }
 
 impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TBackend, TBlock> {
@@ -86,31 +88,31 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 		&self,
 		payload: Vec<u8>,
 		pending_response: oneshot::Sender<Vec<u8>>
-    ) -> Result<(), HandleRequestError>
-        where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
-    {
-        let request = Request::<TBlock>::decode(&mut &payload[..])?;
-        
-        let response = sc_finality_grandpa::finality_proof::prove_authority::<_, _, GrandpaJustification<TBlock>>(
-            self.backend.blockchain(), request.begin,
-        )?;
+	) -> Result<(), HandleRequestError>
+		where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
+	{
+		let request = Request::<TBlock>::decode(&mut &payload[..])?;
 
-        pending_response.send(response)
-            .map_err(|_| HandleRequestError::SendResponse)         
+		let response = sc_finality_grandpa::finality_proof::prove_authority::<_, _, GrandpaJustification<TBlock>>(
+			self.backend.blockchain(), request.begin,
+		)?;
+
+		pending_response.send(response)
+			.map_err(|_| HandleRequestError::SendResponse)
 	}
 
 	/// Run [`BlockRequestHandler`].
-    pub async fn run(mut self)
-        where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
-    {
+	pub async fn run(mut self)
+		where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
+	{
 		while let Some(request) = self.request_receiver.next().await {
 			let IncomingRequest { peer, payload, pending_response } = request;
 
 			match self.handle_request(payload, pending_response) {
-				Ok(()) => debug!(target: LOG_TARGET, "Handled block request from {}.", peer),
+				Ok(()) => debug!(target: LOG_TARGET, "Handled grandpa warp sync request from {}.", peer),
 				Err(e) => debug!(
 					target: LOG_TARGET,
-					"Failed to handle block request from {}: {}",
+					"Failed to handle grandpa warp sync request from {}: {}",
 					peer, e,
 				),
 			}
