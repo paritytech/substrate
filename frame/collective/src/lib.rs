@@ -1530,7 +1530,7 @@ mod tests {
 				)
 			);
 
-			// For the motion, acc 3's first vote, expecting Ok with Pays::No ...
+			// For the motion, acc 3's first vote, expecting Ok with Pays::No.
 			assert_eq!(
 				Collective::vote(Origin::signed(3), hash.clone(), 0, true),
 				Ok(
