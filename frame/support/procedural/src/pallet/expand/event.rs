@@ -43,8 +43,10 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	let event_use_gen = &event.gen_kind.type_use_gen();
 	let event_impl_gen= &event.gen_kind.type_impl_gen();
 	let metadata = event.metadata.iter()
-		.map(|(ident, args, docs)| {
-			let name = format!("{}", ident);
+		.map(|event| {
+			let name = format!("{}", event.name);
+			let args = event.args.iter().map(|arg| arg.1.clone());
+			let docs = &event.docs;
 			quote::quote!(
 				#frame_support::event::EventMetadata {
 					name: #frame_support::event::DecodeDifferent::Encode(#name),
@@ -57,6 +59,27 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 				},
 			)
 		});
+
+	let metadata_vnext = event.metadata.iter()
+		.map(|event| {
+			let name = format!("{}", event.name);
+			let args = event.args
+				.iter()
+				.map(|(ty, name)| {
+					quote::quote!(
+						#frame_support::metadata::vnext::TypeSpec::new::<#ty>(#name)
+					)
+				});
+			let docs = &event.docs;
+			quote::quote!(
+				#frame_support::metadata::vnext::EventMetadata {
+					name: #name,
+					arguments: vec![ #( #args, )* ],
+					documentation: vec![ #( #docs, )* ],
+				},
+			)
+		});
+
 
 	let event_item_span =
 		def.item.content.as_mut().expect("Checked by def parser").1[event.index].span();
@@ -137,6 +160,12 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 			#[doc(hidden)]
 			pub fn metadata() -> &'static [#frame_support::event::EventMetadata] {
 				&[ #( #metadata )* ]
+			}
+
+			#[allow(dead_code)]
+			#[doc(hidden)]
+			pub fn metadata_vnext() -> Vec<#frame_support::metadata::vnext::EventMetadata> {
+				vec![ #( #metadata_vnext )* ]
 			}
 		}
 	)

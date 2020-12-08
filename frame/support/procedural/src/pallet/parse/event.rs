@@ -36,7 +36,7 @@ pub struct EventDef {
 	/// The keyword Event used (contains span).
 	pub event: keyword::Event,
 	/// Event metadatas: `(name, args, docs)`.
-	pub metadata: Vec<(syn::Ident, Vec<String>, Vec<syn::Lit>)>,
+	pub metadata: Vec<EventDefMetadata>,
 	/// A set of usage of instance, must be check for consistency with trait.
 	pub instances: Vec<helper::InstanceUsage>,
 	/// The kind of generic the type `Event` has.
@@ -45,6 +45,13 @@ pub struct EventDef {
 	pub deposit_event: Option<(syn::Visibility, proc_macro2::Span)>,
 	/// Where clause used in event definition.
 	pub where_clause: Option<syn::WhereClause>,
+}
+
+/// Metadata for a pallet event variant.
+pub struct EventDefMetadata {
+	pub name: syn::Ident,
+	pub args: Vec<(syn::Type, String)>,
+	pub docs: Vec<syn::Lit>,
 }
 
 /// Attribute for Event: defines metadata name to use.
@@ -196,14 +203,14 @@ impl EventDef {
 				let args = variant.fields.iter()
 					.map(|field| {
 						metadata.iter().find(|m| m.0 == field.ty)
-							.map(|m| m.1.clone())
+							.cloned()
 							.unwrap_or_else(|| {
-								clean_type_string(&field.ty.to_token_stream().to_string())
+								(field.ty.clone(), clean_type_string(&field.ty.to_token_stream().to_string()))
 							})
 					})
 					.collect();
 
-				(name, args, docs)
+				EventDefMetadata { name, args, docs }
 			})
 			.collect();
 
