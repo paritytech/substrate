@@ -67,7 +67,7 @@ pub trait PerThing:
 		let b = Self::ACCURACY;
 		// if Self::ACCURACY % 100 > 0 then we need the correction for accuracy
 		let c = rational_mul_correction::<Self::Inner, Self>(b, a, 100.into(), Rounding::Nearest);
-		// TODO: this will fail with
+		// TODO: this will fail with 100%.
 		// [primitives/arithmetic/src/per_things.rs:70] a = 100
 		// [primitives/arithmetic/src/per_things.rs:70] b = 65535
 		// [primitives/arithmetic/src/per_things.rs:70] c = 35

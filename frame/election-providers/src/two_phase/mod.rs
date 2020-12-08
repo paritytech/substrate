@@ -227,13 +227,22 @@ impl Default for ElectionCompute {
 /// This is what will get submitted to the chain.
 ///
 /// Such a solution should never become effective in anyway before being checked by the
-/// [`Module::feasibility_check`].
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+/// [`Module::feasibility_check`]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct RawSolution<C> {
 	/// Compact election edges.
 	compact: C,
 	/// The _claimed_ score of the solution.
 	score: ElectionScore,
+	/// The round at which this solution should be submitted.
+	round: u32,
+}
+
+impl<C: Default> Default for RawSolution<C> {
+	fn default() -> Self {
+		// Round 0 is always invalid, only set this to 1.
+		Self { round: 1, compact: Default::default(), score: Default::default() }
+	}
 }
 
 /// A raw, unchecked signed submission.
@@ -364,19 +373,20 @@ impl From<sp_npos_elections::Error> for FeasibilityError {
 }
 
 pub trait WeightInfo {
-	fn feasibility_check() -> Weight;
-	fn submit() -> Weight;
-	fn submit_unsigned() -> Weight;
+	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight;
+	fn submit(v: u32, t: u32, a: u32, d: u32) -> Weight;
+	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight;
 }
 
+
 impl WeightInfo for () {
-	fn feasibility_check() -> Weight {
+	fn feasibility_check(_: u32, _: u32, _: u32, _: u32) -> Weight {
 		Default::default()
 	}
-	fn submit() -> Weight {
+	fn submit(_: u32, _: u32, _: u32, _: u32) -> Weight {
 		Default::default()
 	}
-	fn submit_unsigned() -> Weight {
+	fn submit_unsigned(_: u32, _: u32, _: u32, _: u32) -> Weight {
 		Default::default()
 	}
 }
@@ -410,11 +420,13 @@ where
 	/// The minimum amount of improvement to the solution score that defines a solution as "better".
 	type SolutionImprovementThreshold: Get<Perbill>;
 
-	/// Maximum number of iteration of balancing that will be executed in the embedded miner of the
-	/// pallet.
-	type UnsignedMaxIterations: Get<u32>;
 	/// The priority of the unsigned transaction submitted in the unsigned-phase
 	type UnsignedPriority: Get<TransactionPriority>;
+	/// Maximum number of iteration of balancing that will be executed in the embedded miner of the
+	/// pallet.
+	type MinerMaxIterations: Get<u32>;
+	/// Maximum weight that the miner should consume.
+	type MinerMaxWeight: Get<Weight>;
 
 	/// Handler for the slashed deposits.
 	type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -480,6 +492,10 @@ frame_support::decl_error! {
 		QueueFull,
 		/// The origin failed to pay the deposit.
 		CannotPayDeposit,
+		/// WitnessData is invalid.
+		InvalidWitness,
+		/// Round number is invalid.
+		InvalidRound,
 	}
 }
 
@@ -489,7 +505,6 @@ decl_module! {
 		origin: T::Origin,
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
 	{
-		// TODO: replace with PalletError once we have it working.
 		type Error = PalletError<T>;
 		fn deposit_event() = default;
 
@@ -507,16 +522,16 @@ decl_module! {
 					<CurrentPhase<T>>::put(Phase::Signed);
 					Round::mutate(|r| *r +=1);
 					Self::start_signed_phase();
-					log!(info, "Starting signed phase at #{} , round {}", now, Self::round());
+					log!(info, "Starting signed phase at #{:?} , round {}.", now, Self::round());
 				},
-				Phase::Signed if remaining <= unsigned_deadline && remaining > 0.into() => {
+				Phase::Signed if remaining <= unsigned_deadline && remaining > 0u32.into() => {
 					// check the unsigned phase.
 					// TODO: this is probably very bad as it is.. we should only assume we don't
 					// want OCW solutions if the solutions is checked to be PJR as well. Probably a
 					// good middle ground for now is to always let the unsigned phase be open.
 					let found_solution = Self::finalize_signed_phase();
 					<CurrentPhase<T>>::put(Phase::Unsigned((!found_solution, now)));
-					log!(info, "Starting unsigned phase at #{}", now);
+					log!(info, "Starting unsigned phase at #{:?}.", now);
 				},
 				_ => {
 					// Nothing. We wait in the unsigned phase until we receive the call to `elect`.
@@ -547,17 +562,28 @@ decl_module! {
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
-		#[weight = T::WeightInfo::submit()]
+		#[weight = T::WeightInfo::submit(0, 0, 0, 0)]
 		fn submit(origin, solution: RawSolution<CompactOf<T>>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
 			// ensure solution is timely.
 			ensure!(Self::current_phase().is_signed(), PalletError::<T>::EarlySubmission);
 
+			// ensure round is correct.
+			ensure!(Self::round() == solution.round, PalletError::<T>::InvalidRound);
+
+			// TODO: this is the only case where having separate snapshot would have been better
+			// because could do just decode_len. But we can create abstractions to do this.
+
+			// build witness.
+			// defensive-only: if phase is signed, snapshot will exist.
+			let RoundSnapshot { voters, targets, .. } = Self::snapshot().unwrap_or_default();
+			let witness = WitnessData { voters: voters.len() as u32, targets: targets.len() as u32 };
+
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
-			let maybe_index = Self::insert_submission(&who, &mut signed_submissions, solution);
-			ensure!(maybe_index.is_some(), "QueueFull");
+			let maybe_index = Self::insert_submission(&who, &mut signed_submissions, solution, witness);
+			ensure!(maybe_index.is_some(), PalletError::<T>::QueueFull);
 			let index = maybe_index.expect("Option checked to be `Some`; qed.");
 
 			// collect deposit. Thereafter, the function cannot fail.
@@ -587,14 +613,23 @@ decl_module! {
 		/// authoring reward at risk.
 		///
 		/// No deposit or reward is associated with this.
-		#[weight = T::WeightInfo::submit_unsigned()]
-		fn submit_unsigned(origin, solution: RawSolution<CompactOf<T>>) {
+		#[weight = T::WeightInfo::submit_unsigned(
+			witness.voters,
+			witness.targets,
+			solution.compact.voters_count() as u32,
+			solution.compact.unique_targets().len() as u32
+		)]
+		fn submit_unsigned(origin, solution: RawSolution<CompactOf<T>>, witness: WitnessData) {
 			ensure_none(origin)?;
 
 			// check phase and score.
-			// TODO: since we do this in pre-dispatch, we can just ignore it
-			// here.
+			// NOTE: since we do this in pre-dispatch, we can just ignore it here.
 			let _ = Self::unsigned_pre_dispatch_checks(&solution)?;
+
+			// ensure witness was correct.
+			let RoundSnapshot { voters, targets, .. } = Self::snapshot().unwrap_or_default();
+			ensure!(voters.len() as u32 == witness.voters, PalletError::<T>::InvalidWitness);
+			ensure!(targets.len() as u32 == witness.targets, PalletError::<T>::InvalidWitness);
 
 			let ready =
 				Self::feasibility_check(solution, ElectionCompute::Unsigned)
@@ -627,24 +662,20 @@ where
 		solution: RawSolution<CompactOf<T>>,
 		compute: ElectionCompute,
 	) -> Result<ReadySolution<T::AccountId>, FeasibilityError> {
-		let RawSolution { compact, score } = solution;
+		let RawSolution { compact, score, .. } = solution;
 
 		// winners are not directly encoded in the solution.
 		// TODO: dupe winner
 		// TODO: dupe in compact.
 		let winners = compact.unique_targets();
 
-		// read the entire snapshot.
-		// TODO: maybe we can store desired_targets separately if it
-		// happens to make a difference to the weight. For now I think it will not and we always
-		// want to charge the full weight of this call anyhow.
+		// read the entire snapshot. NOTE: could be optimized.
 		let RoundSnapshot {
 			voters: snapshot_voters,
 			targets: snapshot_targets,
 			desired_targets,
 		} = Self::snapshot().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
-		// Ensure that we have received enough winners.
 		ensure!(
 			winners.len() as u32 == desired_targets,
 			FeasibilityError::WrongWinnerCount

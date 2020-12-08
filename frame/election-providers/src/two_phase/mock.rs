@@ -1,5 +1,5 @@
 use super::*;
-use frame_support::{parameter_types, traits::OnInitialize};
+use frame_support::{parameter_types, traits::OnInitialize, weights::Weight};
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -58,7 +58,6 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 		targets,
 		desired_targets,
 	} = TwoPhase::snapshot().unwrap();
-	let desired = desired_targets as usize;
 
 	// closures
 	let voter_index = crate::voter_index_fn!(voters, AccountId, Runtime);
@@ -68,8 +67,13 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let ElectionResult {
 		winners,
 		assignments,
-	} = seq_phragmen::<_, CompactAccuracyOf<Runtime>>(desired, targets.clone(), voters.clone(), None)
-		.unwrap();
+	} = seq_phragmen::<_, CompactAccuracyOf<Runtime>>(
+		desired_targets as usize,
+		targets.clone(),
+		voters.clone(),
+		None,
+	)
+	.unwrap();
 
 	let winners = to_without_backing(winners);
 
@@ -80,7 +84,17 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let compact =
 		<CompactOf<Runtime>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
 
-	RawSolution { compact, score }
+	let round = TwoPhase::round();
+	RawSolution { compact, score, round }
+}
+
+pub fn witness() -> WitnessData {
+	TwoPhase::snapshot()
+		.map(|snap| WitnessData {
+			voters: snap.voters.len() as u32,
+			targets: snap.targets.len() as u32,
+		})
+		.unwrap_or_default()
 }
 
 frame_support::impl_outer_dispatch! {
@@ -136,6 +150,7 @@ impl pallet_balances::Config for Runtime {
 }
 
 use paste::paste;
+// TODO: no need for this anymore.
 macro_rules! parameter_types_thread_local {
 	(
 		$(
@@ -195,7 +210,10 @@ parameter_types_thread_local! {
 	static MAX_UNSIGNED_ITERATIONS: u32 = 5;
 	static UNSIGNED_PRIORITY: u64 = 100;
 	static SOLUTION_IMPROVEMENT_THRESHOLD: Perbill = Perbill::zero();
+	static MINER_MAX_WEIGHT: Weight = 128;
 }
+
+
 
 impl crate::two_phase::Config for Runtime {
 	type Event = ();
@@ -212,7 +230,8 @@ impl crate::two_phase::Config for Runtime {
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type SlashHandler = ();
 	type RewardHandler = ();
-	type UnsignedMaxIterations = MaxUnsignedIterations;
+	type MinerMaxIterations = MaxUnsignedIterations;
+	type MinerMaxWeight = MinerMaxWeight;
 	type UnsignedPriority = UnsignedPriority;
 	type ElectionDataProvider = StakingMock;
 	type WeightInfo = ();

@@ -69,6 +69,8 @@ use pallet_session::{historical as pallet_session_historical};
 use sp_inherents::{InherentData, CheckInherentsResult};
 use static_assertions::const_assert;
 
+use frame_election_providers::two_phase as pallet_two_phase_election_provider;
+
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 #[cfg(any(feature = "std", test))]
@@ -463,16 +465,40 @@ impl pallet_staking::Config for Runtime {
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
 	type NextNewSession = Session;
-	type ElectionLookahead = ElectionLookahead;
-	type Call = Call;
-	type MaxIterations = MaxIterations;
-	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
-	type UnsignedPriority = StakingUnsignedPriority;
-	// The unsigned solution weight targeted by the OCW. We set it to the maximum possible value of
-	// a single extrinsic.
-	type OffchainSolutionWeightLimit = OffchainSolutionWeightLimit;
+	type ElectionProvider = TwoPhaseElectionProvider;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
+}
+
+parameter_types! {
+	pub const SignedPhase: u32 = 50;
+	pub const UnsignedPhase: u32 = 50;
+	pub const MaxSignedSubmissions: u32 = 10;
+	pub const SignedRewardBase: Balance = 1 * DOLLARS;
+	pub const SignedDepositBase: Balance = 1 * DOLLARS;
+	pub const MaxUnsignedIterations: u32 = 10;
+}
+
+impl pallet_two_phase_election_provider::Config for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type SignedPhase = SignedPhase;
+	type UnsignedPhase = UnsignedPhase;
+	type MaxSignedSubmissions = MaxSignedSubmissions;
+	type SignedRewardBase = SignedRewardBase;
+	type SignedRewardFactor = ();
+	type SignedRewardMax = ();
+	type SignedDepositBase = SignedDepositBase;
+	type SignedDepositByte = ();
+	type SignedDepositWeight = ();
+	type SolutionImprovementThreshold = ();
+	type SlashHandler = ();
+	type RewardHandler = ();
+	type MinerMaxIterations = MaxUnsignedIterations;
+	type MinerMaxWeight = ();
+	type UnsignedPriority = ();
+	type ElectionDataProvider = Staking;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -906,7 +932,8 @@ construct_runtime!(
 		Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
-		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>, ValidateUnsigned},
+		TwoPhaseElectionProvider: pallet_two_phase_election_provider::{Module, Call, Storage, Event<T>, ValidateUnsigned},
+		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		Democracy: pallet_democracy::{Module, Call, Storage, Config, Event<T>},
 		Council: pallet_collective::<Instance1>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
@@ -1216,6 +1243,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_treasury, Treasury);
 			add_benchmark!(params, batches, pallet_utility, Utility);
 			add_benchmark!(params, batches, pallet_vesting, Vesting);
+			add_benchmark!(params, batches, pallet_two_phase_election_provider, TwoPhaseElectionProvider);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

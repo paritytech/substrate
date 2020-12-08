@@ -18,12 +18,13 @@
 //! Two phase election pallet benchmarking.
 
 use super::*;
-use crate::two_phase::{Module as TwoPhase, *};
+use crate::two_phase::{Module as TwoPhase};
 
 pub use frame_benchmarking::{account, benchmarks, whitelist_account, whitelisted_caller};
 use frame_support::assert_ok;
+use frame_system::RawOrigin;
 use rand::{seq::SliceRandom, thread_rng};
-use sp_npos_elections::{ExtendedBalance, VoteWeight};
+use sp_npos_elections::{ExtendedBalance};
 use sp_runtime::InnerOf;
 use std::convert::TryInto;
 
@@ -138,8 +139,8 @@ where
 		.clone()
 		.score(&winners, stake_of, voter_at, target_at)
 		.unwrap();
-
-	RawSolution { compact, score }
+	let round = <TwoPhase<T>>::round();
+	RawSolution { compact, score, round }
 }
 
 benchmarks! {
@@ -150,8 +151,52 @@ benchmarks! {
 	}
 	_{}
 
-	submit_signed {}: {} verify {}
-	submit_unsigned {}: {} verify {}
+	submit {
+		// number of votes in snapshot.
+		let v in 2000 .. 3000;
+		// number of targets in snapshot.
+		let t in 500 .. 800;
+		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
+		// a subset of `v` component.
+		let a in 500 .. 1500;
+		// number of desired targets. Must be a subset of `t` component.
+		let d in 200 .. 400;
+
+		let witness = WitnessData { voters: v, targets: t };
+		let raw_solution = solution_with_size::<T>(witness, a, d);
+
+		assert!(<TwoPhase<T>>::signed_submissions().len() == 0);
+		<CurrentPhase<T>>::put(Phase::Signed);
+
+		let caller = frame_benchmarking::whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
+
+	}: _(RawOrigin::Signed(caller), raw_solution)
+	verify {
+		assert!(<TwoPhase<T>>::signed_submissions().len() == 1);
+	}
+
+	submit_unsigned {
+		// number of votes in snapshot.
+		let v in 2000 .. 3000;
+		// number of targets in snapshot.
+		let t in 500 .. 800;
+		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
+		// a subset of `v` component.
+		let a in 500 .. 1500;
+		// number of desired targets. Must be a subset of `t` component.
+		let d in 200 .. 400;
+
+		let witness = WitnessData { voters: v, targets: t };
+		let raw_solution = solution_with_size::<T>(witness, a, d);
+
+		assert!(<TwoPhase<T>>::queued_solution().is_none());
+		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
+	}: _(RawOrigin::None, raw_solution, witness)
+	verify {
+		assert!(<TwoPhase<T>>::queued_solution().is_some());
+	}
+
 	open_signed_phase {}: {} verify {}
 	close_signed_phase {}: {} verify {}
 
@@ -174,10 +219,8 @@ benchmarks! {
 
 		assert_eq!(raw_solution.compact.voters_count() as u32, a);
 		assert_eq!(raw_solution.compact.unique_targets().len() as u32, d);
-
-		let compute = ElectionCompute::Unsigned;
 	}: {
-		assert_ok!(<TwoPhase<T>>::feasibility_check(raw_solution, compute));
+		assert_ok!(<TwoPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
 	}
 }
 
@@ -190,6 +233,14 @@ mod test {
 	fn test_benchmarks() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_ok!(test_benchmark_feasibility_check::<Runtime>());
-		})
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_submit_unsigned::<Runtime>());
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_submit::<Runtime>());
+		});
 	}
 }

@@ -22,6 +22,7 @@ use codec::Encode;
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::is_score_better;
 use sp_runtime::Perbill;
+use sp_npos_elections::CompactSolution;
 
 impl<T: Config> Module<T>
 where
@@ -107,6 +108,7 @@ where
 		who: &T::AccountId,
 		queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
 		solution: RawSolution<CompactOf<T>>,
+		witness: WitnessData,
 	) -> Option<usize> {
 		// from the last score, compare and see if the current one is better. If none, then the
 		// awarded index is 0.
@@ -133,7 +135,7 @@ where
 				} else {
 					// add to the designated spot. If the length is too much, remove one.
 					let reward = Self::reward_for(&solution);
-					let deposit = Self::deposit_for(&solution);
+					let deposit = Self::deposit_for(&solution, witness);
 					let submission = SignedSubmission {
 						who: who.clone(),
 						deposit,
@@ -164,9 +166,14 @@ where
 	/// 1. base deposit, fixed for all submissions.
 	/// 2. a per-byte deposit, for renting the state usage.
 	/// 3. a per-weight deposit, for the potential weight usage in an upcoming on_initialize
-	pub fn deposit_for(solution: &RawSolution<CompactOf<T>>) -> BalanceOf<T> {
+	pub fn deposit_for(solution: &RawSolution<CompactOf<T>>, witness: WitnessData) -> BalanceOf<T> {
 		let encoded_len: BalanceOf<T> = solution.using_encoded(|e| e.len() as u32).into();
-		let feasibility_weight = T::WeightInfo::feasibility_check();
+		let feasibility_weight = T::WeightInfo::feasibility_check(
+			witness.voters,
+			witness.targets,
+			solution.compact.voters_count() as u32,
+			solution.compact.unique_targets().len() as u32,
+		);
 
 		let len_deposit = T::SignedDepositByte::get() * encoded_len;
 		let weight_deposit = T::SignedDepositWeight::get() * feasibility_weight.saturated_into();
@@ -345,7 +352,7 @@ mod tests {
 
 			assert_noop!(
 				TwoPhase::submit(Origin::signed(99), solution),
-				"QueueFull",
+				PalletError::<Runtime>::QueueFull,
 			);
 		})
 	}
@@ -419,7 +426,7 @@ mod tests {
 				};
 				assert_noop!(
 					TwoPhase::submit(Origin::signed(99), solution),
-					"QueueFull",
+					PalletError::<Runtime>::QueueFull,
 				);
 			})
 	}
@@ -531,4 +538,7 @@ mod tests {
 			assert_eq!(balances(&9999), (100, 0));
 		})
 	}
+
+	#[test]
+	fn invalid_round_fails() {}
 }

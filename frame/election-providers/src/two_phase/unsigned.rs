@@ -45,7 +45,7 @@ where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {
 	/// Min a new npos solution.
-	pub fn mine_solution(iters: usize) -> Result<RawSolution<CompactOf<T>>, Error> {
+	pub fn mine_solution(iters: usize) -> Result<(RawSolution<CompactOf<T>>, WitnessData), Error> {
 		let RoundSnapshot {
 			desired_targets,
 			voters,
@@ -68,10 +68,10 @@ where
 	/// Will always reduce the solution as well.
 	pub fn prepare_election_result(
 		election_result: ElectionResult<T::AccountId, CompactAccuracyOf<T>>,
-	) -> Result<RawSolution<CompactOf<T>>, Error> {
+	) -> Result<(RawSolution<CompactOf<T>>, WitnessData), Error> {
 		// storage items. Note: we have already read this from storage, they must be in cache.
 		let RoundSnapshot {
-			voters, targets, ..
+			voters, targets, desired_targets,
 		} = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
 
 		// closures.
@@ -96,10 +96,13 @@ where
 		let ratio = sp_npos_elections::assignment_staked_to_ratio_normalized(staked)?;
 		let compact = <CompactOf<T>>::from_assignment(ratio, &voter_index, &target_index)?;
 
-		// TODO
+		let witness = WitnessData {
+			voters: voters.len() as u32,
+			targets: targets.len() as u32,
+		};
 		let maximum_allowed_voters =
-			Self::maximum_compact_len::<T::WeightInfo>(0, Default::default(), 0);
-		let compact = Self::trim_compact(compact.voters_count() as u32, compact, &voter_index)?;
+			Self::maximum_compact_len::<T::WeightInfo>(desired_targets, witness, T::MinerMaxWeight::get());
+		let compact = Self::trim_compact(maximum_allowed_voters, compact, &voter_index)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);
@@ -107,14 +110,15 @@ where
 			.clone()
 			.score(&winners, stake_of, voter_at, target_at)?;
 
-		Ok(RawSolution { compact, score })
+		let round = Self::round();
+		Ok((RawSolution { compact, score, round }, witness))
 	}
 
 	/// Get a random number of iterations to run the balancing in the OCW.
 	///
-	/// Uses the offchain seed to generate a random number, maxed with `T::UnsignedMaxIterations`.
+	/// Uses the offchain seed to generate a random number, maxed with `T::MinerMaxIterations`.
 	pub fn get_balancing_iters() -> usize {
-		match T::UnsignedMaxIterations::get() {
+		match T::MinerMaxIterations::get() {
 			0 => 0,
 			max @ _ => {
 				let seed = sp_io::offchain::random_seed();
@@ -190,7 +194,7 @@ where
 	///
 	/// This only returns a value between zero and `size.nominators`.
 	pub fn maximum_compact_len<W: WeightInfo>(
-		_winners_len: u32,
+		desired_winners: u32,
 		witness: WitnessData,
 		max_weight: Weight,
 	) -> u32 {
@@ -202,7 +206,14 @@ where
 		let mut voters = max_voters;
 
 		// helper closures.
-		let weight_with = |_voters: u32| -> Weight { W::submit_unsigned() };
+		let weight_with = |active_voters: u32| -> Weight {
+			W::submit_unsigned(
+				witness.voters,
+				witness.targets,
+				active_voters,
+				desired_winners,
+			)
+		};
 
 		let next_voters = |current_weight: Weight, voters: u32, step: u32| -> Result<u32, ()> {
 			match current_weight.cmp(&max_weight) {
@@ -299,10 +310,10 @@ where
 	/// Mine a new solution, and submit it back to the chian as an unsigned transaction.
 	pub(crate) fn mine_and_submit() -> Result<(), Error> {
 		let balancing = Self::get_balancing_iters();
-		let raw_solution = Self::mine_solution(balancing)?;
+		let (raw_solution, witness) = Self::mine_solution(balancing)?;
 
 		// submit the raw solution to the pool.
-		let call = Call::submit_unsigned(raw_solution).into();
+		let call = Call::submit_unsigned(raw_solution, witness).into();
 
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
 			.map_err(|_| Error::PoolSubmissionFailed)
@@ -338,7 +349,7 @@ where
 {
 	type Call = Call<T>;
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-		if let Call::submit_unsigned(solution) = call {
+		if let Call::submit_unsigned(solution, _) = call {
 			// discard solution not coming from the local OCW.
 			match source {
 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
@@ -356,7 +367,7 @@ where
 				.priority(
 					T::UnsignedPriority::get().saturating_add(solution.score[0].saturated_into()),
 				)
-				// TODO: need some provides to de-duplicate.
+				// TODO: need some provides to de-duplicate: use Round.
 				// TODO: we can do this better.
 				.longevity(DEFAULT_LONGEVITY)
 				// We don't propagate this. This can never the validated at a remote node.
@@ -368,8 +379,9 @@ where
 	}
 
 	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-		if let Call::submit_unsigned(solution) = call {
+		if let Call::submit_unsigned(solution, _) = call {
 			Self::unsigned_pre_dispatch_checks(solution)
+			// TODO error number
 				.map_err(|_| InvalidTransaction::Custom(99).into())
 		} else {
 			Err(InvalidTransaction::Call.into())
@@ -537,7 +549,7 @@ mod tests {
 				score: [5, 0, 0],
 				..Default::default()
 			};
-			let call = Call::submit_unsigned(solution.clone());
+			let call = Call::submit_unsigned(solution.clone(), witness());
 
 			// initial
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
@@ -587,7 +599,7 @@ mod tests {
 				score: [5, 0, 0],
 				..Default::default()
 			};
-			let call = Call::submit_unsigned(solution.clone());
+			let call = Call::submit_unsigned(solution.clone(), witness());
 
 			// initial
 			assert!(<TwoPhase as ValidateUnsigned>::validate_unsigned(
@@ -629,7 +641,7 @@ mod tests {
 					score: [5, 0, 0],
 					..Default::default()
 				};
-				let call = Call::submit_unsigned(solution.clone());
+				let call = Call::submit_unsigned(solution.clone(), witness());
 
 				// initial
 				assert_eq!(
@@ -660,7 +672,7 @@ mod tests {
 				score: [5, 0, 0],
 				..Default::default()
 			};
-			let call = Call::submit_unsigned(solution.clone());
+			let call = Call::submit_unsigned(solution.clone(), witness());
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -677,13 +689,19 @@ mod tests {
 			assert_eq!(TwoPhase::snapshot().unwrap().desired_targets, 2);
 
 			// mine seq_phragmen solution with 2 iters.
-			let solution = TwoPhase::mine_solution(2).unwrap();
+			let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
+			dbg!(&solution);
 
 			// ensure this solution is valid.
 			assert!(TwoPhase::queued_solution().is_none());
-			assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution));
+			assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution, witness));
 			assert!(TwoPhase::queued_solution().is_some());
 		})
+	}
+
+	#[test]
+	fn miner_trims_weight() {
+
 	}
 
 	#[test]
@@ -713,10 +731,8 @@ mod tests {
 						distribution: vec![(10, PerU16::one())],
 					}],
 				};
-				assert_ok!(TwoPhase::submit_unsigned(
-					Origin::none(),
-					TwoPhase::prepare_election_result(result).unwrap(),
-				));
+				let (compact, witness) = TwoPhase::prepare_election_result(result).unwrap();
+				assert_ok!(TwoPhase::submit_unsigned(Origin::none(), compact, witness));
 				assert_eq!(TwoPhase::queued_solution().unwrap().score[0], 10);
 
 				// trial 1: a solution who's score is only 2, i.e. 20% better in the first element.
@@ -734,12 +750,12 @@ mod tests {
 						},
 					],
 				};
-				let solution = TwoPhase::prepare_election_result(result).unwrap();
+				let (solution, witness) = TwoPhase::prepare_election_result(result).unwrap();
 				// 12 is not 50% more than 10
 				assert_eq!(solution.score[0], 12);
 
 				assert_noop!(
-					TwoPhase::submit_unsigned(Origin::none(), solution),
+					TwoPhase::submit_unsigned(Origin::none(), solution, witness),
 					PalletError::<Runtime>::WeakSubmission,
 				);
 
@@ -762,11 +778,11 @@ mod tests {
 						},
 					],
 				};
-				let solution = TwoPhase::prepare_election_result(result).unwrap();
+				let (solution, witness) = TwoPhase::prepare_election_result(result).unwrap();
 				assert_eq!(solution.score[0], 17);
 
 				// and it is fine
-				assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution));
+				assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution, witness));
 			})
 	}
 
@@ -839,7 +855,13 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
 			let call = extrinsic.call;
-			matches!(call, OuterCall::TwoPhase(Call::submit_unsigned(_)));
+			matches!(call, OuterCall::TwoPhase(Call::submit_unsigned(_, _)));
 		})
 	}
+
+	#[test]
+	fn wrong_witness_fails() {}
+
+	#[test]
+	fn invalid_round_fails() {}
 }
