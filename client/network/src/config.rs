@@ -408,11 +408,7 @@ impl NetworkConfiguration {
 			boot_nodes: Vec::new(),
 			node_key,
 			request_response_protocols: Vec::new(),
-			default_peers_set: SetConfig {
-				in_peers: 25,
-				out_peers: 75,
-				reserved_nodes: Vec::new(),
-			},
+			default_peers_set: Default::default(),
 			extra_sets: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
 			client_version: client_version.into(),
@@ -476,6 +472,16 @@ pub struct SetConfig {
 	pub out_peers: u32,
 	/// List of reserved node addresses.
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
+}
+
+impl Default for SetConfig {
+	fn default() -> Self {
+		SetConfig {
+			in_peers: 25,
+			out_peers: 75,
+			reserved_nodes: Vec::new(),
+		}
+	}
 }
 
 /// Extension to [`SetConfig`] for sets that aren't the default set.

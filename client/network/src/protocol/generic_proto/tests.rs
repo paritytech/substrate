@@ -59,19 +59,23 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 			.boxed();
 
 		let (peerset, _) = sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig {
-			in_peers: 25,
-			out_peers: 25,
-			bootnodes: if index == 0 {
-				keypairs
-					.iter()
-					.skip(1)
-					.map(|keypair| keypair.public().into_peer_id())
-					.collect()
-			} else {
-				vec![]
-			},
+			sets: vec![
+				sc_peerset::SetConfig {
+					in_peers: 25,
+					out_peers: 25,
+					bootnodes: if index == 0 {
+						keypairs
+							.iter()
+							.skip(1)
+							.map(|keypair| keypair.public().into_peer_id())
+							.collect()
+					} else {
+						vec![]
+					},
+					reserved_nodes: Default::default(),
+				}
+			],
 			reserved_only: false,
-			priority_groups: Vec::new(),
 		});
 
 		let behaviour = CustomProtoWithAddr {
@@ -243,7 +247,10 @@ fn reconnect_after_disconnect() {
 						ServiceState::NotConnected => {
 							service1_state = ServiceState::FirstConnec;
 							if service2_state == ServiceState::FirstConnec {
-								service1.disconnect_peer(Swarm::local_peer_id(&service2));
+								service1.disconnect_peer(
+									Swarm::local_peer_id(&service2),
+									sc_peerset::SetId::from(0)
+								);
 							}
 						},
 						ServiceState::Disconnected => service1_state = ServiceState::ConnectedAgain,
@@ -262,7 +269,10 @@ fn reconnect_after_disconnect() {
 						ServiceState::NotConnected => {
 							service2_state = ServiceState::FirstConnec;
 							if service1_state == ServiceState::FirstConnec {
-								service1.disconnect_peer(Swarm::local_peer_id(&service2));
+								service1.disconnect_peer(
+									Swarm::local_peer_id(&service2),
+									sc_peerset::SetId::from(0)
+								);
 							}
 						},
 						ServiceState::Disconnected => service2_state = ServiceState::ConnectedAgain,
