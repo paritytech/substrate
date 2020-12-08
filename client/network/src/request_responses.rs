@@ -398,9 +398,9 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								event: ((*protocol).to_string(), event),
 							})
 						}
-						NetworkBehaviourAction::ReportObservedAddr { address } => {
+						NetworkBehaviourAction::ReportObservedAddr { address, score } => {
 							return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-								address,
+								address, score,
 							})
 						}
 					};
@@ -680,7 +680,7 @@ mod tests {
 				let transport = MemoryTransport
 					.upgrade(upgrade::Version::V1)
 					.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-					.multiplex(libp2p::yamux::Config::default())
+					.multiplex(libp2p::yamux::YamuxConfig::default())
 					.boxed();
 
 				let behaviour = {
@@ -783,7 +783,7 @@ mod tests {
 				let transport = MemoryTransport
 					.upgrade(upgrade::Version::V1)
 					.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-					.multiplex(libp2p::yamux::Config::default())
+					.multiplex(libp2p::yamux::YamuxConfig::default())
 					.boxed();
 
 				let behaviour = {

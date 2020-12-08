@@ -31,7 +31,7 @@ use frame_system::Module as System;
 const BLOCK_NUMBER: u32 = 2;
 
 // Add `n` named items to the schedule
-fn fill_schedule<T: Trait> (when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
+fn fill_schedule<T: Config> (when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
 	// Essentially a no-op call.
 	let call = frame_system::Call::set_storage(vec![]);
 	for i in 0..n {
