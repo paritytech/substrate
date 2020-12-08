@@ -541,7 +541,7 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 				.and_then(|block| {
 					let child_info = match ChildType::from_prefixed_key(&storage_key) {
 						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-						None => return Err("Invalid child storage key".into()),
+						None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 					};
 					self.client.child_storage_keys(
 						&BlockId::Hash(block),
@@ -563,7 +563,7 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 				.and_then(|block| {
 					let child_info = match ChildType::from_prefixed_key(&storage_key) {
 						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-						None => return Err("Invalid child storage key".into()),
+						None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 					};
 					self.client.child_storage(
 						&BlockId::Hash(block),
@@ -585,7 +585,7 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 				.and_then(|block| {
 					let child_info = match ChildType::from_prefixed_key(&storage_key) {
 						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-						None => return Err("Invalid child storage key".into()),
+						None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 					};
 					self.client.child_storage_hash(
 						&BlockId::Hash(block),

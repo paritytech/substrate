@@ -68,7 +68,8 @@ mod periodic;
 #[cfg(test)]
 pub(crate) mod tests;
 
-pub use sp_finality_grandpa::GRANDPA_ENGINE_ID;
+/// Name of the notifications protocol used by Grandpa. Must be registered towards the networking
+/// in order for Grandpa to properly function.
 pub const GRANDPA_PROTOCOL_NAME: &'static str = "/paritytech/grandpa/1";
 
 // cost scalars for reporting peers.
@@ -215,7 +216,6 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let validator = Arc::new(validator);
 		let gossip_engine = Arc::new(Mutex::new(GossipEngine::new(
 			service.clone(),
-			GRANDPA_ENGINE_ID,
 			GRANDPA_PROTOCOL_NAME,
 			validator.clone()
 		)));

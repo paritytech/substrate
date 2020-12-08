@@ -37,11 +37,11 @@ const SOME_TEST_VERSION: PalletVersion = PalletVersion { major: 3000, minor: 30,
 mod module1 {
 	use super::*;
 
-	pub trait Trait: system::Trait {}
+	pub trait Config: system::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where
-			origin: <T as system::Trait>::Origin,
+		pub struct Module<T: Config> for enum Call where
+			origin: <T as system::Config>::Origin,
 			system = system,
 		{}
 	}
@@ -52,11 +52,11 @@ mod module1 {
 mod module2 {
 	use super::*;
 
-	pub trait Trait<I=DefaultInstance>: system::Trait {}
+	pub trait Config<I=DefaultInstance>: system::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
-			origin: <T as system::Trait>::Origin,
+		pub struct Module<T: Config<I>, I: Instance=DefaultInstance> for enum Call where
+			origin: <T as system::Config>::Origin,
 			system = system
 		{
 			fn on_runtime_upgrade() -> Weight {
@@ -78,21 +78,21 @@ mod module2 {
 	}
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {}
+		trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Module2 {}
 	}
 }
 
-impl module1::Trait for Runtime {}
-impl module2::Trait for Runtime {}
-impl module2::Trait<module2::Instance1> for Runtime {}
-impl module2::Trait<module2::Instance2> for Runtime {}
+impl module1::Config for Runtime {}
+impl module2::Config for Runtime {}
+impl module2::Config<module2::Instance1> for Runtime {}
+impl module2::Config<module2::Instance2> for Runtime {}
 
 pub type Signature = sr25519::Signature;
 pub type AccountId = <Signature as Verify>::Signer;
 pub type BlockNumber = u64;
 pub type Index = u64;
 
-impl system::Trait for Runtime {
+impl system::Config for Runtime {
 	type BaseCallFilter= ();
 	type Hash = H256;
 	type Origin = Origin;

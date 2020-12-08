@@ -3267,7 +3267,7 @@ mod offchain_election {
 						ElectionSize::default(),
 					),
 					Error::<Test>::OffchainElectionEarlySubmission,
-					Some(<Test as frame_system::Trait>::DbWeight::get().reads(1)),
+					Some(<Test as frame_system::Config>::DbWeight::get().reads(1)),
 				);
 			})
 	}
@@ -3303,7 +3303,7 @@ mod offchain_election {
 						score,
 					),
 					Error::<Test>::OffchainElectionWeakSubmission,
-					Some(<Test as frame_system::Trait>::DbWeight::get().reads(3))
+					Some(<Test as frame_system::Config>::DbWeight::get().reads(3))
 				);
 			})
 	}
@@ -4340,7 +4340,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 	//   then the nominator can't claim its reward
 	// * A nominator can't claim another nominator reward
 	ExtBuilder::default().build_and_execute(|| {
-		for i in 0..=<Test as Trait>::MaxNominatorRewardedPerValidator::get() {
+		for i in 0..=<Test as Config>::MaxNominatorRewardedPerValidator::get() {
 			let stash = 10_000 + i as AccountId;
 			let controller = 20_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
@@ -4366,7 +4366,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		mock::make_all_reward_payment(1);
 
 		// Assert only nominators from 1 to Max are rewarded
-		for i in 0..=<Test as Trait>::MaxNominatorRewardedPerValidator::get() {
+		for i in 0..=<Test as Config>::MaxNominatorRewardedPerValidator::get() {
 			let stash = 10_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
 			if stash == 10_000 {
@@ -4569,14 +4569,14 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 fn offences_weight_calculated_correctly() {
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		// On offence with zero offenders: 4 Reads, 1 Write
-		let zero_offence_weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 1);
+		let zero_offence_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1);
 		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0), Ok(zero_offence_weight));
 
 		// On Offence with N offenders, Unapplied: 4 Reads, 1 Write + 4 Reads, 5 Writes
-		let n_offence_unapplied_weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 1)
-			+ <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 5);
+		let n_offence_unapplied_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
+			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 5);
 
-		let offenders: Vec<OffenceDetails<<Test as frame_system::Trait>::AccountId, pallet_session::historical::IdentificationTuple<Test>>>
+		let offenders: Vec<OffenceDetails<<Test as frame_system::Config>::AccountId, pallet_session::historical::IdentificationTuple<Test>>>
 			= (1..10).map(|i|
 				OffenceDetails {
 					offender: (i, Staking::eras_stakers(Staking::active_era().unwrap().index, i)),
@@ -4595,14 +4595,14 @@ fn offences_weight_calculated_correctly() {
 
 		let n = 1; // Number of offenders
 		let rw = 3 + 3 * n; // rw reads and writes
-		let one_offence_unapplied_weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 1)
-			+ <Test as frame_system::Trait>::DbWeight::get().reads_writes(rw, rw)
+		let one_offence_unapplied_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
+			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(rw, rw)
 			// One `slash_cost`
-			+ <Test as frame_system::Trait>::DbWeight::get().reads_writes(6, 5)
+			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(6, 5)
 			// `slash_cost` * nominators (1)
-			+ <Test as frame_system::Trait>::DbWeight::get().reads_writes(6, 5)
+			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(6, 5)
 			// `reward_cost` * reporters (1)
-			+ <Test as frame_system::Trait>::DbWeight::get().reads_writes(2, 2);
+			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(2, 2);
 
 		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0), Ok(one_offence_unapplied_weight));
 	});
@@ -4614,7 +4614,7 @@ fn on_initialize_weight_is_correct() {
 		assert_eq!(Validators::<Test>::iter().count(), 0);
 		assert_eq!(Nominators::<Test>::iter().count(), 0);
 		// When this pallet has nothing, we do 4 reads each block
-		let base_weight = <Test as frame_system::Trait>::DbWeight::get().reads(4);
+		let base_weight = <Test as frame_system::Config>::DbWeight::get().reads(4);
 		assert_eq!(base_weight, Staking::on_initialize(0));
 	});
 
@@ -4636,7 +4636,7 @@ fn on_initialize_weight_is_correct() {
 		// With 4 validators and 5 nominator, we should increase weight by:
 		// - (4 + 5) reads
 		// - 3 Writes
-		let final_weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(4 + 9, 3);
+		let final_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4 + 9, 3);
 		assert_eq!(final_weight, Staking::on_initialize(System::block_number()));
 	});
 }
