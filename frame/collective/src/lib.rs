@@ -1484,7 +1484,7 @@ mod tests {
 				Some(Votes { index: 0, threshold: 2, ayes: vec![1], nays: vec![], end })
 			);
 
-			// For the motion, acc 2's first vote, expecting Ok with Pays::No ...
+			// For the motion, acc 2's first vote, expecting Ok with Pays::No.
 			assert_eq!(
 				Collective::vote(Origin::signed(2), hash.clone(), 0, true),
 				Ok(
