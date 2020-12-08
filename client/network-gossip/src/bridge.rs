@@ -178,6 +178,12 @@ impl<B: BlockT> Future for GossipEngine<B> {
 				ForwardingState::Idle => {
 					match this.network_event_stream.poll_next_unpin(cx) {
 						Poll::Ready(Some(event)) => match event {
+							Event::SyncConnected { remote } => {
+								this.network.add_to_set(remote, this.protocol.clone());
+							}
+							Event::SyncDisconnected { remote } => {
+								this.network.remove_from_set(remote, this.protocol.clone());
+							}
 							Event::NotificationStreamOpened { remote, protocol, role } => {
 								if protocol != this.protocol {
 									continue;

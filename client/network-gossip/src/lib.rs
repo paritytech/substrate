@@ -75,6 +75,12 @@ pub trait Network<B: BlockT> {
 	/// Adjust the reputation of a node.
 	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange);
 
+	/// Adds the peer to the set of peers to be connected to with this protocol.
+	fn add_to_set(&self, who: PeerId, protocol: Cow<'static, str>);
+
+	/// Removes the peer to the set of peers to be connected to with this protocol.
+	fn remove_from_set(&self, who: PeerId, protocol: Cow<'static, str>);
+
 	/// Force-disconnect a peer.
 	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>);
 
@@ -95,6 +101,14 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 
 	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange) {
 		NetworkService::report_peer(self, peer_id, reputation);
+	}
+
+	fn add_to_set(&self, who: PeerId, protocol: Cow<'static, str>) {
+		//NetworkService::add_to_peers_set(self, 0, who);  // TODO:
+	}
+
+	fn remove_from_set(&self, who: PeerId, protocol: Cow<'static, str>) {
+		//NetworkService::remove_from_peers_set(self, 0, who);  // TODO:
 	}
 
 	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>) {

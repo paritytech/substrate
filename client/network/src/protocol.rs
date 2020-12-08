@@ -1443,6 +1443,10 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	BlockRequest { target: PeerId, request: message::BlockRequest<B> },
 	/// Peer has a reported a new head of chain.
 	PeerNewBest(PeerId, NumberFor<B>),
+	/// Now connected to a new peer for syncing purposes.
+	SyncConnected(PeerId),
+	/// No longer connected to a peer for syncing purposes.
+	SyncDisconnected(PeerId),
 	None,
 }
 
@@ -1589,8 +1593,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 								genesis_hash: handshake.genesis_hash,
 							};
 
-							self.on_sync_peer_connected(peer_id, handshake, notifications_sink);
-							CustomMessageOutcome::None
+							self.on_sync_peer_connected(peer_id.clone(), handshake, notifications_sink);
+							CustomMessageOutcome::SyncConnected(peer_id)
 						},
 						Ok(msg) => {
 							debug!(
@@ -1605,8 +1609,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						Err(err) => {
 							match <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(&mut &received_handshake[..]) {
 								Ok(handshake) => {
-									self.on_sync_peer_connected(peer_id, handshake, notifications_sink);
-									CustomMessageOutcome::None
+									self.on_sync_peer_connected(peer_id.clone(), handshake, notifications_sink);
+									CustomMessageOutcome::SyncConnected(peer_id)
 								}
 								Err(err2) => {
 									debug!(
@@ -1664,8 +1668,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						sc_peerset::SetId::from(1),
 						peer_id.clone()
 					);
-					self.on_sync_peer_disconnected(peer_id);
-					CustomMessageOutcome::None
+					self.on_sync_peer_disconnected(peer_id.clone());
+					CustomMessageOutcome::SyncDisconnected(peer_id)
 				} else if set_id == sc_peerset::SetId::from(1) {
 					CustomMessageOutcome::None
 				} else {

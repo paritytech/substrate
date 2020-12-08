@@ -1500,6 +1500,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						messages,
 					});
 				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::SyncConnected(remote))) => {
+					this.event_streams.send(Event::SyncConnected { remote });
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::SyncDisconnected(remote))) => {
+					this.event_streams.send(Event::SyncDisconnected { remote });
+				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Dht(event, duration))) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						let query_type = match event {
