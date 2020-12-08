@@ -118,9 +118,6 @@ impl WorkerType {
 ///
 /// This can be `join`-ed to get (blocking) the result of
 /// the spawned task execution.
-///
-/// TODO this need to switch to an enum with a possible inline
-/// variant for RuntimeSpawn implemnetation that do not support threads.
 #[must_use]
 pub struct DataJoinHandle {
 	handle: u64,
@@ -132,13 +129,14 @@ impl DataJoinHandle {
 		sp_io::runtime_tasks::join(self.handle)
 	}
 
-	/// TODO doc
+	/// Indicate that handle result will not be needed.
 	pub fn dismiss(self) {
 		sp_io::runtime_tasks::dismiss(self.handle)
 	}
 }
 
-/// TODO doc
+/// Change maximum number of parallel workers capacity
+/// for the current runtime.
 pub fn set_capacity(capacity: u32) {
 	sp_io::runtime_tasks::set_capacity(capacity)
 }
@@ -151,7 +149,6 @@ mod inner {
 	use super::DataJoinHandle;
 
 	/// Spawn new runtime task (native).
-	/// TODO factor this code with the runtime spawn one
 	pub fn spawn(
 		entry_point: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,

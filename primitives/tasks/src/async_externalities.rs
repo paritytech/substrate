@@ -52,22 +52,15 @@ use sp_state_machine::ext_guard as guard;
 use sp_state_machine::trace;
 use sp_core::hexdisplay::HexDisplay;
 
-const KIND_WITH_BACKEND: &str = "This async kind is only buildable with a backend.";
-
 /// Async view on state machine Ext.
 /// It contains its own set of state and rules,
 /// and returns its changes on `join`.
-/// TODO consider moving in state-machine crate
-/// and have just `dyn Ext + Send + Sync`
 pub struct AsyncExt {
 	kind: WorkerType,
 	// Actually unused at this point, is for write variant.
-	// TODO consider Optional, also this is copy, this could synch.
 	overlay: sp_state_machine::OverlayedChanges,
 	spawn_id: Option<TaskId>,
-	// TODO consider non optional with dummy impl for None (is filter
-	// by kind beforehand anyway).
-	backend: Option<Box<dyn AsyncBackend>>,
+	backend: Box<dyn AsyncBackend>,
 }
 
 impl AsyncExt {
@@ -75,18 +68,17 @@ impl AsyncExt {
 	///
 	/// No impact on master thread, no need to
 	/// assert the thread did join.
-	/// 
+	///
 	/// (But there is no sense in runing if we do not join or dismiss).
 	/// TODO remember that when inline we run at join or not at all
 	/// for dismiss so using no panic handler is the same as transmitting
 	/// panic to parent on join.
-	/// TODO make panic in thread panic the master threaod too !!!
 	pub fn stateless_ext() -> Self {
 		AsyncExt {
 			kind: WorkerType::Stateless,
 			overlay: Default::default(),
 			spawn_id: None,
-			backend: None,
+			backend: Box::new(()),
 		}
 	}
 
@@ -100,7 +92,7 @@ impl AsyncExt {
 			kind: WorkerType::ReadLastBlock,
 			overlay: Default::default(),
 			spawn_id: None,
-			backend: Some(backend),
+			backend,
 		}
 	}
 
@@ -113,9 +105,6 @@ impl AsyncExt {
 	///
 	/// Still there is no strong failure case, the master thread should choose behavior
 	/// to adopt when receiving data that is not in synch with the original spawn_id.
-	///
-	/// TODO return original id on join plus a new ext on master (also on child for rec thread) to know if same tx or parent tx
-	/// or dropped tx.
 	pub fn state_at_spawn_read(
 		backend: Box<dyn AsyncBackend>,
 		spawn_id: TaskId,
@@ -124,7 +113,7 @@ impl AsyncExt {
 			kind: WorkerType::ReadAtSpawn,
 			overlay: Default::default(),
 			spawn_id: Some(spawn_id),
-			backend: Some(backend),
+			backend: backend,
 		}
 	}
 
@@ -161,7 +150,6 @@ pub fn new_async_externalities(
 ) -> Result<AsyncExternalities, &'static str> {
 	let mut res = AsyncExternalities {
 		extensions: Default::default(),
-		// TODO as param
 		state: async_ext,
 	};
 	let mut ext = &mut res as &mut dyn Externalities;
@@ -176,11 +164,10 @@ pub fn new_inline_only_externalities(
 ) -> Result<AsyncExternalities, &'static str> {
 	Ok(AsyncExternalities {
 		extensions: Default::default(),
-		// TODO as param
 		state: async_ext,
 	})
 }
-	
+
 impl AsyncExternalities {
 	/// Extend async externalities with the ability to spawn wasm instances.
 	pub fn with_runtime_spawn(
@@ -227,7 +214,7 @@ impl Externalities for AsyncExternalities {
 		self.guard_stateless("`storage`: should not be used in async externalities!");
 		let _guard = guard();
 		let result = self.state.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.state.backend.as_ref().expect(KIND_WITH_BACKEND).storage(key));
+			self.state.backend.storage(key));
 		trace!(target: "state", "{:?}: Th Get {}={:?}",
 			self.state.spawn_id,
 			HexDisplay::from(&key),
@@ -253,7 +240,7 @@ impl Externalities for AsyncExternalities {
 			.child_storage(child_info, key)
 			.map(|x| x.map(|x| x.to_vec()))
 			.unwrap_or_else(||
-				self.state.backend.as_ref().expect(KIND_WITH_BACKEND).child_storage(child_info, key));
+				self.state.backend.child_storage(child_info, key));
 
 		trace!(target: "state", "{:?}: Th GetChild({}) {}={:?}",
 			self.state.spawn_id,
@@ -274,9 +261,8 @@ impl Externalities for AsyncExternalities {
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		// TODO factor logic wit state machine Ext !!!
 		self.guard_stateless("`next_storage_key`: should not be used in async externalities!");
-		let next_backend_key = self.state.backend.as_ref().expect(KIND_WITH_BACKEND).next_storage_key(key);
+		let next_backend_key = self.state.backend.next_storage_key(key);
 		let next_overlay_key_change = self.state.overlay.next_storage_key_change(key);
 
 		match (next_backend_key, next_overlay_key_change) {
@@ -295,10 +281,8 @@ impl Externalities for AsyncExternalities {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageKey> {
-		// TODO factor logic wit state machine Ext !!!
 		self.guard_stateless("`next_child_storage_key`: should not be used in async externalities!");
-		let next_backend_key = self.state.backend.as_ref().expect(KIND_WITH_BACKEND)
-			.next_child_storage_key(child_info, key);
+		let next_backend_key = self.state.backend.next_child_storage_key(child_info, key);
 		let next_overlay_key_change = self.state.overlay.next_child_storage_key_change(
 			child_info.storage_key(),
 			key
@@ -420,7 +404,7 @@ impl Externalities for AsyncExternalities {
 			WorkerType::ReadLastBlock => (),
 		}
 
-		self.state.backend.as_ref().expect(KIND_WITH_BACKEND).async_backend()
+		self.state.backend.async_backend()
 	}
 
 	fn get_async_backend(&mut self, marker: TaskId) -> Box<dyn AsyncBackend> {
@@ -434,21 +418,11 @@ impl Externalities for AsyncExternalities {
 
 		self.state.overlay.set_marker(marker);
 
-		self.state.backend.as_ref().expect(KIND_WITH_BACKEND).async_backend()
+		self.state.backend.async_backend()
 	}
 
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
-		/* actually overlay with no stored info is the same
-		match self.state.kind {
-			WorkerType::ReadLastBlock
-			| WorkerType::Stateless => {
-				state_update.read_resolve()
-			},
-			WorkerType::ReadAtSpawn => {
-		*/
 		self.state.overlay.resolve_worker_result(state_update)
-//			},
-//		}
 	}
 }
 
