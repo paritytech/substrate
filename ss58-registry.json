@@ -257,10 +257,10 @@
 			"prefix": 30,
 			"network": "phala",
 			"displayName": "Phala Network",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["PHA"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://phala.network"
 		},
 		{
 			"prefix": 32,
