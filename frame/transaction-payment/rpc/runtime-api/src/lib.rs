@@ -23,7 +23,7 @@ use sp_std::prelude::*;
 use frame_support::weights::{Weight, DispatchClass};
 use codec::{Encode, Codec, Decode};
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::{Serialize, Deserialize};
 use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeDisplay, MaybeFromStr};
 
 /// The base fee and adjusted weight and length fees constitute the _inclusion fee,_ which is
@@ -31,19 +31,15 @@ use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeDisplay, MaybeFromStr};
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
+#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
 pub struct InclusionFee<Balance> {
 	/// This is the minimum amount a user pays for a transaction. It is declared
 	/// as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
-	#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
-	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_string"))]
-	#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
-	#[cfg_attr(feature = "std", serde(deserialize_with = "deserialize_from_string"))]
+	#[cfg_attr(feature = "std", serde(with = "serde_balance"))]
 	pub base_fee: Balance,
 	/// The length fee, the amount paid for the encoded length (in bytes) of the transaction.
-	#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
-	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_string"))]
-	#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
-	#[cfg_attr(feature = "std", serde(deserialize_with = "deserialize_from_string"))]
+	#[cfg_attr(feature = "std", serde(with = "serde_balance"))]
 	pub len_fee: Balance,
 	/// - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
 	///     the congestion of the network.
@@ -51,10 +47,7 @@ pub struct InclusionFee<Balance> {
 	/// accounts for the execution time of a transaction.
 	///
 	/// adjusted_weight_fee = targeted_fee_adjustment * weight_fee
-	#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
-	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_string"))]
-	#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
-	#[cfg_attr(feature = "std", serde(deserialize_with = "deserialize_from_string"))]
+	#[cfg_attr(feature = "std", serde(with = "serde_balance"))]
 	pub adjusted_weight_fee: Balance,
 }
 
@@ -78,12 +71,11 @@ impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
+#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
 pub struct FeeDetails<Balance> {
 	pub inclusion_fee: Option<InclusionFee<Balance>>,
-	#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
-	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_string"))]
-	#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
-	#[cfg_attr(feature = "std", serde(deserialize_with = "deserialize_from_string"))]
+	#[cfg_attr(feature = "std", serde(with = "serde_balance"))]
 	pub tip: Balance,
 }
 
@@ -102,6 +94,8 @@ impl<Balance: AtLeast32BitUnsigned + Default + Copy> FeeDetails<Balance> {
 #[derive(Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
+#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
 pub struct RuntimeDispatchInfo<Balance> {
 	/// Weight of this dispatch.
 	pub weight: Weight,
@@ -109,22 +103,22 @@ pub struct RuntimeDispatchInfo<Balance> {
 	pub class: DispatchClass,
 	/// The inclusion fee of this dispatch. This does not include a tip or anything else that
 	/// depends on the signature (i.e. depends on a `SignedExtension`).
-	#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
-	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_string"))]
-	#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
-	#[cfg_attr(feature = "std", serde(deserialize_with = "deserialize_from_string"))]
+	#[cfg_attr(feature = "std", serde(with = "serde_balance"))]
 	pub partial_fee: Balance,
 }
 
 #[cfg(feature = "std")]
-fn serialize_as_string<S: Serializer, T: std::fmt::Display>(t: &T, serializer: S) -> Result<S::Ok, S::Error> {
-	serializer.serialize_str(&t.to_string())
-}
+mod serde_balance {
+    use serde::{Deserialize, Serializer, Deserializer};
 
-#[cfg(feature = "std")]
-fn deserialize_from_string<'de, D: Deserializer<'de>, T: std::str::FromStr>(deserializer: D) -> Result<T, D::Error> {
-	let s = String::deserialize(deserializer)?;
-	s.parse::<T>().map_err(|_| serde::de::Error::custom("Parse from string failed"))
+	pub fn serialize<S: Serializer, T: std::fmt::Display>(t: &T, serializer: S) -> Result<S::Ok, S::Error> {
+		serializer.serialize_str(&t.to_string())
+	}
+
+	pub fn deserialize<'de, D: Deserializer<'de>, T: std::str::FromStr>(deserializer: D) -> Result<T, D::Error> {
+		let s = String::deserialize(deserializer)?;
+		s.parse::<T>().map_err(|_| serde::de::Error::custom("Parse from string failed"))
+	}
 }
 
 sp_api::decl_runtime_apis! {
