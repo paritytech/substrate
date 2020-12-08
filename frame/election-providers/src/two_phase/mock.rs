@@ -18,7 +18,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	PerU16,
 };
-use std::{cell::RefCell, sync::Arc};
+use std::sync::Arc;
 
 pub use frame_support::{assert_noop, assert_ok};
 
@@ -149,51 +149,12 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 }
 
-use paste::paste;
-// TODO: no need for this anymore.
-macro_rules! parameter_types_thread_local {
-	(
-		$(
-			static $name:ident : $type:ty = $default:expr;
-		)*
-	) => {
-		parameter_types_thread_local! {
-			@THREAD_LOCAL($(
-				$name, $type, $default,
-			)*)
-		}
-
-		parameter_types_thread_local! {
-			@GETTER_STRUCT($(
-				$name, $type,
-			)*)
-		}
-	};
-	(@THREAD_LOCAL($($name:ident, $type:ty, $default:expr,)*)) => {
-		thread_local! {
-			$(
-				static $name: RefCell<$type> = RefCell::new($default);
-			)*
-		}
-	};
-	(@GETTER_STRUCT($($name:ident, $type:ty,)*)) => {
-		$(
-			paste! {
-				pub struct [<$name:camel>];
-				impl Get<$type> for [<$name:camel>] {
-					fn get() -> $type { $name.with(|v| v.borrow().clone() )}
-				}
-			}
-		)*
-	}
-}
-
-parameter_types_thread_local! {
-	static SIGNED_PHASE: u64 = 10;
-	static UNSIGNED_PHASE: u64 = 5;
-	static MAX_SIGNED_SUBMISSIONS: u32 = 5;
-	static TARGETS: Vec<AccountId> = vec![10, 20, 30, 40];
-	static VOTERS: Vec<(AccountId, VoteWeight, Vec<AccountId>)> = vec![
+parameter_types! {
+	pub static SignedPhase: u64 = 10;
+	pub static UnsignedPhase: u64 = 5;
+	pub static MaxSignedSubmissions: u32 = 5;
+	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
+	pub static Voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)> = vec![
 		(1, 10, vec![10, 20]),
 		(2, 10, vec![30, 40]),
 		(3, 10, vec![40]),
@@ -204,16 +165,19 @@ parameter_types_thread_local! {
 		(30, 30, vec![30]),
 		(40, 40, vec![40]),
 	];
-	static DESIRED_TARGETS: u32 = 2;
-	static SIGNED_DEPOSIT_BASE: Balance = 5;
-	static SIGNED_REWARD_BASE: Balance = 7;
-	static MAX_UNSIGNED_ITERATIONS: u32 = 5;
-	static UNSIGNED_PRIORITY: u64 = 100;
-	static SOLUTION_IMPROVEMENT_THRESHOLD: Perbill = Perbill::zero();
-	static MINER_MAX_WEIGHT: Weight = 128;
+	pub static DesiredTargets: u32 = 2;
+	pub static SignedDepositBase: Balance = 5;
+	pub static SignedDepositByte: Balance = 0;
+	pub static SignedDepositWeight: Balance = 0;
+	pub static SignedRewardBase: Balance = 7;
+	pub static SignedRewardFactor: Perbill = Perbill::zero();
+	pub static SignedRewardMax: Balance = 10;
+	pub static MinerMaxIterations: u32 = 5;
+	pub static UnsignedPriority: u64 = 100;
+	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
+	pub static MinerMaxWeight: Weight = 128;
+	pub static EpochLength: u64 = 30;
 }
-
-
 
 impl crate::two_phase::Config for Runtime {
 	type Event = ();
@@ -222,15 +186,15 @@ impl crate::two_phase::Config for Runtime {
 	type UnsignedPhase = UnsignedPhase;
 	type MaxSignedSubmissions = MaxSignedSubmissions;
 	type SignedRewardBase = SignedRewardBase;
-	type SignedRewardFactor = ();
-	type SignedRewardMax = ();
+	type SignedRewardFactor = SignedRewardFactor;
+	type SignedRewardMax = SignedRewardMax;
 	type SignedDepositBase = SignedDepositBase;
 	type SignedDepositByte = ();
 	type SignedDepositWeight = ();
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type SlashHandler = ();
 	type RewardHandler = ();
-	type MinerMaxIterations = MaxUnsignedIterations;
+	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
 	type UnsignedPriority = UnsignedPriority;
 	type ElectionDataProvider = StakingMock;
@@ -247,13 +211,8 @@ where
 
 pub type Extrinsic = sp_runtime::testing::TestXt<OuterCall, ()>;
 
+#[derive(Default)]
 pub struct ExtBuilder {}
-
-impl Default for ExtBuilder {
-	fn default() -> Self {
-		Self {}
-	}
-}
 
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
@@ -272,25 +231,42 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 		true
 	}
 	fn next_election_prediction(now: u64) -> u64 {
-		now + 20 - now % 20
+		now + EpochLength::get() - now % EpochLength::get()
 	}
 }
 
 impl ExtBuilder {
 	pub fn max_signed_submission(self, count: u32) -> Self {
-		MAX_SIGNED_SUBMISSIONS.with(|v| *v.borrow_mut() = count);
+		<MaxSignedSubmissions>::set(count);
 		self
 	}
 	pub fn unsigned_priority(self, p: u64) -> Self {
-		UNSIGNED_PRIORITY.with(|v| *v.borrow_mut() = p);
+		<UnsignedPriority>::set(p);
 		self
 	}
 	pub fn solution_improvement_threshold(self, p: Perbill) -> Self {
-		SOLUTION_IMPROVEMENT_THRESHOLD.with(|v| *v.borrow_mut() = p);
+		<SolutionImprovementThreshold>::set(p);
+		self
+	}
+	pub fn signed_deposit(self, base: u64, byte: u64, weight: u64) -> Self {
+		<SignedDepositBase>::set(base);
+		<SignedDepositByte>::set(byte);
+		<SignedDepositWeight>::set(weight);
+		self
+	}
+	pub fn phases(self, signed: u64, unsigned: u64) -> Self {
+		<SignedPhase>::set(signed);
+		<UnsignedPhase>::set(unsigned);
+		self
+	}
+	pub fn reward(self, base: u64, factor: Perbill, max: u64) -> Self {
+		<SignedRewardBase>::set(base);
+		<SignedRewardFactor>::set(factor);
+		<SignedRewardMax>::set(max);
 		self
 	}
 	pub fn desired_targets(self, t: u32) -> Self {
-		DESIRED_TARGETS.with(|v| *v.borrow_mut() = t);
+		<DesiredTargets>::set(t);
 		self
 	}
 	pub fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
@@ -315,6 +291,7 @@ impl ExtBuilder {
 
 		sp_io::TestExternalities::from(storage)
 	}
+
 	pub fn build_offchainify(
 		self,
 		iters: u32,
@@ -332,6 +309,7 @@ impl ExtBuilder {
 
 		(ext, pool_state)
 	}
+
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(test)
 	}

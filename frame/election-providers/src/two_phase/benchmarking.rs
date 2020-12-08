@@ -24,9 +24,9 @@ pub use frame_benchmarking::{account, benchmarks, whitelist_account, whitelisted
 use frame_support::assert_ok;
 use frame_system::RawOrigin;
 use rand::{seq::SliceRandom, thread_rng};
-use sp_npos_elections::{ExtendedBalance};
+use sp_npos_elections::ExtendedBalance;
 use sp_runtime::InnerOf;
-use std::convert::TryInto;
+use sp_std::convert::TryInto;
 
 const SEED: u32 = 0;
 
@@ -42,7 +42,7 @@ fn solution_with_size<T: Config>(
 ) -> RawSolution<CompactOf<T>>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	<InnerOf<CompactAccuracyOf<T>> as std::convert::TryFrom<usize>>::Error: std::fmt::Debug,
+	<InnerOf<CompactAccuracyOf<T>> as sp_std::convert::TryFrom<usize>>::Error: sp_std::fmt::Debug,
 {
 	assert!(witness.targets >= winners_count, "must have enough targets");
 	assert!(
@@ -146,8 +146,7 @@ where
 benchmarks! {
 	where_clause {
 		where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		// TODO: do I really need this?
-		<InnerOf<CompactAccuracyOf<T>> as std::convert::TryFrom<usize>>::Error: std::fmt::Debug,
+		<InnerOf<CompactAccuracyOf<T>> as sp_std::convert::TryFrom<usize>>::Error: sp_std::fmt::Debug,
 	}
 	_{}
 
@@ -211,8 +210,6 @@ benchmarks! {
 		let a in 80 .. 140;
 		// number of desired targets. Must be a subset of `t` component.
 		let d in 30 .. 60;
-
-		println!("running v {}, t {}, a {}, d {}", v, t, a, d);
 
 		let witness = WitnessData { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(witness, a, d);

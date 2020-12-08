@@ -19,10 +19,10 @@
 //!
 //! Two main election providers are implemented in this crate.
 //!
-//! 1.  [`onchain`]: A `struct` that perform the election onchain (i.e. in the fly). This type is
+//! 1.  [onchain]: A `struct` that perform the election onchain (i.e. in the fly). This type is
 //!     likely to be expensive for most chains and damage the block time. Only use when you are sure
 //!     that the inputs are bounded and small enough.
-//! 2. [`two_phase`]: An individual `pallet` that performs the election in two phases, signed and
+//! 2. [two_phase]: An individual `pallet` that performs the election in two phases, signed and
 //!    unsigned. Needless to say, the pallet needs to be included in the final runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]

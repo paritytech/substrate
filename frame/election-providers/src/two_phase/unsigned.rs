@@ -28,9 +28,9 @@ use sp_runtime::{
 		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
 		ValidTransaction,
 	},
-	SaturatedConversion,
+	DispatchError, SaturatedConversion,
 };
-use sp_std::cmp::Ordering;
+use sp_std::{cmp::Ordering, convert::TryInto};
 
 /// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/unsigned-election/";
@@ -358,18 +358,23 @@ where
 				}
 			}
 
-			if let Err(_why) = Self::unsigned_pre_dispatch_checks(solution) {
-				return InvalidTransaction::Custom(99).into(); // TODO
-			}
+
+			let _ = Self::unsigned_pre_dispatch_checks(solution)
+				.map_err(dispatch_error_to_invalid)
+				.map(Into::into)?;
 
 			ValidTransaction::with_tag_prefix("OffchainElection")
 				// The higher the score[0], the better a solution is.
 				.priority(
 					T::UnsignedPriority::get().saturating_add(solution.score[0].saturated_into()),
 				)
-				// TODO: need some provides to de-duplicate: use Round.
-				// TODO: we can do this better.
-				.longevity(DEFAULT_LONGEVITY)
+				// used to deduplicate unsigned solutions: each validator should produce one
+				// solution per round at most, and solutions are not propagate.
+				.and_provides(solution.round)
+				// transaction should stay in the pool for the duration of the unsigned phase.
+				.longevity(TryInto::<u64>::try_into(
+					T::UnsignedPhase::get()).unwrap_or(DEFAULT_LONGEVITY)
+				)
 				// We don't propagate this. This can never the validated at a remote node.
 				.propagate(false)
 				.build()
@@ -381,12 +386,22 @@ where
 	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 		if let Call::submit_unsigned(solution, _) = call {
 			Self::unsigned_pre_dispatch_checks(solution)
-			// TODO error number
-				.map_err(|_| InvalidTransaction::Custom(99).into())
+				.map_err(dispatch_error_to_invalid)
+				.map_err(Into::into)
 		} else {
 			Err(InvalidTransaction::Call.into())
 		}
 	}
+}
+
+/// convert a DispatchError to a custom InvalidTransaction with the inner code being the error
+/// number.
+fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
+	let error_number = match error {
+		DispatchError::Module { error, .. } => error,
+		_ => 0,
+	};
+	InvalidTransaction::Custom(error_number)
 }
 
 // #[cfg(test)]
@@ -539,7 +554,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{mock::*, *};
-	use frame_support::traits::OffchainWorker;
+	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
 	use sp_runtime::PerU16;
 
 	#[test]
@@ -564,7 +579,7 @@ mod tests {
 			);
 
 			// signed
-			roll_to(5);
+			roll_to(15);
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
 			matches!(
 				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
@@ -577,8 +592,8 @@ mod tests {
 			);
 
 			// unsigned
-			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			roll_to(25);
+			assert!(TwoPhase::current_phase().is_unsigned());
 
 			assert!(<TwoPhase as ValidateUnsigned>::validate_unsigned(
 				TransactionSource::Local,
@@ -592,8 +607,8 @@ mod tests {
 	#[test]
 	fn validate_unsigned_retracts_low_score() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			roll_to(25);
+			assert!(TwoPhase::current_phase().is_unsigned());
 
 			let solution = RawSolution::<TestCompact> {
 				score: [5, 0, 0],
@@ -634,8 +649,8 @@ mod tests {
 		ExtBuilder::default()
 			.unsigned_priority(20)
 			.build_and_execute(|| {
-				roll_to(15);
-				assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+				roll_to(25);
+				assert!(TwoPhase::current_phase().is_unsigned());
 
 				let solution = RawSolution::<TestCompact> {
 					score: [5, 0, 0],
@@ -663,9 +678,8 @@ mod tests {
 	)]
 	fn invalid_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
-			use frame_support::dispatch::Dispatchable;
-			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			roll_to(25);
+			assert!(TwoPhase::current_phase().is_unsigned());
 
 			// This is in itself an invalid BS solution..
 			let solution = RawSolution::<TestCompact> {
@@ -681,8 +695,8 @@ mod tests {
 	#[test]
 	fn miner_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			roll_to(25);
+			assert!(TwoPhase::current_phase().is_unsigned());
 
 			// ensure we have snapshots in place.
 			assert!(TwoPhase::snapshot().is_some());
@@ -701,7 +715,7 @@ mod tests {
 
 	#[test]
 	fn miner_trims_weight() {
-
+		// set a proper max weight and mock weighInfo, test weight being trimmed.
 	}
 
 	#[test]
@@ -718,8 +732,8 @@ mod tests {
 			.solution_improvement_threshold(Perbill::from_percent(50))
 			.build_and_execute(|| {
 
-				roll_to(15);
-				assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+				roll_to(25);
+				assert!(TwoPhase::current_phase().is_unsigned());
 				assert_eq!(TwoPhase::snapshot().unwrap().desired_targets, 1);
 
 				// an initial solution
@@ -790,32 +804,32 @@ mod tests {
 	fn ocw_check_prevent_duplicate() {
 		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
-			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			roll_to(25);
+			assert!(TwoPhase::current_phase().is_unsigned());
 
 			// first execution -- okay.
-			assert!(TwoPhase::set_check_offchain_execution_status(15).is_ok());
+			assert!(TwoPhase::set_check_offchain_execution_status(25).is_ok());
 
 			// next block: rejected.
-			assert!(TwoPhase::set_check_offchain_execution_status(16).is_err());
+			assert!(TwoPhase::set_check_offchain_execution_status(26).is_err());
 
 			// allowed after `OFFCHAIN_REPEAT`
 			assert!(
-				TwoPhase::set_check_offchain_execution_status((16 + OFFCHAIN_REPEAT).into())
+				TwoPhase::set_check_offchain_execution_status((26 + OFFCHAIN_REPEAT).into())
 					.is_ok()
 			);
 
 			// a fork like situation: re-execute last 3.
 			assert!(TwoPhase::set_check_offchain_execution_status(
-				(16 + OFFCHAIN_REPEAT - 3).into()
+				(26 + OFFCHAIN_REPEAT - 3).into()
 			)
 			.is_err());
 			assert!(TwoPhase::set_check_offchain_execution_status(
-				(16 + OFFCHAIN_REPEAT - 2).into()
+				(26 + OFFCHAIN_REPEAT - 2).into()
 			)
 			.is_err());
 			assert!(TwoPhase::set_check_offchain_execution_status(
-				(16 + OFFCHAIN_REPEAT - 1).into()
+				(26 + OFFCHAIN_REPEAT - 1).into()
 			)
 			.is_err());
 		})
@@ -825,21 +839,23 @@ mod tests {
 	fn ocw_only_runs_when_signed_open_now() {
 		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
-			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			roll_to(25);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
+
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
 			let mut storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 
-			TwoPhase::offchain_worker(14);
+			TwoPhase::offchain_worker(24);
 			assert!(pool.read().transactions.len().is_zero());
 			storage.clear();
 
-			TwoPhase::offchain_worker(16);
+			TwoPhase::offchain_worker(26);
 			assert!(pool.read().transactions.len().is_zero());
 			storage.clear();
 
-			TwoPhase::offchain_worker(15);
+			// submits!
+			TwoPhase::offchain_worker(25);
 			assert!(!pool.read().transactions.len().is_zero());
 		})
 	}
@@ -848,9 +864,9 @@ mod tests {
 	fn ocw_can_submit_to_pool() {
 		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
-			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
-			TwoPhase::offchain_worker(15);
+			roll_to(25);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
+			TwoPhase::offchain_worker(25);
 
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();

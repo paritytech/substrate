@@ -1584,7 +1584,6 @@ dependencies = [
  "sp-io",
  "sp-npos-elections",
  "sp-runtime",
- "sp-staking",
  "sp-std",
  "sp-tracing",
  "static_assertions",

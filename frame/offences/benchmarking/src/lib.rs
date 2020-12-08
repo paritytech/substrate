@@ -28,19 +28,24 @@ use frame_system::{RawOrigin, Module as System, Config as SystemConfig};
 use frame_benchmarking::{benchmarks, account};
 use frame_support::traits::{Currency, OnInitialize};
 
-use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto}};
-use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
+use sp_runtime::{
+	traits::{Convert, Saturating, StaticLookup, UniqueSaturatedInto},
+	Perbill,
+};
+use sp_staking::offence::{Offence, OffenceDetails, ReportOffence};
 
-use pallet_balances::{Config as BalancesConfig};
 use pallet_babe::BabeEquivocationOffence;
+use pallet_balances::Config as BalancesConfig;
 use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
 use pallet_im_online::{Config as ImOnlineConfig, Module as ImOnline, UnresponsivenessOffence};
 use pallet_offences::{Config as OffencesConfig, Module as Offences};
-use pallet_session::historical::{Config as HistoricalConfig, IdentificationTuple};
-use pallet_session::{Config as SessionConfig, SessionManager};
+use pallet_session::{
+	historical::{Config as HistoricalConfig, IdentificationTuple},
+	Config as SessionConfig, SessionManager,
+};
 use pallet_staking::{
-	Module as Staking, Config as StakingConfig, RewardDestination, ValidatorPrefs,
-	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS, Event as StakingEvent
+	Config as StakingConfig, Event as StakingEvent, Exposure, IndividualExposure,
+	Module as Staking, RewardDestination, ValidatorPrefs, MAX_NOMINATIONS,
 };
 
 const SEED: u32 = 0;
@@ -359,7 +364,7 @@ benchmarks! {
 		let o = 10;
 		let n = 100;
 
-		Staking::<T>::put_election_status(ElectionStatus::Closed);
+		// Staking::<T>::put_election_status(ElectionStatus::Closed);
 
 		let mut deferred_offences = vec![];
 		let offenders = make_offenders::<T>(o, n)?.0;

@@ -101,9 +101,15 @@ where
 	}
 
 	/// Find a proper position in the queue for the signed queue, whilst maintaining the order of
-	/// solution quality.
+	/// solution quality. If insertion was successful, `Some(index)` is returned where index is the
+	/// index of the newly inserted item.
 	///
 	/// The length of the queue will always be kept less than or equal to `T::MaxSignedSubmissions`.
+	///
+	/// If a solution is removed, their bond is unreserved.
+	///
+	/// Invariant: The returned index is always a valid index in `queue` and can safely be used to
+	/// inspect the newly inserted element.
 	pub fn insert_submission(
 		who: &T::AccountId,
 		queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
@@ -146,8 +152,15 @@ where
 					// It is either 0 (in which case `0 <= queue.len()`) or one of the queue indices
 					// + 1. The biggest queue index is `queue.len() - 1`, thus `at <= queue.len()`.
 					queue.insert(at, submission);
+					// if length has exceeded the limit, eject the weakest, return shifted index.
 					if queue.len() as u32 > T::MaxSignedSubmissions::get() {
-						queue.remove(0);
+						Self::remove_weakest(queue);
+						// Invariant: at > 0
+						// Proof by contradiction: Assume at is 0 and this will underflow. Then the
+						// previous length of the queue must have been `T::MaxSignedSubmissions` so
+						// that `queue.len() + 1` (for the newly inserted one) is more than
+						// `T::MaxSignedSubmissions`. But this would have been detected by the first
+						// if branch; qed.
 						Some(at - 1)
 					} else {
 						Some(at)
@@ -157,6 +170,18 @@ where
 
 		debug_assert!(queue.len() as u32 <= T::MaxSignedSubmissions::get());
 		outcome
+	}
+
+	/// Removes the weakest element of the queue, namely the first one, should the length of the
+	/// queue be enough. noop if the queue is empty. Bond of the removed solution is returned.
+	pub fn remove_weakest(
+		queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
+	) {
+		if queue.len() > 0 {
+			let SignedSubmission { who, deposit, .. } = queue.remove(0);
+			let _remainder = T::Currency::unreserve(&who, deposit);
+			debug_assert!(_remainder.is_zero());
+		}
 	}
 
 	/// Collect sufficient deposit to store this solution this chain.
@@ -184,8 +209,13 @@ where
 	/// The reward for this solution, if successfully chosen as the best one at the end of the
 	/// signed phase.
 	pub fn reward_for(solution: &RawSolution<CompactOf<T>>) -> BalanceOf<T> {
-		T::SignedRewardBase::get()
-			+ T::SignedRewardFactor::get() * solution.score[0].saturated_into::<BalanceOf<T>>()
+		let raw_reward = T::SignedRewardBase::get()
+			+ T::SignedRewardFactor::get() * solution.score[0].saturated_into::<BalanceOf<T>>();
+
+		match T::SignedRewardMax::get() {
+			Some(cap) => raw_reward.min(cap),
+			None => raw_reward,
+		}
 	}
 }
 
@@ -213,8 +243,8 @@ mod tests {
 	#[test]
 	fn should_pay_deposit() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(5);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
@@ -229,8 +259,8 @@ mod tests {
 	#[test]
 	fn good_solution_is_rewarded() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(5);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
@@ -244,10 +274,49 @@ mod tests {
 	}
 
 	#[test]
+	fn reward_is_capped() {
+		ExtBuilder::default()
+			.reward(5, Perbill::from_percent(25), 10)
+			.build_and_execute(|| {
+				roll_to(15);
+				assert!(TwoPhase::current_phase().is_signed());
+
+				let solution = raw_solution();
+				assert_eq!(solution.score[0], 40);
+				assert_eq!(balances(&99), (100, 0));
+
+				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_eq!(balances(&99), (95, 5));
+
+				assert!(TwoPhase::finalize_signed_phase());
+				// expected reward is 5 + 10
+				assert_eq!(balances(&99), (100 + 10, 0));
+			});
+
+		ExtBuilder::default()
+			.reward(5, Perbill::from_percent(25), 20)
+			.build_and_execute(|| {
+				roll_to(15);
+				assert!(TwoPhase::current_phase().is_signed());
+
+				let solution = raw_solution();
+				assert_eq!(solution.score[0], 40);
+				assert_eq!(balances(&99), (100, 0));
+
+				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_eq!(balances(&99), (95, 5));
+
+				assert!(TwoPhase::finalize_signed_phase());
+				// expected reward is 5 + 10
+				assert_eq!(balances(&99), (100 + 15, 0));
+			});
+	}
+
+	#[test]
 	fn bad_solution_is_slashed() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(5);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
@@ -268,8 +337,8 @@ mod tests {
 	#[test]
 	fn suppressed_solution_gets_bond_back() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(5);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
@@ -295,45 +364,10 @@ mod tests {
 	}
 
 	#[test]
-	fn queue_is_always_sorted() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(5);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
-
-			let solution = RawSolution {
-				score: [5, 0, 0],
-				..Default::default()
-			};
-			assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
-
-			// then a worse one.
-			let solution = RawSolution {
-				score: [4, 0, 0],
-				..Default::default()
-			};
-			assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
-
-			// then a better one.
-			let solution = RawSolution {
-				score: [6, 0, 0],
-				..Default::default()
-			};
-			assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
-
-			assert_eq!(
-				TwoPhase::signed_submissions()
-					.iter()
-					.map(|x| x.solution.score[0])
-					.collect::<Vec<_>>(),
-				vec![4, 5, 6]
-			);
-		})
-	}
-
-	#[test]
 	fn cannot_submit_worse_with_full_queue() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(5);
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
 
 			for s in 0..MaxSignedSubmissions::get() {
 				// score is always getting better
@@ -360,7 +394,8 @@ mod tests {
 	#[test]
 	fn weakest_is_removed_if_better_provided() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(5);
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
 
 			for s in 0..MaxSignedSubmissions::get() {
 				// score is always getting better
@@ -398,11 +433,92 @@ mod tests {
 	}
 
 	#[test]
+	fn weakest_is_removed_if_better_provided_wont_remove_self() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
+
+			for s in 1..MaxSignedSubmissions::get() {
+				// score is always getting better
+				let solution = RawSolution {
+					score: [(5 + s).into(), 0, 0],
+					..Default::default()
+				};
+				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+			}
+
+			let solution = RawSolution {
+				score: [4, 0, 0],
+				..Default::default()
+			};
+			assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+
+			assert_eq!(
+				TwoPhase::signed_submissions()
+					.into_iter()
+					.map(|s| s.solution.score[0])
+					.collect::<Vec<_>>(),
+				vec![4, 6, 7, 8, 9]
+			);
+
+			// better.
+			let solution = RawSolution {
+				score: [5, 0, 0],
+				..Default::default()
+			};
+			assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+
+			// the one with score 5 was rejected, the new one inserted.
+			assert_eq!(
+				TwoPhase::signed_submissions()
+					.into_iter()
+					.map(|s| s.solution.score[0])
+					.collect::<Vec<_>>(),
+				vec![5, 6, 7, 8, 9]
+			);
+		})
+	}
+
+	#[test]
+	fn early_ejected_solution_gets_bond_back() {
+		ExtBuilder::default()
+			.signed_deposit(2, 0, 0)
+			.build_and_execute(|| {
+				roll_to(15);
+				assert!(TwoPhase::current_phase().is_signed());
+
+				for s in 0..MaxSignedSubmissions::get() {
+					// score is always getting better
+					let solution = RawSolution {
+						score: [(5 + s).into(), 0, 0],
+						..Default::default()
+					};
+					assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				}
+
+				assert_eq!(balances(&99).1, 2 * 5);
+				assert_eq!(balances(&999).1, 0);
+
+				// better.
+				let solution = RawSolution {
+					score: [20, 0, 0],
+					..Default::default()
+				};
+				assert_ok!(TwoPhase::submit(Origin::signed(999), solution));
+
+				// got one bond back.
+				assert_eq!(balances(&99).1, 2 * 4);
+				assert_eq!(balances(&999).1, 2);
+			})
+	}
+
+	#[test]
 	fn equally_good_is_not_accepted() {
 		ExtBuilder::default()
 			.max_signed_submission(3)
 			.build_and_execute(|| {
-				roll_to(5);
+				roll_to(15);
+				assert!(TwoPhase::current_phase().is_signed());
 
 				for i in 0..MaxSignedSubmissions::get() {
 					let solution = RawSolution {
@@ -437,10 +553,12 @@ mod tests {
 			.max_signed_submission(3)
 			.build_and_execute(|| {
 				let scores = || TwoPhase::signed_submissions()
-						.into_iter()
-						.map(|s| s.solution.score[0])
-						.collect::<Vec<_>>();
-				roll_to(5);
+					.into_iter()
+					.map(|s| s.solution.score[0])
+					.collect::<Vec<_>>();
+
+				roll_to(15);
+				assert!(TwoPhase::current_phase().is_signed());
 
 				let solution = RawSolution {
 					score: [5, 0, 0],
@@ -500,8 +618,8 @@ mod tests {
 		// - bad_solution_is_slashed
 		// - suppressed_solution_gets_bond_back
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(5);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
 
 			assert_eq!(balances(&99), (100, 0));
 			assert_eq!(balances(&999), (100, 0));

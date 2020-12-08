@@ -17,14 +17,15 @@
 
 //! # Two phase election provider pallet.
 //!
-//! As the name suggests, this election-provider has two distinct phases (see [`Phase`]), signed and
-//! unsigned.
+//! As the name suggests, this election-provider has two distinct phases (see
+//! [Phase](two_phase::Phase)), signed and unsigned.
 //!
 //! ## Phases
 //!
 //! The timeline of pallet is as follows. At each block,
 //! [`ElectionDataProvider::next_election_prediction`] is used to estimate the time remaining to the
-//! next call to `elect`. Based on this, a phase is chosen. The timeline is as follows.
+//! next call to [`ElectionProvider::elect`]. Based on this, a phase is chosen. The timeline is as
+//! follows.
 //!
 //! ```ignore
 //!                                                                    elect()
@@ -32,23 +33,29 @@
 //!   +-------------------------------------------------------------------+
 //!    Phase::Off   +       Phase::Signed     +      Phase::Unsigned      +
 //!
-//! Note that the unsigned phase starts `T::UnsignedPhase` blocks before the
-//! `next_election_prediction`, but only ends when a call to `ElectionProvider::elect` happens.
-//!
 //! ```
+//!
+//! Note that the unsigned phase starts [Config::UnsignedPhase](two_phase::Config::UnsignedPhase)
+//! blocks before the `next_election_prediction`, but only ends when a call to
+//! `ElectionProvider::elect` happens.
+//!
+//! Each of the phases can be disabled by essentially setting their length to zero. If both phases
+//! have length zero, then the pallet essentially runs only the on-chain backup.
+//!
 //! ### Signed Phase
 //!
-//!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
-//! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
-//! on-chain for a number of blocks. A maximum of [`Config::MaxSignedSubmissions`] solutions are
-//! stored. The queue is always sorted based on score (worse to best).
+//!	In the signed phase, solutions (of type [RawSolution](struct.RawSolution.html)) are submitted
+//! and queued on chain. A deposit is reserved, based on the size of the solution, for the cost of
+//! keeping this solution on-chain for a number of blocks, and the potential weight of the solution
+//! upon being checked. A maximum of [`Config::MaxSignedSubmissions`] solutions are stored. The
+//! queue is always sorted based on score (worse to best).
 //!
 //! Upon arrival of a new solution:
 //!
 //! 1. If the queue is not full, it is stored in the appropriate index.
 //! 2. If the queue is full but the submitted solution is better than one of the queued ones, the
-//!    worse solution is discarded (TODO: must return the bond here) and the new solution is stored
-//!    in the correct index.
+//!    worse solution is discarded, the bond of the outgoing solution is returned, and the new
+//!    solution is stored in the correct index.
 //! 3. If the queue is full and the solution is not an improvement compared to any of the queued
 //!    ones, it is instantly rejected and no additional bond is reserved.
 //!
@@ -58,8 +65,8 @@
 //! Upon the end of the signed phase, the solutions are examined from worse to best (i.e. `pop()`ed
 //! until drained). Each solution undergoes an expensive [`Module::feasibility_check`], which ensure
 //! the score claimed by this score was correct, among other checks. At each step, if the current
-//! best solution passes the feasibility check, it is considered to be the best one. The sender
-//! of the origin is rewarded, and the rest of the queued solutions get their deposit back, without
+//! best solution passes the feasibility check, it is considered to be the best one. The sender of
+//! the origin is rewarded, and the rest of the queued solutions get their deposit back, without
 //! being checked.
 //!
 //! The following example covers all of the cases at the end of the signed phase:
@@ -79,32 +86,53 @@
 //! +-------------------------------+
 //! ```
 //!
-//! TODO: what if length of some phase is zero?
-//!
 //! Note that both of the bottom solutions end up being discarded and get their deposit back,
 //! despite one of them being invalid.
 //!
 //! ## Unsigned Phase
 //!
-//! If signed phase ends with a good solution, then the unsigned phase will be `active`
-//! ([`Phase::Unsigned(true)`]), else the unsigned phase will be `passive`.
+//! The unsigned phase will always follow the signed phase, with the specified duration. In this
+//! phase, only validator nodes can submit solutions. A validator node who has offchain workers
+//! enabled will start to mine a solution in this phase and submits it back to the chain as an
+//! unsigned transaction, thus the name _unsigned_ phase.
 //!
-//! TODO
+//! Validators will only submit solutions if the one that they have computed is sufficiently better
+//! than the best queued one (see [SolutionImprovementThreshold]) and will limit the weigh of the
+//! solution to [MinerMaxWeight].
 //!
 //! ### Fallback
 //!
-//! If we reach the end of both phases (i.e. call to `ElectionProvider::elect` happens) and no good
+//! If we reach the end of both phases (i.e. call to [ElectionProvider::elect] happens) and no good
 //! solution is queued, then we fallback to an on-chain election. The on-chain election is slow, and
 //! contains to balancing or reduction post-processing.
 //!
-//! ## Correct Submission
+//! ## Feasible Solution (correct solution)
 //!
-//! TODO
+//! All submissions must undergo a feasibility check. A feasible solution is as follows:
+//!
+//! 0. **all** of the used indices must be correct.
+//! 1. present correct number of winners.
+//! 2. any assignment is checked to match with [Snapshot::voters].
+//! 3. for each assignment, the check of `ElectionDataProvider` is also examined.
+//! 4. the claimed score is valid.
 //!
 //! ## Accuracy
 //!
-//! TODO
+//! Solutions are encoded using indices of the [Snapshot]. The accuracy used for these indices
+//! heavily influences the size of the solution. These indices are configured by an upstream user of
+//! this pallet, through `CompactSolution` type of the `ElectionDataProvider`.
 //!
+//! ## Future Plans
+//!
+//! **Challenge Phase**. We plan adding a third phase to the pallet, called the challenge phase.
+//! This is phase in which no further solutions are processed, and the current best solution might
+//! be challenged by anyone (signed or unsigned). The main plan here is to enforce the solution to
+//! be PJR. Checking PJR on-chain is quite expensive, yet proving that a solution is **not** PJR is
+//! rather cheap. If a queued solution is challenged:
+//!
+//! 1. We must surely slash whoever submitted that solution (might be a challenge for unsigned
+//!    solutions).
+//! 2. It is probably fine to fallback to the on-chain election, as we expect this to happen rarely.
 
 use crate::onchain::OnChainSequentialPhragmen;
 use codec::{Decode, Encode, HasCompact};
@@ -127,8 +155,7 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
-// TODO: make this only test.
-#[cfg(any(feature = "runtime-benchmarks", test))]
+#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 #[cfg(test)]
 mod mock;
@@ -373,6 +400,8 @@ impl From<sp_npos_elections::Error> for FeasibilityError {
 }
 
 pub trait WeightInfo {
+	fn open_signed_phase() -> Weight;
+	fn open_unsigned_phase() -> Weight;
 	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight;
 	fn submit(v: u32, t: u32, a: u32, d: u32) -> Weight;
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight;
@@ -387,6 +416,12 @@ impl WeightInfo for () {
 		Default::default()
 	}
 	fn submit_unsigned(_: u32, _: u32, _: u32, _: u32) -> Weight {
+		Default::default()
+	}
+	fn open_signed_phase() -> Weight {
+		Default::default()
+	}
+	fn open_unsigned_phase() -> Weight {
 		Default::default()
 	}
 }
@@ -408,7 +443,6 @@ where
 	/// Maximum number of singed submissions that can be queued.
 	type MaxSignedSubmissions: Get<u32>;
 
-	// TODO: these need input from the research team
 	type SignedRewardBase: Get<BalanceOf<Self>>;
 	type SignedRewardFactor: Get<Perbill>;
 	type SignedRewardMax: Get<Option<BalanceOf<Self>>>;
@@ -518,27 +552,24 @@ decl_module! {
 			let remaining = next_election - now;
 			match Self::current_phase() {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
-					// check only for the signed phase.
+					// signed phae can only start after Off.
 					<CurrentPhase<T>>::put(Phase::Signed);
 					Round::mutate(|r| *r +=1);
 					Self::start_signed_phase();
 					log!(info, "Starting signed phase at #{:?} , round {}.", now, Self::round());
+					T::WeightInfo::open_signed_phase()
 				},
-				Phase::Signed if remaining <= unsigned_deadline && remaining > 0u32.into() => {
-					// check the unsigned phase.
-					// TODO: this is probably very bad as it is.. we should only assume we don't
-					// want OCW solutions if the solutions is checked to be PJR as well. Probably a
-					// good middle ground for now is to always let the unsigned phase be open.
-					let found_solution = Self::finalize_signed_phase();
-					<CurrentPhase<T>>::put(Phase::Unsigned((!found_solution, now)));
+				Phase::Signed | Phase::Off if remaining <= unsigned_deadline && remaining > 0u32.into() => {
+					// unsigned phase can start after Off or Signed.
+					let _ = Self::finalize_signed_phase();
+					<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
 					log!(info, "Starting unsigned phase at #{:?}.", now);
+					T::WeightInfo::open_unsigned_phase()
 				},
 				_ => {
-					// Nothing. We wait in the unsigned phase until we receive the call to `elect`.
+					Zero::zero()
 				}
 			}
-
-			Default::default()
 		}
 
 		fn offchain_worker(n: T::BlockNumber) {
@@ -572,7 +603,7 @@ decl_module! {
 			// ensure round is correct.
 			ensure!(Self::round() == solution.round, PalletError::<T>::InvalidRound);
 
-			// TODO: this is the only case where having separate snapshot would have been better
+			// NOTE: this is the only case where having separate snapshot would have been better
 			// because could do just decode_len. But we can create abstractions to do this.
 
 			// build witness.
@@ -587,8 +618,8 @@ decl_module! {
 			let index = maybe_index.expect("Option checked to be `Some`; qed.");
 
 			// collect deposit. Thereafter, the function cannot fail.
-			// TODO: ensure this index is correct.
-			let deposit = signed_submissions[index].deposit;
+			// Defensive -- index is valid.
+			let deposit = signed_submissions.get(index).map(|s| s.deposit).unwrap_or_default();
 			T::Currency::reserve(&who, deposit).map_err(|_| PalletError::<T>::CannotPayDeposit)?;
 
 			// store the new signed submission.
@@ -655,7 +686,7 @@ where
 	///
 	/// 0. **all** of the used indices must be correct.
 	/// 1. present correct number of winners.
-	/// 2. any assignment is checked to match with `SnapshotVoters`.
+	/// 2. any assignment is checked to match with [Snapshot::voters].
 	/// 3. for each assignment, the check of `ElectionDataProvider` is also examined.
 	/// 4. the claimed score is valid.
 	fn feasibility_check(
@@ -665,8 +696,6 @@ where
 		let RawSolution { compact, score, .. } = solution;
 
 		// winners are not directly encoded in the solution.
-		// TODO: dupe winner
-		// TODO: dupe in compact.
 		let winners = compact.unique_targets();
 
 		// read the entire snapshot. NOTE: could be optimized.
@@ -678,7 +707,7 @@ where
 
 		ensure!(
 			winners.len() as u32 == desired_targets,
-			FeasibilityError::WrongWinnerCount
+			FeasibilityError::WrongWinnerCount,
 		);
 
 		// ----- Start building. First, we need some closures.
@@ -742,11 +771,25 @@ where
 
 	/// On-chain fallback of election.
 	fn onchain_fallback() -> Result<Supports<T::AccountId>, Error> {
+		// If the length of singed phase is zero, the signed phase never starts and thus snapshot is
+		// never created.
+		let get_snapshot_backup = || {
+			let targets = T::ElectionDataProvider::targets();
+			let voters = T::ElectionDataProvider::voters();
+			let desired_targets = T::ElectionDataProvider::desired_targets();
+
+			RoundSnapshot {
+				voters,
+				targets,
+				desired_targets,
+			}
+		};
+
 		let RoundSnapshot {
 			desired_targets,
 			voters,
 			targets,
-		} = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
+		} = Self::snapshot().unwrap_or_else(get_snapshot_backup);
 		<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<Perbill>(
 			desired_targets as usize,
 			targets,
@@ -774,6 +817,7 @@ where
 		Self::queued_solution()
 			.map_or_else(
 				|| {
+
 					Self::onchain_fallback()
 						.map(|r| (r, ElectionCompute::OnChain))
 						.map_err(Into::into)
@@ -811,7 +855,7 @@ mod tests {
 	#[test]
 	fn phase_rotation_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			// 0 ------- 5 -------------- 15 ------- 20
+			// 0 ------- 15 -------------- 25 ------- 30 ------- ------- 45 ------- 55 ------- 60
 			//           |                |
 			//         Signed           Unsigned
 
@@ -824,54 +868,65 @@ mod tests {
 			assert!(TwoPhase::snapshot().is_none());
 			assert_eq!(TwoPhase::round(), 0);
 
-			roll_to(5);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
-			assert!(TwoPhase::snapshot().is_some());
-			assert_eq!(TwoPhase::round(), 1);
-
-			roll_to(14);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
-			assert!(TwoPhase::snapshot().is_some());
-			assert_eq!(TwoPhase::round(), 1);
-
 			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			assert!(TwoPhase::snapshot().is_some());
+			assert_eq!(TwoPhase::round(), 1);
+
+			roll_to(24);
+			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			assert!(TwoPhase::snapshot().is_some());
+			assert_eq!(TwoPhase::round(), 1);
+
+			roll_to(25);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(TwoPhase::snapshot().is_some());
 
-			roll_to(19);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			roll_to(29);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(TwoPhase::snapshot().is_some());
 
-			roll_to(20);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			roll_to(30);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(TwoPhase::snapshot().is_some());
 
 			// we close when upstream tells us to elect.
-			roll_to(21);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			roll_to(32);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(TwoPhase::snapshot().is_some());
 
 			TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
 				.unwrap();
-			assert_eq!(TwoPhase::current_phase(), Phase::Off);
+
+			assert!(TwoPhase::current_phase().is_off());
 			assert!(TwoPhase::snapshot().is_none());
 			assert_eq!(TwoPhase::round(), 1);
+
+			roll_to(44);
+			assert!(TwoPhase::current_phase().is_off());
+
+			roll_to(45);
+			assert!(TwoPhase::current_phase().is_signed());
+
+			roll_to(55);
+			assert!(TwoPhase::current_phase().is_unsigned_open_at(55));
 		})
 	}
 
 	#[test]
 	fn onchain_backup_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(5);
+			roll_to(15);
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
 
-			roll_to(20);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 15)));
+			roll_to(25);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// zilch solutions thus far.
 			let supports =
 				TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
 					.unwrap();
+
 			assert_eq!(
 				supports,
 				vec![
@@ -892,5 +947,76 @@ mod tests {
 				]
 			)
 		})
+	}
+
+	#[test]
+	fn signed_phase_void() {
+		ExtBuilder::default().phases(0, 10).build_and_execute(|| {
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_off());
+
+			roll_to(19);
+			assert!(TwoPhase::current_phase().is_off());
+
+			roll_to(20);
+			dbg!(TwoPhase::current_phase());
+			assert!(TwoPhase::current_phase().is_unsigned_open_at(20));
+
+			roll_to(30);
+			assert!(TwoPhase::current_phase().is_unsigned_open_at(20));
+
+			let _ =
+				TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
+					.unwrap();
+
+			assert!(TwoPhase::current_phase().is_off());
+		});
+	}
+
+	#[test]
+	fn unsigned_phase_void() {
+		ExtBuilder::default().phases(10, 0).build_and_execute(|| {
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_off());
+
+			roll_to(19);
+			assert!(TwoPhase::current_phase().is_off());
+
+			roll_to(20);
+			assert!(TwoPhase::current_phase().is_signed());
+
+			roll_to(30);
+			assert!(TwoPhase::current_phase().is_signed());
+
+			let _ =
+				TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
+					.unwrap();
+
+			assert!(TwoPhase::current_phase().is_off());
+		});
+	}
+
+	#[test]
+	fn both_phases_void() {
+		ExtBuilder::default().phases(0, 0).build_and_execute(|| {
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_off());
+
+			roll_to(19);
+			assert!(TwoPhase::current_phase().is_off());
+
+			roll_to(20);
+			assert!(TwoPhase::current_phase().is_off());
+
+			roll_to(30);
+			assert!(TwoPhase::current_phase().is_off());
+
+			// this module is now only capable of doing on-chain backup.
+			let _ =
+				TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
+					.unwrap();
+
+			assert!(TwoPhase::current_phase().is_off());
+		});
 	}
 }
