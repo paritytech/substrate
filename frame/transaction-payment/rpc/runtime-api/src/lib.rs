@@ -20,7 +20,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use frame_support::weights::{Weight, DispatchClass};
 use codec::{Encode, Codec, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
@@ -30,7 +29,7 @@ use sp_runtime::traits::{MaybeDisplay, MaybeFromStr};
 #[derive(Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-pub struct RuntimeDispatchInfo<Balance> {
+pub struct RuntimeDispatchInfo<Weight, DispatchClass, Balance> {
 	/// Weight of this dispatch.
 	pub weight: Weight,
 	/// Class of this dispatch.
@@ -56,16 +55,19 @@ fn deserialize_from_string<'de, D: Deserializer<'de>, T: std::str::FromStr>(dese
 }
 
 sp_api::decl_runtime_apis! {
-	pub trait TransactionPaymentApi<Balance> where
+	pub trait TransactionPaymentApi<Weight, DispatchClass, Balance> where
+		Weight: Codec,
+		DispatchClass: Codec,
 		Balance: Codec + MaybeDisplay + MaybeFromStr,
 	{
-		fn query_info(uxt: Block::Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance>;
+		fn query_info(uxt: Block::Extrinsic, len: u32) -> RuntimeDispatchInfo<Weight, DispatchClass, Balance>;
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use frame_support::weights::DispatchClass;
 
 	#[test]
 	fn should_serialize_and_deserialize_properly_with_string() {
@@ -78,7 +80,7 @@ mod tests {
 		let json_str = r#"{"weight":5,"class":"normal","partialFee":"1000000"}"#;
 
 		assert_eq!(serde_json::to_string(&info).unwrap(), json_str);
-		assert_eq!(serde_json::from_str::<RuntimeDispatchInfo<u64>>(json_str).unwrap(), info);
+		assert_eq!(serde_json::from_str::<RuntimeDispatchInfo<u64, DispatchClass, u64>>(json_str).unwrap(), info);
 
 		// should not panic
 		serde_json::to_value(&info).unwrap();
@@ -95,7 +97,7 @@ mod tests {
 		let json_str = r#"{"weight":5,"class":"normal","partialFee":"340282366920938463463374607431768211455"}"#;
 
 		assert_eq!(serde_json::to_string(&info).unwrap(), json_str);
-		assert_eq!(serde_json::from_str::<RuntimeDispatchInfo<u128>>(json_str).unwrap(), info);
+		assert_eq!(serde_json::from_str::<RuntimeDispatchInfo<u64, DispatchClass, u128>>(json_str).unwrap(), info);
 
 		// should not panic
 		serde_json::to_value(&info).unwrap();
