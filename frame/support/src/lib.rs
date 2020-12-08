@@ -27,6 +27,8 @@ pub use sp_tracing;
 
 #[cfg(feature = "std")]
 pub use serde;
+#[doc(hidden)]
+pub use scale_info;
 pub use sp_core::Void;
 #[doc(hidden)]
 pub use sp_std;

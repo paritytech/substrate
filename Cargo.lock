@@ -1631,6 +1631,7 @@ dependencies = [
  "parity-util-mem",
  "paste 0.1.18",
  "pretty_assertions",
+ "scale-info",
  "serde",
  "smallvec 1.5.0",
  "sp-api",

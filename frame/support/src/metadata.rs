@@ -20,6 +20,7 @@ pub use frame_metadata::{
 	DefaultByteGetter, RuntimeMetadataPrefixed, StorageEntryMetadata, StorageMetadata,
 	StorageEntryType, StorageEntryModifier, DefaultByte, StorageHasher, ModuleErrorMetadata,
 	ExtrinsicMetadata,
+	vnext,
 };
 
 /// Implements the metadata support for the given runtime and all its modules.

@@ -70,6 +70,12 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			.collect::<Vec<_>>()
 	});
 
+	let args_is_compact = def.call.methods.iter().map(|method| {
+		method.args.iter()
+			.map(|(is_compact, _, _)| is_compact)
+			.collect::<Vec<_>>()
+	});
+
 	quote::quote_spanned!(def.call.attr_span =>
 		#[derive(
 			#frame_support::RuntimeDebugNoBound,
@@ -193,6 +199,23 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 						documentation: #frame_support::dispatch::DecodeDifferent::Encode(
 							&[ #( #fn_doc ),* ]
 						),
+					},
+				)* ]
+			}
+
+			#[doc(hidden)]
+			pub fn call_functions_vnext() -> Vec<#frame_support::metadata::vnext::FunctionMetadata> {
+				vec![ #(
+					#frame_support::metadata::vnext::FunctionMetadata {
+						name: stringify!(#fn_name),
+						arguments: vec![ #(
+							#frame_support::metadata::vnext::FunctionArgumentMetadata {
+								name: stringify!(#args_name),
+								ty: #frame_support::scale_info::meta_type::<#args_type>(),
+								is_compact: #args_is_compact,
+							},
+						)* ],
+						documentation: vec![ #( #fn_doc ),* ],
 					},
 				)* ]
 			}
