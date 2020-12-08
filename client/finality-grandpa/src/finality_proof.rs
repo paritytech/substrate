@@ -42,7 +42,7 @@ use log::trace;
 use sp_blockchain::{
 	Backend as BlockchainBackend, Error as ClientError, Result as ClientResult,
 };
-use sc_client_api::{backend::Backend, StorageProvider, ProofProvider};
+use sc_client_api::{backend::Backend, StorageProvider};
 use parity_scale_codec::{Encode, Decode};
 use finality_grandpa::BlockNumberOps;
 use sp_runtime::{
@@ -64,25 +64,9 @@ pub trait AuthoritySetForFinalityProver<Block: BlockT>: Send + Sync {
 	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList>;
 }
 
-/// Trait that combines `StorageProvider` and `ProofProvider`
-pub trait StorageAndProofProvider<Block, BE>:
-	StorageProvider<Block, BE> + ProofProvider<Block> + Send + Sync
-where
-	Block: BlockT,
-	BE: Backend<Block> + Send + Sync,
-{}
-
-/// Blanket implementation.
-impl<Block, BE, P> StorageAndProofProvider<Block, BE> for P
-where
-	Block: BlockT,
-	BE: Backend<Block> + Send + Sync,
-	P: StorageProvider<Block, BE> + ProofProvider<Block> + Send + Sync,
-{}
-
 /// Implementation of AuthoritySetForFinalityProver.
 impl<BE, Block: BlockT> AuthoritySetForFinalityProver<Block>
-	for Arc<dyn StorageAndProofProvider<Block, BE>>
+	for Arc<dyn StorageProvider<Block, BE> + Send + Sync>
 where
 	BE: Backend<Block> + Send + Sync + 'static,
 {
@@ -94,9 +78,10 @@ where
 			.ok_or(ClientError::InvalidAuthoritiesSet)
 	}
 }
+
 /// Finality proof provider for serving network requests.
-pub struct FinalityProofProvider<B, Block: BlockT> {
-	backend: Arc<B>,
+pub struct FinalityProofProvider<BE, Block: BlockT> {
+	backend: Arc<BE>,
 	authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 	shared_authority_set: Option<SharedAuthoritySet<Block::Hash, NumberFor<Block>>>,
 }
@@ -109,6 +94,7 @@ where
 	///
 	/// - backend for accessing blockchain data;
 	/// - authority_provider for calling and proving runtime methods.
+	/// - shared_authority_set for accessing authority set data
 	pub fn new<P>(
 		backend: Arc<B>,
 		authority_provider: P,
@@ -127,15 +113,16 @@ where
 	/// Create new finality proof provider for the service using:
 	///
 	/// - backend for accessing blockchain data;
-	/// - storage_and_proof_provider, which is generally a client.
+	/// - storage_provider, which is generally a client.
+	/// - shared_authority_set for accessing authority set data
 	pub fn new_for_service(
 		backend: Arc<B>,
-		storage_and_proof_provider: Arc<dyn StorageAndProofProvider<Block, B>>,
+		storage_provider: Arc<dyn StorageProvider<Block, B> + Send + Sync>,
 		shared_authority_set: Option<SharedAuthoritySet<Block::Hash, NumberFor<Block>>>,
 	) -> Arc<Self> {
 		Arc::new(Self::new(
 			backend,
-			storage_and_proof_provider,
+			storage_provider,
 			shared_authority_set,
 		))
 	}
