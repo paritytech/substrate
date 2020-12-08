@@ -796,10 +796,10 @@ impl MdnsWrapper {
 		}
 	}
 
-    fn poll(
-        &mut self,
-        cx: &mut Context<'_>,
-        params: &mut impl PollParameters,
+	fn poll(
+		&mut self,
+		cx: &mut Context<'_>,
+		params: &mut impl PollParameters,
 	) -> Poll<NetworkBehaviourAction<void::Void, MdnsEvent>> {
 		loop {
 			match self {
