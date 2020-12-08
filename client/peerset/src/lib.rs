@@ -524,8 +524,9 @@ impl Peerset {
 								peer.forget_peer();
 							}
 						}
-						peersstate::Peer::Unknown(_) =>
-							unreachable!("We iterate over known peers; qed")
+						peersstate::Peer::Unknown(_) => {
+							// Happens if this peer does not belong to this set.
+						}
 					}
 				}
 			}

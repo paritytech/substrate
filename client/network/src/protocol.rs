@@ -19,7 +19,7 @@
 use crate::{
 	ExHashT,
 	chain::Client,
-	config::{ProtocolId, TransactionPool, TransactionImportFuture, TransactionImport},
+	config::{self, ProtocolId, TransactionPool, TransactionImportFuture, TransactionImport},
 	error,
 	utils::{interval, LruHashSet},
 };
@@ -336,11 +336,12 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		chain: Arc<dyn Client<B>>,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		protocol_id: ProtocolId,
-		peerset_config: sc_peerset::PeersetConfig,
+		config_role: &config::Role,
+		network_config: &config::NetworkConfiguration,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		metrics_registry: Option<&Registry>,
 		boot_node_ids: Arc<HashSet<PeerId>>,
-	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle)> {
+	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
 			config.roles,
@@ -352,14 +353,85 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let important_peers = {
 			let mut imp_p = HashSet::new();
-			for reserved in peerset_config.sets.iter().flat_map(|s| s.reserved_nodes.iter()) {
-				imp_p.insert(reserved.clone());
+			for reserved in &network_config.default_peers_set.reserved_nodes {
+				imp_p.insert(reserved.peer_id.clone());
+			}
+			for reserved in network_config.extra_sets.iter().flat_map(|s| s.set_config.reserved_nodes.iter()) {
+				imp_p.insert(reserved.peer_id.clone());
 			}
 			imp_p.shrink_to_fit();
 			imp_p
 		};
 
-		let (peerset, peerset_handle) = sc_peerset::Peerset::from_config(peerset_config);
+		let mut known_addresses = Vec::new();
+
+		let (peerset, peerset_handle) = {
+			let mut sets = Vec::with_capacity(2 + network_config.extra_sets.len());
+
+			let mut default_sets_reserved = HashSet::new();
+			match config_role {
+				config::Role::Sentry { validators } => {
+					for validator in validators {
+						default_sets_reserved.insert(validator.peer_id.clone());
+						known_addresses.push((validator.peer_id.clone(), validator.multiaddr.clone()));
+					}
+				}
+				config::Role::Authority { sentry_nodes } => {
+					for sentry_node in sentry_nodes {
+						default_sets_reserved.insert(sentry_node.peer_id.clone());
+						known_addresses.push((sentry_node.peer_id.clone(), sentry_node.multiaddr.clone()));
+					}
+				}
+				_ => {}
+			};
+			for reserved in network_config.default_peers_set.reserved_nodes.iter() {
+				default_sets_reserved.insert(reserved.peer_id.clone());
+				known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
+			}
+
+			let mut bootnodes = Vec::with_capacity(network_config.boot_nodes.len());
+			for bootnode in network_config.boot_nodes.iter() {
+				bootnodes.push(bootnode.peer_id.clone());
+				known_addresses.push((bootnode.peer_id.clone(), bootnode.multiaddr.clone()));
+			}
+
+			// Set number 0 is used for block announces.
+			sets.push(sc_peerset::SetConfig {
+				in_peers: network_config.default_peers_set.in_peers,
+				out_peers: network_config.default_peers_set.out_peers,
+				bootnodes,
+				reserved_nodes: default_sets_reserved.clone(),
+			});
+
+			// Set number 1 is used for transactions.
+			// TODO: expand docs
+			sets.push(sc_peerset::SetConfig {
+				in_peers: network_config.default_peers_set.in_peers,  // TODO: ?!?!
+				out_peers: u32::max_value(),
+				bootnodes: Vec::new(),
+				reserved_nodes: default_sets_reserved,
+			});
+
+			for set_cfg in &network_config.extra_sets {
+				let mut reserved_nodes = HashSet::new();
+				for reserved in set_cfg.set_config.reserved_nodes.iter() {
+					reserved_nodes.insert(reserved.peer_id.clone());
+					known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
+				}
+
+				sets.push(sc_peerset::SetConfig {
+					in_peers: set_cfg.set_config.in_peers,
+					out_peers: set_cfg.set_config.out_peers,
+					bootnodes: Vec::new(),
+					reserved_nodes,
+				});
+			}
+
+			sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig {
+				sets,
+				reserved_only: network_config.non_reserved_mode == config::NonReservedPeerMode::Deny,
+			})
+		};
 
 		let transactions_protocol: Cow<'static, str> = Cow::from({
 			let mut proto = String::new();
@@ -380,6 +452,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let behaviour = {
 			let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
 			let block_announces_handshake = BlockAnnouncesHandshake::build(&config, &chain).encode();
+			let handshake_message = Roles::from(config_role).encode();
+
 			GenericProto::new(
 				local_peer_id,
 				protocol_id.clone(),
@@ -387,7 +461,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				build_status_message(&config, &chain),
 				peerset,
 				iter::once((block_announces_protocol, block_announces_handshake))
-					.chain(iter::once((transactions_protocol, vec![]))),
+					.chain(iter::once((transactions_protocol, vec![])))
+					.chain(network_config.extra_sets.iter()
+						.map(|s| (s.notifications_protocol.clone(), handshake_message.clone()))
+					),
 			)
 		};
 
@@ -409,7 +486,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			transaction_pool,
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
-			notification_protocols: Vec::new(),
+			notification_protocols:
+				network_config.extra_sets.iter().map(|s| s.notifications_protocol.clone()).collect(),
 			metrics: if let Some(r) = metrics_registry {
 				Some(Metrics::register(r)?)
 			} else {
@@ -418,7 +496,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			boot_node_ids,
 		};
 
-		Ok((protocol, peerset_handle))
+		Ok((protocol, peerset_handle, known_addresses))
 	}
 
 	/*/// Returns the list of all the peers we have an open channel to.
@@ -598,23 +676,15 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	/// Called by peer when it is disconnecting
-	pub fn on_sync_peer_disconnected(&mut self, peer: PeerId) -> CustomMessageOutcome<B> {
+	pub fn on_sync_peer_disconnected(&mut self, peer: PeerId) {
 		if self.important_peers.contains(&peer) {
 			warn!(target: "sync", "Reserved peer {} disconnected", peer);
 		} else {
 			trace!(target: "sync", "{} disconnected", peer);
 		}
 
-		if let Some(_peer_data) =  self.context_data.peers.remove(&peer) {
+		if let Some(_peer_data) = self.context_data.peers.remove(&peer) {
 			self.sync.peer_disconnected(&peer);
-
-			// Notify all the notification protocols as closed.
-			CustomMessageOutcome::NotificationStreamClosed {
-				remote: peer,
-				protocols: self.notification_protocols.clone(),
-			}
-		} else {
-			CustomMessageOutcome::None
 		}
 	}
 
@@ -1504,7 +1574,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			GenericProtoOut::CustomProtocolClosed { peer_id, set_id } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == sc_peerset::SetId::from(0) {
-					self.on_sync_peer_disconnected(peer_id)
+					self.on_sync_peer_disconnected(peer_id);
+					CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamClosed {
 						remote: peer_id,

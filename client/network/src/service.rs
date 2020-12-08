@@ -30,7 +30,7 @@
 use crate::{
 	ExHashT, NetworkStateInfo, NetworkStatus,
 	behaviour::{self, Behaviour, BehaviourOut},
-	config::{parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
+	config::{parse_str_addr, Params, Role, TransportConfig},
 	DhtEvent,
 	discovery::DiscoveryConfig,
 	error::Error,
@@ -84,7 +84,6 @@ use std::{
 	borrow::Cow,
 	collections::{HashMap, HashSet},
 	fs,
-	iter,
 	marker::PhantomData,
 	num:: NonZeroUsize,
 	pin::Pin,
@@ -165,12 +164,37 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker");
 
-		if let Some(path) = params.network_config.net_config_path {
-			fs::create_dir_all(&path)?;
+		if let Some(path) = &params.network_config.net_config_path {
+			fs::create_dir_all(path)?;
 		}
 
+		// Private and public keys configuration.
+		let local_identity = params.network_config.node_key.clone().into_keypair()?;
+		let local_public = local_identity.public();
+		let local_peer_id = local_public.clone().into_peer_id();
+		info!(
+			target: "sub-libp2p",
+			"🏷 Local node identity is: {}",
+			local_peer_id.to_base58(),
+		);
+
+		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
+			protocol::ProtocolConfig {
+				roles: From::from(&params.role),
+				max_parallel_downloads: params.network_config.max_parallel_downloads,
+			},
+			local_peer_id.clone(),
+			params.chain.clone(),
+			params.transaction_pool,
+			params.protocol_id.clone(),
+			&params.role,
+			&params.network_config,
+			params.block_announce_validator,
+			params.metrics_registry.as_ref(),
+			Default::default(),  // TODO: restore this
+		)?;
+
 		// List of multiaddresses that we know in the network.
-		let mut known_addresses = Vec::new();
 		let mut bootnodes = Vec::new();
 		let mut boot_node_ids = HashSet::new();
 
@@ -216,85 +240,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			);
 		}
 
-		let peerset_config = {
-			let mut sets = Vec::with_capacity(1 + params.network_config.extra_sets.len());
-
-			for (main_set, bootnodes, set_cfg) in
-				iter::once((true, bootnodes, &params.network_config.default_peers_set))
-					.chain(params.network_config.extra_sets.iter().map(|c| (false, Vec::new(), &c.set_config)))
-			{
-				let reserved_nodes = {
-					let mut reserved_nodes = HashSet::new();
-					for reserved in set_cfg.reserved_nodes.iter() {
-						reserved_nodes.insert(reserved.peer_id.clone());
-						known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
-					}
-
-					if main_set {
-						match &params.role {
-							Role::Sentry { validators } => {
-								for validator in validators {
-									reserved_nodes.insert(validator.peer_id.clone());
-									known_addresses.push((validator.peer_id.clone(), validator.multiaddr.clone()));
-								}
-							}
-							Role::Authority { sentry_nodes } => {
-								for sentry_node in sentry_nodes {
-									reserved_nodes.insert(sentry_node.peer_id.clone());
-									known_addresses.push((sentry_node.peer_id.clone(), sentry_node.multiaddr.clone()));
-								}
-							}
-							_ => {}
-						}
-					}
-
-					reserved_nodes
-				};
-
-				sets.push(sc_peerset::SetConfig {
-					in_peers: set_cfg.in_peers,
-					out_peers: set_cfg.out_peers,
-					bootnodes,
-					reserved_nodes,
-				});
-			}
-
-			sc_peerset::PeersetConfig {
-				sets,
-				reserved_only: params.network_config.non_reserved_mode == NonReservedPeerMode::Deny,
-			}
-		};
-
-		// Private and public keys configuration.
-		let local_identity = params.network_config.node_key.clone().into_keypair()?;
-		let local_public = local_identity.public();
-		let local_peer_id = local_public.clone().into_peer_id();
-		info!(
-			target: "sub-libp2p",
-			"🏷 Local node identity is: {}",
-			local_peer_id.to_base58(),
-		);
-
 		let checker = params.on_demand.as_ref()
 			.map(|od| od.checker().clone())
 			.unwrap_or_else(|| Arc::new(AlwaysBadChecker));
 
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
-		let (protocol, peerset_handle) = Protocol::new(
-			protocol::ProtocolConfig {
-				roles: From::from(&params.role),
-				max_parallel_downloads: params.network_config.max_parallel_downloads,
-			},
-			local_peer_id.clone(),
-			params.chain.clone(),
-			params.transaction_pool,
-			params.protocol_id.clone(),
-			peerset_config,
-			params.block_announce_validator,
-			params.metrics_registry.as_ref(),
-			boot_node_ids.clone(),
-		)?;
 
 		// Build the swarm.
 		let (mut swarm, bandwidth): (Swarm<B, H>, _) = {

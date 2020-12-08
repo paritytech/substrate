@@ -778,7 +778,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 				State::Open { in_substream: in_substream @ Some(_), .. } => {
 					match Stream::poll_next(Pin::new(in_substream.as_mut().unwrap()), cx) {
-						Poll::Pending => continue,
+						Poll::Pending => {},
 						Poll::Ready(Some(Ok(message))) => {
 							let event = NotifsHandlerOut::Notification {
 								protocol_index,
@@ -808,7 +808,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 				State::Opening { in_substream: in_substream @ Some(_), .. } => {
 					match NotificationsInSubstream::poll_process(Pin::new(in_substream.as_mut().unwrap()), cx) {
-						Poll::Pending => continue,
+						Poll::Pending => {},
 						Poll::Ready(Ok(void)) => match void {},
 						Poll::Ready(Err(_)) => *in_substream = None,
 					}
@@ -819,7 +819,7 @@ impl ProtocolsHandler for NotifsHandler {
 			match &mut self.protocols[protocol_index].state {
 				State::Open { out_substream: out_substream @ Some(_), .. } => {
 					match Sink::poll_flush(Pin::new(out_substream.as_mut().unwrap()), cx) {
-						Poll::Pending | Poll::Ready(Ok(())) => continue,
+						Poll::Pending | Poll::Ready(Ok(())) => {},
 						Poll::Ready(Err(_)) => {
 							*out_substream = None;
 							let event = NotifsHandlerOut::CloseDesired { protocol_index };
