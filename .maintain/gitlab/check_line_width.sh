@@ -25,7 +25,7 @@ do
       echo "| error!"
       echo "| Lines must not be longer than ${LINE_WIDTH} characters."
       echo "| "
-      echo "| see more https://wiki.parity.io/Substrate-Style-Guide"
+      echo "| see more https://github.com/paritytech/substrate/blob/master/docs/STYLE_GUIDE.md"
       echo "|"
       FAIL="true"
     fi
@@ -41,7 +41,7 @@ do
         echo "| warning!"
         echo "| Lines should be longer than ${GOOD_LINE_WIDTH} characters only in exceptional circumstances!"
         echo "| "
-        echo "| see more https://wiki.parity.io/Substrate-Style-Guide"
+        echo "| see more https://github.com/paritytech/substrate/blob/master/docs/STYLE_GUIDE.md"
         echo "|"
       fi
       echo "| file: ${file}"

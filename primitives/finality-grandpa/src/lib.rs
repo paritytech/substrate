@@ -252,6 +252,14 @@ impl<H, N> Equivocation<H, N> {
 			Equivocation::Precommit(ref equivocation) => &equivocation.identity,
 		}
 	}
+
+	/// Returns the round number when the equivocation happened.
+	pub fn round_number(&self) -> RoundNumber {
+		match self {
+			Equivocation::Prevote(ref equivocation) => equivocation.round_number,
+			Equivocation::Precommit(ref equivocation) => equivocation.round_number,
+		}
+	}
 }
 
 /// Verifies the equivocation proof by making sure that both votes target

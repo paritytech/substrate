@@ -64,7 +64,7 @@ impl ModuleIdCmd {
 	/// runs the command
 	pub fn run<R>(&self) -> Result<(), Error>
 		where
-			R: frame_system::Trait,
+			R: frame_system::Config,
 			R::AccountId: Ss58Codec,
 	{
 		if self.id.len() != 8 {

@@ -32,18 +32,18 @@ impl<T: 'static + fmt::Debug + fmt::Display + Send + Sync> Error for T {}
 /// would not be executed unless externalities were available. This is included for completeness,
 /// and as a transition away from the pre-existing framework.
 #[derive(Debug, Eq, PartialEq)]
+#[allow(missing_docs)]
 #[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum ExecutionError {
-	/// Backend error.
 	#[cfg_attr(feature = "std", error("Backend error {0:?}"))]
 	Backend(crate::DefaultError),
-	/// The entry `:code` doesn't exist in storage so there's no way we can execute anything.
+
 	#[cfg_attr(feature = "std", error("`:code` entry does not exist in storage"))]
 	CodeEntryDoesNotExist,
-	/// Backend is incompatible with execution proof generation process.
+
 	#[cfg_attr(feature = "std", error("Unable to generate proof"))]
 	UnableToGenerateProof,
-	/// Invalid execution proof.
+
 	#[cfg_attr(feature = "std", error("Invalid execution proof"))]
 	InvalidProof,
 }

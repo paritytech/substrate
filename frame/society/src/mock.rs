@@ -60,7 +60,7 @@ ord_parameter_types! {
 	pub const SuspensionJudgementSetAccount: u128 = 2;
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
@@ -88,7 +88,7 @@ impl frame_system::Trait for Test {
 	type SystemWeightInfo = ();
 }
 
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type Event = ();
@@ -98,7 +98,7 @@ impl pallet_balances::Trait for Test {
 	type WeightInfo = ();
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type Event = ();
 	type Currency = pallet_balances::Module<Self>;
 	type Randomness = TestRandomness;

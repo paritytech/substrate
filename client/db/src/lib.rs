@@ -58,6 +58,9 @@ use std::path::{Path, PathBuf};
 use std::io;
 use std::collections::{HashMap, HashSet};
 use offchain::{BlockNodes, BranchNodes};
+use parking_lot::{Mutex, RwLock};
+use linked_hash_map::LinkedHashMap;
+use log::{trace, debug, warn};
 
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
@@ -72,7 +75,6 @@ use codec::{Decode, Encode};
 use hash_db::Prefix;
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use sp_database::{Transaction, RadixTreeDatabase};
-use parking_lot::RwLock;
 use sp_core::{ChangesTrieConfiguration, Hasher};
 use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
@@ -92,7 +94,6 @@ use sc_state_db::StateDb;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SyncingCachingState, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
-use log::{trace, debug, warn};
 
 // Re-export the Database trait so that one can pass an implementation of it.
 pub use sp_database::Database;
@@ -102,6 +103,7 @@ pub use sc_state_db::PruningMode;
 pub use bench::BenchmarkingState;
 
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
+const CACHE_HEADERS: usize = 8;
 
 /// Default value for storage cache child ratio.
 const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
@@ -658,12 +660,24 @@ impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
 	}
 }
 
+fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
+	cache: &mut LinkedHashMap<Hash, Option<Header>>,
+	hash: Hash,
+	header: Option<Header>,
+) {
+	cache.insert(hash, header);
+	while cache.len() > CACHE_HEADERS {
+		cache.pop_front();
+	}
+}
+
 /// Block database
 pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<dyn Database<DbHash>>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
+	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
@@ -675,6 +689,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			leaves: RwLock::new(leaves),
 			meta: Arc::new(RwLock::new(meta)),
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
+			header_cache: Default::default(),
 		})
 	}
 
@@ -713,7 +728,20 @@ impl<Block: BlockT> BlockchainDb<Block> {
 
 impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
-		utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
+		match &id {
+			BlockId::Hash(h) => {
+				let mut cache = self.header_cache.lock();
+				if let Some(result) = cache.get_refresh(h) {
+					return Ok(result.clone());
+				}
+				let header = utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)?;
+				cache_header(&mut cache, h.clone(), header.clone());
+				Ok(header)
+			}
+			BlockId::Number(_) => {
+				utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
+			}
+		}
 	}
 
 	fn info(&self) -> sc_client_api::blockchain::Info<Block> {
@@ -730,12 +758,7 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 
 	fn status(&self, id: BlockId<Block>) -> ClientResult<sc_client_api::blockchain::BlockStatus> {
 		let exists = match id {
-			BlockId::Hash(_) => read_db(
-				&*self.db,
-				columns::KEY_LOOKUP,
-				columns::HEADER,
-				id
-			)?.is_some(),
+			BlockId::Hash(_) => self.header(id)?.is_some(),
 			BlockId::Number(n) => n <= self.meta.read().best_number,
 		};
 		match exists {
@@ -1259,9 +1282,7 @@ impl<Block: BlockT> Backend<Block> {
 		let is_archive_pruning = config.pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let meta = blockchain.meta.clone();
-		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(
-			format!("State database error: {:?}", e)
-		);
+		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e);
 		let historied_pruning_window = match &config.pruning {
 			PruningMode::Constrained(constraint) => constraint.max_blocks.map(|nb| nb.into()),
 			_ => None,
@@ -1486,7 +1507,7 @@ impl<Block: BlockT> Backend<Block> {
 
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash)
-				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
+				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
 			apply_state_commit(transaction, commit);
 		};
 
@@ -1534,12 +1555,12 @@ impl<Block: BlockT> Backend<Block> {
 					}))
 				{
 					let _query_plan = management.append_external_state(hash.clone(), &state)
-						.ok_or(ClientError::Msg("correct state resolution".into()))?;
+						.ok_or(sp_blockchain::Error::from_state_db("correct state resolution"))?;
 					let update_plan = management.get_db_state_mut(&hash)
-						.ok_or(ClientError::Msg("correct state resolution".into()))?;
+						.ok_or(sp_blockchain::Error::from_state_db("correct state resolution"))?;
 					update_plan
 				} else {
-					return Err("missing update plan".into());
+					return Err(sp_blockchain::Error::from_state_db("missing update plan"));
 				}
 			};
 			Some(HistoriedDBMut {
@@ -1626,12 +1647,6 @@ impl<Block: BlockT> Backend<Block> {
 				hash,
 			)?;
 
-			let header_metadata = CachedHeaderMetadata::from(&pending_block.header);
-			self.blockchain.insert_header_metadata(
-				header_metadata.hash,
-				header_metadata,
-			);
-
 			transaction.set_from_vec(columns::HEADER, &lookup_key, pending_block.header.encode());
 			if let Some(body) = &pending_block.body {
 				transaction.set_from_vec(columns::BODY, &lookup_key, body.encode());
@@ -1704,9 +1719,7 @@ impl<Block: BlockT> Backend<Block> {
 					number_u64,
 					&pending_block.header.parent_hash(),
 					changeset,
-				).map_err(|e: sc_state_db::Error<io::Error>|
-					sp_blockchain::Error::from(format!("State database error: {:?}", e))
-				)?;
+				).map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
 				apply_state_commit(&mut transaction, commit);
 
 				// Check if need to finalize. Genesis is always finalized instantly.
@@ -1780,7 +1793,7 @@ impl<Block: BlockT> Backend<Block> {
 
 			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
 
-			Some((number, hash, enacted, retracted, displaced_leaf, is_best, cache))
+			Some((pending_block.header, number, hash, enacted, retracted, displaced_leaf, is_best, cache))
 		} else {
 			None
 		};
@@ -1806,7 +1819,11 @@ impl<Block: BlockT> Backend<Block> {
 
 		self.storage.db.commit(transaction)?;
 
+		// Apply all in-memory state shanges.
+		// Code beyond this point can't fail.
+
 		if let Some((
+			header,
 			number,
 			hash,
 			enacted,
@@ -1815,6 +1832,12 @@ impl<Block: BlockT> Backend<Block> {
 			is_best,
 			mut cache,
 		)) = imported {
+			let header_metadata = CachedHeaderMetadata::from(&header);
+			self.blockchain.insert_header_metadata(
+				header_metadata.hash,
+				header_metadata,
+			);
+			cache_header(&mut self.blockchain.header_cache.lock(), hash, Some(header));
 			cache.sync_cache(
 				&enacted,
 				&retracted,
@@ -1861,7 +1884,7 @@ impl<Block: BlockT> Backend<Block> {
 			transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash)
-				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
+				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
 			apply_state_commit(transaction, commit);
 
 			if !f_num.is_zero() {
