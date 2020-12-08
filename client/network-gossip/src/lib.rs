@@ -59,9 +59,9 @@ pub use self::state_machine::TopicNotification;
 pub use self::validator::{DiscardAll, MessageIntent, Validator, ValidatorContext, ValidationResult};
 
 use futures::prelude::*;
-use sc_network::{Event, ExHashT, NetworkService, PeerId, ReputationChange};
+use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId, ReputationChange};
 use sp_runtime::{traits::Block as BlockT};
-use std::{borrow::Cow, pin::Pin, sync::Arc};
+use std::{borrow::Cow, iter, pin::Pin, sync::Arc};
 
 mod bridge;
 mod state_machine;
@@ -104,11 +104,21 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 	}
 
 	fn add_to_set(&self, who: PeerId, protocol: Cow<'static, str>) {
-		//NetworkService::add_to_peers_set(self, 0, who);  // TODO:
+		let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
+			.collect::<multiaddr::Multiaddr>();
+		let result = NetworkService::add_to_peers_set(self, protocol, iter::once(addr).collect());
+		if let Err(err) = result {
+			log::error!(target: "gossip", "add_to_peers_set failed: {}", err);
+		}
 	}
 
 	fn remove_from_set(&self, who: PeerId, protocol: Cow<'static, str>) {
-		//NetworkService::remove_from_peers_set(self, 0, who);  // TODO:
+		let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
+			.collect::<multiaddr::Multiaddr>();
+		let result = NetworkService::remove_from_peers_set(self, protocol, iter::once(addr).collect());
+		if let Err(err) = result {
+			log::error!(target: "gossip", "remove_from_peers_set failed: {}", err);
+		}
 	}
 
 	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>) {

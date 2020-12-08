@@ -1005,6 +1005,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let mut propagated_to = HashMap::<_, Vec<_>>::new();
 		let mut propagated_transactions = 0;
 
+		// TODO: only use peers that we have a set id 1 open with
 		for (who, peer) in self.context_data.peers.iter_mut() {
 			// never send transactions to the light node
 			if !peer.info.roles.is_full() {

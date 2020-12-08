@@ -933,46 +933,51 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Modify a set of peers from the peerset.
 	///
-	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
+	/// consist of only `/p2p/<peerid>`.
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	//
-	// NOTE: even though this function is currently sync, it's marked as async for
-	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
-	pub async fn set_peers_set(&self, set_index: usize, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	pub fn set_peers_set(&self, protocol: Cow<'static, str>, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
-		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
-		self.peerset.set_peers_set(sc_peerset::SetId::from(set_index + 2), peer_ids);  // TODO: +2 is a hack
-
-		for (peer_id, addr) in peers.into_iter() {
-			let _ = self
-				.to_worker
-				.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+		for (peer_id, addr) in peers.iter() {
+			if !addr.is_empty() {
+				let _ = self
+					.to_worker
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id.clone(), addr.clone()));
+			}
 		}
+
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetPeersSet(
+				protocol,
+				peers.into_iter().map(|(p, _)| p).collect()
+			));
 
 		Ok(())
 	}
 
 	/// Add peers to a peerset priority group.
 	///
-	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
+	/// consist of only `/p2p/<peerid>`.
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	//
-	// NOTE: even though this function is currently sync, it's marked as async for
-	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
-	pub async fn add_to_peers_set(&self, set_index: usize, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	pub fn add_to_peers_set(&self, protocol: Cow<'static, str>, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		for (peer_id, addr) in peers.into_iter() {
-			self.peerset.add_to_peers_set(sc_peerset::SetId::from(set_index + 2), peer_id.clone());  // TODO: +2 is a hack
-
+			if !addr.is_empty() {
+				let _ = self
+					.to_worker
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id.clone(), addr));
+			}
 			let _ = self
 				.to_worker
-				.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+				.unbounded_send(ServiceToWorkerMsg::AddToPeersSet(protocol.clone(), peer_id));
 		}
 
 		Ok(())
@@ -985,13 +990,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
 	//
-	// NOTE: even though this function is currently sync, it's marked as async for
-	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
 	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
-	pub async fn remove_from_peers_set(&self, set_index: usize, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	pub fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 		for (peer_id, _) in peers.into_iter() {
-			self.peerset.remove_from_peers_set(sc_peerset::SetId::from(set_index + 2), peer_id);  // TODO: +2 is a hack
+			let _ = self
+				.to_worker
+				.unbounded_send(ServiceToWorkerMsg::RemoveFromPeersSet(protocol.clone(), peer_id));
 		}
 		Ok(())
 	}
@@ -1165,6 +1170,9 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	GetValue(record::Key),
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
+	SetPeersSet(Cow<'static, str>, HashSet<PeerId>),
+	AddToPeersSet(Cow<'static, str>, PeerId),
+	RemoveFromPeersSet(Cow<'static, str>, PeerId),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 	EventStream(out_events::Sender),
 	Request {
@@ -1278,6 +1286,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.put_value(key, value),
 				ServiceToWorkerMsg::AddKnownAddress(peer_id, addr) =>
 					this.network_service.add_known_address(peer_id, addr),
+				ServiceToWorkerMsg::SetPeersSet(protocol, peer_ids) =>
+					this.network_service.user_protocol_mut().set_peers_set(protocol, peer_ids),
+				ServiceToWorkerMsg::AddToPeersSet(protocol, peer_id) =>
+					this.network_service.user_protocol_mut().add_to_peers_set(protocol, peer_id),
+				ServiceToWorkerMsg::RemoveFromPeersSet(protocol, peer_id) =>
+					this.network_service.user_protocol_mut().remove_from_peers_set(protocol, peer_id),
 				ServiceToWorkerMsg::SyncFork(peer_ids, hash, number) =>
 					this.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 				ServiceToWorkerMsg::EventStream(sender) =>
