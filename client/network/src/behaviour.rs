@@ -323,32 +323,26 @@ Behaviour<B, H> {
 					block_requests::SendRequestOutcome::EncodeError(_) => {},
 				}
 			},
-			CustomMessageOutcome::NotificationStreamOpened { remote, protocols, roles, notifications_sink } => {
+			CustomMessageOutcome::NotificationStreamOpened { remote, protocol, roles, notifications_sink } => {
 				let role = reported_roles_to_observed_role(&self.role, &remote, roles);
-				for protocol in protocols {
-					self.events.push_back(BehaviourOut::NotificationStreamOpened {
-						remote: remote.clone(),
-						protocol,
-						role: role.clone(),
-						notifications_sink: notifications_sink.clone(),
-					});
-				}
+				self.events.push_back(BehaviourOut::NotificationStreamOpened {
+					remote,
+					protocol,
+					role: role.clone(),
+					notifications_sink: notifications_sink.clone(),
+				});
 			},
-			CustomMessageOutcome::NotificationStreamReplaced { remote, protocols, notifications_sink } =>
-				for protocol in protocols {
-					self.events.push_back(BehaviourOut::NotificationStreamReplaced {
-						remote: remote.clone(),
-						protocol,
-						notifications_sink: notifications_sink.clone(),
-					});
-				},
-			CustomMessageOutcome::NotificationStreamClosed { remote, protocols } =>
-				for protocol in protocols {
-					self.events.push_back(BehaviourOut::NotificationStreamClosed {
-						remote: remote.clone(),
-						protocol,
-					});
-				},
+			CustomMessageOutcome::NotificationStreamReplaced { remote, protocol, notifications_sink } =>
+				self.events.push_back(BehaviourOut::NotificationStreamReplaced {
+					remote,
+					protocol,
+					notifications_sink: notifications_sink.clone(),
+				}),
+			CustomMessageOutcome::NotificationStreamClosed { remote, protocol } =>
+				self.events.push_back(BehaviourOut::NotificationStreamClosed {
+					remote,
+					protocol,
+				}),
 			CustomMessageOutcome::NotificationsReceived { remote, messages } => {
 				self.events.push_back(BehaviourOut::NotificationsReceived { remote, messages });
 			},

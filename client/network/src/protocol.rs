@@ -1342,18 +1342,18 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,
-		protocols: Vec<Cow<'static, str>>,
+		protocol: Cow<'static, str>,
 		roles: Roles,
 		notifications_sink: NotificationsSink
 	},
 	/// The [`NotificationsSink`] of some notification protocols need an update.
 	NotificationStreamReplaced {
 		remote: PeerId,
-		protocols: Vec<Cow<'static, str>>,
+		protocol: Cow<'static, str>,
 		notifications_sink: NotificationsSink,
 	},
 	/// Notification protocols have been closed with a remote.
-	NotificationStreamClosed { remote: PeerId, protocols: Vec<Cow<'static, str>> },
+	NotificationStreamClosed { remote: PeerId, protocol: Cow<'static, str> },
 	/// Messages have been received on one or more notifications protocols.
 	NotificationsReceived { remote: PeerId, messages: Vec<(Cow<'static, str>, Bytes)> },
 	/// A new block request must be emitted.
@@ -1551,7 +1551,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						Ok(roles) =>
 							CustomMessageOutcome::NotificationStreamOpened {
 								remote: peer_id,
-								protocols: self.notification_protocols.clone(),  // TODO: no
+								protocol: self.notification_protocols[usize::from(set_id) - 2].clone(),
 								roles,
 								notifications_sink,
 							},
@@ -1565,10 +1565,14 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				}
 			}
 			GenericProtoOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } => {
-				CustomMessageOutcome::NotificationStreamReplaced {
-					remote: peer_id,
-					protocols: self.notification_protocols.clone(),  // TODO: update
-					notifications_sink,
+				if set_id == sc_peerset::SetId::from(0) || set_id == sc_peerset::SetId::from(1) {
+					CustomMessageOutcome::None
+				} else {
+					CustomMessageOutcome::NotificationStreamReplaced {
+						remote: peer_id,
+						protocol: self.notification_protocols[usize::from(set_id) - 2].clone(),
+						notifications_sink,
+					}
 				}
 			},
 			GenericProtoOut::CustomProtocolClosed { peer_id, set_id } => {
@@ -1576,10 +1580,12 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				if set_id == sc_peerset::SetId::from(0) {
 					self.on_sync_peer_disconnected(peer_id);
 					CustomMessageOutcome::None
+				} else if set_id == sc_peerset::SetId::from(1) {
+					CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamClosed {
 						remote: peer_id,
-						protocols: self.notification_protocols.clone(),  // TODO: no
+						protocol: self.notification_protocols[usize::from(set_id) - 2].clone(),
 					}
 				}
 			},
