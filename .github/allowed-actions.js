@@ -3,5 +3,5 @@
 // not listed here, CI will fail.
 
 module.exports = [
-    'gaurav-nelson/github-action-markdown-link-check@95d5f3b63d2ca8e93f527396308c41e70634e2e7', // gaurav-nelson/github-action-markdown-link-check@v1.0.7
+    'gaurav-nelson/github-action-markdown-link-check@28631ee73c4024e27af2a44ee611c97fe0012a34',
 ]
