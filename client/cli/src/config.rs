@@ -352,6 +352,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(None)
 	}
 
+	/// Get the jaeger configuration (`None` if disabled)
+	///
+	/// By default this is `None`.
+	fn jaeger_config(&self, _default_listen_port: u16) -> Result<Option<JaegerConfig>> {
+		Ok(None)
+	}
+
 	/// Get the telemetry endpoints (if any)
 	///
 	/// By default this is retrieved from the chain spec loaded by `load_spec`.

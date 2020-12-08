@@ -82,6 +82,8 @@ pub struct Configuration {
 	pub rpc_methods: RpcMethods,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
+	/// Jaeger collection configuration. `None` if disabled.
+	pub jaeger_config: Option<JaegerConfig>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
@@ -178,6 +180,27 @@ impl PrometheusConfig {
 			port,
 			registry: Registry::new_custom(Some("substrate".into()), None)
 				.expect("this can only fail if the prefix is empty")
+		}
+	}
+}
+
+/// Configuration of the Prometheus endpoint.
+#[derive(Debug, Clone)]
+pub struct JaegerConfig {
+	/// Destination of the jaeger collector.
+	pub addr: SocketAddr,
+	/// An additional prefix for all used strings.
+	pub prefix: String,
+}
+
+impl JaegerConfig {
+	/// Create a new config using the default registry.
+	///
+	/// The default registry prefixes metrics with `substrate`.
+	pub fn new_with_default_prefix(addr: SocketAddr) -> Self {
+		Self {
+			addr,
+			prefix: "substrate".to_owned()
 		}
 	}
 }
