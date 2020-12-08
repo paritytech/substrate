@@ -3106,7 +3106,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn offchain_backends_change_new() {
+	fn offchain_backends_change() {
 		use sp_core::offchain::{BlockChainOffchainStorage, OffchainStorage};
 
 		let backend = Backend::<Block>::new_test(10, 10);
@@ -3121,14 +3121,6 @@ pub(crate) mod tests {
 		let block1 = insert_block(&backend, 1, block0, None, Some(ooc), Default::default());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
 		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), None);
-		assert!(!offchain_local_storage.at_new(block0).unwrap().can_update()); // TODO change
-		let mut offchain_local_storage = offchain_local_storage.at_new(block1).unwrap();
-		assert!(offchain_local_storage.can_update());
-		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
-		offchain_local_storage.set(b"prefix1", b"key1", b"test");
-		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"test".to_vec()));
-		offchain_local_storage.set(b"prefix1", b"key2", b"test");
-		assert_eq!(offchain_local_storage.get(b"prefix1", b"key2"), Some(b"test".to_vec()));
 	}
 
 	#[test]

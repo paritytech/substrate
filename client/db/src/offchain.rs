@@ -115,7 +115,7 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 			}
 		}
 
-		if keys.is_empty() {
+		if keys_to_migrate.is_empty() {
 			return;
 		}
 
@@ -125,7 +125,7 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 		// locking changed key until transaction applied.
 		let mut guards = Guards::new(self.storage.locks.as_ref());
 		let mut pending = self.pending.write();
-		for k in keys {
+		for k in keys_to_migrate {
 			let column = crate::columns::OFFCHAIN;
 			let init_nodes = ContextHead {
 				key: k.clone(),
@@ -250,14 +250,6 @@ pub struct BlockChainLocalAt {
 	ordered_db: Arc<Mutex<historied_db::mapped_db::MappedDBDyn>>,
 	changes_journals: ChangesJournalSync,
 	skip_journalize: bool,
-	safe_offchain_locks: bool,
-}
-
-/// Offchain local storage at a given block,
-/// only for new state (no concurrency handling).
-#[derive(Clone)]
-pub struct BlockChainLocalAtNew {
-	inner: BlockChainLocalAt,
 	safe_offchain_locks: bool,
 }
 
@@ -396,7 +388,6 @@ impl<H, S> sp_core::offchain::BlockChainOffchainStorage for BlockChainLocalStora
 {
 	type BlockId = H;
 	type OffchainStorage = BlockChainLocalAt;
-	type OffchainStorageNew = BlockChainLocalAtNew;
 
 	fn at(&self, id: Self::BlockId) -> Option<Self::OffchainStorage> {
 		let db_state = self.historied_management.write().get_db_state(&id);
@@ -418,12 +409,6 @@ impl<H, S> sp_core::offchain::BlockChainOffchainStorage for BlockChainLocalStora
 			None
 		}
 	}
-	fn at_new(&self, id: Self::BlockId) -> Option<Self::OffchainStorageNew> {
-		self.at(id).map(|at| BlockChainLocalAtNew {
-			inner: at,
-			safe_offchain_locks: self.safe_offchain_locks,
-		})
-	}
 	fn latest(&self) -> Option<Self::BlockId> {
 		self.historied_management.write().latest_external_state()
 	}
@@ -443,20 +428,6 @@ impl BlockChainLocalAt {
 		self.skip_journalize = true;
 	}
 }
-
-impl BlockChainLocalAtNew {
-	/// Does the current state allows chain update attempt.
-	pub fn can_update(&self) -> bool {
-		self.inner.at_write.is_some()
-	}
-
-	/// When doing batch update we can skip journalize,
-	/// and produce the journalize item at once later.
-	pub fn skip_journalize(&mut self) {
-		self.inner.skip_journalize = true;
-	}
-}
-
 
 impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
@@ -492,7 +463,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		// TODO consider using types for a totally encoded items.
+		// TODO consider using a type to wrap this prefix key onstruction.
 		let key: Vec<u8> = prefix
 			.iter()
 			.chain(std::iter::once(&b'/'))
@@ -538,66 +509,6 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 			true,
 		) {
 			Ok(b) => b,
-			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
-			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
-		}
-	}
-}
-
-impl sp_core::offchain::OffchainStorage for BlockChainLocalAtNew {
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		let test: Option<fn(Option<&[u8]>) -> bool> = None;
-		match self.inner.modify(
-			prefix,
-			key,
-			test,
-			Some(value),
-			true,
-			self.safe_offchain_locks,
-		) {
-			Ok(_) => (),
-			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
-			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
-		}
-	}
-
-	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		let test: Option<fn(Option<&[u8]>) -> bool> = None;
-		match self.inner.modify(
-			prefix,
-			key,
-			test,
-			None,
-			true,
-			self.safe_offchain_locks,
-		) {
-			Ok(_) => (),
-			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
-			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
-		}
-	}
-
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		self.inner.get(prefix, key)
-	}
-
-	fn compare_and_set(
-		&mut self,
-		prefix: &[u8],
-		item_key: &[u8],
-		old_value: Option<&[u8]>,
-		new_value: &[u8],
-	) -> bool {
-		let test = |v: Option<&[u8]>| old_value == v;
-		match self.inner.modify(
-			prefix,
-			item_key,
-			Some(test),
-			Some(new_value),
-			true,
-			true,
-		) {
-			Ok(_) => true,
 			Err(ModifyError::NoWriteState) => panic!("Cannot write at latest"),
 			Err(ModifyError::DbWrite) => panic!("Offchain local db commit failure"),
 		}

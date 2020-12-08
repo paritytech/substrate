@@ -66,11 +66,6 @@ pub struct BlockChainInMemOffchainStorageAt {
 	at_write: Option<Latest<(u32, u32)>>,
 }
 
-/// In-memory storage for offchain workers,
-/// and for new state (without concurrency handling).
-#[derive(Debug, Clone, Default)]
-pub struct BlockChainInMemOffchainStorageAtNew(BlockChainInMemOffchainStorageAt);
-
 impl InMemOffchainStorage {
 	/// Consume the offchain storage and iterate over all key value pairs.
 	pub fn into_iter(self) -> impl Iterator<Item=(Vec<u8>,Vec<u8>)> {
@@ -134,7 +129,6 @@ impl<H> crate::offchain::BlockChainOffchainStorage for BlockChainInMemOffchainSt
 {
 	type BlockId = H;
 	type OffchainStorage = BlockChainInMemOffchainStorageAt;
-	type OffchainStorageNew = BlockChainInMemOffchainStorageAtNew;
 
 	fn at(&self, id: Self::BlockId) -> Option<Self::OffchainStorage> {
 		if let Some(at_read) = self.historied_management.write().get_db_state(&id) {
@@ -147,10 +141,6 @@ impl<H> crate::offchain::BlockChainOffchainStorage for BlockChainInMemOffchainSt
 		} else {
 			None
 		}
-	}
-
-	fn at_new(&self, id: Self::BlockId) -> Option<Self::OffchainStorageNew> {
-		self.at(id).map(|at| BlockChainInMemOffchainStorageAtNew(at))
 	}
 
 	fn latest(&self) -> Option<Self::BlockId> {
@@ -206,52 +196,6 @@ impl OffchainStorage for BlockChainInMemOffchainStorageAt {
 		)
 	}
 }
-
-impl OffchainStorage for BlockChainInMemOffchainStorageAtNew {
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		let test: Option<fn(Option<&[u8]>) -> bool> = None;
-		self.0.modify(
-			prefix,
-			key,
-			test,
-			Some(value),
-			true,
-		);
-	}
-
-	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		let test: Option<fn(Option<&[u8]>) -> bool> = None;
-		self.0.modify(
-			prefix,
-			key,
-			test,
-			None,
-			true,
-		);
-	}
-
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		self.0.get(prefix, key)
-	}
-
-	fn compare_and_set(
-		&mut self,
-		prefix: &[u8],
-		item_key: &[u8],
-		old_value: Option<&[u8]>,
-		new_value: &[u8],
-	) -> bool {
-		let test = |v: Option<&[u8]>| old_value == v;
-		self.0.modify(
-			prefix,
-			item_key,
-			Some(test),
-			Some(new_value),
-			true,
-		)
-	}
-}
-
 
 impl BlockChainInMemOffchainStorageAt {
 	fn modify(
