@@ -1588,18 +1588,7 @@ mod tests {
 				proposal_weight,
 				proposal_len,
 			);
-			match close_rval {
-				Ok(rval) => {
-					// Forced Panic, Invalid case, should not occur.
-					panic!(
-						"Invalid State::trying to close the invalid proposal, invalid rval {:#?}",
-						rval,
-					);
-				},
-				Err(err) => {
-					assert_eq!(err.post_info.pays_fee, Pays::Yes);
-				},
-			}
+			assert_eq!(vote_rval.unwrap_err().post_info.pays_fee, Pays::Yes);
 		});
 	}
 
