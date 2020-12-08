@@ -3106,24 +3106,6 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn offchain_backends_change() {
-		use sp_core::offchain::{BlockChainOffchainStorage, OffchainStorage};
-
-		let backend = Backend::<Block>::new_test(10, 10);
-
-		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
-		let offchain_local_storage = backend.offchain_local_storage().unwrap();
-		let offchain_local_storage = offchain_local_storage.at(block0).unwrap();
-		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), None);
-
-		let mut ooc = OffchainOverlayedChanges::enabled();
-		ooc.set(b"prefix1", b"key1", b"value1", true);
-		let block1 = insert_block(&backend, 1, block0, None, Some(ooc), Default::default());
-		let offchain_local_storage = backend.offchain_local_storage().unwrap();
-		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), None);
-	}
-
-	#[test]
 	fn offchain_backends_change_current_new_value() {
 		use sp_core::offchain::{BlockChainOffchainStorage, OffchainStorage};
 
