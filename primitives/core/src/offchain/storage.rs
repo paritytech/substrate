@@ -36,16 +36,16 @@ pub struct InMemOffchainStorage {
 
 type InMemLinearBackend = historied_db::backend::in_memory::MemoryOnly<
 	Option<Vec<u8>>,
-	u32
+	u64,
 >;
 
 type InMemTreeBackend = historied_db::backend::in_memory::MemoryOnly<
-	historied_db::historied::linear::Linear<Option<Vec<u8>>, u32, InMemLinearBackend>,
+	historied_db::historied::linear::Linear<Option<Vec<u8>>, u64, InMemLinearBackend>,
 	u32,
 >;
 
 /// Historied value with multiple paralell branches.
-pub type InMemHValue = Tree<u32, u32, Option<Vec<u8>>, InMemTreeBackend, InMemLinearBackend>;
+pub type InMemHValue = Tree<u32, u64, Option<Vec<u8>>, InMemTreeBackend, InMemLinearBackend>;
 
 
 /// In-memory storage for offchain workers.
@@ -54,7 +54,7 @@ pub type InMemHValue = Tree<u32, u32, Option<Vec<u8>>, InMemTreeBackend, InMemLi
 pub struct BlockChainInMemOffchainStorage<Hash: Ord> {
 	// Note that we could parameterized over historied management here.
 	// Also could remove inner mutability if changing historied db simple db trait.
-	historied_management: Arc<RwLock<TreeManagement<Hash, u32, u32, ()>>>,
+	historied_management: Arc<RwLock<TreeManagement<Hash, u32, u64, ()>>>,
 	storage: Arc<RwLock<HashMap<Vec<u8>, InMemHValue>>>,
 }
 
@@ -62,18 +62,18 @@ pub struct BlockChainInMemOffchainStorage<Hash: Ord> {
 #[derive(Debug, Clone, Default)]
 pub struct BlockChainInMemOffchainStorageAt {
 	storage: Arc<RwLock<HashMap<Vec<u8>, InMemHValue>>>,
-	at_read: ForkPlan<u32, u32>,
-	at_write: Option<Latest<(u32, u32)>>,
+	at_read: ForkPlan<u32, u64>,
+	at_write: Option<Latest<(u32, u64)>>,
 }
 
 impl InMemOffchainStorage {
 	/// Consume the offchain storage and iterate over all key value pairs.
-	pub fn into_iter(self) -> impl Iterator<Item=(Vec<u8>,Vec<u8>)> {
+	pub fn into_iter(self) -> impl Iterator<Item = (Vec<u8>, Vec<u8>)> {
 		self.storage.into_iter()
 	}
 
 	/// Iterate over all key value pairs by reference.
-	pub fn iter<'a>(&'a self) -> impl Iterator<Item=(&'a Vec<u8>,&'a Vec<u8>)> {
+	pub fn iter<'a>(&'a self) -> impl Iterator<Item = (&'a Vec<u8>, &'a Vec<u8>)> {
 		self.storage.iter()
 	}
 
