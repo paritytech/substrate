@@ -33,6 +33,7 @@
 use std::sync::Arc;
 
 use sp_keystore::SyncCryptoStorePtr;
+use node_runtime::{DispatchClass, Weight};
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;
@@ -116,7 +117,7 @@ pub fn create_full<C, P, SC, B>(
 		HeaderMetadata<Block, Error=BlockChainError> + Sync + Send + 'static,
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber>,
-	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
+	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Weight, DispatchClass, Balance>,
 	C::Api: BabeApi<Block>,
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,

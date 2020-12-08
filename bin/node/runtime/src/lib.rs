@@ -27,7 +27,7 @@ use sp_std::prelude::*;
 use frame_support::{
 	construct_runtime, parameter_types, debug, RuntimeDebug,
 	weights::{
-		Weight, IdentityFee, DispatchClass,
+		IdentityFee,
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
 	},
 	traits::{
@@ -35,6 +35,7 @@ use frame_support::{
 		U128CurrencyToVote,
 	},
 };
+pub use frame_support::weights::{Weight, DispatchClass};
 use frame_system::{EnsureRoot, EnsureOneOf};
 use frame_support::traits::InstanceFilter;
 use codec::{Encode, Decode};
