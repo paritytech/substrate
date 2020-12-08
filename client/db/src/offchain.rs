@@ -77,8 +77,10 @@ pub struct BlockChainLocalStorage<H: Ord, S: TreeManagementStorage> {
 	safe_offchain_locks: bool,
 }
 
-/// For migration this will update a pending change layer to support
-/// transaction.
+/// Consumer with transactional support.
+///
+/// Read journaled keys and update inner transaction with requires
+/// migration changes.
 pub struct TransactionalConsumer<H: Ord, S: TreeManagementStorage> {
 	/// Storage to use.
 	pub storage: BlockChainLocalStorage<H, S>,
@@ -92,23 +94,23 @@ impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement
 		S: TreeManagementStorage + 'static,
 {
 	fn migrate(&self, migrate: &mut historied_db::management::Migrate<H, crate::TreeManagement<H, S>>) {
-		let mut keys = std::collections::BTreeSet::<Vec<u8>>::new();
-		let (prune, changes) = migrate.migrate().touched_state();
+		let mut keys_to_migrate = std::collections::BTreeSet::<Vec<u8>>::new();
+		let (prune, state_changes) = migrate.migrate().touched_state();
 		// this db is transactional.
 		let db = migrate.management().ser();
 		// using a new instance (transactional db is a different type).
 		// This means some ununsed cache state can remain.
 		let mut journals = ChangesJournal::from_db(db);
 		if let Some(pruning) = prune {
-			journals.remove_changes_before(db, &(pruning, Default::default()), &mut keys);
+			journals.remove_changes_before(db, &(pruning, Default::default()), &mut keys_to_migrate);
 		}
 
-		for state in changes {
+		for state in state_changes {
 			let state = state.clone();
 			let state = (state.1, state.0);
 			if let Some(removed) = journals.remove_changes_at(db, &state) {
 				for key in removed {
-					keys.insert(key);
+					keys_to_migrate.insert(key);
 				}
 			}
 		}
@@ -191,7 +193,7 @@ impl<'a> Guards<'a> {
 			locks.entry(key.clone()).or_default().clone()
 		};
 		let key_lock_ref = key_lock.as_ref() as *const Mutex<()>;
-		// relying on Guards 'a lifetime.
+		// Unsafe call relies on Guards 'a lifetime.
 		let key_lock_ref = unsafe { key_lock_ref.as_ref().unwrap() };
 		let guard = key_lock_ref.lock();
 		// keep a copy of the arc so concurrent call will not remove it
@@ -236,7 +238,7 @@ impl<'a> Drop for Guards<'a> {
 	}
 }
 
-/// Offchain local storage for a given block.
+/// Offchain local storage at a given block.
 #[derive(Clone)]
 pub struct BlockChainLocalAt {
 	db: Arc<dyn Database<DbHash>>,
@@ -251,8 +253,8 @@ pub struct BlockChainLocalAt {
 	safe_offchain_locks: bool,
 }
 
-/// Offchain local storage for a given block,
-/// and for new state (without concurrency handling).
+/// Offchain local storage at a given block,
+/// only for new state (no concurrency handling).
 #[derive(Clone)]
 pub struct BlockChainLocalAtNew {
 	inner: BlockChainLocalAt,
