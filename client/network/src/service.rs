@@ -897,7 +897,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
 		self.peerset.remove_reserved_peer(sc_peerset::SetId::from(0), peer);
-		// TODO: set 1?
+		// TODO: set id?
 	}
 
 	/// Adds a `PeerId` and its address as reserved. The string should encode the address
@@ -912,7 +912,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
 		}
 		self.peerset.add_reserved_peer(sc_peerset::SetId::from(0), peer_id.clone());
-		// TODO: set 1?
+		// TODO: set id?
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
@@ -940,15 +940,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	//
 	// NOTE: even though this function is currently sync, it's marked as async for
 	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
-	pub async fn set_peers_set(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	pub async fn set_peers_set(&self, set_index: usize, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
-		//let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
-
-		// TODO:
-		//self.peerset.set_peers_set(group_id, peer_ids);
-
-		// TODO: longevity of entries in peers set?
+		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
+		self.peerset.set_peers_set(sc_peerset::SetId::from(set_index + 2), peer_ids);  // TODO: +2 is a hack
 
 		for (peer_id, addr) in peers.into_iter() {
 			let _ = self
@@ -968,12 +964,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	//
 	// NOTE: even though this function is currently sync, it's marked as async for
 	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
-	pub async fn add_to_peers_set(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	pub async fn add_to_peers_set(&self, set_index: usize, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		for (peer_id, addr) in peers.into_iter() {
-			// TODO:
-			//self.peerset.add_to_peers_set(group_id.clone(), peer_id.clone());
+			self.peerset.add_to_peers_set(sc_peerset::SetId::from(set_index + 2), peer_id.clone());  // TODO: +2 is a hack
 
 			let _ = self
 				.to_worker
@@ -993,11 +988,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	// NOTE: even though this function is currently sync, it's marked as async for
 	// future-proofing, see https://github.com/paritytech/substrate/pull/7247#discussion_r502263451.
 	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
-	pub async fn remove_from_peers_set(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	pub async fn remove_from_peers_set(&self, set_index: usize, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 		for (peer_id, _) in peers.into_iter() {
-			// TODO:
-			//self.peerset.remove_from_peers_set(group_id.clone(), peer_id);
+			self.peerset.remove_from_peers_set(sc_peerset::SetId::from(set_index + 2), peer_id);  // TODO: +2 is a hack
 		}
 		Ok(())
 	}
@@ -1101,6 +1095,7 @@ impl NotificationSender {
 				Err(()) => return Err(NotificationSenderError::Closed),
 			},
 			peer_id: self.sink.peer_id(),
+			protocol_name: &self.protocol_name,
 			notification_size_metric: self.notification_size_metric.clone(),
 		})
 	}
@@ -1113,6 +1108,9 @@ pub struct NotificationSenderReady<'a> {
 
 	/// Target of the notification.
 	peer_id: &'a PeerId,
+
+	/// Name of the protocol on the wire.
+	protocol_name: &'a Cow<'static, str>,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1130,9 +1128,9 @@ impl<'a> NotificationSenderReady<'a> {
 
 		trace!(
 			target: "sub-libp2p",
-			"External API => Notification({:?}, {:?}, {} bytes)",
+			"External API => Notification({:?}, {}, {} bytes)",
 			self.peer_id,
-			"", // TODO: self.ready.protocol_name(),
+			self.protocol_name,
 			notification.len()
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Async notification", self.peer_id);

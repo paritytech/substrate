@@ -396,7 +396,7 @@ impl Peerset {
 
 		// Enumerate elements in `peers` not in `current_group`.
 		for peer_id in &to_insert {
-			// We don't call `on_add_to_peers_set` here in order to avoid calling
+			// We don't call `add_to_peers_set` here in order to avoid calling
 			// `alloc_slots` all the time.
 			self.priority_groups.entry(group_id.to_owned()).or_default().insert(peer_id.clone());
 			self.data.add_no_slot_node(peer_id.clone());
@@ -413,7 +413,11 @@ impl Peerset {
 		todo!() // TODO:
 	}
 
-	fn on_add_to_peers_set(&mut self, set_id: SetId, peer_id: PeerId) {
+	/// Adds a node to the given set. The peerset will, if possible and not already the case,
+	/// try to connect to it.
+	///
+	/// > **Note**: This as the same effect as [`PeersetHandle::add_to_peers_set`].
+	pub fn add_to_peers_set(&mut self, set_id: SetId, peer_id: PeerId) {
 		if let peersstate::Peer::Unknown(entry) = self.data.peer(set_id.0, &peer_id) {
 			entry.discover();
 			self.alloc_slots();
@@ -659,25 +663,6 @@ impl Peerset {
 		self.alloc_slots();
 	}
 
-	/// Adds discovered peer ids to the PSM.
-	///
-	/// > **Note**: There is no equivalent "expired" message, meaning that it is the responsibility
-	/// >           of the PSM to remove `PeerId`s that fail to dial too often.
-	pub fn discovered<I: IntoIterator<Item = PeerId>>(&mut self, set_id: SetId, peer_ids: I) {
-		let mut discovered_any = false;
-
-		for peer_id in peer_ids {
-			if let peersstate::Peer::Unknown(entry) = self.data.peer(set_id.0, &peer_id) {
-				entry.discover();
-				discovered_any = true;
-			}
-		}
-
-		if discovered_any {
-			self.alloc_slots();
-		}
-	}
-
 	/// Reports an adjustment to the reputation of the given peer.
 	pub fn report_peer(&mut self, peer_id: PeerId, score_diff: ReputationChange) {
 		// We don't immediately perform the adjustments in order to have state consistency. We
@@ -748,7 +733,7 @@ impl Stream for Peerset {
 				Action::SetPeersSet(sets_name, peers) =>
 					self.on_set_peers_set(sets_name, peers),
 				Action::AddToPeersSet(sets_name, peer_id) =>
-					self.on_add_to_peers_set(sets_name, peer_id),
+					self.add_to_peers_set(sets_name, peer_id),
 				Action::RemoveFromPeersSet(sets_name, peer_id) =>
 					self.on_remove_from_peers_set(sets_name, peer_id),
 			}
@@ -875,9 +860,9 @@ mod tests {
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
-		peerset.discovered(SetId::from(0), iter::once(discovered.clone()));
-		peerset.discovered(SetId::from(0), iter::once(discovered.clone()));
-		peerset.discovered(SetId::from(0), iter::once(discovered2));
+		peerset.add_to_peers_set(SetId::from(0), discovered.clone());
+		peerset.add_to_peers_set(SetId::from(0), discovered.clone());
+		peerset.add_to_peers_set(SetId::from(0), discovered2);
 
 		assert_messages(peerset, vec![
 			Message::Connect { set_id: SetId::from(0), peer_id: bootnode },

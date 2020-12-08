@@ -1278,12 +1278,90 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
+	/// Connect to unreserved peers and allow unreserved peers to connect.
+	pub fn accept_unreserved_peers(&self) {
+		// TODO:
+		self.peerset_handle.set_reserved_only(false);
+	}
+
+	/// Disconnect from unreserved peers and deny new unreserved peers to connect.
+	pub fn deny_unreserved_peers(&self) {
+		// TODO:
+		self.peerset_handle.set_reserved_only(true);
+	}
+
+	/// Removes a `PeerId` from the list of reserved peers.
+	pub fn remove_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
+		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
+			self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(index + 2), peer);
+		} else {
+			log::error!(
+				target: "sub-libp2p",
+				"remove_reserved_peer with unknown protocol: {}",
+				protocol
+			);
+		}
+	}
+
+	/// Adds a `PeerId` to the list of reserved peers.
+	pub fn add_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
+		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
+			self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(index + 2), peer);
+		} else {
+			log::error!(
+				target: "sub-libp2p",
+				"add_reserved_peer with unknown protocol: {}",
+				protocol
+			);
+		}
+	}
+
 	/// Notify the protocol that we have learned about the existence of nodes on the default set.
 	///
 	/// Can be called multiple times with the same `PeerId`s.
 	pub fn add_default_set_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
-		self.behaviour.add_discovered_nodes(sc_peerset::SetId::from(0), peer_ids);
-		// TODO: self.behaviour.add_discovered_nodes(sc_peerset::SetId::from(1), peer_ids);  // TODO: no
+		for peer_id in peer_ids {
+			self.peerset_handle.add_to_peers_set(sc_peerset::SetId::from(0), peer_id);
+		}
+	}
+
+	/// Modify a set of peers from the peerset.
+	pub fn set_peers_set(&self, protocol: Cow<'static, str>, peers: HashSet<PeerId>) {
+		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
+			self.peerset_handle.set_peers_set(sc_peerset::SetId::from(index + 2), peers);
+		} else {
+			log::error!(
+				target: "sub-libp2p",
+				"set_peers_set with unknown protocol: {}",
+				protocol
+			);
+		}
+	}
+
+	/// Add a peer to a peers set.
+	pub fn add_to_peers_set(&self, protocol: Cow<'static, str>, peer: PeerId) {
+		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
+			self.peerset_handle.add_to_peers_set(sc_peerset::SetId::from(index + 2), peer);
+		} else {
+			log::error!(
+				target: "sub-libp2p",
+				"add_to_peers_set with unknown protocol: {}",
+				protocol
+			);
+		}
+	}
+
+	/// Remove a peer from a peers set.
+	pub fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peer: PeerId) {
+		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
+			self.peerset_handle.remove_from_peers_set(sc_peerset::SetId::from(index + 2), peer);
+		} else {
+			log::error!(
+				target: "sub-libp2p",
+				"remove_from_peers_set with unknown protocol: {}",
+				protocol
+			);
+		}
 	}
 
 	fn format_stats(&self) -> String {
@@ -1496,6 +1574,9 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			GenericProtoOut::CustomProtocolOpen { peer_id, set_id, received_handshake, notifications_sink, .. } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == sc_peerset::SetId::from(0) {
+					// Set 1 is kept in sync with the connected peers of set 0.
+					self.peerset_handle.add_to_peers_set(sc_peerset::SetId::from(1), peer_id.clone());
+
 					// `received_handshake` can be either a `Status` message if received from the
 					// legacy substream ,or a `BlockAnnouncesHandshake` if received from the block
 					// announces substream.
@@ -1578,6 +1659,11 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			GenericProtoOut::CustomProtocolClosed { peer_id, set_id } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == sc_peerset::SetId::from(0) {
+					// Set 1 is kept in sync with the connected peers of set 0.
+					self.peerset_handle.remove_from_peers_set(
+						sc_peerset::SetId::from(1),
+						peer_id.clone()
+					);
 					self.on_sync_peer_disconnected(peer_id);
 					CustomMessageOutcome::None
 				} else if set_id == sc_peerset::SetId::from(1) {
