@@ -1489,7 +1489,7 @@ mod tests {
 				Origin::signed(2),
 				hash.clone(),
 				0,
-				true
+				true,
 			);
 			assert_eq!(vote_rval.unwrap().pays_fee, Pays::No);
 
@@ -1507,7 +1507,7 @@ mod tests {
 				Origin::signed(2),
 				hash.clone(),
 				0,
-				false
+				false,
 			);
 			assert_eq!(vote_rval.unwrap().pays_fee, Pays::Yes);
 
