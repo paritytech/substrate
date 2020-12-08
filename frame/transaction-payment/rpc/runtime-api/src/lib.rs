@@ -24,7 +24,79 @@ use frame_support::weights::{Weight, DispatchClass};
 use codec::{Encode, Codec, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
-use sp_runtime::traits::{MaybeDisplay, MaybeFromStr};
+use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeDisplay, MaybeFromStr};
+
+/// The base fee and adjusted weight and length fees constitute the _inclusion fee,_ which is
+/// the minimum fee for a transaction to be included in a block.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+pub struct InclusionFee<Balance> {
+	/// This is the minimum amount a user pays for a transaction. It is declared
+	/// as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
+	#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_string"))]
+	#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
+	#[cfg_attr(feature = "std", serde(deserialize_with = "deserialize_from_string"))]
+	pub base_fee: Balance,
+	/// The length fee, the amount paid for the encoded length (in bytes) of the transaction.
+	#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_string"))]
+	#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
+	#[cfg_attr(feature = "std", serde(deserialize_with = "deserialize_from_string"))]
+	pub len_fee: Balance,
+	/// - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
+	///     the congestion of the network.
+	/// - `weight_fee`: This amount is computed based on the weight of the transaction. Weight
+	/// accounts for the execution time of a transaction.
+	///
+	/// adjusted_weight_fee = targeted_fee_adjustment * weight_fee
+	#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_string"))]
+	#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
+	#[cfg_attr(feature = "std", serde(deserialize_with = "deserialize_from_string"))]
+	pub adjusted_weight_fee: Balance,
+}
+
+impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
+	/// Returns the total of inclusion fee.
+	///
+	/// ```ignore
+	/// inclusion_fee = base_fee + len_fee + adjusted_weight_fee
+	/// ```
+	pub fn total(&self) -> Balance {
+		self.base_fee
+			.saturating_add(self.len_fee)
+			.saturating_add(self.adjusted_weight_fee)
+	}
+}
+
+/// The `final_fee` is composed of:
+///   - (Optional) `inclusion_fee`: Only the `Pays::Yes` transaction can have the inclusion fee.
+///   - (Optional) `tip`: If included in the transaction, the tip will be added on top. Only
+///     signed transactions can have a tip.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+pub struct FeeDetails<Balance> {
+	pub inclusion_fee: Option<InclusionFee<Balance>>,
+	#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_string"))]
+	#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
+	#[cfg_attr(feature = "std", serde(deserialize_with = "deserialize_from_string"))]
+	pub tip: Balance,
+}
+
+impl<Balance: AtLeast32BitUnsigned + Default + Copy> FeeDetails<Balance> {
+	/// Returns the final fee.
+	///
+	/// ```ignore
+	/// final_fee = inclusion_fee + tip;
+	/// ```
+	pub fn final_fee(&self) -> Balance {
+		self.inclusion_fee.as_ref().map(|i|i.total()).unwrap_or_default() + self.tip
+	}
+}
 
 /// Information related to a dispatchable's class, weight, and fee that can be queried from the runtime.
 #[derive(Eq, PartialEq, Encode, Decode, Default)]
@@ -60,6 +132,7 @@ sp_api::decl_runtime_apis! {
 		Balance: Codec + MaybeDisplay + MaybeFromStr,
 	{
 		fn query_info(uxt: Block::Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance>;
+		fn query_fee_details(uxt: Block::Extrinsic, len: u32) -> FeeDetails<Balance>;
 	}
 }
 

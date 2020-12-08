@@ -25,18 +25,24 @@ use jsonrpc_derive::rpc;
 use sp_runtime::{generic::BlockId, traits::{Block as BlockT, MaybeDisplay, MaybeFromStr}};
 use sp_api::ProvideRuntimeApi;
 use sp_core::Bytes;
-use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, RuntimeDispatchInfo};
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 pub use self::gen_client::Client as TransactionPaymentClient;
 
 #[rpc]
-pub trait TransactionPaymentApi<BlockHash, ResponseType> {
+pub trait TransactionPaymentApi<BlockHash, ResponseType, FeeDetails> {
 	#[rpc(name = "payment_queryInfo")]
 	fn query_info(
 		&self,
 		encoded_xt: Bytes,
 		at: Option<BlockHash>
 	) -> Result<ResponseType>;
+	#[rpc(name = "payment_queryFeeDetails")]
+	fn query_fee_details(
+		&self,
+		encoded_xt: Bytes,
+		at: Option<BlockHash>
+	) -> Result<FeeDetails>;
 }
 
 /// A struct that implements the [`TransactionPaymentApi`].
@@ -69,7 +75,7 @@ impl From<Error> for i64 {
 	}
 }
 
-impl<C, Block, Balance> TransactionPaymentApi<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
+impl<C, Block, Balance> TransactionPaymentApi<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>, FeeDetails<Balance>>
 	for TransactionPayment<C, Block>
 where
 	Block: BlockT,
@@ -98,6 +104,31 @@ where
 		api.query_info(&at, uxt, encoded_len).map_err(|e| RpcError {
 			code: ErrorCode::ServerError(Error::RuntimeError.into()),
 			message: "Unable to query dispatch info.".into(),
+			data: Some(format!("{:?}", e).into()),
+		})
+	}
+
+	fn query_fee_details(
+		&self,
+		encoded_xt: Bytes,
+		at: Option<<Block as BlockT>::Hash>
+	) -> Result<FeeDetails<Balance>> {
+		let api = self.client.runtime_api();
+		let at = BlockId::hash(at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash
+		));
+
+		let encoded_len = encoded_xt.len() as u32;
+
+		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| RpcError {
+			code: ErrorCode::ServerError(Error::DecodeError.into()),
+			message: "Unable to query fee details.".into(),
+			data: Some(format!("{:?}", e).into()),
+		})?;
+		api.query_fee_details(&at, uxt, encoded_len).map_err(|e| RpcError {
+			code: ErrorCode::ServerError(Error::RuntimeError.into()),
+			message: "Unable to query fee details.".into(),
 			data: Some(format!("{:?}", e).into()),
 		})
 	}
