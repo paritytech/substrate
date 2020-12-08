@@ -306,15 +306,15 @@ checksum = "e91831deabf0d6d7ec49552e489aed63b7456a7a3c46cff62adad428110b0af0"
 
 [[package]]
 name = "async-tls"
-version = "0.10.0"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d85a97c4a0ecce878efd3f945f119c78a646d8975340bca0398f9bb05c30cc52"
+checksum = "dd0d8b6fc362bebff7502479fb5e9aed00c8cc3abc5af755536e73a128f0cb88"
 dependencies = [
  "futures-core",
  "futures-io",
- "rustls 0.18.1",
+ "rustls 0.19.0",
  "webpki",
- "webpki-roots 0.20.0",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -3187,7 +3187,7 @@ dependencies = [
  "soketto",
  "url 2.2.0",
  "webpki",
- "webpki-roots 0.21.0",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -10237,15 +10237,6 @@ checksum = "ab146130f5f790d45f82aeeb09e55a256573373ec64409fc19a6fb82fb1032ae"
 dependencies = [
  "ring",
  "untrusted",
-]
-
-[[package]]
-name = "webpki-roots"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f20dea7535251981a9670857150d571846545088359b28e4951d350bdaf179f"
-dependencies = [
- "webpki",
 ]
 
 [[package]]
