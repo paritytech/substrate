@@ -117,9 +117,6 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: frame_support::weights::Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: sp_runtime::Perbill = sp_runtime::Perbill::one();
 	}
 
 	impl frame_system::Config for Runtime {
@@ -135,13 +132,9 @@ mod tests {
 		type Header = TestHeader;
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
+		type BlockWeights = ();
+		type BlockLength = ();
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = ();

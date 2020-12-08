@@ -19,7 +19,7 @@
 
 use super::*;
 use std::cell::RefCell;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{impl_outer_origin, parameter_types};
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
 	Perbill, impl_opaque_keys,
@@ -37,6 +37,31 @@ impl_opaque_keys! {
 impl From<UintAuthorityId> for MockSessionKeys {
 	fn from(dummy: UintAuthorityId) -> Self {
 		Self { dummy }
+	}
+}
+
+pub const KEY_ID_A: KeyTypeId = KeyTypeId([4; 4]);
+pub const KEY_ID_B: KeyTypeId = KeyTypeId([9; 4]);
+
+#[derive(Debug, Clone, codec::Encode, codec::Decode, PartialEq, Eq)]
+pub struct PreUpgradeMockSessionKeys {
+	pub a: [u8; 32],
+	pub b: [u8; 64],
+}
+
+impl OpaqueKeys for PreUpgradeMockSessionKeys {
+	type KeyTypeIdProviders = ();
+
+	fn key_ids() -> &'static [KeyTypeId] {
+		&[KEY_ID_A, KEY_ID_B]
+	}
+
+	fn get_raw(&self, i: KeyTypeId) -> &[u8] {
+		match i {
+			i if i == KEY_ID_A => &self.a[..],
+			i if i == KEY_ID_B => &self.b[..],
+			_ => &[],
+		}
 	}
 }
 
@@ -165,15 +190,17 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 pub struct Test;
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const MinimumPeriod: u64 = 5;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub const BlockHashCount: u64 = 250;
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -185,13 +212,6 @@ impl frame_system::Config for Test {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = ();

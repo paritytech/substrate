@@ -30,7 +30,7 @@ use frame_support::{
 	storage,
 };
 use sp_core::H256;
-use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use crate as utility;
 
 // example module to test behaviors.
@@ -93,12 +93,14 @@ impl_outer_dispatch! {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = Weight::max_value();
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(Weight::max_value());
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = TestBaseCallFilter;
+	type BlockWeights = BlockWeights;
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -110,13 +112,6 @@ impl frame_system::Config for Test {
 	type Header = Header;
 	type Event = TestEvent;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -350,6 +345,7 @@ fn batch_early_exit_works() {
 
 #[test]
 fn batch_weight_calculation_doesnt_overflow() {
+	use sp_runtime::Perbill;
 	new_test_ext().execute_with(|| {
 		let big_call = Call::System(SystemCall::fill_block(Perbill::from_percent(50)));
 		assert_eq!(big_call.get_dispatch_info().weight, Weight::max_value() / 2);
