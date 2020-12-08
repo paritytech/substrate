@@ -69,19 +69,24 @@ impl From<Error> for i64 {
 	}
 }
 
-impl<C, Block, Balance> TransactionPaymentApi<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
+impl<C, Block, Weight, DispatchClass, Balance> TransactionPaymentApi<
+	<Block as BlockT>::Hash,
+	RuntimeDispatchInfo<Weight, DispatchClass, Balance>,
+>
 	for TransactionPayment<C, Block>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
+	C::Api: TransactionPaymentRuntimeApi<Block, Weight, DispatchClass, Balance>,
+	Weight: Codec,
+	DispatchClass: Codec,
 	Balance: Codec + MaybeDisplay + MaybeFromStr,
 {
 	fn query_info(
 		&self,
 		encoded_xt: Bytes,
 		at: Option<<Block as BlockT>::Hash>
-	) -> Result<RuntimeDispatchInfo<Balance>> {
+	) -> Result<RuntimeDispatchInfo<Weight, DispatchClass, Balance>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
