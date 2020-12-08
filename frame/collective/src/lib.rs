@@ -632,7 +632,7 @@ decl_module! {
 				return Ok((
 					Some(T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
 					.saturating_add(proposal_weight)),
-					Pays::No,
+					Pays::Yes,
 				).into());
 
 			} else if disapproved {
@@ -671,7 +671,7 @@ decl_module! {
 				return Ok((
 					Some(T::WeightInfo::close_approved(len as u32, seats, proposal_count)
 					.saturating_add(proposal_weight)),
-					Pays::No,
+					Pays::Yes,
 				).into());
 			} else {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
@@ -1485,17 +1485,13 @@ mod tests {
 			);
 
 			// For the motion, acc 2's first vote, expecting Ok with Pays::No.
-			assert_eq!(
-				Collective::vote(Origin::signed(2), hash.clone(), 0, true),
-				Ok(
-					PostDispatchInfo {
-						actual_weight: Some(
-							207711000,
-						),
-						pays_fee: Pays::No,
-					}
-				)
+			let vote_rval: DispatchResultWithPostInfo = Collective::vote(
+				Origin::signed(2),
+				hash.clone(),
+				0,
+				true
 			);
+			assert_eq!(vote_rval.unwrap().pays_fee, Pays::No);
 
 			// Duplicate vote, expecting error with Pays::Yes.
 			let vote_rval: DispatchResultWithPostInfo = Collective::vote(
@@ -1507,66 +1503,43 @@ mod tests {
 			assert_eq!(vote_rval.unwrap_err().post_info.pays_fee, Pays::Yes);
 
 			// Modifying vote, expecting ok with Pays::Yes.
-			assert_eq!(
-				Collective::vote(Origin::signed(2), hash.clone(), 0, false),
-				Ok(
-					PostDispatchInfo {
-						actual_weight: Some(
-							207711000,
-						),
-						pays_fee: Pays::Yes,
-					}
-				)
+			let vote_rval: DispatchResultWithPostInfo = Collective::vote(
+				Origin::signed(2),
+				hash.clone(),
+				0,
+				false
 			);
+			assert_eq!(vote_rval.unwrap().pays_fee, Pays::Yes);
 
 			// For the motion, acc 3's first vote, expecting Ok with Pays::No.
-			assert_eq!(
-				Collective::vote(Origin::signed(3), hash.clone(), 0, true),
-				Ok(
-					PostDispatchInfo {
-						actual_weight: Some(
-							207711000,
-						),
-						pays_fee: Pays::No,
-					}
-				)
+			let vote_rval: DispatchResultWithPostInfo = Collective::vote(
+				Origin::signed(3),
+				hash.clone(),
+				0,
+				true,
 			);
+			assert_eq!(vote_rval.unwrap().pays_fee, Pays::No);
 
 			// acc 3 modify the vote, expecting Ok with Pays::Yes.
-			assert_eq!(
-				Collective::vote(Origin::signed(3), hash.clone(), 0, false),
-				Ok(
-					PostDispatchInfo {
-						actual_weight: Some(
-							207711000,
-						),
-						pays_fee: Pays::Yes,
-					}
-				)
+			let vote_rval: DispatchResultWithPostInfo = Collective::vote(
+				Origin::signed(3),
+				hash.clone(),
+				0,
+				false,
 			);
+			assert_eq!(vote_rval.unwrap().pays_fee, Pays::Yes);
 
 			// Test close() Extrincis | Check DispatchResultWithPostInfo with Pay Info
 
 			let proposal_weight = proposal.get_dispatch_info().weight;
-
-			// trying to close the valid proposal, Expecting OK with Pays::No
-			assert_eq!(
-				Collective::close(
-					Origin::signed(2),
-					hash.clone(),
-					0,
-					proposal_weight,
-					proposal_len,
-				),
-				Ok(
-					PostDispatchInfo {
-						actual_weight: Some(
-							437711000,
-						),
-						pays_fee: Pays::No,
-					},
-				)
+			let close_rval: DispatchResultWithPostInfo = Collective::close(
+				Origin::signed(2),
+				hash.clone(),
+				0,
+				proposal_weight,
+				proposal_len,
 			);
+			assert_eq!(close_rval.unwrap().pays_fee, Pays::No);
 
 			// trying to close the proposal, which is already closed.
 			// Expecting error "ProposalMissing" with Pays::Yes
@@ -1577,7 +1550,7 @@ mod tests {
 				proposal_weight,
 				proposal_len,
 			);
-			assert_eq!(vote_rval.unwrap_err().post_info.pays_fee, Pays::Yes);
+			assert_eq!(close_rval.unwrap_err().post_info.pays_fee, Pays::Yes);
 		});
 	}
 
