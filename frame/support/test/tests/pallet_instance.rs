@@ -29,6 +29,7 @@ use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
 #[frame_support::pallet]
 pub mod pallet {
 	use sp_std::any::TypeId;
+	use frame_support::scale_info;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -38,7 +39,7 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		#[pallet::constant]
 		type MyGetParam: Get<u32>;
-		type Balance: Parameter + Default;
+		type Balance: Parameter + Default + scale_info::TypeInfo + 'static;
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
