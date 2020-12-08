@@ -692,30 +692,26 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 // Tracks historical authority set changes. We store the block numbers for the first block of each
 // authority set, once they have been finalalized.
 #[derive(Debug, Encode, Decode, Clone, PartialEq)]
-pub struct AuthoritySetChanges<N> {
-	authority_set_changes: Vec<(u64, N)>, // (set_id, block_number)
-}
+pub struct AuthoritySetChanges<N>(pub Vec<(u64, N)>);
 
 impl<N: Ord + Clone> AuthoritySetChanges<N> {
 	pub(crate) fn empty() -> Self {
-		Self {
-			authority_set_changes: Default::default(),
-		}
+		Self(Default::default())
 	}
 
 	pub(crate) fn append(&mut self, set_id: u64, block_number: N) {
-		self.authority_set_changes.push((set_id, block_number));
+		self.0.push((set_id, block_number));
 	}
 
 	pub(crate) fn get_set_id(&self, block_number: N) -> Option<(u64, N)> {
-		let idx = self.authority_set_changes
+		let idx = self.0
 			.binary_search_by_key(&block_number, |(_, n)| n.clone())
 			.unwrap_or_else(|b| b);
-		if idx < self.authority_set_changes.len() {
-			let (set_id, block_number) = self.authority_set_changes[idx].clone();
+		if idx < self.0.len() {
+			let (set_id, block_number) = self.0[idx].clone();
 			// To make sure we have the right set we need to check that the one before it also exists.
 			if idx > 0 {
-				let (prev_set_id, _) = self.authority_set_changes[idx - 1usize];
+				let (prev_set_id, _) = self.0[idx - 1usize];
 				if set_id != prev_set_id + 1u64 {
 					// Without the preceding set_id we don't have a well-defined start.
 					return None;
