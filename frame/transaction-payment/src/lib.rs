@@ -40,7 +40,7 @@ use frame_support::{
 	traits::Get,
 	weights::{
 		Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Pays, WeightToFeePolynomial,
-		WeightToFeeCoefficient,
+		WeightToFeeCoefficient, DispatchClass,
 	},
 	dispatch::DispatchResult,
 };
@@ -158,14 +158,14 @@ impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S,
 		let min_multiplier = M::get();
 		let previous = previous.max(min_multiplier);
 
+		let weights = T::BlockWeights::get();
 		// the computed ratio is only among the normal class.
-		let normal_max_weight =
-			<T as frame_system::Config>::AvailableBlockRatio::get() *
-			<T as frame_system::Config>::MaximumBlockWeight::get();
-		let normal_block_weight =
-			<frame_system::Module<T>>::block_weight()
-			.get(frame_support::weights::DispatchClass::Normal)
-			.min(normal_max_weight);
+		let normal_max_weight = weights.get(DispatchClass::Normal).max_total
+			.unwrap_or_else(|| weights.max_block);
+		let current_block_weight = <frame_system::Module<T>>::block_weight();
+		let normal_block_weight = *current_block_weight
+			.get(DispatchClass::Normal)
+			.min(&normal_max_weight);
 
 		let s = S::get();
 		let v = V::get();
@@ -257,13 +257,13 @@ decl_module! {
 
 		fn integrity_test() {
 			// given weight == u64, we build multipliers from `diff` of two weight values, which can
-			// at most be MaximumBlockWeight. Make sure that this can fit in a multiplier without
+			// at most be maximum block weight. Make sure that this can fit in a multiplier without
 			// loss.
 			use sp_std::convert::TryInto;
 			assert!(
 				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
 				Multiplier::checked_from_integer(
-					<T as frame_system::Config>::MaximumBlockWeight::get().try_into().unwrap()
+					T::BlockWeights::get().max_block.try_into().unwrap()
 				).unwrap(),
 			);
 
@@ -272,9 +272,11 @@ decl_module! {
 			// that if we collapse to minimum, the trend will be positive with a weight value
 			// which is 1% more than the target.
 			let min_value = T::FeeMultiplierUpdate::min();
-			let mut target =
-				T::FeeMultiplierUpdate::target() *
-				(T::AvailableBlockRatio::get() * T::MaximumBlockWeight::get());
+			let mut target = T::FeeMultiplierUpdate::target() *
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.expect(
+					"Setting `max_total` for `Normal` dispatch class is not compatible with \
+					`transaction-payment` pallet."
+				);
 
 			// add 1 percent;
 			let addition = target / 100;
@@ -285,7 +287,7 @@ decl_module! {
 			target += addition;
 
 			sp_io::TestExternalities::new_empty().execute_with(|| {
-				<frame_system::Module<T>>::set_block_limits(target, 0);
+				<frame_system::Module<T>>::set_block_consumed_resources(target, 0);
 				let next = T::FeeMultiplierUpdate::convert(min_value);
 				assert!(next > min_value, "The minimum bound of the multiplier is too low. When \
 					block saturation is more than target by 1% and multiplier is minimal then \
@@ -357,7 +359,13 @@ impl<T: Config> Module<T> where
 	) -> BalanceOf<T> where
 		T::Call: Dispatchable<Info=DispatchInfo>,
 	{
-		Self::compute_fee_raw(len, info.weight, tip, info.pays_fee)
+		Self::compute_fee_raw(
+			len,
+			info.weight,
+			tip,
+			info.pays_fee,
+			info.class,
+		)
 	}
 
 	/// Compute the actual post dispatch fee for a particular transaction.
@@ -372,7 +380,13 @@ impl<T: Config> Module<T> where
 	) -> BalanceOf<T> where
 		T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
 	{
-		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, post_info.pays_fee(info))
+		Self::compute_fee_raw(
+			len,
+			post_info.calc_actual_weight(info),
+			tip,
+			post_info.pays_fee(info),
+			info.class,
+		)
 	}
 
 	fn compute_fee_raw(
@@ -380,6 +394,7 @@ impl<T: Config> Module<T> where
 		weight: Weight,
 		tip: BalanceOf<T>,
 		pays_fee: Pays,
+		class: DispatchClass,
 	) -> BalanceOf<T> {
 		if pays_fee == Pays::Yes {
 			let len = <BalanceOf<T>>::from(len);
@@ -394,7 +409,7 @@ impl<T: Config> Module<T> where
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
-			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
+			let base_fee = Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic);
 			base_fee
 				.saturating_add(fixed_len_fee)
 				.saturating_add(adjusted_weight_fee)
@@ -407,7 +422,7 @@ impl<T: Config> Module<T> where
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
-		let capped_weight = weight.min(<T as frame_system::Config>::MaximumBlockWeight::get());
+		let capped_weight = weight.min(T::BlockWeights::get().max_block);
 		T::WeightToFee::calc(&capped_weight)
 	}
 }
@@ -471,8 +486,9 @@ impl<T: Config + Send + Sync> ChargeTransactionPayment<T> where
 	///  that the transaction which consumes more resources (either length or weight) with the same
 	/// `fee` ends up having lower priority.
 	fn get_priority(len: usize, info: &DispatchInfoOf<T::Call>, final_fee: BalanceOf<T>) -> TransactionPriority {
-		let weight_saturation = T::MaximumBlockWeight::get() / info.weight.max(1);
-		let len_saturation = T::MaximumBlockLength::get() as u64 / (len as u64).max(1);
+		let weight_saturation = T::BlockWeights::get().max_block / info.weight.max(1);
+		let max_block_length = *T::BlockLength::get().max.get(DispatchClass::Normal);
+		let len_saturation = max_block_length as u64 / (len as u64).max(1);
 		let coefficient: BalanceOf<T> = weight_saturation.min(len_saturation).saturated_into::<BalanceOf<T>>();
 		final_fee.saturating_mul(coefficient).saturated_into::<TransactionPriority>()
 	}
@@ -571,6 +587,7 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup},
 		Perbill,
 	};
+	use std::cell::RefCell;
 	use smallvec::smallvec;
 
 	const CALL: &<Runtime as frame_system::Config>::Call =
@@ -598,18 +615,36 @@ mod tests {
 		pub enum Origin for Runtime {}
 	}
 
+	thread_local! {
+		static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
+	}
+
+	pub struct BlockWeights;
+	impl Get<frame_system::limits::BlockWeights> for BlockWeights {
+		fn get() -> frame_system::limits::BlockWeights {
+			frame_system::limits::BlockWeights::builder()
+				.base_block(0)
+				.for_class(DispatchClass::all(), |weights| {
+					weights.base_extrinsic = EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()).into();
+				})
+				.for_class(DispatchClass::non_mandatory(), |weights| {
+					weights.max_total = 1024.into();
+				})
+				.build_or_panic()
+		}
+	}
+
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
-		pub static ExtrinsicBaseWeight: u64 = 0;
 		pub static TransactionByteFee: u64 = 1;
 		pub static WeightToFee: u64 = 1;
 	}
 
 	impl frame_system::Config for Runtime {
 		type BaseCallFilter = ();
+		type BlockWeights = BlockWeights;
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -621,13 +656,6 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = pallet_balances::AccountData<u64>;
@@ -841,7 +869,7 @@ mod tests {
 			// fee will be proportional to what is the actual maximum weight in the runtime.
 			assert_eq!(
 				Balances::free_balance(&1),
-				(10000 - <Runtime as frame_system::Config>::MaximumBlockWeight::get()) as u64
+				(10000 - <Runtime as frame_system::Config>::BlockWeights::get().max_block) as u64
 			);
 		});
 	}
@@ -939,7 +967,7 @@ mod tests {
 					partial_fee:
 						5 * 2 /* base * weight_fee */
 						+ len as u64  /* len * 1 */
-						+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 * 3 / 2 /* weight */
+						+ info.weight.min(BlockWeights::get().max_block) as u64 * 2 * 3 / 2 /* weight */
 				},
 			);
 
