@@ -22,7 +22,6 @@ use crate::{
 };
 
 use bytes::Bytes;
-use codec::Encode as _;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::identify::IdentifyInfo;

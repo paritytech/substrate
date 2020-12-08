@@ -95,9 +95,6 @@ use wasm_timer::Instant;
 /// accommodates for any number of connections.
 ///
 pub struct GenericProto {
-	/// `PeerId` of the local node.
-	local_peer_id: PeerId,
-
 	/// Legacy protocol to open with peers. Never modified.
 	legacy_protocol: RegisteredProtocol,
 
@@ -371,7 +368,6 @@ pub enum GenericProtoOut {
 impl GenericProto {
 	/// Creates a `CustomProtos`.
 	pub fn new(
-		local_peer_id: PeerId,
 		protocol: impl Into<ProtocolId>,
 		versions: &[u8],
 		handshake_message: Vec<u8>,
@@ -388,7 +384,6 @@ impl GenericProto {
 		let legacy_protocol = RegisteredProtocol::new(protocol, versions, legacy_handshake_message);
 
 		GenericProto {
-			local_peer_id,
 			legacy_protocol,
 			notif_protocols,
 			peerset,
@@ -428,26 +423,14 @@ impl GenericProto {
 		self.peerset.num_discovered_peers()
 	}
 
-	/*/// Returns the list of all the peers we have an open channel to.
+	/// Returns the list of all the peers we have an open channel to.
 	pub fn open_peers<'a>(&'a self) -> impl Iterator<Item = &'a PeerId> + 'a {
-		// TODO: update after PR
-		self.peers.iter().filter(|(_, state)| state.is_open()).map(|(id, _)| id)
-	}*/
+		self.peers.iter().filter(|(_, state)| state.is_open()).map(|((id, _), _)| id)
+	}
 
 	/// Returns true if we have an open substream to the given peer.
 	pub fn is_open(&self, peer_id: &PeerId, set_id: sc_peerset::SetId) -> bool {
 		self.peers.get(&(peer_id.clone(), set_id)).map(|p| p.is_open()).unwrap_or(false)
-	}
-
-	/// Returns the [`NotificationsSink`] that sends notifications to the given peer, or `None`
-	/// if the custom protocols aren't opened with this peer.
-	///
-	/// If [`GenericProto::is_open`] returns `true` for this `PeerId`, then this method is
-	/// guaranteed to return `Some`.
-	pub fn notifications_sink(&self, peer_id: &PeerId, set_id: sc_peerset::SetId)
-		-> Option<&NotificationsSink>
-	{
-		self.peers.get(&(peer_id.clone(), set_id)).and_then(|p| p.get_open())
 	}
 
 	/// Disconnects the given peer if we are connected to it.
@@ -596,21 +579,6 @@ impl GenericProto {
 		self.peers.iter()
 			.filter(move |((_, set), state)| *set == set_id && state.is_requested())
 			.map(|((id, _), _)| id)
-	}
-
-	/// Returns true if we try to open protocols with the given peer.
-	pub fn is_enabled(&self, peer_id: &PeerId, set_id: sc_peerset::SetId) -> bool {
-		match self.peers.get(&(peer_id.clone(), set_id)) {
-			None => false,
-			Some(PeerState::Disabled { .. }) => false,
-			Some(PeerState::DisabledPendingEnable { .. }) => false,
-			Some(PeerState::Enabled { .. }) => true,
-			Some(PeerState::Incoming { .. }) => false,
-			Some(PeerState::Requested) => false,
-			Some(PeerState::PendingRequest { .. }) => false,
-			Some(PeerState::Backoff { .. }) => false,
-			Some(PeerState::Poisoned) => false,
-		}
 	}
 
 	/// Sends a notification to a peer.

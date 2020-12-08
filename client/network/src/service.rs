@@ -183,7 +183,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				roles: From::from(&params.role),
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
 			},
-			local_peer_id.clone(),
 			params.chain.clone(),
 			params.transaction_pool,
 			params.protocol_id.clone(),
@@ -290,7 +289,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config
 			};
 
-			let mut behaviour = {
+			let behaviour = {
 				let result = Behaviour::new(
 					protocol,
 					params.role,
@@ -500,11 +499,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// everywhere about this. Please don't use this function to retrieve actual information.
 	pub fn network_state(&mut self) -> NetworkState {
 		let swarm = &mut self.network_service;
-		// TODO: restore
-		//let open = swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
+		let open = swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
 
 		let connected_peers = {
-			/*let swarm = &mut *swarm;
+			let swarm = &mut *swarm;
 			open.iter().filter_map(move |peer_id| {
 				let known_addresses = NetworkBehaviour::addresses_of_peer(&mut **swarm, peer_id)
 					.into_iter().collect();
@@ -522,16 +520,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					version_string: swarm.node(peer_id)
 						.and_then(|i| i.client_version().map(|s| s.to_owned())),
 					latest_ping_time: swarm.node(peer_id).and_then(|i| i.latest_ping()),
-					enabled: swarm.user_protocol().is_enabled(&peer_id),
-					open: swarm.user_protocol().is_open(&peer_id),
 					known_addresses,
 				}))
-			}).collect()*/
-			Default::default()
+			}).collect()
 		};
 
 		let not_connected_peers = {
-			/*let swarm = &mut *swarm;
+			let swarm = &mut *swarm;
 			swarm.known_peers().into_iter()
 				.filter(|p| open.iter().all(|n| n != p))
 				.map(move |peer_id| {
@@ -543,8 +538,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 							.into_iter().collect(),
 					})
 				})
-				.collect()*/
-			Default::default()
+				.collect()
 		};
 
 		let peer_id = Swarm::<B, H>::local_peer_id(&swarm).to_base58();

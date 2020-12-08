@@ -528,7 +528,7 @@ impl ProtocolsHandler for NotifsHandler {
 							pending_opening,
 						};
 					},
-					State::OpenDesiredByRemote { ref mut in_substream, .. } => {
+					State::OpenDesiredByRemote { .. } => {
 						// If a substream already exists, silently drop the new one.
 						// Note that we drop the substream, which will send an equivalent to a
 						// TCP "RST" to the remote and force-close the substream. It might
@@ -656,7 +656,7 @@ impl ProtocolsHandler for NotifsHandler {
 						let in_substream = match
 							mem::replace(&mut protocol_info.state, State::Opening { in_substream: None })
 						{
-							State::OpenDesiredByRemote { pending_opening, in_substream } => in_substream,
+							State::OpenDesiredByRemote { in_substream, .. } => in_substream,
 							_ => unreachable!()
 						};
 						protocol_info.state = State::Opening {
