@@ -48,14 +48,17 @@ where
 		witness.voters >= active_voters_count,
 		"must have enough voters"
 	);
+	assert!((<CompactOf<T>>::LIMIT as u32) < winners_count, "must have enough winners to give them votes.");
 
 	let stake: u64 = 1000_000;
+
 	// first generates random targets.
 	let targets: Vec<T::AccountId> = (0..witness.targets)
 		.map(|i| account("Targets", i, SEED))
 		.collect();
 
 	let mut rng = thread_rng();
+
 	// decide who are the winners.
 	let winners = targets
 		.as_slice()
@@ -64,27 +67,16 @@ where
 		.collect::<Vec<_>>();
 
 	// generate first active voters who must vote for a subset of winners.
-	// TODO: this could lead to an underestimate, the active voters should only vote for winners to
-	// maximize all the iterations.
 	let active_voters = (0..active_voters_count)
 		.map(|i| {
-			// chose a random number of votes to give to the winners, and whatever is left is given
-			// to everyone.
-			let votes_to_winners = rand::random::<usize>() % <CompactOf<T>>::LIMIT + 1;
-			let votes_to_everyone = <CompactOf<T>>::LIMIT - votes_to_winners;
-
+			// chose a random subset of winners.
 			let winner_votes = winners
 				.as_slice()
-				.choose_multiple(&mut rng, votes_to_winners)
-				.cloned();
-			let rest_votes = targets
-				.as_slice()
-				.choose_multiple(&mut rng, votes_to_everyone as usize)
-				.cloned();
-
-			let votes = winner_votes.chain(rest_votes).collect::<Vec<_>>();
+				.choose_multiple(&mut rng, <CompactOf<T>>::LIMIT)
+				.cloned()
+				.collect::<Vec<_>>();
 			let voter = account::<T::AccountId>("Voter", i, SEED);
-			(voter, stake, votes)
+			(voter, stake, winner_votes)
 		})
 		.collect::<Vec<_>>();
 
@@ -105,30 +97,27 @@ where
 		})
 		.collect::<Vec<_>>();
 
-	dbg!(active_voters.len(), rest_voters.len(), winners.len());
-	// active_voters.extend(rest_voters);
 	let mut all_voters = active_voters.clone();
 	all_voters.extend(rest_voters);
+	all_voters.shuffle(&mut rng);
 
 	assert_eq!(active_voters.len() as u32, active_voters_count);
 	assert_eq!(all_voters.len() as u32, witness.voters);
 	assert_eq!(winners.len() as u32, winners_count);
 
-	let voters = active_voters;
-
 	<Snapshot<T>>::put(RoundSnapshot {
 		desired_targets: winners_count,
-		voters: all_voters,
+		voters: all_voters.clone(),
 		targets: targets.clone(),
 	});
 
-	let voter_index = crate::voter_index_fn!(voters, T::AccountId, T);
-	let voter_at = crate::voter_at_fn!(voters, T::AccountId, T);
+	let stake_of = crate::stake_of_fn!(all_voters, T::AccountId);
+	let voter_index = crate::voter_index_fn!(all_voters, T::AccountId, T);
+	let voter_at = crate::voter_at_fn!(all_voters, T::AccountId, T);
 	let target_at = crate::target_at_fn!(targets, T::AccountId, T);
 	let target_index = crate::target_index_fn!(targets, T::AccountId, T);
-	let stake_of = crate::stake_of_fn!(voters, T::AccountId);
 
-	let assignments = voters
+	let assignments = active_voters
 		.iter()
 		.map(|(voter, _stake, votes)| {
 			let percent_per_edge: InnerOf<CompactAccuracyOf<T>> =
