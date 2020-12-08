@@ -93,7 +93,7 @@ impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_authority_discovery::{AuthorityPair};
+	use sp_authority_discovery::AuthorityPair;
 	use sp_application_crypto::Pair;
 	use sp_core::{crypto::key_types, H256};
 	use sp_io::TestExternalities;
@@ -101,7 +101,7 @@ mod tests {
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
 		Perbill, KeyTypeId,
 	};
-	use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{impl_outer_origin, parameter_types};
 
 	type AuthorityDiscovery = Module<Test>;
 
@@ -138,13 +138,15 @@ mod tests {
 		pub const Offset: BlockNumber = 0;
 		pub const UncleGenerations: u64 = 0;
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
 
 	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = BlockNumber;
@@ -156,13 +158,6 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = ();

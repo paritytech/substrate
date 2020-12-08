@@ -122,7 +122,7 @@ use frame_support::{
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
-		extract_actual_weight,
+		extract_actual_weight, PerDispatchClass,
 	},
 	dispatch::DispatchResultWithPostInfo,
 };
@@ -132,14 +132,15 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 use sp_io::TestExternalities;
 
 pub mod offchain;
+pub mod limits;
 #[cfg(test)]
 pub(crate) mod mock;
 
 mod extensions;
-mod weight;
 pub mod weights;
 #[cfg(test)]
 mod tests;
+
 
 pub use extensions::{
 	check_mortality::CheckMortality, check_genesis::CheckGenesis, check_nonce::CheckNonce,
@@ -160,10 +161,19 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::ordered_trie_root(xts)
 }
 
+/// An object to track the currently used extrinsic weight in a block.
+pub type ConsumedWeight = PerDispatchClass<Weight>;
+
 pub trait Config: 'static + Eq + Clone {
 	/// The basic call filter to use in Origin. All origins are built with this filter as base,
 	/// except Root.
 	type BaseCallFilter: Filter<Self::Call>;
+
+	/// Block & extrinsics weights: base values and limits.
+	type BlockWeights: Get<limits::BlockWeights>;
+
+	/// The maximum length of a block (in bytes).
+	type BlockLength: Get<limits::BlockLength>;
 
 	/// The `Origin` type used by dispatchable calls.
 	type Origin:
@@ -219,30 +229,8 @@ pub trait Config: 'static + Eq + Clone {
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount: Get<Self::BlockNumber>;
 
-	/// The maximum weight of a block.
-	type MaximumBlockWeight: Get<Weight>;
-
 	/// The weight of runtime database operations the runtime can invoke.
 	type DbWeight: Get<RuntimeDbWeight>;
-
-	/// The base weight of executing a block, independent of the transactions in the block.
-	type BlockExecutionWeight: Get<Weight>;
-
-	/// The base weight of an Extrinsic in the block, independent of the of extrinsic being executed.
-	type ExtrinsicBaseWeight: Get<Weight>;
-
-	/// The maximal weight of a single Extrinsic. This should be set to at most
-	/// `MaximumBlockWeight - AverageOnInitializeWeight`. The limit only applies to extrinsics
-	/// containing `Normal` dispatch class calls.
-	type MaximumExtrinsicWeight: Get<Weight>;
-
-	/// The maximum length of a block (in bytes).
-	type MaximumBlockLength: Get<u32>;
-
-	/// The portion of the block that is available to normal transaction. The rest can only be used
-	/// by operational transactions. This can be applied to any resource limit managed by the system
-	/// module, including weight and length.
-	type AvailableBlockRatio: Get<Perbill>;
 
 	/// Get the chain's current version.
 	type Version: Get<RuntimeVersion>;
@@ -399,7 +387,7 @@ decl_storage! {
 		ExtrinsicCount: Option<u32>;
 
 		/// The current weight for the block.
-		BlockWeight get(fn block_weight): weight::ExtrinsicsWeight;
+		BlockWeight get(fn block_weight): ConsumedWeight;
 
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
@@ -519,20 +507,11 @@ decl_module! {
 		/// The maximum number of blocks to allow in mortal eras.
 		const BlockHashCount: T::BlockNumber = T::BlockHashCount::get();
 
-		/// The maximum weight of a block.
-		const MaximumBlockWeight: Weight = T::MaximumBlockWeight::get();
-
 		/// The weight of runtime database operations the runtime can invoke.
 		const DbWeight: RuntimeDbWeight = T::DbWeight::get();
 
-		/// The base weight of executing a block, independent of the transactions in the block.
-		const BlockExecutionWeight: Weight = T::BlockExecutionWeight::get();
-
-		/// The base weight of an Extrinsic in the block, independent of the of extrinsic being executed.
-		const ExtrinsicBaseWeight: Weight = T::ExtrinsicBaseWeight::get();
-
-		/// The maximum length of a block (in bytes).
-		const MaximumBlockLength: u32 = T::MaximumBlockLength::get();
+		/// The weight configuration (limits & base values) for each class of extrinsics and block.
+		const BlockWeights: limits::BlockWeights = T::BlockWeights::get();
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if !UpgradedToU32RefCount::get() {
@@ -540,16 +519,22 @@ decl_module! {
 					Some(AccountInfo { nonce, refcount: rc as RefCount, data })
 				);
 				UpgradedToU32RefCount::put(true);
-				T::MaximumBlockWeight::get()
+				T::BlockWeights::get().max_block
 			} else {
 				0
 			}
 		}
 
+		fn integrity_test() {
+			T::BlockWeights::get()
+				.validate()
+				.expect("The weights are invalid.");
+		}
+
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight = *_ratio * T::MaximumBlockWeight::get()]
+		#[weight = *_ratio * T::BlockWeights::get().max_block]
 		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
 		}
@@ -590,7 +575,7 @@ decl_module! {
 		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
 		/// We will treat this as a full block.
 		/// # </weight>
-		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Operational)]
+		#[weight = (T::BlockWeights::get().max_block, DispatchClass::Operational)]
 		pub fn set_code(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
@@ -607,7 +592,7 @@ decl_module! {
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
 		/// # </weight>
-		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Operational)]
+		#[weight = (T::BlockWeights::get().max_block, DispatchClass::Operational)]
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
@@ -1120,9 +1105,9 @@ impl<T: Config> Module<T> {
 
 	/// Set the current block weight. This should only be used in some integration tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn set_block_limits(weight: Weight, len: usize) {
+	pub fn set_block_consumed_resources(weight: Weight, len: usize) {
 		BlockWeight::mutate(|current_weight| {
-			current_weight.put(weight, DispatchClass::Normal)
+			current_weight.set(weight, DispatchClass::Normal)
 		});
 		AllExtrinsicsLen::put(len as u32);
 	}
@@ -1347,7 +1332,6 @@ pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S
 		None => (None, None),
 	}
 }
-
 
 impl<T: Config> IsDeadAccount<T::AccountId> for Module<T> {
 	fn is_dead_account(who: &T::AccountId) -> bool {
