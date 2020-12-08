@@ -1497,7 +1497,7 @@ mod tests {
 				)
 			);
 
-			// Duplicate vote, expecting error with Pays::Yes ...
+			// Duplicate vote, expecting error with Pays::Yes.
 			let vote_rval: DispatchResultWithPostInfo = Collective::vote(
 				Origin::signed(2),
 				hash.clone(),
