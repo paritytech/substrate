@@ -51,7 +51,7 @@ use sp_runtime::{
 	},
 	traits::{
 		Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
-		DispatchInfoOf, PostDispatchInfoOf,
+		DispatchInfoOf, PostDispatchInfoOf, AtLeast32BitUnsigned
 	},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
@@ -330,31 +330,22 @@ impl<T: Config> Module<T> where
 	}
 
 	/// Compute the final fee value for a particular transaction.
-	///
-	/// The final fee is composed of:
-	///   - `base_fee`: This is the minimum amount a user pays for a transaction. It is declared
-	///     as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
-	///   - `len_fee`: The length fee, the amount paid for the encoded length (in bytes) of the
-	///     transaction.
-	///   - `weight_fee`: This amount is computed based on the weight of the transaction. Weight
-	///     accounts for the execution time of a transaction.
-	///   - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
-	///     the congestion of the network.
-	///   - (Optional) `tip`: If included in the transaction, the tip will be added on top. Only
-	///     signed transactions can have a tip.
-	///
-	/// The base fee and adjusted weight and length fees constitute the _inclusion fee,_ which is
-	/// the minimum fee for a transaction to be included in a block.
-	///
-	/// ```ignore
-	/// inclusion_fee = base_fee + len_fee + [targeted_fee_adjustment * weight_fee];
-	/// final_fee = inclusion_fee + tip;
-	/// ```
 	pub fn compute_fee(
 		len: u32,
 		info: &DispatchInfoOf<T::Call>,
 		tip: BalanceOf<T>,
 	) -> BalanceOf<T> where
+		T::Call: Dispatchable<Info=DispatchInfo>,
+	{
+		Self::compute_fee_details(len, info, tip).final_fee()
+	}
+
+	/// Compute the fee details for a particular transaction.
+	pub fn compute_fee_details(
+		len: u32,
+		info: &DispatchInfoOf<T::Call>,
+		tip: BalanceOf<T>,
+	) -> FeeDetails<BalanceOf<T>> where
 		T::Call: Dispatchable<Info=DispatchInfo>,
 	{
 		Self::compute_fee_raw(len, info.weight, tip, info.pays_fee)
@@ -372,6 +363,18 @@ impl<T: Config> Module<T> where
 	) -> BalanceOf<T> where
 		T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
 	{
+		Self::compute_actual_fee_details(len, info, post_info, tip).final_fee()
+	}
+
+	/// Compute the actual post dispatch fee details for a particular transaction.
+	pub fn compute_actual_fee_details(
+		len: u32,
+		info: &DispatchInfoOf<T::Call>,
+		post_info: &PostDispatchInfoOf<T::Call>,
+		tip: BalanceOf<T>,
+	) -> FeeDetails<BalanceOf<T>> where
+		T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
+	{
 		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, post_info.pays_fee(info))
 	}
 
@@ -380,7 +383,7 @@ impl<T: Config> Module<T> where
 		weight: Weight,
 		tip: BalanceOf<T>,
 		pays_fee: Pays,
-	) -> BalanceOf<T> {
+	) -> FeeDetails<BalanceOf<T>> {
 		if pays_fee == Pays::Yes {
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
@@ -395,12 +398,19 @@ impl<T: Config> Module<T> where
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
 			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
-			base_fee
-				.saturating_add(fixed_len_fee)
-				.saturating_add(adjusted_weight_fee)
-				.saturating_add(tip)
+			FeeDetails {
+				inclusion_fee: Some(InclusionFee {
+                    base_fee,
+					len_fee: fixed_len_fee,
+					adjusted_weight_fee
+				}),
+				tip
+			}
 		} else {
-			tip
+			FeeDetails {
+				inclusion_fee: None,
+				tip
+			}
 		}
 	}
 
@@ -423,6 +433,62 @@ impl<T> Convert<Weight, BalanceOf<T>> for Module<T> where
 	/// for informational purposes and not used in the actual fee calculation.
 	fn convert(weight: Weight) -> BalanceOf<T> {
 		NextFeeMultiplier::get().saturating_mul_int(Self::weight_to_fee(weight))
+	}
+}
+
+/// The base fee and adjusted weight and length fees constitute the _inclusion fee,_ which is
+/// the minimum fee for a transaction to be included in a block.
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+pub struct InclusionFee<Balance> {
+	/// This is the minimum amount a user pays for a transaction. It is declared
+    /// as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
+	pub base_fee: Balance,
+	/// The length fee, the amount paid for the encoded length (in bytes) of the transaction.
+	pub len_fee: Balance,
+	/// - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
+    ///     the congestion of the network.
+    /// - `weight_fee`: This amount is computed based on the weight of the transaction. Weight
+    /// accounts for the execution time of a transaction.
+    ///
+    /// adjusted_weight_fee = targeted_fee_adjustment * weight_fee
+	pub adjusted_weight_fee: Balance,
+}
+
+impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
+	/// Returns the total of inclusion fee.
+	///
+    /// ```ignore
+    /// inclusion_fee = base_fee + len_fee + adjusted_weight_fee
+    /// ```
+	pub fn total(&self) -> Balance {
+		self.base_fee
+			.saturating_add(self.len_fee)
+			.saturating_add(self.adjusted_weight_fee)
+	}
+}
+
+/// The `final_fee` is composed of:
+///   - (Optional) `inclusion_fee`: Only the `Pays::Yes` transaction can have the inclusion fee.
+///   - (Optional) `tip`: If included in the transaction, the tip will be added on top. Only
+///     signed transactions can have a tip.
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+pub struct FeeDetails<Balance> {
+	pub inclusion_fee: Option<InclusionFee<Balance>>,
+	pub tip: Balance,
+}
+
+impl<Balance: AtLeast32BitUnsigned + Default + Copy> FeeDetails<Balance> {
+	/// Returns the final fee.
+	///
+	/// ```ignore
+	/// final_fee = inclusion_fee + tip;
+	/// ```
+	pub fn final_fee(&self) -> Balance {
+		self.inclusion_fee.as_ref().map(|i|i.total()).unwrap_or_default() + self.tip
 	}
 }
 
