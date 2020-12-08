@@ -1543,7 +1543,7 @@ mod tests {
 				)
 			);
 
-			// acc 3 modify the vote, expecting Ok with Pays::Yes ...
+			// acc 3 modify the vote, expecting Ok with Pays::Yes.
 			assert_eq!(
 				Collective::vote(Origin::signed(3), hash.clone(), 0, false),
 				Ok(
