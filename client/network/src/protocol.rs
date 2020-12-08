@@ -1276,7 +1276,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	/// Connect to unreserved peers and allow unreserved peers to connect.
+	// TODO: /!\
+	/*/// Connect to unreserved peers and allow unreserved peers to connect.
 	pub fn accept_unreserved_peers(&self) {
 		// TODO:
 		self.peerset_handle.set_reserved_only(false);
@@ -1312,7 +1313,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				protocol
 			);
 		}
-	}
+	}*/
 
 	/// Notify the protocol that we have learned about the existence of nodes on the default set.
 	///
