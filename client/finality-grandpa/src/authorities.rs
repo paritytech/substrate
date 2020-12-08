@@ -919,6 +919,7 @@ mod tests {
 			authorities.pending_changes().collect::<Vec<_>>(),
 			vec![&change_a],
 		);
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges::empty());
 
 		// finalizing "hash_d" will enact the change signaled at "hash_a"
 		let status = authorities.apply_standard_changes(
@@ -937,6 +938,7 @@ mod tests {
 		assert_eq!(authorities.current_authorities, set_a);
 		assert_eq!(authorities.set_id, 1);
 		assert_eq!(authorities.pending_changes().count(), 0);
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15)]));
 	}
 
 	#[test]
@@ -989,6 +991,7 @@ mod tests {
 			authorities.apply_standard_changes("hash_d", 40, &is_descendent_of, false),
 			Err(Error::ForkTree(fork_tree::Error::UnfinalizedAncestor))
 		));
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges::empty());
 
 		let status = authorities.apply_standard_changes(
 			"hash_b",
@@ -1002,6 +1005,7 @@ mod tests {
 
 		assert_eq!(authorities.current_authorities, set_a);
 		assert_eq!(authorities.set_id, 1);
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15)]));
 
 		// after finalizing `change_a` it should be possible to finalize `change_c`
 		let status = authorities.apply_standard_changes(
@@ -1016,6 +1020,7 @@ mod tests {
 
 		assert_eq!(authorities.current_authorities, set_c);
 		assert_eq!(authorities.set_id, 2);
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15), (1, 40)]));
 	}
 
 	#[test]
@@ -1176,7 +1181,7 @@ mod tests {
 					set_id: 1,
 					pending_standard_changes: ForkTree::new(),
 					pending_forced_changes: Vec::new(),
-					authority_set_changes: AuthoritySetChanges::empty(),
+					authority_set_changes: AuthoritySetChanges(vec![(0, 42)]),
 				},
 			)
 		);
@@ -1284,22 +1289,26 @@ mod tests {
 			authorities.apply_forced_changes("hash_d45", 45, &static_is_descendent_of(true), false),
 			Err(Error::ForcedAuthoritySetChangeDependencyUnsatisfied(15))
 		));
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges::empty());
 
 		// we apply the first pending standard change at #15
 		authorities
 			.apply_standard_changes("hash_a15", 15, &static_is_descendent_of(true), false)
 			.unwrap();
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15)]));
 
 		// but the forced change still depends on the next standard change
 		assert!(matches!(
 			authorities.apply_forced_changes("hash_d", 45, &static_is_descendent_of(true), false),
 			Err(Error::ForcedAuthoritySetChangeDependencyUnsatisfied(20))
 		));
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15)]));
 
 		// we apply the pending standard change at #20
 		authorities
 			.apply_standard_changes("hash_b", 20, &static_is_descendent_of(true), false)
 			.unwrap();
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15), (1, 20)]));
 
 		// afterwards the forced change at #45 can already be applied since it signals
 		// that finality stalled at #31, and the next pending standard change is effective
@@ -1316,10 +1325,11 @@ mod tests {
 					set_id: 3,
 					pending_standard_changes: ForkTree::new(),
 					pending_forced_changes: Vec::new(),
-					authority_set_changes: AuthoritySetChanges::empty(),
+					authority_set_changes: AuthoritySetChanges(vec![(0, 15), (1, 20), (2, 31)]),
 				}
 			),
 		);
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15), (1, 20)]));
 	}
 
 	#[test]
