@@ -1504,18 +1504,7 @@ mod tests {
 				0,
 				true,
 			);
-			match vote_rval {
-				Ok(rval) => {
-					// Forced Panic, Invalid case, should not occur.
-					panic!(
-						"Invalid State::Duplicate vote, error expected - invalid rval {:#?}",
-						rval,
-					);
-				},
-				Err(err) => {
-					assert_eq!(err.post_info.pays_fee, Pays::Yes);
-				},
-			}
+			assert_eq!(vote_rval.unwrap_err().post_info.pays_fee, Pays::Yes);
 
 			// Modifying vote, expecting ok with Pays::Yes.
 			assert_eq!(
