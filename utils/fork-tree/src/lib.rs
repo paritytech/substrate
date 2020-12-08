@@ -415,8 +415,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		// another fork not part of the tree). make sure to only keep roots that
 		// are part of the finalized branch
 		let mut changed = false;
-		let mut roots = Vec::new();
-		std::mem::swap(&mut roots, &mut self.roots);
+		let roots = std::mem::take(&mut self.roots);
 
 		for root in roots {
 			if root.number > number && is_descendent_of(hash, &root.hash)? {
@@ -614,8 +613,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		// descendent (in this case the node wasn't finalized earlier presumably
 		// because the predicate didn't pass).
 		let mut changed = false;
-		let mut roots = Vec::new();
-		std::mem::swap(&mut roots, &mut self.roots);
+		let roots = std::mem::take(&mut self.roots);
 
 		for root in roots {
 			let retain = root.number > number && is_descendent_of(hash, &root.hash)?
@@ -909,8 +907,7 @@ impl<H, N, V> Iterator for RemovedIterator<H, N, V> {
 			// child nodes are stored ordered by max branch height (decreasing),
 			// we want to keep this ordering while iterating but since we're
 			// using a stack for iterator state we need to reverse it.
-			let mut children = Vec::new();
-			std::mem::swap(&mut children, &mut node.children);
+			let children = std::mem::take(&mut node.children);
 
 			self.stack.extend(children.into_iter().rev());
 			(node.hash, node.number, node.data)
