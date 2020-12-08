@@ -49,7 +49,7 @@ use historied_db::{
 	DecodeWithContext,
 	management::{ManagementMut, ForkableManagement},
 	historied::DataMut,
-	mapped_db::TransactionalMappedDB,
+	mapped_db::{TransactionalMappedDB, MappedDBDyn},
 	backend::nodes::ContextHead,
 };
 
@@ -113,11 +113,15 @@ pub type DbState<B> = sp_state_machine::TrieBackend<
 	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
 >;
 
-/// Key value db change for at a given block of an historied DB.
+/// Modifiable Historied DB for a given new block state.
+///
+/// This assumes that the block is a head block and modification
+/// is conflict free (writing the delta a the end of a fork branch
+/// without concurrent access).
 pub struct HistoriedDBMut {
-	/// Branch head indexes to change values of a latest block.
+	/// Branch head indexes of a latest block.
 	pub current_state: historied_db::Latest<(u32, u64)>,
-	/// Inner database to modify historied values.
+	/// Inner database storing historied values.
 	pub db: Arc<dyn Database<DbHash>>,
 }
 
@@ -153,7 +157,7 @@ impl HistoriedDBMut {
 
 		let histo = if let Some(histo) = self.db.get(column, k) {
 			Some(HValue::decode_with_context(&mut &histo[..], &(init.clone(), init_nodes.clone()))
-				.expect("Bad encoded value in db, closing"))
+				.expect("Corrupted db, wrong historied value encoding, closing."))
 		} else {
 			if change.is_none() {
 				return;
@@ -418,7 +422,7 @@ pub(crate) mod columns {
 }
 
 #[derive(Clone)]
-/// Database backed tree management.
+/// Persistence mapping of historied db state management.
 ///
 /// Definitions for storage of historied
 /// db tree state (maps block hashes to internal
@@ -426,18 +430,21 @@ pub(crate) mod columns {
 pub struct TreeManagementPersistence;
 
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
-/// Database backed tree management for a rocksdb database.
+/// Rocksdb database for ordered key value.
+///
+/// It can support historied db state management persistence.
 pub struct RocksdbStorage(Arc<kvdb_rocksdb::Database>);
 
-/// Database backed tree management for an unordered database.
+/// Unordered key value database support for ordered key value.
 ///
-/// This internaly use radix tree to index nodes.
+/// It can support historied db state management persistence.
+/// It internaly use a radix tree to index nodes.
 pub struct DatabaseStorage<H: Clone + PartialEq + std::fmt::Debug>(RadixTreeDatabase<H>);
 
 impl historied_db::management::tree::TreeManagementStorage for TreeManagementPersistence {
 	const JOURNAL_DELETE: bool = true;
 	// Use pointer to serialize db with a transactional layer.
-	type Storage = TransactionalMappedDB<historied_db::mapped_db::MappedDBDyn>;
+	type Storage = TransactionalMappedDB<MappedDBDyn>;
 	type Mapping = historied_tree_bindings::Mapping;
 	type JournalDelete = historied_tree_bindings::JournalDelete;
 	type TouchedGC = historied_tree_bindings::TouchedGC;
@@ -448,6 +455,9 @@ impl historied_db::management::tree::TreeManagementStorage for TreeManagementPer
 	type TreeState = historied_tree_bindings::TreeState;
 }
 
+/// Define key to use for subcollection by using a key prefixing
+/// strategy.
+/// This just concatenate the subcollection prefix to the key.
 macro_rules! subcollection_prefixed_key {
 	($prefix: ident, $key: ident) => {
 		let mut prefixed_key;
@@ -462,10 +472,10 @@ macro_rules! subcollection_prefixed_key {
 	}
 }
 
-/// We resolve rocksdb collection or subcollection.
+/// Function that split a collection identifier into a column index and
+/// a subcollection prefix.
 /// Collections are defined by four byte encoding of their index.
-/// Subcollection are located into the collection defined by four first byte,
-/// and behind a prefixed location (remaining bytes).
+/// Subcollection are behind a prefixed location (remaining bytes).
 /// Note that subcollection should define their prefix in a way that no key
 /// collision happen.
 pub fn resolve_collection<'a>(c: &'a [u8]) -> Option<(u32, Option<&'a [u8]>)> {
@@ -483,6 +493,7 @@ pub fn resolve_collection<'a>(c: &'a [u8]) -> Option<(u32, Option<&'a [u8]>)> {
 	}
 	None
 }
+
 const fn resolve_collection_inner<'a>(c: &'a [u8]) -> u32 {
 	let mut buf = [0u8; 4];
 	buf[0] = c[0];
@@ -610,7 +621,7 @@ impl<H> historied_db::mapped_db::MappedDB for DatabaseStorage<H>
 	}
 }
 
-/// Trait for serializing historied db tree management.
+/// Definition of mappings used by `TreeManagementPersistence`.
 pub mod historied_tree_bindings {
 	macro_rules! static_instance {
 		($name: ident, $col: expr) => {
@@ -926,7 +937,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 		&mut self,
 		transaction: &mut Transaction<DbHash>,
 		historied: Option<&mut HistoriedDBMut>,
-		journals: Option<&mut TransactionalMappedDB<historied_db::mapped_db::MappedDBDyn>>,
+		journals: Option<&mut TransactionalMappedDB<MappedDBDyn>>,
 	) {
 		let mut historied = historied.map(|historied_db| {
 			let block_nodes = BlockNodes::new(historied_db.db.clone());
@@ -971,7 +982,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 				ordered_db,
 				historied.0.current_state.latest().clone(),
 				journal_keys,
-				true, // New block, no need for fetch
+				true, // New block, no need for fetch.
 			)
 		}
 
@@ -1193,8 +1204,10 @@ impl<T: Clone> FrozenForDuration<T> {
 	}
 }
 
-/// Tree management for substrate. Inedxes are `u32` and values ar encoded as
-/// `Vec<u8>`.
+/// Historied db state tree management for substrate.
+///
+/// Branch indexes are `u32`, block indexes `u64`,
+/// and values ar encoded as `Vec<u8>`.
 pub type TreeManagement<H, S> = historied_db::management::tree::TreeManagement<
 	H,
 	u32,
@@ -1202,7 +1215,9 @@ pub type TreeManagement<H, S> = historied_db::management::tree::TreeManagement<
 	S,
 >;
 
-/// Register tree management consumer.
+/// Registered historied db state consumer.
+///
+/// Mainly a way to trigger migration over all component using the state.
 pub type RegisteredConsumer<H, S> = historied_db::management::tree::RegisteredConsumer<
 	H,
 	u32,
@@ -1242,6 +1257,36 @@ pub struct Backend<Block: BlockT> {
 	historied_management_consumer_transaction: Arc<RwLock<Transaction<DbHash>>>,
 }
 
+// write management state changes
+fn apply_historied_management_changes<'a, Block: BlockT>(
+	mut historied_management: parking_lot::RwLockWriteGuard<'a, TreeManagement<
+		<HashFor<Block> as Hasher>::Out,
+		TreeManagementPersistence,
+	>>,
+	transaction: &mut Transaction<DbHash>,
+) {
+	let pending = std::mem::replace(&mut historied_management.ser().pending, Default::default());
+	for (col, (mut changes, dropped)) in pending {
+		if dropped {
+			use historied_db::mapped_db::MappedDB;
+			for (key, _v) in historied_management.ser_ref().iter(col) {
+				changes.insert(key, None);
+			}
+		}
+		if let Some((col, p)) = resolve_collection(col) {
+			for (key, change) in changes {
+				subcollection_prefixed_key!(p, key);
+				match change {
+					Some(value) => transaction.set_from_vec(col, key, value),
+					None => transaction.remove(col, key),
+				}
+			}
+		} else {
+			warn!("Unknown collection for tree management pending transaction {:?}", col);
+		}
+	}
+}
+
 impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
@@ -1274,8 +1319,8 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
-		ordered_db: historied_db::mapped_db::MappedDBDyn,
-		ordered_db_2: historied_db::mapped_db::MappedDBDyn,
+		ordered_db: MappedDBDyn,
+		ordered_db_2: MappedDBDyn,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
 	) -> ClientResult<Self> {
@@ -1321,6 +1366,10 @@ impl<Block: BlockT> Backend<Block> {
 		let historied_management = Arc::new(RwLock::new(TreeManagement::from_ser(historied_persistence)));
 		// TODO allow to skip those locks through config (putting in db config feels awkward but could
 		// do the job).
+		// Reminder, without the locks if the offchain worker do not manage its concurrency properly
+		// the data will get corrupted (modified historied value cache writing over concurrent changes
+		// and probably some detached backend nodes that will not get pruned).
+		// TODO maybe use a panicky lock mode to assert worker concurrency is correct.
 		let safe_offchain_locks = true;
 		let offchain_local_storage = offchain::BlockChainLocalStorage::new(
 			db,
@@ -1542,7 +1591,8 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			// Ensure pending layer is clean
-			let _ = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
+			let pending = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
+			assert!(pending.iter().next().is_none());
 			let update_plan = {
 				// lock does notinclude update of value as we do not have concurrent block creation
 				let mut management = self.historied_management.write();
@@ -1584,27 +1634,7 @@ impl<Block: BlockT> Backend<Block> {
 			operation.apply_offchain(&mut transaction, historied_db.as_mut(), journals);
 		}
 
-		// write management state changes
-		let pending = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
-		for (col, (mut changes, dropped)) in pending {
-			if dropped {
-				use historied_db::mapped_db::MappedDB;
-				for (key, _v) in self.historied_management.read().ser_ref().iter(col) {
-					changes.insert(key, None);
-				}
-			}
-			if let Some((col, p)) = resolve_collection(col) {
-				for (key, change) in changes {
-					subcollection_prefixed_key!(p, key);
-					match change {
-						Some(value) => transaction.set_from_vec(col, key, value),
-						None => transaction.remove(col, key),
-					}
-				}
-			} else {
-				warn!("Unknown collection for tree management pending transaction {:?}", col);
-			}
-		}
+		apply_historied_management_changes::<Block>(self.historied_management.write(), &mut transaction);
 
 		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
@@ -1920,47 +1950,35 @@ impl<Block: BlockT> Backend<Block> {
 			number.saturating_sub(nb).saturated_into::<u64>()
 		});
 
+		// This lock can be rather long, so we really need to migrate occasionally.
+		// TODO this is bad design, migrate requires this lock, but the actual
+		// pruning does not require it that much: we should be able to run
+		// a migration without attaching the historied_management to it.
+		// This is due to the fact that transaction is use, and we can apply thing
+		// rather atomically.
+		// TODO create TransactionalMigration that do not require locking?
+		// Maybe some api like AssertUnwindSafe : AssertTransactionalMigrate.
+		let mut historied_management = self.historied_management.write();
 		// Ensure pending layer is clean
-		let _ = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
+		let _ = std::mem::replace(&mut historied_management.ser().pending, Default::default());
 
-		// TODO large mgmt lock
-		let switch_index = self.historied_management.write().get_db_state_for_fork(hash);
+		let switch_index = historied_management.get_db_state_for_fork(hash);
 		let path = {
 			use historied_db::management::Management;
-			self.historied_management.write().get_db_state(hash)
+			historied_management.get_db_state(hash)
 		};
 		
 		if let (Some(switch_index), Some(path)) = (switch_index, path) {
-			self.historied_management.write().canonicalize(path, switch_index, prune_index);
+			historied_management.canonicalize(path, switch_index, prune_index);
 			// do migrate data
-			self.historied_management_consumer.migrate(&mut *self.historied_management.write());
+			self.historied_management_consumer.migrate(&mut *historied_management);
 		} else {
 			return Err(ClientError::UnknownBlock("Missing in historied management".to_string()));
 		}
 
 		// flush historied management changes
-		let pending = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
 		let mut transaction = std::mem::replace(&mut *self.historied_management_consumer_transaction.write(), Default::default());
-		// TODO this is duplicated code: put in a function
-		for (col, (mut changes, dropped)) in pending {
-			if dropped {
-				use historied_db::mapped_db::MappedDB;
-				for (key, _v) in self.historied_management.read().ser_ref().iter(col) {
-					changes.insert(key, None);
-				}
-			}
-			if let Some((col, p)) = resolve_collection(col) {
-				for (key, change) in changes {
-					subcollection_prefixed_key!(p, key);
-					match change {
-						Some(value) => transaction.set_from_vec(col, key, value),
-						None => transaction.remove(col, key),
-					}
-				}
-			} else {
-				warn!("Unknown collection for tree management pending transaction {:?}", col);
-			}
-		}
+		apply_historied_management_changes::<Block>(historied_management, &mut transaction);
 
 		self.storage.db.commit(transaction)?;
 		*self.historied_next_finalizable.write() = Some(number + HISTORIED_FINALIZATION_WINDOWS.into());
@@ -1969,6 +1987,7 @@ impl<Block: BlockT> Backend<Block> {
 }
 
 /// Avoid finalizing at every block.
+/// TODO get this value from conf
 const HISTORIED_FINALIZATION_WINDOWS: u8 = 101;
 
 fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db::CommitSet<Vec<u8>>) {

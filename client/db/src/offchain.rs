@@ -48,6 +48,9 @@ type ChangesJournal<Db> = historied_db::management::JournalForMigrationBasis<
 	crate::historied_tree_bindings::LocalOffchainDelete,
 >;
 
+/// Journal for changes, it write directly its changes.
+/// Please note that this journalling can be quite heavy (list of change key for block to fetch
+/// and update).
 pub(crate) type ChangesJournalSync = Arc<Mutex<ChangesJournal<historied_db::mapped_db::MappedDBDyn>>>;
 
 /// Offchain local storage with blockchain historied storage.
@@ -803,13 +806,19 @@ impl NodesMeta for MetaBlocks {
 	const STORAGE_PREFIX: &'static [u8] = b"tree_mgmt/block_nodes";
 }
 
-/// Node backend for blocks values
-/// when the block history grows too big.
+/// Node backend for historied value that need to be
+/// split in backend database.
+///
+/// This is transactional and `apply_transaction` need
+/// to be call to extract changes into an actual db transaction.
 #[derive(Clone)]
 pub struct BlockNodes(DatabasePending);
 
-/// Node backend for branch values
-/// when the branch history grows too big.
+/// Branch backend for historied value that need to be
+/// split in backend database.
+///
+/// This is transactional and `apply_transaction` need
+/// to be call to extract changes into an actual db transaction.
 #[derive(Clone)]
 pub struct BranchNodes(DatabasePending);
 
