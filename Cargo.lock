@@ -8287,6 +8287,7 @@ dependencies = [
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "regex",
+ "scale-info",
  "schnorrkel",
  "secrecy",
  "serde",
