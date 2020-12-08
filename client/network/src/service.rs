@@ -668,9 +668,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 				sink.clone()
 			} else {
 				// Notification silently discarded, as documented.
-				log::debug!(
+				log::error!(
 					target: "sub-libp2p",
-					"Attempted to send notification on missing or closed substream: {:?}",
+					"Attempted to send notification on unknown protocol: {:?}",
 					protocol,
 				);
 				return;
