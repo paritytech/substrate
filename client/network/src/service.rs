@@ -1381,11 +1381,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							Err(err) => {
 								let reason = match err {
 									ResponseFailure::Busy => "busy",
+									ResponseFailure::TimeoutOrClosed => "timeout-or-closed",
 									ResponseFailure::Network(InboundFailure::Timeout) => "timeout",
 									ResponseFailure::Network(InboundFailure::UnsupportedProtocols) =>
 										"unsupported",
-									ResponseFailure::Network(InboundFailure::ConnectionClosed) =>
-										"connection-closed",
+									ResponseFailure::Network(InboundFailure::ResponseOmission) =>
+										"response-omission",
 								};
 
 								metrics.requests_in_failure_total
