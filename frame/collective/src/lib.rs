@@ -563,14 +563,14 @@ decl_module! {
 		///
 		/// May be called by any signed account in order to finish voting and close the proposal.
 		///
-		/// If the close operation completes successfully (with either approval or disapproval),
-		/// the transaction fee will be waived.
-		///
 		/// If called before the end of the voting period it will only close the vote if it is
 		/// has enough votes to be approved or disapproved.
 		///
 		/// If called after the end of the voting period abstentions are counted as rejections
 		/// unless there is a prime member set and the prime member cast an approval.
+		///
+		/// If the close operation completes successfully with disapproval, the transaction fee will
+		/// be waived. Otherwise execution of the approved operation will be charged to the caller.
 		///
 		/// + `proposal_weight_bound`: The maximum amount of weight consumed by executing the closed proposal.
 		/// + `length_bound`: The upper bound for the length of the proposal in storage. Checked via
