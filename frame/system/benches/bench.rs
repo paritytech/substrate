@@ -54,14 +54,22 @@ impl_outer_event! {
 
 frame_support::parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
-	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::with_sensible_defaults(
+			4 * 1024 * 1024, Perbill::from_percent(75),
+		);
+	pub BlockLength: frame_system::limits::BlockLength =
+		frame_system::limits::BlockLength::max_with_normal_ratio(
+			4 * 1024 * 1024, Perbill::from_percent(75),
+		);
 }
 #[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
 impl system::Config for Runtime {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = BlockLength;
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -73,13 +81,6 @@ impl system::Config for Runtime {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = ();
