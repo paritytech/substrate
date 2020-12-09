@@ -25,8 +25,9 @@
 //! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
 
 pub mod logging;
+pub mod block;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHasher};
 use std::fmt;
 use std::time::{Duration, Instant};
 
@@ -53,6 +54,8 @@ use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 use tracing_subscriber::reload::Handle;
 use once_cell::sync::OnceCell;
 use tracing_subscriber::filter::Directive;
+use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 
@@ -146,7 +149,7 @@ pub fn parse_default_directive(directive: &str) -> Result<Directive, String> {
 pub struct ProfilingLayer {
 	targets: Vec<(String, Level)>,
 	trace_handler: Box<dyn TraceHandler>,
-	span_data: Mutex<FxHashMap<Id, SpanDatum>>,
+	span_data: Mutex<HashMap<Id, SpanDatum>>,
 	current_span: CurrentSpan,
 }
 
@@ -206,17 +209,54 @@ pub struct SpanDatum {
 	pub values: Values,
 }
 
+impl From<SpanDatum> for sp_tracing::std_types::SpanDatum {
+	fn from(s: SpanDatum) -> Self {
+		let values = sp_tracing::std_types::Values {
+			bool_values: s.values.bool_values,
+			i64_values: s.values.i64_values,
+			u64_values: s.values.u64_values,
+			string_values: s.values.string_values,
+		};
+		sp_tracing::std_types::SpanDatum {
+			id: s.id.into_u64(),
+			parent_id: s.parent_id.map(|id| id.into_u64()),
+			name: s.name,
+			target: s.target,
+			line: s.line,
+			overall_time: s.overall_time,
+			values,
+		}
+	}
+}
+
+impl From<TraceEvent> for sp_tracing::std_types::TraceEvent {
+	fn from(e: TraceEvent) -> Self {
+		let values = sp_tracing::std_types::Values {
+			bool_values: e.values.bool_values,
+			i64_values: e.values.i64_values,
+			u64_values: e.values.u64_values,
+			string_values: e.values.string_values,
+		};
+		sp_tracing::std_types::TraceEvent {
+			name: e.name.to_owned(),
+			target: e.target,
+			values,
+			parent_id: e.parent_id.map(|id| id.into_u64()),
+		}
+	}
+}
+
 /// Holds associated values for a tracing span
 #[derive(Default, Clone, Debug)]
 pub struct Values {
 	/// HashMap of `bool` values
-	pub bool_values: FxHashMap<String, bool>,
+	pub bool_values: HashMap<String, bool>,
 	/// HashMap of `i64` values
-	pub i64_values: FxHashMap<String, i64>,
+	pub i64_values: HashMap<String, i64>,
 	/// HashMap of `u64` values
-	pub u64_values: FxHashMap<String, u64>,
+	pub u64_values: HashMap<String, u64>,
 	/// HashMap of `String` values
-	pub string_values: FxHashMap<String, String>,
+	pub string_values: HashMap<String, String>,
 }
 
 impl Values {
@@ -335,7 +375,7 @@ impl ProfilingLayer {
 		Self {
 			targets,
 			trace_handler,
-			span_data: Mutex::new(FxHashMap::default()),
+			span_data: Mutex::new(HashMap::default()),
 			current_span: Default::default(),
 		}
 	}

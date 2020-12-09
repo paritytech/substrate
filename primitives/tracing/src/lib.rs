@@ -89,6 +89,7 @@
 ///
 
 mod types;
+pub mod std_types;
 
 #[cfg(feature = "std")]
 use tracing;

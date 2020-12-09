@@ -7203,6 +7203,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-state-machine",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-utils",
  "sp-version",
@@ -7229,6 +7230,7 @@ dependencies = [
  "sp-core",
  "sp-rpc",
  "sp-runtime",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-version",
 ]
@@ -7439,6 +7441,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slog",
+ "sp-runtime",
  "sp-tracing",
  "tracing",
  "tracing-core",
@@ -8604,8 +8607,14 @@ dependencies = [
 name = "sp-tracing"
 version = "2.0.0"
 dependencies = [
+ "erased-serde",
  "log",
  "parity-scale-codec",
+ "parking_lot 0.10.2",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "slog",
  "sp-std",
  "tracing",
  "tracing-core",

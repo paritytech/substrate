@@ -347,6 +347,11 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 	) -> RpcResult<bool> {
 		self.backend.unsubscribe_runtime_version(meta, id)
 	}
+
+	fn trace_block(&self, block: Block::Hash) -> RpcResult<sp_tracing::std_types::Traces> {
+		let targets= "pallet=trace,frame=trace,state=trace".to_owned();
+		Ok(sc_tracing::block::trace_block::<Block>(targets, block))
+	}
 }
 
 /// Child state backend API.
