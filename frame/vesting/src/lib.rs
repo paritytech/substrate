@@ -38,9 +38,15 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! - `vest` - Update the lock, reducing it in line with the amount "vested" so far.
+//! - `vest` - Update the lock, reducing it in line with the amount "vested" so far for all vested
+//! transfers
 //! - `vest_other` - Update the lock of another account, reducing it in line with the amount
-//!   "vested" so far.
+//!   "vested" so far for all vested transfers added to that account
+//! - `vested_transfer` - Add a new vested transfer to the target account as long as they have not
+//! already reached the maximum allowed vestings for an account.  Otherwise an error
+//! - `force_vested_transfer` - Add a new vested transfer to the target account from the source account
+//! as long as they have not already reached the maximum allowed vestings for an account.
+//! Otherwise an error.  Origin must be root
 //!
 //! [`Call`]: ./enum.Call.html
 //! [`Config`]: ./trait.Config.html
