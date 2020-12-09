@@ -17,7 +17,9 @@
 
 use frame_support::{
 	weights::{DispatchInfo, DispatchClass, Pays, GetDispatchInfo},
-	traits::{GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade, GetPalletVersion, OnGenesis},
+	traits::{
+		GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade, GetPalletVersion, OnGenesis,
+	},
 	dispatch::{UnfilteredDispatchable, Parameter},
 	storage::unhashed,
 };
@@ -277,9 +279,6 @@ frame_support::parameter_types!(
 	pub const MyGetParam2: u32= 11;
 	pub const MyGetParam3: u32= 12;
 	pub const BlockHashCount: u32 = 250;
-	pub const MaximumBlockWeight: frame_support::weights::Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: sp_runtime::Perbill = sp_runtime::Perbill::one();
 );
 
 impl frame_system::Config for Runtime {
@@ -295,13 +294,9 @@ impl frame_system::Config for Runtime {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = frame_support::weights::constants::RocksDbWeight;
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -464,10 +459,7 @@ fn pallet_hooks_expand() {
 		AllModules::on_finalize(1);
 
 		assert_eq!(pallet::Pallet::<Runtime>::storage_version(), None);
-		assert_eq!(
-			AllModules::on_runtime_upgrade(),
-			30 + <Runtime as frame_system::Config>::DbWeight::get().writes(1)
-		);
+		assert_eq!(AllModules::on_runtime_upgrade(), 30);
 		assert_eq!(
 			pallet::Pallet::<Runtime>::storage_version(),
 			Some(pallet::Pallet::<Runtime>::current_version()),

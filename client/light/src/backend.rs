@@ -441,14 +441,14 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(
+	fn apply_to_child_keys_while<A: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
 		action: A,
 	) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				state.for_keys_in_child_storage(child_info, action),
+				state.apply_to_child_keys_while(child_info, action),
 			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}

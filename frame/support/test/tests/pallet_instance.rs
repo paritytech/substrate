@@ -17,12 +17,14 @@
 
 use frame_support::{
 	weights::{DispatchInfo, DispatchClass, Pays, GetDispatchInfo},
-	traits::{GetCallName, GetPalletVersion, OnInitialize, OnFinalize, OnRuntimeUpgrade, OnGenesis},
+	traits::{
+		GetCallName, GetPalletVersion, OnInitialize, OnFinalize, OnRuntimeUpgrade, OnGenesis,
+	},
 	dispatch::UnfilteredDispatchable,
+	storage::unhashed,
 };
 use sp_runtime::{traits::Block as _, DispatchError};
 use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
-use frame_support::storage::unhashed;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -187,9 +189,6 @@ pub mod pallet {
 frame_support::parameter_types!(
 	pub const MyGetParam: u32= 10;
 	pub const BlockHashCount: u32 = 250;
-	pub const MaximumBlockWeight: frame_support::weights::Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: sp_runtime::Perbill = sp_runtime::Perbill::one();
 );
 
 impl frame_system::Config for Runtime {
@@ -205,13 +204,9 @@ impl frame_system::Config for Runtime {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = frame_support::weights::constants::RocksDbWeight;
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -437,10 +432,7 @@ fn pallet_hooks_expand() {
 
 		assert_eq!(pallet::Pallet::<Runtime>::storage_version(), None);
 		assert_eq!(pallet::Pallet::<Runtime, pallet::Instance1>::storage_version(), None);
-		assert_eq!(
-			AllModules::on_runtime_upgrade(),
-			61 + <Runtime as frame_system::Config>::DbWeight::get().writes(2)
-		);
+		assert_eq!(AllModules::on_runtime_upgrade(), 61);
 		assert_eq!(
 			pallet::Pallet::<Runtime>::storage_version(),
 			Some(pallet::Pallet::<Runtime>::current_version()),

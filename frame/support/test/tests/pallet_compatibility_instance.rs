@@ -194,12 +194,12 @@ pub mod pallet {
 frame_support::parameter_types!(
 	pub const SomeConst: u64 = 10;
 	pub const BlockHashCount: u32 = 250;
-	pub const MaximumBlockWeight: frame_support::weights::Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: sp_runtime::Perbill = sp_runtime::Perbill::one();
 );
 
 impl frame_system::Config for Runtime {
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
@@ -212,13 +212,6 @@ impl frame_system::Config for Runtime {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = frame_support::weights::constants::RocksDbWeight;
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();

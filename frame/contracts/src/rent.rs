@@ -240,6 +240,7 @@ where
 				<ContractInfoOf<T>>::remove(account);
 				child::kill_storage(
 					&alive_contract_info.child_trie_info(),
+					None,
 				);
 				<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), false));
 				None
@@ -263,6 +264,7 @@ where
 
 				child::kill_storage(
 					&alive_contract_info.child_trie_info(),
+					None,
 				);
 
 				<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), true));
