@@ -91,7 +91,7 @@ pub trait ElectionDataProvider<AccountId, B> {
 /// Something that can compute the result of an election and pass it back to the caller.
 pub trait ElectionProvider<AccountId> {
 	/// Indicate weather this election provider needs data when calling [`elect`] or not. If
-	/// `false`, then the call site can ignore all parameters of [`elect`]
+	/// `false`, then the call site can ignore all parameters of [`elect`].
 	const NEEDS_ELECT_DATA: bool;
 
 	/// The error type that is returned by the provider.

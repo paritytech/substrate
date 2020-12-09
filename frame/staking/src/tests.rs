@@ -4421,8 +4421,6 @@ fn test_payout_stakers() {
 			bond_nominator(1000 + i, 100 + i, balance + i as Balance, vec![11]);
 		}
 
-		dbg!("HERE");
-
 		mock::start_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
 		// Compute total payout now for whole duration as other parameter won't change
@@ -4709,4 +4707,68 @@ fn payout_to_any_account_works() {
 		// Payment is successful
 		assert!(Balances::free_balance(42) > 0);
 	})
+}
+
+mod election_provider {
+	use super::*;
+
+	#[test]
+	fn estimate_next_election_works() {
+		ExtBuilder::default()
+			.session_per_era(5)
+			.session_length(5)
+			.build()
+			.execute_with(|| {
+				// TODO: prediction for the first session is incorrect. correct is 20 because of
+				// first session having zero length
+				assert_session_era!(0, 0);
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					25
+				);
+
+				run_to_block(4);
+				assert_session_era!(0, 0);
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					25
+				);
+
+				run_to_block(19);
+				assert_session_era!(3, 0);
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					25
+				);
+
+				run_to_block(20);
+				assert_session_era!(4, 1);
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					45
+				);
+
+				run_to_block(21);
+				assert_session_era!(4, 1);
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					45
+				);
+
+				// run_to_block(25);
+				// assert_eq!(System::block_number(), 25);
+				// assert_session_era!(5, 1);
+				// assert_eq!(
+				// 	Staking::next_election_prediction(System::block_number()),
+				// 	45
+				// );
+
+				run_to_block(32);
+				assert_session_era!(6, 1);
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					45
+				);
+			})
+	}
 }

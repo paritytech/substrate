@@ -695,6 +695,18 @@ pub(crate) fn add_slash(who: &AccountId) {
 	);
 }
 
+pub(crate) fn run_to_block(n: BlockNumber) {
+	Staking::on_finalize(System::block_number());
+	for b in System::block_number() + 1..=n {
+		System::set_block_number(b);
+		Session::on_initialize(b);
+		Staking::on_initialize(b);
+		if b != n {
+			Staking::on_finalize(System::block_number());
+		}
+	}
+}
+
 // // winners will be chosen by simply their unweighted total backing stake. Nominator stake is
 // // distributed evenly.
 // pub(crate) fn horrible_npos_solution(
@@ -914,10 +926,10 @@ macro_rules! assert_session_era {
 			$session,
 		);
 		assert_eq!(
-			Staking::active_era().unwrap().index,
+			Staking::current_era().unwrap(),
 			$era,
-			"wrong active era {} != {}",
-			Staking::active_era().unwrap().index,
+			"wrong current era {} != {}",
+			Staking::current_era().unwrap(),
 			$era,
 		);
 	};

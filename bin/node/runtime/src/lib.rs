@@ -471,8 +471,8 @@ impl pallet_staking::Config for Runtime {
 }
 
 parameter_types! {
-	pub const SignedPhase: u32 = 50;
-	pub const UnsignedPhase: u32 = 50;
+	pub const SignedPhase: u32 = 25;
+	pub const UnsignedPhase: u32 = 25;
 	pub const MaxSignedSubmissions: u32 = 10;
 	pub const SignedRewardBase: Balance = 1 * DOLLARS;
 	pub const SignedDepositBase: Balance = 1 * DOLLARS;

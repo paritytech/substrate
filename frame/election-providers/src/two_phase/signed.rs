@@ -56,6 +56,7 @@ where
 	pub fn finalize_signed_phase() -> bool {
 		let mut all_submission: Vec<SignedSubmission<_, _, _>> = <SignedSubmissions<T>>::take();
 		let mut found_solution = false;
+		let mut weight = T::DbWeight::get().reads(1);
 
 		while let Some(best) = all_submission.pop() {
 			let SignedSubmission {
@@ -64,27 +65,40 @@ where
 				deposit,
 				reward,
 			} = best;
+			let active_voters = solution.compact.voters_count() as u32;
 			match Self::feasibility_check(solution, ElectionCompute::Signed) {
 				Ok(ready_solution) => {
-					// write this ready solution.
-					<QueuedSolution<T>>::put(ready_solution);
-
-					// unreserve deposit.
-					let _remaining = T::Currency::unreserve(&who, deposit);
-					debug_assert!(_remaining.is_zero());
-
-					// Reward.
-					let positive_imbalance = T::Currency::deposit_creating(&who, reward);
-					T::RewardHandler::on_unbalanced(positive_imbalance);
-
+					Self::finalize_signed_phase_accept_solution(
+						ready_solution,
+						&who,
+						deposit,
+						reward,
+					);
 					found_solution = true;
+
+					let feasibility_weight = {
+						// TODO: might be easier to just store the weight in `SignedSubmission`?
+						let RoundSnapshot {
+							voters,
+							targets,
+							desired_targets,
+						} = Self::snapshot().unwrap_or_default();
+						let v = voters.len() as u32;
+						let t = targets.len() as u32;
+						let a = active_voters;
+						let w = desired_targets;
+						T::WeightInfo::feasibility_check(v, t, a, w)
+					};
+
+					weight = weight.saturating_add(feasibility_weight);
+					weight = weight
+						.saturating_add(T::WeightInfo::finalize_signed_phase_accept_solution());
 					break;
 				}
 				Err(_) => {
-					let (negative_imbalance, _remaining) =
-						T::Currency::slash_reserved(&who, deposit);
-					debug_assert!(_remaining.is_zero());
-					T::SlashHandler::on_unbalanced(negative_imbalance);
+					Self::finalize_signed_phase_reject_solution(&who, deposit);
+					weight = weight
+						.saturating_add(T::WeightInfo::finalize_signed_phase_reject_solution());
 				}
 			}
 		}
@@ -94,10 +108,45 @@ where
 		all_submission.into_iter().for_each(|not_processed| {
 			let SignedSubmission { who, deposit, .. } = not_processed;
 			let _remaining = T::Currency::unreserve(&who, deposit);
+			weight = weight.saturating_add(T::DbWeight::get().writes(1));
 			debug_assert!(_remaining.is_zero());
 		});
 
 		found_solution
+	}
+
+	/// Helper function for the case where a solution is accepted in the signed phase.
+	///
+	/// Extracted to facilitate with weight calculation.
+	///
+	/// Infallible
+	pub fn finalize_signed_phase_accept_solution(
+		ready_solution: ReadySolution<T::AccountId>,
+		who: &T::AccountId,
+		deposit: BalanceOf<T>,
+		reward: BalanceOf<T>,
+	) {
+		// write this ready solution.
+		<QueuedSolution<T>>::put(ready_solution);
+
+		// unreserve deposit.
+		let _remaining = T::Currency::unreserve(who, deposit);
+		debug_assert!(_remaining.is_zero());
+
+		// Reward.
+		let positive_imbalance = T::Currency::deposit_creating(who, reward);
+		T::RewardHandler::on_unbalanced(positive_imbalance);
+	}
+
+	/// Helper function for the case where a solution is accepted in the rejected phase.
+	///
+	/// Extracted to facilitate with weight calculation.
+	///
+	/// Infallible
+	pub fn finalize_signed_phase_reject_solution(who: &T::AccountId, deposit: BalanceOf<T>) {
+		let (negative_imbalance, _remaining) = T::Currency::slash_reserved(who, deposit);
+		debug_assert!(_remaining.is_zero());
+		T::SlashHandler::on_unbalanced(negative_imbalance);
 	}
 
 	/// Find a proper position in the queue for the signed queue, whilst maintaining the order of
@@ -222,6 +271,18 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{mock::*, *};
+	use frame_support::dispatch::DispatchResultWithPostInfo;
+
+	fn submit_with_witness(
+		origin: Origin,
+		solution: RawSolution<CompactOf<Runtime>>,
+	) -> DispatchResultWithPostInfo {
+		TwoPhase::submit(
+			origin,
+			solution,
+			TwoPhase::signed_submissions().len() as u32,
+		)
+	}
 
 	#[test]
 	fn cannot_submit_too_early() {
@@ -234,11 +295,14 @@ mod tests {
 			let solution = raw_solution();
 
 			assert_noop!(
-				TwoPhase::submit(Origin::signed(10), solution),
+				submit_with_witness(Origin::signed(10), solution),
 				PalletError::<Runtime>::EarlySubmission,
 			);
 		})
 	}
+
+	#[test]
+	fn wrong_witness_fails() {}
 
 	#[test]
 	fn should_pay_deposit() {
@@ -249,7 +313,7 @@ mod tests {
 			let solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
 
-			assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			assert_eq!(balances(&99), (95, 5));
 			assert_eq!(TwoPhase::signed_submissions().first().unwrap().deposit, 5);
@@ -265,7 +329,7 @@ mod tests {
 			let solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
 
-			assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			assert_eq!(balances(&99), (95, 5));
 
 			assert!(TwoPhase::finalize_signed_phase());
@@ -285,7 +349,7 @@ mod tests {
 				assert_eq!(solution.score[0], 40);
 				assert_eq!(balances(&99), (100, 0));
 
-				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				assert_eq!(balances(&99), (95, 5));
 
 				assert!(TwoPhase::finalize_signed_phase());
@@ -303,7 +367,7 @@ mod tests {
 				assert_eq!(solution.score[0], 40);
 				assert_eq!(balances(&99), (100, 0));
 
-				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				assert_eq!(balances(&99), (95, 5));
 
 				assert!(TwoPhase::finalize_signed_phase());
@@ -324,7 +388,7 @@ mod tests {
 			// make the solution invalid.
 			solution.score[0] += 1;
 
-			assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			assert_eq!(balances(&99), (95, 5));
 
 			// no good solution was stored.
@@ -345,11 +409,11 @@ mod tests {
 			assert_eq!(balances(&999), (100, 0));
 
 			// submit as correct.
-			assert_ok!(TwoPhase::submit(Origin::signed(99), solution.clone()));
+			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
 
 			// make the solution invalid and weaker.
 			solution.score[0] -= 1;
-			assert_ok!(TwoPhase::submit(Origin::signed(999), solution));
+			assert_ok!(submit_with_witness(Origin::signed(999), solution));
 			assert_eq!(balances(&99), (95, 5));
 			assert_eq!(balances(&999), (95, 5));
 
@@ -375,7 +439,7 @@ mod tests {
 					score: [(5 + s).into(), 0, 0],
 					..Default::default()
 				};
-				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
 			// weaker.
@@ -385,7 +449,7 @@ mod tests {
 			};
 
 			assert_noop!(
-				TwoPhase::submit(Origin::signed(99), solution),
+				submit_with_witness(Origin::signed(99), solution),
 				PalletError::<Runtime>::QueueFull,
 			);
 		})
@@ -403,7 +467,7 @@ mod tests {
 					score: [(5 + s).into(), 0, 0],
 					..Default::default()
 				};
-				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
 			assert_eq!(
@@ -419,7 +483,7 @@ mod tests {
 				score: [20, 0, 0],
 				..Default::default()
 			};
-			assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
@@ -444,14 +508,14 @@ mod tests {
 					score: [(5 + s).into(), 0, 0],
 					..Default::default()
 				};
-				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
 			let solution = RawSolution {
 				score: [4, 0, 0],
 				..Default::default()
 			};
-			assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			assert_eq!(
 				TwoPhase::signed_submissions()
@@ -466,7 +530,7 @@ mod tests {
 				score: [5, 0, 0],
 				..Default::default()
 			};
-			assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
@@ -493,7 +557,7 @@ mod tests {
 						score: [(5 + s).into(), 0, 0],
 						..Default::default()
 					};
-					assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+					assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				}
 
 				assert_eq!(balances(&99).1, 2 * 5);
@@ -504,7 +568,7 @@ mod tests {
 					score: [20, 0, 0],
 					..Default::default()
 				};
-				assert_ok!(TwoPhase::submit(Origin::signed(999), solution));
+				assert_ok!(submit_with_witness(Origin::signed(999), solution));
 
 				// got one bond back.
 				assert_eq!(balances(&99).1, 2 * 4);
@@ -525,7 +589,7 @@ mod tests {
 						score: [(5 + i).into(), 0, 0],
 						..Default::default()
 					};
-					assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+					assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				}
 				assert_eq!(
 					TwoPhase::signed_submissions()
@@ -541,7 +605,7 @@ mod tests {
 					..Default::default()
 				};
 				assert_noop!(
-					TwoPhase::submit(Origin::signed(99), solution),
+					submit_with_witness(Origin::signed(99), solution),
 					PalletError::<Runtime>::QueueFull,
 				);
 			})
@@ -564,49 +628,49 @@ mod tests {
 					score: [5, 0, 0],
 					..Default::default()
 				};
-				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				assert_eq!(scores(), vec![5]);
 
 				let solution = RawSolution {
 					score: [8, 0, 0],
 					..Default::default()
 				};
-				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				assert_eq!(scores(), vec![5, 8]);
 
 				let solution = RawSolution {
 					score: [3, 0, 0],
 					..Default::default()
 				};
-				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				assert_eq!(scores(), vec![3, 5, 8]);
 
 				let solution = RawSolution {
 					score: [6, 0, 0],
 					..Default::default()
 				};
-				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				assert_eq!(scores(), vec![5, 6, 8]);
 
 				let solution = RawSolution {
 					score: [6, 0, 0],
 					..Default::default()
 				};
-				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				assert_eq!(scores(), vec![6, 6, 8]);
 
 				let solution = RawSolution {
 					score: [10, 0, 0],
 					..Default::default()
 				};
-				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				assert_eq!(scores(), vec![6, 8, 10]);
 
 				let solution = RawSolution {
 					score: [12, 0, 0],
 					..Default::default()
 				};
-				assert_ok!(TwoPhase::submit(Origin::signed(99), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				assert_eq!(scores(), vec![8, 10, 12]);
 			})
 	}
@@ -627,15 +691,15 @@ mod tests {
 			let mut solution = raw_solution();
 
 			// submit a correct one.
-			assert_ok!(TwoPhase::submit(Origin::signed(99), solution.clone()));
+			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
 
 			// make the solution invalidly better and submit. This ought to be slashed.
 			solution.score[0] += 1;
-			assert_ok!(TwoPhase::submit(Origin::signed(999), solution.clone()));
+			assert_ok!(submit_with_witness(Origin::signed(999), solution.clone()));
 
 			// make the solution invalidly worse and submit. This ought to be suppressed and returned.
 			solution.score[0] -= 1;
-			assert_ok!(TwoPhase::submit(Origin::signed(9999), solution));
+			assert_ok!(submit_with_witness(Origin::signed(9999), solution));
 
 			assert_eq!(
 				TwoPhase::signed_submissions()

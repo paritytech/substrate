@@ -152,21 +152,30 @@ impl<
 }
 
 impl<
-	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd + Saturating + Clone,
-	Period: Get<BlockNumber>,
-	Offset: Get<BlockNumber>,
-> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset> {
+		BlockNumber: Rem<Output = BlockNumber>
+			+ Sub<Output = BlockNumber>
+			+ Zero
+			+ PartialOrd
+			+ Saturating
+			+ Clone
+			+ From<u32> // TODO: remove these
+			+ sp_std::fmt::Debug,
+		Period: Get<BlockNumber>,
+		Offset: Get<BlockNumber>,
+	> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset>
+{
 	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber> {
 		let offset = Offset::get();
 		let period = Period::get();
 		Some(if now > offset {
-			let block_after_last_session = (now.clone() - offset) % period.clone();
+			let block_after_last_session = (now.clone() - offset.clone()) % period.clone();
 			if block_after_last_session > Zero::zero() {
 				now.saturating_add(
 					period.saturating_sub(block_after_last_session)
 				)
 			} else {
-				Zero::zero()
+				// TODO: fix this in master.
+				now + period + offset
 			}
 		} else {
 			offset
@@ -174,10 +183,10 @@ impl<
 	}
 
 	fn weight(_now: BlockNumber) -> Weight {
-		// Weight note: `estimate_next_session_rotation` has no storage reads and trivial computational overhead.
-		// There should be no risk to the chain having this weight value be zero for now.
-		// However, this value of zero was not properly calculated, and so it would be reasonable
-		// to come back here and properly calculate the weight of this function.
+		// Weight note: `estimate_next_session_rotation` has no storage reads and trivial
+		// computational overhead. There should be no risk to the chain having this weight value be
+		// zero for now. However, this value of zero was not properly calculated, and so it would be
+		// reasonable to come back here and properly calculate the weight of this function.
 		0
 	}
 }

@@ -704,7 +704,6 @@ mod tests {
 
 			// mine seq_phragmen solution with 2 iters.
 			let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
-			dbg!(&solution);
 
 			// ensure this solution is valid.
 			assert!(TwoPhase::queued_solution().is_none());

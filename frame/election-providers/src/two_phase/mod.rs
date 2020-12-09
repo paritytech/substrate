@@ -155,7 +155,7 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
-#[cfg(feature = "runtime-benchmarks")]
+#[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
 #[cfg(test)]
 mod mock;
@@ -275,7 +275,7 @@ impl<C: Default> Default for RawSolution<C> {
 /// A raw, unchecked signed submission.
 ///
 /// This is just a wrapper around [`RawSolution`] and some additional info.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct SignedSubmission<A, B: HasCompact, C> {
 	/// Who submitted this solution.
 	who: A,
@@ -400,28 +400,35 @@ impl From<sp_npos_elections::Error> for FeasibilityError {
 }
 
 pub trait WeightInfo {
-	fn open_signed_phase() -> Weight;
-	fn open_unsigned_phase() -> Weight;
+	fn on_initialize_open_signed_phase() -> Weight;
+	fn on_initialize_open_unsigned_phase() -> Weight;
+	fn finalize_signed_phase_accept_solution() -> Weight;
+	fn finalize_signed_phase_reject_solution() -> Weight;
 	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight;
-	fn submit(v: u32, t: u32, a: u32, d: u32) -> Weight;
+	fn submit(c: u32) -> Weight;
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight;
 }
-
 
 impl WeightInfo for () {
 	fn feasibility_check(_: u32, _: u32, _: u32, _: u32) -> Weight {
 		Default::default()
 	}
-	fn submit(_: u32, _: u32, _: u32, _: u32) -> Weight {
+	fn submit(_: u32) -> Weight {
 		Default::default()
 	}
 	fn submit_unsigned(_: u32, _: u32, _: u32, _: u32) -> Weight {
 		Default::default()
 	}
-	fn open_signed_phase() -> Weight {
+	fn on_initialize_open_signed_phase() -> Weight {
 		Default::default()
 	}
-	fn open_unsigned_phase() -> Weight {
+	fn on_initialize_open_unsigned_phase() -> Weight {
+		Default::default()
+	}
+	fn finalize_signed_phase_accept_solution() -> Weight {
+		Default::default()
+	}
+	fn finalize_signed_phase_reject_solution() -> Weight {
 		Default::default()
 	}
 }
@@ -549,22 +556,26 @@ decl_module! {
 			let signed_deadline = T::SignedPhase::get() + T::UnsignedPhase::get();
 			let unsigned_deadline = T::UnsignedPhase::get();
 
+			sp_std::if_std! {
+				dbg!(now, next_election, signed_deadline, unsigned_deadline);
+			}
 			let remaining = next_election - now;
 			match Self::current_phase() {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
-					// signed phae can only start after Off.
+					// signed phase can only start after Off.
 					<CurrentPhase<T>>::put(Phase::Signed);
 					Round::mutate(|r| *r +=1);
 					Self::start_signed_phase();
 					log!(info, "Starting signed phase at #{:?} , round {}.", now, Self::round());
-					T::WeightInfo::open_signed_phase()
+					T::WeightInfo::on_initialize_open_signed_phase()
 				},
 				Phase::Signed | Phase::Off if remaining <= unsigned_deadline && remaining > 0u32.into() => {
 					// unsigned phase can start after Off or Signed.
 					let _ = Self::finalize_signed_phase();
+					// for now always start the unsigned phase.
 					<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
 					log!(info, "Starting unsigned phase at #{:?}.", now);
-					T::WeightInfo::open_unsigned_phase()
+					T::WeightInfo::on_initialize_open_unsigned_phase()
 				},
 				_ => {
 					Zero::zero()
@@ -593,9 +604,16 @@ decl_module! {
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
-		#[weight = T::WeightInfo::submit(0, 0, 0, 0)]
-		fn submit(origin, solution: RawSolution<CompactOf<T>>) -> DispatchResultWithPostInfo {
+		///
+		/// # <weight>
+		/// Queue size must be provided as witness data.
+		/// # </weight>
+		#[weight = T::WeightInfo::submit(*witness_data)]
+		fn submit(origin, solution: RawSolution<CompactOf<T>>, witness_data: u32) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+
+			// ensure witness data is correct.
+			ensure!(witness_data == <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32, PalletError::<T>::InvalidWitness);
 
 			// ensure solution is timely.
 			ensure!(Self::current_phase().is_signed(), PalletError::<T>::EarlySubmission);
@@ -606,7 +624,7 @@ decl_module! {
 			// NOTE: this is the only case where having separate snapshot would have been better
 			// because could do just decode_len. But we can create abstractions to do this.
 
-			// build witness.
+			// build witness. Note: this is not needed for weight calc, thus not input.
 			// defensive-only: if phase is signed, snapshot will exist.
 			let RoundSnapshot { voters, targets, .. } = Self::snapshot().unwrap_or_default();
 			let witness = WitnessData { voters: voters.len() as u32, targets: targets.len() as u32 };
@@ -658,6 +676,7 @@ decl_module! {
 			let _ = Self::unsigned_pre_dispatch_checks(&solution)?;
 
 			// ensure witness was correct.
+			// TODO: probably split these again..
 			let RoundSnapshot { voters, targets, .. } = Self::snapshot().unwrap_or_default();
 			ensure!(voters.len() as u32 == witness.voters, PalletError::<T>::InvalidWitness);
 			ensure!(targets.len() as u32 == witness.targets, PalletError::<T>::InvalidWitness);
@@ -855,9 +874,9 @@ mod tests {
 	#[test]
 	fn phase_rotation_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			// 0 ------- 15 -------------- 25 ------- 30 ------- ------- 45 ------- 55 ------- 60
-			//           |                |
-			//         Signed           Unsigned
+			// 0 ------- 15 ------- 25 ------- 30 ------- ------- 45 ------- 55 ------- 60
+			//           |           |                            |           |
+			//         Signed      Unsigned                     Signed     Unsigned
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
@@ -959,7 +978,6 @@ mod tests {
 			assert!(TwoPhase::current_phase().is_off());
 
 			roll_to(20);
-			dbg!(TwoPhase::current_phase());
 			assert!(TwoPhase::current_phase().is_unsigned_open_at(20));
 
 			roll_to(30);

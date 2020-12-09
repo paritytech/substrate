@@ -21,14 +21,18 @@ use super::*;
 use crate::two_phase::{Module as TwoPhase};
 
 pub use frame_benchmarking::{account, benchmarks, whitelist_account, whitelisted_caller};
-use frame_support::assert_ok;
+use frame_support::{assert_ok, traits::OnInitialize};
 use frame_system::RawOrigin;
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_npos_elections::ExtendedBalance;
 use sp_runtime::InnerOf;
 use sp_std::convert::TryInto;
 
 const SEED: u32 = 0;
+// const DEFAULT_VOTERS: u32 = 1000;
+// const DEFAULT_TARGETS: u32 = 500;
+// const DEFAULT_DESIRED: u32 = 200;
+// const DEFAULT_ACTIVE_VOTERS: u32 = 500;
 
 /// Creates a **valid** solution with exactly the given size.
 ///
@@ -58,7 +62,7 @@ where
 		.map(|i| account("Targets", i, SEED))
 		.collect();
 
-	let mut rng = thread_rng();
+	let mut rng = SmallRng::seed_from_u64(999u64);
 
 	// decide who are the winners.
 	let winners = targets
@@ -150,29 +154,84 @@ benchmarks! {
 	}
 	_{}
 
+	on_initialize_nothing {
+		assert!(<TwoPhase<T>>::current_phase().is_off());
+	}: {
+		<TwoPhase<T>>::on_initialize(1u32.into());
+	} verify {
+		assert!(<TwoPhase<T>>::current_phase().is_off());
+	}
+
+	on_initialize_open_signed_phase {
+		assert!(<TwoPhase<T>>::snapshot().is_none());
+		assert!(<TwoPhase<T>>::current_phase().is_off());
+		let next_election = T::ElectionDataProvider::next_election_prediction(1u32.into());
+
+		let signed_deadline = T::SignedPhase::get() + T::UnsignedPhase::get();
+		let unsigned_deadline = T::UnsignedPhase::get();
+	}: {
+		<TwoPhase<T>>::on_initialize(next_election - signed_deadline + 1u32.into());
+	} verify {
+		assert!(<TwoPhase<T>>::snapshot().is_some());
+		assert!(<TwoPhase<T>>::current_phase().is_signed());
+	}
+
+	finalize_signed_phase_accept_solution {
+		let receiver = account("receiver", 0, SEED);
+		T::Currency::make_free_balance_be(&receiver, 100u32.into());
+		let ready: ReadySolution<T::AccountId> = Default::default();
+		let deposit: BalanceOf<T> = 10u32.into();
+		let reward: BalanceOf<T> = 20u32.into();
+
+		assert_ok!(T::Currency::reserve(&receiver, deposit));
+		assert_eq!(T::Currency::free_balance(&receiver), 90u32.into());
+	}: {
+		<TwoPhase<T>>::finalize_signed_phase_accept_solution(ready, &receiver, deposit, reward)
+	} verify {
+		assert_eq!(T::Currency::free_balance(&receiver), 120u32.into());
+		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
+	}
+
+	finalize_signed_phase_reject_solution {
+		let receiver = account("receiver", 0, SEED);
+		let deposit: BalanceOf<T> = 10u32.into();
+		T::Currency::make_free_balance_be(&receiver, 100u32.into());
+		assert_ok!(T::Currency::reserve(&receiver, deposit));
+
+		assert_eq!(T::Currency::free_balance(&receiver), 90u32.into());
+		assert_eq!(T::Currency::reserved_balance(&receiver), 10u32.into());
+	}: {
+		<TwoPhase<T>>::finalize_signed_phase_reject_solution(&receiver, deposit)
+	} verify {
+		assert_eq!(T::Currency::free_balance(&receiver), 90u32.into());
+		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
+	}
+
 	submit {
-		// number of votes in snapshot.
-		let v in 2000 .. 3000;
-		// number of targets in snapshot.
-		let t in 500 .. 800;
-		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
-		// a subset of `v` component.
-		let a in 500 .. 1500;
-		// number of desired targets. Must be a subset of `t` component.
-		let d in 200 .. 400;
+		let c in 1 .. (T::MaxSignedSubmissions::get() - 1);
 
-		let witness = WitnessData { voters: v, targets: t };
-		let raw_solution = solution_with_size::<T>(witness, a, d);
+		// the solution will be worse than all of them meaning the score need to be checked against all.
+		let solution = RawSolution { score: [(1000_0000u128 - 1).into(), 0, 0], ..Default::default() };
 
-		assert!(<TwoPhase<T>>::signed_submissions().len() == 0);
 		<CurrentPhase<T>>::put(Phase::Signed);
+		<Round>::put(1);
+
+		for i in 0..c {
+			<SignedSubmissions<T>>::mutate(|queue| {
+				let solution = RawSolution { score: [(1000_0000 + i).into(), 0, 0], ..Default::default() };
+				let signed_submission = SignedSubmission { solution, ..Default::default() };
+				// note: this is quite tricky: we know that the queue will stay sorted here. The
+				// last will be best.
+				queue.push(signed_submission);
+			})
+		}
 
 		let caller = frame_benchmarking::whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
 
-	}: _(RawOrigin::Signed(caller), raw_solution)
+	}: _(RawOrigin::Signed(caller), solution, c)
 	verify {
-		assert!(<TwoPhase<T>>::signed_submissions().len() == 1);
+		assert!(<TwoPhase<T>>::signed_submissions().len() as u32 == c + 1);
 	}
 
 	submit_unsigned {
@@ -195,9 +254,6 @@ benchmarks! {
 	verify {
 		assert!(<TwoPhase<T>>::queued_solution().is_some());
 	}
-
-	open_signed_phase {}: {} verify {}
-	close_signed_phase {}: {} verify {}
 
 	// This is checking a valid solution. The worse case is indeed a valid solution.
 	feasibility_check {
@@ -238,6 +294,26 @@ mod test {
 
 		ExtBuilder::default().build_and_execute(|| {
 			assert_ok!(test_benchmark_submit::<Runtime>());
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_on_initialize_open_signed_phase::<Runtime>());
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_on_initialize_nothing::<Runtime>());
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_finalize_signed_phase_accept_solution::<
+				Runtime,
+			>());
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_finalize_signed_phase_reject_solution::<
+				Runtime,
+			>());
 		});
 	}
 }

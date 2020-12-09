@@ -763,7 +763,6 @@ fn spawning_runtime_instance_nested_should_work(wasm_method: WasmExecutionMethod
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecutionMethod) {
-
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
@@ -774,6 +773,5 @@ fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecu
 		&mut ext,
 	).unwrap_err();
 
-	dbg!(&error_result);
 	assert!(format!("{}", error_result).contains("Spawned task"));
 }

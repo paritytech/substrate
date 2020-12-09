@@ -1576,7 +1576,6 @@ dependencies = [
  "parking_lot 0.10.2",
  "paste 1.0.3",
  "rand 0.7.3",
- "rand_chacha 0.2.2",
  "serde",
  "sp-arithmetic",
  "sp-core",

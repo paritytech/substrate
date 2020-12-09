@@ -696,6 +696,8 @@ pub trait SessionInterface<AccountId>: frame_system::Config {
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: SessionIndex);
+	/// The current session index.
+	fn current_index() -> SessionIndex;
 }
 
 impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T
@@ -718,6 +720,10 @@ where
 
 	fn validators() -> Vec<<T as frame_system::Config>::AccountId> {
 		<pallet_session::Module<T>>::validators()
+	}
+
+	fn current_index() -> SessionIndex {
+		<pallet_session::Module<T>>::current_index()
 	}
 
 	fn prune_historical_up_to(up_to: SessionIndex) {
@@ -1993,7 +1999,7 @@ impl<T: Config> Module<T> {
 		}
 	}
 
-	/// Plan a new session potentially trigger a new era.
+	/// Plan a new session, potentially trigger a new era.
 	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
@@ -2127,6 +2133,7 @@ impl<T: Config> Module<T> {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
 			s.unwrap()
 		});
+		println!("❌ ErasStartSessionIndex::insert({}, {});", current_era, start_session_index);
 		ErasStartSessionIndex::insert(&current_era, &start_session_index);
 
 		// Clean old era information.
@@ -2421,16 +2428,48 @@ impl<T: Config> ElectionDataProvider<T::AccountId, T::BlockNumber> for Module<T>
 		Self::validator_count()
 	}
 
-	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
-		T::NextNewSession::estimate_next_new_session(now).unwrap_or_default()
-	}
-
 	fn voters() -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		Self::get_npos_voters()
 	}
 
 	fn targets() -> Vec<T::AccountId> {
 		Self::get_npos_targets()
+	}
+
+	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
+		let current_era = Self::current_era().unwrap_or(0);
+		// Note: this happens after the on_initialize of the session module, therefore, this is the
+		// updated session index in the border cases.
+		let session_index = T::SessionInterface::current_index();
+		let current_era_start_session_index =
+			Self::eras_start_session_index(current_era).unwrap_or(0);
+		let era_length = session_index
+			.saturating_sub(current_era_start_session_index)
+			.min(T::SessionsPerEra::get());
+		// TODO: this is probably an ugly hack here and can be re-done.
+		// TODO: cases to consider: session length = 1, session length > 1,
+		let session_length = T::NextNewSession::estimate_next_new_session(1u32.into())
+			.unwrap_or(0u32.into())
+			.max(1u32.into());
+
+		let this_session_end = T::NextNewSession::estimate_next_new_session(now)
+			.unwrap_or_default();
+		let sessions_left: T::BlockNumber = T::SessionsPerEra::get()
+			.saturating_sub(era_length)
+			.saturating_sub(1) // one session is computed in this_session_end.
+			.into();
+
+		dbg!(
+			now,
+			session_index,
+			current_era_start_session_index,
+			era_length,
+			T::NextNewSession::estimate_next_new_session(now).unwrap(),
+			this_session_end,
+			sessions_left,
+			session_length,
+		);
+		this_session_end.saturating_add(sessions_left.saturating_mul(session_length))
 	}
 
 	fn feasibility_check_assignment<P: PerThing>(
