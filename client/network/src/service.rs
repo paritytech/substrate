@@ -878,12 +878,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::PutValue(key, value));
 	}
 
-	/// Connect to unreserved peers and allow unreserved peers to connect.
+	/// Connect to unreserved peers and allow unreserved peers to connect for syncing purposes.
 	pub fn accept_unreserved_peers(&self) {
 		self.peerset.set_reserved_only(sc_peerset::SetId::from(0), false);  // TODO: do properly
 	}
 
-	/// Disconnect from unreserved peers and deny new unreserved peers to connect.
+	/// Disconnect from unreserved peers and deny new unreserved peers to connect for syncing
+	/// purposes.
 	pub fn deny_unreserved_peers(&self) {
 		self.peerset.set_reserved_only(sc_peerset::SetId::from(0), true);  // TODO: do properly
 	}
@@ -900,6 +901,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Returns an `Err` if the given string is not a valid multiaddress
 	/// or contains an invalid peer ID (which includes the local peer ID).
 	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
+		// TODO: use protocol
 		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
 		// Make sure the local peer ID is never added to the PSM.
 		if peer_id == self.local_peer_id {
@@ -910,6 +912,49 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+		Ok(())
+	}
+
+	/// Add peers to a peerset priority group.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
+	/// consist of only `/p2p/<peerid>`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	pub fn add_peers_set_reserved(&self, protocol: Cow<'static, str>, peers: HashSet<Multiaddr>) -> Result<(), String> {
+		let peers = self.split_multiaddr_and_peer_id(peers)?;
+
+		for (peer_id, addr) in peers.into_iter() {
+			if !addr.is_empty() {
+				let _ = self
+					.to_worker
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id.clone(), addr));
+			}
+			let _ = self
+				.to_worker
+				.unbounded_send(ServiceToWorkerMsg::AddToPeersSet(protocol.clone(), peer_id));  // TODO: no
+		}
+
+		Ok(())
+	}
+
+	/// Remove peers from a peerset priority group.
+	///
+	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
+	///
+	/// Returns an `Err` if one of the given addresses is invalid or contains an
+	/// invalid peer ID (which includes the local peer ID).
+	//
+	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
+	// TODO: update
+	pub fn remove_peers_set_reserved(&self, protocol: Cow<'static, str>, peers: HashSet<Multiaddr>) -> Result<(), String> {
+		let peers = self.split_multiaddr_and_peer_id(peers)?;
+		for (peer_id, _) in peers.into_iter() {
+			let _ = self
+				.to_worker
+				.unbounded_send(ServiceToWorkerMsg::RemoveFromPeersSet(protocol.clone(), peer_id));  // TODO: no
+		}
 		Ok(())
 	}
 

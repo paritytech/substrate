@@ -179,10 +179,10 @@ impl<B: BlockT> Future for GossipEngine<B> {
 					match this.network_event_stream.poll_next_unpin(cx) {
 						Poll::Ready(Some(event)) => match event {
 							Event::SyncConnected { remote } => {
-								this.network.add_to_set(remote, this.protocol.clone());
+								this.network.add_set_reserved(remote, this.protocol.clone());
 							}
 							Event::SyncDisconnected { remote } => {
-								this.network.remove_from_set(remote, this.protocol.clone());
+								this.network.remove_set_reserved(remote, this.protocol.clone());
 							}
 							Event::NotificationStreamOpened { remote, protocol, role } => {
 								if protocol != this.protocol {
@@ -333,10 +333,10 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn add_to_set(&self, _: PeerId, _: Cow<'static, str>) {
+		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
 		}
 
-		fn remove_from_set(&self, _: PeerId, _: Cow<'static, str>) {
+		fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
 		}
 
 		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {

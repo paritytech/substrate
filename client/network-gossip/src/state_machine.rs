@@ -499,10 +499,10 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn add_to_set(&self, _: PeerId, _: Cow<'static, str>) {
+		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
 		}
 
-		fn remove_from_set(&self, _: PeerId, _: Cow<'static, str>) {
+		fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
 		}
 
 		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {

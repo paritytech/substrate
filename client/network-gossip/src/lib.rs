@@ -76,10 +76,10 @@ pub trait Network<B: BlockT> {
 	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange);
 
 	/// Adds the peer to the set of peers to be connected to with this protocol.
-	fn add_to_set(&self, who: PeerId, protocol: Cow<'static, str>);
+	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
 
 	/// Removes the peer to the set of peers to be connected to with this protocol.
-	fn remove_from_set(&self, who: PeerId, protocol: Cow<'static, str>);
+	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
 
 	/// Force-disconnect a peer.
 	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>);
@@ -103,21 +103,21 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 		NetworkService::report_peer(self, peer_id, reputation);
 	}
 
-	fn add_to_set(&self, who: PeerId, protocol: Cow<'static, str>) {
+	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
 		let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
 			.collect::<multiaddr::Multiaddr>();
-		let result = NetworkService::add_to_peers_set(self, protocol, iter::once(addr).collect());
+		let result = NetworkService::add_peers_set_reserved(self, protocol, iter::once(addr).collect());
 		if let Err(err) = result {
-			log::error!(target: "gossip", "add_to_peers_set failed: {}", err);
+			log::error!(target: "gossip", "add_set_reserved failed: {}", err);
 		}
 	}
 
-	fn remove_from_set(&self, who: PeerId, protocol: Cow<'static, str>) {
+	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
 		let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
 			.collect::<multiaddr::Multiaddr>();
-		let result = NetworkService::remove_from_peers_set(self, protocol, iter::once(addr).collect());
+		let result = NetworkService::remove_peers_set_reserved(self, protocol, iter::once(addr).collect());
 		if let Err(err) = result {
-			log::error!(target: "gossip", "remove_from_peers_set failed: {}", err);
+			log::error!(target: "gossip", "remove_set_reserved failed: {}", err);
 		}
 	}
 
