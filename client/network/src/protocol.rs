@@ -120,8 +120,6 @@ mod rep {
 	pub const BAD_PROTOCOL: Rep = Rep::new_fatal("Unsupported protocol");
 	/// Peer role does not match (e.g. light peer connecting to another light peer).
 	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
-	/// Peer response data does not have requested bits.
-	pub const BAD_RESPONSE: Rep = Rep::new(-(1 << 12), "Incomplete response");
 	/// Peer send us a block announcement that failed at validation.
 	pub const BAD_BLOCK_ANNOUNCEMENT: Rep = Rep::new(-(1 << 12), "Bad block announcement");
 }
@@ -528,10 +526,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.num_sync_requests()
 	}
 
-	/// Sync local state with the blockchain state.
-	pub fn update_chain(&mut self) {
-		let info = self.context_data.chain.info();
-		self.sync.update_chain_info(&info.best_hash, info.best_number);
+	/// Inform sync about new best imported block.
+	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
+		self.sync.update_chain_info(&hash, number);
 		self.behaviour.set_legacy_handshake_message(
 			build_status_message(&self.config, &self.context_data.chain),
 		);
@@ -539,11 +536,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			&self.block_announces_protocol,
 			BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
 		);
-	}
-
-	/// Inform sync about an own imported block.
-	pub fn own_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
-		self.sync.update_chain_info(&hash, number);
 	}
 
 	fn update_peer_info(&mut self, who: &PeerId) {
@@ -712,20 +704,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				}
 			}
 		} else {
-			// Validate fields against the request.
-			if request.fields.contains(message::BlockAttributes::HEADER) && response.blocks.iter().any(|b| b.header.is_none()) {
-				self.behaviour.disconnect_peer(&peer);
-				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
-				trace!(target: "sync", "Missing header for a block");
-				return CustomMessageOutcome::None
-			}
-			if request.fields.contains(message::BlockAttributes::BODY) && response.blocks.iter().any(|b| b.body.is_none()) {
-				self.behaviour.disconnect_peer(&peer);
-				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
-				trace!(target: "sync", "Missing body for a block");
-				return CustomMessageOutcome::None
-			}
-
 			match self.sync.on_block_data(&peer, Some(request), response) {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
@@ -1089,16 +1067,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let is_best = self.context_data.chain.info().best_hash == hash;
 		debug!(target: "sync", "Reannouncing block {:?} is_best: {}", hash, is_best);
-		self.send_announcement(&header, data, is_best, true)
-	}
-
-	fn send_announcement(&mut self, header: &B::Header, data: Vec<u8>, is_best: bool, force: bool) {
-		let hash = header.hash();
 
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
-			trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
 			let inserted = peer.known_blocks.insert(hash);
-			if inserted || force {
+			if inserted {
+				trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
 				let message = message::BlockAnnounce {
 					header: header.clone(),
 					state: if is_best {
@@ -1258,18 +1231,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
-		let new_best = results.iter().rev().find_map(|r| match r {
-			(Ok(BlockImportResult::ImportedUnknown(n, aux, _)), hash) if aux.is_new_best => Some((*n, hash.clone())),
-			_ => None,
-		});
-		if let Some((best_num, best_hash)) = new_best {
-			self.sync.update_chain_info(&best_hash, best_num);
-			self.behaviour.set_legacy_handshake_message(build_status_message(&self.config, &self.context_data.chain));
-			self.behaviour.set_notif_protocol_handshake(
-				&self.block_announces_protocol,
-				BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
-			);
-		}
 		let results = self.sync.on_blocks_processed(
 			imported,
 			count,
@@ -1507,8 +1468,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
 			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 				return Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }),
-			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
-				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
+			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) =>
+				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }),
 		};
 
 		let outcome = match event {

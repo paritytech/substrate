@@ -22,23 +22,24 @@
 use frame_support::{
 	StorageValue, StorageMap, parameter_types, assert_ok,
 	traits::{ChangeMembers, Currency, LockIdentifier},
-	weights::Weight,
 };
 use sp_core::H256;
 use sp_runtime::{
-	Perbill, BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
+	BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 };
 use crate as elections;
 
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
@@ -50,13 +51,6 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -68,7 +62,7 @@ impl frame_system::Trait for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type DustRemoval = ();
@@ -110,7 +104,7 @@ parameter_types!{
 	pub const ElectionModuleId: LockIdentifier = *b"py/elect";
 }
 
-impl elections::Trait for Test {
+impl elections::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
 	type BadPresentation = ();
