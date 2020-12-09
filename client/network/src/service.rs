@@ -598,7 +598,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Need a better solution to decide authorized_only, but now just use reserved_only flag for
 	/// prototyping.
 	pub fn set_authorized_only(&self, reserved_only: bool) {
-		self.peerset.set_reserved_only(reserved_only)
+		self.peerset.set_reserved_only(sc_peerset::SetId::from(0), reserved_only)
 	}
 
 	/// Appends a notification to the buffer of pending outgoing notifications with the given peer.
@@ -880,12 +880,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Connect to unreserved peers and allow unreserved peers to connect.
 	pub fn accept_unreserved_peers(&self) {
-		self.peerset.set_reserved_only(false);
+		self.peerset.set_reserved_only(sc_peerset::SetId::from(0), false);  // TODO: do properly
 	}
 
 	/// Disconnect from unreserved peers and deny new unreserved peers to connect.
 	pub fn deny_unreserved_peers(&self) {
-		self.peerset.set_reserved_only(true);
+		self.peerset.set_reserved_only(sc_peerset::SetId::from(0), true);  // TODO: do properly
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers.

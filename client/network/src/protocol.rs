@@ -400,6 +400,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				out_peers: network_config.default_peers_set.out_peers,
 				bootnodes,
 				reserved_nodes: default_sets_reserved.clone(),
+				reserved_only: network_config.default_peers_set.non_reserved_mode == config::NonReservedPeerMode::Deny,
 			});
 
 			// Set number 1 is used for transactions.
@@ -409,6 +410,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				out_peers: u32::max_value(),
 				bootnodes: Vec::new(),
 				reserved_nodes: default_sets_reserved,
+				reserved_only: network_config.default_peers_set.non_reserved_mode == config::NonReservedPeerMode::Deny,  // TODO: always deny?
 			});
 
 			for set_cfg in &network_config.extra_sets {
@@ -418,17 +420,20 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
 				}
 
+				let reserved_only =
+					set_cfg.set_config.non_reserved_mode == config::NonReservedPeerMode::Deny;
+
 				sets.push(sc_peerset::SetConfig {
 					in_peers: set_cfg.set_config.in_peers,
 					out_peers: set_cfg.set_config.out_peers,
 					bootnodes: Vec::new(),
 					reserved_nodes,
+					reserved_only,
 				});
 			}
 
 			sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig {
 				sets,
-				reserved_only: network_config.non_reserved_mode == config::NonReservedPeerMode::Deny,
 			})
 		};
 

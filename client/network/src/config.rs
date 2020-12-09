@@ -376,8 +376,6 @@ pub struct NetworkConfiguration {
 	pub default_peers_set: SetConfig,
 	/// Configuration for extra sets of nodes.
 	pub extra_sets: Vec<NonDefaultSetConfig>,
-	/// The non-reserved peer mode.
-	pub non_reserved_mode: NonReservedPeerMode,
 	/// Client identifier. Sent over the wire for debugging purposes.
 	pub client_version: String,
 	/// Name of the node. Sent over the wire for debugging purposes.
@@ -410,7 +408,6 @@ impl NetworkConfiguration {
 			request_response_protocols: Vec::new(),
 			default_peers_set: Default::default(),
 			extra_sets: Vec::new(),
-			non_reserved_mode: NonReservedPeerMode::Accept,
 			client_version: client_version.into(),
 			node_name: node_name.into(),
 			transport: TransportConfig::Normal {
@@ -472,6 +469,9 @@ pub struct SetConfig {
 	pub out_peers: u32,
 	/// List of reserved node addresses.
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
+	/// Whether nodes that aren't in [`SetConfig::reserved_nodes`] are accepted or automatically
+	/// refused.
+	pub non_reserved_mode: NonReservedPeerMode,
 }
 
 impl Default for SetConfig {
@@ -480,6 +480,7 @@ impl Default for SetConfig {
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
+			non_reserved_mode: NonReservedPeerMode::Accept,
 		}
 	}
 }
