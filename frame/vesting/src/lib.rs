@@ -60,6 +60,7 @@ use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
 use frame_support::traits::{
 	Currency, LockableCurrency, VestingSchedule, WithdrawReasons, LockIdentifier,
 	ExistenceRequirement, Get,
+	{GetPalletVersion, PalletVersion},
 };
 use frame_system::{ensure_signed, ensure_root};
 pub use weights::WeightInfo;
@@ -202,6 +203,24 @@ decl_module! {
 
 		/// The minimum amount to be transferred to create a new vesting schedule.
 		const MinVestedTransfer: BalanceOf<T> = T::MinVestedTransfer::get();
+
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			let maybe_storage_version = <Self as GetPalletVersion>::storage_version();
+			match maybe_storage_version {
+				Some(storage_version) if storage_version <= PalletVersion::new(2, 0, 0) => {
+					Vesting::<T>::translate::<Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>, _>(|_: T::AccountId, value: Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>| {
+						if let Some(vesting) = value {
+							return Some(vec![vesting])
+						}
+
+						None
+					});
+
+					frame_support::weights::Weight::max_value()
+					}
+				_ => 0
+			}
+		}
 
 		fn deposit_event() = default;
 
