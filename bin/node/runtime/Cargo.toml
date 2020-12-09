@@ -81,7 +81,7 @@ pallet-treasury = { version = "2.0.0", default-features = false, path = "../../.
 pallet-utility = { version = "2.0.0", default-features = false, path = "../../../frame/utility" }
 pallet-transaction-payment = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
-pallet-vesting = { version = "2.0.0", default-features = false, path = "../../../frame/vesting" }
+pallet-vesting = { version = "2.1.0", default-features = false, path = "../../../frame/vesting" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "3.0.0", path = "../../../utils/wasm-builder" }
