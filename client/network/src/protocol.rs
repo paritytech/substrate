@@ -223,7 +223,7 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
-	boot_node_ids: Arc<HashSet<PeerId>>,
+	boot_node_ids: HashSet<PeerId>,
 }
 
 #[derive(Default)]
@@ -339,7 +339,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		network_config: &config::NetworkConfiguration,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		metrics_registry: Option<&Registry>,
-		boot_node_ids: Arc<HashSet<PeerId>>,
 	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
@@ -349,6 +348,15 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			block_announce_validator,
 			config.max_parallel_downloads,
 		);
+
+		let boot_node_ids = {
+			let mut list = HashSet::new();
+			for node in &network_config.boot_nodes {
+				list.insert(node.peer_id.clone());
+			}
+			list.shrink_to_fit();
+			list
+		};
 
 		let important_peers = {
 			let mut imp_p = HashSet::new();
