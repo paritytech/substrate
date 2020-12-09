@@ -519,9 +519,9 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								};
 								return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 							},
-							None => debug_assert!(
-								false,
-								"Expected to find start time for sent response.",
+							None => log::debug!(
+								"Expected to find start time for sent response. Is the LRU cache \
+								 to small?",
 							),
 						}
 
@@ -701,7 +701,7 @@ impl RequestResponseCodec for GenericCodec {
 
 #[cfg(test)]
 mod tests {
-	use futures::channel::{mpsc, oneshot};
+	use futures::channel::mpsc;
 	use futures::executor::LocalPool;
 	use futures::prelude::*;
 	use futures::task::Spawn;
