@@ -57,7 +57,7 @@ enum Action {
 	AddReservedPeer(SetId, PeerId),
 	RemoveReservedPeer(SetId, PeerId),
 	SetReservedPeers(SetId, HashSet<PeerId>),
-	SetReservedOnly(bool),
+	SetReservedOnly(SetId, bool),
 	ReportPeer(PeerId, ReputationChange),
 	SetPeersSet(SetId, HashSet<PeerId>),
 	AddToPeersSet(SetId, PeerId),
@@ -131,9 +131,10 @@ impl PeersetHandle {
 		let _ = self.tx.unbounded_send(Action::RemoveReservedPeer(set_id, peer_id));
 	}
 
-	/// Sets whether or not the peerset only has connections with nodes marked as reserved.
-	pub fn set_reserved_only(&self, reserved: bool) {
-		let _ = self.tx.unbounded_send(Action::SetReservedOnly(reserved));
+	/// Sets whether or not the peerset only has connections with nodes marked as reserved for
+	/// the given set.
+	pub fn set_reserved_only(&self, set_id: SetId, reserved: bool) {
+		let _ = self.tx.unbounded_send(Action::SetReservedOnly(set_id, reserved));
 	}
 
 	/// Set reserved peers to the new set.
@@ -202,9 +203,6 @@ impl From<u64> for IncomingIndex {
 pub struct PeersetConfig {
 	/// List of sets of nodes the peerset manages.
 	pub sets: Vec<SetConfig>,
-
-	/// If true, we only accept nodes in [`SetConfig::reserved_nodes`] of any of the sets.
-	pub reserved_only: bool,
 }
 
 /// Configuration for a single set of nodes.
@@ -227,6 +225,9 @@ pub struct SetConfig {
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
 	/// >			otherwise it will not be able to connect to them.
 	pub reserved_nodes: HashSet<PeerId>,
+
+	/// If true, we only accept nodes in [`SetConfig::reserved_nodes`].
+	pub reserved_only: bool,
 }
 
 /// Side of the peer set manager owned by the network. In other words, the "receiving" side.
@@ -237,12 +238,10 @@ pub struct SetConfig {
 pub struct Peerset {
 	/// Underlying data structure for the nodes's states.
 	data: peersstate::PeersState,
-	/// If true, we only accept reserved nodes.
-	reserved_only: bool,
 	/// For each set, lists of nodes that don't occupy slots and that we should try to always be
-	/// connected to. Is kept in sync with the list of non-slot-occupying nodes in
-	/// [`Peerset::data`].
-	reserved_nodes: Vec<HashSet<PeerId>>,
+	/// connected to, and whether only reserved nodes are accepted. Is kept in sync with the list
+	/// of non-slot-occupying nodes in [`Peerset::data`].
+	reserved_nodes: Vec<(HashSet<PeerId>, bool)>,
 	/// Receiver for messages from the `PeersetHandle` and from `tx`.
 	rx: TracingUnboundedReceiver<Action>,
 	/// Sending side of `rx`.
@@ -274,8 +273,9 @@ impl Peerset {
 				})),
 				tx,
 				rx,
-				reserved_only: config.reserved_only,
-				reserved_nodes: config.sets.iter().map(|set| set.reserved_nodes.clone()).collect(),
+				reserved_nodes: config.sets.iter().map(|set| {
+					(set.reserved_nodes.clone(), set.reserved_only)
+				}).collect(),
 				message_queue: VecDeque::new(),
 				created: now,
 				latest_time_update: now,
@@ -284,7 +284,7 @@ impl Peerset {
 
 		for (set, set_config) in config.sets.into_iter().enumerate() {
 			for node in set_config.reserved_nodes {
-				peerset.data.add_no_slot_node(node);
+				peerset.data.add_no_slot_node(set, node);
 			}
 
 			for peer_id in set_config.bootnodes {
@@ -301,24 +301,24 @@ impl Peerset {
 	}
 
 	fn on_add_reserved_peer(&mut self, set_id: SetId, peer_id: PeerId) {
-		let newly_inserted = self.reserved_nodes[set_id.0].insert(peer_id.clone());
+		let newly_inserted = self.reserved_nodes[set_id.0].0.insert(peer_id.clone());
 		if !newly_inserted {
 			return;
 		}
 
-		self.data.add_no_slot_node(peer_id);
+		self.data.add_no_slot_node(set_id.0, peer_id);
 		self.alloc_slots();
 	}
 
 	fn on_remove_reserved_peer(&mut self, set_id: SetId, peer_id: PeerId) {
-		if !self.reserved_nodes[set_id.0].remove(&peer_id) {
+		if !self.reserved_nodes[set_id.0].0.remove(&peer_id) {
 			return;
 		}
 
-		self.data.remove_no_slot_node(&peer_id);
+		self.data.remove_no_slot_node(set_id.0, &peer_id);
 
 		// Nothing more to do if not in reserved-only mode.
-		if !self.reserved_only {
+		if !self.reserved_nodes[set_id.0].1 {
 			return;
 		}
 
@@ -336,9 +336,9 @@ impl Peerset {
 	fn on_set_reserved_peers(&mut self, set_id: SetId, peer_ids: HashSet<PeerId>) {
 		// Determine the difference between the current group and the new list.
 		let (to_insert, to_remove) = {
-			let to_insert = peer_ids.difference(&self.reserved_nodes[set_id.0])
+			let to_insert = peer_ids.difference(&self.reserved_nodes[set_id.0].0)
 				.cloned().collect::<Vec<_>>();
-			let to_remove = self.reserved_nodes[set_id.0].difference(&peer_ids)
+			let to_remove = self.reserved_nodes[set_id.0].0.difference(&peer_ids)
 				.cloned().collect::<Vec<_>>();
 			(to_insert, to_remove)
 		};
@@ -352,14 +352,14 @@ impl Peerset {
 		}
 	}
 
-	fn on_set_reserved_only(&mut self, reserved_only: bool) {
-		self.reserved_only = reserved_only;
+	fn on_set_reserved_only(&mut self, set_id: SetId, reserved_only: bool) {
+		self.reserved_nodes[set_id.0].1 = reserved_only;
 
-		if self.reserved_only {
+		if reserved_only {
 			// Disconnect all the nodes that aren't reserved.
 			for set_index in 0..self.data.num_sets() {
 				for peer_id in self.data.connected_peers(set_index).cloned().collect::<Vec<_>>().into_iter() {
-					if self.reserved_nodes[set_index].contains(&peer_id) {
+					if self.reserved_nodes[set_index].0.contains(&peer_id) {
 						continue;
 					}
 
@@ -426,7 +426,7 @@ impl Peerset {
 
 	fn on_remove_from_peers_set(&mut self, set_id: SetId, peer_id: PeerId) {
 		// Don't do anything if node is reserved.
-		if self.reserved_nodes[set_id.0].contains(&peer_id) {
+		if self.reserved_nodes[set_id.0].0.contains(&peer_id) {
 			return;
 		}
 
@@ -543,7 +543,7 @@ impl Peerset {
 
 		// Try to connect to all the reserved nodes that we are not connected to.
 		for set_index in 0..self.data.num_sets() {
-			for reserved_node in &self.reserved_nodes[set_index] {
+			for reserved_node in &self.reserved_nodes[set_index].0 {
 				let entry = match self.data.peer(set_index, reserved_node) {
 					peersstate::Peer::Unknown(n) => n.discover(),
 					peersstate::Peer::NotConnected(n) => n,
@@ -569,13 +569,13 @@ impl Peerset {
 			}
 		}
 
-		// Nothing more to do if we're in reserved mode.
-		if self.reserved_only {
-			return;
-		}
-
 		// Now, we try to connect to other nodes.
 		for set_index in 0..self.data.num_sets() {
+			// Nothing more to do if we're in reserved mode.
+			if self.reserved_nodes[set_index].1 {
+				continue;
+			}
+
 			// Try to grab the next node to attempt to connect to.
 			let next = match self.data.highest_not_connected_peer(set_index) {
 				Some(p) => p,
@@ -612,8 +612,8 @@ impl Peerset {
 
 		self.update_time();
 
-		if self.reserved_only {
-			if !self.reserved_nodes.iter().any(|l| l.contains(&peer_id)) {
+		if self.reserved_nodes[set_id.0].1 {
+			if !self.reserved_nodes[set_id.0].0.contains(&peer_id) {
 				self.message_queue.push_back(Message::Reject(index));
 				return;
 			}
@@ -693,7 +693,7 @@ impl Peerset {
 
 				(peer_id.to_base58(), state)
 			}).collect::<HashMap<_, _>>(),*/
-			"reserved_only": self.reserved_only,
+			//"reserved_only": self.reserved_only,
 			"message_queue": self.message_queue.len(),
 		})
 	}
@@ -726,8 +726,8 @@ impl Stream for Peerset {
 					self.on_remove_reserved_peer(set_id, peer_id),
 				Action::SetReservedPeers(set_id, peer_ids) =>
 					self.on_set_reserved_peers(set_id, peer_ids),
-				Action::SetReservedOnly(reserved) =>
-					self.on_set_reserved_only(reserved),
+				Action::SetReservedOnly(set_id, reserved) =>
+					self.on_set_reserved_only(set_id, reserved),
 				Action::ReportPeer(peer_id, score_diff) =>
 					self.on_report_peer(peer_id, score_diff),
 				Action::SetPeersSet(sets_name, peers) =>
@@ -774,8 +774,8 @@ mod tests {
 				out_peers: 2,
 				bootnodes: vec![bootnode],
 				reserved_nodes: Default::default(),
+				reserved_only: true,
 			}],
-			reserved_only: true,
 		};
 
 		let (peerset, handle) = Peerset::from_config(config);
@@ -804,8 +804,8 @@ mod tests {
 				out_peers: 1,
 				bootnodes: vec![bootnode.clone()],
 				reserved_nodes: Default::default(),
+				reserved_only: false,
 			}],
-			reserved_only: false,
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
@@ -832,8 +832,8 @@ mod tests {
 				out_peers: 50,
 				bootnodes: vec![],
 				reserved_nodes: Default::default(),
+				reserved_only: true,
 			}],
-			reserved_only: true,
 		};
 
 		let (mut peerset, _) = Peerset::from_config(config);
@@ -855,8 +855,8 @@ mod tests {
 				out_peers: 2,
 				bootnodes: vec![bootnode.clone()],
 				reserved_nodes: Default::default(),
+				reserved_only: false,
 			}],
-			reserved_only: false,
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
@@ -878,8 +878,8 @@ mod tests {
 				out_peers: 25,
 				bootnodes: vec![],
 				reserved_nodes: Default::default(),
+				reserved_only: false,
 			}],
-			reserved_only: false,
 		});
 
 		// We ban a node by setting its reputation under the threshold.

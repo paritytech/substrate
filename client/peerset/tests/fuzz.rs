@@ -61,9 +61,9 @@ fn test_once() {
 				},
 				in_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
 				out_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
+				reserved_only: Uniform::new_inclusive(0, 10).sample(&mut rng) == 0,
 			},
 		],
-		reserved_only: Uniform::new_inclusive(0, 10).sample(&mut rng) == 0,
 	});
 
 	futures::executor::block_on(futures::future::poll_fn(move |cx| {
@@ -151,8 +151,8 @@ fn test_once() {
 				}
 
 				// 5 and 6 are the reserved-only mode.
-				5 => peerset_handle.set_reserved_only(true),
-				6 => peerset_handle.set_reserved_only(false),
+				5 => peerset_handle.set_reserved_only(SetId::from(0), true),
+				6 => peerset_handle.set_reserved_only(SetId::from(0), false),
 
 				// 7 and 8 are about switching a random node in or out of reserved mode.
 				7 => {

@@ -52,13 +52,6 @@ pub struct PeersState {
 
 	/// Configuration of each set. The size of this `Vec` is never modified.
 	sets: Vec<SetInfo>,
-
-	/// List of node identities (discovered or not) that don't occupy slots.
-	///
-	/// Note for future readers: this module is purely dedicated to managing slots. If you are
-	/// considering adding more features, please consider doing so outside of this module rather
-	/// than inside.
-	no_slot_nodes: HashSet<PeerId>,
 }
 
 /// Configuration of a single set.
@@ -72,7 +65,7 @@ pub struct SetConfig {
 }
 
 /// State of a single set.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct SetInfo {
 	/// Number of slot-occupying nodes for which the `MembershipState` is `In`.
 	num_in: u32,
@@ -85,6 +78,13 @@ struct SetInfo {
 
 	/// Maximum allowed number of slot-occupying nodes for which the `MembershipState` is `Out`.
 	max_out: u32,
+
+	/// List of node identities (discovered or not) that don't occupy slots.
+	///
+	/// Note for future readers: this module is purely dedicated to managing slots. If you are
+	/// considering adding more features, please consider doing so outside of this module rather
+	/// than inside.
+	no_slot_nodes: HashSet<PeerId>,
 }
 
 /// State of a single node that we know about.
@@ -150,9 +150,9 @@ impl PeersState {
 					num_out: 0,
 					max_in: config.in_peers,
 					max_out: config.out_peers,
+					no_slot_nodes: HashSet::new(),
 				})
 				.collect(),
-			no_slot_nodes: HashSet::new(),
 		}
 	}
 
@@ -277,9 +277,9 @@ impl PeersState {
 	/// Add a node to the list of nodes that don't occupy slots.
 	///
 	/// Has no effect if the node was already in the group.
-	pub fn add_no_slot_node(&mut self, peer_id: PeerId) {
+	pub fn add_no_slot_node(&mut self, set: usize, peer_id: PeerId) {
 		// Reminder: `HashSet::insert` returns false if the node was already in the set
-		if !self.no_slot_nodes.insert(peer_id.clone()) {
+		if !self.sets[set].no_slot_nodes.insert(peer_id.clone()) {
 			return;
 		}
 
@@ -297,9 +297,9 @@ impl PeersState {
 	/// Removes a node from the list of nodes that don't occupy slots.
 	///
 	/// Has no effect if the node was not in the group.
-	pub fn remove_no_slot_node(&mut self, peer_id: &PeerId) {
+	pub fn remove_no_slot_node(&mut self, set: usize, peer_id: &PeerId) {
 		// Reminder: `HashSet::remove` returns false if the node was already not in the set
-		if !self.no_slot_nodes.remove(peer_id) {
+		if !self.sets[set].no_slot_nodes.remove(peer_id) {
 			return;
 		}
 
@@ -379,7 +379,7 @@ impl<'a> ConnectedPeer<'a> {
 
 	/// Switches the peer to "not connected".
 	pub fn disconnect(self) -> NotConnectedPeer<'a> {
-		let is_no_slot_occupy = self.state.no_slot_nodes.contains(&*self.peer_id);
+		let is_no_slot_occupy = self.state.sets[self.set].no_slot_nodes.contains(&*self.peer_id);
 		if let Some(node) = self.state.nodes.get_mut(&*self.peer_id) {
 			if !is_no_slot_occupy {
 				match node.sets[self.set] {
@@ -497,7 +497,7 @@ impl<'a> NotConnectedPeer<'a> {
 	///
 	/// Non-slot-occupying nodes don't count towards the number of slots.
 	pub fn try_outgoing(self) -> Result<ConnectedPeer<'a>, NotConnectedPeer<'a>> {
-		let is_no_slot_occupy = self.state.no_slot_nodes.contains(&*self.peer_id);
+		let is_no_slot_occupy = self.state.sets[self.set].no_slot_nodes.contains(&*self.peer_id);
 
 		// Note that it is possible for num_out to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
@@ -533,7 +533,7 @@ impl<'a> NotConnectedPeer<'a> {
 	///
 	/// Non-slot-occupying nodes don't count towards the number of slots.
 	pub fn try_accept_incoming(self) -> Result<ConnectedPeer<'a>, NotConnectedPeer<'a>> {
-		let is_no_slot_occupy = self.state.no_slot_nodes.contains(&*self.peer_id);
+		let is_no_slot_occupy = self.state.sets[self.set].no_slot_nodes.contains(&*self.peer_id);
 
 		// Note that it is possible for num_in to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
@@ -720,7 +720,7 @@ mod tests {
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
-		peers_state.add_no_slot_node(id1.clone());
+		peers_state.add_no_slot_node(0, id1.clone());
 		if let Peer::Unknown(p) = peers_state.peer(0, &id1) {
 			assert!(p.discover().try_accept_incoming().is_ok());
 		} else {
@@ -857,7 +857,7 @@ mod tests {
 			out_peers: 1,
 		}));
 		let id = PeerId::random();
-		peers_state.add_no_slot_node(id.clone());
+		peers_state.add_no_slot_node(0, id.clone());
 		let peer = peers_state
 			.peer(0, &id)
 			.into_unknown()
