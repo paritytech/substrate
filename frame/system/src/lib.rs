@@ -930,7 +930,7 @@ impl<T: Config> Module<T> {
 	}
 
 	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
-	/// you called `inc_ref` on `who`.
+	/// you called `inc_consumers` on `who`.
 	#[deprecated = "Use `dec_consumers` instead"]
 	pub fn dec_ref(who: &T::AccountId) {
 		let _ = Self::inc_consumers(who);
@@ -964,7 +964,7 @@ impl<T: Config> Module<T> {
 	}
 
 	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
-	/// you called `inc_ref` on `who`.
+	/// you called `inc_consumers` on `who`.
 	pub fn dec_providers(who: &T::AccountId) -> Result<DecRefStatus, DecRefError> {
 		Account::<T>::try_mutate_exists(who, |maybe_account| {
 			if let Some(mut account) = maybe_account.take() {
@@ -1014,7 +1014,7 @@ impl<T: Config> Module<T> {
 	}
 
 	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
-	/// you called `inc_ref` on `who`.
+	/// you called `inc_consumers` on `who`.
 	pub fn dec_consumers(who: &T::AccountId) {
 		Account::<T>::mutate(who, |a| if a.consumers > 0 {
 			a.consumers -= 1;
