@@ -400,7 +400,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				out_peers: network_config.default_peers_set.out_peers,
 				bootnodes,
 				reserved_nodes: default_sets_reserved.clone(),
-				reserved_only: network_config.default_peers_set.non_reserved_mode == config::NonReservedPeerMode::Deny,
+				reserved_only: network_config.default_peers_set.non_reserved_mode
+					== config::NonReservedPeerMode::Deny,
 			});
 
 			// Set number 1 is used for transactions.
@@ -410,7 +411,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				out_peers: u32::max_value(),
 				bootnodes: Vec::new(),
 				reserved_nodes: default_sets_reserved,
-				reserved_only: network_config.default_peers_set.non_reserved_mode == config::NonReservedPeerMode::Deny,  // TODO: always deny?
+				reserved_only: network_config.default_peers_set.non_reserved_mode
+					== config::NonReservedPeerMode::Deny,  // TODO: always deny?
 			});
 
 			for set_cfg in &network_config.extra_sets {
