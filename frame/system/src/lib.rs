@@ -919,11 +919,6 @@ pub enum IncRefError {
 }
 
 impl<T: Config> Module<T> {
-	/// Deposits an event into this block's event record.
-	pub fn deposit_event(event: impl Into<T::Event>) {
-		Self::deposit_event_indexed(&[], event.into());
-	}
-
 	pub fn account_exists(who: &T::AccountId) -> bool {
 		Account::<T>::contains_key(who)
 	}
