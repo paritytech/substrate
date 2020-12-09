@@ -22,6 +22,7 @@ use frame_support::{
 	},
 	dispatch::{UnfilteredDispatchable, Parameter},
 	storage::unhashed,
+	scale_info,
 };
 use sp_runtime::{traits::Block as _, DispatchError};
 use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
@@ -47,10 +48,10 @@ impl From<SomeType6> for u64 { fn from(_t: SomeType6) -> Self { 0u64 } }
 pub struct SomeType7;
 impl From<SomeType7> for u64 { fn from(_t: SomeType7) -> Self { 0u64 } }
 
-pub trait SomeAssociation1 { type _1: Parameter; }
+pub trait SomeAssociation1 { type _1: Parameter + scale_info::TypeInfo; }
 impl SomeAssociation1 for u64 { type _1 = u64; }
 
-pub trait SomeAssociation2 { type _2: Parameter; }
+pub trait SomeAssociation2 { type _2: Parameter + scale_info::TypeInfo; }
 impl SomeAssociation2 for u64 { type _2 = u64; }
 
 #[frame_support::pallet]
@@ -59,6 +60,7 @@ pub mod pallet {
 		SomeType1, SomeType2, SomeType3, SomeType4, SomeType5, SomeType6, SomeType7,
 		SomeAssociation1, SomeAssociation2,
 	};
+	use frame_support::scale_info;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -66,7 +68,9 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config
-	where <Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
+	where
+		<Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
+		<Self::AccountId as SomeAssociation1>::_1: scale_info::TypeInfo,
 	{
 		/// Some comment
 		/// Some comment
@@ -81,7 +85,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MyGetParam3: Get<<Self::AccountId as SomeAssociation1>::_1>;
 
-		type Balance: Parameter + Default;
+		type Balance: Parameter + Default + scale_info::TypeInfo;
 
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
