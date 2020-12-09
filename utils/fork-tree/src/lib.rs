@@ -144,7 +144,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 			for child in root_children {
 				if is_first &&
 					(child.number == *number && child.hash == *hash ||
-					 child.number < *number && is_descendent_of(&child.hash, hash).unwrap_or(false))
+					 child.number < *number && is_descendent_of(&child.hash, hash)?)
 				{
 					root.children.push(child);
 					// assuming that the tree is well formed only one child should pass this requirement
@@ -415,15 +415,15 @@ impl<H, N, V> ForkTree<H, N, V> where
 		// another fork not part of the tree). make sure to only keep roots that
 		// are part of the finalized branch
 		let mut changed = false;
-		self.roots.retain(|root| {
-			let retain = root.number > number && is_descendent_of(hash, &root.hash).unwrap_or(false);
+		let roots = std::mem::take(&mut self.roots);
 
-			if !retain {
+		for root in roots {
+			if root.number > number && is_descendent_of(hash, &root.hash)? {
+				self.roots.push(root);
+			} else {
 				changed = true;
 			}
-
-			retain
-		});
+		}
 
 		self.best_finalized_number = Some(number);
 
@@ -467,16 +467,19 @@ impl<H, N, V> ForkTree<H, N, V> where
 			let (is_finalized, is_descendant, is_ancestor) = {
 				let root = &self.roots[idx];
 				let is_finalized = root.hash == *hash;
-				let is_descendant = !is_finalized
-					&& root.number > number && is_descendent_of(hash, &root.hash).unwrap_or(false);
-				let is_ancestor = !is_finalized && !is_descendant
-					&& root.number < number && is_descendent_of(&root.hash, hash).unwrap_or(false);
+				let is_descendant =
+					!is_finalized && root.number > number && is_descendent_of(hash, &root.hash)?;
+				let is_ancestor = !is_finalized
+					&& !is_descendant && root.number < number
+					&& is_descendent_of(&root.hash, hash)?;
 				(is_finalized, is_descendant, is_ancestor)
 			};
 
 			// if we have met finalized root - open it and return
 			if is_finalized {
-				return Ok(FinalizationResult::Changed(Some(self.finalize_root_at(idx))));
+				return Ok(FinalizationResult::Changed(Some(
+					self.finalize_root_at(idx),
+				)));
 			}
 
 			// if node is descendant of finalized block - just leave it as is
@@ -610,18 +613,19 @@ impl<H, N, V> ForkTree<H, N, V> where
 		// descendent (in this case the node wasn't finalized earlier presumably
 		// because the predicate didn't pass).
 		let mut changed = false;
-		self.roots.retain(|root| {
-			let retain =
-				root.number > number && is_descendent_of(hash, &root.hash).unwrap_or(false) ||
-				root.number == number && root.hash == *hash ||
-				is_descendent_of(&root.hash, hash).unwrap_or(false);
+		let roots = std::mem::take(&mut self.roots);
 
-			if !retain {
+		for root in roots {
+			let retain = root.number > number && is_descendent_of(hash, &root.hash)?
+				|| root.number == number && root.hash == *hash
+				|| is_descendent_of(&root.hash, hash)?;
+
+			if retain {
+				self.roots.push(root);
+			} else {
 				changed = true;
 			}
-
-			retain
-		});
+		}
 
 		self.best_finalized_number = Some(number);
 
@@ -903,8 +907,7 @@ impl<H, N, V> Iterator for RemovedIterator<H, N, V> {
 			// child nodes are stored ordered by max branch height (decreasing),
 			// we want to keep this ordering while iterating but since we're
 			// using a stack for iterator state we need to reverse it.
-			let mut children = Vec::new();
-			std::mem::swap(&mut children, &mut node.children);
+			let children = std::mem::take(&mut node.children);
 
 			self.stack.extend(children.into_iter().rev());
 			(node.hash, node.number, node.data)
