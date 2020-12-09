@@ -75,8 +75,11 @@ impl From<Error> for i64 {
 	}
 }
 
-impl<C, Block, Balance> TransactionPaymentApi<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>, FeeDetails<Balance>>
-	for TransactionPayment<C, Block>
+impl<C, Block, Balance> TransactionPaymentApi<
+	<Block as BlockT>::Hash,
+	RuntimeDispatchInfo<Balance>,
+	FeeDetails<Balance>,
+> for TransactionPayment<C, Block>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
