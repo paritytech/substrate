@@ -521,7 +521,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							},
 							None => log::debug!(
 								"Expected to find start time for sent response. Is the LRU cache \
-								 to small?",
+								 too small?",
 							),
 						}
 
