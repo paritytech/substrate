@@ -1310,6 +1310,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(0), peer);
 	}
 
+	/// Sets the list of reserved peers for syncing purposes.
+	pub fn set_reserved_peers(&self, peers: HashSet<PeerId>) {
+		self.peerset_handle.set_reserved_peers(sc_peerset::SetId::from(0), peers);
+	}
+
 	/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_set_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {

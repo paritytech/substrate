@@ -588,8 +588,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Need a better solution to manage authorized peers, but now just use reserved peers for
 	/// prototyping.
 	pub fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
-		self.peerset.set_reserved_peers(sc_peerset::SetId::from(0), peers)
-		// TODO: set 1?
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetReserved(peers));
 	}
 
 	/// Set authorized_only flag.
@@ -597,7 +598,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Need a better solution to decide authorized_only, but now just use reserved_only flag for
 	/// prototyping.
 	pub fn set_authorized_only(&self, reserved_only: bool) {
-		self.peerset.set_reserved_only(sc_peerset::SetId::from(0), reserved_only)
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(reserved_only));
 	}
 
 	/// Appends a notification to the buffer of pending outgoing notifications with the given peer.
@@ -1206,6 +1209,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	SetReservedOnly(bool),
 	AddReserved(PeerId),
 	RemoveReserved(PeerId),
+	SetReserved(HashSet<PeerId>),
 	AddSetReserved(Cow<'static, str>, PeerId),
 	RemoveSetReserved(Cow<'static, str>, PeerId),
 	AddToPeersSet(Cow<'static, str>, PeerId),
@@ -1323,6 +1327,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.put_value(key, value),
 				ServiceToWorkerMsg::SetReservedOnly(reserved_only) =>
 					this.network_service.user_protocol_mut().set_reserved_only(reserved_only),
+				ServiceToWorkerMsg::SetReserved(peers) =>
+					this.network_service.user_protocol_mut().set_reserved_peers(peers),
 				ServiceToWorkerMsg::AddReserved(peer_id) =>
 					this.network_service.user_protocol_mut().add_reserved_peer(peer_id),
 				ServiceToWorkerMsg::RemoveReserved(peer_id) =>
