@@ -184,7 +184,7 @@ where
 	let info = blockchain.info();
 	if info.finalized_number <= block {
 		let err = format!(
-			"Requested finality proof for descendant of #{} while we only have finalized #{}. Returning empty proof.",
+			"Requested finality proof for descendant of #{} while we only have finalized #{}.",
 			block,
 			info.finalized_number,
 		);
