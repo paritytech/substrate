@@ -361,18 +361,13 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 					if let Some((protocol, _)) = self.protocols.get_mut(&*protocol_name) {
 						if let Err(_) = protocol.send_response(inner_channel, Ok(response)) {
 							self.pending_responses_arrival_time.pop(&request_id);
-							log::warn!(
+							log::debug!(
 								target: "sub-libp2p",
-								"Failed to send response for {:?} on protocol {:?}. Dropping \
-								 response",
+								"Failed to send response for {:?} on protocol {:?} due to a \
+								 timeout or due to the connection to the peer being closed. \
+								 Dropping response",
 								request_id, protocol_name,
 							);
-							let out = Event::InboundRequest {
-								peer,
-								protocol: protocol_name,
-								result: Err(ResponseFailure::TimeoutOrClosed),
-							};
-							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}
 					}
 				}
@@ -499,7 +494,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 					}
 
-					// Remote has tried to send a request but failed.
+					// An inbound request failed, either while reading the request or due to failing
+					// to send a response.
 					RequestResponseEvent::InboundFailure { request_id, peer, error, .. } => {
 						self.pending_responses_arrival_time.pop(&request_id);
 						let out = Event::InboundRequest {
@@ -566,8 +562,6 @@ pub enum RequestFailure {
 pub enum ResponseFailure {
 	/// Internal response builder is too busy to process this request.
 	Busy,
-	/// Failed to respond in time or connection to peer is closed already.
-	TimeoutOrClosed,
 	/// Problem on the network.
 	#[display(fmt = "Problem on the network")]
 	Network(#[error(ignore)] InboundFailure),
