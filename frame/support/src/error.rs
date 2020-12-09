@@ -39,7 +39,7 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 /// #
 /// decl_error! {
 ///     /// Errors that can occur in my module.
-///     pub enum MyError for Module<T: Trait> {
+///     pub enum MyError for Module<T: Config> {
 ///         /// Hey this is an error message that indicates bla.
 ///         MyCoolErrorMessage,
 ///         /// You are just not cool enough for my module!
@@ -47,13 +47,13 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 ///     }
 /// }
 ///
-/// # use frame_system::Trait;
+/// # use frame_system::Config;
 ///
 /// // You need to register the error type in `decl_module!` as well to make the error
 /// // exported in the metadata.
 ///
 /// decl_module! {
-///     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+///     pub struct Module<T: Config> for enum Call where origin: T::Origin {
 ///         type Error = MyError<T>;
 ///
 ///         #[weight = 0]

@@ -4,7 +4,7 @@ This crate contains structs and utilities to declare
 a runtime-specific configuration file (a.k.a chain spec).
 
 Basic chain spec type containing all required parameters is
-[`ChainSpec`](https://docs.rs/sc-chain-spec/latest/sc_chain_spec/struct.ChainSpec.html). It can be extended with
+[`ChainSpec`](https://docs.rs/sc-chain-spec/latest/sc_chain_spec/struct.GenericChainSpec.html). It can be extended with
 additional options that contain configuration specific to your chain.
 Usually the extension is going to be an amalgamate of types exposed
 by Substrate core modules. To allow the core modules to retrieve

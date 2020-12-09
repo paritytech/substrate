@@ -38,7 +38,7 @@
 			(i32.eq
 				(call $seal_transfer
 					(i32.const 16)	;; Pointer to destination address
-					(i32.const 8)	;; Length of destination address
+					(i32.const 32)	;; Length of destination address
 					(i32.const 0)	;; Pointer to the buffer with value to transfer
 					(i32.const 8)	;; Length of the buffer with value to transfer
 				)

@@ -25,7 +25,7 @@ use prometheus_endpoint::Registry;
 use crate::{
 	block_import::BlockOrigin,
 	import_queue::{
-		BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
+		BlockImportResult, BlockImportError, Verifier, BoxBlockImport,
 		BoxJustificationImport, ImportQueue, Link, Origin,
 		IncomingBlock, import_single_block_metered,
 		buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver},
@@ -36,8 +36,8 @@ use crate::{
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate
 /// task, with plugable verification.
 pub struct BasicQueue<B: BlockT, Transaction> {
-	/// Channel to send finality work messages to the background task.
-	finality_sender: TracingUnboundedSender<worker_messages::Finality<B>>,
+	/// Channel to send justifcation import messages to the background task.
+	justification_sender: TracingUnboundedSender<worker_messages::ImportJustification<B>>,
 	/// Channel to send block import messages to the background task.
 	block_import_sender: TracingUnboundedSender<worker_messages::ImportBlocks<B>>,
 	/// Results coming from the worker task.
@@ -48,7 +48,7 @@ pub struct BasicQueue<B: BlockT, Transaction> {
 impl<B: BlockT, Transaction> Drop for BasicQueue<B, Transaction> {
 	fn drop(&mut self) {
 		// Flush the queue and close the receiver to terminate the future.
-		self.finality_sender.close_channel();
+		self.justification_sender.close_channel();
 		self.block_import_sender.close_channel();
 		self.result_port.close();
 	}
@@ -57,13 +57,11 @@ impl<B: BlockT, Transaction> Drop for BasicQueue<B, Transaction> {
 impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 	/// Instantiate a new basic queue, with given verifier.
 	///
-	/// This creates a background task, and calls `on_start` on the justification importer and
-	/// finality proof importer.
+	/// This creates a background task, and calls `on_start` on the justification importer.
 	pub fn new<V: 'static + Verifier<B>>(
 		verifier: V,
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
-		finality_proof_import: Option<BoxFinalityProofImport<B>>,
 		spawner: &impl sp_core::traits::SpawnNamed,
 		prometheus_registry: Option<&Registry>,
 	) -> Self {
@@ -77,19 +75,18 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 				.ok()
 		});
 
-		let (future, finality_sender, block_import_sender) = BlockImportWorker::new(
+		let (future, justification_sender, block_import_sender) = BlockImportWorker::new(
 			result_sender,
 			verifier,
 			block_import,
 			justification_import,
-			finality_proof_import,
 			metrics,
 		);
 
 		spawner.spawn_blocking("basic-block-import-worker", future.boxed());
 
 		Self {
-			finality_sender,
+			justification_sender,
 			block_import_sender,
 			result_port,
 			_phantom: PhantomData,
@@ -122,34 +119,14 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		number: NumberFor<B>,
 		justification: Justification,
 	) {
-		let res = self.finality_sender.unbounded_send(
-			worker_messages::Finality::ImportJustification(who, hash, number, justification),
+		let res = self.justification_sender.unbounded_send(
+			worker_messages::ImportJustification(who, hash, number, justification),
 		);
 
 		if res.is_err() {
 			log::error!(
 				target: "sync",
 				"import_justification: Background import task is no longer alive"
-			);
-		}
-	}
-
-	fn import_finality_proof(
-		&mut self,
-		who: Origin,
-		hash: B::Hash,
-		number: NumberFor<B>,
-		finality_proof: Vec<u8>,
-	) {
-		trace!(target: "sync", "Scheduling finality proof of {}/{} for import", number, hash);
-		let res = self.finality_sender.unbounded_send(
-			worker_messages::Finality::ImportFinalityProof(who, hash, number, finality_proof),
-		);
-
-		if res.is_err() {
-			log::error!(
-				target: "sync",
-				"import_finality_proof: Background import task is no longer alive"
 			);
 		}
 	}
@@ -166,17 +143,12 @@ mod worker_messages {
 	use super::*;
 
 	pub struct ImportBlocks<B: BlockT>(pub BlockOrigin, pub Vec<IncomingBlock<B>>);
-
-	pub enum Finality<B: BlockT> {
-		ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),
-		ImportFinalityProof(Origin, B::Hash, NumberFor<B>, Vec<u8>),
-	}
+	pub struct ImportJustification<B: BlockT>(pub Origin, pub B::Hash, pub NumberFor<B>, pub Justification);
 }
 
 struct BlockImportWorker<B: BlockT, Transaction> {
 	result_sender: BufferedLinkSender<B>,
 	justification_import: Option<BoxJustificationImport<B>>,
-	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	delay_between_blocks: Duration,
 	metrics: Option<Metrics>,
 	_phantom: PhantomData<Transaction>,
@@ -188,17 +160,16 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		verifier: V,
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
-		finality_proof_import: Option<BoxFinalityProofImport<B>>,
 		metrics: Option<Metrics>,
 	) -> (
 		impl Future<Output = ()> + Send,
-		TracingUnboundedSender<worker_messages::Finality<B>>,
+		TracingUnboundedSender<worker_messages::ImportJustification<B>>,
 		TracingUnboundedSender<worker_messages::ImportBlocks<B>>,
 	) {
 		use worker_messages::*;
 
-		let (finality_sender, mut finality_port) =
-			tracing_unbounded("mpsc_import_queue_worker_finality");
+		let (justification_sender, mut justification_port) =
+			tracing_unbounded("mpsc_import_queue_worker_justification");
 
 		let (block_import_sender, mut block_import_port) =
 			tracing_unbounded("mpsc_import_queue_worker_blocks");
@@ -206,21 +177,15 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		let mut worker = BlockImportWorker {
 			result_sender,
 			justification_import,
-			finality_proof_import,
 			delay_between_blocks: Duration::new(0, 0),
 			metrics,
 			_phantom: PhantomData,
 		};
 
-		// Let's initialize `justification_import` and `finality_proof_import`.
+		// Let's initialize `justification_import`
 		if let Some(justification_import) = worker.justification_import.as_mut() {
 			for (hash, number) in justification_import.on_start() {
 				worker.result_sender.request_justification(&hash, number);
-			}
-		}
-		if let Some(finality_proof_import) = worker.finality_proof_import.as_mut() {
-			for (hash, number) in finality_proof_import.on_start() {
-				worker.result_sender.request_finality_proof(&hash, number);
 			}
 		}
 
@@ -230,7 +195,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		//   `Future`, and `block_import` is `None`.
 		// - Something else, in which case `block_import` is `Some` and `importing` is None.
 		//
-		// Additionally, the task will prioritize processing of finality work messages over
+		// Additionally, the task will prioritize processing of justification import messages over
 		// block import messages, hence why two distinct channels are used.
 		let mut block_import_verifier = Some((block_import, verifier));
 		let mut importing = None;
@@ -243,28 +208,15 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 					return Poll::Ready(())
 				}
 
-				// Grab the next finality action request sent to the import queue.
-				let finality_work = match Stream::poll_next(Pin::new(&mut finality_port), cx) {
-					Poll::Ready(Some(msg)) => Some(msg),
-					Poll::Ready(None) => return Poll::Ready(()),
-					Poll::Pending => None,
-				};
-
-				match finality_work {
-					Some(Finality::ImportFinalityProof(who, hash, number, proof)) => {
-						let (_, verif) = block_import_verifier
-							.as_mut()
-							.expect("block_import_verifier is always Some; qed");
-
-						worker.import_finality_proof(verif, who, hash, number, proof);
-						continue;
-					}
-					Some(Finality::ImportJustification(who, hash, number, justification)) => {
+				// Grab the next justification import request sent to the import queue.
+				match Stream::poll_next(Pin::new(&mut justification_port), cx) {
+					Poll::Ready(Some(ImportJustification(who, hash, number, justification))) => {
 						worker.import_justification(who, hash, number, justification);
 						continue;
-					}
-					None => {}
-				}
+					},
+					Poll::Ready(None) => return Poll::Ready(()),
+					Poll::Pending => {},
+				};
 
 				// If we are in the process of importing a bunch of blocks, let's resume this
 				// process before doing anything more.
@@ -299,7 +251,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 			}
 		});
 
-		(future, finality_sender, block_import_sender)
+		(future, justification_sender, block_import_sender)
 	}
 
 	/// Returns a `Future` that imports the given blocks and sends the results on
@@ -322,36 +274,6 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 				result_sender.blocks_processed(imported, count, results);
 				future::ready((block_import, verifier))
 			})
-	}
-
-	fn import_finality_proof<V: 'static + Verifier<B>>(
-		&mut self,
-		verifier: &mut V,
-		who: Origin,
-		hash: B::Hash,
-		number: NumberFor<B>,
-		finality_proof: Vec<u8>
-	) {
-		let started = wasm_timer::Instant::now();
-		let result = self.finality_proof_import.as_mut().map(|finality_proof_import| {
-			finality_proof_import.import_finality_proof(hash, number, finality_proof, verifier)
-				.map_err(|e| {
-					debug!(
-						"Finality proof import failed with {:?} for hash: {:?} number: {:?} coming from node: {:?}",
-						e,
-						hash,
-						number,
-						who,
-					);
-				})
-		}).unwrap_or(Err(()));
-
-		if let Some(metrics) = self.metrics.as_ref() {
-			metrics.finality_proof_import_time.observe(started.elapsed().as_secs_f64());
-		}
-
-		trace!(target: "sync", "Imported finality proof for {}/{}", number, hash);
-		self.result_sender.finality_proof_imported(who, (hash, number), result);
 	}
 
 	fn import_justification(
@@ -596,7 +518,7 @@ mod tests {
 		let (result_sender, mut result_port) = buffered_link::buffered_link();
 
 		let (mut worker, mut finality_sender, mut block_import_sender) =
-			BlockImportWorker::new(result_sender, (), Box::new(()), Some(Box::new(())), None, None);
+			BlockImportWorker::new(result_sender, (), Box::new(()), Some(Box::new(())), None);
 
 		let mut import_block = |n| {
 			let header = Header {
@@ -629,7 +551,7 @@ mod tests {
 		let mut import_justification = || {
 			let hash = Hash::random();
 
-			block_on(finality_sender.send(worker_messages::Finality::ImportJustification(
+			block_on(finality_sender.send(worker_messages::ImportJustification(
 				libp2p::PeerId::random(),
 				hash,
 				1,

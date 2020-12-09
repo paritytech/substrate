@@ -42,6 +42,15 @@ use std::marker::PhantomData;
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 
+/// Default maximum block size in bytes used by [`Proposer`].
+///
+/// Can be overwritten by [`ProposerFactory::set_maxium_block_size`].
+///
+/// Be aware that there is also an upper packet size on what the networking code
+/// will accept. If the block doesn't fit in such a package, it can not be
+/// transferred to other nodes.
+pub const DEFAULT_MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
+
 /// Proposer factory.
 pub struct ProposerFactory<A, B, C> {
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -53,6 +62,7 @@ pub struct ProposerFactory<A, B, C> {
 	metrics: PrometheusMetrics,
 	/// phantom member to pin the `Backend` type.
 	_phantom: PhantomData<B>,
+	max_block_size: usize,
 }
 
 impl<A, B, C> ProposerFactory<A, B, C> {
@@ -68,7 +78,16 @@ impl<A, B, C> ProposerFactory<A, B, C> {
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
 			_phantom: PhantomData,
+			max_block_size: DEFAULT_MAX_BLOCK_SIZE,
 		}
+	}
+
+	/// Set the maximum block size in bytes.
+	///
+	/// The default value for the maximum block size is:
+	/// [`DEFAULT_MAX_BLOCK_SIZE`].
+	pub fn set_maximum_block_size(&mut self, size: usize) {
+		self.max_block_size = size;
 	}
 }
 
@@ -103,6 +122,7 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 			now,
 			metrics: self.metrics.clone(),
 			_phantom: PhantomData,
+			max_block_size: self.max_block_size,
 		};
 
 		proposer
@@ -143,6 +163,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
 	_phantom: PhantomData<B>,
+	max_block_size: usize,
 }
 
 impl<A, B, Block, C> sp_consensus::Proposer<Block> for
@@ -187,10 +208,7 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 		}));
 
 		async move {
-			match rx.await {
-				Ok(x) => x,
-				Err(err) => Err(sp_blockchain::Error::Msg(err.to_string()))
-			}
+			rx.await?
 		}.boxed()
 	}
 }
@@ -334,7 +352,12 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			error!("Failed to verify block encoding/decoding");
 		}
 
-		if let Err(err) = evaluation::evaluate_initial(&block, &self.parent_hash, self.parent_number) {
+		if let Err(err) = evaluation::evaluate_initial(
+			&block,
+			&self.parent_hash,
+			self.parent_number,
+			self.max_block_size,
+		) {
 			error!("Failed to evaluate authored block: {:?}", err);
 		}
 
