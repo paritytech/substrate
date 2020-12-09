@@ -839,7 +839,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Disconnect from a node as soon as possible.
 	///
 	/// This triggers the same effects as if the connection had closed itself spontaneously.
-	pub fn disconnect_peer(&self, who: PeerId, protocol: impl Into<Cow<'static, str>>,) {
+	///
+	/// See also [`NetworkService::remove_from_peers_set`], which has the same effect but also
+	/// prevents the local node from re-establishing an outgoing substream to this peer until it
+	/// is added again.
+	pub fn disconnect_peer(&self, who: PeerId, protocol: impl Into<Cow<'static, str>>) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::DisconnectPeer(who, protocol.into()));
 	}
 
@@ -893,30 +897,32 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(true));
 	}
 
-	/// Removes a `PeerId` from the list of reserved peers.
-	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset.remove_reserved_peer(sc_peerset::SetId::from(0), peer);
-		// TODO: set id?
-	}
-
 	/// Adds a `PeerId` and its address as reserved. The string should encode the address
 	/// and peer ID of the remote node.
 	///
 	/// Returns an `Err` if the given string is not a valid multiaddress
 	/// or contains an invalid peer ID (which includes the local peer ID).
 	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
-		// TODO: use protocol
 		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
 		// Make sure the local peer ID is never added to the PSM.
 		if peer_id == self.local_peer_id {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
 		}
-		self.peerset.add_reserved_peer(sc_peerset::SetId::from(0), peer_id.clone());
-		// TODO: set id?
+
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::AddReserved(peer_id.clone()));
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 		Ok(())
+	}
+
+	/// Removes a `PeerId` from the list of reserved peers.
+	pub fn remove_reserved_peer(&self, peer_id: PeerId) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::RemoveReserved(peer_id));
 	}
 
 	/// Add peers to a peerset priority group.
@@ -930,6 +936,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		for (peer_id, addr) in peers.into_iter() {
+			// Make sure the local peer ID is never added to the PSM.
+			if peer_id == self.local_peer_id {
+				return Err("Local peer ID cannot be added as a reserved peer.".to_string())
+			}
+
 			if !addr.is_empty() {
 				let _ = self
 					.to_worker
@@ -937,7 +948,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			}
 			let _ = self
 				.to_worker
-				.unbounded_send(ServiceToWorkerMsg::AddToPeersSet(protocol.clone(), peer_id));  // TODO: no
+				.unbounded_send(ServiceToWorkerMsg::AddSetReserved(protocol.clone(), peer_id));
 		}
 
 		Ok(())
@@ -951,13 +962,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// invalid peer ID (which includes the local peer ID).
 	//
 	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
-	// TODO: update
 	pub fn remove_peers_set_reserved(&self, protocol: Cow<'static, str>, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 		for (peer_id, _) in peers.into_iter() {
 			let _ = self
 				.to_worker
-				.unbounded_send(ServiceToWorkerMsg::RemoveFromPeersSet(protocol.clone(), peer_id));  // TODO: no
+				.unbounded_send(ServiceToWorkerMsg::RemoveSetReserved(protocol.clone(), peer_id));
 		}
 		Ok(())
 	}
@@ -974,7 +984,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::SyncFork(peers, hash, number));
 	}
 
-	/// Add peers to a peerset priority group.
+	/// Add a peer to a set of peers.
+	///
+	/// If the set has slots available, it will try to open a substream with this peer.
 	///
 	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
 	/// consist of only `/p2p/<peerid>`.
@@ -985,6 +997,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		for (peer_id, addr) in peers.into_iter() {
+			// Make sure the local peer ID is never added to the PSM.
+			if peer_id == self.local_peer_id {
+				return Err("Local peer ID cannot be added as a reserved peer.".to_string())
+			}
+
 			if !addr.is_empty() {
 				let _ = self
 					.to_worker
@@ -999,6 +1016,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 
 	/// Remove peers from a peerset priority group.
+	///
+	/// If we currently have an open substream with this peer, it will soon be closed.
 	///
 	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
 	///
@@ -1186,6 +1205,10 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 	SetReservedOnly(bool),
+	AddReserved(PeerId),
+	RemoveReserved(PeerId),
+	AddSetReserved(Cow<'static, str>, PeerId),
+	RemoveSetReserved(Cow<'static, str>, PeerId),
 	AddToPeersSet(Cow<'static, str>, PeerId),
 	RemoveFromPeersSet(Cow<'static, str>, PeerId),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
@@ -1301,6 +1324,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.put_value(key, value),
 				ServiceToWorkerMsg::SetReservedOnly(reserved_only) =>
 					this.network_service.user_protocol_mut().set_reserved_only(reserved_only),
+				ServiceToWorkerMsg::AddReserved(peer_id) =>
+					this.network_service.user_protocol_mut().add_reserved_peer(peer_id),
+				ServiceToWorkerMsg::RemoveReserved(peer_id) =>
+					this.network_service.user_protocol_mut().remove_reserved_peer(peer_id),
+				ServiceToWorkerMsg::AddSetReserved(protocol, peer_id) =>
+					this.network_service.user_protocol_mut().add_set_reserved_peer(protocol, peer_id),
+				ServiceToWorkerMsg::RemoveSetReserved(protocol, peer_id) =>
+					this.network_service.user_protocol_mut().remove_set_reserved_peer(protocol, peer_id),
 				ServiceToWorkerMsg::AddKnownAddress(peer_id, addr) =>
 					this.network_service.add_known_address(peer_id, addr),
 				ServiceToWorkerMsg::AddToPeersSet(protocol, peer_id) =>

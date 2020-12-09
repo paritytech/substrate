@@ -1292,32 +1292,41 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.peerset_handle.set_reserved_only(sc_peerset::SetId::from(0), reserved_only);
 	}
 
-	// TODO: !
-	/*/// Removes a `PeerId` from the list of reserved peers.
-	pub fn remove_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
+	/// Removes a `PeerId` from the list of reserved peers for syncing purposes.
+	pub fn remove_reserved_peer(&self, peer: PeerId) {
+		self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(0), peer);
+	}
+
+	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
+	pub fn add_reserved_peer(&self, peer: PeerId) {
+		self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(0), peer);
+	}
+
+	/// Removes a `PeerId` from the list of reserved peers.
+	pub fn remove_set_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(index + 2), peer);
 		} else {
 			log::error!(
 				target: "sub-libp2p",
-				"remove_reserved_peer with unknown protocol: {}",
+				"remove_set_reserved_peer with unknown protocol: {}",
 				protocol
 			);
 		}
 	}
 
 	/// Adds a `PeerId` to the list of reserved peers.
-	pub fn add_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
+	pub fn add_set_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(index + 2), peer);
 		} else {
 			log::error!(
 				target: "sub-libp2p",
-				"add_reserved_peer with unknown protocol: {}",
+				"add_set_reserved_peer with unknown protocol: {}",
 				protocol
 			);
 		}
-	}*/
+	}
 
 	/// Notify the protocol that we have learned about the existence of nodes on the default set.
 	///
