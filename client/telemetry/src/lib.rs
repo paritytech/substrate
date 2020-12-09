@@ -269,6 +269,7 @@ impl Telemetries {
 		let mut connection_sinks: HashMap<Id, TelemetryConnectionSinks> = HashMap::new();
 		let mut node_pool: HashMap<Multiaddr, Node<crate::worker::WsTrans>> = HashMap::new(); // TODO mod
 		let mut node_first_connect: HashSet<(Multiaddr, Id)> = HashSet::new();
+		let mut existing_nodes: HashSet<Multiaddr> = HashSet::new();
 
 		// initialize the telemetry nodes
 		init_sender.close_channel();
@@ -282,7 +283,8 @@ impl Telemetries {
 				node_map.entry(id.clone()).or_insert_with(Vec::new)
 					.push((verbosity, addr.clone()));
 				node_map_inv.entry(addr.clone()).or_insert_with(Vec::new).push(id.clone());
-				node_first_connect.insert((addr, id.clone()));
+				node_first_connect.insert((addr.clone(), id.clone()));
+				existing_nodes.insert(addr.clone());
 			}
 
 			let connection_sink = TelemetryConnectionSinks::default();
@@ -290,43 +292,77 @@ impl Telemetries {
 			connection_messages.insert(id.clone(), connection_message);
 		}
 
-		// loop indefinitely over telemetry messages
-		while let Some((id, verbosity, message)) = receiver.next().await {
-			let before = Instant::now();
-
-			let nodes = if let Some(nodes) = node_map.get(&id) {
-				nodes
-			} else {
-				log::error!(
-					target: "telemetry",
-					"Received telemetry log for unknown id ({:?}): {}",
-					id,
-					message,
-				);
-				continue;
-			};
-
-			for (node_max_verbosity, addr) in nodes {
-				let node = if let Some(node) = node_pool.get_mut(addr) {
-					node
+		let mut messages = receiver
+			.filter_map(|(id, verbosity, message)| {
+				if let Some(nodes) = node_map.get(&id) {
+					future::ready(Some((id, verbosity, message, nodes)))
 				} else {
 					log::error!(
 						target: "telemetry",
-						"Could not find telemetry server in the NodePool: {}",
-						addr,
+						"Received telemetry log for unknown id ({:?}): {}",
+						id,
+						message,
 					);
-					continue;
-				};
+					future::ready(None)
+				}
+			})
+			.flat_map(|(id, verbosity, message, nodes)| {
+				let mut to_send = Vec::with_capacity(nodes.len());
+				let before = Instant::now();
 
-				if verbosity > *node_max_verbosity {
-					log::trace!(
-						target: "telemetry",
-						"Skipping {} for log entry with verbosity {:?}",
-						addr,
-						verbosity);
-					continue;
+				for (node_max_verbosity, addr) in nodes {
+					if !existing_nodes.contains(addr) {
+						log::error!(
+							target: "telemetry",
+							"Could not find telemetry server in the NodePool: {}",
+							addr,
+						);
+						continue;
+					};
+
+					if verbosity > *node_max_verbosity {
+						log::trace!(
+							target: "telemetry",
+							"Skipping {} for log entry with verbosity {:?}",
+							addr,
+							verbosity);
+						continue;
+					}
+
+					to_send.push((addr, message.clone()));
 				}
 
+				if before.elapsed() > Duration::from_millis(200) {
+					log::warn!(
+						target: "telemetry",
+						"Processing one telemetry message took more than 200ms",
+					);
+				}
+
+				stream::iter(to_send)
+			});
+			// TODO make it forward to a sink that will dispatch?
+
+		while let Some((addr, message)) = messages.next().await {
+			let mut node = node_pool.get_mut(&addr).unwrap();
+			log::trace!(target: "telemetry", "#### Sending to {}: {}", addr, message);
+			let _ = node.send(message).await;
+		}
+
+		/*
+		let futures = stream::unfold(messages, |messages| async move {
+			let (addr, message) = messages.next().await?;
+			if let Some(node) = node_pool.get(addr) {
+				Some((node.send(message), messages))
+			} else {
+				todo!()
+			}
+		});
+		*/
+
+		// loop indefinitely over telemetry messages
+		/*
+		while let Some() = receiver.next().await {
 				// Detect re-connection
 				let node_status = node.next().await;
 				if matches!(node_status, Some(NodeEvent::Connected)) {
@@ -357,17 +393,8 @@ impl Telemetries {
 					}
 				}
 
-				// `send_message` returns an error if we're not connected, which we silently ignore.
-				let res = node.send_message(message.clone()); // TODO probably dont need to clone
-			}
-
-			if before.elapsed() > Duration::from_millis(200) {
-				log::warn!(
-					target: "telemetry",
-					"Processing one telemetry message took more than 200ms",
-				);
-			}
 		}
+		*/
 	}
 }
 

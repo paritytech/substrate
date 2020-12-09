@@ -70,7 +70,7 @@ impl<TTrans: Transport> fmt::Debug for NodeSocket<TTrans> {
 struct NodeSocketConnected<TTrans: Transport> {
 	/// Where to send data.
 	sink: TTrans::Output,
-	/// Queue of packets to send.
+	/// Queue of packets to send. TODO remove caching (can be done with SinkExt.buffer())
 	pending: VecDeque<Vec<u8>>,
 	/// If true, we need to flush the sink.
 	need_flush: bool,
@@ -115,6 +115,7 @@ impl<TTrans: Transport> Node<TTrans> {
 	}
 }
 
+/*
 impl<TTrans: Transport, TSinkErr> Node<TTrans>
 where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
@@ -132,10 +133,8 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 				pending.push_back(payload.into());
 				Ok(())
 			} else {
-				/*
 				warn!(target: "telemetry", "⚠️  Rejected log entry because queue is full for {:?}",
 					self.addr);
-				*/
 				Err(())
 			}
 		} else {
@@ -143,35 +142,56 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 		}
 	}
 }
+*/
 
-impl<TTrans: Transport, TSinkErr> Stream for Node<TTrans>
+impl<TTrans: Transport, TSinkErr> Sink<String> for Node<TTrans>
 where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
 		+ Stream<Item=Result<Vec<u8>, TSinkErr>>
 		+ Unpin,
 	TSinkErr: fmt::Debug
 {
-	type Item = NodeEvent<TSinkErr>;
+	//type Item = NodeEvent<TSinkErr>;
+	type Error = TSinkErr;
 
-	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+	fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
 		let mut socket = mem::replace(&mut self.socket, NodeSocket::Poisoned);
 		self.socket = loop {
 			match socket {
 				NodeSocket::Connected(mut conn) => {
-					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr) {
-						Poll::Ready(Ok(v)) => match v {},
-						Poll::Pending => {
+					match Sink::poll_ready(Pin::new(&mut conn.sink), cx) {
+						Poll::Ready(Ok(())) => {
 							self.socket = NodeSocket::Connected(conn);
-							// NOTE: return None means nothing special is happening but we are
-							//       connected
-							return Poll::Ready(None);
+							return Poll::Ready(Ok(()));
 						},
 						Poll::Ready(Err(err)) => {
 							warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
 							let timeout = gen_rand_reconnect_delay();
 							self.socket = NodeSocket::WaitingReconnect(timeout);
-							return Poll::Ready(Some(NodeEvent::Disconnected(err)))
+							//return Poll::Ready(Some(NodeEvent::Disconnected(err)))
+							return Poll::Pending;
+						},
+						Poll::Pending => {
+							self.socket = NodeSocket::Connected(conn);
+							return Poll::Pending;
+						},
+						/*
+						Poll::Ready(Ok(v)) => match v {},
+						Poll::Pending => {
+							self.socket = NodeSocket::Connected(conn);
+							// NOTE: return None means nothing special is happening but we are
+							//       connected
+							//return Poll::Ready(None);
+							return Poll::Ready(Ok(()));
+						},
+						Poll::Ready(Err(err)) => {
+							warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
+							let timeout = gen_rand_reconnect_delay();
+							self.socket = NodeSocket::WaitingReconnect(timeout);
+							//return Poll::Ready(Some(NodeEvent::Disconnected(err)))
+							return Poll::Pending;
 						}
+						*/
 					}
 				}
 				NodeSocket::Dialing(mut s) => match Future::poll(Pin::new(&mut s), cx) {
@@ -184,7 +204,8 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 							timeout: None,
 						};
 						self.socket = NodeSocket::Connected(conn);
-						return Poll::Ready(Some(NodeEvent::Connected))
+						//return Poll::Ready(Some(NodeEvent::Connected))
+						return Poll::Ready(Ok(()));
 					},
 					Poll::Pending => break NodeSocket::Dialing(s),
 					Poll::Ready(Err(err)) => {
@@ -219,6 +240,30 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 
 		Poll::Pending
 	}
+
+	fn start_send(mut self: Pin<&mut Self>, item: String) -> Result<(), Self::Error> {
+		match &mut self.socket {
+			NodeSocket::Connected(conn) => {
+				let _ = Sink::start_send(Pin::new(&mut conn.sink), item.into());
+			},
+			_ => {},
+		}
+		Ok(())
+	}
+
+	fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+		match &mut self.socket {
+			NodeSocket::Connected(conn) => Sink::poll_flush(Pin::new(&mut conn.sink), cx).map(|_| Ok(())),
+			_ => Poll::Pending,
+		}
+	}
+
+	fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+		match &mut self.socket {
+			NodeSocket::Connected(conn) => Sink::poll_close(Pin::new(&mut conn.sink), cx).map(|_| Ok(())),
+			_ => Poll::Pending,
+		}
+	}
 }
 
 /// Generates a `Delay` object with a random timeout.
@@ -230,6 +275,7 @@ fn gen_rand_reconnect_delay() -> Delay {
 	Delay::new(Duration::from_secs(random_delay))
 }
 
+/*
 impl<TTrans: Transport, TSinkErr> NodeSocketConnected<TTrans>
 where TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
 	+ Stream<Item=Result<Vec<u8>, TSinkErr>>
@@ -333,6 +379,7 @@ where TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
 		Poll::Pending
 	}
 }
+*/
 
 impl<TTrans: Transport> fmt::Debug for Node<TTrans> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
