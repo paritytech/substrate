@@ -104,7 +104,7 @@ fn set_name_works(){
 		// name setting by manager works correctly
 		let status = NameStatus::Owned{ who: 1, expiration: None };
 		assert_ok!(NameService::set_name(Origin::signed(100), name_hash.clone(), status.clone()));
-		
+
 		let stored_data = Registration::<Test>::get(&name_hash);
 		assert_eq!(stored_data, status);
 
@@ -170,7 +170,6 @@ fn bid_works(){
 #[test]
 fn claim_works(){
 	new_test_ext().execute_with(|| {
-
 		// Test data
 		let name = b"shawntabrizi";
 		let name_hash = blake2_256(name);
@@ -213,9 +212,7 @@ fn claim_works(){
 
 #[test]
 fn free_works(){
-
 	new_test_ext().execute_with(|| {
-
 		// Test data
 		let name = b"shawntabrizi";
 		let name_hash = blake2_256(name);
@@ -262,11 +259,10 @@ fn free_works(){
 #[test]
 fn assign_works(){
 	new_test_ext().execute_with(|| {
-
 		// Test data
 		let name = b"shawntabrizi";
 		let name_hash = blake2_256(name);
-		
+
 		// setup a claimed name to assign
 		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
 		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
@@ -288,10 +284,9 @@ fn assign_works(){
 #[test]
 fn unassign_works(){
 	new_test_ext().execute_with(|| {
-
 		// Test data
 		let name_hash = blake2_256(b"shawntabrizi");
-		
+
 		// setup an assigned name to test
 		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
 		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
@@ -310,24 +305,23 @@ fn unassign_works(){
 #[test]
 fn make_permanent_works(){
 	new_test_ext().execute_with(|| {
+		// Test data
+		let name_hash = blake2_256(b"shawntabrizi");
 
-	// Test data
-	let name_hash = blake2_256(b"shawntabrizi");
+		// setup an assigned name to test
+		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
+		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+		assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
 
-	// setup an assigned name to test
-	assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
-	run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
-	assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
+		// call from non permeance account should fail
+		assert_noop!(NameService::make_permanent(Origin::signed(1), name_hash), BadOrigin);
 
-	// call from non permeance account should fail
-	assert_noop!(NameService::make_permanent(Origin::signed(1), name_hash), BadOrigin);
-
-	// call from permeance accout should pass
-	assert_ok!(NameService::make_permanent(Origin::signed(200), name_hash));
-	let stored_data = Registration::<Test>::get(&name_hash);
-	assert_eq!(stored_data, NameStatus::Owned {
-			who: 1,
-			expiration: None,
+		// call from permeance accout should pass
+		assert_ok!(NameService::make_permanent(Origin::signed(200), name_hash));
+		let stored_data = Registration::<Test>::get(&name_hash);
+		assert_eq!(stored_data, NameStatus::Owned {
+				who: 1,
+				expiration: None,
 		});
 	});
 }
@@ -335,27 +329,26 @@ fn make_permanent_works(){
 #[test]
 fn extend_ownership_works(){
 	new_test_ext().execute_with(|| {
+		// Test data
+		let name_hash = blake2_256(b"shawntabrizi");
 
-	// Test data
-	let name_hash = blake2_256(b"shawntabrizi");
+		// call with non claimed name should fail
+		assert_noop!(NameService::extend_ownership(Origin::signed(1), name_hash), Error::<Test>::UnexpectedState);
 
-	// call with non claimed name should fail
-	assert_noop!(NameService::extend_ownership(Origin::signed(1), name_hash), Error::<Test>::UnexpectedState);
+		// setup an assigned name to test
+		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
+		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+		assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
 
-	// setup an assigned name to test
-	assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
-	run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
-	assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
+		// call to extend ownership should pass
+		assert_ok!(NameService::extend_ownership(Origin::signed(2), name_hash));
+		// balance of caller should reduce by the extension fee
+		assert_eq!(Balances::free_balance(&2), 200.saturating_sub(5));
 
-	// call to extend ownership should pass
-	assert_ok!(NameService::extend_ownership(Origin::signed(2), name_hash));
-	// balance of caller should reduce by the extension fee
-	assert_eq!(Balances::free_balance(&2), 200.saturating_sub(5));
-	
-	let stored_data = Registration::<Test>::get(&name_hash);
-	assert_eq!(stored_data, NameStatus::Owned {
-		who: 1,
-		expiration: Some(210)
+		let stored_data = Registration::<Test>::get(&name_hash);
+		assert_eq!(stored_data, NameStatus::Owned {
+			who: 1,
+			expiration: Some(210)
 		});
 	});
 }
