@@ -33,6 +33,7 @@ use codec::{Codec, Encode, Decode};
 
 mod mock;
 mod tests;
+mod benchmarking;
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
