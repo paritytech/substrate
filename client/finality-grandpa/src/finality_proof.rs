@@ -183,13 +183,13 @@ where
 	// Early-return if we sure that there are no blocks finalized AFTER begin block
 	let info = blockchain.info();
 	if info.finalized_number <= block {
-		trace!(
-			target: "afg",
+		let err = format!(
 			"Requested finality proof for descendant of #{} while we only have finalized #{}. Returning empty proof.",
 			block,
 			info.finalized_number,
 		);
-		return Ok(None);
+		trace!(target: "afg", "{}", &err);
+		return Err(ClientError::ProveFinalityRpc(err));
 	}
 
 	// Get set_id the block belongs to, and the last block of the set which should contain a
@@ -197,7 +197,13 @@ where
 	let (set_id, last_block_for_set) = if let Some(id) = authority_set_changes.get_set_id(block) {
 		id
 	} else {
-		return Ok(None);
+		let err = format!(
+			"AuthoritySetChanges does not cover the requested block #{}. \
+			Maybe the subscription API is more appropriate.",
+			block,
+		);
+		trace!(target: "afg", "{}", &err);
+		return Err(ClientError::ProveFinalityRpc(err));
 	};
 
 	// Get the Justification stored at the last block of the set

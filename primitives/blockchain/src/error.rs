@@ -99,6 +99,10 @@ pub enum Error {
 	#[error("bad justification for header: {0}")]
 	BadJustification(String),
 
+	// #[error("No AuthoritySetChanges entry for set id.")]
+	#[error("{0}")]
+	ProveFinalityRpc(String),
+
 	#[error("This method is not currently available when running in light client mode")]
 	NotAvailableOnLightClient,
 
