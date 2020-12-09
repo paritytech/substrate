@@ -31,7 +31,7 @@ const MAX_SLASHES: u32 = 1000;
 
 // Add slashing spans to a user account. Not relevant for actual use, only to benchmark
 // read and write operations.
-fn add_slashing_spans<T: Trait>(who: &T::AccountId, spans: u32) {
+fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
 	if spans == 0 { return }
 
 	// For the first slashing span, we initialize
@@ -48,7 +48,7 @@ fn add_slashing_spans<T: Trait>(who: &T::AccountId, spans: u32) {
 // This function clears all existing validators and nominators from the set, and generates one new
 // validator being nominated by n nominators, and returns the validator stash account and the
 // nominators' stash and controller. It also starts an era and creates pending payouts.
-pub fn create_validator_with_nominators<T: Trait>(
+pub fn create_validator_with_nominators<T: Config>(
 	n: u32,
 	upper_bound: u32,
 	dead: bool,
@@ -521,7 +521,12 @@ benchmarks! {
 			compact,
 			score,
 			size
-		) = offchain_election::prepare_submission::<T>(assignments, winners, false, T::MaximumBlockWeight::get()).unwrap();
+		) = offchain_election::prepare_submission::<T>(
+			assignments,
+			winners,
+			false,
+			T::BlockWeights::get().max_block,
+		).unwrap();
 
 		assert_eq!(
 			winners.len(), compact.unique_targets().len(),
@@ -589,7 +594,12 @@ benchmarks! {
 			compact,
 			score,
 			size
-		) = offchain_election::prepare_submission::<T>(assignments, winners, false, T::MaximumBlockWeight::get()).unwrap();
+		) = offchain_election::prepare_submission::<T>(
+			assignments,
+			winners,
+			false,
+			T::BlockWeights::get().max_block,
+		).unwrap();
 
 		assert_eq!(
 			winners.len(), compact.unique_targets().len(),
@@ -729,7 +739,7 @@ mod tests {
 
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Trait>::MaxNominatorRewardedPerValidator::get() as u32,
+				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
 				false,
 				RewardDestination::Staked,
 			).unwrap();
@@ -753,7 +763,7 @@ mod tests {
 
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Trait>::MaxNominatorRewardedPerValidator::get() as u32,
+				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
 				false,
 				RewardDestination::Staked,
 			).unwrap();

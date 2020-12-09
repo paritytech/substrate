@@ -18,7 +18,7 @@
 
 use crate::{
 	exec::{AccountIdOf, StorageKey},
-	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Trait, TrieId,
+	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Config, TrieId,
 	AccountCounter,
 };
 use sp_std::prelude::*;
@@ -37,7 +37,7 @@ pub struct Storage<T>(PhantomData<T>);
 
 impl<T> Storage<T>
 where
-	T: Trait,
+	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
 	/// Reads a storage kv pair of a contract.
@@ -195,7 +195,7 @@ where
 	/// This function doesn't affect the account.
 	pub fn destroy_contract(address: &AccountIdOf<T>, trie_id: &TrieId) {
 		<ContractInfoOf<T>>::remove(address);
-		child::kill_storage(&crate::child_trie_info(&trie_id));
+		child::kill_storage(&crate::child_trie_info(&trie_id), None);
 	}
 
 	/// This generator uses inner counter for account id and applies the hash over `AccountId +

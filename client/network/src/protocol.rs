@@ -120,8 +120,6 @@ mod rep {
 	pub const BAD_PROTOCOL: Rep = Rep::new_fatal("Unsupported protocol");
 	/// Peer role does not match (e.g. light peer connecting to another light peer).
 	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
-	/// Peer response data does not have requested bits.
-	pub const BAD_RESPONSE: Rep = Rep::new(-(1 << 12), "Incomplete response");
 	/// Peer send us a block announcement that failed at validation.
 	pub const BAD_BLOCK_ANNOUNCEMENT: Rep = Rep::new(-(1 << 12), "Bad block announcement");
 }
@@ -706,20 +704,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				}
 			}
 		} else {
-			// Validate fields against the request.
-			if request.fields.contains(message::BlockAttributes::HEADER) && response.blocks.iter().any(|b| b.header.is_none()) {
-				self.behaviour.disconnect_peer(&peer);
-				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
-				trace!(target: "sync", "Missing header for a block");
-				return CustomMessageOutcome::None
-			}
-			if request.fields.contains(message::BlockAttributes::BODY) && response.blocks.iter().any(|b| b.body.is_none()) {
-				self.behaviour.disconnect_peer(&peer);
-				self.peerset_handle.report_peer(peer, rep::BAD_RESPONSE);
-				trace!(target: "sync", "Missing body for a block");
-				return CustomMessageOutcome::None
-			}
-
 			match self.sync.on_block_data(&peer, Some(request), response) {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
@@ -1083,16 +1067,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let is_best = self.context_data.chain.info().best_hash == hash;
 		debug!(target: "sync", "Reannouncing block {:?} is_best: {}", hash, is_best);
-		self.send_announcement(&header, data, is_best, true)
-	}
-
-	fn send_announcement(&mut self, header: &B::Header, data: Vec<u8>, is_best: bool, force: bool) {
-		let hash = header.hash();
 
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
-			trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
 			let inserted = peer.known_blocks.insert(hash);
-			if inserted || force {
+			if inserted {
+				trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
 				let message = message::BlockAnnounce {
 					header: header.clone(),
 					state: if is_best {

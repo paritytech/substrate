@@ -580,7 +580,7 @@ const CODE_TRANSFER: &str = r#"
 #[test]
 fn deploying_wasm_contract_should_work() {
 	let transfer_code = wat::parse_str(CODE_TRANSFER).unwrap();
-	let transfer_ch = <Runtime as frame_system::Trait>::Hashing::hash(&transfer_code);
+	let transfer_ch = <Runtime as frame_system::Config>::Hashing::hash(&transfer_code);
 
 	let addr = pallet_contracts::Module::<Runtime>::contract_address(
 		&charlie(),
@@ -588,7 +588,7 @@ fn deploying_wasm_contract_should_work() {
 		&[],
 	);
 
-	let subsistence = pallet_contracts::Config::<Runtime>::subsistence_threshold_uncached();
+	let subsistence = pallet_contracts::ConfigCache::<Runtime>::subsistence_threshold_uncached();
 
 	let b = construct_block(
 		&mut new_test_ext(compact_code_unwrap(), false),

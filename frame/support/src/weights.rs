@@ -39,9 +39,9 @@
 //!    `Yes`**.
 //!
 //! ```
-//! # use frame_system::Trait;
+//! # use frame_system::Config;
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //!         #[weight = 1000]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
@@ -52,10 +52,10 @@
 //! 2.1 Define weight and class, **in which case `PaysFee` would be `Yes`**.
 //!
 //! ```
-//! # use frame_system::Trait;
+//! # use frame_system::Config;
 //! # use frame_support::weights::DispatchClass;
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //!         #[weight = (1000, DispatchClass::Operational)]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
@@ -66,10 +66,10 @@
 //! 2.2 Define weight and `PaysFee`, **in which case `ClassifyDispatch` would be `Normal`**.
 //!
 //! ```
-//! # use frame_system::Trait;
+//! # use frame_system::Config;
 //! # use frame_support::weights::Pays;
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //!         #[weight = (1000, Pays::No)]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
@@ -80,10 +80,10 @@
 //! 3. Define all 3 parameters.
 //!
 //! ```
-//! # use frame_system::Trait;
+//! # use frame_system::Config;
 //! # use frame_support::weights::{DispatchClass, Pays};
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //!         #[weight = (1000, DispatchClass::Operational, Pays::No)]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
@@ -100,10 +100,10 @@
 //! all 3 are static values, providing a raw tuple is easier.
 //!
 //! ```
-//! # use frame_system::Trait;
+//! # use frame_system::Config;
 //! # use frame_support::weights::{DispatchClass, FunctionOf, Pays};
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //!         #[weight = FunctionOf(
 //! 			// weight, function.
 //! 			|args: (&u32, &u64)| *args.0 as u64 + args.1,
@@ -213,6 +213,9 @@ impl Default for Pays {
 }
 
 /// A generalized group of dispatch types.
+///
+/// NOTE whenever upgrading the enum make sure to also update
+/// [DispatchClass::all] and [DispatchClass::non_mandatory] helper functions.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
@@ -240,6 +243,39 @@ impl Default for DispatchClass {
 	fn default() -> Self {
 		Self::Normal
 	}
+}
+
+impl DispatchClass {
+	/// Returns an array containing all dispatch classes.
+	pub fn all() -> &'static [DispatchClass] {
+		&[DispatchClass::Normal, DispatchClass::Operational, DispatchClass::Mandatory]
+	}
+
+	/// Returns an array of all dispatch classes except `Mandatory`.
+	pub fn non_mandatory() -> &'static [DispatchClass] {
+		&[DispatchClass::Normal, DispatchClass::Operational]
+	}
+}
+
+/// A trait that represents one or many values of given type.
+///
+/// Useful to accept as parameter type to let the caller pass either a single value directly
+/// or an iterator.
+pub trait OneOrMany<T> {
+	/// The iterator type.
+	type Iter: Iterator<Item = T>;
+	/// Convert this item into an iterator.
+	fn into_iter(self) -> Self::Iter;
+}
+
+impl OneOrMany<DispatchClass> for DispatchClass {
+    type Iter = sp_std::iter::Once<DispatchClass>;
+    fn into_iter(self) -> Self::Iter { sp_std::iter::once(self) }
+}
+
+impl<'a> OneOrMany<DispatchClass> for &'a [DispatchClass] {
+    type Iter = sp_std::iter::Cloned<sp_std::slice::Iter<'a, DispatchClass>>;
+    fn into_iter(self) -> Self::Iter { self.iter().cloned() }
 }
 
 /// Primitives related to priority management of Frame.
@@ -695,13 +731,94 @@ impl<T> WeightToFeePolynomial for IdentityFee<T> where
 	}
 }
 
+/// A struct holding value for each `DispatchClass`.
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+pub struct PerDispatchClass<T> {
+	/// Value for `Normal` extrinsics.
+	normal: T,
+	/// Value for `Operational` extrinsics.
+	operational: T,
+	/// Value for `Mandatory` extrinsics.
+	mandatory: T,
+}
+
+impl<T> PerDispatchClass<T> {
+	/// Create new `PerDispatchClass` with the same value for every class.
+	pub fn new(val: impl Fn(DispatchClass) -> T) -> Self {
+		Self {
+			normal: val(DispatchClass::Normal),
+			operational: val(DispatchClass::Operational),
+			mandatory: val(DispatchClass::Mandatory),
+		}
+	}
+
+	/// Get a mutable reference to current value of given class.
+	pub fn get_mut(&mut self, class: DispatchClass) -> &mut T {
+		match class {
+			DispatchClass::Operational => &mut self.operational,
+			DispatchClass::Normal => &mut self.normal,
+			DispatchClass::Mandatory => &mut self.mandatory,
+		}
+	}
+
+	/// Get current value for given class.
+	pub fn get(&self, class: DispatchClass) -> &T {
+		match class {
+			DispatchClass::Normal => &self.normal,
+			DispatchClass::Operational => &self.operational,
+			DispatchClass::Mandatory => &self.mandatory,
+		}
+	}
+}
+
+impl<T: Clone> PerDispatchClass<T> {
+	/// Set the value of given class.
+	pub fn set(&mut self, new: T, class: impl OneOrMany<DispatchClass>) {
+		for class in class.into_iter() {
+			*self.get_mut(class) = new.clone();
+		}
+	}
+}
+
+impl PerDispatchClass<Weight> {
+	/// Returns the total weight consumed by all extrinsics in the block.
+	pub fn total(&self) -> Weight {
+		let mut sum = 0;
+		for class in DispatchClass::all() {
+			sum = sum.saturating_add(*self.get(*class));
+		}
+		sum
+	}
+
+	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
+	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
+		let value = self.get_mut(class);
+		*value = value.saturating_add(weight);
+	}
+
+	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would
+	/// occur.
+	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
+		let value = self.get_mut(class);
+		*value = value.checked_add(weight).ok_or(())?;
+		Ok(())
+	}
+
+	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of
+	/// `Weight`.
+	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
+		let value = self.get_mut(class);
+		*value = value.saturating_sub(weight);
+	}
+}
+
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
 	use crate::{decl_module, parameter_types, traits::Get};
 	use super::*;
 
-	pub trait Trait: 'static {
+	pub trait Config: 'static {
 		type Origin;
 		type Balance;
 		type BlockNumber;
@@ -718,7 +835,7 @@ mod tests {
 		};
 	}
 
-	impl Trait for TraitImpl {
+	impl Config for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type Balance = u32;
@@ -727,7 +844,7 @@ mod tests {
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 			// no arguments, fixed weight
 			#[weight = 1000]
 			fn f00(_origin) { unimplemented!(); }

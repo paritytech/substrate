@@ -31,14 +31,14 @@ use frame_system::{Module as System, Call, RawOrigin, DigestItemOf};
 
 mod mock;
 
-pub struct Module<T: Trait>(System<T>);
-pub trait Trait: frame_system::Trait {}
+pub struct Module<T: Config>(System<T>);
+pub trait Config: frame_system::Config {}
 
 benchmarks! {
 	_ { }
 
 	remark {
-		let b in 0 .. T::MaximumBlockLength::get();
+		let b in 0 .. T::BlockWeights::get().max_block as u32;
 		let remark_message = vec![1; b as usize];
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), remark_message)

@@ -629,7 +629,7 @@ pub(crate) fn setup_inputs<AccountId: IdentifierT>(
 		})
 		.collect::<Vec<CandidatePtr<AccountId>>>();
 
-	let voters = initial_voters.into_iter().map(|(who, voter_stake, votes)| {
+	let voters = initial_voters.into_iter().filter_map(|(who, voter_stake, votes)| {
 		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
 		for v in votes {
 			if edges.iter().any(|e| e.who == v) {
@@ -650,12 +650,18 @@ pub(crate) fn setup_inputs<AccountId: IdentifierT>(
 				);
 			} // else {} would be wrong votes. We don't really care about it.
 		}
-		Voter {
-			who,
-			edges: edges,
-			budget: voter_stake.into(),
-			load: Rational128::zero(),
+		if edges.is_empty() {
+			None
 		}
+		else {
+			Some(Voter {
+				who,
+				edges: edges,
+				budget: voter_stake.into(),
+				load: Rational128::zero(),
+			})
+		}
+
 	}).collect::<Vec<_>>();
 
 	(candidates, voters,)

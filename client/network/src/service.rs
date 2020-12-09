@@ -656,7 +656,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// >			between the remote voluntarily closing a substream or a network error
 	/// >			preventing the message from being delivered.
 	///
-	/// The protocol must have been registered with `register_notifications_protocol` or
+	/// The protocol must have been registered with
 	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
 	///
 	pub fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
@@ -664,13 +664,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		// `peers_notifications_sinks` mutex as soon as possible.
 		let sink = {
 			let peers_notifications_sinks = self.peers_notifications_sinks.lock();
-			if let Some(sink) = peers_notifications_sinks.get(&(target, protocol.clone())) {
+			if let Some(sink) = peers_notifications_sinks.get(&(target.clone(), protocol.clone())) {
 				sink.clone()
 			} else {
 				// Notification silently discarded, as documented.
-				log::error!(
+				log::debug!(
 					target: "sub-libp2p",
-					"Attempted to send notification on unknown protocol: {:?}",
+					"Attempted to send notification on missing or closed substream: {:?}",
 					protocol,
 				);
 				return;
@@ -684,6 +684,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		}
 
 		// Sending is communicated to the `NotificationsSink`.
+		trace!(
+			target: "sub-libp2p",
+			"External API => Notification({:?}, {:?}, {} bytes)",
+			target,
+			protocol,
+			message.len()
+		);
+		trace!(target: "sub-libp2p", "Handler({:?}) <= Sync notification", target);
 		sink.send_sync_notification(protocol, message);
 	}
 
@@ -709,7 +717,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// return an error. It is however possible for the entire connection to be abruptly closed,
 	/// in which case enqueued notifications will be lost.
 	///
-	/// The protocol must have been registered with `register_notifications_protocol` or
+	/// The protocol must have been registered with
 	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
 	///
 	/// # Usage
@@ -834,28 +842,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			// closed, and we legitimately report this situation as a "ConnectionClosed".
 			Err(_) => Err(RequestFailure::Network(OutboundFailure::ConnectionClosed)),
 		}
-	}
-
-	/// Registers a new notifications protocol.
-	///
-	/// After a protocol has been registered, you can call `write_notifications`.
-	///
-	/// **Important**: This method is a work-around, and you are instead strongly encouraged to
-	/// pass the protocol in the `NetworkConfiguration::notifications_protocols` list instead.
-	/// If you have no other choice but to use this method, you are very strongly encouraged to
-	/// call it very early on. Any connection open will retain the protocols that were registered
-	/// then, and not any new one.
-	///
-	/// Please call `event_stream` before registering a protocol, otherwise you may miss events
-	/// about the protocol that you have registered.
-	// TODO: remove this method after https://github.com/paritytech/substrate/issues/6827
-	pub fn register_notifications_protocol(
-		&self,
-		protocol_name: impl Into<Cow<'static, str>>,
-	) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::RegisterNotifProtocol {
-			protocol_name: protocol_name.into(),
-		});
 	}
 
 	/// You may call this when new transactons are imported by the transaction pool.
@@ -1139,6 +1125,7 @@ impl NotificationSender {
 				Ok(r) => r,
 				Err(()) => return Err(NotificationSenderError::Closed),
 			},
+			peer_id: self.sink.peer_id(),
 			notification_size_metric: self.notification_size_metric.clone(),
 		})
 	}
@@ -1148,6 +1135,9 @@ impl NotificationSender {
 #[must_use]
 pub struct NotificationSenderReady<'a> {
 	ready: Ready<'a>,
+
+	/// Target of the notification.
+	peer_id: &'a PeerId,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1162,6 +1152,15 @@ impl<'a> NotificationSenderReady<'a> {
 		if let Some(notification_size_metric) = &self.notification_size_metric {
 			notification_size_metric.observe(notification.len() as f64);
 		}
+
+		trace!(
+			target: "sub-libp2p",
+			"External API => Notification({:?}, {:?}, {} bytes)",
+			self.peer_id,
+			self.ready.protocol_name(),
+			notification.len()
+		);
+		trace!(target: "sub-libp2p", "Handler({:?}) <= Async notification", self.peer_id);
 
 		self.ready
 			.send(notification)
@@ -1200,9 +1199,6 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		protocol: Cow<'static, str>,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
-	},
-	RegisterNotifProtocol {
-		protocol_name: Cow<'static, str>,
 	},
 	DisconnectPeer(PeerId),
 	NewBestBlockImported(B::Hash, NumberFor<B>),
@@ -1338,8 +1334,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						},
 					}
 				},
-				ServiceToWorkerMsg::RegisterNotifProtocol { protocol_name } =>
-					this.network_service.register_notifications_protocol(protocol_name),
 				ServiceToWorkerMsg::DisconnectPeer(who) =>
 					this.network_service.user_protocol_mut().disconnect_peer(&who),
 				ServiceToWorkerMsg::NewBestBlockImported(hash, number) =>

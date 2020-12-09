@@ -20,7 +20,7 @@
 //! The Treasury module provides a "pot" of funds that can be managed by stakeholders in the
 //! system and a structure for making spending proposals from this pot.
 //!
-//! - [`treasury::Trait`](./trait.Trait.html)
+//! - [`treasury::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
@@ -38,7 +38,7 @@
 //! given without first having a pre-determined stakeholder group come to consensus on how much
 //! should be paid.
 //!
-//! A group of `Tippers` is determined through the config `Trait`. After half of these have declared
+//! A group of `Tippers` is determined through the config `Config`. After half of these have declared
 //! some amount that they believe a particular reported reason deserves, then a countdown period is
 //! entered where any remaining members can declare their tip amounts also. After the close of the
 //! countdown period, the median of all declared tips is paid to the reported beneficiary, along
@@ -155,13 +155,13 @@ use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
 
 type BalanceOf<T, I> =
-	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type PositiveImbalanceOf<T, I> =
-	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
+	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T, I> =
-	<<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
-pub trait Trait<I=DefaultInstance>: frame_system::Trait {
+pub trait Config<I=DefaultInstance>: frame_system::Config {
 	/// The treasury's module id, used for deriving its sovereign account ID.
 	type ModuleId: Get<ModuleId>;
 
@@ -192,7 +192,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	type DataDepositPerByte: Get<BalanceOf<Self, I>>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Handler for the unbalanced decrease when slashing for a rejected proposal or bounty.
 	type OnSlash: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
@@ -332,7 +332,7 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Treasury {
+	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Treasury {
 		/// Number of proposals that have been made.
 		ProposalCount get(fn proposal_count): ProposalIndex;
 
@@ -388,8 +388,8 @@ decl_event!(
 	pub enum Event<T, I=DefaultInstance>
 	where
 		Balance = BalanceOf<T, I>,
-		<T as frame_system::Trait>::AccountId,
-		<T as frame_system::Trait>::Hash,
+		<T as frame_system::Config>::AccountId,
+		<T as frame_system::Config>::Hash,
 	{
 		/// New proposal. \[proposal_index\]
 		Proposed(ProposalIndex),
@@ -433,7 +433,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the treasury module.
-	pub enum Error for Module<T: Trait<I>, I: Instance> {
+	pub enum Error for Module<T: Config<I>, I: Instance> {
 		/// Proposer's balance is too low.
 		InsufficientProposersBalance,
 		/// No proposal or bounty at that index.
@@ -465,7 +465,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance>
+	pub struct Module<T: Config<I>, I: Instance=DefaultInstance>
 		for enum Call
 		where origin: T::Origin
 	{
@@ -1159,7 +1159,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> Module<T, I> {
+impl<T: Config<I>, I: Instance> Module<T, I> {
 	// Add public immutables and private mutables.
 
 	/// The account ID of the treasury pot.
@@ -1452,7 +1452,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> OnUnbalanced<NegativeImbalanceOf<T, I>> for Module<T, I> {
+impl<T: Config<I>, I: Instance> OnUnbalanced<NegativeImbalanceOf<T, I>> for Module<T, I> {
 	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T, I>) {
 		let numeric_amount = amount.peek();
 

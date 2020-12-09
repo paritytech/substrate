@@ -10,6 +10,7 @@ use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::SharedVoterState;
+use sc_keystore::LocalKeystore;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -37,6 +38,10 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		sc_finality_grandpa::LinkHalf<Block, FullClient, FullSelectChain>
 	)
 >, ServiceError> {
+	if config.keystore_remote.is_some() {
+		return Err(ServiceError::Other(
+			format!("Remote Keystores are not supported.")))
+	}
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
 	let (client, backend, keystore_container, task_manager) =
@@ -78,13 +83,31 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	})
 }
 
+fn remote_keystore(_url: &String) -> Result<Arc<LocalKeystore>, &'static str> {
+	// FIXME: here would the concrete keystore be built,
+	//        must return a concrete type (NOT `LocalKeystore`) that
+	//        implements `CryptoStore` and `SyncCryptoStore`
+	Err("Remote Keystore not supported.")
+}
+
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
+pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
-		client, backend, mut task_manager, import_queue, keystore_container,
+		client, backend, mut task_manager, import_queue, mut keystore_container,
 		select_chain, transaction_pool, inherent_data_providers,
 		other: (block_import, grandpa_link),
 	} = new_partial(&config)?;
+
+	if let Some(url) = &config.keystore_remote {
+		match remote_keystore(url) {
+			Ok(k) => keystore_container.set_remote_keystore(k),
+			Err(e) => {
+				return Err(ServiceError::Other(
+					format!("Error hooking up remote keystore for {}: {}", url, e)))
+			}
+		};
+	}
+	config.network.notifications_protocols.push(sc_finality_grandpa::GRANDPA_PROTOCOL_NAME.into());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -210,8 +233,6 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			"grandpa-voter",
 			sc_finality_grandpa::run_grandpa_voter(grandpa_config)?
 		);
-	} else {
-		sc_finality_grandpa::setup_disabled_grandpa(network)?;
 	}
 
 	network_starter.start_network();
@@ -219,9 +240,11 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
+pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError> {
 	let (client, backend, keystore_container, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
+
+	config.network.notifications_protocols.push(sc_finality_grandpa::GRANDPA_PROTOCOL_NAME.into());
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
