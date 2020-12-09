@@ -511,7 +511,7 @@ fn test_metadata() {
 #[test]
 fn test_metadata_vnext() {
 	use frame_metadata::*;
-	use frame_support::scale_info::form::{MetaForm};
+	use frame_support::scale_info::{form::MetaForm, IntoCompact, Registry};
 	let expected_metadata: vnext::RuntimeMetadataLastVersion<MetaForm> = vnext::RuntimeMetadataLastVersion {
 		modules: vec![
 			vnext::ModuleMetadata {
@@ -736,6 +736,8 @@ fn test_metadata_vnext() {
 		// 	signed_extensions: vec![DecodeDifferent::Encode("UnitSignedExtension")],
 		// },
 	};
+	let mut registry = Registry::new();
+	let expected_metadata = expected_metadata.into_compact(&mut registry);
 	pretty_assertions::assert_eq!(Runtime::metadata_vnext().1, vnext::RuntimeMetadata::V12(expected_metadata));
 }
 
