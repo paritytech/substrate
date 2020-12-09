@@ -3967,6 +3967,7 @@ dependencies = [
  "sc-consensus-aura",
  "sc-executor",
  "sc-finality-grandpa",
+ "sc-keystore",
  "sc-rpc",
  "sc-rpc-api",
  "sc-service",
@@ -7484,6 +7485,7 @@ dependencies = [
  "merlin",
  "rand 0.7.3",
  "rand_core 0.5.1",
+ "serde",
  "sha2 0.8.2",
  "subtle 2.3.0",
  "zeroize",
@@ -8276,6 +8278,7 @@ dependencies = [
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "schnorrkel",
+ "serde",
  "sp-core",
  "sp-externalities",
 ]
