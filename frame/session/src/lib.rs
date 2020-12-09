@@ -683,6 +683,55 @@ impl<T: Config> Module<T> {
 		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
 	}
 
+	/// Upgrade the key type from some old type to a new type. Supports adding
+	/// and removing key types.
+	///
+	/// This function should be used with extreme care and only during an
+	/// `on_runtime_upgrade` block. Misuse of this function can put your blockchain
+	/// into an unrecoverable state.
+	///
+	/// Care should be taken that the raw versions of the
+	/// added keys are unique for every `ValidatorId, KeyTypeId` combination.
+	/// This is an invariant that the session module typically maintains internally.
+	///
+	/// As the actual values of the keys are typically not known at runtime upgrade,
+	/// it's recommended to initialize the keys to a (unique) dummy value with the expectation
+	/// that all validators should invoke `set_keys` before those keys are actually
+	/// required.
+	pub fn upgrade_keys<Old, F>(upgrade: F) where
+		Old: OpaqueKeys + Member + Decode,
+		F: Fn(T::ValidatorId, Old) -> T::Keys,
+	{
+		let old_ids = Old::key_ids();
+		let new_ids = T::Keys::key_ids();
+
+		// Translate NextKeys, and key ownership relations at the same time.
+		<NextKeys<T>>::translate::<Old, _>(|val, old_keys| {
+			// Clear all key ownership relations. Typically the overlap should
+			// stay the same, but no guarantees by the upgrade function.
+			for i in old_ids.iter() {
+				Self::clear_key_owner(*i, old_keys.get_raw(*i));
+			}
+
+			let new_keys = upgrade(val.clone(), old_keys);
+
+			// And now set the new ones.
+			for i in new_ids.iter() {
+				Self::put_key_owner(*i, new_keys.get_raw(*i), &val);
+			}
+
+			Some(new_keys)
+		});
+
+		let _ = <QueuedKeys<T>>::translate::<Vec<(T::ValidatorId, Old)>, _>(
+			|k| {
+				k.map(|k| k.into_iter()
+					.map(|(val, old_keys)| (val.clone(), upgrade(val, old_keys)))
+					.collect::<Vec<_>>())
+			}
+		);
+	}
+
 	/// Perform the set_key operation, checking for duplicates. Does not set `Changed`.
 	///
 	/// This ensures that the reference counter in system is incremented appropriately and as such
