@@ -399,20 +399,21 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				in_peers: network_config.default_peers_set.in_peers,
 				out_peers: network_config.default_peers_set.out_peers,
 				bootnodes,
-				reserved_nodes: default_sets_reserved.clone(),
+				reserved_nodes: default_sets_reserved,
 				reserved_only: network_config.default_peers_set.non_reserved_mode
 					== config::NonReservedPeerMode::Deny,
 			});
 
 			// Set number 1 is used for transactions.
-			// TODO: expand docs
+			// The `reserved_nodes` of this set are later kept in sync with the peers we connect
+			// to through set 0.
 			sets.push(sc_peerset::SetConfig {
-				in_peers: network_config.default_peers_set.in_peers,  // TODO: ?!?!
-				out_peers: u32::max_value(),
+				in_peers: 0,
+				out_peers: 0,
 				bootnodes: Vec::new(),
-				reserved_nodes: default_sets_reserved,
+				reserved_nodes: Default::default(),
 				reserved_only: network_config.default_peers_set.non_reserved_mode
-					== config::NonReservedPeerMode::Deny,  // TODO: always deny?
+					== config::NonReservedPeerMode::Deny,
 			});
 
 			for set_cfg in &network_config.extra_sets {
@@ -1009,10 +1010,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let mut propagated_to = HashMap::<_, Vec<_>>::new();
 		let mut propagated_transactions = 0;
 
-		// TODO: only use peers that we have a set id 1 open with
 		for (who, peer) in self.context_data.peers.iter_mut() {
 			// never send transactions to the light node
 			if !peer.info.roles.is_full() {
+				continue;
+			}
+
+			if !self.behaviour.is_open(who, sc_peerset::SetId::from(1)) {
 				continue;
 			}
 
@@ -1584,9 +1588,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			GenericProtoOut::CustomProtocolOpen { peer_id, set_id, received_handshake, notifications_sink, .. } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == sc_peerset::SetId::from(0) {
-					// Set 1 is kept in sync with the connected peers of set 0.
-					self.peerset_handle.add_to_peers_set(sc_peerset::SetId::from(1), peer_id.clone());
-
 					// `received_handshake` can be either a `Status` message if received from the
 					// legacy substream ,or a `BlockAnnouncesHandshake` if received from the block
 					// announces substream.
@@ -1600,6 +1601,11 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 							};
 
 							if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
+								// Set 1 is kept in sync with the connected peers of set 0.
+								self.peerset_handle.add_reserved_peer(
+									sc_peerset::SetId::from(1),
+									peer_id.clone()
+								);
 								CustomMessageOutcome::SyncConnected(peer_id)
 							} else {
 								CustomMessageOutcome::None
@@ -1619,6 +1625,11 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 							match <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(&mut &received_handshake[..]) {
 								Ok(handshake) => {
 									if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
+										// Set 1 is kept in sync with the connected peers of set 0.
+										self.peerset_handle.add_reserved_peer(
+											sc_peerset::SetId::from(1),
+											peer_id.clone()
+										);
 										CustomMessageOutcome::SyncConnected(peer_id)
 									} else {
 										CustomMessageOutcome::None
@@ -1675,12 +1686,12 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			GenericProtoOut::CustomProtocolClosed { peer_id, set_id } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == sc_peerset::SetId::from(0) {
-					// Set 1 is kept in sync with the connected peers of set 0.
-					self.peerset_handle.remove_from_peers_set(
-						sc_peerset::SetId::from(1),
-						peer_id.clone()
-					);
 					if self.on_sync_peer_disconnected(peer_id.clone()).is_ok() {
+						// Set 1 is kept in sync with the connected peers of set 0.
+						self.peerset_handle.remove_reserved_peer(
+							sc_peerset::SetId::from(1),
+							peer_id.clone()
+						);
 						CustomMessageOutcome::SyncDisconnected(peer_id)
 					} else {
 						CustomMessageOutcome::None
