@@ -24,21 +24,25 @@ macro_rules! impl_runtime_metadata_vnext {
 			$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn metadata_vnext() -> $crate::metadata::vnext::RuntimeMetadataPrefixed {
-				$crate::metadata::vnext::RuntimeMetadataLastVersion {
-						modules: $crate::__runtime_modules_to_metadata_vnext!($runtime;; $( $rest )*),
-						// extrinsic: $crate::metadata::ExtrinsicMetadata {
-						// 	version: <$ext as $crate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
-						// 	signed_extensions: <
-						// 			<
-						// 				$ext as $crate::sp_runtime::traits::ExtrinsicMetadata
-						// 			>::SignedExtensions as $crate::sp_runtime::traits::SignedExtension
-						// 		>::identifier()
-						// 			.into_iter()
-						// 			.map($crate::metadata::DecodeDifferent::Encode)
-						// 			.collect(),
-						// },
-				}.into()
+			pub fn metadata_vnext() -> $crate::metadata::vnext::RuntimeMetadataPrefixed<$crate::scale_info::form::CompactForm> {
+				let mut registry = $crate::scale_info::Registry::new();
+				let metadata =
+					$crate::metadata::vnext::RuntimeMetadataLastVersion {
+							modules: $crate::__runtime_modules_to_metadata_vnext!($runtime;; $( $rest )*),
+							// extrinsic: $crate::metadata::ExtrinsicMetadata {
+							// 	version: <$ext as $crate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
+							// 	signed_extensions: <
+							// 			<
+							// 				$ext as $crate::sp_runtime::traits::ExtrinsicMetadata
+							// 			>::SignedExtensions as $crate::sp_runtime::traits::SignedExtension
+							// 		>::identifier()
+							// 			.into_iter()
+							// 			.map($crate::metadata::DecodeDifferent::Encode)
+							// 			.collect(),
+							// },
+					};
+				use $crate::scale_info::IntoCompact as _;
+				metadata.into_compact(&mut registry).into()
 			}
 		}
 	}
