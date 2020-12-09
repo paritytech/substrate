@@ -73,9 +73,9 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 						vec![]
 					},
 					reserved_nodes: Default::default(),
+					reserved_only: false,
 				}
 			],
-			reserved_only: false,
 		});
 
 		let behaviour = CustomProtoWithAddr {

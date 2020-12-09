@@ -284,12 +284,10 @@ impl PeersState {
 		}
 
 		if let Some(peer) = self.nodes.get_mut(&peer_id) {
-			for (set, membership) in peer.sets.iter().enumerate() {
-				match membership {
-					MembershipState::In => self.sets[set].num_in -= 1,
-					MembershipState::Out => self.sets[set].num_out -= 1,
-					MembershipState::NotConnected { .. } | MembershipState::NotMember => {}
-				}
+			match peer.sets[set] {
+				MembershipState::In => self.sets[set].num_in -= 1,
+				MembershipState::Out => self.sets[set].num_out -= 1,
+				MembershipState::NotConnected { .. } | MembershipState::NotMember => {}
 			}
 		}
 	}
@@ -304,12 +302,10 @@ impl PeersState {
 		}
 
 		if let Some(peer) = self.nodes.get_mut(peer_id) {
-			for (set, membership) in peer.sets.iter().enumerate() {
-				match membership {
-					MembershipState::In => self.sets[set].num_in += 1,
-					MembershipState::Out => self.sets[set].num_out += 1,
-					MembershipState::NotConnected { .. } | MembershipState::NotMember => {}
-				}
+			match peer.sets[set] {
+				MembershipState::In => self.sets[set].num_in += 1,
+				MembershipState::Out => self.sets[set].num_out += 1,
+				MembershipState::NotConnected { .. } | MembershipState::NotMember => {}
 			}
 		}
 	}
