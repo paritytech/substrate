@@ -86,7 +86,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		other: (block_import, grandpa_link),
 	} = new_partial(&config)?;
 
-	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
+	config.network.extra_sets.push(sc_finality_grandpa::grandpa_peers_set_config());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -223,7 +223,7 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 	let (client, backend, keystore_container, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
-	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
+	config.network.extra_sets.push(sc_finality_grandpa::grandpa_peers_set_config());
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
