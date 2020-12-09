@@ -45,7 +45,6 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 
 	for index in 0 .. 2 {
 		let keypair = keypairs[index].clone();
-		let local_peer_id = keypair.public().into_peer_id();
 
 		let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
 			.into_authentic(&keypair)
