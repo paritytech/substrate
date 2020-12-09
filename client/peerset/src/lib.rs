@@ -746,7 +746,7 @@ mod tests {
 	use libp2p::PeerId;
 	use futures::prelude::*;
 	use super::{PeersetConfig, Peerset, Message, IncomingIndex, ReputationChange, SetConfig, SetId, BANNED_THRESHOLD};
-	use std::{iter, pin::Pin, task::Poll, thread, time::Duration};
+	use std::{pin::Pin, task::Poll, thread, time::Duration};
 
 	fn assert_messages(mut peerset: Peerset, messages: Vec<Message>) -> Peerset {
 		for expected_message in messages {
