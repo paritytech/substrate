@@ -922,7 +922,7 @@ parameter_types! {
 	pub const MinBid: Balance = 10 * DOLLARS;
 }
 
-impl pallet_name_service::Trait for Runtime {
+impl pallet_name_service::Config for Runtime {
 	type AccountIndex = AccountIndex;
 	type Currency = Balances;
 	type Event = Event;

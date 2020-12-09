@@ -23,7 +23,7 @@ use sp_runtime::testing::Header;
 use sp_runtime::Perbill;
 use sp_core::H256;
 use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, ord_parameter_types, weights::Weight};
-use crate::{self as pallet_name_service, Module, Trait, ExtensionConfig};
+use crate::{self as pallet_name_service, Module, Config, ExtensionConfig};
 use frame_system::EnsureSignedBy;
 
 impl_outer_origin!{
@@ -51,8 +51,11 @@ parameter_types! {
 type BlockNumber = u64;
 type Balance = u64;
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Call = ();
 	type Index = u64;
@@ -64,13 +67,6 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -83,7 +79,7 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
 
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = Balance;
 	type DustRemoval = ();
@@ -111,7 +107,7 @@ ord_parameter_types! {
 	pub const Permanence: u64 = 200;
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type AccountIndex = ();
 	type Currency = Balances;
 	type Event = Event;

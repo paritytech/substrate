@@ -121,7 +121,7 @@ fn bid_works(){
 
 		// call with less than MinBid should fail
 		assert_noop!(
-			NameService::bid(Origin::signed(1), name_hash, <mock::Test as Trait>::MinBid::get().saturating_sub(1)),
+			NameService::bid(Origin::signed(1), name_hash, <mock::Test as Config>::MinBid::get().saturating_sub(1)),
 			Error::<Test>::InvalidBid
 		);
 
@@ -130,7 +130,7 @@ fn bid_works(){
 		let stored_data = Registration::<Test>::get(&name_hash);
 		assert_eq!(stored_data, NameStatus::Bidding {
 			who: 1,
-			bid_end: <mock::Test as Trait>::BiddingPeriod::get(),
+			bid_end: <mock::Test as Config>::BiddingPeriod::get(),
 			amount: 5
 		});
 		assert_eq!(Balances::free_balance(&1), 95);
@@ -144,7 +144,7 @@ fn bid_works(){
 		let stored_data = Registration::<Test>::get(&name_hash);
 		assert_eq!(stored_data, NameStatus::Bidding {
 			who: 1,
-			bid_end: <mock::Test as Trait>::BiddingPeriod::get().saturating_add(2),
+			bid_end: <mock::Test as Config>::BiddingPeriod::get().saturating_add(2),
 			amount: 10
 		});
 		assert_eq!(Balances::free_balance(&1), 90);
@@ -154,7 +154,7 @@ fn bid_works(){
 		let stored_data = Registration::<Test>::get(&name_hash);
 		assert_eq!(stored_data, NameStatus::Bidding {
 			who: 2,
-			bid_end: <mock::Test as Trait>::BiddingPeriod::get().saturating_add(2),
+			bid_end: <mock::Test as Config>::BiddingPeriod::get().saturating_add(2),
 			amount: 20
 		});
 		assert_eq!(Balances::free_balance(&1), 100);
@@ -182,7 +182,7 @@ fn claim_works(){
 		// claim before bid expiry should fail
 		assert_noop!(NameService::claim(Origin::signed(1), name_hash, 1), Error::<Test>::NotExpired);
 
-		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+		run_to_block(<mock::Test as Config>::BiddingPeriod::get());
 
 		// cannot invoke with less than one period
 		assert_noop!(NameService::claim(Origin::signed(1), name_hash, 0), Error::<Test>::InvalidClaim);
@@ -199,9 +199,9 @@ fn claim_works(){
 		let stored_data = Registration::<Test>::get(&name_hash);
 		assert_eq!(stored_data, NameStatus::Owned {
 			who: 1,
-			expiration: Some(<mock::Test as Trait>::OwnershipPeriod::get()
+			expiration: Some(<mock::Test as Config>::OwnershipPeriod::get()
 				.saturating_mul(2)
-				.saturating_add(<mock::Test as Trait>::BiddingPeriod::get())),
+				.saturating_add(<mock::Test as Config>::BiddingPeriod::get())),
 		});
 
 		// call to previously claimed name should fail
@@ -226,11 +226,11 @@ fn free_works(){
 		assert_noop!(NameService::free(Origin::signed(2), name_hash), Error::<Test>::NotExpired);
 
 		// free should wait for claim period
-		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+		run_to_block(<mock::Test as Config>::BiddingPeriod::get());
 		assert_noop!(NameService::free(Origin::signed(2), name_hash), Error::<Test>::NotExpired);
 
 		// call after (bid_end+bidding+claim+1) period should pass
-		let ideal_block = <mock::Test as Trait>::BiddingPeriod::get().saturating_add(<mock::Test as Trait>::ClaimPeriod::get());
+		let ideal_block = <mock::Test as Config>::BiddingPeriod::get().saturating_add(<mock::Test as Config>::ClaimPeriod::get());
 		run_to_block(ideal_block.saturating_add(11));
 		assert_ok!(NameService::free(Origin::signed(1), name_hash));
 
@@ -264,7 +264,7 @@ fn assign_works(){
 
 		// setup a claimed name to assign
 		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
-		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+		run_to_block(<mock::Test as Config>::BiddingPeriod::get());
 		assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
 
 		// non owner calls should fail
@@ -288,7 +288,7 @@ fn unassign_works(){
 
 		// setup an assigned name to test
 		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
-		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+		run_to_block(<mock::Test as Config>::BiddingPeriod::get());
 		assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
 		assert_ok!(NameService::assign(Origin::signed(1), name_hash, Some(1)));
 
@@ -309,7 +309,7 @@ fn make_permanent_works(){
 
 		// setup an assigned name to test
 		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
-		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+		run_to_block(<mock::Test as Config>::BiddingPeriod::get());
 		assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
 
 		// call from non permeance account should fail
@@ -336,7 +336,7 @@ fn extend_ownership_works(){
 
 		// setup an assigned name to test
 		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
-		run_to_block(<mock::Test as Trait>::BiddingPeriod::get());
+		run_to_block(<mock::Test as Config>::BiddingPeriod::get());
 		assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
 
 		// call to extend ownership should pass
