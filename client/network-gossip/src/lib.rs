@@ -106,7 +106,7 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
 		let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
 			.collect::<multiaddr::Multiaddr>();
-		let result = NetworkService::add_peers_set_reserved(self, protocol, iter::once(addr).collect());
+		let result = NetworkService::add_to_peers_set(self, protocol, iter::once(addr).collect());
 		if let Err(err) = result {
 			log::error!(target: "gossip", "add_set_reserved failed: {}", err);
 		}
@@ -115,7 +115,7 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
 		let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
 			.collect::<multiaddr::Multiaddr>();
-		let result = NetworkService::remove_peers_set_reserved(self, protocol, iter::once(addr).collect());
+		let result = NetworkService::remove_from_peers_set(self, protocol, iter::once(addr).collect());
 		if let Err(err) = result {
 			log::error!(target: "gossip", "remove_set_reserved failed: {}", err);
 		}

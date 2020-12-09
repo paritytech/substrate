@@ -407,7 +407,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				in_peers: network_config.default_peers_set.in_peers,
 				out_peers: network_config.default_peers_set.out_peers,
 				bootnodes,
-				reserved_nodes: default_sets_reserved,
+				reserved_nodes: default_sets_reserved.clone(),
 				reserved_only: network_config.default_peers_set.non_reserved_mode
 					== config::NonReservedPeerMode::Deny,
 			});
@@ -416,10 +416,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			// The `reserved_nodes` of this set are later kept in sync with the peers we connect
 			// to through set 0.
 			sets.push(sc_peerset::SetConfig {
-				in_peers: 0,
-				out_peers: 0,
+				in_peers: network_config.default_peers_set.in_peers,
+				out_peers: network_config.default_peers_set.out_peers,
 				bootnodes: Vec::new(),
-				reserved_nodes: Default::default(),
+				reserved_nodes: default_sets_reserved,
 				reserved_only: network_config.default_peers_set.non_reserved_mode
 					== config::NonReservedPeerMode::Deny,
 			});
@@ -1298,21 +1298,25 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Set whether the syncing peers set is in reserved-only mode.
 	pub fn set_reserved_only(&self, reserved_only: bool) {
 		self.peerset_handle.set_reserved_only(sc_peerset::SetId::from(0), reserved_only);
+		self.peerset_handle.set_reserved_only(sc_peerset::SetId::from(1), reserved_only);
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers for syncing purposes.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(0), peer);
+		self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(0), peer.clone());
+		self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(1), peer);
 	}
 
 	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
 	pub fn add_reserved_peer(&self, peer: PeerId) {
-		self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(0), peer);
+		self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(0), peer.clone());
+		self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(1), peer);
 	}
 
 	/// Sets the list of reserved peers for syncing purposes.
 	pub fn set_reserved_peers(&self, peers: HashSet<PeerId>) {
-		self.peerset_handle.set_reserved_peers(sc_peerset::SetId::from(0), peers);
+		self.peerset_handle.set_reserved_peers(sc_peerset::SetId::from(0), peers.clone());
+		self.peerset_handle.set_reserved_peers(sc_peerset::SetId::from(1), peers);
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers.
@@ -1604,7 +1608,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 
 							if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
 								// Set 1 is kept in sync with the connected peers of set 0.
-								self.peerset_handle.add_reserved_peer(
+								self.peerset_handle.add_to_peers_set(
 									sc_peerset::SetId::from(1),
 									peer_id.clone()
 								);
@@ -1628,7 +1632,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 								Ok(handshake) => {
 									if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
 										// Set 1 is kept in sync with the connected peers of set 0.
-										self.peerset_handle.add_reserved_peer(
+										self.peerset_handle.add_to_peers_set(
 											sc_peerset::SetId::from(1),
 											peer_id.clone()
 										);
