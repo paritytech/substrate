@@ -38,7 +38,7 @@ use std::{collections::HashSet, collections::VecDeque};
 use futures::prelude::*;
 use log::{debug, error, trace};
 use serde_json::json;
-use std::{pin::Pin, task::{Context, Poll}, time::Duration};
+use std::{collections::HashMap, pin::Pin, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
@@ -635,24 +635,29 @@ impl Peerset {
 		self.update_time();
 
 		json!({
-			// TODO:
-			/*"nodes": self.data.peers().cloned().collect::<Vec<_>>().into_iter().map(|peer_id| {
-				let state = match self.data.peer(&peer_id) {
-					peersstate::Peer::Connected(entry) => json!({
-						"connected": true,
-						"reputation": entry.reputation()
-					}),
-					peersstate::Peer::NotConnected(entry) => json!({
-						"connected": false,
-						"reputation": entry.reputation()
-					}),
-					peersstate::Peer::Unknown(_) =>
-						unreachable!("We iterate over the known peers; QED")
-				};
+			"sets": (0..self.data.num_sets()).map(|set_index| {
+				json!({
+					"nodes": self.data.peers().cloned().collect::<Vec<_>>().into_iter().filter_map(|peer_id| {
+						let state = match self.data.peer(set_index, &peer_id) {
+							peersstate::Peer::Connected(entry) => json!({
+								"connected": true,
+								"reputation": entry.reputation()
+							}),
+							peersstate::Peer::NotConnected(entry) => json!({
+								"connected": false,
+								"reputation": entry.reputation()
+							}),
+							peersstate::Peer::Unknown(_) => return None,
+						};
 
-				(peer_id.to_base58(), state)
-			}).collect::<HashMap<_, _>>(),*/
-			//"reserved_only": self.reserved_only,
+						Some((peer_id.to_base58(), state))
+					}).collect::<HashMap<_, _>>(),
+					"reserved_nodes": self.reserved_nodes[set_index].0.iter().map(|peer_id| {
+						peer_id.to_base58()
+					}).collect::<HashSet<_>>(),
+					"reserved_only": self.reserved_nodes[set_index].1,
+				})
+			}).collect::<Vec<_>>(),
 			"message_queue": self.message_queue.len(),
 		})
 	}
