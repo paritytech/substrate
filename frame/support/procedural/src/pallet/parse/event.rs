@@ -69,7 +69,7 @@ impl EventDef {
 	pub fn event_impl_gen(&self) -> proc_macro2::TokenStream {
 		if self.is_generic {
 			if self.has_instance {
-				quote::quote!(T: Config<I>, I)
+				quote::quote!(T: Config<I>, I: 'static)
 			} else {
 				quote::quote!(T: Config)
 			}
