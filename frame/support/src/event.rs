@@ -149,6 +149,13 @@ macro_rules! decl_event {
 			pub fn metadata() -> &'static [ $crate::event::EventMetadata ] {
 				$crate::__events_to_metadata!(; $( $events )* )
 			}
+
+			/// Metadata vnext only supported by new frame support macros
+			#[allow(dead_code)]
+			#[doc(hidden)]
+			pub fn metadata_vnext() -> Vec<$crate::metadata::vnext::EventMetadata> {
+				vec![]
+			}
 		}
 	}
 }
@@ -296,6 +303,13 @@ macro_rules! __decl_generic_event {
 			#[doc(hidden)]
 			pub fn metadata() -> &'static [$crate::event::EventMetadata] {
 				$crate::__events_to_metadata!(; $( $events )* )
+			}
+
+			/// Metadata vnext only supported by new frame support macros
+			#[allow(dead_code)]
+			#[doc(hidden)]
+			pub fn metadata_vnext() -> Vec<$crate::metadata::vnext::EventMetadata> {
+				vec![]
 			}
 		}
 	};
