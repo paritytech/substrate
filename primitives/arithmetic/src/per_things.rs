@@ -68,7 +68,7 @@ pub trait PerThing:
 		// if Self::ACCURACY % 100 > 0 then we need the correction for accuracy
 		let c = rational_mul_correction::<Self::Inner, Self>(b, a, 100.into(), Rounding::Nearest);
 		let base: Self::Inner = 100.into();
-		Self::from_parts(a / base.saturating_mul(b).saturating_add(c))
+		Self::from_parts((a / base).saturating_mul(b).saturating_add(c))
 	}
 
 	/// Return the product of multiplication of this value by itself.

@@ -522,10 +522,10 @@ mod per_thing {
 
 	#[test]
 	fn per_thing_100_wont_overflow() {
-		<Percent as PerThing>::from_percent(100);
-		<PerU16 as PerThing>::from_percent(100);
-		<Permill as PerThing>::from_percent(100);
-		<Perbill as PerThing>::from_percent(100);
-		<Perquintill as PerThing>::from_percent(100);
+		assert_eq!(<Percent as PerThing>::from_percent(100), Percent::one());
+		assert_eq!(<PerU16 as PerThing>::from_percent(100), PerU16::one());
+		assert_eq!(<Permill as PerThing>::from_percent(100), Permill::one());
+		assert_eq!(<Perbill as PerThing>::from_percent(100), Perbill::one());
+		assert_eq!(<Perquintill as PerThing>::from_percent(100), Perquintill::one());
 	}
 }
