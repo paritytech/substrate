@@ -27,7 +27,6 @@ use frame_support::{
 	traits::{OnInitialize, OnFinalize},
 	error::BadOrigin
 };
-use pallet_balances::Error as BalancesError;
 
 fn run_to_block(n: u64) {
 	while System::block_number() < n {
