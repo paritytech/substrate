@@ -129,7 +129,10 @@ pub enum Event {
 		protocol: Cow<'static, str>,
 		/// If `Ok`, contains the time elapsed between when we received the request and when we
 		/// sent back the response. If `Err`, the error that happened.
-		result: Result<Duration, ResponseFailure>,
+		///
+		/// Note: Given that response time is tracked on a best-effort basis only, `Ok(time)` can be
+		/// `None`.
+		result: Result<Option<Duration>, ResponseFailure>,
 	},
 
 	/// A request initiated using [`RequestResponsesBehaviour::send_request`] has succeeded or
@@ -506,20 +509,21 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}
 						RequestResponseEvent::ResponseSent { request_id, peer } => {
-							match self.pending_responses_arrival_time.pop(&request_id) {
-								Some(arrival) => {
-									let out = Event::InboundRequest {
-										peer,
-										protocol: protocol.clone(),
-										result: Ok(arrival.elapsed()),
-									};
-									return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
-								},
-								None => log::debug!(
-									"Expected to find start time for sent response. Is the LRU cache \
-									 too small?",
-								),
+							let arrival_time = self.pending_responses_arrival_time.pop(&request_id)
+								.map(|t| t.elapsed());
+							if arrival_time.is_none() {
+								log::debug!(
+									"Expected to find arrival time for sent response. Is the LRU \
+									 cache size set too small?",
+								);
 							}
+
+							let out = Event::InboundRequest {
+								peer,
+								protocol: protocol.clone(),
+								result: Ok(arrival_time),
+							};
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 
 						}
 					};
