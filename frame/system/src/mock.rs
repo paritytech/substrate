@@ -34,12 +34,11 @@ impl_outer_origin! {
 #[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub struct Test;
 
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
+const MAX_BLOCK_WEIGHT: Weight = 1024;
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 10;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumExtrinsicWeight: Weight = 768;
-	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
-	pub const MaximumBlockLength: u32 = 1024;
 	pub Version: RuntimeVersion = RuntimeVersion {
 		spec_name: sp_version::create_runtime_str!("test"),
 		impl_name: sp_version::create_runtime_str!("system-test"),
@@ -49,12 +48,28 @@ parameter_types! {
 		apis: sp_version::create_apis_vec!([]),
 		transaction_version: 1,
 	};
-	pub const BlockExecutionWeight: Weight = 10;
-	pub const ExtrinsicBaseWeight: Weight = 5;
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 		read: 10,
 		write: 100,
 	};
+	pub RuntimeBlockWeights: limits::BlockWeights = limits::BlockWeights::builder()
+		.base_block(10)
+		.for_class(DispatchClass::all(), |weights| {
+			weights.base_extrinsic = 5;
+		})
+		.for_class(DispatchClass::Normal, |weights| {
+			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT);
+		})
+		.for_class(DispatchClass::Operational, |weights| {
+			weights.max_total = Some(MAX_BLOCK_WEIGHT);
+			weights.reserved = Some(
+				MAX_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT
+			);
+		})
+		.avg_block_initialization(Perbill::from_percent(0))
+		.build_or_panic();
+	pub RuntimeBlockLength: limits::BlockLength =
+		limits::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
 }
 
 thread_local!{
@@ -82,6 +97,8 @@ impl Dispatchable for Call {
 
 impl Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = RuntimeBlockWeights;
+	type BlockLength = RuntimeBlockLength;
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
@@ -93,13 +110,7 @@ impl Config for Test {
 	type Header = Header;
 	type Event = Event<Self>;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = DbWeight;
-	type BlockExecutionWeight = BlockExecutionWeight;
-	type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
-	type MaximumExtrinsicWeight = MaximumExtrinsicWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
 	type Version = Version;
 	type PalletInfo = ();
 	type AccountData = u32;
@@ -118,7 +129,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = GenesisConfig::default().build_storage::<Test>().unwrap().into();
 	// Add to each test the initial weight of a block
 	ext.execute_with(|| System::register_extra_weight_unchecked(
-		<Test as Config>::BlockExecutionWeight::get(),
+		<Test as crate::Config>::BlockWeights::get().base_block,
 		DispatchClass::Mandatory
 	));
 	ext
