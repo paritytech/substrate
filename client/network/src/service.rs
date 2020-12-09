@@ -880,13 +880,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Connect to unreserved peers and allow unreserved peers to connect for syncing purposes.
 	pub fn accept_unreserved_peers(&self) {
-		self.peerset.set_reserved_only(sc_peerset::SetId::from(0), false);  // TODO: do properly
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(false));
 	}
 
 	/// Disconnect from unreserved peers and deny new unreserved peers to connect for syncing
 	/// purposes.
 	pub fn deny_unreserved_peers(&self) {
-		self.peerset.set_reserved_only(sc_peerset::SetId::from(0), true);  // TODO: do properly
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(true));
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers.
@@ -968,34 +972,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::SyncFork(peers, hash, number));
-	}
-
-	/// Modify a set of peers from the peerset.
-	///
-	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
-	/// consist of only `/p2p/<peerid>`.
-	///
-	/// Returns an `Err` if one of the given addresses is invalid or contains an
-	/// invalid peer ID (which includes the local peer ID).
-	pub fn set_peers_set(&self, protocol: Cow<'static, str>, peers: HashSet<Multiaddr>) -> Result<(), String> {
-		let peers = self.split_multiaddr_and_peer_id(peers)?;
-
-		for (peer_id, addr) in peers.iter() {
-			if !addr.is_empty() {
-				let _ = self
-					.to_worker
-					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id.clone(), addr.clone()));
-			}
-		}
-
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::SetPeersSet(
-				protocol,
-				peers.into_iter().map(|(p, _)| p).collect()
-			));
-
-		Ok(())
 	}
 
 	/// Add peers to a peerset priority group.
@@ -1209,7 +1185,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	GetValue(record::Key),
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
-	SetPeersSet(Cow<'static, str>, HashSet<PeerId>),
+	SetReservedOnly(bool),
 	AddToPeersSet(Cow<'static, str>, PeerId),
 	RemoveFromPeersSet(Cow<'static, str>, PeerId),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
@@ -1323,10 +1299,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.get_value(&key),
 				ServiceToWorkerMsg::PutValue(key, value) =>
 					this.network_service.put_value(key, value),
+				ServiceToWorkerMsg::SetReservedOnly(reserved_only) =>
+					this.network_service.user_protocol_mut().set_reserved_only(reserved_only),
 				ServiceToWorkerMsg::AddKnownAddress(peer_id, addr) =>
 					this.network_service.add_known_address(peer_id, addr),
-				ServiceToWorkerMsg::SetPeersSet(protocol, peer_ids) =>
-					this.network_service.user_protocol_mut().set_peers_set(protocol, peer_ids),
 				ServiceToWorkerMsg::AddToPeersSet(protocol, peer_id) =>
 					this.network_service.user_protocol_mut().add_to_peers_set(protocol, peer_id),
 				ServiceToWorkerMsg::RemoveFromPeersSet(protocol, peer_id) =>

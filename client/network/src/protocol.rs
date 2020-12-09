@@ -1287,20 +1287,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	// TODO: /!\
-	/*/// Connect to unreserved peers and allow unreserved peers to connect.
-	pub fn accept_unreserved_peers(&self) {
-		// TODO:
-		self.peerset_handle.set_reserved_only(false);
+	/// Set whether the syncing peers set is in reserved-only mode.
+	pub fn set_reserved_only(&self, reserved_only: bool) {
+		self.peerset_handle.set_reserved_only(sc_peerset::SetId::from(0), reserved_only);
 	}
 
-	/// Disconnect from unreserved peers and deny new unreserved peers to connect.
-	pub fn deny_unreserved_peers(&self) {
-		// TODO:
-		self.peerset_handle.set_reserved_only(true);
-	}
-
-	/// Removes a `PeerId` from the list of reserved peers.
+	// TODO: !
+	/*/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(index + 2), peer);
@@ -1332,19 +1325,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn add_default_set_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		for peer_id in peer_ids {
 			self.peerset_handle.add_to_peers_set(sc_peerset::SetId::from(0), peer_id);
-		}
-	}
-
-	/// Modify a set of peers from the peerset.
-	pub fn set_peers_set(&self, protocol: Cow<'static, str>, peers: HashSet<PeerId>) {
-		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.set_peers_set(sc_peerset::SetId::from(index + 2), peers);
-		} else {
-			log::error!(
-				target: "sub-libp2p",
-				"set_peers_set with unknown protocol: {}",
-				protocol
-			);
 		}
 	}
 

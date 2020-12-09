@@ -59,7 +59,6 @@ enum Action {
 	SetReservedPeers(SetId, HashSet<PeerId>),
 	SetReservedOnly(SetId, bool),
 	ReportPeer(PeerId, ReputationChange),
-	SetPeersSet(SetId, HashSet<PeerId>),
 	AddToPeersSet(SetId, PeerId),
 	RemoveFromPeersSet(SetId, PeerId),
 }
@@ -145,11 +144,6 @@ impl PeersetHandle {
 	/// Reports an adjustment to the reputation of the given peer.
 	pub fn report_peer(&self, peer_id: PeerId, score_diff: ReputationChange) {
 		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
-	}
-
-	/// Modify a set.
-	pub fn set_peers_set(&self, set_id: SetId, peers: HashSet<PeerId>) {
-		let _ = self.tx.unbounded_send(Action::SetPeersSet(set_id, peers));
 	}
 
 	/// Add a peer to a set.
@@ -376,41 +370,6 @@ impl Peerset {
 		} else {
 			self.alloc_slots();
 		}
-	}
-
-	fn on_set_peers_set(&mut self, _set_id: SetId, _peers: HashSet<PeerId>) {
-		/*let set_index = match self.sets_name_to_id_mapping.get(&set_id) {
-			Some(idx) => *idx,
-			None => return,
-		};
-
-		// Determine the difference between the current group and the new list.
-		let (to_insert, to_remove) = {
-			let current_group = self.priority_groups.entry(group_id.to_owned()).or_default();
-			let to_insert = peers.difference(current_group)
-				.cloned().collect::<Vec<_>>();
-			let to_remove = current_group.difference(&peers)
-				.cloned().collect::<Vec<_>>();
-			(to_insert, to_remove)
-		};
-
-		// Enumerate elements in `peers` not in `current_group`.
-		for peer_id in &to_insert {
-			// We don't call `add_to_peers_set` here in order to avoid calling
-			// `alloc_slots` all the time.
-			self.priority_groups.entry(group_id.to_owned()).or_default().insert(peer_id.clone());
-			self.data.add_no_slot_node(peer_id.clone());
-		}
-
-		// Enumerate elements in `current_group` not in `peers`.
-		for peer in to_remove {
-			self.on_remove_from_peers_set(group_id, peer);
-		}
-
-		if !to_insert.is_empty() {
-			self.alloc_slots();
-		}*/
-		todo!() // TODO:
 	}
 
 	/// Adds a node to the given set. The peerset will, if possible and not already the case,
@@ -730,8 +689,6 @@ impl Stream for Peerset {
 					self.on_set_reserved_only(set_id, reserved),
 				Action::ReportPeer(peer_id, score_diff) =>
 					self.on_report_peer(peer_id, score_diff),
-				Action::SetPeersSet(sets_name, peers) =>
-					self.on_set_peers_set(sets_name, peers),
 				Action::AddToPeersSet(sets_name, peer_id) =>
 					self.add_to_peers_set(sets_name, peer_id),
 				Action::RemoveFromPeersSet(sets_name, peer_id) =>
