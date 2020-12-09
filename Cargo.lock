@@ -4305,7 +4305,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-balances"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -4338,7 +4338,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-contracts"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "assert_matches",
  "bitflags",
@@ -4405,7 +4405,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-democracy"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -4559,7 +4559,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-identity"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "enumflags2",
  "frame-benchmarking",
@@ -5036,7 +5036,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-vesting"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "enumflags2",
  "frame-benchmarking",
