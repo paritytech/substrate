@@ -351,20 +351,18 @@ impl Peerset {
 
 		if reserved_only {
 			// Disconnect all the nodes that aren't reserved.
-			for set_index in 0..self.data.num_sets() {
-				for peer_id in self.data.connected_peers(set_index).cloned().collect::<Vec<_>>().into_iter() {
-					if self.reserved_nodes[set_index].0.contains(&peer_id) {
-						continue;
-					}
-
-					let peer = self.data.peer(set_index, &peer_id).into_connected()
-						.expect("We are enumerating connected peers, therefore the peer is connected; qed");
-					peer.disconnect();
-					self.message_queue.push_back(Message::Drop {
-						set_id: SetId(set_index),
-						peer_id
-					});
+			for peer_id in self.data.connected_peers(set_id.0).cloned().collect::<Vec<_>>().into_iter() {
+				if self.reserved_nodes[set_id.0].0.contains(&peer_id) {
+					continue;
 				}
+
+				let peer = self.data.peer(set_id.0, &peer_id).into_connected()
+					.expect("We are enumerating connected peers, therefore the peer is connected; qed");
+				peer.disconnect();
+				self.message_queue.push_back(Message::Drop {
+					set_id,
+					peer_id
+				});
 			}
 
 		} else {
