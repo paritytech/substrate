@@ -598,7 +598,6 @@ pub(crate) struct Metrics {
 	dht_event_received: CounterVec<U64>,
 	handle_value_found_event_failure: Counter<U64>,
 	known_authorities_count: Gauge<U64>,
-	priority_group_size: Gauge<U64>,
 }
 
 impl Metrics {
@@ -655,13 +654,6 @@ impl Metrics {
 				Gauge::new(
 					"authority_discovery_known_authorities_count",
 					"Number of authorities known by authority discovery."
-				)?,
-				registry,
-			)?,
-			priority_group_size: register(
-				Gauge::new(
-					"authority_discovery_priority_group_size",
-					"Number of addresses passed to the peer set as a priority group."
 				)?,
 				registry,
 			)?,

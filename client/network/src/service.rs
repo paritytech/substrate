@@ -927,7 +927,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::RemoveReserved(peer_id));
 	}
 
-	/// Add peers to a peerset priority group.
+	/// Add peers to a peer set.
 	///
 	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`. It can also
 	/// consist of only `/p2p/<peerid>`.
@@ -956,7 +956,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		Ok(())
 	}
 
-	/// Remove peers from a peerset priority group.
+	/// Remove peers from a peer set.
 	///
 	/// Each `Multiaddr` must end with a `/p2p/` component containing the `PeerId`.
 	///
@@ -1017,7 +1017,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		Ok(())
 	}
 
-	/// Remove peers from a peerset priority group.
+	/// Remove peers from a peer set.
 	///
 	/// If we currently have an open substream with this peer, it will soon be closed.
 	///
@@ -1049,7 +1049,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::NewBestBlockImported(hash, number));
 	}
 
-	/// Utility function to extract `PeerId` from each `Multiaddr` for priority group updates.
+	/// Utility function to extract `PeerId` from each `Multiaddr` for peer set updates.
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
@@ -1065,7 +1065,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 				// Make sure the local peer ID is never added to the PSM
 				// or added as a "known address", even if given.
 				if peer == self.local_peer_id {
-					Err("Local peer ID in priority group.".to_string())
+					Err("Local peer ID in peer set.".to_string())
 				} else {
 					Ok((peer, addr))
 				}

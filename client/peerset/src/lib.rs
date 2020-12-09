@@ -68,7 +68,7 @@ enum Action {
 /// Can be constructed using the `From<usize>` trait implementation based on the index of the set
 /// within [`PeersetConfig::sets`]. For example, the first element of [`PeersetConfig::sets`] is
 /// later referred to with `SetId::from(0)`. It is intended that the code responsible for building
-/// the [`PeersetConfig`] is also responsible for constructive the [`SetId`]s.
+/// the [`PeersetConfig`] is also responsible for constructing the [`SetId`]s.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SetId(usize);
 
@@ -373,7 +373,7 @@ impl Peerset {
 	/// Adds a node to the given set. The peerset will, if possible and not already the case,
 	/// try to connect to it.
 	///
-	/// > **Note**: This as the same effect as [`PeersetHandle::add_to_peers_set`].
+	/// > **Note**: This has the same effect as [`PeersetHandle::add_to_peers_set`].
 	pub fn add_to_peers_set(&mut self, set_id: SetId, peer_id: PeerId) {
 		if let peersstate::Peer::Unknown(entry) = self.data.peer(set_id.0, &peer_id) {
 			entry.discover();
@@ -475,7 +475,7 @@ impl Peerset {
 
 				drop(peer_reputation);
 
-				// If the peer reaches a reputation of 0, and there is no connect to it,
+				// If the peer reaches a reputation of 0, and there is no connection to it,
 				// forget it.
 				for set_index in 0..self.data.num_sets() {
 					match self.data.peer(set_index, &peer_id) {
