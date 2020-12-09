@@ -494,6 +494,15 @@ macro_rules! impl_outer_event {
 				$( $generic_instance )?,
 			)*;
 		);
+		$crate::__impl_outer_event_json_metadata_vnext!(
+			$runtime;
+			$name;
+			$(
+				$module_name::Event
+				< $( $generic_param )? $(, $module_name::$generic_instance )? >
+				$( $generic_instance )?,
+			)*;
+		);
 	}
 }
 
@@ -572,7 +581,7 @@ macro_rules! __impl_outer_event_json_metadata_vnext {
 				}
 			}
 
-			$crate::__impl_outer_event_json_metadata! {
+			$crate::__impl_outer_event_json_metadata_vnext! {
 				@DECL_MODULE_EVENT_FNS
 				$( $module_name < $( $generic_params ),* > $( $instance )? ; )*
 			}
@@ -587,7 +596,7 @@ macro_rules! __impl_outer_event_json_metadata_vnext {
 		$crate::paste::item! {
 			$(
 				#[allow(dead_code)]
-				pub fn [< __module_events_ $module_name $( _ $instance )? >] () ->
+				pub fn [< __module_events_vnext_ $module_name $( _ $instance )? >] () ->
 					Vec<$crate::event::vnext::EventMetadata>
 				{
 					$module_name::Event ::< $( $generic_params ),* > ::metadata_vnext()

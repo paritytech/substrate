@@ -2124,6 +2124,14 @@ macro_rules! __dispatch_impl_metadata {
 			pub fn call_functions() -> &'static [$crate::dispatch::FunctionMetadata] {
 				$crate::__call_to_functions!($($rest)*)
 			}
+
+			/// vnext metadata implemented in new frame support proc macros.
+			/// Returns empty vec for now to allow mixing of old style and new style pallets.
+			#[doc(hidden)]
+			#[allow(dead_code)]
+			pub fn call_functions_vnext() -> Vec<$crate::metadata::vnext::FunctionMetadata> {
+				vec![]
+			}
 		}
 	}
 }

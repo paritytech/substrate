@@ -320,11 +320,18 @@ fn decl_runtime_metadata<'a>(
 			quote!(
 				#module::Module #(#instance)* as #name { index #index } with #(#filtered_names)*,
 			)
-		});
+		})
+		.collect::<Vec<_>>();
+	let modules_tokens_vnext = modules_tokens.clone();
 	quote!(
 		#scrate::impl_runtime_metadata!{
 			for #runtime with modules where Extrinsic = #extrinsic
 				#(#modules_tokens)*
+		}
+
+		#scrate::impl_runtime_metadata_vnext!{
+			for #runtime with modules where Extrinsic = #extrinsic
+				#(#modules_tokens_vnext)*
 		}
 	)
 }

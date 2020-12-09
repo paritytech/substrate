@@ -60,6 +60,8 @@ pub mod event;
 #[macro_use]
 pub mod metadata;
 #[macro_use]
+pub mod metadata_vnext;
+#[macro_use]
 pub mod genesis_config;
 #[macro_use]
 pub mod inherent;
