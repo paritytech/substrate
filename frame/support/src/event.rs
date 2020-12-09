@@ -22,6 +22,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
+pub use frame_metadata::vnext;
 
 /// Implement the `Event` for a module.
 ///
@@ -547,6 +548,55 @@ macro_rules! __impl_outer_event_json_metadata {
 	}
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __impl_outer_event_json_metadata_vnext {
+	(
+		$runtime:ident;
+		$event_name:ident;
+		$( $module_name:ident::Event < $( $generic_params:path ),* > $( $instance:ident )?, )*;
+	) => {
+		impl $runtime {
+			#[allow(dead_code)]
+			pub fn outer_event_metadata_vnext() -> $crate::event::vnext::OuterEventMetadata {
+				$crate::event::vnext::OuterEventMetadata {
+					name: stringify!($event_name),
+					events: vec![
+						$(
+							$crate::metadata::vnext::ModuleEventMetadata {
+								name: stringify!($module_name),
+								events: $module_name::Event ::< $( $generic_params ),* > ::metadata_vnext()
+							}
+						),*
+					]
+				}
+			}
+
+			$crate::__impl_outer_event_json_metadata! {
+				@DECL_MODULE_EVENT_FNS
+				$( $module_name < $( $generic_params ),* > $( $instance )? ; )*
+			}
+		}
+	};
+
+	(@DECL_MODULE_EVENT_FNS
+		$(
+			$module_name:ident < $( $generic_params:path ),* > $( $instance:ident )? ;
+		)*
+	) => {
+		$crate::paste::item! {
+			$(
+				#[allow(dead_code)]
+				pub fn [< __module_events_ $module_name $( _ $instance )? >] () ->
+					Vec<$crate::event::vnext::EventMetadata>
+				{
+					$module_name::Event ::< $( $generic_params ),* > ::metadata_vnext()
+				}
+			)*
+		}
+	}
+}
+
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
@@ -827,7 +877,7 @@ mod tests {
 			event_module2::Event::<TestRuntime2>::TestEvent(3)
 		);
 		assert_eq!(runtime_2_event_module_2.encode()[0], 5);
-		
+
 		let runtime_2_event_module_3 = TestEventSystemRenamed::event_module3(
 			event_module3::Event::HiEvent
 		);
