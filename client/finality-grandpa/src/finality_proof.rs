@@ -409,9 +409,8 @@ pub(crate) mod tests {
 			&|_| unreachable!("Should return before calling GetAuthorities"),
 			authority_set_changes,
 			*header(4).number(),
-		)
-		.unwrap();
-		assert_eq!(proof_of_4, None);
+		);
+		assert!(matches!(proof_of_4, Err(ClientError::ProveFinalityRpc(_))));
 	}
 
 	#[test]
@@ -638,9 +637,8 @@ pub(crate) mod tests {
 			},
 			authority_set_changes,
 			*header(5).number(),
-		)
-		.unwrap();
-		assert!(proof_of_5.is_none());
+		);
+		assert!(matches!(proof_of_5, Err(ClientError::ProveFinalityRpc(..))));
 	}
 
 	#[test]
