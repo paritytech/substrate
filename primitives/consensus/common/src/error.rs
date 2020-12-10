@@ -25,6 +25,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
 	/// Missing state at block with given descriptor.
 	#[error("State unavailable at block {0}")]
