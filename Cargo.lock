@@ -609,6 +609,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
 
 [[package]]
+name = "bytes"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0dcbc35f504eb6fc275a6d20e4ebcda18cf50d40ba6fabff8c711fa16cb3b16"
+
+[[package]]
 name = "cache-padded"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7046,7 +7052,7 @@ dependencies = [
  "async-trait",
  "bitflags",
  "bs58",
- "bytes 0.5.6",
+ "bytes 0.6.0",
  "derive_more",
  "either",
  "erased-serde",
@@ -7146,7 +7152,7 @@ dependencies = [
 name = "sc-offchain"
 version = "2.0.0"
 dependencies = [
- "bytes 0.5.6",
+ "bytes 0.6.0",
  "fnv",
  "futures 0.3.8",
  "futures-timer 3.0.2",
