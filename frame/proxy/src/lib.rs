@@ -706,7 +706,7 @@ impl<T: Config> Module<T> {
 pub mod migration {
 	use super::*;
 
-	/// Migration code for https://github.com/paritytech/substrate/pull/6770
+	/// Migration code for <https://github.com/paritytech/substrate/pull/6770>
 	///
 	/// Details: This migration was introduced between Substrate 2.0-RC6 and Substrate 2.0 releases.
 	/// Before this migration, the `Proxies` storage item used a tuple of `AccountId` and

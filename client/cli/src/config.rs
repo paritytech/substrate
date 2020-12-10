@@ -47,7 +47,7 @@ const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
 
 /// Default configuration values used by Substrate
 ///
-/// These values will be used by [`CliConfiguritation`] to set
+/// These values will be used by [`CliConfiguration`] to set
 /// default values for e.g. the listen port or the RPC port.
 pub trait DefaultConfigurationValues {
 	/// The port Substrate should listen on for p2p connections.

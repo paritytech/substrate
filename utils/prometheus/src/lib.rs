@@ -33,7 +33,7 @@ use std::net::SocketAddr;
 mod networking;
 mod sourced;
 
-pub use sourced::{SourcedCounter, SourcedGauge, MetricSource};
+pub use sourced::{SourcedCounter, SourcedGauge, MetricSource, SourcedMetric};
 
 #[cfg(target_os = "unknown")]
 pub use unknown_os::init_prometheus;
