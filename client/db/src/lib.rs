@@ -442,13 +442,11 @@ pub struct RocksdbStorage(Arc<kvdb_rocksdb::Database>);
 pub struct DatabaseStorage<H: Clone + PartialEq + std::fmt::Debug>(RadixTreeDatabase<H>);
 
 impl historied_db::management::tree::TreeManagementStorage for TreeManagementPersistence {
-	const JOURNAL_DELETE: bool = true;
+	const JOURNAL_CHANGES: bool = true;
 	// Use pointer to serialize db with a transactional layer.
 	type Storage = TransactionalMappedDB<MappedDBDyn>;
 	type Mapping = historied_tree_bindings::Mapping;
 	type JournalDelete = historied_tree_bindings::JournalDelete;
-	type TouchedGC = historied_tree_bindings::TouchedGC;
-	type CurrentGC = historied_tree_bindings::CurrentGC;
 	type LastIndex = historied_tree_bindings::LastIndex;
 	type NeutralElt = historied_tree_bindings::NeutralElt;
 	type TreeMeta = historied_tree_bindings::TreeMeta;
@@ -1624,7 +1622,7 @@ impl<Block: BlockT> Backend<Block> {
 		{
 			use historied_db::management::tree::TreeManagementStorage;
 			let mut management;
-			let journals = if TreeManagementPersistence::JOURNAL_DELETE {
+			let journals = if TreeManagementPersistence::JOURNAL_CHANGES {
 				management = self.historied_management.write();
 				Some(management.ser())
 			} else {

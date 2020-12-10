@@ -402,7 +402,7 @@ impl<H, S> sp_core::offchain::BlockChainOffchainStorage for BlockChainLocalStora
 				locks: self.locks.clone(),
 				ordered_db: self.ordered_db.clone(),
 				changes_journals: self.changes_journals.clone(),
-				skip_journalize: !S::JOURNAL_DELETE,
+				skip_journalize: !S::JOURNAL_CHANGES,
 				safe_offchain_locks: self.safe_offchain_locks,
 			})
 		} else {
@@ -552,7 +552,8 @@ impl BlockChainLocalAt {
 			let at_write = if is_new {
 				self.at_write.as_ref().expect("checked above")
 			} else {
-				at_write_inner = Latest::unchecked_latest(self.at_read.latest_index());
+				use historied_db::StateIndex;
+				at_write_inner = Latest::unchecked_latest(self.at_read.index());
 				&at_write_inner
 			};
 			let is_set;
@@ -595,9 +596,13 @@ impl BlockChainLocalAt {
 						} else {
 							use historied_db::historied::force::ForceDataMut;
 							use historied_db::StateIndex;
+							let mut index = Default::default();
 							histo.force_set(
 								new_value,
-								at_write.index_ref(),
+								at_write.index_ref().unwrap_or_else(|| {
+									index = at_write.index();
+									&index
+								}),
 							)
 						};
 						if let &UpdateResult::Unchanged = &update_result {

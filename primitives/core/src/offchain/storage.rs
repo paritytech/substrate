@@ -213,7 +213,10 @@ impl BlockChainInMemOffchainStorageAt {
 		let at_write = if is_new {
 			self.at_write.as_ref().expect("checked above")
 		} else {
-			at_write_inner = Latest::unchecked_latest(self.at_read.latest_index());
+			// Here we should not use at_write because at write do resolve
+			// a tree leaf (so is_new true).
+			use historied_db::StateIndex;
+			at_write_inner = Latest::unchecked_latest(self.at_read.index());
 			&at_write_inner
 		};
 		let key: Vec<u8> = prefix.iter().chain(item_key).cloned().collect();
@@ -236,9 +239,13 @@ impl BlockChainInMemOffchainStorageAt {
 				} else {
 					use historied_db::historied::force::ForceDataMut;
 					use historied_db::StateIndex;
+					let mut index = Default::default();
 					let _update_result = histo.force_set(
 						new_value,
-						at_write.index_ref(),
+						at_write.index_ref().unwrap_or_else(|| {
+							index = at_write.index();
+							&index
+						}),
 					);
 				}
 			} else {
