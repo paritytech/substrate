@@ -88,7 +88,7 @@ pub trait Config<I = DefaultInstance>: frame_system::Config {
 	/// and some of the inner mmr nodes might be pruned from on-chain storage.
 	/// The later will contain all the entries in their full form.
 	///
-	/// Each node is stored in the Off-chain DB under key derived from the [Self::INDEXING_PREFIX] and
+	/// Each node is stored in the Off-chain DB under key derived from the [`Self::INDEXING_PREFIX`] and
 	/// it's in-tree index (MMR position).
 	const INDEXING_PREFIX: &'static [u8];
 
