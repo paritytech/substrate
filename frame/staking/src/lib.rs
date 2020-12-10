@@ -2166,7 +2166,7 @@ impl<T: Config> Module<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
-	/// Internal impl of [`slashable_balance_of`] that returns [`VoteWeight`].
+	/// Internal impl of [`Self::slashable_balance_of`] that returns [`VoteWeight`].
 	pub fn slashable_balance_of_vote_weight(stash: &T::AccountId, issuance: BalanceOf<T>) -> VoteWeight {
 		T::CurrencyToVote::to_vote(Self::slashable_balance_of(stash), issuance)
 	}
@@ -2833,7 +2833,7 @@ impl<T: Config> Module<T> {
 	/// Execute election and return the new results. The edge weights are processed into support
 	/// values.
 	///
-	/// This is basically a wrapper around [`do_phragmen`] which translates
+	/// This is basically a wrapper around [`Self::do_phragmen`] which translates
 	/// `PrimitiveElectionResult` into `ElectionResult`.
 	///
 	/// No storage item is updated.
