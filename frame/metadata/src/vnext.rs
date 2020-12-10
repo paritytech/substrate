@@ -66,7 +66,7 @@ impl From<RuntimeMetadataPrefixed<CompactForm>> for sp_core::OpaqueMetadata {
 #[derive(Eq, Encode, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode))]
 pub enum RuntimeMetadata<T: Form = MetaForm> {
-	/// Version 11 for runtime metadata.
+	/// Version 12 for runtime metadata.
 	V12(RuntimeMetadataV12<T>),
 }
 

@@ -772,24 +772,12 @@ fn metadata() {
 fn metadata_vnext() {
 	use frame_metadata::*;
 	use crate::scale_info::{meta_type, Registry, IntoCompact};
-	use codec::{Decode, Encode};
 
 	let expected_pallet_metadata = vnext::ModuleMetadata {
 		// index: 1,
 		name: "Example",
 		// storage:
 		calls: Some(vec![
-			vnext::FunctionMetadata {
-				name: "foo",
-				arguments: vec![
-					vnext::FunctionArgumentMetadata {
-						name: "_foo",
-						ty: meta_type::<u32>(),
-						is_compact: true,
-					}
-				],
-				documentation: vec![" Doc comment put in metadata"],
-			},
 			vnext::FunctionMetadata {
 				name: "foo",
 				arguments: vec![
@@ -854,7 +842,6 @@ fn metadata_vnext() {
 
 	let metadata = match Runtime::metadata_vnext().1 {
 		vnext::RuntimeMetadata::V12(metadata) => metadata,
-		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
 	let mut registry = Registry::new();
