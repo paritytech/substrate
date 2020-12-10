@@ -2,7 +2,6 @@
     "ignorePatterns": [
         {
             "pattern": "^https://crates.io",
-            "pattern": "%20"
         }
     ]
 }
