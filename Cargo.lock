@@ -306,9 +306,9 @@ checksum = "e91831deabf0d6d7ec49552e489aed63b7456a7a3c46cff62adad428110b0af0"
 
 [[package]]
 name = "async-tls"
-version = "0.10.2"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd0d8b6fc362bebff7502479fb5e9aed00c8cc3abc5af755536e73a128f0cb88"
+checksum = "2f23d769dbf1838d5df5156e7b1ad404f4c463d1ac2c6aeb6cd943630f8a8400"
 dependencies = [
  "futures-core",
  "futures-io",
@@ -2818,9 +2818,9 @@ checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 
 [[package]]
 name = "libp2p"
-version = "0.32.0"
+version = "0.32.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fac71e0cd4ba56b06464c3669bdfe893dd6c14f05f7ed1ba0965b1bc5933ee71"
+checksum = "022cdac4ab124be12de581e591796d4dfb7d1f1eef94669d2c1eaa0e98dd2f0e"
 dependencies = [
  "atomic",
  "bytes 0.5.6",
@@ -3194,9 +3194,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-websocket"
-version = "0.26.1"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "046031ad8ade16f2f0547350e4b2cea36c78cb10426e9c0d9eab35fa9943b969"
+checksum = "522a877ce42ededf1f5dd011dbc40ea116f1776818f09dacb3d7a206f3ad6305"
 dependencies = [
  "async-tls",
  "either",
