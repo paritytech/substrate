@@ -417,7 +417,7 @@ impl<T: Config> VestingSchedule<T::AccountId> for Module<T> where
 		starting_block: T::BlockNumber
 	) -> DispatchResult {
 		if locked.is_zero() { return Ok(()) }
-		let vesting_schedules = Vesting::<T>::get(who);
+		let mut vesting_schedules = Vesting::<T>::get(who);
 		if vesting_schedules.len() as u32 >= T::MaxVestingSchedules::get() {
 			Err(Error::<T>::TooManyVestingSchedules)?
 		}
@@ -426,7 +426,6 @@ impl<T: Config> VestingSchedule<T::AccountId> for Module<T> where
 			per_block,
 			starting_block
 		};
-		let mut vesting_schedules = Vesting::<T>::get(who);
 		vesting_schedules.push(vesting_schedule);
 		Vesting::<T>::insert(who, vesting_schedules);
 
