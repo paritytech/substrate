@@ -767,3 +767,98 @@ fn metadata() {
 
 	pretty_assertions::assert_eq!(pallet_metadata, expected_pallet_metadata);
 }
+
+#[test]
+fn metadata_vnext() {
+	use frame_metadata::*;
+	use crate::scale_info::{meta_type, Registry, IntoCompact};
+	use codec::{Decode, Encode};
+
+	let expected_pallet_metadata = vnext::ModuleMetadata {
+		// index: 1,
+		name: "Example",
+		// storage:
+		calls: Some(vec![
+			vnext::FunctionMetadata {
+				name: "foo",
+				arguments: vec![
+					vnext::FunctionArgumentMetadata {
+						name: "_foo",
+						ty: meta_type::<u32>(),
+						is_compact: true,
+					}
+				],
+				documentation: vec![" Doc comment put in metadata"],
+			},
+			vnext::FunctionMetadata {
+				name: "foo",
+				arguments: vec![
+					vnext::FunctionArgumentMetadata {
+						name: "_foo",
+						ty: meta_type::<u32>(),
+						is_compact: true,
+					},
+					vnext::FunctionArgumentMetadata {
+						name: "_bar",
+						ty: meta_type::<u32>(),
+						is_compact: false,
+					},
+				],
+				documentation: vec![" Doc comment put in metadata"],
+			},
+			vnext::FunctionMetadata {
+				name: "foo_transactional",
+				arguments: vec![
+					vnext::FunctionArgumentMetadata {
+						name: "foo",
+						ty: meta_type::<u32>(),
+						is_compact: true,
+					},
+				],
+				documentation: vec![" Doc comment put in metadata"],
+			},
+		]),
+		event: Some(vec![
+			vnext::EventMetadata {
+				name: "Proposed",
+				arguments: vec![
+					vnext::TypeSpec::new::<<Runtime as frame_system::Config>::AccountId>("<T as frame_system::Config>::AccountId"),
+				],
+				documentation: vec![" doc comment put in metadata"],
+			},
+			vnext::EventMetadata {
+				name: "Spending",
+				arguments: vec![
+					vnext::TypeSpec::new::<<Runtime as pallet::Config>::Balance>("Balance"),
+				],
+				documentation: vec![" doc"],
+			},
+			vnext::EventMetadata {
+				name: "Something",
+				arguments: vec![
+					vnext::TypeSpec::new::<u32>("Other"),
+				],
+				documentation: vec![],
+			},
+			vnext::EventMetadata {
+				name: "SomethingElse",
+				arguments: vec![
+					vnext::TypeSpec::new::<<<Runtime as frame_system::Config>::AccountId as SomeAssociation1>::_1>("<T::AccountId as SomeAssociation1>::_1"),
+				],
+				documentation: vec![],
+			},
+		]),
+		// constants: ,
+		// errors:
+	};
+
+	let metadata = match Runtime::metadata_vnext().1 {
+		vnext::RuntimeMetadata::V12(metadata) => metadata,
+		_ => panic!("metadata has been bumped, test needs to be updated"),
+	};
+
+	let mut registry = Registry::new();
+	let expected_pallet_metadata = expected_pallet_metadata.into_compact(&mut registry);
+
+	pretty_assertions::assert_eq!(metadata.modules[1], expected_pallet_metadata);
+}
