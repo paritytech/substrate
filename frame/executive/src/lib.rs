@@ -130,7 +130,7 @@ use sp_runtime::{
 	transaction_validity::{TransactionValidity, TransactionSource},
 };
 use codec::{Codec, Encode};
-use frame_system::{extrinsics_root, DigestOf};
+use frame_system::DigestOf;
 
 /// Trait that can be used to execute a block.
 pub trait ExecuteBlock<Block: BlockT> {
@@ -213,7 +213,6 @@ where
 		Self::initialize_block_impl(
 			header.number(),
 			header.parent_hash(),
-			header.extrinsics_root(),
 			&digests
 		);
 	}
@@ -231,7 +230,6 @@ where
 	fn initialize_block_impl(
 		block_number: &System::BlockNumber,
 		parent_hash: &System::Hash,
-		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
 		let mut weight = 0;
@@ -244,7 +242,6 @@ where
 		<frame_system::Module<System>>::initialize(
 			block_number,
 			parent_hash,
-			extrinsics_root,
 			digest,
 			frame_system::InitKind::Full,
 		);
@@ -286,13 +283,8 @@ where
 		assert!(
 			n > System::BlockNumber::zero()
 			&& <frame_system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
-			"Parent hash should be valid."
+			"Parent hash should be valid.",
 		);
-
-		// Check that transaction trie root represents the transactions.
-		let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
-		header.extrinsics_root().check_equal(&xts_root);
-		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
 	/// Actually execute all transitions for `block`.
@@ -322,8 +314,14 @@ where
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
-	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
-		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
+	fn execute_extrinsics_with_book_keeping(
+		extrinsics: Vec<Block::Extrinsic>,
+		block_number: NumberFor<Block>,
+	) {
+		extrinsics.into_iter().for_each(|e| if let Err(e) = Self::apply_extrinsic(e) {
+			let err: &'static str = e.into();
+			panic!(err)
+		});
 
 		// post-extrinsics book-keeping
 		<frame_system::Module<System>>::note_finished_extrinsics();
@@ -341,8 +339,6 @@ where
 		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 
-		// set up extrinsics
-		<frame_system::Module<System>>::derive_extrinsics();
 		<frame_system::Module<System>>::finalize()
 	}
 
@@ -355,15 +351,6 @@ where
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
 		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded))
-	}
-
-	/// Apply an extrinsic inside the block execution function.
-	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
-		let l = uxt.encode().len();
-		match Self::apply_extrinsic_with_len(uxt, l, None) {
-			Ok(_) => (),
-			Err(e) => { let err: &'static str = e.into(); panic!(err) },
-		}
 	}
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
@@ -418,6 +405,11 @@ where
 		let storage_root = new_header.state_root();
 		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
+
+		assert!(
+			header.extrinsics_root() == new_header.extrinsics_root(),
+			"Transaction trie root must be valid.",
+		);
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any
@@ -462,7 +454,6 @@ where
 		<frame_system::Module<System>>::initialize(
 			header.number(),
 			header.parent_hash(),
-			header.extrinsics_root(),
 			&digests,
 			frame_system::InitKind::Inspection,
 		);
@@ -557,6 +548,12 @@ mod tests {
 
 				fn offchain_worker(n: T::BlockNumber) {
 					assert_eq!(T::BlockNumber::from(1u32), n);
+				}
+
+				#[weight = 0]
+				fn calculate_storage_root(origin) {
+					let root = sp_io::storage::root();
+					sp_io::storage::set("storage_root".as_bytes(), &root);
 				}
 			}
 		}
@@ -1151,6 +1148,31 @@ mod tests {
 			assert_eq!(digest, System::digest());
 			assert_eq!(parent_hash, System::block_hash(0));
 			assert_eq!(header.hash(), System::block_hash(1));
+		});
+	}
+
+	#[test]
+	fn calculating_storage_root_twice_works() {
+		let call = Call::Custom(custom::Call::calculate_storage_root());
+		let xt = TestXt::new(call, sign_extra(1, 0, 0));
+
+		let header = new_test_ext(1).execute_with(|| {
+			// Let's build some fake block.
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			Executive::apply_extrinsic(xt.clone()).unwrap().unwrap();
+
+			Executive::finalize_block()
+		});
+
+		new_test_ext(1).execute_with(|| {
+			Executive::execute_block(Block::new(header, vec![xt]));
 		});
 	}
 }

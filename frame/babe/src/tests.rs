@@ -77,7 +77,6 @@ fn first_block_epoch_zero_start() {
 		System::initialize(
 			&1,
 			&Default::default(),
-			&Default::default(),
 			&pre_digest,
 			Default::default(),
 		);
@@ -128,7 +127,6 @@ fn author_vrf_output_for_primary() {
 		System::initialize(
 			&1,
 			&Default::default(),
-			&Default::default(),
 			&primary_pre_digest,
 			Default::default(),
 		);
@@ -155,7 +153,6 @@ fn author_vrf_output_for_secondary_vrf() {
 		System::initialize(
 			&1,
 			&Default::default(),
-			&Default::default(),
 			&secondary_vrf_pre_digest,
 			Default::default(),
 		);
@@ -178,7 +175,6 @@ fn no_author_vrf_output_for_secondary_plain() {
 
 		System::initialize(
 			&1,
-			&Default::default(),
 			&Default::default(),
 			&secondary_plain_pre_digest,
 			Default::default(),

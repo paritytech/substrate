@@ -55,7 +55,6 @@ fn deposit_event_should_work() {
 		System::initialize(
 			&1,
 			&[0u8; 32].into(),
-			&[0u8; 32].into(),
 			&Default::default(),
 			InitKind::Full,
 		);
@@ -75,7 +74,6 @@ fn deposit_event_should_work() {
 
 		System::initialize(
 			&2,
-			&[0u8; 32].into(),
 			&[0u8; 32].into(),
 			&Default::default(),
 			InitKind::Full,
@@ -132,7 +130,6 @@ fn deposit_event_uses_actual_weight() {
 	new_test_ext().execute_with(|| {
 		System::initialize(
 			&1,
-			&[0u8; 32].into(),
 			&[0u8; 32].into(),
 			&Default::default(),
 			InitKind::Full,
@@ -218,7 +215,6 @@ fn deposit_event_topics() {
 		System::initialize(
 			&BLOCK_NUMBER,
 			&[0u8; 32].into(),
-			&[0u8; 32].into(),
 			&Default::default(),
 			InitKind::Full,
 		);
@@ -284,7 +280,6 @@ fn prunes_block_hash_mappings() {
 			System::initialize(
 				&n,
 				&[n as u8 - 1; 32].into(),
-				&[0u8; 32].into(),
 				&Default::default(),
 				InitKind::Full,
 			);
