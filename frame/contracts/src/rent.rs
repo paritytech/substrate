@@ -19,6 +19,7 @@
 use crate::{
 	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, RawEvent,
 	TombstoneContractInfo, Config, CodeHash, ConfigCache, Error,
+	storage::Storage,
 };
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
@@ -238,13 +239,18 @@ where
 		current_block_number: T::BlockNumber,
 		verdict: Verdict<T>,
 		allow_eviction: bool,
-	) -> Option<ContractInfo<T>> {
+	) -> Result<Option<ContractInfo<T>>, DispatchError> {
 		match verdict {
-			Verdict::Exempt => return Some(ContractInfo::Alive(alive_contract_info)),
+			Verdict::Exempt => return Ok(Some(ContractInfo::Alive(alive_contract_info))),
 			Verdict::Evict { amount: _ } if !allow_eviction => {
-				None
+				Ok(None)
 			}
 			Verdict::Evict { amount } => {
+				// We need to remove the trie first because it is the only operation
+				// that can fail and this function is called without a storage
+				// transaction when called through `claim_surcharge`.
+				Storage::<T>::queue_trie_for_deletion(&alive_contract_info)?;
+
 				if let Some(amount) = amount {
 					amount.withdraw(account);
 				}
@@ -260,14 +266,8 @@ where
 				);
 				let tombstone_info = ContractInfo::Tombstone(tombstone);
 				<ContractInfoOf<T>>::insert(account, &tombstone_info);
-
-				child::kill_storage(
-					&alive_contract_info.child_trie_info(),
-					None,
-				);
-
 				<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), true));
-				Some(tombstone_info)
+				Ok(Some(tombstone_info))
 			}
 			Verdict::Charge { amount } => {
 				let contract_info = ContractInfo::Alive(AliveContractInfo::<T> {
@@ -276,9 +276,8 @@ where
 					..alive_contract_info
 				});
 				<ContractInfoOf<T>>::insert(account, &contract_info);
-
 				amount.withdraw(account);
-				Some(contract_info)
+				Ok(Some(contract_info))
 			}
 		}
 	}
@@ -288,10 +287,10 @@ where
 	/// This functions does **not** evict the contract. It returns `None` in case the
 	/// contract is in need of eviction. [`snitch_contract_should_be_evicted`] must
 	/// be called to perform the eviction.
-	pub fn charge(account: &T::AccountId) -> Option<ContractInfo<T>> {
+	pub fn charge(account: &T::AccountId) -> Result<Option<ContractInfo<T>>, DispatchError> {
 		let contract_info = <ContractInfoOf<T>>::get(account);
 		let alive_contract_info = match contract_info {
-			None | Some(ContractInfo::Tombstone(_)) => return contract_info,
+			None | Some(ContractInfo::Tombstone(_)) => return Ok(contract_info),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 
@@ -320,10 +319,10 @@ where
 	pub fn snitch_contract_should_be_evicted(
 		account: &T::AccountId,
 		handicap: T::BlockNumber,
-	) -> bool {
+	) -> Result<bool, DispatchError> {
 		let contract = <ContractInfoOf<T>>::get(account);
 		let contract = match contract {
-			None | Some(ContractInfo::Tombstone(_)) => return false,
+			None | Some(ContractInfo::Tombstone(_)) => return Ok(false),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 		let current_block_number = <frame_system::Module<T>>::block_number();
@@ -337,10 +336,10 @@ where
 		// Enact the verdict only if the contract gets removed.
 		match verdict {
 			Verdict::Evict { .. } => {
-				Self::enact_verdict(account, contract, current_block_number, verdict, true);
-				true
+				Self::enact_verdict(account, contract, current_block_number, verdict, true)?;
+				Ok(true)
 			}
-			_ => false,
+			_ => Ok(false),
 		}
 	}
 
@@ -358,9 +357,11 @@ where
 	pub fn compute_projection(
 		account: &T::AccountId,
 	) -> RentProjectionResult<T::BlockNumber> {
+		use ContractAccessError::IsTombstone;
+
 		let contract_info = <ContractInfoOf<T>>::get(account);
 		let alive_contract_info = match contract_info {
-			None | Some(ContractInfo::Tombstone(_)) => return Err(ContractAccessError::IsTombstone),
+			None | Some(ContractInfo::Tombstone(_)) => return Err(IsTombstone),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 		let current_block_number = <frame_system::Module<T>>::block_number();
@@ -374,8 +375,8 @@ where
 			Self::enact_verdict(account, alive_contract_info, current_block_number, verdict, false);
 
 		// Check what happened after enaction of the verdict.
-		let alive_contract_info = match new_contract_info {
-			None | Some(ContractInfo::Tombstone(_)) => return Err(ContractAccessError::IsTombstone),
+		let alive_contract_info = match new_contract_info.map_err(|_| IsTombstone)? {
+			None | Some(ContractInfo::Tombstone(_)) => return Err(IsTombstone),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 

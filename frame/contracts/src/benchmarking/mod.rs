@@ -209,36 +209,51 @@ where
 	}
 }
 
-/// A `Contract` that was evicted after accumulating some storage.
+/// A `Contract` that contains some storage items.
 ///
-/// This is used to benchmark contract resurrection.
-struct Tombstone<T: Config> {
+/// This is used to benchmark contract destruction and resurection. Those operations'
+/// weight depend on the amount of storage accumulated.
+struct ContractWithStorage<T: Config> {
 	/// The contract that was evicted.
 	contract: Contract<T>,
 	/// The storage the contract held when it was avicted.
 	storage: Vec<(StorageKey, Vec<u8>)>,
 }
 
-impl<T: Config> Tombstone<T>
+impl<T: Config> ContractWithStorage<T>
 where
 	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	/// Create and evict a new contract with the supplied storage item count and size each.
+	/// Same as [`Self::with_code`] but with dummy contract code.
 	fn new(stor_num: u32, stor_size: u32) -> Result<Self, &'static str> {
-		let contract = Contract::<T>::new(WasmModule::dummy(), vec![], Endow::CollectRent)?;
+		Self::with_code(WasmModule::dummy(), stor_num, stor_size)
+	}
+
+	/// Create and evict a new contract with the supplied storage item count and size each.
+	fn with_code(code: WasmModule<T>, stor_num: u32, stor_size: u32) -> Result<Self, &'static str> {
+		let contract = Contract::<T>::new(code, vec![], Endow::CollectRent)?;
 		let storage_items = create_storage::<T>(stor_num, stor_size)?;
 		contract.store(&storage_items)?;
-		System::<T>::set_block_number(
-			contract.eviction_at()? + T::SignedClaimHandicap::get() + 5u32.into()
-		);
-		Rent::<T>::snitch_contract_should_be_evicted(&contract.account_id, Zero::zero());
-		contract.ensure_tombstone()?;
-
-		Ok(Tombstone {
+		Ok(Self {
 			contract,
 			storage: storage_items,
 		})
+	}
+
+	/// Increase the system block number so that this contract is eligible for eviction.
+	fn set_block_num_for_eviction(&self) -> Result<(), &'static str>  {
+		System::<T>::set_block_number(
+			self.contract.eviction_at()? + T::SignedClaimHandicap::get() + 5u32.into()
+		);
+		Ok(())
+	}
+
+	/// Evict this contract.
+	fn evict(&mut self) -> Result<(), &'static str> {
+		self.set_block_num_for_eviction()?;
+		Rent::<T>::snitch_contract_should_be_evicted(&self.contract.account_id, Zero::zero())?;
+		self.contract.ensure_tombstone()
 	}
 }
 
@@ -268,6 +283,30 @@ benchmarks! {
 	}
 
 	_ {
+	}
+
+	// The base weight without any actual work performed apart from the setup costs.
+	on_initialize {}: {
+		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
+	}
+
+	on_initialize_per_trie_key {
+		let k in 0..1024;
+		let instance = ContractWithStorage::<T>::new(k, T::MaxValueSize::get())?;
+		Storage::<T>::queue_trie_for_deletion(&instance.contract.alive_info()?)?;
+	}: {
+		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
+	}
+
+	on_initialize_per_queue_item {
+		let q in 0..1024;
+		for i in 0 .. q {
+			let instance = Contract::<T>::with_index(i, WasmModule::dummy(), vec![], Endow::Max)?;
+			Storage::<T>::queue_trie_for_deletion(&instance.alive_info()?)?;
+			ContractInfoOf::<T>::remove(instance.account_id);
+		}
+	}: {
+		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
 	}
 
 	// This extrinsic is pretty much constant as it is only a simple setter.
@@ -650,7 +689,8 @@ benchmarks! {
 		// Restore just moves the trie id from origin to destination and therefore
 		// does not depend on the size of the destination contract. However, to not
 		// trigger any edge case we won't use an empty contract as destination.
-		let tombstone = Tombstone::<T>::new(10, T::MaxValueSize::get())?;
+		let mut tombstone = ContractWithStorage::<T>::new(10, T::MaxValueSize::get())?;
+		tombstone.evict()?;
 
 		let dest = tombstone.contract.account_id.encode();
 		let dest_len = dest.len();
@@ -723,7 +763,8 @@ benchmarks! {
 
 	seal_restore_to_per_delta {
 		let d in 0 .. API_BENCHMARK_BATCHES;
-		let tombstone = Tombstone::<T>::new(0, 0)?;
+		let mut tombstone = ContractWithStorage::<T>::new(0, 0)?;
+		tombstone.evict()?;
 		let delta = create_storage::<T>(d * API_BENCHMARK_BATCH_SIZE, T::MaxValueSize::get())?;
 
 		let dest = tombstone.contract.account_id.encode();
@@ -2393,6 +2434,10 @@ mod tests {
 			}
 		}
 	}
+
+	create_test!(on_initialize);
+	create_test!(on_initialize_per_trie_key);
+	create_test!(on_initialize_per_queue_item);
 
 	create_test!(update_schedule);
 	create_test!(put_code);
