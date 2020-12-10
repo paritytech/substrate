@@ -6602,7 +6602,6 @@ dependencies = [
  "sp-consensus",
  "sp-core",
  "sp-database",
- "sp-finality-grandpa",
  "sp-keyring",
  "sp-runtime",
  "sp-state-machine",

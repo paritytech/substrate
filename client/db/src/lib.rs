@@ -612,7 +612,6 @@ pub struct BlockImportOperation<Block: BlockT> {
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justifications>)>,
 	set_head: Option<BlockId<Block>>,
-	appended_justifications: Vec<(BlockId<Block>, Justification)>,
 	commit_state: bool,
 }
 
@@ -757,17 +756,6 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		assert!(self.set_head.is_none(), "Only one set head per operation is allowed");
 		self.set_head = Some(block);
 		Ok(())
-	}
-
-	fn append_justification(
-		&mut self,
-		_block: BlockId<Block>,
-		_justification: Justification,
-	) -> sp_blockchain::Result<()> {
-		// WIP(JON): How we append Justification depends on implementation of mark_finalized. Maybe
-		// we need to check self.finalized_blocks and update if it block already exists there.
-		// Otherwise probably need one additional field in BlockImportOperation.
-		todo!();
 	}
 }
 
@@ -1475,7 +1463,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
 			set_head: None,
-			appended_justifications: Vec::new(),
 			commit_state: false,
 		})
 	}
@@ -1534,6 +1521,43 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		self.storage.db.commit(transaction)?;
 		self.blockchain.update_meta(hash, number, is_best, is_finalized);
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
+		Ok(())
+	}
+
+	fn append_justification(
+		&self,
+		block: BlockId<Block>,
+		justification: Justification,
+	) -> ClientResult<()> {
+		// WIP(JON): Check is block is finalized first
+
+		// Create a Transaction.
+		let mut transaction: Transaction<DbHash> = Transaction::new();
+		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
+		let header = self.blockchain.expect_header(block)?;
+		let number = *header.number();
+
+		// Read and merge Justification
+		use sp_blockchain::Backend;
+		let justifications = if let Some(mut stored_justifications) = self.blockchain.justification(block)? {
+			stored_justifications.0.push(justification);
+			stored_justifications
+		} else {
+			Justifications::from(justification)
+		};
+
+		// WIP(JON): Reject if we now have more than one per consensus engine.
+
+		// Set Justification in Transaction in the same way as in finalize_block_with_transaction
+		transaction.set_from_vec(
+			columns::JUSTIFICATION,
+			&utils::number_and_hash_to_lookup_key(number, hash)?,
+			justifications.encode(),
+		);
+
+		// Commit to storage
+		self.storage.db.commit(transaction)?;
+
 		Ok(())
 	}
 
@@ -1787,12 +1811,15 @@ pub(crate) mod tests {
 	use sp_core::H256;
 	use sc_client_api::backend::{Backend as BTrait, BlockImportOperation as Op};
 	use sc_client_api::blockchain::Backend as BLBTrait;
+	use sp_runtime::ConsensusEngineId;
 	use sp_runtime::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use sp_runtime::traits::{Hash, BlakeTwo256};
 	use sp_runtime::generic::DigestItem;
 	use sp_state_machine::{TrieMut, TrieDBMut};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
-	use sp_finality_grandpa::GRANDPA_ENGINE_ID;
+
+	const CONS0_ENGINE_ID: ConsensusEngineId = *b"CON0";
+	const CONS1_ENGINE_ID: ConsensusEngineId = *b"CON1";
 
 	pub(crate) type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
@@ -2368,12 +2395,36 @@ pub(crate) mod tests {
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 		let _ = insert_header(&backend, 1, block0, None, Default::default());
 
-		let justification = Some(Justifications(vec![(GRANDPA_ENGINE_ID, vec![1, 2, 3])]));
+		let justification = Some(Justifications(vec![(CONS0_ENGINE_ID, vec![1, 2, 3])]));
 		backend.finalize_block(BlockId::Number(1), justification.clone()).unwrap();
 
 		assert_eq!(
 			backend.blockchain().justification(BlockId::Number(1)).unwrap(),
 			justification,
+		);
+	}
+
+	#[test]
+	fn test_append_justification_to_finalized_block() {
+		use sc_client_api::blockchain::{Backend as BlockChainBackend};
+
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let _ = insert_header(&backend, 1, block0, None, Default::default());
+
+		let just0 = (CONS0_ENGINE_ID, vec![1, 2, 3]);
+		backend.finalize_block(
+			BlockId::Number(1),
+			Some(Justifications(vec![just0.clone()])),
+		).unwrap();
+
+		let just1 = (CONS1_ENGINE_ID, vec![4, 5]);
+		backend.append_justification(BlockId::Number(1), just1.clone()).unwrap();
+
+		assert_eq!(
+			backend.blockchain().justification(BlockId::Number(1)).unwrap(),
+			Some(Justifications(vec![just0, just1])),
 		);
 	}
 

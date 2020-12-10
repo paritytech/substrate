@@ -199,6 +199,15 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		self.blockchain.storage().finalize_header(block)
 	}
 
+	fn append_justification(
+		&self,
+		_block: BlockId<Block>,
+		_justification: Justification,
+	) -> ClientResult<()> {
+		// WIP(JON)
+		todo!();
+	}
+
 	fn blockchain(&self) -> &Blockchain<S> {
 		&self.blockchain
 	}
@@ -365,14 +374,6 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 	fn mark_head(&mut self, block: BlockId<Block>) -> ClientResult<()> {
 		self.set_head = Some(block);
 		Ok(())
-	}
-
-	fn append_justification(
-		&mut self,
-		_block: BlockId<Block>,
-		_justification: Justification,
-	) -> ClientResult<()> {
-		todo!();
 	}
 }
 
