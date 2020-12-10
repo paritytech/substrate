@@ -33,15 +33,16 @@ use codec::{Codec, Encode, Decode};
 
 mod mock;
 mod tests;
+mod benchmarking;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 pub trait WeightInfo {}
 impl WeightInfo for () {}
 
 /// The module's config trait.
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// An optional `AccountIndex` type for backwards compatibility.
 	type AccountIndex: Parameter + Member + Codec + Default + Copy;
 
@@ -49,7 +50,7 @@ pub trait Trait: frame_system::Trait {
 	type Currency: ReservableCurrency<Self::AccountId>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Origin that can have high level control over the name-service pallet.
 	type ManagerOrigin: EnsureOrigin<Self::Origin>;
@@ -109,7 +110,7 @@ impl<AccountId, BlockNumber, Balance> Default for NameStatus<AccountId, BlockNum
 type Name = [u8; 32];
 
 decl_storage! {
-	trait Store for Module<T: Trait> as NameService {
+	trait Store for Module<T: Config> as NameService {
 		/// Registration information for a given name.
 		pub Registration: map hasher(blake2_128_concat) Name => NameStatus<T::AccountId, T::BlockNumber, BalanceOf<T>>;
 		/// The lookup from name to account.
@@ -120,8 +121,8 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where
 		Balance = BalanceOf<T>,
-		<T as frame_system::Trait>::AccountId,
-		<T as frame_system::Trait>::BlockNumber,
+		<T as frame_system::Config>::AccountId,
+		<T as frame_system::Config>::BlockNumber,
 	{
 		BidPlaced(Name, AccountId, Balance, BlockNumber),
 		NameClaimed(Name, AccountId, BlockNumber),
@@ -133,7 +134,7 @@ decl_event!(
 );
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// The current state of the name does not match this step in the state machine.
 		UnexpectedState,
 		/// The name provided does not follow the configured rules.
@@ -160,7 +161,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin, system = frame_system {
 		//TODO: Expose Constants
 
 		fn deposit_event() = default;
@@ -396,9 +397,9 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {}
+impl<T: Config> Module<T> {}
 
-impl<T: Trait> StaticLookup for Module<T>
+impl<T: Config> StaticLookup for Module<T>
 where
 	MultiAddress<T::AccountId, T::AccountIndex>: Codec,
 {

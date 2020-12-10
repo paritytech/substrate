@@ -472,6 +472,8 @@ ss58_address_format!(
 		(13, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
 	TotemAccount =>
 		(14, "totem", "Any Totem Live Accounting network standard account (*25519).")
+	SynesthesiaAccount =>
+		(15, "synesthesia", "Synesthesia mainnet, standard account (*25519).")
 	KulupuAccount =>
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
 	DarkAccount =>
@@ -1027,6 +1029,7 @@ pub trait CryptoType {
 	Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode, PassByInner,
 	crate::RuntimeDebug
 )]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyTypeId(pub [u8; 4]);
 
 impl From<u32> for KeyTypeId {
@@ -1056,10 +1059,12 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 
 /// An identifier for a specific cryptographic algorithm used by a key pair
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct CryptoTypeId(pub [u8; 4]);
 
 /// A type alias of CryptoTypeId & a public key
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
 
 #[cfg(feature = "std")]

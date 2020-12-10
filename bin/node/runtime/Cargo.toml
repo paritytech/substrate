@@ -15,7 +15,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
-integer-sqrt = { version = "0.1.2" }
 serde = { version = "1.0.102", optional = true }
 static_assertions = "1.1.0"
 hex-literal = { version = "0.3.1", optional = true }
@@ -44,6 +43,7 @@ frame-support = { version = "2.0.0", default-features = false, path = "../../../
 frame-system = { version = "2.0.0", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "2.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 frame-system-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
+pallet-assets = { version = "2.0.0", default-features = false, path = "../../../frame/assets" }
 pallet-authority-discovery = { version = "2.0.0", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "2.0.0", default-features = false, path = "../../../frame/authorship" }
 pallet-babe = { version = "2.0.0", default-features = false, path = "../../../frame/babe" }
@@ -59,6 +59,7 @@ pallet-im-online = { version = "2.0.0", default-features = false, path = "../../
 pallet-indices = { version = "2.0.0", default-features = false, path = "../../../frame/indices" }
 pallet-identity = { version = "2.0.0", default-features = false, path = "../../../frame/identity" }
 pallet-membership = { version = "2.0.0", default-features = false, path = "../../../frame/membership" }
+pallet-mmr = { version = "2.0.0", default-features = false, path = "../../../frame/merkle-mountain-range" }
 pallet-multisig = { version = "2.0.0", default-features = false, path = "../../../frame/multisig" }
 pallet-name-service = { version = "2.0.0", default-features = false, path = "../../../frame/name-service" }
 pallet-offences = { version = "2.0.0", default-features = false, path = "../../../frame/offences" }
@@ -81,7 +82,7 @@ pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-featur
 pallet-vesting = { version = "2.0.0", default-features = false, path = "../../../frame/vesting" }
 
 [build-dependencies]
-wasm-builder-runner = { version = "2.0.0", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+substrate-wasm-builder = { version = "3.0.0", path = "../../../utils/wasm-builder" }
 
 [dev-dependencies]
 sp-io = { version = "2.0.0", path = "../../../primitives/io" }
@@ -91,6 +92,7 @@ default = ["std"]
 with-tracing = [ "frame-executive/with-tracing" ]
 std = [
 	"sp-authority-discovery/std",
+	"pallet-assets/std",
 	"pallet-authority-discovery/std",
 	"pallet-authorship/std",
 	"sp-consensus-babe/std",
@@ -110,7 +112,9 @@ std = [
 	"pallet-indices/std",
 	"sp-inherents/std",
 	"pallet-membership/std",
+	"pallet-mmr/std",
 	"pallet-multisig/std",
+	"pallet-name-service/std",
 	"pallet-identity/std",
 	"pallet-scheduler/std",
 	"node-primitives/std",
@@ -149,6 +153,7 @@ runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
+	"pallet-assets/runtime-benchmarks",
 	"pallet-babe/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",
@@ -159,7 +164,9 @@ runtime-benchmarks = [
 	"pallet-identity/runtime-benchmarks",
 	"pallet-im-online/runtime-benchmarks",
 	"pallet-indices/runtime-benchmarks",
+	"pallet-mmr/runtime-benchmarks",
 	"pallet-multisig/runtime-benchmarks",
+	"pallet-name-service/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-scheduler/runtime-benchmarks",
 	"pallet-society/runtime-benchmarks",

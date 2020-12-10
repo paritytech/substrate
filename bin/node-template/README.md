@@ -55,7 +55,7 @@ RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/node-template -lruntime=debug -
 ### Multi-Node Local Testnet
 
 To see the multi-node consensus algorithm in action, run a local testnet with two validator nodes,
-Alice and Bob, that have been [configured](/bin/node-template/node/src/chain_spec.rs) as the initial
+Alice and Bob, that have been [configured](./node/src/chain_spec.rs) as the initial
 authorities of the `local` testnet chain and endowed with testnet units.
 
 Note: this will require two terminal sessions (one for each node).
@@ -157,7 +157,7 @@ Review the [FRAME runtime implementation](./runtime/src/lib.rs) included in this
 the following:
 
 -   This file configures several pallets to include in the runtime. Each pallet configuration is
-    defined by a code block that begins with `impl $PALLET_NAME::Trait for Runtime`.
+    defined by a code block that begins with `impl $PALLET_NAME::Config for Runtime`.
 -   The pallets are composed into a single runtime by way of the
     [`construct_runtime!`](https://crates.parity.io/frame_support/macro.construct_runtime.html)
     macro, which is part of the core
@@ -181,8 +181,8 @@ A FRAME pallet is compromised of a number of blockchain primitives:
 -   Events: Substrate uses [events](https://substrate.dev/docs/en/knowledgebase/runtime/events) to
     notify users of important changes in the runtime.
 -   Errors: When a dispatchable fails, it returns an error.
--   Trait: The `Trait` configuration interface is used to define the types and parameters upon which
-    a FRAME pallet depends.
+-   Config: The `Config` configuration interface is used to define the types and parameters upon
+    which a FRAME pallet depends.
 
 ## Generate a Custom Node Template
 
