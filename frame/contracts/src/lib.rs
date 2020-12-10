@@ -319,6 +319,12 @@ pub trait Config: frame_system::Config {
 	/// Describes the weights of the dispatchables of this module and is also used to
 	/// construct a default cost schedule.
 	type WeightInfo: WeightInfo;
+
+	/// The maximum number of tries that can be queued for deletion.
+	type DeletionQueueDepth: Get<u32>;
+
+	/// The maximum amount of weight that can be consumed per block for lazy trie removal.
+	type DeletionWeightLimit: Get<Weight>;
 }
 
 decl_error! {
@@ -378,6 +384,13 @@ decl_error! {
 		/// on the call stack. Those actions are contract self destruction and restoration
 		/// of a tombstone.
 		ReentranceDenied,
+		/// Removal of a contract failed because the deletion queue is full.
+		///
+		/// This can happen when either calling [`Module::claim_surcharge`] or `seal_terminate`.
+		/// The queue is filled by deleting contracts and emptied by a fixed amount each block.
+		/// Trying again during another block is the only way to resolve this issue.
+		DeletionQueueFull,
+		ContractNotEvictable,
 	}
 }
 
@@ -431,7 +444,18 @@ decl_module! {
 		/// The maximum size of a storage value in bytes. A reasonable default is 16 KiB.
 		const MaxValueSize: u32 = T::MaxValueSize::get();
 
+		/// The maximum number of tries that can be queued for deletion.
+		const DeletionQueueDepth: u32 = T::DeletionQueueDepth::get();
+
+		/// The maximum amount of weight that can be consumed per block for lazy trie removal.
+		const DeletionWeightLimit: Weight = T::DeletionWeightLimit::get();
+
 		fn deposit_event() = default;
+
+		fn on_initialize() -> Weight {
+			Storage::<T>::process_deletion_queue_batch(T::DeletionWeightLimit::get())
+				.unwrap_or_else(T::WeightInfo::on_initialize)
+		}
 
 		/// Updates the schedule for metering contracts.
 		///
@@ -531,10 +555,14 @@ decl_module! {
 		/// Allows block producers to claim a small reward for evicting a contract. If a block producer
 		/// fails to do so, a regular users will be allowed to claim the reward.
 		///
-		/// If contract is not evicted as a result of this call, no actions are taken and
-		/// the sender is not eligible for the reward.
+		/// If contract is not evicted as a result of this call, [`Error::ContractNotEvictable`]
+		/// is returned and the sender is not eligible for the reward.
 		#[weight = T::WeightInfo::claim_surcharge()]
-		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
+		fn claim_surcharge(
+			origin,
+			dest: T::AccountId,
+			aux_sender: Option<T::AccountId>
+		) -> DispatchResult {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
 				(Ok(frame_system::RawOrigin::Signed(account)), None) => {
@@ -556,8 +584,10 @@ decl_module! {
 			};
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
-			if Rent::<T>::snitch_contract_should_be_evicted(&dest, handicap) {
-				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get())?;
+			if Rent::<T>::snitch_contract_should_be_evicted(&dest, handicap)? {
+				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get()).map(|_| ())
+			} else {
+				Err(Error::<T>::ContractNotEvictable.into())
 			}
 		}
 	}
@@ -715,6 +745,11 @@ decl_storage! {
 		///
 		/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 		pub ContractInfoOf: map hasher(twox_64_concat) T::AccountId => Option<ContractInfo<T>>;
+		/// Evicted contracts that await child trie deletion.
+		///
+		/// Child trie deletion is a heavy operation depending on the amount of storage items
+		/// stored in said trie. Therefore this operation is performed lazily in `on_initialize`.
+		pub DeletionQueue: Vec<storage::DeletedContract>;
 	}
 }
 

@@ -27,12 +27,14 @@ use sp_runtime::{
 	testing::{Header, H256},
 	AccountId32,
 };
+use sp_io::hashing::blake2_256;
 use frame_support::{
-	assert_ok, assert_err_ignore_postinfo, impl_outer_dispatch, impl_outer_event,
+	assert_ok, assert_err, assert_err_ignore_postinfo, impl_outer_dispatch, impl_outer_event,
 	impl_outer_origin, parameter_types, StorageMap,
-	traits::{Currency, ReservableCurrency},
+	traits::{Currency, ReservableCurrency, OnInitialize},
 	weights::{Weight, PostDispatchInfo},
 	dispatch::DispatchErrorWithPostInfo,
+	storage::child,
 };
 use frame_system::{self as system, EventRecord, Phase};
 
@@ -158,6 +160,8 @@ parameter_types! {
 	pub const SurchargeReward: u64 = 150;
 	pub const MaxDepth: u32 = 100;
 	pub const MaxValueSize: u32 = 16_384;
+	pub const DeletionQueueDepth: u32 = 1024;
+	pub const DeletionWeightLimit: Weight = 500_000_000_000;
 }
 
 parameter_types! {
@@ -186,6 +190,8 @@ impl Config for Test {
 	type MaxValueSize = MaxValueSize;
 	type WeightPrice = Self;
 	type WeightInfo = ();
+	type DeletionQueueDepth = DeletionQueueDepth;
+	type DeletionWeightLimit = DeletionWeightLimit;
 }
 
 type Balances = pallet_balances::Module<Test>;
@@ -824,7 +830,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn(AccountIdOf<Test>) -> bool
 			initialize_block(blocks);
 
 			// Trigger rent through call
-			assert!(trigger_call(addr.clone()));
+			assert_eq!(trigger_call(addr.clone()), removes);
 
 			if removes {
 				assert!(ContractInfoOf::<Test>::get(&addr).unwrap().get_tombstone().is_some());
@@ -862,7 +868,7 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 			let subsistence_threshold = 50 /*existential_deposit*/ + 16 /*tombstone_deposit*/;
 
 			// Trigger rent must have no effect
-			assert!(trigger_call(addr.clone()));
+			assert!(!trigger_call(addr.clone()));
 			assert_eq!(ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap().rent_allowance, 1_000);
 			assert_eq!(Balances::free_balance(&addr), 100);
 
@@ -878,7 +884,7 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 			initialize_block(20);
 
 			// Trigger rent must have no effect
-			assert!(trigger_call(addr.clone()));
+			assert!(!trigger_call(addr.clone()));
 			assert!(ContractInfoOf::<Test>::get(&addr).unwrap().get_tombstone().is_some());
 			assert_eq!(Balances::free_balance(&addr), subsistence_threshold);
 		});
@@ -902,7 +908,7 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 			// Trigger rent must have no effect
-			assert!(trigger_call(addr.clone()));
+			assert!(!trigger_call(addr.clone()));
 			assert_eq!(
 				ContractInfoOf::<Test>::get(&addr)
 					.unwrap()
@@ -929,7 +935,7 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 			initialize_block(20);
 
 			// Trigger rent must have no effect
-			assert!(trigger_call(addr.clone()));
+			assert!(!trigger_call(addr.clone()));
 			assert!(ContractInfoOf::<Test>::get(&addr)
 				.unwrap()
 				.get_tombstone()
@@ -958,7 +964,7 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 			// Trigger rent must have no effect
-			assert!(trigger_call(addr.clone()));
+			assert!(!trigger_call(addr.clone()));
 			assert_eq!(
 				ContractInfoOf::<Test>::get(&addr)
 					.unwrap()
@@ -1002,7 +1008,7 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 			initialize_block(20);
 
 			// Trigger rent must have no effect
-			assert!(trigger_call(addr.clone()));
+			assert!(!trigger_call(addr.clone()));
 			assert_matches!(ContractInfoOf::<Test>::get(&addr), Some(ContractInfo::Tombstone(_)));
 			assert_eq!(Balances::free_balance(&addr), subsistence_threshold);
 		});
@@ -1910,5 +1916,178 @@ fn instantiate_return_code() {
 		).exec_result.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeTrapped);
 
+	});
+}
+
+#[test]
+fn lazy_removal_works() {
+	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = ConfigCache::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), code));
+
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				subsistence,
+				GAS_LIMIT,
+				hash.into(),
+				vec![],
+				vec![],
+			),
+		);
+
+		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
+		let info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
+		let trie = &info.child_trie_info();
+
+		// Put value into the contracts child trie
+		child::put(trie, &[99], &42);
+
+		// Terminate the contract
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![],
+		));
+
+		// Contract info should be gone
+		assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
+
+		// But value should be still there as the lazy removal did not run, yet.
+		assert_matches!(child::get(trie, &[99]), Some(42));
+
+		// Run the lazy removal
+		Contracts::on_initialize(0);
+
+		// Value should be gone now
+		assert_matches!(child::get::<i32>(trie, &[99]), None);
+	});
+}
+
+#[test]
+fn lazy_removal_does_not_use_all_weight() {
+	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = ConfigCache::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), code));
+
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				subsistence,
+				GAS_LIMIT,
+				hash.into(),
+				vec![],
+				vec![],
+			),
+		);
+
+		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
+		let info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
+		let trie = &info.child_trie_info();
+		let weight_limit = 5_000_000_000;
+		let (weight_per_key, max_keys) = Storage::<Test>::deletion_budget(1, weight_limit);
+
+		// We create a contract with one less storage item than we can remove within the limit
+		let vals: Vec<_> = (0..max_keys - 1).map(|i| {
+			(blake2_256(&i.encode()), (i as u32), (i as u32).encode())
+		})
+		.collect();
+
+		// Put value into the contracts child trie
+		for val in &vals {
+			Storage::<Test>::write(
+				&addr,
+				&info.trie_id,
+				&val.0,
+				Some(val.2.clone()),
+			).unwrap();
+		}
+
+		// Terminate the contract
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![],
+		));
+
+		// Contract info should be gone
+		assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
+
+		// But value should be still there as the lazy removal did not run, yet.
+		for val in &vals {
+			assert_eq!(child::get::<u32>(trie, &blake2_256(&val.0)), Some(val.1));
+		}
+
+		// Run the lazy removal
+		let weight_used = Storage::<Test>::process_deletion_queue_batch(weight_limit).unwrap();
+
+		// We have one less key in our trie than our weight limit suffices for
+		assert_eq!(weight_used, weight_limit - weight_per_key);
+
+		// All the keys are removed
+		for val in vals {
+			assert_eq!(child::get::<u32>(trie, &blake2_256(&val.0)), None);
+		}
+	});
+}
+
+#[test]
+fn deletion_queue_full() {
+	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = ConfigCache::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), code));
+
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				subsistence,
+				GAS_LIMIT,
+				hash.into(),
+				vec![],
+				vec![],
+			),
+		);
+
+		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
+
+		// fill the deletion queue up until its limit
+		Storage::<Test>::fill_queue_with_dummies();
+
+		// Terminate the contract should fail
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				vec![],
+			),
+			Error::<Test>::DeletionQueueFull,
+		);
+
+		// Contract should be alive because removal failed
+		<ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
+
+		// make the contract ripe for eviction
+		initialize_block(5);
+
+		// eviction should fail for the same reason as termination
+		assert_err!(
+			Contracts::claim_surcharge(Origin::none(), addr.clone(), Some(ALICE)),
+			Error::<Test>::DeletionQueueFull,
+		);
+
+		// Contract should be alive because removal failed
+		<ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
 	});
 }
