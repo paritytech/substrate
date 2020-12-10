@@ -1901,8 +1901,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		self.body(id)
 	}
 
-	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>
-	{
+	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
 		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
 			(Some(header), Some(extrinsics), justification) =>
 				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
@@ -1911,26 +1910,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	}
 
 	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
-		// this can probably be implemented more efficiently
-		if let BlockId::Hash(ref h) = id {
-			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
-				return Ok(BlockStatus::Queued);
-			}
-		}
-		let hash_and_number = match id.clone() {
-			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
-			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
-		};
-		match hash_and_number {
-			Some((hash, number)) => {
-				if self.backend.have_state_at(&hash, number) {
-					Ok(BlockStatus::InChainWithState)
-				} else {
-					Ok(BlockStatus::InChainPruned)
-				}
-			}
-			None => Ok(BlockStatus::Unknown),
-		}
+		Client::block_status(self, id)
 	}
 
 	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {

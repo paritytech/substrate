@@ -75,7 +75,7 @@ pub struct Metrics {
 	pub pending_connections: Gauge<U64>,
 	pub pending_connections_errors_total: CounterVec<U64>,
 	pub requests_in_failure_total: CounterVec<U64>,
-	pub requests_in_duration_building_response: HistogramVec,
+	pub requests_in_success_total: HistogramVec,
 	pub requests_out_failure_total: CounterVec<U64>,
 	pub requests_out_success_total: HistogramVec,
 }
@@ -225,12 +225,12 @@ impl Metrics {
 				),
 				&["protocol", "reason"]
 			)?, registry)?,
-			requests_in_duration_building_response: prometheus::register(HistogramVec::new(
+			requests_in_success_total: prometheus::register(HistogramVec::new(
 				HistogramOpts {
 					common_opts: Opts::new(
-						"sub_libp2p_requests_in_duration_building_response",
-						"For incoming requests, time between receiving the request and starting to \
-						 send the response"
+						"sub_libp2p_requests_in_success_total",
+						"For successful incoming requests, time between receiving the request and \
+						 starting to send the response"
 					),
 					buckets: prometheus::exponential_buckets(0.001, 2.0, 16)
 						.expect("parameters are always valid values; qed"),

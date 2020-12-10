@@ -50,6 +50,8 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
+	/// Remote URI to connect to for async keystore support
+	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
 	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
@@ -103,6 +105,8 @@ pub struct Configuration {
 	pub dev_key_seed: Option<String>,
 	/// Tracing targets
 	pub tracing_targets: Option<String>,
+	/// Is log filter reloading disabled
+	pub disable_log_reloading: bool,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
 	/// The size of the instances cache.
