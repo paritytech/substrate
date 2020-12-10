@@ -515,17 +515,3 @@ mod threshold_compare_tests {
 		assert_eq!(Saturating::saturating_pow(i32::max_value(), 2), i32::max_value());
 	}
 }
-
-#[cfg(test)]
-mod per_thing {
-	use super::*;
-
-	#[test]
-	fn per_thing_100_wont_overflow() {
-		assert_eq!(<Percent as PerThing>::from_percent(100), Percent::one());
-		assert_eq!(<PerU16 as PerThing>::from_percent(100), PerU16::one());
-		assert_eq!(<Permill as PerThing>::from_percent(100), Permill::one());
-		assert_eq!(<Perbill as PerThing>::from_percent(100), Perbill::one());
-		assert_eq!(<Perquintill as PerThing>::from_percent(100), Perquintill::one());
-	}
-}
