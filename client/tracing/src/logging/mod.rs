@@ -214,6 +214,10 @@ where
 	env_filter = env_filter.add_directive(
 		parse_default_directive("sc_tracing=trace").expect("provided directive is valid")
 	);
+	env_filter = env_filter.add_directive(
+		// TODO
+		parse_default_directive("telemetry-logger=trace").expect("provided directive is valid")
+	);
 
 	let enable_color = atty::is(atty::Stream::Stderr);
 	let timer = ChronoLocal::with_format(if simple {

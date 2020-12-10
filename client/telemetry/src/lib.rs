@@ -264,11 +264,10 @@ impl Telemetries {
 		} = self;
 
 		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
-		let mut node_map_inv: HashMap<Multiaddr, Vec<Id>> = HashMap::new();
-		let mut connection_messages: HashMap<Id, serde_json::Value> = HashMap::new();
-		let mut connection_sinks: HashMap<Id, TelemetryConnectionSinks> = HashMap::new();
-		let mut node_pool: HashMap<Multiaddr, Node<crate::worker::WsTrans>> = HashMap::new(); // TODO mod
-		let mut node_first_connect: HashSet<(Multiaddr, Id)> = HashSet::new();
+		let mut node_map_inv: HashMap<Multiaddr, Vec<Id>> = HashMap::new(); // TODO remove?
+		let mut connection_messages: HashMap<Multiaddr, Vec<serde_json::Value>> = HashMap::new();
+		let mut connection_sinks: HashMap<Multiaddr, Vec<TelemetryConnectionSinks>> = HashMap::new();
+		let mut node_first_connect: HashSet<(Multiaddr, Id)> = HashSet::new(); // TODO remove?
 		let mut existing_nodes: HashSet<Multiaddr> = HashSet::new();
 
 		// initialize the telemetry nodes
@@ -278,22 +277,38 @@ impl Telemetries {
 			let endpoints = endpoints.0;
 
 			for (addr, verbosity) in endpoints {
-				let node = Node::new(transport.clone(), addr.clone());
-				node_pool.insert(addr.clone(), node);
 				node_map.entry(id.clone()).or_insert_with(Vec::new)
 					.push((verbosity, addr.clone()));
 				node_map_inv.entry(addr.clone()).or_insert_with(Vec::new).push(id.clone());
 				node_first_connect.insert((addr.clone(), id.clone()));
 				existing_nodes.insert(addr.clone());
+				let mut json = connection_message.clone();
+				let obj = json.as_object_mut().expect("todo");
+				obj.insert("msg".into(), "system.connected".into());
+				obj.insert("id".into(), id.into_u64().into());
+				connection_messages.entry(addr.clone()).or_insert_with(Vec::new)
+					.push(json);
+				connection_sinks.entry(addr.clone()).or_insert_with(Vec::new)
+					.push(connection_sink.clone());
 			}
-
-			let connection_sink = TelemetryConnectionSinks::default();
-			connection_sinks.insert(id.clone(), connection_sink.clone());
-			connection_messages.insert(id.clone(), connection_message);
 		}
+
+		let mut node_pool: HashMap<Multiaddr, Node<crate::worker::WsTrans>> =
+			existing_nodes
+				.iter()
+				.map(|addr| {
+					let connection_messages = connection_messages.remove(addr)
+						.expect("there is a node for every connection message; qed");
+					let connection_sinks = connection_sinks.remove(addr)
+						.expect("there is a node for every connection sink; qed");
+					let node = Node::new(transport.clone(), addr.clone(), connection_messages, connection_sinks);
+					(addr.clone(), node)
+				})
+				.collect();
 
 		let mut messages = receiver
 			.filter_map(|(id, verbosity, message)| {
+				// TODO probably wont need anymore
 				if let Some(nodes) = node_map.get(&id) {
 					future::ready(Some((id, verbosity, message, nodes)))
 				} else {
@@ -346,7 +361,7 @@ impl Telemetries {
 		while let Some((addr, message)) = messages.next().await {
 			let mut node = node_pool.get_mut(&addr).unwrap();
 			log::trace!(target: "telemetry", "#### Sending to {}: {}", addr, message);
-			let _ = node.send(message).await;
+			node.send(message).await.expect("never error");
 		}
 
 		/*
@@ -415,7 +430,7 @@ impl TelemetryHandle {
 		let connection_sink = TelemetryConnectionSinks::default();
 
 		let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
-		let id = span.id().expect("the span is enabled; qed");
+		let id = span.id().expect("the span is enabled; qed"); // TODO: this error happen if the log is disabled by the command line
 		{
 			let id = id.clone();
 			// TODO where to drop span?

@@ -25,11 +25,13 @@ use libp2p::core::transport::Transport;
 use log::{trace, debug, warn, error};
 use rand::Rng as _;
 use std::{collections::VecDeque, fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
+use crate::TelemetryConnectionSinks;
 
 /// Maximum number of pending telemetry messages.
 const MAX_PENDING: usize = 10;
 
 /// Handler for a single telemetry node.
+/// TODO: probably dont need to be pub + explain 2 properties of this Sink
 pub struct Node<TTrans: Transport> {
 	/// Address of the node.
 	addr: Multiaddr,
@@ -37,6 +39,9 @@ pub struct Node<TTrans: Transport> {
 	socket: NodeSocket<TTrans>,
 	/// Transport used to establish new connections.
 	transport: TTrans,
+	connection_messages: Vec<serde_json::Value>,
+	buf: Option<Vec<Vec<u8>>>,
+	connection_sinks: Vec<TelemetryConnectionSinks>,
 }
 
 enum NodeSocket<TTrans: Transport> {
@@ -71,7 +76,7 @@ struct NodeSocketConnected<TTrans: Transport> {
 	/// Where to send data.
 	sink: TTrans::Output,
 	/// Queue of packets to send. TODO remove caching (can be done with SinkExt.buffer())
-	pending: VecDeque<Vec<u8>>,
+	pending: Vec<Vec<u8>>,
 	/// If true, we need to flush the sink.
 	need_flush: bool,
 	/// A timeout for the socket to write data.
@@ -101,11 +106,19 @@ pub enum ConnectionError<TSinkErr> {
 
 impl<TTrans: Transport> Node<TTrans> {
 	/// Builds a new node handler.
-	pub fn new(transport: TTrans, addr: Multiaddr) -> Self {
+	pub fn new(
+		transport: TTrans,
+		addr: Multiaddr,
+		connection_messages: Vec<serde_json::Value>,
+		connection_sinks: Vec<TelemetryConnectionSinks>,
+	) -> Self {
 		Node {
 			addr,
 			socket: NodeSocket::ReconnectNow,
 			transport,
+			buf: None,
+			connection_messages,
+			connection_sinks,
 		}
 	}
 
@@ -115,7 +128,6 @@ impl<TTrans: Transport> Node<TTrans> {
 	}
 }
 
-/*
 impl<TTrans: Transport, TSinkErr> Node<TTrans>
 where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
@@ -123,6 +135,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 		+ Unpin,
 	TSinkErr: fmt::Debug
 {
+/*
 	/// Sends a WebSocket frame to the node. Returns an error if we are not connected to the node.
 	///
 	/// After calling this method, you should call `poll` in order for it to be properly processed.
@@ -141,8 +154,34 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 			Err(())
 		}
 	}
-}
 */
+
+	// NOTE: this code has been inspired from `Buffer` (`futures_util::sink::Buffer`).
+	//       https://docs.rs/futures-util/0.3.8/src/futures_util/sink/buffer.rs.html#32
+	fn try_send_connection_messages(
+		mut self: Pin<&mut Self>,
+		cx: &mut Context<'_>,
+		mut conn: &mut NodeSocketConnected<TTrans>,
+		needs_poll: bool,
+	) -> Poll<Result<(), TSinkErr>> {
+		if needs_poll {
+			futures::ready!(conn.sink.poll_ready_unpin(cx))?;
+		}
+		if let Some(buf) = self.buf.as_mut() {
+			while let Some(item) = buf.pop() {
+				if let Err(e) = conn.sink.start_send_unpin(item) {
+					return Poll::Ready(Err(e));
+				}
+				if !buf.is_empty() {
+					futures::ready!(conn.sink.poll_ready_unpin(cx))?;
+				}
+			}
+			conn.sink.poll_ready_unpin(cx)
+		} else {
+			Poll::Ready(Ok(()))
+		}
+	}
+}
 
 impl<TTrans: Transport, TSinkErr> Sink<String> for Node<TTrans>
 where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
@@ -159,19 +198,28 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 		self.socket = loop {
 			match socket {
 				NodeSocket::Connected(mut conn) => {
-					match Sink::poll_ready(Pin::new(&mut conn.sink), cx) {
+					match conn.sink.poll_ready_unpin(cx) {
 						Poll::Ready(Ok(())) => {
-							self.socket = NodeSocket::Connected(conn);
-							return Poll::Ready(Ok(()));
+							match self.as_mut().try_send_connection_messages(cx, &mut conn, false) {
+								Poll::Ready(Err(e)) => {
+									let timeout = gen_rand_reconnect_delay();
+									socket = NodeSocket::WaitingReconnect(timeout);
+								},
+								other => {
+									self.socket = NodeSocket::Connected(conn);
+									return other;
+								},
+							}
 						},
 						Poll::Ready(Err(err)) => {
 							warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
 							let timeout = gen_rand_reconnect_delay();
-							self.socket = NodeSocket::WaitingReconnect(timeout);
+							socket = NodeSocket::WaitingReconnect(timeout);
 							//return Poll::Ready(Some(NodeEvent::Disconnected(err)))
-							return Poll::Pending;
+							//return Poll::Pending;
 						},
 						Poll::Pending => {
+							dbg!("pending");
 							self.socket = NodeSocket::Connected(conn);
 							return Poll::Pending;
 						},
@@ -195,17 +243,38 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 					}
 				}
 				NodeSocket::Dialing(mut s) => match Future::poll(Pin::new(&mut s), cx) {
-					Poll::Ready(Ok(sink)) => {
+					Poll::Ready(Ok(mut sink)) => {
 						debug!(target: "telemetry", "✅ Connected to {}", self.addr);
-						let conn = NodeSocketConnected {
+
+						let mut conn = NodeSocketConnected {
 							sink,
-							pending: VecDeque::new(),
+							pending: Vec::new(),
 							need_flush: false,
 							timeout: None,
 						};
-						self.socket = NodeSocket::Connected(conn);
-						//return Poll::Ready(Some(NodeEvent::Connected))
-						return Poll::Ready(Ok(()));
+
+						for connection_sink in self.connection_sinks.iter() {
+							connection_sink.fire();
+						}
+
+						let mut buf = Vec::new();
+						for mut json in self.connection_messages.iter().cloned() {
+							let obj = json.as_object_mut().expect("todo");
+							obj.insert("ts".into(), chrono::Local::now().to_rfc3339().into());
+							buf.push(serde_json::to_vec(obj).expect("todo"));
+						}
+						self.buf.replace(buf);
+
+						match self.as_mut().try_send_connection_messages(cx, &mut conn, true) {
+							Poll::Ready(Err(e)) => {
+								let timeout = gen_rand_reconnect_delay();
+								socket = NodeSocket::WaitingReconnect(timeout);
+							},
+							other => {
+								self.socket = NodeSocket::Connected(conn);
+								return other;
+							},
+						}
 					},
 					Poll::Pending => break NodeSocket::Dialing(s),
 					Poll::Ready(Err(err)) => {
@@ -244,24 +313,33 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	fn start_send(mut self: Pin<&mut Self>, item: String) -> Result<(), Self::Error> {
 		match &mut self.socket {
 			NodeSocket::Connected(conn) => {
-				let _ = Sink::start_send(Pin::new(&mut conn.sink), item.into());
+				dbg!(&item);
+				let _ = conn.sink.start_send_unpin(item.into());
 			},
-			_ => {},
+			_ => {
+				error!(
+					target: "telemetry",
+					"Trying to send something but the connection is not ready. This is a bug. \
+					Message sent: {}",
+					item,
+				);
+				todo!("should never happen");
+			},
 		}
 		Ok(())
 	}
 
 	fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
 		match &mut self.socket {
-			NodeSocket::Connected(conn) => Sink::poll_flush(Pin::new(&mut conn.sink), cx).map(|_| Ok(())),
-			_ => Poll::Pending,
+			NodeSocket::Connected(conn) => conn.sink.poll_flush_unpin(cx).map(|_| Ok(())),
+			_ => Poll::Ready(Ok(())),
 		}
 	}
 
 	fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
 		match &mut self.socket {
-			NodeSocket::Connected(conn) => Sink::poll_close(Pin::new(&mut conn.sink), cx).map(|_| Ok(())),
-			_ => Poll::Pending,
+			NodeSocket::Connected(conn) => conn.sink.poll_close_unpin(cx).map(|_| Ok(())),
+			_ => Poll::Ready(Ok(())),
 		}
 	}
 }
