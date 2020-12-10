@@ -65,7 +65,7 @@ impl InsertCmd {
 			.ok_or_else(|| Error::MissingBasePath)?;
 
 		let (keystore, public) = match self.keystore_params.keystore_config(base_path)? {
-			KeystoreConfig::Path { path, password } => {
+			(_, KeystoreConfig::Path { path, password }) => {
 				let public = with_crypto_scheme!(
 					self.crypto_scheme.scheme,
 					to_vec(&suri, password.clone())

@@ -3,5 +3,11 @@
         {
             "pattern": "^https://crates.io"
         }
+    ],
+    "replacementPatterns": [
+        {
+          "pattern": "%20",
+          "replacement": " "
+        }
     ]
 }

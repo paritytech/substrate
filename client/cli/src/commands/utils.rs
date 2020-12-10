@@ -57,7 +57,7 @@ pub fn read_uri(uri: Option<&String>) -> error::Result<String> {
 /// 2. Try to construct the `Pair` while using `uri` as input for [`sp_core::Pair::from_string_with_seed`].
 ///
 /// 3. Try to construct the `Pair::Public` while using `uri` as input for
-///    [`sp_core::Pair::Public::from_string_with_version`].
+///    [`sp_core::crypto::Ss58Codec::from_string_with_version`].
 pub fn print_from_uri<Pair>(
 	uri: &str,
 	password: Option<SecretString>,
