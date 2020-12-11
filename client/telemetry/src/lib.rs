@@ -48,17 +48,15 @@ use log::{error, warn};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{
 	collections::{HashMap, HashSet},
-	fmt,
 	io,
 	pin::Pin,
 	sync::Arc,
-	task::{Context, Poll},
 	time::Duration,
 };
 use wasm_timer::Instant;
 use tracing::Id;
 use parking_lot::Mutex;
-use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender}};
+use sp_utils::{mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender}};
 
 pub use chrono;
 pub use libp2p::wasm_ext::ExtTransport;
@@ -266,10 +264,8 @@ impl Telemetries {
 		} = self;
 
 		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
-		let mut node_map_inv: HashMap<Multiaddr, Vec<Id>> = HashMap::new(); // TODO remove?
 		let mut connection_messages: HashMap<Multiaddr, Vec<serde_json::Value>> = HashMap::new();
 		let mut connection_sinks: HashMap<Multiaddr, Vec<TelemetryConnectionSinks>> = HashMap::new();
-		let mut node_first_connect: HashSet<(Multiaddr, Id)> = HashSet::new(); // TODO remove?
 		let mut existing_nodes: HashSet<Multiaddr> = HashSet::new();
 
 		// initialize the telemetry nodes
@@ -281,8 +277,6 @@ impl Telemetries {
 			for (addr, verbosity) in endpoints {
 				node_map.entry(id.clone()).or_insert_with(Vec::new)
 					.push((verbosity, addr.clone()));
-				node_map_inv.entry(addr.clone()).or_insert_with(Vec::new).push(id.clone());
-				node_first_connect.insert((addr.clone(), id.clone()));
 				existing_nodes.insert(addr.clone());
 				let mut json = connection_message.clone();
 				let obj = json.as_object_mut().expect("todo");
@@ -307,8 +301,9 @@ impl Telemetries {
 					(addr.clone(), node)
 				})
 				.collect();
+		//let mut node_pool = node_pool.buffer(2000);
 
-		let mut res = receiver
+		let res = receiver
 			.filter_map(|(id, verbosity, message): (Id, u8, String)| {
 				if let Some(nodes) = node_map.get(&id) {
 					future::ready(Some((verbosity, message, nodes)))
@@ -367,61 +362,6 @@ impl Telemetries {
 			Ok(()) => {},
 			Err(x) => match x {},
 		}
-
-		/*
-		while let Some((addr, message)) = messages.next().await {
-			let mut node = node_pool.get_mut(&addr).unwrap();
-			log::trace!(target: "telemetry", "#### Sending to {}: {}", addr, message);
-			let _ = node.send(message).await;
-		}
-		*/
-
-		/*
-		let futures = stream::unfold(messages, |messages| async move {
-			let (addr, message) = messages.next().await?;
-			if let Some(node) = node_pool.get(addr) {
-				Some((node.send(message), messages))
-			} else {
-				todo!()
-			}
-		});
-		*/
-
-		// loop indefinitely over telemetry messages
-		/*
-		while let Some() = receiver.next().await {
-				// Detect re-connection
-				let node_status = node.next().await;
-				if matches!(node_status, Some(NodeEvent::Connected)) {
-					// All the instances must re-send the connection message
-					node_first_connect.extend(
-						node_map_inv.get(addr)
-							.iter()
-							.map(|x| x.iter())
-							.flatten()
-							.map(|id| (addr.clone(), id.to_owned())),
-					);
-				}
-
-				// Reconnection handling
-				if matches!(node_status, Some(NodeEvent::Connected) | None) {
-					if node_first_connect.remove(&(addr.to_owned(), id.clone())) {
-						if let Some(connection_sink) = connection_sinks.get(&id) {
-							connection_sink.fire();
-						}
-						if let Some(json) = connection_messages.get(&id) {
-							let mut json = json.clone();
-							let obj = json.as_object_mut().expect("todo");
-							obj.insert("msg".into(), "system.connected".into());
-							obj.insert("ts".into(), chrono::Local::now().to_rfc3339().into());
-							obj.insert("id".into(), id.into_u64().into());
-							let _ = node.send_message(serde_json::to_string(obj).expect("todo"));
-						}
-					}
-				}
-
-		}
-		*/
 	}
 }
 

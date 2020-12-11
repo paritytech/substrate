@@ -85,11 +85,6 @@ impl<TTrans: Transport> Node<TTrans> {
 			connection_sinks,
 		}
 	}
-
-	/// Returns the address that was passed to `new`.
-	pub(crate) fn addr(&self) -> &Multiaddr {
-		&self.addr
-	}
 }
 
 impl<TTrans: Transport, TSinkErr> Node<TTrans>

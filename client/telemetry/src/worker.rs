@@ -29,15 +29,8 @@
 //!
 
 use futures::{prelude::*, ready};
-use libp2p::{
-	core::transport::{OptionalTransport, timeout::TransportTimeout},
-	Multiaddr,
-	Transport,
-	wasm_ext
-};
-use log::{trace, error};
-use parking_lot::Mutex;
-use std::{io, pin::Pin, sync::Arc, task::Context, task::Poll, time};
+use log::{error};
+use std::{io, pin::Pin, task::Context, task::Poll, time};
 
 /// Timeout after which a connection attempt is considered failed. Includes the WebSocket HTTP
 /// upgrading.

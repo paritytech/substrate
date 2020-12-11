@@ -6,7 +6,6 @@ use std::iter::FromIterator;
 use libp2p::Multiaddr;
 use std::task::{Poll, Context};
 use std::pin::Pin;
-use std::collections::VecDeque;
 
 #[derive(Debug)]
 pub(crate) struct Dispatcher {
