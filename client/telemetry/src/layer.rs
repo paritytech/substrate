@@ -65,13 +65,15 @@ where
 					..
 				} = attrs
 				{
-					let _ = self.0.lock().try_send((
+					if self.0.lock().try_send((
 						id,
 						verbosity
 							.try_into()
 							.expect("telemetry log message verbosity are u8; qed"),
 						json,
-					));
+					)).is_err() {
+						eprintln!("Telemetry buffer overflowed!");
+					}
 				} else {
 					// NOTE: logging in this function doesn't work
 					eprintln!(
