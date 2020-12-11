@@ -1,0 +1,35 @@
+[package]
+name = "historied-db"
+version = "0.8.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Trait for key value databases with history."
+license = "Apache-2.0"
+categories = [ "no-std" ]
+edition = "2018"
+
+[dependencies]
+derivative = { version = "2.1", features = ["use_core"] }
+smallvec = "1.4"
+hash-db = { default-features = false, version = "0.15.2"}
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
+sp-std = { version = "2.0.0", default-features = false }
+num-traits = { version = "0.2.8", default-features = false } # only for zero_one
+
+[dev-dependencies]
+ref-cast = { version = "1.0" }
+
+[features]
+default = ["std"]
+
+# Force set could be unused and
+# is not compatible with aggregate
+force-data = []
+# temp size implementation specific to a use case
+temp-size-impl = []
+# Index access is a rather unsafe api
+index-access = []
+std = [
+  "codec/std",
+	"sp-std/std",
+	"num-traits/std",
+]
