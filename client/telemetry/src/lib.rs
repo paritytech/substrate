@@ -361,7 +361,7 @@ impl Telemetries {
 		while let Some((addr, message)) = messages.next().await {
 			let mut node = node_pool.get_mut(&addr).unwrap();
 			log::trace!(target: "telemetry", "#### Sending to {}: {}", addr, message);
-			node.send(message).await.expect("never error");
+			let _ = node.send(message).await;
 		}
 
 		/*
