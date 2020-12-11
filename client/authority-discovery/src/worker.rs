@@ -77,7 +77,7 @@ pub enum Role {
 /// An authority discovery [`Worker`] can publish the local node's addresses as well as discover
 /// those of other nodes via a Kademlia DHT.
 ///
-/// When constructed with [`Role::PublishAndDiscover`] a [`Worker`] will
+/// When constructed with [`Role::PublishAndDiscover`] a [`Worker`] will:
 ///
 ///    1. Retrieve its external addresses (including peer id).
 ///
@@ -87,7 +87,8 @@ pub enum Role {
 ///
 ///    4. Put addresses and signature as a record with the authority id as a key on a Kademlia DHT.
 ///
-/// When constructed with either [`Role::PublishAndDiscover`] or [`Role::Publish`] a [`Worker`] will
+/// When constructed with either [`Role::PublishAndDiscover`] or [`Role::Discover`] a [`Worker`]
+/// will:
 ///
 ///    1. Retrieve the current and next set of authorities.
 ///
