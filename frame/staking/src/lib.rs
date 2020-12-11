@@ -1476,9 +1476,11 @@ decl_module! {
 			let stash_balance = T::Currency::free_balance(&stash);
 			if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
 				let extra = extra.min(max_additional);
-				ensure!(extra + ledger.active > T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 				ledger.total += extra;
 				ledger.active += extra;
+				// last check: the new active amount of ledger must be more than ED.
+				ensure!(ledger.active > T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+
 				Self::deposit_event(RawEvent::Bonded(stash, extra));
 				Self::update_ledger(&controller, &ledger);
 			}
