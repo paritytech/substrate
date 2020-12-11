@@ -1011,13 +1011,15 @@ impl<T: Config> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
 		ExecutionPhase::kill();
-		ExtrinsicCount::kill();
 		AllExtrinsicsLen::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
 		let mut digest = <Digest<T>>::take();
-		let extrinsics_root = Self::derive_extrinsics_root();
+		let extrinsics = (0..ExtrinsicCount::take().unwrap_or_default())
+			.map(ExtrinsicData::take)
+			.collect();
+		let extrinsics_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 
 		// move block hash pruning window by one block
 		let block_hash_count = T::BlockHashCount::get();
@@ -1166,14 +1168,6 @@ impl<T: Config> Module<T> {
 	/// (e.g., called `on_initialize` for all modules).
 	pub fn note_finished_initialize() {
 		ExecutionPhase::put(Phase::ApplyExtrinsic(0))
-	}
-
-	/// Remove all extrinsic data and calculate the extrinsics root.
-	fn derive_extrinsics_root() -> T::Hash {
-		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default())
-			.map(ExtrinsicData::take)
-			.collect();
-		extrinsics_data_root::<T::Hashing>(extrinsics)
 	}
 
 	/// An account is being created.
