@@ -199,6 +199,8 @@ decl_error! {
 		TooManyVestingSchedules,
 		/// Amount being transferred is too low to create a vesting schedule.
 		AmountLow,
+		/// Vesting was out of range or had already begun vesting
+		InvalidConsolidation,
 	}
 }
 
@@ -349,6 +351,56 @@ decl_module! {
 				.expect("user does not have an existing vesting schedule; q.e.d.");
 
 			Ok(())
+		}
+
+		/// Consolidate 2 vestings
+		///
+		/// The dispatch origin for this call must be _Signed_ and the sender must have funds still
+		/// locked under this module.
+		///
+		/// We do not record when any vesting has has had any of its funds unlocked, only when
+		/// any of the vest or vested_transfer extrinsics are dispatched therefor it is invalid
+		/// to attempt to consolidate a vesting that has already begun vesting (starting_block >
+		/// now)
+		///
+		/// If the starting blocks of each vesting are different the consolidated vesting will start
+		/// at the later of the two.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - DbWeight: 2 Reads, 2 Writes
+		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
+		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
+		/// # </weight>
+		#[weight = T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get())
+			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get()))
+		]
+		fn consolidate_vestings(origin, first: u32, second: u32) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut vesting_schedules = Vesting::<T>::get(&who);
+			ensure!(first < second, Error::<T>::InvalidConsolidation);
+			ensure!(vesting_schedules.len() as u32 >= first, Error::<T>::InvalidConsolidation);
+			ensure!(vesting_schedules.len() as u32 >= second, Error::<T>::InvalidConsolidation);
+			let now = <frame_system::Module<T>>::block_number();
+			let first_vesting = vesting_schedules.get(first as usize)
+				.expect("Vecs cant be sparse and we bounds checked above");
+			ensure!(first_vesting.starting_block > now, Error::<T>::InvalidConsolidation);
+			let second_vesting = vesting_schedules.get(second as usize)
+				.expect("Vecs cant be sparse and we bounds checked above");
+			ensure!(second_vesting.starting_block > now, Error::<T>::InvalidConsolidation);
+			let consolidated_vesting = VestingInfo {
+				locked: first_vesting.locked.saturating_add(second_vesting.locked),
+				starting_block: sp_std::cmp::max(first_vesting.starting_block,
+					second_vesting.starting_block),
+				per_block: first_vesting.per_block.saturating_add(second_vesting.per_block)
+			};
+			vesting_schedules.remove(first as usize);
+			let second = second - 1;
+			vesting_schedules.remove(second as usize);
+			vesting_schedules.push(consolidated_vesting);
+			Vesting::<T>::insert(who.clone(), vesting_schedules);
+
+			Self::update_lock(who)
 		}
 	}
 }
@@ -546,8 +598,10 @@ mod tests {
 					(3, 30 * self.existential_deposit),
 					(4, 40 * self.existential_deposit),
 					(12, 10 * self.existential_deposit),
+					// Accounts with multiple vestings
 					(100, 20 * self.existential_deposit),
-					(101, 20 * self.existential_deposit)
+					(101, 20 * self.existential_deposit),
+					(200, 750 * self.existential_deposit)
 				],
 			}.assimilate_storage(&mut t).unwrap();
 			GenesisConfig::<Test> {
@@ -558,13 +612,47 @@ mod tests {
 					(100, 0, 10, 10),
 					(100, 0, 10, 0),
 					(101, 0, 10, 10),
-					(101, 20, 5, 0)
+					(101, 20, 5, 0),
+					(200, 10, 10, 250),
+					(200, 15, 10, 0)
 				],
 			}.assimilate_storage(&mut t).unwrap();
 			let mut ext = sp_io::TestExternalities::new(t);
 			ext.execute_with(|| System::set_block_number(1));
 			ext
 		}
+	}
+
+	#[test]
+	fn consolidate_vestings_valid_vestings() {
+		ExtBuilder::default()
+			.existential_deposit(1)
+			.build()
+			.execute_with(|| {
+				let vestings = Vesting::vesting(&200);
+				assert_eq!(vestings.len(), 2); // Account has 2 vesting schedules
+
+				// Before consolidation
+				// One vesting starts at block 10 releasing 50 per block up to a max of 500
+				// The other   starts at block 15 releasing 25 per block up to a max of 250
+				assert_ok!(Vesting::consolidate_vestings(Some(200).into(), 0, 1));
+				let vestings = Vesting::vesting(&200);
+				assert_eq!(vestings.len(), 1); // Account should now have one vesting
+
+				// Vesting no longer starts at block 10
+				System::set_block_number(10);
+				assert_eq!(Vesting::vesting_balance(&200), Some(75 * 10));
+
+				System::set_block_number(16);
+				assert_eq!(System::block_number(), 16);
+				// The consolidated vesting should have vested 1 block at the consolidated 75 per
+				// block
+				assert_eq!(Vesting::vesting_balance(&200), Some(75 * 9));
+
+				System::set_block_number(25);
+				// The consolidated vesting should have fully vested
+				assert_eq!(Vesting::vesting_balance(&200), Some(0));
+			})
 	}
 
 	#[test]
