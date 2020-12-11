@@ -68,10 +68,12 @@ pub use tracing;
 mod layer;
 mod node;
 pub mod worker;
+mod dispatcher;
 
 pub use layer::*;
 use node::*;
 use worker::{CONNECT_TIMEOUT, StreamSink}; // TODO mod
+use dispatcher::*;
 
 /// List of telemetry servers we want to talk to. Contains the URL of the server, and the
 /// maximum verbosity level.
@@ -256,7 +258,7 @@ impl Telemetries {
 	/// TODO
 	pub async fn run(self) {
 		let Self {
-			mut receiver,
+			receiver,
 			sender: _sender,
 			mut init_receiver,
 			init_sender,
@@ -293,7 +295,7 @@ impl Telemetries {
 			}
 		}
 
-		let mut node_pool: HashMap<Multiaddr, Node<crate::worker::WsTrans>> =
+		let mut node_pool: Dispatcher =
 			existing_nodes
 				.iter()
 				.map(|addr| {
@@ -306,11 +308,10 @@ impl Telemetries {
 				})
 				.collect();
 
-		let mut messages = receiver
-			.filter_map(|(id, verbosity, message)| {
-				// TODO probably wont need anymore
+		let mut res = receiver
+			.filter_map(|(id, verbosity, message): (Id, u8, String)| {
 				if let Some(nodes) = node_map.get(&id) {
-					future::ready(Some((id, verbosity, message, nodes)))
+					future::ready(Some((verbosity, message, nodes)))
 				} else {
 					log::error!(
 						target: "telemetry",
@@ -321,20 +322,11 @@ impl Telemetries {
 					future::ready(None)
 				}
 			})
-			.flat_map(|(id, verbosity, message, nodes)| {
+			.flat_map(|(verbosity, message, nodes): (u8, String, &Vec<(u8, Multiaddr)>)| {
 				let mut to_send = Vec::with_capacity(nodes.len());
 				let before = Instant::now();
 
 				for (node_max_verbosity, addr) in nodes {
-					if !existing_nodes.contains(addr) {
-						log::error!(
-							target: "telemetry",
-							"Could not find telemetry server in the NodePool: {}",
-							addr,
-						);
-						continue;
-					};
-
 					if verbosity > *node_max_verbosity {
 						log::trace!(
 							target: "telemetry",
@@ -344,7 +336,7 @@ impl Telemetries {
 						continue;
 					}
 
-					to_send.push((addr, message.clone()));
+					to_send.push((addr.clone(), message.clone()));
 				}
 
 				if before.elapsed() > Duration::from_millis(200) {
@@ -355,14 +347,34 @@ impl Telemetries {
 				}
 
 				stream::iter(to_send)
-			});
-			// TODO make it forward to a sink that will dispatch?
+			})
+			.map(|x| Ok(x))
+			.boxed()
+			.forward(&mut node_pool)
+			.await;
 
+		match res {
+			Ok(()) => {},
+			Err(x) => match x {},
+		};
+
+		log::error!(
+			target: "telemetry",
+			"Unexpected end of stream. This is a bug.",
+		);
+
+		match node_pool.close().await {
+			Ok(()) => {},
+			Err(x) => match x {},
+		}
+
+		/*
 		while let Some((addr, message)) = messages.next().await {
 			let mut node = node_pool.get_mut(&addr).unwrap();
 			log::trace!(target: "telemetry", "#### Sending to {}: {}", addr, message);
 			let _ = node.send(message).await;
 		}
+		*/
 
 		/*
 		let futures = stream::unfold(messages, |messages| async move {
