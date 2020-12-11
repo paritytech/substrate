@@ -1568,6 +1568,7 @@ dependencies = [
 name = "frame-benchmarking-cli"
 version = "2.0.0"
 dependencies = [
+ "Inflector",
  "chrono",
  "frame-benchmarking",
  "handlebars",

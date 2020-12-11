@@ -1052,10 +1052,29 @@ macro_rules! impl_benchmark_test {
 /// ```
 ///
 /// At the end of `dispatch_benchmark`, you should return this batches object.
+///
+/// In the case where you have multiple instances of a pallet that you need to separately benchmark,
+/// the name of your module struct will be used as a suffix to your outputted weight file. For
+/// example:
+///
+/// ```ignore
+/// add_benchmark!(params, batches, pallet_balances, Balances); // pallet_balances.rs
+/// add_benchmark!(params, batches, pallet_collective, Council); // pallet_collective_council.rs
+/// add_benchmark!(params, batches, pallet_collective, TechnicalCommittee); // pallet_collective_technical_committee.rs
+/// ```
+///
+/// You can manipulate this suffixed string by using a type alias if needed. For example:
+///
+/// ```ignore
+/// type Council2 = TechnicalCommittee;
+/// add_benchmark!(params, batches, pallet_collective, Council2); // pallet_collective_council_2.rs
+/// ```
+
 #[macro_export]
 macro_rules! add_benchmark {
 	( $params:ident, $batches:ident, $name:ident, $( $location:tt )* ) => (
 		let name_string = stringify!($name).as_bytes();
+		let instance_string = stringify!( $( $location )* ).as_bytes();
 		let (config, whitelist) = $params;
 		let $crate::BenchmarkConfig {
 			pallet,
@@ -1071,6 +1090,9 @@ macro_rules! add_benchmark {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
 				for benchmark in $( $location )*::benchmarks(*extra).into_iter() {
 					$batches.push($crate::BenchmarkBatch {
+						pallet: name_string.to_vec(),
+						instance: instance_string.to_vec(),
+						benchmark: benchmark.to_vec(),
 						results: $( $location )*::run_benchmark(
 							benchmark,
 							&lowest_range_values[..],
@@ -1080,12 +1102,13 @@ macro_rules! add_benchmark {
 							whitelist,
 							*verify,
 						)?,
-						pallet: name_string.to_vec(),
-						benchmark: benchmark.to_vec(),
 					});
 				}
 			} else {
 				$batches.push($crate::BenchmarkBatch {
+					pallet: name_string.to_vec(),
+					instance: instance_string.to_vec(),
+					benchmark: benchmark.clone(),
 					results: $( $location )*::run_benchmark(
 						&benchmark[..],
 						&lowest_range_values[..],
@@ -1095,8 +1118,6 @@ macro_rules! add_benchmark {
 						whitelist,
 						*verify,
 					)?,
-					pallet: name_string.to_vec(),
-					benchmark: benchmark.clone(),
 				});
 			}
 		}
