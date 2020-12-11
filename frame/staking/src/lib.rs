@@ -1474,9 +1474,9 @@ decl_module! {
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
 			let stash_balance = T::Currency::free_balance(&stash);
-
 			if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
 				let extra = extra.min(max_additional);
+				ensure!(extra + ledger.active > T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 				ledger.total += extra;
 				ledger.active += extra;
 				Self::deposit_event(RawEvent::Bonded(stash, extra));
