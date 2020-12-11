@@ -581,6 +581,7 @@ fn assert_ledger_consistent(ctrl: AccountId) {
 	let ledger = Staking::ledger(ctrl).expect("Not a controller.");
 	let real_total: Balance = ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
 	assert_eq!(real_total, ledger.total);
+	assert!(ledger.active >= Balances::minimum_balance());
 }
 
 pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
