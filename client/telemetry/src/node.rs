@@ -29,6 +29,7 @@ use crate::TelemetryConnectionSinks;
 /// Maximum number of pending telemetry messages.
 /// Handler for a single telemetry node.
 /// TODO: explain 2 properties of this Sink
+#[derive(Debug)]
 pub(crate) struct Node<TTrans: Transport> {
 	/// Address of the node.
 	addr: Multiaddr,
@@ -51,21 +52,6 @@ enum NodeSocket<TTrans: Transport> {
 	WaitingReconnect(Delay),
 	/// Temporary transition state.
 	Poisoned,
-}
-
-impl<TTrans: Transport> fmt::Debug for NodeSocket<TTrans> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		use NodeSocket::*;
-		f.write_str(
-			match self {
-				Connected(_) => "Connected",
-				Dialing(_) => "Dialing",
-				ReconnectNow => "ReconnectNow",
-				WaitingReconnect(_) => "WaitingReconnect",
-				Poisoned => "Poisoned",
-			},
-		)
-	}
 }
 
 impl<TTrans: Transport> NodeSocket<TTrans> {
@@ -267,19 +253,17 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	}
 }
 
-impl<TTrans: Transport> fmt::Debug for Node<TTrans> {
+impl<TTrans: Transport> fmt::Debug for NodeSocket<TTrans> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let state = match self.socket {
-			NodeSocket::Connected(_) => "Connected",
-			NodeSocket::Dialing(_) => "Dialing",
-			NodeSocket::ReconnectNow => "Pending reconnect",
-			NodeSocket::WaitingReconnect(_) => "Pending reconnect",
-			NodeSocket::Poisoned => "Poisoned",
-		};
-
-		f.debug_struct("Node")
-			.field("addr", &self.addr)
-			.field("state", &state)
-			.finish()
+		use NodeSocket::*;
+		f.write_str(
+			match self {
+				Connected(_) => "Connected",
+				Dialing(_) => "Dialing",
+				ReconnectNow => "ReconnectNow",
+				WaitingReconnect(_) => "WaitingReconnect",
+				Poisoned => "Poisoned",
+			},
+		)
 	}
 }
