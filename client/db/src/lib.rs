@@ -1529,7 +1529,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		block: BlockId<Block>,
 		justification: Justification,
 	) -> ClientResult<()> {
-		// WIP(JON): Check is block is finalized first
+		// WIP(JON): Check if block is finalized first
 
 		// Create a Transaction.
 		let mut transaction: Transaction<DbHash> = Transaction::new();
@@ -1539,14 +1539,22 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		// Read and merge Justification
 		use sp_blockchain::Backend;
-		let justifications = if let Some(mut stored_justifications) = self.blockchain.justification(block)? {
-			stored_justifications.0.push(justification);
-			stored_justifications
-		} else {
-			Justifications::from(justification)
-		};
-
-		// WIP(JON): Reject if we now have more than one per consensus engine.
+		let justifications =
+			if let Some(mut stored_justifications) = self.blockchain.justification(block)? {
+				if stored_justifications
+					.0
+					.iter()
+					.find(|stored| stored.0 == justification.0)
+					.is_some()
+				{
+					// WIP(JON): Maybe create new error type for this
+					return Err(ClientError::BadJustification("Duplicate".into()));
+				}
+				stored_justifications.0.push(justification);
+				stored_justifications
+			} else {
+				Justifications::from(justification)
+			};
 
 		// Set Justification in Transaction in the same way as in finalize_block_with_transaction
 		transaction.set_from_vec(
@@ -2421,6 +2429,12 @@ pub(crate) mod tests {
 
 		let just1 = (CONS1_ENGINE_ID, vec![4, 5]);
 		backend.append_justification(BlockId::Number(1), just1.clone()).unwrap();
+
+		let just2 = (CONS1_ENGINE_ID, vec![6, 7]);
+		assert!(matches!(
+			backend.append_justification(BlockId::Number(1), just2),
+			Err(ClientError::BadJustification(_))
+		));
 
 		assert_eq!(
 			backend.blockchain().justification(BlockId::Number(1)).unwrap(),
