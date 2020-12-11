@@ -37,7 +37,6 @@ pub(crate) struct Node<TTrans: Transport> {
 	/// Transport used to establish new connections.
 	transport: TTrans,
 	connection_messages: Vec<serde_json::Value>,
-	buf: Vec<Vec<u8>>,
 	connection_sinks: Vec<TelemetryConnectionSinks>,
 }
 
@@ -80,8 +79,8 @@ impl<TTrans: Transport> NodeSocket<TTrans> {
 struct NodeSocketConnected<TTrans: Transport> {
 	/// Where to send data.
 	sink: TTrans::Output,
-	/// Queue of packets to send. TODO remove caching (can be done with SinkExt.buffer())
-	pending: Vec<Vec<u8>>,
+	/// Queue of packets to send before accepting new packets.
+	buf: Vec<Vec<u8>>,
 }
 
 impl<TTrans: Transport> Node<TTrans> {
@@ -96,7 +95,6 @@ impl<TTrans: Transport> Node<TTrans> {
 			addr,
 			socket: NodeSocket::ReconnectNow,
 			transport,
-			buf: Vec::new(),
 			connection_messages,
 			connection_sinks,
 		}
@@ -118,11 +116,11 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	// NOTE: this code has been inspired from `Buffer` (`futures_util::sink::Buffer`).
 	//       https://docs.rs/futures-util/0.3.8/src/futures_util/sink/buffer.rs.html#32
 	fn try_send_connection_messages(
-		mut self: Pin<&mut Self>,
+		self: Pin<&mut Self>,
 		cx: &mut Context<'_>,
 		conn: &mut NodeSocketConnected<TTrans>,
 	) -> Poll<Result<(), TSinkErr>> {
-		while let Some(item) = self.buf.pop() {
+		while let Some(item) = conn.buf.pop() {
 			if let Err(e) = conn.sink.start_send_unpin(item) {
 				return Poll::Ready(Err(e));
 			}
@@ -180,11 +178,6 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 					Poll::Ready(Ok(sink)) => {
 						log::debug!(target: "telemetry", "✅ Connected to {}", self.addr);
 
-						let conn = NodeSocketConnected {
-							sink,
-							pending: Vec::new(),
-						};
-
 						for connection_sink in self.connection_sinks.iter() {
 							connection_sink.fire();
 						}
@@ -195,9 +188,11 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 							obj.insert("ts".into(), chrono::Local::now().to_rfc3339().into());
 							buf.push(serde_json::to_vec(obj).expect("todo"));
 						}
-						let _ = mem::replace(&mut self.buf, buf);
 
-						socket = NodeSocket::Connected(conn);
+						socket = NodeSocket::Connected(NodeSocketConnected {
+							sink,
+							buf,
+						});
 					},
 					Poll::Pending => break NodeSocket::Dialing(s),
 					Poll::Ready(Err(err)) => {
