@@ -170,11 +170,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 		mut self: Pin<&mut Self>,
 		cx: &mut Context<'_>,
 		mut conn: &mut NodeSocketConnected<TTrans>,
-		needs_poll: bool,
 	) -> Poll<Result<(), TSinkErr>> {
-		if needs_poll {
-			futures::ready!(conn.sink.poll_ready_unpin(cx))?;
-		}
 		while let Some(item) = self.buf.pop() {
 			if let Err(e) = conn.sink.start_send_unpin(item) {
 				return Poll::Ready(Err(e));
@@ -195,7 +191,6 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 		+ Unpin,
 	TSinkErr: fmt::Debug
 {
-	//type Item = NodeEvent<TSinkErr>;
 	type Error = Infallible;
 
 	fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
@@ -205,7 +200,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 				NodeSocket::Connected(mut conn) => {
 					match conn.sink.poll_ready_unpin(cx) {
 						Poll::Ready(Ok(())) => {
-							match self.as_mut().try_send_connection_messages(cx, &mut conn, false) {
+							match self.as_mut().try_send_connection_messages(cx, &mut conn) {
 								Poll::Ready(Err(e)) => {
 									socket = NodeSocket::wait_reconnect();
 								},
