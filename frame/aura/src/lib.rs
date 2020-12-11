@@ -74,7 +74,7 @@ pub trait Trait: pallet_timestamp::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
 		/// The last timestamp.
-		LastTimestamp get(fn last): T::Moment;
+		LastTimestamp get(fn last) build(|_| 0u32.into()): T::Moment;
 
 		/// The current authorities
 		pub Authorities get(fn authorities): Vec<T::AuthorityId>;
