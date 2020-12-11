@@ -143,16 +143,6 @@ pub const CONSENSUS_WARN: u8 = 4;
 /// Consensus INFO log level.
 pub const CONSENSUS_INFO: u8 = 1;
 
-/*
- * TODO
-impl Drop for Telemetry {
-	fn drop(&mut self) {
-		let span_id = self.span.id().expect("the span is enabled; qed");
-		tracing::dispatcher::get_default(move |dispatch| dispatch.exit(&span_id));
-	}
-}
-*/
-
 pub(crate) type InitPayload = (Id, TelemetryEndpoints, serde_json::Value, TelemetryConnectionSinks);
 
 /// An object that keeps track of all the [`Telemetry`] created by its `build_telemetry()` method.
@@ -301,9 +291,8 @@ impl Telemetries {
 					(addr.clone(), node)
 				})
 				.collect();
-		//let mut node_pool = node_pool.buffer(2000);
 
-		let res = receiver
+		let _ = receiver
 			.filter_map(|(id, verbosity, message): (Id, u8, String)| {
 				if let Some(nodes) = node_map.get(&id) {
 					future::ready(Some((verbosity, message, nodes)))
@@ -348,20 +337,10 @@ impl Telemetries {
 			.forward(&mut node_pool)
 			.await;
 
-		match res {
-			Ok(()) => {},
-			Err(x) => match x {},
-		};
-
 		log::error!(
 			target: "telemetry",
 			"Unexpected end of stream. This is a bug.",
 		);
-
-		match node_pool.close().await {
-			Ok(()) => {},
-			Err(x) => match x {},
-		}
 	}
 }
 
@@ -401,6 +380,7 @@ impl TelemetryHandle {
 	}
 }
 
+// TODO maybe rename because it's confusing
 /// Sinks to propagate telemetry connection established events.
 #[derive(Default, Clone, Debug)]
 pub struct TelemetryConnectionSinks(Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
