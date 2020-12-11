@@ -1973,6 +1973,9 @@ decl_module! {
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let ledger = ledger.rebond(value);
+			// last check: the new active amount of ledger must be more than ED.
+			ensure!(ledger.active > T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+
 			Self::update_ledger(&controller, &ledger);
 			Ok(Some(
 				35 * WEIGHT_PER_MICROS
