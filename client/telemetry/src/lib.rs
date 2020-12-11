@@ -70,7 +70,7 @@ mod node;
 pub mod worker;
 
 pub use layer::*;
-use node::{Node, NodeEvent};
+use node::*;
 use worker::{CONNECT_TIMEOUT, StreamSink}; // TODO mod
 
 /// List of telemetry servers we want to talk to. Contains the URL of the server, and the
