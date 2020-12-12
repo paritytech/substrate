@@ -1479,7 +1479,7 @@ decl_module! {
 				ledger.total += extra;
 				ledger.active += extra;
 				// last check: the new active amount of ledger must be more than ED.
-				ensure!(ledger.active > T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 
 				Self::deposit_event(RawEvent::Bonded(stash, extra));
 				Self::update_ledger(&controller, &ledger);
@@ -1588,7 +1588,7 @@ decl_module! {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
 
-			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
+			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active <= T::Currency::minimum_balance() {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
@@ -1976,7 +1976,7 @@ decl_module! {
 
 			let ledger = ledger.rebond(value);
 			// last check: the new active amount of ledger must be more than ED.
-			ensure!(ledger.active > T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 
 			Self::update_ledger(&controller, &ledger);
 			Ok(Some(
