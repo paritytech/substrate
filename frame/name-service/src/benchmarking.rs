@@ -54,18 +54,46 @@ benchmarks! {
 		assert_eq!(T::Currency::free_balance(&current_bidder), 5.into());
 		assert_eq!(T::Currency::free_balance(&new_bidder), 0.into());
 	}
+
+	// Benchmark claim with the worst possible scenario
+	// ie. When a claim is valid and for (min+1) periods
+	claim {
+		// Test data
+		let name_hash = blake2_256(b"shawntabrizi");
+		let current_bidder : T::AccountId = whitelisted_caller();
+		// load balance to claim 2 periods
+		T::Currency::make_free_balance_be(&current_bidder, 10.into());
+		NameService::<T>::bid(RawOrigin::Signed(current_bidder.clone()).into(), name_hash, 5.into())?;
+	}: claim(RawOrigin::Signed(current_bidder.clone()), name_hash, 2 as u32)
+	verify {
+		let stored_data = Registration::<T>::get(&name_hash);
+		assert_eq!(stored_data, NameStatus::Owned {
+			who: current_bidder.clone(),
+			expiration : Some(5.into())
+		});
+		assert_eq!(T::Currency::free_balance(&current_bidder), 0.into());
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::mock::{new_test_ext, Test};
+	use crate::tests::run_to_block;
 	use frame_support::assert_ok;
 
 	#[test]
 	fn bid() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_bid::<Test>());
+		});
+	}
+
+	#[test]
+	fn claim() {
+		new_test_ext().execute_with(|| {
+			//run_to_block(12);
+			assert_ok!(test_benchmark_claim::<Test>());
 		});
 	}
 }
