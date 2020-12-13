@@ -73,13 +73,80 @@ benchmarks! {
 		});
 		assert_eq!(T::Currency::free_balance(&current_bidder), 0.into());
 	}
+
+	// Benchmark free with the worst possible scenario
+	// ie. When a bid has expired and not claimed
+	free {
+		// Test data
+		let name_hash = blake2_256(b"shawntabrizi");
+		let current_bidder : T::AccountId = whitelisted_caller();
+		assert!(true);
+	}: {
+		assert!(true);
+	}
+	verify {
+		assert!(true);
+	}
+
+	// Benchmark assign with the worst possible scenario
+	// ie. When a name is Owned and target is being set
+	assign {
+		// Test data
+		let name_hash = blake2_256(b"shawntabrizi");
+		let caller : T::AccountId = whitelisted_caller();
+		// set caller as the owner of name
+		let state = NameStatus::<T::AccountId, T::BlockNumber, BalanceOf<T>>::Owned{ 
+			who : caller.clone(), 
+			expiration : None 
+		};
+		Registration::<T>::insert(&name_hash, state);
+	}: assign(RawOrigin::Signed(caller.clone()), name_hash, Some(caller.clone()))
+	verify {
+		assert_eq!(Lookup::<T>::get(&name_hash), Some(caller.clone()));
+	}
+
+	// Benchmark unassign with the worst possible scenario
+	// ie. When the caller is the target and can unassign
+	unassign {
+		// Test data
+		let name_hash = blake2_256(b"shawntabrizi");
+		let caller : T::AccountId = whitelisted_caller();
+		// set caller as the target of name
+		Lookup::<T>::insert(&name_hash, caller.clone());
+	}: unassign(RawOrigin::Signed(caller.clone()), name_hash)
+	verify {
+		assert_eq!(Lookup::<T>::get(&name_hash), None);
+	}
+
+	// Benchmark extend_ownership with the worst possible scenario
+	// ie. When the name is Owned, has an expiration date and extension is enabled
+	extend_ownership {
+		// Test data
+		let name_hash = blake2_256(b"shawntabrizi");
+		let caller : T::AccountId = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, 10.into());
+		// set caller as the owner of name
+		let state = NameStatus::<T::AccountId, T::BlockNumber, BalanceOf<T>>::Owned{ 
+			who : caller.clone(), 
+			expiration : Some(0.into()) 
+		};
+		Registration::<T>::insert(&name_hash, state);
+	}: extend_ownership(RawOrigin::Signed(caller.clone()), name_hash)
+	verify {
+		let stored_data = Registration::<T>::get(&name_hash);
+		assert_eq!(stored_data, NameStatus::Owned {
+			who: caller.clone(),
+			expiration : Some(100.into())
+		});
+		assert_eq!(T::Currency::free_balance(&caller), 5.into());
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::mock::{new_test_ext, Test};
-	use crate::tests::run_to_block;
+	//use crate::tests::run_to_block;
 	use frame_support::assert_ok;
 
 	#[test]
@@ -94,6 +161,38 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			//run_to_block(12);
 			assert_ok!(test_benchmark_claim::<Test>());
+		});
+	}
+
+	#[test]
+	fn free() {
+		new_test_ext().execute_with(|| {
+			//run_to_block(12);
+			assert_ok!(test_benchmark_free::<Test>());
+		});
+	}
+
+	#[test]
+	fn assign() {
+		new_test_ext().execute_with(|| {
+			//run_to_block(12);
+			assert_ok!(test_benchmark_assign::<Test>());
+		});
+	}
+
+	#[test]
+	fn unassign() {
+		new_test_ext().execute_with(|| {
+			//run_to_block(12);
+			assert_ok!(test_benchmark_unassign::<Test>());
+		});
+	}
+
+	#[test]
+	fn extend_ownership() {
+		new_test_ext().execute_with(|| {
+			//run_to_block(12);
+			assert_ok!(test_benchmark_extend_ownership::<Test>());
 		});
 	}
 }
