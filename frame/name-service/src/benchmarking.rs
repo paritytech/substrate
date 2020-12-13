@@ -80,12 +80,14 @@ benchmarks! {
 		// Test data
 		let name_hash = blake2_256(b"shawntabrizi");
 		let current_bidder : T::AccountId = whitelisted_caller();
-		assert!(true);
-	}: {
-		assert!(true);
-	}
+		T::Currency::make_free_balance_be(&current_bidder, 10.into());
+		// bid for the name
+		NameService::<T>::bid(RawOrigin::Signed(current_bidder.clone()).into(), name_hash, 5.into())?;
+	}: free(RawOrigin::Signed(current_bidder.clone()), name_hash)
 	verify {
-		assert!(true);
+		let stored_data = Registration::<T>::get(&name_hash);
+		assert_eq!(stored_data, NameStatus::default());
+		assert_eq!(T::Currency::total_balance(&current_bidder), 5.into());
 	}
 
 	// Benchmark assign with the worst possible scenario
@@ -175,7 +177,6 @@ mod tests {
 	#[test]
 	fn assign() {
 		new_test_ext().execute_with(|| {
-			//run_to_block(12);
 			assert_ok!(test_benchmark_assign::<Test>());
 		});
 	}
@@ -183,7 +184,6 @@ mod tests {
 	#[test]
 	fn unassign() {
 		new_test_ext().execute_with(|| {
-			//run_to_block(12);
 			assert_ok!(test_benchmark_unassign::<Test>());
 		});
 	}
@@ -191,7 +191,6 @@ mod tests {
 	#[test]
 	fn extend_ownership() {
 		new_test_ext().execute_with(|| {
-			//run_to_block(12);
 			assert_ok!(test_benchmark_extend_ownership::<Test>());
 		});
 	}
