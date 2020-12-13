@@ -21,20 +21,38 @@
 
 use super::*;
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use sp_core::blake2_256;
 
 use crate::Module as NameService;
+
+const SEED: u32 = 1;
 
 benchmarks! {
 	_ { }
 
-	empty_benchmark {
-		assert!(true);
-	}: {
-        assert!(true);
-    }
+	// Benchmark bid with the worst possible scenario
+	// ie. When the bid is ongoing and new_bidder != current_bidder
+	bid {
+		// Test data
+		let name_hash = blake2_256(b"shawntabrizi");
+		let current_bidder : T::AccountId = account("current_bidder", 0, SEED);
+		let new_bidder : T::AccountId = whitelisted_caller();
+
+		T::Currency::make_free_balance_be(&current_bidder, 5.into());
+		T::Currency::make_free_balance_be(&new_bidder, 10.into());
+
+		NameService::<T>::bid(RawOrigin::Signed(current_bidder.clone()).into(), name_hash, 5.into())?;
+	}: bid(RawOrigin::Signed(new_bidder.clone()), name_hash, 10.into())
 	verify {
-		assert!(true);
+		let stored_data = Registration::<T>::get(&name_hash);
+		assert_eq!(stored_data, NameStatus::Bidding {
+			who: new_bidder.clone(),
+			bid_end: 11.into(),
+			amount: 10.into()
+		});
+		assert_eq!(T::Currency::free_balance(&current_bidder), 5.into());
+		assert_eq!(T::Currency::free_balance(&new_bidder), 0.into());
 	}
 }
 
@@ -45,9 +63,9 @@ mod tests {
 	use frame_support::assert_ok;
 
 	#[test]
-	fn test_benchmarks() {
+	fn bid() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_empty_benchmark::<Test>());
+			assert_ok!(test_benchmark_bid::<Test>());
 		});
 	}
 }
