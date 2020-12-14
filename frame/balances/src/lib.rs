@@ -414,9 +414,7 @@ decl_storage! {
 			}
 
 			// ensure no duplicates exist.
-			let mut endowed_accounts = config.balances.iter().map(|(x, _)| x).cloned().collect::<Vec<_>>();
-			endowed_accounts.sort();
-			endowed_accounts.dedup();
+			let endowed_accounts = config.balances.iter().map(|(x, _)| x).cloned().collect::<std::collections::HashSet<_>>();
 
 			assert!(endowed_accounts.len() == config.balances.len(), "duplicate balances in genesis.");
 
