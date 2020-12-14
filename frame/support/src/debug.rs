@@ -134,7 +134,7 @@ macro_rules! runtime_print {
 			use core::fmt::Write;
 			let mut w = $crate::sp_std::Writer::default();
 			let _ = core::write!(&mut w, $($arg)+);
-			sp_io::misc::print_utf8(&w.inner())
+			$crate::sp_io::misc::print_utf8(&w.inner())
 		}
 	}
 }

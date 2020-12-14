@@ -100,7 +100,7 @@ pub enum Role {
 ///
 ///    5. Allow querying of the collected addresses via the [`crate::Service`].
 pub struct Worker<Client, Network, Block, DhtEventStream> {
-	/// Channel receiver for messages send by a [`Service`].
+	/// Channel receiver for messages send by a [`crate::Service`].
 	from_service: Fuse<mpsc::Receiver<ServicetoWorkerMsg>>,
 
 	client: Arc<Client>,
@@ -615,8 +615,8 @@ where
 }
 
 /// NetworkProvider provides [`Worker`] with all necessary hooks into the
-/// underlying Substrate networking. Using this trait abstraction instead of [`NetworkService`]
-/// directly is necessary to unit test [`Worker`].
+/// underlying Substrate networking. Using this trait abstraction instead of
+/// [`sc_network::NetworkService`] directly is necessary to unit test [`Worker`].
 #[async_trait]
 pub trait NetworkProvider: NetworkStateInfo {
 	/// Modify a peerset priority group.
