@@ -20,36 +20,44 @@
 #![cfg(test)]
 
 use sp_runtime::{
-	traits::IdentityLookup,
+	traits::{Block as _, IdentityLookup},
 	testing::Header,
 };
 use sp_core::H256;
 use sp_io;
-use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
-use frame_support::traits::StorageMapShim;
+use frame_support::{parameter_types, StorageValue};
+use frame_support::traits::{Get, StorageMapShim};
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
-use crate::{GenesisConfig, Module, Config, decl_tests, tests::CallWithDispatchInfo};
+use std::cell::RefCell;
+use crate::{Pallet, Config, decl_tests};
 use pallet_transaction_payment::CurrencyAdapter;
 
 use frame_system as system;
-impl_outer_origin!{
-	pub enum Origin for Test {}
-}
+use crate as balances;
 
-mod balances {
-	pub use crate::Event;
-}
+pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
-impl_outer_event! {
-	pub enum Event for Test {
-		system<T>,
-		balances<T>,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic
+	{
+		System: system::{Pallet, Call, Event<T>, Config},
+		Balances: balances::{Pallet, Call, Event<T>, Config<T>},
 	}
+);
+
+thread_local! {
+	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 }
 
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Test;
+pub struct ExistentialDeposit;
+impl Get<u64> for ExistentialDeposit {
+	fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
+}
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -64,7 +72,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = CallWithDispatchInfo;
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
@@ -73,10 +81,10 @@ impl frame_system::Config for Test {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = super::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnKilledAccount = Module<Test>;
+	type OnKilledAccount = Pallet<Test>;
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 }
@@ -84,7 +92,7 @@ parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
 impl pallet_transaction_payment::Config for Test {
-	type OnChargeTransaction = CurrencyAdapter<Module<Test>, ()>;
+	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
@@ -137,7 +145,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
+		balances::GenesisConfig::<Test> {
 			balances: if self.monied {
 				vec![
 					(1, 10 * self.existential_deposit),
@@ -171,8 +179,8 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 				events(),
 				[
 					Event::system(system::RawEvent::NewAccount(1)),
-					Event::balances(RawEvent::Endowed(1, 100)),
-					Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+					Event::balances(balances::Event::Endowed(1, 100)),
+					Event::balances(balances::Event::BalanceSet(1, 100, 0)),
 				]
 			);
 
@@ -186,7 +194,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::balances(RawEvent::DustLost(1, 1)),
+					Event::balances(balances::Event::DustLost(1, 1)),
 					Event::system(system::RawEvent::KilledAccount(1))
 				]
 			);

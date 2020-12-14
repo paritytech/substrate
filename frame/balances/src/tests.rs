@@ -52,10 +52,7 @@ macro_rules! decl_tests {
 		const ID_1: LockIdentifier = *b"1       ";
 		const ID_2: LockIdentifier = *b"2       ";
 
-		pub type System = frame_system::Module<$test>;
-		pub type Balances = Module<$test>;
-
-		pub const CALL: &<$test as frame_system::Config>::Call = &$crate::tests::CallWithDispatchInfo;
+		pub const CALL: &<$test as frame_system::Config>::Call = &Call::System(system::Call::remark(vec![]));
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
@@ -492,7 +489,7 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
 				assert_eq!(
 					last_event(),
-					Event::balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
+					Event::balances(balances::Event::ReserveRepatriated(1, 2, 41, Status::Free)),
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
@@ -634,7 +631,7 @@ macro_rules! decl_tests {
 		fn cannot_set_genesis_value_below_ed() {
 			($existential_deposit).with(|v| *v.borrow_mut() = 11);
 			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>().unwrap();
-			let _ = GenesisConfig::<$test> {
+			let _ = balances::GenesisConfig::<$test> {
 				balances: vec![(1, 10)],
 			}.assimilate_storage(&mut t).unwrap();
 		}
@@ -713,7 +710,7 @@ macro_rules! decl_tests {
 
 					assert_eq!(
 						last_event(),
-						Event::balances(RawEvent::Reserved(1, 10)),
+						Event::balances(balances::Event::Reserved(1, 10)),
 					);
 
 					System::set_block_number(3);
@@ -721,7 +718,7 @@ macro_rules! decl_tests {
 
 					assert_eq!(
 						last_event(),
-						Event::balances(RawEvent::Unreserved(1, 5)),
+						Event::balances(balances::Event::Unreserved(1, 5)),
 					);
 
 					System::set_block_number(4);
@@ -730,7 +727,7 @@ macro_rules! decl_tests {
 					// should only unreserve 5
 					assert_eq!(
 						last_event(),
-						Event::balances(RawEvent::Unreserved(1, 5)),
+						Event::balances(balances::Event::Unreserved(1, 5)),
 					);
 				});
 		}
@@ -746,9 +743,9 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::system(system::RawEvent::NewAccount(1)),
-							Event::balances(RawEvent::Endowed(1, 100)),
-							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+							Event::system(system::Event::NewAccount(1)),
+							Event::balances(balances::Event::Endowed(1, 100)),
+							Event::balances(balances::Event::BalanceSet(1, 100, 0)),
 						]
 					);
 
@@ -757,8 +754,8 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::balances(RawEvent::DustLost(1, 99)),
-							Event::system(system::RawEvent::KilledAccount(1))
+							Event::balances(balances::Event::DustLost(1, 99)),
+							Event::system(system::Event::KilledAccount(1))
 						]
 					);
 				});
@@ -775,9 +772,9 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::system(system::RawEvent::NewAccount(1)),
-							Event::balances(RawEvent::Endowed(1, 100)),
-							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+							Event::system(system::Event::NewAccount(1)),
+							Event::balances(balances::Event::Endowed(1, 100)),
+							Event::balances(balances::Event::BalanceSet(1, 100, 0)),
 						]
 					);
 
