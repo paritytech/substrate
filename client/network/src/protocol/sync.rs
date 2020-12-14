@@ -1541,7 +1541,7 @@ fn peer_block_request<B: BlockT>(
 		trace!(
 			target: "sync",
 			"Requesting pre-finalized chain from {:?}, common={}, finalized={}, peer best={}, our best={}",
-			id, finalized, peer.common_number, peer.best_number, best_num,
+			id, peer.common_number, finalized, peer.best_number, best_num,
 		);
 	}
 	if let Some(range) = blocks.needed_blocks(
