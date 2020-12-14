@@ -28,7 +28,7 @@ use sp_std::{
 	vec::Vec,
 };
 
-pub use sp_externalities::{Externalities, ExternalitiesExt, WorkerResult};
+pub use sp_externalities::{Externalities, ExternalitiesExt, WorkerResult, WorkerDeclaration};
 
 /// Code execution engine.
 #[cfg(feature = "std")]
@@ -207,6 +207,7 @@ pub trait RuntimeSpawn: Send {
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
 		kind: u8,
+		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64;
 
@@ -220,6 +221,7 @@ pub trait RuntimeSpawn: Send {
 		func: u32,
 		payload: Vec<u8>,
 		kind: u8,
+		declaration: WorkerDeclaration,
 		ext: &mut dyn Externalities,
 	) -> u64;
 	

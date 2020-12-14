@@ -64,7 +64,8 @@ mod async_externalities;
 #[cfg(feature = "std")]
 pub use async_externalities::new_async_externalities;
 pub use async_externalities::{new_inline_only_externalities, AsyncExternalities, AsyncExt};
-
+pub use sp_externalities::{WorkerResult, WorkerDeclaration};
+pub use sp_io::Crossing;
 use sp_std::vec::Vec;
 
 /// Differents workers execution mode `AsyncState`, it results
@@ -83,6 +84,18 @@ pub enum WorkerType {
 	/// In this case when joining we return an identifier of the
 	/// state at launch.
 	ReadAtSpawn = 2,
+
+	/// State between main thread and child workers must be the same.
+	/// We return `None` on join if some state access break this asumption:
+	/// Any access to a variable that was modified in parent worker.
+	ReadOptimistic = 3,
+
+	/// State between main thread and child workers must be the same.
+	/// When starting a child worker we declare exclusive write access
+	/// over the keyspace for both worker.
+	/// Writing in undeclared location or reading a location declared as writable
+	/// in another worker will result in a panic.
+	ReadDeclarative = 4,
 }
 
 impl Default for WorkerType {
@@ -110,6 +123,8 @@ impl WorkerType {
 			WorkerType::Stateless => false,
 			WorkerType::ReadLastBlock => false,
 			WorkerType::ReadAtSpawn => true,
+			WorkerType::ReadDeclarative => true,
+			WorkerType::ReadOptimistic => true,
 		}
 	}
 }
@@ -145,7 +160,7 @@ pub fn set_capacity(capacity: u32) {
 mod inner {
 	use sp_externalities::{Externalities, ExternalitiesExt as _};
 	use sp_core::traits::RuntimeSpawnExt;
-	use crate::WorkerType;
+	use crate::{WorkerType, WorkerDeclaration};
 	use super::DataJoinHandle;
 
 	/// Spawn new runtime task (native).
@@ -153,6 +168,7 @@ mod inner {
 		entry_point: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
 		kind: WorkerType,
+		declaration: WorkerDeclaration, // TODO consider splitting spawn
 	) -> DataJoinHandle {
 		let handle = sp_externalities::with_externalities(|mut ext|{
 			let ext_unsafe = ext as *mut dyn Externalities;
@@ -163,7 +179,7 @@ mod inner {
 			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
 			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
 			// a given id, to make this safer.
-			let result = runtime_spawn.spawn_call_native(entry_point, data, kind as u8, ext_unsafe);
+			let result = runtime_spawn.spawn_call_native(entry_point, data, kind as u8, declaration, ext_unsafe);
 			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 			// Not necessary (same lifetime as runtime_spawn), but shows intent to keep
 			// ext alive as long as ext_unsafe is in scope.
@@ -179,7 +195,7 @@ mod inner {
 mod inner {
 	use core::mem;
 	use sp_std::prelude::*;
-	use crate::WorkerType;
+	use crate::{WorkerType, WorkerDeclaration};
 	use super::DataJoinHandle;
 
 	/// Dispatch wrapper for wasm blob.
@@ -207,6 +223,7 @@ mod inner {
 		entry_point: fn(Vec<u8>) -> Vec<u8>,
 		payload: Vec<u8>,
 		kind: WorkerType,
+		declaration: WorkerDeclaration, // TODO consider splitting spawn
 	) -> DataJoinHandle {
 		let func_ptr: usize = unsafe { mem::transmute(entry_point) };
 
@@ -215,6 +232,7 @@ mod inner {
 			func_ptr as u32,
 			payload,
 			kind as u8,
+			sp_io::task_declaration(declaration),
 		);
 		DataJoinHandle { handle }
 	}

@@ -28,7 +28,7 @@ use sp_core::{
 	traits::Externalities, Blake2Hasher,
 };
 use codec::Encode;
-use sp_externalities::{TaskId, AsyncBackend, WorkerResult};
+use sp_externalities::{TaskId, AsyncBackend, WorkerResult, WorkerDeclaration};
 
 /// Trait for inspecting state in any backend.
 ///
@@ -209,7 +209,11 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		self.backend.async_backend()
 	}
 
-	fn get_async_backend(&mut self, _marker: TaskId) -> Box<dyn AsyncBackend> {
+	fn get_async_backend(
+		&mut self,
+		_marker: TaskId,
+		_decl: WorkerDeclaration,
+	) -> Box<dyn AsyncBackend> {
 		self.get_past_async_backend()
 	}
 

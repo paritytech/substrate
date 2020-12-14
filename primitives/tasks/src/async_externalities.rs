@@ -46,7 +46,8 @@ use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	traits::{SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
-use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend, WorkerResult};
+use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend,
+	WorkerResult, AccessDeclaration, WorkerDeclaration};
 use crate::WorkerType;
 use sp_state_machine::ext_guard as guard;
 use sp_state_machine::trace;
@@ -187,14 +188,30 @@ type StorageKey = Vec<u8>;
 type StorageValue = Vec<u8>;
 
 impl AsyncExternalities {
-	fn guard_stateless(&self, panic: &'static str) {
+	fn guard_stateless(
+		&self,
+		panic: &'static str,
+		child_info: Option<&ChildInfo>,
+		key: &[u8],
+	) {
 		match self.state.kind {
 			WorkerType::Stateless => {
 				panic!(panic)
 			},
 			WorkerType::ReadLastBlock
-			| WorkerType::ReadAtSpawn => (),
+			| WorkerType::ReadAtSpawn
+			| WorkerType::ReadOptimistic => (),
+			WorkerType::ReadDeclarative => self.guard_read(panic, child_info, key),
 		}
+	}
+
+	fn guard_read(
+		&self,
+		panic: &'static str,
+		child_info: Option<&ChildInfo>,
+		key: &[u8],
+	) {
+		unimplemented!("TODO check against parent write access");
 	}
 
 	/// Depending on kind the result may be already
@@ -211,7 +228,7 @@ impl Externalities for AsyncExternalities {
 	}
 
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
-		self.guard_stateless("`storage`: should not be used in async externalities!");
+		self.guard_stateless("`storage`: should not be used in async externalities!", None, key);
 		let _guard = guard();
 		let result = self.state.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.state.backend.storage(key));
@@ -234,7 +251,11 @@ impl Externalities for AsyncExternalities {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageValue> {
-		self.guard_stateless("`child_storage`: should not be used in async externalities!");
+		self.guard_stateless(
+			"`child_storage`: should not be used in async externalities!",
+			Some(child_info),
+			key,
+		);
 		let _guard = guard();
 		let result = self.state.overlay
 			.child_storage(child_info, key)
@@ -261,7 +282,7 @@ impl Externalities for AsyncExternalities {
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		self.guard_stateless("`next_storage_key`: should not be used in async externalities!");
+		self.guard_stateless("`next_storage_key`: should not be used in async externalities!", None, key);
 		let next_backend_key = self.state.backend.next_storage_key(key);
 		let next_overlay_key_change = self.state.overlay.next_storage_key_change(key);
 
@@ -281,7 +302,11 @@ impl Externalities for AsyncExternalities {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageKey> {
-		self.guard_stateless("`next_child_storage_key`: should not be used in async externalities!");
+		self.guard_stateless(
+			"`next_child_storage_key`: should not be used in async externalities!",
+			Some(child_info),
+			key,
+		);
 		let next_backend_key = self.state.backend.next_child_storage_key(child_info, key);
 		let next_overlay_key_change = self.state.overlay.next_child_storage_key_change(
 			child_info.storage_key(),
@@ -398,6 +423,8 @@ impl Externalities for AsyncExternalities {
 	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
 		match self.state.kind {
 			WorkerType::Stateless
+			| WorkerType::ReadOptimistic
+			| WorkerType::ReadDeclarative
 			| WorkerType::ReadAtSpawn => {
 				panic!("Spawning a ReadLastBlock worker is only possible from a ReadLastBlock worker");
 			},
@@ -407,18 +434,29 @@ impl Externalities for AsyncExternalities {
 		self.state.backend.async_backend()
 	}
 
-	fn get_async_backend(&mut self, marker: TaskId) -> Box<dyn AsyncBackend> {
+	fn get_async_backend(
+		&mut self,
+		marker: TaskId,
+		declaration: WorkerDeclaration,
+	) -> Box<dyn AsyncBackend> {
 		match self.state.kind {
 			WorkerType::Stateless
 			| WorkerType::ReadLastBlock => {
 				panic!("Spawning a ReadAtSpawn worker is only possible from a ReadAtSpawn worker");
 			},
-			WorkerType::ReadAtSpawn => (),
+			WorkerType::ReadOptimistic
+			| WorkerType::ReadDeclarative
+			| WorkerType::ReadAtSpawn => (),
 		}
 
 		self.state.overlay.set_marker(marker);
 
-		self.state.backend.async_backend()
+		let backend = self.state.backend.async_backend();
+		// TODO backend at
+		// backend.state.overlay.set_child_declaration(declaration.clone());
+		self.state.overlay.set_parent_declaration(declaration);
+
+		backend
 	}
 
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {

@@ -29,7 +29,7 @@ use sp_core::{
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{
 	Externalities, Extensions, Extension, ExtensionStore, AsyncBackend, TaskId,
-	WorkerResult,
+	WorkerResult, WorkerDeclaration,
 };
 use codec::{Decode, Encode, EncodeAppend};
 
@@ -677,13 +677,20 @@ where
 		self.backend.async_backend()
 	}
 
-	fn get_async_backend(&mut self, marker: TaskId) -> Box<dyn AsyncBackend> {
+	fn get_async_backend(
+		&mut self,
+		marker: TaskId,
+		declaration: WorkerDeclaration,
+	) -> Box<dyn AsyncBackend> {
 		let backend = self.get_past_async_backend();
+
 		self.overlay.set_marker(marker);
 		let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
 			backend,
 			self.overlay,
+			&declaration,
 		));
+		self.overlay.set_parent_declaration(declaration);
 		backend
 	}
 

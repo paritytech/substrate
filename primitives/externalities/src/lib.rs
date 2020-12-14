@@ -279,7 +279,12 @@ pub trait Externalities: ExtensionStore {
 	/// Adding this checkpoint state allows externalities to kill all tasks
 	/// associated with this state if it gets dropped (by transactional
 	/// rollback).
-	fn get_async_backend(&mut self, marker: TaskId) -> Box<dyn AsyncBackend>;
+	/// A worker declaration also be added to filter access on workers.
+	fn get_async_backend(
+		&mut self,
+		marker: TaskId,
+		declaration: WorkerDeclaration,
+	) -> Box<dyn AsyncBackend>;
 
 	/// Resolve worker result does update externality state
 	/// and also apply rules relative to the exernality state.
@@ -397,6 +402,31 @@ impl AsyncBackend for () {
 	fn async_backend(&self) -> Box<dyn AsyncBackend> {
 		Box::new(())
 	}
+}
+
+/// Access filter on storage when spawning worker.
+#[derive(Debug, Clone, codec::Encode, codec::Decode)]
+pub enum WorkerDeclaration {
+	/// The worker type need no declaration.
+	None,
+
+	/// Parent write access only.
+	ParentWrite(AccessDeclaration),
+
+	/// Child worker read access only.
+	ChildRead(AccessDeclaration),
+}
+
+/// Access filter on storage.
+#[derive(Debug, Clone, codec::Encode, codec::Decode)]
+pub struct AccessDeclaration {
+	/// Lock over a full prefix.
+	///
+	/// Gives access to all key starting with any of the declared prefixes.
+	prefixes_lock: Vec<Vec<u8>>,
+
+	/// Lock only over a given key.
+	keys_lock: Vec<Vec<u8>>,
 }
 
 /// Extension for the [`Externalities`] trait.

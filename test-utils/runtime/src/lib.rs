@@ -31,7 +31,7 @@ use sp_application_crypto::{ed25519, sr25519, ecdsa, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
 use sp_trie::{PrefixedMemoryDB, StorageProof};
 use sp_trie::trie_types::{TrieDB, TrieDBMut};
-
+use sp_tasks::{WorkerType, WorkerDeclaration};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 use sp_runtime::{
 	create_runtime_str, impl_opaque_keys,
@@ -1224,7 +1224,7 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		assert!(sp_io::storage::get(b"value3").is_some());
 		assert!(sp_io::storage::get(b"xyz").is_none());
 		sp_tasks::set_capacity(4);
-		let handle = sp_tasks::spawn(worker_test, Vec::new(), sp_tasks::WorkerType::ReadAtSpawn);
+		let handle = sp_tasks::spawn(worker_test, Vec::new(), WorkerType::ReadAtSpawn, WorkerDeclaration::None);
 		sp_io::storage::set(b"xyz", b"test");
 		assert!(sp_io::storage::get(b"xyz").is_some());
 		let res = handle.join().expect("expected result for task");
@@ -1241,29 +1241,29 @@ fn test_tasks() {
 		result.push(42);
 		result
 	}
-	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::WorkerType::ReadAtSpawn);
+	let handle = sp_tasks::spawn(todo, Vec::new(), WorkerType::ReadAtSpawn, WorkerDeclaration::None);
 	let res = handle.join().expect("expected result for task");
 	assert!(res.get(0) == Some(&42));
 
 	fn tokill(_inp: Vec<u8>) -> Vec<u8> {
 		loop { }
 	}
-	let handle = sp_tasks::spawn(tokill, Vec::new(), sp_tasks::WorkerType::ReadAtSpawn);
+	let handle = sp_tasks::spawn(tokill, Vec::new(), WorkerType::ReadAtSpawn, WorkerDeclaration::None);
 	handle.dismiss();
 	fn do_panic(_inp: Vec<u8>) -> Vec<u8> {
 		panic!("Expected test panic.");
 	}
-	let handle = sp_tasks::spawn(do_panic, Vec::new(), sp_tasks::WorkerType::ReadAtSpawn);
+	let handle = sp_tasks::spawn(do_panic, Vec::new(), WorkerType::ReadAtSpawn, WorkerDeclaration::None);
 	// Dismiss don't panic
 	handle.dismiss();
 
 	sp_io::storage::start_transaction();
-	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::WorkerType::ReadAtSpawn);
+	let handle = sp_tasks::spawn(todo, Vec::new(), WorkerType::ReadAtSpawn, WorkerDeclaration::None);
 	// invalidate state for handle
 	sp_io::storage::rollback_transaction();
 	assert!(handle.join().is_none());
 	sp_io::storage::start_transaction();
-	let handle = sp_tasks::spawn(todo, Vec::new(), sp_tasks::WorkerType::ReadLastBlock);
+	let handle = sp_tasks::spawn(todo, Vec::new(), WorkerType::ReadLastBlock, WorkerDeclaration::None);
 	sp_io::storage::rollback_transaction();
 	// state stay correct for last block
 	assert!(handle.join().is_some());

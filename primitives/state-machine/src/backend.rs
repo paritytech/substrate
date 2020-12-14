@@ -30,7 +30,7 @@ use crate::{
 use sp_std::{vec::Vec, boxed::Box};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
-use sp_externalities::AsyncBackend;
+use sp_externalities::{AsyncBackend, WorkerDeclaration};
 use super::EXT_NOT_ALLOWED_TO_FAIL;
 
 /// A state backend is used to read state data and can have changes committed
@@ -354,6 +354,7 @@ impl AsyncBackend for AsyncBackendAt {
 		let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
 			backend,
 			&self.overlay,
+			&WorkerDeclaration::None,
 		));
 		backend
 	}
@@ -365,11 +366,15 @@ impl AsyncBackendAt {
 	/// This is cloning the current changes from the parent worker. That is not a light
 	/// operation, but at this state of the implementation this is the easiest and
 	/// safest way to proceed.
-	pub fn new(backend: Box<dyn AsyncBackend>, overlay: &crate::OverlayedChanges) -> Self {
-		AsyncBackendAt {
-			backend,
-			overlay: overlay.clone(),
-		}
+	pub fn new(
+		backend: Box<dyn AsyncBackend>,
+		overlay: &crate::OverlayedChanges,
+		access: &WorkerDeclaration,
+	) -> Self {
+		let mut overlay = overlay.clone();
+		overlay.set_child_declaration(access.clone());
+
+		AsyncBackendAt { backend, overlay }
 	}
 }
 

@@ -61,7 +61,7 @@ use sp_runtime_interface::pass_by::PassBy;
 
 use codec::{Encode, Decode};
 
-use sp_externalities::{ExternalitiesExt, Externalities};
+use sp_externalities::{ExternalitiesExt, Externalities, WorkerDeclaration};
 
 #[cfg(feature = "std")]
 mod batch_verifier;
@@ -1251,6 +1251,11 @@ pub trait Sandbox {
 	}
 }
 
+/// Cast declaration to sp_io crossing.
+pub fn task_declaration(declaration: WorkerDeclaration) -> Crossing<WorkerDeclaration> {
+	Crossing(declaration)
+}
+
 /// Wasm host functions for managing tasks.
 ///
 /// This should not be used directly. Use `sp_tasks` for running parallel tasks instead.
@@ -1272,7 +1277,14 @@ pub trait RuntimeTasks {
 	/// ost function for spawning task.
 	///
 	/// This should not be used directly. Use `sp_tasks::spawn` instead.
-	fn spawn(&mut self, dispatcher_ref: u32, entry: u32, payload: Vec<u8>, kind: u8) -> u64 {
+	fn spawn(
+		&mut self,
+		dispatcher_ref: u32,
+		entry: u32,
+		payload: Vec<u8>,
+		kind: u8,
+		declaration: Crossing<WorkerDeclaration>,
+	) -> u64 {
 		let ext_unsafe = *self as *mut dyn Externalities;
 		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
 			.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
@@ -1281,7 +1293,7 @@ pub trait RuntimeTasks {
 		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
 		// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
 		// a given id, to make this safer.
-		let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, kind, ext_unsafe);
+		let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, kind, declaration.into_inner(), ext_unsafe);
 		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 		result
 	}

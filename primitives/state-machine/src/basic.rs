@@ -33,7 +33,8 @@ use sp_core::{
 };
 use log::warn;
 use codec::Encode;
-use sp_externalities::{Extensions, Extension, AsyncBackend, TaskId, WorkerResult};
+use sp_externalities::{Extensions, Extension, AsyncBackend, TaskId,
+	WorkerResult, WorkerDeclaration};
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
@@ -337,7 +338,11 @@ impl Externalities for BasicExternalities {
 		unimplemented!("TODO empty one")
 	}
 
-	fn get_async_backend(&mut self, _marker: TaskId) -> Box<dyn AsyncBackend> {
+	fn get_async_backend(
+		&mut self,
+		_marker: TaskId,
+		_decl: WorkerDeclaration,
+	) -> Box<dyn AsyncBackend> {
 		unimplemented!("TODO from self.storage cloned")
 	}
 
