@@ -295,6 +295,39 @@ impl<Block: BlockT> Blockchain<Block> {
 		Ok(())
 	}
 
+	fn append_justification(&self, id: BlockId<Block>, justification: Justification)
+		-> sp_blockchain::Result<()>
+	{
+		let hash = self.expect_block_hash_from_id(&id)?;
+		let mut storage = self.storage.write();
+
+		let block = storage
+			.blocks
+			.get_mut(&hash)
+			.expect("hash was fetched from a block in the db; qed");
+
+		let block_justification = match block {
+			StoredBlock::Header(_, ref mut j) | StoredBlock::Full(_, ref mut j) => j
+		};
+
+		if let Some(stored_justifications) = block_justification {
+			if stored_justifications
+				.0
+				.iter()
+				.find(|stored| stored.0 == justification.0)
+				.is_some()
+			{
+				// WIP(JON): Maybe create new error type for this
+				return Err(sp_blockchain::Error::BadJustification("Duplicate".into()));
+			}
+			stored_justifications.0.push(justification);
+		} else {
+			*block_justification = Some(Justifications::from(justification));
+		};
+
+		Ok(())
+	}
+
 	fn write_aux(&self, ops: Vec<(Vec<u8>, Option<Vec<u8>>)>) {
 		let mut storage = self.storage.write();
 		for (k, v) in ops {
@@ -695,11 +728,10 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 
 	fn append_justification(
 		&self,
-		_block: BlockId<Block>,
-		_justification: Justification,
+		block: BlockId<Block>,
+		justification: Justification,
 	) -> sp_blockchain::Result<()> {
-		// WIP(JON)
-		todo!();
+		self.blockchain.append_justification(block, justification)
 	}
 
 	fn blockchain(&self) -> &Self::Blockchain {
@@ -771,4 +803,66 @@ pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 	}
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::{NewBlockState, in_mem::Blockchain};
+	use sp_api::{BlockId, HeaderT};
+	use sp_runtime::{ConsensusEngineId, Justifications};
+	use sp_blockchain::Backend;
+	use substrate_test_runtime::{Block, Header, H256};
+
+	pub const ID1: ConsensusEngineId = *b"TST1";
+	pub const ID2: ConsensusEngineId = *b"TST2";
+
+	fn header(number: u64) -> Header {
+		let parent_hash = match number {
+			0 => Default::default(),
+			_ => header(number - 1).hash(),
+		};
+		Header::new(number, H256::from_low_u64_be(0), H256::from_low_u64_be(0), parent_hash, Default::default())
+	}
+
+	fn test_blockchain() -> Blockchain<Block> {
+		let blockchain = Blockchain::<Block>::new();
+		let just0 = Some(Justifications(vec![(ID1, vec![0])]));
+		let just1 = Some(Justifications(vec![(ID1, vec![1])]));
+		let just2 = None;
+		let just3 = Some(Justifications(vec![(ID1, vec![3])]));
+		blockchain.insert(header(0).hash(), header(0), just0, None, NewBlockState::Final).unwrap();
+		blockchain.insert(header(1).hash(), header(1), just1, None, NewBlockState::Final).unwrap();
+		blockchain.insert(header(2).hash(), header(2), just2, None, NewBlockState::Best).unwrap();
+		blockchain.insert(header(3).hash(), header(3), just3, None, NewBlockState::Final).unwrap();
+		blockchain
+	}
+
+	#[test]
+	fn append_and_retreive_justifications() {
+		let blockchain = test_blockchain();
+		let last_finalized = blockchain.last_finalized().unwrap();
+		let block = BlockId::Hash(last_finalized);
+
+		blockchain.append_justification(block, (ID2, vec![4])).unwrap();
+		assert_eq!(
+			blockchain.justification(block).unwrap(),
+			Some(Justifications(vec![
+				(ID1, vec![3]),
+				(ID2, vec![4]),
+			])),
+		);
+	}
+
+	#[test]
+	fn store_duplicate_justifications_is_forbidden() {
+		let blockchain = test_blockchain();
+		let last_finalized = blockchain.last_finalized().unwrap();
+		let block = BlockId::Hash(last_finalized);
+
+		blockchain.append_justification(block, (ID2, vec![0])).unwrap();
+		assert!(matches!(
+			blockchain.append_justification(block, (ID2, vec![1])),
+			Err(sp_blockchain::Error::BadJustification(_)),
+		));
+	}
 }
