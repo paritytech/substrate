@@ -59,8 +59,6 @@ use libp2p::kad::handler::KademliaHandlerProto;
 use libp2p::kad::QueryId;
 use libp2p::kad::record::{self, store::{MemoryStore, RecordStore}};
 #[cfg(not(target_os = "unknown"))]
-use libp2p::swarm::toggle::Toggle;
-#[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
@@ -206,15 +204,9 @@ impl DiscoveryConfig {
 			discovery_only_if_under_num,
 			#[cfg(not(target_os = "unknown"))]
 			mdns: if enable_mdns {
-				match Mdns::new() {
-					Ok(mdns) => Some(mdns).into(),
-					Err(err) => {
-						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
-						None.into()
-					}
-				}
+				MdnsWrapper::Instantiating(Mdns::new().boxed())
 			} else {
-				None.into()
+				MdnsWrapper::Disabled
 			},
 			allow_non_globals_in_dht,
 			known_external_addresses: LruHashSet::new(
@@ -234,7 +226,7 @@ pub struct DiscoveryBehaviour {
 	kademlias: HashMap<ProtocolId, Kademlia<MemoryStore>>,
 	/// Discovers nodes on the local network.
 	#[cfg(not(target_os = "unknown"))]
-	mdns: Toggle<Mdns>,
+	mdns: MdnsWrapper,
 	/// Stream that fires when we need to perform the next random Kademlia query.
 	next_kad_random_query: Delay,
 	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
@@ -783,6 +775,48 @@ fn protocol_name_from_protocol_id(id: &ProtocolId) -> Vec<u8> {
 	v.extend_from_slice(id.as_ref().as_bytes());
 	v.extend_from_slice(b"/kad");
 	v
+}
+
+/// [`Mdns::new`] returns a future. Instead of forcing [`DiscoveryConfig::finish`] and all its
+/// callers to be async, lazily instantiate [`Mdns`].
+#[cfg(not(target_os = "unknown"))]
+enum MdnsWrapper {
+	Instantiating(futures::future::BoxFuture<'static, std::io::Result<Mdns>>),
+	Ready(Mdns),
+	Disabled,
+}
+
+#[cfg(not(target_os = "unknown"))]
+impl MdnsWrapper {
+	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
+		match self {
+			MdnsWrapper::Instantiating(_) => Vec::new(),
+			MdnsWrapper::Ready(mdns) => mdns.addresses_of_peer(peer_id),
+			MdnsWrapper::Disabled => Vec::new(),
+		}
+	}
+
+	fn poll(
+		&mut self,
+		cx: &mut Context<'_>,
+		params: &mut impl PollParameters,
+	) -> Poll<NetworkBehaviourAction<void::Void, MdnsEvent>> {
+		loop {
+			match self {
+				MdnsWrapper::Instantiating(fut) => {
+					*self = match futures::ready!(fut.as_mut().poll(cx)) {
+						Ok(mdns) => MdnsWrapper::Ready(mdns),
+						Err(err) => {
+							warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
+							MdnsWrapper::Disabled
+						},
+					}
+				}
+				MdnsWrapper::Ready(mdns) => return mdns.poll(cx, params),
+				MdnsWrapper::Disabled => return Poll::Pending,
+			}
+		}
+	}
 }
 
 #[cfg(test)]

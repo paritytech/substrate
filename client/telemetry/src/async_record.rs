@@ -1,6 +1,6 @@
 //! # Internal types to ssync drain slog
 //! FIXME: REMOVE THIS ONCE THE PR WAS MERGE
-//! https://github.com/slog-rs/async/pull/14
+//! <https://github.com/slog-rs/async/pull/14>
 
 use slog::{Record, RecordStatic, Level, SingleKV, KV, BorrowedKV};
 use slog::{Serializer, OwnedKVList, Key};
