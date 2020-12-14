@@ -324,6 +324,8 @@ pub enum PollBlockAnnounceValidation<H> {
 	Failure {
 		/// Who sent the processed block announcement?
 		who: PeerId,
+		/// Should the peer be disconnected?
+		disconnect: bool,
 	},
 	/// The announcement does not require further handling.
 	Nothing {
@@ -354,6 +356,8 @@ enum PreValidateBlockAnnounce<H> {
 	Failure {
 		/// Who sent the processed block announcement?
 		who: PeerId,
+		/// Should the peer be disconnected?
+		disconnect: bool,
 	},
 	/// The announcement does not require further handling.
 	Nothing {
@@ -1215,14 +1219,14 @@ impl<B: BlockT> ChainSync<B> {
 					announce,
 					who,
 				},
-				Ok(Validation::Failure) => {
+				Ok(Validation::Failure { disconnect }) => {
 					debug!(
 						target: "sync",
 						"Block announcement validation of block {} from {} failed",
 						hash,
 						who,
 					);
-					PreValidateBlockAnnounce::Failure { who }
+					PreValidateBlockAnnounce::Failure { who, disconnect }
 				}
 				Err(e) => {
 					error!(target: "sync", "💔 Block announcement validation errored: {}", e);
@@ -1280,9 +1284,9 @@ impl<B: BlockT> ChainSync<B> {
 				self.peer_block_announce_validation_finished(&who);
 				return PollBlockAnnounceValidation::Nothing { is_best, who, header: announce.header }
 			},
-			PreValidateBlockAnnounce::Failure { who } => {
+			PreValidateBlockAnnounce::Failure { who, disconnect } => {
 				self.peer_block_announce_validation_finished(&who);
-				return PollBlockAnnounceValidation::Failure { who }
+				return PollBlockAnnounceValidation::Failure { who, disconnect }
 			},
 			PreValidateBlockAnnounce::Process { announce, is_new_best, who } => {
 				self.peer_block_announce_validation_finished(&who);
