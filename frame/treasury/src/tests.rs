@@ -22,7 +22,7 @@
 use super::*;
 use std::cell::RefCell;
 use frame_support::{
-	assert_noop, assert_ok, impl_outer_origin, impl_outer_event, parameter_types, weights::Weight,
+	assert_noop, assert_ok, impl_outer_origin, impl_outer_event, parameter_types,
 	traits::{OnInitialize}
 };
 use frame_system::{self as system};
