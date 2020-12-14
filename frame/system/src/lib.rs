@@ -192,27 +192,27 @@ pub mod pallet {
 		/// Account index (aka nonce) type. This stores the number of previous transactions
 		/// associated with a sender account.
 		type Index:
-		Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + AtLeast32Bit
-		+ Copy;
+			Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + AtLeast32Bit
+				+ Copy;
 
 		/// The block number type used by the runtime.
 		type BlockNumber:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay +
-		AtLeast32BitUnsigned + Default + Bounded + Copy + sp_std::hash::Hash +
-		sp_std::str::FromStr + MaybeMallocSizeOf;
+			Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay +
+			AtLeast32BitUnsigned + Default + Bounded + Copy + sp_std::hash::Hash +
+			sp_std::str::FromStr + MaybeMallocSizeOf;
 
 		/// The output of the `Hashing` function.
 		type Hash:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps +
-		Ord + Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> +
-		MaybeMallocSizeOf;
+			Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps +
+			Ord + Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> +
+			MaybeMallocSizeOf;
 
 		/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 		type Hashing: Hash<Output = Self::Hash>;
 
 		/// The user account identifier type for the runtime.
 		type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord
-		+ Default;
+			+ Default + ::scale_info::TypeInfo;
 
 		/// Converting trait to take a source type and convert to `AccountId`.
 		///
@@ -231,7 +231,7 @@ pub mod pallet {
 
 		/// The aggregated event type of the runtime.
 		type Event: Parameter + Member + From<Event<Self>> + Debug +
-		IsType<<Self as frame_system::Config>::Event>;
+			IsType<<Self as frame_system::Config>::Event>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]

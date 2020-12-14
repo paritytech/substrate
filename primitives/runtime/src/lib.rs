@@ -391,7 +391,7 @@ pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
 /// Reason why a dispatch call failed.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug, ::scale_info::TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.

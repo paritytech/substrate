@@ -261,11 +261,11 @@ where
 
 	/// Returns if the runtime was upgraded since the last time this function was called.
 	fn runtime_upgraded() -> bool {
-		let last = frame_system::LastRuntimeUpgrade::get();
+		let last = frame_system::LastRuntimeUpgrade::<System>::get();
 		let current = <System::Version as frame_support::traits::Get<_>>::get();
 
 		if last.map(|v| v.was_upgraded(&current)).unwrap_or(true) {
-			frame_system::LastRuntimeUpgrade::put(
+			frame_system::LastRuntimeUpgrade::<System>::put(
 				frame_system::LastRuntimeUpgradeInfo::from(current),
 			);
 			true
