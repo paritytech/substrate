@@ -812,12 +812,14 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 2_000_000_000_000;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(2_000_000_000_000);
 	}
 	impl system::Config for Test {
 		type BaseCallFilter = BaseFilter;
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = RocksDbWeight;
 		type Origin = Origin;
 		type Call = Call;
 		type Index = u64;
@@ -829,13 +831,6 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = RocksDbWeight;
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = ();
@@ -847,7 +842,7 @@ mod tests {
 		type Event = ();
 	}
 	parameter_types! {
-		pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+		pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
 		pub const MaxScheduledPerBlock: u32 = 10;
 	}
 	ord_parameter_types! {

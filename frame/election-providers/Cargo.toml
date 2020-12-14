@@ -40,6 +40,8 @@ paste = "1.0.3"
 substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
 parking_lot = "0.10.2"
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
+rand = { version = "0.7.3" }
+frame-benchmarking = { path = "../benchmarking" }
 
 
 [features]

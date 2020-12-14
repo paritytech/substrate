@@ -124,9 +124,8 @@ where
 /// `seq_phragmen` for more information. This function is left public in case a crate needs to use
 /// the implementation in a custom way.
 ///
-/// To create th inputs needed for this function, see [`crate::setup_inputs`].
-///
 /// This can only fail if the normalization fails.
+// To create the inputs needed for this function, see [`crate::setup_inputs`].
 pub fn seq_phragmen_core<AccountId: IdentifierT>(
 	rounds: usize,
 	candidates: Vec<CandidatePtr<AccountId>>,

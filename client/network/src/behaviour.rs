@@ -88,7 +88,7 @@ pub enum BehaviourOut<B: BlockT> {
 		protocol: Cow<'static, str>,
 		/// If `Ok`, contains the time elapsed between when we received the request and when we
 		/// sent back the response. If `Err`, the error that happened.
-		result: Result<Duration, ResponseFailure>,
+		result: Result<Option<Duration>, ResponseFailure>,
 	},
 
 	/// A request initiated using [`Behaviour::send_request`] has succeeded or failed.
@@ -417,7 +417,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 				self.events.push_back(BehaviourOut::InboundRequest {
 					peer,
 					protocol: self.block_requests.protocol_name().to_owned().into(),
-					result: Ok(total_handling_time),
+					result: Ok(Some(total_handling_time)),
 				});
 			},
 			block_requests::Event::Response { peer, response, request_duration } => {

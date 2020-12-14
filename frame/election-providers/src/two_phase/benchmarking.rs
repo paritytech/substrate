@@ -29,10 +29,6 @@ use sp_runtime::InnerOf;
 use sp_std::convert::TryInto;
 
 const SEED: u32 = 0;
-// const DEFAULT_VOTERS: u32 = 1000;
-// const DEFAULT_TARGETS: u32 = 500;
-// const DEFAULT_DESIRED: u32 = 200;
-// const DEFAULT_ACTIVE_VOTERS: u32 = 500;
 
 /// Creates a **valid** solution with exactly the given size.
 ///

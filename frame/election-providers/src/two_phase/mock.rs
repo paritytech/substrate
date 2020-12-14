@@ -120,13 +120,9 @@ impl frame_system::Config for Runtime {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = ();
-	type MaximumBlockWeight = ();
 	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = ();
-	type MaximumBlockLength = ();
-	type AvailableBlockRatio = ();
+	type BlockLength = ();
+	type BlockWeights = ();
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;

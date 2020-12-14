@@ -61,18 +61,11 @@ pub trait PerThing:
 	fn is_one(&self) -> bool { self.deconstruct() == Self::ACCURACY }
 
 	/// Build this type from a percent. Equivalent to `Self::from_parts(x * Self::ACCURACY / 100)`
-	/// but more accurate.
+	/// but more accurate and can cope with potential type overflows.
 	fn from_percent(x: Self::Inner) -> Self {
-		let a = x.min(100.into());
-		let b = Self::ACCURACY;
-		// if Self::ACCURACY % 100 > 0 then we need the correction for accuracy
-		let c = rational_mul_correction::<Self::Inner, Self>(b, a, 100.into(), Rounding::Nearest);
-		// TODO: this will fail with 100%.
-		// [primitives/arithmetic/src/per_things.rs:70] a = 100
-		// [primitives/arithmetic/src/per_things.rs:70] b = 65535
-		// [primitives/arithmetic/src/per_things.rs:70] c = 35
-		let base: Self::Inner = 100.into();
-		Self::from_parts(a / base.saturating_mul(b).saturating_add(c))
+		let a: Self::Inner = x.min(100.into());
+		let b: Self::Inner = 100.into();
+		Self::from_rational_approximation(a, b)
 	}
 
 	/// Return the product of multiplication of this value by itself.
@@ -712,6 +705,7 @@ macro_rules! implement_per_thing {
 
 				assert_eq!($name::from_percent(0), $name::from_parts(Zero::zero()));
 				assert_eq!($name::from_percent(10), $name::from_parts($max / 10));
+				assert_eq!($name::from_percent(50), $name::from_parts($max / 2));
 				assert_eq!($name::from_percent(100), $name::from_parts($max));
 				assert_eq!($name::from_percent(200), $name::from_parts($max));
 
@@ -720,6 +714,15 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_fraction(1.0), $name::from_parts($max));
 				assert_eq!($name::from_fraction(2.0), $name::from_parts($max));
 				assert_eq!($name::from_fraction(-1.0), $name::from_parts(Zero::zero()));
+			}
+
+			#[test]
+			fn percent_trait_impl_works() {
+				assert_eq!(<$name as PerThing>::from_percent(0), $name::from_parts(Zero::zero()));
+				assert_eq!(<$name as PerThing>::from_percent(10), $name::from_parts($max / 10));
+				assert_eq!(<$name as PerThing>::from_percent(50), $name::from_parts($max / 2));
+				assert_eq!(<$name as PerThing>::from_percent(100), $name::from_parts($max));
+				assert_eq!(<$name as PerThing>::from_percent(200), $name::from_parts($max));
 			}
 
 			macro_rules! u256ify {
