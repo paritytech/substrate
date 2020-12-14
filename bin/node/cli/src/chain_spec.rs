@@ -234,9 +234,11 @@ pub fn testnet_genesis(
 			get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
 		]
 	});
-	endowed_accounts.extend(initial_authorities.iter().map(|x| x.0.clone()));
-	// if any of the initial_authorities are the above known accounts, dedup it out.
-	endowed_accounts.dedup();
+	initial_authorities.iter().for_each(|x|
+		if !endowed_accounts.contains(&x.0) {
+			endowed_accounts.push(x.0.clone())
+		}
+	);
 
 	let num_endowed_accounts = endowed_accounts.len();
 

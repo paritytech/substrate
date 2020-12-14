@@ -412,6 +412,14 @@ decl_storage! {
 					"the balance of any account should always be at least the existential deposit.",
 				)
 			}
+
+			// ensure no duplicates exist.
+			let mut endowed_accounts = config.balances.iter().map(|(x, _)| x).cloned().collect::<Vec<_>>();
+			endowed_accounts.sort();
+			endowed_accounts.dedup();
+
+			assert!(endowed_accounts.len() == config.balances.len(), "duplicate balances in genesis.");
+
 			for &(ref who, free) in config.balances.iter() {
 				T::AccountStore::insert(who, AccountData { free, .. Default::default() });
 			}
