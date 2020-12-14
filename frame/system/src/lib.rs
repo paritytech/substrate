@@ -1013,16 +1013,17 @@ impl<T: Config> Module<T> {
 		}
 	}
 
-	/// Remove temporary "environment" entries in storage.
+	/// Remove temporary "environment" entries in storage, compute the storage root and return the
+	/// resulting header for this block.
 	pub fn finalize() -> T::Header {
 		ExecutionPhase::kill();
 		ExtrinsicCount::kill();
 		AllExtrinsicsLen::kill();
 
-		let number = <Number<T>>::take();
-		let parent_hash = <ParentHash<T>>::take();
-		let mut digest = <Digest<T>>::take();
-		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
+		let number = <Number<T>>::get();
+		let parent_hash = <ParentHash<T>>::get();
+		let mut digest = <Digest<T>>::get();
+		let extrinsics_root = <ExtrinsicsRoot<T>>::get();
 
 		// move block hash pruning window by one block
 		let block_hash_count = <T::BlockHashCount>::get();
