@@ -26,6 +26,7 @@ use sp_core::blake2_256;
 use frame_support::{
 	traits::{OnInitialize, OnFinalize},
 };
+use sp_runtime::traits::One;
 
 use crate::Module as NameService;
 const SEED: u32 = 1;
@@ -33,7 +34,7 @@ const SEED: u32 = 1;
 fn run_to_block<T : Config>(n: T::BlockNumber) {
 	while System::<T>::block_number() < n {
 		NameService::<T>::on_finalize(System::<T>::block_number());
-		System::<T>::set_block_number(System::<T>::block_number() + 1u32.into());
+		System::<T>::set_block_number(System::<T>::block_number() + One::one());
 		NameService::<T>::on_initialize(System::<T>::block_number());
 	}
 }
@@ -53,14 +54,14 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&new_bidder, balance);
 		// create first bid
 		NameService::<T>::bid(RawOrigin::Signed(current_bidder.clone()).into(), name_hash, T::MinBid::get())?;
-		let new_bid_amount = T::MinBid::get().saturating_mul(2.into());
-	}: bid(RawOrigin::Signed(new_bidder.clone()), name_hash, new_bid_amount)
+		let new_bid_amount = T::MinBid::get().saturating_mul(2u32.into());
+	}: _(RawOrigin::Signed(new_bidder.clone()), name_hash, new_bid_amount)
 	verify {
 		let stored_data = Registration::<T>::get(&name_hash);
 		assert_eq!(stored_data, NameStatus::Bidding {
 			who: new_bidder.clone(),
-			bid_end: 11.into(),
-			amount: 10.into()
+			bid_end: T::BiddingPeriod::get().saturating_add(1u32.into()),
+			amount: new_bid_amount
 		});
 		assert_eq!(T::Currency::total_balance(&current_bidder), balance);
 		assert_eq!(T::Currency::free_balance(&new_bidder), balance.saturating_sub(new_bid_amount));
@@ -77,7 +78,7 @@ benchmarks! {
 		// create winning bid
 		NameService::<T>::bid(RawOrigin::Signed(current_bidder.clone()).into(), name_hash, T::MinBid::get())?;
 		run_to_block::<T>(12.into());
-	}: claim(RawOrigin::Signed(current_bidder.clone()), name_hash, 2 as u32)
+	}: _(RawOrigin::Signed(current_bidder.clone()), name_hash, 2 as u32)
 	verify {
 		let stored_data = Registration::<T>::get(&name_hash);
 		assert_eq!(stored_data, NameStatus::Owned {
@@ -98,7 +99,7 @@ benchmarks! {
 		// bid for the name
 		NameService::<T>::bid(RawOrigin::Signed(current_bidder.clone()).into(), name_hash, T::MinBid::get())?;
 		run_to_block::<T>(50.into());
-	}: free(RawOrigin::Signed(current_bidder.clone()), name_hash)
+	}: _(RawOrigin::Signed(current_bidder.clone()), name_hash)
 	verify {
 		let stored_data = Registration::<T>::get(&name_hash);
 		assert_eq!(stored_data, NameStatus::default());
@@ -117,7 +118,7 @@ benchmarks! {
 			expiration : None 
 		};
 		Registration::<T>::insert(&name_hash, state);
-	}: assign(RawOrigin::Signed(caller.clone()), name_hash, Some(caller.clone()))
+	}: _(RawOrigin::Signed(caller.clone()), name_hash, Some(caller.clone()))
 	verify {
 		assert_eq!(Lookup::<T>::get(&name_hash), Some(caller.clone()));
 	}
@@ -130,7 +131,7 @@ benchmarks! {
 		let caller : T::AccountId = whitelisted_caller();
 		// set caller as the target of name
 		Lookup::<T>::insert(&name_hash, caller.clone());
-	}: unassign(RawOrigin::Signed(caller.clone()), name_hash)
+	}: _(RawOrigin::Signed(caller.clone()), name_hash)
 	verify {
 		assert_eq!(Lookup::<T>::get(&name_hash), None);
 	}
@@ -149,7 +150,7 @@ benchmarks! {
 			expiration : Some(0.into()) 
 		};
 		Registration::<T>::insert(&name_hash, state);
-	}: extend_ownership(RawOrigin::Signed(caller.clone()), name_hash)
+	}: _(RawOrigin::Signed(caller.clone()), name_hash)
 	verify {
 		let stored_data = Registration::<T>::get(&name_hash);
 		assert_eq!(stored_data, NameStatus::Owned {
