@@ -1129,9 +1129,10 @@ impl<T: Config> Module<T> {
 		Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
 	}
 
-	/// Note what the extrinsic data of the current extrinsic index is. If this
-	/// is called, then ensure `derive_extrinsics` is also called before
-	/// block-building is completed.
+	/// Note what the extrinsic data of the current extrinsic index is.
+	///
+	/// This is required to be called before applying an extrinsic. The data will used
+	/// in [`Self::finalize`] to calculate the correct extrinsics root.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
 		ExtrinsicData::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
 	}
