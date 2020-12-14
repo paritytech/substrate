@@ -1700,6 +1700,11 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						);
 						CustomMessageOutcome::SyncDisconnected(peer_id)
 					} else {
+						log::error!(
+							target: "sync",
+							"State mismatch: disconnected peer wasn't connected {}",
+							peer_id
+						);
 						CustomMessageOutcome::None
 					}
 				} else if set_id == sc_peerset::SetId::from(1) {
