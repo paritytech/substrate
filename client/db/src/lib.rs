@@ -1529,13 +1529,16 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		block: BlockId<Block>,
 		justification: Justification,
 	) -> ClientResult<()> {
-		// WIP(JON): Check if block is finalized first
-
-		// Create a Transaction.
 		let mut transaction: Transaction<DbHash> = Transaction::new();
 		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
 		let header = self.blockchain.expect_header(block)?;
 		let number = *header.number();
+
+		// Check if block is finalized first
+		// WIP(JON): is this really the correct way to check if a block is final?
+		if number > self.blockchain.info().finalized_number {
+			return Err(ClientError::BadJustification("WIP: block not finalized".into()));
+		}
 
 		// Read and merge Justification
 		use sp_blockchain::Backend;
