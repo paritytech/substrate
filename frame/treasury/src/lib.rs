@@ -414,19 +414,19 @@ decl_event!(
 		TipClosed(Hash, AccountId, Balance),
 		/// A tip suggestion has been retracted. \[tip_hash\]
 		TipRetracted(Hash),
-		/// New bounty proposal. [index]
+		/// New bounty proposal. \[index\]
 		BountyProposed(BountyIndex),
 		/// A bounty proposal was rejected; funds were slashed. [index, bond]
 		BountyRejected(BountyIndex, Balance),
-		/// A bounty proposal is funded and became active. [index]
+		/// A bounty proposal is funded and became active. \[index\]
 		BountyBecameActive(BountyIndex),
 		/// A bounty is awarded to a beneficiary. [index, beneficiary]
 		BountyAwarded(BountyIndex, AccountId),
 		/// A bounty is claimed by beneficiary. [index, payout, beneficiary]
 		BountyClaimed(BountyIndex, Balance, AccountId),
-		/// A bounty is cancelled. [index]
+		/// A bounty is cancelled. \[index\]
 		BountyCanceled(BountyIndex),
-		/// A bounty expiry is extended. [index]
+		/// A bounty expiry is extended. \[index\]
 		BountyExtended(BountyIndex),
 	}
 );
