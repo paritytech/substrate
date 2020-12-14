@@ -624,6 +624,31 @@ mod tests {
 	}
 
 	#[test]
+	fn consolidate_vestings_invalid_vestings() {
+		ExtBuilder::default()
+			.existential_deposit(1)
+			.build()
+			.execute_with(|| {
+				let vestings = Vesting::vesting(&200);
+				assert_eq!(vestings.len(), 2); // Account has 2 vesting schedules
+
+				// first vesting must come before second vesting
+				assert_noop!(Vesting::consolidate_vestings(Some(200).into(), 1, 0),
+					Error::<Test>::InvalidConsolidation);
+				// vestings must be in range
+				assert_noop!(Vesting::consolidate_vestings(Some(200).into(), 1, 3),
+					Error::<Test>::InvalidConsolidation);
+
+				// Start first vesting
+				System::set_block_number(10);
+				assert_eq!(System::block_number(), 10);
+				// cannot consolidate when vesting has started
+				assert_noop!(Vesting::consolidate_vestings(Some(200).into(), 0, 1),
+					Error::<Test>::InvalidConsolidation);
+			})
+	}
+
+	#[test]
 	fn consolidate_vestings_valid_vestings() {
 		ExtBuilder::default()
 			.existential_deposit(1)
@@ -641,6 +666,7 @@ mod tests {
 
 				// Vesting no longer starts at block 10
 				System::set_block_number(10);
+				assert_eq!(System::block_number(), 10);
 				assert_eq!(Vesting::vesting_balance(&200), Some(75 * 10));
 
 				System::set_block_number(16);
