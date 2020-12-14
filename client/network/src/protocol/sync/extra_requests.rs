@@ -549,7 +549,6 @@ mod tests {
 				best_hash: Hash::random(),
 				best_number: g.gen(),
 				state: ArbitraryPeerSyncState::arbitrary(g).0,
-				recently_announced: Default::default()
 			};
 			ArbitraryPeerSync(ps)
 		}
