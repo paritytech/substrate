@@ -20,13 +20,23 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_system::RawOrigin;
+use frame_system::{Module as System, RawOrigin};
 use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use sp_core::blake2_256;
+use frame_support::{
+	traits::{OnInitialize, OnFinalize},
+};
 
 use crate::Module as NameService;
-
 const SEED: u32 = 1;
+
+fn run_to_block<T : Config>(n: T::BlockNumber) {
+	while System::<T>::block_number() < n {
+		NameService::<T>::on_finalize(System::<T>::block_number());
+		System::<T>::set_block_number(System::<T>::block_number() + 1u32.into());
+		NameService::<T>::on_initialize(System::<T>::block_number());
+	}
+}
 
 benchmarks! {
 	_ { }
@@ -62,14 +72,15 @@ benchmarks! {
 		let name_hash = blake2_256(b"shawntabrizi");
 		let current_bidder : T::AccountId = whitelisted_caller();
 		// load balance to claim 2 periods
-		T::Currency::make_free_balance_be(&current_bidder, 10.into());
-		NameService::<T>::bid(RawOrigin::Signed(current_bidder.clone()).into(), name_hash, 5.into())?;
+		T::Currency::make_free_balance_be(&current_bidder, 40.into());
+		NameService::<T>::bid(RawOrigin::Signed(current_bidder.clone()).into(), name_hash, 10.into())?;
+		run_to_block::<T>(12.into());
 	}: claim(RawOrigin::Signed(current_bidder.clone()), name_hash, 2 as u32)
 	verify {
 		let stored_data = Registration::<T>::get(&name_hash);
 		assert_eq!(stored_data, NameStatus::Owned {
 			who: current_bidder.clone(),
-			expiration : Some(5.into())
+			expiration : Some(212.into())
 		});
 		assert_eq!(T::Currency::free_balance(&current_bidder), 0.into());
 	}
@@ -83,6 +94,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&current_bidder, 10.into());
 		// bid for the name
 		NameService::<T>::bid(RawOrigin::Signed(current_bidder.clone()).into(), name_hash, 5.into())?;
+		run_to_block::<T>(50.into());
 	}: free(RawOrigin::Signed(current_bidder.clone()), name_hash)
 	verify {
 		let stored_data = Registration::<T>::get(&name_hash);
