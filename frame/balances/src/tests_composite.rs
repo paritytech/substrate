@@ -25,12 +25,12 @@ use sp_runtime::{
 };
 use sp_core::H256;
 use sp_io;
-use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, StorageValue};
+use frame_support::{parameter_types, StorageValue};
 use frame_support::traits::Get;
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use pallet_transaction_payment::CurrencyAdapter;
 use std::cell::RefCell;
-use crate::{Pallet, Config, decl_tests};
+use crate::{Module, Config, decl_tests};
 
 use frame_system as system;
 use crate as balances;
@@ -45,7 +45,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Event<T>, Config},
-		Balances: balances::{Pallet, Call, Event<T>, Config<T>},
+		Balances: balances::{Module, Call, Event<T>, Config<T>},
 	}
 );
 
@@ -92,7 +92,7 @@ parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
 impl pallet_transaction_payment::Config for Test {
-	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
+	type OnChargeTransaction = CurrencyAdapter<Module<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
@@ -135,7 +135,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
+		balances::GenesisConfig::<Test> {
 			balances: if self.monied {
 				vec![
 					(1, 10 * self.existential_deposit),

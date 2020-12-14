@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-#[derive(Debug)]
+#[derive(Debug, codec::Encode, codec::Decode, Clone, Eq, PartialEq)]
 pub struct CallWithDispatchInfo;
 impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
 	type Origin = ();
@@ -28,8 +28,8 @@ impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
 	type PostInfo = frame_support::weights::PostDispatchInfo;
 
 	fn dispatch(self, _origin: Self::Origin)
-		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-			panic!("Do not use dummy implementation for dispatch.");
+				-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+		panic!("Do not use dummy implementation for dispatch.");
 	}
 }
 
@@ -489,7 +489,7 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
 				assert_eq!(
 					last_event(),
-					Event::balances(balances::Event::ReserveRepatriated(1, 2, 41, Status::Free)),
+					Event::balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
@@ -710,7 +710,7 @@ macro_rules! decl_tests {
 
 					assert_eq!(
 						last_event(),
-						Event::balances(balances::Event::Reserved(1, 10)),
+						Event::balances(RawEvent::Reserved(1, 10)),
 					);
 
 					System::set_block_number(3);
@@ -718,7 +718,7 @@ macro_rules! decl_tests {
 
 					assert_eq!(
 						last_event(),
-						Event::balances(balances::Event::Unreserved(1, 5)),
+						Event::balances(RawEvent::Unreserved(1, 5)),
 					);
 
 					System::set_block_number(4);
@@ -727,7 +727,7 @@ macro_rules! decl_tests {
 					// should only unreserve 5
 					assert_eq!(
 						last_event(),
-						Event::balances(balances::Event::Unreserved(1, 5)),
+						Event::balances(RawEvent::Unreserved(1, 5)),
 					);
 				});
 		}
@@ -743,9 +743,9 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::system(system::Event::NewAccount(1)),
-							Event::balances(balances::Event::Endowed(1, 100)),
-							Event::balances(balances::Event::BalanceSet(1, 100, 0)),
+							Event::system(system::RawEvent::NewAccount(1)),
+							Event::balances(RawEvent::Endowed(1, 100)),
+							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
 						]
 					);
 
@@ -754,8 +754,8 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::balances(balances::Event::DustLost(1, 99)),
-							Event::system(system::Event::KilledAccount(1))
+							Event::balances(RawEvent::DustLost(1, 99)),
+							Event::system(system::RawEvent::KilledAccount(1))
 						]
 					);
 				});
@@ -772,9 +772,9 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::system(system::Event::NewAccount(1)),
-							Event::balances(balances::Event::Endowed(1, 100)),
-							Event::balances(balances::Event::BalanceSet(1, 100, 0)),
+							Event::system(system::RawEvent::NewAccount(1)),
+							Event::balances(RawEvent::Endowed(1, 100)),
+							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
 						]
 					);
 

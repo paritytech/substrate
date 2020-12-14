@@ -19,7 +19,7 @@
 //!
 //! The Balances module provides functionality for handling accounts and balances.
 //!
-//! - [`balances::Config`](./trait.Config.html)
+//! - [`balances::Config`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 //!
@@ -79,7 +79,7 @@
 //! - [`Imbalance`](../frame_support/traits/trait.Imbalance.html): Functions for handling
 //! imbalances between total issuance in the system and account balances. Must be used when a function
 //! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-//! - [`IsDeadAccount`](../frame_support/traits/trait.IsDeadAccount.html): Determiner to say whether a
+//! - [`IsDeadAccount`](../frame_system/trait.IsDeadAccount.html): Determiner to say whether a
 //! given account is unused.
 //!
 //! ## Interface
@@ -99,12 +99,12 @@
 //!
 //! ```
 //! use frame_support::traits::Currency;
-//! # pub trait Config: frame_system::Config {
+//! # pub trait Trait: frame_system::Config {
 //! # 	type Currency: Currency<Self::AccountId>;
 //! # }
 //!
-//! pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-//! pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+//! pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+//! pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 //!
 //! # fn main() {}
 //! ```
@@ -145,7 +145,7 @@
 //!
 //! ## Assumptions
 //!
-//! * Total issued balanced of all accounts should be less than `Config::Balance::max_value()`.
+//! * Total issued balanced of all accounts should be less than `Trait::Balance::max_value()`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -160,7 +160,7 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
-	Parameter, ensure,
+	ensure,
 	traits::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
@@ -171,11 +171,11 @@ use frame_support::{
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
-		Zero, AtLeast32BitUnsigned, StaticLookup, Member, CheckedAdd, CheckedSub,
+		Zero, AtLeast32BitUnsigned, StaticLookup, CheckedAdd, CheckedSub,
 		MaybeSerializeDeserialize, Saturating, Bounded,
 	},
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{self as system};
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 pub use weights::WeightInfo;
 
@@ -214,15 +214,22 @@ pub mod pallet {
 		type MaxLocks: Get<u32>;
 	}
 
+	pub type DefaultInstance = ();
+
 	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
+
+	/// Deperacated name for Pallet
+	pub type Module<T, I = ()> = Pallet<T, I>;
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I>
-		where <T::Lookup as StaticLookup>::Source: ::scale_info::TypeInfo
+	where
+		<T::Lookup as StaticLookup>::Source: ::scale_info::TypeInfo
 	{
 		/// Transfer some liquid free balance to another account.
 		///
@@ -317,7 +324,7 @@ pub mod pallet {
 
 				(account.free, account.reserved)
 			});
-			Self::deposit_event(Event::BalanceSet(who, free, reserved));
+			Self::deposit_event(RawEvent::BalanceSet(who, free, reserved));
 			Ok(().into())
 		}
 
@@ -388,6 +395,9 @@ pub mod pallet {
 		/// \[from, to, balance, destination_status\]
 		ReserveRepatriated(T::AccountId, T::AccountId, T::Balance, Status),
 	}
+
+	/// Deprecated name for event.
+	pub type RawEvent<T, I = ()> = Event<T, I>;
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
@@ -589,7 +599,7 @@ impl Default for Releases {
 	}
 }
 
-impl<T: Config<I>, I: 'static> Pallet<T, I> {
+impl<T: Config<I>, I: 'static> Module<T, I> {
 	// PRIVATE MUTABLES
 
 	/// Get the free balance of an account.
@@ -633,7 +643,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if total < T::ExistentialDeposit::get() {
 			if !total.is_zero() {
 				T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
-				Self::deposit_event(Event::DustLost(who.clone(), total));
+				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
 			}
 			None
 		} else {
@@ -680,7 +690,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			})
 		}).map(|(maybe_endowed, result)| {
 			if let Some(endowed) = maybe_endowed {
-				Self::deposit_event(Event::Endowed(who.clone(), endowed));
+				Self::deposit_event(RawEvent::Endowed(who.clone(), endowed));
 			}
 			result
 		})
@@ -728,14 +738,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 // of the inner member.
 mod imbalances {
 	use super::{
-		result, Imbalance, Config, Zero, Saturating, TryDrop,
+		result, DefaultInstance, Imbalance, Config, Zero, Saturating, TryDrop,
 	};
 	use sp_std::mem;
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been created without any equal and opposite accounting.
 	#[must_use]
-	pub struct PositiveImbalance<T: Config<I>, I: 'static>(T::Balance);
+	pub struct PositiveImbalance<T: Config<I>, I: 'static=DefaultInstance>(T::Balance);
 
 	impl<T: Config<I>, I: 'static> PositiveImbalance<T, I> {
 		/// Create a new positive imbalance from a balance.
@@ -747,7 +757,7 @@ mod imbalances {
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been destroyed without any equal and opposite accounting.
 	#[must_use]
-	pub struct NegativeImbalance<T: Config<I>, I: 'static>(T::Balance);
+	pub struct NegativeImbalance<T: Config<I>, I: 'static=DefaultInstance>(T::Balance);
 
 	impl<T: Config<I>, I: 'static> NegativeImbalance<T, I> {
 		/// Create a new negative imbalance from a balance.
@@ -877,7 +887,7 @@ mod imbalances {
 	}
 }
 
-impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
+impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Module<T, I> where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Balance = T::Balance;
@@ -991,7 +1001,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 		})?;
 
 		// Emit transfer event.
-		Self::deposit_event(Event::Transfer(transactor.clone(), dest.clone(), value));
+		Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value));
 
 		Ok(())
 	}
@@ -1079,54 +1089,54 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 		if value.is_zero() { return Ok(NegativeImbalance::zero()); }
 
 		Self::try_mutate_account(who, |account, _|
-			-> Result<Self::NegativeImbalance, DispatchError>
-		{
-			let new_free_account = account.free.checked_sub(&value)
-				.ok_or(Error::<T, I>::InsufficientBalance)?;
+									   -> Result<Self::NegativeImbalance, DispatchError>
+			{
+				let new_free_account = account.free.checked_sub(&value)
+					.ok_or(Error::<T, I>::InsufficientBalance)?;
 
-			// bail if we need to keep the account alive and this would kill it.
-			let ed = T::ExistentialDeposit::get();
-			let would_be_dead = new_free_account + account.reserved < ed;
-			let would_kill = would_be_dead && account.free + account.reserved >= ed;
-			ensure!(liveness == AllowDeath || !would_kill, Error::<T, I>::KeepAlive);
+				// bail if we need to keep the account alive and this would kill it.
+				let ed = T::ExistentialDeposit::get();
+				let would_be_dead = new_free_account + account.reserved < ed;
+				let would_kill = would_be_dead && account.free + account.reserved >= ed;
+				ensure!(liveness == AllowDeath || !would_kill, Error::<T, I>::KeepAlive);
 
-			Self::ensure_can_withdraw(who, value, reasons, new_free_account)?;
+				Self::ensure_can_withdraw(who, value, reasons, new_free_account)?;
 
-			account.free = new_free_account;
+				account.free = new_free_account;
 
-			Ok(NegativeImbalance::new(value))
-		})
+				Ok(NegativeImbalance::new(value))
+			})
 	}
 
 	/// Force the new free balance of a target account `who` to some new value `balance`.
 	fn make_free_balance_be(who: &T::AccountId, value: Self::Balance)
-		-> SignedImbalance<Self::Balance, Self::PositiveImbalance>
+							-> SignedImbalance<Self::Balance, Self::PositiveImbalance>
 	{
 		Self::try_mutate_account(who, |account, is_new|
-			-> Result<SignedImbalance<Self::Balance, Self::PositiveImbalance>, ()>
-		{
-			let ed = T::ExistentialDeposit::get();
-			// If we're attempting to set an existing account to less than ED, then
-			// bypass the entire operation. It's a no-op if you follow it through, but
-			// since this is an instance where we might account for a negative imbalance
-			// (in the dust cleaner of set_account) before we account for its actual
-			// equal and opposite cause (returned as an Imbalance), then in the
-			// instance that there's no other accounts on the system at all, we might
-			// underflow the issuance and our arithmetic will be off.
-			ensure!(value.saturating_add(account.reserved) >= ed || !is_new, ());
+									   -> Result<SignedImbalance<Self::Balance, Self::PositiveImbalance>, ()>
+			{
+				let ed = T::ExistentialDeposit::get();
+				// If we're attempting to set an existing account to less than ED, then
+				// bypass the entire operation. It's a no-op if you follow it through, but
+				// since this is an instance where we might account for a negative imbalance
+				// (in the dust cleaner of set_account) before we account for its actual
+				// equal and opposite cause (returned as an Imbalance), then in the
+				// instance that there's no other accounts on the system at all, we might
+				// underflow the issuance and our arithmetic will be off.
+				ensure!(value.saturating_add(account.reserved) >= ed || !is_new, ());
 
-			let imbalance = if account.free <= value {
-				SignedImbalance::Positive(PositiveImbalance::new(value - account.free))
-			} else {
-				SignedImbalance::Negative(NegativeImbalance::new(account.free - value))
-			};
-			account.free = value;
-			Ok(imbalance)
-		}).unwrap_or_else(|_| SignedImbalance::Positive(Self::PositiveImbalance::zero()))
+				let imbalance = if account.free <= value {
+					SignedImbalance::Positive(PositiveImbalance::new(value - account.free))
+				} else {
+					SignedImbalance::Negative(NegativeImbalance::new(account.free - value))
+				};
+				account.free = value;
+				Ok(imbalance)
+			}).unwrap_or_else(|_| SignedImbalance::Positive(Self::PositiveImbalance::zero()))
 	}
 }
 
-impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>  where
+impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Module<T, I>  where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	/// Check if `who` can reserve `value` from their free balance.
@@ -1157,7 +1167,7 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 			Self::ensure_can_withdraw(&who, value.clone(), WithdrawReasons::RESERVE, account.free)
 		})?;
 
-		Self::deposit_event(Event::Reserved(who.clone(), value));
+		Self::deposit_event(RawEvent::Reserved(who.clone(), value));
 		Ok(())
 	}
 
@@ -1176,7 +1186,7 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 			actual
 		});
 
-		Self::deposit_event(Event::Unreserved(who.clone(), actual.clone()));
+		Self::deposit_event(RawEvent::Unreserved(who.clone(), actual.clone()));
 		value - actual
 	}
 
@@ -1231,7 +1241,7 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 			})
 		})?;
 
-		Self::deposit_event(Event::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual, status));
+		Self::deposit_event(RawEvent::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual, status));
 		Ok(value - actual)
 	}
 }
@@ -1241,22 +1251,22 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 /// NOTE: You probably won't need to use this! This only needs to be "wired in" to System module
 /// if you're using the local balance storage. **If you're using the composite system account
 /// storage (which is the default in most examples and tests) then there's no need.**
-impl<T: Config<I>, I: 'static> OnKilledAccount<T::AccountId> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> OnKilledAccount<T::AccountId> for Module<T, I> {
 	fn on_killed_account(who: &T::AccountId) {
 		Account::<T, I>::mutate_exists(who, |account| {
 			let total = account.as_ref().map(|acc| acc.total()).unwrap_or_default();
 			if !total.is_zero() {
 				T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
-				Self::deposit_event(Event::DustLost(who.clone(), total));
+				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
 			}
 			*account = None;
 		});
 	}
 }
 
-impl<T: Config<I>, I: 'static> LockableCurrency<T::AccountId> for Pallet<T, I>
-where
-	T::Balance: MaybeSerializeDeserialize + Debug
+impl<T: Config<I>, I: 'static> LockableCurrency<T::AccountId> for Module<T, I>
+	where
+		T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Moment = T::BlockNumber;
 
@@ -1319,7 +1329,7 @@ where
 	}
 }
 
-impl<T: Config<I>, I: 'static> IsDeadAccount<T::AccountId> for Pallet<T, I> where
+impl<T: Config<I>, I: 'static> IsDeadAccount<T::AccountId> for Module<T, I> where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {

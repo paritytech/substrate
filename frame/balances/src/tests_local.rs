@@ -29,7 +29,7 @@ use frame_support::{parameter_types, StorageValue};
 use frame_support::traits::{Get, StorageMapShim};
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use std::cell::RefCell;
-use crate::{Pallet, Config, decl_tests};
+use crate::{Module, Config, decl_tests};
 use pallet_transaction_payment::CurrencyAdapter;
 
 use frame_system as system;
@@ -84,7 +84,7 @@ impl frame_system::Config for Test {
 	type PalletInfo = PalletInfo;
 	type AccountData = super::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnKilledAccount = Pallet<Test>;
+	type OnKilledAccount = Module<Test>;
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 }
@@ -92,7 +92,7 @@ parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
 impl pallet_transaction_payment::Config for Test {
-	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
+	type OnChargeTransaction = CurrencyAdapter<Module<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
@@ -179,8 +179,8 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 				events(),
 				[
 					Event::system(system::RawEvent::NewAccount(1)),
-					Event::balances(balances::Event::Endowed(1, 100)),
-					Event::balances(balances::Event::BalanceSet(1, 100, 0)),
+					Event::balances(RawEvent::Endowed(1, 100)),
+					Event::balances(RawEvent::BalanceSet(1, 100, 0)),
 				]
 			);
 
@@ -194,7 +194,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::balances(balances::Event::DustLost(1, 1)),
+					Event::balances(RawEvent::DustLost(1, 1)),
 					Event::system(system::RawEvent::KilledAccount(1))
 				]
 			);
