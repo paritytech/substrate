@@ -47,7 +47,7 @@ const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
 
 /// Default configuration values used by Substrate
 ///
-/// These values will be used by [`CliConfiguritation`] to set
+/// These values will be used by [`CliConfiguration`] to set
 /// default values for e.g. the listen port or the RPC port.
 pub trait DefaultConfigurationValues {
 	/// The port Substrate should listen on for p2p connections.
@@ -188,10 +188,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// Bu default this is retrieved from `KeystoreParams` if it is available. Otherwise it uses
 	/// `KeystoreConfig::InMemory`.
-	fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
+	fn keystore_config(&self, base_path: &PathBuf) -> Result<(Option<String>, KeystoreConfig)> {
 		self.keystore_params()
 			.map(|x| x.keystore_config(base_path))
-			.unwrap_or(Ok(KeystoreConfig::InMemory))
+			.unwrap_or_else(|| Ok((None, KeystoreConfig::InMemory)))
 	}
 
 	/// Get the database cache size.
@@ -471,6 +471,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 		let is_validator = role.is_network_authority();
+		let (keystore_remote, keystore) = self.keystore_config(&config_dir)?;
 
 		let unsafe_pruning = self
 			.import_params()
@@ -491,7 +492,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 				node_key,
 				DCV::p2p_listen_port(),
 			)?,
-			keystore: self.keystore_config(&config_dir)?,
+			keystore_remote,
+			keystore,
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
