@@ -667,7 +667,7 @@ pub(crate) fn advance_session() {
 /// the election happened, not the first session after the election has happened.
 pub(crate) fn start_era(era_index: EraIndex) {
 	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into());
-	// TODO: fuck this shit, they should be different
+	// TODO <https://github.com/paritytech/substrate/issues/5244>: we should test when different
 	assert_eq!(Staking::current_era().unwrap(), era_index);
 	assert_eq!(Staking::active_era().unwrap().index, era_index);
 }
