@@ -160,7 +160,6 @@ benchmarks! {
 mod tests {
 	use super::*;
 	use crate::mock::{new_test_ext, Test};
-	//use crate::tests::run_to_block;
 	use frame_support::assert_ok;
 
 	#[test]
@@ -173,7 +172,6 @@ mod tests {
 	#[test]
 	fn claim() {
 		new_test_ext().execute_with(|| {
-			//run_to_block(12);
 			assert_ok!(test_benchmark_claim::<Test>());
 		});
 	}
@@ -181,7 +179,6 @@ mod tests {
 	#[test]
 	fn free() {
 		new_test_ext().execute_with(|| {
-			//run_to_block(12);
 			assert_ok!(test_benchmark_free::<Test>());
 		});
 	}
