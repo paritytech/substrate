@@ -76,17 +76,23 @@ benchmarks! {
 		let balance = T::Currency::minimum_balance().max(T::MinBid::get()).saturating_mul(100.into());
 		T::Currency::make_free_balance_be(&current_bidder, balance);
 		// create winning bid
-		NameService::<T>::bid(RawOrigin::Signed(current_bidder.clone()).into(), name_hash, T::MinBid::get())?;
+		NameService::<T>::bid(RawOrigin::Signed(
+			current_bidder.clone()).into(), 
+			name_hash, 
+			T::MinBid::get())?;
 		run_to_block::<T>(T::BiddingPeriod::get());
 	}: _(RawOrigin::Signed(current_bidder.clone()), name_hash, 2 as u32)
 	verify {
 		let stored_data = Registration::<T>::get(&name_hash);
-		let expected_expiry = T::BiddingPeriod::get().saturating_add(T::OwnershipPeriod::get().saturating_mul(2u32.into()));
+		let expected_expiry = T::BiddingPeriod::get()
+			.saturating_add(T::OwnershipPeriod::get()
+			.saturating_mul(2u32.into()));
 		assert_eq!(stored_data, NameStatus::Owned {
 			who: current_bidder.clone(),
 			expiration : Some(expected_expiry)
 		});
-		assert_eq!(T::Currency::free_balance(&current_bidder), balance.saturating_sub(T::MinBid::get().saturating_mul(4.into())));
+		assert_eq!(T::Currency::free_balance(&current_bidder), 
+					balance.saturating_sub(T::MinBid::get().saturating_mul(4.into())));
 	}
 
 	// Benchmark free with the worst possible scenario
@@ -100,7 +106,9 @@ benchmarks! {
 		// bid for the name
 		NameService::<T>::bid(RawOrigin::Signed(current_bidder.clone()).into(), name_hash, T::MinBid::get())?;
 		// expiry+bid+claim time
-		let block_to_free = T::BiddingPeriod::get().saturating_mul(2u32.into()).saturating_add(T::ClaimPeriod::get());
+		let block_to_free = T::BiddingPeriod::get()
+			.saturating_mul(2u32.into())
+			.saturating_add(T::ClaimPeriod::get());
 		run_to_block::<T>(block_to_free.saturating_add(1u32.into()));
 	}: _(RawOrigin::Signed(current_bidder.clone()), name_hash)
 	verify {
@@ -145,7 +153,9 @@ benchmarks! {
 		// Test data
 		let name_hash = blake2_256(b"shawntabrizi");
 		let caller : T::AccountId = whitelisted_caller();
-		let balance = T::Currency::minimum_balance().max(T::MinBid::get()).saturating_mul(100.into());
+		let balance = T::Currency::minimum_balance()
+					.max(T::MinBid::get())
+					.saturating_mul(100.into());
 		T::Currency::make_free_balance_be(&caller, balance);
 		// set caller as the owner of name
 		let state = NameStatus::<T::AccountId, T::BlockNumber, BalanceOf<T>>::Owned{ 
@@ -160,7 +170,8 @@ benchmarks! {
 			who: caller.clone(),
 			expiration : Some(100.into())
 		});
-		assert_eq!(T::Currency::free_balance(&caller), balance.saturating_sub(T::ExtensionConfig::get().extension_fee));
+		assert_eq!(T::Currency::free_balance(&caller), 
+			balance.saturating_sub(T::ExtensionConfig::get().extension_fee));
 	}
 }
 
