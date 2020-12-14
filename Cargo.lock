@@ -3778,6 +3778,7 @@ dependencies = [
  "sc-consensus-epochs",
  "sc-consensus-slots",
  "sc-finality-grandpa",
+ "sc-grandpa-warp-sync",
  "sc-keystore",
  "sc-network",
  "sc-offchain",
@@ -6998,6 +6999,7 @@ dependencies = [
  "sc-client-api",
  "sc-finality-grandpa",
  "sc-network",
+ "sc-service",
  "sp-blockchain",
  "sp-runtime",
 ]
@@ -7339,7 +7341,6 @@ dependencies = [
  "sc-client-db",
  "sc-executor",
  "sc-finality-grandpa",
- "sc-grandpa-warp-sync",
  "sc-informant",
  "sc-keystore",
  "sc-light",

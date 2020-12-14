@@ -80,7 +80,6 @@ tracing = "0.1.22"
 tracing-futures = { version = "0.2.4" }
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
 finality-grandpa = "0.12.3"
-sc-grandpa-warp-sync = { version = "0.8.0", path = "../grandpa-warp-sync" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 tempfile = "3.1.0"

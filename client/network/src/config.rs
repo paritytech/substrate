@@ -95,19 +95,6 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
-
-	/// Request response configuration for the grandpa warp sync request protocol.
-	///
-	/// [`RequestResponseConfig`] [`name`] is used to tag outgoing grandpa warp sync requests with
-	/// the correct protocol name. In addition all of [`RequestResponseConfig`] is used to handle
-	/// incoming grandpa warp sync requests, if enabled.
-	///
-	/// Can be constructed either via
-	/// [`grandpa_warp_sync_request_handler::generate_protocol_config`] allowing outgoing but not
-	/// incoming requests, or constructed via
-	/// [`grandpa_warp_sync_request_handler::GrandpaWarpSyncRequestHandler::new`] allowing both
-	/// outgoing and incoming requests.
-	pub grandpa_warp_sync_request_protocol_config: RequestResponseConfig,
 }
 
 /// Role of the local node.

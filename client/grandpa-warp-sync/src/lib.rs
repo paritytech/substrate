@@ -29,6 +29,31 @@ use log::debug;
 use sp_runtime::traits::Block as BlockT;
 use std::time::Duration;
 use std::sync::Arc;
+use sc_service::{SpawnTaskHandle, config::{Configuration, Role}};
+
+/// Generates the appropriate [`ProtocolConfig`] for a given chain configuration.
+pub fn protocol_config_for_chain<TBlock: BlockT, TBackend: Backend<TBlock> + 'static>(
+	config: &Configuration,
+	spawn_handle: SpawnTaskHandle,
+	backend: Arc<TBackend>,
+) -> ProtocolConfig
+	where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
+{
+	let protocol_id = config.protocol_id();
+
+	if matches!(config.role, Role::Light) {
+		// Allow outgoing requests but deny incoming requests.
+		generate_protocol_config(protocol_id.clone())
+	} else {
+		// Allow both outgoing and incoming requests.
+		let (handler, protocol_config) = GrandpaWarpSyncRequestHandler::new(
+			protocol_id.clone(),
+			backend.clone(),
+		);
+		spawn_handle.spawn("grandpa_warp_sync_request_handler", handler.run());
+		protocol_config
+	}
+}
 
 const LOG_TARGET: &str = "grandpa-warp-sync-request-handler";
 

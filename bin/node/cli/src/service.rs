@@ -180,11 +180,14 @@ pub fn new_full_base(
 
 	config.network.notifications_protocols.push(grandpa::GRANDPA_PROTOCOL_NAME.into());
 
+	config.network.request_response_protocols.push(sc_grandpa_warp_sync::protocol_config_for_chain(
+		&config, task_manager.spawn_handle(), backend.clone(),
+	));
+
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
-			backend: backend.clone(),
 			transaction_pool: transaction_pool.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
@@ -390,7 +393,6 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
-			backend: backend.clone(),
 			transaction_pool: transaction_pool.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,

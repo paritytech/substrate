@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
+	error::Error, MallocSizeOfWasm,
 	TelemetryConnectionSinks, RpcHandlers, NetworkStatusSinks,
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
 	metrics::MetricsService,
@@ -43,7 +43,6 @@ use sc_keystore::LocalKeystore;
 use log::{info, warn};
 use sc_network::config::{Role, OnDemand};
 use sc_network::NetworkService;
-use sc_grandpa_warp_sync::GrandpaWarpSyncRequestHandler;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo, NumberFor,
@@ -844,13 +843,11 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 }
 
 /// Parameters to pass into `build_network`.
-pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl, TBackend> {
+pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// The service configuration.
 	pub config: &'a Configuration,
 	/// A shared client returned by `new_full_parts`/`new_light_parts`.
 	pub client: Arc<TCl>,
-	/// A shared backend returned by `new_full_parts`/`new_light_parts`.
-	pub backend: Arc<TBackend>,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// A handle for spawning tasks.
@@ -866,8 +863,8 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl, TBackend> {
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
-pub fn build_network<TBl, TExPool, TImpQu, TCl, TBackend>(
-	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl, TBackend>
+pub fn build_network<TBl, TExPool, TImpQu, TCl>(
+	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>
 ) -> Result<
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
@@ -884,11 +881,9 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl, TBackend>(
 		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
-		TBackend: sc_client_api::backend::Backend<TBl> + 'static,
-		NumberFor<TBl>: BlockNumberOps,
 {
 	let BuildNetworkParams {
-		config, client, backend, transaction_pool, spawn_handle, import_queue, on_demand,
+		config, client, transaction_pool, spawn_handle, import_queue, on_demand,
 		block_announce_validator_builder,
 	} = params;
 
@@ -898,40 +893,14 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl, TBackend>(
 		client: client.clone(),
 	});
 
-	let protocol_id = {
-		let protocol_id_full = match config.chain_spec.protocol_id() {
-			Some(pid) => pid,
-			None => {
-				warn!("Using default protocol ID {:?} because none is configured in the \
-					chain specs", DEFAULT_PROTOCOL_ID
-				);
-				DEFAULT_PROTOCOL_ID
-			}
-		};
-		sc_network::config::ProtocolId::from(protocol_id_full)
-	};
+	let protocol_id = config.protocol_id();
 
 	let block_announce_validator = if let Some(f) = block_announce_validator_builder {
 		f(client.clone())
 	} else {
 		Box::new(DefaultBlockAnnounceValidator)
 	};
-
-	let grandpa_warp_sync_request_protocol_config = {
-		if matches!(config.role, Role::Light) {
-			// Allow outgoing requests but deny incoming requests.
-			sc_grandpa_warp_sync::generate_protocol_config(protocol_id.clone())
-		} else {
-			// Allow both outgoing and incoming requests.
-			let (handler, protocol_config) = GrandpaWarpSyncRequestHandler::new(
-				protocol_id.clone(),
-				backend.clone(),
-			);
-			spawn_handle.spawn("grandpa_warp_sync_request_handler", handler.run());
-			protocol_config
-		}
-	};
-
+	
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
@@ -947,8 +916,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl, TBackend>(
 		import_queue: Box::new(import_queue),
 		protocol_id,
 		block_announce_validator,
-		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
-		grandpa_warp_sync_request_protocol_config,
+		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone())
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

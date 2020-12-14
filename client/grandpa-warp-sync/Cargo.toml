@@ -18,6 +18,7 @@ sc-finality-grandpa = { version = "0.8.0", path = "../finality-grandpa" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 sc-client-api = { version = "2.0.0", path = "../api" }
+sc-service = { version = "0.8.0", path = "../service" }
 futures = "0.3.8"
 log = "0.4.11"
 derive_more = "0.99.11"
