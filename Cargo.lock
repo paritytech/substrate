@@ -3912,7 +3912,7 @@ name = "node-rpc-client"
 version = "2.0.0"
 dependencies = [
  "futures 0.1.30",
- "hyper 0.13.9",
+ "hyper 0.12.35",
  "jsonrpc-core-client",
  "log",
  "node-primitives",
