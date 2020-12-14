@@ -368,7 +368,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `O(1)`.
-		/// - DbWeight: 2 Reads, 2 Writes
+		/// - DbWeight: 5 Reads, 4 Writes
 		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
 		/// # </weight>
