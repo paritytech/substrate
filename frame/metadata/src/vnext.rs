@@ -24,10 +24,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-use codec::Decode;
+use codec::{Decode, Input};
 use codec::Encode;
 use sp_core::RuntimeDebug;
-use sp_std::vec::Vec;
+use sp_std::{
+	vec::Vec,
+	fmt::Debug,
+};
 
 use scale_info::{
 	form::{
@@ -38,6 +41,7 @@ use scale_info::{
 	meta_type,
 	IntoCompact,
 	Registry,
+	RegistryReadOnly,
 	TypeInfo,
 };
 
@@ -46,16 +50,29 @@ pub type RuntimeMetadataLastVersion<T> = RuntimeMetadataV12<T>;
 /// Metadata prefixed by a u32 for reserved usage
 #[derive(Eq, Encode, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode))]
-pub struct RuntimeMetadataPrefixed<T: Form = MetaForm>(pub u32, pub RuntimeMetadata<T>);
+pub struct RuntimeMetadataPrefixed<S = &'static str>
+where
+	S: PartialEq + Eq + PartialOrd + Ord + Clone + Debug,
+{
+	pub prefix: u32,
+	pub types: RegistryReadOnly<S>,
+	pub metadata: RuntimeMetadata<CompactForm<S>>,
+}
 
-impl From<RuntimeMetadataLastVersion<CompactForm>> for RuntimeMetadataPrefixed<CompactForm> {
-	fn from(metadata: RuntimeMetadataLastVersion<CompactForm>) -> RuntimeMetadataPrefixed<CompactForm> {
-		RuntimeMetadataPrefixed(super::META_RESERVED, RuntimeMetadata::V12(metadata))
+impl From<RuntimeMetadataLastVersion<MetaForm>> for RuntimeMetadataPrefixed {
+	fn from(metadata: RuntimeMetadataLastVersion<MetaForm>) -> RuntimeMetadataPrefixed {
+		let mut registry = Registry::new();
+		let metadata = metadata.into_compact(&mut registry);
+		RuntimeMetadataPrefixed {
+			prefix: super::META_RESERVED,
+			types: registry.into(),
+			metadata: RuntimeMetadata::V12(metadata),
+		}
 	}
 }
 
-impl From<RuntimeMetadataPrefixed<CompactForm>> for sp_core::OpaqueMetadata {
-	fn from(metadata: RuntimeMetadataPrefixed<CompactForm>) -> Self {
+impl From<RuntimeMetadataPrefixed> for sp_core::OpaqueMetadata {
+	fn from(metadata: RuntimeMetadataPrefixed) -> Self {
 		sp_core::OpaqueMetadata::new(metadata.encode())
 	}
 }
