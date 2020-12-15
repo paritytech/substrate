@@ -537,27 +537,34 @@ impl<B: BlockT> ChainSync<B> {
 				}
 
 				// If we are at genesis, just start downloading.
-				if self.best_queued_number.is_zero() {
-					debug!(target:"sync", "New peer with best hash {} ({}).", best_hash, best_number);
-					self.peers.insert(who.clone(), PeerSync {
-						peer_id: who.clone(),
-						common_number: Zero::zero(),
+				let (state, req) = if self.best_queued_number.is_zero() {
+					debug!(
+						target:"sync",
+						"New peer with best hash {} ({}).",
 						best_hash,
 						best_number,
-						state: PeerSyncState::Available,
-					});
-					self.pending_requests.add(&who);
-					return Ok(None)
-				}
+					);
 
-				let common_best = std::cmp::min(self.best_queued_number, best_number);
+					(PeerSyncState::Available, None)
+				} else {
+					let common_best = std::cmp::min(self.best_queued_number, best_number);
 
-				debug!(
-					target:"sync",
-					"New peer with unknown best hash {} ({}), searching for common ancestor.",
-					best_hash,
-					best_number
-				);
+					debug!(
+						target:"sync",
+						"New peer with unknown best hash {} ({}), searching for common ancestor.",
+						best_hash,
+						best_number
+					);
+
+					(
+						PeerSyncState::AncestorSearch {
+							current: common_best,
+							start: self.best_queued_number,
+							state: AncestorSearchState::ExponentialBackoff(One::one()),
+						},
+						Some(ancestry_request::<B>(common_best))
+					)
+				};
 
 				self.pending_requests.add(&who);
 				self.peers.insert(who.clone(), PeerSync {
@@ -565,14 +572,10 @@ impl<B: BlockT> ChainSync<B> {
 					common_number: Zero::zero(),
 					best_hash,
 					best_number,
-					state: PeerSyncState::AncestorSearch {
-						current: common_best,
-						start: self.best_queued_number,
-						state: AncestorSearchState::ExponentialBackoff(One::one()),
-					},
+					state,
 				});
 
-				Ok(Some(ancestry_request::<B>(common_best)))
+				Ok(req)
 			}
 			Ok(BlockStatus::Queued) | Ok(BlockStatus::InChainWithState) | Ok(BlockStatus::InChainPruned) => {
 				debug!(
@@ -1607,36 +1610,34 @@ fn peer_block_request<B: BlockT>(
 			id, peer.common_number, finalized, peer.best_number, best_num,
 		);
 	}
-	if let Some(range) = blocks.needed_blocks(
+	let range = blocks.needed_blocks(
 		id.clone(),
 		MAX_BLOCKS_TO_REQUEST,
 		peer.best_number,
 		peer.common_number,
 		max_parallel_downloads,
 		MAX_DOWNLOAD_AHEAD,
-	) {
-		// The end is not part of the range.
-		let last = range.end.saturating_sub(One::one());
+	)?;
 
-		let from = if peer.best_number == last {
-			message::FromBlock::Hash(peer.best_hash)
-		} else {
-			message::FromBlock::Number(last)
-		};
+	// The end is not part of the range.
+	let last = range.end.saturating_sub(One::one());
 
-		let request = message::generic::BlockRequest {
-			id: 0,
-			fields: attrs.clone(),
-			from,
-			to: None,
-			direction: message::Direction::Descending,
-			max: Some((range.end - range.start).saturated_into::<u32>())
-		};
-
-		Some((range, request))
+	let from = if peer.best_number == last {
+		message::FromBlock::Hash(peer.best_hash)
 	} else {
-		None
-	}
+		message::FromBlock::Number(last)
+	};
+
+	let request = message::generic::BlockRequest {
+		id: 0,
+		fields: attrs.clone(),
+		from,
+		to: None,
+		direction: message::Direction::Descending,
+		max: Some((range.end - range.start).saturated_into::<u32>())
+	};
+
+	Some((range, request))
 }
 
 /// Get pending fork sync targets for a peer.
@@ -2134,5 +2135,70 @@ mod test {
 		let res = sync.on_block_data(&peer_id2, Some(request3), response).unwrap();
 		// Nothing to import
 		assert!(matches!(res, OnBlockData::Import(_, blocks) if blocks.is_empty()));
+	}
+
+	#[test]
+	fn lol() {
+		sp_tracing::try_init_simple();
+
+		let blocks = {
+			let mut client = Arc::new(TestClientBuilder::new().build());
+			(0..MAX_DOWNLOAD_AHEAD * 2).map(|_| build_block(&mut client)).collect::<Vec<_>>()
+		};
+
+		let mut client = Arc::new(TestClientBuilder::new().build());
+		let info = client.info();
+
+		let mut sync = ChainSync::new(
+			Roles::AUTHORITY,
+			client.clone(),
+			&info,
+			Box::new(DefaultBlockAnnounceValidator),
+			5,
+		);
+
+		let peer_id1 = PeerId::random();
+		let peer_id2 = PeerId::random();
+
+		let best_block = blocks.last().unwrap().clone();
+		// Connect the node we will sync from
+		sync.new_peer(peer_id1.clone(), best_block.hash(), *best_block.header().number()).unwrap();
+		sync.new_peer(peer_id2.clone(), info.best_hash, 0).unwrap();
+
+		let mut best_block_num = 0;
+		while best_block_num < MAX_DOWNLOAD_AHEAD {
+			let request = get_block_request(
+				&mut sync,
+				FromBlock::Number(MAX_BLOCKS_TO_REQUEST as u64 + best_block_num as u64),
+				MAX_BLOCKS_TO_REQUEST as u32,
+				&peer_id1,
+			);
+
+			let from = if let FromBlock::Number(from) = request.from {
+				from
+			} else {
+				panic!("We don't expect a hash!");
+			};
+
+			let mut resp_blocks = blocks[best_block_num as usize..from as usize].to_vec();
+			resp_blocks.reverse();
+
+			let response = create_block_response(resp_blocks);
+
+			let res = sync.on_block_data(&peer_id1, Some(request), response).unwrap();
+			assert!(
+				matches!(
+					res,
+					OnBlockData::Import(_, blocks) if blocks.len() == MAX_BLOCKS_TO_REQUEST,
+				),
+			);
+
+			best_block_num += MAX_BLOCKS_TO_REQUEST as u32;
+		}
+
+		// Let peer2 announce that it finished syncing
+		send_block_announce(best_block.header().clone(), &peer_id2, &mut sync);
+
+		panic!("{:?}", sync.block_requests().collect::<Vec<_>>());
 	}
 }
