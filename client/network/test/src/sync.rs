@@ -813,7 +813,7 @@ fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 }
 
 #[test]
-fn lol() {
+fn make_sure_we_sync_to_tip_without_informing_sync_about_new_best_block() {
 	sp_tracing::try_init_simple();
 
 	let mut net = TestNet::new(3);
