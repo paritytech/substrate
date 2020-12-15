@@ -1023,7 +1023,7 @@ impl<T: Config> Module<T> {
 		let number = <Number<T>>::get();
 		let parent_hash = <ParentHash<T>>::get();
 		let mut digest = <Digest<T>>::get();
-		let extrinsics_root = <ExtrinsicsRoot<T>>::get();
+		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 
 		// move block hash pruning window by one block
 		let block_hash_count = <T::BlockHashCount>::get();
