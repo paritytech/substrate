@@ -96,6 +96,41 @@ macro_rules! impl_outer_inherent {
 					})*
 				}
 
+				$(
+					match $module::is_inherent_required(self) {
+						Ok(Some(e)) => {
+							let found = block.extrinsics().iter().any(|xt| {
+								if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
+									return false
+								}
+
+								let call: Option<&<$module as ProvideInherent>::Call> =
+									xt.function.is_sub_type();
+
+								call.is_some()
+							});
+
+							if !found {
+								result.put_error(
+									$module::INHERENT_IDENTIFIER, &e
+								).expect("There is only one fatal error; qed");
+								if e.is_fatal_error() {
+									return result
+								}
+							}
+						},
+						Ok(None) => (),
+						Err(e) => {
+							result.put_error(
+								$module::INHERENT_IDENTIFIER, &e
+							).expect("There is only one fatal error; qed");
+							if e.is_fatal_error() {
+								return result
+							}
+						},
+					}
+				)*
+
 				result
 			}
 		}
