@@ -345,7 +345,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block|
-					self.client.runtime_api().metadata(&BlockId::Hash(block)).map(Into::into)
+					self.client.runtime_api().metadata_vnext(&BlockId::Hash(block)).map(Into::into)
 				)
 				.map_err(client_err)))
 	}

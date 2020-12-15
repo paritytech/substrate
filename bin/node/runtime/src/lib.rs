@@ -1051,6 +1051,10 @@ impl_runtime_apis! {
 		fn metadata() -> OpaqueMetadata {
 			Runtime::metadata().into()
 		}
+
+		fn metadata_vnext() -> OpaqueMetadata {
+			Runtime::metadata_vnext().into()
+		}
 	}
 
 	impl sp_block_builder::BlockBuilder<Block> for Runtime {
