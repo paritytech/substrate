@@ -398,28 +398,27 @@ impl<E: codec::Encode> IsFatalError for MakeFatalError<E> {
 	}
 }
 
-/// A module that provides an inherent and may also verifies it.
+/// A pallet that provides an inherent and may also verifies it.
 pub trait ProvideInherent {
-	/// The call type of the module.
+	/// The call type of the pallet.
 	type Call;
+
 	/// The error returned by `check_inherent`.
 	type Error: codec::Encode + IsFatalError;
+
 	/// The inherent identifier used by this inherent.
 	const INHERENT_IDENTIFIER: self::InherentIdentifier;
 
 	/// Create an inherent out of the given `InherentData`.
-	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
-
-	/// If `Some`, indicates that an inherent is required. Check will return the inner error if no
-	/// inherent is found. If `Err`, indicates that the check failed and further operations should
-	/// be aborted.
-	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
+	///
+	/// This will be called when producing a block in order to provide the inherents of the block.
+	fn create_inherent(data: &InherentData) -> Self::Call;
 
 	/// Check the given inherent if it is valid.
-	/// Checking the inherent is optional and can be omitted.
-	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
-		Ok(())
-	}
+	///
+	/// This will typically be called when validating a block to ensure block inherents are
+	/// sensible in regards to the inherent data provided by the validator.
+	fn check_inherent(_call: Option<&Self::Call>, _data: &InherentData) -> Result<(), Self::Error>;
 }
 
 #[cfg(test)]

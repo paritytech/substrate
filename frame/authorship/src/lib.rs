@@ -210,6 +210,7 @@ decl_module! {
 		/// Provide a set of uncles.
 		#[weight = (0, DispatchClass::Mandatory)]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
+			// TODO TODO: accept and no-op when Vec is empty ?
 			ensure_none(origin)?;
 			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);
 
@@ -342,7 +343,7 @@ impl<T: Config> ProvideInherent for Module<T> {
 	type Error = InherentError;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+	fn create_inherent(data: &InherentData) -> Self::Call {
 		let uncles = data.uncles().unwrap_or_default();
 		let mut set_uncles = Vec::new();
 
@@ -375,20 +376,14 @@ impl<T: Config> ProvideInherent for Module<T> {
 			}
 		}
 
-		if set_uncles.is_empty() {
-			None
-		} else {
-			Some(Call::set_uncles(set_uncles))
-		}
+		Call::set_uncles(set_uncles)
 	}
 
 	fn check_inherent(call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
 		match call {
-			Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES => {
-				Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into()))
-			},
+			Call::set_uncles(_) => Ok(()),
 			_ => {
-				Ok(())
+				todo!("err");
 			},
 		}
 	}

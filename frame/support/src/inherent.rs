@@ -26,6 +26,9 @@ pub use sp_inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFa
 /// Implement the outer inherent.
 /// All given modules need to implement `ProvideInherent`.
 ///
+/// The order will be the order of created inherent and the enforced order of inherent in block
+/// extrinsics.
+///
 /// # Example
 ///
 /// ```nocompile
@@ -37,6 +40,9 @@ pub use sp_inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFa
 ///     }
 /// }
 /// ```
+///
+/// `timestamp` will provide and check for the first extrinsic, `consensus` for the second and
+/// `aura` for the third.
 #[macro_export]
 macro_rules! impl_outer_inherent {
 	(
@@ -61,12 +67,12 @@ macro_rules! impl_outer_inherent {
 				let mut inherents = Vec::new();
 
 				$(
-					if let Some(inherent) = $module::create_inherent(self) {
-						inherents.push($uncheckedextrinsic::new(
-							inherent.into(),
-							None,
-						).expect("Runtime UncheckedExtrinsic is not Opaque, so it has to return `Some`; qed"));
-					}
+					let inherent = $module::create_inherent(self);
+					inherents.push($uncheckedextrinsic::new(
+						inherent.into(),
+						None,
+					).expect("Runtime UncheckedExtrinsic is not Opaque, \
+						so it has to return `Some`; qed"));
 				)*
 
 				inherents
@@ -77,57 +83,32 @@ macro_rules! impl_outer_inherent {
 				use $crate::traits::IsSubType;
 
 				let mut result = $crate::inherent::CheckInherentsResult::new();
-				for xt in block.extrinsics() {
-					if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
-						break
-					}
 
-					$({
-						if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
-							if let Err(e) = $module::check_inherent(call, self) {
-								result.put_error(
-									$module::INHERENT_IDENTIFIER, &e
-								).expect("There is only one fatal error; qed");
-								if e.is_fatal_error() {
-									return result
-								}
-							}
-						}
-					})*
-				}
+				let xts = block.extrinsics();
 
 				$(
-					match $module::is_inherent_required(self) {
-						Ok(Some(e)) => {
-							let found = block.extrinsics().iter().any(|xt| {
-								if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
-									return false
-								}
-
-								let call: Option<&<$module as ProvideInherent>::Call> =
-									xt.function.is_sub_type();
-
-								call.is_some()
-							});
-
-							if !found {
-								result.put_error(
-									$module::INHERENT_IDENTIFIER, &e
-								).expect("There is only one fatal error; qed");
-								if e.is_fatal_error() {
-									return result
-								}
+					match xts.next() {
+						Some(xt) => {
+							if xt.signature.is_some() {
+								todo!("return fatal error invalid inherent is signed");
 							}
-						},
-						Ok(None) => (),
-						Err(e) => {
-							result.put_error(
-								$module::INHERENT_IDENTIFIER, &e
-							).expect("There is only one fatal error; qed");
-							if e.is_fatal_error() {
-								return result
+
+							if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
+								if let Err(e) = $module::check_inherent(call, self) {
+									result.put_error(
+										$module::INHERENT_IDENTIFIER, &e
+									).expect("There is only one fatal error; qed");
+									if e.is_fatal_error() {
+										return result
+									}
+								}
+							} else {
+								todo!("return fatal error invalid inherent is for different pallet");
 							}
-						},
+						}
+						None => {
+							todo!("return fatal error invalid inherent is missing");
+						}
 					}
 				)*
 

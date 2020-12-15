@@ -242,6 +242,20 @@ decl_module! {
 		/// the probability of a slot being empty).
 		const ExpectedBlockTime: T::Moment = T::ExpectedBlockTime::get();
 
+		// TODO TODO: should return an error which is Encode+IsFatalError
+		fn check_inherent_data(data: &sp_inherents::InherentData) -> sp_inherents::CheckInherentsResult {
+			let timestamp = pallet_timestamp::Module<T>::now();
+
+			let timestamp_based_slot = (timestamp / Self::slot_duration()).saturated_into::<u64>();
+			let seal_slot = data.babe_inherent_data()?;
+
+			if timestamp_based_slot == seal_slot {
+				Ok(())
+			} else {
+				Err(sp_inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
+			}
+		}
+
 		/// Initialization
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			Self::do_initialize(now);
@@ -776,18 +790,5 @@ impl<T: Config> ProvideInherent for Module<T> {
 	}
 
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-		let timestamp = match call {
-			pallet_timestamp::Call::set(ref timestamp) => timestamp.clone(),
-			_ => return Ok(()),
-		};
-
-		let timestamp_based_slot = (timestamp / Self::slot_duration()).saturated_into::<u64>();
-		let seal_slot = data.babe_inherent_data()?;
-
-		if timestamp_based_slot == seal_slot {
-			Ok(())
-		} else {
-			Err(sp_inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
-		}
 	}
 }

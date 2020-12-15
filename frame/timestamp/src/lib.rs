@@ -230,13 +230,13 @@ impl<T: Config> ProvideInherent for Module<T> {
 	type Error = InherentError;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+	fn create_inherent(data: &InherentData) -> Self::Call {
 		let data: T::Moment = extract_inherent_data(data)
 			.expect("Gets and decodes timestamp inherent data")
 			.saturated_into();
 
 		let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
-		Some(Call::set(next_time.into()))
+		Call::set(next_time.into())
 	}
 
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
@@ -244,7 +244,7 @@ impl<T: Config> ProvideInherent for Module<T> {
 
 		let t: u64 = match call {
 			Call::set(ref t) => t.clone().saturated_into::<u64>(),
-			_ => return Ok(()),
+			_ => todo!("err"),
 		};
 
 		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
