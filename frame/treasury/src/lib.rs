@@ -253,7 +253,7 @@ decl_module! {
 
 		type Error = Error<T, I>;
 
-		pub fn deposit_event() = default;
+		fn deposit_event() = default;
 
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
@@ -398,7 +398,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
 
 		// Call Runtime hooks to external pallet using treasury to compute spend funds.
-		T::SpendFunds::spend_funds( &mut budget_remaining, &mut imbalance, &mut total_weight, &mut missed_any );
+		T::SpendFunds::spend_funds( &mut budget_remaining, &mut imbalance, &mut total_weight, &mut missed_any);
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
