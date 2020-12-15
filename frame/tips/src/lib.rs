@@ -83,6 +83,9 @@ pub trait Config: frame_system::Config + pallet_treasury::Config {
 	/// Maximum acceptable reason length.
 	type MaximumReasonLength: Get<u32>;
 
+	/// The amount held on deposit per byte within the tip report reason or bounty description.
+	type DataDepositPerByte: Get<BalanceOf<Self>>;
+
 	/// Origin from which tippers must come.
 	///
 	/// `ContainsLengthBound::max_len` must be cost free (i.e. no storage read or heavy operation).

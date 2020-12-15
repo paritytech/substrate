@@ -120,6 +120,9 @@ pub trait Config: frame_system::Config + pallet_treasury::Config {
 	/// Minimum value for a bounty.
 	type BountyValueMinimum: Get<BalanceOf<Self>>;
 
+	/// The amount held on deposit per byte within the tip report reason or bounty description.
+	type DataDepositPerByte: Get<BalanceOf<Self>>;
+
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
