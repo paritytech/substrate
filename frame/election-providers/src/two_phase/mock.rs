@@ -56,8 +56,8 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let RoundSnapshot {
 		voters,
 		targets,
-		desired_targets,
 	} = TwoPhase::snapshot().unwrap();
+	let desired_targets = TwoPhase::desired_targets().unwrap();
 
 	// closures
 	let voter_index = crate::voter_index_fn!(voters, AccountId, Runtime);
@@ -195,6 +195,7 @@ impl crate::two_phase::Config for Runtime {
 	type UnsignedPriority = UnsignedPriority;
 	type ElectionDataProvider = StakingMock;
 	type WeightInfo = ();
+	type CompactSolution = TestCompact;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
@@ -212,8 +213,6 @@ pub struct ExtBuilder {}
 
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
-	type CompactSolution = TestCompact;
-
 	fn targets() -> Vec<AccountId> {
 		Targets::get()
 	}

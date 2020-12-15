@@ -106,8 +106,12 @@ where
 	assert_eq!(all_voters.len() as u32, witness.voters);
 	assert_eq!(winners.len() as u32, winners_count);
 
+	SnapshotMetadata::put(RoundSnapshotMetadata {
+		voters_len: all_voters.len() as u32,
+		targets_len: targets.len() as u32,
+	});
+	DesiredTargets::put(winners_count);
 	<Snapshot<T>>::put(RoundSnapshot {
-		desired_targets: winners_count,
 		voters: all_voters.clone(),
 		targets: targets.clone(),
 	});

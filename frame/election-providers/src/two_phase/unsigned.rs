@@ -46,11 +46,9 @@ where
 {
 	/// Min a new npos solution.
 	pub fn mine_solution(iters: usize) -> Result<(RawSolution<CompactOf<T>>, WitnessData), Error> {
-		let RoundSnapshot {
-			desired_targets,
-			voters,
-			targets,
-		} = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
+		let RoundSnapshot { voters, targets } =
+			Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
+		let desired_targets = Self::desired_targets().ok_or(Error::SnapshotUnAvailable)?;
 
 		seq_phragmen::<_, CompactAccuracyOf<T>>(
 			desired_targets as usize,
@@ -70,9 +68,9 @@ where
 		election_result: ElectionResult<T::AccountId, CompactAccuracyOf<T>>,
 	) -> Result<(RawSolution<CompactOf<T>>, WitnessData), Error> {
 		// storage items. Note: we have already read this from storage, they must be in cache.
-		let RoundSnapshot {
-			voters, targets, desired_targets,
-		} = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
+		let RoundSnapshot { voters, targets } =
+			Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
+		let desired_targets = Self::desired_targets().ok_or(Error::SnapshotUnAvailable)?;
 
 		// closures.
 		let voter_index = crate::voter_index_fn!(voters, T::AccountId, T);
@@ -700,7 +698,7 @@ mod tests {
 
 			// ensure we have snapshots in place.
 			assert!(TwoPhase::snapshot().is_some());
-			assert_eq!(TwoPhase::snapshot().unwrap().desired_targets, 2);
+			assert_eq!(TwoPhase::desired_targets().unwrap(), 2);
 
 			// mine seq_phragmen solution with 2 iters.
 			let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
@@ -733,7 +731,7 @@ mod tests {
 
 				roll_to(25);
 				assert!(TwoPhase::current_phase().is_unsigned());
-				assert_eq!(TwoPhase::snapshot().unwrap().desired_targets, 1);
+				assert_eq!(TwoPhase::desired_targets().unwrap(), 1);
 
 				// an initial solution
 				let result = ElectionResult {

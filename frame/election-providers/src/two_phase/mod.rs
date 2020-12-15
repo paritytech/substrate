@@ -165,12 +165,8 @@ pub(crate) mod macros;
 pub mod signed;
 pub mod unsigned;
 
-/// The compact solution type used by this crate. This is provided from the [`ElectionDataProvider`]
-/// implementer.
-pub type CompactOf<T> = <<T as Config>::ElectionDataProvider as ElectionDataProvider<
-	<T as frame_system::Config>::AccountId,
-	<T as frame_system::Config>::BlockNumber,
->>::CompactSolution;
+/// The compact solution type used by this crate.
+pub type CompactOf<T> = <T as Config>::CompactSolution;
 
 /// The voter index. Derived from [`CompactOf`].
 pub type CompactVoterIndexOf<T> = <CompactOf<T> as CompactSolution>::Voter;
@@ -331,8 +327,21 @@ pub struct RoundSnapshot<A> {
 	pub voters: Vec<(A, VoteWeight, Vec<A>)>,
 	/// All of the targets.
 	pub targets: Vec<A>,
-	/// Desired number of winners to be elected for this round.
-	pub desired_targets: u32,
+}
+
+/// Some metadata related to snapshot.
+///
+/// In this pallet, there are cases where we want to read the whole snapshot (voters, targets,
+/// desired), and cases that we are interested in just the length of these values. The former favors
+/// the snapshot to be stored in one struct (as it is now) while the latter prefers them to be
+/// separate to enable the use of `decode_len`. This approach is a middle ground, storing the
+/// snapshot as one struct, whilst storing the lengths separately.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+pub struct RoundSnapshotMetadata {
+	/// The length of voters.
+	voters_len: u32,
+	/// The length of targets.
+	targets_len: u32,
 }
 
 /// The crate errors.
@@ -400,8 +409,8 @@ impl From<sp_npos_elections::Error> for FeasibilityError {
 }
 
 pub trait WeightInfo {
+	fn on_initialize_nothing() -> Weight;
 	fn on_initialize_open_signed_phase() -> Weight;
-	fn on_initialize_open_unsigned_phase() -> Weight;
 	fn finalize_signed_phase_accept_solution() -> Weight;
 	fn finalize_signed_phase_reject_solution() -> Weight;
 	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight;
@@ -419,10 +428,10 @@ impl WeightInfo for () {
 	fn submit_unsigned(_: u32, _: u32, _: u32, _: u32) -> Weight {
 		Default::default()
 	}
-	fn on_initialize_open_signed_phase() -> Weight {
+	fn on_initialize_nothing() -> Weight {
 		Default::default()
 	}
-	fn on_initialize_open_unsigned_phase() -> Weight {
+	fn on_initialize_open_signed_phase() -> Weight {
 		Default::default()
 	}
 	fn finalize_signed_phase_accept_solution() -> Weight {
@@ -477,6 +486,15 @@ where
 	/// Something that will provide the election data.
 	type ElectionDataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 
+	/// The compact solution type
+	type CompactSolution: codec::Codec
+		+ Default
+		+ PartialEq
+		+ Eq
+		+ Clone
+		+ sp_std::fmt::Debug
+		+ CompactSolution;
+
 	/// The weight of the pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -488,8 +506,8 @@ decl_storage! {
 		/// This is useful for de-duplication of transactions submitted to the pool, and general
 		/// diagnostics of the module.
 		///
-		/// This is merely incremented once per every time that signed phase starts.
-		pub Round get(fn round): u32 = 0;
+		/// This is merely incremented once per every time that an upstream `elect` is called.
+		pub Round get(fn round): u32 = 1;
 		/// Current phase.
 		pub CurrentPhase get(fn current_phase): Phase<T::BlockNumber> = Phase::Off;
 
@@ -503,6 +521,16 @@ decl_storage! {
 		///
 		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 		pub Snapshot get(fn snapshot): Option<RoundSnapshot<T::AccountId>>;
+
+		/// Desired number of targets to elect for this round.
+		///
+		/// Only exists when [`Snapshot`] is present.
+		pub DesiredTargets get(fn desired_targets): Option<u32>;
+
+		/// The metadata of the [`RoundSnapshot`]
+		///
+		/// Only exists when [`Snapshot`] is present.
+		pub SnapshotMetadata get(fn snapshot_metadata): Option<RoundSnapshotMetadata>;
 	}
 }
 
@@ -556,26 +584,22 @@ decl_module! {
 			let signed_deadline = T::SignedPhase::get() + T::UnsignedPhase::get();
 			let unsigned_deadline = T::UnsignedPhase::get();
 
-			sp_std::if_std! {
-				dbg!(now, next_election, signed_deadline, unsigned_deadline);
-			}
 			let remaining = next_election - now;
 			match Self::current_phase() {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
 					// signed phase can only start after Off.
 					<CurrentPhase<T>>::put(Phase::Signed);
-					Round::mutate(|r| *r +=1);
 					Self::start_signed_phase();
 					log!(info, "Starting signed phase at #{:?} , round {}.", now, Self::round());
 					T::WeightInfo::on_initialize_open_signed_phase()
 				},
 				Phase::Signed | Phase::Off if remaining <= unsigned_deadline && remaining > 0u32.into() => {
 					// unsigned phase can start after Off or Signed.
-					let _ = Self::finalize_signed_phase();
+					let (_, consumed_weight) = Self::finalize_signed_phase();
 					// for now always start the unsigned phase.
 					<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
 					log!(info, "Starting unsigned phase at #{:?}.", now);
-					T::WeightInfo::on_initialize_open_unsigned_phase()
+					consumed_weight
 				},
 				_ => {
 					Zero::zero()
@@ -626,8 +650,7 @@ decl_module! {
 
 			// build witness. Note: this is not needed for weight calc, thus not input.
 			// defensive-only: if phase is signed, snapshot will exist.
-			let RoundSnapshot { voters, targets, .. } = Self::snapshot().unwrap_or_default();
-			let witness = WitnessData { voters: voters.len() as u32, targets: targets.len() as u32 };
+			let witness = Self::build_witness().unwrap_or_default();
 
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
@@ -676,10 +699,9 @@ decl_module! {
 			let _ = Self::unsigned_pre_dispatch_checks(&solution)?;
 
 			// ensure witness was correct.
-			// TODO: probably split these again..
-			let RoundSnapshot { voters, targets, .. } = Self::snapshot().unwrap_or_default();
-			ensure!(voters.len() as u32 == witness.voters, PalletError::<T>::InvalidWitness);
-			ensure!(targets.len() as u32 == witness.targets, PalletError::<T>::InvalidWitness);
+			let RoundSnapshotMetadata { voters_len, targets_len } = Self::snapshot_metadata().unwrap_or_default();
+			ensure!(voters_len as u32 == witness.voters, PalletError::<T>::InvalidWitness);
+			ensure!(targets_len as u32 == witness.targets, PalletError::<T>::InvalidWitness);
 
 			let ready =
 				Self::feasibility_check(solution, ElectionCompute::Unsigned)
@@ -699,6 +721,33 @@ impl<T: Config> Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {
+	/// Perform the tasks to be done after a new `elect` has been triggered:
+	///
+	/// 1. Increment round.
+	/// 2. Change phase to [`Phase::Off`]
+	/// 3. Clear all snapshot data.
+	fn post_elect() {
+		// inc round
+		Round::mutate(|r| *r = *r + 1);
+
+		// change phase
+		<CurrentPhase<T>>::put(Phase::Off);
+
+		// kill snapshots
+		<Snapshot<T>>::kill();
+		SnapshotMetadata::kill();
+		DesiredTargets::kill();
+	}
+
+	/// Build the witness data from the snapshot metadata, if it exists. Else, returns `None`.
+	fn build_witness() -> Option<WitnessData> {
+		let metadata = Self::snapshot_metadata()?;
+		Some(WitnessData {
+			voters: metadata.voters_len as u32,
+			targets: metadata.targets_len as u32,
+		})
+	}
+
 	/// Checks the feasibility of a solution.
 	///
 	/// This checks the solution for the following:
@@ -717,17 +766,19 @@ where
 		// winners are not directly encoded in the solution.
 		let winners = compact.unique_targets();
 
-		// read the entire snapshot. NOTE: could be optimized.
-		let RoundSnapshot {
-			voters: snapshot_voters,
-			targets: snapshot_targets,
-			desired_targets,
-		} = Self::snapshot().ok_or(FeasibilityError::SnapshotUnavailable)?;
+		let desired_targets =
+			Self::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
 		ensure!(
 			winners.len() as u32 == desired_targets,
 			FeasibilityError::WrongWinnerCount,
 		);
+
+		// read the entire snapshot.
+		let RoundSnapshot {
+			voters: snapshot_voters,
+			targets: snapshot_targets,
+		} = Self::snapshot().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
 		// ----- Start building. First, we need some closures.
 		let voter_at = crate::voter_at_fn!(snapshot_voters, T::AccountId, T);
@@ -792,23 +843,15 @@ where
 	fn onchain_fallback() -> Result<Supports<T::AccountId>, Error> {
 		// If the length of singed phase is zero, the signed phase never starts and thus snapshot is
 		// never created.
-		let get_snapshot_backup = || {
+		let snapshot_backup = || {
 			let targets = T::ElectionDataProvider::targets();
 			let voters = T::ElectionDataProvider::voters();
-			let desired_targets = T::ElectionDataProvider::desired_targets();
-
-			RoundSnapshot {
-				voters,
-				targets,
-				desired_targets,
-			}
+			RoundSnapshot { voters, targets }
 		};
+		let desired_targets_backup = || T::ElectionDataProvider::desired_targets();
 
-		let RoundSnapshot {
-			desired_targets,
-			voters,
-			targets,
-		} = Self::snapshot().unwrap_or_else(get_snapshot_backup);
+		let RoundSnapshot { voters, targets } = Self::snapshot().unwrap_or_else(snapshot_backup);
+		let desired_targets = Self::desired_targets().unwrap_or_else(desired_targets_backup);
 		<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<Perbill>(
 			desired_targets as usize,
 			targets,
@@ -844,11 +887,7 @@ where
 				|ReadySolution { supports, compute, ..}| Ok((supports, compute)),
 			)
 			.map(|(supports, compute)| {
-				// reset phase.
-				<CurrentPhase<T>>::put(Phase::Off);
-				// clear snapshots.
-				<Snapshot<T>>::kill();
-
+				Self::post_elect();
 				Self::deposit_event(RawEvent::ElectionFinalized(Some(compute)));
 				log!(info, "Finalized election round with compute {:?}.", compute);
 				supports
@@ -880,12 +919,12 @@ mod tests {
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
-			assert_eq!(TwoPhase::round(), 0);
+			assert_eq!(TwoPhase::round(), 1);
 
 			roll_to(4);
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
 			assert!(TwoPhase::snapshot().is_none());
-			assert_eq!(TwoPhase::round(), 0);
+			assert_eq!(TwoPhase::round(), 1);
 
 			roll_to(15);
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
@@ -919,7 +958,7 @@ mod tests {
 
 			assert!(TwoPhase::current_phase().is_off());
 			assert!(TwoPhase::snapshot().is_none());
-			assert_eq!(TwoPhase::round(), 1);
+			assert_eq!(TwoPhase::round(), 2);
 
 			roll_to(44);
 			assert!(TwoPhase::current_phase().is_off());
@@ -1036,5 +1075,10 @@ mod tests {
 
 			assert!(TwoPhase::current_phase().is_off());
 		});
+	}
+
+	#[test]
+	fn early_termination() {
+		// un expectedly early call to `elect`, at the middle of signed phase or unsigned phase.
 	}
 }

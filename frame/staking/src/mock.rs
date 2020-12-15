@@ -224,6 +224,7 @@ pallet_staking_reward_curve::build! {
 	);
 }
 parameter_types! {
+	pub const MaxNominations: u32 = 16;
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
@@ -251,6 +252,7 @@ impl Config for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type MaxNominations = MaxNominations;
 	type RewardRemainder = RewardRemainderMock;
 	type Event = MetaEvent;
 	type Slash = ();

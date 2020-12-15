@@ -22,54 +22,56 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 
-
-use sp_std::prelude::*;
+use codec::{Decode, Encode};
 use frame_support::{
-	construct_runtime, parameter_types, debug, RuntimeDebug,
-	weights::{
-		Weight, IdentityFee,
-		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND}, DispatchClass,
-	},
+	construct_runtime, debug, parameter_types,
 	traits::{
-		Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier,
-		U128CurrencyToVote,
+		Currency, Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier, OnUnbalanced,
+		Randomness, U128CurrencyToVote,
 	},
+	weights::{
+		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
+		DispatchClass, IdentityFee, Weight,
+	},
+	RuntimeDebug,
 };
 use frame_system::{
-	EnsureRoot, EnsureOneOf,
-	limits::{BlockWeights, BlockLength}
+	limits::{BlockLength, BlockWeights},
+	EnsureOneOf, EnsureRoot,
 };
-use frame_support::traits::InstanceFilter;
-use codec::{Encode, Decode};
+pub use node_primitives::{AccountId, Signature};
+use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
+use pallet_grandpa::{
+	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
+};
+use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
+use pallet_session::historical as pallet_session_historical;
+pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
+use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+use sp_api::impl_runtime_apis;
+use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_core::{
 	crypto::KeyTypeId,
 	u32_trait::{_1, _2, _3, _4, _5},
 	OpaqueMetadata,
 };
-pub use node_primitives::{AccountId, Signature};
-use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
-use sp_api::impl_runtime_apis;
+use sp_inherents::{CheckInherentsResult, InherentData};
+use sp_npos_elections::CompactSolution;
 use sp_runtime::{
-	Permill, Perbill, Perquintill, Percent, ApplyExtrinsicResult,
-	impl_opaque_keys, generic, create_runtime_str, ModuleId, FixedPointNumber,
+	create_runtime_str,
+	curve::PiecewiseLinear,
+	generic, impl_opaque_keys,
+	traits::{
+		self, BlakeTwo256, Block as BlockT, ConvertInto, NumberFor, OpaqueKeys,
+		SaturatedConversion, StaticLookup,
+	},
+	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
+	ApplyExtrinsicResult, FixedPointNumber, ModuleId, Perbill, Percent, Permill, Perquintill,
 };
-use sp_runtime::curve::PiecewiseLinear;
-use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource, TransactionPriority};
-use sp_runtime::traits::{
-	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
-	ConvertInto, OpaqueKeys, NumberFor,
-};
-use sp_version::RuntimeVersion;
+use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
-use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
-use pallet_grandpa::fg_primitives;
-use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
-use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
-use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
-pub use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment, CurrencyAdapter};
-use pallet_session::{historical as pallet_session_historical};
-use sp_inherents::{InherentData, CheckInherentsResult};
+use sp_version::RuntimeVersion;
 use static_assertions::const_assert;
 
 use frame_election_providers::two_phase as pallet_two_phase_election_provider;
@@ -451,7 +453,13 @@ pallet_staking_reward_curve::build! {
 	);
 }
 
+sp_npos_elections::generate_solution_type!(
+	#[compact]
+	pub struct CompactU16Solution::<u32, u16, sp_runtime::PerU16>(16)
+);
+
 parameter_types! {
+	pub const MaxNominations: u32 = CompactU16Solution::LIMIT as u32;
 	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
 	pub const BondingDuration: pallet_staking::EraIndex = 24 * 28;
 	pub const SlashDeferDuration: pallet_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
@@ -472,6 +480,7 @@ impl pallet_staking::Config for Runtime {
 	type UnixTime = Timestamp;
 	type CurrencyToVote = U128CurrencyToVote;
 	type RewardRemainder = Treasury;
+	type MaxNominations = MaxNominations;
 	type Event = Event;
 	type Slash = Treasury; // send the slashed funds to the treasury.
 	type Reward = (); // rewards are minted from the void
@@ -520,6 +529,7 @@ impl pallet_two_phase_election_provider::Config for Runtime {
 	type MinerMaxWeight = ();
 	type UnsignedPriority = ();
 	type ElectionDataProvider = Staking;
+	type CompactSolution = CompactU16Solution;
 	type WeightInfo = ();
 }
 

@@ -23,12 +23,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{fmt::Debug, prelude::*};
+use sp_std::prelude::*;
 
 use sp_arithmetic::PerThing;
 /// Re-export some type as they are used in the interface.
-pub use sp_npos_elections::{CompactSolution, ExtendedBalance, PerThing128, VoteWeight, Supports};
-
+pub use sp_npos_elections::{CompactSolution, ExtendedBalance, PerThing128, Supports, VoteWeight};
 
 /// Something that can provide the data to something else that implements [`ElectionProvider`], such
 /// as the [`two_phase`] module.
@@ -55,11 +54,6 @@ pub use sp_npos_elections::{CompactSolution, ExtendedBalance, PerThing128, VoteW
 /// }
 /// ```
 pub trait ElectionDataProvider<AccountId, B> {
-	/// The compact solution type.
-	///
-	/// This should encode the entire solution with the least possible space usage.
-	type CompactSolution: codec::Codec + Default + PartialEq + Eq + Clone + Debug + CompactSolution;
-
 	/// All possible targets for the election, i.e. the candidates.
 	fn targets() -> Vec<AccountId>;
 

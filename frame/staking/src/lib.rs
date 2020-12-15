@@ -298,7 +298,7 @@ use frame_support::{
 use frame_system::{self as system, ensure_root, ensure_signed, offchain::SendTransactionTypes};
 use pallet_session::historical;
 use sp_election_providers::{ElectionDataProvider, ElectionProvider, Supports};
-use sp_npos_elections::{generate_solution_type, CompactSolution, ExtendedBalance, VoteWeight};
+use sp_npos_elections::{ExtendedBalance, VoteWeight};
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
@@ -313,20 +313,11 @@ use sp_staking::{
 	offence::{Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
 	SessionIndex,
 };
-use sp_std::{
-	collections::btree_map::BTreeMap,
-	convert::{From, TryInto},
-	mem::size_of,
-	prelude::*,
-	result,
-};
+use sp_std::{collections::btree_map::BTreeMap, convert::From, mem::size_of, prelude::*, result};
 use weights::WeightInfo;
 
 const STAKING_ID: LockIdentifier = *b"staking ";
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
-// TODO: This should be moved to the runtime level, and there's no need for type CompactSolution in
-// `ElectionDataProvider`. TwoPhase can just have a `type Compact = ...` in its `Config`.
-pub const MAX_NOMINATIONS: usize = <CompactU16Solution as CompactSolution>::LIMIT;
 pub(crate) const LOG_TARGET: &'static str = "staking";
 
 // syntactic sugar for logging.
@@ -357,12 +348,6 @@ pub type EraIndex = u32;
 
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
-
-// Note: Maximum nomination limit is set here -- 16.
-generate_solution_type!(
-	#[compact]
-	pub struct CompactU16Solution::<NominatorIndex, ValidatorIndex, OffchainAccuracy>(16)
-);
 
 /// Accuracy used for on-chain election.
 pub type ChainAccuracy = Perbill;
@@ -799,6 +784,9 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// Maximum number of nominations allowed per nominator.
+	type MaxNominations: Get<u32>;
 }
 
 decl_storage! {
@@ -1150,24 +1138,25 @@ decl_module! {
 				)
 			);
 
-			use sp_runtime::UpperOf;
+			// use sp_runtime::UpperOf;
 			// see the documentation of `Assignment::try_normalize`. Now we can ensure that this
 			// will always return `Ok`.
 			// 1. Maximum sum of Vec<ChainAccuracy> must fit into `UpperOf<ChainAccuracy>`.
-			assert!(
-				<usize as TryInto<UpperOf<ChainAccuracy>>>::try_into(MAX_NOMINATIONS)
-				.unwrap()
-				.checked_mul(<ChainAccuracy>::one().deconstruct().try_into().unwrap())
-				.is_some()
-			);
+			// TODO: these must go elsewhere
+			// assert!(
+			// 	<usize as TryInto<UpperOf<ChainAccuracy>>>::try_into(MAX_NOMINATIONS)
+			// 	.unwrap()
+			// 	.checked_mul(<ChainAccuracy>::one().deconstruct().try_into().unwrap())
+			// 	.is_some()
+			// );
 
-			// 2. Maximum sum of Vec<OffchainAccuracy> must fit into `UpperOf<OffchainAccuracy>`.
-			assert!(
-				<usize as TryInto<UpperOf<OffchainAccuracy>>>::try_into(MAX_NOMINATIONS)
-				.unwrap()
-				.checked_mul(<OffchainAccuracy>::one().deconstruct().try_into().unwrap())
-				.is_some()
-			);
+			// // 2. Maximum sum of Vec<OffchainAccuracy> must fit into `UpperOf<OffchainAccuracy>`.
+			// assert!(
+			// 	<usize as TryInto<UpperOf<OffchainAccuracy>>>::try_into(MAX_NOMINATIONS)
+			// 	.unwrap()
+			// 	.checked_mul(<OffchainAccuracy>::one().deconstruct().try_into().unwrap())
+			// 	.is_some()
+			// );
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
@@ -1444,7 +1433,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - The transaction's complexity is proportional to the size of `targets` (N)
-		/// which is capped at CompactAssignments::LIMIT (MAX_NOMINATIONS).
+		/// which is capped at T::MaxNominations.
 		/// - Both the reads and writes follow a similar pattern.
 		/// ---------
 		/// Weight: O(N)
@@ -1460,7 +1449,7 @@ decl_module! {
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			let targets = targets.into_iter()
-				.take(MAX_NOMINATIONS)
+				.take(T::MaxNominations::get() as usize)
 				.map(|t| T::Lookup::lookup(t))
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
@@ -2140,7 +2129,6 @@ impl<T: Config> Module<T> {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
 			s.unwrap()
 		});
-		println!("❌ ErasStartSessionIndex::insert({}, {});", current_era, start_session_index);
 		ErasStartSessionIndex::insert(&current_era, &start_session_index);
 
 		// Clean old era information.
@@ -2429,8 +2417,6 @@ impl<T: Config> Module<T> {
 }
 
 impl<T: Config> ElectionDataProvider<T::AccountId, T::BlockNumber> for Module<T> {
-	type CompactSolution = CompactU16Solution;
-
 	fn desired_targets() -> u32 {
 		Self::validator_count()
 	}
@@ -2466,16 +2452,6 @@ impl<T: Config> ElectionDataProvider<T::AccountId, T::BlockNumber> for Module<T>
 			.saturating_sub(1) // one session is computed in this_session_end.
 			.into();
 
-		dbg!(
-			now,
-			session_index,
-			current_era_start_session_index,
-			era_length,
-			T::NextNewSession::estimate_next_new_session(now).unwrap(),
-			this_session_end,
-			sessions_left,
-			session_length,
-		);
 		this_session_end.saturating_add(sessions_left.saturating_mul(session_length))
 	}
 

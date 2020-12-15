@@ -39,11 +39,12 @@ where
 		let voters = T::ElectionDataProvider::voters();
 		let desired_targets = T::ElectionDataProvider::desired_targets();
 
-		<Snapshot<T>>::put(RoundSnapshot {
-			voters,
-			targets,
-			desired_targets,
+		SnapshotMetadata::put(RoundSnapshotMetadata {
+			voters_len: voters.len() as u32,
+			targets_len: targets.len() as u32,
 		});
+		DesiredTargets::put(desired_targets);
+		<Snapshot<T>>::put(RoundSnapshot { voters, targets });
 	}
 
 	/// Finish the singed phase. Process the signed submissions from best to worse until a valid one
@@ -53,7 +54,7 @@ where
 	///
 	/// This drains the [`SignedSubmissions`], potentially storing the best valid one in
 	/// [`QueuedSolution`].
-	pub fn finalize_signed_phase() -> bool {
+	pub fn finalize_signed_phase() -> (bool, Weight) {
 		let mut all_submission: Vec<SignedSubmission<_, _, _>> = <SignedSubmissions<T>>::take();
 		let mut found_solution = false;
 		let mut weight = T::DbWeight::get().reads(1);
@@ -66,6 +67,19 @@ where
 				reward,
 			} = best;
 			let active_voters = solution.compact.voters_count() as u32;
+			let feasibility_weight = {
+				// defensive only: at the end of signed phase, snapshot will exits.
+				let RoundSnapshotMetadata {
+					voters_len,
+					targets_len,
+				} = Self::snapshot_metadata().unwrap_or_default();
+				let desired_targets = Self::desired_targets().unwrap_or_default();
+				let v = voters_len as u32;
+				let t = targets_len as u32;
+				let a = active_voters;
+				let w = desired_targets;
+				T::WeightInfo::feasibility_check(v, t, a, w)
+			};
 			match Self::feasibility_check(solution, ElectionCompute::Signed) {
 				Ok(ready_solution) => {
 					Self::finalize_signed_phase_accept_solution(
@@ -76,26 +90,14 @@ where
 					);
 					found_solution = true;
 
-					let feasibility_weight = {
-						// TODO: might be easier to just store the weight in `SignedSubmission`?
-						let RoundSnapshot {
-							voters,
-							targets,
-							desired_targets,
-						} = Self::snapshot().unwrap_or_default();
-						let v = voters.len() as u32;
-						let t = targets.len() as u32;
-						let a = active_voters;
-						let w = desired_targets;
-						T::WeightInfo::feasibility_check(v, t, a, w)
-					};
-
 					weight = weight.saturating_add(feasibility_weight);
 					weight = weight
 						.saturating_add(T::WeightInfo::finalize_signed_phase_accept_solution());
 					break;
 				}
 				Err(_) => {
+					// we assume a worse ase feasibility check happened anyhow.
+					weight = weight.saturating_add(feasibility_weight);
 					Self::finalize_signed_phase_reject_solution(&who, deposit);
 					weight = weight
 						.saturating_add(T::WeightInfo::finalize_signed_phase_reject_solution());
@@ -112,7 +114,7 @@ where
 			debug_assert!(_remaining.is_zero());
 		});
 
-		found_solution
+		(found_solution, weight)
 	}
 
 	/// Helper function for the case where a solution is accepted in the signed phase.
@@ -332,7 +334,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			assert_eq!(balances(&99), (95, 5));
 
-			assert!(TwoPhase::finalize_signed_phase());
+			assert!(TwoPhase::finalize_signed_phase().0);
 			assert_eq!(balances(&99), (100 + 7, 0));
 		})
 	}
@@ -352,7 +354,7 @@ mod tests {
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				assert_eq!(balances(&99), (95, 5));
 
-				assert!(TwoPhase::finalize_signed_phase());
+				assert!(TwoPhase::finalize_signed_phase().0);
 				// expected reward is 5 + 10
 				assert_eq!(balances(&99), (100 + 10, 0));
 			});
@@ -370,7 +372,7 @@ mod tests {
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 				assert_eq!(balances(&99), (95, 5));
 
-				assert!(TwoPhase::finalize_signed_phase());
+				assert!(TwoPhase::finalize_signed_phase().0);
 				// expected reward is 5 + 10
 				assert_eq!(balances(&99), (100 + 15, 0));
 			});
@@ -392,7 +394,7 @@ mod tests {
 			assert_eq!(balances(&99), (95, 5));
 
 			// no good solution was stored.
-			assert!(!TwoPhase::finalize_signed_phase());
+			assert!(!TwoPhase::finalize_signed_phase().0);
 			// and the bond is gone.
 			assert_eq!(balances(&99), (95, 0));
 		})
@@ -418,7 +420,7 @@ mod tests {
 			assert_eq!(balances(&999), (95, 5));
 
 			// _some_ good solution was stored.
-			assert!(TwoPhase::finalize_signed_phase());
+			assert!(TwoPhase::finalize_signed_phase().0);
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7, 0));
@@ -710,7 +712,7 @@ mod tests {
 			);
 
 			// _some_ good solution was stored.
-			assert!(TwoPhase::finalize_signed_phase());
+			assert!(TwoPhase::finalize_signed_phase().0);
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7, 0));
