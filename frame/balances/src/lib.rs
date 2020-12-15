@@ -414,7 +414,7 @@ decl_storage! {
 			}
 
 			// ensure no duplicates exist.
-			let endowed_accounts = config.balances.iter().map(|(x, _)| x).cloned().collect::<std::collections::HashSet<_>>();
+			let endowed_accounts = config.balances.iter().map(|(x, _)| x).cloned().collect::<std::collections::BTreeSet<_>>();
 
 			assert!(endowed_accounts.len() == config.balances.len(), "duplicate balances in genesis.");
 
