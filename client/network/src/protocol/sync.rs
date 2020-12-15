@@ -2103,24 +2103,24 @@ mod test {
 		// Let peer2 announce block 4 and check that sync wants to get the block.
 		send_block_announce(block4.header().clone(), &peer_id2, &mut sync);
 
-		let request = get_block_request(&mut sync, FromBlock::Hash(block4.hash()), 1, &peer_id2);
+		let request = get_block_request(&mut sync, FromBlock::Hash(block4.hash()), 2, &peer_id2);
 
 		// Peer1 announces the same block, but as the common block is still `1`, sync will request
 		// block 2 again.
 		send_block_announce(block4.header().clone(), &peer_id1, &mut sync);
 
-		let request2 = get_block_request(&mut sync, FromBlock::Number(3), 2, &peer_id1);
+		let request2 = get_block_request(&mut sync, FromBlock::Number(2), 1, &peer_id1);
 
-		let response = create_block_response(vec![block4.clone()]);
+		let response = create_block_response(vec![block4.clone(), block3_fork.clone()]);
 		let res = sync.on_block_data(&peer_id2, Some(request), response).unwrap();
 
 		// We should not yet import the blocks, because there is still an open request for fetching
 		// block `2` which blocks the import.
 		assert!(matches!(res, OnBlockData::Import(_, blocks) if blocks.is_empty()));
 
-		let request3 = get_block_request(&mut sync, FromBlock::Number(3), 2, &peer_id2);
+		let request3 = get_block_request(&mut sync, FromBlock::Number(2), 1, &peer_id2);
 
-		let response = create_block_response(vec![block3_fork.clone(), block2.clone()]);
+		let response = create_block_response(vec![block2.clone()]);
 		let res = sync.on_block_data(&peer_id1, Some(request2), response).unwrap();
 		assert!(
 			matches!(
@@ -2130,7 +2130,7 @@ mod test {
 			)
 		);
 
-		let response = create_block_response(vec![block3_fork.clone(), block2.clone()]);
+		let response = create_block_response(vec![block2.clone()]);
 		let res = sync.on_block_data(&peer_id2, Some(request3), response).unwrap();
 		// Nothing to import
 		assert!(matches!(res, OnBlockData::Import(_, blocks) if blocks.is_empty()));
