@@ -35,6 +35,21 @@ sp_npos_elections::generate_solution_type!(
 	pub struct TestCompact::<u32, u16, PerU16>(16)
 );
 
+/// All events of this pallet.
+pub(crate) fn two_phase_events() -> Vec<Event<Runtime>> {
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| {
+			if let MetaEvent::two_phase(inner) = e {
+				Some(inner)
+			} else {
+				None
+			}
+		})
+		.collect::<Vec<_>>()
+}
+
 /// To from `now` to block `n`.
 pub fn roll_to(n: u64) {
 	let now = System::block_number();
@@ -107,6 +122,21 @@ frame_support::impl_outer_origin! {
 	pub enum Origin for Runtime where system = frame_system {}
 }
 
+mod two_phase {
+	// Re-export needed for `impl_outer_event!`.
+	pub use super::super::*;
+}
+use frame_system as system;
+use pallet_balances as balances;
+
+frame_support::impl_outer_event! {
+	pub enum MetaEvent for Runtime {
+		system<T>,
+		balances<T>,
+		two_phase<T>,
+	}
+}
+
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = ();
 	type Origin = Origin;
@@ -118,7 +148,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = MetaEvent;
 	type BlockHashCount = ();
 	type DbWeight = ();
 	type BlockLength = ();
@@ -137,7 +167,7 @@ parameter_types! {
 
 impl pallet_balances::Config for Runtime {
 	type Balance = Balance;
-	type Event = ();
+	type Event = MetaEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -176,7 +206,7 @@ parameter_types! {
 }
 
 impl crate::two_phase::Config for Runtime {
-	type Event = ();
+	type Event = MetaEvent;
 	type Currency = Balances;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;

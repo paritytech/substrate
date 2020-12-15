@@ -548,6 +548,10 @@ decl_event!(
 		Rewarded(AccountId),
 		/// An account has been slashed for submitting an invalid signed submission.
 		Slashed(AccountId),
+		/// The signed phase of the given round has started.
+		SignedPhaseStarted(u32),
+		/// The unsigned phase of the given round has started.
+		UnsignedPhaseStarted(u32),
 	}
 );
 
@@ -590,6 +594,7 @@ decl_module! {
 					// signed phase can only start after Off.
 					<CurrentPhase<T>>::put(Phase::Signed);
 					Self::start_signed_phase();
+					Self::deposit_event(RawEvent::SignedPhaseStarted(Self::round()));
 					log!(info, "Starting signed phase at #{:?} , round {}.", now, Self::round());
 					T::WeightInfo::on_initialize_open_signed_phase()
 				},
@@ -598,6 +603,7 @@ decl_module! {
 					let (_, consumed_weight) = Self::finalize_signed_phase();
 					// for now always start the unsigned phase.
 					<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
+					Self::deposit_event(RawEvent::UnsignedPhaseStarted(Self::round()));
 					log!(info, "Starting unsigned phase at #{:?}.", now);
 					consumed_weight
 				},
@@ -928,6 +934,7 @@ mod tests {
 
 			roll_to(15);
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			assert_eq!(two_phase_events(), vec![RawEvent::SignedPhaseStarted(1)]);
 			assert!(TwoPhase::snapshot().is_some());
 			assert_eq!(TwoPhase::round(), 1);
 
@@ -938,6 +945,7 @@ mod tests {
 
 			roll_to(25);
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(two_phase_events(), vec![RawEvent::SignedPhaseStarted(1), RawEvent::UnsignedPhaseStarted(1)]);
 			assert!(TwoPhase::snapshot().is_some());
 
 			roll_to(29);
@@ -1079,6 +1087,36 @@ mod tests {
 
 	#[test]
 	fn early_termination() {
-		// un expectedly early call to `elect`, at the middle of signed phase or unsigned phase.
+		// an early termination in the signed phase, with no queued solution.
+		ExtBuilder::default().build_and_execute(|| {
+			// signed phase started at block 15 and will end at 25.
+			roll_to(14);
+			assert_eq!(TwoPhase::current_phase(), Phase::Off);
+
+			roll_to(15);
+			assert_eq!(two_phase_events(), vec![RawEvent::SignedPhaseStarted(1)]);
+			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			assert_eq!(TwoPhase::round(), 1);
+
+			// an unexpected call to elect.
+			roll_to(20);
+			TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
+				.unwrap();
+
+			// we surely can't have any feasible solutions. This will cause an on-chain election.
+			assert_eq!(
+				two_phase_events(),
+				vec![
+					RawEvent::SignedPhaseStarted(1),
+					RawEvent::ElectionFinalized(Some(ElectionCompute::OnChain))
+				],
+			);
+			// all storage items must be cleared.
+			assert_eq!(TwoPhase::round(), 2);
+			assert!(TwoPhase::snapshot().is_none());
+			assert!(TwoPhase::snapshot_metadata().is_none());
+			assert!(TwoPhase::desired_targets().is_none());
+			assert!(TwoPhase::queued_solution().is_none());
+		})
 	}
 }
