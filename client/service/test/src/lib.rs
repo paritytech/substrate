@@ -239,6 +239,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		task_executor,
 		transaction_pool: Default::default(),
 		network: network_config,
+		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::Path {
 			path: root.join("key"),
 			password: None
@@ -274,6 +275,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		announce_block: true,
 		base_path: Some(BasePath::new(root)),
 		informant_output_format: Default::default(),
+		disable_log_reloading: false,
 	}
 }
 
