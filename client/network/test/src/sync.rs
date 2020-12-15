@@ -835,8 +835,8 @@ fn lol() {
 
 	assert!(!net.peer(2).has_block(&block_hash));
 
-	net.peer(0).network_service().new_best_block_imported(block_hash, 3);
-	while !net.peer(2).has_block(&block_hash) {
+	net.peer(0).network_service().new_best_block_imported(block_hash, 10_000);
+	while !net.peer(2).has_block(&block_hash) && !net.peer(1).has_block(&block_hash) {
 		net.block_until_idle();
 	}
 }
