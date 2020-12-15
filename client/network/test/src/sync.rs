@@ -702,7 +702,7 @@ fn can_sync_to_peers_with_wrong_common_block() {
 
 	net.block_until_sync();
 
-	assert!(net.peer(1).client().header(&BlockId::Hash(final_hash)).unwrap().is_some());
+	assert!(net.peer(1).has_block(&final_hash));
 }
 
 /// Returns `is_new_best = true` for each validated announcement.

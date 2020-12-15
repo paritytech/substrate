@@ -719,10 +719,11 @@ impl<B: BlockT> ChainSync<B> {
 			}
 
 			// If our best queued is more than `MAX_BLOCKS_TO_LOOK_BACKWARDS` blocks away from the
-			// common number, but the peer best number is higher than our best queued, we should
-			// do an ancestor search to find a better common block.
+			// common number, the peer best number is higher than our best queued and the common
+			// number is smaller than the last finalized block number, we should do an ancestor
+			// search to find a better common block.
 			if best_queued.saturating_sub(peer.common_number) > MAX_BLOCKS_TO_LOOK_BACKWARDS.into()
-				&& best_queued < peer.best_number
+				&& best_queued < peer.best_number && peer.common_number < last_finalized
 			{
 				let current = std::cmp::min(peer.best_number, best_queued);
 				peer.state = PeerSyncState::AncestorSearch {
@@ -2236,7 +2237,9 @@ mod test {
 
 			best_block_num += MAX_BLOCKS_TO_REQUEST as u32;
 
-			resp_blocks.into_iter().rev().for_each(|b| client.import(BlockOrigin::Own, b).unwrap());
+			resp_blocks.into_iter()
+					.rev()
+					.for_each(|b| client.import_as_final(BlockOrigin::Own, b).unwrap());
 		}
 
 		// Let peer2 announce that it finished syncing
