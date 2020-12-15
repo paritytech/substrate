@@ -690,6 +690,7 @@ impl pallet_bounties::Config for Runtime {
 	type BountyUpdatePeriod = BountyUpdatePeriod;
 	type BountyCuratorDeposit = BountyCuratorDeposit;
 	type BountyValueMinimum = BountyValueMinimum;
+	type MaximumReasonLength = MaximumReasonLength;
 	type WeightInfo = pallet_bounties::weights::SubstrateWeight<Runtime>;
 }
 
