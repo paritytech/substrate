@@ -35,7 +35,6 @@
 // --output=./frame/treasury/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
-
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
