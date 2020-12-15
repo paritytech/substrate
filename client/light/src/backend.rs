@@ -204,8 +204,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		_block: BlockId<Block>,
 		_justification: Justification,
 	) -> ClientResult<()> {
-		// WIP(JON)
-		todo!();
+		Ok(())
 	}
 
 	fn blockchain(&self) -> &Blockchain<S> {
