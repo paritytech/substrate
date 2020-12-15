@@ -220,6 +220,10 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		state_update.read_resolve()
 	}
+
+	fn dismiss_worker(&mut self, _id: TaskId) {
+		unimplemented!("TODO needs filter from declaration to get deterministic failure of access parent writable");
+	}
 }
 
 impl<'a, H: Hasher, B: 'a + Backend<H>> sp_externalities::ExtensionStore for ReadOnlyExternalities<'a, H, B> {

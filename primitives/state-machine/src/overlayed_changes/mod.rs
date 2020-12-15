@@ -49,6 +49,7 @@ use hash_db::Hasher;
 use crate::DefaultError;
 use sp_externalities::{Extensions, Extension, TaskId, WorkerResult,
 	AccessDeclaration, WorkerDeclaration};
+use filter_tree::FilterTree;
 
 pub use self::changeset::{OverlayedValue, NoOpenTransaction, AlreadyInRuntime, NotInRuntime};
 
@@ -171,16 +172,10 @@ impl Markers {
 	pub fn resolve_worker_result(&mut self, result: WorkerResult) -> Option<Vec<u8>> {
 		match result {
 			WorkerResult::CallAt(result, marker) => {
-				match self.markers.remove(&marker) {
-					Some(marker_desc) => {
-						if let Some(markers) = self.transactions.get_mut(marker_desc.transaction_depth) {
-							if let Some(ix) = markers.iter().position(|id| id == &marker) {
-								markers.remove(ix);
-							}
-						}
-						Some(result)
-					}
-					None => None,
+				if self.remove_worker(marker) {
+					Some(result)
+				} else {
+					None
 				}
 			},
 			WorkerResult::Valid(result) => Some(result),
@@ -194,50 +189,108 @@ impl Markers {
 			},
 		}
 	}
+
+	fn remove_worker(&mut self, marker: TaskId) -> bool {
+		match self.markers.remove(&marker) {
+			Some(marker_desc) => {
+				if let Some(markers) = self.transactions.get_mut(marker_desc.transaction_depth) {
+					if let Some(ix) = markers.iter().position(|id| id == &marker) {
+						markers.remove(ix);
+					}
+				}
+				true
+			}
+			None => false,
+		}
+	}
+
+	pub fn dissmiss_worker(&mut self, id: TaskId) {
+		self.remove_worker(id);
+	}
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct Filters {
-	filters: (), // TODO use tree
+	filters: FilterTree,
+	allow_all_reads: bool,
+	allow_all_writes: bool,
+	touched_allow_all_reads: bool,
+	touched_allow_all_writes: bool,
+	/// keeping history to remove constraint on join or dismiss.
+	changes: BTreeMap<TaskId, AccessDeclaration>,
+}
+
+impl Default for Filters {
+	fn default() -> Self {
+		Filters {
+			filters: FilterTree::new(()),
+			allow_all_reads: true,
+			allow_all_writes: true,
+			touched_allow_all_reads: false,
+			touched_allow_all_writes: false,
+			changes: BTreeMap::new(),
+		}
+	}
 }
 
 impl Filters {
-	fn allow_writes(&mut self, filter: AccessDeclaration) {
+	fn allow_writes(&mut self, task_id: Option<TaskId>, filter: AccessDeclaration) {
 		unimplemented!()
 	}
 
-	fn allow_reads(&mut self, filter: AccessDeclaration) {
+	fn allow_reads(&mut self, task_id: Option<TaskId>, filter: AccessDeclaration) {
 		unimplemented!()
 	}
 
-	fn forbid_all_writes(&mut self) {
+	fn forbid_all_writes(&mut self, task_id: Option<TaskId>) {
 		unimplemented!()
 	}
 
-	fn forbid_all_reads(&mut self) {
+	fn forbid_writes(&mut self, task_id: Option<TaskId>, filter: AccessDeclaration) {
 		unimplemented!()
 	}
 
-	fn forbid_writes(&mut self, filter: AccessDeclaration) {
+	fn forbid_reads(&mut self, task_id: Option<TaskId>, filter: AccessDeclaration) {
 		unimplemented!()
 	}
 
-	fn forbid_reads(&mut self, filter: AccessDeclaration) {
+	fn on_worker_result(&mut self, result: &WorkerResult) {
+		match result {
+			WorkerResult::CallAt(result, marker) => {
+				self.remove(*marker);
+			},
+			// When using filter there is no directly valid case.
+			WorkerResult::Valid(result) => (),
+			// When using filter there is no invalid case.
+			WorkerResult::Invalid => (),
+			// will panic on resolve so no need to clean filter
+			WorkerResult::HardPanic
+			| WorkerResult::Panic => (),
+		}
+	}
+
+	fn remove(&mut self, task_id: TaskId) {
 		unimplemented!()
 	}
 }
 
-enum Filter {
+/// Filter internally use for key access.
+#[derive(Debug, Clone)]
+pub enum Filter {
 	Read(FilterScope),
 	Write(FilterScope),
 }
 
-enum FilterScope {
+/// TODO
+#[derive(Debug, Clone)]
+pub enum FilterScope {
 	Prefix(FilterState),
 	Key(FilterState),
 }
 
-enum FilterState {
+/// TODO
+#[derive(Debug, Clone)]
+pub enum FilterState {
 	Allow,
 	Forbid,
 }
@@ -524,15 +577,14 @@ impl OverlayedChanges {
 	}
 
 	/// Set access declaration in the parent worker.
-	pub fn set_parent_declaration(&mut self, declaration: WorkerDeclaration) {
+	pub fn set_parent_declaration(&mut self, marker: TaskId, declaration: WorkerDeclaration) {
 		match declaration {
 			WorkerDeclaration::None => (),
 			WorkerDeclaration::ParentWrite(filter) => {
-				self.filters.forbid_all_writes();
-				self.filters.allow_writes(filter)
+				self.filters.allow_writes(Some(marker), filter)
 			},
 			WorkerDeclaration::ChildRead(filter) => {
-				self.filters.forbid_writes(filter)
+				self.filters.forbid_writes(Some(marker), filter)
 			},
 		}
 	}
@@ -542,11 +594,10 @@ impl OverlayedChanges {
 		match declaration {
 			WorkerDeclaration::None => (),
 			WorkerDeclaration::ParentWrite(filter) => {
-				self.filters.forbid_reads(filter)
+				self.filters.forbid_reads(None, filter)
 			},
 			WorkerDeclaration::ChildRead(filter) => {
-				self.filters.forbid_all_reads();
-				self.filters.allow_reads(filter)
+				self.filters.allow_reads(None, filter)
 			},
 		}
 	}
@@ -556,7 +607,16 @@ impl OverlayedChanges {
 	///
 	/// Return `None` when the worker execution should be invalidated.
 	pub fn resolve_worker_result(&mut self, result: WorkerResult) -> Option<Vec<u8>> {
+		self.filters.on_worker_result(&result);
 		self.markers.resolve_worker_result(result)
+	}
+
+	/// A worker was dissmissed.
+	///
+	/// Update internal state relative to this worker.
+	pub fn dismiss_worker(&mut self, id: TaskId) {
+		self.filters.remove(id);
+		self.markers.remove_worker(id);
 	}
 
 	/// Start a new nested transaction.
@@ -916,6 +976,26 @@ impl<'a> OverlayedExtensions<'a> {
 	pub fn deregister(&mut self, type_id: TypeId) -> bool {
 		self.extensions.remove(&type_id).is_some()
 	}
+}
+
+/// Radix tree for filtering.
+pub mod filter_tree {
+	use radix_tree::{Derivative, radix::{RadixConf, impls::Radix256Conf},
+		children::{Children, ART48_256}, Value, TreeConf, Node};
+	use super::Filter;
+	use core::fmt::Debug;
+
+	radix_tree::flatten_children!(
+		Children256FlattenART,
+		Node256FlattenART,
+		Node256NoBackendART,
+		ART48_256,
+		Radix256Conf,
+		(),
+	);
+
+	/// Radix tree internally use for filtering key accesses.
+	pub type FilterTree = radix_tree::Tree<Node256NoBackendART<Filter>>;
 }
 
 #[cfg(test)]

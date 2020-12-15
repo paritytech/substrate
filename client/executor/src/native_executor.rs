@@ -719,7 +719,8 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		calling_ext.resolve_worker_result(worker_result)
 	}
 
-	fn dismiss(&self, handle: u64) {
+	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
+		calling_ext.dismiss_worker(handle);
 		self.dismiss_handles.dismiss_thread(handle);
 		self.tasks.lock().remove(&handle);
 	}

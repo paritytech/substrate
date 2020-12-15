@@ -1166,6 +1166,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "993a608597367c6377b258c25d7120740f00ed23a2252b729b1932dd7866f908"
 
 [[package]]
+name = "derivative"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb582b60359da160a9477ee80f15c8d784c477e69c217ef2cdd4169c24ea380f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5784,6 +5795,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "def50a86306165861203e7f84ecffbbdfdea79f0e51039b33de1e952358c47ac"
 
 [[package]]
+name = "radix-tree"
+version = "0.8.0"
+source = "git+https://github.com/cheme/substrate?branch=historied-db#f2e36aa5aa07fca6333f6b6fbb87708b2b9e5bc8"
+dependencies = [
+ "derivative",
+ "hashbrown 0.8.2",
+ "parity-scale-codec",
+ "parking_lot 0.10.2",
+ "smallvec 1.5.0",
+]
+
+[[package]]
 name = "rand"
 version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8492,6 +8515,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "pretty_assertions",
+ "radix-tree",
  "rand 0.7.3",
  "smallvec 1.5.0",
  "sp-core",

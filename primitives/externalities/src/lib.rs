@@ -294,6 +294,11 @@ pub trait Externalities: ExtensionStore {
 	/// but after checking against parent externalities, it may change
 	/// to invalid (`None`).
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>>;
+
+	/// Worker result have been dissmiss, inner externality state and constraint
+	/// needs to be lifted.
+	/// TODO consider making it a worker result varian and only have 'resolve_worker_result'.
+	fn dismiss_worker(&mut self, id: TaskId);
 }
 
 /// Result from worker execution.

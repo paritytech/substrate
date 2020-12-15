@@ -539,7 +539,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		calling_ext.resolve_worker_result(worker_result)
 	}
 
-	fn dismiss(&self, handle: u64) {
+	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
+		// TODO consider Dismiss(handle) as variant of worker result?
+		calling_ext.dismiss_worker(handle);
+
 		self.0.lock().dismiss(handle)
 	}
 

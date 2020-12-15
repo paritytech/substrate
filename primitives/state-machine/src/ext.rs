@@ -690,12 +690,16 @@ where
 			self.overlay,
 			&declaration,
 		));
-		self.overlay.set_parent_declaration(declaration);
+		self.overlay.set_parent_declaration(marker, declaration);
 		backend
 	}
 
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		self.overlay.resolve_worker_result(state_update)
+	}
+
+	fn dismiss_worker(&mut self, id: TaskId) {
+		self.overlay.dismiss_worker(id);
 	}
 }
 

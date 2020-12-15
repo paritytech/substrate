@@ -350,6 +350,10 @@ impl Externalities for BasicExternalities {
 		// No transaction, works as read (TODO this will not be true for worker in write mode).
 		state_update.read_resolve()
 	}
+	
+	fn dismiss_worker(&mut self, _id: TaskId) {
+		unimplemented!("TODO from get_async_backend needs at least filter");
+	}
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {
