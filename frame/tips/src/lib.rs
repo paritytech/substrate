@@ -133,7 +133,7 @@ pub struct OpenTip<
 
 // Note :: For backward compatability reasons,
 // pallet-tips uses Treasury for storage.
-// This is temporary soultion, soon will get replaced with
+// This is temporary solution, soon will get replaced with
 // Own storage identifier.
 decl_storage! {
 	trait Store for Module<T: Config> as Treasury {
@@ -203,7 +203,7 @@ decl_module! {
 		/// The amount held on deposit for placing a tip report.
 		const TipReportDepositBase: BalanceOf<T> = T::TipReportDepositBase::get();
 
-		/// The amount held on deposit per byte within the tip report reason or bounty description.
+		/// The amount held on deposit per byte within the tip report reason.
 		const DataDepositPerByte: BalanceOf<T> = T::DataDepositPerByte::get();
 
 		/// Maximum acceptable reason length.
