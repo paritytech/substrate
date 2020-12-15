@@ -1020,9 +1020,20 @@ impl<T: Config> Module<T> {
 		ExtrinsicCount::kill();
 		AllExtrinsicsLen::kill();
 
+		// The following fields
+		//
+		// - <Events<T>>
+		// - <EventCount<T>>
+		// - <EventTopics<T>>
+		// - <Number<T>>
+		// - <ParentHash<T>>
+		// - <Digest<T>>
+		//
+		// stay to be inspected by the client and will be cleared by `Self::initialize`.
 		let number = <Number<T>>::get();
 		let parent_hash = <ParentHash<T>>::get();
 		let mut digest = <Digest<T>>::get();
+
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 
 		// move block hash pruning window by one block
@@ -1049,14 +1060,6 @@ impl<T: Config> Module<T> {
 			);
 			digest.push(item);
 		}
-
-		// The following fields
-		//
-		// - <Events<T>>
-		// - <EventCount<T>>
-		// - <EventTopics<T>>
-		//
-		// stay to be inspected by the client and will be cleared by `Self::initialize`.
 
 		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
