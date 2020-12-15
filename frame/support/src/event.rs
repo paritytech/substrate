@@ -153,8 +153,8 @@ macro_rules! decl_event {
 			/// Metadata vnext only supported by new frame support macros
 			#[allow(dead_code)]
 			#[doc(hidden)]
-			pub fn metadata_vnext() -> Vec<$crate::metadata::vnext::EventMetadata> {
-				vec![]
+			pub fn metadata_vnext() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::vnext::EventMetadata> {
+				$crate::scale_info::prelude::vec![]
 			}
 		}
 	}
@@ -308,8 +308,8 @@ macro_rules! __decl_generic_event {
 			/// Metadata vnext only supported by new frame support macros
 			#[allow(dead_code)]
 			#[doc(hidden)]
-			pub fn metadata_vnext() -> Vec<$crate::metadata::vnext::EventMetadata> {
-				vec![]
+			pub fn metadata_vnext() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::vnext::EventMetadata> {
+				$crate::scale_info::prelude::vec![]
 			}
 		}
 	};
@@ -584,7 +584,7 @@ macro_rules! __impl_outer_event_json_metadata_vnext {
 			pub fn outer_event_metadata_vnext() -> $crate::event::vnext::OuterEventMetadata {
 				$crate::event::vnext::OuterEventMetadata {
 					name: stringify!($event_name),
-					events: vec![
+					events: $crate::scale_info::prelude::vec![
 						$(
 							$crate::metadata::vnext::ModuleEventMetadata {
 								name: stringify!($module_name),

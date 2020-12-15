@@ -204,18 +204,18 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			#[doc(hidden)]
-			pub fn call_functions_vnext() -> Vec<#frame_support::metadata::vnext::FunctionMetadata> {
-				vec![ #(
+			pub fn call_functions_vnext() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::vnext::FunctionMetadata> {
+				#frame_support::scale_info::prelude::vec![ #(
 					#frame_support::metadata::vnext::FunctionMetadata {
 						name: stringify!(#fn_name),
-						arguments: vec![ #(
+						arguments: #frame_support::scale_info::prelude::vec![ #(
 							#frame_support::metadata::vnext::FunctionArgumentMetadata {
 								name: stringify!(#args_name),
 								ty: #frame_support::scale_info::meta_type::<#args_type>(),
 								is_compact: #args_is_compact,
 							},
 						)* ],
-						documentation: vec![ #( #fn_doc ),* ],
+						documentation: #frame_support::scale_info::prelude::vec![ #( #fn_doc ),* ],
 					},
 				)* ]
 			}
