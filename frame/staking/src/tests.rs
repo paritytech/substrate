@@ -191,6 +191,7 @@ fn rewards_should_work() {
 
 		// Compute total payout now for whole duration of the session.
 		let total_payout_0 = current_total_payout_for_duration(time_per_era());
+		let maximum_payout = maximum_payout_for_duration(time_per_era());
 
 		start_session(1);
 
@@ -217,8 +218,14 @@ fn rewards_should_work() {
 		start_session(3);
 
 		assert_eq!(Staking::active_era().unwrap().index, 1);
-		assert_eq!(mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()), 7050);
-		assert_eq!(*mock::staking_events().last().unwrap(), RawEvent::EraPayout(0, 2350, 7050));
+		assert_eq!(
+			mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()),
+			maximum_payout - total_payout_0,
+		);
+		assert_eq!(
+			*mock::staking_events().last().unwrap(),
+			RawEvent::EraPayout(0, total_payout_0, maximum_payout - total_payout_0)
+		);
 		mock::make_all_reward_payment(0);
 
 		assert_eq_error_rate!(
@@ -249,8 +256,14 @@ fn rewards_should_work() {
 		let total_payout_1 = current_total_payout_for_duration(time_per_era());
 
 		mock::start_era(2);
-		assert_eq!(mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()), 7050*2);
-		assert_eq!(*mock::staking_events().last().unwrap(), RawEvent::EraPayout(1, 2350, 7050));
+		assert_eq!(
+			mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()),
+			maximum_payout * 2 - total_payout_0 - total_payout_1,
+		);
+		assert_eq!(
+			*mock::staking_events().last().unwrap(),
+			RawEvent::EraPayout(1, total_payout_1, maximum_payout - total_payout_1)
+		);
 		mock::make_all_reward_payment(1);
 
 		assert_eq_error_rate!(
@@ -504,20 +517,20 @@ fn nominating_and_rewards_should_work() {
 			assert_eq_error_rate!(
 				Balances::total_balance(&4),
 				initial_balance + (2 * payout_for_10 / 9 + 3 * payout_for_20 / 11),
-				1,
+				2,
 			);
 
 			// Validator 10: got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
 			assert_eq_error_rate!(
 				Balances::total_balance(&10),
 				initial_balance + 5 * payout_for_10 / 9,
-				1,
+				2,
 			);
 			// Validator 20: got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
 			assert_eq_error_rate!(
 				Balances::total_balance(&20),
 				initial_balance + 5 * payout_for_20 / 11,
-				1,
+				2,
 			);
 		});
 }
@@ -4405,8 +4418,8 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		mock::start_era(1);
 
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_0 = current_total_payout_for_duration(time_per_era());
+		// compute and ensure the reward amount is greater than zero.
+		let _ = current_total_payout_for_duration(time_per_era());
 
 		mock::start_era(2);
 		mock::make_all_reward_payment(1);
@@ -4459,8 +4472,10 @@ fn test_payout_stakers() {
 
 		mock::start_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_0 = current_total_payout_for_duration(time_per_era());
+
+		// compute and ensure the reward amount is greater than zero.
+		let _ = current_total_payout_for_duration(time_per_era());
+
 		mock::start_era(2);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
 
@@ -4483,8 +4498,10 @@ fn test_payout_stakers() {
 
 		for i in 3..16 {
 			Staking::reward_by_ids(vec![(11, 1)]);
-			// Compute total payout now for whole duration as other parameter won't change
-			let total_payout_0 = current_total_payout_for_duration(time_per_era());
+
+			// compute and ensure the reward amount is greater than zero.
+			let _ = current_total_payout_for_duration(time_per_era());
+
 			mock::start_era(i);
 			assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, i - 1));
 		}
@@ -4497,8 +4514,8 @@ fn test_payout_stakers() {
 
 		for i in 16..100 {
 			Staking::reward_by_ids(vec![(11, 1)]);
-			// Compute total payout now for whole duration as other parameter won't change
-			let total_payout_0 = current_total_payout_for_duration(time_per_era());
+			// compute and ensure the reward amount is greater than zero.
+			let _ = current_total_payout_for_duration(time_per_era());
 			mock::start_era(i);
 		}
 
@@ -4536,8 +4553,10 @@ fn payout_stakers_handles_basic_errors() {
 
 		mock::start_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_0 = current_total_payout_for_duration(time_per_era());
+
+		// compute and ensure the reward amount is greater than zero.
+		let _ = current_total_payout_for_duration(time_per_era());
+
 		mock::start_era(2);
 
 		// Wrong Era, too big
@@ -4547,8 +4566,8 @@ fn payout_stakers_handles_basic_errors() {
 
 		for i in 3..100 {
 			Staking::reward_by_ids(vec![(11, 1)]);
-			// Compute total payout now for whole duration as other parameter won't change
-			let total_payout_0 = current_total_payout_for_duration(time_per_era());
+			// compute and ensure the reward amount is greater than zero.
+			let _ = current_total_payout_for_duration(time_per_era());
 			mock::start_era(i);
 		}
 		// We are at era 99, with history depth of 84
@@ -4698,8 +4717,8 @@ fn payout_creates_controller() {
 
 		mock::start_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_0 = current_total_payout_for_duration(time_per_era());
+		// compute and ensure the reward amount is greater than zero.
+		let _ = current_total_payout_for_duration(time_per_era());
 		mock::start_era(2);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
 
@@ -4726,8 +4745,8 @@ fn payout_to_any_account_works() {
 
 		mock::start_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_0 = current_total_payout_for_duration(time_per_era());
+		// compute and ensure the reward amount is greater than zero.
+		let _ = current_total_payout_for_duration(time_per_era());
 		mock::start_era(2);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
 
