@@ -640,6 +640,15 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		#[should_panic = "duplicate balances in genesis."]
+		fn cannot_set_genesis_value_twice() {
+			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>().unwrap();
+			let _ = GenesisConfig::<$test> {
+				balances: vec![(1, 10), (2, 20), (1, 15)],
+			}.assimilate_storage(&mut t).unwrap();
+		}
+
+		#[test]
 		fn dust_moves_between_free_and_reserved() {
 			<$ext_builder>::default()
 				.existential_deposit(100)
