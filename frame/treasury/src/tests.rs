@@ -104,7 +104,6 @@ parameter_types! {
 	pub const DataDepositPerByte: u64 = 1;
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 	pub const BountyUpdatePeriod: u32 = 20;
-	pub const MaximumReasonLength: u32 = 16384;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: u64 = 1;
 }
@@ -120,7 +119,6 @@ impl Config for Test {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
-	type MaximumReasonLength = MaximumReasonLength;
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();

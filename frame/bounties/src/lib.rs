@@ -123,6 +123,9 @@ pub trait Config: frame_system::Config + pallet_treasury::Config {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
+	/// Maximum acceptable reason length.
+	type MaximumReasonLength: Get<u32>;
+
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }

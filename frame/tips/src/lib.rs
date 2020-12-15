@@ -80,6 +80,8 @@ pub type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
 pub type NegativeImbalanceOf<T> = pallet_treasury::NegativeImbalanceOf<T>;
 
 pub trait Config: frame_system::Config + pallet_treasury::Config {
+	/// Maximum acceptable reason length.
+	type MaximumReasonLength: Get<u32>;
 
 	/// Origin from which tippers must come.
 	///

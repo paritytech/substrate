@@ -140,7 +140,6 @@ impl pallet_treasury::Config for Test {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
-	type MaximumReasonLength = MaximumReasonLength;
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
@@ -151,6 +150,7 @@ parameter_types! {
 	pub const TipReportDepositBase: u64 = 1;
 }
 impl Config for Test {
+	type MaximumReasonLength = MaximumReasonLength;
 	type Tippers = TenToFourteen;
 	type TipCountdown = TipCountdown;
 	type TipFindersFee = TipFindersFee;

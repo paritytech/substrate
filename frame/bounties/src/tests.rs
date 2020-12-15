@@ -105,7 +105,6 @@ parameter_types! {
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const DataDepositPerByte: u64 = 1;
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
-	pub const MaximumReasonLength: u32 = 16384;
 }
 // impl pallet_treasury::Config for Test {
 impl pallet_treasury::Config for Test {
@@ -120,7 +119,6 @@ impl pallet_treasury::Config for Test {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
-	type MaximumReasonLength = MaximumReasonLength;
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = Bounties;
@@ -131,6 +129,7 @@ parameter_types! {
 	pub const BountyUpdatePeriod: u32 = 20;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: u64 = 1;
+	pub const MaximumReasonLength: u32 = 16384;
 }
 impl Config for Test {
 	type Event = Event;
@@ -139,6 +138,7 @@ impl Config for Test {
 	type BountyUpdatePeriod = BountyUpdatePeriod;
 	type BountyCuratorDeposit = BountyCuratorDeposit;
 	type BountyValueMinimum = BountyValueMinimum;
+	type MaximumReasonLength = MaximumReasonLength;
 	type WeightInfo = ();
 }
 type System = frame_system::Module<Test>;

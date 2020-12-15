@@ -678,7 +678,6 @@ impl pallet_treasury::Config for Runtime {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
-	type MaximumReasonLength = MaximumReasonLength;
 	type BurnDestination = ();
 	type SpendFunds = Bounties;
 	type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
@@ -696,6 +695,7 @@ impl pallet_bounties::Config for Runtime {
 
 impl pallet_tips::Config for Runtime {
 	type Event = Event;
+	type MaximumReasonLength = MaximumReasonLength;
 	type Tippers = Elections;
 	type TipCountdown = TipCountdown;
 	type TipFindersFee = TipFindersFee;

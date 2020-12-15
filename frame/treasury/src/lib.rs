@@ -122,9 +122,6 @@ pub trait Config<I=DefaultInstance>: frame_system::Config {
 	/// Percentage of spare funds (if any) that are burnt per spend period.
 	type Burn: Get<Permill>;
 
-	/// Maximum acceptable reason length.
-	type MaximumReasonLength: Get<u32>;
-
 	/// Handler for the unbalanced decrease when treasury funds are burned.
 	type BurnDestination: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 
