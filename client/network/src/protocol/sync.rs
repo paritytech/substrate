@@ -67,6 +67,10 @@ const MAX_IMPORTING_BLOCKS: usize = 2048;
 /// Maximum blocks to download ahead of any gap.
 const MAX_DOWNLOAD_AHEAD: u32 = 2048;
 
+/// Maximum blocks to look backwards. The gap is the difference between the highest block and the
+/// common block of a node.
+const MAX_BLOCKS_TO_LOOK_BACKWARDS: u32 = MAX_DOWNLOAD_AHEAD / 2;
+
 /// Maximum number of concurrent block announce validations.
 ///
 /// If the queue reaches the maximum, we drop any new block
@@ -714,7 +718,20 @@ impl<B: BlockT> ChainSync<B> {
 				return None
 			}
 
-			if let Some((range, req)) = peer_block_request(
+			// If our best queued is more than `MAX_BLOCKS_TO_LOOK_BACKWARDS` blocks away from the
+			// common number, but the peer best number is higher than our best queued, we should
+			// do an ancestor search to find a better common block.
+			if best_queued.saturating_sub(peer.common_number) > MAX_BLOCKS_TO_LOOK_BACKWARDS.into()
+				&& best_queued < peer.best_number
+			{
+				let current = std::cmp::min(peer.best_number, best_queued);
+				peer.state = PeerSyncState::AncestorSearch {
+					current,
+					start: best_queued,
+					state: AncestorSearchState::ExponentialBackoff(One::one()),
+				};
+				Some((id, ancestry_request::<B>(current)))
+			} else if let Some((range, req)) = peer_block_request(
 				id,
 				peer,
 				blocks,
@@ -822,15 +839,29 @@ impl<B: BlockT> ChainSync<B> {
 						PeerSyncState::AncestorSearch { current, start, state } => {
 							let matching_hash = match (blocks.get(0), self.client.hash(*current)) {
 								(Some(block), Ok(maybe_our_block_hash)) => {
-									trace!(target: "sync", "Got ancestry block #{} ({}) from peer {}", current, block.hash, who);
+									trace!(
+										target: "sync",
+										"Got ancestry block #{} ({}) from peer {}",
+										current,
+										block.hash,
+										who,
+									);
 									maybe_our_block_hash.filter(|x| x == &block.hash)
 								},
 								(None, _) => {
-									debug!(target: "sync", "Invalid response when searching for ancestor from {}", who);
+									debug!(
+										target: "sync",
+										"Invalid response when searching for ancestor from {}",
+										who,
+									);
 									return Err(BadPeer(who.clone(), rep::UNKNOWN_ANCESTOR))
 								},
 								(_, Err(e)) => {
-									info!("❌ Error answering legitimate blockchain query: {:?}", e);
+									info!(
+										target: "sync",
+										"❌ Error answering legitimate blockchain query: {:?}",
+										e,
+									);
 									return Err(BadPeer(who.clone(), rep::BLOCKCHAIN_READ_ERROR))
 								}
 							};
@@ -1551,13 +1582,13 @@ pub enum AncestorSearchState<B: BlockT> {
 fn handle_ancestor_search_state<B: BlockT>(
 	state: &AncestorSearchState<B>,
 	curr_block_num: NumberFor<B>,
-	block_hash_match: bool
+	block_hash_match: bool,
 ) -> Option<(AncestorSearchState<B>, NumberFor<B>)> {
 	let two = <NumberFor<B>>::one() + <NumberFor<B>>::one();
-	match state {
+	match dbg!(state) {
 		AncestorSearchState::ExponentialBackoff(next_distance_to_tip) => {
-			let next_distance_to_tip = *next_distance_to_tip;
-			if block_hash_match && next_distance_to_tip == One::one() {
+			let next_distance_to_tip = dbg!(*next_distance_to_tip);
+			if dbg!(block_hash_match) && next_distance_to_tip == One::one() {
 				// We found the ancestor in the first step so there is no need to execute binary search.
 				return None;
 			}
@@ -1602,8 +1633,7 @@ fn peer_block_request<B: BlockT>(
 	if best_num >= peer.best_number {
 		// Will be downloaded as alternative fork instead.
 		return None;
-	}
-	if peer.common_number < finalized {
+	} else if peer.common_number < finalized {
 		trace!(
 			target: "sync",
 			"Requesting pre-finalized chain from {:?}, common={}, finalized={}, peer best={}, our best={}",
@@ -2012,7 +2042,7 @@ mod test {
 	/// Get a block request from `sync` and check that is matches the expected request.
 	fn get_block_request(
 		sync: &mut ChainSync<Block>,
-		from: message::FromBlock<Hash, u64>,
+		from: FromBlock<Hash, u64>,
 		max: u32,
 		peer: &PeerId,
 	) -> BlockRequest<Block> {
@@ -2137,8 +2167,23 @@ mod test {
 		assert!(matches!(res, OnBlockData::Import(_, blocks) if blocks.is_empty()));
 	}
 
+	fn unwrap_from_block_number(from: FromBlock<Hash, u64>) -> u64 {
+		if let FromBlock::Number(from) = from {
+			from
+		} else {
+			panic!("Expected a number!");
+		}
+	}
+
+	/// A regression test for a behavior we have seen on a live network.
+	///
+	/// The scenario is that the node is doing a full resync and is connected to some node that is
+	/// doing a major sync as well. This other node that is doing a major sync will finish before
+	/// our node and send a block announcement message, but we don't have seen any block announcement
+	/// from this node in its sync process. Meaning our common number didn't change. It is now expected
+	/// that we start an ancestor search to find the common number.
 	#[test]
-	fn lol() {
+	fn do_ancestor_search_when_common_block_to_best_qeued_gap_is_to_big() {
 		sp_tracing::try_init_simple();
 
 		let blocks = {
@@ -2174,31 +2219,63 @@ mod test {
 				&peer_id1,
 			);
 
-			let from = if let FromBlock::Number(from) = request.from {
-				from
-			} else {
-				panic!("We don't expect a hash!");
-			};
+			let from = unwrap_from_block_number(request.from.clone());
 
 			let mut resp_blocks = blocks[best_block_num as usize..from as usize].to_vec();
 			resp_blocks.reverse();
 
-			let response = create_block_response(resp_blocks);
+			let response = create_block_response(resp_blocks.clone());
 
 			let res = sync.on_block_data(&peer_id1, Some(request), response).unwrap();
 			assert!(
 				matches!(
 					res,
-					OnBlockData::Import(_, blocks) if blocks.len() == MAX_BLOCKS_TO_REQUEST,
+					OnBlockData::Import(_, blocks) if blocks.len() == MAX_BLOCKS_TO_REQUEST
 				),
 			);
 
 			best_block_num += MAX_BLOCKS_TO_REQUEST as u32;
+
+			resp_blocks.into_iter().rev().for_each(|b| client.import(BlockOrigin::Own, b).unwrap());
 		}
 
 		// Let peer2 announce that it finished syncing
 		send_block_announce(best_block.header().clone(), &peer_id2, &mut sync);
 
-		panic!("{:?}", sync.block_requests().collect::<Vec<_>>());
+		let (peer1_req, peer2_req) = sync.block_requests().fold((None, None), |res, req| {
+			if req.0 == &peer_id1 {
+				(Some(req.1), res.1)
+			} else if req.0 == &peer_id2 {
+				(res.0, Some(req.1))
+			} else {
+				panic!("Unexpected req: {:?}", req)
+			}
+		});
+
+		// We should now do an ancestor search to find the correct common block.
+		let peer2_req = peer2_req.unwrap();
+		assert_eq!(Some(1), peer2_req.max);
+		assert_eq!(FromBlock::Number(best_block_num as u64), peer2_req.from);
+
+		let response = create_block_response(vec![blocks[(best_block_num - 1) as usize].clone()]);
+		let res = sync.on_block_data(&peer_id2, Some(peer2_req), response).unwrap();
+		assert!(
+			matches!(
+				res,
+				OnBlockData::Import(_, blocks) if blocks.is_empty()
+			),
+		);
+
+		let peer1_from = unwrap_from_block_number(peer1_req.unwrap().from);
+
+		// As we are on the same chain, we should directly continue with requesting blocks from
+		// peer 2 as well.
+		get_block_request(
+			&mut sync,
+			FromBlock::Number(peer1_from + MAX_BLOCKS_TO_REQUEST as u64),
+			MAX_BLOCKS_TO_REQUEST as u32,
+			&peer_id2,
+		);
 	}
+
 }
