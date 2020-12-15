@@ -184,7 +184,7 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 
 // Note :: For backward compatability reasons,
 // pallet-bounties uses Treasury for storage.
-// This is temporary soultion, soon will get replaced with
+// This is temporary solution, soon will get replaced with
 // Own storage identifier.
 decl_storage! {
 	trait Store for Module<T: Config> as Treasury {
@@ -258,20 +258,7 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
-		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
-		/// An accepted proposal gets these back. A rejected proposal does not.
-		const ProposalBond: Permill = T::ProposalBond::get();
-
-		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
-		const ProposalBondMinimum: BalanceOf<T> = T::ProposalBondMinimum::get();
-
-		/// Period between successive spends.
-		const SpendPeriod: T::BlockNumber = T::SpendPeriod::get();
-
-		/// Percentage of spare funds (if any) that are burnt per spend period.
-		const Burn: Permill = T::Burn::get();
-
-		/// The amount held on deposit per byte within the tip report reason or bounty description.
+		/// The amount held on deposit per byte within bounty description.
 		const DataDepositPerByte: BalanceOf<T> = T::DataDepositPerByte::get();
 
 		/// The amount held on deposit for placing a bounty proposal.
@@ -283,6 +270,7 @@ decl_module! {
 		/// Percentage of the curator fee that will be reserved upfront as deposit for bounty curator.
 		const BountyCuratorDeposit: Permill = T::BountyCuratorDeposit::get();
 
+		/// Minimum value for a bounty.
 		const BountyValueMinimum: BalanceOf<T> = T::BountyValueMinimum::get();
 
 		/// Maximum acceptable reason length.
@@ -763,5 +751,4 @@ impl<T: Config> pallet_treasury::SpendFunds<T> for Module<T> {
 
 		*total_weight += <T as Config>::WeightInfo::spend_funds(bounties_len);
 	}
-
 }
