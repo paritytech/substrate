@@ -914,7 +914,7 @@ pub enum DecRefError {
 
 /// Some resultant status relevant to incrementing a provider reference.
 pub enum IncRefError {
-	/// Account cannot introduce a consumer is there are no providers.
+	/// Account cannot introduce a consumer while there are no providers.
 	NoProviders,
 }
 
