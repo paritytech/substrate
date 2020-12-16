@@ -237,12 +237,14 @@ pub fn init_logging_and_telemetry(
 	pattern: &str,
 	tracing_receiver: sc_tracing::TracingReceiver,
 	profiling_targets: Option<&str>,
+	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 	disable_log_reloading: bool,
 ) -> std::result::Result<sc_telemetry::Telemetries, String> {
 	Ok(if let Some(profiling_targets) = profiling_targets {
 		if disable_log_reloading {
 			let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries_with_profiling(
 				pattern,
+				telemetry_external_transport,
 				tracing_receiver,
 				profiling_targets,
 			)?;
@@ -257,6 +259,7 @@ pub fn init_logging_and_telemetry(
 		} else {
 			let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries_with_profiling_and_log_reloading(
 				pattern,
+				telemetry_external_transport,
 				tracing_receiver,
 				profiling_targets,
 			)?;
@@ -273,6 +276,7 @@ pub fn init_logging_and_telemetry(
 		if disable_log_reloading {
 			let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries(
 				pattern,
+				telemetry_external_transport,
 			)?;
 
 			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
@@ -285,6 +289,7 @@ pub fn init_logging_and_telemetry(
 		} else {
 			let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries_with_log_reloading(
 				pattern,
+				telemetry_external_transport,
 			)?;
 
 			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {

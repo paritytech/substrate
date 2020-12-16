@@ -49,6 +49,7 @@ macro_rules! disable_log_reloading {
 /// TODO
 pub fn get_default_subscriber_and_telemetries(
 	pattern: &str,
+	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
@@ -58,14 +59,18 @@ pub fn get_default_subscriber_and_telemetries(
 > {
 	get_default_subscriber_and_telemetries_internal(
 		parse_directives(pattern),
+		telemetry_external_transport,
 		|builder| builder,
 	)
 }
 
 /// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects.
+///
+/// When running in a browser, the `telemetry_external_transport` should be provided.
 #[cfg(not(target_os = "unknown"))]
 pub fn get_default_subscriber_and_telemetries_with_log_reloading(
 	pattern: &str,
+	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
@@ -75,14 +80,18 @@ pub fn get_default_subscriber_and_telemetries_with_log_reloading(
 > {
 	get_default_subscriber_and_telemetries_internal(
 		parse_directives(pattern),
+		telemetry_external_transport,
 		|builder| disable_log_reloading!(builder),
 	)
 }
 
 /// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects with
 /// profiling enabled.
+///
+/// When running in a browser, the `telemetry_external_transport` should be provided.
 pub fn get_default_subscriber_and_telemetries_with_profiling(
 	pattern: &str,
+	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 	tracing_receiver: crate::TracingReceiver,
 	profiling_targets: &str,
 ) -> std::result::Result<
@@ -96,6 +105,7 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 		parse_directives(pattern)
 			.into_iter()
 			.chain(parse_directives(profiling_targets).into_iter()),
+		telemetry_external_transport,
 		|builder| builder,
 	)?;
 	let profiling = crate::ProfilingLayer::new(tracing_receiver, profiling_targets);
@@ -105,9 +115,12 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 
 /// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects with
 /// profiling enabled.
+///
+/// When running in a browser, the `telemetry_external_transport` should be provided.
 #[cfg(not(target_os = "unknown"))]
 pub fn get_default_subscriber_and_telemetries_with_profiling_and_log_reloading(
 	pattern: &str,
+	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 	tracing_receiver: crate::TracingReceiver,
 	profiling_targets: &str,
 ) -> std::result::Result<
@@ -121,6 +134,7 @@ pub fn get_default_subscriber_and_telemetries_with_profiling_and_log_reloading(
 		parse_directives(pattern)
 			.into_iter()
 			.chain(parse_directives(profiling_targets).into_iter()),
+		telemetry_external_transport,
 		|builder| disable_log_reloading!(builder),
 	)?;
 	let profiling = crate::ProfilingLayer::new(tracing_receiver, profiling_targets);
@@ -132,6 +146,7 @@ pub fn get_default_subscriber_and_telemetries_with_profiling_and_log_reloading(
 // `get_default_subscriber_and_telemetries_with_profiling`.
 fn get_default_subscriber_and_telemetries_internal<N, E, F, W>(
 	extra_directives: impl IntoIterator<Item = Directive>,
+	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 	builder_hook: impl Fn(SubscriberBuilder<format::DefaultFields, EventFormat<ChronoLocal>, EnvFilter, fn() -> std::io::Stderr>) -> SubscriberBuilder<N, E, F, W>,
 ) -> std::result::Result<
 	(
@@ -211,8 +226,11 @@ where
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-	let telemetries = sc_telemetry::Telemetries::new()
-		.map_err(|err| format!("Could not initialize telemetry: {}", err))?;
+	let telemetries = if let Some(telemetry_external_transport) = telemetry_external_transport {
+		sc_telemetry::Telemetries::with_wasm_external_transport(telemetry_external_transport)
+	} else {
+		sc_telemetry::Telemetries::new()
+	}.map_err(|err| format!("Could not initialize telemetry: {}", err))?;
 	let sender = telemetries.sender();
 	let telemetry_layer = sc_telemetry::TelemetryLayer::new(sender);
 	let event_format = EventFormat {

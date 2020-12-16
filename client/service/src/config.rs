@@ -84,6 +84,9 @@ pub struct Configuration {
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
+	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
+	/// endpoint, this transport will be tried in priority before all others.
+	pub telemetry_external_transport: Option<ExtTransport>,
 	/// Telemetry handle.
 	pub telemetry_handle: Option<sc_telemetry::TelemetryHandle>,
 	/// The default number of 64KB pages to allocate for Wasm execution

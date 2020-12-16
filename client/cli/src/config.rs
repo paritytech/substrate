@@ -28,7 +28,7 @@ use log::warn;
 use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
-	BasePath, Configuration, DatabaseConfig, KeystoreConfig, NetworkConfiguration,
+	BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
 	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
 	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
@@ -362,6 +362,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(chain_spec.telemetry_endpoints().clone())
 	}
 
+	/// Get the telemetry external transport
+	///
+	/// By default this is `None`.
+	fn telemetry_external_transport(&self) -> Result<Option<ExtTransport>> {
+		Ok(None)
+	}
+
 	/// Get the default value for heap pages
 	///
 	/// By default this is `None`.
@@ -501,6 +508,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_cors: self.rpc_cors(is_dev)?,
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
 			telemetry_endpoints: self.telemetry_endpoints(&chain_spec)?,
+			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,
 			force_authoring: self.force_authoring()?,
@@ -546,6 +554,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let tracing_receiver = self.tracing_receiver()?;
 		let tracing_targets = self.tracing_targets()?;
 		let disable_log_reloading = self.is_log_filter_reloading_disabled()?;
+		let telemetry_external_transport = self.telemetry_external_transport()?;
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
@@ -553,6 +562,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			&logger_pattern,
 			tracing_receiver,
 			tracing_targets.as_ref().map(|x| x.as_str()),
+			telemetry_external_transport,
 			disable_log_reloading,
 		)?;
 
