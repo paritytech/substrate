@@ -28,7 +28,7 @@ use crate::TelemetryConnectionSinks;
 
 /// Maximum number of pending telemetry messages.
 /// Handler for a single telemetry node.
-/// TODO: explain 2 properties of this Sink
+/// TODO: explain 3 properties of this Sink (infailible, connection message, discard messages)
 #[derive(Debug)]
 pub(crate) struct Node<TTrans: Transport> {
 	/// Address of the node.
@@ -124,7 +124,6 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	type Error = Infallible;
 
 	fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
-		// TODO discard messages
 		let mut socket = mem::replace(&mut self.socket, NodeSocket::Poisoned);
 		self.socket = loop {
 			match socket {
@@ -205,7 +204,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 			}
 		};
 
-		Poll::Pending
+		Poll::Ready(Ok(()))
 	}
 
 	fn start_send(mut self: Pin<&mut Self>, item: String) -> Result<(), Self::Error> {
@@ -214,14 +213,11 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 				let _ = conn.sink.start_send_unpin(item.into()).expect("boo");
 			},
 			socket => {
-				log::error!(
+				log::trace!(
 					target: "telemetry",
-					"Trying to send something but the connection is not ready ({:?}).
-					This is a bug. Message sent: {}",
-					socket,
+					"Message has been discarded: {}",
 					item,
 				);
-				todo!("should never happen");
 			},
 		}
 		Ok(())
