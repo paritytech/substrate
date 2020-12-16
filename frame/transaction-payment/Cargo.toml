@@ -24,6 +24,7 @@ sp-io = { version = "2.0.0", path = "../../primitives/io", default-features = fa
 sp-core = { version = "2.0.0", path = "../../primitives/core", default-features = false }
 
 [dev-dependencies]
+serde_json = "1.0.41"
 pallet-balances = { version = "2.0.0", path = "../balances" }
 sp-storage = { version = "2.0.0", path = "../../primitives/storage" }
 

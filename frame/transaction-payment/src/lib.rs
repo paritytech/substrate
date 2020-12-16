@@ -600,7 +600,6 @@ mod tests {
 		traits::Currency,
 	};
 	use pallet_balances::Call as BalancesCall;
-	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::{Header, TestXt},
