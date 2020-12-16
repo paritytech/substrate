@@ -26,9 +26,17 @@ use rand::Rng as _;
 use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
 use crate::TelemetryConnectionSinks;
 
-/// Maximum number of pending telemetry messages.
 /// Handler for a single telemetry node.
-/// TODO: explain 3 properties of this Sink (infailible, connection message, discard messages)
+///
+/// This is a wrapper `Sink` around a network `Sink` with 3 particularities:
+///  -  It is infallible: if the connection stops, it will reconnect automatically when the server
+///     becomes available again.
+///  -  It holds a list of "connection messages" which are sent automatically when the connection is
+///     (re-)established. This is used for the "system.connected" message that needs to be send for
+///     every substrate node that connects.
+///  -  It doesn't stay in pending while waiting for connection. Instead, it moves data into the
+///     void if the connection could not be established. This is important for the `Dispatcher`
+///     `Sink` which we don't want to block if one connection is broken.
 #[derive(Debug)]
 pub(crate) struct Node<TTrans: Transport> {
 	/// Address of the node.
@@ -37,7 +45,9 @@ pub(crate) struct Node<TTrans: Transport> {
 	socket: NodeSocket<TTrans>,
 	/// Transport used to establish new connections.
 	transport: TTrans,
+	/// Messages that are sent when the connection (re-)establishes.
 	connection_messages: Vec<serde_json::Value>,
+	/// Notifier for when the connection (re-)establishes.
 	connection_sinks: Vec<TelemetryConnectionSinks>,
 }
 
@@ -111,7 +121,6 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	}
 }
 
-// TODO not pub
 pub(crate) enum Infallible {}
 
 impl<TTrans: Transport, TSinkErr> Sink<String> for Node<TTrans>
@@ -163,12 +172,32 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 							connection_sink.fire();
 						}
 
-						let mut buf = Vec::with_capacity(self.connection_messages.len());
-						for mut json in self.connection_messages.iter().cloned() {
-							let obj = json.as_object_mut().expect("todo");
+						fn generate_message(mut json: serde_json::Value) -> Result<Vec<u8>, String> {
+							let obj = json.as_object_mut()
+								.ok_or_else(|| {
+									"Invalid JSON message: it must be an object".to_owned()
+								})?;
 							obj.insert("ts".into(), chrono::Local::now().to_rfc3339().into());
-							buf.push(serde_json::to_vec(obj).expect("todo"));
+							serde_json::to_vec(obj)
+								.map_err(|err| format!("Could not serialize JSON message: {}", err))
 						}
+
+						let buf = self.connection_messages
+							.iter()
+							.cloned()
+							.filter_map(|json| match generate_message(json) {
+								Ok(message) => Some(message),
+								Err(err) => {
+									log::error!(
+										target: "telemetry",
+										"An error occurred while generating new connection \
+										messages: {}",
+										err,
+									);
+									None
+								},
+							})
+							.collect();
 
 						socket = NodeSocket::Connected(NodeSocketConnected {
 							sink,

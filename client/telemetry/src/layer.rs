@@ -18,9 +18,7 @@
 
 use futures::channel::mpsc;
 use parking_lot::Mutex;
-use std::collections::HashMap;
 use std::convert::TryInto;
-use std::sync::Arc;
 use tracing::{Event, Id, Subscriber};
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
@@ -132,24 +130,5 @@ impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
 			message.push_str(&value[1..]);
 			(*self.0).json = Some(message)
 		}
-	}
-}
-
-/// A collection of `futures::channel::mpsc::Sender` with their associated span's ID.
-///
-/// This is used by [`TelemetryLayer`] to route the log events to the correct channel based on the
-/// span's ID.
-// TODO remove
-#[derive(Default, Debug, Clone)]
-pub struct Senders(
-	Arc<Mutex<HashMap<Id, std::panic::AssertUnwindSafe<mpsc::Sender<(u8, String)>>>>>,
-);
-
-impl Senders {
-	/// Insert a channel `Sender` to the collection using an `Id` for its key.
-	pub fn insert(&self, id: Id, sender: mpsc::Sender<(u8, String)>) {
-		self.0
-			.lock()
-			.insert(id, std::panic::AssertUnwindSafe(sender));
 	}
 }
