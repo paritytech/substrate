@@ -190,8 +190,8 @@ fn rewards_should_work() {
 		<Module<Test>>::reward_by_ids(vec![(21, 50)]);
 
 		// Compute total payout now for whole duration of the session.
-		let total_payout_0 = current_total_payout_for_duration(time_per_era());
-		let maximum_payout = maximum_payout_for_duration(time_per_era());
+		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
+		let maximum_payout = maximum_payout_for_duration(reward_time_per_era());
 
 		start_session(1);
 
@@ -253,7 +253,7 @@ fn rewards_should_work() {
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_1 = current_total_payout_for_duration(time_per_era());
+		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
 
 		mock::start_active_era(2);
 		assert_eq!(
@@ -453,7 +453,7 @@ fn nominating_and_rewards_should_work() {
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 21, 41]));
 
 			// the total reward for era 0
-			let total_payout_0 = current_total_payout_for_duration(time_per_era());
+			let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 			<Module<Test>>::reward_by_ids(vec![(41, 1)]);
 			<Module<Test>>::reward_by_ids(vec![(31, 1)]);
 
@@ -495,7 +495,7 @@ fn nominating_and_rewards_should_work() {
 			);
 
 			// the total reward for era 1
-			let total_payout_1 = current_total_payout_for_duration(time_per_era());
+			let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
 			<Module<Test>>::reward_by_ids(vec![(21, 2)]);
 			<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
@@ -888,7 +888,7 @@ fn reward_destination_works() {
 		}));
 
 		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_0 = current_total_payout_for_duration(time_per_era());
+		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(1);
@@ -911,7 +911,7 @@ fn reward_destination_works() {
 		<Payee<Test>>::insert(&11, RewardDestination::Stash);
 
 		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_1 = current_total_payout_for_duration(time_per_era());
+		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(2);
@@ -939,7 +939,7 @@ fn reward_destination_works() {
 		assert_eq!(Balances::free_balance(10), 1);
 
 		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_2 = current_total_payout_for_duration(time_per_era());
+		let total_payout_2 = current_total_payout_for_duration(reward_time_per_era());
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(3);
@@ -984,7 +984,7 @@ fn validator_payment_prefs_work() {
 		let balance_era_1_100 = Balances::total_balance(&100);
 
 		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_1 = current_total_payout_for_duration(time_per_era());
+		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
 		let exposure_1 = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 
@@ -1478,7 +1478,7 @@ fn reward_to_stake_works() {
 		<Ledger<Test>>::insert(&20, StakingLedger { stash: 21, total: 69, active: 69, unlocking: vec![], claimed_rewards: vec![] });
 
 		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_0 = current_total_payout_for_duration(time_per_era());
+		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 		<Module<Test>>::reward_by_ids(vec![(21, 1)]);
 
@@ -1744,8 +1744,9 @@ fn bond_with_little_staked_value_bounded() {
 			assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
 			assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 
-			// 1 session's worth of reward.
-			let total_payout_0 = current_total_payout_for_duration(time_per_era());
+			// 1 era worth of reward. BUT, we set the timestamp after on_initialize, so outdated by
+			// one block.
+			let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 
 			reward_all_elected();
 			mock::start_active_era(1);
@@ -1756,12 +1757,12 @@ fn bond_with_little_staked_value_bounded() {
 			assert_eq!(Staking::eras_stakers(active_era(), 2).total, 0);
 
 			// Old ones are rewarded.
-			assert_eq!(Balances::free_balance(10), init_balance_10 + total_payout_0 / 3);
+			assert_eq_error_rate!(Balances::free_balance(10), init_balance_10 + total_payout_0 / 3, 1);
 			// no rewards paid to 2. This was initial election.
 			assert_eq!(Balances::free_balance(2), init_balance_2);
 
 			// reward era 2
-			let total_payout_1 = current_total_payout_for_duration(time_per_era());
+			let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
 			reward_all_elected();
 			mock::start_active_era(2);
 			mock::make_all_reward_payment(1);
@@ -1770,10 +1771,11 @@ fn bond_with_little_staked_value_bounded() {
 			assert_eq!(Staking::eras_stakers(active_era(), 2).total, 0);
 
 			// 2 is now rewarded.
-			assert_eq!(Balances::free_balance(2), init_balance_2 + total_payout_1 / 3);
-			assert_eq!(
+			assert_eq_error_rate!(Balances::free_balance(2), init_balance_2 + total_payout_1 / 3, 1);
+			assert_eq_error_rate!(
 				Balances::free_balance(&10),
 				init_balance_10 + total_payout_0 / 3 + total_payout_1 / 3,
+				2,
 			);
 		});
 }
@@ -4248,7 +4250,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_0 = current_total_payout_for_duration(time_per_era());
+		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 
 		mock::start_active_era(1);
 
@@ -4256,7 +4258,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		// Change total issuance in order to modify total payout
 		let _ = Balances::deposit_creating(&999, 1_000_000_000);
 		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_1 = current_total_payout_for_duration(time_per_era());
+		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
 		assert!(total_payout_1 != total_payout_0);
 
 		mock::start_active_era(2);
@@ -4265,7 +4267,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		// Change total issuance in order to modify total payout
 		let _ = Balances::deposit_creating(&999, 1_000_000_000);
 		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_2 = current_total_payout_for_duration(time_per_era());
+		let total_payout_2 = current_total_payout_for_duration(reward_time_per_era());
 		assert!(total_payout_2 != total_payout_0);
 		assert!(total_payout_2 != total_payout_1);
 
@@ -4424,7 +4426,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 		// compute and ensure the reward amount is greater than zero.
-		let _ = current_total_payout_for_duration(time_per_era());
+		let _ = current_total_payout_for_duration(reward_time_per_era());
 
 		mock::start_active_era(2);
 		mock::make_all_reward_payment(1);
@@ -4479,7 +4481,7 @@ fn test_payout_stakers() {
 		Staking::reward_by_ids(vec![(11, 1)]);
 
 		// compute and ensure the reward amount is greater than zero.
-		let _ = current_total_payout_for_duration(time_per_era());
+		let _ = current_total_payout_for_duration(reward_time_per_era());
 
 		mock::start_active_era(2);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
@@ -4505,7 +4507,7 @@ fn test_payout_stakers() {
 			Staking::reward_by_ids(vec![(11, 1)]);
 
 			// compute and ensure the reward amount is greater than zero.
-			let _ = current_total_payout_for_duration(time_per_era());
+			let _ = current_total_payout_for_duration(reward_time_per_era());
 
 			mock::start_active_era(i);
 			assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, i - 1));
@@ -4520,7 +4522,7 @@ fn test_payout_stakers() {
 		for i in 16..100 {
 			Staking::reward_by_ids(vec![(11, 1)]);
 			// compute and ensure the reward amount is greater than zero.
-			let _ = current_total_payout_for_duration(time_per_era());
+			let _ = current_total_payout_for_duration(reward_time_per_era());
 			mock::start_active_era(i);
 		}
 
@@ -4560,7 +4562,7 @@ fn payout_stakers_handles_basic_errors() {
 		Staking::reward_by_ids(vec![(11, 1)]);
 
 		// compute and ensure the reward amount is greater than zero.
-		let _ = current_total_payout_for_duration(time_per_era());
+		let _ = current_total_payout_for_duration(reward_time_per_era());
 
 		mock::start_active_era(2);
 
@@ -4572,7 +4574,7 @@ fn payout_stakers_handles_basic_errors() {
 		for i in 3..100 {
 			Staking::reward_by_ids(vec![(11, 1)]);
 			// compute and ensure the reward amount is greater than zero.
-			let _ = current_total_payout_for_duration(time_per_era());
+			let _ = current_total_payout_for_duration(reward_time_per_era());
 			mock::start_active_era(i);
 		}
 		// We are at era 99, with history depth of 84
@@ -4723,7 +4725,7 @@ fn payout_creates_controller() {
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
 		// compute and ensure the reward amount is greater than zero.
-		let _ = current_total_payout_for_duration(time_per_era());
+		let _ = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
 
@@ -4751,7 +4753,7 @@ fn payout_to_any_account_works() {
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
 		// compute and ensure the reward amount is greater than zero.
-		let _ = current_total_payout_for_duration(time_per_era());
+		let _ = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
 
@@ -4812,46 +4814,6 @@ fn session_buffering_with_offset() {
 		});
 }
 
-fn cannot_bond_extra_to_lower_than_ed() {
-	ExtBuilder::default()
-		.existential_deposit(10)
-		.build_and_execute(|| {
-			// stash must have more balance than bonded for this to work.
-			assert_eq!(Balances::free_balance(&21), 512_000);
-
-			// initial stuff.
-			assert_eq!(
-				Staking::ledger(&20).unwrap(),
-				StakingLedger {
-					stash: 21,
-					total: 1000,
-					active: 1000,
-					unlocking: vec![],
-					claimed_rewards: vec![]
-				}
-			);
-
-			// unbond all of it.
-			assert_ok!(Staking::unbond(Origin::signed(20), 1000));
-			assert_eq!(
-				Staking::ledger(&20).unwrap(),
-				StakingLedger {
-					stash: 21,
-					total: 1000,
-					active: 0,
-					unlocking: vec![UnlockChunk { value: 1000, era: 3 }],
-					claimed_rewards: vec![]
-				}
-			);
-
-			// now bond a wee bit more
-			assert_noop!(
-				Staking::bond_extra(Origin::signed(21), 5),
-				Error::<Test>::InsufficientValue,
-			);
-		})
-}
-
 #[test]
 fn session_buffering_no_offset() {
 	// no offset, first session starts immediately
@@ -4904,6 +4866,7 @@ fn session_buffering_no_offset() {
 		});
 }
 
+#[test]
 fn cannot_rebond_to_lower_than_ed() {
 	ExtBuilder::default()
 		.existential_deposit(10)
@@ -4939,6 +4902,50 @@ fn cannot_rebond_to_lower_than_ed() {
 			// now bond a wee bit more
 			assert_noop!(
 				Staking::rebond(Origin::signed(20), 5),
+				Error::<Test>::InsufficientValue,
+			);
+		})
+}
+
+#[test]
+fn cannot_bond_extra_to_lower_than_ed() {
+	ExtBuilder::default()
+		.existential_deposit(10)
+		.build_and_execute(|| {
+			// stash must have more balance than bonded for this to work.
+			assert_eq!(Balances::free_balance(&21), 512_000);
+
+			// initial stuff.
+			assert_eq!(
+				Staking::ledger(&20).unwrap(),
+				StakingLedger {
+					stash: 21,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![],
+					claimed_rewards: vec![]
+				}
+			);
+
+			// unbond all of it.
+			assert_ok!(Staking::unbond(Origin::signed(20), 1000));
+			assert_eq!(
+				Staking::ledger(&20).unwrap(),
+				StakingLedger {
+					stash: 21,
+					total: 1000,
+					active: 0,
+					unlocking: vec![UnlockChunk {
+						value: 1000,
+						era: 3
+					}],
+					claimed_rewards: vec![]
+				}
+			);
+
+			// now bond a wee bit more
+			assert_noop!(
+				Staking::bond_extra(Origin::signed(21), 5),
 				Error::<Test>::InsufficientValue,
 			);
 		})

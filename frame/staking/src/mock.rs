@@ -469,9 +469,9 @@ impl ExtBuilder {
 			// session length is 1, then it is already triggered.
 			ext.execute_with(|| {
 				System::set_block_number(1);
-				Timestamp::set_timestamp(INIT_TIMESTAMP);
 				Session::on_initialize(1);
 				Staking::on_initialize(1);
+				Timestamp::set_timestamp(INIT_TIMESTAMP);
 			});
 		}
 
@@ -626,9 +626,9 @@ pub(crate) fn run_to_block(n: BlockNumber) {
 	Staking::on_finalize(System::block_number());
 	for b in (System::block_number() + 1)..=n {
 		System::set_block_number(b);
-		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
 		Session::on_initialize(b);
 		Staking::on_initialize(b);
+		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
 		if b != n {
 			Staking::on_finalize(System::block_number());
 		}
@@ -690,12 +690,25 @@ pub(crate) fn maximum_payout_for_duration(duration: u64) -> Balance {
 	.1
 }
 
+/// Time it takes to finish a session.
+///
+/// Note, if you see `time_per_session() - BLOCK_TIME`, it is fine. This is because we set the
+/// timestamp after on_initialize, so the timestamp is always one block old.
 pub(crate) fn time_per_session() -> u64 {
 	Period::get() * BLOCK_TIME
 }
 
+/// Time it takes to finish an era.
+///
+/// Note, if you see `time_per_era() - BLOCK_TIME`, it is fine. This is because we set the
+/// timestamp after on_initialize, so the timestamp is always one block old.
 pub(crate) fn time_per_era() -> u64 {
 	time_per_session() * SessionsPerEra::get() as u64
+}
+
+/// Time that will be calculated for the reward per era.
+pub(crate) fn reward_time_per_era() -> u64 {
+	time_per_era() - BLOCK_TIME
 }
 
 pub(crate) fn reward_all_elected() {
