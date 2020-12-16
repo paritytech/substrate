@@ -212,7 +212,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 			NodeSocket::Connected(conn) => {
 				let _ = conn.sink.start_send_unpin(item.into()).expect("boo");
 			},
-			socket => {
+			_socket => {
 				log::trace!(
 					target: "telemetry",
 					"Message has been discarded: {}",
