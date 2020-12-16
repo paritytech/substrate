@@ -6954,7 +6954,6 @@ dependencies = [
  "hex",
  "ip_network",
  "libp2p",
- "libp2p-wasm-ext",
  "linked-hash-map",
  "linked_hash_set",
  "log",

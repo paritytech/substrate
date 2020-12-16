@@ -29,6 +29,7 @@ use futures::{
 };
 use std::pin::Pin;
 use sc_chain_spec::Extension;
+use libp2p_wasm_ext::{ExtTransport, ffi};
 
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 
@@ -38,7 +39,8 @@ pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 /// can be used for network transport.
 pub fn init_logging_and_telemetry(
 	pattern: &str,
-) -> Result<sc_telemetry::Telemetries, String> {
+) -> Result<(sc_telemetry::Telemetries, ExtTransport), String> {
+	let transport = ExtTransport::new(ffi::websocket_transport());
 	let (subscriber, telemetries) = sc_tracing::logging::get_default_subscriber_and_telemetries(
 		pattern,
 	)?;
@@ -46,7 +48,7 @@ pub fn init_logging_and_telemetry(
 	tracing::subscriber::set_global_default(subscriber)
 		.map_err(|e| format!("could not set global default subscriber: {}", e))?;
 
-	Ok(telemetries)
+	Ok((telemetries, transport))
 }
 
 /// Create a service configuration from a chain spec.
@@ -55,6 +57,7 @@ pub fn init_logging_and_telemetry(
 pub async fn browser_configuration<G, E>(
 	chain_spec: GenericChainSpec<G, E>,
 	telemetry_handle: Option<sc_telemetry::TelemetryHandle>,
+	transport: ExtTransport,
 ) -> Result<Configuration, Box<dyn std::error::Error>>
 where
 	G: RuntimeGenesis + 'static,
@@ -70,6 +73,7 @@ where
 	);
 	network.boot_nodes = chain_spec.boot_nodes().to_vec();
 	network.transport = TransportConfig::Normal {
+		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
 		enable_mdns: false,
 	};

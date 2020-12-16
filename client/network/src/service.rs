@@ -349,17 +349,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				behaviour.register_notifications_protocol(protocol.clone());
 			}
 			let (transport, bandwidth) = {
-				let config_mem = match params.network_config.transport {
-					TransportConfig::MemoryOnly => true,
-					TransportConfig::Normal { .. } => false,
+				let (config_mem, config_wasm) = match params.network_config.transport {
+					TransportConfig::MemoryOnly => (true, None),
+					TransportConfig::Normal { wasm_external_transport, .. } =>
+						(false, wasm_external_transport)
 				};
-				#[cfg(target_os = "unknown")]
-				let config_wasm = {
-					use libp2p_wasm_ext::{ExtTransport, ffi};
-					Some(ExtTransport::new(ffi::websocket_transport()))
-				};
-				#[cfg(not(target_os = "unknown"))]
-				let config_wasm = None;
 				transport::build_transport(local_identity, config_mem, config_wasm)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
