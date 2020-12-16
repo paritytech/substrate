@@ -1148,7 +1148,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				self.update_peer_info(&who);
 				(header, is_best, who)
 			}
-			sync::PollBlockAnnounceValidation::Failure { who } => {
+			sync::PollBlockAnnounceValidation::Failure { who, disconnect } => {
+				if disconnect {
+					self.disconnect_peer(&who);
+				}
+
 				self.report_peer(who, rep::BAD_BLOCK_ANNOUNCEMENT);
 				return CustomMessageOutcome::None
 			}
