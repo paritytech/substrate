@@ -906,7 +906,7 @@ pub enum DecRefStatus {
 	Exists,
 }
 
-/// Some resultant status relevant to incrementing a provider reference.
+/// Some resultant status relevant to decrementing a provider reference.
 pub enum DecRefError {
 	/// Account cannot have the last provider reference removed while there is a consumer.
 	ConsumerRemaining,
