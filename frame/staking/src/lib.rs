@@ -958,7 +958,7 @@ decl_storage! {
 
 		/// The session index at which the era start for the last `HISTORY_DEPTH` eras.
 		///
-		/// Note: This tracks the starting session of the [`CurrentEra`].
+		/// Note: This tracks the starting session (i.e. session index when era start being active) for the eras in `[CurrentEra - HISTORY_DEPTH, CurrentEra]`.
 		pub ErasStartSessionIndex get(fn eras_start_session_index):
 			map hasher(twox_64_concat) EraIndex => Option<SessionIndex>;
 
