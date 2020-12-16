@@ -97,7 +97,6 @@ use serde::Serialize;
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
-//use sp_std::convert::Infallible;
 use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
@@ -689,27 +688,6 @@ decl_module! {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
 		}
-
-		/*
-		/// Kill the sending account, assuming there are no references outstanding and the composite
-		/// data is equal to its default value.
-		///
-		/// # <weight>
-		/// - `O(1)`
-		/// - 1 storage read and deletion.
-		/// --------------------
-		/// Base Weight: 8.626 µs
-		/// No DB Read or Write operations because caller is already in overlay
-		/// # </weight>
-		#[weight = (T::SystemWeightInfo::suicide(), DispatchClass::Operational)]
-		pub fn reduce(origin) {
-			let who = ensure_signed(origin)?;
-			let account = Account::<T>::get(&who);
-			ensure!(account.consumers == 0, Error::<T>::NonZeroRefCount);
-			ensure!(account.providers == 0, Error::<T>::NonZeroRefCount);
-			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
-			Self::kill_account(&who);
-		}*/
 	}
 }
 
@@ -1389,18 +1367,7 @@ impl<T: Config> BlockNumberProvider for Module<T>
 		Module::<T>::block_number()
 	}
 }
-/*
-pub trait IsProviding<T> {
-	fn is_providing(t: &T) -> bool;
-}
 
-pub struct IsNotDefault<T>(PhantomData<T>);
-impl<T: Default + Eq> IsProviding<T> for IsNotDefault<T> {
-	fn is_providing(t: &T) -> bool {
-		t == &T::default()
-	}
-}
-*/
 fn is_providing<T: Default + Eq>(d: &T) -> bool {
 	d != &T::default()
 }
