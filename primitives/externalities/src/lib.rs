@@ -428,10 +428,20 @@ pub struct AccessDeclaration {
 	/// Lock over a full prefix.
 	///
 	/// Gives access to all key starting with any of the declared prefixes.
-	prefixes_lock: Vec<Vec<u8>>,
+	pub prefixes_lock: Vec<Vec<u8>>,
 
 	/// Lock only over a given key.
-	keys_lock: Vec<Vec<u8>>,
+	pub keys_lock: Vec<Vec<u8>>,
+}
+
+impl AccessDeclaration {
+	/// Declaration for top prefix only.
+	pub fn top_prefix() -> Self {
+		AccessDeclaration {
+			prefixes_lock: vec![Vec::new()],
+			keys_lock: Vec::new(),
+		}
+	}
 }
 
 /// Extension for the [`Externalities`] trait.

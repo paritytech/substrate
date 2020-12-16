@@ -169,6 +169,20 @@ impl Markers {
 
 	}
 
+	fn remove_worker(&mut self, marker: TaskId) -> bool {
+		match self.markers.remove(&marker) {
+			Some(marker_desc) => {
+				if let Some(markers) = self.transactions.get_mut(marker_desc.transaction_depth) {
+					if let Some(ix) = markers.iter().position(|id| id == &marker) {
+						markers.remove(ix);
+					}
+				}
+				true
+			}
+			None => false,
+		}
+	}
+
 	pub fn resolve_worker_result(&mut self, result: WorkerResult) -> Option<Vec<u8>> {
 		match result {
 			WorkerResult::CallAt(result, marker) => {
@@ -190,20 +204,6 @@ impl Markers {
 		}
 	}
 
-	fn remove_worker(&mut self, marker: TaskId) -> bool {
-		match self.markers.remove(&marker) {
-			Some(marker_desc) => {
-				if let Some(markers) = self.transactions.get_mut(marker_desc.transaction_depth) {
-					if let Some(ix) = markers.iter().position(|id| id == &marker) {
-						markers.remove(ix);
-					}
-				}
-				true
-			}
-			None => false,
-		}
-	}
-
 	pub fn dissmiss_worker(&mut self, id: TaskId) {
 		self.remove_worker(id);
 	}
@@ -212,52 +212,41 @@ impl Markers {
 #[derive(Debug, Clone)]
 struct Filters {
 	filters: FilterTree,
-	allow_all_reads: bool,
-	allow_all_writes: bool,
-	touched_allow_all_reads: bool,
-	touched_allow_all_writes: bool,
+	// TODO child tree filters.
 	/// keeping history to remove constraint on join or dismiss.
-	changes: BTreeMap<TaskId, AccessDeclaration>,
+	/// It contains constraint for the parent (child do not need
+	/// to remove contraint), indexed by its relative child id.
+	changes: BTreeMap<TaskId, WorkerDeclaration>,
 }
 
 impl Default for Filters {
 	fn default() -> Self {
 		Filters {
 			filters: FilterTree::new(()),
-			allow_all_reads: true,
-			allow_all_writes: true,
-			touched_allow_all_reads: false,
-			touched_allow_all_writes: false,
 			changes: BTreeMap::new(),
 		}
 	}
 }
 
 impl Filters {
-	fn allow_writes(&mut self, task_id: Option<TaskId>, filter: AccessDeclaration) {
+	fn allow_writes(&mut self, filter: AccessDeclaration) {
+		unimplemented!()
+	}
+	fn forbid_writes(&mut self, filter: AccessDeclaration) {
 		unimplemented!()
 	}
 
-	fn allow_reads(&mut self, task_id: Option<TaskId>, filter: AccessDeclaration) {
+	fn allow_reads(&mut self, filter: AccessDeclaration) {
 		unimplemented!()
 	}
-
-	fn forbid_all_writes(&mut self, task_id: Option<TaskId>) {
-		unimplemented!()
-	}
-
-	fn forbid_writes(&mut self, task_id: Option<TaskId>, filter: AccessDeclaration) {
-		unimplemented!()
-	}
-
-	fn forbid_reads(&mut self, task_id: Option<TaskId>, filter: AccessDeclaration) {
+	fn forbid_reads(&mut self, filter: AccessDeclaration) {
 		unimplemented!()
 	}
 
 	fn on_worker_result(&mut self, result: &WorkerResult) {
 		match result {
 			WorkerResult::CallAt(result, marker) => {
-				self.remove(*marker);
+				self.remove_worker(*marker);
 			},
 			// When using filter there is no directly valid case.
 			WorkerResult::Valid(result) => (),
@@ -269,30 +258,157 @@ impl Filters {
 		}
 	}
 
-	fn remove(&mut self, task_id: TaskId) {
+	fn guard_read_all(&self) {
+		unimplemented!("panic on first forbid");
+	}
+
+	fn guard_inner(state: &FilterState, blocked: &mut bool, key: &[u8], len: usize) {
+		match state {
+			FilterState::Forbid(FilterScope::Prefix) => {
+				*blocked = true;
+			},
+			FilterState::Forbid(FilterScope::Key) => {
+				if len == key.len() {
+					*blocked = true;
+				}
+			},
+			FilterState::Allow(FilterScope::Prefix) => {
+				*blocked = false;
+			},
+			FilterState::Allow(FilterScope::Key) => {
+				if len == key.len() {
+					*blocked = false;
+				}
+			},
+			FilterState::None => (),
+		}
+	}
+
+	/// Panic on invalid access.
+	fn guard_read(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
+		let filters = if let Some(child_info) = child_info {
+			unimplemented!()
+		} else {
+			&self.filters
+		};
+		let mut blocked = false;
+		let len = key.len();
+		for (key, value) in filters.seek_iter(key).value_iter() {
+			Self::guard_inner(&value.write, &mut blocked, key, len);
+			// writes supersed read.
+			if blocked {
+				match value.read_only {
+					Some(FilterScope::Prefix) => {
+						blocked = false;
+					},
+					Some(FilterScope::Key) => {
+						if len == key.len() {
+							blocked = false;
+						}
+					},
+					None => (),
+				}
+			}
+		}
+		if blocked {
+			panic!("Key access impossible due to worker access declaration");
+		}
+	}
+
+	/// Panic on invalid access.
+	fn guard_write(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
+		let filters = if let Some(child_info) = child_info {
+			unimplemented!()
+		} else {
+			&self.filters
+		};
+		let mut blocked = false;
+		let len = key.len();
+		for (key, value) in filters.seek_iter(key).value_iter() {
+			Self::guard_inner(&value.write, &mut blocked, key, len);
+		}
+		if blocked {
+			panic!("Key access impossible due to worker access declaration");
+		}
+	}
+
+	fn guard_write_prefix(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
+		let filters = if let Some(child_info) = child_info {
+			unimplemented!()
+		} else {
+			&self.filters
+		};
+		let mut blocked = false;
+		let len = key.len();
+		let mut iter = filters.seek_iter(key).value_iter();
+		while let Some((key, value)) =  iter.next() {
+			Self::guard_inner(&value.write, &mut blocked, key, len);
+		}
+		for (key, value) in iter.node_iter().iter_prefix().value_iter() {
+			Self::guard_inner(&value.write, &mut blocked, key.as_slice(), len);
+		}
+		if blocked {
+			panic!("Key access impossible due to worker access declaration");
+		}
+	}
+	
+	fn set_parent_declaration(&mut self, child_marker: TaskId, declaration: WorkerDeclaration) {
+		self.changes.insert(child_marker, declaration.clone());
+		match declaration {
+			WorkerDeclaration::None => (),
+			WorkerDeclaration::ParentWrite(filter) => {
+				self.forbid_writes(AccessDeclaration::top_prefix());
+				self.allow_writes(filter)
+			},
+			WorkerDeclaration::ChildRead(filter) => {
+				self.forbid_writes(filter)
+			},
+		}
+	}
+
+	fn set_child_declaration(&mut self, declaration: WorkerDeclaration) {
+		match declaration {
+			WorkerDeclaration::None => (),
+			WorkerDeclaration::ParentWrite(filter) => {
+				self.forbid_reads(filter)
+			},
+			WorkerDeclaration::ChildRead(filter) => {
+				self.forbid_reads(AccessDeclaration::top_prefix());
+				self.allow_reads(filter)
+			},
+		}
+	}
+
+	fn remove_worker(&mut self, task_id: TaskId) {
+		// remove all changes for this task_id
 		unimplemented!()
 	}
 }
 
 /// Filter internally use for key access.
 #[derive(Debug, Clone)]
-pub enum Filter {
-	Read(FilterScope),
-	Write(FilterScope),
+pub enum FilterState {
+	Forbid(FilterScope),
+	Allow(FilterScope),
+	None,
 }
+
 
 /// TODO
 #[derive(Debug, Clone)]
 pub enum FilterScope {
-	Prefix(FilterState),
-	Key(FilterState),
+	Prefix,
+	Key,
 }
 
-/// TODO
 #[derive(Debug, Clone)]
-pub enum FilterState {
-	Allow,
-	Forbid,
+pub struct Filter {
+	/// write superseed read when define.
+	/// So if forbid is only defined at write level.
+	write: FilterState,
+	read_only: Option<FilterScope>,
+	rc_write: usize,
+	rc_read: usize,
 }
 
 /// The set of changes that are overlaid onto the backend.
@@ -440,6 +556,7 @@ impl OverlayedChanges {
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
 	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
+		self.filters.guard_read(None, key);
 		self.top.get(key).map(|x| {
 			let value = x.value();
 			let size_read = value.map(|x| x.len() as u64).unwrap_or(0);
@@ -459,6 +576,7 @@ impl OverlayedChanges {
 		key: &[u8],
 		init: impl Fn() -> StorageValue,
 	) -> &mut StorageValue {
+		self.filters.guard_write(None, key);
 		let value = self.top.modify(key.to_vec(), init, self.extrinsic_index());
 
 		// if the value was deleted initialise it back with an empty vec
@@ -469,6 +587,7 @@ impl OverlayedChanges {
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
 	pub fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Option<&[u8]>> {
+		self.filters.guard_read(Some(child_info), key);
 		let map = self.children.get(child_info.storage_key())?;
 		let value = map.0.get(key)?.value();
 		let size_read = value.map(|x| x.len() as u64).unwrap_or(0);
@@ -480,6 +599,7 @@ impl OverlayedChanges {
 	///
 	/// Can be rolled back or committed when called inside a transaction.
 	pub(crate) fn set_storage(&mut self, key: StorageKey, val: Option<StorageValue>) {
+		self.filters.guard_write(None, key.as_slice());
 		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
 		self.stats.tally_write_overlay(size_write);
 		self.top.set(key, val, self.extrinsic_index());
@@ -496,6 +616,7 @@ impl OverlayedChanges {
 		key: StorageKey,
 		val: Option<StorageValue>,
 	) {
+		self.filters.guard_write(Some(child_info), key.as_slice());
 		let extrinsic_index = self.extrinsic_index();
 		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
 		self.stats.tally_write_overlay(size_write);
@@ -519,6 +640,7 @@ impl OverlayedChanges {
 		&mut self,
 		child_info: &ChildInfo,
 	) {
+		self.filters.guard_write_prefix(Some(child_info), &[]);
 		let extrinsic_index = self.extrinsic_index();
 		let storage_key = child_info.storage_key().to_vec();
 		let top = &self.top;
@@ -537,6 +659,7 @@ impl OverlayedChanges {
 	///
 	/// Can be rolled back or committed when called inside a transaction.
 	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
+		self.filters.guard_write_prefix(None, prefix);
 		self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index());
 	}
 
@@ -548,6 +671,7 @@ impl OverlayedChanges {
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) {
+		self.filters.guard_write_prefix(Some(child_info), prefix);
 		let extrinsic_index = self.extrinsic_index();
 		let storage_key = child_info.storage_key().to_vec();
 		let top = &self.top;
@@ -577,29 +701,18 @@ impl OverlayedChanges {
 	}
 
 	/// Set access declaration in the parent worker.
-	pub fn set_parent_declaration(&mut self, marker: TaskId, declaration: WorkerDeclaration) {
-		match declaration {
-			WorkerDeclaration::None => (),
-			WorkerDeclaration::ParentWrite(filter) => {
-				self.filters.allow_writes(Some(marker), filter)
-			},
-			WorkerDeclaration::ChildRead(filter) => {
-				self.filters.forbid_writes(Some(marker), filter)
-			},
-		}
+	pub fn set_parent_declaration(&mut self, child_marker: TaskId, declaration: WorkerDeclaration) {
+		self.filters.set_parent_declaration(child_marker, declaration);
 	}
 
 	/// Set access declaration in the parent worker.
 	pub fn set_child_declaration(&mut self, declaration: WorkerDeclaration) {
-		match declaration {
-			WorkerDeclaration::None => (),
-			WorkerDeclaration::ParentWrite(filter) => {
-				self.filters.forbid_reads(None, filter)
-			},
-			WorkerDeclaration::ChildRead(filter) => {
-				self.filters.allow_reads(None, filter)
-			},
-		}
+		self.filters.set_child_declaration(declaration);
+	}
+
+	/// Set access declaration in the parent worker.
+	pub fn remove_parent_declaration(&mut self, marker: TaskId) {
+		self.filters.remove_worker(marker);
 	}
 
 	/// Check if worker result is compatible with changes
@@ -615,7 +728,7 @@ impl OverlayedChanges {
 	///
 	/// Update internal state relative to this worker.
 	pub fn dismiss_worker(&mut self, id: TaskId) {
-		self.filters.remove(id);
+		self.filters.remove_worker(id);
 		self.markers.remove_worker(id);
 	}
 
@@ -830,6 +943,7 @@ impl OverlayedChanges {
 	) -> H::Out
 		where H::Out: Ord + Encode,
 	{
+		self.filters.guard_read_all();
 		let delta = self.changes().map(|(k, v)| (&k[..], v.value().map(|v| &v[..])));
 		let child_delta = self.children()
 			.map(|(changes, info)| (info, changes.map(
@@ -877,6 +991,7 @@ impl OverlayedChanges {
 	/// Returns the next (in lexicographic order) storage key in the overlayed alongside its value.
 	/// If no value is next then `None` is returned.
 	pub fn next_storage_key_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
+		unimplemented!("how to filter this??");
 		self.top.next_change(key)
 	}
 
@@ -887,6 +1002,7 @@ impl OverlayedChanges {
 		storage_key: &[u8],
 		key: &[u8]
 	) -> Option<(&[u8], &OverlayedValue)> {
+		unimplemented!("how to filter this??");
 		self.children
 			.get(storage_key)
 			.and_then(|(overlay, _)|
