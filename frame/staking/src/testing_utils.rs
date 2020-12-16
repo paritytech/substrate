@@ -301,7 +301,7 @@ pub fn get_seq_phragmen_solution<T: Config>(
 		assignments,
 		winners,
 		do_reduce,
-		T::MaximumBlockWeight::get(),
+		T::BlockWeights::get().max_block,
 	)
 	.unwrap()
 }

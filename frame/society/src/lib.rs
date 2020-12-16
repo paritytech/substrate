@@ -533,7 +533,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn bid(origin, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
@@ -572,7 +572,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(B + X)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn unbid(origin, pos: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -642,7 +642,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			// Check user is not suspended.
@@ -683,7 +683,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(B)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn unvouch(origin, pos: u32) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			ensure!(Self::vouching(&voucher) == Some(VouchingStatus::Vouching), Error::<T, I>::NotVouching);
@@ -721,7 +721,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + C)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn vote(origin, candidate: <T::Lookup as StaticLookup>::Source, approve: bool) {
 			let voter = ensure_signed(origin)?;
 			let candidate = T::Lookup::lookup(candidate)?;
@@ -752,7 +752,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn defender_vote(origin, approve: bool) {
 			let voter = ensure_signed(origin)?;
 			let members = <Members<T, I>>::get();
@@ -784,7 +784,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + P + X)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn payout(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -826,7 +826,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		fn found(origin, founder: T::AccountId, max_members: u32, rules: Vec<u8>) {
 			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
@@ -853,7 +853,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		fn unfound(origin) {
 			let founder = ensure_signed(origin)?;
 			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
@@ -895,7 +895,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + B)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			ensure!(<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::NotSuspended);
@@ -966,7 +966,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + B + X)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		fn judge_suspended_candidate(origin, who: T::AccountId, judgement: Judgement) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			if let Some((value, kind)) = <SuspendedCandidates<T, I>>::get(&who) {
@@ -1026,7 +1026,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		fn set_max_members(origin, max: u32) {
 			ensure_root(origin)?;
 			ensure!(max > 1, Error::<T, I>::MaxMembers);
@@ -1038,13 +1038,14 @@ decl_module! {
 			let mut members = vec![];
 
 			let mut weight = 0;
+			let weights = T::BlockWeights::get();
 
 			// Run a candidate/membership rotation
 			if (n % T::RotationPeriod::get()).is_zero() {
 				members = <Members<T, I>>::get();
 				Self::rotate_period(&mut members);
 
-				weight += T::MaximumBlockWeight::get() / 20;
+				weight += weights.max_block / 20;
 			}
 
 			// Run a challenge rotation
@@ -1055,7 +1056,7 @@ decl_module! {
 				}
 				Self::rotate_challenge(&mut members);
 
-				weight += T::MaximumBlockWeight::get() / 20;
+				weight += weights.max_block / 20;
 			}
 
 			weight

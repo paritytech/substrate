@@ -26,7 +26,7 @@ mod analysis;
 
 pub use utils::*;
 #[cfg(feature = "std")]
-pub use analysis::{Analysis, BenchmarkSelector};
+pub use analysis::{Analysis, BenchmarkSelector, RegressionModel};
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 pub use sp_runtime::traits::Zero;
