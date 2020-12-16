@@ -1588,7 +1588,7 @@ fn handle_ancestor_search_state<B: BlockT>(
 	let two = <NumberFor<B>>::one() + <NumberFor<B>>::one();
 	match state {
 		AncestorSearchState::ExponentialBackoff(next_distance_to_tip) => {
-			let next_distance_to_tip = dbg!(*next_distance_to_tip);
+			let next_distance_to_tip = *next_distance_to_tip;
 			if dbg!(block_hash_match) && next_distance_to_tip == One::one() {
 				// We found the ancestor in the first step so there is no need to execute binary search.
 				return None;
