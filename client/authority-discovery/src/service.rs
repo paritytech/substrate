@@ -22,14 +22,14 @@ use futures::SinkExt;
 use sc_network::{Multiaddr, PeerId};
 use sp_authority_discovery::AuthorityId;
 
-/// Service to interact with the [`Worker`].
+/// Service to interact with the [`crate::Worker`].
 #[derive(Clone)]
 pub struct Service {
 	to_worker: mpsc::Sender<ServicetoWorkerMsg>,
 }
 
-/// A [`Service`] allows to interact with a [`Worker`], e.g. by querying the
-/// [`Worker`]'s local address cache for a given [`AuthorityId`].
+/// A [`Service`] allows to interact with a [`crate::Worker`], e.g. by querying the
+/// [`crate::Worker`]'s local address cache for a given [`AuthorityId`].
 impl Service {
 	pub(crate) fn new(to_worker: mpsc::Sender<ServicetoWorkerMsg>) -> Self {
 		Self {
@@ -44,7 +44,7 @@ impl Service {
 	/// [`crate::Worker`] failed.
 	///
 	/// Note: [`Multiaddr`]s returned always include a [`PeerId`] via a
-	/// [`libp2p::core::multiaddr:Protocol::P2p`] component. Equality of
+	/// [`libp2p::core::multiaddr::Protocol::P2p`] component. Equality of
 	/// [`PeerId`]s across [`Multiaddr`]s returned by a single call is not
 	/// enforced today, given that there are still authorities out there
 	/// publishing the addresses of their sentry nodes on the DHT. In the future

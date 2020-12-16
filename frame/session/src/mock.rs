@@ -40,6 +40,31 @@ impl From<UintAuthorityId> for MockSessionKeys {
 	}
 }
 
+pub const KEY_ID_A: KeyTypeId = KeyTypeId([4; 4]);
+pub const KEY_ID_B: KeyTypeId = KeyTypeId([9; 4]);
+
+#[derive(Debug, Clone, codec::Encode, codec::Decode, PartialEq, Eq)]
+pub struct PreUpgradeMockSessionKeys {
+	pub a: [u8; 32],
+	pub b: [u8; 64],
+}
+
+impl OpaqueKeys for PreUpgradeMockSessionKeys {
+	type KeyTypeIdProviders = ();
+
+	fn key_ids() -> &'static [KeyTypeId] {
+		&[KEY_ID_A, KEY_ID_B]
+	}
+
+	fn get_raw(&self, i: KeyTypeId) -> &[u8] {
+		match i {
+			i if i == KEY_ID_A => &self.a[..],
+			i if i == KEY_ID_B => &self.b[..],
+			_ => &[],
+		}
+	}
+}
+
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }

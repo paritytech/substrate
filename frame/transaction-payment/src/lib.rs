@@ -109,7 +109,7 @@ type BalanceOf<T> =
 /// Meaning that fees can change by around ~23% per day, given extreme congestion.
 ///
 /// More info can be found at:
-/// https://w3f-research.readthedocs.io/en/latest/polkadot/Token%20Economics.html
+/// <https://w3f-research.readthedocs.io/en/latest/polkadot/Token%20Economics.html>
 pub struct TargetedFeeAdjustment<T, S, V, M>(sp_std::marker::PhantomData<(T, S, V, M)>);
 
 /// Something that can convert the current multiplier to the next one.
