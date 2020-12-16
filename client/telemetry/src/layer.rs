@@ -121,6 +121,12 @@ impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
 
 	fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
 		if field.name() == "json" {
+			if value.chars().next() == Some('{') {
+				eprintln!(
+					"Invalid value for JSON in telemetry logging: \
+					the attribute's value `json` doesn't start with the character `{{`",
+				);
+			}
 			// NOTE: this is a hack to inject the span id into the json
 			let mut message = format!(r#"{{"id":{},"#, (*self.0).id.into_u64());
 			message.push_str(&value[1..]);
