@@ -45,7 +45,7 @@
 //!
 //! ### Resources:
 //!
-//! 1. https://hackmd.io/JOn9x98iS0e0DPWQ87zGWg?view
+//! 1. <https://hackmd.io/JOn9x98iS0e0DPWQ87zGWg?view>
 
 use crate::node::{Node, NodeId, NodeRef, NodeRole};
 use crate::{ExtendedBalance, IdentifierT, StakedAssignment};

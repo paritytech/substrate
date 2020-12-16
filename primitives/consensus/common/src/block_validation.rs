@@ -42,7 +42,12 @@ pub enum Validation {
 		is_new_best: bool,
 	},
 	/// Invalid block announcement.
-	Failure,
+	Failure {
+		/// Should we disconnect from this peer?
+		///
+		/// This should be used if the peer for example send junk to spam us.
+		disconnect: bool,
+	},
 }
 
 /// Type which checks incoming block announcements.
@@ -68,8 +73,20 @@ impl<B: Block> BlockAnnounceValidator<B> for DefaultBlockAnnounceValidator {
 	fn validate(
 		&mut self,
 		_: &B::Header,
-		_: &[u8],
+		data: &[u8],
 	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn Error + Send>>> + Send>> {
-		async { Ok(Validation::Success { is_new_best: false }) }.boxed()
+		let is_empty = data.is_empty();
+
+		async move {
+			if !is_empty {
+				log::debug!(
+					target: "sync",
+					"Received unknown data alongside the block announcement.",
+				);
+				Ok(Validation::Failure { disconnect: true })
+			} else {
+				Ok(Validation::Success { is_new_best: false })
+			}
+		}.boxed()
 	}
 }

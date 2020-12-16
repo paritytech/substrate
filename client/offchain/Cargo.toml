@@ -33,7 +33,7 @@ sc-network = { version = "0.8.0", path = "../network" }
 sc-keystore = { version = "2.0.0", path = "../keystore" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
-hyper = "0.13.2"
+hyper = "0.13.9"
 hyper-rustls = "0.21.0"
 
 [dev-dependencies]

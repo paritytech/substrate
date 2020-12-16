@@ -4808,6 +4808,47 @@ fn session_buffering_with_offset() {
 			assert_eq!(current_era(), 2);
 			assert_eq!(active_era(), 2);
 			assert_eq!(Session::current_index(), 10);
+
+		});
+}
+
+fn cannot_bond_extra_to_lower_than_ed() {
+	ExtBuilder::default()
+		.existential_deposit(10)
+		.build_and_execute(|| {
+			// stash must have more balance than bonded for this to work.
+			assert_eq!(Balances::free_balance(&21), 512_000);
+
+			// initial stuff.
+			assert_eq!(
+				Staking::ledger(&20).unwrap(),
+				StakingLedger {
+					stash: 21,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![],
+					claimed_rewards: vec![]
+				}
+			);
+
+			// unbond all of it.
+			assert_ok!(Staking::unbond(Origin::signed(20), 1000));
+			assert_eq!(
+				Staking::ledger(&20).unwrap(),
+				StakingLedger {
+					stash: 21,
+					total: 1000,
+					active: 0,
+					unlocking: vec![UnlockChunk { value: 1000, era: 3 }],
+					claimed_rewards: vec![]
+				}
+			);
+
+			// now bond a wee bit more
+			assert_noop!(
+				Staking::bond_extra(Origin::signed(21), 5),
+				Error::<Test>::InsufficientValue,
+			);
 		})
 }
 
@@ -4859,5 +4900,46 @@ fn session_buffering_no_offset() {
 			assert_eq!(current_era(), 2);
 			assert_eq!(active_era(), 2);
 			assert_eq!(Session::current_index(), 10);
+
+		});
+}
+
+fn cannot_rebond_to_lower_than_ed() {
+	ExtBuilder::default()
+		.existential_deposit(10)
+		.build_and_execute(|| {
+			// stash must have more balance than bonded for this to work.
+			assert_eq!(Balances::free_balance(&21), 512_000);
+
+			// initial stuff.
+			assert_eq!(
+				Staking::ledger(&20).unwrap(),
+				StakingLedger {
+					stash: 21,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![],
+					claimed_rewards: vec![]
+				}
+			);
+
+			// unbond all of it.
+			assert_ok!(Staking::unbond(Origin::signed(20), 1000));
+			assert_eq!(
+				Staking::ledger(&20).unwrap(),
+				StakingLedger {
+					stash: 21,
+					total: 1000,
+					active: 0,
+					unlocking: vec![UnlockChunk { value: 1000, era: 3 }],
+					claimed_rewards: vec![]
+				}
+			);
+
+			// now bond a wee bit more
+			assert_noop!(
+				Staking::rebond(Origin::signed(20), 5),
+				Error::<Test>::InsufficientValue,
+			);
 		})
 }
