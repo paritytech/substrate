@@ -124,6 +124,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	type Error = Infallible;
 
 	fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+		// TODO discard messages
 		let mut socket = mem::replace(&mut self.socket, NodeSocket::Poisoned);
 		self.socket = loop {
 			match socket {

@@ -388,7 +388,7 @@ pub struct TelemetryConnectionSinks(Arc<Mutex<Vec<TracingUnboundedSender<()>>>>)
 impl TelemetryConnectionSinks {
 	/// Get event stream for telemetry connection established events.
 	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
-		let (sink, stream) =tracing_unbounded("mpsc_telemetry_on_connect");
+		let (sink, stream) = tracing_unbounded("mpsc_telemetry_on_connect");
 		self.0.lock().push(sink);
 		stream
 	}
