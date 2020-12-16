@@ -1586,7 +1586,7 @@ fn handle_ancestor_search_state<B: BlockT>(
 	block_hash_match: bool,
 ) -> Option<(AncestorSearchState<B>, NumberFor<B>)> {
 	let two = <NumberFor<B>>::one() + <NumberFor<B>>::one();
-	match dbg!(state) {
+	match state {
 		AncestorSearchState::ExponentialBackoff(next_distance_to_tip) => {
 			let next_distance_to_tip = dbg!(*next_distance_to_tip);
 			if dbg!(block_hash_match) && next_distance_to_tip == One::one() {
