@@ -62,7 +62,7 @@ macro_rules! write_node_name {
 	($method:ident, $type:ty, $format:expr) => {
 		fn $method(&mut self, field: &tracing::field::Field, value: $type) {
 			if field.name() == "name" {
-				write!(self.0, $format, value).expect("no way to return the err; qed");
+				let _ = write!(self.0, $format, value);
 			}
 		}
 	};
