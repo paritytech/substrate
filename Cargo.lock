@@ -1653,7 +1653,7 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-std",
- "trybuild 1.0.35 (git+https://github.com/bkchr/trybuild.git?branch=bkchr-use-workspace-cargo-lock)",
+ "trybuild",
 ]
 
 [[package]]
@@ -6400,7 +6400,6 @@ dependencies = [
  "tiny-bip39",
  "tokio 0.2.23",
  "tracing",
- "trybuild 1.0.35 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -7871,7 +7870,7 @@ dependencies = [
  "sp-state-machine",
  "sp-version",
  "substrate-test-runtime-client",
- "trybuild 1.0.35 (git+https://github.com/bkchr/trybuild.git?branch=bkchr-use-workspace-cargo-lock)",
+ "trybuild",
 ]
 
 [[package]]
@@ -8324,7 +8323,7 @@ dependencies = [
  "sp-tracing",
  "sp-wasm-interface",
  "static_assertions",
- "trybuild 1.0.35 (git+https://github.com/bkchr/trybuild.git?branch=bkchr-use-workspace-cargo-lock)",
+ "trybuild",
 ]
 
 [[package]]
@@ -8909,7 +8908,7 @@ dependencies = [
  "sc-service",
  "substrate-test-utils-derive",
  "tokio 0.2.23",
- "trybuild 1.0.35 (git+https://github.com/bkchr/trybuild.git?branch=bkchr-use-workspace-cargo-lock)",
+ "trybuild",
 ]
 
 [[package]]
@@ -9572,20 +9571,6 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
-
-[[package]]
-name = "trybuild"
-version = "1.0.35"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7d30fe369fd650072b352b1a9cb9587669de6b89be3b8225544012c1c45292d"
-dependencies = [
- "glob",
- "lazy_static",
- "serde",
- "serde_json",
- "termcolor",
- "toml",
-]
 
 [[package]]
 name = "trybuild"

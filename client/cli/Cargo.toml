@@ -50,7 +50,6 @@ rpassword = "5.0.0"
 
 [dev-dependencies]
 tempfile = "3.1.0"
-trybuild = "1.0.35"
 
 [features]
 wasmtime = [

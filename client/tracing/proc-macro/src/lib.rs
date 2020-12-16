@@ -20,7 +20,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use proc_macro_crate::crate_name;
 use quote::quote;
-use syn::{Error, Expr, Ident, ItemFn, Path};
+use syn::{Error, Expr, Ident, ItemFn};
 
 /// Add a log prefix to the function.
 ///
@@ -122,15 +122,14 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 		.expect("cargo env var always there when compiling; qed")
 		== "sc-tracing"
 	{
-		Path::from(Ident::new("sc_tracing", Span::call_site()))
+		Ident::from(Ident::new("sc_tracing", Span::call_site()))
 	} else {
-		match crate_name("sc-cli") {
-			Ok(x) => syn::parse_str::<Path>(&format!("{}::sc_tracing", x)).unwrap(),
-			Err(_) => match crate_name("sc-tracing") {
-				Ok(x) => Path::from(Ident::new(&x, Span::call_site())),
-				Err(err) => return Error::new(Span::call_site(), err).to_compile_error().into(),
-			},
-		}
+		let crate_name = match crate_name("sc-tracing") {
+			Ok(x) => x,
+			Err(err) => return Error::new(Span::call_site(), err).to_compile_error().into(),
+		};
+
+		Ident::new(&crate_name, Span::call_site())
 	};
 
 	let ItemFn {

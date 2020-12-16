@@ -46,8 +46,7 @@ use structopt::{
 };
 use sc_tracing::logging;
 #[doc(hidden)]
-pub use sc_tracing;
-pub use sc_tracing::logging::prefix_logs_with;
+pub use tracing;
 
 /// Substrate client CLI
 ///
