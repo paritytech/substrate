@@ -87,7 +87,6 @@ where
 			wasm_bindgen_futures::spawn_local(fut);
 			async {}
 		}).into(),
-		telemetry_external_transport: Some(transport),
 		telemetry_handle,
 		role: Role::Light,
 		database: {

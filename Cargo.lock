@@ -7339,6 +7339,7 @@ dependencies = [
  "futures 0.3.8",
  "futures-timer 3.0.2",
  "libp2p",
+ "libp2p-wasm-ext",
  "log",
  "parking_lot 0.11.1",
  "pin-project 0.4.27",

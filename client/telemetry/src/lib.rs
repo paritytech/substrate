@@ -41,8 +41,7 @@
 
 use futures::{channel::mpsc, prelude::*};
 use libp2p::{
-	core::transport::{OptionalTransport, timeout::TransportTimeout},
-	wasm_ext, Multiaddr, Transport,
+	core::transport::timeout::TransportTimeout, Multiaddr, Transport,
 };
 use log::{error, warn};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -70,7 +69,7 @@ mod dispatcher;
 
 pub use layer::*;
 use node::*;
-use worker::{CONNECT_TIMEOUT, StreamSink}; // TODO mod
+use worker::CONNECT_TIMEOUT; // TODO mod
 use dispatcher::*;
 
 /// List of telemetry servers we want to talk to. Contains the URL of the server, and the
@@ -168,46 +167,23 @@ impl Telemetries {
 			sender,
 			init_receiver,
 			init_sender,
-			transport: Self::initialize_transport(None)?,
+			transport: Self::initialize_transport()?,
 		})
 	}
 
-	/// Create a [`Telemetries`] object using an `ExtTransport`.
-	///
-	/// This is used in WASM contexts where we need some binding between the networking provided by
-	/// the operating system or environment and libp2p.
-	///
-	/// This constructor is expected to be used only when compiling for WASM.
-	///
-	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
-	/// >                internal buffering going on. In the context of WebSockets, each `write`
-	/// >                must be one individual WebSockets frame.
-	pub fn with_wasm_external_transport(wasm_external_transport: wasm_ext::ExtTransport) -> Result<Self, io::Error> {
-		let (sender, receiver) = mpsc::channel(16);
-		let (init_sender, init_receiver) = mpsc::unbounded();
-
-		Ok(Self {
-			receiver,
-			sender,
-			init_receiver,
-			init_sender,
-			transport: Self::initialize_transport(Some(wasm_external_transport))?,
-		})
-	}
-
-	fn initialize_transport(
-		wasm_external_transport: Option<wasm_ext::ExtTransport>,
-	) -> Result<crate::worker::WsTrans, io::Error> {
-		let transport = match wasm_external_transport.clone() {
-			Some(t) => OptionalTransport::some(t),
-			None => OptionalTransport::none()
+	fn initialize_transport() -> Result<crate::worker::WsTrans, io::Error> {
+		// TODO refactor
+		#[cfg(target_os = "unknown")]
+		let transport = {
+			use libp2p_wasm_ext::{ExtTransport, ffi};
+			ExtTransport::new(ffi::websocket_transport())
 		}.map((|inner, _| StreamSink::from(inner)) as fn(_, _) -> _);
 
 		// The main transport is the `wasm_external_transport`, but if we're on desktop we add
 		// support for TCP+WebSocket+DNS as a fallback. In practice, you're not expected to pass
 		// an external transport on desktop and the fallback is used all the time.
 		#[cfg(not(target_os = "unknown"))]
-		let transport = transport.or_transport({
+		let transport = {
 			let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new())?;
 			libp2p::websocket::framed::WsConfig::new(inner)
 				.and_then(|connec, _| {
@@ -220,7 +196,7 @@ impl Telemetries {
 						.map_ok(|data| data.into_bytes());
 					future::ready(Ok::<_, io::Error>(connec))
 				})
-		});
+		};
 
 		Ok(TransportTimeout::new(
 			transport.map(|out, _| {
