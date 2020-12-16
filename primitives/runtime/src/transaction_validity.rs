@@ -53,7 +53,8 @@ pub enum InvalidTransaction {
 	/// itself. As the verifying side does not know which additional data was used while signing
 	/// it will only be able to assume a bad signature and cannot express a more meaningful error.
 	BadProof,
-	/// The transaction birth block is ancient.
+	/// The transaction birth block is ancient. For `FRAME`-based runtimes this means:
+	/// current block number - `Era::birth` block number > `BlockHashCount`.
 	AncientBirthBlock,
 	/// The transaction would exhaust the resources of current block.
 	///
