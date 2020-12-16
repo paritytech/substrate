@@ -268,27 +268,50 @@ impl Filters {
 	fn allow_writes(&mut self, filter: AccessDeclaration) {
 		self.default_forbid();
 		for prefix in filter.prefixes_lock {
+			// TODO actually must be a variant that just check if there
+			// is allowed
 			self.guard_write_prefix(None, prefix.as_slice());
 			if let Some(filter) = self.top_filters.get_mut(prefix.as_slice()) {
 				// append
+				debug_assert!(filter.write_prefix != FilterState::Forbid); // we did use guard
+				filter.write_prefix = FilterState::Allow;
+				filter.rc_write_prefix += 1;
 			} else {
 				// new entry
+				let mut filter = Filter::default();
+				filter.write_prefix = FilterState::Allow;
+				filter.rc_write_prefix += 1;
+				self.top_filters.insert(prefix.as_slice(), filter);
 			}
 		}
 		for key in filter.keys_lock {
+			self.guard_write(None, key.as_slice());
+			if let Some(filter) = self.top_filters.get_mut(key.as_slice()) {
+				debug_assert!(filter.write_key != FilterState::Forbid); // we did use guard
+				// append
+				filter.write_key = FilterState::Allow;
+				filter.rc_write_key += 1;
+			} else {
+				// new entry
+				let mut filter = Filter::default();
+				filter.write_key = FilterState::Allow;
+				filter.rc_write_key += 1;
+				self.top_filters.insert(key.as_slice(), filter);
+			}
 		}
-
-		unimplemented!()
-	}
-	fn forbid_writes(&mut self, filter: AccessDeclaration) {
-		self.default_allow();
-		unimplemented!()
 	}
 
 	fn allow_reads(&mut self, filter: AccessDeclaration) {
 		self.default_forbid();
 		unimplemented!()
 	}
+
+	fn forbid_writes(&mut self, filter: AccessDeclaration) {
+		self.default_allow();
+
+		unimplemented!()
+	}
+
 	fn forbid_reads(&mut self, filter: AccessDeclaration) {
 		self.default_allow();
 		unimplemented!()
@@ -309,29 +332,29 @@ impl Filters {
 		}
 	}
 
+	/// TODO this implementation is borderline eg forbid prefix
+	/// does not mean that we cannot run storage_root, as we do
+	/// not know the query plan.
+	/// -> it could be easier to forbid storage root from
+	/// worker (it maybe be already the case).
 	fn guard_read_all_filter(filters: &FilterTree) -> bool {
 		let mut blocked = false;
 		for (key, value) in filters.iter().value_iter() {
-			match value.write {
-				FilterState::Forbid(FilterScope::Prefix) => {
-					blocked = true;
-				},
-				FilterState::Forbid(FilterScope::Key) => {
-					blocked = true;
+			match value.write_prefix {
+				FilterState::Forbid => {
+					if !value.read_only_prefix {
+						blocked = true;
+					}
 				},
 				_ => (),
 			}
-			// writes supersed read.
-			if blocked {
-				match value.read_only {
-					Some(FilterScope::Prefix) => {
-						blocked = false;
-					},
-					Some(FilterScope::Key) => {
-						blocked = false;
-					},
-					None => (),
-				}
+			match value.write_key {
+				FilterState::Forbid => {
+					if value.read_only_key {
+						blocked = true;
+					}
+				},
+				_ => (),
 			}
 			if blocked {
 				break;
@@ -358,20 +381,23 @@ impl Filters {
 		}
 	}
 
-	fn guard_inner(state: &FilterState, blocked: &mut bool, key: &[u8], len: usize) {
-		match state {
-			FilterState::Forbid(FilterScope::Prefix) => {
+	fn guard_write_inner(filter: &Filter, blocked: &mut bool, key: &[u8], len: usize) {
+		match filter.write_prefix {
+			FilterState::Forbid => {
 				*blocked = true;
 			},
-			FilterState::Forbid(FilterScope::Key) => {
+			FilterState::Allow => {
+				*blocked = false;
+			},
+			FilterState::None => (),
+		}
+		match filter.write_key {
+			FilterState::Forbid => {
 				if len == key.len() {
 					*blocked = true;
 				}
 			},
-			FilterState::Allow(FilterScope::Prefix) => {
-				*blocked = false;
-			},
-			FilterState::Allow(FilterScope::Key) => {
+			FilterState::Allow => {
 				if len == key.len() {
 					*blocked = false;
 				}
@@ -398,19 +424,15 @@ impl Filters {
 		let mut blocked = false;
 		let len = key.len();
 		for (key, value) in filters.seek_iter(key).value_iter() {
-			Self::guard_inner(&value.write, &mut blocked, key, len);
+			// if guard write pass, then read is fine too.
+			Self::guard_write_inner(&value, &mut blocked, key, len);
 			// writes supersed read.
 			if blocked {
-				match value.read_only {
-					Some(FilterScope::Prefix) => {
-						blocked = false;
-					},
-					Some(FilterScope::Key) => {
-						if len == key.len() {
-							blocked = false;
-						}
-					},
-					None => (),
+				if value.read_only_prefix {
+					blocked = false;
+				}
+				if value.read_only_key && len == key.len() {
+					blocked = false;
 				}
 			}
 		}
@@ -429,7 +451,7 @@ impl Filters {
 		let mut blocked = false;
 		let len = key.len();
 		for (key, value) in filters.seek_iter(key).value_iter() {
-			Self::guard_inner(&value.write, &mut blocked, key, len);
+			Self::guard_write_inner(&value, &mut blocked, key, len);
 		}
 		if blocked {
 			panic!(BROKEN_DECLARATION);
@@ -446,10 +468,10 @@ impl Filters {
 		let len = key.len();
 		let mut iter = filters.seek_iter(key).value_iter();
 		while let Some((key, value)) =  iter.next() {
-			Self::guard_inner(&value.write, &mut blocked, key, len);
+			Self::guard_write_inner(&value, &mut blocked, key, len);
 		}
 		for (key, value) in iter.node_iter().iter_prefix().value_iter() {
-			Self::guard_inner(&value.write, &mut blocked, key.as_slice(), len);
+			Self::guard_write_inner(&value, &mut blocked, key.as_slice(), len);
 		}
 		if blocked {
 			panic!(BROKEN_DECLARATION);
@@ -466,11 +488,11 @@ impl Filters {
 		let len = key.len();
 		let mut iter = filters.seek_iter(key).value_iter();
 		while let Some((key, value)) =  iter.next() {
-			Self::guard_inner(&value.write, &mut blocked, key, len);
+			Self::guard_write_inner(&value, &mut blocked, key, len);
 		}
 		for (key, value) in iter.node_iter().iter().value_iter() {
 			if key.as_slice() <= key_end {
-				Self::guard_inner(&value.write, &mut blocked, key.as_slice(), len);
+				Self::guard_write_inner(&value, &mut blocked, key.as_slice(), len);
 			} else {
 				break;
 			}
@@ -515,27 +537,30 @@ impl Filters {
 /// Filter internally use for key access.
 #[derive(Debug, Clone)]
 pub enum FilterState {
-	Forbid(FilterScope),
-	Allow(FilterScope),
 	None,
+	Forbid,
+	Allow,
 }
 
-
-/// TODO
-#[derive(Debug, Clone)]
-pub enum FilterScope {
-	Prefix,
-	Key,
+impl Default for FilterState {
+	fn default() -> Self {
+		FilterState::None
+	}
 }
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Filter {
 	/// write superseed read when define.
 	/// So if forbid is only defined at write level.
-	write: FilterState,
-	read_only: Option<FilterScope>,
-	rc_write: usize,
-	rc_read: usize,
+	write_prefix: FilterState,
+	write_key: FilterState,
+	// read only is ignore 'false' or allow (forbid readonly
+	// is equivalent to forbid write).
+	read_only_prefix: bool,
+	read_only_key: bool,
+	rc_write_prefix: usize,
+	rc_write_key: usize,
+	rc_read_prefix: usize,
+	rc_read_key: usize,
 }
 
 /// The set of changes that are overlaid onto the backend.
