@@ -56,6 +56,9 @@ pub use self::changeset::{OverlayedValue, NoOpenTransaction, AlreadyInRuntime, N
 /// Changes that are made outside of extrinsics are marked with this index;
 pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
 
+/// Worker declaration assertion failure.
+pub const BROKEN_DECLARATION: &'static str = "Key access impossible due to worker access declaration";
+
 /// Storage key.
 pub type StorageKey = Vec<u8>;
 
@@ -211,6 +214,15 @@ impl Markers {
 
 #[derive(Debug, Clone)]
 struct Filters {
+	// By default no declaration does not filter
+	// Using allows definition switch this.
+	default_allow: bool,
+	// to be able to switch back to default on changes empty
+	// we require this to be false.
+	// In practice this indicates if this is a worker filter
+	// (worker filter have defined declaration that cannot be
+	// rolledback).
+	can_switch_default: bool,
 	top_filters: FilterTree,
 	children_filters: Map<StorageKey, FilterTree>,
 	// TODO child tree filters.
@@ -223,6 +235,8 @@ struct Filters {
 impl Default for Filters {
 	fn default() -> Self {
 		Filters {
+			default_allow: true,
+			can_switch_default: true,
 			top_filters: FilterTree::new(()),
 			children_filters: Map::new(),
 			changes: BTreeMap::new(),
@@ -231,17 +245,52 @@ impl Default for Filters {
 }
 
 impl Filters {
+	fn default_forbid(&mut self) {
+		if self.default_allow {
+			if self.changes.is_empty() && self.can_switch_default {
+				self.default_allow = false;
+			} else {
+				panic!(BROKEN_DECLARATION);
+			}
+		}
+	}
+
+	fn default_allow(&mut self) {
+		if !self.default_allow {
+			if self.changes.is_empty() && self.can_switch_default {
+				self.default_allow = true;
+			} else {
+				panic!(BROKEN_DECLARATION);
+			}
+		}
+	}
+
 	fn allow_writes(&mut self, filter: AccessDeclaration) {
+		self.default_forbid();
+		for prefix in filter.prefixes_lock {
+			self.guard_write_prefix(None, prefix.as_slice());
+			if let Some(filter) = self.top_filters.get_mut(prefix.as_slice()) {
+				// append
+			} else {
+				// new entry
+			}
+		}
+		for key in filter.keys_lock {
+		}
+
 		unimplemented!()
 	}
 	fn forbid_writes(&mut self, filter: AccessDeclaration) {
+		self.default_allow();
 		unimplemented!()
 	}
 
 	fn allow_reads(&mut self, filter: AccessDeclaration) {
+		self.default_forbid();
 		unimplemented!()
 	}
 	fn forbid_reads(&mut self, filter: AccessDeclaration) {
+		self.default_allow();
 		unimplemented!()
 	}
 
@@ -305,7 +354,7 @@ impl Filters {
 			}
 		}
 		if blocked {
-			panic!("Key access impossible due to worker access declaration");
+			panic!(BROKEN_DECLARATION);
 		}
 	}
 
@@ -366,7 +415,7 @@ impl Filters {
 			}
 		}
 		if blocked {
-			panic!("Key access impossible due to worker access declaration");
+			panic!(BROKEN_DECLARATION);
 		}
 	}
 
@@ -383,7 +432,7 @@ impl Filters {
 			Self::guard_inner(&value.write, &mut blocked, key, len);
 		}
 		if blocked {
-			panic!("Key access impossible due to worker access declaration");
+			panic!(BROKEN_DECLARATION);
 		}
 	}
 
@@ -403,7 +452,7 @@ impl Filters {
 			Self::guard_inner(&value.write, &mut blocked, key.as_slice(), len);
 		}
 		if blocked {
-			panic!("Key access impossible due to worker access declaration");
+			panic!(BROKEN_DECLARATION);
 		}
 	}
 
@@ -427,7 +476,7 @@ impl Filters {
 			}
 		}
 		if blocked {
-			panic!("Key access impossible due to worker access declaration");
+			panic!(BROKEN_DECLARATION);
 		}
 	}
 	
@@ -436,7 +485,6 @@ impl Filters {
 		match declaration {
 			WorkerDeclaration::None => (),
 			WorkerDeclaration::ParentWrite(filter) => {
-				self.forbid_writes(AccessDeclaration::top_prefix());
 				self.allow_writes(filter)
 			},
 			WorkerDeclaration::ChildRead(filter) => {
@@ -452,7 +500,7 @@ impl Filters {
 				self.forbid_reads(filter)
 			},
 			WorkerDeclaration::ChildRead(filter) => {
-				self.forbid_reads(AccessDeclaration::top_prefix());
+				self.can_switch_default = false;
 				self.allow_reads(filter)
 			},
 		}
