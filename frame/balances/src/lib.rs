@@ -999,26 +999,28 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
 
 		for attempt in 0..2 {
-			match Self::try_mutate_account(who, |account, _is_new| -> Result<(Self::NegativeImbalance, Self::Balance), StoredMapError> {
-				let free_slash = cmp::min(account.free, value);
-				account.free -= free_slash;
+			match Self::try_mutate_account(who,
+				|account, _is_new| -> Result<(Self::NegativeImbalance, Self::Balance), StoredMapError> {
+					let free_slash = cmp::min(account.free, value);
+					account.free -= free_slash;
 
-				let value = match attempt {
-					0 => value,
-					// If acting as a critical provider (i.e. first attempt failed), then ensure
-					// slash leaves at least the ED.
-					_ => value.min(account.free + account.reserved - T::ExistentialDeposit::get()),
-				};
+					let value = match attempt {
+						0 => value,
+						// If acting as a critical provider (i.e. first attempt failed), then ensure
+						// slash leaves at least the ED.
+						_ => value.min(account.free + account.reserved - T::ExistentialDeposit::get()),
+					};
 
-				let remaining_slash = value - free_slash;
-				if !remaining_slash.is_zero() {
-					let reserved_slash = cmp::min(account.reserved, remaining_slash);
-					account.reserved -= reserved_slash;
-					Ok((NegativeImbalance::new(free_slash + reserved_slash), remaining_slash - reserved_slash))
-				} else {
-					Ok((NegativeImbalance::new(value), Zero::zero()))
+					let remaining_slash = value - free_slash;
+					if !remaining_slash.is_zero() {
+						let reserved_slash = cmp::min(account.reserved, remaining_slash);
+						account.reserved -= reserved_slash;
+						Ok((NegativeImbalance::new(free_slash + reserved_slash), remaining_slash - reserved_slash))
+					} else {
+						Ok((NegativeImbalance::new(value), Zero::zero()))
+					}
 				}
-			}) {
+			) {
 				Ok(r) => return r,
 				Err(_) => (),
 			}
