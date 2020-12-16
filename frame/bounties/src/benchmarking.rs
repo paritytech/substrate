@@ -27,6 +27,7 @@ use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use frame_support::traits::OnInitialize;
 
 use crate::Module as Bounties;
+use pallet_treasury::Module as Treasury;
 
 const SEED: u32 = 0;
 
@@ -70,7 +71,7 @@ fn create_bounty<T: Config>() -> Result<(
 	Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 	let bounty_id = BountyCount::get() - 1;
 	Bounties::<T>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
-	// Bounties::<T>::on_initialize(T::BlockNumber::zero());
+	Treasury::<T>::on_initialize(T::BlockNumber::zero());
 	Bounties::<T>::propose_curator(RawOrigin::Root.into(), bounty_id, curator_lookup.clone(), fee)?;
 	Bounties::<T>::accept_curator(RawOrigin::Signed(curator).into(), bounty_id)?;
 	Ok((curator_lookup, bounty_id))
@@ -156,12 +157,17 @@ benchmarks! {
 		let bounty_id = BountyCount::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup)?;
 
-		let beneficiary = T::Lookup::unlookup(account("beneficiary", 0, SEED));
+		let beneficiary_account: T::AccountId = account("beneficiary", 0, SEED);
+		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
 		Bounties::<T>::award_bounty(RawOrigin::Signed(curator.clone()).into(), bounty_id, beneficiary)?;
 
 		frame_system::Module::<T>::set_block_number(T::BountyDepositPayoutDelay::get());
+		ensure!(T::Currency::free_balance(&beneficiary_account).is_zero(), "Beneficiary already has balance");
 
 	}: _(RawOrigin::Signed(curator), bounty_id)
+	verify {
+		ensure!(!T::Currency::free_balance(&beneficiary_account).is_zero(), "Beneficiary didn't get paid");
+	}
 
 	close_bounty_proposed {
 		setup_pod_account::<T>();
