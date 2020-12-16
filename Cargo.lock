@@ -5044,7 +5044,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
- "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec",
  "serde",
  "smallvec 1.5.0",
@@ -5076,13 +5075,10 @@ dependencies = [
 name = "pallet-transaction-payment-rpc-runtime-api"
 version = "2.0.0"
 dependencies = [
- "frame-support",
+ "pallet-transaction-payment",
  "parity-scale-codec",
- "serde",
- "serde_json",
  "sp-api",
  "sp-runtime",
- "sp-std",
 ]
 
 [[package]]

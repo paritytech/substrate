@@ -54,10 +54,12 @@ use sp_runtime::{
 		DispatchInfoOf, PostDispatchInfoOf
 	},
 };
-use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 
 mod payment;
+mod types;
+
 pub use payment::*;
+pub use types::{InclusionFee, FeeDetails, RuntimeDispatchInfo};
 
 /// Fee multiplier.
 pub type Multiplier = FixedU128;
