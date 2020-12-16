@@ -514,10 +514,8 @@ build-rust-doc:
       --tag "$IMAGE_NAME:$VERSION"
       --tag "$IMAGE_NAME:latest"
       --file "$DOCKERFILE" .
-    - buildah login
-      --username "$Docker_Hub_User_Parity"
-      --password "$Docker_Hub_Pass_Parity"
-      "$IMAGE_NAME"
+    - echo "$Docker_Hub_Pass_Parity" |
+      buildah login --username "$Docker_Hub_User_Parity" --password-stdin docker.io
     - buildah info
     - buildah push
       --format=v2s2
