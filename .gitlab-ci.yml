@@ -499,7 +499,7 @@ build-rust-doc:
     DOCKERFILE:                    $PRODUCT.Dockerfile
     IMAGE_NAME:                    docker.io/parity/$PRODUCT
   before_script:
-    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity" || 
+    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity" ||
         ( echo "no docker credentials provided"; exit 1 )
   script:
     - cd ./artifacts/$PRODUCT/
@@ -514,8 +514,8 @@ build-rust-doc:
       --tag "$IMAGE_NAME:$VERSION"
       --tag "$IMAGE_NAME:latest"
       --file "$DOCKERFILE" .
-    - buildah login 
-      --username "$Docker_Hub_User_Parity" 
+    - buildah login
+      --username "$Docker_Hub_User_Parity"
       --password "$Docker_Hub_Pass_Parity"
       "$IMAGE_NAME"
     - buildah info
