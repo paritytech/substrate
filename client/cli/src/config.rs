@@ -551,7 +551,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// 1. Sets the panic handler
 	/// 2. Initializes the logger
 	/// 3. Raises the FD limit
-	fn init<C: SubstrateCli>(&self) -> Result<sc_telemetry::Telemetries> {
+	fn init<C: SubstrateCli>(&self) -> Result<sc_telemetry::TelemetryWorker> {
 		let logger_pattern = self.log_filters()?;
 		let tracing_receiver = self.tracing_receiver()?;
 		let tracing_targets = self.tracing_targets()?;
@@ -560,7 +560,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		let telemetries = init_logging_and_telemetry(
+		let telemetry_worker = init_logging_and_telemetry(
 			&logger_pattern,
 			tracing_receiver,
 			tracing_targets.as_ref().map(|x| x.as_str()),
@@ -578,7 +578,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			}
 		}
 
-		Ok(telemetries)
+		Ok(telemetry_worker)
 	}
 }
 

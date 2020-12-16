@@ -47,49 +47,49 @@ macro_rules! disable_log_reloading {
 }
 
 /// TODO
-pub fn get_default_subscriber_and_telemetries(
+pub fn get_default_subscriber_and_telemetry_worker(
 	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
-		sc_telemetry::Telemetries,
+		sc_telemetry::TelemetryWorker,
 	),
 	String,
 > {
-	get_default_subscriber_and_telemetries_internal(
+	get_default_subscriber_and_telemetry_worker_internal(
 		parse_directives(pattern),
 		telemetry_external_transport,
 		|builder| builder,
 	)
 }
 
-/// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects.
+/// Get a new default tracing's `Subscriber` and a sc-telemetry's `TelemetryWorker` objects.
 ///
 /// When running in a browser, the `telemetry_external_transport` should be provided.
 #[cfg(not(target_os = "unknown"))]
-pub fn get_default_subscriber_and_telemetries_with_log_reloading(
+pub fn get_default_subscriber_and_telemetry_worker_with_log_reloading(
 	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
-		sc_telemetry::Telemetries,
+		sc_telemetry::TelemetryWorker,
 	),
 	String,
 > {
-	get_default_subscriber_and_telemetries_internal(
+	get_default_subscriber_and_telemetry_worker_internal(
 		parse_directives(pattern),
 		telemetry_external_transport,
 		|builder| disable_log_reloading!(builder),
 	)
 }
 
-/// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects with
+/// Get a new default tracing's `Subscriber` and a sc-telemetry's `TelemetryWorker` objects with
 /// profiling enabled.
 ///
 /// When running in a browser, the `telemetry_external_transport` should be provided.
-pub fn get_default_subscriber_and_telemetries_with_profiling(
+pub fn get_default_subscriber_and_telemetry_worker_with_profiling(
 	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 	tracing_receiver: crate::TracingReceiver,
@@ -97,11 +97,11 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
-		sc_telemetry::Telemetries,
+		sc_telemetry::TelemetryWorker,
 	),
 	String,
 > {
-	let (subscriber, telemetries) = get_default_subscriber_and_telemetries_internal(
+	let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker_internal(
 		parse_directives(pattern)
 			.into_iter()
 			.chain(parse_directives(profiling_targets).into_iter()),
@@ -110,15 +110,15 @@ pub fn get_default_subscriber_and_telemetries_with_profiling(
 	)?;
 	let profiling = crate::ProfilingLayer::new(tracing_receiver, profiling_targets);
 
-	Ok((subscriber.with(profiling), telemetries))
+	Ok((subscriber.with(profiling), telemetry_worker))
 }
 
-/// Get a new default tracing's `Subscriber` and a sc-telemetry's `Telemetries` objects with
+/// Get a new default tracing's `Subscriber` and a sc-telemetry's `TelemetryWorker` objects with
 /// profiling enabled.
 ///
 /// When running in a browser, the `telemetry_external_transport` should be provided.
 #[cfg(not(target_os = "unknown"))]
-pub fn get_default_subscriber_and_telemetries_with_profiling_and_log_reloading(
+pub fn get_default_subscriber_and_telemetry_worker_with_profiling_and_log_reloading(
 	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 	tracing_receiver: crate::TracingReceiver,
@@ -126,11 +126,11 @@ pub fn get_default_subscriber_and_telemetries_with_profiling_and_log_reloading(
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
-		sc_telemetry::Telemetries,
+		sc_telemetry::TelemetryWorker,
 	),
 	String,
 > {
-	let (subscriber, telemetries) = get_default_subscriber_and_telemetries_internal(
+	let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker_internal(
 		parse_directives(pattern)
 			.into_iter()
 			.chain(parse_directives(profiling_targets).into_iter()),
@@ -139,19 +139,19 @@ pub fn get_default_subscriber_and_telemetries_with_profiling_and_log_reloading(
 	)?;
 	let profiling = crate::ProfilingLayer::new(tracing_receiver, profiling_targets);
 
-	Ok((subscriber.with(profiling), telemetries))
+	Ok((subscriber.with(profiling), telemetry_worker))
 }
 
-// Common implementation for `get_default_subscriber_and_telemetries` and
-// `get_default_subscriber_and_telemetries_with_profiling`.
-fn get_default_subscriber_and_telemetries_internal<N, E, F, W>(
+// Common implementation for `get_default_subscriber_and_telemetry_worker` and
+// `get_default_subscriber_and_telemetry_worker_with_profiling`.
+fn get_default_subscriber_and_telemetry_worker_internal<N, E, F, W>(
 	extra_directives: impl IntoIterator<Item = Directive>,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 	builder_hook: impl Fn(SubscriberBuilder<format::DefaultFields, EventFormat<ChronoLocal>, EnvFilter, fn() -> std::io::Stderr>) -> SubscriberBuilder<N, E, F, W>,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
-		sc_telemetry::Telemetries,
+		sc_telemetry::TelemetryWorker,
 	),
 	String,
 >
@@ -226,12 +226,12 @@ where
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-	let telemetries = if let Some(telemetry_external_transport) = telemetry_external_transport {
-		sc_telemetry::Telemetries::with_wasm_external_transport(telemetry_external_transport)
+	let telemetry_worker = if let Some(telemetry_external_transport) = telemetry_external_transport {
+		sc_telemetry::TelemetryWorker::with_wasm_external_transport(telemetry_external_transport)
 	} else {
-		sc_telemetry::Telemetries::new()
+		sc_telemetry::TelemetryWorker::new()
 	}.map_err(|err| format!("Could not initialize telemetry: {}", err))?;
-	let sender = telemetries.sender();
+	let sender = telemetry_worker.sender();
 	let telemetry_layer = sc_telemetry::TelemetryLayer::new(sender);
 	let event_format = EventFormat {
 		timer,
@@ -266,7 +266,7 @@ where
 	#[cfg(target_os = "unknown")]
 	let subscriber = subscriber.with(ConsoleLogLayer::new(event_format));
 
-	Ok((subscriber, telemetries))
+	Ok((subscriber, telemetry_worker))
 }
 
 // Transform a string of comma separated logging directive into a `Vec<Directive>`.
@@ -285,8 +285,8 @@ mod tests {
 	const EXPECTED_NODE_NAME: &'static str = "THE_NODE";
 
 	fn init_logger(pattern: &str) -> tracing::subscriber::DefaultGuard {
-		let (subscriber, _telemetries) =
-			get_default_subscriber_and_telemetries(pattern, None, false).unwrap();
+		let (subscriber, _telemetry_worker) =
+			get_default_subscriber_and_telemetry_worker(pattern, None, false).unwrap();
 		tracing::subscriber::set_default(subscriber)
 	}
 

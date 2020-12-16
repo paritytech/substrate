@@ -222,8 +222,8 @@ pub trait SubstrateCli: Sized {
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
 	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
-		let telemetries = command.init::<Self>()?;
-		Runner::new(self, command, telemetries)
+		let telemetry_worker = command.init::<Self>()?;
+		Runner::new(self, command, telemetry_worker)
 	}
 
 	/// Native runtime version.
@@ -239,10 +239,10 @@ pub fn init_logging_and_telemetry(
 	profiling_targets: Option<&str>,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 	disable_log_reloading: bool,
-) -> std::result::Result<sc_telemetry::Telemetries, String> {
+) -> std::result::Result<sc_telemetry::TelemetryWorker, String> {
 	Ok(if let Some(profiling_targets) = profiling_targets {
 		if disable_log_reloading {
-			let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries_with_profiling(
+			let (subscriber, telemetry_worker) = logging::get_default_subscriber_and_telemetry_worker_with_profiling(
 				pattern,
 				telemetry_external_transport,
 				tracing_receiver,
@@ -255,9 +255,9 @@ pub fn init_logging_and_telemetry(
 				))
 			}
 
-			telemetries
+			telemetry_worker
 		} else {
-			let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries_with_profiling_and_log_reloading(
+			let (subscriber, telemetry_worker) = logging::get_default_subscriber_and_telemetry_worker_with_profiling_and_log_reloading(
 				pattern,
 				telemetry_external_transport,
 				tracing_receiver,
@@ -270,11 +270,11 @@ pub fn init_logging_and_telemetry(
 				))
 			}
 
-			telemetries
+			telemetry_worker
 		}
 	} else {
 		if disable_log_reloading {
-			let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries(
+			let (subscriber, telemetry_worker) = logging::get_default_subscriber_and_telemetry_worker(
 				pattern,
 				telemetry_external_transport,
 			)?;
@@ -285,9 +285,9 @@ pub fn init_logging_and_telemetry(
 				))
 			}
 
-			telemetries
+			telemetry_worker
 		} else {
-			let (subscriber, telemetries) = logging::get_default_subscriber_and_telemetries_with_log_reloading(
+			let (subscriber, telemetry_worker) = logging::get_default_subscriber_and_telemetry_worker_with_log_reloading(
 				pattern,
 				telemetry_external_transport,
 			)?;
@@ -298,7 +298,7 @@ pub fn init_logging_and_telemetry(
 				))
 			}
 
-			telemetries
+			telemetry_worker
 		}
 	})
 }

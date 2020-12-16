@@ -29,9 +29,9 @@
 //! telemetries. If multiple `Telemetry` objects are created, the latest one (higher up in the
 //! stack) will be used. If no `Telemetry` object can be found, nothing is reported.
 //!
-//! To re-use connections to the same server you need to use the `Telemetries` object to create
-//! multiple `Telemetry`. `Telemetries` also manages a collection of channel `Sender` for you (see
-//! `Senders`). `Telemetries` should be used unless you need finer control.
+//! To re-use connections to the same server you need to use the `TelemetryWorker` object to create
+//! multiple `Telemetry`. `TelemetryWorker` also manages a collection of channel `Sender` for you (see
+//! `Senders`). `TelemetryWorker` should be used unless you need finer control.
 //!
 //! The [`Telemetry`] struct implements `Stream` and must be polled regularly (or sent to a
 //! background thread/task) in order for the telemetry to properly function.
@@ -149,7 +149,7 @@ pub(crate) type InitPayload = (Id, TelemetryEndpoints, serde_json::Value, Teleme
 ///
 /// [`Telemetry`] created through this object re-use connections if possible.
 #[derive(Debug)]
-pub struct Telemetries {
+pub struct TelemetryWorker {
 	receiver: mpsc::Receiver<(Id, u8, String)>,
 	sender: mpsc::Sender<(Id, u8, String)>,
 	init_receiver: mpsc::UnboundedReceiver<InitPayload>,
@@ -157,7 +157,7 @@ pub struct Telemetries {
 	transport: crate::worker::WsTrans,
 }
 
-impl Telemetries {
+impl TelemetryWorker {
 	/// TODO
 	pub fn new() -> Result<Self, io::Error> {
 		let (sender, receiver) = mpsc::channel(16);
@@ -172,7 +172,7 @@ impl Telemetries {
 		})
 	}
 
-	/// Create a [`Telemetries`] object using an `ExtTransport`.
+	/// Create a [`TelemetryWorker`] object using an `ExtTransport`.
 	///
 	/// This is used in WASM contexts where we need some binding between the networking provided by
 	/// the operating system or environment and libp2p.

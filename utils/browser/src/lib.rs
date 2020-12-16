@@ -33,15 +33,15 @@ use libp2p_wasm_ext::{ExtTransport, ffi};
 
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 
-/// Initialize the logger and return a `Telemetries` and a wasm `ExtTransport`.
+/// Initialize the logger and return a `TelemetryWorker` and a wasm `ExtTransport`.
 ///
-/// The `Telemetries` object can be use to create `Telemetry` objects and the wasm `ExtTransport`
+/// The `TelemetryWorker` object can be use to create `Telemetry` objects and the wasm `ExtTransport`
 /// can be used for network transport.
 pub fn init_logging_and_telemetry(
 	pattern: &str,
-) -> Result<sc_telemetry::Telemetries, String> {
+) -> Result<sc_telemetry::TelemetryWorker, String> {
 	let transport = ExtTransport::new(ffi::websocket_transport());
-	let (subscriber, telemetries) = sc_tracing::logging::get_default_subscriber_and_telemetries(
+	let (subscriber, telemetry_worker) = sc_tracing::logging::get_default_subscriber_and_telemetry_worker(
 		pattern,
 		Some(transport.clone()),
 	)?;
@@ -49,7 +49,7 @@ pub fn init_logging_and_telemetry(
 	tracing::subscriber::set_global_default(subscriber)
 		.map_err(|e| format!("could not set global default subscriber: {}", e))?;
 
-	Ok(telemetries)
+	Ok(telemetry_worker)
 }
 
 /// Create a service configuration from a chain spec.

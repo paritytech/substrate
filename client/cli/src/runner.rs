@@ -113,7 +113,7 @@ where
 pub struct Runner<C: SubstrateCli> {
 	config: Configuration,
 	tokio_runtime: tokio::runtime::Runtime,
-	telemetries: Arc<sc_telemetry::Telemetries>,
+	telemetry_worker: Arc<sc_telemetry::TelemetryWorker>,
 	phantom: PhantomData<C>,
 }
 
@@ -122,7 +122,7 @@ impl<C: SubstrateCli> Runner<C> {
 	pub fn new<T: CliConfiguration>(
 		cli: &C,
 		command: &T,
-		telemetries: sc_telemetry::Telemetries,
+		telemetry_worker: sc_telemetry::TelemetryWorker,
 	) -> Result<Runner<C>> {
 		let tokio_runtime = build_runtime()?;
 		let runtime_handle = tokio_runtime.handle().clone();
@@ -135,16 +135,16 @@ impl<C: SubstrateCli> Runner<C> {
 						.map(drop),
 			}
 		};
-		let telemetries = Arc::new(telemetries);
+		let telemetry_worker = Arc::new(telemetry_worker);
 
 		Ok(Runner {
 			config: command.create_configuration(
 				cli,
 				task_executor.into(),
-				Some(telemetries.handle()),
+				Some(telemetry_worker.handle()),
 			)?,
 			tokio_runtime,
-			telemetries,
+			telemetry_worker,
 			phantom: PhantomData,
 		})
 	}
@@ -190,12 +190,12 @@ impl<C: SubstrateCli> Runner<C> {
 	) -> Result<()> {
 		self.print_node_infos();
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
-		let telemetries = Arc::try_unwrap(self.telemetries)
+		let telemetry_worker = Arc::try_unwrap(self.telemetry_worker)
 			.map_err(|_| String::from(
-				"Could not initialize telemetries! \
+				"Could not initialize telemetry_worker! \
 				Maybe some node Configuration are pending?"
 			))?;
-		task_manager.spawn_handle().spawn("telemetries", telemetries.run());
+		task_manager.spawn_handle().spawn("telemetry_worker", telemetry_worker.run());
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
 		self.tokio_runtime.block_on(task_manager.clean_shutdown());
 		res.map_err(|e| e.to_string().into())

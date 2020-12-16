@@ -34,14 +34,14 @@ pub async fn start_client(chain_spec: Option<String>, log_level: String) -> Resu
 
 async fn start_inner(chain_spec: Option<String>, log_directives: String) -> Result<Client, Box<dyn std::error::Error>> {
 	set_console_error_panic_hook();
-	let telemetries = init_logging_and_telemetry(&log_directives)?;
+	let telemetry_worker = init_logging_and_telemetry(&log_directives)?;
 	let chain_spec = match chain_spec {
 		Some(chain_spec) => ChainSpec::from_json_bytes(chain_spec.as_bytes().to_vec())
 			.map_err(|e| format!("{:?}", e))?,
 		None => crate::chain_spec::development_config(),
 	};
 
-	let mut config = browser_configuration(chain_spec, Some(telemetries.handle())).await?;
+	let mut config = browser_configuration(chain_spec, Some(telemetry_worker.handle())).await?;
 	config.telemetry_endpoints = Some(sc_telemetry::TelemetryEndpoints::new(vec![("ws://127.0.0.1:8000/submit".to_owned(), 10)]).unwrap());
 
 	info!("Substrate browser node");
@@ -57,7 +57,7 @@ async fn start_inner(chain_spec: Option<String>, log_directives: String) -> Resu
 			.map(|(components, rpc_handlers, _, _, _, _)| (components, rpc_handlers))
 			.map_err(|e| format!("{:?}", e))?;
 
-	task_manager.spawn_handle().spawn("telemetry", telemetries.run());
+	task_manager.spawn_handle().spawn("telemetry", telemetry_worker.run());
 
 	Ok(browser_utils::start_client(task_manager, rpc_handlers))
 }
