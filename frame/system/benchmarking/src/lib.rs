@@ -25,9 +25,12 @@ use sp_std::prelude::*;
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use sp_runtime::traits::Hash;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::traits::Get;
-use frame_support::storage;
-use frame_system::{Module as System, Call, RawOrigin, DigestItemOf};
+use frame_support::{
+	storage::{self, StorageMap},
+	traits::Get,
+	weights::DispatchClass,
+};
+use frame_system::{Module as System, Call, RawOrigin, DigestItemOf, AccountInfo};
 
 mod mock;
 
@@ -38,7 +41,7 @@ benchmarks! {
 	_ { }
 
 	remark {
-		let b in 0 .. T::BlockWeights::get().max_block as u32;
+		let b in 0 .. *T::BlockLength::get().max.get(DispatchClass::Normal) as u32;
 		let remark_message = vec![1; b as usize];
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), remark_message)
