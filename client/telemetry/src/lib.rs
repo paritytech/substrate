@@ -172,12 +172,11 @@ impl Telemetries {
 	}
 
 	fn initialize_transport() -> Result<crate::worker::WsTrans, io::Error> {
-		// TODO refactor
 		#[cfg(target_os = "unknown")]
 		let transport = {
 			use libp2p_wasm_ext::{ExtTransport, ffi};
 			ExtTransport::new(ffi::websocket_transport())
-		}.map((|inner, _| StreamSink::from(inner)) as fn(_, _) -> _);
+		}.map((|inner, _| worker::StreamSink::from(inner)) as fn(_, _) -> _);
 
 		// The main transport is the `wasm_external_transport`, but if we're on desktop we add
 		// support for TCP+WebSocket+DNS as a fallback. In practice, you're not expected to pass

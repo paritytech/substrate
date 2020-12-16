@@ -43,7 +43,6 @@ pub fn init_logging_and_telemetry(
 	let transport = ExtTransport::new(ffi::websocket_transport());
 	let (subscriber, telemetries) = sc_tracing::logging::get_default_subscriber_and_telemetries(
 		pattern,
-		Some(transport.clone()),
 	)?;
 
 	tracing::subscriber::set_global_default(subscriber)
