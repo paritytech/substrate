@@ -211,18 +211,20 @@ impl Markers {
 
 #[derive(Debug, Clone)]
 struct Filters {
-	filters: FilterTree,
+	top_filters: FilterTree,
+	children_filters: Map<StorageKey, FilterTree>,
 	// TODO child tree filters.
 	/// keeping history to remove constraint on join or dismiss.
 	/// It contains constraint for the parent (child do not need
 	/// to remove contraint), indexed by its relative child id.
-	changes: BTreeMap<TaskId, WorkerDeclaration>,
+	changes: BTreeMap<TaskId, Vec<(Option<StorageKey>, WorkerDeclaration)>>,
 }
 
 impl Default for Filters {
 	fn default() -> Self {
 		Filters {
-			filters: FilterTree::new(()),
+			top_filters: FilterTree::new(()),
+			children_filters: Map::new(),
 			changes: BTreeMap::new(),
 		}
 	}
@@ -258,8 +260,53 @@ impl Filters {
 		}
 	}
 
+	fn guard_read_all_filter(filters: &FilterTree) -> bool {
+		let mut blocked = false;
+		for (key, value) in filters.iter().value_iter() {
+			match value.write {
+				FilterState::Forbid(FilterScope::Prefix) => {
+					blocked = true;
+				},
+				FilterState::Forbid(FilterScope::Key) => {
+					blocked = true;
+				},
+				_ => (),
+			}
+			// writes supersed read.
+			if blocked {
+				match value.read_only {
+					Some(FilterScope::Prefix) => {
+						blocked = false;
+					},
+					Some(FilterScope::Key) => {
+						blocked = false;
+					},
+					None => (),
+				}
+			}
+			if blocked {
+				break;
+			}
+		}
+		blocked
+	}
+
 	fn guard_read_all(&self) {
-		unimplemented!("panic on first forbid");
+		let mut blocked = false;
+		if Self::guard_read_all_filter(&self.top_filters) {
+			blocked = true;
+		}
+		for (_storage_key, child_filters) in self.children_filters.iter() {
+			if blocked {
+				break;
+			}
+			if Self::guard_read_all_filter(&self.top_filters) {
+				blocked = true;
+			}
+		}
+		if blocked {
+			panic!("Key access impossible due to worker access declaration");
+		}
 	}
 
 	fn guard_inner(state: &FilterState, blocked: &mut bool, key: &[u8], len: usize) {
@@ -284,12 +331,20 @@ impl Filters {
 		}
 	}
 
+	fn filter(&self, child_info: Option<&ChildInfo>) -> Option<&FilterTree> {
+		if let Some(child_info) = child_info {
+			self.children_filters.get(child_info.storage_key())
+		} else {
+			Some(&self.top_filters)
+		}
+	}
+
 	/// Panic on invalid access.
 	fn guard_read(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
-		let filters = if let Some(child_info) = child_info {
-			unimplemented!()
+		let filters = if let Some(filter) = self.filter(child_info) {
+			filter
 		} else {
-			&self.filters
+			return;
 		};
 		let mut blocked = false;
 		let len = key.len();
@@ -317,10 +372,10 @@ impl Filters {
 
 	/// Panic on invalid access.
 	fn guard_write(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
-		let filters = if let Some(child_info) = child_info {
-			unimplemented!()
+		let filters = if let Some(filter) = self.filter(child_info) {
+			filter
 		} else {
-			&self.filters
+			return;
 		};
 		let mut blocked = false;
 		let len = key.len();
@@ -333,10 +388,10 @@ impl Filters {
 	}
 
 	fn guard_write_prefix(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
-		let filters = if let Some(child_info) = child_info {
-			unimplemented!()
+		let filters = if let Some(filter) = self.filter(child_info) {
+			filter
 		} else {
-			&self.filters
+			return;
 		};
 		let mut blocked = false;
 		let len = key.len();
@@ -351,9 +406,33 @@ impl Filters {
 			panic!("Key access impossible due to worker access declaration");
 		}
 	}
+
+	fn guard_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
+		let filters = if let Some(filter) = self.filter(child_info) {
+			filter
+		} else {
+			return;
+		};
+		let mut blocked = false;
+		let len = key.len();
+		let mut iter = filters.seek_iter(key).value_iter();
+		while let Some((key, value)) =  iter.next() {
+			Self::guard_inner(&value.write, &mut blocked, key, len);
+		}
+		for (key, value) in iter.node_iter().iter().value_iter() {
+			if key.as_slice() <= key_end {
+				Self::guard_inner(&value.write, &mut blocked, key.as_slice(), len);
+			} else {
+				break;
+			}
+		}
+		if blocked {
+			panic!("Key access impossible due to worker access declaration");
+		}
+	}
 	
 	fn set_parent_declaration(&mut self, child_marker: TaskId, declaration: WorkerDeclaration) {
-		self.changes.insert(child_marker, declaration.clone());
+		self.changes.insert(child_marker, vec![(None, declaration.clone())]);
 		match declaration {
 			WorkerDeclaration::None => (),
 			WorkerDeclaration::ParentWrite(filter) => {
@@ -991,7 +1070,6 @@ impl OverlayedChanges {
 	/// Returns the next (in lexicographic order) storage key in the overlayed alongside its value.
 	/// If no value is next then `None` is returned.
 	pub fn next_storage_key_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
-		unimplemented!("how to filter this??");
 		self.top.next_change(key)
 	}
 
@@ -1002,12 +1080,18 @@ impl OverlayedChanges {
 		storage_key: &[u8],
 		key: &[u8]
 	) -> Option<(&[u8], &OverlayedValue)> {
-		unimplemented!("how to filter this??");
 		self.children
 			.get(storage_key)
 			.and_then(|(overlay, _)|
 				overlay.next_change(key)
 			)
+	}
+
+	/// Assert read worker access over a given interval.
+	/// Generally such assertion are done at overlay level, but this one needs to be exposed
+	/// as the result from the overlay can be a bigger interval than the one from the backend.
+	pub fn guard_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
+		self.filters.guard_read_interval(child_info, key, key_end)
 	}
 }
 

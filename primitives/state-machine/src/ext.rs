@@ -340,7 +340,7 @@ where
 		let next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
 
-		match (next_backend_key, next_overlay_key_change) {
+		let res = match (next_backend_key, next_overlay_key_change) {
 			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
 			(backend_key, None) => backend_key,
 			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
@@ -348,7 +348,9 @@ where
 			} else {
 				self.next_storage_key(&overlay_key.0[..])
 			},
-		}
+		};
+		self.overlay.guard_read_interval(None, key, res.as_ref().map(Vec::as_slice).unwrap_or(&[]));
+		res
 	}
 
 	fn next_child_storage_key(
@@ -364,7 +366,7 @@ where
 			key
 		);
 
-		match (next_backend_key, next_overlay_key_change) {
+		let res = match (next_backend_key, next_overlay_key_change) {
 			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
 			(backend_key, None) => backend_key,
 			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
@@ -375,7 +377,9 @@ where
 					&overlay_key.0[..],
 				)
 			},
-		}
+		};
+		self.overlay.guard_read_interval(Some(child_info), key, res.as_ref().map(Vec::as_slice).unwrap_or(&[]));
+		res
 	}
 
 	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
