@@ -23,13 +23,13 @@
 //!
 //! The election happens in _rounds_: every `N` blocks, all previous members are retired and a new
 //! set is elected (which may or may not have an intersection with the previous set). Each round
-//! lasts for some number of blocks defined by [`TermDuration`]. The words _term_ and _round_ can be
-//! used interchangeably in this context.
+//! lasts for some number of blocks defined by [`Config::TermDuration`]. The words _term_ and
+//! _round_ can be used interchangeably in this context.
 //!
-//! [`TermDuration`] might change during a round. This can shorten or extend the length of the
-//! round. The next election round's block number is never stored but rather always checked on the
-//! fly. Based on the current block number and [`TermDuration`], the condition `BlockNumber %
-//! TermDuration == 0` being satisfied will always trigger a new election round.
+//! [`Config::TermDuration`] might change during a round. This can shorten or extend the length of
+//! the round. The next election round's block number is never stored but rather always checked on
+//! the fly. Based on the current block number and [`Config::TermDuration`], the condition
+//! `BlockNumber % TermDuration == 0` being satisfied will always trigger a new election round.
 //!
 //! ### Bonds and Deposits
 //!
@@ -47,37 +47,42 @@
 //! ignored during election. Yet, a voter _might_ vote for a future candidate. Voters reserve a bond
 //! as they vote. Each vote defines a `value`. This amount is locked from the account of the voter
 //! and indicates the weight of the vote. Voters can update their votes at any time by calling
-//! `vote()` again. This keeps the bond untouched but can optionally change the locked `value`.
-//! After a round, votes are kept and might still be valid for further rounds. A voter is
-//! responsible for calling `remove_voter` once they are done to have their bond back and remove the
-//! lock.
+//! `vote()` again. This can update the vote targets (which might update the deposit) or update the
+//! vote's stake ([`Voter::stake`]). After a round, votes are kept and might still be valid for
+//! further rounds. A voter is responsible for calling `remove_voter` once they are done to have
+//! their bond back and remove the lock.
+//!
+//! See [`Call::vote`].
 //!
 //! ### Defunct Voter
 //!
 //! A voter is defunct once all of the candidates that they have voted for are not a valid candidate
 //! (as seen further below, members and runners-up are also always candidates). Defunct voters can
-//! be removed via a root call. Upon being removed, their bond is returned. This is an
-//! administrative operation and can be called only by the root origin in the case of state bloat.
+//! be removed via a root call ([`Call::clean_defunct_voters`]). Upon being removed, their bond is
+//! returned. This is an administrative operation and can be called only by the root origin in the
+//! case of state bloat.
 //!
 //! ### Candidacy and Members
 //!
 //! Candidates also reserve a bond as they submit candidacy. A candidate can end up in one of the
 //! below situations:
 //!   - **Members**: A winner is kept as a _member_. They must still have a bond in reserve and they
-//!     are automatically counted as a candidate for the next election.
+//!     are automatically counted as a candidate for the next election. The number of desired
+//!     members is set by [`Config::DesiredMembers`].
 //!   - **Runner-up**: Runners-up are the best candidates immediately after the winners. The number
-//!     of runners_up to keep is configurable. Runners-up are used, in order that they are elected,
-//!     as replacements when a candidate is kicked by [`remove_member`], or when an active member
-//!     renounces their candidacy. Runners are automatically counted as a candidate for the next
-//!     election.
-//!   - **Loser**: Any of the candidate who are not a winner are left as losers. A loser might be an
-//!     _outgoing member or runner_, meaning that they are an active member who failed to keep their
-//!     spot. **An outgoing candidate/member/runner-up will always lose their bond**.
+//!     of runners up to keep is set by [`Config::DesiredRunnersUp`]. Runners-up are used, in order
+//!     that they are elected, as replacements when a candidate is kicked by
+//!     [`Call::remove_member`], or when an active member renounces their candidacy. Runners are
+//!     automatically counted as a candidate for the next election.
+//!   - **Loser**: Any of the candidate who are not member/runner-up are left as losers. A loser
+//!     might be an _outgoing member or runner-up_, meaning that they are an active member who
+//!     failed to keep their spot. **An outgoing candidate/member/runner-up will always lose their
+//!     bond**.
 //!
 //! #### Renouncing candidacy.
 //!
-//! All candidates, elected or not, can renounce their candidacy. A call to [`renounce_candidacy`]
-//! will always cause the candidacy bond to be refunded.
+//! All candidates, elected or not, can renounce their candidacy. A call to
+//! [`Call::renounce_candidacy`] will always cause the candidacy bond to be refunded.
 //!
 //! Note that with the members being the default candidates for the next round and votes persisting
 //! in storage, the election system is entirely stable given no further input. This means that if
@@ -160,6 +165,8 @@ pub struct SeatHolder<AccountId, Balance> {
 	/// The total backing stake.
 	pub stake: Balance,
 	/// The amount of deposit held on-chain.
+	///
+	/// To be unreserved upon renouncing, or slashed upon being a loser.
 	pub deposit: Balance,
 }
 
@@ -231,8 +238,8 @@ decl_storage! {
 		/// last (i.e. _best_) runner-up will be replaced.
 		pub RunnersUp get(fn runners_up): Vec<SeatHolder<T::AccountId, BalanceOf<T>>>;
 
-		/// The present candidate list. A current member or runner-up
-		/// can never enter this vector and is always implicitly assumed to be a candidate.
+		/// The present candidate list. A current member or runner-up can never enter this vector
+		/// and is always implicitly assumed to be a candidate.
 		///
 		/// Second element is the deposit.
 		///
@@ -245,7 +252,10 @@ decl_storage! {
 		/// Votes and locked stake of a particular voter.
 		///
 		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
-		pub Voting get(fn voting): map hasher(twox_64_concat) T::AccountId => Voter<T::AccountId, BalanceOf<T>>;
+		pub Voting get(fn voting): map hasher(twox_64_concat)
+			T::AccountId
+			=>
+			Voter<T::AccountId, BalanceOf<T>>;
 	} add_extra_genesis {
 		config(members): Vec<(T::AccountId, BalanceOf<T>)>;
 		build(|config: &GenesisConfig<T>| {
@@ -270,7 +280,9 @@ decl_storage! {
 				});
 
 				// set self-votes to make persistent. Genesis voters don't have any bond, nor do
-				// they have any lock.
+				// they have any lock. NOTE: this means that we will still try to remove a lock once
+				// this genesis voter is removed, and for now it is okay because remove_lock is noop
+				// if lock is not there.
 				<Voting<T>>::insert(
 					&member,
 					Voter { votes: vec![member.clone()], stake: *stake, deposit: Zero::zero() },
@@ -314,7 +326,7 @@ decl_error! {
 		/// Not a member.
 		NotMember,
 		/// The provided count of number of candidates is incorrect.
-		InvalidCandidateCount,
+		InvalidWitnessData,
 		/// The provided count of number of votes is incorrect.
 		InvalidVoteCount,
 		/// The renouncing origin presented a wrong `Renouncing` parameter.
@@ -378,15 +390,17 @@ decl_module! {
 		///   - be less than the number of possible candidates. Note that all current members and
 		///     runners-up are also automatically candidates for the next round.
 		///
+		/// If `value` is more than `who`'s total balance, then the maximum of the two is used.
+		///
 		/// The dispatch origin of this call must be signed.
 		///
 		/// ### Warning
 		///
 		/// It is the responsibility of the caller to **NOT** place all of their balance into the
-		/// lock and keep some for further transactions.
+		/// lock and keep some for further operations.
 		///
 		/// # <weight>
-		/// we consider the common case of placing more votes. In other two case, we refund.
+		/// We assume the maximum weight among all 3 cases: vote_equal, vote_more and vote_less.
 		/// # </weight>
 		#[weight =
 			T::WeightInfo::vote_more(votes.len() as u32)
@@ -411,7 +425,7 @@ decl_module! {
 			// can never submit a vote of there are no members, and cannot submit more votes than
 			// all potential vote targets.
 			// addition is valid: candidates, members and runners-up will never overlap.
-			let allowed_votes = candidates_count + members_count + runners_up_count;
+			let allowed_votes = candidates_count.saturating_add(members_count).saturating_add(runners_up_count);
 			ensure!(!allowed_votes.is_zero(), Error::<T>::UnableToVote);
 			ensure!(votes.len() <= allowed_votes, Error::<T>::TooManyVotes);
 
@@ -460,7 +474,6 @@ decl_module! {
 		fn remove_voter(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_voter(&who), Error::<T>::MustBeVoter);
-
 			Self::do_remove_voter(&who);
 		}
 
@@ -473,8 +486,8 @@ decl_module! {
 		///
 		/// ### Warning
 		///
-		/// Even if a candidate ends up being a member, they must call [`renounce_candidacy`] to get
-		/// their deposit back. Losing the spot in an election will also lead to a slash.
+		/// Even if a candidate ends up being a member, they must call [`Call::renounce_candidacy`]
+		/// to get their deposit back. Losing the spot in an election will always lead to a slash.
 		///
 		/// # <weight>
 		/// The number of current candidates must be provided as witness data.
@@ -486,12 +499,10 @@ decl_module! {
 			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0);
 			ensure!(
 				actual_count as u32 <= candidate_count,
-				Error::<T>::InvalidCandidateCount,
+				Error::<T>::InvalidWitnessData,
 			);
 
-			let is_candidate = Self::is_candidate(&who);
-			ensure!(is_candidate.is_err(), Error::<T>::DuplicatedCandidate);
-			let index = is_candidate.unwrap_err();
+			let index = Self::is_candidate(&who).err().ok_or(Error::<T>::DuplicatedCandidate)?;
 
 			ensure!(!Self::is_member(&who), Error::<T>::MemberSubmit);
 			ensure!(!Self::is_runner_up(&who), Error::<T>::RunnerUpSubmit);
@@ -528,27 +539,31 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			match renouncing {
 				Renouncing::Member => {
-					let _ = Self::remove_and_replace_member(&who, false).map_err(|_| Error::<T>::InvalidRenouncing)?;
+					let _ = Self::remove_and_replace_member(&who, false)
+						.map_err(|_| Error::<T>::InvalidRenouncing)?;
 					Self::deposit_event(RawEvent::Renounced(who));
 				},
 				Renouncing::RunnerUp => {
 					<RunnersUp<T>>::try_mutate::<_, Error<T>, _>(|runners_up| {
-						let index = runners_up.iter().position(|SeatHolder { who: r, .. }| r == &who).ok_or(Error::<T>::InvalidRenouncing)?;
+						let index = runners_up
+							.iter()
+							.position(|SeatHolder { who: r, .. }| r == &who)
+							.ok_or(Error::<T>::InvalidRenouncing)?;
 						let SeatHolder { deposit, .. } = runners_up.remove(index);
 						T::Currency::unreserve(&who, deposit);
-						<RunnersUp<T>>::put(runners_up);
 						Self::deposit_event(RawEvent::Renounced(who));
 						Ok(())
 					})?;
 				}
 				Renouncing::Candidate(count) => {
 					<Candidates<T>>::try_mutate::<_, Error<T>, _>(|candidates| {
-						ensure!(count >= candidates.len() as u32, Error::<T>::InvalidRenouncing);
-						let index = candidates.binary_search_by(|(c, _)| c.cmp(&who)).map_err(|_| Error::<T>::InvalidRenouncing)?;
+						ensure!(count >= candidates.len() as u32, Error::<T>::InvalidWitnessData);
+						let index = candidates
+							.binary_search_by(|(c, _)| c.cmp(&who))
+							.map_err(|_| Error::<T>::InvalidRenouncing)?;
 						let (_removed, deposit) = candidates.remove(index);
 						T::Currency::unreserve(&who, deposit);
 						Self::deposit_event(RawEvent::Renounced(who));
-						<Candidates<T>>::put(candidates);
 						Ok(())
 					})?;
 				}
@@ -589,9 +604,10 @@ decl_module! {
 					// refund. The weight value comes from a benchmark which is special to this.
 					T::WeightInfo::remove_member_wrong_refund()
 				));
-			} // else, prediction was correct.
+			}
 
 			let had_replacement = Self::remove_and_replace_member(&who, true)?;
+			debug_assert_eq!(has_replacement, had_replacement);
 			Self::deposit_event(RawEvent::MemberKicked(who.clone()));
 
 			if !had_replacement {
@@ -654,12 +670,12 @@ impl<T: Config> Module<T> {
 	///
 	/// Both `Members` and `RunnersUp` storage is updated accordingly. `T::ChangeMember` is called
 	/// if needed. If `slash` is true, the deposit of the potentially removed member is slashed,
-	/// else it is unreserved.
+	/// else, it is unreserved.
 	///
-	/// ### Note
+	/// ### Note: Prime preservation
 	///
 	/// This function attempts to preserve the prime. If the removed members is not the prime, it is
-	/// set again via [`Trait::ChangeMembers` ] to prevent it being wiped.
+	/// set again via [`Config::ChangeMembers` ] to prevent it being wiped.
 	fn remove_and_replace_member(who: &T::AccountId, slash: bool) -> Result<bool, DispatchError> {
 		// closure will return:
 		// - `Ok(Option(replacement))` if member was removed and replacement was replaced.
@@ -684,20 +700,23 @@ impl<T: Config> Module<T> {
 			}
 
 			let maybe_next_best = <RunnersUp<T>>::mutate(|r| r.pop()).map(|next_best| {
-				// invariant: Members and runners-up are disjoint. This will always be err and give
-				// us an index to insert.
-				members
-					.binary_search_by(|m| m.who.cmp(&next_best.who))
-					.err()
-					.map(|index| {
-						members.insert(index, next_best.clone());
-					});
+				// defensive-only: Members and runners-up are disjoint. This will always be err and
+				// give us an index to insert.
+				if let Err(index) = members.binary_search_by(|m| m.who.cmp(&next_best.who)) {
+					members.insert(index, next_best.clone());
+				} else {
+					// overlap. This can never happen. If so, it seems like our intended replacement
+					// is already a member, so not much more to do.
+					frame_support::debug::error!(
+						"pallet-elections-phragmen: a member seems to also be a runner-up."
+					);
+				}
 				next_best
 			});
 			Ok(maybe_next_best)
 		})?;
 
-		let member_ids = Self::members()
+		let remaining_member_ids_sorted = Self::members()
 			.into_iter()
 			.map(|x| x.who.clone())
 			.collect::<Vec<_>>();
@@ -706,11 +725,19 @@ impl<T: Config> Module<T> {
 		let return_value = match maybe_replacement {
 			// member ids are already sorted, other two elements have one item.
 			Some(incoming) => {
-				T::ChangeMembers::change_members_sorted(&[incoming.who], outgoing, &member_ids[..]);
+				T::ChangeMembers::change_members_sorted(
+					&[incoming.who],
+					outgoing,
+					&remaining_member_ids_sorted[..]
+				);
 				true
 			}
 			None => {
-				T::ChangeMembers::change_members_sorted(&[], outgoing, &member_ids[..]);
+				T::ChangeMembers::change_members_sorted(
+					&[],
+					outgoing,
+					&remaining_member_ids_sorted[..]
+				);
 				false
 			}
 		};
@@ -2840,7 +2867,7 @@ mod tests {
 
 			assert_noop!(
 				Elections::renounce_candidacy(Origin::signed(4), Renouncing::Candidate(2)),
-				Error::<Test>::InvalidRenouncing,
+				Error::<Test>::InvalidWitnessData,
 			);
 
 			assert_ok!(Elections::renounce_candidacy(Origin::signed(4), Renouncing::Candidate(3)));
