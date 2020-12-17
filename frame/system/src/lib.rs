@@ -1372,11 +1372,11 @@ fn is_providing<T: Default + Eq>(d: &T) -> bool {
 	d != &T::default()
 }
 
-// Implement StoredMap for a simple single-item, provide-when-not-default system. This works fine
-// for storing a single item which allows the account to continue existing as long as it's not
-// empty/default.
-//
-// Anything more complex will need more sophisticated logic.
+/// Implement StoredMap for a simple single-item, provide-when-not-default system. This works fine
+/// for storing a single item which allows the account to continue existing as long as it's not
+/// empty/default.
+///
+/// Anything more complex will need more sophisticated logic.
 impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 	fn get(k: &T::AccountId) -> T::AccountData {
 		Account::<T>::get(k).data
