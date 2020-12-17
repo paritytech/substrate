@@ -171,10 +171,6 @@ pub struct AssetDetails<
 	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq,
 	DepositBalance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 > {
-	/// The balance deposited for this asset.
-	///
-	/// This pays for the data stored here together with any virtual accounts.
-	deposit: DepositBalance,
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
 	owner: AccountId,
 	/// Can mint tokens.
@@ -185,6 +181,10 @@ pub struct AssetDetails<
 	freezer: AccountId,
 	/// The total supply across all accounts.
 	supply: Balance,
+	/// The balance deposited for this asset.
+	///
+	/// This pays for the data stored here together with any virtual accounts.
+	deposit: DepositBalance,
 	/// The number of balance-holding accounts that this asset may have, excluding those that were
 	/// created when they had a system-level ED.
 	max_zombies: u32,
@@ -1109,9 +1109,6 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
