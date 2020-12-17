@@ -18,8 +18,8 @@
 
 use futures::prelude::*;
 use futures_timer::Delay;
-use libp2p::Multiaddr;
 use libp2p::core::transport::Transport;
+use libp2p::Multiaddr;
 use rand::Rng as _;
 use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
 
@@ -98,11 +98,12 @@ impl<TTrans: Transport> Node<TTrans> {
 }
 
 impl<TTrans: Transport, TSinkErr> Node<TTrans>
-where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
-	TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
-		+ Stream<Item=Result<Vec<u8>, TSinkErr>>
-		+ Unpin,
-	TSinkErr: fmt::Debug
+where
+	TTrans: Clone + Unpin,
+	TTrans::Dial: Unpin,
+	TTrans::Output:
+		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
+	TSinkErr: fmt::Debug,
 {
 	// NOTE: this code has been inspired from `Buffer` (`futures_util::sink::Buffer`).
 	//       https://docs.rs/futures-util/0.3.8/src/futures_util/sink/buffer.rs.html#32
@@ -124,11 +125,12 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 pub(crate) enum Infallible {}
 
 impl<TTrans: Transport, TSinkErr> Sink<String> for Node<TTrans>
-where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
-	TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
-		+ Stream<Item=Result<Vec<u8>, TSinkErr>>
-		+ Unpin,
-	TSinkErr: fmt::Debug
+where
+	TTrans: Clone + Unpin,
+	TTrans::Dial: Unpin,
+	TTrans::Output:
+		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
+	TSinkErr: fmt::Debug,
 {
 	type Error = Infallible;
 
@@ -136,34 +138,32 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 		let mut socket = mem::replace(&mut self.socket, NodeSocket::Poisoned);
 		self.socket = loop {
 			match socket {
-				NodeSocket::Connected(mut conn) => {
-					match conn.sink.poll_ready_unpin(cx) {
-						Poll::Ready(Ok(())) => {
-							match self.as_mut().try_send_connection_messages(cx, &mut conn) {
-								Poll::Ready(Err(err)) => {
-									log::warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
-									socket = NodeSocket::wait_reconnect();
-								},
-								Poll::Ready(Ok(())) => {
-									self.socket = NodeSocket::Connected(conn);
-									return Poll::Ready(Ok(()));
-								},
-								Poll::Pending => {
-									self.socket = NodeSocket::Connected(conn);
-									return Poll::Pending;
-								},
+				NodeSocket::Connected(mut conn) => match conn.sink.poll_ready_unpin(cx) {
+					Poll::Ready(Ok(())) => {
+						match self.as_mut().try_send_connection_messages(cx, &mut conn) {
+							Poll::Ready(Err(err)) => {
+								log::warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
+								socket = NodeSocket::wait_reconnect();
 							}
-						},
-						Poll::Ready(Err(err)) => {
-							log::warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
-							socket = NodeSocket::wait_reconnect();
-						},
-						Poll::Pending => {
-							self.socket = NodeSocket::Connected(conn);
-							return Poll::Pending;
-						},
+							Poll::Ready(Ok(())) => {
+								self.socket = NodeSocket::Connected(conn);
+								return Poll::Ready(Ok(()));
+							}
+							Poll::Pending => {
+								self.socket = NodeSocket::Connected(conn);
+								return Poll::Pending;
+							}
+						}
 					}
-				}
+					Poll::Ready(Err(err)) => {
+						log::warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
+						socket = NodeSocket::wait_reconnect();
+					}
+					Poll::Pending => {
+						self.socket = NodeSocket::Connected(conn);
+						return Poll::Pending;
+					}
+				},
 				NodeSocket::Dialing(mut s) => match Future::poll(Pin::new(&mut s), cx) {
 					Poll::Ready(Ok(sink)) => {
 						log::debug!(target: "telemetry", "✅ Connected to {}", self.addr);
@@ -178,7 +178,8 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 								.map_err(|err| format!("Could not serialize JSON message: {}", err))
 						}
 
-						let buf = self.connection_messages
+						let buf = self
+							.connection_messages
 							.iter()
 							.cloned()
 							.filter_map(|json| match generate_message(json) {
@@ -191,21 +192,18 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 										err,
 									);
 									None
-								},
+								}
 							})
 							.collect();
 
-						socket = NodeSocket::Connected(NodeSocketConnected {
-							sink,
-							buf,
-						});
-					},
+						socket = NodeSocket::Connected(NodeSocketConnected { sink, buf });
+					}
 					Poll::Pending => break NodeSocket::Dialing(s),
 					Poll::Ready(Err(err)) => {
 						log::warn!(target: "telemetry", "❌ Error while dialing {}: {:?}", self.addr, err);
 						socket = NodeSocket::wait_reconnect();
 					}
-				}
+				},
 				NodeSocket::ReconnectNow => match self.transport.clone().dial(self.addr.clone()) {
 					Ok(d) => {
 						log::debug!(target: "telemetry", "Started dialing {}", self.addr);
@@ -215,16 +213,17 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 						log::warn!(target: "telemetry", "❌ Error while dialing {}: {:?}", self.addr, err);
 						socket = NodeSocket::wait_reconnect();
 					}
-				}
-				NodeSocket::WaitingReconnect(mut s) =>
+				},
+				NodeSocket::WaitingReconnect(mut s) => {
 					if let Poll::Ready(_) = Future::poll(Pin::new(&mut s), cx) {
 						socket = NodeSocket::ReconnectNow;
 					} else {
-						break NodeSocket::WaitingReconnect(s)
+						break NodeSocket::WaitingReconnect(s);
 					}
+				}
 				NodeSocket::Poisoned => {
 					log::error!(target: "telemetry", "‼️ Poisoned connection with {}", self.addr);
-					break NodeSocket::Poisoned
+					break NodeSocket::Poisoned;
 				}
 			}
 		};
@@ -236,14 +235,14 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 		match &mut self.socket {
 			NodeSocket::Connected(conn) => {
 				let _ = conn.sink.start_send_unpin(item.into()).expect("boo");
-			},
+			}
 			_socket => {
 				log::trace!(
 					target: "telemetry",
 					"Message has been discarded: {}",
 					item,
 				);
-			},
+			}
 		}
 		Ok(())
 	}
@@ -254,7 +253,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 				Poll::Ready(Err(_)) => {
 					self.socket = NodeSocket::wait_reconnect();
 					Poll::Ready(Ok(()))
-				},
+				}
 				Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
 				Poll::Pending => Poll::Pending,
 			},
@@ -273,14 +272,12 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 impl<TTrans: Transport> fmt::Debug for NodeSocket<TTrans> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use NodeSocket::*;
-		f.write_str(
-			match self {
-				Connected(_) => "Connected",
-				Dialing(_) => "Dialing",
-				ReconnectNow => "ReconnectNow",
-				WaitingReconnect(_) => "WaitingReconnect",
-				Poisoned => "Poisoned",
-			},
-		)
+		f.write_str(match self {
+			Connected(_) => "Connected",
+			Dialing(_) => "Dialing",
+			ReconnectNow => "ReconnectNow",
+			WaitingReconnect(_) => "WaitingReconnect",
+			Poisoned => "Poisoned",
+		})
 	}
 }

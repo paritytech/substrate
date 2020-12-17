@@ -26,15 +26,20 @@ mod directives;
 mod event_format;
 mod layers;
 
-pub use sc_tracing_proc_macro::*;
 pub use directives::*;
+pub use sc_tracing_proc_macro::*;
 
 use sc_telemetry::{ExtTransport, TelemetryWorker};
 use tracing::Subscriber;
 use tracing_subscriber::{
-	fmt::time::ChronoLocal, layer::{self, SubscriberExt}, registry::LookupSpan,
-	FmtSubscriber, Layer, EnvFilter, fmt::{SubscriberBuilder, format, FormatFields, MakeWriter, FormatEvent, Formatter, Layer as FmtLayer},
-	Registry,
+	fmt::time::ChronoLocal,
+	fmt::{
+		format, FormatEvent, FormatFields, Formatter, Layer as FmtLayer, MakeWriter,
+		SubscriberBuilder,
+	},
+	layer::{self, SubscriberExt},
+	registry::LookupSpan,
+	EnvFilter, FmtSubscriber, Layer, Registry,
 };
 
 pub use event_format::*;
@@ -67,14 +72,21 @@ macro_rules! disable_log_reloading {
 		let handle = builder.reload_handle();
 		set_reload_handle(handle);
 		builder
-	}};
+		}};
 }
 
 /// Common implementation to get the subscriber.
 fn get_subscriber_internal<N, E, F, W>(
 	pattern: &str,
 	telemetry_external_transport: Option<ExtTransport>,
-	builder_hook: impl Fn(SubscriberBuilder<format::DefaultFields, EventFormat<ChronoLocal>, EnvFilter, fn() -> std::io::Stderr>) -> SubscriberBuilder<N, E, F, W>,
+	builder_hook: impl Fn(
+		SubscriberBuilder<
+			format::DefaultFields,
+			EventFormat<ChronoLocal>,
+			EnvFilter,
+			fn() -> std::io::Stderr,
+		>,
+	) -> SubscriberBuilder<N, E, F, W>,
 ) -> Result<(impl Subscriber + for<'a> LookupSpan<'a>, TelemetryWorker)>
 where
 	N: for<'writer> FormatFields<'writer> + 'static,
@@ -97,20 +109,18 @@ where
 	// after log filter reloading by RPC
 	let mut env_filter = EnvFilter::default()
 		// Enable info
-		.add_directive(parse_default_directive("info")
-			.expect("provided directive is valid"))
+		.add_directive(parse_default_directive("info").expect("provided directive is valid"))
 		// Disable info logging by default for some modules.
-		.add_directive(parse_default_directive("ws=off")
-			.expect("provided directive is valid"))
-		.add_directive(parse_default_directive("yamux=off")
-			.expect("provided directive is valid"))
-		.add_directive(parse_default_directive("cranelift_codegen=off")
-			.expect("provided directive is valid"))
+		.add_directive(parse_default_directive("ws=off").expect("provided directive is valid"))
+		.add_directive(parse_default_directive("yamux=off").expect("provided directive is valid"))
+		.add_directive(
+			parse_default_directive("cranelift_codegen=off").expect("provided directive is valid"),
+		)
 		// Set warn logging by default for some modules.
-		.add_directive(parse_default_directive("cranelift_wasm=warn")
-			.expect("provided directive is valid"))
-		.add_directive(parse_default_directive("hyper=warn")
-			.expect("provided directive is valid"));
+		.add_directive(
+			parse_default_directive("cranelift_wasm=warn").expect("provided directive is valid"),
+		)
+		.add_directive(parse_default_directive("hyper=warn").expect("provided directive is valid"));
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
@@ -135,7 +145,7 @@ where
 	// NOTE: this must be done after we check the `max_level_hint` otherwise
 	// it is always raised to `TRACE`.
 	env_filter = env_filter.add_directive(
-		parse_default_directive("sc_tracing=trace").expect("provided directive is valid")
+		parse_default_directive("sc_tracing=trace").expect("provided directive is valid"),
 	);
 
 	let enable_color = atty::is(atty::Stream::Stderr);
@@ -145,7 +155,8 @@ where
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-	let (telemetry_layer, telemetry_worker) = sc_telemetry::TelemetryLayer::new(telemetry_external_transport)?;
+	let (telemetry_layer, telemetry_worker) =
+		sc_telemetry::TelemetryLayer::new(telemetry_external_transport)?;
 	let event_format = EventFormat {
 		timer,
 		display_target: !simple,
@@ -153,20 +164,13 @@ where
 		display_thread_name: !simple,
 		enable_color,
 	};
-	let builder = FmtSubscriber::builder()
-		.with_env_filter(env_filter);
+	let builder = FmtSubscriber::builder().with_env_filter(env_filter);
 
 	#[cfg(not(target_os = "unknown"))]
-	let builder = builder
-		.with_writer(
-			std::io::stderr as _,
-		);
+	let builder = builder.with_writer(std::io::stderr as _);
 
 	#[cfg(target_os = "unknown")]
-	let builder = builder
-		.with_writer(
-			std::io::sink,
-		);
+	let builder = builder.with_writer(std::io::sink);
 
 	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.event_format(event_format);
@@ -227,53 +231,57 @@ impl GlobalLoggerBuilder {
 	///
 	/// This sets various global logging and tracing instances and thus may only be called once.
 	pub fn init(self) -> Result<TelemetryWorker> {
-		Ok(if let Some((tracing_receiver, profiling_targets)) = self.profiling {
-			if self.disable_log_reloading {
-				let (subscriber, telemetry_worker) = get_subscriber_internal(
-					&format!("{},{}", self.pattern, profiling_targets),
-					self.telemetry_external_transport,
-					|builder| builder,
-				)?;
-				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+		Ok(
+			if let Some((tracing_receiver, profiling_targets)) = self.profiling {
+				if self.disable_log_reloading {
+					let (subscriber, telemetry_worker) = get_subscriber_internal(
+						&format!("{},{}", self.pattern, profiling_targets),
+						self.telemetry_external_transport,
+						|builder| builder,
+					)?;
+					let profiling =
+						crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
-				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
+					tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
-				telemetry_worker
+					telemetry_worker
+				} else {
+					let (subscriber, telemetry_worker) = get_subscriber_internal(
+						&format!("{},{}", self.pattern, profiling_targets),
+						self.telemetry_external_transport,
+						|builder| disable_log_reloading!(builder),
+					)?;
+					let profiling =
+						crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+
+					tracing::subscriber::set_global_default(subscriber.with(profiling))?;
+
+					telemetry_worker
+				}
 			} else {
-				let (subscriber, telemetry_worker) = get_subscriber_internal(
-					&format!("{},{}", self.pattern, profiling_targets),
-					self.telemetry_external_transport,
-					|builder| disable_log_reloading!(builder),
-				)?;
-				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+				if self.disable_log_reloading {
+					let (subscriber, telemetry_worker) = get_subscriber_internal(
+						&self.pattern,
+						self.telemetry_external_transport,
+						|builder| builder,
+					)?;
 
-				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
+					tracing::subscriber::set_global_default(subscriber)?;
 
-				telemetry_worker
-			}
-		} else {
-			if self.disable_log_reloading {
-				let (subscriber, telemetry_worker) = get_subscriber_internal(
-					&self.pattern,
-					self.telemetry_external_transport,
-					|builder| builder,
-				)?;
+					telemetry_worker
+				} else {
+					let (subscriber, telemetry_worker) = get_subscriber_internal(
+						&self.pattern,
+						self.telemetry_external_transport,
+						|builder| disable_log_reloading!(builder),
+					)?;
 
-				tracing::subscriber::set_global_default(subscriber)?;
+					tracing::subscriber::set_global_default(subscriber)?;
 
-				telemetry_worker
-			} else {
-				let (subscriber, telemetry_worker) = get_subscriber_internal(
-					&self.pattern,
-					self.telemetry_external_transport,
-					|builder| disable_log_reloading!(builder),
-				)?;
-
-				tracing::subscriber::set_global_default(subscriber)?;
-
-				telemetry_worker
-			}
-		})
+					telemetry_worker
+				}
+			},
+		)
 	}
 }
 

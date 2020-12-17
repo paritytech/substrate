@@ -16,13 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::TelemetryWorker;
 use futures::channel::mpsc;
+use libp2p::wasm_ext::ExtTransport;
 use parking_lot::Mutex;
 use std::convert::TryInto;
 use tracing::{Event, Id, Subscriber};
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
-use libp2p::wasm_ext::ExtTransport;
-use crate::TelemetryWorker;
 
 /// Span name used to report the telemetry.
 pub const TELEMETRY_LOG_SPAN: &str = "telemetry-logger";
@@ -33,7 +33,9 @@ pub struct TelemetryLayer(Mutex<mpsc::Sender<(Id, u8, String)>>);
 
 impl TelemetryLayer {
 	/// Create a new [`TelemetryLayer`] using the [`Senders`] provided in argument.
-	pub fn new(telemetry_external_transport: Option<ExtTransport>) -> super::Result<(Self, TelemetryWorker)> {
+	pub fn new(
+		telemetry_external_transport: Option<ExtTransport>,
+	) -> super::Result<(Self, TelemetryWorker)> {
 		let worker = TelemetryWorker::new(telemetry_external_transport)?;
 		let sender = worker.sender();
 		Ok((Self(Mutex::new(sender)), worker))
@@ -67,13 +69,18 @@ where
 					..
 				} = attrs
 				{
-					if self.0.lock().try_send((
-						id,
-						verbosity
-							.try_into()
-							.expect("telemetry log message verbosity are u8; qed"),
-						json,
-					)).is_err() {
+					if self
+						.0
+						.lock()
+						.try_send((
+							id,
+							verbosity
+								.try_into()
+								.expect("telemetry log message verbosity are u8; qed"),
+							json,
+						))
+						.is_err()
+					{
 						eprintln!("Telemetry buffer overflowed!");
 					}
 				} else {

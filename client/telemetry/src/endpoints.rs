@@ -16,9 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use libp2p::{
-	Multiaddr,
-};
+use libp2p::Multiaddr;
 use serde::{Deserialize, Deserializer, Serialize};
 
 /// List of telemetry servers we want to talk to. Contains the URL of the server, and the
@@ -27,25 +25,30 @@ use serde::{Deserialize, Deserializer, Serialize};
 /// The URL string can be either a URL or a multiaddress.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TelemetryEndpoints(
-	#[serde(deserialize_with = "url_or_multiaddr_deser")]
-	pub(crate) Vec<(Multiaddr, u8)>
+	#[serde(deserialize_with = "url_or_multiaddr_deser")] pub(crate) Vec<(Multiaddr, u8)>,
 );
 
 /// Custom deserializer for TelemetryEndpoints, used to convert urls or multiaddr to multiaddr.
 fn url_or_multiaddr_deser<'de, D>(deserializer: D) -> Result<Vec<(Multiaddr, u8)>, D::Error>
-	where D: Deserializer<'de>
+where
+	D: Deserializer<'de>,
 {
 	Vec::<(String, u8)>::deserialize(deserializer)?
 		.iter()
-		.map(|e| Ok((url_to_multiaddr(&e.0)
-		.map_err(serde::de::Error::custom)?, e.1)))
+		.map(|e| {
+			Ok((
+				url_to_multiaddr(&e.0).map_err(serde::de::Error::custom)?,
+				e.1,
+			))
+		})
 		.collect()
 }
 
 impl TelemetryEndpoints {
 	/// Create a `TelemetryEndpoints` based on a list of `(String, u8)`.
 	pub fn new(endpoints: Vec<(String, u8)>) -> Result<Self, libp2p::multiaddr::Error> {
-		let endpoints: Result<Vec<(Multiaddr, u8)>, libp2p::multiaddr::Error> = endpoints.iter()
+		let endpoints: Result<Vec<(Multiaddr, u8)>, libp2p::multiaddr::Error> = endpoints
+			.iter()
 			.map(|e| Ok((url_to_multiaddr(&e.0)?, e.1)))
 			.collect();
 		endpoints.map(Self)
@@ -69,7 +72,7 @@ fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
 
 	// If not, try the `ws://path/url` format.
 	if let Ok(ma) = libp2p::multiaddr::from_url(url) {
-		return Ok(ma)
+		return Ok(ma);
 	}
 
 	// If we have no clue about the format of that string, assume that we were expecting a

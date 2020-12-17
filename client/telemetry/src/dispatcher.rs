@@ -16,14 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use futures::prelude::*;
-use std::collections::HashMap;
-use crate::node::{Node, Infallible};
+use crate::node::{Infallible, Node};
 use crate::transport::WsTrans;
-use std::iter::FromIterator;
+use futures::prelude::*;
 use libp2p::Multiaddr;
-use std::task::{Poll, Context};
+use std::collections::HashMap;
+use std::iter::FromIterator;
 use std::pin::Pin;
+use std::task::{Context, Poll};
 
 #[derive(Debug)]
 pub(crate) struct Dispatcher {
@@ -33,7 +33,7 @@ pub(crate) struct Dispatcher {
 }
 
 impl FromIterator<(Multiaddr, Node<WsTrans>)> for Dispatcher {
-	fn from_iter<I: IntoIterator<Item=(Multiaddr, Node<WsTrans>)>>(iter: I) -> Self {
+	fn from_iter<I: IntoIterator<Item = (Multiaddr, Node<WsTrans>)>>(iter: I) -> Self {
 		let pool: HashMap<_, _> = FromIterator::from_iter(iter);
 		Dispatcher {
 			pool,
@@ -49,14 +49,17 @@ impl Dispatcher {
 		cx: &mut Context<'_>,
 	) -> Poll<Result<(), Infallible>> {
 		if let Some(addr) = self.flush_node.take() {
-			let node = self.pool.get_mut(&addr).expect("we added the address ourselves; qed");
+			let node = self
+				.pool
+				.get_mut(&addr)
+				.expect("we added the address ourselves; qed");
 			match node.poll_flush_unpin(cx) {
-				Poll::Ready(Ok(())) => {},
+				Poll::Ready(Ok(())) => {}
 				Poll::Ready(Err(x)) => match x {},
 				Poll::Pending => {
 					self.flush_node = Some(addr);
 					return Poll::Pending;
-				},
+				}
 			}
 		}
 
@@ -74,7 +77,7 @@ impl Dispatcher {
 			};
 
 			match node.poll_ready_unpin(cx) {
-				Poll::Ready(Ok(())) => {},
+				Poll::Ready(Ok(())) => {}
 				Poll::Ready(Err(x)) => match x {},
 				Poll::Pending => {
 					self.item = Some((addr, message));
@@ -83,17 +86,17 @@ impl Dispatcher {
 			}
 
 			match node.start_send_unpin(message) {
-				Ok(()) => {},
+				Ok(()) => {}
 				Err(x) => match x {},
 			}
 
 			match node.poll_flush_unpin(cx) {
-				Poll::Ready(Ok(())) => {},
+				Poll::Ready(Ok(())) => {}
 				Poll::Ready(Err(x)) => match x {},
 				Poll::Pending => {
 					self.flush_node = Some(addr);
 					return Poll::Pending;
-				},
+				}
 			}
 		}
 
@@ -101,8 +104,7 @@ impl Dispatcher {
 	}
 }
 
-impl Sink<(Multiaddr, String)> for Dispatcher
-{
+impl Sink<(Multiaddr, String)> for Dispatcher {
 	type Error = Infallible;
 
 	fn poll_ready(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
@@ -132,11 +134,11 @@ impl Sink<(Multiaddr, String)> for Dispatcher
 
 		for (addr, mut node) in self.pool.drain() {
 			match node.poll_close_unpin(cx) {
-				Poll::Ready(Ok(())) => {},
+				Poll::Ready(Ok(())) => {}
 				Poll::Ready(Err(x)) => match x {},
 				Poll::Pending => {
 					new_pool.insert(addr, node);
-				},
+				}
 			}
 		}
 

@@ -17,8 +17,8 @@
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use tracing_subscriber::{
-	fmt::time::ChronoLocal, Registry, EnvFilter, reload::Handle, filter::Directive,
-	fmt as tracing_fmt, layer,
+	filter::Directive, fmt as tracing_fmt, fmt::time::ChronoLocal, layer, reload::Handle,
+	EnvFilter, Registry,
 };
 
 // Handle to reload the tracing log filter
@@ -34,21 +34,26 @@ static CURRENT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
 ///
 /// `sync=debug,state=trace`
 pub(crate) fn add_default_directives(directives: &str) {
-	DEFAULT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directives.to_owned());
+	DEFAULT_DIRECTIVES
+		.get_or_init(|| Mutex::new(Vec::new()))
+		.lock()
+		.push(directives.to_owned());
 	add_directives(directives);
 }
 
 /// Add directives to current directives
 pub fn add_directives(directives: &str) {
-	CURRENT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directives.to_owned());
+	CURRENT_DIRECTIVES
+		.get_or_init(|| Mutex::new(Vec::new()))
+		.lock()
+		.push(directives.to_owned());
 }
 
 /// Parse `Directive` and add to default directives if successful.
 ///
 /// Ensures the supplied directive will be restored when resetting the log filter.
 pub(crate) fn parse_default_directive(directive: &str) -> super::Result<Directive> {
-	let dir = directive
-		.parse()?;
+	let dir = directive.parse()?;
 	add_default_directives(directive);
 	Ok(dir)
 }
@@ -58,7 +63,12 @@ pub fn reload_filter() -> Result<(), String> {
 	let mut env_filter = EnvFilter::default();
 	if let Some(current_directives) = CURRENT_DIRECTIVES.get() {
 		// Use join and then split in case any directives added together
-		for directive in current_directives.lock().join(",").split(',').map(|d| d.parse()) {
+		for directive in current_directives
+			.lock()
+			.join(",")
+			.split(',')
+			.map(|d| d.parse())
+		{
 			match directive {
 				Ok(dir) => env_filter = env_filter.add_directive(dir),
 				Err(invalid_directive) => {
@@ -77,7 +87,8 @@ pub fn reload_filter() -> Result<(), String> {
 			.expect("provided directive is valid"),
 	);
 	log::debug!(target: "tracing", "Reloading log filter with: {}", env_filter);
-	FILTER_RELOAD_HANDLE.get()
+	FILTER_RELOAD_HANDLE
+		.get()
 		.ok_or("No reload handle present".to_string())?
 		.reload(env_filter)
 		.map_err(|e| format!("{}", e))
@@ -88,8 +99,11 @@ pub fn reload_filter() -> Result<(), String> {
 /// Includes substrate defaults and CLI supplied directives.
 pub fn reset_log_filter() -> Result<(), String> {
 	*CURRENT_DIRECTIVES
-		.get_or_init(|| Mutex::new(Vec::new())).lock() =
-		DEFAULT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().clone();
+		.get_or_init(|| Mutex::new(Vec::new()))
+		.lock() = DEFAULT_DIRECTIVES
+		.get_or_init(|| Mutex::new(Vec::new()))
+		.lock()
+		.clone();
 	reload_filter()
 }
 
@@ -103,5 +117,5 @@ pub(crate) fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
 type SCSubscriber<
 	N = tracing_fmt::format::DefaultFields,
 	E = crate::logging::EventFormat<ChronoLocal>,
-	W = fn() -> std::io::Stderr
+	W = fn() -> std::io::Stderr,
 > = layer::Layered<tracing_fmt::Layer<Registry, N, E, W>, Registry>;

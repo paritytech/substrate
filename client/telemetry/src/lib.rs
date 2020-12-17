@@ -40,33 +40,31 @@
 #![warn(missing_docs)]
 
 use futures::{channel::mpsc, prelude::*};
-use libp2p::{
-	wasm_ext, Multiaddr,
-};
+use libp2p::{wasm_ext, Multiaddr};
 use log::{error, warn};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use std::{
 	collections::{HashMap, HashSet},
 	time::Duration,
 };
-use wasm_timer::Instant;
 use tracing::Id;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
+use wasm_timer::Instant;
 
 pub use chrono;
 pub use libp2p::wasm_ext::ExtTransport;
 pub use serde_json;
 pub use tracing;
 
+mod dispatcher;
+mod endpoints;
 mod layer;
 mod node;
-mod dispatcher;
 mod transport;
-mod endpoints;
 
-pub use layer::*;
-use node::*;
 use dispatcher::*;
 pub use endpoints::*;
+pub use layer::*;
+use node::*;
 use transport::*;
 
 /// Substrate DEBUG log level.
@@ -83,7 +81,12 @@ pub const CONSENSUS_WARN: u8 = 4;
 /// Consensus INFO log level.
 pub const CONSENSUS_INFO: u8 = 1;
 
-pub(crate) type InitPayload = (Id, TelemetryEndpoints, ConnectionMessage, mpsc::UnboundedReceiver<ConnectionNotifierSender>);
+pub(crate) type InitPayload = (
+	Id,
+	TelemetryEndpoints,
+	ConnectionMessage,
+	mpsc::UnboundedReceiver<ConnectionNotifierSender>,
+);
 
 /// An object that keeps track of all the [`Telemetry`] created by its `build_telemetry()` method.
 ///
@@ -157,12 +160,14 @@ impl TelemetryWorker {
 
 		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
 		let mut connection_messages: HashMap<Multiaddr, Vec<ConnectionMessage>> = HashMap::new();
-		let mut connection_notifiers: HashMap<Multiaddr, Vec<ConnectionNotifierSender>> = HashMap::new();
+		let mut connection_notifiers: HashMap<Multiaddr, Vec<ConnectionNotifierSender>> =
+			HashMap::new();
 		let mut existing_nodes: HashSet<Multiaddr> = HashSet::new();
 
 		// initialize the telemetry nodes
 		init_receiver.close();
-		while let Some((id, endpoints, connection_message, mut connection_notifiers_rx)) = init_receiver.next().await
+		while let Some((id, endpoints, connection_message, mut connection_notifiers_rx)) =
+			init_receiver.next().await
 		{
 			let endpoints = endpoints.0;
 
@@ -170,31 +175,43 @@ impl TelemetryWorker {
 			let connection_notifier_senders: Vec<_> = connection_notifiers_rx.collect().await;
 
 			for (addr, verbosity) in endpoints {
-				node_map.entry(id.clone()).or_insert_with(Vec::new)
+				node_map
+					.entry(id.clone())
+					.or_insert_with(Vec::new)
 					.push((verbosity, addr.clone()));
 				existing_nodes.insert(addr.clone());
 				let mut obj = connection_message.clone();
 				obj.insert("msg".into(), "system.connected".into());
 				obj.insert("id".into(), id.into_u64().into());
-				connection_messages.entry(addr.clone()).or_insert_with(Vec::new)
+				connection_messages
+					.entry(addr.clone())
+					.or_insert_with(Vec::new)
 					.push(obj);
-				connection_notifiers.entry(addr.clone()).or_insert_with(Vec::new)
+				connection_notifiers
+					.entry(addr.clone())
+					.or_insert_with(Vec::new)
 					.extend(connection_notifier_senders.clone());
 			}
 		}
 
-		let mut node_pool: Dispatcher =
-			existing_nodes
-				.iter()
-				.map(|addr| {
-					let connection_messages = connection_messages.remove(addr)
-						.expect("there is a node for every connection message; qed");
-					let connection_notifiers = connection_notifiers.remove(addr)
-						.expect("there is a node for every connection notifier; qed");
-					let node = Node::new(transport.clone(), addr.clone(), connection_messages, connection_notifiers);
-					(addr.clone(), node)
-				})
-				.collect();
+		let mut node_pool: Dispatcher = existing_nodes
+			.iter()
+			.map(|addr| {
+				let connection_messages = connection_messages
+					.remove(addr)
+					.expect("there is a node for every connection message; qed");
+				let connection_notifiers = connection_notifiers
+					.remove(addr)
+					.expect("there is a node for every connection notifier; qed");
+				let node = Node::new(
+					transport.clone(),
+					addr.clone(),
+					connection_messages,
+					connection_notifiers,
+				);
+				(addr.clone(), node)
+			})
+			.collect();
 
 		let _ = receiver
 			.filter_map(|(id, verbosity, message): (Id, u8, String)| {
@@ -210,32 +227,34 @@ impl TelemetryWorker {
 					future::ready(None)
 				}
 			})
-			.flat_map(|(verbosity, message, nodes): (u8, String, &Vec<(u8, Multiaddr)>)| {
-				let mut to_send = Vec::with_capacity(nodes.len());
-				let before = Instant::now();
+			.flat_map(
+				|(verbosity, message, nodes): (u8, String, &Vec<(u8, Multiaddr)>)| {
+					let mut to_send = Vec::with_capacity(nodes.len());
+					let before = Instant::now();
 
-				for (node_max_verbosity, addr) in nodes {
-					if verbosity > *node_max_verbosity {
-						log::trace!(
+					for (node_max_verbosity, addr) in nodes {
+						if verbosity > *node_max_verbosity {
+							log::trace!(
 							target: "telemetry",
 							"Skipping {} for log entry with verbosity {:?}",
 							addr,
 							verbosity);
-						continue;
+							continue;
+						}
+
+						to_send.push((addr.clone(), message.clone()));
 					}
 
-					to_send.push((addr.clone(), message.clone()));
-				}
+					if before.elapsed() > Duration::from_millis(200) {
+						log::warn!(
+							target: "telemetry",
+							"Processing one telemetry message took more than 200ms",
+						);
+					}
 
-				if before.elapsed() > Duration::from_millis(200) {
-					log::warn!(
-						target: "telemetry",
-						"Processing one telemetry message took more than 200ms",
-					);
-				}
-
-				stream::iter(to_send)
-			})
+					stream::iter(to_send)
+				},
+			)
 			.map(|x| Ok(x))
 			.boxed()
 			.forward(&mut node_pool)
@@ -274,11 +293,11 @@ impl TelemetryHandle {
 
 		match span.id() {
 			Some(id) => {
-				match self.0.unbounded_send(
-					(id.clone(), endpoints, connection_message, receiver),
-				) {
-					Ok(()) =>
-						tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&id)),
+				match self
+					.0
+					.unbounded_send((id.clone(), endpoints, connection_message, receiver))
+				{
+					Ok(()) => tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&id)),
 					Err(err) => error!(
 						target: "telemetry",
 						"Could not initialize telemetry: \
@@ -286,7 +305,7 @@ impl TelemetryHandle {
 						err,
 					),
 				}
-			},
+			}
 			None => error!(
 				target: "telemetry",
 				"Could not initialize telemetry: the span could not be entered",
@@ -387,31 +406,44 @@ macro_rules! format_fields_to_json {
 
 #[cfg(test)]
 mod telemetry_endpoints_tests {
-	use libp2p::Multiaddr;
-	use super::TelemetryEndpoints;
 	use super::url_to_multiaddr;
+	use super::TelemetryEndpoints;
+	use libp2p::Multiaddr;
 
 	#[test]
 	fn valid_endpoints() {
-		let endp = vec![("wss://telemetry.polkadot.io/submit/".into(), 3), ("/ip4/80.123.90.4/tcp/5432".into(), 4)];
-		let telem = TelemetryEndpoints::new(endp.clone()).expect("Telemetry endpoint should be valid");
+		let endp = vec![
+			("wss://telemetry.polkadot.io/submit/".into(), 3),
+			("/ip4/80.123.90.4/tcp/5432".into(), 4),
+		];
+		let telem =
+			TelemetryEndpoints::new(endp.clone()).expect("Telemetry endpoint should be valid");
 		let mut res: Vec<(Multiaddr, u8)> = vec![];
 		for (a, b) in endp.iter() {
-			res.push((url_to_multiaddr(a).expect("provided url should be valid"), *b))
+			res.push((
+				url_to_multiaddr(a).expect("provided url should be valid"),
+				*b,
+			))
 		}
 		assert_eq!(telem.0, res);
 	}
 
 	#[test]
 	fn invalid_endpoints() {
-		let endp = vec![("/ip4/...80.123.90.4/tcp/5432".into(), 3), ("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4)];
+		let endp = vec![
+			("/ip4/...80.123.90.4/tcp/5432".into(), 3),
+			("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4),
+		];
 		let telem = TelemetryEndpoints::new(endp);
 		assert!(telem.is_err());
 	}
 
 	#[test]
 	fn valid_and_invalid_endpoints() {
-		let endp = vec![("/ip4/80.123.90.4/tcp/5432".into(), 3), ("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4)];
+		let endp = vec![
+			("/ip4/80.123.90.4/tcp/5432".into(), 3),
+			("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4),
+		];
 		let telem = TelemetryEndpoints::new(endp);
 		assert!(telem.is_err());
 	}

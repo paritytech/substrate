@@ -16,13 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use futures::{prelude::*, task::{Context, Poll}, ready};
-use std::pin::Pin;
-use std::io;
+use futures::{
+	prelude::*,
+	ready,
+	task::{Context, Poll},
+};
 use libp2p::{
-	core::transport::{OptionalTransport, timeout::TransportTimeout},
+	core::transport::{timeout::TransportTimeout, OptionalTransport},
 	wasm_ext, Transport,
 };
+use std::io;
+use std::pin::Pin;
 use std::time::Duration;
 
 /// Timeout after which a connection attempt is considered failed. Includes the WebSocket HTTP
@@ -34,8 +38,9 @@ pub(crate) fn initialize_transport(
 ) -> Result<WsTrans, io::Error> {
 	let transport = match wasm_external_transport.clone() {
 		Some(t) => OptionalTransport::some(t),
-		None => OptionalTransport::none()
-	}.map((|inner, _| StreamSink::from(inner)) as fn(_, _) -> _);
+		None => OptionalTransport::none(),
+	}
+	.map((|inner, _| StreamSink::from(inner)) as fn(_, _) -> _);
 
 	// The main transport is the `wasm_external_transport`, but if we're on desktop we add
 	// support for TCP+WebSocket+DNS as a fallback. In practice, you're not expected to pass
@@ -43,17 +48,16 @@ pub(crate) fn initialize_transport(
 	#[cfg(not(target_os = "unknown"))]
 	let transport = transport.or_transport({
 		let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new())?;
-		libp2p::websocket::framed::WsConfig::new(inner)
-			.and_then(|connec, _| {
-				let connec = connec
-					.with(|item| {
-						let item = libp2p::websocket::framed::OutgoingData::Binary(item);
-						future::ready(Ok::<_, io::Error>(item))
-					})
-					.try_filter(|item| future::ready(item.is_data()))
-					.map_ok(|data| data.into_bytes());
-				future::ready(Ok::<_, io::Error>(connec))
-			})
+		libp2p::websocket::framed::WsConfig::new(inner).and_then(|connec, _| {
+			let connec = connec
+				.with(|item| {
+					let item = libp2p::websocket::framed::OutgoingData::Binary(item);
+					future::ready(Ok::<_, io::Error>(item))
+				})
+				.try_filter(|item| future::ready(item.is_data()))
+				.map_ok(|data| data.into_bytes());
+			future::ready(Ok::<_, io::Error>(connec))
+		})
 	});
 
 	Ok(TransportTimeout::new(
@@ -63,8 +67,9 @@ pub(crate) fn initialize_transport(
 				.sink_map_err(|err| io::Error::new(io::ErrorKind::Other, err));
 			Box::pin(out) as Pin<Box<_>>
 		}),
-		CONNECT_TIMEOUT
-	).boxed())
+		CONNECT_TIMEOUT,
+	)
+	.boxed())
 }
 
 /// A trait that implements `Stream` and `Sink`.
@@ -73,11 +78,11 @@ impl<T: ?Sized + Stream + Sink<I>, I> StreamAndSink<I> for T {}
 
 /// A type alias for the WebSocket transport.
 pub(crate) type WsTrans = libp2p::core::transport::Boxed<
-	Pin<Box<dyn StreamAndSink<
-		Vec<u8>,
-		Item = Result<Vec<u8>, io::Error>,
-		Error = io::Error
-	> + Send>>
+	Pin<
+		Box<
+			dyn StreamAndSink<Vec<u8>, Item = Result<Vec<u8>, io::Error>, Error = io::Error> + Send,
+		>,
+	>,
 >;
 
 /// Wraps around an `AsyncWrite` and implements `Sink`. Guarantees that each item being sent maps
@@ -105,7 +110,7 @@ impl<T: AsyncRead> Stream for StreamSink<T> {
 			Ok(n) => {
 				buf.truncate(n);
 				Poll::Ready(Some(Ok(buf)))
-			},
+			}
 			Err(err) => Poll::Ready(Some(Err(err))),
 		}
 	}
@@ -156,4 +161,3 @@ impl<T: AsyncWrite> Sink<Vec<u8>> for StreamSink<T> {
 		AsyncWrite::poll_close(this.0, cx)
 	}
 }
-
