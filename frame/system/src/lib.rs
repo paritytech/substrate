@@ -1006,9 +1006,9 @@ impl<T: Config> Module<T> {
 		Account::<T>::get(who).consumers
 	}
 
-	/// True if the account has no outstanding references.
+	/// True if the account has some outstanding references.
 	pub fn is_provider_required(who: &T::AccountId) -> bool {
-		Account::<T>::get(who).consumers == 0
+		Account::<T>::get(who).consumers != 0
 	}
 
 	/// Deposits an event into this block's event record.
