@@ -287,6 +287,24 @@ fn close_tip_works() {
 }
 
 #[test]
+fn slash_tip_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_eq!(Treasury::pot(), 100);
+		assert_ok!(TipsModTestInst::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
+		let h = tip_hash();
+		assert_eq!(last_event(), RawEvent::NewTip(h));
+		assert_noop!(
+			TipsModTestInst::slash_tip(Origin::signed(0), h.clone()),
+			BadOrigin,
+		);
+		assert_ok!(TipsModTestInst::slash_tip(Origin::root(), h.clone()));
+		assert_eq!(last_event(), RawEvent::TipSlashed(h, 0, 12));
+	});
+}
+
+#[test]
 fn retract_tip_works() {
 	new_test_ext().execute_with(|| {
 		// with report awesome

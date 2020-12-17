@@ -70,8 +70,10 @@ use frame_support::traits::{
 use sp_runtime::{ Percent, RuntimeDebug, traits::{
 	Zero, AccountIdConversion, Hash, BadOrigin
 }};
-
-use frame_support::traits::{Contains, ContainsLengthBound};
+use frame_support::traits::{
+	Contains, ContainsLengthBound,
+	OnUnbalanced, EnsureOrigin,
+};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
@@ -168,6 +170,8 @@ decl_event!(
 		TipClosing(Hash),
 		/// A tip suggestion has been closed. \[tip_hash, who, payout\]
 		TipClosed(Hash, AccountId, Balance),
+		/// A tip suggestion has been slashed. \[tip_hash, finder, deposit\]
+		TipSlashed(Hash, AccountId, Balance),
 		/// A tip suggestion has been retracted. \[tip_hash\]
 		TipRetracted(Hash),
 	}
@@ -377,6 +381,31 @@ decl_module! {
 				Self::deposit_event(RawEvent::TipClosing(hash.clone()));
 			}
 			Tips::<T>::insert(&hash, tip);
+		}
+
+		/// Remove and slash an already-open tip.
+		///
+		/// May only be called from `T::RejectOrigin`.
+		///
+		/// As a result, API will slash the finder and the deposits are lost.
+		///
+		/// Emits `TipSlashed` if successful.
+		#[weight = 10_000]
+		fn slash_tip(origin, hash: T::Hash) {
+			T::RejectOrigin::ensure_origin(origin)?;
+
+			let tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
+
+			if !tip.deposit.is_zero() {
+				let deposit = tip.deposit;
+				let imbalance = T::Currency::slash_reserved(&tip.finder, deposit).0;
+				T::OnSlash::on_unbalanced(imbalance);
+			}
+
+			Reasons::<T>::remove(&tip.reason);
+			Tips::<T>::remove(hash);
+
+			Self::deposit_event(RawEvent::TipSlashed(hash, tip.finder, tip.deposit));
 		}
 
 		/// Close and payout a tip.
