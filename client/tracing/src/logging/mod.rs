@@ -299,10 +299,24 @@ mod tests {
 		let _ = GlobalLoggerBuilder::new(pattern).init().unwrap();
 	}
 
+	fn run_in_process(test_name: &str) {
+		if env::var("RUN_IN_PROCESS").is_err() {
+			let status = Command::new(env::current_exe().unwrap())
+				.arg(test_name)
+				.env("RUN_IN_PROCESS", "true")
+				.status()
+				.unwrap();
+			assert!(status.success(), "process did not ended successfully");
+			std::process::exit(0);
+		}
+	}
+
 	#[test]
 	fn test_logger_filters() {
+		run_in_process("test_logger_filters");
+
 		let test_pattern = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
-		let _guard = init_logger(&test_pattern);
+		init_logger(&test_pattern);
 
 		tracing::dispatcher::get_default(|dispatcher| {
 			let test_filter = |target, level| {
