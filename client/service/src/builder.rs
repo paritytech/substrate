@@ -718,7 +718,9 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 		"network_id": network_id.clone()
 	}};
 
-	Some(telemetry_handle.start_telemetry(endpoints, json))
+	let obj = serde_json::from_value(json).expect("it's an object; qed");
+
+	Some(telemetry_handle.start_telemetry(endpoints, obj))
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(

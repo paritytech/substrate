@@ -24,6 +24,8 @@ use rand::Rng as _;
 use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
 use crate::TelemetryConnectionNotifier;
 
+pub(crate) type ConnectionMessage = serde_json::Map<String, serde_json::Value>;
+
 /// Handler for a single telemetry node.
 ///
 /// This is a wrapper `Sink` around a network `Sink` with 3 particularities:
@@ -44,7 +46,7 @@ pub(crate) struct Node<TTrans: Transport> {
 	/// Transport used to establish new connections.
 	transport: TTrans,
 	/// Messages that are sent when the connection (re-)establishes.
-	connection_messages: Vec<serde_json::Value>,
+	connection_messages: Vec<ConnectionMessage>,
 	/// Notifier for when the connection (re-)establishes.
 	telemetry_connection_notifier: Vec<TelemetryConnectionNotifier>,
 }
@@ -82,7 +84,7 @@ impl<TTrans: Transport> Node<TTrans> {
 	pub(crate) fn new(
 		transport: TTrans,
 		addr: Multiaddr,
-		connection_messages: Vec<serde_json::Value>,
+		connection_messages: Vec<ConnectionMessage>,
 		telemetry_connection_notifier: Vec<TelemetryConnectionNotifier>,
 	) -> Self {
 		Node {
@@ -170,13 +172,9 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 							connection_sink.fire();
 						}
 
-						fn generate_message(mut json: serde_json::Value) -> Result<Vec<u8>, String> {
-							let obj = json.as_object_mut()
-								.ok_or_else(|| {
-									"Invalid JSON message: it must be an object".to_owned()
-								})?;
+						fn generate_message(mut obj: ConnectionMessage) -> Result<Vec<u8>, String> {
 							obj.insert("ts".into(), chrono::Local::now().to_rfc3339().into());
-							serde_json::to_vec(obj)
+							serde_json::to_vec(&obj)
 								.map_err(|err| format!("Could not serialize JSON message: {}", err))
 						}
 

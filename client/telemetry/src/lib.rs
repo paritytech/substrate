@@ -85,7 +85,7 @@ pub const CONSENSUS_WARN: u8 = 4;
 /// Consensus INFO log level.
 pub const CONSENSUS_INFO: u8 = 1;
 
-pub(crate) type InitPayload = (Id, TelemetryEndpoints, serde_json::Value, TelemetryConnectionNotifier);
+pub(crate) type InitPayload = (Id, TelemetryEndpoints, ConnectionMessage, TelemetryConnectionNotifier);
 
 /// An object that keeps track of all the [`Telemetry`] created by its `build_telemetry()` method.
 ///
@@ -158,7 +158,7 @@ impl TelemetryWorker {
 		} = self;
 
 		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
-		let mut connection_messages: HashMap<Multiaddr, Vec<serde_json::Value>> = HashMap::new();
+		let mut connection_messages: HashMap<Multiaddr, Vec<ConnectionMessage>> = HashMap::new();
 		let mut telemetry_connection_notifier: HashMap<Multiaddr, Vec<TelemetryConnectionNotifier>> = HashMap::new();
 		let mut existing_nodes: HashSet<Multiaddr> = HashSet::new();
 
@@ -172,12 +172,11 @@ impl TelemetryWorker {
 				node_map.entry(id.clone()).or_insert_with(Vec::new)
 					.push((verbosity, addr.clone()));
 				existing_nodes.insert(addr.clone());
-				let mut json = connection_message.clone();
-				let obj = json.as_object_mut().expect("todo");
+				let mut obj = connection_message.clone();
 				obj.insert("msg".into(), "system.connected".into());
 				obj.insert("id".into(), id.into_u64().into());
 				connection_messages.entry(addr.clone()).or_insert_with(Vec::new)
-					.push(json);
+					.push(obj);
 				telemetry_connection_notifier.entry(addr.clone()).or_insert_with(Vec::new)
 					.push(connection_sink.clone());
 			}
@@ -266,7 +265,7 @@ impl TelemetryHandle {
 	pub fn start_telemetry(
 		&mut self,
 		endpoints: TelemetryEndpoints,
-		connection_message: serde_json::Value,
+		connection_message: ConnectionMessage,
 	) -> TelemetryConnectionNotifier {
 		let connection_sink = TelemetryConnectionNotifier::default();
 		let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
