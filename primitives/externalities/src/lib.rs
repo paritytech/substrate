@@ -415,6 +415,10 @@ pub enum WorkerDeclaration {
 	/// The worker type need no declaration.
 	None,
 
+	/// The worker type need to log access and resolve
+	/// error on result access only.
+	Optimistic,
+
 	/// Parent write access only.
 	ParentWrite(AccessDeclaration),
 
@@ -438,7 +442,7 @@ impl AccessDeclaration {
 	/// Declaration for top prefix only.
 	pub fn top_prefix() -> Self {
 		AccessDeclaration {
-			prefixes_lock: vec![Vec::new()],
+			prefixes_lock: sp_std::vec![Vec::new()],
 			keys_lock: Vec::new(),
 		}
 	}

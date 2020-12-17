@@ -235,7 +235,7 @@ pub trait RuntimeSpawn: Send {
 	/// Note that `dismiss` can be more expensive than `join`, as
 	/// it can involve spawning again the worker, when `join` just
 	/// release it.
-	fn dismiss(&self, handle: u64);
+	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities);
 
 	/// Change the number of runtime runing in the pool.
 	/// Note that this should only increase capacity (default value

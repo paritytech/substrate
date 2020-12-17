@@ -202,6 +202,8 @@ pub fn instantiate(
 }
 
 /// Obtain externality and get id for worker.
+/// TODO consider having declaration param only for kind declarative and uses default when not
+/// here.
 pub fn spawn_call_ext(
 	handle: u64,
 	kind: u8,
@@ -218,11 +220,11 @@ pub fn spawn_call_ext(
 			AsyncExt::previous_block_read(backend)
 		},
 		WorkerType::ReadAtSpawn => {
-			let backend = calling_ext.get_async_backend(handle, declaration);
+			let backend = calling_ext.get_async_backend(handle, WorkerDeclaration::None);
 			AsyncExt::state_at_spawn_read(backend, handle)
 		},
 		WorkerType::ReadOptimistic => {
-			let backend = calling_ext.get_async_backend(handle, declaration);
+			let backend = calling_ext.get_async_backend(handle, WorkerDeclaration::Optimistic);
 			unimplemented!("TODO optimistic backend that register keys??");
 			AsyncExt::state_at_spawn_read(backend, handle)
 		},
@@ -627,7 +629,8 @@ impl<HostLocal: HostLocalFunction> RuntimeSpawn for RuntimeInstanceSpawnForceSen
 		calling_ext.resolve_worker_result(worker_result)
 	}
 
-	fn dismiss(&self, handle: u64) {
+	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
+		calling_ext.dismiss_worker(handle);
 		self.0.borrow_mut().dismiss(handle)
 	}
 
@@ -713,9 +716,14 @@ pub mod hosted_runtime {
 	/// Hosted runtime variant of sp_io `RuntimeTasks` `spawn`.
 	pub fn host_runtime_tasks_dismiss(handle: u64) {
 		sp_externalities::with_externalities(|mut ext| {
+			let ext_unsafe = ext as *mut dyn Externalities;
 			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
 				.expect("Inline runtime extension improperly set.");
-			runtime_spawn.dismiss(handle)
+			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+			// a given id, to make this safer.
+			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+			runtime_spawn.dismiss(handle, ext_unsafe);
+			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
 		}).unwrap()
 	}
 }
