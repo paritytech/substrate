@@ -27,7 +27,6 @@ use log::info;
 use sc_service::{Configuration, TaskType, TaskManager};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -113,7 +112,7 @@ where
 pub struct Runner<C: SubstrateCli> {
 	config: Configuration,
 	tokio_runtime: tokio::runtime::Runtime,
-	telemetry_worker: Arc<sc_telemetry::TelemetryWorker>,
+	telemetry_worker: sc_telemetry::TelemetryWorker,
 	phantom: PhantomData<C>,
 }
 
@@ -135,7 +134,6 @@ impl<C: SubstrateCli> Runner<C> {
 						.map(drop),
 			}
 		};
-		let telemetry_worker = Arc::new(telemetry_worker);
 
 		Ok(Runner {
 			config: command.create_configuration(
@@ -190,12 +188,7 @@ impl<C: SubstrateCli> Runner<C> {
 	) -> Result<()> {
 		self.print_node_infos();
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
-		let telemetry_worker = Arc::try_unwrap(self.telemetry_worker)
-			.map_err(|_| String::from(
-				"Could not initialize telemetry_worker! \
-				Maybe some node Configuration are pending?"
-			))?;
-		task_manager.spawn_handle().spawn("telemetry_worker", telemetry_worker.run());
+		task_manager.spawn_handle().spawn("telemetry_worker", self.telemetry_worker.run());
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
 		self.tokio_runtime.block_on(task_manager.clean_shutdown());
 		res.map_err(|e| e.to_string().into())
