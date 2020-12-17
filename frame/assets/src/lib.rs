@@ -154,6 +154,9 @@ pub trait Config: frame_system::Config {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// Type parameter for ERC20 compatible
+	type IsERC20Compatible: Get<bool>;
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
@@ -216,7 +219,7 @@ decl_storage! {
 
 		/// The number of units of assets being approved by one account to another
 		/// The ordering of from, to is sequential i.e (from, to)
-		#[cfg(feature = "erc20")]
+
 		pub Approvals: double_map
 			hasher(blake2_128_concat) T::AssetId,
 			hasher(blake2_128_concat) (T::AccountId, T::AccountId)
@@ -285,6 +288,8 @@ decl_error! {
 		Overflow,
 		/// An allowance for transfer from is insufficient
 		AllowanceTooLow,
+		///
+		NotERC20Compatible,
 	}
 }
 
@@ -791,6 +796,7 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 {
 	type Balance = T::Balance;
 	type AssetId = T::AssetId;
+	type IsERC20Compatible = T::IsERC20Compatible;
 
 	// PUBLIC IMMUTABLES
 
@@ -807,8 +813,11 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	}
 
 	/// Returns the remaining number of tokens a spender can spend for a specific asset.
-	#[cfg(feature = "erc20")]
 	fn allowance(id: Self::AssetId, owner: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source) -> Self::Balance {
+		if !Self::IsERC20Compatible::get() {
+			return Self::Balance::zero();
+		}
+
 		let owner = match T::Lookup::lookup(owner) {
 			Ok(acc) => acc,
 			Err(_) => return Self::Balance::zero(),
@@ -869,24 +878,27 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		})
 	}
 
-	#[cfg(feature = "erc20")]
 	fn approve(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+		ensure!(Self::IsERC20Compatible::get(), Error::<T>::NotERC20Compatible);
+
 		let who = T::Lookup::lookup(who)?;
 		let spender = T::Lookup::lookup(spender)?;
 		Approvals::<T>::mutate(id, (who, spender), |b| *b += amount);
 		Ok(())
 	}
 
-	#[cfg(feature = "erc20")]
 	fn set_approval(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+		ensure!(Self::IsERC20Compatible::get(), Error::<T>::NotERC20Compatible);
+
 		let who = T::Lookup::lookup(who)?;
 		let spender = T::Lookup::lookup(spender)?;
 		Approvals::<T>::mutate(id, (who, spender), |b| *b = amount);
 		Ok(())
 	}
 
-	#[cfg(feature = "erc20")]
 	fn transfer_from(id: Self::AssetId, spender: <T::Lookup as StaticLookup>::Source, who: <T::Lookup as StaticLookup>::Source, recipient: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+		ensure!(Self::IsERC20Compatible::get(), Error::<T>::NotERC20Compatible);
+
 		ensure!(!amount.is_zero(), Error::<T>::AmountZero);
 		// check allowance
 		let allowance = Self::allowance(id, who.clone(), spender.clone());
@@ -1080,6 +1092,7 @@ mod tests {
 	parameter_types! {
 		pub const AssetDepositBase: u64 = 1;
 		pub const AssetDepositPerZombie: u64 = 1;
+		pub const IsERC20Compatible: bool = true;
 	}
 
 	impl Config for Test {
@@ -1090,6 +1103,7 @@ mod tests {
 		type ForceOrigin = frame_system::EnsureRoot<u64>;
 		type AssetDepositBase = AssetDepositBase;
 		type AssetDepositPerZombie = AssetDepositPerZombie;
+		type IsERC20Compatible = IsERC20Compatible;
 		type WeightInfo = ();
 	}
 	type System = frame_system::Module<Test>;
@@ -1412,7 +1426,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "erc20")]
 	fn creating_approvals_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
@@ -1425,7 +1438,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "erc20")]
 	fn setting_approvals_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
@@ -1438,7 +1450,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "erc20")]
 	fn spending_approved_assets_works() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
@@ -1451,7 +1462,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "erc20")]
 	fn spending_approved_assets_without_enough_allowance_should_not_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
