@@ -50,7 +50,7 @@ use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
 use std::sync::Arc;
 use wasm_timer::SystemTime;
-use sc_telemetry::{telemetry, TelemetryConnectionSinks, SUBSTRATE_INFO};
+use sc_telemetry::{telemetry, TelemetryConnectionNotifier, SUBSTRATE_INFO};
 use sp_transaction_pool::MaintainedTransactionPool;
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
@@ -526,7 +526,7 @@ pub fn build_offchain_workers<TBl, TBackend, TCl>(
 /// Spawn the tasks that are required to run a node.
 pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
-) -> Result<(RpcHandlers, Option<TelemetryConnectionSinks>), Error>
+) -> Result<(RpcHandlers, Option<TelemetryConnectionNotifier>), Error>
 	where
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
@@ -569,7 +569,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 	)?;
 
-	let telemetry_connection_sinks = init_telemetry(
+	let telemetry_telemetry_connection_notifier = init_telemetry(
 		&mut config,
 		network.clone(),
 		client.clone(),
@@ -649,7 +649,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
 
-	Ok((rpc_handlers, telemetry_connection_sinks))
+	Ok((rpc_handlers, telemetry_telemetry_connection_notifier))
 }
 
 async fn transaction_notifications<TBl, TExPool>(
@@ -678,7 +678,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	config: &mut Configuration,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
-) -> Option<sc_telemetry::TelemetryConnectionSinks> {
+) -> Option<sc_telemetry::TelemetryConnectionNotifier> {
 	let telemetry_handle = if let Some(handle) = config.telemetry_handle.as_mut() {
 		handle
 	} else {

@@ -143,7 +143,7 @@ pub const CONSENSUS_WARN: u8 = 4;
 /// Consensus INFO log level.
 pub const CONSENSUS_INFO: u8 = 1;
 
-pub(crate) type InitPayload = (Id, TelemetryEndpoints, serde_json::Value, TelemetryConnectionSinks);
+pub(crate) type InitPayload = (Id, TelemetryEndpoints, serde_json::Value, TelemetryConnectionNotifier);
 
 /// An object that keeps track of all the [`Telemetry`] created by its `build_telemetry()` method.
 ///
@@ -257,7 +257,7 @@ impl TelemetryWorker {
 
 		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
 		let mut connection_messages: HashMap<Multiaddr, Vec<serde_json::Value>> = HashMap::new();
-		let mut connection_sinks: HashMap<Multiaddr, Vec<TelemetryConnectionSinks>> = HashMap::new();
+		let mut telemetry_connection_notifier: HashMap<Multiaddr, Vec<TelemetryConnectionNotifier>> = HashMap::new();
 		let mut existing_nodes: HashSet<Multiaddr> = HashSet::new();
 
 		// initialize the telemetry nodes
@@ -276,7 +276,7 @@ impl TelemetryWorker {
 				obj.insert("id".into(), id.into_u64().into());
 				connection_messages.entry(addr.clone()).or_insert_with(Vec::new)
 					.push(json);
-				connection_sinks.entry(addr.clone()).or_insert_with(Vec::new)
+				telemetry_connection_notifier.entry(addr.clone()).or_insert_with(Vec::new)
 					.push(connection_sink.clone());
 			}
 		}
@@ -287,9 +287,9 @@ impl TelemetryWorker {
 				.map(|addr| {
 					let connection_messages = connection_messages.remove(addr)
 						.expect("there is a node for every connection message; qed");
-					let connection_sinks = connection_sinks.remove(addr)
+					let telemetry_connection_notifier = telemetry_connection_notifier.remove(addr)
 						.expect("there is a node for every connection sink; qed");
-					let node = Node::new(transport.clone(), addr.clone(), connection_messages, connection_sinks);
+					let node = Node::new(transport.clone(), addr.clone(), connection_messages, telemetry_connection_notifier);
 					(addr.clone(), node)
 				})
 				.collect();
@@ -359,8 +359,8 @@ impl TelemetryHandle {
 		&mut self,
 		endpoints: TelemetryEndpoints,
 		connection_message: serde_json::Value,
-	) -> TelemetryConnectionSinks {
-		let connection_sink = TelemetryConnectionSinks::default();
+	) -> TelemetryConnectionNotifier {
+		let connection_sink = TelemetryConnectionNotifier::default();
 
 		let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
 		let id = span.id().expect("the span is enabled; qed"); // TODO: this error happen if the log is disabled by the command line
@@ -382,12 +382,11 @@ impl TelemetryHandle {
 	}
 }
 
-// TODO maybe rename because it's confusing
 /// Sinks to propagate telemetry connection established events.
 #[derive(Default, Clone, Debug)]
-pub struct TelemetryConnectionSinks(Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
+pub struct TelemetryConnectionNotifier(Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
 
-impl TelemetryConnectionSinks {
+impl TelemetryConnectionNotifier {
 	/// Get event stream for telemetry connection established events.
 	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
 		let (sink, stream) = tracing_unbounded("mpsc_telemetry_on_connect");

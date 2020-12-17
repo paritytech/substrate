@@ -22,7 +22,7 @@ use libp2p::Multiaddr;
 use libp2p::core::transport::Transport;
 use rand::Rng as _;
 use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
-use crate::TelemetryConnectionSinks;
+use crate::TelemetryConnectionNotifier;
 
 /// Handler for a single telemetry node.
 ///
@@ -46,7 +46,7 @@ pub(crate) struct Node<TTrans: Transport> {
 	/// Messages that are sent when the connection (re-)establishes.
 	connection_messages: Vec<serde_json::Value>,
 	/// Notifier for when the connection (re-)establishes.
-	connection_sinks: Vec<TelemetryConnectionSinks>,
+	telemetry_connection_notifier: Vec<TelemetryConnectionNotifier>,
 }
 
 enum NodeSocket<TTrans: Transport> {
@@ -83,14 +83,14 @@ impl<TTrans: Transport> Node<TTrans> {
 		transport: TTrans,
 		addr: Multiaddr,
 		connection_messages: Vec<serde_json::Value>,
-		connection_sinks: Vec<TelemetryConnectionSinks>,
+		telemetry_connection_notifier: Vec<TelemetryConnectionNotifier>,
 	) -> Self {
 		Node {
 			addr,
 			socket: NodeSocket::ReconnectNow,
 			transport,
 			connection_messages,
-			connection_sinks,
+			telemetry_connection_notifier,
 		}
 	}
 }
@@ -166,7 +166,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 					Poll::Ready(Ok(sink)) => {
 						log::debug!(target: "telemetry", "✅ Connected to {}", self.addr);
 
-						for connection_sink in self.connection_sinks.iter() {
+						for connection_sink in self.telemetry_connection_notifier.iter() {
 							connection_sink.fire();
 						}
 
