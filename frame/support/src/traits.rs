@@ -1193,6 +1193,8 @@ pub trait Token<Source> {
 
 	type AssetId: Member + Parameter + Default + Copy + HasCompact;
 
+	type IsERC20Compatible: Get<bool>;
+
 	// PUBLIC IMMUTABLES
 	/// The total amount of issuance in the system for a specific asset.
 	fn total_issuance(id: Self::AssetId) -> Self::Balance;
@@ -1209,7 +1211,6 @@ pub trait Token<Source> {
 	fn balance_of(id: Self::AssetId, who: Source) -> Self::Balance;
 
 	/// Returns the remaining number of tokens a spender can spend for a specific asset.
-	#[cfg(feature = "erc20")]
 	fn allowance(id: Self::AssetId, owner: Source, spender: Source) -> Self::Balance;
 
 	// PUBLIC MUTABLES (DANGEROUS)
@@ -1219,16 +1220,13 @@ pub trait Token<Source> {
 
 	/// Approve some amount of an asset to be spent by another account.
 	/// NOTE: This adds the amount to the existing approvals for an account
-	#[cfg(feature = "erc20")]
 	fn approve(id: Self::AssetId, who: Source, spender: Source, amount: Self::Balance) -> DispatchResult;
 
 	/// Approve some amount of an asset to be spent by another account.
 	/// NOTE: This replaces the amount approved by the new amount provided.
-	#[cfg(feature = "erc20")]
 	fn set_approval(id: Self::AssetId, who: Source, spender: Source, amount: Self::Balance) -> DispatchResult;
 
 	/// Transfer some `amount` of tokens from an account `who` to another account `recipient`
-	#[cfg(feature = "erc20")]
 	fn transfer_from(id: Self::AssetId, spender: Source, who: Source, recipient: Source, amount: Self::Balance) -> DispatchResult;
 
 
