@@ -619,8 +619,8 @@ decl_module! {
 			Ok(None.into())
 		}
 
-		/// Clean all voters who are defunct (i.e. they do not serve any purpose at all). The deposit
-		/// of the removed voters are returned.
+		/// Clean all voters who are defunct (i.e. they do not serve any purpose at all). The
+		/// deposit of the removed voters are returned.
 		///
 		/// This is an root function to be used only for cleaning the state.
 		///
@@ -1062,7 +1062,10 @@ impl<T: Config> Contains<T::AccountId> for Module<T> {
 	fn contains(who: &T::AccountId) -> bool {
 		Self::is_member(who)
 	}
-	fn sorted_members() -> Vec<T::AccountId> { Self::members_ids() }
+
+	fn sorted_members() -> Vec<T::AccountId> {
+		Self::members_ids()
+	}
 
 	// A special function to populate members in this pallet for passing Origin
 	// checks in runtime benchmarking.
