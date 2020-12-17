@@ -604,7 +604,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> sp_blockchain::Result<ImportResult> where
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 			ApiExt<Block, StateBackend = B::State>,
 	{
 		let BlockImportParams {
@@ -696,7 +696,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_existing: bool,
 	) -> sp_blockchain::Result<ImportResult> where
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 				ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
@@ -838,7 +838,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<Option<ImportResult>>
 		where
 			Self: ProvideRuntimeApi<Block>,
-			<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+			<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 				ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = import_block.header.parent_hash();
@@ -1272,7 +1272,7 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 		Block: BlockT,
 		Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-			+ BlockBuilderApi<Block, Error = Error>,
+			+ BlockBuilderApi<Block>,
 {
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
@@ -1628,18 +1628,17 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 	E: CallExecutor<Block, Backend = B> + Send + Sync,
 	Block: BlockT,
 {
-	type Error = Error;
 	type StateBackend = B::State;
 
 	fn call_api_at<
 		'a,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-		C: CoreApi<Block, Error = Error>,
+		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
+		C: CoreApi<Block>,
 	>(
 		&self,
 		params: CallApiAtParams<'a, Block, C, NC, B::State>,
-	) -> sp_blockchain::Result<NativeOrEncoded<R>> {
+	) -> Result<NativeOrEncoded<R>, Box<dyn std::error::Error + Send + Sync>> {
 		let core_api = params.core_api;
 		let at = params.at;
 
@@ -1649,7 +1648,9 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 		);
 
 		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
-			|| core_api.initialize_block(at, &self.prepare_environment_block(at)?),
+			|| core_api
+				.initialize_block(at, &self.prepare_environment_block(at)?)
+				.map_err(Error::RuntimeApiError),
 			at,
 			params.function,
 			&params.arguments,
@@ -1661,11 +1662,14 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 			params.native_call,
 			params.recorder,
 			Some(extensions),
-		)
+		).map_err(|e| Box::new(e) as Box<_>)
 	}
 
-	fn runtime_version_at(&self, at: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		self.runtime_version_at(at)
+	fn runtime_version_at(
+		&self,
+		at: &BlockId<Block>,
+	) -> Result<RuntimeVersion, Box<dyn std::error::Error + Send + Sync>> {
+		self.runtime_version_at(at).map_err(|e| Box::new(e) as Box<_>)
 	}
 }
 
@@ -1677,7 +1681,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	E: CallExecutor<Block> + Send + Sync,
 	Block: BlockT,
 	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 		ApiExt<Block, StateBackend = B::State>,
 {
 	type Error = ConsensusError;
@@ -1777,7 +1781,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, R
 	E: CallExecutor<Block> + Send + Sync,
 	Block: BlockT,
 	Self: ProvideRuntimeApi<Block>,
-	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 		ApiExt<Block, StateBackend = B::State>,
 {
 	type Error = ConsensusError;
@@ -1948,7 +1952,7 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 		E: CallExecutor<Block>,
 		Block: BlockT,
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block>,
 {
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<
@@ -1978,7 +1982,7 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 		E: CallExecutor<Block>,
 		Block: BlockT,
 		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block>,
 {
 	fn insert_aux<
 		'a,

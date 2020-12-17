@@ -69,7 +69,7 @@ pub use sp_std::{slice, mem};
 #[cfg(feature = "std")]
 use sp_std::result;
 #[doc(hidden)]
-pub use codec::{Encode, Decode, DecodeLimit};
+pub use codec::{Encode, Decode, DecodeLimit, self};
 use sp_core::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::{panic::UnwindSafe, cell::RefCell};
@@ -248,8 +248,8 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 /// and the error type can be specified as associated type. If no error type is specified [`String`]
 /// is used as error type.
 ///
-/// Besides implementing the given traits, the [`Core`](sp_api::Core), [`ApiExt`](sp_api::ApiExt)
-/// and [`ApiErrorExt`](sp_api::ApiErrorExt) are implemented automatically.
+/// Besides implementing the given traits, the [`Core`](sp_api::Core) and [`ApiExt`](sp_api::ApiExt)
+/// are implemented automatically.
 ///
 /// # Example
 ///
@@ -395,46 +395,35 @@ pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {
 }
 
 /// An error describing which API call failed.
-#[cfg_attr(feature = "std", derive(Debug, thiserror::Error, Eq, PartialEq))]
-#[cfg_attr(feature = "std", error("Failed to execute API call {tag}"))]
 #[cfg(feature = "std")]
-pub struct ApiError {
-    tag: &'static str,
-    #[source]
-    error: codec::Error,
-}
-
-#[cfg(feature = "std")]
-impl From<(&'static str, codec::Error)> for ApiError {
-    fn from((tag, error): (&'static str, codec::Error)) -> Self {
-        Self {
-            tag,
-            error,
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl ApiError {
-	pub fn new(tag: &'static str, error: codec::Error) -> Self {
-		Self {
-			tag,
-			error,
-		}
-	}
-}
-
-/// Extends the runtime api traits with an associated error type. This trait is given as super
-/// trait to every runtime api trait.
-#[cfg(feature = "std")]
-pub trait ApiErrorExt {
-	/// Error type used by the runtime apis.
-	type Error: std::fmt::Debug + From<ApiError>;
+#[derive(Debug, thiserror::Error)]
+pub enum ApiError {
+	#[error("Failed to decode return value of {function}")]
+	FailedToDecodeReturnValue {
+		function: &'static str,
+		#[source]
+		error: codec::Error,
+	},
+	#[error("Failed to convert return value from runtime to node of {function}")]
+	FailedToConvertReturnValue {
+		function: &'static str,
+		#[source]
+		error: codec::Error,
+	},
+	#[error("Failed to convert parameter `{parameter}` from node to runtime of {function}")]
+	FailedToConvertParameter {
+		function: &'static str,
+		parameter: &'static str,
+		#[source]
+		error: codec::Error,
+	},
+	#[error("Application specific error")]
+	Application(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// Extends the runtime api implementation with some common functionality.
 #[cfg(feature = "std")]
-pub trait ApiExt<Block: BlockT>: ApiErrorExt {
+pub trait ApiExt<Block: BlockT> {
 	/// The state backend that is used to store the block states.
 	type StateBackend: StateBackend<HashFor<Block>>;
 
@@ -452,14 +441,14 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	fn has_api<A: RuntimeApiInfo + ?Sized>(
 		&self,
 		at: &BlockId<Block>,
-	) -> Result<bool, Self::Error> where Self: Sized;
+	) -> Result<bool, ApiError> where Self: Sized;
 
 	/// Check if the given api is implemented and the version passes a predicate.
 	fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 		&self,
 		at: &BlockId<Block>,
 		pred: P,
-	) -> Result<bool, Self::Error> where Self: Sized;
+	) -> Result<bool, ApiError> where Self: Sized;
 
 	/// Start recording all accessed trie nodes for generating proofs.
 	fn record_proof(&mut self);
@@ -480,7 +469,10 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 		backend: &Self::StateBackend,
 		changes_trie_state: Option<&ChangesTrieState<HashFor<Block>, NumberFor<Block>>>,
 		parent_hash: Block::Hash,
-	) -> Result<StorageChanges<Self::StateBackend, Block>, String> where Self: Sized;
+	) -> Result<
+		StorageChanges<Self::StateBackend, Block>,
+		String
+	> where Self: Sized;
 }
 
 /// Before calling any runtime api function, the runtime need to be initialized
@@ -537,9 +529,6 @@ pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashF
 /// Something that can call into the an api at a given block.
 #[cfg(feature = "std")]
 pub trait CallApiAt<Block: BlockT> {
-	/// Error type used by the implementation.
-	type Error: std::fmt::Debug + From<ApiError>;
-
 	/// The state backend that is used to store the block states.
 	type StateBackend: StateBackend<HashFor<Block>>;
 
@@ -548,15 +537,18 @@ pub trait CallApiAt<Block: BlockT> {
 	fn call_api_at<
 		'a,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-		C: Core<Block, Error = Self::Error>,
+		NC: FnOnce() -> result::Result<R, ApiError> + UnwindSafe,
+		C: Core<Block>,
 	>(
 		&self,
 		params: CallApiAtParams<'a, Block, C, NC, Self::StateBackend>,
-	) -> Result<NativeOrEncoded<R>, Self::Error>;
+	) -> Result<NativeOrEncoded<R>, Box<dyn std::error::Error + Send + Sync>>;
 
 	/// Returns the runtime version at the given block.
-	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, Self::Error>;
+	fn runtime_version_at(
+		&self,
+		at: &BlockId<Block>,
+	) -> Result<RuntimeVersion, Box<dyn std::error::Error + Send + Sync>>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
@@ -608,10 +600,6 @@ pub trait RuntimeApiInfo {
 	/// The version of the runtime api.
 	const VERSION: u32;
 }
-
-/// Extracts the `Api::Error` for a type that provides a runtime api.
-#[cfg(feature = "std")]
-pub type ApiErrorFor<T, Block> = <<T as ProvideRuntimeApi<Block>>::Api as ApiErrorExt>::Error;
 
 #[derive(codec::Encode, codec::Decode)]
 pub struct OldRuntimeVersion {

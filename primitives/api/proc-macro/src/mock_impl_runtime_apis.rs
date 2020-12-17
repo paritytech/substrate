@@ -73,17 +73,7 @@ fn implement_common_api_traits(
 		.map(|e| quote!(#e))
 		.unwrap_or_else(|| quote!( #crate_::ApiError ) );
 
-	// Quote using the span from `error_type` to generate nice error messages when the type is
-	// not implementing a trait or similar.
-	let api_error_ext = quote_spanned! { error_type.span() =>
-		impl #crate_::ApiErrorExt for #self_ty {
-			type Error = #error_type;
-		}
-	};
-
 	Ok(quote!(
-		#api_error_ext
-
 		impl #crate_::ApiExt<#block_type> for #self_ty {
 			type StateBackend = #crate_::InMemoryBackend<#crate_::HashFor<#block_type>>;
 

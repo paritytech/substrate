@@ -168,7 +168,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
 	>(
 		&self,
 		initialize_block_fn: IB,
@@ -213,7 +213,6 @@ where
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_state);
 				// It is important to extract the runtime code here before we create the proof
 				// recorder.
-				
 				let runtime_code = state_runtime_code.runtime_code()
 					.map_err(sp_blockchain::Error::RuntimeCode)?;
 				let runtime_code = self.check_override(runtime_code, at)?;

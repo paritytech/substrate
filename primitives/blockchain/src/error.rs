@@ -114,8 +114,8 @@ pub enum Error {
 	#[error("Error decoding call result of {0}")]
 	CallResultDecode(&'static str, #[source] CodecError),
 
-	#[error(transparent)]
-	RuntimeApiCodecError(#[from] ApiError),
+	#[error("Error at calling runtime api: {0}")]
+	RuntimeApiError(#[from] ApiError),
 
 	#[error("Runtime :code missing in storage")]
 	RuntimeCodeMissing,
@@ -152,7 +152,6 @@ pub enum Error {
 
 	#[error("Failed to get header for hash {0}")]
 	MissingHeader(String),
-
 
 	#[error("State Database error: {0}")]
 	StateDatabase(String),

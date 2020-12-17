@@ -96,16 +96,16 @@ pub enum Error {
 
 	#[error(transparent)]
 	RuntimeConstruction(#[from] WasmError),
-	
+
 	#[error("Shared memory is not supported")]
 	SharedMemUnsupported,
-	
+
 	#[error("Imported globals are not supported yet")]
 	ImportedGlobalsUnsupported,
-	
+
 	#[error("initializer expression can have only up to 2 expressions in wasm 1.0")]
 	InitializerHasTooManyExpressions,
-	
+
 	#[error("Invalid initializer expression provided {0}")]
 	InvalidInitializerExpression(String),
 }
