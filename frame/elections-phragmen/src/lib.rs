@@ -217,38 +217,36 @@ decl_storage! {
 				config.members.len() as u32 <= T::DesiredMembers::get(),
 				"Cannot accept more than DesiredMembers genesis member",
 			);
-			let members = config.members
-				.iter()
-				.map(|(ref member, ref stake)| {
-					// make sure they have enough stake
-					assert!(
-						T::Currency::free_balance(member) >= *stake,
-						"Genesis member does not have enough stake",
-					);
+			let members = config.members.iter().map(|(ref member, ref stake)| {
+				// make sure they have enough stake
+				assert!(
+					T::Currency::free_balance(member) >= *stake,
+					"Genesis member does not have enough stake",
+				);
 
-					// reserve candidacy bond and set as members.
-					T::Currency::reserve(&member, T::CandidacyBond::get())
-						.expect("Genesis member does not have enough balance to be a candidate");
+				// reserve candidacy bond and set as members.
+				T::Currency::reserve(&member, T::CandidacyBond::get())
+					.expect("Genesis member does not have enough balance to be a candidate");
 
-					// Note: all members will only vote for themselves, hence they must be given exactly
-					// their own stake as total backing. Any sane election should behave as such.
-					// Nonetheless, stakes will be updated for term 1 onwards according to the election.
-					Members::<T>::mutate(|members| {
-						match members.binary_search_by(|(a, _b)| a.cmp(member)) {
-							Ok(_) => panic!("Duplicate member in elections phragmen genesis: {}", member),
-							Err(pos) => members.insert(pos, (member.clone(), *stake)),
-						}
-					});
+				// Note: all members will only vote for themselves, hence they must be given exactly
+				// their own stake as total backing. Any sane election should behave as such.
+				// Nonetheless, stakes will be updated for term 1 onwards according to the election.
+				Members::<T>::mutate(|members| {
+					match members.binary_search_by(|(a, _b)| a.cmp(member)) {
+						Ok(_) => panic!("Duplicate member in elections phragmen genesis: {}", member),
+						Err(pos) => members.insert(pos, (member.clone(), *stake)),
+					}
+				});
 
-					// set self-votes to make persistent.
-					<Module<T>>::vote(
-						T::Origin::from(Some(member.clone()).into()),
-						vec![member.clone()],
-						*stake,
-					).expect("Genesis member could not vote.");
+				// set self-votes to make persistent.
+				<Module<T>>::vote(
+					T::Origin::from(Some(member.clone()).into()),
+					vec![member.clone()],
+					*stake,
+				).expect("Genesis member could not vote.");
 
-					member.clone()
-				}).collect::<Vec<T::AccountId>>();
+				member.clone()
+			}).collect::<Vec<T::AccountId>>();
 
 			// report genesis members to upstream, if any.
 			T::InitializeMembers::initialize_members(&members);
