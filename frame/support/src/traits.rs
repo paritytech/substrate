@@ -1209,49 +1209,64 @@ pub trait Token<Source> {
 	fn balance_of(id: Self::AssetId, who: Source) -> Self::Balance;
 
 	/// Returns the remaining number of tokens a spender can spend for a specific asset.
+	#[cfg(feature = "erc20")]
 	fn allowance(id: Self::AssetId, owner: Source, spender: Source) -> Self::Balance;
 
 	// PUBLIC MUTABLES (DANGEROUS)
 
 	/// Transfer some liquid free balance of an asset to another account.
-	fn transfer_asset(id: Self::AssetId, origin: Source, dest: Source, amount: Self::Balance) -> DispatchResult;
+	fn transfer(id: Self::AssetId, from: Source, to: Source, amount: Self::Balance) -> DispatchResult;
 
 	/// Approve some amount of an asset to be spent by another account.
+	/// NOTE: This adds the amount to the existing approvals for an account
+	#[cfg(feature = "erc20")]
 	fn approve(id: Self::AssetId, who: Source, spender: Source, amount: Self::Balance) -> DispatchResult;
 
+	/// Approve some amount of an asset to be spent by another account.
+	/// NOTE: This replaces the amount approved by the new amount provided.
+	#[cfg(feature = "erc20")]
+	fn set_approval(id: Self::AssetId, who: Source, spender: Source, amount: Self::Balance) -> DispatchResult;
+
 	/// Transfer some `amount` of tokens from an account `who` to another account `recipient`
-	fn transfer_from(id: Self::AssetId, who: Source, recipient: Source, amount: Self::Balance) -> DispatchResult;
+	#[cfg(feature = "erc20")]
+	fn transfer_from(id: Self::AssetId, spender: Source, who: Source, recipient: Source, amount: Self::Balance) -> DispatchResult;
 
 
 	/// Reduce the total number of assets a specific account owns for a specific asset.
 	///
 	/// Returns `Ok` iff the burn was successful.
 	/// `Err` with the reason why otherwise.
-	fn burn(id: Self::AssetId, origin: Source, who: Source, amount: Self::Balance) -> DispatchResult;
+	fn burn(id: Self::AssetId, who: Source, amount: Self::Balance) -> DispatchResult;
 
 	/// Increase the total issuance of of a specific asset by `amount` for a specific account.
 	///
 	/// Returns `Ok` iff the mint was successful.
 	/// `Err` with the reason why otherwise.
-	fn mint(id: Self::AssetId, origin: Source, beneficiary: Source, amount: Self::Balance) -> DispatchResult;
+	fn mint(id: Self::AssetId, beneficiary: Source, amount: Self::Balance) -> DispatchResult;
 
 	/// Freeze an amount of tokens for a specific account.
 	///
 	/// Returns `Ok` iff the mint was successful.
 	/// `Err` with the reason why otherwise.
-	fn freeze(id: Self::AssetId, origin: Source, who: Source) -> DispatchResult;
+	fn freeze(id: Self::AssetId, who: Source) -> DispatchResult;
 
 	/// Unfreeze an amount of tokens for a specific account.
 	///
 	/// Returns `Ok` iff the mint was successful.
 	/// `Err` with the reason why otherwise.
-	fn thaw(id: Self::AssetId, origin: Source, who: Source) -> DispatchResult;
+	fn thaw(id: Self::AssetId, who: Source) -> DispatchResult;
 
 	/// Transfer ownership of administrative functions for a specific token.
 	///
 	/// Returns `Ok` iff the ownership transfer was successful.
 	/// `Err` with the reason why otherwise.
-	fn transfer_ownership(id: Self::AssetId, origin: Source, owner: Source) -> DispatchResult;
+	fn transfer_ownership(id: Self::AssetId, owner: Source) -> DispatchResult;
+
+	/// Sets the team: Issuer, Admin, Freezer for a specific token
+	///
+	/// Returns `Ok` iff the team was successfully set.
+	/// `Err` with the reason why otherwise.
+	fn set_team(id: Self::AssetId, issuer: Source, admin: Source, freezer: Source) -> DispatchResult;
 }
 
 bitflags! {

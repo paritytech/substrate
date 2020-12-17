@@ -19,7 +19,7 @@ sp-std = { version = "2.0.0", default-features = false, path = "../../primitives
 # Needed for various traits. In our case, `OnFinalize`.
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 # Needed for type-safe access to storage DB.
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-support = { version = "2.0.0", default-features = false, path = "../support", features = ["erc20"]}
 # `system` module provides us with all sorts of useful stuff and macros depend on it being around.
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
@@ -31,7 +31,7 @@ sp-io = { version = "2.0.0", path = "../../primitives/io" }
 pallet-balances = { version = "2.0.0", default-features = false, path = "../balances" }
 
 [features]
-default = ["std"]
+default = ["std", "erc20"]
 std = [
 	"serde",
 	"codec/std",
@@ -41,6 +41,7 @@ std = [
 	"frame-system/std",
 	"frame-benchmarking/std",
 ]
+erc20 = []
 runtime-benchmarks = [
 	"frame-benchmarking",
 	"sp-runtime/runtime-benchmarks",

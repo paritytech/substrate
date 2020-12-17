@@ -134,7 +134,7 @@ pub trait Config: frame_system::Config {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The units in which we record balances.
-	type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy;
+	type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy + MaybeSerializeDeserialize + Debug;
 
 	/// The arithmetic type of asset identifier.
 	type AssetId: Member + Parameter + Default + Copy + HasCompact;
@@ -216,6 +216,7 @@ decl_storage! {
 
 		/// The number of units of assets being approved by one account to another
 		/// The ordering of from, to is sequential i.e (from, to)
+		#[cfg(feature = "erc20")]
 		pub Approvals: double_map
 			hasher(blake2_128_concat) T::AssetId,
 			hasher(blake2_128_concat) (T::AccountId, T::AccountId)
@@ -480,26 +481,10 @@ decl_module! {
 			#[compact] amount: T::Balance
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let beneficiary = T::Lookup::lookup(beneficiary)?;
+			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+			ensure!(&origin == &details.issuer, Error::<T>::NoPermission);
 
-			Asset::<T>::try_mutate(id, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-
-				ensure!(&origin == &details.issuer, Error::<T>::NoPermission);
-				details.supply = details.supply.checked_add(&amount).ok_or(Error::<T>::Overflow)?;
-
-				Account::<T>::try_mutate(id, &beneficiary, |t| -> DispatchResult {
-					let new_balance = t.balance.saturating_add(amount);
-					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
-					if t.balance.is_zero() {
-						t.is_zombie = Self::new_account(&beneficiary, details)?;
-					}
-					t.balance = new_balance;
-					Ok(())
-				})?;
-				Self::deposit_event(RawEvent::Issued(id, beneficiary, amount));
-				Ok(())
-			})
+			<Self as Token<_>>::mint(id, beneficiary, amount)
 		}
 
 		/// Reduce the balance of `who` by as much as possible up to `amount` assets of `id`.
@@ -524,35 +509,10 @@ decl_module! {
 			#[compact] amount: T::Balance
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let who = T::Lookup::lookup(who)?;
+			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+			ensure!(&origin == &details.admin, Error::<T>::NoPermission);
 
-			Asset::<T>::try_mutate(id, |maybe_details| {
-				let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-				ensure!(&origin == &d.admin, Error::<T>::NoPermission);
-
-				let burned = Account::<T>::try_mutate_exists(
-					id,
-					&who,
-					|maybe_account| -> Result<T::Balance, DispatchError> {
-						let mut account = maybe_account.take().ok_or(Error::<T>::BalanceZero)?;
-						let mut burned = amount.min(account.balance);
-						account.balance -= burned;
-						*maybe_account = if account.balance < d.min_balance {
-							burned += account.balance;
-							Self::dead_account(&who, d, account.is_zombie);
-							None
-						} else {
-							Some(account)
-						};
-						Ok(burned)
-					}
-				)?;
-
-				d.supply = d.supply.saturating_sub(burned);
-
-				Self::deposit_event(RawEvent::Burned(id, who, burned));
-				Ok(())
-			})
+			<Self as Token<_>>::burn(id, who, amount)
 		}
 
 		/// Move some assets from the sender account to another.
@@ -587,44 +547,14 @@ decl_module! {
 			origin_account.balance = origin_account.balance.checked_sub(&amount)
 				.ok_or(Error::<T>::BalanceLow)?;
 
-			let dest = T::Lookup::lookup(target)?;
-			Asset::<T>::try_mutate(id, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-
-				if dest == origin {
-					return Ok(())
-				}
-
-				let mut amount = amount;
-				if origin_account.balance < details.min_balance {
-					amount += origin_account.balance;
-					origin_account.balance = Zero::zero();
-				}
-
-				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
-					let new_balance = a.balance.saturating_add(amount);
-					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
-					if a.balance.is_zero() {
-						a.is_zombie = Self::new_account(&dest, details)?;
-					}
-					a.balance = new_balance;
+			match <Self as Token<_>>::transfer(id, T::Lookup::unlookup(origin.clone()), target.clone(), amount) {
+				Ok(_) => {
+					let target = T::Lookup::lookup(target)?;
+					Self::deposit_event(RawEvent::Transferred(id, origin, target, amount));
 					Ok(())
-				})?;
-
-				match origin_account.balance.is_zero() {
-					false => {
-						Self::dezombify(&origin, details, &mut origin_account.is_zombie);
-						Account::<T>::insert(id, &origin, &origin_account)
-					}
-					true => {
-						Self::dead_account(&origin, details, origin_account.is_zombie);
-						Account::<T>::remove(id, &origin);
-					}
-				}
-
-				Self::deposit_event(RawEvent::Transferred(id, origin, dest, amount));
-				Ok(())
-			})
+				},
+				Err(e) => Err(e),
+			}
 		}
 
 		/// Move some assets from one account to another.
@@ -655,50 +585,22 @@ decl_module! {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
+			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+			ensure!(&origin == &details.admin, Error::<T>::NoPermission);
+
 			let source = T::Lookup::lookup(source)?;
-			let mut source_account = Account::<T>::get(id, &source);
-			let mut amount = amount.min(source_account.balance);
+			let source_account = Account::<T>::get(id, &source);
+			let amount = amount.min(source_account.balance);
 			ensure!(!amount.is_zero(), Error::<T>::AmountZero);
 
-			let dest = T::Lookup::lookup(dest)?;
-			if dest == source {
-				return Ok(())
-			}
-
-			Asset::<T>::try_mutate(id, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-				ensure!(&origin == &details.admin, Error::<T>::NoPermission);
-
-				source_account.balance -= amount;
-				if source_account.balance < details.min_balance {
-					amount += source_account.balance;
-					source_account.balance = Zero::zero();
-				}
-
-				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
-					let new_balance = a.balance.saturating_add(amount);
-					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
-					if a.balance.is_zero() {
-						a.is_zombie = Self::new_account(&dest, details)?;
-					}
-					a.balance = new_balance;
+			match <Self as Token<_>>::transfer(id, T::Lookup::unlookup(source.clone()), dest.clone(), amount) {
+				Ok(_) => {
+					let dest = T::Lookup::lookup(dest)?;
+					Self::deposit_event(RawEvent::Transferred(id, source, dest, amount));
 					Ok(())
-				})?;
-
-				match source_account.balance.is_zero() {
-					false => {
-						Self::dezombify(&source, details, &mut source_account.is_zombie);
-						Account::<T>::insert(id, &source, &source_account)
-					}
-					true => {
-						Self::dead_account(&source, details, source_account.is_zombie);
-						Account::<T>::remove(id, &source);
-					}
-				}
-
-				Self::deposit_event(RawEvent::ForceTransferred(id, source, dest, amount));
-				Ok(())
-			})
+				},
+				Err(e) => Err(e),
+			}
 		}
 
 		/// Disallow further unprivileged transfers from an account.
@@ -717,12 +619,8 @@ decl_module! {
 
 			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
 			ensure!(&origin == &d.freezer, Error::<T>::NoPermission);
-			let who = T::Lookup::lookup(who)?;
-			ensure!(Account::<T>::contains_key(id, &who), Error::<T>::BalanceZero);
-
-			Account::<T>::mutate(id, &who, |a| a.is_frozen = true);
-
-			Self::deposit_event(Event::<T>::Frozen(id, who));
+			
+			let _ = <Self as Token<_>>::freeze(id, who)?;
 		}
 
 		/// Allow unprivileged transfers from an account again.
@@ -741,12 +639,8 @@ decl_module! {
 
 			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
 			ensure!(&origin == &details.admin, Error::<T>::NoPermission);
-			let who = T::Lookup::lookup(who)?;
-			ensure!(Account::<T>::contains_key(id, &who), Error::<T>::BalanceZero);
-
-			Account::<T>::mutate(id, &who, |a| a.is_frozen = false);
-
-			Self::deposit_event(Event::<T>::Thawed(id, who));
+			
+			let _ = <Self as Token<_>>::thaw(id, who)?;
 		}
 
 		/// Change the Owner of an asset.
@@ -765,21 +659,10 @@ decl_module! {
 			owner: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let owner = T::Lookup::lookup(owner)?;
+			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+			ensure!(&origin == &details.owner, Error::<T>::NoPermission);
 
-			Asset::<T>::try_mutate(id, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-				ensure!(&origin == &details.owner, Error::<T>::NoPermission);
-				if details.owner == owner { return Ok(()) }
-
-				// Move the deposit to the new owner.
-				T::Currency::repatriate_reserved(&details.owner, &owner, details.deposit, Reserved)?;
-
-				details.owner = owner.clone();
-
-				Self::deposit_event(RawEvent::OwnerChanged(id, owner));
-				Ok(())
-			})
+			<Self as Token<_>>::transfer_ownership(id, owner)
 		}
 
 		/// Change the Issuer, Admin and Freezer of an asset.
@@ -802,21 +685,11 @@ decl_module! {
 			freezer: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let issuer = T::Lookup::lookup(issuer)?;
-			let admin = T::Lookup::lookup(admin)?;
-			let freezer = T::Lookup::lookup(freezer)?;
 
-			Asset::<T>::try_mutate(id, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-				ensure!(&origin == &details.owner, Error::<T>::NoPermission);
+			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+			ensure!(&origin == &details.admin, Error::<T>::NoPermission);
 
-				details.issuer = issuer.clone();
-				details.admin = admin.clone();
-				details.freezer = freezer.clone();
-
-				Self::deposit_event(RawEvent::TeamChanged(id, issuer, admin, freezer));
-				Ok(())
-			})
+			<Self as Token<_>>::set_team(id, issuer, admin, freezer)
 		}
 
 		#[weight = T::WeightInfo::set_max_zombies()]
@@ -934,6 +807,7 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	}
 
 	/// Returns the remaining number of tokens a spender can spend for a specific asset.
+	#[cfg(feature = "erc20")]
 	fn allowance(id: Self::AssetId, owner: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source) -> Self::Balance {
 		let owner = match T::Lookup::lookup(owner) {
 			Ok(acc) => acc,
@@ -950,27 +824,24 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 
 	// PUBLIC MUTABLES (DANGEROUS)
 
-	fn transfer_asset(id: Self::AssetId, origin: <T::Lookup as StaticLookup>::Source, dest: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
-		ensure!(!amount.is_zero(), Error::<T>::AmountZero);
-
-		let origin = T::Lookup::lookup(origin)?;
+	fn transfer(id: Self::AssetId, from: <T::Lookup as StaticLookup>::Source, dest: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+		let from = T::Lookup::lookup(from)?;
 		let dest = T::Lookup::lookup(dest)?;
-		let mut origin_account = Account::<T>::get(id, &origin);
-		ensure!(!origin_account.is_frozen, Error::<T>::Frozen);
-		origin_account.balance = origin_account.balance.checked_sub(&amount)
+		let mut from_account = Account::<T>::get(id, &from);
+		from_account.balance = from_account.balance.checked_sub(&amount)
 			.ok_or(Error::<T>::BalanceLow)?;
+
+		if dest == from {
+			return Ok(())
+		}
 
 		Asset::<T>::try_mutate(id, |maybe_details| {
 			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 
-			if dest == origin {
-				return Ok(())
-			}
-
 			let mut amount = amount;
-			if origin_account.balance < details.min_balance {
-				amount += origin_account.balance;
-				origin_account.balance = Zero::zero();
+			if from_account.balance < details.min_balance {
+				amount += from_account.balance;
+				from_account.balance = Zero::zero();
 			}
 
 			Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
@@ -983,22 +854,22 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 				Ok(())
 			})?;
 
-			match origin_account.balance.is_zero() {
+			match from_account.balance.is_zero() {
 				false => {
-					Self::dezombify(&origin, details, &mut origin_account.is_zombie);
-					Account::<T>::insert(id, &origin, &origin_account)
+					Self::dezombify(&from, details, &mut from_account.is_zombie);
+					Account::<T>::insert(id, &from, &from_account)
 				}
 				true => {
-					Self::dead_account(&origin, details, origin_account.is_zombie);
-					Account::<T>::remove(id, &origin);
+					Self::dead_account(&from, details, from_account.is_zombie);
+					Account::<T>::remove(id, &from);
 				}
 			}
 
-			Self::deposit_event(RawEvent::Transferred(id, origin, dest, amount));
 			Ok(())
 		})
 	}
 
+	#[cfg(feature = "erc20")]
 	fn approve(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
 		let who = T::Lookup::lookup(who)?;
 		let spender = T::Lookup::lookup(spender)?;
@@ -1006,22 +877,37 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		Ok(())
 	}
 
-	fn transfer_from(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, recipient: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+	#[cfg(feature = "erc20")]
+	fn set_approval(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+		let who = T::Lookup::lookup(who)?;
+		let spender = T::Lookup::lookup(spender)?;
+		Approvals::<T>::mutate(id, (who, spender), |b| *b = amount);
+		Ok(())
+	}
+
+	#[cfg(feature = "erc20")]
+	fn transfer_from(id: Self::AssetId, spender: <T::Lookup as StaticLookup>::Source, who: <T::Lookup as StaticLookup>::Source, recipient: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
 		ensure!(!amount.is_zero(), Error::<T>::AmountZero);
 		// check allowance
-		let allowance = Self::allowance(id, who.clone(), recipient.clone());
+		let allowance = Self::allowance(id, who.clone(), spender.clone());
 		ensure!(allowance >= amount, Error::<T>::AllowanceTooLow);
 		// transfer if allowance is sufficient
 		// frozen errors will be handled in transfer method
-		Self::transfer_asset(id, who, recipient, amount)
+		match <Self as Token<_>>::transfer(id, who.clone(), recipient, amount) {
+			Ok(_) => {
+				let who = T::Lookup::lookup(who)?;
+				let spender = T::Lookup::lookup(spender)?;
+				Approvals::<T>::mutate(id, (who, spender), |b| *b -= amount);
+				Ok(())
+			},
+			Err(e) => Err(e),
+		}
 	}
 
-	fn burn(id: Self::AssetId, origin: <T::Lookup as StaticLookup>::Source, who: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+	fn burn(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
 		let who = T::Lookup::lookup(who)?;
-		let origin = T::Lookup::lookup(origin)?;
 		Asset::<T>::try_mutate(id, |maybe_details| {
 			let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-			ensure!(&origin == &d.admin, Error::<T>::NoPermission);
 
 			let burned = Account::<T>::try_mutate_exists(
 				id,
@@ -1048,14 +934,11 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		})
 	}
 
-	fn mint(id: Self::AssetId, origin: <T::Lookup as StaticLookup>::Source, beneficiary: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
-		let origin = T::Lookup::lookup(origin)?;
+	fn mint(id: Self::AssetId, beneficiary: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
 		let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 		Asset::<T>::try_mutate(id, |maybe_details| {
 			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-
-			ensure!(&origin == &details.issuer, Error::<T>::NoPermission);
 			details.supply = details.supply.checked_add(&amount).ok_or(Error::<T>::Overflow)?;
 
 			Account::<T>::try_mutate(id, &beneficiary, |t| -> DispatchResult {
@@ -1072,11 +955,7 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		})
 	}
 
-	fn freeze(id: Self::AssetId, origin: <T::Lookup as StaticLookup>::Source, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
-		let origin = T::Lookup::lookup(origin)?;
-		let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
-		ensure!(&origin == &d.freezer, Error::<T>::NoPermission);
-		
+	fn freeze(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 		let who = T::Lookup::lookup(who)?;
 		ensure!(Account::<T>::contains_key(id, &who), Error::<T>::BalanceZero);
 
@@ -1086,11 +965,7 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		Ok(())
 	}
 
-	fn thaw(id: Self::AssetId, origin: <T::Lookup as StaticLookup>::Source, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
-		let origin = T::Lookup::lookup(origin)?;
-		let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
-		ensure!(&origin == &details.admin, Error::<T>::NoPermission);
-
+	fn thaw(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 		let who = T::Lookup::lookup(who)?;
 		ensure!(Account::<T>::contains_key(id, &who), Error::<T>::BalanceZero);
 
@@ -1100,13 +975,11 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		Ok(())
 	}
 
-	fn transfer_ownership(id: Self::AssetId, origin: <T::Lookup as StaticLookup>::Source, owner: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
-		let origin = T::Lookup::lookup(origin)?;
+	fn transfer_ownership(id: Self::AssetId, owner: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 		let owner = T::Lookup::lookup(owner)?;
 
 		Asset::<T>::try_mutate(id, |maybe_details| {
 			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-			ensure!(&origin == &details.owner, Error::<T>::NoPermission);
 			if details.owner == owner { return Ok(()) }
 
 			// Move the deposit to the new owner.
@@ -1115,6 +988,23 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 			details.owner = owner.clone();
 
 			Self::deposit_event(RawEvent::OwnerChanged(id, owner));
+			Ok(())
+		})
+	}
+
+	fn set_team(id: Self::AssetId, issuer: <T::Lookup as StaticLookup>::Source, admin: <T::Lookup as StaticLookup>::Source, freezer: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		let issuer = T::Lookup::lookup(issuer)?;
+		let admin = T::Lookup::lookup(admin)?;
+		let freezer = T::Lookup::lookup(freezer)?;
+
+		Asset::<T>::try_mutate(id, |maybe_details| {
+			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+
+			details.issuer = issuer.clone();
+			details.admin = admin.clone();
+			details.freezer = freezer.clone();
+
+			Self::deposit_event(RawEvent::TeamChanged(id, issuer, admin, freezer));
 			Ok(())
 		})
 	}
@@ -1518,6 +1408,57 @@ mod tests {
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 2), 0);
 			assert_noop!(Assets::burn(Origin::signed(1), 0, 2, u64::max_value()), Error::<Test>::BalanceZero);
+		});
+	}
+
+	#[test]
+	#[cfg(feature = "erc20")]
+	fn creating_approvals_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_ok!(Assets::approve(0, 1, 2, 50));
+			assert_eq!(Assets::allowance(0, 1, 2), 50);
+			assert_ok!(Assets::approve(0, 1, 2, 50));
+			assert_eq!(Assets::allowance(0, 1, 2), 100);
+		});
+	}
+
+	#[test]
+	#[cfg(feature = "erc20")]
+	fn setting_approvals_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_ok!(Assets::approve(0, 1, 2, 50));
+			assert_eq!(Assets::allowance(0, 1, 2), 50);
+			assert_ok!(Assets::set_approval(0, 1, 2, 0));
+			assert_eq!(Assets::allowance(0, 1, 2), 0);
+		});
+	}
+
+	#[test]
+	#[cfg(feature = "erc20")]
+	fn spending_approved_assets_works() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_ok!(Assets::approve(0, 1, 2, 50));
+			assert_eq!(Assets::allowance(0, 1, 2), 50);
+			assert_ok!(Assets::transfer_from(0, 2, 1, 3, 50));
+			assert_eq!(Assets::allowance(0, 1, 2), 0);
+		});
+	}
+
+	#[test]
+	#[cfg(feature = "erc20")]
+	fn spending_approved_assets_without_enough_allowance_should_not_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_ok!(Assets::approve(0, 1, 2, 50));
+			assert_eq!(Assets::allowance(0, 1, 2), 50);
+			assert_noop!(Assets::transfer_from(0, 2, 1, 3, 100), Error::<Test>::AllowanceTooLow);
 		});
 	}
 }

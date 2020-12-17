@@ -40,7 +40,7 @@ substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/ru
 sp-api = { version = "2.0.0", default-features = false, path = "../../primitives/api" }
 
 [features]
-default = ["std"]
+default = ["std", "erc20"]
 std = [
 	"once_cell",
 	"serde",
@@ -55,6 +55,7 @@ std = [
 	"sp-state-machine",
 	"frame-support-procedural/std",
 ]
+erc20 = []
 nightly = []
 strict = []
 runtime-benchmarks = []
