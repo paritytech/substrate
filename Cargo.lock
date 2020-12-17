@@ -7367,9 +7367,7 @@ dependencies = [
  "tracing-futures",
  "tracing-log",
  "tracing-subscriber",
- "wasm-bindgen",
  "wasm-timer",
- "web-sys",
 ]
 
 [[package]]
