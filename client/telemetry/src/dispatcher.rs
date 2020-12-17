@@ -125,7 +125,7 @@ impl Sink<(Multiaddr, String)> for Dispatcher {
 		Ok(())
 	}
 
-	fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
 		self.try_empty_buffer(cx)
 	}
 

@@ -295,10 +295,8 @@ mod tests {
 	const EXPECTED_LOG_MESSAGE: &'static str = "yeah logging works as expected";
 	const EXPECTED_NODE_NAME: &'static str = "THE_NODE";
 
-	fn init_logger(pattern: &str) -> tracing::subscriber::DefaultGuard {
-		let (subscriber, _telemetry_worker) =
-			get_default_subscriber_and_telemetry_worker(pattern, None, false).unwrap();
-		tracing::subscriber::set_default(subscriber)
+	fn init_logger(pattern: &str) {
+		let _ = GlobalLoggerBuilder::new(pattern).init().unwrap();
 	}
 
 	#[test]
