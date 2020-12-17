@@ -2,7 +2,7 @@ error: `on_initialize` can only be passed once as input.
   --> $DIR/reserved_keyword_two_times_on_initialize.rs:1:1
    |
 1  | / frame_support::decl_module! {
-2  | |     pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
+2  | |     pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 3  | |         fn on_initialize() -> Weight {
 4  | |             0
 ...  |
@@ -16,7 +16,7 @@ error[E0601]: `main` function not found in crate `$CRATE`
   --> $DIR/reserved_keyword_two_times_on_initialize.rs:1:1
    |
 1  | / frame_support::decl_module! {
-2  | |     pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
+2  | |     pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 3  | |         fn on_initialize() -> Weight {
 4  | |             0
 ...  |

@@ -18,7 +18,7 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions for {{pallet}}.
 pub struct WeightInfo<T>(PhantomData<T>);
-impl<T: frame_system::Trait> {{pallet}}::WeightInfo for WeightInfo<T> {
+impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 	{{~#each benchmarks as |benchmark|}}
 	fn {{benchmark.name~}}
 	(
@@ -27,6 +27,7 @@ impl<T: frame_system::Trait> {{pallet}}::WeightInfo for WeightInfo<T> {
 	) -> Weight {
 		({{underscore benchmark.base_weight}} as Weight)
 			{{~#each benchmark.component_weight as |cw|}}
+			// Standard Error: {{underscore cw.error}}
 			.saturating_add(({{underscore cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight))
 			{{~/each}}
 			{{~#if (ne benchmark.base_reads "0")}}

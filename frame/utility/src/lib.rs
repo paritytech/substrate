@@ -18,7 +18,7 @@
 //! # Utility Module
 //! A stateless module with helpers for dispatch management which does no re-authentication.
 //!
-//! - [`utility::Trait`](./trait.Trait.html)
+//! - [`utility::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
@@ -50,7 +50,7 @@
 //! * `as_derivative` - Dispatch a call from a derivative signed origin.
 //!
 //! [`Call`]: ./enum.Call.html
-//! [`Trait`]: ./trait.Trait.html
+//! [`Config`]: ./trait.Config.html
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -74,9 +74,9 @@ use sp_runtime::{DispatchError, traits::Dispatchable};
 pub use weights::WeightInfo;
 
 /// Configuration trait.
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
@@ -88,7 +88,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Utility {}
+	trait Store for Module<T: Config> as Utility {}
 }
 
 decl_event! {
@@ -111,7 +111,7 @@ impl TypeId for IndexedUtilityModuleId {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
@@ -122,7 +122,7 @@ decl_module! {
 		/// - `calls`: The calls to be dispatched from the same origin.
 		///
 		/// If origin is root then call are dispatch without checking origin filter. (This includes
-		/// bypassing `frame_system::Trait::BaseCallFilter`).
+		/// bypassing `frame_system::Config::BaseCallFilter`).
 		///
 		/// # <weight>
 		/// - Complexity: O(C) where C is the number of calls to be batched.
@@ -149,7 +149,7 @@ decl_module! {
 				}
 			},
 		)]
-		fn batch(origin, calls: Vec<<T as Trait>::Call>) -> DispatchResultWithPostInfo {
+		fn batch(origin, calls: Vec<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			// Track the actual weight of each of the batch calls.
@@ -197,7 +197,7 @@ decl_module! {
 				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 			call.get_dispatch_info().class,
 		)]
-		fn as_derivative(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResultWithPostInfo {
+		fn as_derivative(origin, index: u16, call: Box<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let mut origin = origin;
 			let who = ensure_signed(origin.clone())?;
 			let pseudonym = Self::derivative_account_id(who, index);
@@ -222,7 +222,7 @@ decl_module! {
 		/// - `calls`: The calls to be dispatched from the same origin.
 		///
 		/// If origin is root then call are dispatch without checking origin filter. (This includes
-		/// bypassing `frame_system::Trait::BaseCallFilter`).
+		/// bypassing `frame_system::Config::BaseCallFilter`).
 		///
 		/// # <weight>
 		/// - Complexity: O(C) where C is the number of calls to be batched.
@@ -244,7 +244,7 @@ decl_module! {
 			},
 		)]
 		#[transactional]
-		fn batch_all(origin, calls: Vec<<T as Trait>::Call>) -> DispatchResultWithPostInfo {
+		fn batch_all(origin, calls: Vec<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			// Track the actual weight of each of the batch calls.
@@ -274,7 +274,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Derive a derivative account ID from the owner account and the sub-account index.
 	pub fn derivative_account_id(who: T::AccountId, index: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);

@@ -44,7 +44,7 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 
 /// Default maximum block size in bytes used by [`Proposer`].
 ///
-/// Can be overwritten by [`ProposerFactory::set_maxium_block_size`].
+/// Can be overwritten by [`ProposerFactory::set_maximum_block_size`].
 ///
 /// Be aware that there is also an upper packet size on what the networking code
 /// will accept. If the block doesn't fit in such a package, it can not be
@@ -208,10 +208,7 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 		}));
 
 		async move {
-			match rx.await {
-				Ok(x) => x,
-				Err(err) => Err(sp_blockchain::Error::Msg(err.to_string()))
-			}
+			rx.await?
 		}.boxed()
 	}
 }

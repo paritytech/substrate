@@ -79,12 +79,12 @@ impl<'a> MaybeColorWriter<'a> {
 	}
 }
 
-pub(crate) struct EventFormat<T = SystemTime> {
-	pub(crate) timer: T,
-	pub(crate) display_target: bool,
-	pub(crate) display_level: bool,
-	pub(crate) display_thread_name: bool,
-	pub(crate) enable_color: bool,
+pub struct EventFormat<T = SystemTime> {
+	pub timer: T,
+	pub display_target: bool,
+	pub display_level: bool,
+	pub display_thread_name: bool,
+	pub enable_color: bool,
 }
 
 // NOTE: the following code took inspiration from tracing-subscriber
@@ -147,7 +147,7 @@ where
 	}
 }
 
-pub(crate) struct NodeNameLayer;
+pub struct NodeNameLayer;
 
 impl<S> Layer<S> for NodeNameLayer
 where

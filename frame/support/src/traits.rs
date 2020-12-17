@@ -1653,16 +1653,16 @@ pub trait EnsureOrigin<OuterOrigin> {
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
 /// `construct_runtime` and `impl_outer_dispatch`.
 pub trait UnfilteredDispatchable {
-	/// The origin type of the runtime, (i.e. `frame_system::Trait::Origin`).
+	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
 	type Origin;
 
 	/// Dispatch this call but do not check the filter in origin.
 	fn dispatch_bypass_filter(self, origin: Self::Origin) -> crate::dispatch::DispatchResultWithPostInfo;
 }
 
-/// Methods available on `frame_system::Trait::Origin`.
+/// Methods available on `frame_system::Config::Origin`.
 pub trait OriginTrait: Sized {
-	/// Runtime call type, as in `frame_system::Trait::Call`
+	/// Runtime call type, as in `frame_system::Config::Call`
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
@@ -1674,7 +1674,7 @@ pub trait OriginTrait: Sized {
 	/// Add a filter to the origin.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
 
-	/// Reset origin filters to default one, i.e `frame_system::Trait::BaseCallFilter`.
+	/// Reset origin filters to default one, i.e `frame_system::Config::BaseCallFilter`.
 	fn reset_filter(&mut self);
 
 	/// Replace the caller with caller from the other origin
@@ -1686,13 +1686,13 @@ pub trait OriginTrait: Sized {
 	/// Get the caller.
 	fn caller(&self) -> &Self::PalletsOrigin;
 
-	/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+	/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
 	fn none() -> Self;
 
 	/// Create with system root origin and no filter.
 	fn root() -> Self;
 
-	/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+	/// Create with system signed origin and `frame-system::Config::BaseCallFilter`.
 	fn signed(by: Self::AccountId) -> Self;
 }
 
@@ -1731,13 +1731,19 @@ pub trait Instance: 'static {
 	const PREFIX: &'static str;
 }
 
-/// An instance of a storage.
+/// An instance of a storage in a pallet.
 ///
-/// It is required the the couple `(PalletInfo::name<Pallet>(), STORAGE_PREFIX)` is unique.
-/// Any storage with same couple will collide.
+/// Define an instance for an individual storage inside a pallet.
+/// The pallet prefix is used to isolate the storage between pallets, and the storage prefix is
+/// used to isolate storages inside a pallet.
+///
+/// NOTE: These information can be used to define storages in pallet such as a `StorageMap` which
+/// can use keys after `twox_128(pallet_prefix())++twox_128(STORAGE_PREFIX)`
 pub trait StorageInstance {
-	type Pallet: 'static;
-	type PalletInfo: PalletInfo;
+	/// Prefix of a pallet to isolate it from other pallets.
+	fn pallet_prefix() -> &'static str;
+
+	/// Prefix given to a storage to isolate from other storages in the pallet.
 	const STORAGE_PREFIX: &'static str;
 }
 
@@ -1895,7 +1901,7 @@ impl PalletVersion {
 
 	/// Returns the storage key for a pallet version.
 	///
-	/// See [`PALLET_VERSION_STORAGE_KEY_POSTIFX`] on how this key is built.
+	/// See [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] on how this key is built.
 	///
 	/// Returns `None` if the given `PI` returned a `None` as name for the given
 	/// `Pallet`.
