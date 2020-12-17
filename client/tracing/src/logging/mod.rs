@@ -22,14 +22,16 @@
 
 #![warn(missing_docs)]
 
+mod directives;
 mod event_format;
 mod layers;
 
 pub use sc_tracing_proc_macro::*;
+pub use directives::*;
 
 use tracing::Subscriber;
 use tracing_subscriber::{
-	filter::Directive, fmt::time::ChronoLocal, layer::{self, SubscriberExt}, registry::LookupSpan,
+	fmt::time::ChronoLocal, layer::{self, SubscriberExt}, registry::LookupSpan,
 	FmtSubscriber, Layer, EnvFilter, fmt::{SubscriberBuilder, format, FormatFields, MakeWriter, FormatEvent, Formatter, Layer as FmtLayer},
 	Registry,
 };
@@ -41,7 +43,7 @@ macro_rules! disable_log_reloading {
 	($builder:expr) => {{
 		let builder = $builder.with_filter_reloading();
 		let handle = builder.reload_handle();
-		$crate::set_reload_handle(handle);
+		set_reload_handle(handle);
 		builder
 	}};
 }
@@ -60,7 +62,7 @@ pub fn get_default_subscriber_and_telemetry_worker(
 	String,
 > {
 	get_default_subscriber_and_telemetry_worker_internal(
-		parse_directives(pattern),
+		pattern,
 		telemetry_external_transport,
 		|builder| builder,
 	)
@@ -82,7 +84,7 @@ pub fn get_default_subscriber_and_telemetry_worker_with_log_reloading(
 	String,
 > {
 	get_default_subscriber_and_telemetry_worker_internal(
-		parse_directives(pattern),
+		pattern,
 		telemetry_external_transport,
 		|builder| disable_log_reloading!(builder),
 	)
@@ -105,9 +107,7 @@ pub fn get_default_subscriber_and_telemetry_worker_with_profiling(
 	String,
 > {
 	let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker_internal(
-		parse_directives(pattern)
-			.into_iter()
-			.chain(parse_directives(profiling_targets).into_iter()),
+		&format!("{},{}", pattern, profiling_targets),
 		telemetry_external_transport,
 		|builder| builder,
 	)?;
@@ -134,9 +134,7 @@ pub fn get_default_subscriber_and_telemetry_worker_with_profiling_and_log_reload
 	String,
 > {
 	let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker_internal(
-		parse_directives(pattern)
-			.into_iter()
-			.chain(parse_directives(profiling_targets).into_iter()),
+		&format!("{},{}", pattern, profiling_targets),
 		telemetry_external_transport,
 		|builder| disable_log_reloading!(builder),
 	)?;
@@ -148,7 +146,7 @@ pub fn get_default_subscriber_and_telemetry_worker_with_profiling_and_log_reload
 // Common implementation for `get_default_subscriber_and_telemetry_worker` and
 // `get_default_subscriber_and_telemetry_worker_with_profiling`.
 fn get_default_subscriber_and_telemetry_worker_internal<N, E, F, W>(
-	extra_directives: impl IntoIterator<Item = Directive>,
+	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
 	builder_hook: impl Fn(SubscriberBuilder<format::DefaultFields, EventFormat<ChronoLocal>, EnvFilter, fn() -> std::io::Stderr>) -> SubscriberBuilder<N, E, F, W>,
 ) -> std::result::Result<
@@ -165,7 +163,13 @@ where
 	F: layer::Layer<Formatter<N, E, W>> + Send + Sync + 'static,
 	FmtLayer<Registry, N, E, W>: layer::Layer<Registry> + Send + Sync + 'static,
 {
-	use crate::parse_default_directive;
+	// Accept all valid directives and print invalid ones
+	fn parse_user_directives(mut env_filter: EnvFilter, dirs: &str) -> std::result::Result<EnvFilter, String> {
+		for dir in dirs.split(',') {
+			env_filter = env_filter.add_directive(parse_default_directive(&dir)?);
+		}
+		Ok(env_filter)
+	}
 
 	if let Err(e) = tracing_log::LogTracer::init() {
 		return Err(format!("Registering Substrate logger failed: {:}!", e));
@@ -191,17 +195,15 @@ where
 			.expect("provided directive is valid"));
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		// We're not sure if log or tracing is available at this moment, so silently ignore the
-		// parse error.
-		for directive in parse_directives(lvl) {
-			env_filter = env_filter.add_directive(directive);
+		if lvl != "" {
+			env_filter = parse_user_directives(env_filter, &lvl)?;
 		}
 	}
 
-	for directive in extra_directives {
+	if pattern != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
 		// parse error.
-		env_filter = env_filter.add_directive(directive);
+		env_filter = parse_user_directives(env_filter, pattern)?;
 	}
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
@@ -216,10 +218,6 @@ where
 	// it is always raised to `TRACE`.
 	env_filter = env_filter.add_directive(
 		parse_default_directive("sc_tracing=trace").expect("provided directive is valid")
-	);
-	env_filter = env_filter.add_directive(
-		// TODO
-		parse_default_directive("telemetry-logger=trace").expect("provided directive is valid")
 	);
 
 	let enable_color = atty::is(atty::Stream::Stderr);
@@ -264,11 +262,6 @@ where
 	let subscriber = subscriber.with(ConsoleLogLayer::new(event_format));
 
 	Ok((subscriber, telemetry_worker))
-}
-
-// Transform a string of comma separated logging directive into a `Vec<Directive>`.
-fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
-	dirs.as_ref().split(',').filter_map(|s| s.parse().ok()).collect()
 }
 
 #[cfg(test)]
