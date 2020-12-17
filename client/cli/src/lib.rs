@@ -44,9 +44,6 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
-use sc_tracing::logging;
-#[doc(hidden)]
-pub use tracing;
 
 /// Substrate client CLI
 ///
@@ -228,77 +225,4 @@ pub trait SubstrateCli: Sized {
 
 	/// Native runtime version.
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
-}
-
-/// Initialize the global logger
-///
-/// This sets various global logging and tracing instances and thus may only be called once.
-pub fn init_logging_and_telemetry(
-	pattern: &str,
-	tracing_receiver: sc_tracing::TracingReceiver,
-	profiling_targets: Option<&str>,
-	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
-	disable_log_reloading: bool,
-) -> std::result::Result<sc_telemetry::TelemetryWorker, String> {
-	Ok(if let Some(profiling_targets) = profiling_targets {
-		if disable_log_reloading {
-			let (subscriber, telemetry_worker) = logging::get_default_subscriber_and_telemetry_worker_with_profiling(
-				pattern,
-				telemetry_external_transport,
-				tracing_receiver,
-				profiling_targets,
-			)?;
-
-			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-				return Err(format!(
-					"Registering Substrate tracing subscriber failed: {:}!", e
-				))
-			}
-
-			telemetry_worker
-		} else {
-			let (subscriber, telemetry_worker) = logging::get_default_subscriber_and_telemetry_worker_with_profiling_and_log_reloading(
-				pattern,
-				telemetry_external_transport,
-				tracing_receiver,
-				profiling_targets,
-			)?;
-
-			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-				return Err(format!(
-					"Registering Substrate tracing subscriber failed: {:}!", e
-				))
-			}
-
-			telemetry_worker
-		}
-	} else {
-		if disable_log_reloading {
-			let (subscriber, telemetry_worker) = logging::get_default_subscriber_and_telemetry_worker(
-				pattern,
-				telemetry_external_transport,
-			)?;
-
-			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-				return Err(format!(
-					"Registering Substrate tracing subscriber failed: {:}!", e
-				))
-			}
-
-			telemetry_worker
-		} else {
-			let (subscriber, telemetry_worker) = logging::get_default_subscriber_and_telemetry_worker_with_log_reloading(
-				pattern,
-				telemetry_external_transport,
-			)?;
-
-			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-				return Err(format!(
-					"Registering Substrate tracing subscriber failed: {:}!", e
-				))
-			}
-
-			telemetry_worker
-		}
-	})
 }

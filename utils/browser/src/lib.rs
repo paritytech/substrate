@@ -23,6 +23,7 @@ use sc_service::{
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
 	GenericChainSpec, RuntimeGenesis
 };
+use sc_tracing::logging::GlobalLogger;
 use wasm_bindgen::prelude::*;
 use futures::{
 	prelude::*, channel::{oneshot, mpsc}, compat::*, future::{ready, ok, select}
@@ -41,13 +42,9 @@ pub fn init_logging_and_telemetry(
 	pattern: &str,
 ) -> Result<sc_telemetry::TelemetryWorker, String> {
 	let transport = ExtTransport::new(ffi::websocket_transport());
-	let (subscriber, telemetry_worker) = sc_tracing::logging::get_default_subscriber_and_telemetry_worker(
-		pattern,
-		Some(transport.clone()),
-	)?;
-
-	tracing::subscriber::set_global_default(subscriber)
-		.map_err(|e| format!("could not set global default subscriber: {}", e))?;
+	let mut logger = GlobalLogger::new(pattern);
+	logger.with_transport(transport);
+	let telemetry_worker = logger.init()?;
 
 	Ok(telemetry_worker)
 }

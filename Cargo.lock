@@ -3792,7 +3792,6 @@ dependencies = [
  "substrate-build-script-utils",
  "substrate-frame-cli",
  "tempfile",
- "tracing",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -6512,7 +6511,6 @@ dependencies = [
  "thiserror",
  "tiny-bip39",
  "tokio 0.2.23",
- "tracing",
 ]
 
 [[package]]
@@ -8834,7 +8832,6 @@ dependencies = [
  "sc-telemetry",
  "sc-tracing",
  "sp-database",
- "tracing",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]

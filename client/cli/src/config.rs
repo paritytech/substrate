@@ -21,8 +21,8 @@
 use crate::arg_enums::Database;
 use crate::error::Result;
 use crate::{
-	init_logging_and_telemetry, DatabaseParams, ImportParams, KeystoreParams, NetworkParams,
-	NodeKeyParams, OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
+	DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
+	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
 use log::warn;
 use names::{Generator, Name};
@@ -33,6 +33,7 @@ use sc_service::config::{
 	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver};
+use sc_tracing::logging::GlobalLogger;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -552,21 +553,21 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// 2. Initializes the logger
 	/// 3. Raises the FD limit
 	fn init<C: SubstrateCli>(&self) -> Result<sc_telemetry::TelemetryWorker> {
-		let logger_pattern = self.log_filters()?;
-		let tracing_receiver = self.tracing_receiver()?;
-		let tracing_targets = self.tracing_targets()?;
-		let disable_log_reloading = self.is_log_filter_reloading_disabled()?;
-		let telemetry_external_transport = self.telemetry_external_transport()?;
-
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		let telemetry_worker = init_logging_and_telemetry(
-			&logger_pattern,
-			tracing_receiver,
-			tracing_targets.as_ref().map(|x| x.as_str()),
-			telemetry_external_transport,
-			disable_log_reloading,
-		)?;
+		let mut logger = GlobalLogger::new(self.log_filters()?);
+		logger.with_log_reloading(!self.is_log_filter_reloading_disabled()?);
+
+		if let Some(transport) = self.telemetry_external_transport()? {
+			logger.with_transport(transport);
+		}
+
+		if let Some(tracing_targets) = self.tracing_targets()? {
+			let tracing_receiver = self.tracing_receiver()?;
+			logger.with_profiling(tracing_receiver, tracing_targets);
+		}
+
+		let telemetry_worker = logger.init()?;
 
 		if let Some(new_limit) = fdlimit::raise_fd_limit() {
 			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {

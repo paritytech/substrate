@@ -29,6 +29,7 @@ mod layers;
 pub use sc_tracing_proc_macro::*;
 pub use directives::*;
 
+use sc_telemetry::{ExtTransport, TelemetryWorker};
 use tracing::Subscriber;
 use tracing_subscriber::{
 	fmt::time::ChronoLocal, layer::{self, SubscriberExt}, registry::LookupSpan,
@@ -51,13 +52,13 @@ macro_rules! disable_log_reloading {
 /// Get a new default tracing's `Subscriber` and a sc-telemetry's `TelemetryWorker` objects.
 ///
 /// When running in a browser, the `telemetry_external_transport` should be provided.
-pub fn get_default_subscriber_and_telemetry_worker(
+fn get_default_subscriber_and_telemetry_worker(
 	pattern: &str,
-	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
+	telemetry_external_transport: Option<ExtTransport>,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
-		sc_telemetry::TelemetryWorker,
+		TelemetryWorker,
 	),
 	String,
 > {
@@ -72,14 +73,13 @@ pub fn get_default_subscriber_and_telemetry_worker(
 /// reloading.
 ///
 /// When running in a browser, the `telemetry_external_transport` should be provided.
-#[cfg(not(target_os = "unknown"))]
-pub fn get_default_subscriber_and_telemetry_worker_with_log_reloading(
+fn get_default_subscriber_and_telemetry_worker_with_log_reloading(
 	pattern: &str,
-	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
+	telemetry_external_transport: Option<ExtTransport>,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
-		sc_telemetry::TelemetryWorker,
+		TelemetryWorker,
 	),
 	String,
 > {
@@ -94,15 +94,15 @@ pub fn get_default_subscriber_and_telemetry_worker_with_log_reloading(
 /// profiling enabled.
 ///
 /// When running in a browser, the `telemetry_external_transport` should be provided.
-pub fn get_default_subscriber_and_telemetry_worker_with_profiling(
+fn get_default_subscriber_and_telemetry_worker_with_profiling(
 	pattern: &str,
-	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
+	telemetry_external_transport: Option<ExtTransport>,
 	tracing_receiver: crate::TracingReceiver,
 	profiling_targets: &str,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
-		sc_telemetry::TelemetryWorker,
+		TelemetryWorker,
 	),
 	String,
 > {
@@ -120,16 +120,15 @@ pub fn get_default_subscriber_and_telemetry_worker_with_profiling(
 /// profiling enabled and log reloading.
 ///
 /// When running in a browser, the `telemetry_external_transport` should be provided.
-#[cfg(not(target_os = "unknown"))]
-pub fn get_default_subscriber_and_telemetry_worker_with_profiling_and_log_reloading(
+fn get_default_subscriber_and_telemetry_worker_with_profiling_and_log_reloading(
 	pattern: &str,
-	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
+	telemetry_external_transport: Option<ExtTransport>,
 	tracing_receiver: crate::TracingReceiver,
 	profiling_targets: &str,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
-		sc_telemetry::TelemetryWorker,
+		TelemetryWorker,
 	),
 	String,
 > {
@@ -147,12 +146,12 @@ pub fn get_default_subscriber_and_telemetry_worker_with_profiling_and_log_reload
 // `get_default_subscriber_and_telemetry_worker_with_profiling`.
 fn get_default_subscriber_and_telemetry_worker_internal<N, E, F, W>(
 	pattern: &str,
-	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
+	telemetry_external_transport: Option<ExtTransport>,
 	builder_hook: impl Fn(SubscriberBuilder<format::DefaultFields, EventFormat<ChronoLocal>, EnvFilter, fn() -> std::io::Stderr>) -> SubscriberBuilder<N, E, F, W>,
 ) -> std::result::Result<
 	(
 		impl Subscriber + for<'a> LookupSpan<'a>,
-		sc_telemetry::TelemetryWorker,
+		TelemetryWorker,
 	),
 	String,
 >
@@ -262,6 +261,110 @@ where
 	let subscriber = subscriber.with(ConsoleLogLayer::new(event_format));
 
 	Ok((subscriber, telemetry_worker))
+}
+
+pub struct GlobalLogger {
+	pattern: String,
+	profiling: Option<(crate::TracingReceiver, String)>,
+	telemetry_external_transport: Option<ExtTransport>,
+	disable_log_reloading: bool,
+}
+
+impl GlobalLogger {
+	pub fn new<S: Into<String>>(pattern: S) -> Self {
+		Self {
+			pattern: pattern.into(),
+			profiling: None,
+			telemetry_external_transport: None,
+			disable_log_reloading: false,
+		}
+	}
+
+	pub fn with_profiling<S: Into<String>>(
+		&mut self,
+		tracing_receiver: crate::TracingReceiver,
+		profiling_targets: S,
+	) -> &mut Self {
+		self.profiling = Some((tracing_receiver, profiling_targets.into()));
+		self
+	}
+
+	pub fn with_log_reloading(&mut self, enabled: bool) -> &mut Self {
+		self.disable_log_reloading = !enabled;
+		self
+	}
+
+	pub fn with_transport(&mut self, transport: ExtTransport) -> &mut Self {
+		self.telemetry_external_transport = Some(transport);
+		self
+	}
+
+	/// Initialize the global logger
+	///
+	/// This sets various global logging and tracing instances and thus may only be called once.
+	pub fn init(self) -> Result<TelemetryWorker, String> {
+		Ok(if let Some((tracing_receiver, profiling_targets)) = self.profiling {
+			if self.disable_log_reloading {
+				let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker_with_profiling(
+					&self.pattern,
+					self.telemetry_external_transport,
+					tracing_receiver,
+					&profiling_targets,
+				)?;
+
+				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+					return Err(format!(
+						"Registering Substrate tracing subscriber failed: {:}!", e
+					))
+				}
+
+				telemetry_worker
+			} else {
+				let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker_with_profiling_and_log_reloading(
+					&self.pattern,
+					self.telemetry_external_transport,
+					tracing_receiver,
+					&profiling_targets,
+				)?;
+
+				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+					return Err(format!(
+						"Registering Substrate tracing subscriber failed: {:}!", e
+					))
+				}
+
+				telemetry_worker
+			}
+		} else {
+			if self.disable_log_reloading {
+				let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker(
+					&self.pattern,
+					self.telemetry_external_transport,
+				)?;
+
+				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+					return Err(format!(
+						"Registering Substrate tracing subscriber failed: {:}!", e
+					))
+				}
+
+				telemetry_worker
+			} else {
+				let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker_with_log_reloading(
+					&self.pattern,
+					self.telemetry_external_transport,
+				)?;
+
+				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+					return Err(format!(
+						"Registering Substrate tracing subscriber failed: {:}!", e
+					))
+				}
+
+				telemetry_worker
+			}
+		})
+	}
 }
 
 #[cfg(test)]
