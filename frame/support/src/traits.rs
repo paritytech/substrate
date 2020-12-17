@@ -1731,13 +1731,19 @@ pub trait Instance: 'static {
 	const PREFIX: &'static str;
 }
 
-/// An instance of a storage.
+/// An instance of a storage in a pallet.
 ///
-/// It is required the the couple `(PalletInfo::name<Pallet>(), STORAGE_PREFIX)` is unique.
-/// Any storage with same couple will collide.
+/// Define an instance for an individual storage inside a pallet.
+/// The pallet prefix is used to isolate the storage between pallets, and the storage prefix is
+/// used to isolate storages inside a pallet.
+///
+/// NOTE: These information can be used to define storages in pallet such as a `StorageMap` which
+/// can use keys after `twox_128(pallet_prefix())++twox_128(STORAGE_PREFIX)`
 pub trait StorageInstance {
-	type Pallet: 'static;
-	type PalletInfo: PalletInfo;
+	/// Prefix of a pallet to isolate it from other pallets.
+	fn pallet_prefix() -> &'static str;
+
+	/// Prefix given to a storage to isolate from other storages in the pallet.
 	const STORAGE_PREFIX: &'static str;
 }
 
@@ -1895,7 +1901,7 @@ impl PalletVersion {
 
 	/// Returns the storage key for a pallet version.
 	///
-	/// See [`PALLET_VERSION_STORAGE_KEY_POSTIFX`] on how this key is built.
+	/// See [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] on how this key is built.
 	///
 	/// Returns `None` if the given `PI` returned a `None` as name for the given
 	/// `Pallet`.
