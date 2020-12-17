@@ -20,14 +20,14 @@
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
 use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
-use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
+use codec::{FullCodec, Codec, Encode, Decode, EncodeLike, HasCompact};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError,
 	traits::{
 		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
 		BadOrigin, AtLeast32BitUnsigned, UniqueSaturatedFrom, UniqueSaturatedInto,
-		SaturatedConversion,
+		SaturatedConversion, Member,
 	},
 };
 use crate::dispatch::Parameter;
@@ -1183,6 +1183,75 @@ pub trait VestingSchedule<AccountId> {
 	///
 	/// NOTE: This doesn't alter the free balance of the account.
 	fn remove_vesting_schedule(who: &AccountId);
+}
+
+/// Abstraction over a fungible assets system.
+pub trait Token<Source> {
+	/// The balance of an account.
+	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug +
+		Default + HasCompact;
+
+	type AssetId: Member + Parameter + Default + Copy + HasCompact;
+
+	// PUBLIC IMMUTABLES
+	/// The total amount of issuance in the system for a specific asset.
+	fn total_issuance(id: Self::AssetId) -> Self::Balance;
+
+	/// The balance of a given account.
+	///
+	/// This is the only balance that matters in terms of most operations on tokens. It alone
+	/// is used to determine the balance when in the contract execution environment. When this
+	/// balance falls below the value of `ExistentialDeposit`, then the 'current account' is
+	/// deleted: specifically `FreeBalance`.
+	///
+	/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
+	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+	fn balance_of(id: Self::AssetId, who: Source) -> Self::Balance;
+
+	/// Returns the remaining number of tokens a spender can spend for a specific asset.
+	fn allowance(id: Self::AssetId, owner: Source, spender: Source) -> Self::Balance;
+
+	// PUBLIC MUTABLES (DANGEROUS)
+
+	/// Transfer some liquid free balance of an asset to another account.
+	fn transfer_asset(id: Self::AssetId, origin: Source, dest: Source, amount: Self::Balance) -> DispatchResult;
+
+	/// Approve some amount of an asset to be spent by another account.
+	fn approve(id: Self::AssetId, who: Source, spender: Source, amount: Self::Balance) -> DispatchResult;
+
+	/// Transfer some `amount` of tokens from an account `who` to another account `recipient`
+	fn transfer_from(id: Self::AssetId, who: Source, recipient: Source, amount: Self::Balance) -> DispatchResult;
+
+
+	/// Reduce the total number of assets a specific account owns for a specific asset.
+	///
+	/// Returns `Ok` iff the burn was successful.
+	/// `Err` with the reason why otherwise.
+	fn burn(id: Self::AssetId, origin: Source, who: Source, amount: Self::Balance) -> DispatchResult;
+
+	/// Increase the total issuance of of a specific asset by `amount` for a specific account.
+	///
+	/// Returns `Ok` iff the mint was successful.
+	/// `Err` with the reason why otherwise.
+	fn mint(id: Self::AssetId, origin: Source, beneficiary: Source, amount: Self::Balance) -> DispatchResult;
+
+	/// Freeze an amount of tokens for a specific account.
+	///
+	/// Returns `Ok` iff the mint was successful.
+	/// `Err` with the reason why otherwise.
+	fn freeze(id: Self::AssetId, origin: Source, who: Source) -> DispatchResult;
+
+	/// Unfreeze an amount of tokens for a specific account.
+	///
+	/// Returns `Ok` iff the mint was successful.
+	/// `Err` with the reason why otherwise.
+	fn thaw(id: Self::AssetId, origin: Source, who: Source) -> DispatchResult;
+
+	/// Transfer ownership of administrative functions for a specific token.
+	///
+	/// Returns `Ok` iff the ownership transfer was successful.
+	/// `Err` with the reason why otherwise.
+	fn transfer_ownership(id: Self::AssetId, origin: Source, owner: Source) -> DispatchResult;
 }
 
 bitflags! {

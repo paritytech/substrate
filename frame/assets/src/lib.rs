@@ -115,11 +115,12 @@ pub mod weights;
 
 use sp_std::{fmt::Debug};
 use sp_runtime::{RuntimeDebug, traits::{
-	Member, AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd
+	Member, AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd,
+	MaybeSerializeDeserialize,
 }};
 use codec::{Encode, Decode, HasCompact};
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
-	traits::{Currency, ReservableCurrency, EnsureOrigin, Get, BalanceStatus::Reserved},
+	traits::{Token, Currency, ReservableCurrency, EnsureOrigin, Get, BalanceStatus::Reserved},
 	dispatch::{DispatchResult, DispatchError},
 };
 use frame_system::ensure_signed;
@@ -201,17 +202,24 @@ pub struct AssetBalance<
 decl_storage! {
 	trait Store for Module<T: Config> as Assets {
 		/// Details of an asset.
-		Asset: map hasher(blake2_128_concat) T::AssetId => Option<AssetDetails<
+		pub Asset: map hasher(blake2_128_concat) T::AssetId => Option<AssetDetails<
 			T::Balance,
 			T::AccountId,
 			BalanceOf<T>,
 		>>;
 
 		/// The number of units of assets held by any given account.
-		Account: double_map
+		pub Account: double_map
 			hasher(blake2_128_concat) T::AssetId,
 			hasher(blake2_128_concat) T::AccountId
 			=> AssetBalance<T::Balance>;
+
+		/// The number of units of assets being approved by one account to another
+		/// The ordering of from, to is sequential i.e (from, to)
+		pub Approvals: double_map
+			hasher(blake2_128_concat) T::AssetId,
+			hasher(blake2_128_concat) (T::AccountId, T::AccountId)
+			=> T::Balance;		
 	}
 }
 
@@ -274,6 +282,8 @@ decl_error! {
 		MinBalanceZero,
 		/// A mint operation lead to an overflow.
 		Overflow,
+		/// An allowance for transfer from is insufficient
+		AllowanceTooLow,
 	}
 }
 
@@ -414,6 +424,7 @@ decl_module! {
 
 				*maybe_details = None;
 				Account::<T>::remove_prefix(&id);
+				Approvals::<T>::remove_prefix(&id);
 				Self::deposit_event(RawEvent::Destroyed(id));
 				Ok(())
 			})
@@ -444,6 +455,7 @@ decl_module! {
 
 				*maybe_details = None;
 				Account::<T>::remove_prefix(&id);
+				Approvals::<T>::remove_prefix(&id);
 				Self::deposit_event(RawEvent::Destroyed(id));
 				Ok(())
 			})
@@ -898,6 +910,213 @@ impl<T: Config> Module<T> {
 			frame_system::Module::<T>::dec_ref(who);
 		}
 		d.accounts = d.accounts.saturating_sub(1);
+	}
+}
+
+impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
+	T::Balance: MaybeSerializeDeserialize + Debug
+{
+	type Balance = T::Balance;
+	type AssetId = T::AssetId;
+
+	// PUBLIC IMMUTABLES
+
+	/// The total amount of issuance in the system for a specific asset.
+	fn total_issuance(id: Self::AssetId) -> Self::Balance {
+		Self::total_supply(id)
+	}
+
+	fn balance_of(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source) -> Self::Balance {
+		match T::Lookup::lookup(who) {
+			Ok(acc) => Self::balance(id, acc),
+			Err(_) => Self::Balance::zero(),
+		}
+	}
+
+	/// Returns the remaining number of tokens a spender can spend for a specific asset.
+	fn allowance(id: Self::AssetId, owner: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source) -> Self::Balance {
+		let owner = match T::Lookup::lookup(owner) {
+			Ok(acc) => acc,
+			Err(_) => return Self::Balance::zero(),
+		};
+
+		let spender = match T::Lookup::lookup(spender) {
+			Ok(acc) => acc,
+			Err(_) => return Self::Balance::zero(),
+		};
+
+		Approvals::<T>::get(id, (owner, spender))
+	}
+
+	// PUBLIC MUTABLES (DANGEROUS)
+
+	fn transfer_asset(id: Self::AssetId, origin: <T::Lookup as StaticLookup>::Source, dest: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+		ensure!(!amount.is_zero(), Error::<T>::AmountZero);
+
+		let origin = T::Lookup::lookup(origin)?;
+		let dest = T::Lookup::lookup(dest)?;
+		let mut origin_account = Account::<T>::get(id, &origin);
+		ensure!(!origin_account.is_frozen, Error::<T>::Frozen);
+		origin_account.balance = origin_account.balance.checked_sub(&amount)
+			.ok_or(Error::<T>::BalanceLow)?;
+
+		Asset::<T>::try_mutate(id, |maybe_details| {
+			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+
+			if dest == origin {
+				return Ok(())
+			}
+
+			let mut amount = amount;
+			if origin_account.balance < details.min_balance {
+				amount += origin_account.balance;
+				origin_account.balance = Zero::zero();
+			}
+
+			Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
+				let new_balance = a.balance.saturating_add(amount);
+				ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
+				if a.balance.is_zero() {
+					a.is_zombie = Self::new_account(&dest, details)?;
+				}
+				a.balance = new_balance;
+				Ok(())
+			})?;
+
+			match origin_account.balance.is_zero() {
+				false => {
+					Self::dezombify(&origin, details, &mut origin_account.is_zombie);
+					Account::<T>::insert(id, &origin, &origin_account)
+				}
+				true => {
+					Self::dead_account(&origin, details, origin_account.is_zombie);
+					Account::<T>::remove(id, &origin);
+				}
+			}
+
+			Self::deposit_event(RawEvent::Transferred(id, origin, dest, amount));
+			Ok(())
+		})
+	}
+
+	fn approve(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+		let who = T::Lookup::lookup(who)?;
+		let spender = T::Lookup::lookup(spender)?;
+		Approvals::<T>::mutate(id, (who, spender), |b| *b += amount);
+		Ok(())
+	}
+
+	fn transfer_from(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, recipient: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+		ensure!(!amount.is_zero(), Error::<T>::AmountZero);
+		// check allowance
+		let allowance = Self::allowance(id, who.clone(), recipient.clone());
+		ensure!(allowance >= amount, Error::<T>::AllowanceTooLow);
+		// transfer if allowance is sufficient
+		// frozen errors will be handled in transfer method
+		Self::transfer_asset(id, who, recipient, amount)
+	}
+
+	fn burn(id: Self::AssetId, origin: <T::Lookup as StaticLookup>::Source, who: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+		let who = T::Lookup::lookup(who)?;
+		let origin = T::Lookup::lookup(origin)?;
+		Asset::<T>::try_mutate(id, |maybe_details| {
+			let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+			ensure!(&origin == &d.admin, Error::<T>::NoPermission);
+
+			let burned = Account::<T>::try_mutate_exists(
+				id,
+				&who,
+				|maybe_account| -> Result<T::Balance, DispatchError> {
+					let mut account = maybe_account.take().ok_or(Error::<T>::BalanceZero)?;
+					let mut burned = amount.min(account.balance);
+					account.balance -= burned;
+					*maybe_account = if account.balance < d.min_balance {
+						burned += account.balance;
+						Self::dead_account(&who, d, account.is_zombie);
+						None
+					} else {
+						Some(account)
+					};
+					Ok(burned)
+				}
+			)?;
+
+			d.supply = d.supply.saturating_sub(burned);
+
+			Self::deposit_event(RawEvent::Burned(id, who, burned));
+			Ok(())
+		})
+	}
+
+	fn mint(id: Self::AssetId, origin: <T::Lookup as StaticLookup>::Source, beneficiary: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+		let origin = T::Lookup::lookup(origin)?;
+		let beneficiary = T::Lookup::lookup(beneficiary)?;
+
+		Asset::<T>::try_mutate(id, |maybe_details| {
+			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+
+			ensure!(&origin == &details.issuer, Error::<T>::NoPermission);
+			details.supply = details.supply.checked_add(&amount).ok_or(Error::<T>::Overflow)?;
+
+			Account::<T>::try_mutate(id, &beneficiary, |t| -> DispatchResult {
+				let new_balance = t.balance.saturating_add(amount);
+				ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
+				if t.balance.is_zero() {
+					t.is_zombie = Self::new_account(&beneficiary, details)?;
+				}
+				t.balance = new_balance;
+				Ok(())
+			})?;
+			Self::deposit_event(RawEvent::Issued(id, beneficiary, amount));
+			Ok(())
+		})
+	}
+
+	fn freeze(id: Self::AssetId, origin: <T::Lookup as StaticLookup>::Source, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		let origin = T::Lookup::lookup(origin)?;
+		let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+		ensure!(&origin == &d.freezer, Error::<T>::NoPermission);
+		
+		let who = T::Lookup::lookup(who)?;
+		ensure!(Account::<T>::contains_key(id, &who), Error::<T>::BalanceZero);
+
+		Account::<T>::mutate(id, &who, |a| a.is_frozen = true);
+
+		Self::deposit_event(Event::<T>::Thawed(id, who));
+		Ok(())
+	}
+
+	fn thaw(id: Self::AssetId, origin: <T::Lookup as StaticLookup>::Source, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		let origin = T::Lookup::lookup(origin)?;
+		let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+		ensure!(&origin == &details.admin, Error::<T>::NoPermission);
+
+		let who = T::Lookup::lookup(who)?;
+		ensure!(Account::<T>::contains_key(id, &who), Error::<T>::BalanceZero);
+
+		Account::<T>::mutate(id, &who, |a| a.is_frozen = false);
+
+		Self::deposit_event(Event::<T>::Thawed(id, who));
+		Ok(())
+	}
+
+	fn transfer_ownership(id: Self::AssetId, origin: <T::Lookup as StaticLookup>::Source, owner: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		let origin = T::Lookup::lookup(origin)?;
+		let owner = T::Lookup::lookup(owner)?;
+
+		Asset::<T>::try_mutate(id, |maybe_details| {
+			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+			ensure!(&origin == &details.owner, Error::<T>::NoPermission);
+			if details.owner == owner { return Ok(()) }
+
+			// Move the deposit to the new owner.
+			T::Currency::repatriate_reserved(&details.owner, &owner, details.deposit, Reserved)?;
+
+			details.owner = owner.clone();
+
+			Self::deposit_event(RawEvent::OwnerChanged(id, owner));
+			Ok(())
+		})
 	}
 }
 
