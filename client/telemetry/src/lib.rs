@@ -46,7 +46,6 @@ use libp2p::{
 use log::{error, warn};
 use std::{
 	collections::{HashMap, HashSet},
-	io,
 	sync::Arc,
 	time::Duration,
 };
@@ -100,6 +99,18 @@ pub struct TelemetryWorker {
 	transport: WsTrans,
 }
 
+/// Telemetry Result typedef.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Telemetry errors.
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
+#[non_exhaustive]
+pub enum Error {
+	#[error(transparent)]
+	Io(#[from] std::io::Error),
+}
+
 impl TelemetryWorker {
 	/// Create a [`TelemetryWorker`] instance using an `ExtTransport`.
 	///
@@ -111,7 +122,7 @@ impl TelemetryWorker {
 	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
 	/// >                internal buffering going on. In the context of WebSockets, each `write`
 	/// >                must be one individual WebSockets frame.
-	pub fn new(wasm_external_transport: Option<wasm_ext::ExtTransport>) -> Result<Self, io::Error> {
+	pub fn new(wasm_external_transport: Option<wasm_ext::ExtTransport>) -> Result<Self> {
 		let (sender, receiver) = mpsc::channel(16);
 		let (init_sender, init_receiver) = mpsc::unbounded();
 

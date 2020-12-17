@@ -40,6 +40,27 @@ use tracing_subscriber::{
 pub use event_format::*;
 pub use layers::*;
 
+/// Logging Result typedef.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Logging errors.
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
+#[non_exhaustive]
+pub enum Error {
+	#[error(transparent)]
+	TelemetryError(#[from] sc_telemetry::Error),
+
+	#[error(transparent)]
+	SetGlobalDefaultError(#[from] tracing::subscriber::SetGlobalDefaultError),
+
+	#[error(transparent)]
+	DirectiveParseError(#[from] tracing_subscriber::filter::ParseError),
+
+	#[error(transparent)]
+	SetLoggerError(#[from] tracing_log::log_tracer::SetLoggerError),
+}
+
 macro_rules! disable_log_reloading {
 	($builder:expr) => {{
 		let builder = $builder.with_filter_reloading();
@@ -49,28 +70,12 @@ macro_rules! disable_log_reloading {
 	}};
 }
 
-macro_rules! set_global_default {
-	($subscriber:expr) => {{
-		tracing::subscriber::set_global_default($subscriber)
-			.map_err(|err| format!(
-				"Registering Substrate tracing subscriber failed: {}!",
-				err,
-			))
-	}};
-}
-
 /// Common implementation to get the subscriber.
 fn get_subscriber_internal<N, E, F, W>(
 	pattern: &str,
 	telemetry_external_transport: Option<ExtTransport>,
 	builder_hook: impl Fn(SubscriberBuilder<format::DefaultFields, EventFormat<ChronoLocal>, EnvFilter, fn() -> std::io::Stderr>) -> SubscriberBuilder<N, E, F, W>,
-) -> std::result::Result<
-	(
-		impl Subscriber + for<'a> LookupSpan<'a>,
-		TelemetryWorker,
-	),
-	String,
->
+) -> Result<(impl Subscriber + for<'a> LookupSpan<'a>, TelemetryWorker)>
 where
 	N: for<'writer> FormatFields<'writer> + 'static,
 	E: FormatEvent<Registry, N> + 'static,
@@ -79,16 +84,14 @@ where
 	FmtLayer<Registry, N, E, W>: layer::Layer<Registry> + Send + Sync + 'static,
 {
 	// Accept all valid directives and print invalid ones
-	fn parse_user_directives(mut env_filter: EnvFilter, dirs: &str) -> std::result::Result<EnvFilter, String> {
+	fn parse_user_directives(mut env_filter: EnvFilter, dirs: &str) -> Result<EnvFilter> {
 		for dir in dirs.split(',') {
 			env_filter = env_filter.add_directive(parse_default_directive(&dir)?);
 		}
 		Ok(env_filter)
 	}
 
-	if let Err(e) = tracing_log::LogTracer::init() {
-		return Err(format!("Registering Substrate logger failed: {:}!", e));
-	}
+	tracing_log::LogTracer::init()?;
 
 	// Initialize filter - ensure to use `parse_default_directive` for any defaults to persist
 	// after log filter reloading by RPC
@@ -142,7 +145,7 @@ where
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-	let (telemetry_layer, telemetry_worker) = sc_telemetry::TelemetryLayer::new(telemetry_external_transport).map_err(|err| format!("Could not initialize telemetry: {}", err))?;
+	let (telemetry_layer, telemetry_worker) = sc_telemetry::TelemetryLayer::new(telemetry_external_transport)?;
 	let event_format = EventFormat {
 		timer,
 		display_target: !simple,
@@ -179,6 +182,7 @@ where
 	Ok((subscriber, telemetry_worker))
 }
 
+/// A builder that is used to initialize the global logger.
 pub struct GlobalLoggerBuilder {
 	pattern: String,
 	profiling: Option<(crate::TracingReceiver, String)>,
@@ -187,6 +191,7 @@ pub struct GlobalLoggerBuilder {
 }
 
 impl GlobalLoggerBuilder {
+	/// Create a new [`GlobalLoggerBuilder`] which can be used to initialize the global logger.
 	pub fn new<S: Into<String>>(pattern: S) -> Self {
 		Self {
 			pattern: pattern.into(),
@@ -196,6 +201,7 @@ impl GlobalLoggerBuilder {
 		}
 	}
 
+	/// Set up the profiling.
 	pub fn with_profiling<S: Into<String>>(
 		&mut self,
 		tracing_receiver: crate::TracingReceiver,
@@ -205,11 +211,13 @@ impl GlobalLoggerBuilder {
 		self
 	}
 
+	/// Wether or not to disable log reloading.
 	pub fn with_log_reloading(&mut self, enabled: bool) -> &mut Self {
 		self.disable_log_reloading = !enabled;
 		self
 	}
 
+	/// Set a custom network transport (used for the telemetry).
 	pub fn with_transport(&mut self, transport: ExtTransport) -> &mut Self {
 		self.telemetry_external_transport = Some(transport);
 		self
@@ -218,7 +226,7 @@ impl GlobalLoggerBuilder {
 	/// Initialize the global logger
 	///
 	/// This sets various global logging and tracing instances and thus may only be called once.
-	pub fn init(self) -> Result<TelemetryWorker, String> {
+	pub fn init(self) -> Result<TelemetryWorker> {
 		Ok(if let Some((tracing_receiver, profiling_targets)) = self.profiling {
 			if self.disable_log_reloading {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
@@ -228,7 +236,7 @@ impl GlobalLoggerBuilder {
 				)?;
 				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
-				set_global_default!(subscriber.with(profiling))?;
+				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
 				telemetry_worker
 			} else {
@@ -239,7 +247,7 @@ impl GlobalLoggerBuilder {
 				)?;
 				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
-				set_global_default!(subscriber.with(profiling))?;
+				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
 				telemetry_worker
 			}
@@ -251,7 +259,7 @@ impl GlobalLoggerBuilder {
 					|builder| builder,
 				)?;
 
-				set_global_default!(subscriber)?;
+				tracing::subscriber::set_global_default(subscriber)?;
 
 				telemetry_worker
 			} else {
@@ -261,7 +269,7 @@ impl GlobalLoggerBuilder {
 					|builder| disable_log_reloading!(builder),
 				)?;
 
-				set_global_default!(subscriber)?;
+				tracing::subscriber::set_global_default(subscriber)?;
 
 				telemetry_worker
 			}

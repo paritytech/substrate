@@ -46,10 +46,9 @@ pub fn add_directives(directives: &str) {
 /// Parse `Directive` and add to default directives if successful.
 ///
 /// Ensures the supplied directive will be restored when resetting the log filter.
-pub(crate) fn parse_default_directive(directive: &str) -> Result<Directive, String> {
+pub(crate) fn parse_default_directive(directive: &str) -> super::Result<Directive> {
 	let dir = directive
-		.parse()
-		.map_err(|_| format!("Unable to parse directive: {}", directive))?;
+		.parse()?;
 	add_default_directives(directive);
 	Ok(dir)
 }

@@ -40,7 +40,7 @@ pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 /// can be used for network transport.
 pub fn init_logging_and_telemetry(
 	pattern: &str,
-) -> Result<sc_telemetry::TelemetryWorker, String> {
+) -> Result<sc_telemetry::TelemetryWorker, Box<dyn std::error::Error>> {
 	let transport = ExtTransport::new(ffi::websocket_transport());
 	let mut logger = GlobalLoggerBuilder::new(pattern);
 	logger.with_transport(transport);
