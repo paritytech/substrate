@@ -24,9 +24,6 @@ stages:
   - check
   - test
   - build
-  - post-build-test
-  - chaos-env
-  - chaos
   - publish
   - deploy
   - flaming-fir

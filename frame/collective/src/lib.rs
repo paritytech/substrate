@@ -56,7 +56,7 @@ use frame_support::{
 	},
 	ensure,
 	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
-	weights::{DispatchClass, GetDispatchInfo, Weight},
+	weights::{DispatchClass, GetDispatchInfo, Weight, Pays},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -488,6 +488,8 @@ decl_module! {
 		///
 		/// Requires the sender to be a member.
 		///
+		/// Transaction fees will be waived if the member is voting on any particular proposal
+		/// for the first time and the call is successful. Subsequent vote changes will charge a fee.
 		/// # <weight>
 		/// ## Weight
 		/// - `O(M)` where `M` is members-count (code- and governance-bounded)
@@ -515,6 +517,9 @@ decl_module! {
 			let position_yes = voting.ayes.iter().position(|a| a == &who);
 			let position_no = voting.nays.iter().position(|a| a == &who);
 
+			// Detects first vote of the member in the motion
+			let is_account_voting_first_time = position_yes.is_none() && position_no.is_none();
+
 			if approve {
 				if position_yes.is_none() {
 					voting.ayes.push(who.clone());
@@ -541,7 +546,17 @@ decl_module! {
 
 			Voting::<T, I>::insert(&proposal, voting);
 
-			Ok(Some(T::WeightInfo::vote(members.len() as u32)).into())
+			if is_account_voting_first_time {
+				Ok((
+					Some(T::WeightInfo::vote(members.len() as u32)),
+					Pays::No,
+				).into())
+			} else {
+				Ok((
+					Some(T::WeightInfo::vote(members.len() as u32)),
+					Pays::Yes,
+				).into())
+			}
 		}
 
 		/// Close a vote that is either approved, disapproved or whose voting period has ended.
@@ -553,6 +568,9 @@ decl_module! {
 		///
 		/// If called after the end of the voting period abstentions are counted as rejections
 		/// unless there is a prime member set and the prime member cast an approval.
+		///
+		/// If the close operation completes successfully with disapproval, the transaction fee will
+		/// be waived. Otherwise execution of the approved operation will be charged to the caller.
 		///
 		/// + `proposal_weight_bound`: The maximum amount of weight consumed by executing the closed proposal.
 		/// + `length_bound`: The upper bound for the length of the proposal in storage. Checked via
@@ -606,20 +624,23 @@ decl_module! {
 				let (proposal, len) = Self::validate_and_get_proposal(
 					&proposal_hash,
 					length_bound,
-					proposal_weight_bound
+					proposal_weight_bound,
 				)?;
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
-				return Ok(Some(
-					T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
-						.saturating_add(proposal_weight)
+				return Ok((
+					Some(T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
+					.saturating_add(proposal_weight)),
+					Pays::Yes,
 				).into());
+
 			} else if disapproved {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
-				return Ok(Some(
-					T::WeightInfo::close_early_disapproved(seats, proposal_count)
+				return Ok((
+					Some(T::WeightInfo::close_early_disapproved(seats, proposal_count)),
+					Pays::No,
 				).into());
 			}
 
@@ -642,20 +663,22 @@ decl_module! {
 				let (proposal, len) = Self::validate_and_get_proposal(
 					&proposal_hash,
 					length_bound,
-					proposal_weight_bound
+					proposal_weight_bound,
 				)?;
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
-				return Ok(Some(
-					T::WeightInfo::close_approved(len as u32, seats, proposal_count)
-						.saturating_add(proposal_weight)
+				return Ok((
+					Some(T::WeightInfo::close_approved(len as u32, seats, proposal_count)
+					.saturating_add(proposal_weight)),
+					Pays::Yes,
 				).into());
 			} else {
 				Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 				let proposal_count = Self::do_disapprove_proposal(proposal_hash);
-				return Ok(Some(
-					T::WeightInfo::close_disapproved(seats, proposal_count)
+				return Ok((
+					Some(T::WeightInfo::close_disapproved(seats, proposal_count)),
+					Pays::No,
 				).into());
 			}
 		}
@@ -933,27 +956,29 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use frame_support::{Hashable, assert_ok, assert_noop, parameter_types, weights::Weight};
+	use frame_support::{Hashable, assert_ok, assert_noop, parameter_types};
 	use frame_system::{self as system, EventRecord, Phase};
 	use hex_literal::hex;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
+		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
 		BuildStorage,
 	};
 	use crate as collective;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
 		pub const MotionDuration: u64 = 3;
 		pub const MaxProposals: u32 = 100;
 		pub const MaxMembers: u32 = 100;
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
 	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -965,13 +990,6 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = ();
@@ -1438,6 +1456,96 @@ mod tests {
 					topics: vec![],
 				}
 			]);
+		});
+	}
+
+	#[test]
+	fn motions_all_first_vote_free_works() {
+		new_test_ext().execute_with(|| {
+			let proposal = make_proposal(42);
+			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+			let hash: H256 = proposal.blake2_256().into();
+			let end = 4;
+			assert_ok!(
+				Collective::propose(
+					Origin::signed(1),
+					2,
+					Box::new(proposal.clone()),
+					proposal_len,
+				)
+			);
+			assert_eq!(
+				Collective::voting(&hash),
+				Some(Votes { index: 0, threshold: 2, ayes: vec![1], nays: vec![], end })
+			);
+
+			// For the motion, acc 2's first vote, expecting Ok with Pays::No.
+			let vote_rval: DispatchResultWithPostInfo = Collective::vote(
+				Origin::signed(2),
+				hash.clone(),
+				0,
+				true,
+			);
+			assert_eq!(vote_rval.unwrap().pays_fee, Pays::No);
+
+			// Duplicate vote, expecting error with Pays::Yes.
+			let vote_rval: DispatchResultWithPostInfo = Collective::vote(
+				Origin::signed(2),
+				hash.clone(),
+				0,
+				true,
+			);
+			assert_eq!(vote_rval.unwrap_err().post_info.pays_fee, Pays::Yes);
+
+			// Modifying vote, expecting ok with Pays::Yes.
+			let vote_rval: DispatchResultWithPostInfo = Collective::vote(
+				Origin::signed(2),
+				hash.clone(),
+				0,
+				false,
+			);
+			assert_eq!(vote_rval.unwrap().pays_fee, Pays::Yes);
+
+			// For the motion, acc 3's first vote, expecting Ok with Pays::No.
+			let vote_rval: DispatchResultWithPostInfo = Collective::vote(
+				Origin::signed(3),
+				hash.clone(),
+				0,
+				true,
+			);
+			assert_eq!(vote_rval.unwrap().pays_fee, Pays::No);
+
+			// acc 3 modify the vote, expecting Ok with Pays::Yes.
+			let vote_rval: DispatchResultWithPostInfo = Collective::vote(
+				Origin::signed(3),
+				hash.clone(),
+				0,
+				false,
+			);
+			assert_eq!(vote_rval.unwrap().pays_fee, Pays::Yes);
+
+			// Test close() Extrincis | Check DispatchResultWithPostInfo with Pay Info
+
+			let proposal_weight = proposal.get_dispatch_info().weight;
+			let close_rval: DispatchResultWithPostInfo = Collective::close(
+				Origin::signed(2),
+				hash.clone(),
+				0,
+				proposal_weight,
+				proposal_len,
+			);
+			assert_eq!(close_rval.unwrap().pays_fee, Pays::No);
+
+			// trying to close the proposal, which is already closed.
+			// Expecting error "ProposalMissing" with Pays::Yes
+			let close_rval: DispatchResultWithPostInfo = Collective::close(
+				Origin::signed(2),
+				hash.clone(),
+				0,
+				proposal_weight,
+				proposal_len,
+			);
+			assert_eq!(close_rval.unwrap_err().post_info.pays_fee, Pays::Yes);
 		});
 	}
 
