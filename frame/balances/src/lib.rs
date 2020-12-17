@@ -976,7 +976,7 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 				// TODO: This is over-conservative. There may now be other providers, and this module
 				//   may not even be a provider.
 				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
-				let allow_death = allow_death && system::Module::<T>::is_provider_required(transactor);
+				let allow_death = allow_death && !system::Module::<T>::is_provider_required(transactor);
 				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
 
 				Ok(())

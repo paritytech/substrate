@@ -921,9 +921,9 @@ impl<T: Config> Module<T> {
 	}
 
 	/// True if the account has no outstanding references.
-	#[deprecated = "Use `is_provider_required` instead"]
+	#[deprecated = "Use `!is_provider_required` instead"]
 	pub fn allow_death(who: &T::AccountId) -> bool {
-		Self::is_provider_required(who)
+		!Self::is_provider_required(who)
 	}
 
 	/// Increment the reference counter on an account.

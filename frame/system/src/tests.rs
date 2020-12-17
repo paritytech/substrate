@@ -32,18 +32,18 @@ fn origin_works() {
 fn stored_map_works() {
 	new_test_ext().execute_with(|| {
 		assert!(System::insert(&0, 42).is_ok());
-		assert!(System::is_provider_required(&0));
+		assert!(!System::is_provider_required(&0));
 
 		assert_eq!(Account::<Test>::get(0), AccountInfo { nonce: 0, providers: 1, consumers: 0, data: 42 });
 
 		assert!(System::inc_consumers(&0).is_ok());
-		assert!(!System::is_provider_required(&0));
+		assert!(System::is_provider_required(&0));
 
 		assert!(System::insert(&0, 69).is_ok());
-		assert!(!System::is_provider_required(&0));
+		assert!(System::is_provider_required(&0));
 
 		System::dec_consumers(&0);
-		assert!(System::is_provider_required(&0));
+		assert!(!System::is_provider_required(&0));
 
 		assert!(KILLED.with(|r| r.borrow().is_empty()));
 		assert!(System::remove(&0).is_ok());
