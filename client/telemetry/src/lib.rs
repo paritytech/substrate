@@ -158,7 +158,7 @@ pub struct TelemetryWorker {
 }
 
 impl TelemetryWorker {
-	/// TODO
+	/// Create a new [`TelemetryWorker`] instance.
 	pub fn new() -> Result<Self, io::Error> {
 		let (sender, receiver) = mpsc::channel(16);
 		let (init_sender, init_receiver) = mpsc::unbounded();
@@ -172,7 +172,7 @@ impl TelemetryWorker {
 		})
 	}
 
-	/// Create a [`TelemetryWorker`] object using an `ExtTransport`.
+	/// Create a [`TelemetryWorker`] instance using an `ExtTransport`.
 	///
 	/// This is used in WASM contexts where we need some binding between the networking provided by
 	/// the operating system or environment and libp2p.
@@ -233,7 +233,9 @@ impl TelemetryWorker {
 		).boxed())
 	}
 
-	/// TODO
+	/// Get a handle to this [`TelemetryWorker`].
+	///
+	/// This is used when you want to register a new telemetry for a Substrate node.
 	pub fn handle(&self) -> TelemetryHandle {
 		TelemetryHandle(self.init_sender.clone())
 	}
