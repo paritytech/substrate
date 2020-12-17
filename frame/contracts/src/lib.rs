@@ -390,6 +390,10 @@ decl_error! {
 		/// The queue is filled by deleting contracts and emptied by a fixed amount each block.
 		/// Trying again during another block is the only way to resolve this issue.
 		DeletionQueueFull,
+		/// A contract could not be evicted because it has enough balance to pay rent.
+		///
+		/// This can be returned from [`Module::claim_surcharge`] because the target
+		/// contract has enough balance to pay for its rent.
 		ContractNotEvictable,
 	}
 }
