@@ -333,6 +333,18 @@ pub enum OnBlockData<B: BlockT> {
 	Request(PeerId, BlockRequest<B>)
 }
 
+impl<B: BlockT> OnBlockData<B> {
+	/// Returns `self` as request.
+	#[cfg(test)]
+	fn into_request(self) -> Option<(PeerId, BlockRequest<B>)> {
+		if let Self::Request(peer, req) = self {
+			Some((peer, req))
+		} else {
+			None
+		}
+	}
+}
+
 /// Result of [`ChainSync::poll_block_announce_validation`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PollBlockAnnounceValidation<H> {
@@ -881,17 +893,23 @@ impl<B: BlockT> ChainSync<B> {
 								trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
 								return Err(BadPeer(who.clone(), rep::GENESIS_MISMATCH))
 							}
-							if let Some((next_state, next_num)) = handle_ancestor_search_state(state, *current, matching_hash.is_some()) {
+							if let Some((next_state, next_num)) =
+								handle_ancestor_search_state(state, *current, matching_hash.is_some())
+							{
 								peer.state = PeerSyncState::AncestorSearch {
 									current: next_num,
 									start: *start,
 									state: next_state,
 								};
-								return Ok(OnBlockData::Request(who.clone(), ancestry_request::<B>(next_num)))
+								return Ok(
+									OnBlockData::Request(who.clone(), ancestry_request::<B>(next_num))
+								)
 							} else {
 								// Ancestry search is complete. Check if peer is on a stale fork unknown to us and
 								// add it to sync targets if necessary.
-								trace!(target: "sync", "Ancestry search complete. Ours={} ({}), Theirs={} ({}), Common={:?} ({})",
+								trace!(
+									target: "sync",
+									"Ancestry search complete. Ours={} ({}), Theirs={} ({}), Common={:?} ({})",
 									self.best_queued_hash,
 									self.best_queued_number,
 									peer.best_hash,
@@ -902,7 +920,12 @@ impl<B: BlockT> ChainSync<B> {
 								if peer.common_number < peer.best_number
 									&& peer.best_number < self.best_queued_number
 								{
-									trace!(target: "sync", "Added fork target {} for {}" , peer.best_hash, who);
+									trace!(
+										target: "sync",
+										"Added fork target {} for {}",
+										peer.best_hash,
+										who,
+									);
 									self.fork_targets
 										.entry(peer.best_hash.clone())
 										.or_insert_with(|| ForkTarget {
@@ -2048,6 +2071,9 @@ mod test {
 		peer: &PeerId,
 	) -> BlockRequest<Block> {
 		let requests = sync.block_requests().collect::<Vec<_>>();
+
+		log::trace!(target: "sync", "Requests: {:?}", requests);
+
 		assert_eq!(1, requests.len());
 		assert_eq!(peer, requests[0].0);
 
@@ -2294,6 +2320,14 @@ mod test {
 		);
 	}
 
+	/// A test that ensures that we can sync a huge fork.
+	///
+	/// The following scenario:
+	/// A peer connects to us and we both have the common block 512. The last finalized is 2048.
+	/// Our best block is 4096. The peer send us a block announcement with 4097 from a fork.
+	///
+	/// We will first do an ancestor search to find the common block. After that we start to sync
+	/// the fork and finish it ;)
 	#[test]
 	fn can_sync_huge_fork() {
 		sp_tracing::try_init_simple();
@@ -2327,7 +2361,7 @@ mod test {
 			5,
 		);
 
-		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2].clone();
+		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2 - 1].clone();
 		client.finalize_block(BlockId::Hash(finalized_block.hash()), Some(Vec::new())).unwrap();
 		sync.update_chain_info(&info.best_hash, info.best_number);
 
@@ -2339,9 +2373,84 @@ mod test {
 
 		send_block_announce(fork_blocks.last().unwrap().header().clone(), &peer_id1, &mut sync);
 
+		let mut request = get_block_request(
+			&mut sync,
+			FromBlock::Number(info.best_number),
+			1,
+			&peer_id1,
+		);
+
+		// Do the ancestor search
+		loop {
+			let block = &fork_blocks[unwrap_from_block_number(request.from.clone()) as usize - 1];
+			let response = create_block_response(vec![block.clone()]);
+
+			let on_block_data = sync.on_block_data(&peer_id1, Some(request), response).unwrap();
+			request = match on_block_data.into_request() {
+				Some(req) => req.1,
+				// We found the ancenstor
+				None => break,
+			};
+
+			log::trace!(target: "sync", "Request: {:?}", request);
+		}
+
+		// Now request and import the fork.
+		let mut best_block_num = finalized_block.header().number().clone() as u32;
+		while best_block_num < *fork_blocks.last().unwrap().header().number() as u32 - 1 {
+			let request = get_block_request(
+				&mut sync,
+				FromBlock::Number(MAX_BLOCKS_TO_REQUEST as u64 + best_block_num as u64),
+				MAX_BLOCKS_TO_REQUEST as u32,
+				&peer_id1,
+			);
+
+			let from = unwrap_from_block_number(request.from.clone());
+
+			let mut resp_blocks = fork_blocks[best_block_num as usize..from as usize].to_vec();
+			resp_blocks.reverse();
+
+			let response = create_block_response(resp_blocks.clone());
+
+			let res = sync.on_block_data(&peer_id1, Some(request), response).unwrap();
+			assert!(
+				matches!(
+					res,
+					OnBlockData::Import(_, blocks) if blocks.len() == MAX_BLOCKS_TO_REQUEST
+				),
+			);
+
+			best_block_num += MAX_BLOCKS_TO_REQUEST as u32;
+
+			let _ = sync.on_blocks_processed(
+				MAX_BLOCKS_TO_REQUEST as usize,
+				MAX_BLOCKS_TO_REQUEST as usize,
+				resp_blocks.iter()
+					.rev()
+					.map(|b|
+						(
+							Ok(
+								BlockImportResult::ImportedUnknown(
+									b.header().number().clone(),
+									Default::default(),
+									Some(peer_id1.clone()),
+								)
+							),
+							b.hash(),
+						)
+					)
+					.collect()
+			);
+
+			resp_blocks.into_iter()
+				.rev()
+				.for_each(|b| client.import(BlockOrigin::Own, b).unwrap());
+		}
+
+		// Request the tip
 		get_block_request(
 			&mut sync,
-			FromBlock::Number(*common_block.header().number() as u64),
+			FromBlock::Hash(fork_blocks.last().unwrap().hash()),
 			1,
 			&peer_id1,
 		);
