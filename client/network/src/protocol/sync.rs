@@ -1845,7 +1845,7 @@ mod test {
 	use substrate_test_runtime_client::{
 		runtime::{Block, Hash, Header},
 		ClientBlockImportExt, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
-		BlockBuilderExt, TestClient,
+		BlockBuilderExt, TestClient, ClientExt,
 	};
 	use futures::{future::poll_fn, executor::block_on};
 
@@ -2059,8 +2059,21 @@ mod test {
 	}
 
 	/// Build and import a new best block.
-	fn build_block(client: &mut Arc<TestClient>) -> Block {
-		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	fn build_block(client: &mut Arc<TestClient>, at: Option<Hash>, fork: bool) -> Block {
+		let at = at.unwrap_or_else(|| client.info().best_hash);
+
+		let mut block_builder = client.new_block_at(
+			&BlockId::Hash(at),
+			Default::default(),
+			false,
+		).unwrap();
+
+		if fork {
+			block_builder.push_storage_change(vec![1, 2, 3], Some(vec![4, 5, 6])).unwrap();
+		}
+
+		let block = block_builder.build().unwrap().block;
+
 		client.import(BlockOrigin::Own, block.clone()).unwrap();
 		block
 	}
@@ -2108,9 +2121,9 @@ mod test {
 			block
 		};
 
-		let block1 = build_block(&mut client);
-		let block2 = build_block(&mut client);
-		let block3 = build_block(&mut client);
+		let block1 = build_block(&mut client, None, false);
+		let block2 = build_block(&mut client, None, false);
+		let block3 = build_block(&mut client, None, false);
 		let block3_fork = build_block_at(block2.hash(), false);
 
 		// Add two peers which are on block 1.
@@ -2189,7 +2202,7 @@ mod test {
 
 		let blocks = {
 			let mut client = Arc::new(TestClientBuilder::new().build());
-			(0..MAX_DOWNLOAD_AHEAD * 2).map(|_| build_block(&mut client)).collect::<Vec<_>>()
+			(0..MAX_DOWNLOAD_AHEAD * 2).map(|_| build_block(&mut client, None, false)).collect::<Vec<_>>()
 		};
 
 		let mut client = Arc::new(TestClientBuilder::new().build());
@@ -2281,4 +2294,56 @@ mod test {
 		);
 	}
 
+	#[test]
+	fn can_sync_huge_fork() {
+		sp_tracing::try_init_simple();
+
+		let mut client = Arc::new(TestClientBuilder::new().build());
+		let blocks = (0..MAX_BLOCKS_TO_LOOK_BACKWARDS * 4)
+			.map(|_| build_block(&mut client, None, false))
+			.collect::<Vec<_>>();
+
+		let fork_blocks = {
+			let mut client = Arc::new(TestClientBuilder::new().build());
+			let fork_blocks = blocks[..MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2]
+				.into_iter()
+				.inspect(|b| client.import(BlockOrigin::Own, (*b).clone()).unwrap())
+				.cloned()
+				.collect::<Vec<_>>();
+
+				fork_blocks.into_iter().chain(
+					(0..MAX_BLOCKS_TO_LOOK_BACKWARDS * 2 + 1)
+						.map(|_| build_block(&mut client, None, true))
+				).collect::<Vec<_>>()
+		};
+
+		let info = client.info();
+
+		let mut sync = ChainSync::new(
+			Roles::AUTHORITY,
+			client.clone(),
+			&info,
+			Box::new(DefaultBlockAnnounceValidator),
+			5,
+		);
+
+		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2].clone();
+		client.finalize_block(BlockId::Hash(finalized_block.hash()), Some(Vec::new())).unwrap();
+		sync.update_chain_info(&info.best_hash, info.best_number);
+
+		let peer_id1 = PeerId::random();
+
+		let common_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize / 2].clone();
+		// Connect the node we will sync from
+		sync.new_peer(peer_id1.clone(), common_block.hash(), *common_block.header().number()).unwrap();
+
+		send_block_announce(fork_blocks.last().unwrap().header().clone(), &peer_id1, &mut sync);
+
+		get_block_request(
+			&mut sync,
+			FromBlock::Number(*common_block.header().number() as u64),
+			1,
+			&peer_id1,
+		);
+	}
 }
