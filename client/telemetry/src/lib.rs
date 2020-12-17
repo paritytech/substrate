@@ -41,15 +41,12 @@
 
 use futures::{channel::mpsc, prelude::*};
 use libp2p::{
-	core::transport::{OptionalTransport, timeout::TransportTimeout},
-	wasm_ext, Multiaddr, Transport,
+	wasm_ext, Multiaddr,
 };
 use log::{error, warn};
-use serde::{Deserialize, Deserializer, Serialize};
 use std::{
 	collections::{HashMap, HashSet},
 	io,
-	pin::Pin,
 	sync::Arc,
 	time::Duration,
 };
@@ -65,69 +62,15 @@ pub use tracing;
 
 mod layer;
 mod node;
-pub mod worker;
 mod dispatcher;
+mod transport;
+mod endpoints;
 
 pub use layer::*;
 use node::*;
-use worker::{CONNECT_TIMEOUT, StreamSink}; // TODO mod
 use dispatcher::*;
-
-/// List of telemetry servers we want to talk to. Contains the URL of the server, and the
-/// maximum verbosity level.
-///
-/// The URL string can be either a URL or a multiaddress.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct TelemetryEndpoints(
-	#[serde(deserialize_with = "url_or_multiaddr_deser")]
-	Vec<(Multiaddr, u8)>
-);
-
-/// Custom deserializer for TelemetryEndpoints, used to convert urls or multiaddr to multiaddr.
-fn url_or_multiaddr_deser<'de, D>(deserializer: D) -> Result<Vec<(Multiaddr, u8)>, D::Error>
-	where D: Deserializer<'de>
-{
-	Vec::<(String, u8)>::deserialize(deserializer)?
-		.iter()
-		.map(|e| Ok((url_to_multiaddr(&e.0)
-		.map_err(serde::de::Error::custom)?, e.1)))
-		.collect()
-}
-
-impl TelemetryEndpoints {
-	/// Create a `TelemetryEndpoints` based on a list of `(String, u8)`.
-	pub fn new(endpoints: Vec<(String, u8)>) -> Result<Self, libp2p::multiaddr::Error> {
-		let endpoints: Result<Vec<(Multiaddr, u8)>, libp2p::multiaddr::Error> = endpoints.iter()
-			.map(|e| Ok((url_to_multiaddr(&e.0)?, e.1)))
-			.collect();
-		endpoints.map(Self)
-	}
-}
-
-impl TelemetryEndpoints {
-	/// Return `true` if there are no telemetry endpoints, `false` otherwise.
-	pub fn is_empty(&self) -> bool {
-		self.0.is_empty()
-	}
-}
-
-/// Parses a WebSocket URL into a libp2p `Multiaddr`.
-fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
-	// First, assume that we have a `Multiaddr`.
-	let parse_error = match url.parse() {
-		Ok(ma) => return Ok(ma),
-		Err(err) => err,
-	};
-
-	// If not, try the `ws://path/url` format.
-	if let Ok(ma) = libp2p::multiaddr::from_url(url) {
-		return Ok(ma)
-	}
-
-	// If we have no clue about the format of that string, assume that we were expecting a
-	// `Multiaddr`.
-	Err(parse_error)
-}
+pub use endpoints::*;
+use transport::*;
 
 /// Substrate DEBUG log level.
 pub const SUBSTRATE_DEBUG: u8 = 9;
@@ -154,7 +97,7 @@ pub struct TelemetryWorker {
 	sender: mpsc::Sender<(Id, u8, String)>,
 	init_receiver: mpsc::UnboundedReceiver<InitPayload>,
 	init_sender: mpsc::UnboundedSender<InitPayload>,
-	transport: crate::worker::WsTrans,
+	transport: WsTrans,
 }
 
 impl TelemetryWorker {
@@ -177,46 +120,8 @@ impl TelemetryWorker {
 			sender,
 			init_receiver,
 			init_sender,
-			transport: Self::initialize_transport(wasm_external_transport)?,
+			transport: initialize_transport(wasm_external_transport)?,
 		})
-	}
-
-	fn initialize_transport(
-		wasm_external_transport: Option<wasm_ext::ExtTransport>,
-	) -> Result<crate::worker::WsTrans, io::Error> {
-		let transport = match wasm_external_transport.clone() {
-			Some(t) => OptionalTransport::some(t),
-			None => OptionalTransport::none()
-		}.map((|inner, _| StreamSink::from(inner)) as fn(_, _) -> _);
-
-		// The main transport is the `wasm_external_transport`, but if we're on desktop we add
-		// support for TCP+WebSocket+DNS as a fallback. In practice, you're not expected to pass
-		// an external transport on desktop and the fallback is used all the time.
-		#[cfg(not(target_os = "unknown"))]
-		let transport = transport.or_transport({
-			let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new())?;
-			libp2p::websocket::framed::WsConfig::new(inner)
-				.and_then(|connec, _| {
-					let connec = connec
-						.with(|item| {
-							let item = libp2p::websocket::framed::OutgoingData::Binary(item);
-							future::ready(Ok::<_, io::Error>(item))
-						})
-						.try_filter(|item| future::ready(item.is_data()))
-						.map_ok(|data| data.into_bytes());
-					future::ready(Ok::<_, io::Error>(connec))
-				})
-		});
-
-		Ok(TransportTimeout::new(
-			transport.map(|out, _| {
-				let out = out
-					.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-					.sink_map_err(|err| io::Error::new(io::ErrorKind::Other, err));
-				Box::pin(out) as Pin<Box<_>>
-			}),
-			CONNECT_TIMEOUT
-		).boxed())
 	}
 
 	/// Get a handle to this [`TelemetryWorker`].

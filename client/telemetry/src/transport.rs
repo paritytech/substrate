@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,32 +16,63 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Contains the object that makes the telemetry work.
-//!
-//! # Usage
-//!
-//! - Create a `TelemetryWorker` with `TelemetryWorker::new`.
-//! - Send messages to the telemetry with `TelemetryWorker::send_message`. Messages will only be
-//!   sent to the appropriate targets. Messages may be ignored if the target happens to be
-//!   temporarily unreachable.
-//! - You must appropriately poll the worker with `TelemetryWorker::poll`. Polling will/may produce
-//!   events indicating what happened since the latest polling.
-//!
-
-use futures::{prelude::*, ready};
-use log::{error};
-use std::{io, pin::Pin, task::Context, task::Poll, time};
+use futures::{prelude::*, task::{Context, Poll}, ready};
+use std::pin::Pin;
+use std::io;
+use libp2p::{
+	core::transport::{OptionalTransport, timeout::TransportTimeout},
+	wasm_ext, Transport,
+};
+use std::time::Duration;
 
 /// Timeout after which a connection attempt is considered failed. Includes the WebSocket HTTP
 /// upgrading.
-pub(crate) const CONNECT_TIMEOUT: time::Duration = time::Duration::from_secs(20);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
+
+pub(crate) fn initialize_transport(
+	wasm_external_transport: Option<wasm_ext::ExtTransport>,
+) -> Result<WsTrans, io::Error> {
+	let transport = match wasm_external_transport.clone() {
+		Some(t) => OptionalTransport::some(t),
+		None => OptionalTransport::none()
+	}.map((|inner, _| StreamSink::from(inner)) as fn(_, _) -> _);
+
+	// The main transport is the `wasm_external_transport`, but if we're on desktop we add
+	// support for TCP+WebSocket+DNS as a fallback. In practice, you're not expected to pass
+	// an external transport on desktop and the fallback is used all the time.
+	#[cfg(not(target_os = "unknown"))]
+	let transport = transport.or_transport({
+		let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new())?;
+		libp2p::websocket::framed::WsConfig::new(inner)
+			.and_then(|connec, _| {
+				let connec = connec
+					.with(|item| {
+						let item = libp2p::websocket::framed::OutgoingData::Binary(item);
+						future::ready(Ok::<_, io::Error>(item))
+					})
+					.try_filter(|item| future::ready(item.is_data()))
+					.map_ok(|data| data.into_bytes());
+				future::ready(Ok::<_, io::Error>(connec))
+			})
+	});
+
+	Ok(TransportTimeout::new(
+		transport.map(|out, _| {
+			let out = out
+				.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+				.sink_map_err(|err| io::Error::new(io::ErrorKind::Other, err));
+			Box::pin(out) as Pin<Box<_>>
+		}),
+		CONNECT_TIMEOUT
+	).boxed())
+}
 
 /// A trait that implements `Stream` and `Sink`.
-pub trait StreamAndSink<I>: Stream + Sink<I> {}
+pub(crate) trait StreamAndSink<I>: Stream + Sink<I> {}
 impl<T: ?Sized + Stream + Sink<I>, I> StreamAndSink<I> for T {}
 
 /// A type alias for the WebSocket transport.
-pub type WsTrans = libp2p::core::transport::Boxed<
+pub(crate) type WsTrans = libp2p::core::transport::Boxed<
 	Pin<Box<dyn StreamAndSink<
 		Vec<u8>,
 		Item = Result<Vec<u8>, io::Error>,
@@ -86,7 +117,7 @@ impl<T: AsyncWrite> StreamSink<T> {
 
 		if let Some(buffer) = this.1 {
 			if ready!(this.0.poll_write(cx, &buffer[..]))? != buffer.len() {
-				error!(target: "telemetry",
+				log::error!(target: "telemetry",
 					"Detected some internal buffering happening in the telemetry");
 				let err = io::Error::new(io::ErrorKind::Other, "Internal buffering detected");
 				return Poll::Ready(Err(err));
@@ -125,3 +156,4 @@ impl<T: AsyncWrite> Sink<Vec<u8>> for StreamSink<T> {
 		AsyncWrite::poll_close(this.0, cx)
 	}
 }
+
