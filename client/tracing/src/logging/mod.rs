@@ -49,102 +49,18 @@ macro_rules! disable_log_reloading {
 	}};
 }
 
-/// Get a new default tracing's `Subscriber` and a sc-telemetry's `TelemetryWorker` objects.
-///
-/// When running in a browser, the `telemetry_external_transport` should be provided.
-fn get_default_subscriber_and_telemetry_worker(
-	pattern: &str,
-	telemetry_external_transport: Option<ExtTransport>,
-) -> std::result::Result<
-	(
-		impl Subscriber + for<'a> LookupSpan<'a>,
-		TelemetryWorker,
-	),
-	String,
-> {
-	get_default_subscriber_and_telemetry_worker_internal(
-		pattern,
-		telemetry_external_transport,
-		|builder| builder,
-	)
+macro_rules! set_global_default {
+	($subscriber:expr) => {{
+		tracing::subscriber::set_global_default($subscriber)
+			.map_err(|err| format!(
+				"Registering Substrate tracing subscriber failed: {}!",
+				err,
+			))
+	}};
 }
 
-/// Get a new default tracing's `Subscriber` and a sc-telemetry's `TelemetryWorker` objects with log
-/// reloading.
-///
-/// When running in a browser, the `telemetry_external_transport` should be provided.
-fn get_default_subscriber_and_telemetry_worker_with_log_reloading(
-	pattern: &str,
-	telemetry_external_transport: Option<ExtTransport>,
-) -> std::result::Result<
-	(
-		impl Subscriber + for<'a> LookupSpan<'a>,
-		TelemetryWorker,
-	),
-	String,
-> {
-	get_default_subscriber_and_telemetry_worker_internal(
-		pattern,
-		telemetry_external_transport,
-		|builder| disable_log_reloading!(builder),
-	)
-}
-
-/// Get a new default tracing's `Subscriber` and a sc-telemetry's `TelemetryWorker` objects with
-/// profiling enabled.
-///
-/// When running in a browser, the `telemetry_external_transport` should be provided.
-fn get_default_subscriber_and_telemetry_worker_with_profiling(
-	pattern: &str,
-	telemetry_external_transport: Option<ExtTransport>,
-	tracing_receiver: crate::TracingReceiver,
-	profiling_targets: &str,
-) -> std::result::Result<
-	(
-		impl Subscriber + for<'a> LookupSpan<'a>,
-		TelemetryWorker,
-	),
-	String,
-> {
-	let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker_internal(
-		&format!("{},{}", pattern, profiling_targets),
-		telemetry_external_transport,
-		|builder| builder,
-	)?;
-	let profiling = crate::ProfilingLayer::new(tracing_receiver, profiling_targets);
-
-	Ok((subscriber.with(profiling), telemetry_worker))
-}
-
-/// Get a new default tracing's `Subscriber` and a sc-telemetry's `TelemetryWorker` objects with
-/// profiling enabled and log reloading.
-///
-/// When running in a browser, the `telemetry_external_transport` should be provided.
-fn get_default_subscriber_and_telemetry_worker_with_profiling_and_log_reloading(
-	pattern: &str,
-	telemetry_external_transport: Option<ExtTransport>,
-	tracing_receiver: crate::TracingReceiver,
-	profiling_targets: &str,
-) -> std::result::Result<
-	(
-		impl Subscriber + for<'a> LookupSpan<'a>,
-		TelemetryWorker,
-	),
-	String,
-> {
-	let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker_internal(
-		&format!("{},{}", pattern, profiling_targets),
-		telemetry_external_transport,
-		|builder| disable_log_reloading!(builder),
-	)?;
-	let profiling = crate::ProfilingLayer::new(tracing_receiver, profiling_targets);
-
-	Ok((subscriber.with(profiling), telemetry_worker))
-}
-
-// Common implementation for `get_default_subscriber_and_telemetry_worker` and
-// `get_default_subscriber_and_telemetry_worker_with_profiling`.
-fn get_default_subscriber_and_telemetry_worker_internal<N, E, F, W>(
+/// Common implementation to get the subscriber.
+fn get_subscriber_internal<N, E, F, W>(
 	pattern: &str,
 	telemetry_external_transport: Option<ExtTransport>,
 	builder_hook: impl Fn(SubscriberBuilder<format::DefaultFields, EventFormat<ChronoLocal>, EnvFilter, fn() -> std::io::Stderr>) -> SubscriberBuilder<N, E, F, W>,
@@ -305,61 +221,47 @@ impl GlobalLoggerBuilder {
 	pub fn init(self) -> Result<TelemetryWorker, String> {
 		Ok(if let Some((tracing_receiver, profiling_targets)) = self.profiling {
 			if self.disable_log_reloading {
-				let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker_with_profiling(
-					&self.pattern,
+				let (subscriber, telemetry_worker) = get_subscriber_internal(
+					&format!("{},{}", self.pattern, profiling_targets),
 					self.telemetry_external_transport,
-					tracing_receiver,
-					&profiling_targets,
+					|builder| builder,
 				)?;
+				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
-				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-					return Err(format!(
-						"Registering Substrate tracing subscriber failed: {:}!", e
-					))
-				}
+				set_global_default!(subscriber.with(profiling))?;
 
 				telemetry_worker
 			} else {
-				let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker_with_profiling_and_log_reloading(
-					&self.pattern,
+				let (subscriber, telemetry_worker) = get_subscriber_internal(
+					&format!("{},{}", self.pattern, profiling_targets),
 					self.telemetry_external_transport,
-					tracing_receiver,
-					&profiling_targets,
+					|builder| disable_log_reloading!(builder),
 				)?;
+				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
-				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-					return Err(format!(
-						"Registering Substrate tracing subscriber failed: {:}!", e
-					))
-				}
+				set_global_default!(subscriber.with(profiling))?;
 
 				telemetry_worker
 			}
 		} else {
 			if self.disable_log_reloading {
-				let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker(
+				let (subscriber, telemetry_worker) = get_subscriber_internal(
 					&self.pattern,
 					self.telemetry_external_transport,
+					|builder| builder,
 				)?;
 
-				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-					return Err(format!(
-						"Registering Substrate tracing subscriber failed: {:}!", e
-					))
-				}
+				set_global_default!(subscriber)?;
 
 				telemetry_worker
 			} else {
-				let (subscriber, telemetry_worker) = get_default_subscriber_and_telemetry_worker_with_log_reloading(
+				let (subscriber, telemetry_worker) = get_subscriber_internal(
 					&self.pattern,
 					self.telemetry_external_transport,
+					|builder| disable_log_reloading!(builder),
 				)?;
 
-				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-					return Err(format!(
-						"Registering Substrate tracing subscriber failed: {:}!", e
-					))
-				}
+				set_global_default!(subscriber)?;
 
 				telemetry_worker
 			}
