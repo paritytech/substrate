@@ -158,20 +158,6 @@ pub struct TelemetryWorker {
 }
 
 impl TelemetryWorker {
-	/// Create a new [`TelemetryWorker`] instance.
-	pub fn new() -> Result<Self, io::Error> {
-		let (sender, receiver) = mpsc::channel(16);
-		let (init_sender, init_receiver) = mpsc::unbounded();
-
-		Ok(Self {
-			receiver,
-			sender,
-			init_receiver,
-			init_sender,
-			transport: Self::initialize_transport(None)?,
-		})
-	}
-
 	/// Create a [`TelemetryWorker`] instance using an `ExtTransport`.
 	///
 	/// This is used in WASM contexts where we need some binding between the networking provided by
@@ -182,7 +168,7 @@ impl TelemetryWorker {
 	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
 	/// >                internal buffering going on. In the context of WebSockets, each `write`
 	/// >                must be one individual WebSockets frame.
-	pub fn with_wasm_external_transport(wasm_external_transport: wasm_ext::ExtTransport) -> Result<Self, io::Error> {
+	pub fn new(wasm_external_transport: Option<wasm_ext::ExtTransport>) -> Result<Self, io::Error> {
 		let (sender, receiver) = mpsc::channel(16);
 		let (init_sender, init_receiver) = mpsc::unbounded();
 
@@ -191,7 +177,7 @@ impl TelemetryWorker {
 			sender,
 			init_receiver,
 			init_sender,
-			transport: Self::initialize_transport(Some(wasm_external_transport))?,
+			transport: Self::initialize_transport(wasm_external_transport)?,
 		})
 	}
 
@@ -240,12 +226,12 @@ impl TelemetryWorker {
 		TelemetryHandle(self.init_sender.clone())
 	}
 
-	/// TODO
-	pub fn sender(&self) -> mpsc::Sender<(Id, u8, String)> {
+	/// Get a clone of the channel's `Sender` used to send telemetry event.
+	pub(crate) fn sender(&self) -> mpsc::Sender<(Id, u8, String)> {
 		self.sender.clone()
 	}
 
-	/// TODO
+	/// Run the telemetry worker.
 	pub async fn run(self) {
 		let Self {
 			receiver,
@@ -346,43 +332,55 @@ impl TelemetryWorker {
 	}
 }
 
-/// TODO
+/// Handle to the [`TelemetryWorker`] thats allows initializing the telemetry for a Substrate node.
 #[derive(Clone, Debug)]
 pub struct TelemetryHandle(mpsc::UnboundedSender<InitPayload>);
 
 impl TelemetryHandle {
-	/// Create a new [`Telemetry`] for the endpoints provided in argument.
+	/// Initialize the telemetry with the endpoints provided in argument for the current substrate
+	/// node.
+	///
+	/// This method must be called during the substrate node initialization.
 	///
 	/// The `endpoints` argument is a collection of telemetry WebSocket servers with a corresponding
-	/// verbosity level. TODO doc
+	/// verbosity level.
+	///
+	/// The `connection_message` argument is a JSON object that is sent every time the connection
+	/// (re-)establishes.
 	pub fn start_telemetry(
 		&mut self,
 		endpoints: TelemetryEndpoints,
 		connection_message: serde_json::Value,
 	) -> TelemetryConnectionNotifier {
 		let connection_sink = TelemetryConnectionNotifier::default();
-
 		let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
-		let id = span.id().expect("the span is enabled; qed"); // TODO: this error happen if the log is disabled by the command line
-		{
-			let id = id.clone();
-			// TODO where to drop span?
-			tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&id));
-		}
 
-		if let Err(err) = self.0.unbounded_send((id, endpoints, connection_message, connection_sink.clone())) {
-			error!(
+		match span.id() {
+			Some(id) => {
+				match self.0.unbounded_send(
+					(id.clone(), endpoints, connection_message, connection_sink.clone()),
+				) {
+					Ok(()) =>
+						tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&id)),
+					Err(err) => error!(
+						target: "telemetry",
+						"Could not initialize telemetry: {}",
+						err,
+					),
+				}
+			},
+			None => error!(
 				target: "telemetry",
-				"Could not initialize telemetry: {}",
-				err,
-			);
+				"Could not initialize telemetry: the span could not be entered",
+			),
 		}
 
 		connection_sink
 	}
 }
 
-/// Sinks to propagate telemetry connection established events.
+/// Used to create a stream of events with only one event: when a telemetry connection
+/// (re-)establishes.
 #[derive(Default, Clone, Debug)]
 pub struct TelemetryConnectionNotifier(Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
 

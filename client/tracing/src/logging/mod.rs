@@ -226,13 +226,7 @@ where
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-	let telemetry_worker = if let Some(telemetry_external_transport) = telemetry_external_transport {
-		sc_telemetry::TelemetryWorker::with_wasm_external_transport(telemetry_external_transport)
-	} else {
-		sc_telemetry::TelemetryWorker::new()
-	}.map_err(|err| format!("Could not initialize telemetry: {}", err))?;
-	let sender = telemetry_worker.sender();
-	let telemetry_layer = sc_telemetry::TelemetryLayer::new(sender);
+	let (telemetry_layer, telemetry_worker) = sc_telemetry::TelemetryLayer::new(telemetry_external_transport).map_err(|err| format!("Could not initialize telemetry: {}", err))?;
 	let event_format = EventFormat {
 		timer,
 		display_target: !simple,

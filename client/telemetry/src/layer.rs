@@ -21,6 +21,9 @@ use parking_lot::Mutex;
 use std::convert::TryInto;
 use tracing::{Event, Id, Subscriber};
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
+use libp2p::wasm_ext::ExtTransport;
+use crate::TelemetryWorker;
+use std::io;
 
 /// Span name used to report the telemetry.
 pub const TELEMETRY_LOG_SPAN: &str = "telemetry-logger";
@@ -31,8 +34,10 @@ pub struct TelemetryLayer(Mutex<mpsc::Sender<(Id, u8, String)>>);
 
 impl TelemetryLayer {
 	/// Create a new [`TelemetryLayer`] using the [`Senders`] provided in argument.
-	pub fn new(sender: mpsc::Sender<(Id, u8, String)>) -> Self {
-		Self(Mutex::new(sender))
+	pub fn new(telemetry_external_transport: Option<ExtTransport>) -> Result<(Self, TelemetryWorker), io::Error> {
+		let worker = TelemetryWorker::new(telemetry_external_transport)?;
+		let sender = worker.sender();
+		Ok((Self(Mutex::new(sender)), worker))
 	}
 }
 
