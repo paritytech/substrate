@@ -41,12 +41,14 @@ macro_rules! disable_log_reloading {
 	($builder:expr) => {{
 		let builder = $builder.with_filter_reloading();
 		let handle = builder.reload_handle();
-		crate::set_reload_handle(handle);
+		$crate::set_reload_handle(handle);
 		builder
 	}};
 }
 
-/// TODO
+/// Get a new default tracing's `Subscriber` and a sc-telemetry's `TelemetryWorker` objects.
+///
+/// When running in a browser, the `telemetry_external_transport` should be provided.
 pub fn get_default_subscriber_and_telemetry_worker(
 	pattern: &str,
 	telemetry_external_transport: Option<sc_telemetry::ExtTransport>,
@@ -64,7 +66,8 @@ pub fn get_default_subscriber_and_telemetry_worker(
 	)
 }
 
-/// Get a new default tracing's `Subscriber` and a sc-telemetry's `TelemetryWorker` objects.
+/// Get a new default tracing's `Subscriber` and a sc-telemetry's `TelemetryWorker` objects with log
+/// reloading.
 ///
 /// When running in a browser, the `telemetry_external_transport` should be provided.
 #[cfg(not(target_os = "unknown"))]
@@ -114,7 +117,7 @@ pub fn get_default_subscriber_and_telemetry_worker_with_profiling(
 }
 
 /// Get a new default tracing's `Subscriber` and a sc-telemetry's `TelemetryWorker` objects with
-/// profiling enabled.
+/// profiling enabled and log reloading.
 ///
 /// When running in a browser, the `telemetry_external_transport` should be provided.
 #[cfg(not(target_os = "unknown"))]
