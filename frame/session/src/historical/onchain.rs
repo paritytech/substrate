@@ -55,7 +55,7 @@ pub fn store_session_validator_set_to_offchain<T: HistoricalConfig + SessionConf
 
 /// Store the validator set associated to the _current_ session index to the off-chain database.
 ///
-/// See [`fn store_session_validator_set_...(..)`](Self::store_session_validator_set_to_offchain)
+/// See [`store_session_validator_set_to_offchain`]
 /// for further information and restrictions.
 pub fn store_current_session_validator_set_to_offchain<T: HistoricalConfig + SessionConfig>() {
 	store_session_validator_set_to_offchain::<T>(<SessionModule<T>>::current_index());

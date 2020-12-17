@@ -621,7 +621,7 @@ decl_module! {
 		#[weight = if *has_replacement {
 			T::WeightInfo::remove_member_with_replacement()
 		} else {
-			T::MaximumBlockWeight::get()
+			T::BlockWeights::get().max_block
 		}]
 		fn remove_member(
 			origin,
@@ -829,7 +829,7 @@ impl<T: Config> Module<T> {
 		if !Self::term_duration().is_zero() {
 			if (block_number % Self::term_duration()).is_zero() {
 				Self::do_phragmen();
-				return T::MaximumBlockWeight::get()
+				return T::BlockWeights::get().max_block;
 			}
 		}
 		0
@@ -1058,26 +1058,26 @@ impl<T: Config> ContainsLengthBound for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use frame_support::{assert_ok, assert_noop, assert_err_with_weight, parameter_types,
-		weights::Weight,
-	};
+	use frame_support::{assert_ok, assert_noop, assert_err_with_weight, parameter_types};
 	use substrate_test_utils::assert_eq_uvec;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill, testing::Header, BuildStorage, DispatchResult,
+		testing::Header, BuildStorage, DispatchResult,
 		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
 	use crate as elections_phragmen;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
 
 	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -1089,13 +1089,6 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = pallet_balances::AccountData<u64>;

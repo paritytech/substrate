@@ -257,10 +257,10 @@
 			"prefix": 30,
 			"network": "phala",
 			"displayName": "Phala Network",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["PHA"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://phala.network"
 		},
 		{
 			"prefix": 32,
@@ -299,6 +299,15 @@
 			"website": "https://nodle.io/"
 		},
 		{
+			"prefix": 38,
+			"network": "kilt",
+			"displayName": "KILT Chain",
+			"symbols": ["KILT"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://kilt.io/"
+		},
+		{
 			"prefix": 39,
 			"network": "mathchain",
 			"displayName": "MathChain mainnet",
@@ -315,6 +324,15 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://mathwallet.org"
+		},
+		{
+			"prefix": 41,
+			"network": "poli",
+			"displayName": "Polimec Chain",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": "https://polimec.io/"
 		},
 		{
 			"prefix": 42,

@@ -69,7 +69,7 @@ pub struct Limits {
 
 	/// Maximum allowed stack height in number of elements.
 	///
-	/// See https://wiki.parity.io/WebAssembly-StackHeight to find out
+	/// See <https://wiki.parity.io/WebAssembly-StackHeight> to find out
 	/// how the stack frame cost is calculated. Each element can be of one of the
 	/// wasm value types. This means the maximum size per element is 64bit.
 	pub stack_height: u32,

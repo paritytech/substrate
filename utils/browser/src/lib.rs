@@ -75,6 +75,7 @@ where
 
 			DatabaseConfig::Custom(sp_database::as_database(db))
 		},
+		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::InMemory,
 		default_heap_pages: Default::default(),
 		dev_key_seed: Default::default(),
@@ -105,6 +106,7 @@ where
 		informant_output_format: sc_informant::OutputFormat {
 			enable_color: false,
 		},
+		disable_log_reloading: false,
 	};
 
 	Ok(config)
