@@ -562,7 +562,7 @@ decl_module! {
 		/// If contract is not evicted as a result of this call, [`Error::ContractNotEvictable`]
 		/// is returned and the sender is not eligible for the reward.
 		#[weight = T::WeightInfo::claim_surcharge()]
-		fn claim_surcharge(
+		pub fn claim_surcharge(
 			origin,
 			dest: T::AccountId,
 			aux_sender: Option<T::AccountId>
