@@ -350,7 +350,7 @@ pub fn new_full(config: Configuration)
 }
 
 pub fn new_light_base(mut config: Configuration) -> Result<(
-	TaskManager, RpcHandlers, TelemetryConnectionNotifier, Arc<LightClient>,
+	TaskManager, RpcHandlers, Option<TelemetryConnectionNotifier>, Arc<LightClient>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
@@ -436,7 +436,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 			task_manager: &mut task_manager,
 		})?;
 
-	Ok((task_manager, rpc_handlers, telemetry_telemetry_connection_notifier.unwrap_or_default(), client, network, transaction_pool))
+	Ok((task_manager, rpc_handlers, telemetry_telemetry_connection_notifier, client, network, transaction_pool))
 }
 
 /// Builds a new service for a light client.

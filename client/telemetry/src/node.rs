@@ -22,9 +22,9 @@ use libp2p::Multiaddr;
 use libp2p::core::transport::Transport;
 use rand::Rng as _;
 use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
-use crate::TelemetryConnectionNotifier;
 
 pub(crate) type ConnectionMessage = serde_json::Map<String, serde_json::Value>;
+pub(crate) type ConnectionNotifierSender = sp_utils::mpsc::TracingUnboundedSender<()>;
 
 /// Handler for a single telemetry node.
 ///
@@ -48,7 +48,7 @@ pub(crate) struct Node<TTrans: Transport> {
 	/// Messages that are sent when the connection (re-)establishes.
 	connection_messages: Vec<ConnectionMessage>,
 	/// Notifier for when the connection (re-)establishes.
-	telemetry_connection_notifier: Vec<TelemetryConnectionNotifier>,
+	telemetry_connection_notifier: Vec<ConnectionNotifierSender>,
 }
 
 enum NodeSocket<TTrans: Transport> {
@@ -85,7 +85,7 @@ impl<TTrans: Transport> Node<TTrans> {
 		transport: TTrans,
 		addr: Multiaddr,
 		connection_messages: Vec<ConnectionMessage>,
-		telemetry_connection_notifier: Vec<TelemetryConnectionNotifier>,
+		telemetry_connection_notifier: Vec<ConnectionNotifierSender>,
 	) -> Self {
 		Node {
 			addr,
@@ -168,8 +168,8 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 					Poll::Ready(Ok(sink)) => {
 						log::debug!(target: "telemetry", "✅ Connected to {}", self.addr);
 
-						for connection_sink in self.telemetry_connection_notifier.iter() {
-							connection_sink.fire();
+						for sender in self.telemetry_connection_notifier.iter_mut() {
+							let _ = sender.send(());
 						}
 
 						fn generate_message(mut obj: ConnectionMessage) -> Result<Vec<u8>, String> {

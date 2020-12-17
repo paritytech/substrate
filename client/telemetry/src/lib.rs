@@ -46,13 +46,11 @@ use libp2p::{
 use log::{error, warn};
 use std::{
 	collections::{HashMap, HashSet},
-	sync::Arc,
 	time::Duration,
 };
 use wasm_timer::Instant;
 use tracing::Id;
-use parking_lot::Mutex;
-use sp_utils::{mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender}};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 
 pub use chrono;
 pub use libp2p::wasm_ext::ExtTransport;
@@ -85,7 +83,7 @@ pub const CONSENSUS_WARN: u8 = 4;
 /// Consensus INFO log level.
 pub const CONSENSUS_INFO: u8 = 1;
 
-pub(crate) type InitPayload = (Id, TelemetryEndpoints, ConnectionMessage, TelemetryConnectionNotifier);
+pub(crate) type InitPayload = (Id, TelemetryEndpoints, ConnectionMessage, mpsc::UnboundedReceiver<ConnectionNotifierSender>);
 
 /// An object that keeps track of all the [`Telemetry`] created by its `build_telemetry()` method.
 ///
@@ -153,20 +151,23 @@ impl TelemetryWorker {
 			receiver,
 			sender: _sender,
 			mut init_receiver,
-			init_sender,
+			init_sender: _init_sender,
 			transport,
 		} = self;
 
 		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
 		let mut connection_messages: HashMap<Multiaddr, Vec<ConnectionMessage>> = HashMap::new();
-		let mut telemetry_connection_notifier: HashMap<Multiaddr, Vec<TelemetryConnectionNotifier>> = HashMap::new();
+		let mut connection_notifiers: HashMap<Multiaddr, Vec<ConnectionNotifierSender>> = HashMap::new();
 		let mut existing_nodes: HashSet<Multiaddr> = HashSet::new();
 
 		// initialize the telemetry nodes
-		init_sender.close_channel();
-		while let Some((id, endpoints, connection_message, connection_sink)) = init_receiver.next().await
+		init_receiver.close();
+		while let Some((id, endpoints, connection_message, mut connection_notifiers_rx)) = init_receiver.next().await
 		{
 			let endpoints = endpoints.0;
+
+			connection_notifiers_rx.close();
+			let connection_notifier_senders: Vec<_> = connection_notifiers_rx.collect().await;
 
 			for (addr, verbosity) in endpoints {
 				node_map.entry(id.clone()).or_insert_with(Vec::new)
@@ -177,8 +178,8 @@ impl TelemetryWorker {
 				obj.insert("id".into(), id.into_u64().into());
 				connection_messages.entry(addr.clone()).or_insert_with(Vec::new)
 					.push(obj);
-				telemetry_connection_notifier.entry(addr.clone()).or_insert_with(Vec::new)
-					.push(connection_sink.clone());
+				connection_notifiers.entry(addr.clone()).or_insert_with(Vec::new)
+					.extend(connection_notifier_senders.clone());
 			}
 		}
 
@@ -188,9 +189,9 @@ impl TelemetryWorker {
 				.map(|addr| {
 					let connection_messages = connection_messages.remove(addr)
 						.expect("there is a node for every connection message; qed");
-					let telemetry_connection_notifier = telemetry_connection_notifier.remove(addr)
-						.expect("there is a node for every connection sink; qed");
-					let node = Node::new(transport.clone(), addr.clone(), connection_messages, telemetry_connection_notifier);
+					let connection_notifiers = connection_notifiers.remove(addr)
+						.expect("there is a node for every connection notifier; qed");
+					let node = Node::new(transport.clone(), addr.clone(), connection_messages, connection_notifiers);
 					(addr.clone(), node)
 				})
 				.collect();
@@ -267,19 +268,21 @@ impl TelemetryHandle {
 		endpoints: TelemetryEndpoints,
 		connection_message: ConnectionMessage,
 	) -> TelemetryConnectionNotifier {
-		let connection_sink = TelemetryConnectionNotifier::default();
 		let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
+		let (sender, receiver) = mpsc::unbounded();
+		let connection_notifier = TelemetryConnectionNotifier(sender);
 
 		match span.id() {
 			Some(id) => {
 				match self.0.unbounded_send(
-					(id.clone(), endpoints, connection_message, connection_sink.clone()),
+					(id.clone(), endpoints, connection_message, receiver),
 				) {
 					Ok(()) =>
 						tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&id)),
 					Err(err) => error!(
 						target: "telemetry",
-						"Could not initialize telemetry: {}",
+						"Could not initialize telemetry: \
+						the telemetry is probably already running: {}",
 						err,
 					),
 				}
@@ -290,27 +293,28 @@ impl TelemetryHandle {
 			),
 		}
 
-		connection_sink
+		connection_notifier
 	}
 }
 
 /// Used to create a stream of events with only one event: when a telemetry connection
 /// (re-)establishes.
-#[derive(Default, Clone, Debug)]
-pub struct TelemetryConnectionNotifier(Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
+#[derive(Clone, Debug)]
+pub struct TelemetryConnectionNotifier(mpsc::UnboundedSender<ConnectionNotifierSender>);
 
 impl TelemetryConnectionNotifier {
 	/// Get event stream for telemetry connection established events.
 	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
-		let (sink, stream) = tracing_unbounded("mpsc_telemetry_on_connect");
-		self.0.lock().push(sink);
-		stream
-	}
-
-	pub(crate) fn fire(&self) {
-		self.0.lock().retain(|sink| {
-			sink.unbounded_send(()).is_ok()
-		});
+		let (sender, receiver) = tracing_unbounded("mpsc_telemetry_on_connect");
+		if let Err(err) = self.0.unbounded_send(sender) {
+			error!(
+				target: "telemetry",
+				"Could not create a telemetry connection notifier: \
+				the telemetry is probably already running: {}",
+				err,
+			);
+		}
+		receiver
 	}
 }
 
