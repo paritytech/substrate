@@ -329,7 +329,7 @@ impl<Block: BlockT, Client> BlockStatus<Block> for Arc<Client> where
 
 /// A trait that includes all the client functionalities grandpa requires.
 /// Ideally this would be a trait alias, we're not there yet.
-/// tracking issue https://github.com/rust-lang/rust/issues/41517
+/// tracking issue <https://github.com/rust-lang/rust/issues/41517>
 pub trait ClientForGrandpa<Block, BE>:
 	LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
 	+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>

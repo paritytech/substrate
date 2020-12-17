@@ -43,10 +43,12 @@ frame-support = { version = "2.0.0", default-features = false, path = "../../../
 frame-system = { version = "2.0.0", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "2.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 frame-system-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
+pallet-assets = { version = "2.0.0", default-features = false, path = "../../../frame/assets" }
 pallet-authority-discovery = { version = "2.0.0", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "2.0.0", default-features = false, path = "../../../frame/authorship" }
 pallet-babe = { version = "2.0.0", default-features = false, path = "../../../frame/babe" }
 pallet-balances = { version = "2.0.0", default-features = false, path = "../../../frame/balances" }
+pallet-bounties = { version = "2.0.0", default-features = false, path = "../../../frame/bounties" }
 pallet-collective = { version = "2.0.0", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "2.0.0", default-features = false, path = "../../../frame/contracts" }
 pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "../../../frame/contracts/common/" }
@@ -58,6 +60,7 @@ pallet-im-online = { version = "2.0.0", default-features = false, path = "../../
 pallet-indices = { version = "2.0.0", default-features = false, path = "../../../frame/indices" }
 pallet-identity = { version = "2.0.0", default-features = false, path = "../../../frame/identity" }
 pallet-membership = { version = "2.0.0", default-features = false, path = "../../../frame/membership" }
+pallet-mmr = { version = "2.0.0", default-features = false, path = "../../../frame/merkle-mountain-range" }
 pallet-multisig = { version = "2.0.0", default-features = false, path = "../../../frame/multisig" }
 pallet-offences = { version = "2.0.0", default-features = false, path = "../../../frame/offences" }
 pallet-offences-benchmarking = { version = "2.0.0", path = "../../../frame/offences/benchmarking", default-features = false, optional = true }
@@ -72,6 +75,7 @@ pallet-scheduler = { version = "2.0.0", default-features = false, path = "../../
 pallet-society = { version = "2.0.0", default-features = false, path = "../../../frame/society" }
 pallet-sudo = { version = "2.0.0", default-features = false, path = "../../../frame/sudo" }
 pallet-timestamp = { version = "2.0.0", default-features = false, path = "../../../frame/timestamp" }
+pallet-tips = { version = "2.0.0", default-features = false, path = "../../../frame/tips" }
 pallet-treasury = { version = "2.0.0", default-features = false, path = "../../../frame/treasury" }
 pallet-utility = { version = "2.0.0", default-features = false, path = "../../../frame/utility" }
 pallet-transaction-payment = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment" }
@@ -89,11 +93,13 @@ default = ["std"]
 with-tracing = [ "frame-executive/with-tracing" ]
 std = [
 	"sp-authority-discovery/std",
+	"pallet-assets/std",
 	"pallet-authority-discovery/std",
 	"pallet-authorship/std",
 	"sp-consensus-babe/std",
 	"pallet-babe/std",
 	"pallet-balances/std",
+	"pallet-bounties/std",
 	"sp-block-builder/std",
 	"codec/std",
 	"pallet-collective/std",
@@ -108,6 +114,7 @@ std = [
 	"pallet-indices/std",
 	"sp-inherents/std",
 	"pallet-membership/std",
+	"pallet-mmr/std",
 	"pallet-multisig/std",
 	"pallet-identity/std",
 	"pallet-scheduler/std",
@@ -132,6 +139,7 @@ std = [
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
 	"pallet-timestamp/std",
+	"pallet-tips/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
 	"pallet-transaction-payment/std",
 	"pallet-treasury/std",
@@ -147,8 +155,10 @@ runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
+	"pallet-assets/runtime-benchmarks",
 	"pallet-babe/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
+	"pallet-bounties/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",
 	"pallet-contracts/runtime-benchmarks",
 	"pallet-democracy/runtime-benchmarks",
@@ -157,12 +167,14 @@ runtime-benchmarks = [
 	"pallet-identity/runtime-benchmarks",
 	"pallet-im-online/runtime-benchmarks",
 	"pallet-indices/runtime-benchmarks",
+	"pallet-mmr/runtime-benchmarks",
 	"pallet-multisig/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-scheduler/runtime-benchmarks",
 	"pallet-society/runtime-benchmarks",
 	"pallet-staking/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
+	"pallet-tips/runtime-benchmarks",
 	"pallet-treasury/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",

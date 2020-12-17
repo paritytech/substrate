@@ -409,9 +409,15 @@ decl_storage! {
 			for (_, balance) in &config.balances {
 				assert!(
 					*balance >= <T as Config<I>>::ExistentialDeposit::get(),
-					"the balance of any account should always be more than existential deposit.",
+					"the balance of any account should always be at least the existential deposit.",
 				)
 			}
+
+			// ensure no duplicates exist.
+			let endowed_accounts = config.balances.iter().map(|(x, _)| x).cloned().collect::<std::collections::BTreeSet<_>>();
+
+			assert!(endowed_accounts.len() == config.balances.len(), "duplicate balances in genesis.");
+
 			for &(ref who, free) in config.balances.iter() {
 				T::AccountStore::insert(who, AccountData { free, .. Default::default() });
 			}
