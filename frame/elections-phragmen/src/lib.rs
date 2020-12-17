@@ -213,6 +213,10 @@ decl_storage! {
 	} add_extra_genesis {
 		config(members): Vec<(T::AccountId, BalanceOf<T>)>;
 		build(|config: &GenesisConfig<T>| {
+			assert!(
+				config.members.len() as u32 <= T::DesiredMembers::get(),
+				"Cannot accept more than DesiredMembers genesis member",
+			);
 			let members = config.members.iter().map(|(ref member, ref stake)| {
 				// make sure they have enough stake
 				assert!(
@@ -1442,7 +1446,17 @@ mod tests {
 	#[should_panic = "Duplicate member in elections phragmen genesis: 2"]
 	fn genesis_members_cannot_be_duplicate() {
 		ExtBuilder::default()
+			.desired_members(3)
 			.genesis_members(vec![(1, 10), (2, 10), (2, 10)])
+			.build_and_execute(|| {});
+	}
+
+	#[test]
+	#[should_panic = "Cannot accept more than DesiredMembers genesis member"]
+	fn genesis_members_cannot_too_many() {
+		ExtBuilder::default()
+			.genesis_members(vec![(1, 10), (2, 10), (3, 30)])
+			.desired_members(2)
 			.build_and_execute(|| {});
 	}
 
