@@ -48,6 +48,18 @@ impl Dispatcher {
 		mut self: Pin<&mut Self>,
 		cx: &mut Context<'_>,
 	) -> Poll<Result<(), Infallible>> {
+		if let Some(addr) = self.flush_node.take() {
+			let node = self.pool.get_mut(&addr).expect("we added the address ourselves; qed");
+			match node.poll_flush_unpin(cx) {
+				Poll::Ready(Ok(())) => {},
+				Poll::Ready(Err(x)) => match x {},
+				Poll::Pending => {
+					self.flush_node = Some(addr);
+					return Poll::Pending;
+				},
+			}
+		}
+
 		if let Some((addr, message)) = self.item.take() {
 			let node = if let Some(node) = self.pool.get_mut(&addr) {
 				node
@@ -112,18 +124,6 @@ impl Sink<(Multiaddr, String)> for Dispatcher
 	}
 
 	fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-		if let Some(addr) = self.flush_node.take() {
-			let node = self.pool.get_mut(&addr).expect("we added the address ourselves; qed");
-			match node.poll_flush_unpin(cx) {
-				Poll::Ready(Ok(())) => return Poll::Ready(Ok(())),
-				Poll::Ready(Err(x)) => match x {},
-				Poll::Pending => {
-					self.flush_node = Some(addr);
-					return Poll::Pending;
-				},
-			}
-		}
-
 		self.try_empty_buffer(cx)
 	}
 
