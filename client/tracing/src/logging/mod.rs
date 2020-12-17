@@ -263,14 +263,14 @@ where
 	Ok((subscriber, telemetry_worker))
 }
 
-pub struct GlobalLogger {
+pub struct GlobalLoggerBuilder {
 	pattern: String,
 	profiling: Option<(crate::TracingReceiver, String)>,
 	telemetry_external_transport: Option<ExtTransport>,
 	disable_log_reloading: bool,
 }
 
-impl GlobalLogger {
+impl GlobalLoggerBuilder {
 	pub fn new<S: Into<String>>(pattern: S) -> Self {
 		Self {
 			pattern: pattern.into(),

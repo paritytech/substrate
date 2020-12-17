@@ -33,7 +33,7 @@ use sc_service::config::{
 	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver};
-use sc_tracing::logging::GlobalLogger;
+use sc_tracing::logging::GlobalLoggerBuilder;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -555,7 +555,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	fn init<C: SubstrateCli>(&self) -> Result<sc_telemetry::TelemetryWorker> {
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		let mut logger = GlobalLogger::new(self.log_filters()?);
+		let mut logger = GlobalLoggerBuilder::new(self.log_filters()?);
 		logger.with_log_reloading(!self.is_log_filter_reloading_disabled()?);
 
 		if let Some(transport) = self.telemetry_external_transport()? {

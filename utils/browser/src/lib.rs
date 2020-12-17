@@ -23,7 +23,7 @@ use sc_service::{
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
 	GenericChainSpec, RuntimeGenesis
 };
-use sc_tracing::logging::GlobalLogger;
+use sc_tracing::logging::GlobalLoggerBuilder;
 use wasm_bindgen::prelude::*;
 use futures::{
 	prelude::*, channel::{oneshot, mpsc}, compat::*, future::{ready, ok, select}
@@ -42,7 +42,7 @@ pub fn init_logging_and_telemetry(
 	pattern: &str,
 ) -> Result<sc_telemetry::TelemetryWorker, String> {
 	let transport = ExtTransport::new(ffi::websocket_transport());
-	let mut logger = GlobalLogger::new(pattern);
+	let mut logger = GlobalLoggerBuilder::new(pattern);
 	logger.with_transport(transport);
 	let telemetry_worker = logger.init()?;
 
