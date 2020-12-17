@@ -37,6 +37,7 @@ pub use params::*;
 pub use runner::*;
 pub use sc_service::{ChainSpec, Role};
 use sc_service::{Configuration, TaskExecutor};
+pub use sc_tracing::logging::GlobalLoggerBuilder;
 pub use sp_version::RuntimeVersion;
 use std::io::Write;
 pub use structopt;
