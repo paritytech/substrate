@@ -191,9 +191,6 @@ pub struct ChainSync<B: BlockT> {
 	/// A set of hashes of blocks that are being downloaded or have been
 	/// downloaded and are queued for import.
 	queue_blocks: HashSet<B::Hash>,
-	/// The best block number that was successfully imported into the chain.
-	/// This can not decrease.
-	best_imported_number: NumberFor<B>,
 	/// Fork sync targets.
 	fork_targets: HashMap<B::Hash, ForkTarget<B>>,
 	/// A set of peers for which there might be potential block requests
@@ -455,7 +452,6 @@ impl<B: BlockT> ChainSync<B> {
 			blocks: BlockCollection::new(),
 			best_queued_hash: info.best_hash,
 			best_queued_number: info.best_number,
-			best_imported_number: info.best_number,
 			extra_justifications: ExtraRequests::new("justification"),
 			role,
 			required_block_attributes,
@@ -1106,10 +1102,6 @@ impl<B: BlockT> ChainSync<B> {
 						}
 					}
 
-					if number > self.best_imported_number {
-						self.best_imported_number = number;
-					}
-
 					if let Some(peer) = who.and_then(|p| self.peers.get_mut(&p)) {
 						peer.update_common_number(number);
 					}
@@ -1508,7 +1500,7 @@ impl<B: BlockT> ChainSync<B> {
 		self.blocks.clear();
 		let info = self.client.info();
 		self.best_queued_hash = info.best_hash;
-		self.best_queued_number = std::cmp::max(info.best_number, self.best_imported_number);
+		self.best_queued_number = info.best_number;
 		self.pending_requests.set_all();
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 		let old_peers = std::mem::take(&mut self.peers);
