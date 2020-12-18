@@ -155,8 +155,11 @@ pub trait Config: frame_system::Config {
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 
-	/// Type parameter for ERC20 compatible
+	/// Type parameters for ERC20 compatible functionality
 	type AllowApprovalSpending: Get<bool>;
+	type AllowFreezing: Get<bool>;
+	type AllowBurning: Get<bool>;
+	type AllowMinting: Get<bool>;
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
@@ -287,8 +290,11 @@ decl_error! {
 		Overflow,
 		/// An allowance for transfer from is insufficient
 		AllowanceTooLow,
-		///
-		NotERC20Compatible,
+		/// Gated functionality errors
+		NoApprovalSpendingAllowed,
+		NoFreezingAllowed,
+		NoBurningAllowed,
+		NoMintingAllowed,
 	}
 }
 
@@ -795,7 +801,10 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 {
 	type Balance = T::Balance;
 	type AssetId = T::AssetId;
-	type IsERC20Compatible = T::IsERC20Compatible;
+	type AllowApprovalSpending = T::AllowApprovalSpending;
+	type AllowFreezing = T::AllowFreezing;
+	type AllowBurning = T::AllowBurning;
+	type AllowMinting = T::AllowMinting;
 
 	// PUBLIC IMMUTABLES
 
@@ -813,7 +822,7 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 
 	/// Returns the remaining number of tokens a spender can spend for a specific asset.
 	fn allowance(id: Self::AssetId, owner: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source) -> Self::Balance {
-		if !Self::IsERC20Compatible::get() {
+		if !Self::AllowApprovalSpending::get() {
 			return Self::Balance::zero();
 		}
 
@@ -878,7 +887,7 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	}
 
 	fn approve(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
-		ensure!(Self::IsERC20Compatible::get(), Error::<T>::NotERC20Compatible);
+		ensure!(Self::AllowApprovalSpending::get(), Error::<T>::NoApprovalSpendingAllowed);
 
 		let who = T::Lookup::lookup(who)?;
 		let spender = T::Lookup::lookup(spender)?;
@@ -887,7 +896,7 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	}
 
 	fn set_approval(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
-		ensure!(Self::IsERC20Compatible::get(), Error::<T>::NotERC20Compatible);
+		ensure!(Self::AllowApprovalSpending::get(), Error::<T>::NoApprovalSpendingAllowed);
 
 		let who = T::Lookup::lookup(who)?;
 		let spender = T::Lookup::lookup(spender)?;
@@ -896,7 +905,7 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	}
 
 	fn transfer_from(id: Self::AssetId, spender: <T::Lookup as StaticLookup>::Source, who: <T::Lookup as StaticLookup>::Source, recipient: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
-		ensure!(Self::IsERC20Compatible::get(), Error::<T>::NotERC20Compatible);
+		ensure!(Self::AllowApprovalSpending::get(), Error::<T>::NoApprovalSpendingAllowed);
 
 		ensure!(!amount.is_zero(), Error::<T>::AmountZero);
 		// check allowance
@@ -916,6 +925,8 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	}
 
 	fn burn(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+		ensure!(Self::AllowBurning::get(), Error::<T>::NoBurningAllowed);
+
 		let who = T::Lookup::lookup(who)?;
 		Asset::<T>::try_mutate(id, |maybe_details| {
 			let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
@@ -946,6 +957,8 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	}
 
 	fn mint(id: Self::AssetId, beneficiary: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+		ensure!(Self::AllowMinting::get(), Error::<T>::NoMintingAllowed);
+
 		let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 		Asset::<T>::try_mutate(id, |maybe_details| {
@@ -967,6 +980,8 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	}
 
 	fn freeze(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		ensure!(Self::AllowFreezing::get(), Error::<T>::NoFreezingAllowed);
+
 		let who = T::Lookup::lookup(who)?;
 		ensure!(Account::<T>::contains_key(id, &who), Error::<T>::BalanceZero);
 
@@ -977,6 +992,8 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	}
 
 	fn thaw(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		ensure!(Self::AllowFreezing::get(), Error::<T>::NoFreezingAllowed);
+
 		let who = T::Lookup::lookup(who)?;
 		ensure!(Account::<T>::contains_key(id, &who), Error::<T>::BalanceZero);
 
@@ -1091,7 +1108,10 @@ mod tests {
 	parameter_types! {
 		pub const AssetDepositBase: u64 = 1;
 		pub const AssetDepositPerZombie: u64 = 1;
-		pub const IsERC20Compatible: bool = true;
+		pub const AllowApprovalSpending: bool = true;
+		pub const AllowFreezing: bool = true;
+		pub const AllowBurning: bool = true;
+		pub const AllowMinting: bool = true;
 	}
 
 	impl Config for Test {
@@ -1102,7 +1122,10 @@ mod tests {
 		type ForceOrigin = frame_system::EnsureRoot<u64>;
 		type AssetDepositBase = AssetDepositBase;
 		type AssetDepositPerZombie = AssetDepositPerZombie;
-		type IsERC20Compatible = IsERC20Compatible;
+		type AllowApprovalSpending = AllowApprovalSpending;
+		type AllowFreezing = AllowFreezing;
+		type AllowBurning = AllowBurning;
+		type AllowMinting = AllowMinting;
 		type WeightInfo = ();
 	}
 	type System = frame_system::Module<Test>;

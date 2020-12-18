@@ -1193,7 +1193,10 @@ pub trait Token<Source> {
 
 	type AssetId: Member + Parameter + Default + Copy + HasCompact;
 
-	type IsERC20Compatible: Get<bool>;
+	type AllowApprovalSpending: Get<bool>;
+	type AllowFreezing: Get<bool>;
+	type AllowBurning: Get<bool>;
+	type AllowMinting: Get<bool>;
 
 	// PUBLIC IMMUTABLES
 	/// The total amount of issuance in the system for a specific asset.
