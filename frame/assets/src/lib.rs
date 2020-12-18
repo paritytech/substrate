@@ -821,7 +821,11 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	}
 
 	/// Returns the remaining number of tokens a spender can spend for a specific asset.
-	fn allowance(id: Self::AssetId, owner: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source) -> Self::Balance {
+	fn allowance(
+		id: Self::AssetId,
+		owner: <T::Lookup as StaticLookup>::Source,
+		spender: <T::Lookup as StaticLookup>::Source
+	) -> Self::Balance {
 		if !Self::AllowApprovalSpending::get() {
 			return Self::Balance::zero();
 		}
@@ -841,7 +845,12 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 
 	// PUBLIC MUTABLES (DANGEROUS)
 
-	fn transfer(id: Self::AssetId, from: <T::Lookup as StaticLookup>::Source, dest: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+	fn transfer(
+		id: Self::AssetId,
+		from: <T::Lookup as StaticLookup>::Source,
+		dest: <T::Lookup as StaticLookup>::Source,
+		amount: Self::Balance
+	) -> DispatchResult {
 		let from = T::Lookup::lookup(from)?;
 		let dest = T::Lookup::lookup(dest)?;
 		let mut from_account = Account::<T>::get(id, &from);
@@ -886,7 +895,12 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		})
 	}
 
-	fn approve(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+	fn approve(
+		id: Self::AssetId,
+		who: <T::Lookup as StaticLookup>::Source,
+		spender: <T::Lookup as StaticLookup>::Source,
+		amount: Self::Balance
+	) -> DispatchResult {
 		ensure!(Self::AllowApprovalSpending::get(), Error::<T>::NoApprovalSpendingAllowed);
 
 		let who = T::Lookup::lookup(who)?;
@@ -895,7 +909,12 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		Ok(())
 	}
 
-	fn set_approval(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, spender: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+	fn set_approval(
+		id: Self::AssetId,
+		who: <T::Lookup as StaticLookup>::Source,
+		spender: <T::Lookup as StaticLookup>::Source,
+		amount: Self::Balance
+	) -> DispatchResult {
 		ensure!(Self::AllowApprovalSpending::get(), Error::<T>::NoApprovalSpendingAllowed);
 
 		let who = T::Lookup::lookup(who)?;
@@ -904,7 +923,13 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		Ok(())
 	}
 
-	fn transfer_from(id: Self::AssetId, spender: <T::Lookup as StaticLookup>::Source, who: <T::Lookup as StaticLookup>::Source, recipient: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+	fn transfer_from(
+		id: Self::AssetId,
+		spender: <T::Lookup as StaticLookup>::Source,
+		who: <T::Lookup as StaticLookup>::Source,
+		recipient: <T::Lookup as StaticLookup>::Source,
+		amount: Self::Balance
+	) -> DispatchResult {
 		ensure!(Self::AllowApprovalSpending::get(), Error::<T>::NoApprovalSpendingAllowed);
 
 		ensure!(!amount.is_zero(), Error::<T>::AmountZero);
@@ -924,7 +949,11 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		}
 	}
 
-	fn burn(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+	fn burn(
+		id: Self::AssetId,
+		who: <T::Lookup as StaticLookup>::Source,
+		amount: Self::Balance
+	) -> DispatchResult {
 		ensure!(Self::AllowBurning::get(), Error::<T>::NoBurningAllowed);
 
 		let who = T::Lookup::lookup(who)?;
@@ -956,7 +985,11 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		})
 	}
 
-	fn mint(id: Self::AssetId, beneficiary: <T::Lookup as StaticLookup>::Source, amount: Self::Balance) -> DispatchResult {
+	fn mint(
+		id: Self::AssetId,
+		beneficiary: <T::Lookup as StaticLookup>::Source,
+		amount: Self::Balance
+	) -> DispatchResult {
 		ensure!(Self::AllowMinting::get(), Error::<T>::NoMintingAllowed);
 
 		let beneficiary = T::Lookup::lookup(beneficiary)?;
@@ -1020,7 +1053,12 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		})
 	}
 
-	fn set_team(id: Self::AssetId, issuer: <T::Lookup as StaticLookup>::Source, admin: <T::Lookup as StaticLookup>::Source, freezer: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+	fn set_team(
+		id: Self::AssetId,
+		issuer: <T::Lookup as StaticLookup>::Source,
+		admin: <T::Lookup as StaticLookup>::Source,
+		freezer: <T::Lookup as StaticLookup>::Source
+	) -> DispatchResult {
 		let issuer = T::Lookup::lookup(issuer)?;
 		let admin = T::Lookup::lookup(admin)?;
 		let freezer = T::Lookup::lookup(freezer)?;
