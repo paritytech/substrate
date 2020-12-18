@@ -32,7 +32,7 @@ pub const TELEMETRY_LOG_SPAN: &str = "telemetry-logger";
 pub struct TelemetryLayer(Mutex<mpsc::Sender<(Id, u8, String)>>);
 
 impl TelemetryLayer {
-	/// Create a new [`TelemetryLayer`] using the [`Senders`] provided in argument.
+	/// Create a new [`TelemetryLayer`] and [`TelemetryWorker`].
 	pub fn new(
 		telemetry_external_transport: Option<ExtTransport>,
 	) -> super::Result<(Self, TelemetryWorker)> {

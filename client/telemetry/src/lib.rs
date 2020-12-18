@@ -16,26 +16,19 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Telemetry utilities. TODO update doc
+//! To start using this module, please initialize the global logger from `sc-tracing`. This will
+//! return a [`TelemetryWorker`] which can be used to register substrate node. In order to do that,
+//! first call [`TelemetryWorker::handle()`] to get a handle to the worker, then use
+//! [`TelemetryHandle::start_telemetry()`] to initialize the telemetry. This will also return a
+//! [`TelemetryConnectionNotifier`] which can be used to create streams of events for whenever the
+//! connection to a telemetry server is (re-)established.
 //!
-//! You can collect telemetries for a substrate node by creating a `Telemetry` object. For every
-//! substrate node there must be only one `Telemetry` object. This `Telemetry` object can connect to
-//! multiple telemetry endpoints. The `Telemetry` object is a `Stream` that needs to be polled
-//! regularly in order to function.
-//!
-//! The macro `telemetry!` can be used to report telemetries from anywhere in the code but a
-//! `Telemetry` must have been initialized. Creating a `Telemetry` will make all the following code
-//! execution (including newly created async background tasks) use this `Telemetry` when reporting
-//! telemetries. If multiple `Telemetry` objects are created, the latest one (higher up in the
-//! stack) will be used. If no `Telemetry` object can be found, nothing is reported.
-//!
-//! To re-use connections to the same server you need to use the `TelemetryWorker` object to create
-//! multiple `Telemetry`. `TelemetryWorker` also manages a collection of channel `Sender` for you (see
-//! `Senders`). `TelemetryWorker` should be used unless you need finer control.
-//!
-//! The [`Telemetry`] struct implements `Stream` and must be polled regularly (or sent to a
-//! background thread/task) in order for the telemetry to properly function.
-//! The `Stream` generates [`TelemetryEvent`]s.
+//! The macro [`telemetry`] can be used to report telemetries from anywhere in the code but the
+//! telemetry must have been initialized through [`TelemetryHandle::start_telemetry()`].
+//! Initializing the telemetry will make all the following code execution (including newly created
+//! async background tasks) report the telemetries through the endpoints provided during the
+//! initialization. If multiple telemetries have been started, the latest one (higher up in the
+//! stack) will be used. If no telemetry has been started, nothing will be reported.
 
 #![warn(missing_docs)]
 
@@ -88,9 +81,11 @@ pub(crate) type InitPayload = (
 	mpsc::UnboundedReceiver<ConnectionNotifierSender>,
 );
 
-/// An object that keeps track of all the [`Telemetry`] created by its `build_telemetry()` method.
+/// Telemetry worker.
 ///
-/// [`Telemetry`] created through this object re-use connections if possible.
+/// It should be ran as a background task using the [`TelemetryWorker::run`] method. This method
+/// will consume the object and any further attempts of initializing a new telemetry through its
+/// handle will fail (without being fatal).
 #[derive(Debug)]
 pub struct TelemetryWorker {
 	receiver: mpsc::Receiver<(Id, u8, String)>,
@@ -113,17 +108,15 @@ pub enum Error {
 }
 
 impl TelemetryWorker {
-	/// Create a [`TelemetryWorker`] instance using an `ExtTransport`.
+	/// Create a [`TelemetryWorker`] instance using an [`ExtTransport`].
 	///
-	/// This is used in WASM contexts where we need some binding between the networking provided by
-	/// the operating system or environment and libp2p.
-	///
-	/// This constructor is expected to be used only when compiling for WASM.
+	/// The [`ExtTransport`] is used in WASM contexts where we need some binding between the
+	/// networking provided by the operating system or environment and libp2p.
 	///
 	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
 	/// >                internal buffering going on. In the context of WebSockets, each `write`
 	/// >                must be one individual WebSockets frame.
-	pub fn new(wasm_external_transport: Option<wasm_ext::ExtTransport>) -> Result<Self> {
+	pub(crate) fn new(wasm_external_transport: Option<wasm_ext::ExtTransport>) -> Result<Self> {
 		let (sender, receiver) = mpsc::channel(16);
 		let (init_sender, init_receiver) = mpsc::unbounded();
 
@@ -143,12 +136,14 @@ impl TelemetryWorker {
 		TelemetryHandle(self.init_sender.clone())
 	}
 
-	/// Get a clone of the channel's `Sender` used to send telemetry event.
+	/// Get a clone of the channel's `Sender` used to send telemetry events.
 	pub(crate) fn sender(&self) -> mpsc::Sender<(Id, u8, String)> {
 		self.sender.clone()
 	}
 
 	/// Run the telemetry worker.
+	///
+	/// This should be run in a background task.
 	pub async fn run(self) {
 		let Self {
 			receiver,
@@ -337,13 +332,29 @@ impl TelemetryConnectionNotifier {
 	}
 }
 
-/// Translates to `tracing::info!`, but contains an additional verbosity
-/// parameter which the log record is tagged with. Additionally the verbosity
-/// parameter is added to the record as a key-value pair.
+/// Report a telemetry.
+///
+/// Translates to [`tracing::info`], but contains an additional verbosity parameter which the log
+/// record is tagged with. Additionally the verbosity parameter is added to the record as a
+/// key-value pair.
+///
+/// # Example
+///
+/// ```no_run
+/// # use sc_telemetry::*;
+/// # let authority_id = 42_u64;
+/// # let set_id = (43_u64, 44_u64);
+/// # let authorities = vec![45_u64];
+/// telemetry!(CONSENSUS_INFO; "afg.authority_set";
+/// 	"authority_id" => authority_id.to_string(),
+/// 	"authority_set_id" => ?set_id,
+/// 	"authorities" => authorities,
+/// );
+/// ```
 #[macro_export(local_inner_macros)]
 macro_rules! telemetry {
-	( $a:expr; $b:expr; $( $t:tt )* ) => {{
-		let verbosity: u8 = $a;
+	( $verbosity:expr; $msg:expr; $( $t:tt )* ) => {{
+		let verbosity: u8 = $verbosity;
 		match format_fields_to_json!($($t)*) {
 			Err(err) => {
 				$crate::tracing::error!(
@@ -354,7 +365,7 @@ macro_rules! telemetry {
 			},
 			Ok(mut json) => {
 				// NOTE: the span id will be added later in the JSON for the greater good
-				json.insert("msg".into(), $b.into());
+				json.insert("msg".into(), $msg.into());
 				json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
 				let serialized_json = $crate::serde_json::to_string(&json)
 					.expect("contains only string keys; qed");
@@ -390,7 +401,7 @@ macro_rules! format_fields_to_json {
 	( $k:literal => ? $v:expr $(,)? $(, $($t:tt)+ )? ) => {{
 		let mut map = $crate::serde_json::Map::new();
 		map.insert($k.into(), std::format!("{:?}", &$v).into());
-		let ok_map: Result<_, $crate::serde_json::Error> = Ok(map);
+		let ok_map: ::std::result::Result<_, $crate::serde_json::Error> = Ok(map);
 		ok_map
 		$(
 			.and_then(|mut prev_map| {
