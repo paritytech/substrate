@@ -76,7 +76,7 @@ fn import_single_good_known_block_is_ignored() {
 		block,
 		&mut PassThroughVerifier::new(true)
 	) {
-		Ok(BlockImportResult::ImportedKnown(ref n)) if *n == number => {}
+		Ok(BlockImportResult::ImportedKnown(ref n, _)) if *n == number => {}
 		_ => panic!()
 	}
 }

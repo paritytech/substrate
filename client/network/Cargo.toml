@@ -61,7 +61,7 @@ thiserror = "1"
 unsigned-varint = { version = "0.5.0", features = ["futures", "futures-codec"] }
 void = "1.0.2"
 wasm-timer = "0.2"
-zeroize = "1.0.0"
+zeroize = "1.2.0"
 
 [dependencies.libp2p]
 version = "0.32.2"

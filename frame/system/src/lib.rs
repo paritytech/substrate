@@ -1008,14 +1008,26 @@ impl<T: Config> Module<T> {
 		}
 	}
 
-	/// Remove temporary "environment" entries in storage.
+	/// Remove temporary "environment" entries in storage, compute the storage root and return the
+	/// resulting header for this block.
 	pub fn finalize() -> T::Header {
 		ExecutionPhase::kill();
 		AllExtrinsicsLen::kill();
 
-		let number = <Number<T>>::take();
-		let parent_hash = <ParentHash<T>>::take();
-		let mut digest = <Digest<T>>::take();
+		// The following fields
+		//
+		// - <Events<T>>
+		// - <EventCount<T>>
+		// - <EventTopics<T>>
+		// - <Number<T>>
+		// - <ParentHash<T>>
+		// - <Digest<T>>
+		//
+		// stay to be inspected by the client and will be cleared by `Self::initialize`.
+		let number = <Number<T>>::get();
+		let parent_hash = <ParentHash<T>>::get();
+		let mut digest = <Digest<T>>::get();
+
 		let extrinsics = (0..ExtrinsicCount::take().unwrap_or_default())
 			.map(ExtrinsicData::take)
 			.collect();
@@ -1043,14 +1055,6 @@ impl<T: Config> Module<T> {
 			);
 			digest.push(item);
 		}
-
-		// The following fields
-		//
-		// - <Events<T>>
-		// - <EventCount<T>>
-		// - <EventTopics<T>>
-		//
-		// stay to be inspected by the client and will be cleared by `Self::initialize`.
 
 		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
