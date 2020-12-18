@@ -1230,7 +1230,13 @@ pub trait Token<Source> {
 	fn set_approval(id: Self::AssetId, who: Source, spender: Source, amount: Self::Balance) -> DispatchResult;
 
 	/// Transfer some `amount` of tokens from an account `who` to another account `recipient`
-	fn transfer_from(id: Self::AssetId, spender: Source, who: Source, recipient: Source, amount: Self::Balance) -> DispatchResult;
+	fn transfer_from(
+		id: Self::AssetId,
+		spender: Source,
+		who: Source,
+		recipient: Source,
+		amount: Self::Balance
+	) -> DispatchResult;
 
 
 	/// Reduce the total number of assets a specific account owns for a specific asset.
