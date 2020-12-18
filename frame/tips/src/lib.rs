@@ -402,6 +402,13 @@ decl_module! {
 		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::close_tip(T::Tippers::max_len() as u32)]
 		fn close_tip(origin, hash: T::Hash) {
+
+			if_std! {
+				println!(
+					"close_tip-Entry",
+				);
+			}
+
 			ensure_signed(origin)?;
 
 			let tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
@@ -411,6 +418,12 @@ decl_module! {
 			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(hash);
 			Self::payout_tip(hash, tip);
+
+			if_std! {
+				println!(
+					"close_tip-Exit",
+				);
+			}
 		}
 
 		/// Remove and slash an already-open tip.
@@ -420,9 +433,24 @@ decl_module! {
 		/// As a result, API will slash the finder and the deposits are lost.
 		///
 		/// Emits `TipSlashed` if successful.
+		// #[weight = <T as Config>::WeightInfo::slash_tip(T::Tippers::max_len() as u32)]
 		#[weight = 10_000]
 		fn slash_tip(origin, hash: T::Hash) {
+
+			if_std! {
+				println!(
+					"slash_tip-Entry",
+				);
+			}
+
 			T::RejectOrigin::ensure_origin(origin)?;
+
+			if_std! {
+				println!(
+					"slash_tip-hash-{:#?}",
+					hash,
+				);
+			}
 
 			let tip = Tips::<T>::take(hash).ok_or(Error::<T>::UnknownTip)?;
 
@@ -433,6 +461,12 @@ decl_module! {
 			}
 			Reasons::<T>::remove(&tip.reason);
 			Self::deposit_event(RawEvent::TipSlashed(hash, tip.finder, tip.deposit));
+
+			if_std! {
+				println!(
+					"slash_tip-exit",
+				);
+			}
 		}
 	}
 }
