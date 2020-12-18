@@ -739,6 +739,7 @@ pub mod tests {
 	fn div_unit_works() {
 		let a = BigUint { digits: vec![100] };
 		let b = BigUint { digits: vec![1, 100] };
+		let c = BigUint { digits: vec![14, 28, 100] };
 
 		assert_eq!(a.clone().div_unit(1), a);
 		assert_eq!(a.clone().div_unit(0), a);
@@ -750,5 +751,9 @@ pub mod tests {
 		assert_eq!(b.clone().div_unit(2), BigUint::from(((B + 100) / 2) as Single));
 		assert_eq!(b.clone().div_unit(7), BigUint::from(((B + 100) / 7) as Single));
 
+		assert_eq!(c.clone().div_unit(1), c);
+		assert_eq!(c.clone().div_unit(0), c);
+		assert_eq!(c.clone().div_unit(2), BigUint { digits: vec![7, 14, 50] });
+		assert_eq!(c.clone().div_unit(7), BigUint { digits: vec![2, 4, 14] });
 	}
 }
