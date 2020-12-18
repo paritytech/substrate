@@ -138,7 +138,7 @@ pub trait Link<B: BlockT>: Send {
 #[derive(Debug, PartialEq)]
 pub enum BlockImportResult<N: std::fmt::Debug + PartialEq> {
 	/// Imported known block.
-	ImportedKnown(N),
+	ImportedKnown(N, Option<Origin>),
 	/// Imported unknown block.
 	ImportedUnknown(N, ImportedAux, Option<Origin>),
 }
@@ -204,7 +204,7 @@ pub(crate) fn import_single_block_metered<B: BlockT, V: Verifier<B>, Transaction
 		match import {
 			Ok(ImportResult::AlreadyInChain) => {
 				trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
-				Ok(BlockImportResult::ImportedKnown(number))
+				Ok(BlockImportResult::ImportedKnown(number, peer.clone()))
 			},
 			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux, peer.clone())),
 			Ok(ImportResult::MissingState) => {
