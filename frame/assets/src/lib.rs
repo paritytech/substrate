@@ -219,7 +219,6 @@ decl_storage! {
 
 		/// The number of units of assets being approved by one account to another
 		/// The ordering of from, to is sequential i.e (from, to)
-
 		pub Approvals: double_map
 			hasher(blake2_128_concat) T::AssetId,
 			hasher(blake2_128_concat) (T::AccountId, T::AccountId)
