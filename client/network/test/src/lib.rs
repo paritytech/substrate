@@ -707,6 +707,8 @@ pub trait TestNetFactory: Sized {
 			block_request_protocol_config,
 		}).unwrap();
 
+		trace!(target: "test_network", "Peer identifier: {}", network.service().local_peer_id());
+
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
 				peer.network.add_known_address(network.service().local_peer_id().clone(), listen_addr.clone());

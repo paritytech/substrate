@@ -702,7 +702,7 @@ fn can_sync_to_peers_with_wrong_common_block() {
 
 	net.block_until_sync();
 
-	assert!(net.peer(1).client().header(&BlockId::Hash(final_hash)).unwrap().is_some());
+	assert!(net.peer(1).has_block(&final_hash));
 }
 
 /// Returns `is_new_best = true` for each validated announcement.
@@ -721,7 +721,6 @@ impl BlockAnnounceValidator<Block> for NewBestBlockAnnounceValidator {
 #[test]
 fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 	sp_tracing::try_init_simple();
-	log::trace!(target: "sync", "Test");
 	let mut net = TestNet::with_fork_choice(ForkChoiceStrategy::Custom(false));
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
@@ -763,7 +762,6 @@ impl BlockAnnounceValidator<Block> for DeferredBlockAnnounceValidator {
 #[test]
 fn wait_until_deferred_block_announce_validation_is_ready() {
 	sp_tracing::try_init_simple();
-	log::trace!(target: "sync", "Test");
 	let mut net = TestNet::with_fork_choice(ForkChoiceStrategy::Custom(false));
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig {
@@ -785,7 +783,6 @@ fn wait_until_deferred_block_announce_validation_is_ready() {
 #[test]
 fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 	sp_tracing::try_init_simple();
-	log::trace!(target: "sync", "Test");
 	let mut net = TestNet::new(1);
 
 	// Produce some blocks
@@ -813,4 +810,35 @@ fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 
 	// However peer 1 should still not have the block.
 	assert!(!net.peer(1).has_block(&block_hash));
+}
+
+/// Ensures that if we as a syncing node sync to the tip while we are connected to another peer
+/// that is currently also doing a major sync.
+#[test]
+fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
+	sp_tracing::try_init_simple();
+
+	let mut net = TestNet::new(3);
+
+	let block_hash = net.peer(0).push_blocks_at_without_informing_sync(
+		BlockId::Number(0),
+		10_000,
+		false,
+	);
+
+	net.peer(1).push_blocks_at_without_informing_sync(
+		BlockId::Number(0),
+		5_000,
+		false,
+	);
+
+	net.block_until_connected();
+	net.block_until_idle();
+
+	assert!(!net.peer(2).has_block(&block_hash));
+
+	net.peer(0).network_service().new_best_block_imported(block_hash, 10_000);
+	while !net.peer(2).has_block(&block_hash) && !net.peer(1).has_block(&block_hash) {
+		net.block_until_idle();
+	}
 }

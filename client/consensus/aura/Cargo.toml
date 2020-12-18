@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 sp-application-crypto = { version = "2.0.0", path = "../../../primitives/application-crypto" }
 sp-consensus-aura = { version = "0.8.0", path = "../../../primitives/consensus/aura" }
 sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
-sc-block-builder = { version = "0.8.0", path = "../../../client/block-builder" }
+sc-block-builder = { version = "0.8.0", path = "../../block-builder" }
 sc-client-api = { version = "2.0.0", path = "../../api" }
 codec = { package = "parity-scale-codec", version = "1.3.4" }
 sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }

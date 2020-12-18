@@ -38,7 +38,7 @@ hyper-rustls = "0.21.0"
 
 [dev-dependencies]
 sc-client-db = { version = "0.8.0", default-features = true, path = "../db/" }
-sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }
+sc-transaction-pool = { version = "2.0.0", path = "../transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
