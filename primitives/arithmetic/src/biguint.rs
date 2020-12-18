@@ -212,8 +212,8 @@ impl BigUint {
 				let mut needs_borrow = false;
 				let mut t = 0;
 
-				if let Some(v) = u.checked_sub(v) {
-					if let Some(v2) = v.checked_sub(k) {
+				if let Some(v1) = u.checked_sub(v) {
+					if let Some(v2) = v1.checked_sub(k) {
 						t = v2;
 						k = 0;
 					} else {
