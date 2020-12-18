@@ -348,6 +348,7 @@ impl Externalities for BasicExternalities {
 
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		// No transaction, works as read (TODO this will not be true for worker in write mode).
+		// TODO this is actually incorrect for optimistic, similarily callat should fail on drop Tx.
 		state_update.read_resolve()
 	}
 	

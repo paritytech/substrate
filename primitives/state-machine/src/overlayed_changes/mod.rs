@@ -186,25 +186,21 @@ impl Markers {
 			None => false,
 		}
 	}
-
-	pub fn resolve_worker_result(&mut self, result: WorkerResult) -> Option<Vec<u8>> {
+	
+	fn on_worker_result(&mut self, result: &WorkerResult) -> bool {
 		match result {
-			WorkerResult::CallAt(result, marker) => {
-				if self.remove_worker(marker) {
-					Some(result)
-				} else {
-					None
-				}
+			WorkerResult::CallAt(_result, marker) => {
+				// invalid when nothing
+				self.remove_worker(*marker)
 			},
-			WorkerResult::Valid(result) => Some(result),
-			WorkerResult::Invalid => None,
+			WorkerResult::Optimistic(_result, marker, _accesses) => {
+				// invalid when nothing
+				self.remove_worker(*marker)
+			},
+			WorkerResult::Valid(_result) => true,
+			WorkerResult::Invalid => true,
 			WorkerResult::HardPanic
-			| WorkerResult::Panic => {
-				// Hard panic distinction is mainly for implementation
-				// purpose, here both will be handled as a panic in
-				// the parent worker.
-				panic!("Panic from a worker")
-			},
+			| WorkerResult::Panic => true,
 		}
 	}
 
@@ -256,6 +252,13 @@ struct StateLogger {
 	write_prefix: Map<Vec<u8>, BTreeSet<TaskId>>,
 }
 
+impl StateLogger {
+	fn remove_read_logs(&mut self) {
+		self.read_key.get_mut().clear();
+		self.read_intervals.get_mut().clear();
+	}
+}
+
 impl AccessLogger {
 	// actually this needs to be resolvable over the lifetime of a child worker.
 	// So need to push worker id in the log.
@@ -270,19 +273,25 @@ impl AccessLogger {
 		self.log_read = true;
 	}
 
-	fn on_worker_result(&mut self, result: &WorkerResult) {
+	fn on_worker_result(&mut self, result: &WorkerResult) -> bool {
 		match result {
 			WorkerResult::CallAt(result, marker) => {
+				// should not be usefull here
 				self.remove_worker(*marker);
-				unimplemented!("Need read access from logger into the worker result!!");
+				true
+			},
+			WorkerResult::Optimistic(result, marker, accesses) => {
+				let result = unimplemented!("accesses deltas with writes and ret false on conflict");
+				self.remove_worker(*marker);
+				result
 			},
 			// When using filter there is no directly valid case.
-			WorkerResult::Valid(result) => (),
+			WorkerResult::Valid(result) => true,
 			// When using filter there is no invalid case.
-			WorkerResult::Invalid => (),
+			WorkerResult::Invalid => true,
 			// will panic on resolve so no need to clean filter
 			WorkerResult::HardPanic
-			| WorkerResult::Panic => (),
+			| WorkerResult::Panic => true,
 		}
 	}
 
@@ -294,6 +303,10 @@ impl AccessLogger {
 //	fn guard_read_all(&self) {
 	fn log_read_all(&mut self) {
 		self.read_all = true;
+		self.top_logger.remove_read_logs();
+		for child_logger in self.children_logger.get_mut().iter_mut() {
+			child_logger.1.remove_read_logs();
+		}
 	}
 
 	fn logger_mut<'a>(
@@ -311,7 +324,7 @@ impl AccessLogger {
 
 //	fn guard_read(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
 	fn log_read(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
-		if self.log_read {
+		if self.log_read && !self.read_all {
 			let mut ref_children;
 			let logger = if let Some(child_info) = child_info {
 				let storage_key = child_info.storage_key();
@@ -330,7 +343,7 @@ impl AccessLogger {
 
 //	fn guard_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
 	fn log_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
-		if self.log_read {
+		if self.log_read && !self.read_all {
 			let mut ref_children;
 			let logger = if let Some(child_info) = child_info {
 				let storage_key = child_info.storage_key();
@@ -363,6 +376,38 @@ impl AccessLogger {
 			let mut entry = logger.write_prefix.entry(key.to_vec()).or_insert_with(Default::default);
 			entry.extend(self.log_write.iter());
 		}
+	}
+
+	fn extract_read(&mut self) -> Option<sp_externalities::AccessLog> {
+		if !self.log_read {
+			return None;
+		}
+
+		if self.read_all {
+			// Resetting state is not strictly needed, extract read should only happen
+			// on end of lifetime of the overlay (at worker return).
+			// But writing it for having explicitly a clean read state.
+			self.read_all = false;
+			return Some(sp_externalities::AccessLog {
+				read_all: true,
+				top_logger: Default::default(),
+				children_logger: Default::default(),
+			})
+		}
+
+		let read_keys = sp_std::mem::take(self.top_logger.read_key.get_mut());
+		let read_intervals = sp_std::mem::take(self.top_logger.read_intervals.get_mut());
+		let top_logger = sp_externalities::StateLog { read_keys, read_intervals };
+		let children_logger: Vec<_> = self.children_logger.get_mut().iter_mut().map(|(storage_key, logger)| {
+			let read_keys = sp_std::mem::take(logger.read_key.get_mut());
+			let read_intervals = sp_std::mem::take(logger.read_intervals.get_mut());
+			(storage_key, sp_externalities::StateLog { read_keys, read_intervals })
+		}).collect();
+		Some(sp_externalities::AccessLog {
+			read_all: false,
+			top_logger: Default::default(),
+			children_logger: Default::default(),
+		})
 	}
 }
 
@@ -451,9 +496,14 @@ impl Filters {
 		unimplemented!()
 	}
 
-	fn on_worker_result(&mut self, result: &WorkerResult) {
+	fn on_worker_result(&mut self, result: &WorkerResult) -> bool {
 		match result {
-			WorkerResult::CallAt(result, marker) => {
+			WorkerResult::CallAt(_result, marker) => {
+				self.remove_worker(*marker);
+			},
+			WorkerResult::Optimistic(_result, marker, ..) => {
+				// This is actually a noops since optimistic don't
+				// use filter.
 				self.remove_worker(*marker);
 			},
 			// When using filter there is no directly valid case.
@@ -463,7 +513,8 @@ impl Filters {
 			// will panic on resolve so no need to clean filter
 			WorkerResult::HardPanic
 			| WorkerResult::Panic => (),
-		}
+		};
+		true
 	}
 
 	/// TODO this implementation is borderline eg forbid prefix
@@ -841,7 +892,10 @@ impl OverlayedChanges {
 		init: impl Fn() -> StorageValue,
 	) -> &mut StorageValue {
 		self.filters.guard_write(None, key);
+		// no guard read as write supersed it.
 		self.optimistic_logger.log_write(None, key);
+		// we need to log read here as we can read it.
+		self.optimistic_logger.log_read(None, key);
 		let value = self.top.modify(key.to_vec(), init, self.extrinsic_index());
 
 		// if the value was deleted initialise it back with an empty vec
@@ -1016,9 +1070,26 @@ impl OverlayedChanges {
 	///
 	/// Return `None` when the worker execution should be invalidated.
 	pub fn resolve_worker_result(&mut self, result: WorkerResult) -> Option<Vec<u8>> {
-		self.filters.on_worker_result(&result);
-		self.optimistic_logger.on_worker_result(&result);
-		self.markers.resolve_worker_result(result)
+		if !self.filters.on_worker_result(&result)
+			|| !self.optimistic_logger.on_worker_result(&result)
+			|| !self.markers.on_worker_result(&result) {
+			return None;
+		}
+
+		match result {
+			WorkerResult::Optimistic(result, ..)
+			| WorkerResult::Valid(result)
+			| WorkerResult::CallAt(result, ..) => Some(result),
+			WorkerResult::Valid(result) => Some(result),
+			WorkerResult::Invalid => None,
+			WorkerResult::HardPanic
+			| WorkerResult::Panic => {
+				// Hard panic distinction is mainly for implementation
+				// purpose, here both will be handled as a panic in
+				// the parent worker.
+				panic!("Panic from a worker")
+			},
+		}
 	}
 
 	/// A worker was dissmissed.
@@ -1316,6 +1387,12 @@ impl OverlayedChanges {
 	/// Similar use as `guard_read_interval` but for optimistic worker.
 	pub fn log_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
 		self.optimistic_logger.log_read_interval(child_info, key, key_end)
+	}
+
+	/// For optimistic worker, we extract logs from the overlay.
+	/// When call on a non optimistic worker returns `None`.
+	pub fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
+		self.optimistic_logger.extract_read()
 	}
 }
 

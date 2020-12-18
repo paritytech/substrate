@@ -124,6 +124,12 @@ impl AsyncExt {
 	pub fn need_resolve(&self) -> bool {
 		self.kind.need_resolve()
 	}
+
+	/// For optimistic worker, we extract logs from the overlay.
+	/// When call on a non optimistic worker returns `None`.
+	pub fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
+		self.overlay.extract_optimistic_log()
+	}
 }
 
 /// Simple state-less externalities for use in async context.
@@ -218,7 +224,13 @@ impl AsyncExternalities {
 	/// valid, in this case we do not need to resolve
 	/// it.
 	pub fn need_resolve(&self) -> bool {
-		self.state.kind.need_resolve()
+		self.state.need_resolve()
+	}
+
+	/// For optimistic worker, we extract logs from the overlay.
+	/// When call on a non optimistic worker returns `None`.
+	pub fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
+		self.state.extract_optimistic_log()
 	}
 }
 

@@ -331,13 +331,12 @@ pub fn process_task<
 	#[cfg(feature = "std")]
 	instance_ref: I,
 ) -> WorkerResult {
-	let need_resolve = async_ext.need_resolve();
 
-	match task {
+	let result = match task {
 		Task::Wasm(WasmTask { dispatcher_ref, func, data }) => {
 
 			#[cfg(feature = "std")]
-			let result = if HostLocal::HOST_LOCAL {
+			if HostLocal::HOST_LOCAL {
 				panic!("HOST_LOCAL is only expected for a wasm call");
 			} else {
 				let instance = if let Some(instance) = instance_ref.instantiate() {
@@ -352,32 +351,18 @@ pub fn process_task<
 						&data[..],
 					)
 				)
-			};
+			}
 			#[cfg(not(feature = "std"))]
-			let result: Result<Result<_, ()>, _> = if HostLocal::HOST_LOCAL {
+			if HostLocal::HOST_LOCAL {
 				let f: fn(Vec<u8>) -> Vec<u8> = unsafe { sp_std::mem::transmute(func) };
 				with_externalities_safe(
 					&mut async_ext,
-					|| Ok(f(data)),
+					|| -> Result<_, ()> {
+						Ok(f(data))
+					},
 				)
 			} else {
 				panic!("No no_std wasm runner");
-			};
-
-			match result {
-				Ok(Ok(result)) => if need_resolve {
-					WorkerResult::CallAt(result, handle)
-				} else {
-					WorkerResult::Valid(result)
-				},
-				Ok(Err(error)) => {
-					log_error!("Wasm instance error in : {:?}", error);
-					WorkerResult::HardPanic
-				},
-				Err(error) => {
-					log_error!("Panic error in sinlined task: {:?}", error);
-					WorkerResult::Panic
-				}
 			}
 		},
 		Task::Native(NativeTask { func, data }) => {
@@ -385,17 +370,30 @@ pub fn process_task<
 				&mut async_ext,
 				|| func(data),
 			) {
-				Ok(result) => if need_resolve {
-					WorkerResult::CallAt(result, handle)
-				} else {
-					WorkerResult::Valid(result)
-				},
-				Err(error) => {
-					log_error!("Panic error in sinlined task: {:?}", error);
-					WorkerResult::Panic
-				}
+				Ok(result) => Ok(Ok(result)),
+				Err(error) => Err(error),
 			}
 		},
+	};
+	let need_resolve = async_ext.need_resolve();
+	match result {
+		Ok(Ok(result)) => if need_resolve {
+			if let Some(access) = async_ext.extract_optimistic_log() {
+				WorkerResult::Optimistic(result, handle, access)
+			} else {
+				WorkerResult::CallAt(result, handle)
+			}
+		} else {
+			WorkerResult::Valid(result)
+		},
+		Ok(Err(error)) => {
+			log_error!("Wasm instance error in : {:?}", error);
+			WorkerResult::HardPanic
+		},
+		Err(error) => {
+			log_error!("Panic error in inlined task: {:?}", error);
+			WorkerResult::Panic
+		}
 	}
 }
 

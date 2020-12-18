@@ -314,6 +314,9 @@ pub enum WorkerResult {
 	/// Result that require to be checked against
 	/// its parent externality state.
 	CallAt(Vec<u8>, TaskId),
+	/// Optimistic strategy call reply, it contains
+	/// a log of accessed keys.
+	Optimistic(Vec<u8>, TaskId, AccessLog),
 	/// A worker execution that is not valid.
 	/// For instance when asumption on state
 	/// are required.
@@ -326,12 +329,46 @@ pub enum WorkerResult {
 	HardPanic,
 }
 
+/// Log of a given worker call.
+#[derive(codec::Encode, codec::Decode, Default)]
+pub struct AccessLog {
+	/// Worker did iterate over the full state.
+	/// (in practice it did not iterate but uses
+	/// merkle hash over the full state when calculating
+	/// a storage root).
+	pub read_all: bool,
+	/// Log of access for main state.
+	pub top_logger: StateLog,
+	/// Log of access for individual child state.
+	/// Note that the child root isn't logged in top_logger
+	/// because it is always written with its right state
+	/// at the end (actually triggers read_all that supersed
+	/// the other fields).
+	pub children_logger: Vec<(Vec<u8>, StateLog)>,
+}
+
+/// Log of a given trie state.
+#[derive(codec::Encode, codec::Decode, Default)]
+pub struct StateLog {
+	/// Read access to a key.
+	/// Note that write access are not included because
+	/// they are in the worker payload.
+	/// Writes that got rollback are not an issue as long
+	/// as previous value was not read.
+	pub read_keys: Vec<Vec<u8>>,
+	/// Worker did iterate over a given interval.
+	/// Interval is a pair of inclusive start and end key.
+	pub read_intervals: Vec<(Vec<u8>, Vec<u8>)>,
+}
+
 impl WorkerResult {
 	/// Resolve state default implementation for
-	/// Externalities that do not register changes.
+	/// Read only Externalities that do not register changes.
+	/// TODO this function is bad: remove and use explicitely.
 	pub fn read_resolve(self) -> Option<Vec<u8>> {
 		match self {
 			WorkerResult::CallAt(result, ..) => Some(result),
+			WorkerResult::Optimistic(result, ..) => Some(result),
 			WorkerResult::Valid(result) => Some(result),
 			WorkerResult::Invalid => None,
 			WorkerResult::Panic => {
