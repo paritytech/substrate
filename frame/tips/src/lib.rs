@@ -170,10 +170,10 @@ decl_event!(
 		TipClosing(Hash),
 		/// A tip suggestion has been closed. \[tip_hash, who, payout\]
 		TipClosed(Hash, AccountId, Balance),
-		/// A tip suggestion has been slashed. \[tip_hash, finder, deposit\]
-		TipSlashed(Hash, AccountId, Balance),
 		/// A tip suggestion has been retracted. \[tip_hash\]
 		TipRetracted(Hash),
+		/// A tip suggestion has been slashed. \[tip_hash, finder, deposit\]
+		TipSlashed(Hash, AccountId, Balance),
 	}
 );
 
@@ -383,31 +383,6 @@ decl_module! {
 			Tips::<T>::insert(&hash, tip);
 		}
 
-		/// Remove and slash an already-open tip.
-		///
-		/// May only be called from `T::RejectOrigin`.
-		///
-		/// As a result, API will slash the finder and the deposits are lost.
-		///
-		/// Emits `TipSlashed` if successful.
-		#[weight = 10_000]
-		fn slash_tip(origin, hash: T::Hash) {
-			T::RejectOrigin::ensure_origin(origin)?;
-
-			let tip = Tips::<T>::take(hash).ok_or(Error::<T>::UnknownTip)?;
-
-			if !tip.deposit.is_zero() {
-				let deposit = tip.deposit;
-				let imbalance = T::Currency::slash_reserved(&tip.finder, deposit).0;
-				T::OnSlash::on_unbalanced(imbalance);
-			}
-
-			Reasons::<T>::remove(&tip.reason);
-			Tips::<T>::remove(hash);
-
-			Self::deposit_event(RawEvent::TipSlashed(hash, tip.finder, tip.deposit));
-		}
-
 		/// Close and payout a tip.
 		///
 		/// The dispatch origin for this call must be _Signed_.
@@ -436,6 +411,28 @@ decl_module! {
 			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(hash);
 			Self::payout_tip(hash, tip);
+		}
+
+		/// Remove and slash an already-open tip.
+		///
+		/// May only be called from `T::RejectOrigin`.
+		///
+		/// As a result, API will slash the finder and the deposits are lost.
+		///
+		/// Emits `TipSlashed` if successful.
+		#[weight = 10_000]
+		fn slash_tip(origin, hash: T::Hash) {
+			T::RejectOrigin::ensure_origin(origin)?;
+
+			let tip = Tips::<T>::take(hash).ok_or(Error::<T>::UnknownTip)?;
+
+			if !tip.deposit.is_zero() {
+				let deposit = tip.deposit;
+				let imbalance = T::Currency::slash_reserved(&tip.finder, deposit).0;
+				T::OnSlash::on_unbalanced(imbalance);
+			}
+			Reasons::<T>::remove(&tip.reason);
+			Self::deposit_event(RawEvent::TipSlashed(hash, tip.finder, tip.deposit));
 		}
 	}
 }

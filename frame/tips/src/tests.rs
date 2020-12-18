@@ -292,7 +292,11 @@ fn slash_tip_works() {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
+		assert_eq!(Balances::reserved_balance(0), 0);
+		assert_eq!(Balances::free_balance(0), 100);
 		assert_ok!(TipsModTestInst::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
+		assert_eq!(Balances::reserved_balance(0), 12);
+		assert_eq!(Balances::free_balance(0), 88);
 		let h = tip_hash();
 		assert_eq!(last_event(), RawEvent::NewTip(h));
 		assert_noop!(
@@ -301,6 +305,8 @@ fn slash_tip_works() {
 		);
 		assert_ok!(TipsModTestInst::slash_tip(Origin::root(), h.clone()));
 		assert_eq!(last_event(), RawEvent::TipSlashed(h, 0, 12));
+		assert_eq!(Balances::reserved_balance(0), 0);
+		assert_eq!(Balances::free_balance(0), 88);
 	});
 }
 
