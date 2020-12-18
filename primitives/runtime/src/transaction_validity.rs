@@ -55,8 +55,12 @@ pub enum InvalidTransaction {
 	BadProof,
 	/// The transaction birth block is ancient.
 	///
-	/// For `FRAME`-based runtimes this means:
-	/// current block number - `Era::birth` block number > `BlockHashCount`.
+	/// # Possible causes
+	///
+	/// For `FRAME`-based runtimes this would be caused by `current block number
+	/// - Era::birth block number > BlockHashCount`. (e.g. in Polkadot `BlockHashCount` = 2400, so a
+	/// transaction with birth block number 1337 would be valid up until block number 1337 + 2400,
+	/// after which point the transaction would be considered to have an ancient birth block.)
 	AncientBirthBlock,
 	/// The transaction would exhaust the resources of current block.
 	///
