@@ -7,7 +7,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -585,9 +585,14 @@ pub mod tests {
 		let a = SHIFT / 2;
 		let b = SHIFT * 3 / 2;
 		let num: Double = 1 << a | 1 << b;
-		// example when `Single = u8`
-		// assert_eq!(num, 0b_0001_0000_0001_0000)
+		assert_eq!(num, 0x_0001_0000_0001_0000);
 		assert_eq!(split(num), (1 << a, 1 << a));
+
+		let a = SHIFT / 2 + 4;
+		let b = SHIFT / 2 - 4;
+		let num: Double = 1 << (SHIFT + a) | 1 << b;
+		assert_eq!(num, 0x_0010_0000_0000_1000);
+		assert_eq!(split(num), (1 << a, 1 << b));
 	}
 
 	#[test]
