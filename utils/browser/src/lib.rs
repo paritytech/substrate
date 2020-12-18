@@ -35,9 +35,6 @@ use libp2p_wasm_ext::{ExtTransport, ffi};
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 
 /// Initialize the logger and return a `TelemetryWorker` and a wasm `ExtTransport`.
-///
-/// The `TelemetryWorker` object can be use to create `Telemetry` objects and the wasm `ExtTransport`
-/// can be used for network transport.
 pub fn init_logging_and_telemetry(
 	pattern: &str,
 ) -> Result<sc_telemetry::TelemetryWorker, Box<dyn std::error::Error>> {
