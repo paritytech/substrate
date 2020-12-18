@@ -116,12 +116,13 @@ where
 				// the subsistence threshold does not pay rent given a large enough subsistence
 				// threshold. But we need rent payments to occur in order to benchmark for worst cases.
 				let storage_size = ConfigCache::<T>::subsistence_threshold_uncached()
-					.checked_div(&T::RentDepositOffset::get())
+					.checked_div(&T::DepositPerStorageByte::get())
 					.unwrap_or_else(Zero::zero);
 
 				// Endowment should be large but not as large to inhibit rent payments.
-				let endowment = T::RentDepositOffset::get()
-					.saturating_mul(storage_size + T::StorageSizeOffset::get().into())
+				let endowment = T::DepositPerStorageByte::get()
+					.saturating_mul(storage_size)
+					.saturating_add(T::DepositPerContract::get())
 					.saturating_sub(1u32.into());
 
 				(storage_size, endowment)
