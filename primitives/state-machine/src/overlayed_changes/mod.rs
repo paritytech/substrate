@@ -249,6 +249,7 @@ struct StateLogger {
 	read_intervals: RefCell<Vec<(Vec<u8>, Vec<u8>)>>,
 	write_key: Map<Vec<u8>, BTreeSet<TaskId>>,
 	// this is roughly clear prefix.
+	// TODO this need to be a radix tree
 	write_prefix: Map<Vec<u8>, BTreeSet<TaskId>>,
 }
 
@@ -256,6 +257,64 @@ impl StateLogger {
 	fn remove_read_logs(&mut self) {
 		self.read_key.get_mut().clear();
 		self.read_intervals.get_mut().clear();
+	}
+	fn remove_write_logs(&mut self) {
+		self.write_key.clear();
+		self.write_prefix.clear();
+	}
+	fn is_write_empty(&self, marker: TaskId) -> bool {
+		for (_, ids) in self.write_key.iter() {
+			if ids.contains(&marker) {
+				return false;
+			}
+		}
+		for (_, ids) in self.write_prefix.iter() {
+			if ids.contains(&marker) {
+				return false;
+			}
+		}
+		true
+	}
+	fn check_write_read(&self, access: &sp_externalities::StateLog) -> bool {
+		let mut result = true;
+		for key in access.read_keys.iter() {
+			if !result {
+				break;
+			}
+			result = self.check_write_read_key(key);
+		}
+		for interval in access.read_intervals.iter() {
+			if !result {
+				break;
+			}
+			result = self.check_write_read_intervals(interval);
+		}
+		result
+	}
+	fn check_write_read_key(&self, read_key: &Vec<u8>) -> bool {
+		let mut result = true;
+		if let Some(ids) = self.write_key.get(key) {
+			if ids.contains(&marker) {
+				return false;
+			}
+		}
+		for (prefix, ids) in self.write_prefix.iter() {
+			unimplemented!("TODO use a trie seek iter until first conaining id");
+			if ids.contains(&marker) {
+				return false;
+			}
+		}
+
+		unimplemented!();
+		result
+	}
+	fn check_write_read_intervals(&self, interval: &(Vec<u8>, Vec<u8>)) -> bool {
+		let mut result = true;
+		// TODO there is probably a good way to merge redundant/contigus intervals here.
+		// (in fact since most of the time they are one step of iteration this is mandatory
+		// but could be do more when we register new read interval.
+		unimplemented!("hum looks tricky");
+		result
 	}
 }
 
@@ -281,7 +340,32 @@ impl AccessLogger {
 				true
 			},
 			WorkerResult::Optimistic(result, marker, accesses) => {
-				let result = unimplemented!("accesses deltas with writes and ret false on conflict");
+				let mut result = true;
+
+				if accesses.read_all {
+					if result && !self.top_logger.is_write_empty(*marker) {
+						result = false;
+					}
+					for child_logger in self.children_logger.get_mut().iter_mut() {
+						if !result {
+							break;
+						}
+						result = !child_logger.1.is_write_empty(*marker);
+					}
+				} else {
+					if result {
+						result = self.top_logger.check_write_read(&accesses.top_logger);
+					}
+					for (storage_key, child_logger) in accesses.children_logger.iter() {
+						if !result {
+							break;
+						}
+						if let Some(access_logger) = self.children_logger.get_mut().get(storage_key) {
+							result = access_logger.check_write_read(child_logger);
+						}
+					}
+				}
+
 				self.remove_worker(*marker);
 				result
 			},
@@ -297,9 +381,16 @@ impl AccessLogger {
 
 	fn remove_worker(&mut self, worker: TaskId) {
 		self.log_write.remove(&worker);
-		// TODO should we remove from access too, seems better to do it lazilly
-		// on resolve (diff the associated ids and the current ids).
+		// we could remove all occurence, but we only do when no runing thread
+		// to just clear.
+		if self.log_write.is_empty() {
+			self.top_logger.remove_write_logs();
+			for child_logger in self.children_logger.get_mut().iter_mut() {
+				child_logger.1.remove_write_logs();
+			}
+		}
 	}
+
 //	fn guard_read_all(&self) {
 	fn log_read_all(&mut self) {
 		self.read_all = true;
