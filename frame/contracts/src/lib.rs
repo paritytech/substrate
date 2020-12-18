@@ -205,11 +205,8 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	///
 	/// It is a sum of each key-value pair stored by this contract.
 	pub storage_size: u32,
-	/// The number of key-value pairs that have values of zero length.
-	/// The condition `empty_pair_count ≤ total_pair_count` always holds.
-	pub empty_pair_count: u32,
 	/// The total number of key-value pairs in storage of this contract.
-	pub total_pair_count: u32,
+	pub pair_count: u32,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash,
 	/// Pay rent at most up to this value.

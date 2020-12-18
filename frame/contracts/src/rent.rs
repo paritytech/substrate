@@ -105,7 +105,7 @@ where
 			.saturating_mul(contract.storage_size.into())
 			.saturating_add(
 				T::DepositPerStorageItem::get()
-					.saturating_mul(contract.total_pair_count.into())
+					.saturating_mul(contract.pair_count.into())
 			)
 			.saturating_add(T::DepositPerContract::get())
 			.saturating_sub(*free_balance);
@@ -478,8 +478,7 @@ where
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
 			trie_id: origin_contract.trie_id,
 			storage_size: origin_contract.storage_size,
-			empty_pair_count: origin_contract.empty_pair_count,
-			total_pair_count: origin_contract.total_pair_count,
+			pair_count: origin_contract.pair_count,
 			code_hash,
 			rent_allowance,
 			deduct_block: current_block,
