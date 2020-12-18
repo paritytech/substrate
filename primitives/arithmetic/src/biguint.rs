@@ -214,7 +214,7 @@ impl BigUint {
 
 				if let Some(v) = u.checked_sub(v) {
 					if let Some(v2) = v.checked_sub(k) {
-						t = v2 % B;
+						t = v2;
 						k = 0;
 					} else {
 						needs_borrow = true;
@@ -228,9 +228,9 @@ impl BigUint {
 				}
 				t
 			};
-			// PROOF: t either comes from `v2 % B`, or from `u + B - v - k`. The former is
+			// PROOF: t either comes from `v2`, or from `u + B - v - k`. The former is
 			// trivial. The latter will not overflow this branch will only happen if the sum of
-			// `u - v - k` part has been negative, hence `u + B - v - k < b`.
+			// `u - v - k` part has been negative, hence `u + B - v - k < B`.
 			w.set(j, s as Single);
 		}
 
