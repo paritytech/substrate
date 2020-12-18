@@ -287,9 +287,9 @@ impl BigUint {
 		let mut out = Self::with_capacity(n);
 		let mut r: Single = 0;
 		// PROOF: (B-1) * B + (B-1) still fits in double
-		let with_r = |x: Double, r: Single| { Double::from(r) * B + x };
+		let with_r = |x: Single, r: Single| { Double::from(r) * B + Double::from(x) };
 		for d in (0..n).rev() {
-			let (q, rr) = div_single(with_r(self.get(d).into(), r), other) ;
+			let (q, rr) = div_single(with_r(self.get(d), r), other) ;
 			out.set(d, q as Single);
 			r = rr;
 		}
