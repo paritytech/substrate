@@ -156,7 +156,7 @@ pub trait Config: frame_system::Config {
 	type WeightInfo: WeightInfo;
 
 	/// Type parameter for ERC20 compatible
-	type IsERC20Compatible: Get<bool>;
+	type AllowApprovalSpending: Get<bool>;
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
