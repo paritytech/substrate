@@ -546,7 +546,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 	/// Inform sync about new best imported block.
 	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
-		trace!(target: "sync", "New best block imported {:?}/{}", hash, number);
+		trace!(target: "sync", "New best block imported {:?}/#{}", hash, number);
 
 		self.sync.update_chain_info(&hash, number);
 
