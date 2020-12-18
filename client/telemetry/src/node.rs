@@ -228,6 +228,9 @@ where
 			}
 		};
 
+		// The Dispatcher blocks when the Node sinks blocks. This is why it is important that the
+		// Node sinks doesn't go into "Pending" state while waiting for reconnection but rather
+		// discard the excess of telemetry messages.
 		Poll::Ready(Ok(()))
 	}
 
