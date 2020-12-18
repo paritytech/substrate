@@ -394,7 +394,7 @@ decl_module! {
 		fn slash_tip(origin, hash: T::Hash) {
 			T::RejectOrigin::ensure_origin(origin)?;
 
-			let tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
+			let tip = Tips::<T>::take(hash).ok_or(Error::<T>::UnknownTip)?;
 
 			if !tip.deposit.is_zero() {
 				let deposit = tip.deposit;
