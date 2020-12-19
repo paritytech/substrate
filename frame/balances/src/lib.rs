@@ -1232,14 +1232,14 @@ impl<T: Config<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I
 
 		for attempt in 0..2 {
 			match Self::mutate_account(who, |account| {
-				let value = match attempt {
+				let best_value = match attempt {
 					0 => value,
 					// If acting as a critical provider (i.e. first attempt failed), then ensure
 					// slash leaves at least the ED.
 					_ => value.min(account.free + account.reserved - T::ExistentialDeposit::get()),
 				};
 
-				let actual = cmp::min(account.reserved, value);
+				let actual = cmp::min(account.reserved, best_value);
 				account.reserved -= actual;
 
 				// underflow should never happen, but it if does, there's nothing to be done here.
