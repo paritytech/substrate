@@ -1235,7 +1235,7 @@ pub trait Token<Source> {
 		spender: Source,
 		who: Source,
 		recipient: Source,
-		amount: Self::Balance
+		amount: Self::Balance,
 	) -> DispatchResult;
 
 
