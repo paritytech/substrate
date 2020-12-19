@@ -29,14 +29,14 @@
 //! The base fee and adjusted weight and length fees constitute the _inclusion fee_, which is
 //! the minimum fee for a transaction to be included in a block.
 //!
-//! The final fee is composed of:
-//!   - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
-//! 	the congestion of the network.
-//!
+//! The formula of final fee:
 //!   ```ignore
 //!   inclusion_fee = base_fee + length_fee + [targeted_fee_adjustment * weight_fee];
 //!   final_fee = inclusion_fee + tip;
 //!   ```
+//!
+//!   - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
+//! 	the congestion of the network.
 //!
 //! Additionally, this module allows one to configure:
 //!   - The mapping between one unit of weight to one unit of fee via [`Config::WeightToFee`].
