@@ -49,6 +49,7 @@ pub trait WeightInfo {
 	fn tip_new(r: u32, t: u32, ) -> Weight;
 	fn tip(t: u32, ) -> Weight;
 	fn close_tip(t: u32, ) -> Weight;
+	fn slash_tip(t: u32, ) -> Weight;
 }
 
 /// Weights for pallet_tips using the Substrate node and recommended hardware.
@@ -89,6 +90,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
+	fn slash_tip(t: u32, ) -> Weight {
+		(119_313_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((372_000 as Weight).saturating_mul(t as Weight))
+			.saturating_add(T::DbWeight::get().reads(3 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+	}
 }
 
 // For backwards compatibility and tests
@@ -122,6 +130,13 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn close_tip(t: u32, ) -> Weight {
+		(119_313_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((372_000 as Weight).saturating_mul(t as Weight))
+			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+	}
+	fn slash_tip(t: u32, ) -> Weight {
 		(119_313_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((372_000 as Weight).saturating_mul(t as Weight))

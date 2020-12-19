@@ -66,10 +66,6 @@ fn setup_tip<T: Config>(r: u32, t: u32) ->
 fn create_tips<T: Config>(t: u32, hash: T::Hash, value: BalanceOf<T>) ->
 	Result<(), &'static str>
 {
-	println!(
-		"Benchmark-create_tips-entry",
-	);
-
 	for i in 0 .. t {
 		let caller = account("member", i, SEED);
 		ensure!(T::Tippers::contains(&caller), "caller is not a tipper");
@@ -80,11 +76,6 @@ fn create_tips<T: Config>(t: u32, hash: T::Hash, value: BalanceOf<T>) ->
 			open_tip.closes = Some(T::BlockNumber::zero());
 		}
 	});
-
-	println!(
-		"Benchmark-create_tips-exit",
-	);
-
 	Ok(())
 }
 
@@ -156,10 +147,6 @@ benchmarks! {
 	close_tip {
 		let t in 1 .. MAX_TIPPERS;
 
-		println!(
-			"Benchmark-close-tip-entry",
-		);
-
 		// Make sure pot is funded
 		setup_pod_account::<T>();
 
@@ -178,29 +165,16 @@ benchmarks! {
 		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
 
-		println!(
-			"Benchmark-close-tip-hash-{:#?}",
-			hash,
-		);
-
 		create_tips::<T>(t, hash.clone(), value)?;
 
 		let caller = account("caller", t, SEED);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
-
-		println!(
-			"Benchmark-close-tip-exit",
-		);
 	}: _(RawOrigin::Signed(caller), hash)
 
 	slash_tip {
 		let t in 1 .. MAX_TIPPERS;
-
-		println!(
-			"Benchmark-slash-tip-entry",
-		);
 
 		// Make sure pot is funded
 		setup_pod_account::<T>();
@@ -219,19 +193,10 @@ benchmarks! {
 		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
 
-		println!(
-			"Benchmark-slash-tip-hash-{:#?}",
-			hash,
-		);
-
-		TipsMod::<T>::slash_tip(
-			RawOrigin::Root.into(),
-			hash.clone(),
-		)?;
-
-		// // Whitelist caller account from further DB operations.
-		// let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		// frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
+		// Whitelist caller account from further DB operations.
+		let caller: T::AccountId = account("member", t, SEED);
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Root, hash)
 }
 
@@ -244,10 +209,10 @@ mod tests {
 	#[test]
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
-			// assert_ok!(test_benchmark_report_awesome::<Test>());
-			// assert_ok!(test_benchmark_retract_tip::<Test>());
-			// assert_ok!(test_benchmark_tip_new::<Test>());
-			// assert_ok!(test_benchmark_tip::<Test>());
+			assert_ok!(test_benchmark_report_awesome::<Test>());
+			assert_ok!(test_benchmark_retract_tip::<Test>());
+			assert_ok!(test_benchmark_tip_new::<Test>());
+			assert_ok!(test_benchmark_tip::<Test>());
 			assert_ok!(test_benchmark_close_tip::<Test>());
 			assert_ok!(test_benchmark_slash_tip::<Test>());
 		});

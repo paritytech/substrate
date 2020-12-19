@@ -58,8 +58,6 @@ mod tests;
 mod benchmarking;
 pub mod weights;
 
-use sp_std::if_std;
-
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error, Parameter};
 use frame_support::traits::{
@@ -402,13 +400,6 @@ decl_module! {
 		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::close_tip(T::Tippers::max_len() as u32)]
 		fn close_tip(origin, hash: T::Hash) {
-
-			if_std! {
-				println!(
-					"close_tip-Entry",
-				);
-			}
-
 			ensure_signed(origin)?;
 
 			let tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
@@ -418,12 +409,6 @@ decl_module! {
 			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(hash);
 			Self::payout_tip(hash, tip);
-
-			if_std! {
-				println!(
-					"close_tip-Exit",
-				);
-			}
 		}
 
 		/// Remove and slash an already-open tip.
@@ -433,24 +418,16 @@ decl_module! {
 		/// As a result, API will slash the finder and the deposits are lost.
 		///
 		/// Emits `TipSlashed` if successful.
-		// #[weight = <T as Config>::WeightInfo::slash_tip(T::Tippers::max_len() as u32)]
-		#[weight = 10_000]
+		///
+		/// # <weight>
+		///   `T` is charged as upper bound given by `ContainsLengthBound`.
+		///   The actual cost depends on the implementation of `T::Tippers`.
+		/// - DbReads: `Tips`,
+		/// - DbWrites: `Reasons`, `Tips`
+		/// # </weight>
+		#[weight = <T as Config>::WeightInfo::slash_tip(T::Tippers::max_len() as u32)]
 		fn slash_tip(origin, hash: T::Hash) {
-
-			if_std! {
-				println!(
-					"slash_tip-Entry",
-				);
-			}
-
 			T::RejectOrigin::ensure_origin(origin)?;
-
-			if_std! {
-				println!(
-					"slash_tip-hash-{:#?}",
-					hash,
-				);
-			}
 
 			let tip = Tips::<T>::take(hash).ok_or(Error::<T>::UnknownTip)?;
 
@@ -461,12 +438,6 @@ decl_module! {
 			}
 			Reasons::<T>::remove(&tip.reason);
 			Self::deposit_event(RawEvent::TipSlashed(hash, tip.finder, tip.deposit));
-
-			if_std! {
-				println!(
-					"slash_tip-exit",
-				);
-			}
 		}
 	}
 }
@@ -583,10 +554,6 @@ impl<T: Config> Module<T> {
 
 		use frame_support::{Twox64Concat, migration::StorageKeyIterator};
 
-		if_std! {
-			println!("Inside migrate_retract_tip_for_tip_new()!");
-		}
-
 		for (hash, old_tip) in StorageKeyIterator::<
 			T::Hash,
 			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
@@ -594,25 +561,11 @@ impl<T: Config> Module<T> {
 		>::new(b"Treasury", b"Tips").drain()
 		{
 
-			if_std! {
-				println!("Inside loop migrate_retract_tip_for_tip_new()!");
-			}
-
 			let (finder, deposit, finders_fee) = match old_tip.finder {
 				Some((finder, deposit)) => {
-					if_std! {
-						// This code is only being compiled and executed when the `std` feature is enabled.
-						println!("OK case!");
-						println!("value is: {:#?},{:#?}", finder, deposit);
-					}
 					(finder, deposit, true)
 				},
 				None => {
-					if_std! {
-						// This code is only being compiled and executed when the `std` feature is enabled.
-						println!("None case!");
-						// println!("value is: {:#?},{:#?}", T::AccountId::default(), Zero::zero());
-					}
 					(T::AccountId::default(), Zero::zero(), false)
 				},
 			};
@@ -627,10 +580,5 @@ impl<T: Config> Module<T> {
 			};
 			Tips::<T>::insert(hash, new_tip)
 		}
-
-		if_std! {
-			println!("Exit migrate_retract_tip_for_tip_new()!");
-		}
-
 	}
 }
