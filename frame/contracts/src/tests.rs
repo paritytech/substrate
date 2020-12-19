@@ -1221,7 +1221,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				30_000,
 				GAS_LIMIT,
 				restoration_code_hash.into(),
-				<Test as pallet_balances::Config>::Balance::from(0u32).encode(),
+				vec![],
 				vec![],
 			));
 			let addr_django = Contracts::contract_address(&CHARLIE, &restoration_code_hash, &[]);
@@ -1253,6 +1253,15 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				)
 			};
 
+			// The key that is used in the restorer contract but is not in the target contract.
+			// Is supplied as delta to the restoration. We need it to check whether the key
+			// is properly removed on success but still there on failure.
+			let delta_key = {
+				let mut key = [0u8; 32];
+				key[0] = 1;
+				key
+			};
+
 			if test_different_storage || test_restore_to_with_dirty_storage {
 				// Parametrization of the test imply restoration failure. Check that `DJANGO` aka
 				// restoration contract is still in place and also that `BOB` doesn't exist.
@@ -1263,6 +1272,10 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				assert_eq!(django_contract.storage_size, 8);
 				assert_eq!(django_contract.trie_id, django_trie_id);
 				assert_eq!(django_contract.deduct_block, System::block_number());
+				assert_eq!(
+					Storage::<Test>::read(&django_trie_id, &delta_key),
+					Some(vec![40, 0, 0, 0]),
+				);
 				match (test_different_storage, test_restore_to_with_dirty_storage) {
 					(true, false) => {
 						assert_err_ignore_postinfo!(
@@ -1321,7 +1334,6 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 				// Here we expect that the restoration is succeeded. Check that the restoration
 				// contract `DJANGO` ceased to exist and that `BOB` returned back.
-				println!("{:?}", ContractInfoOf::<Test>::get(&addr_bob));
 				let bob_contract = ContractInfoOf::<Test>::get(&addr_bob).unwrap()
 					.get_alive().unwrap();
 				assert_eq!(bob_contract.rent_allowance, 50);
@@ -1329,6 +1341,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				assert_eq!(bob_contract.trie_id, django_trie_id);
 				assert_eq!(bob_contract.deduct_block, System::block_number());
 				assert!(ContractInfoOf::<Test>::get(&addr_django).is_none());
+				assert_matches!(Storage::<Test>::read(&django_trie_id, &delta_key), None);
 				assert_eq!(System::events(), vec![
 					EventRecord {
 						phase: Phase::Initialization,
