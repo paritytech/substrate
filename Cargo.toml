@@ -107,6 +107,7 @@ members = [
 	"frame/support/test",
 	"frame/system",
 	"frame/system/benchmarking",
+	"frame/system/extended-tests",
 	"frame/system/rpc/runtime-api",
 	"frame/timestamp",
 	"frame/transaction-payment",
