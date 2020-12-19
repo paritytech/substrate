@@ -23,22 +23,23 @@
 //!
 //! - A database containing the blocks and chain state, generally referred to as
 //! the [`Backend`](sc_client_api::backend::Backend).
-//! - A runtime environment, generally referred to as the [`Executor`](CallExecutor).
+//! - A runtime environment, generally referred to as the
+//! [`Executor`](sc_client_api::call_executor::CallExecutor).
 //!
 //! # Initialization
 //!
 //! Creating a [`Client`] is done by calling the `new` method and passing to it a
-//! [`Backend`](sc_client_api::backend::Backend) and an [`Executor`](CallExecutor).
+//! [`Backend`](sc_client_api::backend::Backend) and an
+//! [`Executor`](sc_client_api::call_executor::CallExecutor).
 //!
 //! The former is typically provided by the `sc-client-db` crate.
 //!
 //! The latter typically requires passing one of:
 //!
 //! - A [`LocalCallExecutor`] running the runtime locally.
-//! - A [`RemoteCallExecutor`](light::call_executor::RemoteCallRequest) that will ask a
+//! - A [`RemoteCallExecutor`](sc_client_api::light::RemoteCallRequest) that will ask a
 //! third-party to perform the executions.
-//! - A [`RemoteOrLocalCallExecutor`](light::call_executor::RemoteOrLocalCallExecutor), combination
-//! of the two.
+//! - A [`RemoteOrLocalCallExecutor`](sc_client_api::light::LocalOrRemote), combination of the two.
 //!
 //! Additionally, the fourth generic parameter of the `Client` is a marker type representing
 //! the ways in which the runtime can interface with the outside. Any code that builds a `Client`

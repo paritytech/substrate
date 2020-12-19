@@ -38,7 +38,7 @@ use sp_keystore::{
 	SyncCryptoStore,
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
-use sp_application_crypto::{ed25519, sr25519, ecdsa};
+use sp_application_crypto::{ed25519, sr25519, ecdsa, AppPair, AppKey, IsWrappedBy};
 
 use crate::{Result, Error};
 
@@ -56,6 +56,14 @@ impl LocalKeystore {
 	pub fn in_memory() -> Self {
 		let inner = KeystoreInner::new_in_memory();
 		Self(RwLock::new(inner))
+	}
+
+	/// Get a key pair for the given public key.
+	///
+	/// This function is only available for a local keystore. If your application plans to work with
+	/// remote keystores, you do not want to depend on it.
+	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Pair> {
+		self.0.read().key_pair::<Pair>(public)
 	}
 }
 
@@ -321,7 +329,7 @@ impl KeystoreInner {
 	/// Open the store at the given path.
 	///
 	/// Optionally takes a password that will be used to encrypt/decrypt the keys.
-	pub fn open<T: Into<PathBuf>>(path: T, password: Option<SecretString>) -> Result<Self> {
+	fn open<T: Into<PathBuf>>(path: T, password: Option<SecretString>) -> Result<Self> {
 		let path = path.into();
 		fs::create_dir_all(&path)?;
 
@@ -337,7 +345,7 @@ impl KeystoreInner {
 	}
 
 	/// Create a new in-memory store.
-	pub fn new_in_memory() -> Self {
+	fn new_in_memory() -> Self {
 		Self {
 			path: None,
 			additional: HashMap::new(),
@@ -365,8 +373,8 @@ impl KeystoreInner {
 
 	/// Insert a new key with anonymous crypto.
 	///
-	/// Places it into the file system store.
-	pub fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<()> {
+	/// Places it into the file system store, if a path is configured.
+	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<()> {
 		if let Some(path) = self.key_file_path(public, key_type) {
 			let mut file = File::create(path).map_err(Error::Io)?;
 			serde_json::to_writer(&file, &suri).map_err(Error::Json)?;
@@ -377,13 +385,16 @@ impl KeystoreInner {
 
 	/// Generate a new key.
 	///
-	/// Places it into the file system store.
-	pub fn generate_by_type<Pair: PairT>(&self, key_type: KeyTypeId) -> Result<Pair> {
+	/// Places it into the file system store, if a path is configured. Otherwise insert
+	/// it into the memory cache only.
+	fn generate_by_type<Pair: PairT>(&mut self, key_type: KeyTypeId) -> Result<Pair> {
 		let (pair, phrase, _) = Pair::generate_with_phrase(self.password());
 		if let Some(path) = self.key_file_path(pair.public().as_slice(), key_type) {
 			let mut file = File::create(path)?;
 			serde_json::to_writer(&file, &phrase)?;
 			file.flush()?;
+		} else {
+			self.insert_ephemeral_pair(&pair, &phrase, key_type);
 		}
 		Ok(pair)
 	}
@@ -391,7 +402,7 @@ impl KeystoreInner {
 	/// Create a new key from seed.
 	///
 	/// Does not place it into the file system store.
-	pub fn insert_ephemeral_from_seed_by_type<Pair: PairT>(
+	fn insert_ephemeral_from_seed_by_type<Pair: PairT>(
 		&mut self,
 		seed: &str,
 		key_type: KeyTypeId,
@@ -414,7 +425,7 @@ impl KeystoreInner {
 	}
 
 	/// Get a key pair for the given public key and key type.
-	pub fn key_pair_by_type<Pair: PairT>(&self,
+	fn key_pair_by_type<Pair: PairT>(&self,
 		public: &Pair::Public,
 		key_type: KeyTypeId,
 	) -> Result<Pair> {
@@ -470,6 +481,11 @@ impl KeystoreInner {
 
 		Ok(public_keys)
 	}
+
+	/// Get a key pair for the given public key.
+	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Pair> {
+		self.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID).map(Into::into)
+	}
 }
 
 
@@ -479,62 +495,49 @@ mod tests {
 	use tempfile::TempDir;
 	use sp_core::{
 		Pair,
-		crypto::{IsWrappedBy, Ss58Codec},
+		crypto::Ss58Codec,
 		testing::SR25519,
 	};
-	use sp_application_crypto::{ed25519, sr25519, AppPublic, AppKey, AppPair};
+	use sp_application_crypto::{ed25519, sr25519, AppPublic};
 	use std::{
 		fs,
 		str::FromStr,
 	};
 
-	/// Generate a new key.
-	///
-	/// Places it into the file system store.
-	fn generate<Pair: AppPair>(store: &KeystoreInner) -> Result<Pair> {
-		store.generate_by_type::<Pair::Generic>(Pair::ID).map(Into::into)
-	}
+	const TEST_KEY_TYPE: KeyTypeId = KeyTypeId(*b"test");
 
-	/// Create a new key from seed.
-	///
-	/// Does not place it into the file system store.
-	fn insert_ephemeral_from_seed<Pair: AppPair>(store: &mut KeystoreInner, seed: &str) -> Result<Pair> {
-		store.insert_ephemeral_from_seed_by_type::<Pair::Generic>(seed, Pair::ID).map(Into::into)
-	}
+	impl KeystoreInner {
+		fn insert_ephemeral_from_seed<Pair: AppPair>(&mut self, seed: &str) -> Result<Pair> {
+			self.insert_ephemeral_from_seed_by_type::<Pair::Generic>(seed, Pair::ID).map(Into::into)
+		}
 
-	/// Get public keys of all stored keys that match the key type.
-	///
-	/// This will just use the type of the public key (a list of which to be returned) in order
-	/// to determine the key type. Unless you use a specialized application-type public key, then
-	/// this only give you keys registered under generic cryptography, and will not return keys
-	/// registered under the application type.
-	fn public_keys<Public: AppPublic>(store: &KeystoreInner) -> Result<Vec<Public>> {
-		store.raw_public_keys(Public::ID)
-			.map(|v| {
-				v.into_iter()
-				 .map(|k| Public::from_slice(k.as_slice()))
-				 .collect()
-			})
-	}
+		fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {
+			self.raw_public_keys(Public::ID)
+				.map(|v| {
+					v.into_iter()
+						.map(|k| Public::from_slice(k.as_slice()))
+						.collect()
+				})
+		}
 
-	/// Get a key pair for the given public key.
-	fn key_pair<Pair: AppPair>(store: &KeystoreInner, public: &<Pair as AppKey>::Public) -> Result<Pair> {
-		store.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID).map(Into::into)
+		fn generate<Pair: AppPair>(&mut self) -> Result<Pair> {
+			self.generate_by_type::<Pair::Generic>(Pair::ID).map(Into::into)
+		}
 	}
 
 	#[test]
 	fn basic_store() {
 		let temp_dir = TempDir::new().unwrap();
-		let store = KeystoreInner::open(temp_dir.path(), None).unwrap();
+		let mut store = KeystoreInner::open(temp_dir.path(), None).unwrap();
 
-		assert!(public_keys::<ed25519::AppPublic>(&store).unwrap().is_empty());
+		assert!(store.public_keys::<ed25519::AppPublic>().unwrap().is_empty());
 
-		let key: ed25519::AppPair = generate(&store).unwrap();
-		let key2: ed25519::AppPair = key_pair(&store, &key.public()).unwrap();
+		let key: ed25519::AppPair = store.generate().unwrap();
+		let key2: ed25519::AppPair = store.key_pair(&key.public()).unwrap();
 
 		assert_eq!(key.public(), key2.public());
 
-		assert_eq!(public_keys::<ed25519::AppPublic>(&store).unwrap()[0], key.public());
+		assert_eq!(store.public_keys::<ed25519::AppPublic>().unwrap()[0], key.public());
 	}
 
 	#[test]
@@ -542,8 +545,7 @@ mod tests {
 		let temp_dir = TempDir::new().unwrap();
 		let mut store = KeystoreInner::open(temp_dir.path(), None).unwrap();
 
-		let pair: ed25519::AppPair = insert_ephemeral_from_seed(
-			&mut store,
+		let pair: ed25519::AppPair = store.insert_ephemeral_from_seed(
 			"0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc"
 		).unwrap();
 		assert_eq!(
@@ -554,27 +556,27 @@ mod tests {
 		drop(store);
 		let store = KeystoreInner::open(temp_dir.path(), None).unwrap();
 		// Keys generated from seed should not be persisted!
-		assert!(key_pair::<ed25519::AppPair>(&store, &pair.public()).is_err());
+		assert!(store.key_pair::<ed25519::AppPair>(&pair.public()).is_err());
 	}
 
 	#[test]
 	fn password_being_used() {
 		let password = String::from("password");
 		let temp_dir = TempDir::new().unwrap();
-		let store = KeystoreInner::open(
+		let mut store = KeystoreInner::open(
 			temp_dir.path(),
 			Some(FromStr::from_str(password.as_str()).unwrap()),
 		).unwrap();
 
-		let pair: ed25519::AppPair = generate(&store).unwrap();
+		let pair: ed25519::AppPair = store.generate().unwrap();
 		assert_eq!(
 			pair.public(),
-			key_pair::<ed25519::AppPair>(&store, &pair.public()).unwrap().public(),
+			store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
 		);
 
 		// Without the password the key should not be retrievable
 		let store = KeystoreInner::open(temp_dir.path(), None).unwrap();
-		assert!(key_pair::<ed25519::AppPair>(&store, &pair.public()).is_err());
+		assert!(store.key_pair::<ed25519::AppPair>(&pair.public()).is_err());
 
 		let store = KeystoreInner::open(
 			temp_dir.path(),
@@ -582,7 +584,7 @@ mod tests {
 		).unwrap();
 		assert_eq!(
 			pair.public(),
-			key_pair::<ed25519::AppPair>(&store, &pair.public()).unwrap().public(),
+			store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
 		);
 	}
 
@@ -593,18 +595,17 @@ mod tests {
 
 		let mut keys = Vec::new();
 		for i in 0..10 {
-			keys.push(generate::<ed25519::AppPair>(&store).unwrap().public());
-			keys.push(insert_ephemeral_from_seed::<ed25519::AppPair>(
-				&mut store,
+			keys.push(store.generate::<ed25519::AppPair>().unwrap().public());
+			keys.push(store.insert_ephemeral_from_seed::<ed25519::AppPair>(
 				&format!("0x3d97c819d68f9bafa7d6e79cb991eebcd7{}d966c5334c0b94d9e1fa7ad0869dc", i),
 			).unwrap().public());
 		}
 
 		// Generate a key of a different type
-		generate::<sr25519::AppPair>(&store).unwrap();
+		store.generate::<sr25519::AppPair>().unwrap();
 
 		keys.sort();
-		let mut store_pubs = public_keys::<ed25519::AppPublic>(&store).unwrap();
+		let mut store_pubs = store.public_keys::<ed25519::AppPublic>().unwrap();
 		store_pubs.sort();
 
 		assert_eq!(keys, store_pubs);
@@ -643,5 +644,28 @@ mod tests {
 		assert!(
 			SyncCryptoStore::sr25519_public_keys(&store, SR25519).is_empty(),
 		);
+	}
+
+	#[test]
+	fn generate_with_seed_is_not_stored() {
+		let temp_dir = TempDir::new().unwrap();
+		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
+		let _alice_tmp_key = SyncCryptoStore::sr25519_generate_new(&store, TEST_KEY_TYPE, Some("//Alice")).unwrap();
+
+		assert_eq!(SyncCryptoStore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 1);
+
+		drop(store);
+		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
+		assert_eq!(SyncCryptoStore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 0);
+	}
+
+	#[test]
+	fn generate_can_be_fetched_in_memory() {
+		let store = LocalKeystore::in_memory();
+		SyncCryptoStore::sr25519_generate_new(&store, TEST_KEY_TYPE, Some("//Alice")).unwrap();
+
+		assert_eq!(SyncCryptoStore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 1);
+		SyncCryptoStore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
+		assert_eq!(SyncCryptoStore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 2);
 	}
 }

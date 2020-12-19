@@ -22,6 +22,7 @@ sc-cli = { version = "0.8.0", path = "../../../client/cli", features = ["wasmtim
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sc-executor = { version = "0.8.0", path = "../../../client/executor", features = ["wasmtime"] }
 sc-service = { version = "0.8.0", path = "../../../client/service", features = ["wasmtime"] }
+sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
 sc-transaction-pool = { version = "2.0.0", path = "../../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
@@ -35,7 +36,7 @@ sc-client-api = { version = "2.0.0", path = "../../../client/api" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 
 # These dependencies are used for the node template's RPCs
-jsonrpc-core = "15.0.0"
+jsonrpc-core = "15.1.0"
 sc-rpc = { version = "2.0.0", path = "../../../client/rpc" }
 sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sc-rpc-api = { version = "0.8.0", path = "../../../client/rpc-api" }

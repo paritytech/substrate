@@ -72,7 +72,7 @@ pub trait WeightInfo {
 
 /// Weights for pallet_staking using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: frame_system::Trait> WeightInfo for SubstrateWeight<T> {
+impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn bond() -> Weight {
 		(99_659_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))

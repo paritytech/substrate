@@ -472,6 +472,8 @@ ss58_address_format!(
 		(13, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
 	TotemAccount =>
 		(14, "totem", "Any Totem Live Accounting network standard account (*25519).")
+	SynesthesiaAccount =>
+		(15, "synesthesia", "Synesthesia mainnet, standard account (*25519).")
 	KulupuAccount =>
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
 	DarkAccount =>
@@ -504,6 +506,10 @@ ss58_address_format!(
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
 	NodleAccount =>
 		(37, "nodle", "Nodle Chain mainnet, standard account (*25519).")
+	KiltAccount =>
+		(38, "kilt", "KILT Chain mainnet, standard account (*25519).")
+	PolimecAccount =>
+		(41, "poli", "Polimec Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
 	Reserved43 =>
@@ -617,6 +623,16 @@ pub trait Public:
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 
+impl AccountId32 {
+	/// Create a new instance from its raw inner byte value.
+	///
+	/// Equivalent to this types `From<[u8; 32]>` implementation. For the lack of const
+	/// support in traits we have this constructor.
+	pub const fn new(inner: [u8; 32]) -> Self {
+		Self(inner)
+	}
+}
+
 impl UncheckedFrom<crate::hash::H256> for AccountId32 {
 	fn unchecked_from(h: crate::hash::H256) -> Self {
 		AccountId32(h.into())
@@ -651,8 +667,8 @@ impl AsMut<[u8; 32]> for AccountId32 {
 }
 
 impl From<[u8; 32]> for AccountId32 {
-	fn from(x: [u8; 32]) -> AccountId32 {
-		AccountId32(x)
+	fn from(x: [u8; 32]) -> Self {
+		Self::new(x)
 	}
 }
 
@@ -1017,6 +1033,7 @@ pub trait CryptoType {
 	Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode, PassByInner,
 	crate::RuntimeDebug
 )]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyTypeId(pub [u8; 4]);
 
 impl From<u32> for KeyTypeId {
@@ -1046,10 +1063,12 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 
 /// An identifier for a specific cryptographic algorithm used by a key pair
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct CryptoTypeId(pub [u8; 4]);
 
 /// A type alias of CryptoTypeId & a public key
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
 
 #[cfg(feature = "std")]
