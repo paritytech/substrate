@@ -579,8 +579,18 @@ fn assert_is_stash(acc: AccountId) {
 fn assert_ledger_consistent(ctrl: AccountId) {
 	// ensures ledger.total == ledger.active + sum(ledger.unlocking).
 	let ledger = Staking::ledger(ctrl).expect("Not a controller.");
-	let real_total: Balance = ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
+	let real_total: Balance = ledger
+		.unlocking
+		.iter()
+		.fold(ledger.active, |a, c| a + c.value);
 	assert_eq!(real_total, ledger.total);
+	assert!(
+		ledger.active >= Balances::minimum_balance() || ledger.active == 0,
+		"{}: active ledger amount ({}) must be greater than ED {}",
+		ctrl,
+		ledger.active,
+		Balances::minimum_balance()
+	);
 }
 
 pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
