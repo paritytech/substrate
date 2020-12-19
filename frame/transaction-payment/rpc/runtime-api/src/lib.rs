@@ -26,7 +26,7 @@ pub use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 
 sp_api::decl_runtime_apis! {
 	pub trait TransactionPaymentApi<Balance> where
-		Balance: Codec + MaybeDisplay + MaybeFromStr,
+		Balance: Codec + MaybeDisplay + MaybeFromStr + Default,
 	{
 		fn query_info(uxt: Block::Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance>;
 		fn query_fee_details(uxt: Block::Extrinsic, len: u32) -> FeeDetails<Balance>;

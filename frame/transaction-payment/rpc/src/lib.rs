@@ -84,7 +84,7 @@ where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
-	Balance: Codec + MaybeDisplay + MaybeFromStr,
+	Balance: Codec + MaybeDisplay + MaybeFromStr + Default,
 {
 	fn query_info(
 		&self,

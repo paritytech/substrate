@@ -31,7 +31,7 @@ use sp_runtime::traits::AtLeast32BitUnsigned;
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
 #[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
-pub struct InclusionFee<Balance> {
+pub struct InclusionFee<Balance: Default> {
 	/// This is the minimum amount a user pays for a transaction. It is declared
 	/// as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
 	#[cfg_attr(feature = "std", serde(with = "serde_balance"))]
@@ -49,7 +49,7 @@ pub struct InclusionFee<Balance> {
 	pub adjusted_weight_fee: Balance,
 }
 
-impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
+impl<Balance: AtLeast32BitUnsigned + Default + Copy> InclusionFee<Balance> {
 	/// Returns the total of inclusion fee.
 	///
 	/// ```ignore
@@ -71,7 +71,7 @@ impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
 #[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
-pub struct FeeDetails<Balance> {
+pub struct FeeDetails<Balance: Default> {
 	pub inclusion_fee: Option<InclusionFee<Balance>>,
 	// Do not serialize and deserialize `tip` as we actually can not pass any tip to the RPC.
 	#[cfg_attr(feature = "std", serde(skip))]
