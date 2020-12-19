@@ -877,6 +877,9 @@ macro_rules! decl_tests {
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(1150), 150));
 					// Account is still alive
 					assert!(System::account_exists(&1));
+
+					// Slash on non-existent account is okay.
+					assert_eq!(Balances::slash(&12345, 1_300), (NegativeImbalance::new(0), 1300));
 				});
 		}
 
@@ -946,6 +949,9 @@ macro_rules! decl_tests {
 					assert_eq!(Balances::slash_reserved(&1, 1_300), (NegativeImbalance::new(1_000), 300));
 					// Account is still alive
 					assert!(System::account_exists(&1));
+
+					// Slash on non-existent account is okay.
+					assert_eq!(Balances::slash_reserved(&12345, 1_300), (NegativeImbalance::new(0), 1300));
 				});
 		}
 	}
