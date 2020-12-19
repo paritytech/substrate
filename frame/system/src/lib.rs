@@ -863,12 +863,14 @@ impl Default for InitKind {
 }
 
 /// Reference status; can be either referenced or unreferenced.
+#[derive(RuntimeDebug)]
 pub enum RefStatus {
 	Referenced,
 	Unreferenced,
 }
 
 /// Some resultant status relevant to incrementing a provider reference.
+#[derive(RuntimeDebug)]
 pub enum IncRefStatus {
 	/// Account was created.
 	Created,
@@ -877,6 +879,7 @@ pub enum IncRefStatus {
 }
 
 /// Some resultant status relevant to decrementing a provider reference.
+#[derive(RuntimeDebug)]
 pub enum DecRefStatus {
 	/// Account was destroyed.
 	Reaped,
@@ -885,12 +888,14 @@ pub enum DecRefStatus {
 }
 
 /// Some resultant status relevant to decrementing a provider reference.
+#[derive(RuntimeDebug)]
 pub enum DecRefError {
 	/// Account cannot have the last provider reference removed while there is a consumer.
 	ConsumerRemaining,
 }
 
 /// Some resultant status relevant to incrementing a provider reference.
+#[derive(RuntimeDebug)]
 pub enum IncRefError {
 	/// Account cannot introduce a consumer while there are no providers.
 	NoProviders,

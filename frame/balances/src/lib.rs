@@ -719,13 +719,14 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 mod imbalances {
 	use super::{
 		result, DefaultInstance, Imbalance, Config, Zero, Instance, Saturating,
-		StorageValue, TryDrop,
+		StorageValue, TryDrop, RuntimeDebug,
 	};
 	use sp_std::mem;
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been created without any equal and opposite accounting.
 	#[must_use]
+	#[derive(RuntimeDebug, PartialEq, Eq)]
 	pub struct PositiveImbalance<T: Config<I>, I: Instance=DefaultInstance>(T::Balance);
 
 	impl<T: Config<I>, I: Instance> PositiveImbalance<T, I> {
@@ -738,6 +739,7 @@ mod imbalances {
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been destroyed without any equal and opposite accounting.
 	#[must_use]
+	#[derive(RuntimeDebug, PartialEq, Eq)]
 	pub struct NegativeImbalance<T: Config<I>, I: Instance=DefaultInstance>(T::Balance);
 
 	impl<T: Config<I>, I: Instance> NegativeImbalance<T, I> {
@@ -1007,23 +1009,33 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		for attempt in 0..2 {
 			match Self::try_mutate_account(who,
 				|account, _is_new| -> Result<(Self::NegativeImbalance, Self::Balance), StoredMapError> {
-					let free_slash = cmp::min(account.free, value);
-					account.free -= free_slash;
-
-					let value = match attempt {
+					// Best value is the most amount we can slash following liveness rules.
+					let best_value = match attempt {
+						// First attempt we try to slash the full amount, and see if liveness issues happen.
 						0 => value,
-						// If acting as a critical provider (i.e. first attempt failed), then ensure
-						// slash leaves at least the ED.
-						_ => value.min(account.free + account.reserved - T::ExistentialDeposit::get()),
+						// If acting as a critical provider (i.e. first attempt failed), then slash
+						// as much as possible while leaving at least at ED.
+						_ => value.min((account.free + account.reserved).saturating_sub(T::ExistentialDeposit::get())),
 					};
 
-					let remaining_slash = value - free_slash;
+					let free_slash = cmp::min(account.free, best_value);
+					account.free -= free_slash; // Safe because of above check
+					let remaining_slash = best_value - free_slash; // Safe because of above check
+
 					if !remaining_slash.is_zero() {
+						// If we have remaining slash, take it from reserved balance.
 						let reserved_slash = cmp::min(account.reserved, remaining_slash);
-						account.reserved -= reserved_slash;
-						Ok((NegativeImbalance::new(free_slash + reserved_slash), remaining_slash - reserved_slash))
+						account.reserved -= reserved_slash; // Safe because of above check
+						Ok((
+							NegativeImbalance::new(free_slash + reserved_slash),
+							value - free_slash - reserved_slash, // Safe because value is gt or eq total slashed
+						))
 					} else {
-						Ok((NegativeImbalance::new(value), Zero::zero()))
+						// Else we are done!
+						Ok((
+							NegativeImbalance::new(free_slash),
+							value - free_slash, // Safe because value is gt or eq to total slashed
+						))
 					}
 				}
 			) {
