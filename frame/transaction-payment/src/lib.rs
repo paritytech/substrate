@@ -31,8 +31,11 @@
 //!
 //!	The final fee is composed of:
 //!
+//! 	- `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
+//! 	the congestion of the network.
+//!
 //! 	```ignore
-//! 	inclusion_fee = base_fee + len_fee + [targeted_fee_adjustment * weight_fee];
+//! 	inclusion_fee = base_fee + length_fee + [targeted_fee_adjustment * weight_fee];
 //! 	final_fee = inclusion_fee + tip;
 //! 	```
 //!
