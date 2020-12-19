@@ -29,7 +29,7 @@
 //! The base fee and adjusted weight and length fees constitute the _inclusion fee_, which is
 //! the minimum fee for a transaction to be included in a block.
 //!
-//!	The final fee is composed of:
+//! The final fee is composed of:
 //!
 //! 	- `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
 //! 	the congestion of the network.
@@ -66,7 +66,7 @@ use sp_runtime::{
 	},
 	traits::{
 		Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
-		DispatchInfoOf, PostDispatchInfoOf
+		DispatchInfoOf, PostDispatchInfoOf,
 	},
 };
 
