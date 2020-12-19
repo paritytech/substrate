@@ -45,11 +45,7 @@ cargo install -f --version 0.2.0 diener
 
 # Merge master into our branch before building Polkadot to make sure we don't miss
 # any commits that are required by Polkadot.
-<<<<<<< HEAD
 git fetch --depth 100 origin
-=======
-git fetch --depth 20 origin
->>>>>>> master
 git merge origin/master
 
 # Clone the current Polkadot master branch into ./polkadot.
