@@ -1020,7 +1020,7 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 
 		Account::<T>::mutate(id, &who, |a| a.is_frozen = true);
 
-		Self::deposit_event(Event::<T>::Thawed(id, who));
+		Self::deposit_event(Event::<T>::Frozen(id, who));
 		Ok(())
 	}
 
