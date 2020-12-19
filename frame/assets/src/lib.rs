@@ -606,7 +606,7 @@ decl_module! {
 			match <Self as Token<_>>::transfer(id, T::Lookup::unlookup(source.clone()), dest.clone(), amount) {
 				Ok(_) => {
 					let dest = T::Lookup::lookup(dest)?;
-					Self::deposit_event(RawEvent::Transferred(id, source, dest, amount));
+					Self::deposit_event(RawEvent::ForceTransferred(id, source, dest, amount));
 					Ok(())
 				},
 				Err(e) => Err(e),
