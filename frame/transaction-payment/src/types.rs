@@ -62,9 +62,9 @@ impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
 	}
 }
 
-/// The `final_fee` is composed of:
+/// The `FeeDetails` is composed of:
 ///   - (Optional) `inclusion_fee`: Only the `Pays::Yes` transaction can have the inclusion fee.
-///   - (Optional) `tip`: If included in the transaction, the tip will be added on top. Only
+///   - `tip`: If included in the transaction, the tip will be added on top. Only
 ///     signed transactions can have a tip.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -73,7 +73,8 @@ impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
 #[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
 pub struct FeeDetails<Balance> {
 	pub inclusion_fee: Option<InclusionFee<Balance>>,
-	#[cfg_attr(feature = "std", serde(with = "serde_balance"))]
+	// Do not serialize and deserialize `tip` as we actually can not pass any tip to the RPC.
+	#[cfg_attr(feature = "std", serde(skip))]
 	pub tip: Balance,
 }
 

@@ -19,10 +19,22 @@
 //!
 //! This module provides the basic logic needed to pay the absolute minimum amount needed for a
 //! transaction to be included. This includes:
+//!   - _base fee_: This is the minimum amount a user pays for a transaction. It is declared
+//! 	as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
 //!   - _weight fee_: A fee proportional to amount of weight a transaction consumes.
 //!   - _length fee_: A fee proportional to the encoded length of the transaction.
 //!   - _tip_: An optional tip. Tip increases the priority of the transaction, giving it a higher
 //!     chance to be included by the transaction queue.
+//!
+//! The base fee and adjusted weight and length fees constitute the _inclusion fee_, which is
+//! the minimum fee for a transaction to be included in a block.
+//!
+//!	The final fee is composed of:
+//!
+//! 	```ignore
+//! 	inclusion_fee = base_fee + len_fee + [targeted_fee_adjustment * weight_fee];
+//! 	final_fee = inclusion_fee + tip;
+//! 	```
 //!
 //! Additionally, this module allows one to configure:
 //!   - The mapping between one unit of weight to one unit of fee via [`Config::WeightToFee`].
