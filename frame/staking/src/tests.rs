@@ -415,10 +415,22 @@ fn nominating_and_rewards_should_work() {
 			assert_eq_uvec!(validator_controllers(), vec![40, 30]);
 
 			// Set payee to controller
-			assert_ok!(Staking::set_payee(Origin::signed(10), RewardPolicy::One(RewardDestination::Controller)));
-			assert_ok!(Staking::set_payee(Origin::signed(20), RewardPolicy::One(RewardDestination::Controller)));
-			assert_ok!(Staking::set_payee(Origin::signed(30), RewardPolicy::One(RewardDestination::Controller)));
-			assert_ok!(Staking::set_payee(Origin::signed(40), RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::set_payee(
+				Origin::signed(10),
+				RewardPolicy::One(RewardDestination::Controller))
+			);
+			assert_ok!(Staking::set_payee(
+				Origin::signed(20),
+				RewardPolicy::One(RewardDestination::Controller))
+			);
+			assert_ok!(Staking::set_payee(
+				Origin::signed(30),
+				RewardPolicy::One(RewardDestination::Controller))
+			);
+			assert_ok!(Staking::set_payee(
+				Origin::signed(40),
+				RewardPolicy::One(RewardDestination::Controller))
+			);
 
 			// give the man some money
 			let initial_balance = 1000;
@@ -428,10 +440,20 @@ fn nominating_and_rewards_should_work() {
 
 			// bond two account pairs and state interest in nomination.
 			// 2 will nominate for 10, 20, 30
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::bond(
+				Origin::signed(1),
+				2,
+				1000,
+				RewardPolicy::One(RewardDestination::Controller))
+			);
 			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 21, 31]));
 			// 4 will nominate for 10, 20, 40
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::bond(
+				Origin::signed(3),
+				4,
+				1000,
+				RewardPolicy::One(RewardDestination::Controller))
+			);
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 21, 41]));
 
 			// the total reward for era 0
@@ -1635,7 +1657,10 @@ fn switching_roles() {
 	// Test that it should be possible to switch between roles (nominator, validator, idle) with minimal overhead.
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		// Reset reward destination
-		for i in &[10, 20] { assert_ok!(Staking::set_payee(Origin::signed(*i), RewardPolicy::One(RewardDestination::Controller))); }
+		for i in &[10, 20] { assert_ok!(
+			Staking::set_payee(Origin::signed(*i),
+			RewardPolicy::One(RewardDestination::Controller))
+		);}
 
 		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
 
@@ -1643,14 +1668,29 @@ fn switching_roles() {
 		for i in 1..7 { let _ = Balances::deposit_creating(&i, 5000); }
 
 		// add 2 nominators
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardPolicy::One(RewardDestination::Controller)));
+		assert_ok!(Staking::bond(
+			Origin::signed(1),
+			2,
+			2000,
+			RewardPolicy::One(RewardDestination::Controller))
+		);
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 5]));
 
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardPolicy::One(RewardDestination::Controller)));
+		assert_ok!(Staking::bond(
+			Origin::signed(3),
+			4,
+			500,
+			RewardPolicy::One(RewardDestination::Controller))
+		);
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 1]));
 
 		// add a new validator candidate
-		assert_ok!(Staking::bond(Origin::signed(5), 6, 1000, RewardPolicy::One(RewardDestination::Controller)));
+		assert_ok!(Staking::bond(
+			Origin::signed(5),
+			6,
+			1000,
+			RewardPolicy::One(RewardDestination::Controller))
+		);
 		assert_ok!(Staking::validate(Origin::signed(6), ValidatorPrefs::default()));
 
 		mock::start_era(1);
@@ -1682,7 +1722,12 @@ fn wrong_vote_is_null() {
 		for i in 1..3 { let _ = Balances::deposit_creating(&i, 5000); }
 
 		// add 1 nominators
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardPolicy::One(RewardDestination::default())));
+		assert_ok!(Staking::bond(
+			Origin::signed(1),
+			2,
+			2000,
+			RewardPolicy::One(RewardDestination::default()))
+		);
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![
 			11, 21, 			// good votes
 			1, 2, 15, 1000, 25  // crap votes. No effect.
@@ -1708,11 +1753,21 @@ fn bond_with_no_staked_value() {
 		.execute_with(|| {
 			// Can't bond with 1
 			assert_noop!(
-				Staking::bond(Origin::signed(1), 2, 1, RewardPolicy::One(RewardDestination::Controller)),
+				Staking::bond(
+					Origin::signed(1),
+					2,
+					1,
+					RewardPolicy::One(RewardDestination::Controller)
+				),
 				Error::<Test>::InsufficientValue,
 			);
 			// bonded with absolute minimum value possible.
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::bond(
+				Origin::signed(1),
+				2,
+				5,
+				RewardPolicy::One(RewardDestination::Controller))
+			);
 			assert_eq!(Balances::locks(&1)[0].amount, 5);
 
 			// unbonding even 1 will cause all to be unbonded.
@@ -1757,12 +1812,20 @@ fn bond_with_little_staked_value_bounded() {
 		.execute_with(|| {
 			// setup
 			assert_ok!(Staking::chill(Origin::signed(30)));
-			assert_ok!(Staking::set_payee(Origin::signed(10), RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::set_payee(
+				Origin::signed(10),
+				RewardPolicy::One(RewardDestination::Controller))
+			);
 			let init_balance_2 = Balances::free_balance(&2);
 			let init_balance_10 = Balances::free_balance(&10);
 
 			// Stingy validator.
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::bond(
+				Origin::signed(1),
+				2,
+				1,
+				RewardPolicy::One(RewardDestination::Controller))
+			);
 			assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 
 			// reward era 0
@@ -1827,10 +1890,20 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
 				let _ = Balances::make_free_balance_be(i, initial_balance);
 			}
 
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::bond(
+				Origin::signed(1),
+				2,
+				1000,
+				RewardPolicy::One(RewardDestination::Controller))
+			);
 			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21, 31,]));
 
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::bond(
+				Origin::signed(3),
+				4,
+				1000,
+				RewardPolicy::One(RewardDestination::Controller))
+			);
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
 
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into account.
@@ -1874,10 +1947,20 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election_elected() {
 				let _ = Balances::make_free_balance_be(i, initial_balance);
 			}
 
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::bond(
+				Origin::signed(1),
+				2,
+				1000,
+				RewardPolicy::One(RewardDestination::Controller))
+			);
 			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21, 31,]));
 
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::bond(
+				Origin::signed(3),
+				4,
+				1000,
+				RewardPolicy::One(RewardDestination::Controller))
+			);
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
 
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into account.
@@ -1969,7 +2052,11 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 
 		// only slashes out of bonded stake are applied. without this line,
 		// it is 0.
-		Staking::bond(Origin::signed(2), 20000, stake - 1, RewardPolicy::One(RewardDestination::default())).unwrap();
+		Staking::bond(
+			Origin::signed(2), 
+			20000, stake - 1, 
+			RewardPolicy::One(RewardDestination::default())
+		).unwrap();
 		// Override exposure of 11
 		ErasStakers::<Test>::insert(0, 11, Exposure {
 			total: stake,

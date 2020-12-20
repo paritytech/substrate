@@ -35,7 +35,7 @@ use frame_system::RawOrigin;
 use pallet_session::{historical::Module as Historical, Module as Session, *};
 use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
-	MAX_NOMINATIONS, RewardDestination,
+	MAX_NOMINATIONS, RewardDestination, RewardPolicy,
 };
 use sp_runtime::traits::{One, StaticLookup};
 
@@ -59,7 +59,7 @@ benchmarks! {
 			n,
 			MAX_NOMINATIONS as u32,
 			false,
-			RewardDestination::Staked,
+			RewardPolicy::One(RewardDestination::Staked),
 		)?;
 		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
@@ -75,7 +75,7 @@ benchmarks! {
 			n,
 			MAX_NOMINATIONS as u32,
 			false,
-			RewardDestination::Staked
+			RewardPolicy::One(RewardDestination::Staked)
 		)?;
 		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
