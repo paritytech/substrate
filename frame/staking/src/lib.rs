@@ -427,6 +427,21 @@ pub enum StakerStatus<AccountId> {
 	Nominator(Vec<AccountId>),
 }
 
+/// Policy for receiving rewards
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+pub enum RewardPolicy<Dest> {
+	/// Pay into single RewardDestination
+	One(Dest),
+	/// Pay (Perbill * Total) to 1st Dest, ((1-Perbill) * Total) to 2nd Dest
+	Split(Dest,Perbill,Dest),
+}
+
+impl<T: Default> Default for RewardPolicy<T> {
+	fn default() -> Self {
+		RewardPolicy::One(T::default())
+	}
+}
+
 /// A destination account for payment.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
 pub enum RewardDestination<AccountId> {
@@ -934,7 +949,7 @@ decl_storage! {
 			=> Option<StakingLedger<T::AccountId, BalanceOf<T>>>;
 
 		/// Where the reward payment should be made. Keyed by stash.
-		pub Payee get(fn payee): map hasher(twox_64_concat) T::AccountId => RewardDestination<T::AccountId>;
+		pub Payee get(fn payee): map hasher(twox_64_concat) T::AccountId => RewardPolicy<RewardDestination<T::AccountId>>;
 
 		/// The map from (wannabe) validator stash key to the preferences of that validator.
 		pub Validators get(fn validators):
@@ -1099,7 +1114,7 @@ decl_storage! {
 					T::Origin::from(Some(stash.clone()).into()),
 					T::Lookup::unlookup(controller.clone()),
 					balance,
-					RewardDestination::Staked,
+					RewardPolicy::One(RewardDestination::Staked),
 				);
 				let _ = match status {
 					StakerStatus::Validator => {
@@ -1401,7 +1416,7 @@ decl_module! {
 		pub fn bond(origin,
 			controller: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
-			payee: RewardDestination<T::AccountId>,
+			payee: RewardPolicy<RewardDestination<T::AccountId>>,
 		) {
 			let stash = ensure_signed(origin)?;
 
@@ -1727,7 +1742,7 @@ decl_module! {
 		///     - Write: Payee
 		/// # </weight>
 		#[weight = T::WeightInfo::set_payee()]
-		fn set_payee(origin, payee: RewardDestination<T::AccountId>) {
+		fn set_payee(origin, payee: RewardPolicy<RewardDestination<T::AccountId>>) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
@@ -2355,25 +2370,43 @@ impl<T: Config> Module<T> {
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.
 	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
-		let dest = Self::payee(stash);
-		match dest {
-			RewardDestination::Controller => Self::bonded(stash)
-				.and_then(|controller|
-					Some(T::Currency::deposit_creating(&controller, amount))
-				),
-			RewardDestination::Stash =>
-				T::Currency::deposit_into_existing(stash, amount).ok(),
-			RewardDestination::Staked => Self::bonded(stash)
-				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
-				.and_then(|(controller, mut l)| {
-					l.active += amount;
-					l.total += amount;
-					let r = T::Currency::deposit_into_existing(stash, amount).ok();
-					Self::update_ledger(&controller, &l);
-					r
-				}),
-			RewardDestination::Account(dest_account) => {
-				Some(T::Currency::deposit_creating(&dest_account, amount))
+		let policy = Self::payee(stash);
+		let payout = |dest: RewardDestination<T::AccountId>, amount: BalanceOf<T>| -> Option<PositiveImbalanceOf<T>> {
+			match dest {
+				RewardDestination::Controller => Self::bonded(stash)
+					.and_then(|controller|
+						Some(T::Currency::deposit_creating(&controller, amount))
+					),
+				RewardDestination::Stash =>
+					T::Currency::deposit_into_existing(stash, amount).ok(),
+				RewardDestination::Staked => Self::bonded(stash)
+					.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
+					.and_then(|(controller, mut l)| {
+						l.active += amount;
+						l.total += amount;
+						let r = T::Currency::deposit_into_existing(stash, amount).ok();
+						Self::update_ledger(&controller, &l);
+						r
+					}),
+				RewardDestination::Account(dest_account) => {
+					Some(T::Currency::deposit_creating(&dest_account, amount))
+				}
+			}
+		};
+		match policy {
+			RewardPolicy::One(d) => payout(d,amount),
+			RewardPolicy::Split(d1,pct,d2) => {
+				let first_amt = pct * amount;
+				let remaining = amount - first_amt;
+				if let Some(payout1) = payout(d1,first_amt) {
+					if let Some(payout2) = payout(d2,remaining) {
+						Some(payout1.merge(payout2))
+					} else {
+						Some(payout1)
+					}
+				} else {
+					payout(d2,remaining)
+				}
 			}
 		}
 	}
