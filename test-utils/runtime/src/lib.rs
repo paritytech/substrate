@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The Substrate runtime. This can be compiled with #[no_std], ready for Wasm.
+//! The Substrate runtime. This can be compiled with `#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -29,7 +29,7 @@ use codec::{Encode, Decode, Input, Error};
 use sp_core::{offchain::KeyTypeId, ChangesTrieConfiguration, OpaqueMetadata, RuntimeDebug};
 use sp_application_crypto::{ed25519, sr25519, ecdsa, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
-use sp_trie::PrefixedMemoryDB;
+use sp_trie::{PrefixedMemoryDB, StorageProof};
 use sp_trie::trie_types::{TrieDB, TrieDBMut};
 
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
@@ -42,9 +42,11 @@ use sp_runtime::{
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, NumberFor, Verify, IdentityLookup,
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
 	},
 };
+#[cfg(feature = "std")]
+use sp_runtime::traits::NumberFor;
 use sp_version::RuntimeVersion;
 pub use sp_core::hash::H256;
 #[cfg(any(feature = "std", test))]
@@ -52,18 +54,27 @@ use sp_version::NativeVersion;
 use frame_support::{
 	impl_outer_origin, parameter_types,
 	traits::KeyOwnerProofSystem,
-	weights::{RuntimeDbWeight, Weight},
+	weights::RuntimeDbWeight,
 };
+use frame_system::limits::{BlockWeights, BlockLength};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
+
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
 // Include the WASM binary
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+
+/// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
+#[cfg(feature = "std")]
+pub fn wasm_binary_unwrap() -> &'static [u8] {
+	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
+						supported with the flag disabled.")
+}
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -189,7 +200,7 @@ impl ExtrinsicT for Extrinsic {
 
 impl sp_runtime::traits::Dispatchable for Extrinsic {
 	type Origin = Origin;
-	type Trait = ();
+	type Config = ();
 	type Info = ();
 	type PostInfo = ();
 	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
@@ -327,9 +338,13 @@ cfg_if! {
 				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
+				/// Check a witness.
+				fn test_witness(proof: StorageProof, root: crate::Hash);
 				/// Test that ensures that we can call a function that takes multiple
 				/// arguments.
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
+				/// Traces log "Hey I'm runtime."
+				fn do_trace_log();
 			}
 		}
 	} else {
@@ -376,9 +391,13 @@ cfg_if! {
 				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
+				/// Check a witness.
+				fn test_witness(proof: StorageProof, root: crate::Hash);
 				/// Test that ensures that we can call a function that takes multiple
 				/// arguments.
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
+				/// Traces log "Hey I'm runtime."
+				fn do_trace_log();
 			}
 		}
 	}
@@ -411,17 +430,20 @@ impl From<frame_system::Event<Runtime>> for Event {
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
 	pub const MinimumPeriod: u64 = 5;
-	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 		read: 100,
 		write: 1000,
 	};
-	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+	pub RuntimeBlockLength: BlockLength =
+		BlockLength::max(4 * 1024 * 1024);
+	pub RuntimeBlockWeights: BlockWeights =
+		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
 }
 
-impl frame_system::Trait for Runtime {
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = ();
+	type BlockWeights = RuntimeBlockWeights;
+	type BlockLength = RuntimeBlockLength;
 	type Origin = Origin;
 	type Call = Extrinsic;
 	type Index = u64;
@@ -433,22 +455,16 @@ impl frame_system::Trait for Runtime {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
-	type ModuleToIndex = ();
+	type PalletInfo = ();
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 }
 
-impl pallet_timestamp::Trait for Runtime {
+impl pallet_timestamp::Config for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
@@ -461,7 +477,7 @@ parameter_types! {
 	pub const ExpectedBlockTime: u64 = 10_000;
 }
 
-impl pallet_babe::Trait for Runtime {
+impl pallet_babe::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	// there is no actual runtime in this test-runtime, so testing crates
@@ -480,6 +496,8 @@ impl pallet_babe::Trait for Runtime {
 	)>>::IdentificationTuple;
 
 	type HandleEquivocation = ();
+
+	type WeightInfo = ();
 }
 
 /// Adds one to the given input and returns the final result.
@@ -676,9 +694,18 @@ cfg_if! {
 					test_read_child_storage();
 				}
 
+				fn test_witness(proof: StorageProof, root: crate::Hash) {
+					test_witness(proof, root);
+				}
+
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
 					assert_eq!(&data[..], &other[..]);
 					assert_eq!(data.len(), num as usize);
+				}
+
+				fn do_trace_log() {
+					frame_support::debug::RuntimeLogger::init();
+					frame_support::debug::trace!("Hey I'm runtime");
 				}
 			}
 
@@ -918,9 +945,18 @@ cfg_if! {
 					test_read_child_storage();
 				}
 
+				fn test_witness(proof: StorageProof, root: crate::Hash) {
+					test_witness(proof, root);
+				}
+
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
 					assert_eq!(&data[..], &other[..]);
 					assert_eq!(data.len(), num as usize);
+				}
+
+				fn do_trace_log() {
+					frame_support::debug::RuntimeLogger::init();
+					frame_support::debug::trace!("Hey I'm runtime");
 				}
 			}
 
@@ -1047,17 +1083,13 @@ fn test_read_storage() {
 	sp_io::storage::set(KEY, b"test");
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::read(
-		KEY,
-		&mut v,
-		0
-	);
+	let r = sp_io::storage::read(KEY, &mut v, 0);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::read(KEY, &mut v, 8);
-	assert_eq!(r, Some(4));
+	let r = sp_io::storage::read(KEY, &mut v, 4);
+	assert_eq!(r, Some(0));
 	assert_eq!(&v, &[0, 0, 0, 0]);
 }
 
@@ -1087,8 +1119,36 @@ fn test_read_child_storage() {
 		&mut v,
 		8,
 	);
-	assert_eq!(r, Some(4));
+	assert_eq!(r, Some(0));
 	assert_eq!(&v, &[0, 0, 0, 0]);
+}
+
+fn test_witness(proof: StorageProof, root: crate::Hash) {
+	use sp_externalities::Externalities;
+	let db: sp_trie::MemoryDB<crate::Hashing> = proof.into_memory_db();
+	let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(
+		db,
+		root,
+	);
+	let mut overlay = sp_state_machine::OverlayedChanges::default();
+	#[cfg(feature = "std")]
+	let mut offchain_overlay = Default::default();
+	let mut cache = sp_state_machine::StorageTransactionCache::<_, _, BlockNumber>::default();
+	let mut ext = sp_state_machine::Ext::new(
+		&mut overlay,
+		#[cfg(feature = "std")]
+		&mut offchain_overlay,
+		&mut cache,
+		&backend,
+		#[cfg(feature = "std")]
+		None,
+		#[cfg(feature = "std")]
+		None,
+	);
+	assert!(ext.storage(b"value3").is_some());
+	assert!(ext.storage_root().as_slice() == &root[..]);
+	ext.place_storage(vec![0], Some(vec![1]));
+	assert!(ext.storage_root().as_slice() != &root[..]);
 }
 
 #[cfg(test)]
@@ -1148,5 +1208,34 @@ mod tests {
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		runtime_api.test_storage(&block_id).unwrap();
+	}
+
+	fn witness_backend() -> (sp_trie::MemoryDB<crate::Hashing>, crate::Hash) {
+		use sp_trie::TrieMut;
+		let mut root = crate::Hash::default();
+		let mut mdb = sp_trie::MemoryDB::<crate::Hashing>::default();
+		{
+			let mut trie = sp_trie::trie_types::TrieDBMut::new(&mut mdb, &mut root);
+			trie.insert(b"value3", &[142]).expect("insert failed");
+			trie.insert(b"value4", &[124]).expect("insert failed");
+		};
+		(mdb, root)
+	}
+
+	#[test]
+	fn witness_backend_works() {
+		let (db, root) = witness_backend();
+		let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(
+			db,
+			root,
+		);
+		let proof = sp_state_machine::prove_read(backend, vec![b"value3"]).unwrap();
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::Both)
+			.build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(client.chain_info().best_number);
+
+		runtime_api.test_witness(&block_id, proof, root).unwrap();
 	}
 }

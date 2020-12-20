@@ -23,7 +23,8 @@ use super::*;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::benchmarks;
-use sp_core::offchain::{OpaquePeerId, OpaqueMultiaddr};
+use sp_core::OpaquePeerId;
+use sp_core::offchain::OpaqueMultiaddr;
 use sp_runtime::traits::{ValidateUnsigned, Zero};
 use sp_runtime::transaction_validity::TransactionSource;
 use frame_support::traits::UnfilteredDispatchable;
@@ -33,7 +34,7 @@ use crate::Module as ImOnline;
 const MAX_KEYS: u32 = 1000;
 const MAX_EXTERNAL_ADDRESSES: u32 = 100;
 
-pub fn create_heartbeat<T: Trait>(k: u32, e: u32) ->
+pub fn create_heartbeat<T: Config>(k: u32, e: u32) ->
 	Result<(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature), &'static str>
 {
 	let mut keys = Vec::new();
@@ -64,12 +65,14 @@ pub fn create_heartbeat<T: Trait>(k: u32, e: u32) ->
 benchmarks! {
 	_{ }
 
+	#[extra]
 	heartbeat {
 		let k in 1 .. MAX_KEYS;
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
 	}: _(RawOrigin::None, input_heartbeat, signature)
 
+	#[extra]
 	validate_unsigned {
 		let k in 1 .. MAX_KEYS;
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;

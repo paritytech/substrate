@@ -248,14 +248,10 @@ pub trait TransactionPool: Send + Sync {
 
 /// Events that the transaction pool listens for.
 pub enum ChainEvent<B: BlockT> {
-	/// New blocks have been added to the chain
-	NewBlock {
-		/// Is this the new best block.
-		is_new_best: bool,
+	/// New best block have been added to the chain
+	NewBestBlock {
 		/// Hash of the block.
 		hash: B::Hash,
-		/// Header of the just imported block
-		header: B::Header,
 		/// Tree route from old best to new best parent that was calculated on import.
 		///
 		/// If `None`, no re-org happened on import.

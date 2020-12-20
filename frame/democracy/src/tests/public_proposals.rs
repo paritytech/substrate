@@ -97,6 +97,45 @@ fn invalid_seconds_upper_bound_should_not_work() {
 }
 
 #[test]
+fn cancel_proposal_should_work() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(0);
+		assert_ok!(propose_set_balance_and_note(1, 2, 2));
+		assert_ok!(propose_set_balance_and_note(1, 4, 4));
+		assert_noop!(Democracy::cancel_proposal(Origin::signed(1), 0), BadOrigin);
+		assert_ok!(Democracy::cancel_proposal(Origin::root(), 0));
+		assert_eq!(Democracy::backing_for(0), None);
+		assert_eq!(Democracy::backing_for(1), Some(4));
+	});
+}
+
+#[test]
+fn blacklisting_should_work() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(0);
+		let hash = set_balance_proposal_hash(2);
+
+		assert_ok!(propose_set_balance_and_note(1, 2, 2));
+		assert_ok!(propose_set_balance_and_note(1, 4, 4));
+
+		assert_noop!(Democracy::blacklist(Origin::signed(1), hash.clone(), None), BadOrigin);
+		assert_ok!(Democracy::blacklist(Origin::root(), hash, None));
+
+		assert_eq!(Democracy::backing_for(0), None);
+		assert_eq!(Democracy::backing_for(1), Some(4));
+
+		assert_noop!(propose_set_balance_and_note(1, 2, 2), Error::<Test>::ProposalBlacklisted);
+
+		fast_forward_to(2);
+
+		let hash = set_balance_proposal_hash(4);
+		assert!(Democracy::referendum_status(0).is_ok());
+		assert_ok!(Democracy::blacklist(Origin::root(), hash, Some(0)));
+		assert!(Democracy::referendum_status(0).is_err());
+	});
+}
+
+#[test]
 fn runners_up_should_come_after() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);

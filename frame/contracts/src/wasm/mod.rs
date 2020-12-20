@@ -17,12 +17,13 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use crate::{CodeHash, Schedule, Trait};
+use crate::{CodeHash, Schedule, Config};
 use crate::wasm::env_def::FunctionImplProvider;
-use crate::exec::{Ext, ExecResult};
+use crate::exec::Ext;
 use crate::gas::GasMeter;
 
 use sp_std::prelude::*;
+use sp_core::crypto::UncheckedFrom;
 use codec::{Encode, Decode};
 use sp_sandbox;
 
@@ -32,10 +33,14 @@ mod code_cache;
 mod prepare;
 mod runtime;
 
-use self::runtime::{to_execution_result, Runtime};
+use self::runtime::Runtime;
 use self::code_cache::load as load_code;
+use pallet_contracts_primitives::ExecResult;
 
 pub use self::code_cache::save as save_code;
+#[cfg(feature = "runtime-benchmarks")]
+pub use self::code_cache::save_raw as save_code_raw;
+pub use self::runtime::ReturnCode;
 
 /// A prepared wasm module ready for execution.
 #[derive(Clone, Encode, Decode)]
@@ -63,17 +68,20 @@ pub struct WasmExecutable {
 }
 
 /// Loader which fetches `WasmExecutable` from the code cache.
-pub struct WasmLoader<'a> {
-	schedule: &'a Schedule,
+pub struct WasmLoader<'a, T: Config> {
+	schedule: &'a Schedule<T>,
 }
 
-impl<'a> WasmLoader<'a> {
-	pub fn new(schedule: &'a Schedule) -> Self {
+impl<'a, T: Config> WasmLoader<'a, T> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
+	pub fn new(schedule: &'a Schedule<T>) -> Self {
 		WasmLoader { schedule }
 	}
 }
 
-impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a> {
+impl<'a, T: Config> crate::exec::Loader<T> for WasmLoader<'a, T>
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+{
 	type Executable = WasmExecutable;
 
 	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
@@ -93,17 +101,20 @@ impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a> {
 }
 
 /// Implementation of `Vm` that takes `WasmExecutable` and executes it.
-pub struct WasmVm<'a> {
-	schedule: &'a Schedule,
+pub struct WasmVm<'a, T: Config> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
+	schedule: &'a Schedule<T>,
 }
 
-impl<'a> WasmVm<'a> {
-	pub fn new(schedule: &'a Schedule) -> Self {
+impl<'a, T: Config> WasmVm<'a, T> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
+	pub fn new(schedule: &'a Schedule<T>) -> Self {
 		WasmVm { schedule }
 	}
 }
 
-impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
+impl<'a, T: Config> crate::exec::Vm<T> for WasmVm<'a, T>
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+{
 	type Executable = WasmExecutable;
 
 	fn execute<E: Ext<T = T>>(
@@ -126,9 +137,9 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 				});
 
 		let mut imports = sp_sandbox::EnvironmentDefinitionBuilder::new();
-		imports.add_memory("env", "memory", memory.clone());
+		imports.add_memory(self::prepare::IMPORT_MODULE_MEMORY, "memory", memory.clone());
 		runtime::Env::impls(&mut |name, func_ptr| {
-			imports.add_host_func("env", name, func_ptr);
+			imports.add_host_func(self::prepare::IMPORT_MODULE_FN, name, func_ptr);
 		});
 
 		let mut runtime = Runtime::new(
@@ -143,25 +154,27 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 		// entrypoint.
 		let result = sp_sandbox::Instance::new(&exec.prefab_module.code, &imports, &mut runtime)
 			.and_then(|mut instance| instance.invoke(exec.entrypoint_name, &[], &mut runtime));
-		to_execution_result(runtime, result)
+		runtime.to_execution_result(result)
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::{
+		CodeHash, BalanceOf, Error, Module as Contracts,
+		exec::{Ext, StorageKey, AccountIdOf},
+		gas::{Gas, GasMeter},
+		tests::{Test, Call, ALICE, BOB},
+		wasm::prepare::prepare_contract,
+	};
 	use std::collections::HashMap;
 	use sp_core::H256;
-	use crate::exec::{Ext, StorageKey, ExecReturnValue, ReturnFlags};
-	use crate::gas::{Gas, GasMeter};
-	use crate::tests::{Test, Call};
-	use crate::wasm::prepare::prepare_contract;
-	use crate::{CodeHash, BalanceOf};
-	use wabt;
 	use hex_literal::hex;
-	use assert_matches::assert_matches;
 	use sp_runtime::DispatchError;
 	use frame_support::weights::Weight;
+	use assert_matches::assert_matches;
+	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
 
 	const GAS_LIMIT: Gas = 10_000_000_000;
 
@@ -170,7 +183,7 @@ mod tests {
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct RestoreEntry {
-		dest: u64,
+		dest: AccountIdOf<Test>,
 		code_hash: H256,
 		rent_allowance: u64,
 		delta: Vec<StorageKey>,
@@ -182,20 +195,19 @@ mod tests {
 		endowment: u64,
 		data: Vec<u8>,
 		gas_left: u64,
+		salt: Vec<u8>,
 	}
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct TerminationEntry {
-		beneficiary: u64,
-		gas_left: u64,
+		beneficiary: AccountIdOf<Test>,
 	}
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct TransferEntry {
-		to: u64,
+		to: AccountIdOf<Test>,
 		value: u64,
 		data: Vec<u8>,
-		gas_left: u64,
 	}
 
 	#[derive(Default)]
@@ -208,7 +220,6 @@ mod tests {
 		restores: Vec<RestoreEntry>,
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
-		next_account_id: u64,
 	}
 
 	impl Ext for MockExt {
@@ -226,18 +237,17 @@ mod tests {
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> Result<(u64, ExecReturnValue), DispatchError> {
+			salt: &[u8],
+		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
 			self.instantiates.push(InstantiateEntry {
 				code_hash: code_hash.clone(),
 				endowment,
 				data: data.to_vec(),
 				gas_left: gas_meter.gas_left(),
+				salt: salt.to_vec(),
 			});
-			let address = self.next_account_id;
-			self.next_account_id += 1;
-
 			Ok((
-				address,
+				Contracts::<Test>::contract_address(&ALICE, code_hash, salt),
 				ExecReturnValue {
 					flags: ReturnFlags::empty(),
 					data: Vec::new(),
@@ -246,30 +256,27 @@ mod tests {
 		}
 		fn transfer(
 			&mut self,
-			to: &u64,
+			to: &AccountIdOf<Self::T>,
 			value: u64,
-			gas_meter: &mut GasMeter<Test>,
 		) -> Result<(), DispatchError> {
 			self.transfers.push(TransferEntry {
-				to: *to,
+				to: to.clone(),
 				value,
 				data: Vec::new(),
-				gas_left: gas_meter.gas_left(),
 			});
 			Ok(())
 		}
 		fn call(
 			&mut self,
-			to: &u64,
+			to: &AccountIdOf<Self::T>,
 			value: u64,
-			gas_meter: &mut GasMeter<Test>,
+			_gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
 		) -> ExecResult {
 			self.transfers.push(TransferEntry {
-				to: *to,
+				to: to.clone(),
 				value,
 				data: data,
-				gas_left: gas_meter.gas_left(),
 			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
@@ -277,22 +284,20 @@ mod tests {
 		}
 		fn terminate(
 			&mut self,
-			beneficiary: &u64,
-			gas_meter: &mut GasMeter<Test>,
+			beneficiary: &AccountIdOf<Self::T>,
 		) -> Result<(), DispatchError> {
 			self.terminations.push(TerminationEntry {
-				beneficiary: *beneficiary,
-				gas_left: gas_meter.gas_left(),
+				beneficiary: beneficiary.clone(),
 			});
 			Ok(())
 		}
 		fn restore_to(
 			&mut self,
-			dest: u64,
+			dest: AccountIdOf<Self::T>,
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) -> Result<(), &'static str> {
+		) -> Result<(), DispatchError> {
 			self.restores.push(RestoreEntry {
 				dest,
 				code_hash,
@@ -301,11 +306,11 @@ mod tests {
 			});
 			Ok(())
 		}
-		fn caller(&self) -> &u64 {
-			&42
+		fn caller(&self) -> &AccountIdOf<Self::T> {
+			&ALICE
 		}
-		fn address(&self) -> &u64 {
-			&69
+		fn address(&self) -> &AccountIdOf<Self::T> {
+			&BOB
 		}
 		fn balance(&self) -> u64 {
 			228
@@ -366,27 +371,26 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
-		) -> Result<(u64, ExecReturnValue), DispatchError> {
-			(**self).instantiate(code, value, gas_meter, input_data)
+			salt: &[u8],
+		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
+			(**self).instantiate(code, value, gas_meter, input_data, salt)
 		}
 		fn transfer(
 			&mut self,
-			to: &u64,
+			to: &AccountIdOf<Self::T>,
 			value: u64,
-			gas_meter: &mut GasMeter<Test>,
 		) -> Result<(), DispatchError> {
-			(**self).transfer(to, value, gas_meter)
+			(**self).transfer(to, value)
 		}
 		fn terminate(
 			&mut self,
-			beneficiary: &u64,
-			gas_meter: &mut GasMeter<Test>,
+			beneficiary: &AccountIdOf<Self::T>,
 		) -> Result<(), DispatchError> {
-			(**self).terminate(beneficiary, gas_meter)
+			(**self).terminate(beneficiary)
 		}
 		fn call(
 			&mut self,
-			to: &u64,
+			to: &AccountIdOf<Self::T>,
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
@@ -395,11 +399,11 @@ mod tests {
 		}
 		fn restore_to(
 			&mut self,
-			dest: u64,
+			dest: AccountIdOf<Self::T>,
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) -> Result<(), &'static str> {
+		) -> Result<(), DispatchError> {
 			(**self).restore_to(
 				dest,
 				code_hash,
@@ -407,10 +411,10 @@ mod tests {
 				delta,
 			)
 		}
-		fn caller(&self) -> &u64 {
+		fn caller(&self) -> &AccountIdOf<Self::T> {
 			(**self).caller()
 		}
-		fn address(&self) -> &u64 {
+		fn address(&self) -> &AccountIdOf<Self::T> {
 			(**self).address()
 		}
 		fn balance(&self) -> u64 {
@@ -456,13 +460,17 @@ mod tests {
 		input_data: Vec<u8>,
 		ext: E,
 		gas_meter: &mut GasMeter<E::T>,
-	) -> ExecResult {
+	) -> ExecResult
+	where
+		<E::T as frame_system::Config>::AccountId:
+			UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>
+	{
 		use crate::exec::Vm;
 
-		let wasm = wabt::wat2wasm(wat).unwrap();
+		let wasm = wat::parse_str(wat).unwrap();
 		let schedule = crate::Schedule::default();
 		let prefab_module =
-			prepare_contract::<super::runtime::Env>(&wasm, &schedule).unwrap();
+			prepare_contract::<super::runtime::Env, E::T>(&wasm, &schedule).unwrap();
 
 		let exec = WasmExecutable {
 			// Use a "call" convention.
@@ -478,31 +486,35 @@ mod tests {
 
 	const CODE_TRANSFER: &str = r#"
 (module
-	;; ext_transfer(
+	;; seal_transfer(
 	;;    account_ptr: u32,
 	;;    account_len: u32,
 	;;    value_ptr: u32,
 	;;    value_len: u32,
 	;;) -> u32
-	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
+	(import "seal0" "seal_transfer" (func $seal_transfer (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
-		(call $ext_transfer
-			(i32.const 4)  ;; Pointer to "account" address.
-			(i32.const 8)  ;; Length of "account" address.
-			(i32.const 12) ;; Pointer to the buffer with value to transfer
-			(i32.const 8)  ;; Length of the buffer with value to transfer.
+		(drop
+			(call $seal_transfer
+				(i32.const 4)  ;; Pointer to "account" address.
+				(i32.const 32)  ;; Length of "account" address.
+				(i32.const 36) ;; Pointer to the buffer with value to transfer
+				(i32.const 8)  ;; Length of the buffer with value to transfer.
+			)
 		)
 	)
 	(func (export "deploy"))
 
-	;; Destination AccountId to transfer the funds.
-	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 4) "\07\00\00\00\00\00\00\00")
+	;; Destination AccountId (ALICE)
+	(data (i32.const 4)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
 
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 12) "\99\00\00\00\00\00\00\00")
+	(data (i32.const 36) "\99\00\00\00\00\00\00\00")
 )
 "#;
 
@@ -519,17 +531,16 @@ mod tests {
 		assert_eq!(
 			&mock_ext.transfers,
 			&[TransferEntry {
-				to: 7,
+				to: ALICE,
 				value: 153,
 				data: Vec::new(),
-				gas_left: 9989500000,
 			}]
 		);
 	}
 
 	const CODE_CALL: &str = r#"
 (module
-	;; ext_call(
+	;; seal_call(
 	;;    callee_ptr: u32,
 	;;    callee_len: u32,
 	;;    gas: u64,
@@ -540,17 +551,17 @@ mod tests {
 	;;    output_ptr: u32,
 	;;    output_len_ptr: u32
 	;;) -> u32
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
-			(call $ext_call
+			(call $seal_call
 				(i32.const 4)  ;; Pointer to "callee" address.
-				(i32.const 8)  ;; Length of "callee" address.
+				(i32.const 32)  ;; Length of "callee" address.
 				(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.
-				(i32.const 12) ;; Pointer to the buffer with value to transfer
+				(i32.const 36) ;; Pointer to the buffer with value to transfer
 				(i32.const 8)  ;; Length of the buffer with value to transfer.
-				(i32.const 20) ;; Pointer to input data buffer address
+				(i32.const 44) ;; Pointer to input data buffer address
 				(i32.const 4)  ;; Length of input data buffer
 				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy output
 				(i32.const 0) ;; Length is ignored in this case
@@ -559,14 +570,17 @@ mod tests {
 	)
 	(func (export "deploy"))
 
-	;; Destination AccountId to transfer the funds.
-	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
+	;; Destination AccountId (ALICE)
+	(data (i32.const 4)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 12) "\06\00\00\00\00\00\00\00")
+	(data (i32.const 36) "\06\00\00\00\00\00\00\00")
 
-	(data (i32.const 20) "\01\02\03\04")
+	(data (i32.const 44) "\01\02\03\04")
 )
 "#;
 
@@ -583,17 +597,16 @@ mod tests {
 		assert_eq!(
 			&mock_ext.transfers,
 			&[TransferEntry {
-				to: 9,
+				to: ALICE,
 				value: 6,
 				data: vec![1, 2, 3, 4],
-				gas_left: 9984500000,
 			}]
 		);
 	}
 
 	const CODE_INSTANTIATE: &str = r#"
 (module
-	;; ext_instantiate(
+	;; seal_instantiate(
 	;;     code_ptr: u32,
 	;;     code_len: u32,
 	;;     gas: u64,
@@ -607,11 +620,13 @@ mod tests {
 	;;     output_ptr: u32,
 	;;     output_len_ptr: u32
 	;; ) -> u32
-	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_instantiate" (func $seal_instantiate
+		(param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)
+	))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
-			(call $ext_instantiate
+			(call $seal_instantiate
 				(i32.const 16)   ;; Pointer to `code_hash`
 				(i32.const 32)   ;; Length of `code_hash`
 				(i64.const 0)    ;; How much gas to devote for the execution. 0 = all.
@@ -623,11 +638,15 @@ mod tests {
 				(i32.const 0) ;; Length is ignored in this case
 				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy output
 				(i32.const 0) ;; Length is ignored in this case
+				(i32.const 0) ;; salt_ptr
+				(i32.const 4) ;; salt_len
 			)
 		)
 	)
 	(func (export "deploy"))
 
+	;; Salt
+	(data (i32.const 0) "\42\43\44\45")
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\03\00\00\00\00\00\00\00")
@@ -651,36 +670,42 @@ mod tests {
 			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
-		assert_eq!(
-			&mock_ext.instantiates,
-			&[InstantiateEntry {
-				code_hash: [0x11; 32].into(),
+		assert_matches!(
+			&mock_ext.instantiates[..],
+			[InstantiateEntry {
+				code_hash,
 				endowment: 3,
-				data: vec![1, 2, 3, 4],
-				gas_left: 9971500000,
-			}]
+				data,
+				gas_left: _,
+				salt,
+			}] if
+				code_hash == &[0x11; 32].into() &&
+				data == &vec![1, 2, 3, 4] &&
+				salt == &vec![0x42, 0x43, 0x44, 0x45]
 		);
 	}
 
 	const CODE_TERMINATE: &str = r#"
 (module
-	;; ext_terminate(
+	;; seal_terminate(
 	;;     beneficiary_ptr: u32,
 	;;     beneficiary_len: u32,
 	;; )
-	(import "env" "ext_terminate" (func $ext_terminate (param i32 i32)))
+	(import "seal0" "seal_terminate" (func $seal_terminate (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
-		(call $ext_terminate
+		(call $seal_terminate
 			(i32.const 4)  ;; Pointer to "beneficiary" address.
-			(i32.const 8)  ;; Length of "beneficiary" address.
+			(i32.const 32)  ;; Length of "beneficiary" address.
 		)
 	)
 	(func (export "deploy"))
 
 	;; Beneficiary AccountId to transfer the funds.
-	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
+	(data (i32.const 4)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
 )
 "#;
 
@@ -697,15 +722,14 @@ mod tests {
 		assert_eq!(
 			&mock_ext.terminations,
 			&[TerminationEntry {
-				beneficiary: 0x09,
-				gas_left: 9994500000,
+				beneficiary: ALICE,
 			}]
 		);
 	}
 
 	const CODE_TRANSFER_LIMITED_GAS: &str = r#"
 (module
-	;; ext_call(
+	;; seal_call(
 	;;    callee_ptr: u32,
 	;;    callee_len: u32,
 	;;    gas: u64,
@@ -716,17 +740,17 @@ mod tests {
 	;;    output_ptr: u32,
 	;;    output_len_ptr: u32
 	;;) -> u32
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
-			(call $ext_call
+			(call $seal_call
 				(i32.const 4)  ;; Pointer to "callee" address.
-				(i32.const 8)  ;; Length of "callee" address.
+				(i32.const 32)  ;; Length of "callee" address.
 				(i64.const 228)  ;; How much gas to devote for the execution.
-				(i32.const 12)  ;; Pointer to the buffer with value to transfer
+				(i32.const 36)  ;; Pointer to the buffer with value to transfer
 				(i32.const 8)   ;; Length of the buffer with value to transfer.
-				(i32.const 20)   ;; Pointer to input data buffer address
+				(i32.const 44)   ;; Pointer to input data buffer address
 				(i32.const 4)   ;; Length of input data buffer
 				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy output
 				(i32.const 0) ;; Length is ignored in this cas
@@ -736,13 +760,15 @@ mod tests {
 	(func (export "deploy"))
 
 	;; Destination AccountId to transfer the funds.
-	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
+	(data (i32.const 4)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 12) "\06\00\00\00\00\00\00\00")
+	(data (i32.const 36) "\06\00\00\00\00\00\00\00")
 
-	(data (i32.const 20) "\01\02\03\04")
+	(data (i32.const 44) "\01\02\03\04")
 )
 "#;
 
@@ -759,18 +785,17 @@ mod tests {
 		assert_eq!(
 			&mock_ext.transfers,
 			&[TransferEntry {
-				to: 9,
+				to: ALICE,
 				value: 6,
 				data: vec![1, 2, 3, 4],
-				gas_left: 228,
 			}]
 		);
 	}
 
 	const CODE_GET_STORAGE: &str = r#"
 (module
-	(import "env" "ext_get_storage" (func $ext_get_storage (param i32 i32 i32) (result i32)))
-	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
+	(import "seal0" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32) (result i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 32) key for get storage
@@ -799,7 +824,7 @@ mod tests {
 		;; Load a storage value into contract memory.
 		(call $assert
 			(i32.eq
-				(call $ext_get_storage
+				(call $seal_get_storage
 					(i32.const 0)		;; The pointer to the storage key to fetch
 					(i32.const 36)		;; Pointer to the output buffer
 					(i32.const 32)		;; Pointer to the size of the buffer
@@ -817,13 +842,13 @@ mod tests {
 		)
 
 		;; Return the contents of the buffer
-		(call $ext_return
+		(call $seal_return
 			(i32.const 0)
 			(i32.const 36)
 			(get_local $buf_size)
 		)
 
-		;; env:ext_return doesn't return, so this is effectively unreachable.
+		;; env:seal_return doesn't return, so this is effectively unreachable.
 		(unreachable)
 	)
 
@@ -848,10 +873,10 @@ mod tests {
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: [0x22; 32].to_vec() });
 	}
 
-	/// calls `ext_caller` and compares the result with the constant 42.
+	/// calls `seal_caller` and compares the result with the constant 42.
 	const CODE_CALLER: &str = r#"
 (module
-	(import "env" "ext_caller" (func $ext_caller (param i32 i32)))
+	(import "seal0" "seal_caller" (func $seal_caller (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -868,21 +893,21 @@ mod tests {
 
 	(func (export "call")
 		;; fill the buffer with the caller.
-		(call $ext_caller (i32.const 0) (i32.const 32))
+		(call $seal_caller (i32.const 0) (i32.const 32))
 
-		;; assert len == 8
+		;; assert len == 32
 		(call $assert
 			(i32.eq
 				(i32.load (i32.const 32))
-				(i32.const 8)
+				(i32.const 32)
 			)
 		)
 
-		;; assert that contents of the buffer is equal to the i64 value of 42.
+		;; assert that the first 64 byte are the beginning of "ALICE"
 		(call $assert
 			(i64.eq
 				(i64.load (i32.const 0))
-				(i64.const 42)
+				(i64.const 0x0101010101010101)
 			)
 		)
 	)
@@ -901,10 +926,10 @@ mod tests {
 		).unwrap();
 	}
 
-	/// calls `ext_address` and compares the result with the constant 69.
+	/// calls `seal_address` and compares the result with the constant 69.
 	const CODE_ADDRESS: &str = r#"
 (module
-	(import "env" "ext_address" (func $ext_address (param i32 i32)))
+	(import "seal0" "seal_address" (func $seal_address (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -921,21 +946,21 @@ mod tests {
 
 	(func (export "call")
 		;; fill the buffer with the self address.
-		(call $ext_address (i32.const 0) (i32.const 32))
+		(call $seal_address (i32.const 0) (i32.const 32))
 
-		;; assert size == 8
+		;; assert size == 32
 		(call $assert
 			(i32.eq
 				(i32.load (i32.const 32))
-				(i32.const 8)
+				(i32.const 32)
 			)
 		)
 
-		;; assert that contents of the buffer is equal to the i64 value of 69.
+		;; assert that the first 64 byte are the beginning of "BOB"
 		(call $assert
 			(i64.eq
 				(i64.load (i32.const 0))
-				(i64.const 69)
+				(i64.const 0x0202020202020202)
 			)
 		)
 	)
@@ -956,7 +981,7 @@ mod tests {
 
 	const CODE_BALANCE: &str = r#"
 (module
-	(import "env" "ext_balance" (func $ext_balance (param i32 i32)))
+	(import "seal0" "seal_balance" (func $seal_balance (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -973,7 +998,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the balance in the buffer
-		(call $ext_balance (i32.const 0) (i32.const 32))
+		(call $seal_balance (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1008,7 +1033,7 @@ mod tests {
 
 	const CODE_GAS_PRICE: &str = r#"
 (module
-	(import "env" "ext_weight_to_fee" (func $ext_weight_to_fee (param i64 i32 i32)))
+	(import "seal0" "seal_weight_to_fee" (func $seal_weight_to_fee (param i64 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1025,7 +1050,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the gas price in the buffer
-		(call $ext_weight_to_fee (i64.const 2) (i32.const 0) (i32.const 32))
+		(call $seal_weight_to_fee (i64.const 2) (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1060,8 +1085,8 @@ mod tests {
 
 	const CODE_GAS_LEFT: &str = r#"
 (module
-	(import "env" "ext_gas_left" (func $ext_gas_left (param i32 i32)))
-	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
+	(import "seal0" "seal_gas_left" (func $seal_gas_left (param i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1078,7 +1103,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the gas left in the buffer
-		(call $ext_gas_left (i32.const 0) (i32.const 32))
+		(call $seal_gas_left (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1089,7 +1114,7 @@ mod tests {
 		)
 
 		;; return gas left
-		(call $ext_return (i32.const 0) (i32.const 0) (i32.const 8))
+		(call $seal_return (i32.const 0) (i32.const 0) (i32.const 8))
 
 		(unreachable)
 	)
@@ -1115,7 +1140,7 @@ mod tests {
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
 (module
-	(import "env" "ext_value_transferred" (func $ext_value_transferred (param i32 i32)))
+	(import "seal0" "seal_value_transferred" (func $seal_value_transferred (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1132,7 +1157,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the value transferred in the buffer
-		(call $ext_value_transferred (i32.const 0) (i32.const 32))
+		(call $seal_value_transferred (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1167,12 +1192,12 @@ mod tests {
 
 	const CODE_RETURN_FROM_START_FN: &str = r#"
 (module
-	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(start $start)
 	(func $start
-		(call $ext_return
+		(call $seal_return
 			(i32.const 0)
 			(i32.const 8)
 			(i32.const 4)
@@ -1203,7 +1228,7 @@ mod tests {
 
 	const CODE_TIMESTAMP_NOW: &str = r#"
 (module
-	(import "env" "ext_now" (func $ext_now (param i32 i32)))
+	(import "seal0" "seal_now" (func $seal_now (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1220,7 +1245,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the block timestamp in the buffer
-		(call $ext_now (i32.const 0) (i32.const 32))
+		(call $seal_now (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1255,7 +1280,7 @@ mod tests {
 
 	const CODE_MINIMUM_BALANCE: &str = r#"
 (module
-	(import "env" "ext_minimum_balance" (func $ext_minimum_balance (param i32 i32)))
+	(import "seal0" "seal_minimum_balance" (func $seal_minimum_balance (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1271,7 +1296,7 @@ mod tests {
 	)
 
 	(func (export "call")
-		(call $ext_minimum_balance (i32.const 0) (i32.const 32))
+		(call $seal_minimum_balance (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1306,7 +1331,7 @@ mod tests {
 
 	const CODE_TOMBSTONE_DEPOSIT: &str = r#"
 (module
-	(import "env" "ext_tombstone_deposit" (func $ext_tombstone_deposit (param i32 i32)))
+	(import "seal0" "seal_tombstone_deposit" (func $seal_tombstone_deposit (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1322,7 +1347,7 @@ mod tests {
 	)
 
 	(func (export "call")
-		(call $ext_tombstone_deposit (i32.const 0) (i32.const 32))
+		(call $seal_tombstone_deposit (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1357,8 +1382,8 @@ mod tests {
 
 	const CODE_RANDOM: &str = r#"
 (module
-	(import "env" "ext_random" (func $ext_random (param i32 i32 i32 i32)))
-	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
+	(import "seal0" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0,128) is reserved for the result of PRNG.
@@ -1371,7 +1396,7 @@ mod tests {
 
 	;; size of our buffer is 128 bytes
 	(data (i32.const 160) "\80")
-	
+
 	(func $assert (param i32)
 		(block $ok
 			(br_if $ok
@@ -1383,7 +1408,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the block random seed in the buffer
-		(call $ext_random
+		(call $seal_random
 			(i32.const 128) ;; Pointer in memory to the start of the subject buffer
 			(i32.const 32) ;; The subject buffer's length
 			(i32.const 0) ;; Pointer to the output buffer
@@ -1399,7 +1424,7 @@ mod tests {
 		)
 
 		;; return the random data
-		(call $ext_return
+		(call $seal_return
 			(i32.const 0)
 			(i32.const 0)
 			(i32.const 32)
@@ -1432,11 +1457,11 @@ mod tests {
 
 	const CODE_DEPOSIT_EVENT: &str = r#"
 (module
-	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32 i32 i32)))
+	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "call")
-		(call $ext_deposit_event
+		(call $seal_deposit_event
 			(i32.const 32) ;; Pointer to the start of topics buffer
 			(i32.const 33) ;; The length of the topics buffer.
 			(i32.const 8) ;; Pointer to the start of the data buffer
@@ -1469,16 +1494,16 @@ mod tests {
 			vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00])
 		]);
 
-		assert_eq!(gas_meter.gas_left(), 9967000000);
+		assert!(gas_meter.gas_left() > 0);
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
 (module
-	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32 i32 i32)))
+	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "call")
-		(call $ext_deposit_event
+		(call $seal_deposit_event
 			(i32.const 32) ;; Pointer to the start of topics buffer
 			(i32.const 161) ;; The length of the topics buffer.
 			(i32.const 8) ;; Pointer to the start of the data buffer
@@ -1504,24 +1529,27 @@ mod tests {
 		// Checks that the runtime traps if there are more than `max_topic_events` topics.
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 
-		assert_matches!(
+		assert_eq!(
 			execute(
 				CODE_DEPOSIT_EVENT_MAX_TOPICS,
 				vec![],
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(DispatchError::Other("contract trapped during execution"))
+			Err(ExecError {
+				error: Error::<Test>::ContractTrapped.into(),
+				origin: ErrorOrigin::Caller,
+			})
 		);
 	}
 
 	const CODE_DEPOSIT_EVENT_DUPLICATES: &str = r#"
 (module
-	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32 i32 i32)))
+	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "call")
-		(call $ext_deposit_event
+		(call $seal_deposit_event
 			(i32.const 32) ;; Pointer to the start of topics buffer
 			(i32.const 129) ;; The length of the topics buffer.
 			(i32.const 8) ;; Pointer to the start of the data buffer
@@ -1546,21 +1574,24 @@ mod tests {
 		// Checks that the runtime traps if there are duplicates.
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 
-		assert_matches!(
+		assert_eq!(
 			execute(
 				CODE_DEPOSIT_EVENT_DUPLICATES,
 				vec![],
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(DispatchError::Other("contract trapped during execution"))
+			Err(ExecError {
+				error: Error::<Test>::ContractTrapped.into(),
+				origin: ErrorOrigin::Caller,
+			})
 		);
 	}
 
-	/// calls `ext_block_number` compares the result with the constant 121.
+	/// calls `seal_block_number` compares the result with the constant 121.
 	const CODE_BLOCK_NUMBER: &str = r#"
 (module
-	(import "env" "ext_block_number" (func $ext_block_number (param i32 i32)))
+	(import "seal0" "seal_block_number" (func $seal_block_number (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1577,7 +1608,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the block height in the buffer
-		(call $ext_block_number (i32.const 0) (i32.const 32))
+		(call $seal_block_number (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert
@@ -1612,8 +1643,8 @@ mod tests {
 
 	const CODE_RETURN_WITH_DATA: &str = r#"
 (module
-	(import "env" "ext_input" (func $ext_input (param i32 i32)))
-	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(data (i32.const 32) "\20")
@@ -1626,13 +1657,13 @@ mod tests {
 	;; Call reads the first 4 bytes (LE) as the exit status and returns the rest as output data.
 	(func $call (export "call")
 		;; Copy input data this contract memory.
-		(call $ext_input
+		(call $seal_input
 			(i32.const 0)	;; Pointer where to store input
 			(i32.const 32)	;; Pointer to the length of the buffer
 		)
 
 		;; Copy all but the first 4 bytes of the input data as the output data.
-		(call $ext_return
+		(call $seal_return
 			(i32.load (i32.const 0))
 			(i32.const 4)
 			(i32.sub (i32.load (i32.const 32)) (i32.const 4))
@@ -1643,7 +1674,7 @@ mod tests {
 "#;
 
 	#[test]
-	fn ext_return_with_success_status() {
+	fn seal_return_with_success_status() {
 		let output = execute(
 			CODE_RETURN_WITH_DATA,
 			hex!("00000000445566778899").to_vec(),
@@ -1667,4 +1698,75 @@ mod tests {
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::REVERT, data: hex!("5566778899").to_vec() });
 		assert!(!output.is_success());
 	}
+
+	const CODE_OUT_OF_BOUNDS_ACCESS: &str = r#"
+(module
+	(import "seal0" "seal_terminate" (func $seal_terminate (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		(call $seal_terminate
+			(i32.const 65536)  ;; Pointer to "account" address (out of bound).
+			(i32.const 8)  ;; Length of "account" address.
+		)
+	)
+)
+"#;
+
+	#[test]
+	fn contract_out_of_bounds_access() {
+		let mut mock_ext = MockExt::default();
+		let result = execute(
+			CODE_OUT_OF_BOUNDS_ACCESS,
+			vec![],
+			&mut mock_ext,
+			&mut GasMeter::new(GAS_LIMIT),
+		);
+
+		assert_eq!(
+			result,
+			Err(ExecError {
+				error: Error::<Test>::OutOfBounds.into(),
+				origin: ErrorOrigin::Caller,
+			})
+		);
+	}
+
+	const CODE_DECODE_FAILURE: &str = r#"
+(module
+	(import "seal0" "seal_terminate" (func $seal_terminate (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		(call $seal_terminate
+			(i32.const 0)  ;; Pointer to "account" address.
+			(i32.const 4)  ;; Length of "account" address (too small -> decode fail).
+		)
+	)
+)
+"#;
+
+	#[test]
+	fn contract_decode_failure() {
+		let mut mock_ext = MockExt::default();
+		let result = execute(
+			CODE_DECODE_FAILURE,
+			vec![],
+			&mut mock_ext,
+			&mut GasMeter::new(GAS_LIMIT),
+		);
+
+		assert_eq!(
+			result,
+			Err(ExecError {
+				error: Error::<Test>::DecodingFailed.into(),
+				origin: ErrorOrigin::Caller,
+			})
+		);
+	}
+
 }

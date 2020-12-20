@@ -19,9 +19,8 @@
 //! Light client components.
 
 use sp_runtime::traits::{Block as BlockT, HashFor};
-use sc_client_api::CloneableSpawn;
 use std::sync::Arc;
-use sp_core::traits::CodeExecutor;
+use sp_core::traits::{CodeExecutor, SpawnNamed};
 
 pub mod backend;
 pub mod blockchain;
@@ -34,7 +33,7 @@ pub use {backend::*, blockchain::*, call_executor::*, fetcher::*};
 pub fn new_fetch_checker<E, B: BlockT, S: BlockchainStorage<B>>(
 	blockchain: Arc<Blockchain<S>>,
 	executor: E,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Box<dyn SpawnNamed>,
 ) -> LightDataChecker<E, HashFor<B>, B, S>
 	where
 		E: CodeExecutor,

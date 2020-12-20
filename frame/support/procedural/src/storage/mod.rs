@@ -42,7 +42,7 @@ pub struct DeclStorageDef {
 	module_name: syn::Ident,
 	/// Usually `T`.
 	module_runtime_generic: syn::Ident,
-	/// Usually `Trait`
+	/// Usually `Config`
 	module_runtime_trait: syn::Path,
 	/// For instantiable module: usually `I: Instance=DefaultInstance`.
 	module_instance: Option<ModuleInstanceDef>,
@@ -77,7 +77,7 @@ pub struct DeclStorageDefExt {
 	module_name: syn::Ident,
 	/// Usually `T`.
 	module_runtime_generic: syn::Ident,
-	/// Usually `Trait`.
+	/// Usually `Config`.
 	module_runtime_trait: syn::Path,
 	/// For instantiable module: usually `I: Instance=DefaultInstance`.
 	module_instance: Option<ModuleInstanceDef>,
@@ -93,7 +93,7 @@ pub struct DeclStorageDefExt {
 	crate_name: syn::Ident,
 	/// Full struct expansion: `Module<T, I>`.
 	module_struct: proc_macro2::TokenStream,
-	/// Impl block for module: `<T: Trait, I: Instance>`.
+	/// Impl block for module: `<T: Config, I: Instance>`.
 	module_impl: proc_macro2::TokenStream,
 	/// For instantiable: `I`.
 	optional_instance: Option<proc_macro2::TokenStream>,
@@ -212,7 +212,7 @@ pub struct StorageLineDefExt {
 	storage_struct: proc_macro2::TokenStream,
 	/// If storage is generic over runtime then `T`.
 	optional_storage_runtime_comma: Option<proc_macro2::TokenStream>,
-	/// If storage is generic over runtime then `T: Trait`.
+	/// If storage is generic over runtime then `T: Config`.
 	optional_storage_runtime_bound_comma: Option<proc_macro2::TokenStream>,
 	/// The where clause to use to constrain generics if storage is generic over runtime.
 	optional_storage_where_clause: Option<proc_macro2::TokenStream>,
@@ -249,7 +249,7 @@ impl StorageLineDefExt {
 			StorageLineTypeDef::DoubleMap(map) => map.value.clone(),
 		};
 		let is_option = ext::extract_type_option(&query_type).is_some();
-		let value_type = ext::extract_type_option(&query_type).unwrap_or(query_type.clone());
+		let value_type = ext::extract_type_option(&query_type).unwrap_or_else(|| query_type.clone());
 
 		let module_runtime_generic = &def.module_runtime_generic;
 		let module_runtime_trait = &def.module_runtime_trait;
@@ -328,7 +328,7 @@ impl StorageLineDefExt {
 
 pub enum StorageLineTypeDef {
 	Map(MapDef),
-	DoubleMap(DoubleMapDef),
+	DoubleMap(Box<DoubleMapDef>),
 	Simple(syn::Type),
 }
 
@@ -416,6 +416,8 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 			StorageMap as _,
 			StorageDoubleMap as _,
 			StoragePrefixedMap as _,
+			IterableStorageMap as _,
+			IterableStorageDoubleMap as _,
 		};
 
 		#scrate_decl

@@ -32,7 +32,7 @@ use sp_runtime::{
 	},
 };
 use codec::{KeyedVec, Encode, Decode};
-use frame_system::Trait;
+use frame_system::Config;
 use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
@@ -42,11 +42,11 @@ const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {}
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as TestRuntime {
+	trait Store for Module<T: Config> as TestRuntime {
 		ExtrinsicData: map hasher(blake2_128_concat) u32 => Vec<u8>;
 		// The current block number being processed. Set by `execute_block`.
 		Number get(fn number): Option<BlockNumber>;
@@ -342,7 +342,7 @@ mod tests {
 
 	use sp_io::TestExternalities;
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
-	use crate::{Header, Transfer, WASM_BINARY};
+	use crate::{Header, Transfer, wasm_binary_unwrap};
 	use sp_core::{NeverNativeValue, map, traits::{CodeExecutor, RuntimeCode}};
 	use sc_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
 	use sp_io::hashing::twox_128;
@@ -365,7 +365,7 @@ mod tests {
 			Sr25519Keyring::Charlie.to_raw_public()
 		];
 		TestExternalities::new_with_code(
-			WASM_BINARY,
+			wasm_binary_unwrap(),
 			sp_core::storage::Storage {
 				top: map![
 					twox_128(b"latest").to_vec() => vec![69u8; 32],
@@ -407,7 +407,7 @@ mod tests {
 		block_import_works(|b, ext| {
 			let mut ext = ext.ext();
 			let runtime_code = RuntimeCode {
-				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.into()),
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(wasm_binary_unwrap().into()),
 				hash: Vec::new(),
 				heap_pages: None,
 			};
@@ -507,7 +507,7 @@ mod tests {
 		block_import_with_transaction_works(|b, ext| {
 			let mut ext = ext.ext();
 			let runtime_code = RuntimeCode {
-				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.into()),
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(wasm_binary_unwrap().into()),
 				hash: Vec::new(),
 				heap_pages: None,
 			};

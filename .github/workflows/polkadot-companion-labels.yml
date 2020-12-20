@@ -16,9 +16,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           contexts: 'continuous-integration/gitlab-check-polkadot-companion-build'
           timeout: 1800
-          notPresentTimeout: 3600 # It can take quite a while before the job starts...
+          notPresentTimeout: 3600 # It can take quite a while before the job starts on Gitlab when the CI queue is large
           failureStates: failure
           interruptedStates: error # Error = job was probably cancelled. We don't want to label the PR in that case
+          pollInterval: 30
       - name: Label success
         uses: andymckay/labeler@master
         if: steps.check-companion-status.outputs.result == 'success'

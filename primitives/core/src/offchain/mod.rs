@@ -19,7 +19,7 @@
 
 use codec::{Encode, Decode};
 use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
-use crate::RuntimeDebug;
+use crate::{OpaquePeerId, RuntimeDebug};
 use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
@@ -184,21 +184,10 @@ impl TryFrom<u32> for HttpRequestStatus {
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec)]
 #[cfg_attr(feature = "std", derive(Default))]
 pub struct OpaqueNetworkState {
-	/// PeerId of the local node.
+	/// PeerId of the local node in SCALE encoded.
 	pub peer_id: OpaquePeerId,
 	/// List of addresses the node knows it can be reached as.
 	pub external_addresses: Vec<OpaqueMultiaddr>,
-}
-
-/// Simple blob to hold a `PeerId` without committing to its format.
-#[derive(Default, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner)]
-pub struct OpaquePeerId(pub Vec<u8>);
-
-impl OpaquePeerId {
-	/// Create new `OpaquePeerId`
-	pub fn new(vec: Vec<u8>) -> Self {
-		OpaquePeerId(vec)
-	}
 }
 
 /// Simple blob to hold a `Multiaddr` without committing to its format.
@@ -277,6 +266,8 @@ pub enum Capability {
 	OffchainWorkerDbRead = 32,
 	/// Access to offchain worker DB (writes).
 	OffchainWorkerDbWrite = 64,
+	/// Manage the authorized nodes
+	NodeAuthorization = 128,
 }
 
 /// A set of capabilities
@@ -495,6 +486,18 @@ pub trait Externalities: Send {
 		buffer: &mut [u8],
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError>;
+
+	/// Set the authorized nodes from runtime.
+	///
+	/// In a permissioned network, the connections between nodes need to reach a
+	/// consensus between participants.
+	///
+	/// - `nodes`: a set of nodes which are allowed to connect for the local node.
+	/// each one is identified with an `OpaquePeerId`, here it just use plain bytes
+	/// without any encoding. Invalid `OpaquePeerId`s are silently ignored.
+	/// - `authorized_only`: if true, only the authorized nodes are allowed to connect,
+	/// otherwise unauthorized nodes can also be connected through other mechanism.
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool);
 }
 
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
@@ -572,6 +575,10 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
+	}
+
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
+		(&mut **self).set_authorized_nodes(nodes, authorized_only)
 	}
 }
 
@@ -690,6 +697,11 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	) -> Result<usize, HttpError> {
 		self.check(Capability::Http, "http_response_read_body");
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
+	}
+
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
+		self.check(Capability::NodeAuthorization, "set_authorized_nodes");
+		self.externalities.set_authorized_nodes(nodes, authorized_only)
 	}
 }
 

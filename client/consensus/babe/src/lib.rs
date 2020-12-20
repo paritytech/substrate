@@ -59,7 +59,7 @@
 //! blocks) and will go with the longest one in case of a tie.
 //!
 //! An in-depth description and analysis of the protocol can be found here:
-//! <https://research.web3.foundation/en/latest/polkadot/BABE/Babe.html>
+//! <https://research.web3.foundation/en/latest/polkadot/block-production/Babe.html>
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -79,17 +79,15 @@ use std::{
 	any::Any, borrow::Cow, convert::TryInto,
 };
 use sp_consensus::{ImportResult, CanAuthorWith};
-use sp_consensus::import_queue::{
-	BoxJustificationImport, BoxFinalityProofImport,
-};
-use sp_core::{crypto::Public, traits::BareCryptoStore};
+use sp_consensus::import_queue::BoxJustificationImport;
+use sp_core::crypto::Public;
 use sp_application_crypto::AppKey;
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
-use sc_keystore::KeyStorePtr;
 use parking_lot::Mutex;
 use sp_inherents::{InherentDataProviders, InherentData};
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
@@ -100,18 +98,21 @@ use sp_consensus::{
 };
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
-use sp_consensus::import_queue::{Verifier, BasicQueue, CacheKeyId};
+use sp_consensus::import_queue::{Verifier, BasicQueue, DefaultImportQueue, CacheKeyId};
 use sc_client_api::{
 	backend::AuxStore,
 	BlockchainEvents, ProvideUncles,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
+use futures::channel::mpsc::{channel, Sender, Receiver};
+use retain_mut::RetainMut;
 
 use futures::prelude::*;
 use log::{debug, info, log, trace, warn};
 use prometheus_endpoint::Registry;
 use sc_consensus_slots::{
-	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
+	SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
+	BackoffAuthoringBlocksStrategy,
 };
 use sc_consensus_epochs::{
 	descendent_query, SharedEpochChanges, EpochChangesFor, Epoch as EpochT, ViableEpochDescriptor,
@@ -124,9 +125,10 @@ use schnorrkel::SignatureError;
 use codec::{Encode, Decode};
 use sp_api::ApiExt;
 
-mod aux_schema;
 mod verification;
 mod migration;
+
+pub mod aux_schema;
 pub mod authorship;
 #[cfg(test)]
 mod tests;
@@ -196,58 +198,86 @@ impl Epoch {
 	}
 }
 
+/// Errors encountered by the babe authorship task.
 #[derive(derive_more::Display, Debug)]
-enum Error<B: BlockT> {
+pub enum Error<B: BlockT> {
+	/// Multiple BABE pre-runtime digests
 	#[display(fmt = "Multiple BABE pre-runtime digests, rejecting!")]
 	MultiplePreRuntimeDigests,
+	/// No BABE pre-runtime digest found
 	#[display(fmt = "No BABE pre-runtime digest found")]
 	NoPreRuntimeDigest,
+	/// Multiple BABE epoch change digests
 	#[display(fmt = "Multiple BABE epoch change digests, rejecting!")]
 	MultipleEpochChangeDigests,
+	/// Multiple BABE config change digests
 	#[display(fmt = "Multiple BABE config change digests, rejecting!")]
 	MultipleConfigChangeDigests,
+	/// Could not extract timestamp and slot
 	#[display(fmt = "Could not extract timestamp and slot: {:?}", _0)]
 	Extraction(sp_consensus::Error),
+	/// Could not fetch epoch
 	#[display(fmt = "Could not fetch epoch at {:?}", _0)]
 	FetchEpoch(B::Hash),
+	/// Header rejected: too far in the future
 	#[display(fmt = "Header {:?} rejected: too far in the future", _0)]
 	TooFarInFuture(B::Hash),
+	/// Parent unavailable. Cannot import
 	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
 	ParentUnavailable(B::Hash, B::Hash),
+	/// Slot number must increase
 	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
 	SlotNumberMustIncrease(u64, u64),
+	/// Header has a bad seal
 	#[display(fmt = "Header {:?} has a bad seal", _0)]
 	HeaderBadSeal(B::Hash),
+	/// Header is unsealed
 	#[display(fmt = "Header {:?} is unsealed", _0)]
 	HeaderUnsealed(B::Hash),
+	/// Slot author not found
 	#[display(fmt = "Slot author not found")]
 	SlotAuthorNotFound,
+	/// Secondary slot assignments are disabled for the current epoch.
 	#[display(fmt = "Secondary slot assignments are disabled for the current epoch.")]
 	SecondarySlotAssignmentsDisabled,
+	/// Bad signature
 	#[display(fmt = "Bad signature on {:?}", _0)]
 	BadSignature(B::Hash),
+	/// Invalid author: Expected secondary author
 	#[display(fmt = "Invalid author: Expected secondary author: {:?}, got: {:?}.", _0, _1)]
 	InvalidAuthor(AuthorityId, AuthorityId),
+	/// No secondary author expected.
 	#[display(fmt = "No secondary author expected.")]
 	NoSecondaryAuthorExpected,
+	/// VRF verification of block by author failed
 	#[display(fmt = "VRF verification of block by author {:?} failed: threshold {} exceeded", _0, _1)]
 	VRFVerificationOfBlockFailed(AuthorityId, u128),
+	/// VRF verification failed
 	#[display(fmt = "VRF verification failed: {:?}", _0)]
 	VRFVerificationFailed(SignatureError),
+	/// Could not fetch parent header
 	#[display(fmt = "Could not fetch parent header: {:?}", _0)]
 	FetchParentHeader(sp_blockchain::Error),
+	/// Expected epoch change to happen.
 	#[display(fmt = "Expected epoch change to happen at {:?}, s{}", _0, _1)]
 	ExpectedEpochChange(B::Hash, u64),
+	/// Unexpected config change.
 	#[display(fmt = "Unexpected config change")]
 	UnexpectedConfigChange,
+	/// Unexpected epoch change
 	#[display(fmt = "Unexpected epoch change")]
 	UnexpectedEpochChange,
+	/// Parent block has no associated weight
 	#[display(fmt = "Parent block of {} has no associated weight", _0)]
 	ParentBlockNoAssociatedWeight(B::Hash),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
+	/// Check Inherents error
 	CheckInherents(String),
+	/// Client error
 	Client(sp_blockchain::Error),
+	/// Runtime error
 	Runtime(sp_inherents::Error),
+	/// Fork tree error
 	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
 }
 
@@ -323,9 +353,9 @@ impl std::ops::Deref for Config {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
+pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 	/// The keystore that manages the keys of the node.
-	pub keystore: KeyStorePtr,
+	pub keystore: SyncCryptoStorePtr,
 
 	/// The client to use
 	pub client: Arc<C>,
@@ -350,6 +380,9 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 	/// Force authoring of blocks even if we are offline
 	pub force_authoring: bool,
 
+	/// Strategy and parameters for backing off block production.
+	pub backoff_authoring_blocks: Option<BS>,
+
 	/// The source of timestamps for relative slots
 	pub babe_link: BabeLink<B>,
 
@@ -358,7 +391,7 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW> {
 }
 
 /// Start the babe worker.
-pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
+pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 	keystore,
 	client,
 	select_chain,
@@ -367,10 +400,11 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	sync_oracle,
 	inherent_data_providers,
 	force_authoring,
+	backoff_authoring_blocks,
 	babe_link,
 	can_author_with,
-}: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
-	impl futures::Future<Output=()>,
+}: BabeParams<B, C, E, I, SO, SC, CAW, BS>) -> Result<
+	BabeWorker<B>,
 	sp_consensus::Error,
 > where
 	B: BlockT,
@@ -378,23 +412,28 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync + 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
-	E: Environment<B, Error = Error> + Send + Sync,
+	E: Environment<B, Error = Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send
 		+ Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
-	SO: SyncOracle + Send + Sync + Clone,
-	CAW: CanAuthorWith<B> + Send,
+	SO: SyncOracle + Send + Sync + Clone + 'static,
+	CAW: CanAuthorWith<B> + Send + 'static,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
 	let config = babe_link.config;
-	let worker = BabeWorker {
+	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
+
+	let worker = BabeSlotWorker {
 		client: client.clone(),
 		block_import: Arc::new(Mutex::new(block_import)),
 		env,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
+		backoff_authoring_blocks,
 		keystore,
 		epoch_changes: babe_link.epoch_changes.clone(),
+		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: config.clone(),
 	};
 
@@ -406,7 +445,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	)?;
 
 	info!(target: "babe", "👶 Starting BABE Authorship worker");
-	Ok(sc_consensus_slots::start_slot_worker(
+	let inner = sc_consensus_slots::start_slot_worker(
 		config.0,
 		select_chain,
 		worker,
@@ -414,21 +453,64 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		inherent_data_providers,
 		babe_link.time_source,
 		can_author_with,
-	))
+	);
+	Ok(BabeWorker {
+		inner: Box::pin(inner),
+		slot_notification_sinks,
+	})
 }
 
-struct BabeWorker<B: BlockT, C, E, I, SO> {
+/// Worker for Babe which implements `Future<Output=()>`. This must be polled.
+#[must_use]
+pub struct BabeWorker<B: BlockT> {
+	inner: Pin<Box<dyn futures::Future<Output=()> + Send + 'static>>,
+	slot_notification_sinks: Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
+}
+
+impl<B: BlockT> BabeWorker<B> {
+	/// Return an event stream of notifications for when new slot happens, and the corresponding
+	/// epoch descriptor.
+	pub fn slot_notification_stream(
+		&self
+	) -> Receiver<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)> {
+		const CHANNEL_BUFFER_SIZE: usize = 1024;
+
+		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
+		self.slot_notification_sinks.lock().push(sink);
+		stream
+	}
+}
+
+impl<B: BlockT> futures::Future for BabeWorker<B> {
+	type Output = ();
+
+	fn poll(
+		mut self: Pin<&mut Self>,
+		cx: &mut futures::task::Context
+	) -> futures::task::Poll<Self::Output> {
+		self.inner.as_mut().poll(cx)
+	}
+}
+
+/// Slot notification sinks.
+type SlotNotificationSinks<B> = Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>>;
+
+struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
 	sync_oracle: SO,
 	force_authoring: bool,
-	keystore: KeyStorePtr,
+	backoff_authoring_blocks: Option<BS>,
+	keystore: SyncCryptoStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
+	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
 }
 
-impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
+impl<B, C, E, I, Error, SO, BS> sc_consensus_slots::SimpleSlotWorker<B>
+	for BabeSlotWorker<B, C, E, I, SO, BS>
+where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> +
 		ProvideCache<B> +
@@ -439,6 +521,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>>,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
@@ -502,6 +585,28 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		s
 	}
 
+	fn notify_slot(
+		&self,
+		_parent_header: &B::Header,
+		slot_number: SlotNumber,
+		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+	) {
+		self.slot_notification_sinks.lock()
+			.retain_mut(|sink| {
+				match sink.try_send((slot_number, epoch_descriptor.clone())) {
+					Ok(()) => true,
+					Err(e) => {
+						if e.is_full() {
+							warn!(target: "babe", "Trying to notify a slot but the channel is full");
+							true
+						} else {
+							false
+						}
+					},
+				}
+			});
+	}
+
 	fn pre_digest_data(
 		&self,
 		_slot_number: u64,
@@ -529,15 +634,15 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			// add it to a digest item.
 			let public_type_pair = public.clone().into();
 			let public = public.to_raw_vec();
-			let signature = keystore.read()
-				.sign_with(
-					<AuthorityId as AppKey>::ID,
-					&public_type_pair,
-					header_hash.as_ref()
-				)
-				.map_err(|e| sp_consensus::Error::CannotSign(
-					public.clone(), e.to_string(),
-				))?;
+			let signature = SyncCryptoStore::sign_with(
+				&*keystore,
+				<AuthorityId as AppKey>::ID,
+				&public_type_pair,
+				header_hash.as_ref()
+			)
+			.map_err(|e| sp_consensus::Error::CannotSign(
+				public.clone(), e.to_string(),
+			))?;
 			let signature: AuthoritySignature = signature.clone().try_into()
 				.map_err(|_| sp_consensus::Error::InvalidSignature(
 					signature, public
@@ -561,6 +666,23 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		self.force_authoring
 	}
 
+	fn should_backoff(&self, slot_number: u64, chain_head: &B::Header) -> bool {
+		if let Some(ref strategy) = self.backoff_authoring_blocks {
+			if let Ok(chain_head_slot) = find_pre_digest::<B>(chain_head)
+				.map(|digest| digest.slot_number())
+			{
+				return strategy.should_backoff(
+					*chain_head.number(),
+					chain_head_slot,
+					self.client.info().finalized_number,
+					slot_number,
+					self.logging_target(),
+				);
+			}
+		}
+		false
+	}
+
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle {
 		&mut self.sync_oracle
 	}
@@ -573,12 +695,17 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 
 	fn proposing_remaining_duration(
 		&self,
-		head: &B::Header,
+		parent_head: &B::Header,
 		slot_info: &SlotInfo,
 	) -> Option<std::time::Duration> {
 		let slot_remaining = self.slot_remaining_duration(slot_info);
 
-		let parent_slot = match find_pre_digest::<B>(head) {
+		// If parent is genesis block, we don't require any lenience factor.
+		if parent_head.number().is_zero() {
+			return Some(slot_remaining)
+		}
+
+		let parent_slot = match find_pre_digest::<B>(parent_head) {
 			Err(_) => return Some(slot_remaining),
 			Ok(d) => d.slot_number(),
 		};
@@ -586,7 +713,8 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		if let Some(slot_lenience) =
 			sc_consensus_slots::slot_lenience_exponential(parent_slot, slot_info)
 		{
-			debug!(target: "babe",
+			debug!(
+				target: "babe",
 				"No block for {} slots. Applying exponential lenience of {}s",
 				slot_info.number.saturating_sub(parent_slot + 1),
 				slot_lenience.as_secs(),
@@ -599,30 +727,9 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	}
 }
 
-impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
-	B: BlockT,
-	C: ProvideRuntimeApi<B> +
-		ProvideCache<B> +
-		HeaderBackend<B> +
-		HeaderMetadata<B, Error = ClientError> + Send + Sync,
-	C::Api: BabeApi<B>,
-	E: Environment<B, Error = Error> + Send + Sync,
-	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	SO: SyncOracle + Send + Sync + Clone,
-	Error: std::error::Error + Send + From<sp_consensus::Error> + From<I::Error> + 'static,
-{
-	type OnSlot = Pin<Box<dyn Future<Output = Result<(), sp_consensus::Error>> + Send>>;
-
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
-		<Self as sc_consensus_slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
-	}
-}
-
 /// Extract the BABE pre digest from the given header. Pre-runtime digests are
 /// mandatory, the function will return `Err` if none is found.
-fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
-{
+pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>> {
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
@@ -720,22 +827,24 @@ impl<Block: BlockT> BabeLink<Block> {
 }
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<Block: BlockT, Client, SelectChain> {
+pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW> {
 	client: Arc<Client>,
 	select_chain: SelectChain,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	config: Config,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	time_source: TimeSource,
+	can_author_with: CAW,
 }
 
-impl<Block, Client, SelectChain> BabeVerifier<Block, Client, SelectChain>
+impl<Block, Client, SelectChain, CAW> BabeVerifier<Block, Client, SelectChain, CAW>
 where
 	Block: BlockT,
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
 	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
 		+ BabeApi<Block, Error = sp_blockchain::Error>,
 	SelectChain: sp_consensus::SelectChain<Block>,
+	CAW: CanAuthorWith<Block>,
 {
 	fn check_inherents(
 		&self,
@@ -743,6 +852,16 @@ where
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
 	) -> Result<(), Error<Block>> {
+		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
+			debug!(
+				target: "babe",
+				"Skipping `check_inherents` as authoring version is not compatible: {}",
+				e,
+			);
+
+			return Ok(())
+		}
+
 		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
 			block,
@@ -841,13 +960,15 @@ where
 	}
 }
 
-impl<Block, Client, SelectChain> Verifier<Block> for BabeVerifier<Block, Client, SelectChain>
+impl<Block, Client, SelectChain, CAW> Verifier<Block>
+	for BabeVerifier<Block, Client, SelectChain, CAW>
 where
 	Block: BlockT,
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + AuxStore + ProvideCache<Block>,
 	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error> + BabeApi<Block, Error = sp_blockchain::Error>,
 	SelectChain: sp_consensus::SelectChain<Block>,
+	CAW: CanAuthorWith<Block> + Send + Sync,
 {
 	fn verify(
 		&mut self,
@@ -913,13 +1034,15 @@ where
 				// the header is valid but let's check if there was something else already
 				// proposed at the same slot by the given author. if there was, we will
 				// report the equivocation to the runtime.
-				self.check_and_report_equivocation(
+				if let Err(err) = self.check_and_report_equivocation(
 					slot_now,
 					slot_number,
 					&header,
 					&verified_info.author,
 					&origin,
-				)?;
+				) {
+					warn!(target: "babe", "Error checking/reporting BABE equivocation: {:?}", err);
+				}
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
@@ -967,11 +1090,8 @@ where
 	}
 }
 
-/// The BABE import queue type.
-pub type BabeImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
-
 /// Register the babe inherent data provider, if not registered already.
-fn register_babe_inherent_data_provider(
+pub fn register_babe_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 	slot_duration: u64,
 ) -> Result<(), sp_consensus::Error> {
@@ -1358,23 +1478,24 @@ pub fn block_import<Client, Block: BlockT, I>(
 ///
 /// The block import object provided must be the `BabeBlockImport` or a wrapper
 /// of it, otherwise crucial import logic will be omitted.
-pub fn import_queue<Block: BlockT, Client, SelectChain, Inner>(
+pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	babe_link: BabeLink<Block>,
 	block_import: Inner,
 	justification_import: Option<BoxJustificationImport<Block>>,
-	finality_proof_import: Option<BoxFinalityProofImport<Block>>,
 	client: Arc<Client>,
 	select_chain: SelectChain,
 	inherent_data_providers: InherentDataProviders,
 	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
-) -> ClientResult<BabeImportQueue<Block, sp_api::TransactionFor<Client, Block>>> where
+	can_author_with: CAW,
+) -> ClientResult<DefaultImportQueue<Block, Client>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
 	Client: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
+	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
 
@@ -1385,13 +1506,13 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner>(
 		config: babe_link.config,
 		epoch_changes: babe_link.epoch_changes,
 		time_source: babe_link.time_source,
+		can_author_with,
 	};
 
 	Ok(BasicQueue::new(
 		verifier,
 		Box::new(block_import),
 		justification_import,
-		finality_proof_import,
 		spawner,
 		registry,
 	))
@@ -1408,7 +1529,7 @@ pub mod test_helpers {
 		slot_number: u64,
 		parent: &B::Header,
 		client: &C,
-		keystore: &KeyStorePtr,
+		keystore: SyncCryptoStorePtr,
 		link: &BabeLink<B>,
 	) -> Option<PreDigest> where
 		B: BlockT,
@@ -1430,7 +1551,7 @@ pub mod test_helpers {
 		authorship::claim_slot(
 			slot_number,
 			&epoch,
-			keystore,
+			&keystore,
 		).map(|(digest, _)| digest)
 	}
 }

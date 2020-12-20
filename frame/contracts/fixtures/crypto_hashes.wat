@@ -1,21 +1,21 @@
 (module
-	(import "env" "ext_input" (func $ext_input (param i32 i32)))
-	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 
-	(import "env" "ext_hash_sha2_256" (func $ext_hash_sha2_256 (param i32 i32 i32)))
-	(import "env" "ext_hash_keccak_256" (func $ext_hash_keccak_256 (param i32 i32 i32)))
-	(import "env" "ext_hash_blake2_256" (func $ext_hash_blake2_256 (param i32 i32 i32)))
-	(import "env" "ext_hash_blake2_128" (func $ext_hash_blake2_128 (param i32 i32 i32)))
+	(import "seal0" "seal_hash_sha2_256" (func $seal_hash_sha2_256 (param i32 i32 i32)))
+	(import "seal0" "seal_hash_keccak_256" (func $seal_hash_keccak_256 (param i32 i32 i32)))
+	(import "seal0" "seal_hash_blake2_256" (func $seal_hash_blake2_256 (param i32 i32 i32)))
+	(import "seal0" "seal_hash_blake2_128" (func $seal_hash_blake2_128 (param i32 i32 i32)))
 
 	(import "env" "memory" (memory 1 1))
 
 	(type $hash_fn_sig (func (param i32 i32 i32)))
 	(table 8 funcref)
 	(elem (i32.const 1)
-		$ext_hash_sha2_256
-		$ext_hash_keccak_256
-		$ext_hash_blake2_256
-		$ext_hash_blake2_128
+		$seal_hash_sha2_256
+		$seal_hash_keccak_256
+		$seal_hash_blake2_256
+		$seal_hash_blake2_128
 	)
 	(data (i32.const 1) "20202010201008") ;; Output sizes of the hashes in order in hex.
 
@@ -56,7 +56,7 @@
 		(local.set $input_len_ptr (i32.const 256))
 		(local.set $input_ptr (i32.const 10))
 		(i32.store (local.get $input_len_ptr) (i32.const 246))
-		(call $ext_input (local.get $input_ptr) (local.get $input_len_ptr))
+		(call $seal_input (local.get $input_ptr) (local.get $input_len_ptr))
 		(local.set $chosen_hash_fn (i32.load8_u (local.get $input_ptr)))
 		(if (i32.gt_u (local.get $chosen_hash_fn) (i32.const 7))
 			;; We check that the chosen hash fn  identifier is within bounds: [0,7]
@@ -71,7 +71,7 @@
 			(local.get $input_ptr)
 			(local.get $chosen_hash_fn) ;; Which crypto hash function to execute.
 		)
-		(call $ext_return
+		(call $seal_return
 			(i32.const 0)
 			(local.get $input_ptr) ;; Linear memory location of the output buffer.
 			(local.get $output_len) ;; Number of output buffer bytes.

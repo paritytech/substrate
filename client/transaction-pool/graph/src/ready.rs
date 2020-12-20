@@ -538,7 +538,7 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 				}
 			}
 
-			return Some(best.transaction.clone())
+			return Some(best.transaction)
 		}
 	}
 }

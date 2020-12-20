@@ -15,6 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # WARNING: NOT ACTIVELY MAINTAINED
+//!
+//! This pallet is currently not maintained and should not be used in production until further
+//! notice.
+//!
+//! ---
+//!
 //! Election module for stake-weighted membership selection of a collective.
 //!
 //! The composition of a set of account IDs works according to one or more approval votes
@@ -34,7 +41,7 @@ use frame_support::{
 	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
-		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers,
+		OnUnbalanced, ReservableCurrency, WithdrawReasons, ChangeMembers,
 	}
 };
 use codec::{Encode, Decode};
@@ -132,9 +139,9 @@ pub const VOTER_SET_SIZE: usize = 64;
 /// NUmber of approvals grouped in one chunk.
 pub const APPROVAL_SET_SIZE: usize = 8;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// Index used to access chunks.
 type SetIndex = u32;
@@ -145,8 +152,8 @@ type ApprovalFlag = u32;
 /// Number of approval flags that can fit into [`ApprovalFlag`] type.
 const APPROVAL_FLAG_LEN: usize = 32;
 
-pub trait Trait: frame_system::Trait {
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+pub trait Config: frame_system::Config {
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Identifier for the elections pallet's lock
 	type ModuleId: Get<LockIdentifier>;
@@ -211,7 +218,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Elections {
+	trait Store for Module<T: Config> as Elections {
 		// ---- parameters
 
 		/// How long to give each top candidate to present themselves after the vote ends.
@@ -279,7 +286,7 @@ decl_storage! {
 
 decl_error! {
 	/// Error for the elections module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Reporter must be a voter.
 		NotVoter,
 		/// Target for inactivity cleanup must be active.
@@ -338,7 +345,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		/// How much should be locked up in order to submit one's candidacy. A reasonable
@@ -699,19 +706,20 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T> where <T as frame_system::Trait>::AccountId {
-		/// reaped voter, reaper
+	pub enum Event<T> where <T as frame_system::Config>::AccountId {
+		/// Reaped \[voter, reaper\].
 		VoterReaped(AccountId, AccountId),
-		/// slashed reaper
+		/// Slashed \[reaper\].
 		BadReaperSlashed(AccountId),
-		/// A tally (for approval votes of seat(s)) has started.
+		/// A tally (for approval votes of \[seats\]) has started.
 		TallyStarted(u32),
-		/// A tally (for approval votes of seat(s)) has ended (with one or more new members).
+		/// A tally (for approval votes of seat(s)) has ended (with one or more new members). 
+		/// \[incoming, outgoing\]
 		TallyFinalized(Vec<AccountId>, Vec<AccountId>),
 	}
 );
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	// exposed immutables.
 
 	/// True if we're currently in a presentation period.
@@ -863,7 +871,7 @@ impl<T: Trait> Module<T> {
 						let imbalance = T::Currency::withdraw(
 							&who,
 							T::VotingFee::get(),
-							WithdrawReason::Fee.into(),
+							WithdrawReasons::FEE,
 							ExistenceRequirement::KeepAlive,
 						)?;
 						T::BadVoterIndex::on_unbalanced(imbalance);

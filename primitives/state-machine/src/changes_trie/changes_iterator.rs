@@ -46,7 +46,7 @@ pub fn key_changes<'a, H: Hasher, Number: BlockNumber>(
 	key: &'a [u8],
 ) -> Result<DrilldownIterator<'a, H, Number>, String> {
 	// we can't query any roots before root
-	let max = ::std::cmp::min(max.clone(), end.number.clone());
+	let max = std::cmp::min(max, end.number.clone());
 
 	Ok(DrilldownIterator {
 		essence: DrilldownIteratorEssence {
@@ -85,7 +85,7 @@ pub fn key_changes_proof<'a, H: Hasher, Number: BlockNumber>(
 	key: &[u8],
 ) -> Result<Vec<Vec<u8>>, String> where H::Out: Codec {
 	// we can't query any roots before root
-	let max = ::std::cmp::min(max.clone(), end.number.clone());
+	let max = std::cmp::min(max, end.number.clone());
 
 	let mut iter = ProvingDrilldownIterator {
 		essence: DrilldownIteratorEssence {
@@ -156,7 +156,7 @@ pub fn key_changes_proof_check_with_db<'a, H: Hasher, Number: BlockNumber>(
 	key: &[u8]
 ) -> Result<Vec<(Number, u32)>, String> where H::Out: Encode {
 	// we can't query any roots before root
-	let max = ::std::cmp::min(max.clone(), end.number.clone());
+	let max = std::cmp::min(max, end.number.clone());
 
 	DrilldownIterator {
 		essence: DrilldownIteratorEssence {

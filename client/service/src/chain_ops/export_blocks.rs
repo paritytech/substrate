@@ -87,7 +87,7 @@ where
 			// Reached end of the chain.
 			None => return Poll::Ready(Ok(())),
 		}
-		if (block % 10000.into()).is_zero() {
+		if (block % 10000u32.into()).is_zero() {
 			info!("#{}", block);
 		}
 		if block == last {

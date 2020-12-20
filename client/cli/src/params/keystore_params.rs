@@ -21,6 +21,7 @@ use sc_service::config::KeystoreConfig;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use crate::error;
 use sp_core::crypto::SecretString;
 
 /// default sub directory for the key store
@@ -29,6 +30,9 @@ const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
 /// Parameters of the keystore
 #[derive(Debug, StructOpt)]
 pub struct KeystoreParams {
+	/// Specify custom URIs to connect to for keystore-services
+	#[structopt(long = "keystore-uri")]
+	pub keystore_uri: Option<String>,
 	/// Specify custom keystore path.
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
@@ -66,27 +70,21 @@ pub fn secret_string_from_str(s: &str) -> std::result::Result<SecretString, Stri
 
 impl KeystoreParams {
 	/// Get the keystore configuration for the parameters
-	pub fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
+	/// returns a vector of remote-urls and the local Keystore configuration
+	pub fn keystore_config(&self, base_path: &PathBuf) -> Result<(Option<String>, KeystoreConfig)> {
+
 		let password = if self.password_interactive {
 			#[cfg(not(target_os = "unknown"))]
 			{
-				let mut password = input_keystore_password()?;
-				let secret = std::str::FromStr::from_str(password.as_str())
-					.map_err(|()| "Error reading password")?;
-				use sp_core::crypto::Zeroize;
-				password.zeroize();
-				Some(secret)
+				let password = input_keystore_password()?;
+				Some(SecretString::new(password))
 			}
 			#[cfg(target_os = "unknown")]
 			None
 		} else if let Some(ref file) = self.password_filename {
-			let mut password = fs::read_to_string(file)
+			let password = fs::read_to_string(file)
 				.map_err(|e| format!("{}", e))?;
-			let secret = std::str::FromStr::from_str(password.as_str())
-				.map_err(|()| "Error reading password")?;
-			use sp_core::crypto::Zeroize;
-			password.zeroize();
-			Some(secret)
+			Some(SecretString::new(password))
 		} else {
 			self.password.clone()
 		};
@@ -94,9 +92,23 @@ impl KeystoreParams {
 		let path = self
 			.keystore_path
 			.clone()
-			.unwrap_or(base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH));
+			.unwrap_or_else(|| base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH));
 
-		Ok(KeystoreConfig::Path { path, password })
+		Ok((self.keystore_uri.clone(), KeystoreConfig::Path { path, password }))
+	}
+
+	/// helper method to fetch password from `KeyParams` or read from stdin
+	pub fn read_password(&self) -> error::Result<Option<SecretString>> {
+		let (password_interactive, password) = (self.password_interactive, self.password.clone());
+
+		let pass = if password_interactive {
+			let password = rpassword::read_password_from_tty(Some("Key password: "))?;
+			Some(SecretString::new(password))
+		} else {
+			password
+		};
+
+		Ok(pass)
 	}
 }
 

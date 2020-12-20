@@ -31,13 +31,11 @@ pub enum Error {
 	/// Failed to verify a dht payload with the given signature.
 	VerifyingDhtPayload,
 	/// Failed to hash the authority id to be used as a dht key.
-	HashingAuthorityId(libp2p::core::multiaddr::multihash::EncodeError),
+	HashingAuthorityId(libp2p::core::multiaddr::multihash::Error),
 	/// Failed calling into the Substrate runtime.
 	CallingRuntime(sp_blockchain::Error),
-	/// From the Dht we only get the hashed authority id. In order to retrieve the actual authority id and to ensure it
-	/// is actually an authority, we match the hash against the hash of the authority id of all other authorities. This
-	/// error is the result of the above failing.
-	MatchingHashedAuthorityIdWithAuthorityId,
+	/// Received a dht record with a key that does not match any in-flight awaited keys.
+	ReceivingUnexpectedRecord,
 	/// Failed to set the authority discovery peerset priority group in the peerset module.
 	SettingPeersetPriorityGroup(String),
 	/// Failed to encode a protobuf payload.

@@ -18,7 +18,8 @@
 
 use crate::BlockStatus;
 use sp_runtime::{generic::BlockId, traits::Block};
-use std::{error::Error, sync::Arc};
+use std::{error::Error, future::Future, pin::Pin, sync::Arc};
+use futures::FutureExt as _;
 
 /// A type which provides access to chain information.
 pub trait Chain<B: Block> {
@@ -41,13 +42,27 @@ pub enum Validation {
 		is_new_best: bool,
 	},
 	/// Invalid block announcement.
-	Failure,
+	Failure {
+		/// Should we disconnect from this peer?
+		///
+		/// This should be used if the peer for example send junk to spam us.
+		disconnect: bool,
+	},
 }
 
 /// Type which checks incoming block announcements.
 pub trait BlockAnnounceValidator<B: Block> {
 	/// Validate the announced header and its associated data.
-	fn validate(&mut self, header: &B::Header, data: &[u8]) -> Result<Validation, Box<dyn Error + Send>>;
+	///
+	/// # Note
+	///
+	/// Returning [`Validation::Failure`] will lead to a decrease of the
+	/// peers reputation as it sent us invalid data.
+	fn validate(
+		&mut self,
+		header: &B::Header,
+		data: &[u8],
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn Error + Send>>> + Send>>;
 }
 
 /// Default implementation of `BlockAnnounceValidator`.
@@ -55,7 +70,23 @@ pub trait BlockAnnounceValidator<B: Block> {
 pub struct DefaultBlockAnnounceValidator;
 
 impl<B: Block> BlockAnnounceValidator<B> for DefaultBlockAnnounceValidator {
-	fn validate(&mut self, _h: &B::Header, _d: &[u8]) -> Result<Validation, Box<dyn Error + Send>> {
-		Ok(Validation::Success { is_new_best: false })
+	fn validate(
+		&mut self,
+		_: &B::Header,
+		data: &[u8],
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn Error + Send>>> + Send>> {
+		let is_empty = data.is_empty();
+
+		async move {
+			if !is_empty {
+				log::debug!(
+					target: "sync",
+					"Received unknown data alongside the block announcement.",
+				);
+				Ok(Validation::Failure { disconnect: true })
+			} else {
+				Ok(Validation::Success { is_new_best: false })
+			}
+		}.boxed()
 	}
 }

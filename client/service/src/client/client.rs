@@ -22,6 +22,7 @@ use std::{
 	marker::PhantomData,
 	collections::{HashSet, BTreeMap, HashMap},
 	sync::Arc, panic::UnwindSafe, result,
+	path::PathBuf
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
@@ -32,13 +33,15 @@ use sp_core::{
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
 	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
 };
+#[cfg(feature="test-helpers")]
+use sp_keystore::SyncCryptoStorePtr;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
 		Block as BlockT, Header as HeaderT, Zero, NumberFor,
-		HashFor, SaturatedConversion, One, DigestFor,
+		HashFor, SaturatedConversion, One, DigestFor, UniqueSaturatedInto,
 	},
 };
 use sp_state_machine::{
@@ -92,8 +95,8 @@ use rand::Rng;
 
 #[cfg(feature="test-helpers")]
 use {
-	sp_core::traits::CodeExecutor,
-	sc_client_api::{CloneableSpawn, in_mem},
+	sp_core::traits::{CodeExecutor, SpawnNamed},
+	sc_client_api::in_mem,
 	sc_executor::RuntimeInfo,
 	super::call_executor::LocalCallExecutor,
 };
@@ -147,9 +150,9 @@ impl<H> PrePostHeader<H> {
 pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: &S,
-	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
@@ -179,6 +182,8 @@ pub struct ClientConfig {
 	pub offchain_worker_enabled: bool,
 	/// If true, allows access from the runtime to write into offchain worker db.
 	pub offchain_indexing_api: bool,
+	/// Path where WASM files exist to override the on-chain WASM.
+	pub wasm_runtime_overrides: Option<PathBuf>,
 }
 
 /// Create a client with the explicitly provided backend.
@@ -188,8 +193,8 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
 	build_genesis_storage: &S,
-	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	keystore: Option<SyncCryptoStorePtr>,
+	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
@@ -199,7 +204,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
 	let extensions = ExecutionExtensions::new(Default::default(), keystore);
 	Client::new(
 		backend,
@@ -292,7 +297,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
-			let genesis_storage = build_genesis_storage.build_storage()?;
+			let genesis_storage = build_genesis_storage.build_storage()
+				.map_err(sp_blockchain::Error::Storage)?;
 			let mut op = backend.begin_operation()?;
 			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default()))?;
 			let state_root = op.reset_storage(genesis_storage)?;
@@ -802,7 +808,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		operation.op.insert_aux(aux)?;
 
-		if make_notifications {
+		// we only notify when we are already synced to the tip of the chain or if this import triggers a re-org
+		if make_notifications || tree_route.is_some() {
 			if finalized {
 				operation.notify_finalized.push(hash);
 			}
@@ -874,7 +881,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					&state,
 					changes_trie_state.as_ref(),
 					*parent_hash,
-				)?;
+				).map_err(sp_blockchain::Error::Storage)?;
 
 				if import_block.header.state_root()
 					!= &gen_storage_changes.transaction_storage_root
@@ -1054,20 +1061,31 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// reverted past the last finalized block. Returns the number of blocks
 	/// that were successfully reverted.
 	pub fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n, false)?)
+		let (number, _) = self.backend.revert(n, false)?;
+		Ok(number)
 	}
 
-	/// Attempts to revert the chain by `n` blocks disregarding finality. This
-	/// method will revert any finalized blocks as requested and can potentially
-	/// leave the node in an inconsistent state. Other modules in the system that
-	/// persist data and that rely on finality (e.g. consensus parts) will be
-	/// unaffected by the revert. Use this method with caution and making sure
-	/// that no other data needs to be reverted for consistency aside from the
-	/// block data.
+	/// Attempts to revert the chain by `n` blocks disregarding finality. This method will revert
+	/// any finalized blocks as requested and can potentially leave the node in an inconsistent
+	/// state. Other modules in the system that persist data and that rely on finality
+	/// (e.g. consensus parts) will be unaffected by the revert. Use this method with caution and
+	/// making sure that no other data needs to be reverted for consistency aside from the block
+	/// data. If `blacklist` is set to true, will also blacklist reverted blocks from finalizing
+	/// again. The blacklist is reset upon client restart.
 	///
 	/// Returns the number of blocks that were successfully reverted.
-	pub fn unsafe_revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n, true)?)
+	pub fn unsafe_revert(
+		&mut self,
+		n: NumberFor<Block>,
+		blacklist: bool,
+	) -> sp_blockchain::Result<NumberFor<Block>> {
+		let (number, reverted) = self.backend.revert(n, true)?;
+		if blacklist {
+			for b in reverted {
+				self.block_rules.mark_bad(b);
+			}
+		}
+		Ok(number)
 	}
 
 	/// Get blockchain info.
@@ -1127,7 +1145,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let mut ancestor = load_header(ancestor_hash)?;
 		let mut uncles = Vec::new();
 
-		for _generation in 0..max_generation.saturated_into() {
+		for _generation in 0u32..UniqueSaturatedInto::<u32>::unique_saturated_into(max_generation) {
 			let children = self.backend.blockchain().children(ancestor_hash)?;
 			uncles.extend(children.into_iter().filter(|h| h != &current_hash));
 			current_hash = ancestor_hash;
@@ -1142,12 +1160,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Prepare in-memory header that is used in execution environment.
 	fn prepare_environment_block(&self, parent: &BlockId<Block>) -> sp_blockchain::Result<Block::Header> {
-		let parent_header = self.backend.blockchain().expect_header(*parent)?;
+		let parent_hash = self.backend.blockchain().expect_block_hash_from_id(parent)?;
 		Ok(<<Block as BlockT>::Header as HeaderT>::new(
 			self.backend.blockchain().expect_block_number_from_id(parent)? + One::one(),
 			Default::default(),
 			Default::default(),
-			parent_header.hash(),
+			parent_hash,
 			Default::default(),
 		))
 	}
@@ -1883,8 +1901,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		self.body(id)
 	}
 
-	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>
-	{
+	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
 		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
 			(Some(header), Some(extrinsics), justification) =>
 				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
@@ -1893,26 +1910,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	}
 
 	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
-		// this can probably be implemented more efficiently
-		if let BlockId::Hash(ref h) = id {
-			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
-				return Ok(BlockStatus::Queued);
-			}
-		}
-		let hash_and_number = match id.clone() {
-			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
-			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
-		};
-		match hash_and_number {
-			Some((hash, number)) => {
-				if self.backend.have_state_at(&hash, number) {
-					Ok(BlockStatus::InChainWithState)
-				} else {
-					Ok(BlockStatus::InChainPruned)
-				}
-			}
-			None => Ok(BlockStatus::Unknown),
-		}
+		Client::block_status(self, id)
 	}
 
 	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
@@ -1921,7 +1919,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
-	}	
+	}
 }
 
 impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>

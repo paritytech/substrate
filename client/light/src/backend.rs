@@ -19,7 +19,7 @@
 //! Light client backend. Only stores headers and justifications of blocks.
 //! Everything else is requested from full nodes on demand.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use parking_lot::RwLock;
 
@@ -146,7 +146,10 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		Ok(())
 	}
 
-	fn commit_operation(&self, mut operation: Self::BlockImportOperation) -> ClientResult<()> {
+	fn commit_operation(
+		&self,
+		mut operation: Self::BlockImportOperation,
+	) -> ClientResult<()> {
 		if !operation.finalized_blocks.is_empty() {
 			for block in operation.finalized_blocks {
 				self.blockchain.storage().finalize_header(block)?;
@@ -231,7 +234,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		&self,
 		_n: NumberFor<Block>,
 		_revert_finalized: bool,
-	) -> ClientResult<NumberFor<Block>> {
+	) -> ClientResult<(NumberFor<Block>, HashSet<Block::Hash>)> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
@@ -438,14 +441,14 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(
+	fn apply_to_child_keys_while<A: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
 		action: A,
 	) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				state.for_keys_in_child_storage(child_info, action),
+				state.apply_to_child_keys_while(child_info, action),
 			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}

@@ -20,10 +20,11 @@
 
 // FIXME #1021 move this into sp-consensus
 
-use std::{time, sync::Arc};
+use std::{pin::Pin, time, sync::Arc};
 use sc_client_api::backend;
 use codec::Decode;
 use sp_consensus::{evaluation, Proposal, RecordProof};
+use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use log::{error, info, debug, trace, warn};
 use sp_runtime::{
@@ -34,15 +35,25 @@ use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
-use futures::{executor, future, future::Either};
+use futures::{future, future::{Future, FutureExt}, channel::oneshot, select};
 use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 
+/// Default maximum block size in bytes used by [`Proposer`].
+///
+/// Can be overwritten by [`ProposerFactory::set_maximum_block_size`].
+///
+/// Be aware that there is also an upper packet size on what the networking code
+/// will accept. If the block doesn't fit in such a package, it can not be
+/// transferred to other nodes.
+pub const DEFAULT_MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
+
 /// Proposer factory.
 pub struct ProposerFactory<A, B, C> {
+	spawn_handle: Box<dyn SpawnNamed>,
 	/// The client instance.
 	client: Arc<C>,
 	/// The transaction pool.
@@ -51,20 +62,32 @@ pub struct ProposerFactory<A, B, C> {
 	metrics: PrometheusMetrics,
 	/// phantom member to pin the `Backend` type.
 	_phantom: PhantomData<B>,
+	max_block_size: usize,
 }
 
 impl<A, B, C> ProposerFactory<A, B, C> {
 	pub fn new(
+		spawn_handle: impl SpawnNamed + 'static,
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
 	) -> Self {
 		ProposerFactory {
+			spawn_handle: Box::new(spawn_handle),
 			client,
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
 			_phantom: PhantomData,
+			max_block_size: DEFAULT_MAX_BLOCK_SIZE,
 		}
+	}
+
+	/// Set the maximum block size in bytes.
+	///
+	/// The default value for the maximum block size is:
+	/// [`DEFAULT_MAX_BLOCK_SIZE`].
+	pub fn set_maximum_block_size(&mut self, size: usize) {
+		self.max_block_size = size;
 	}
 }
 
@@ -90,6 +113,7 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
 		let proposer = Proposer {
+			spawn_handle: self.spawn_handle.clone(),
 			client: self.client.clone(),
 			parent_hash,
 			parent_id: id,
@@ -98,6 +122,7 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 			now,
 			metrics: self.metrics.clone(),
 			_phantom: PhantomData,
+			max_block_size: self.max_block_size,
 		};
 
 		proposer
@@ -129,6 +154,7 @@ impl<A, B, Block, C> sp_consensus::Environment<Block> for
 
 /// The proposer logic.
 pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
+	spawn_handle: Box<dyn SpawnNamed>,
 	client: Arc<C>,
 	parent_hash: <Block as BlockT>::Hash,
 	parent_id: BlockId<Block>,
@@ -137,6 +163,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
 	_phantom: PhantomData<B>,
+	max_block_size: usize,
 }
 
 impl<A, B, Block, C> sp_consensus::Proposer<Block> for
@@ -151,9 +178,9 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 				+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	type Transaction = backend::TransactionFor<B, Block>;
-	type Proposal = tokio_executor::blocking::Blocking<
-		Result<Proposal<Block, Self::Transaction>, Self::Error>
-	>;
+	type Proposal = Pin<Box<dyn Future<
+		Output = Result<Proposal<Block, Self::Transaction>, Self::Error>
+	> + Send>>;
 	type Error = sp_blockchain::Error;
 
 	fn propose(
@@ -163,11 +190,26 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 		max_duration: time::Duration,
 		record_proof: RecordProof,
 	) -> Self::Proposal {
-		tokio_executor::blocking::run(move || {
+		let (tx, rx) = oneshot::channel();
+		let spawn_handle = self.spawn_handle.clone();
+
+		spawn_handle.spawn_blocking("basic-authorship-proposer", Box::pin(async move {
 			// leave some time for evaluation and block finalization (33%)
 			let deadline = (self.now)() + max_duration - max_duration / 3;
-			self.propose_with(inherent_data, inherent_digests, deadline, record_proof)
-		})
+			let res = self.propose_with(
+				inherent_data,
+				inherent_digests,
+				deadline,
+				record_proof,
+			).await;
+			if tx.send(res).is_err() {
+				trace!("Could not send block production result to proposer!");
+			}
+		}));
+
+		async move {
+			rx.await?
+		}.boxed()
 	}
 }
 
@@ -181,7 +223,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 			+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
-	fn propose_with(
+	async fn propose_with(
 		self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
@@ -218,18 +260,20 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
-		let pending_iterator = match executor::block_on(future::select(
-			self.transaction_pool.ready_at(self.parent_number),
-			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8),
-		)) {
-			Either::Left((iterator, _)) => iterator,
-			Either::Right(_) => {
+
+		let mut t1 = self.transaction_pool.ready_at(self.parent_number).fuse();
+		let mut t2 = futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8).fuse();
+
+		let pending_iterator = select! {
+			res = t1 => res,
+			_ = t2 => {
 				log::warn!(
-					"Timeout fired waiting for transaction pool at block #{}. Proceeding with production.",
+					"Timeout fired waiting for transaction pool at block #{}. \
+					Proceeding with production.",
 					self.parent_number,
 				);
 				self.transaction_pool.ready()
-			}
+			},
 		};
 
 		debug!("Attempting to push transactions from the pool.");
@@ -308,7 +352,12 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			error!("Failed to verify block encoding/decoding");
 		}
 
-		if let Err(err) = evaluation::evaluate_initial(&block, &self.parent_hash, self.parent_number) {
+		if let Err(err) = evaluation::evaluate_initial(
+			&block,
+			&self.parent_hash,
+			self.parent_number,
+			self.max_block_size,
+		) {
 			error!("Failed to evaluate authored block: {:?}", err);
 		}
 
@@ -326,7 +375,7 @@ mod tests {
 		prelude::*, TestClientBuilder, runtime::{Extrinsic, Transfer}, TestClientBuilderExt,
 	};
 	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool, TransactionSource};
-	use sc_transaction_pool::{BasicPool, FullChainApi};
+	use sc_transaction_pool::BasicPool;
 	use sp_api::Core;
 	use sp_blockchain::HeaderBackend;
 	use sp_runtime::traits::NumberFor;
@@ -346,11 +395,9 @@ mod tests {
 	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
 		where NumberFor<B>: From<u64>
 	{
-		ChainEvent::NewBlock {
+		ChainEvent::NewBestBlock {
 			hash: header.hash(),
 			tree_route: None,
-			is_new_best: true,
-			header,
 		}
 	}
 
@@ -358,12 +405,11 @@ mod tests {
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
@@ -379,7 +425,12 @@ mod tests {
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+		);
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let proposer = proposer_factory.init_with_now(
@@ -412,16 +463,20 @@ mod tests {
 	#[test]
 	fn should_not_panic_when_deadline_is_reached() {
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+		);
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let proposer = proposer_factory.init_with_now(
@@ -448,12 +503,11 @@ mod tests {
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
 		let (client, backend) = TestClientBuilder::new().build_with_backend();
 		let client = Arc::new(client);
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
@@ -472,7 +526,12 @@ mod tests {
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+		);
 
 		let proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),
@@ -511,12 +570,11 @@ mod tests {
 	fn should_not_remove_invalid_transactions_when_skipping() {
 		// given
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
@@ -542,7 +600,12 @@ mod tests {
 			])
 		).unwrap();
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+		);
 		let mut propose_block = |
 			client: &TestClient,
 			number,

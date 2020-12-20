@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 #![warn(unused_extern_crates)]
 #![warn(missing_docs)]
 
@@ -140,8 +141,9 @@
 //! block announces are pushed to other nodes. The handshake is empty on both sides. The message
 //! format is a SCALE-encoded tuple containing a block header followed with an opaque list of
 //! bytes containing some data associated with this block announcement, e.g. a candidate message.
-//! - Notifications protocols that are registered using the `register_notifications_protocol`
-//! method. For example: `/paritytech/grandpa/1`. See below for more information.
+//! - Notifications protocols that are registered using
+//! `NetworkConfiguration::notifications_protocols`. For example: `/paritytech/grandpa/1`. See
+//! below for more information.
 //!
 //! ## The legacy Substrate substream
 //!
@@ -197,13 +199,14 @@
 //! handshake message can be of length 0, in which case the sender has to send a single `0`.
 //! - The receiver then either immediately closes the substream, or answers with its own
 //! LEB128-prefixed protocol-specific handshake response. The message can be of length 0, in which
-//! case a single `0` has to be sent back. The receiver is then encouraged to close its sending
-//! side.
+//! case a single `0` has to be sent back.
 //! - Once the handshake has completed, the notifications protocol is unidirectional. Only the
 //! node which initiated the substream can push notifications. If the remote wants to send
 //! notifications as well, it has to open its own undirectional substream.
 //! - Each notification must be prefixed with an LEB128-encoded length. The encoding of the
 //! messages is specific to each protocol.
+//! - Either party can signal that it doesn't want a notifications substream anymore by closing
+//! its writing side. The other party should respond by closing its own writing side soon after.
 //!
 //! The API of `sc-network` allows one to register user-defined notification protocols.
 //! `sc-network` automatically tries to open a substream towards each node for which the legacy
@@ -247,10 +250,10 @@ mod block_requests;
 mod chain;
 mod peer_info;
 mod discovery;
-mod finality_requests;
 mod light_client_handler;
 mod on_demand_layer;
 mod protocol;
+mod request_responses;
 mod schema;
 mod service;
 mod transport;
@@ -258,15 +261,16 @@ mod utils;
 
 pub mod config;
 pub mod error;
+pub mod gossip;
 pub mod network_state;
 
-pub use service::{NetworkService, NetworkWorker};
-pub use protocol::PeerInfo;
-pub use protocol::event::{Event, DhtEvent, ObservedRole};
-pub use protocol::sync::SyncState;
-pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]
-pub use libp2p::multiaddr;
+pub use libp2p::{multiaddr, Multiaddr, PeerId};
+pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
+pub use service::{
+	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
+	NotificationSenderReady,
+};
 
 pub use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -279,6 +283,9 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 /// case of (possibly repeated) simultaneous dialing attempts between
 /// two peers, the per-peer connection limit is not set to 1 but 2.
 const MAX_CONNECTIONS_PER_PEER: usize = 2;
+
+/// The maximum number of concurrent established connections that were incoming.
+const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
 
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
@@ -308,8 +315,8 @@ pub struct NetworkStatus<B: BlockT> {
 	pub num_connected_peers: usize,
 	/// Total number of active peers.
 	pub num_active_peers: usize,
-	/// Downloaded bytes per second averaged over the past few seconds.
-	pub average_download_per_sec: u64,
-	/// Uploaded bytes per second averaged over the past few seconds.
-	pub average_upload_per_sec: u64,
+	/// The total number of bytes received.
+	pub total_bytes_inbound: u64,
+	/// The total number of bytes sent.
+	pub total_bytes_outbound: u64,
 }

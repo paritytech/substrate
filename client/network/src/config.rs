@@ -21,8 +21,9 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-pub use crate::chain::{Client, FinalityProofProvider};
+pub use crate::chain::Client;
 pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
+pub use crate::request_responses::{IncomingRequest, ProtocolConfig as RequestResponseConfig};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -34,12 +35,13 @@ use crate::ExHashT;
 
 use core::{fmt, iter};
 use futures::future;
-use libp2p::identity::{ed25519, Keypair};
-use libp2p::wasm_ext;
-use libp2p::{multiaddr, Multiaddr, PeerId};
+use libp2p::{
+	identity::{ed25519, Keypair},
+	multiaddr, wasm_ext, Multiaddr, PeerId,
+};
 use prometheus_endpoint::Registry;
 use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
-use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
+use sp_runtime::traits::Block as BlockT;
 use std::{borrow::Cow, convert::TryFrom, future::Future, pin::Pin, str::FromStr};
 use std::{
 	collections::HashMap,
@@ -48,6 +50,7 @@ use std::{
 	io::{self, Write},
 	net::Ipv4Addr,
 	path::{Path, PathBuf},
+	str,
 	sync::Arc,
 };
 use zeroize::Zeroize;
@@ -66,17 +69,6 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Client that contains the blockchain.
 	pub chain: Arc<dyn Client<B>>,
-
-	/// Finality proof provider.
-	///
-	/// This object, if `Some`, is used when a node on the network requests a proof of finality
-	/// from us.
-	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
-
-	/// How to build requests for proofs of finality.
-	///
-	/// This object, if `Some`, is used when we need a proof of finality from another node.
-	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 
 	/// The `OnDemand` object acts as a "receiver" for block data requests from the client.
 	/// If `Some`, the network worker will process these requests and answer them.
@@ -150,25 +142,6 @@ impl fmt::Display for Role {
 	}
 }
 
-/// Finality proof request builder.
-pub trait FinalityProofRequestBuilder<B: BlockT>: Send {
-	/// Build data blob, associated with the request.
-	fn build_request_data(&mut self, hash: &B::Hash) -> Vec<u8>;
-}
-
-/// Implementation of `FinalityProofRequestBuilder` that builds a dummy empty request.
-#[derive(Debug, Default)]
-pub struct DummyFinalityProofRequestBuilder;
-
-impl<B: BlockT> FinalityProofRequestBuilder<B> for DummyFinalityProofRequestBuilder {
-	fn build_request_data(&mut self, _: &B::Hash) -> Vec<u8> {
-		Vec::new()
-	}
-}
-
-/// Shared finality proof request builder struct used by the queue.
-pub type BoxFinalityProofRequestBuilder<B> = Box<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
-
 /// Result of the transaction import.
 #[derive(Clone, Copy, Debug)]
 pub enum TransactionImport {
@@ -233,20 +206,26 @@ impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransaction
 	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
 }
 
-/// Name of a protocol, transmitted on the wire. Should be unique for each chain.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
 
-impl<'a> From<&'a [u8]> for ProtocolId {
-	fn from(bytes: &'a [u8]) -> ProtocolId {
-		ProtocolId(bytes.into())
+impl<'a> From<&'a str> for ProtocolId {
+	fn from(bytes: &'a str) -> ProtocolId {
+		ProtocolId(bytes.as_bytes().into())
 	}
 }
 
-impl ProtocolId {
-	/// Exposes the `ProtocolId` as bytes.
-	pub fn as_bytes(&self) -> &[u8] {
-		self.0.as_ref()
+impl AsRef<str> for ProtocolId {
+	fn as_ref(&self) -> &str {
+		str::from_utf8(&self.0[..])
+			.expect("the only way to build a ProtocolId is through a UTF-8 String; qed")
+	}
+}
+
+impl fmt::Debug for ProtocolId {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Debug::fmt(self.as_ref(), f)
 	}
 }
 
@@ -272,21 +251,8 @@ pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 /// Splits a Multiaddress into a Multiaddress and PeerId.
 pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
-		Some(multiaddr::Protocol::P2p(key)) => {
-			if !matches!(key.algorithm(), multiaddr::multihash::Code::Identity) {
-				// (note: this is the "person bowing" emoji)
-				log::warn!(
-					"🙇 You are using the peer ID {}. This peer ID uses a legacy, deprecated \
-					representation that will no longer be supported in the future. \
-					Please refresh it by performing a RPC query to the appropriate node, \
-					by looking at its logs, or by using `subkey inspect-node-key` on its \
-					private key.",
-					bs58::encode(key.as_bytes()).into_string()
-				);
-			}
-
-			PeerId::from_multihash(key).map_err(|_| ParseErr::InvalidPeerId)?
-		},
+		Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
+			.map_err(|_| ParseErr::InvalidPeerId)?,
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
 
@@ -404,9 +370,10 @@ pub struct NetworkConfiguration {
 	pub boot_nodes: Vec<MultiaddrWithPeerId>,
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
-	/// List of notifications protocols that the node supports. Must also include a
-	/// `ConsensusEngineId` for backwards-compatibility.
-	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, [u8]>)>,
+	/// List of names of notifications protocols that the node supports.
+	pub notifications_protocols: Vec<Cow<'static, str>>,
+	/// List of request-response protocols that the node supports.
+	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// Maximum allowed number of incoming connections.
 	pub in_peers: u32,
 	/// Number of outgoing connections we're trying to maintain.
@@ -425,6 +392,9 @@ pub struct NetworkConfiguration {
 	pub max_parallel_downloads: u32,
 	/// Should we insert non-global addresses into the DHT?
 	pub allow_non_globals_in_dht: bool,
+	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in the
+	/// presence of potentially adversarial nodes.
+	pub kademlia_disjoint_query_paths: bool,
 }
 
 impl NetworkConfiguration {
@@ -442,6 +412,7 @@ impl NetworkConfiguration {
 			boot_nodes: Vec::new(),
 			node_key,
 			notifications_protocols: Vec::new(),
+			request_response_protocols: Vec::new(),
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
@@ -452,15 +423,13 @@ impl NetworkConfiguration {
 				enable_mdns: false,
 				allow_private_ipv4: true,
 				wasm_external_transport: None,
-				use_yamux_flow_control: false,
 			},
 			max_parallel_downloads: 5,
 			allow_non_globals_in_dht: false,
+			kademlia_disjoint_query_paths: false,
 		}
 	}
-}
 
-impl NetworkConfiguration {
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new(
@@ -522,8 +491,6 @@ pub enum TransportConfig {
 		/// This parameter exists whatever the target platform is, but it is expected to be set to
 		/// `Some` only when compiling for WASM.
 		wasm_external_transport: Option<wasm_ext::ExtTransport>,
-		/// Use flow control for yamux streams if set to true.
-		use_yamux_flow_control: bool,
 	},
 
 	/// Only allow connections within the same process.
@@ -615,10 +582,26 @@ impl NodeKeyConfig {
 				Ok(Keypair::Ed25519(k.into())),
 
 			Ed25519(Secret::File(f)) =>
-				get_secret(f,
-					|mut b| ed25519::SecretKey::from_bytes(&mut b),
+				get_secret(
+					f,
+					|mut b| {
+						match String::from_utf8(b.to_vec())
+							.ok()
+							.and_then(|s|{
+								if s.len() == 64 {
+									hex::decode(&s).ok()
+								} else {
+									None
+								}}
+							)
+						{
+							Some(s) => ed25519::SecretKey::from_bytes(s),
+							_ => ed25519::SecretKey::from_bytes(&mut b),
+						}
+					},
 					ed25519::SecretKey::generate,
-					|b| b.as_ref().to_vec())
+					|b| b.as_ref().to_vec()
+				)
 				.map(ed25519::Keypair::from)
 				.map(Keypair::Ed25519),
 		}

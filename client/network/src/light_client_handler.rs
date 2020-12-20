@@ -44,6 +44,7 @@ use libp2p::{
 		upgrade::{OutboundUpgrade, read_one, write_one}
 	},
 	swarm::{
+		AddressRecord,
 		NegotiatedSubstream,
 		NetworkBehaviour,
 		NetworkBehaviourAction,
@@ -156,13 +157,13 @@ impl Config {
 	pub fn set_protocol(&mut self, id: &ProtocolId) -> &mut Self {
 		let mut vl = Vec::new();
 		vl.extend_from_slice(b"/");
-		vl.extend_from_slice(id.as_bytes());
+		vl.extend_from_slice(id.as_ref().as_bytes());
 		vl.extend_from_slice(b"/light/2");
 		self.light_protocol = vl.into();
 
 		let mut vb = Vec::new();
 		vb.extend_from_slice(b"/");
-		vb.extend_from_slice(id.as_bytes());
+		vb.extend_from_slice(id.as_ref().as_bytes());
 		vb.extend_from_slice(b"/sync/2");
 		self.block_protocol = vb.into();
 
@@ -627,7 +628,7 @@ where
 		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
 		let child_info = match ChildType::from_prefixed_key(prefixed_key) {
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
-			None => Err("Invalid child storage key".into()),
+			None => Err(sp_blockchain::Error::InvalidChildStorageKey),
 		};
 		let proof = match child_info.and_then(|child_info| self.chain.read_child_proof(
 			&BlockId::Hash(block),
@@ -758,7 +759,7 @@ where
 		};
 		let mut cfg = OneShotHandlerConfig::default();
 		cfg.keep_alive_timeout = self.config.inactivity_timeout;
-		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
+		OneShotHandler::new(SubstreamProtocol::new(p, ()), cfg)
 	}
 
 	fn addresses_of_peer(&mut self, peer: &PeerId) -> Vec<Multiaddr> {
@@ -1316,7 +1317,7 @@ mod tests {
 			connection::ConnectionId,
 			identity,
 			muxing::{StreamMuxerBox, SubstreamRef},
-			transport::{Transport, boxed::Boxed, memory::MemoryTransport},
+			transport::{Transport, Boxed, memory::MemoryTransport},
 			upgrade
 		},
 		noise::{self, Keypair, X25519, NoiseConfig},
@@ -1355,9 +1356,7 @@ mod tests {
 		let transport = MemoryTransport::default()
 			.upgrade(upgrade::Version::V1)
 			.authenticate(NoiseConfig::xx(dh_key).into_authenticated())
-			.multiplex(yamux::Config::default())
-			.map(|(peer, muxer), _| (peer, StreamMuxerBox::new(muxer)))
-			.map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+			.multiplex(yamux::YamuxConfig::default())
 			.boxed();
 		Swarm::new(transport, LightClientHandler::new(cf, client, checker, ps), local_peer)
 	}
@@ -1429,7 +1428,7 @@ mod tests {
 			_: ChangesProof<B::Header>
 		) -> Result<Vec<(NumberFor<B>, u32)>, ClientError> {
 			match self.ok {
-				true => Ok(vec![(100.into(), 2)]),
+				true => Ok(vec![(100u32.into(), 2)]),
 				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
@@ -1447,7 +1446,7 @@ mod tests {
 	}
 
 	fn make_config() -> super::Config {
-		super::Config::new(&ProtocolId::from(&b"foo"[..]))
+		super::Config::new(&ProtocolId::from("foo"))
 	}
 
 	fn dummy_header() -> sp_test_primitives::Header {
@@ -1465,7 +1464,7 @@ mod tests {
 	impl PollParameters for EmptyPollParams {
 		type SupportedProtocolsIter = iter::Empty<Vec<u8>>;
 		type ListenedAddressesIter = iter::Empty<Multiaddr>;
-		type ExternalAddressesIter = iter::Empty<Multiaddr>;
+		type ExternalAddressesIter = iter::Empty<AddressRecord>;
 
 		fn supported_protocols(&self) -> Self::SupportedProtocolsIter {
 			iter::empty()
@@ -2004,7 +2003,7 @@ mod tests {
 
 	#[test]
 	fn send_receive_header() {
-		let _ = env_logger::try_init();
+		sp_tracing::try_init_simple();
 		let chan = oneshot::channel();
 		let request = light::RemoteHeaderRequest {
 			cht_root: Default::default(),

@@ -60,17 +60,29 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub no_min_squares: bool,
 
-	/// Output the benchmarks to a Rust file.
+	/// Output the benchmarks to a Rust file at the given path.
 	#[structopt(long)]
-	pub output: bool,
+	pub output: Option<std::path::PathBuf>,
 
-	/// Output the trait definition to a Rust file.
+	/// Add a header file to your outputted benchmarks
 	#[structopt(long)]
-	pub weight_trait: bool,
+	pub header: Option<std::path::PathBuf>,
+
+	/// Path to Handlebars template file used for outputting benchmark results. (Optional)
+	#[structopt(long)]
+	pub template: Option<std::path::PathBuf>,
 
 	/// Set the heap pages while running benchmarks.
 	#[structopt(long)]
 	pub heap_pages: Option<u64>,
+
+	/// Disable verification logic when running benchmarks.
+	#[structopt(long)]
+	pub no_verify: bool,
+
+	/// Display and run extra benchmarks that would otherwise not be needed for weight construction.
+	#[structopt(long)]
+	pub extra: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]

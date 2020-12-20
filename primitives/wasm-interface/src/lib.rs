@@ -20,6 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{
+	vec,
 	borrow::Cow, marker::PhantomData, mem, iter::Iterator, result, vec::Vec,
 };
 
@@ -275,8 +276,7 @@ impl PartialEq for dyn Function {
 pub trait FunctionContext {
 	/// Read memory from `address` into a vector.
 	fn read_memory(&self, address: Pointer<u8>, size: WordSize) -> Result<Vec<u8>> {
-		let mut vec = Vec::with_capacity(size as usize);
-		vec.resize(size as usize, 0);
+		let mut vec = vec![0; size as usize];
 		self.read_memory_into(address, &mut vec)?;
 		Ok(vec)
 	}

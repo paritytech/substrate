@@ -365,7 +365,9 @@ impl<T: codec::Codec> PassBy for Option<T> {
 	type PassBy = Codec<Self>;
 }
 
-impl PassBy for (u32, u32, u32, u32) {
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[tuple_types_no_default_trait_bound]
+impl PassBy for Tuple where Self: codec::Codec {
 	type PassBy = Codec<Self>;
 }
 
@@ -536,4 +538,8 @@ impl PassBy for sp_wasm_interface::ValueType {
 
 impl PassBy for sp_wasm_interface::Value {
 	type PassBy = Codec<sp_wasm_interface::Value>;
+}
+
+impl PassBy for sp_storage::TrackedStorageKey {
+	type PassBy = Codec<Self>;
 }

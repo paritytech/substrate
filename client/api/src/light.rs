@@ -32,7 +32,7 @@ use sp_blockchain::{
 	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
 	Error as ClientError, Result as ClientResult,
 };
-use crate::{backend::{AuxStore, NewBlockState}, UsageInfo};
+use crate::{backend::{AuxStore, NewBlockState}, UsageInfo, ProvideChtRoots};
 
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -232,7 +232,9 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 
 
 /// Light client blockchain storage.
-pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error=ClientError> {
+pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block>
+	+ HeaderMetadata<Block, Error=ClientError> + ProvideChtRoots<Block>
+{
 	/// Store new header. Should refuse to revert any finalized blocks.
 	///
 	/// Takes new authorities, the leaf state of the new block, and
@@ -253,20 +255,6 @@ pub trait Storage<Block: BlockT>: AuxStore + HeaderBackend<Block> + HeaderMetada
 
 	/// Get last finalized header.
 	fn last_finalized(&self) -> ClientResult<Block::Hash>;
-
-	/// Get headers CHT root for given block. Returns None if the block is not pruned (not a part of any CHT).
-	fn header_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> ClientResult<Option<Block::Hash>>;
-
-	/// Get changes trie CHT root for given block. Returns None if the block is not pruned (not a part of any CHT).
-	fn changes_trie_cht_root(
-		&self,
-		cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> ClientResult<Option<Block::Hash>>;
 
 	/// Get storage cache.
 	fn cache(&self) -> Option<Arc<dyn BlockchainCache<Block>>>;
@@ -324,13 +312,21 @@ pub mod tests {
 	use sp_test_primitives::{Block, Header, Extrinsic};
 	use super::*;
 
+	#[derive(Debug, thiserror::Error)]
+	#[error("Not implemented on test node")]
+	struct MockError;
+
+	impl Into<ClientError> for MockError {
+		fn into(self) -> ClientError {
+			ClientError::Application(Box::new(self))
+		}
+	}	
+	
 	pub type OkCallFetcher = Mutex<Vec<u8>>;
 
-	fn not_implemented_in_tests<T, E>() -> Ready<Result<T, E>>
-	where
-		E: std::convert::From<&'static str>,
+	fn not_implemented_in_tests<T>() -> Ready<Result<T, ClientError>>
 	{
-		futures::future::ready(Err("Not implemented on test node".into()))
+		futures::future::ready(Err(MockError.into()))
 	}
 
 	impl Fetcher<Block> for OkCallFetcher {

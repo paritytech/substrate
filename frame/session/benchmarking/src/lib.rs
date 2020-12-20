@@ -28,23 +28,23 @@ use sp_std::vec;
 use frame_benchmarking::benchmarks;
 use frame_support::{
 	codec::Decode,
-	storage::StorageValue,
+	storage::{StorageValue, StorageMap},
 	traits::{KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::RawOrigin;
 use pallet_session::{historical::Module as Historical, Module as Session, *};
 use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
-	MAX_NOMINATIONS,
+	MAX_NOMINATIONS, RewardDestination,
 };
 use sp_runtime::traits::{One, StaticLookup};
 
 const MAX_VALIDATORS: u32 = 1000;
 
-pub struct Module<T: Trait>(pallet_session::Module<T>);
-pub trait Trait: pallet_session::Trait + pallet_session::historical::Trait + pallet_staking::Trait {}
+pub struct Module<T: Config>(pallet_session::Module<T>);
+pub trait Config: pallet_session::Config + pallet_session::historical::Config + pallet_staking::Config {}
 
-impl<T: Trait> OnInitialize<T::BlockNumber> for Module<T> {
+impl<T: Config> OnInitialize<T::BlockNumber> for Module<T> {
 	fn on_initialize(n: T::BlockNumber) -> frame_support::weights::Weight {
 		pallet_session::Module::<T>::on_initialize(n)
 	}
@@ -54,22 +54,39 @@ benchmarks! {
 	_ {	}
 
 	set_keys {
-		let n in 1 .. MAX_NOMINATIONS as u32;
-		let v_stash = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32, false)?;
+		let n = MAX_NOMINATIONS as u32;
+		let (v_stash, _) = create_validator_with_nominators::<T>(
+			n,
+			MAX_NOMINATIONS as u32,
+			false,
+			RewardDestination::Staked,
+		)?;
 		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
+		// Whitelist controller account from further DB operations.
+		let v_controller_key = frame_system::Account::<T>::hashed_key_for(&v_controller);
+		frame_benchmarking::benchmarking::add_to_whitelist(v_controller_key.into());
 	}: _(RawOrigin::Signed(v_controller), keys, proof)
 
 	purge_keys {
-		let n in 1 .. MAX_NOMINATIONS as u32;
-		let v_stash = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32, false)?;
+		let n = MAX_NOMINATIONS as u32;
+		let (v_stash, _) = create_validator_with_nominators::<T>(
+			n,
+			MAX_NOMINATIONS as u32,
+			false,
+			RewardDestination::Staked
+		)?;
 		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		Session::<T>::set_keys(RawOrigin::Signed(v_controller.clone()).into(), keys, proof)?;
+		// Whitelist controller account from further DB operations.
+		let v_controller_key = frame_system::Account::<T>::hashed_key_for(&v_controller);
+		frame_benchmarking::benchmarking::add_to_whitelist(v_controller_key.into());
 	}: _(RawOrigin::Signed(v_controller))
 
+	#[extra]
 	check_membership_proof_current_session {
 		let n in 2 .. MAX_VALIDATORS as u32;
 
@@ -82,6 +99,7 @@ benchmarks! {
 		assert!(Historical::<T>::check_proof(key, key_owner_proof2).is_some());
 	}
 
+	#[extra]
 	check_membership_proof_historical_session {
 		let n in 2 .. MAX_VALIDATORS as u32;
 
@@ -103,7 +121,7 @@ benchmarks! {
 /// Sets up the benchmark for checking a membership proof. It creates the given
 /// number of validators, sets random session keys and then creates a membership
 /// proof for the first authority and returns its key and the proof.
-fn check_membership_proof_setup<T: Trait>(
+fn check_membership_proof_setup<T: Config>(
 	n: u32,
 ) -> (
 	(sp_runtime::KeyTypeId, &'static [u8; 32]),

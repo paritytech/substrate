@@ -22,36 +22,35 @@
 ///   higher-level logic. This message is prefixed with a variable-length integer message length.
 ///   This message can be empty, in which case `0` is sent.
 /// - If node B accepts the substream, it sends back a message with the same properties.
-///   Afterwards, the sending side of B is closed.
 /// - If instead B refuses the connection (which typically happens because no empty slot is
 ///   available), then it immediately closes the substream without sending back anything.
 /// - Node A can then send notifications to B, prefixed with a variable-length integer indicating
 ///   the length of the message.
-/// - Node A closes its writing side if it doesn't want the notifications substream anymore.
+/// - Either node A or node B can signal that it doesn't want this notifications substream anymore
+///   by closing its writing side. The other party should respond by also closing their own
+///   writing side soon after.
 ///
 /// Notification substreams are unidirectional. If A opens a substream with B, then B is
 /// encouraged but not required to open a substream to A as well.
 ///
 
 use bytes::BytesMut;
-use futures::{prelude::*, ready};
+use futures::prelude::*;
 use futures_codec::Framed;
 use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade};
 use log::error;
-use std::{borrow::Cow, collections::VecDeque, convert::TryFrom as _, io, iter, mem, pin::Pin, task::{Context, Poll}};
+use std::{borrow::Cow, convert::Infallible, io, iter, mem, pin::Pin, task::{Context, Poll}};
 use unsigned_varint::codec::UviBytes;
 
 /// Maximum allowed size of the two handshake messages, in bytes.
 const MAX_HANDSHAKE_SIZE: usize = 1024;
-/// Maximum number of buffered messages before we refuse to accept more.
-const MAX_PENDING_MESSAGES: usize = 512;
 
 /// Upgrade that accepts a substream, sends back a status message, then becomes a unidirectional
 /// stream of messages.
 #[derive(Debug, Clone)]
 pub struct NotificationsIn {
 	/// Protocol name to use when negotiating the substream.
-	protocol_name: Cow<'static, [u8]>,
+	protocol_name: Cow<'static, str>,
 }
 
 /// Upgrade that opens a substream, waits for the remote to accept by sending back a status
@@ -59,7 +58,7 @@ pub struct NotificationsIn {
 #[derive(Debug, Clone)]
 pub struct NotificationsOut {
 	/// Protocol name to use when negotiating the substream.
-	protocol_name: Cow<'static, [u8]>,
+	protocol_name: Cow<'static, str>,
 	/// Message to send when we start the handshake.
 	initial_message: Vec<u8>,
 }
@@ -82,9 +81,13 @@ enum NotificationsInSubstreamHandshake {
 	/// User gave us the handshake message. Trying to push it in the socket.
 	PendingSend(Vec<u8>),
 	/// Handshake message was pushed in the socket. Still need to flush.
-	Close,
-	/// Handshake message successfully sent.
+	Flush,
+	/// Handshake message successfully sent and flushed.
 	Sent,
+	/// Remote has closed their writing side. We close our own writing side in return.
+	ClosingInResponseToRemote,
+	/// Both our side and the remote have closed their writing side.
+	BothSidesClosed,
 }
 
 /// A substream for outgoing notification messages.
@@ -93,22 +96,18 @@ pub struct NotificationsOutSubstream<TSubstream> {
 	/// Substream where to send messages.
 	#[pin]
 	socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>,
-	/// Queue of messages waiting to be sent.
-	messages_queue: VecDeque<Vec<u8>>,
-	/// If true, we need to flush `socket`.
-	need_flush: bool,
 }
 
 impl NotificationsIn {
 	/// Builds a new potential upgrade.
-	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>) -> Self {
+	pub fn new(protocol_name: impl Into<Cow<'static, str>>) -> Self {
 		NotificationsIn {
 			protocol_name: protocol_name.into(),
 		}
 	}
 
 	/// Returns the name of the protocol that we accept.
-	pub fn protocol_name(&self) -> &[u8] {
+	pub fn protocol_name(&self) -> &Cow<'static, str> {
 		&self.protocol_name
 	}
 }
@@ -118,7 +117,11 @@ impl UpgradeInfo for NotificationsIn {
 	type InfoIter = iter::Once<Self::Info>;
 
 	fn protocol_info(&self) -> Self::InfoIter {
-		iter::once(self.protocol_name.clone())
+		let bytes: Cow<'static, [u8]> = match &self.protocol_name {
+			Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+			Cow::Owned(s) => Cow::Owned(s.as_bytes().to_vec())
+		};
+		iter::once(bytes)
 	}
 }
 
@@ -145,7 +148,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			let mut initial_message = vec![0u8; initial_message_len];
 			if !initial_message.is_empty() {
-				socket.read(&mut initial_message).await?;
+				socket.read_exact(&mut initial_message).await?;
 			}
 
 			let substream = NotificationsInSubstream {
@@ -159,7 +162,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 }
 
 impl<TSubstream> NotificationsInSubstream<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite,
+where TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
 	/// Sends the handshake in order to inform the remote that we accept the substream.
 	pub fn send_handshake(&mut self, message: impl Into<Vec<u8>>) {
@@ -169,6 +172,48 @@ where TSubstream: AsyncRead + AsyncWrite,
 		}
 
 		self.handshake = NotificationsInSubstreamHandshake::PendingSend(message.into());
+	}
+
+	/// Equivalent to `Stream::poll_next`, except that it only drives the handshake and is
+	/// guaranteed to not generate any notification.
+	pub fn poll_process(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<Infallible, io::Error>> {
+		let mut this = self.project();
+
+		loop {
+			match mem::replace(this.handshake, NotificationsInSubstreamHandshake::Sent) {
+				NotificationsInSubstreamHandshake::PendingSend(msg) =>
+					match Sink::poll_ready(this.socket.as_mut(), cx) {
+						Poll::Ready(_) => {
+							*this.handshake = NotificationsInSubstreamHandshake::Flush;
+							match Sink::start_send(this.socket.as_mut(), io::Cursor::new(msg)) {
+								Ok(()) => {},
+								Err(err) => return Poll::Ready(Err(err)),
+							}
+						},
+						Poll::Pending => {
+							*this.handshake = NotificationsInSubstreamHandshake::PendingSend(msg);
+							return Poll::Pending
+						}
+					},
+				NotificationsInSubstreamHandshake::Flush =>
+					match Sink::poll_flush(this.socket.as_mut(), cx)? {
+						Poll::Ready(()) =>
+							*this.handshake = NotificationsInSubstreamHandshake::Sent,
+						Poll::Pending => {
+							*this.handshake = NotificationsInSubstreamHandshake::Flush;
+							return Poll::Pending
+						}
+					},
+
+				st @ NotificationsInSubstreamHandshake::NotSent |
+				st @ NotificationsInSubstreamHandshake::Sent |
+				st @ NotificationsInSubstreamHandshake::ClosingInResponseToRemote |
+				st @ NotificationsInSubstreamHandshake::BothSidesClosed => {
+					*this.handshake = st;
+					return Poll::Pending;
+				}
+			}
+		}
 	}
 }
 
@@ -183,8 +228,6 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 		// This `Stream` implementation first tries to send back the handshake if necessary.
 		loop {
 			match mem::replace(this.handshake, NotificationsInSubstreamHandshake::Sent) {
-				NotificationsInSubstreamHandshake::Sent =>
-					return Stream::poll_next(this.socket.as_mut(), cx),
 				NotificationsInSubstreamHandshake::NotSent => {
 					*this.handshake = NotificationsInSubstreamHandshake::NotSent;
 					return Poll::Pending
@@ -192,7 +235,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 				NotificationsInSubstreamHandshake::PendingSend(msg) =>
 					match Sink::poll_ready(this.socket.as_mut(), cx) {
 						Poll::Ready(_) => {
-							*this.handshake = NotificationsInSubstreamHandshake::Close;
+							*this.handshake = NotificationsInSubstreamHandshake::Flush;
 							match Sink::start_send(this.socket.as_mut(), io::Cursor::new(msg)) {
 								Ok(()) => {},
 								Err(err) => return Poll::Ready(Some(Err(err))),
@@ -203,15 +246,43 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 							return Poll::Pending
 						}
 					},
-				NotificationsInSubstreamHandshake::Close =>
-					match Sink::poll_close(this.socket.as_mut(), cx)? {
+				NotificationsInSubstreamHandshake::Flush =>
+					match Sink::poll_flush(this.socket.as_mut(), cx)? {
 						Poll::Ready(()) =>
 							*this.handshake = NotificationsInSubstreamHandshake::Sent,
 						Poll::Pending => {
-							*this.handshake = NotificationsInSubstreamHandshake::Close;
+							*this.handshake = NotificationsInSubstreamHandshake::Flush;
 							return Poll::Pending
 						}
 					},
+
+				NotificationsInSubstreamHandshake::Sent => {
+					match Stream::poll_next(this.socket.as_mut(), cx) {
+						Poll::Ready(None) => *this.handshake =
+							NotificationsInSubstreamHandshake::ClosingInResponseToRemote,
+						Poll::Ready(Some(msg)) => {
+							*this.handshake = NotificationsInSubstreamHandshake::Sent;
+							return Poll::Ready(Some(msg))
+						},
+						Poll::Pending => {
+							*this.handshake = NotificationsInSubstreamHandshake::Sent;
+							return Poll::Pending
+						},
+					}
+				},
+
+				NotificationsInSubstreamHandshake::ClosingInResponseToRemote =>
+					match Sink::poll_close(this.socket.as_mut(), cx)? {
+						Poll::Ready(()) =>
+							*this.handshake = NotificationsInSubstreamHandshake::BothSidesClosed,
+						Poll::Pending => {
+							*this.handshake = NotificationsInSubstreamHandshake::ClosingInResponseToRemote;
+							return Poll::Pending
+						}
+					},
+
+				NotificationsInSubstreamHandshake::BothSidesClosed =>
+					return Poll::Ready(None),
 			}
 		}
 	}
@@ -219,7 +290,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 
 impl NotificationsOut {
 	/// Builds a new potential upgrade.
-	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>, initial_message: impl Into<Vec<u8>>) -> Self {
+	pub fn new(protocol_name: impl Into<Cow<'static, str>>, initial_message: impl Into<Vec<u8>>) -> Self {
 		let initial_message = initial_message.into();
 		if initial_message.len() > MAX_HANDSHAKE_SIZE {
 			error!(target: "sub-libp2p", "Outbound networking handshake is above allowed protocol limit");
@@ -237,7 +308,11 @@ impl UpgradeInfo for NotificationsOut {
 	type InfoIter = iter::Once<Self::Info>;
 
 	fn protocol_info(&self) -> Self::InfoIter {
-		iter::once(self.protocol_name.clone())
+		let bytes: Cow<'static, [u8]> = match &self.protocol_name {
+			Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+			Cow::Owned(s) => Cow::Owned(s.as_bytes().to_vec())
+		};
+		iter::once(bytes)
 	}
 }
 
@@ -267,34 +342,13 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			let mut handshake = vec![0u8; handshake_len];
 			if !handshake.is_empty() {
-				socket.read(&mut handshake).await?;
+				socket.read_exact(&mut handshake).await?;
 			}
 
 			Ok((handshake, NotificationsOutSubstream {
 				socket: Framed::new(socket, UviBytes::default()),
-				messages_queue: VecDeque::with_capacity(MAX_PENDING_MESSAGES),
-				need_flush: false,
 			}))
 		})
-	}
-}
-
-impl<TSubstream> NotificationsOutSubstream<TSubstream> {
-	/// Returns the number of items in the queue, capped to `u32::max_value()`.
-	pub fn queue_len(&self) -> u32 {
-		u32::try_from(self.messages_queue.len()).unwrap_or(u32::max_value())
-	}
-
-	/// Push a message to the queue of messages.
-	///
-	/// This has the same effect as the `Sink::start_send` implementation.
-	pub fn push_message(&mut self, item: Vec<u8>) -> Result<(), NotificationsOutError> {
-		if self.messages_queue.len() >= MAX_PENDING_MESSAGES {
-			return Err(NotificationsOutError::Clogged);
-		}
-
-		self.messages_queue.push_back(item);
-		Ok(())
 	}
 }
 
@@ -303,49 +357,28 @@ impl<TSubstream> Sink<Vec<u8>> for NotificationsOutSubstream<TSubstream>
 {
 	type Error = NotificationsOutError;
 
-	fn poll_ready(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
-		Poll::Ready(Ok(()))
+	fn poll_ready(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+		let mut this = self.project();
+		Sink::poll_ready(this.socket.as_mut(), cx)
+			.map_err(NotificationsOutError::Io)
 	}
 
-	fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
-		self.push_message(item)
+	fn start_send(self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
+		let mut this = self.project();
+		Sink::start_send(this.socket.as_mut(), io::Cursor::new(item))
+			.map_err(NotificationsOutError::Io)
 	}
 
 	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
 		let mut this = self.project();
-
-		while !this.messages_queue.is_empty() {
-			match Sink::poll_ready(this.socket.as_mut(), cx) {
-				Poll::Ready(Err(err)) => return Poll::Ready(Err(From::from(err))),
-				Poll::Ready(Ok(())) => {
-					let msg = this.messages_queue.pop_front()
-						.expect("checked for !is_empty above; qed");
-					Sink::start_send(this.socket.as_mut(), io::Cursor::new(msg))?;
-					*this.need_flush = true;
-				},
-				Poll::Pending => return Poll::Pending,
-			}
-		}
-
-		if *this.need_flush {
-			match Sink::poll_flush(this.socket.as_mut(), cx) {
-				Poll::Ready(Err(err)) => return Poll::Ready(Err(From::from(err))),
-				Poll::Ready(Ok(())) => *this.need_flush = false,
-				Poll::Pending => return Poll::Pending,
-			}
-		}
-
-		Poll::Ready(Ok(()))
+		Sink::poll_flush(this.socket.as_mut(), cx)
+			.map_err(NotificationsOutError::Io)
 	}
 
-	fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
-		ready!(Sink::poll_flush(self.as_mut(), cx))?;
-		let this = self.project();
-		match Sink::poll_close(this.socket, cx) {
-			Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
-			Poll::Ready(Err(err)) => Poll::Ready(Err(From::from(err))),
-			Poll::Pending => Poll::Pending,
-		}
+	fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+		let mut this = self.project();
+		Sink::poll_close(this.socket.as_mut(), cx)
+			.map_err(NotificationsOutError::Io)
 	}
 }
 
@@ -386,13 +419,6 @@ impl From<unsigned_varint::io::ReadError> for NotificationsHandshakeError {
 pub enum NotificationsOutError {
 	/// I/O error on the substream.
 	Io(io::Error),
-
-	/// Remote doesn't process our messages quickly enough.
-	///
-	/// > **Note**: This is not necessarily the remote's fault, and could also be caused by the
-	/// >           local node sending data too quickly. Properly doing back-pressure, however,
-	/// >           would require a deep refactoring effort in Substrate as a whole.
-	Clogged,
 }
 
 #[cfg(test)]
@@ -402,11 +428,11 @@ mod tests {
 	use async_std::net::{TcpListener, TcpStream};
 	use futures::{prelude::*, channel::oneshot};
 	use libp2p::core::upgrade;
-	use std::pin::Pin;
+	use std::borrow::Cow;
 
 	#[test]
 	fn basic_works() {
-		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
+		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -445,7 +471,7 @@ mod tests {
 	fn empty_handshake() {
 		// Check that everything still works when the handshake messages are empty.
 
-		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
+		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -482,7 +508,7 @@ mod tests {
 
 	#[test]
 	fn refused() {
-		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
+		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -520,7 +546,7 @@ mod tests {
 
 	#[test]
 	fn large_initial_message_refused() {
-		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
+		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -551,7 +577,7 @@ mod tests {
 
 	#[test]
 	fn large_handshake_refused() {
-		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
+		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -581,58 +607,5 @@ mod tests {
 		});
 
 		async_std::task::block_on(client);
-	}
-
-	#[test]
-	fn buffer_is_full_closes_connection() {
-		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
-		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
-
-		let client = async_std::task::spawn(async move {
-			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
-			let (handshake, mut substream) = upgrade::apply_outbound(
-				socket,
-				NotificationsOut::new(PROTO_NAME, vec![]),
-				upgrade::Version::V1
-			).await.unwrap();
-
-			assert!(handshake.is_empty());
-
-			// Push an item and flush so that the test works.
-			substream.send(b"hello world".to_vec()).await.unwrap();
-
-			for _ in 0..32768 {
-				// Push an item on the sink without flushing until an error happens because the
-				// buffer is full.
-				let message = b"hello world!".to_vec();
-				if future::poll_fn(|cx| Sink::poll_ready(Pin::new(&mut substream), cx)).await.is_err() {
-					return Ok(());
-				}
-				if Sink::start_send(Pin::new(&mut substream), message).is_err() {
-					return Ok(());
-				}
-			}
-
-			Err(())
-		});
-
-		async_std::task::block_on(async move {
-			let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-			listener_addr_tx.send(listener.local_addr().unwrap()).unwrap();
-
-			let (socket, _) = listener.accept().await.unwrap();
-			let (initial_message, mut substream) = upgrade::apply_inbound(
-				socket,
-				NotificationsIn::new(PROTO_NAME)
-			).await.unwrap();
-
-			assert!(initial_message.is_empty());
-			substream.send_handshake(vec![]);
-
-			// Process one message so that the handshake and all works.
-			let _ = substream.next().await.unwrap().unwrap();
-
-			client.await.unwrap();
-		});
 	}
 }

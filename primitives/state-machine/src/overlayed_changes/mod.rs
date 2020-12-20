@@ -20,22 +20,38 @@
 mod changeset;
 
 use crate::{
-	backend::Backend, ChangesTrieTransaction,
-	changes_trie::{
-		NO_EXTRINSIC_INDEX, BlockNumber, build_changes_trie,
-		State as ChangesTrieState,
-	},
+	backend::Backend,
 	stats::StateMachineStats,
 };
+use sp_std::{vec::Vec, any::{TypeId, Any}, boxed::Box};
 use self::changeset::OverlayedChangeSet;
 
-use std::collections::HashMap;
+#[cfg(feature = "std")]
+use crate::{
+	ChangesTrieTransaction,
+	changes_trie::{
+		build_changes_trie,
+		State as ChangesTrieState,
+	},
+};
+use crate::changes_trie::BlockNumber;
+#[cfg(feature = "std")]
+use std::collections::{HashMap as Map, hash_map::Entry as MapEntry};
+#[cfg(not(feature = "std"))]
+use sp_std::collections::btree_map::{BTreeMap as Map, Entry as MapEntry};
+use sp_std::collections::btree_set::BTreeSet;
 use codec::{Decode, Encode};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo};
+#[cfg(feature = "std")]
 use sp_core::offchain::storage::OffchainOverlayedChanges;
 use hash_db::Hasher;
+use crate::DefaultError;
+use sp_externalities::{Extensions, Extension};
 
 pub use self::changeset::{OverlayedValue, NoOpenTransaction, AlreadyInRuntime, NotInRuntime};
+
+/// Changes that are made outside of extrinsics are marked with this index;
+pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
 
 /// Storage key.
 pub type StorageKey = Vec<u8>;
@@ -49,6 +65,29 @@ pub type StorageCollection = Vec<(StorageKey, Option<StorageValue>)>;
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection)>;
 
+/// Keep trace of extrinsics index for a modified value.
+#[derive(Debug, Default, Eq, PartialEq, Clone)]
+pub struct Extrinsics(Vec<u32>);
+
+impl Extrinsics {
+	/// Extracts extrinsics into a `BTreeSets`.
+	fn copy_extrinsics_into(&self, dest: &mut BTreeSet<u32>) {
+		dest.extend(self.0.iter())
+	}
+
+	/// Add an extrinsics.
+	fn insert(&mut self, ext: u32) {
+		if Some(&ext) != self.0.last() {
+			self.0.push(ext);
+		}
+	}
+
+	/// Extend `self` with `other`.
+	fn extend(&mut self, other: Self) {
+		self.0.extend(other.0.into_iter());
+	}
+}
+
 /// The set of changes that are overlaid onto the backend.
 ///
 /// It allows changes to be modified using nestable transactions.
@@ -57,7 +96,7 @@ pub struct OverlayedChanges {
 	/// Top level storage changes.
 	top: OverlayedChangeSet,
 	/// Child storage changes. The map key is the child storage key without the common prefix.
-	children: HashMap<StorageKey, (OverlayedChangeSet, ChildInfo)>,
+	children: Map<StorageKey, (OverlayedChangeSet, ChildInfo)>,
 	/// True if extrinsics stats must be collected.
 	collect_extrinsics: bool,
 	/// Collect statistic on this execution.
@@ -76,6 +115,7 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	/// All changes to the child storages.
 	pub child_storage_changes: ChildStorageCollection,
 	/// Offchain state changes to write to the offchain database.
+	#[cfg(feature = "std")]
 	pub offchain_storage_changes: OffchainOverlayedChanges,
 	/// A transaction for the backend that contains all changes from
 	/// [`main_storage_changes`](StorageChanges::main_storage_changes) and from
@@ -87,9 +127,14 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	/// Contains the transaction for the backend for the changes trie.
 	///
 	/// If changes trie is disabled the value is set to `None`.
+	#[cfg(feature = "std")]
 	pub changes_trie_transaction: Option<ChangesTrieTransaction<H, N>>,
+	/// Phantom data for block number until change trie support no_std.
+	#[cfg(not(feature = "std"))]
+	pub _ph: sp_std::marker::PhantomData<N>,
 }
 
+#[cfg(feature = "std")]
 impl<Transaction, H: Hasher, N: BlockNumber> StorageChanges<Transaction, H, N> {
 	/// Deconstruct into the inner values
 	pub fn into_inner(self) -> (
@@ -120,9 +165,14 @@ pub struct StorageTransactionCache<Transaction, H: Hasher, N: BlockNumber> {
 	/// The storage root after applying the transaction.
 	pub(crate) transaction_storage_root: Option<H::Out>,
 	/// Contains the changes trie transaction.
+	#[cfg(feature = "std")]
 	pub(crate) changes_trie_transaction: Option<Option<ChangesTrieTransaction<H, N>>>,
 	/// The storage root after applying the changes trie transaction.
+	#[cfg(feature = "std")]
 	pub(crate) changes_trie_transaction_storage_root: Option<Option<H::Out>>,
+	/// Phantom data for block number until change trie support no_std.
+	#[cfg(not(feature = "std"))]
+	pub(crate) _ph: sp_std::marker::PhantomData<N>,
 }
 
 impl<Transaction, H: Hasher, N: BlockNumber> StorageTransactionCache<Transaction, H, N> {
@@ -137,8 +187,12 @@ impl<Transaction, H: Hasher, N: BlockNumber> Default for StorageTransactionCache
 		Self {
 			transaction: None,
 			transaction_storage_root: None,
+			#[cfg(feature = "std")]
 			changes_trie_transaction: None,
+			#[cfg(feature = "std")]
 			changes_trie_transaction_storage_root: None,
+			#[cfg(not(feature = "std"))]
+			_ph: Default::default(),
 		}
 	}
 }
@@ -148,10 +202,14 @@ impl<Transaction: Default, H: Hasher, N: BlockNumber> Default for StorageChanges
 		Self {
 			main_storage_changes: Default::default(),
 			child_storage_changes: Default::default(),
+			#[cfg(feature = "std")]
 			offchain_storage_changes: Default::default(),
 			transaction: Default::default(),
 			transaction_storage_root: Default::default(),
+			#[cfg(feature = "std")]
 			changes_trie_transaction: None,
+			#[cfg(not(feature = "std"))]
+			_ph: Default::default(),
 		}
 	}
 }
@@ -190,7 +248,7 @@ impl OverlayedChanges {
 		key: &[u8],
 		init: impl Fn() -> StorageValue,
 	) -> &mut StorageValue {
-		let value = self.top.modify(key.to_owned(), init, self.extrinsic_index());
+		let value = self.top.modify(key.to_vec(), init, self.extrinsic_index());
 
 		// if the value was deleted initialise it back with an empty vec
 		value.get_or_insert_with(StorageValue::default)
@@ -235,7 +293,7 @@ impl OverlayedChanges {
 		let (changeset, info) = self.children.entry(storage_key).or_insert_with(||
 			(
 				top.spawn_child(),
-				child_info.to_owned()
+				child_info.clone()
 			)
 		);
 		let updatable = info.try_update(child_info);
@@ -256,7 +314,7 @@ impl OverlayedChanges {
 		let (changeset, info) = self.children.entry(storage_key).or_insert_with(||
 			(
 				top.spawn_child(),
-				child_info.to_owned()
+				child_info.clone()
 			)
 		);
 		let updatable = info.try_update(child_info);
@@ -285,7 +343,7 @@ impl OverlayedChanges {
 		let (changeset, info) = self.children.entry(storage_key).or_insert_with(||
 			(
 				top.spawn_child(),
-				child_info.to_owned()
+				child_info.clone()
 			)
 		);
 		let updatable = info.try_update(child_info);
@@ -322,7 +380,7 @@ impl OverlayedChanges {
 	/// there is no open transaction that can be rolled back.
 	pub fn rollback_transaction(&mut self) -> Result<(), NoOpenTransaction> {
 		self.top.rollback_transaction()?;
-		self.children.retain(|_, (changeset, _)| {
+		retain_map(&mut self.children, |_, (changeset, _)| {
 			changeset.rollback_transaction()
 				.expect("Top and children changesets are started in lockstep; qed");
 			!changeset.is_empty()
@@ -379,7 +437,7 @@ impl OverlayedChanges {
 		impl Iterator<Item=(StorageKey, Option<StorageValue>)>,
 		impl Iterator<Item=(StorageKey, (impl Iterator<Item=(StorageKey, Option<StorageValue>)>, ChildInfo))>,
 	) {
-		use std::mem::take;
+		use sp_std::mem::take;
 		(
 			take(&mut self.top).drain_commited(),
 			take(&mut self.children).into_iter()
@@ -409,6 +467,7 @@ impl OverlayedChanges {
 	}
 
 	/// Convert this instance with all changes into a [`StorageChanges`] instance.
+	#[cfg(feature = "std")]
 	pub fn into_storage_changes<
 		B: Backend<H>, H: Hasher, N: BlockNumber
 	>(
@@ -417,7 +476,8 @@ impl OverlayedChanges {
 		changes_trie_state: Option<&ChangesTrieState<H, N>>,
 		parent_hash: H::Out,
 		mut cache: StorageTransactionCache<B::Transaction, H, N>,
-	) -> Result<StorageChanges<B::Transaction, H, N>, String> where H::Out: Ord + Encode + 'static {
+	) -> Result<StorageChanges<B::Transaction, H, N>, DefaultError>
+		where H::Out: Ord + Encode + 'static {
 		self.drain_storage_changes(backend, changes_trie_state, parent_hash, &mut cache)
 	}
 
@@ -425,10 +485,12 @@ impl OverlayedChanges {
 	pub fn drain_storage_changes<B: Backend<H>, H: Hasher, N: BlockNumber>(
 		&mut self,
 		backend: &B,
+		#[cfg(feature = "std")]
 		changes_trie_state: Option<&ChangesTrieState<H, N>>,
 		parent_hash: H::Out,
 		mut cache: &mut StorageTransactionCache<B::Transaction, H, N>,
-	) -> Result<StorageChanges<B::Transaction, H, N>, String> where H::Out: Ord + Encode + 'static {
+	) -> Result<StorageChanges<B::Transaction, H, N>, DefaultError>
+		where H::Out: Ord + Encode + 'static {
 		// If the transaction does not exist, we generate it.
 		if cache.transaction.is_none() {
 			self.storage_root(backend, &mut cache);
@@ -439,6 +501,7 @@ impl OverlayedChanges {
 			.expect("Transaction was be generated as part of `storage_root`; qed");
 
 		// If the transaction does not exist, we generate it.
+		#[cfg(feature = "std")]
 		if cache.changes_trie_transaction.is_none() {
 			self.changes_trie_root(
 				backend,
@@ -449,20 +512,24 @@ impl OverlayedChanges {
 			).map_err(|_| "Failed to generate changes trie transaction")?;
 		}
 
+		#[cfg(feature = "std")]
 		let changes_trie_transaction = cache.changes_trie_transaction
 			.take()
 			.expect("Changes trie transaction was generated by `changes_trie_root`; qed");
 
-		let offchain_storage_changes = Default::default();
 		let (main_storage_changes, child_storage_changes) = self.drain_committed();
 
 		Ok(StorageChanges {
 			main_storage_changes: main_storage_changes.collect(),
 			child_storage_changes: child_storage_changes.map(|(sk, it)| (sk, it.0.collect())).collect(),
-			offchain_storage_changes,
+			#[cfg(feature = "std")]
+			offchain_storage_changes: Default::default(),
 			transaction,
 			transaction_storage_root,
+			#[cfg(feature = "std")]
 			changes_trie_transaction,
+			#[cfg(not(feature = "std"))]
+			_ph: Default::default(),
 		})
 	}
 
@@ -520,6 +587,7 @@ impl OverlayedChanges {
 	/// # Panics
 	///
 	/// Panics on storage error, when `panic_on_storage_error` is set.
+	#[cfg(feature = "std")]
 	pub fn changes_trie_root<'a, H: Hasher, N: BlockNumber, B: Backend<H>>(
 		&self,
 		backend: &B,
@@ -563,6 +631,89 @@ impl OverlayedChanges {
 	}
 }
 
+#[cfg(feature = "std")]
+fn retain_map<K, V, F>(map: &mut Map<K, V>, f: F)
+	where
+		K: std::cmp::Eq + std::hash::Hash,
+		F: FnMut(&K, &mut V) -> bool,
+{
+	map.retain(f);
+}
+
+#[cfg(not(feature = "std"))]
+fn retain_map<K, V, F>(map: &mut Map<K, V>, mut f: F)
+	where
+		K: Ord,
+		F: FnMut(&K, &mut V) -> bool,
+{
+	let old = sp_std::mem::replace(map, Map::default());
+	for (k, mut v) in old.into_iter() {
+		if f(&k, &mut v) {
+			map.insert(k, v);
+		}
+	}
+}
+
+/// An overlayed extension is either a mutable reference
+/// or an owned extension.
+pub enum OverlayedExtension<'a> {
+	MutRef(&'a mut Box<dyn Extension>),
+	Owned(Box<dyn Extension>),
+}
+
+/// Overlayed extensions which are sourced from [`Extensions`].
+///
+/// The sourced extensions will be stored as mutable references,
+/// while extensions that are registered while execution are stored
+/// as owned references. After the execution of a runtime function, we
+/// can safely drop this object while not having modified the original
+/// list.
+pub struct OverlayedExtensions<'a> {
+	extensions: Map<TypeId, OverlayedExtension<'a>>,
+}
+
+impl<'a> OverlayedExtensions<'a> {
+	/// Create a new instance of overalyed extensions from the given extensions.
+	pub fn new(extensions: &'a mut Extensions) -> Self {
+		Self {
+			extensions: extensions
+				.iter_mut()
+				.map(|(k, v)| (*k, OverlayedExtension::MutRef(v)))
+				.collect(),
+		}
+	}
+
+	/// Return a mutable reference to the requested extension.
+	pub fn get_mut(&mut self, ext_type_id: TypeId) -> Option<&mut dyn Any> {
+		self.extensions.get_mut(&ext_type_id).map(|ext| match ext {
+			OverlayedExtension::MutRef(ext) => ext.as_mut_any(),
+			OverlayedExtension::Owned(ext) => ext.as_mut_any(),
+		})
+	}
+
+	/// Register extension `extension` with the given `type_id`.
+	pub fn register(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn Extension>,
+	) -> Result<(), sp_externalities::Error> {
+		match self.extensions.entry(type_id) {
+			MapEntry::Vacant(vacant) => {
+				vacant.insert(OverlayedExtension::Owned(extension));
+				Ok(())
+			},
+			MapEntry::Occupied(_) => Err(sp_externalities::Error::ExtensionAlreadyRegistered),
+		}
+	}
+
+	/// Deregister extension with the given `type_id`.
+	///
+	/// Returns `true` when there was an extension registered for the given `type_id`.
+	pub fn deregister(&mut self, type_id: TypeId) -> bool {
+		self.extensions.remove(&type_id).is_some()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use hex_literal::hex;
@@ -578,7 +729,7 @@ mod tests {
 		expected: Vec<u32>,
 	) {
 		assert_eq!(
-			overlay.get(key.as_ref()).unwrap().extrinsics().cloned().collect::<Vec<_>>(),
+			overlay.get(key.as_ref()).unwrap().extrinsics().into_iter().collect::<Vec<_>>(),
 			expected
 		)
 	}

@@ -18,7 +18,7 @@
 
 use std::{sync::Arc, collections::HashMap};
 
-use log::{debug, trace};
+use log::debug;
 use parity_scale_codec::Encode;
 use parking_lot::RwLockWriteGuard;
 
@@ -41,9 +41,9 @@ use sp_runtime::traits::{
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
-use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::finalize_block;
 use crate::justification::GrandpaJustification;
+use crate::notification::GrandpaJustificationSender;
 use std::marker::PhantomData;
 
 /// A block-import handler for GRANDPA.
@@ -60,8 +60,8 @@ pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
-	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	authority_set_hard_forks: HashMap<Block::Hash, PendingChange<Block::Hash, NumberFor<Block>>>,
+	justification_sender: GrandpaJustificationSender<Block>,
 	_phantom: PhantomData<Backend>,
 }
 
@@ -74,8 +74,8 @@ impl<Backend, Block: BlockT, Client, SC: Clone> Clone for
 			select_chain: self.select_chain.clone(),
 			authority_set: self.authority_set.clone(),
 			send_voter_commands: self.send_voter_commands.clone(),
-			consensus_changes: self.consensus_changes.clone(),
 			authority_set_hard_forks: self.authority_set_hard_forks.clone(),
+			justification_sender: self.justification_sender.clone(),
 			_phantom: PhantomData,
 		}
 	}
@@ -436,7 +436,6 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 
 		// we don't want to finalize on `inner.import_block`
 		let mut justification = block.justification.take();
-		let enacts_consensus_change = !new_cache.is_empty();
 		let import_result = (&*self.inner).import_block(block, new_cache);
 
 		let mut imported_aux = {
@@ -514,7 +513,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 				);
 
 				import_res.unwrap_or_else(|err| {
-					if needs_justification || enacts_consensus_change {
+					if needs_justification {
 						debug!(target: "afg", "Imported block #{} that enacts authority set change with \
 							invalid justification: {:?}, requesting justification from peers.", number, err);
 						imported_aux.bad_justification = true;
@@ -524,19 +523,13 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 			},
 			None => {
 				if needs_justification {
-					trace!(
+					debug!(
 						target: "afg",
 						"Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.",
 						number,
 					);
 
 					imported_aux.needs_justification = true;
-				}
-
-				// we have imported block with consensus data changes, but without justification
-				// => remember to create justification when next block will be finalized
-				if enacts_consensus_change {
-					self.consensus_changes.lock().note_change((number, hash));
 				}
 			}
 		}
@@ -558,8 +551,8 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 		select_chain: SC,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
-		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 		authority_set_hard_forks: Vec<(SetId, PendingChange<Block::Hash, NumberFor<Block>>)>,
+		justification_sender: GrandpaJustificationSender<Block>,
 	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
 		// check for and apply any forced authority set hard fork that applies
 		// to the *current* authority set.
@@ -601,8 +594,8 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 			select_chain,
 			authority_set,
 			send_voter_commands,
-			consensus_changes,
 			authority_set_hard_forks,
+			justification_sender,
 			_phantom: PhantomData,
 		}
 	}
@@ -614,7 +607,6 @@ where
 	Client: crate::ClientForGrandpa<Block, BE>,
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 {
-
 	/// Import a block justification and finalize the block.
 	///
 	/// If `enacts_change` is set to true, then finalizing this block *must*
@@ -642,12 +634,12 @@ where
 		let result = finalize_block(
 			self.inner.clone(),
 			&self.authority_set,
-			&self.consensus_changes,
 			None,
 			hash,
 			number,
 			justification.into(),
 			initial_sync,
+			Some(&self.justification_sender),
 		);
 
 		match result {

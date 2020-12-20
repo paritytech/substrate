@@ -22,10 +22,12 @@
 
 #![warn(missing_docs)]
 
-mod metadata;
+use futures::{compat::Future01CompatExt, FutureExt};
+use rpc::futures::future::{Executor, ExecuteError, Future};
+use sp_core::traits::SpawnNamed;
+use std::sync::Arc;
 
-pub use sc_rpc_api::DenyUnsafe;
-pub use self::metadata::Metadata;
+pub use sc_rpc_api::{DenyUnsafe, Metadata};
 pub use rpc::IoHandlerExtension as RpcExtension;
 
 pub mod author;
@@ -33,5 +35,27 @@ pub mod chain;
 pub mod offchain;
 pub mod state;
 pub mod system;
-#[cfg(test)]
-mod testing;
+
+#[cfg(any(test, feature = "test-helpers"))]
+pub mod testing;
+
+/// Task executor that is being used by RPC subscriptions.
+#[derive(Clone)]
+pub struct SubscriptionTaskExecutor(Arc<dyn SpawnNamed>);
+
+impl SubscriptionTaskExecutor {
+	/// Create a new `Self` with the given spawner.
+	pub fn new(spawn: impl SpawnNamed + 'static) -> Self {
+		Self(Arc::new(spawn))
+	}
+}
+
+impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SubscriptionTaskExecutor {
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>,
+	) -> Result<(), ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		self.0.spawn("substrate-rpc-subscription", future.compat().map(drop).boxed());
+		Ok(())
+	}
+}

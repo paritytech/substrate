@@ -53,3 +53,12 @@ pub mod borrow {
 	pub use core::borrow::*;
 	pub use alloc::borrow::*;
 }
+
+pub mod thread {
+	/// Returns if the current thread is panicking.
+	///
+	/// In wasm this always returns `false`, as we abort on any panic.
+	pub fn panicking() -> bool {
+		false
+	}
+}

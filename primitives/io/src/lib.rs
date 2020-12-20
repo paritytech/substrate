@@ -33,16 +33,21 @@ use sp_std::vec::Vec;
 use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]
+use tracing;
+
+#[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
-	traits::{KeystoreExt, CallInWasmExt, TaskExecutorExt},
+	traits::{CallInWasmExt, TaskExecutorExt, RuntimeSpawnExt},
 	offchain::{OffchainExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
 	storage::ChildInfo,
 };
+#[cfg(feature = "std")]
+use sp_keystore::{KeystoreExt, SyncCryptoStore};
 
 use sp_core::{
-	crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
+	OpaquePeerId, crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
@@ -52,6 +57,7 @@ use sp_core::{
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 
 use sp_runtime_interface::{runtime_interface, Pointer};
+use sp_runtime_interface::pass_by::PassBy;
 
 use codec::{Encode, Decode};
 
@@ -94,7 +100,7 @@ pub trait Storage {
 			let data = &value[value_offset.min(value.len())..];
 			let written = std::cmp::min(data.len(), value_out.len());
 			value_out[..written].copy_from_slice(&data[..written]);
-			value.len() as u32
+			data.len() as u32
 		})
 	}
 
@@ -235,7 +241,7 @@ pub trait DefaultChildStorage {
 				let data = &value[value_offset.min(value.len())..];
 				let written = std::cmp::min(data.len(), value_out.len());
 				value_out[..written].copy_from_slice(&data[..written]);
-				value.len() as u32
+				data.len() as u32
 			})
 	}
 
@@ -273,7 +279,35 @@ pub trait DefaultChildStorage {
 		storage_key: &[u8],
 	) {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.kill_child_storage(&child_info);
+		self.kill_child_storage(&child_info, None);
+	}
+
+	/// Clear a child storage key.
+	///
+	/// Deletes all keys from the overlay and up to `limit` keys from the backend if
+	/// it is set to `Some`. No limit is applied when `limit` is set to `None`.
+	///
+	/// The limit can be used to partially delete a child trie in case it is too large
+	/// to delete in one go (block).
+	///
+	/// It returns false iff some keys are remaining in
+	/// the child trie after the functions returns.
+	///
+	/// # Note
+	///
+	/// Please note that keys that are residing in the overlay for that child trie when
+	/// issuing this call are all deleted without counting towards the `limit`. Only keys
+	/// written during the current block are part of the overlay. Deleting with a `limit`
+	/// mostly makes sense with an empty overlay for that child trie.
+	///
+	/// Calling this function multiple times per block for the same `storage_key` does
+	/// not make much sense because it is not cumulative when called inside the same block.
+	/// Use this function to distribute the deletion of a single child trie across multiple
+	/// blocks.
+	#[version(2)]
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> bool {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.kill_child_storage(&child_info, limit)
 	}
 
 	/// Check a child storage key.
@@ -413,10 +447,9 @@ pub trait Misc {
 pub trait Crypto {
 	/// Returns all `ed25519` public keys for the given key id from the keystore.
 	fn ed25519_public_keys(&mut self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.ed25519_public_keys(id)
+		let keystore = &***self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::ed25519_public_keys(keystore, id)
 	}
 
 	/// Generate an `ed22519` key for the given key type using an optional `seed` and
@@ -427,10 +460,9 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn ed25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ed25519::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.write()
-			.ed25519_generate_new(id, seed)
+		let keystore = &***self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::ed25519_generate_new(keystore, id, seed)
 			.expect("`ed25519_generate` failed")
 	}
 
@@ -444,10 +476,9 @@ pub trait Crypto {
 		pub_key: &ed25519::Public,
 		msg: &[u8],
 	) -> Option<ed25519::Signature> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.sign_with(id, &pub_key.into(), msg)
+		let keystore = &***self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
 			.ok()
 	}
@@ -517,7 +548,6 @@ pub trait Crypto {
 	fn start_batch_verify(&mut self) {
 		let scheduler = self.extension::<TaskExecutorExt>()
 			.expect("No task executor associated with the current context!")
-			.0
 			.clone();
 
 		self.register_extension(VerificationExt(BatchVerifier::new(scheduler)))
@@ -543,10 +573,9 @@ pub trait Crypto {
 
 	/// Returns all `sr25519` public keys for the given key id from the keystore.
 	fn sr25519_public_keys(&mut self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.sr25519_public_keys(id)
+		let keystore = &*** self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::sr25519_public_keys(keystore, id)
 	}
 
 	/// Generate an `sr22519` key for the given key type using an optional seed and
@@ -557,10 +586,9 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn sr25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> sr25519::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.write()
-			.sr25519_generate_new(id, seed)
+		let keystore = &***self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::sr25519_generate_new(keystore, id, seed)
 			.expect("`sr25519_generate` failed")
 	}
 
@@ -574,10 +602,9 @@ pub trait Crypto {
 		pub_key: &sr25519::Public,
 		msg: &[u8],
 	) -> Option<sr25519::Signature> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.sign_with(id, &pub_key.into(), msg)
+		let keystore = &***self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
 			.ok()
 	}
@@ -592,10 +619,9 @@ pub trait Crypto {
 
 	/// Returns all `ecdsa` public keys for the given key id from the keystore.
 	fn ecdsa_public_keys(&mut self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.ecdsa_public_keys(id)
+		let keystore = &***self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::ecdsa_public_keys(keystore, id)
 	}
 
 	/// Generate an `ecdsa` key for the given key type using an optional `seed` and
@@ -606,10 +632,9 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn ecdsa_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ecdsa::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.write()
-			.ecdsa_generate_new(id, seed)
+		let keystore = &***self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::ecdsa_generate_new(keystore, id, seed)
 			.expect("`ecdsa_generate` failed")
 	}
 
@@ -623,10 +648,9 @@ pub trait Crypto {
 		pub_key: &ecdsa::Public,
 		msg: &[u8],
 	) -> Option<ecdsa::Signature> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.sign_with(id, &pub_key.into(), msg)
+		let keystore = &***self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
 			.ok()
 	}
@@ -711,6 +735,11 @@ pub trait Hashing {
 		sp_core::hashing::keccak_256(data)
 	}
 
+	/// Conduct a 512-bit Keccak hash.
+	fn keccak_512(data: &[u8]) -> [u8; 64] {
+		sp_core::hashing::keccak_512(data)
+	}
+
 	/// Conduct a 256-bit Sha2 hash.
 	fn sha2_256(data: &[u8]) -> [u8; 32] {
 		sp_core::hashing::sha2_256(data)
@@ -758,7 +787,7 @@ pub trait OffchainIndex {
 
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
-	/// The keystore extension to register/retrieve from the externalities.
+	/// Batch verification extension to register/retrieve from the externalities.
 	pub struct VerificationExt(BatchVerifier);
 }
 
@@ -960,6 +989,13 @@ pub trait Offchain {
 			.http_response_read_body(request_id, buffer, deadline)
 			.map(|r| r as u32)
 	}
+
+	/// Set the authorized nodes and authorized_only flag.
+	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
+		self.extension::<OffchainExt>()
+			.expect("set_authorized_nodes can be called only in the offchain worker context")
+			.set_authorized_nodes(nodes, authorized_only)
+	}
 }
 
 /// Wasm only interface that provides functions for calling into the allocator.
@@ -997,54 +1033,155 @@ pub trait Logging {
 	}
 }
 
-#[cfg(feature = "std")]
-sp_externalities::decl_extension! {
-	/// Extension to allow running traces in wasm via Proxy
-	pub struct TracingProxyExt(sp_tracing::proxy::TracingProxy);
+#[derive(Encode, Decode)]
+/// Crossing is a helper wrapping any Encode-Decodeable type
+/// for transferring over the wasm barrier.
+pub struct Crossing<T: Encode + Decode>(T);
+
+impl<T: Encode + Decode> PassBy for Crossing<T> {
+	type PassBy = sp_runtime_interface::pass_by::Codec<Self>;
 }
 
-/// Interface that provides functions for profiling the runtime.
-#[runtime_interface]
+impl<T: Encode + Decode> Crossing<T> {
+
+	/// Convert into the inner type
+	pub fn into_inner(self) -> T {
+		self.0
+	}
+}
+
+// useful for testing
+impl<T> core::default::Default for Crossing<T>
+	where T: core::default::Default + Encode + Decode
+{
+	fn default() -> Self {
+		Self(Default::default())
+	}
+
+}
+
+/// Interface to provide tracing facilities for wasm. Modelled after tokios `tracing`-crate
+/// interfaces. See `sp-tracing` for more information.
+#[runtime_interface(wasm_only, no_tracing)]
 pub trait WasmTracing {
-	/// To create and enter a `tracing` span, using `sp_tracing::proxy`
-	/// Returns 0 value to indicate that no further traces should be attempted
-	fn enter_span(&mut self, target: &str, name: &str) -> u64 {
-		if sp_tracing::wasm_tracing_enabled() {
-			match self.extension::<TracingProxyExt>() {
-				Some(proxy) => return proxy.enter_span(target, name),
-				None => {
-					if self.register_extension(TracingProxyExt(sp_tracing::proxy::TracingProxy::new())).is_ok() {
-						if let Some(proxy) = self.extension::<TracingProxyExt>() {
-							return proxy.enter_span(target, name);
-						}
-					} else {
-						log::warn!(
-							target: "tracing",
-							"Unable to register extension: TracingProxyExt"
-						);
-					}
-				}
+	/// Whether the span described in `WasmMetadata` should be traced wasm-side
+	/// On the host converts into a static Metadata and checks against the global `tracing` dispatcher.
+	///
+	/// When returning false the calling code should skip any tracing-related execution. In general
+	/// within the same block execution this is not expected to change and it doesn't have to be
+	/// checked more than once per metadata. This exists for optimisation purposes but is still not
+	/// cheap as it will jump the wasm-native-barrier every time it is called. So an implementation might
+	/// chose to cache the result for the execution of the entire block.
+	fn enabled(&mut self, metadata: Crossing<sp_tracing::WasmMetadata>) -> bool {
+		let metadata: &tracing_core::metadata::Metadata<'static> = (&metadata.into_inner()).into();
+		tracing::dispatcher::get_default(|d| {
+			d.enabled(metadata)
+		})
+	}
+
+	/// Open a new span with the given attributes. Return the u64 Id of the span.
+	///
+	/// On the native side this goes through the default `tracing` dispatcher to register the span
+	/// and then calls `clone_span` with the ID to signal that we are keeping it around on the wasm-
+	/// side even after the local span is dropped. The resulting ID is then handed over to the wasm-
+	/// side.
+	fn enter_span(&mut self, span: Crossing<sp_tracing::WasmEntryAttributes>) -> u64 {
+		let span: tracing::Span = span.into_inner().into();
+		match span.id() {
+			Some(id) => tracing::dispatcher::get_default(|d| {
+				// inform dispatch that we'll keep the ID around
+				// then enter it immediately
+				let final_id = d.clone_span(&id);
+				d.enter(&final_id);
+				final_id.into_u64()
+			}),
+			_ => {
+				0
 			}
 		}
-		log::debug!(
-			target: "tracing",
-			"Notify to runtime that tracing is disabled."
-		);
-		0
 	}
 
-	/// Exit a `tracing` span, using `sp_tracing::proxy`
-	fn exit_span(&mut self, id: u64) {
-		if let Some(proxy) = self.extension::<TracingProxyExt>() {
-			proxy.exit_span(id)
-		} else {
-			log::warn!(
-				target: "tracing",
-				"Unable to load extension: TracingProxyExt"
-			);
+	/// Emit the given event to the global tracer on the native side
+	fn event(&mut self, event: Crossing<sp_tracing::WasmEntryAttributes>) {
+		event.into_inner().emit();
+	}
+
+	/// Signal that a given span-id has been exited. On native, this directly
+	/// proxies the span to the global dispatcher.
+	fn exit(&mut self, span: u64) {
+		tracing::dispatcher::get_default(|d| {
+			let id = tracing_core::span::Id::from_u64(span);
+			d.exit(&id);
+		});
+	}
+}
+
+#[cfg(all(not(feature="std"), feature="with-tracing"))]
+mod tracing_setup {
+	use core::sync::atomic::{AtomicBool, Ordering};
+	use tracing_core::{
+		dispatcher::{Dispatch, set_global_default},
+		span::{Id, Record, Attributes},
+		Metadata, Event,
+	};
+	use super::{wasm_tracing, Crossing};
+
+	static TRACING_SET: AtomicBool = AtomicBool::new(false);
+
+
+	/// The PassingTracingSubscriber implements `tracing_core::Subscriber`
+	/// and pushes the information across the runtime interface to the host
+	struct PassingTracingSubsciber;
+
+	impl tracing_core::Subscriber for PassingTracingSubsciber {
+		fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+			wasm_tracing::enabled(Crossing(metadata.into()))
+		}
+		fn new_span(&self, attrs: &Attributes<'_>) -> Id {
+			Id::from_u64(wasm_tracing::enter_span(Crossing(attrs.into())))
+		}
+		fn enter(&self, span: &Id) {
+			// Do nothing, we already entered the span previously
+		}
+		/// Not implemented! We do not support recording values later
+		/// Will panic when used.
+		fn record(&self, span: &Id, values: &Record<'_>) {
+			unimplemented!{} // this usage is not supported
+		}
+		/// Not implemented! We do not support recording values later
+		/// Will panic when used.
+		fn record_follows_from(&self, span: &Id, follows: &Id) {
+			unimplemented!{ } // this usage is not supported
+		}
+		fn event(&self, event: &Event<'_>) {
+			wasm_tracing::event(Crossing(event.into()))
+		}
+		fn exit(&self, span: &Id) {
+			wasm_tracing::exit(span.into_u64())
+		}
+	}
+
+
+	/// Initialize tracing of sp_tracing on wasm with `with-tracing` enabled.
+	/// Can be called multiple times from within the same process and will only
+	/// set the global bridging subscriber once.
+	pub fn init_tracing() {
+		if TRACING_SET.load(Ordering::Relaxed) == false {
+			set_global_default(Dispatch::new(PassingTracingSubsciber {}))
+				.expect("We only ever call this once");
+			TRACING_SET.store(true, Ordering::Relaxed);
 		}
 	}
 }
+
+#[cfg(not(all(not(feature="std"), feature="with-tracing")))]
+mod tracing_setup {
+	/// Initialize tracing of sp_tracing not necessary – noop. To enable build
+	/// without std and with the `with-tracing`-feature.
+	pub fn init_tracing() { }
+}
+
+pub use tracing_setup::init_tracing;
 
 /// Wasm-only interface that provides functions for interacting with the sandbox.
 #[runtime_interface(wasm_only)]
@@ -1134,6 +1271,34 @@ pub trait Sandbox {
 	}
 }
 
+/// Wasm host functions for managing tasks.
+///
+/// This should not be used directly. Use `sp_tasks` for running parallel tasks instead.
+#[runtime_interface(wasm_only)]
+pub trait RuntimeTasks {
+	/// Wasm host function for spawning task.
+	///
+	/// This should not be used directly. Use `sp_tasks::spawn` instead.
+	fn spawn(dispatcher_ref: u32, entry: u32, payload: Vec<u8>) -> u64 {
+		sp_externalities::with_externalities(|mut ext|{
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
+			runtime_spawn.spawn_call(dispatcher_ref, entry, payload)
+		}).expect("`RuntimeTasks::spawn`: called outside of externalities context")
+	}
+
+	/// Wasm host function for joining a task.
+	///
+	/// This should not be used directly. Use `join` of `sp_tasks::spawn` result instead.
+	fn join(handle: u64) -> Vec<u8> {
+		sp_externalities::with_externalities(|mut ext| {
+			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
+				.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
+			runtime_spawn.join(handle)
+		}).expect("`RuntimeTasks::join`: called outside of externalities context")
+	}
+ }
+
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(not(feature = "std"))]
 struct WasmAllocator;
@@ -1201,14 +1366,16 @@ pub type SubstrateHostFunctions = (
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
+	runtime_tasks::HostFunctions,
 );
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::map;
 	use sp_state_machine::BasicExternalities;
-	use sp_core::storage::Storage;
+	use sp_core::{
+		storage::Storage, map, traits::TaskExecutorExt, testing::TaskExecutor,
+	};
 	use std::any::TypeId;
 
 	#[test]
@@ -1235,17 +1402,18 @@ mod tests {
 
 	#[test]
 	fn read_storage_works() {
+		let value = b"\x0b\0\0\0Hello world".to_vec();
 		let mut t = BasicExternalities::new(Storage {
-			top: map![b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()],
+			top: map![b":test".to_vec() => value.clone()],
 			children_default: map![],
 		});
 
 		t.execute_with(|| {
 			let mut v = [0u8; 4];
-			assert!(storage::read(b":test", &mut v[..], 0).unwrap() >= 4);
+			assert_eq!(storage::read(b":test", &mut v[..], 0).unwrap(), value.len() as u32);
 			assert_eq!(v, [11u8, 0, 0, 0]);
 			let mut w = [0u8; 11];
-			assert!(storage::read(b":test", &mut w[..], 4).unwrap() >= 11);
+			assert_eq!(storage::read(b":test", &mut w[..], 4).unwrap(), value.len() as u32 - 4);
 			assert_eq!(&w, b"Hello world");
 		});
 	}
@@ -1274,7 +1442,9 @@ mod tests {
 
 	#[test]
 	fn batch_verify_start_finish_works() {
-		let mut ext = BasicExternalities::with_tasks_executor();
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
+
 		ext.execute_with(|| {
 			crypto::start_batch_verify();
 		});
@@ -1290,7 +1460,8 @@ mod tests {
 
 	#[test]
 	fn long_sr25519_batching() {
-		let mut ext = BasicExternalities::with_tasks_executor();
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 		ext.execute_with(|| {
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
 			crypto::start_batch_verify();
@@ -1320,7 +1491,8 @@ mod tests {
 
 	#[test]
 	fn batching_works() {
-		let mut ext = BasicExternalities::with_tasks_executor();
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 		ext.execute_with(|| {
 			// invalid ed25519 signature
 			crypto::start_batch_verify();

@@ -50,7 +50,7 @@ use node_runtime::{
 	AccountId,
 	Signature,
 };
-use sp_core::{ExecutionContext, blake2_256, traits::CloneableSpawn};
+use sp_core::{ExecutionContext, blake2_256, traits::SpawnNamed, Pair, Public, sr25519, ed25519};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_inherents::InherentData;
@@ -58,9 +58,8 @@ use sc_client_api::{
 	ExecutionStrategy, BlockBackend,
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 };
-use sp_core::{Pair, Public, sr25519, ed25519};
 use sc_block_builder::BlockBuilderProvider;
-use futures::{executor, task};
+use futures::executor;
 
 /// Keyring full of accounts for benching.
 ///
@@ -86,6 +85,61 @@ impl BenchPair {
 			Self::Sr25519(pair) => pair.sign(payload).into(),
 			Self::Ed25519(pair) => pair.sign(payload).into(),
 		}
+	}
+}
+
+/// Drop system cache.
+///
+/// Will panic if cache drop is impossbile.
+pub fn drop_system_cache() {
+	#[cfg(target_os = "windows")] {
+		log::warn!(
+			target: "bench-logistics",
+			"Clearing system cache on windows is not supported. Benchmark might totally be wrong.",
+		);
+		return;
+	}
+
+	std::process::Command::new("sync")
+		.output()
+		.expect("Failed to execute system cache clear");
+
+	#[cfg(target_os = "linux")] {
+		log::trace!(target: "bench-logistics", "Clearing system cache...");
+		std::process::Command::new("echo")
+			.args(&["3", ">", "/proc/sys/vm/drop_caches", "2>", "/dev/null"])
+			.output()
+			.expect("Failed to execute system cache clear");
+
+		let temp = tempfile::tempdir().expect("Failed to spawn tempdir");
+		let temp_file_path = format!("of={}/buf", temp.path().to_string_lossy());
+
+		// this should refill write cache with 2GB of garbage
+		std::process::Command::new("dd")
+			.args(&["if=/dev/urandom", &temp_file_path, "bs=64M", "count=32"])
+			.output()
+			.expect("Failed to execute dd for cache clear");
+
+		// remove tempfile of previous command
+		std::process::Command::new("rm")
+			.arg(&temp_file_path)
+			.output()
+			.expect("Failed to remove temp file");
+
+		std::process::Command::new("sync")
+			.output()
+			.expect("Failed to execute system cache clear");
+
+		log::trace!(target: "bench-logistics", "Clearing system cache done!");
+	}
+
+	#[cfg(target_os = "macos")] {
+		log::trace!(target: "bench-logistics", "Clearing system cache...");
+		if let Err(err) = std::process::Command::new("purge").output() {
+			log::error!("purge error {:?}: ", err);
+			panic!("Could not clear system cache. Run under sudo?");
+		}
+		log::trace!(target: "bench-logistics", "Clearing system cache done!");
 	}
 }
 
@@ -118,13 +172,19 @@ impl Clone for BenchDb {
 			.map(|f_result|
 				f_result.expect("failed to read file in seed db")
 					.path()
-					.clone()
-			).collect();
+			).collect::<Vec<PathBuf>>();
 		fs_extra::copy_items(
 			&seed_db_files,
 			dir.path(),
 			&fs_extra::dir::CopyOptions::new(),
 		).expect("Copy of seed database is ok");
+
+		// We clear system cache after db clone but before any warmups.
+		// This populates system cache with some data unrelated to actual
+		// data we will be quering further under benchmark (like what
+		// would have happened in real system that queries random entries
+		// from database).
+		drop_system_cache();
 
 		BenchDb { keyring, directory_guard: Guard(dir), database_type }
 	}
@@ -146,7 +206,7 @@ impl BlockType {
 	pub fn to_content(self, size: Option<usize>) -> BlockContent {
 		BlockContent {
 			block_type: self,
-			size: size,
+			size,
 		}
 	}
 }
@@ -198,16 +258,13 @@ impl TaskExecutor {
 	}
 }
 
-impl task::Spawn for TaskExecutor {
-	fn spawn_obj(&self, future: task::FutureObj<'static, ()>)
-	-> Result<(), task::SpawnError> {
-		self.pool.spawn_obj(future)
+impl SpawnNamed for TaskExecutor {
+	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		self.pool.spawn_ok(future);
 	}
-}
 
-impl CloneableSpawn for TaskExecutor {
-	fn clone(&self) -> Box<dyn CloneableSpawn> {
-		Box::new(Clone::clone(self))
+	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		self.pool.spawn_ok(future);
 	}
 }
 
@@ -260,7 +317,7 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 					BlockType::RandomTransfersKeepAlive => {
 						Call::Balances(
 							BalancesCall::transfer_keep_alive(
-								pallet_indices::address::Address::Id(receiver),
+								sp_runtime::MultiAddress::Id(receiver),
 								node_runtime::ExistentialDeposit::get() + 1,
 							)
 						)
@@ -268,7 +325,7 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 					BlockType::RandomTransfersReaping => {
 						Call::Balances(
 							BalancesCall::transfer(
-								pallet_indices::address::Address::Id(receiver),
+								sp_runtime::MultiAddress::Id(receiver),
 								// Transfer so that ending balance would be 1 less than existential deposit
 								// so that we kill the sender account.
 								100*DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
@@ -316,7 +373,12 @@ impl BenchDb {
 			"Created seed db at {}",
 			dir.path().to_string_lossy(),
 		);
-		let (_client, _backend) = Self::bench_client(database_type, dir.path(), Profile::Native, &keyring);
+		let (_client, _backend, _task_executor) = Self::bench_client(
+			database_type,
+			dir.path(),
+			Profile::Native,
+			&keyring,
+		);
 		let directory_guard = Guard(dir);
 
 		BenchDb { keyring, directory_guard, database_type }
@@ -344,13 +406,14 @@ impl BenchDb {
 		dir: &std::path::Path,
 		profile: Profile,
 		keyring: &BenchKeyring,
-	) -> (Client, std::sync::Arc<Backend>) {
+	) -> (Client, std::sync::Arc<Backend>, TaskExecutor) {
 		let db_config = sc_client_db::DatabaseSettings {
 			state_cache_size: 16*1024*1024,
 			state_cache_child_ratio: Some((0, 100)),
 			pruning: PruningMode::ArchiveAll,
 			source: database_type.into_settings(dir.into()),
 		};
+		let task_executor = TaskExecutor::new();
 
 		let (client, backend) = sc_service::new_client(
 			db_config,
@@ -359,12 +422,12 @@ impl BenchDb {
 			None,
 			None,
 			ExecutionExtensions::new(profile.into_execution_strategies(), None),
-			Box::new(TaskExecutor::new()),
+			Box::new(task_executor.clone()),
 			None,
 			Default::default(),
 		).expect("Should not fail");
 
-		(client, backend)
+		(client, backend, task_executor)
 	}
 
 	/// Generate list of required inherents.
@@ -374,10 +437,9 @@ impl BenchDb {
 		let mut inherent_data = InherentData::new();
 		let timestamp = 1 * MinimumPeriod::get();
 
-		inherent_data.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
+		inherent_data
+			.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp)
 			.expect("Put timestamp failed");
-		inherent_data.put_data(sp_finality_tracker::INHERENT_IDENTIFIER, &0)
-			.expect("Put finality tracker failed");
 
 		client.runtime_api()
 			.inherent_extrinsics_with_context(
@@ -394,7 +456,7 @@ impl BenchDb {
 
 	/// Get cliet for this database operations.
 	pub fn client(&mut self) -> Client {
-		let (client, _backend) = Self::bench_client(
+		let (client, _backend, _task_executor) = Self::bench_client(
 			self.database_type,
 			self.directory_guard.path(),
 			Profile::Wasm,
@@ -448,7 +510,7 @@ impl BenchDb {
 	/// Clone this database and create context for testing/benchmarking.
 	pub fn create_context(&self, profile: Profile) -> BenchContext {
 		let BenchDb { directory_guard, keyring, database_type } = self.clone();
-		let (client, backend) = Self::bench_client(
+		let (client, backend, task_executor) = Self::bench_client(
 			database_type,
 			directory_guard.path(),
 			profile,
@@ -459,6 +521,7 @@ impl BenchDb {
 			client: Arc::new(client),
 			db_guard: directory_guard,
 			backend,
+			spawn_handle: Box::new(task_executor),
 		}
 	}
 }
@@ -528,7 +591,7 @@ impl BenchKeyring {
 					}
 				}).into();
 				UncheckedExtrinsic {
-					signature: Some((pallet_indices::address::Address::Id(signed), signature, extra)),
+					signature: Some((sp_runtime::MultiAddress::Id(signed), signature, extra)),
 					function: payload.0,
 				}
 			}
@@ -543,7 +606,7 @@ impl BenchKeyring {
 	pub fn generate_genesis(&self) -> node_runtime::GenesisConfig {
 		crate::genesis::config_endowed(
 			false,
-			Some(node_runtime::WASM_BINARY),
+			Some(node_runtime::wasm_binary_unwrap()),
 			self.collect_account_ids(),
 		)
 	}
@@ -593,6 +656,8 @@ pub struct BenchContext {
 	pub client: Arc<Client>,
 	/// Node backend.
 	pub backend: Arc<Backend>,
+	/// Spawn handle.
+	pub spawn_handle: Box<dyn SpawnNamed>,
 
 	db_guard: Guard,
 }
@@ -630,7 +695,6 @@ impl BenchContext {
 					clear_justification_requests: false,
 					needs_justification: false,
 					bad_justification: false,
-					needs_finality_proof: false,
 					is_new_best: true,
 				}
 			)

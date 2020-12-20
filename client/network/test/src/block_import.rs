@@ -76,7 +76,7 @@ fn import_single_good_known_block_is_ignored() {
 		block,
 		&mut PassThroughVerifier::new(true)
 	) {
-		Ok(BlockImportResult::ImportedKnown(ref n)) if *n == number => {}
+		Ok(BlockImportResult::ImportedKnown(ref n, _)) if *n == number => {}
 		_ => panic!()
 	}
 }
@@ -98,7 +98,7 @@ fn import_single_good_block_without_header_fails() {
 
 #[test]
 fn async_import_queue_drops() {
-	let executor = sp_core::testing::SpawnBlockingExecutor::new();
+	let executor = sp_core::testing::TaskExecutor::new();
 	// Perform this test multiple times since it exhibits non-deterministic behavior.
 	for _ in 0..100 {
 		let verifier = PassThroughVerifier::new(true);
@@ -106,7 +106,6 @@ fn async_import_queue_drops() {
 		let queue = BasicQueue::new(
 			verifier,
 			Box::new(substrate_test_runtime_client::new()),
-			None,
 			None,
 			&executor,
 			None,

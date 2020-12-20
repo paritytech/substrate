@@ -37,7 +37,7 @@ use crate::{Commit, Error};
 ///
 /// This is meant to be stored in the db and passed around the network to other
 /// nodes, and are used by syncing nodes to prove authority set handoffs.
-#[derive(Encode, Decode)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, Debug)]
 pub struct GrandpaJustification<Block: BlockT> {
 	round: u64,
 	pub(crate) commit: Commit<Block>,
@@ -47,7 +47,7 @@ pub struct GrandpaJustification<Block: BlockT> {
 impl<Block: BlockT> GrandpaJustification<Block> {
 	/// Create a GRANDPA justification from the given commit. This method
 	/// assumes the commit is valid and well-formed.
-	pub(crate) fn from_commit<C>(
+	pub fn from_commit<C>(
 		client: &Arc<C>,
 		round: u64,
 		commit: Commit<Block>,

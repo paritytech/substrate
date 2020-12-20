@@ -15,10 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[rustversion::attr(not(stable), ignore)]
 #[test]
 fn decl_storage_ui() {
 	// As trybuild is using `cargo check`, we don't need the real WASM binaries.
-	std::env::set_var("BUILD_DUMMY_WASM_BINARY", "1");
+	std::env::set_var("SKIP_WASM_BUILD", "1");
 
 	let t = trybuild::TestCases::new();
 	t.compile_fail("tests/decl_storage_ui/*.rs");

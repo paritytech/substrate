@@ -37,7 +37,7 @@ pub use light::*;
 pub use notifications::*;
 pub use proof_provider::*;
 
-pub use sp_state_machine::{StorageProof, ExecutionStrategy, CloneableSpawn};
+pub use sp_state_machine::{StorageProof, ExecutionStrategy};
 
 /// Usage Information Provider interface
 ///

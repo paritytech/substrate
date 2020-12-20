@@ -178,6 +178,7 @@ impl sp_state_machine::Storage<sp_core::Blake2Hasher> for Storage {
 impl core::Benchmark for TrieReadBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
 		let mut db = self.database.clone();
+
 		let storage: Arc<dyn sp_state_machine::Storage<sp_core::Blake2Hasher>> =
 			Arc::new(Storage(db.open(self.database_type)));
 

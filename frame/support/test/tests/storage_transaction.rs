@@ -15,28 +15,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode, EncodeLike};
 use frame_support::{
-	StorageMap, StorageValue, storage::{with_transaction, TransactionOutcome::*},
+	assert_ok, assert_noop, transactional, StorageMap, StorageValue,
+	dispatch::{DispatchError, DispatchResult}, storage::{with_transaction, TransactionOutcome::*},
 };
 use sp_io::TestExternalities;
+use sp_std::result;
 
-pub trait Trait {
-	type Origin;
-	type BlockNumber: Encode + Decode + EncodeLike + Default + Clone;
-}
+pub trait Config: frame_support_test::Config {}
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {
+		#[weight = 0]
+		#[transactional]
+		fn value_commits(_origin, v: u32) {
+			Value::set(v);
+		}
+
+		#[weight = 0]
+		#[transactional]
+		fn value_rollbacks(_origin, v: u32) -> DispatchResult {
+			Value::set(v);
+			Err(DispatchError::Other("nah"))
+		}
+	}
 }
 
 frame_support::decl_storage!{
-	trait Store for Module<T: Trait> as StorageTransactions {
+	trait Store for Module<T: Config> as StorageTransactions {
 		pub Value: u32;
 		pub Map: map hasher(twox_64_concat) String => u32;
 	}
 }
 
+struct Runtime;
+
+impl frame_support_test::Config for Runtime {
+	type Origin = u32;
+	type BlockNumber = u32;
+	type PalletInfo = ();
+	type DbWeight = ();
+}
+
+impl Config for Runtime {}
 
 #[test]
 fn storage_transaction_basic_commit() {
@@ -155,5 +176,43 @@ fn storage_transaction_commit_then_rollback() {
 		assert_eq!(Map::get("val1"), 1);
 		assert_eq!(Map::get("val2"), 0);
 		assert_eq!(Map::get("val3"), 0);
+	});
+}
+
+#[test]
+fn transactional_annotation() {
+	fn set_value(v: u32) -> DispatchResult {
+		Value::set(v);
+		Ok(())
+	}
+
+	#[transactional]
+	fn value_commits(v: u32) -> result::Result<u32, &'static str> {
+		set_value(v)?;
+		Ok(v)
+	}
+
+	#[transactional]
+	fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
+		set_value(v)?;
+		Err("nah")
+	}
+
+	TestExternalities::default().execute_with(|| {
+		assert_ok!(value_commits(2), 2);
+		assert_eq!(Value::get(), 2);
+
+		assert_noop!(value_rollbacks(3), "nah");
+	});
+}
+
+#[test]
+fn transactional_annotation_in_decl_module() {
+	TestExternalities::default().execute_with(|| {
+		let origin = 0;
+		assert_ok!(<Module<Runtime>>::value_commits(origin, 2));
+		assert_eq!(Value::get(), 2);
+
+		assert_noop!(<Module<Runtime>>::value_rollbacks(origin, 3), "nah");
 	});
 }

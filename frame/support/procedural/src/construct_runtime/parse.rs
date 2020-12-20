@@ -149,9 +149,11 @@ impl Parse for WhereDefinition {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ModuleDeclaration {
 	pub name: Ident,
+	/// Optional fixed index (e.g. `MyPallet ...  = 3,`)
+	pub index: Option<u8>,
 	pub module: Ident,
 	pub instance: Option<Ident>,
 	pub module_parts: Vec<ModulePart>,
@@ -175,29 +177,24 @@ impl Parse for ModuleDeclaration {
 		let _: Token![::] = input.parse()?;
 		let module_parts = parse_module_parts(input)?;
 
+		let index = if input.peek(Token![=]) {
+			input.parse::<Token![=]>()?;
+			let index = input.parse::<syn::LitInt>()?;
+			let index = index.base10_parse::<u8>()?;
+			Some(index)
+		} else {
+			None
+		};
+
 		let parsed = Self {
 			name,
 			module,
 			instance,
 			module_parts,
+			index,
 		};
 
 		Ok(parsed)
-	}
-}
-
-impl ModuleDeclaration {
-	/// Get resolved module parts
-	pub fn module_parts(&self) -> &[ModulePart] {
-		&self.module_parts
-	}
-
-	pub fn find_part(&self, name: &str) -> Option<&ModulePart> {
-		self.module_parts.iter().find(|part| part.name() == name)
-	}
-
-	pub fn exists_part(&self, name: &str) -> bool {
-		self.find_part(name).is_some()
 	}
 }
 

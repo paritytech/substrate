@@ -83,7 +83,7 @@ pub fn take_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_val
 
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(key: &[u8]) -> bool {
-	sp_io::storage::read(key, &mut [0;0][..], 0).is_some()
+	sp_io::storage::exists(key)
 }
 
 /// Ensure `key` has no explicit entry in storage.

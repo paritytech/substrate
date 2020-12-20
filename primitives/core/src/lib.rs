@@ -32,6 +32,7 @@ macro_rules! map {
 	);
 }
 
+use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
 use sp_std::prelude::*;
 use sp_std::ops::Deref;
 #[cfg(feature = "std")]
@@ -50,9 +51,9 @@ pub use impl_serde::serialize as bytes;
 
 #[cfg(feature = "full_crypto")]
 pub mod hashing;
+
 #[cfg(feature = "full_crypto")]
 pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256, keccak_256};
-#[cfg(feature = "std")]
 pub mod hexdisplay;
 pub mod crypto;
 
@@ -71,10 +72,6 @@ mod changes_trie;
 #[cfg(feature = "std")]
 pub mod traits;
 pub mod testing;
-#[cfg(feature = "std")]
-pub mod tasks;
-#[cfg(feature = "std")]
-pub mod vrf;
 
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::{U256, U512};
@@ -178,6 +175,18 @@ impl sp_std::ops::Deref for OpaqueMetadata {
 	}
 }
 
+/// Simple blob to hold a `PeerId` without committing to its format.
+#[derive(Default, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, PassByInner)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct OpaquePeerId(pub Vec<u8>);
+
+impl OpaquePeerId {
+	/// Create new `OpaquePeerId`
+	pub fn new(vec: Vec<u8>) -> Self {
+		OpaquePeerId(vec)
+	}
+}
+
 /// Something that is either a native or an encoded value.
 #[cfg(feature = "std")]
 pub enum NativeOrEncoded<R> {
@@ -185,6 +194,13 @@ pub enum NativeOrEncoded<R> {
 	Native(R),
 	/// The encoded representation.
 	Encoded(Vec<u8>)
+}
+
+#[cfg(feature = "std")]
+impl<R> From<R> for NativeOrEncoded<R> {
+	fn from(val: R) -> Self {
+		Self::Native(val)
+	}
 }
 
 #[cfg(feature = "std")]
@@ -259,7 +275,7 @@ pub trait TypeId {
 /// A log level matching the one from `log` crate.
 ///
 /// Used internally by `sp_io::log` method.
-#[derive(Encode, Decode, sp_runtime_interface::pass_by::PassByEnum, Copy, Clone)]
+#[derive(Encode, Decode, PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
 	Error = 1,

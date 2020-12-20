@@ -20,7 +20,7 @@ use crate::config::ProtocolId;
 use bytes::BytesMut;
 use futures::prelude::*;
 use futures_codec::Framed;
-use libp2p::core::{Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
+use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use parking_lot::RwLock;
 use std::{collections::VecDeque, io, pin::Pin, sync::Arc, vec::IntoIter as VecIntoIter};
 use std::task::{Context, Poll};
@@ -49,7 +49,7 @@ impl RegisteredProtocol {
 		-> Self {
 		let protocol = protocol.into();
 		let mut base_name = b"/substrate/".to_vec();
-		base_name.extend_from_slice(protocol.as_bytes());
+		base_name.extend_from_slice(protocol.as_ref().as_bytes());
 		base_name.extend_from_slice(b"/");
 
 		RegisteredProtocol {
@@ -57,7 +57,7 @@ impl RegisteredProtocol {
 			id: protocol,
 			supported_versions: {
 				let mut tmp = versions.to_vec();
-				tmp.sort_unstable_by(|a, b| b.cmp(&a));
+				tmp.sort_by(|a, b| b.cmp(&a));
 				tmp
 			},
 			handshake_message,
@@ -85,34 +85,18 @@ impl Clone for RegisteredProtocol {
 pub struct RegisteredProtocolSubstream<TSubstream> {
 	/// If true, we are in the process of closing the sink.
 	is_closing: bool,
-	/// Whether the local node opened this substream (dialer), or we received this substream from
-	/// the remote (listener).
-	endpoint: Endpoint,
 	/// Buffer of packets to send.
 	send_queue: VecDeque<BytesMut>,
 	/// If true, we should call `poll_complete` on the inner sink.
 	requires_poll_flush: bool,
 	/// The underlying substream.
 	inner: stream::Fuse<Framed<TSubstream, UviBytes<BytesMut>>>,
-	/// Version of the protocol that was negotiated.
-	protocol_version: u8,
 	/// If true, we have sent a "remote is clogged" event recently and shouldn't send another one
 	/// unless the buffer empties then fills itself again.
 	clogged_fuse: bool,
 }
 
 impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
-	/// Returns the version of the protocol that was negotiated.
-	pub fn protocol_version(&self) -> u8 {
-		self.protocol_version
-	}
-
-	/// Returns whether the local node opened this substream (dialer), or we received this
-	/// substream from the remote (listener).
-	pub fn endpoint(&self) -> Endpoint {
-		self.endpoint
-	}
-
 	/// Starts a graceful shutdown process on this substream.
 	///
 	/// Note that "graceful" means that we sent a closing message. We don't wait for any
@@ -122,15 +106,6 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 	pub fn shutdown(&mut self) {
 		self.is_closing = true;
 		self.send_queue.clear();
-	}
-
-	/// Sends a message to the substream.
-	pub fn send_message(&mut self, data: Vec<u8>) {
-		if self.is_closing {
-			return
-		}
-
-		self.send_queue.push_back(From::from(&data[..]));
 	}
 }
 
@@ -174,7 +149,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 		}
 
 		// Indicating that the remote is clogged if that's the case.
-		if self.send_queue.len() >= 2048 {
+		if self.send_queue.len() >= 1536 {
 			if !self.clogged_fuse {
 				// Note: this fuse is important not just for preventing us from flooding the logs;
 				// 	if you remove the fuse, then we will always return early from this function and
@@ -255,7 +230,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	fn upgrade_inbound(
 		self,
 		socket: TSubstream,
-		info: Self::Info,
+		_: Self::Info,
 	) -> Self::Future {
 		Box::pin(async move {
 			let mut framed = {
@@ -271,11 +246,9 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			Ok((RegisteredProtocolSubstream {
 				is_closing: false,
-				endpoint: Endpoint::Listener,
 				send_queue: VecDeque::new(),
 				requires_poll_flush: false,
 				inner: framed.fuse(),
-				protocol_version: info.version,
 				clogged_fuse: false,
 			}, received_handshake.to_vec()))
 		})
@@ -292,7 +265,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	fn upgrade_outbound(
 		self,
 		socket: TSubstream,
-		info: Self::Info,
+		_: Self::Info,
 	) -> Self::Future {
 		Box::pin(async move {
 			let mut framed = {
@@ -310,11 +283,9 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			Ok((RegisteredProtocolSubstream {
 				is_closing: false,
-				endpoint: Endpoint::Dialer,
 				send_queue: VecDeque::new(),
 				requires_poll_flush: false,
 				inner: framed.fuse(),
-				protocol_version: info.version,
 				clogged_fuse: false,
 			}, received_handshake.to_vec()))
 		})

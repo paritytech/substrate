@@ -1,0 +1,5 @@
+error: the test function accepts only one argument of type sc_service::TaskExecutor
+  --> $DIR/too-many-func-parameters.rs:23:1
+   |
+23 | async fn too_many_func_parameters(task_executor_1: TaskExecutor, task_executor_2: TaskExecutor) {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

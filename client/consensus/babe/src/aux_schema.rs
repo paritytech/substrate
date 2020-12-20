@@ -51,7 +51,7 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 }
 
 /// Load or initialize persistent epoch change data from backend.
-pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
+pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	backend: &B,
 	config: &BabeGenesisConfiguration,
 ) -> ClientResult<SharedEpochChanges<Block, Epoch>> {
@@ -126,7 +126,7 @@ pub(crate) fn write_block_weight<H: Encode, F, R>(
 }
 
 /// Load the cumulative chain-weight associated with a block.
-pub(crate) fn load_block_weight<H: Encode, B: AuxStore>(
+pub fn load_block_weight<H: Encode, B: AuxStore>(
 	backend: &B,
 	block_hash: H,
 ) -> ClientResult<Option<BabeBlockWeight>> {

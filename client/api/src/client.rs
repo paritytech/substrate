@@ -16,7 +16,7 @@
 
 //! A set of APIs supported by the client along with their primitives.
 
-use std::{fmt, collections::HashSet, sync::Arc};
+use std::{fmt, collections::HashSet, sync::Arc, convert::TryFrom};
 use sp_core::storage::StorageKey;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
@@ -252,13 +252,17 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub header: Block::Header,
 }
 
-impl<B: BlockT> From<BlockImportNotification<B>> for sp_transaction_pool::ChainEvent<B> {
-	fn from(n: BlockImportNotification<B>) -> Self {
-		Self::NewBlock {
-			is_new_best: n.is_new_best,
-			hash: n.hash,
-			header: n.header,
-			tree_route: n.tree_route,
+impl<B: BlockT> TryFrom<BlockImportNotification<B>> for sp_transaction_pool::ChainEvent<B> {
+	type Error = ();
+
+	fn try_from(n: BlockImportNotification<B>) -> Result<Self, ()> {
+		if n.is_new_best {
+			Ok(Self::NewBestBlock {
+				hash: n.hash,
+				tree_route: n.tree_route,
+			})
+		} else {
+			Err(())
 		}
 	}
 }

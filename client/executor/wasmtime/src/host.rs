@@ -232,7 +232,7 @@ impl<'a> Sandbox for HostContext<'a> {
 			.map_err(|e| e.to_string())
 	}
 
-	fn memory_new(&mut self, initial: u32, maximum: MemoryId) -> sp_wasm_interface::Result<u32> {
+	fn memory_new(&mut self, initial: u32, maximum: u32) -> sp_wasm_interface::Result<u32> {
 		self.sandbox_store
 			.borrow_mut()
 			.new_memory(initial, maximum)
@@ -308,6 +308,7 @@ impl<'a> Sandbox for HostContext<'a> {
 				.ok_or_else(|| "dispatch_thunk_id is out of bounds")?
 				.funcref()
 				.ok_or_else(|| "dispatch_thunk_idx should be a funcref")?
+				.ok_or_else(|| "dispatch_thunk_idx should point to actual func")?
 				.clone();
 			SupervisorFuncRef(func_ref)
 		};

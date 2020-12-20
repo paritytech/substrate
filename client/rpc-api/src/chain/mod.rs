@@ -21,7 +21,6 @@
 pub mod error;
 
 use jsonrpc_core::Result as RpcResult;
-use jsonrpc_core::futures::Future;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use sp_rpc::{number::NumberOrHex, list::ListOrValue};

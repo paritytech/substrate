@@ -26,39 +26,40 @@ use std::{slice, marker};
 use sc_executor_common::{
 	error::{Error, Result},
 	util::{WasmModuleInfo, DataSegmentsSnapshot},
+	wasm_runtime::InvokeMethod,
 };
 use sp_wasm_interface::{Pointer, WordSize, Value};
-use wasmtime::{Store, Instance, Module, Memory, Table, Val, Func, Extern, Global};
+use wasmtime::{Engine, Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
+use parity_wasm::elements;
 
 mod globals_snapshot;
 
 pub use globals_snapshot::GlobalsSnapshot;
 
 pub struct ModuleWrapper {
-	imported_globals_count: u32,
-	globals_count: u32,
 	module: Module,
 	data_segments_snapshot: DataSegmentsSnapshot,
 }
 
 impl ModuleWrapper {
-	pub fn new(store: &Store, code: &[u8]) -> Result<Self> {
-		let module = Module::new(&store, code)
+	pub fn new(engine: &Engine, code: &[u8]) -> Result<Self> {
+		let mut raw_module: elements::Module = elements::deserialize_buffer(code)
+			.map_err(|e| Error::from(format!("cannot decode module: {}", e)))?;
+		pwasm_utils::export_mutable_globals(&mut raw_module, "exported_internal_global");
+		let instrumented_code = elements::serialize(raw_module)
+			.map_err(|e| Error::from(format!("cannot encode module: {}", e)))?;
+
+		let module = Module::new(engine, &instrumented_code)
 			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
 
 		let module_info = WasmModuleInfo::new(code)
 			.ok_or_else(|| Error::from("cannot deserialize module".to_string()))?;
-		let declared_globals_count = module_info.declared_globals_count();
-		let imported_globals_count = module_info.imported_globals_count();
-		let globals_count = imported_globals_count + declared_globals_count;
 
 		let data_segments_snapshot = DataSegmentsSnapshot::take(&module_info)
 			.map_err(|e| Error::from(format!("cannot take data segments snapshot: {}", e)))?;
 
 		Ok(Self {
 			module,
-			imported_globals_count,
-			globals_count,
 			data_segments_snapshot,
 		})
 	}
@@ -72,14 +73,88 @@ impl ModuleWrapper {
 	}
 }
 
+/// Invoked entrypoint format.
+pub enum EntryPointType {
+	/// Direct call.
+	///
+	/// Call is made by providing only payload reference and length.
+	Direct,
+	/// Indirect call.
+	///
+	/// Call is made by providing payload reference and length, and extra argument
+	/// for advanced routing (typically extra WASM function pointer).
+	Wrapped(u32),
+}
+
+/// Wasm blob entry point.
+pub struct EntryPoint {
+	call_type: EntryPointType,
+	func: wasmtime::Func,
+}
+
+impl EntryPoint {
+	/// Call this entry point.
+	pub fn call(&self, data_ptr: Pointer<u8>, data_len: WordSize) -> Result<u64> {
+		let data_ptr = u32::from(data_ptr) as i32;
+		let data_len = u32::from(data_len) as i32;
+
+		(match self.call_type {
+			EntryPointType::Direct => {
+				self.func.call(&[
+					wasmtime::Val::I32(data_ptr),
+					wasmtime::Val::I32(data_len),
+				])
+			},
+			EntryPointType::Wrapped(func) => {
+				self.func.call(&[
+					wasmtime::Val::I32(func as _),
+					wasmtime::Val::I32(data_ptr),
+					wasmtime::Val::I32(data_len),
+				])
+			},
+		})
+			.map(|results| 
+				// the signature is checked to have i64 return type
+				results[0].unwrap_i64() as u64
+			)
+			.map_err(|err| Error::from(format!(
+				"Wasm execution trapped: {}",
+				err
+			)))
+	}
+
+	pub fn direct(func: wasmtime::Func) -> std::result::Result<Self, &'static str> {
+		match (func.ty().params(), func.ty().results()) {
+			(&[wasmtime::ValType::I32, wasmtime::ValType::I32], &[wasmtime::ValType::I64]) => {
+				Ok(Self { func, call_type: EntryPointType::Direct })
+			}
+			_ => {
+				Err("Invalid signature for direct entry point")
+			}
+		}
+	}
+
+	pub fn wrapped(dispatcher: wasmtime::Func, func: u32) -> std::result::Result<Self, &'static str> {
+		match (dispatcher.ty().params(), dispatcher.ty().results()) {
+			(
+				&[wasmtime::ValType::I32, wasmtime::ValType::I32, wasmtime::ValType::I32],
+				&[wasmtime::ValType::I64],
+			) => {
+				Ok(Self { func: dispatcher, call_type: EntryPointType::Wrapped(func) })
+			},
+			_ => {
+				Err("Invalid signature for wrapped entry point")
+			}
+		}
+	}
+}
+
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
 ///
 /// This struct is a handy wrapper around a wasmtime `Instance` that provides substrate specific
 /// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
-	globals_count: u32,
-	imported_globals_count: u32,
 	// The memory instance of the `instance`.
 	//
 	// It is important to make sure that we don't make any copies of this to make it easier to proof
@@ -121,8 +196,8 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 
 impl InstanceWrapper {
 	/// Create a new instance wrapper from the given wasm module.
-	pub fn new(module_wrapper: &ModuleWrapper, imports: &Imports, heap_pages: u32) -> Result<Self> {
-		let instance = Instance::new(&module_wrapper.module, &imports.externs)
+	pub fn new(store: &Store, module_wrapper: &ModuleWrapper, imports: &Imports, heap_pages: u32) -> Result<Self> {
+		let instance = Instance::new(store, &module_wrapper.module, &imports.externs)
 			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
 
 		let memory = match imports.memory_import_index {
@@ -143,8 +218,6 @@ impl InstanceWrapper {
 		Ok(Self {
 			table: get_table(&instance),
 			instance,
-			globals_count: module_wrapper.globals_count,
-			imported_globals_count: module_wrapper.imported_globals_count,
 			memory,
 			_not_send_nor_sync: marker::PhantomData,
 		})
@@ -154,24 +227,62 @@ impl InstanceWrapper {
 	///
 	/// An entrypoint must have a signature `(i32, i32) -> i64`, otherwise this function will return
 	/// an error.
-	pub fn resolve_entrypoint(&self, name: &str) -> Result<wasmtime::Func> {
-		// Resolve the requested method and verify that it has a proper signature.
-		let export = self
-			.instance
-			.get_export(name)
-			.ok_or_else(|| Error::from(format!("Exported method {} is not found", name)))?;
-		let entrypoint = extern_func(&export)
-			.ok_or_else(|| Error::from(format!("Export {} is not a function", name)))?;
-		match (entrypoint.ty().params(), entrypoint.ty().results()) {
-			(&[wasmtime::ValType::I32, wasmtime::ValType::I32], &[wasmtime::ValType::I64]) => {}
-			_ => {
-				return Err(Error::from(format!(
-					"method {} have an unsupported signature",
-					name
-				)))
-			}
-		}
-		Ok(entrypoint.clone())
+	pub fn resolve_entrypoint(&self, method: InvokeMethod) -> Result<EntryPoint> {
+		Ok(match method {
+			InvokeMethod::Export(method) => {
+				// Resolve the requested method and verify that it has a proper signature.
+				let export = self
+					.instance
+					.get_export(method)
+					.ok_or_else(|| Error::from(format!("Exported method {} is not found", method)))?;
+				let func = extern_func(&export)
+					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?
+					.clone();
+				EntryPoint::direct(func)
+					.map_err(|_|
+						Error::from(format!(
+							"Exported function '{}' has invalid signature.",
+							method,
+						))
+					)?
+			},
+			InvokeMethod::Table(func_ref) => {
+				let table = self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
+				let val = table.get(func_ref)
+					.ok_or(Error::NoTableEntryWithIndex(func_ref))?;
+				let func = val
+					.funcref()
+					.ok_or(Error::TableElementIsNotAFunction(func_ref))?
+					.ok_or(Error::FunctionRefIsNull(func_ref))?
+					.clone();
+
+				EntryPoint::direct(func)
+					.map_err(|_|
+						Error::from(format!(
+							"Function @{} in exported table has invalid signature for direct call.",
+							func_ref,
+						))
+					)?
+				},
+			InvokeMethod::TableWithWrapper { dispatcher_ref, func } => {
+				let table = self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
+				let val = table.get(dispatcher_ref)
+					.ok_or(Error::NoTableEntryWithIndex(dispatcher_ref))?;
+				let dispatcher = val
+					.funcref()
+					.ok_or(Error::TableElementIsNotAFunction(dispatcher_ref))?
+					.ok_or(Error::FunctionRefIsNull(dispatcher_ref))?
+					.clone();
+
+				EntryPoint::wrapped(dispatcher, func)
+					.map_err(|_|
+						Error::from(format!(
+							"Function @{} in exported table has invalid signature for wrapped call.",
+							dispatcher_ref,
+						))
+					)?
+			},
+		})
 	}
 
 	/// Returns an indirect function table of this instance.

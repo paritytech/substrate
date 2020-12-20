@@ -50,7 +50,7 @@ use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 pub fn buffered_link<B: BlockT>() -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {
 	let (tx, rx) = tracing_unbounded("mpsc_buffered_link");
 	let tx = BufferedLinkSender { tx };
-	let rx = BufferedLinkReceiver { rx };
+	let rx = BufferedLinkReceiver { rx: rx.fuse() };
 	(tx, rx)
 }
 
@@ -81,8 +81,6 @@ enum BlockImportWorkerMsg<B: BlockT> {
 	BlocksProcessed(usize, usize, Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>),
 	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
 	RequestJustification(B::Hash, NumberFor<B>),
-	FinalityProofImported(Origin, (B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
-	RequestFinalityProof(B::Hash, NumberFor<B>),
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
@@ -109,25 +107,11 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestJustification(hash.clone(), number));
 	}
-
-	fn finality_proof_imported(
-		&mut self,
-		who: Origin,
-		request_block: (B::Hash, NumberFor<B>),
-		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
-	) {
-		let msg = BlockImportWorkerMsg::FinalityProofImported(who, request_block, finalization_result);
-		let _ = self.tx.unbounded_send(msg);
-	}
-
-	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestFinalityProof(hash.clone(), number));
-	}
 }
 
 /// See [`buffered_link`].
 pub struct BufferedLinkReceiver<B: BlockT> {
-	rx: TracingUnboundedReceiver<BlockImportWorkerMsg<B>>,
+	rx: stream::Fuse<TracingUnboundedReceiver<BlockImportWorkerMsg<B>>>,
 }
 
 impl<B: BlockT> BufferedLinkReceiver<B> {
@@ -137,12 +121,14 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 	/// This method should behave in a way similar to `Future::poll`. It can register the current
 	/// task and notify later when more actions are ready to be polled. To continue the comparison,
 	/// it is as if this method always returned `Poll::Pending`.
-	pub fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
+	///
+	/// Returns an error if the corresponding [`BufferedLinkSender`] has been closed.
+	pub fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) -> Result<(), ()> {
 		loop {
-			let msg = if let Poll::Ready(Some(msg)) = Stream::poll_next(Pin::new(&mut self.rx), cx) {
-				msg
-			} else {
-				break
+			let msg = match Stream::poll_next(Pin::new(&mut self.rx), cx) {
+				Poll::Ready(Some(msg)) => msg,
+				Poll::Ready(None) => break Err(()),
+				Poll::Pending => break Ok(()),
 			};
 
 			match msg {
@@ -152,17 +138,13 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 					link.justification_imported(who, &hash, number, success),
 				BlockImportWorkerMsg::RequestJustification(hash, number) =>
 					link.request_justification(&hash, number),
-				BlockImportWorkerMsg::FinalityProofImported(who, block, result) =>
-					link.finality_proof_imported(who, block, result),
-				BlockImportWorkerMsg::RequestFinalityProof(hash, number) =>
-					link.request_finality_proof(&hash, number),
 			}
 		}
 	}
 
 	/// Close the channel.
 	pub fn close(&mut self) {
-		self.rx.close()
+		self.rx.get_mut().close()
 	}
 }
 

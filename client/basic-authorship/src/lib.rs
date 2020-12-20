@@ -31,16 +31,20 @@
 //! # };
 //! # use sc_transaction_pool::{BasicPool, FullChainApi};
 //! # let client = Arc::new(substrate_test_runtime_client::new());
-//! # let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+//! # let spawner = sp_core::testing::TaskExecutor::new();
 //! # let txpool = BasicPool::new_full(
 //! #     Default::default(),
-//! #     Arc::new(FullChainApi::new(client.clone(), None)),
 //! #     None,
-//! #     spawner,
+//! #     spawner.clone(),
 //! #     client.clone(),
 //! # );
 //! // The first step is to create a `ProposerFactory`.
-//! let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+//! let mut proposer_factory = ProposerFactory::new(
+//!		spawner,
+//!		client.clone(),
+//!		txpool.clone(),
+//!		None,
+//!	);
 //!
 //! // From this factory, we create a `Proposer`.
 //! let proposer = proposer_factory.init(
@@ -67,4 +71,4 @@
 
 mod basic_authorship;
 
-pub use crate::basic_authorship::{ProposerFactory, Proposer};
+pub use crate::basic_authorship::{ProposerFactory, Proposer, DEFAULT_MAX_BLOCK_SIZE};

@@ -27,7 +27,7 @@ use wasm_bindgen::prelude::*;
 use futures::{
 	prelude::*, channel::{oneshot, mpsc}, compat::*, future::{ready, ok, select}
 };
-use std::{sync::Arc, pin::Pin};
+use std::pin::Pin;
 use sc_chain_spec::Extension;
 use libp2p_wasm_ext::{ExtTransport, ffi};
 
@@ -41,7 +41,7 @@ pub async fn browser_configuration<G, E>(chain_spec: GenericChainSpec<G, E>)
 	-> Result<Configuration, Box<dyn std::error::Error>>
 where
 	G: RuntimeGenesis + 'static,
-	E: Extension + 'static + Send,
+	E: Extension + 'static + Send + Sync,
 {
 	let name = chain_spec.name().to_string();
 
@@ -57,14 +57,16 @@ where
 		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
 		enable_mdns: false,
-		use_yamux_flow_control: true,
 	};
 
 	let config = Configuration {
 		network,
 		telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
 		chain_spec: Box::new(chain_spec),
-		task_executor: (|fut, _| wasm_bindgen_futures::spawn_local(fut)).into(),
+		task_executor: (|fut, _| {
+			wasm_bindgen_futures::spawn_local(fut);
+			async {}
+		}).into(),
 		telemetry_external_transport: Some(transport),
 		role: Role::Light,
 		database: {
@@ -73,6 +75,7 @@ where
 
 			DatabaseConfig::Custom(sp_database::as_database(db))
 		},
+		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::InMemory,
 		default_heap_pages: Default::default(),
 		dev_key_seed: Default::default(),
@@ -96,13 +99,14 @@ where
 		tracing_targets: Default::default(),
 		transaction_pool: Default::default(),
 		wasm_method: Default::default(),
+		wasm_runtime_overrides: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
 		base_path: None,
 		informant_output_format: sc_informant::OutputFormat {
 			enable_color: false,
-			prefix: String::new(),
 		},
+		disable_log_reloading: false,
 	};
 
 	Ok(config)
@@ -121,7 +125,7 @@ struct RpcMessage {
 }
 
 /// Create a Client object that connects to a service.
-pub fn start_client(mut task_manager: TaskManager, rpc_handlers: Arc<RpcHandlers>) -> Client {
+pub fn start_client(mut task_manager: TaskManager, rpc_handlers: RpcHandlers) -> Client {
 	// We dispatch a background task responsible for processing the service.
 	//
 	// The main action performed by the code below consists in polling the service with

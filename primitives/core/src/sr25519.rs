@@ -27,8 +27,8 @@ use sp_std::vec::Vec;
 use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretKey, PublicKey,
 	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
 };
-#[cfg(feature = "full_crypto")]
-use core::convert::TryFrom;
+#[cfg(feature = "std")]
+use std::convert::TryFrom;
 #[cfg(feature = "std")]
 use substrate_bip39::mini_secret_from_entropy;
 #[cfg(feature = "std")]
@@ -399,15 +399,15 @@ impl TraitPublic for Public {
 }
 
 impl From<Public> for CryptoTypePublicPair {
-    fn from(key: Public) -> Self {
-        (&key).into()
-    }
+	fn from(key: Public) -> Self {
+		(&key).into()
+	}
 }
 
 impl From<&Public> for CryptoTypePublicPair {
-    fn from(key: &Public) -> Self {
-        CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
-    }
+	fn from(key: &Public) -> Self {
+		CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
+	}
 }
 
 #[cfg(feature = "std")]

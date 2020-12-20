@@ -153,7 +153,7 @@ fn unscored_entities_must_not_be_used_for_filling_members() {
 
 		// then
 		// the `None` candidates should not have been filled in
-		assert_eq!(ScoredPool::members(), vec![]);
+		assert!(ScoredPool::members().is_empty());
 		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), ScoredPool::members());
 	});
 }

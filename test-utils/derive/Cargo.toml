@@ -1,0 +1,17 @@
+[package]
+name = "substrate-test-utils-derive"
+version = "0.8.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Substrate test utilities macros"
+
+[dependencies]
+quote = "1.0.6"
+syn = { version = "1.0.33", features = ["full"] }
+proc-macro-crate = "0.1.4"
+
+[lib]
+proc-macro = true

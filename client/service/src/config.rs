@@ -50,6 +50,8 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
+	/// Remote URI to connect to for async keystore support
+	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
 	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
@@ -62,6 +64,10 @@ pub struct Configuration {
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.
 	pub wasm_method: WasmExecutionMethod,
+	/// Directory where local WASM runtimes live. These runtimes take precedence
+	/// over on-chain runtimes when the spec version matches. Set to `None` to
+	/// disable overrides (default).
+	pub wasm_runtime_overrides: Option<PathBuf>,
 	/// Execution strategies.
 	pub execution_strategies: ExecutionStrategies,
 	/// RPC over HTTP binding address. `None` if disabled.
@@ -99,6 +105,8 @@ pub struct Configuration {
 	pub dev_key_seed: Option<String>,
 	/// Tracing targets
 	pub tracing_targets: Option<String>,
+	/// Is log filter reloading disabled
+	pub disable_log_reloading: bool,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
 	/// The size of the instances cache.
@@ -263,7 +271,9 @@ impl std::convert::From<PathBuf> for BasePath {
 	}
 }
 
-type TaskExecutorInner = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>;
+// NOTE: here for code readability.
+pub(crate) type SomeFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+pub(crate) type JoinFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
 /// Callable object that execute tasks.
 ///
@@ -275,37 +285,27 @@ type TaskExecutorInner = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, Ta
 ///
 /// ```
 /// # use sc_service::TaskExecutor;
-/// # mod tokio { pub mod runtime {
-/// # #[derive(Clone)]
-/// # pub struct Runtime;
-/// # impl Runtime {
-/// # pub fn new() -> Result<Self, ()> { Ok(Runtime) }
-/// # pub fn handle(&self) -> &Self { &self }
-/// # pub fn spawn(&self, _: std::pin::Pin<Box<dyn futures::future::Future<Output = ()> + Send>>) {}
-/// # }
-/// # } }
+/// use futures::future::FutureExt;
 /// use tokio::runtime::Runtime;
 ///
 /// let runtime = Runtime::new().unwrap();
 /// let handle = runtime.handle().clone();
 /// let task_executor: TaskExecutor = (move |future, _task_type| {
-///		handle.spawn(future);
-///	}).into();
+///     handle.spawn(future).map(|_| ())
+/// }).into();
 /// ```
 ///
 /// ## Using async-std
 ///
 /// ```
 /// # use sc_service::TaskExecutor;
-/// # mod async_std { pub mod task {
-/// # pub fn spawn(_: std::pin::Pin<Box<dyn futures::future::Future<Output = ()> + Send>>) {}
-/// # } }
 /// let task_executor: TaskExecutor = (|future, _task_type| {
-///		async_std::task::spawn(future);
-///	}).into();
+///     // NOTE: async-std's JoinHandle is not a Result so we don't need to map the result
+///     async_std::task::spawn(future)
+/// }).into();
 /// ```
 #[derive(Clone)]
-pub struct TaskExecutor(TaskExecutorInner);
+pub struct TaskExecutor(Arc<dyn Fn(SomeFuture, TaskType) -> JoinFuture + Send + Sync>);
 
 impl std::fmt::Debug for TaskExecutor {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -313,18 +313,19 @@ impl std::fmt::Debug for TaskExecutor {
 	}
 }
 
-impl<F> std::convert::From<F> for TaskExecutor
+impl<F, FUT> std::convert::From<F> for TaskExecutor
 where
-	F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync + 'static,
+	F: Fn(SomeFuture, TaskType) -> FUT + Send + Sync + 'static,
+	FUT: Future<Output = ()> + Send + 'static,
 {
-	fn from(x: F) -> Self {
-		Self(Arc::new(x))
+	fn from(func: F) -> Self {
+		Self(Arc::new(move |fut, tt| Box::pin(func(fut, tt))))
 	}
 }
 
 impl TaskExecutor {
 	/// Spawns a new asynchronous task.
-	pub fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>, task_type: TaskType) {
+	pub fn spawn(&self, future: SomeFuture, task_type: TaskType) -> JoinFuture {
 		self.0(future, task_type)
 	}
 }

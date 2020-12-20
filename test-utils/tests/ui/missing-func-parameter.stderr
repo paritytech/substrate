@@ -1,0 +1,5 @@
+error: the test function accepts only one argument of type sc_service::TaskExecutor
+  --> $DIR/missing-func-parameter.rs:20:1
+   |
+20 | async fn missing_func_parameter() {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

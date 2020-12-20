@@ -109,7 +109,7 @@ where
 			Some(map) => insert_into_memory_db::<H, _>(
 				root,
 				self.backend_storage_mut(),
-				map.clone().into_iter().chain(new_child_roots.into_iter()),
+				map.into_iter().chain(new_child_roots.into_iter()),
 			),
 			None => insert_into_memory_db::<H, _>(
 				root,

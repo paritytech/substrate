@@ -28,7 +28,7 @@ use std::sync::Arc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use rpc::{Result as RpcResult, futures::{Future, future::result}};
 
-use sc_rpc_api::state::ReadProof;
+use sc_rpc_api::{DenyUnsafe, state::ReadProof};
 use sc_client_api::light::{RemoteBlockchain, Fetcher};
 use sp_core::{Bytes, storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet}};
 use sp_version::RuntimeVersion;
@@ -97,14 +97,14 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	) -> FutureResult<Option<Block::Hash>>;
 
 	/// Returns the size of a storage entry at a block's state.
+	///
+	/// If data is available at `key`, it is returned. Else, the sum of values who's key has `key`
+	/// prefix is returned, i.e. all the storage (double) maps that have this prefix.
 	fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
-	) -> FutureResult<Option<u64>> {
-		Box::new(self.storage(block, key)
-			.map(|x| x.map(|x| x.0.len() as u64)))
-	}
+	) -> FutureResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes>;
@@ -140,21 +140,21 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	/// New runtime version subscription
 	fn subscribe_runtime_version(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<RuntimeVersion>,
 	);
 
 	/// Unsubscribe from runtime version subscription
 	fn unsubscribe_runtime_version(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool>;
 
 	/// New storage subscription
 	fn subscribe_storage(
 		&self,
-		_meta: crate::metadata::Metadata,
+		_meta: crate::Metadata,
 		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
 		keys: Option<Vec<StorageKey>>,
 	);
@@ -162,7 +162,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	/// Unsubscribe from storage subscription
 	fn unsubscribe_storage(
 		&self,
-		_meta: Option<crate::metadata::Metadata>,
+		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool>;
 }
@@ -171,6 +171,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
 	subscriptions: SubscriptionManager,
+	deny_unsafe: DenyUnsafe,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
@@ -185,7 +186,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 		self::state_full::FullState::new(client.clone(), subscriptions.clone())
 	);
 	let backend = Box::new(self::state_full::FullState::new(client, subscriptions));
-	(State { backend }, ChildState { backend: child_backend })
+	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
 /// Create new state API that works on light node.
@@ -194,6 +195,7 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	subscriptions: SubscriptionManager,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
+	deny_unsafe: DenyUnsafe,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
@@ -217,12 +219,14 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 			remote_blockchain,
 			fetcher,
 	));
-	(State { backend }, ChildState { backend: child_backend })
+	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
 /// State API with subscriptions support.
 pub struct State<Block, Client> {
 	backend: Box<dyn StateBackend<Block, Client>>,
+	/// Whether to deny unsafe calls
+	deny_unsafe: DenyUnsafe,
 }
 
 impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
@@ -230,7 +234,7 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		Block: BlockT + 'static,
 		Client: Send + Sync + 'static,
 {
-	type Metadata = crate::metadata::Metadata;
+	type Metadata = crate::Metadata;
 
 	fn call(&self, method: String, data: Bytes, block: Option<Block::Hash>) -> FutureResult<Bytes> {
 		self.backend.call(block, method, data)
@@ -249,6 +253,10 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		key_prefix: StorageKey,
 		block: Option<Block::Hash>,
 	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
+		if let Err(err) = self.deny_unsafe.check_if_safe() {
+			return Box::new(result(Err(err.into())))
+		}
+
 		self.backend.storage_pairs(block, key_prefix)
 	}
 
@@ -292,6 +300,10 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		from: Block::Hash,
 		to: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		if let Err(err) = self.deny_unsafe.check_if_safe() {
+			return Box::new(result(Err(err.into())))
+		}
+
 		self.backend.query_storage(from, to, keys)
 	}
 
@@ -390,7 +402,7 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 		Block: BlockT + 'static,
 		Client: Send + Sync + 'static,
 {
-	type Metadata = crate::metadata::Metadata;
+	type Metadata = crate::Metadata;
 
 	fn storage(
 		&self,

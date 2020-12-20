@@ -1,9 +1,11 @@
 (module
-	(import "env" "ext_input" (func $ext_input (param i32 i32)))
-	(import "env" "ext_balance" (func $ext_balance (param i32 i32)))
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_println" (func $ext_println (param i32 i32)))
+	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
+	(import "seal0" "seal_balance" (func $seal_balance (param i32 i32)))
+	(import "seal0" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "seal0" "seal_instantiate" (func $seal_instantiate
+		(param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)
+	))
+	(import "seal0" "seal_println" (func $seal_println (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -20,7 +22,7 @@
 			(i32.sub (get_local $sp) (i32.const 16))
 			(i32.const 8)
 		)
-		(call $ext_balance
+		(call $seal_balance
 			(i32.sub (get_local $sp) (i32.const 8))
 			(i32.sub (get_local $sp) (i32.const 16))
 		)
@@ -41,7 +43,7 @@
 		(i32.store (i32.const 20) (i32.const 32))
 
 		;; Copy input to this contracts memory
-		(call $ext_input (i32.const 24) (i32.const 20))
+		(call $seal_input (i32.const 24) (i32.const 20))
 
 		;; Input data is the code hash of the contract to be deployed.
 		(call $assert
@@ -59,7 +61,7 @@
 
 		;; Fail to deploy the contract since it returns a non-zero exit status.
 		(set_local $exit_code
-			(call $ext_instantiate
+			(call $seal_instantiate
 				(i32.const 24)	;; Pointer to the code hash.
 				(i32.const 32)	;; Length of the code hash.
 				(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
@@ -71,6 +73,8 @@
 				(i32.const 0) ;; Length is ignored in this case
 				(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
 				(i32.const 0) ;; Length is ignored in this case
+				(i32.const 0) ;; salt_ptr
+				(i32.const 0) ;; salt_le
 			)
 		)
 
@@ -86,10 +90,10 @@
 
 		;; Fail to deploy the contract due to insufficient gas.
 		(set_local $exit_code
-			(call $ext_instantiate
+			(call $seal_instantiate
 				(i32.const 24)	;; Pointer to the code hash.
 				(i32.const 32)	;; Length of the code hash.
-				(i64.const 200)	;; How much gas to devote for the execution.
+				(i64.const 1) ;; Supply too little gas
 				(i32.const 0)	;; Pointer to the buffer with value to transfer
 				(i32.const 8)	;; Length of the buffer with value to transfer.
 				(i32.const 8)	;; Pointer to input data buffer address
@@ -98,6 +102,9 @@
 				(i32.const 0) ;; Length is ignored in this case
 				(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
 				(i32.const 0) ;; Length is ignored in this case
+				(i32.const 0) ;; salt_ptr
+				(i32.const 0) ;; salt_le
+
 			)
 		)
 
@@ -114,12 +121,12 @@
 		;; Length of the output buffer
 		(i32.store
 			(i32.sub (get_local $sp) (i32.const 4))
-			(i32.const 8)
+			(i32.const 256)
 		)
 
 		;; Deploy the contract successfully.
 		(set_local $exit_code
-			(call $ext_instantiate
+			(call $seal_instantiate
 				(i32.const 24)	;; Pointer to the code hash.
 				(i32.const 32)	;; Length of the code hash.
 				(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
@@ -131,6 +138,8 @@
 				(i32.sub (get_local $sp) (i32.const 4)) ;; Pointer to the address buffer length
 				(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
 				(i32.const 0) ;; Length is ignored in this case
+				(i32.const 0) ;; salt_ptr
+				(i32.const 0) ;; salt_le
 
 			)
 		)
@@ -142,7 +151,7 @@
 
 		;; Check that address has the expected length
 		(call $assert
-			(i32.eq (i32.load (i32.sub (get_local $sp) (i32.const 4))) (i32.const 8))
+			(i32.eq (i32.load (i32.sub (get_local $sp) (i32.const 4))) (i32.const 32))
 		)
 
 		;; Check that balance has been deducted.
@@ -167,9 +176,9 @@
 
 		;; Call the new contract and expect it to return failing exit code.
 		(set_local $exit_code
-			(call $ext_call
+			(call $seal_call
 				(i32.const 16)	;; Pointer to "callee" address.
-				(i32.const 8)	;; Length of "callee" address.
+				(i32.const 32)	;; Length of "callee" address.
 				(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
 				(i32.const 0)	;; Pointer to the buffer with value to transfer
 				(i32.const 8)	;; Length of the buffer with value to transfer.
@@ -203,10 +212,10 @@
 
 		;; Fail to call the contract due to insufficient gas.
 		(set_local $exit_code
-			(call $ext_call
+			(call $seal_call
 				(i32.const 16)	;; Pointer to "callee" address.
-				(i32.const 8)	;; Length of "callee" address.
-				(i64.const 100)	;; How much gas to devote for the execution.
+				(i32.const 32)	;; Length of "callee" address.
+				(i64.const 1) ;; Supply too little gas
 				(i32.const 0)	;; Pointer to the buffer with value to transfer
 				(i32.const 8)	;; Length of the buffer with value to transfer.
 				(i32.const 8)	;; Pointer to input data buffer address
@@ -240,9 +249,9 @@
 
 		;; Call the contract successfully.
 		(set_local $exit_code
-			(call $ext_call
+			(call $seal_call
 				(i32.const 16)	;; Pointer to "callee" address.
-				(i32.const 8)	;; Length of "callee" address.
+				(i32.const 32)	;; Length of "callee" address.
 				(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
 				(i32.const 0)	;; Pointer to the buffer with value to transfer
 				(i32.const 8)	;; Length of the buffer with value to transfer.

@@ -40,8 +40,7 @@ use sp_runtime::traits::{
 use substrate_test_runtime::TestAPI;
 use sp_state_machine::backend::Backend as _;
 use sp_api::{ProvideRuntimeApi, OffchainOverlayedChanges};
-use sp_core::tasks::executor as tasks_executor;
-use sp_core::{H256, ChangesTrieConfiguration, blake2_256};
+use sp_core::{H256, ChangesTrieConfiguration, blake2_256, testing::TaskExecutor};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use sp_consensus::{
@@ -165,6 +164,7 @@ fn construct_block(
 	let mut offchain_overlay = OffchainOverlayedChanges::default();
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
+	let task_executor = Box::new(TaskExecutor::new());
 
 	StateMachine::new(
 		backend,
@@ -176,7 +176,7 @@ fn construct_block(
 		&header.encode(),
 		Default::default(),
 		&runtime_code,
-		tasks_executor(),
+		task_executor.clone() as Box<_>,
 	).execute(
 		ExecutionStrategy::NativeElseWasm,
 	).unwrap();
@@ -192,7 +192,7 @@ fn construct_block(
 			&tx.encode(),
 			Default::default(),
 			&runtime_code,
-			tasks_executor(),
+			task_executor.clone() as Box<_>,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -208,7 +208,7 @@ fn construct_block(
 		&[],
 		Default::default(),
 		&runtime_code,
-		tasks_executor(),
+		task_executor.clone() as Box<_>,
 	).execute(
 		ExecutionStrategy::NativeElseWasm,
 	).unwrap();
@@ -262,7 +262,7 @@ fn construct_genesis_should_work_with_native() {
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		tasks_executor(),
+		TaskExecutor::new(),
 	).execute(
 		ExecutionStrategy::NativeElseWasm,
 	).unwrap();
@@ -298,7 +298,7 @@ fn construct_genesis_should_work_with_wasm() {
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		tasks_executor(),
+		TaskExecutor::new(),
 	).execute(
 		ExecutionStrategy::AlwaysWasm,
 	).unwrap();
@@ -334,7 +334,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		tasks_executor(),
+		TaskExecutor::new(),
 	).execute(
 		ExecutionStrategy::NativeElseWasm,
 	);
@@ -1206,7 +1206,7 @@ fn get_header_by_block_number_doesnt_panic() {
 
 #[test]
 fn state_reverted_on_reorg() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let mut client = substrate_test_runtime_client::new();
 
 	let current_balance = |client: &substrate_test_runtime_client::TestClient|
@@ -1266,7 +1266,7 @@ fn state_reverted_on_reorg() {
 
 #[test]
 fn doesnt_import_blocks_that_revert_finality() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let tmp = tempfile::tempdir().unwrap();
 
 	// we need to run with archive pruning to avoid pruning non-canonical
@@ -1467,7 +1467,7 @@ fn respects_block_rules() {
 
 #[test]
 fn returns_status_for_pruned_blocks() {
-	let _ = env_logger::try_init();
+	sp_tracing::try_init_simple();
 	let tmp = tempfile::tempdir().unwrap();
 
 	// set to prune after 1 block
@@ -1737,13 +1737,13 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 			_,
 			substrate_test_runtime_client::runtime::Block,
 			_,
-			substrate_test_runtime_client::runtime::RuntimeApi
+			substrate_test_runtime_client::runtime::RuntimeApi,
 		>(
 			substrate_test_runtime_client::new_native_executor(),
 			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
 			None,
 			None,
-			sp_core::tasks::executor(),
+			Box::new(TaskExecutor::new()),
 			Default::default(),
 		)
 			.unwrap();
@@ -1802,3 +1802,57 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 	assert_eq!(client.finality_notification_sinks().lock().len(), 0);
 }
 
+/// Test that ensures that we always send an import notification for re-orgs.
+#[test]
+fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifications() {
+	let mut client = TestClientBuilder::new().build();
+
+	let mut notification_stream = futures::executor::block_on_stream(
+		client.import_notification_stream()
+	);
+
+	let a1 = client.new_block_at(
+		&BlockId::Number(0),
+		Default::default(),
+		false,
+	).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::NetworkInitialSync, a1.clone()).unwrap();
+
+	let a2 = client.new_block_at(
+		&BlockId::Hash(a1.hash()),
+		Default::default(),
+		false,
+	).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::NetworkInitialSync, a2.clone()).unwrap();
+
+	let mut b1 = client.new_block_at(
+		&BlockId::Number(0),
+		Default::default(),
+		false,
+	).unwrap();
+	// needed to make sure B1 gets a different hash from A1
+	b1.push_transfer(Transfer {
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
+		amount: 1,
+		nonce: 0,
+	}).unwrap();
+	let b1 = b1.build().unwrap().block;
+	client.import(BlockOrigin::NetworkInitialSync, b1.clone()).unwrap();
+
+	let b2 = client.new_block_at(
+		&BlockId::Hash(b1.hash()),
+		Default::default(),
+		false,
+	).unwrap().build().unwrap().block;
+
+	// Should trigger a notification because we reorg
+	client.import_as_best(BlockOrigin::NetworkInitialSync, b2.clone()).unwrap();
+
+	// There should be one notification
+	let notification = notification_stream.next().unwrap();
+
+	// We should have a tree route of the re-org
+	let tree_route = notification.tree_route.unwrap();
+	assert_eq!(tree_route.enacted()[0].hash, b1.hash());
+}

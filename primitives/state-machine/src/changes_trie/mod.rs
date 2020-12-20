@@ -85,9 +85,6 @@ use crate::{
 	},
 };
 
-/// Changes that are made outside of extrinsics are marked with this index;
-pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
-
 /// Requirements for block number that can be used with changes tries.
 pub trait BlockNumber:
 	Send + Sync + 'static +

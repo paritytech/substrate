@@ -17,7 +17,7 @@
 
 //! # Vesting Module
 //!
-//! - [`vesting::Trait`](./trait.Trait.html)
+//! - [`vesting::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
@@ -43,9 +43,12 @@
 //!   "vested" so far.
 //!
 //! [`Call`]: ./enum.Call.html
-//! [`Trait`]: ./trait.Trait.html
+//! [`Config`]: ./trait.Config.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
+mod benchmarking;
+pub mod weights;
 
 use sp_std::prelude::*;
 use sp_std::fmt::Debug;
@@ -53,36 +56,20 @@ use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
 	StaticLookup, Zero, AtLeast32BitUnsigned, MaybeSerializeDeserialize, Convert
 }};
-use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure, weights::Weight};
+use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
 use frame_support::traits::{
-	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier,
+	Currency, LockableCurrency, VestingSchedule, WithdrawReasons, LockIdentifier,
 	ExistenceRequirement, Get,
 };
 use frame_system::{ensure_signed, ensure_root};
+pub use weights::WeightInfo;
 
-mod benchmarking;
+type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type MaxLocksOf<T> = <<T as Config>::Currency as LockableCurrency<<T as frame_system::Config>::AccountId>>::MaxLocks;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-
-pub trait WeightInfo {
-	fn vest_locked(l: u32, ) -> Weight;
-	fn vest_unlocked(l: u32, ) -> Weight;
-	fn vest_other_locked(l: u32, ) -> Weight;
-	fn vest_other_unlocked(l: u32, ) -> Weight;
-	fn vested_transfer(l: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn vest_locked(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn vest_unlocked(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn vest_other_locked(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn vest_other_unlocked(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn vested_transfer(_l: u32, ) -> Weight { 1_000_000_000 }
-}
-
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The currency trait.
 	type Currency: LockableCurrency<Self::AccountId>;
@@ -133,7 +120,7 @@ impl<
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Vesting {
+	trait Store for Module<T: Config> as Vesting {
 		/// Information regarding the vesting of a given account.
 		pub Vesting get(fn vesting):
 			map hasher(blake2_128_concat) T::AccountId
@@ -161,7 +148,7 @@ decl_storage! {
 					per_block: per_block,
 					starting_block: begin
 				});
-				let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+				let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 				T::Currency::set_lock(VESTING_ID, who, locked, reasons);
 			}
 		})
@@ -169,18 +156,19 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
+	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId, Balance = BalanceOf<T> {
 		/// The amount vested has been updated. This could indicate more funds are available. The
 		/// balance given is the amount which is left unvested (and thus locked).
+		/// \[account, unvested\]
 		VestingUpdated(AccountId, Balance),
-		/// An account (given) has become fully vested. No further vesting can happen.
+		/// An \[account\] has become fully vested. No further vesting can happen.
 		VestingCompleted(AccountId),
 	}
 );
 
 decl_error! {
 	/// Error for the vesting module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// The account given is not vesting.
 		NotVesting,
 		/// An existing vesting schedule already exists for this account that cannot be clobbered.
@@ -192,7 +180,7 @@ decl_error! {
 
 decl_module! {
 	/// Vesting module declaration.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		/// The minimum amount to be transferred to create a new vesting schedule.
@@ -212,12 +200,10 @@ decl_module! {
 		/// - DbWeight: 2 Reads, 2 Writes
 		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
-		/// - Benchmark:
-		///     - Unlocked: 48.76 + .048 * l µs (min square analysis)
-		///     - Locked: 44.43 + .284 * l µs (min square analysis)
-		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 50_000_000 + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = T::WeightInfo::vest_locked(MaxLocksOf::<T>::get())
+			.max(T::WeightInfo::vest_unlocked(MaxLocksOf::<T>::get()))
+		]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
@@ -237,12 +223,10 @@ decl_module! {
 		/// - DbWeight: 3 Reads, 3 Writes
 		///     - Reads: Vesting Storage, Balances Locks, Target Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account
-		/// - Benchmark:
-		///     - Unlocked: 44.3 + .294 * l µs (min square analysis)
-		///     - Locked: 48.16 + .103 * l µs (min square analysis)
-		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 50_000_000 + T::DbWeight::get().reads_writes(3, 3)]
+		#[weight = T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get())
+			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get()))
+		]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
@@ -263,10 +247,8 @@ decl_module! {
 		/// - DbWeight: 3 Reads, 3 Writes
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
-		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
-		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(3, 3)]
+		#[weight = T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get())]
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -302,10 +284,8 @@ decl_module! {
 		/// - DbWeight: 4 Reads, 4 Writes
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, Source Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
-		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
-		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(4, 4)]
+		#[weight = T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get())]
 		pub fn force_vested_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -329,7 +309,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// (Re)set or remove the module's currency lock on `who`'s account in accordance with their
 	/// current unvested amount.
 	fn update_lock(who: T::AccountId) -> DispatchResult {
@@ -342,7 +322,7 @@ impl<T: Trait> Module<T> {
 			Vesting::<T>::remove(&who);
 			Self::deposit_event(RawEvent::VestingCompleted(who));
 		} else {
-			let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 			T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons);
 			Self::deposit_event(RawEvent::VestingUpdated(who, locked_now));
 		}
@@ -350,7 +330,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
+impl<T: Config> VestingSchedule<T::AccountId> for Module<T> where
 	BalanceOf<T>: MaybeSerializeDeserialize + Debug
 {
 	type Moment = T::BlockNumber;
@@ -410,14 +390,11 @@ impl<T: Trait> VestingSchedule<T::AccountId> for Module<T> where
 mod tests {
 	use super::*;
 
-	use std::cell::RefCell;
 	use frame_support::{
-		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
-		traits::Get
+		assert_ok, assert_noop, impl_outer_origin, parameter_types,
 	};
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill,
 		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup, Identity, BadOrigin},
 	};
@@ -431,12 +408,14 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -448,32 +427,30 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
-		type ModuleToIndex = ();
+		type PalletInfo = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 	}
-	impl pallet_balances::Trait for Test {
+	parameter_types! {
+		pub const MaxLocks: u32 = 10;
+	}
+	impl pallet_balances::Config for Test {
 		type Balance = u64;
 		type DustRemoval = ();
 		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type MaxLocks = MaxLocks;
 		type WeightInfo = ();
 	}
 	parameter_types! {
 		pub const MinVestedTransfer: u64 = 256 * 2;
+		pub static ExistentialDeposit: u64 = 0;
 	}
-	impl Trait for Test {
+	impl Config for Test {
 		type Event = ();
 		type Currency = Balances;
 		type BlockNumberToBalance = Identity;
@@ -484,13 +461,6 @@ mod tests {
 	type Balances = pallet_balances::Module<Test>;
 	type Vesting = Module<Test>;
 
-	thread_local! {
-		static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
-	}
-	pub struct ExistentialDeposit;
-	impl Get<u64> for ExistentialDeposit {
-		fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
-	}
 
 	pub struct ExtBuilder {
 		existential_deposit: u64,

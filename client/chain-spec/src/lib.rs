@@ -20,7 +20,7 @@
 //! a runtime-specific configuration file (a.k.a chain spec).
 //!
 //! Basic chain spec type containing all required parameters is
-//! [`ChainSpec`](./struct.ChainSpec.html). It can be extended with
+//! [`GenericChainSpec`]. It can be extended with
 //! additional options that contain configuration specific to your chain.
 //! Usually the extension is going to be an amalgamate of types exposed
 //! by Substrate core modules. To allow the core modules to retrieve
@@ -108,7 +108,9 @@
 mod chain_spec;
 mod extension;
 
-pub use chain_spec::{ChainSpec as GenericChainSpec, NoExtension};
+pub use chain_spec::{
+	ChainSpec as GenericChainSpec, NoExtension, LightSyncState, SerializableLightSyncState,
+};
 pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 pub use sp_chain_spec::{Properties, ChainType};
@@ -124,7 +126,7 @@ pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// Common interface of a chain specification.
-pub trait ChainSpec: BuildStorage + Send {
+pub trait ChainSpec: BuildStorage + Send + Sync {
 	/// Spec name.
 	fn name(&self) -> &str;
 	/// Spec id.
@@ -155,6 +157,8 @@ pub trait ChainSpec: BuildStorage + Send {
 	///
 	/// This will be used as storage at genesis.
 	fn set_storage(&mut self, storage: Storage);
+	/// Hardcode infomation to allow light clients to sync quickly into the chain spec.
+	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState);
 }
 
 impl std::fmt::Debug for dyn ChainSpec {

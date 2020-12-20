@@ -15,18 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use node_runtime::{
 	Executive, Indices, Runtime, UncheckedExtrinsic,
 };
 use sp_application_crypto::AppKey;
-use sp_core::testing::KeyStore;
 use sp_core::{
 	offchain::{
 		TransactionPoolExt,
 		testing::TestTransactionPoolExt,
 	},
-	traits::KeystoreExt,
 };
+use sp_keystore::{KeystoreExt, SyncCryptoStore, testing::KeyStore};
 use frame_system::{
 	offchain::{
 		Signer,
@@ -41,7 +41,7 @@ use self::common::*;
 
 #[test]
 fn should_submit_unsigned_transaction() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -67,15 +67,27 @@ const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put c
 
 #[test]
 fn should_submit_signed_transaction() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter3", PHRASE))).unwrap();
-	t.register_extension(KeystoreExt(keystore));
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter2", PHRASE))
+	).unwrap();
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter3", PHRASE))
+	).unwrap();
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	t.execute_with(|| {
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
@@ -92,14 +104,22 @@ fn should_submit_signed_transaction() {
 
 #[test]
 fn should_submit_signed_twice_from_the_same_account() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
-	t.register_extension(KeystoreExt(keystore));
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter2", PHRASE))
+	).unwrap();
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	t.execute_with(|| {
 		let result = Signer::<Runtime, TestAuthorityId>::any_account()
@@ -136,14 +156,20 @@ fn should_submit_signed_twice_from_the_same_account() {
 
 #[test]
 fn should_submit_signed_twice_from_all_accounts() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
-	t.register_extension(KeystoreExt(keystore));
+	keystore.sr25519_generate_new(
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+	keystore.sr25519_generate_new(
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter2", PHRASE))
+	).unwrap();
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	t.execute_with(|| {
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
@@ -192,16 +218,19 @@ fn should_submit_signed_twice_from_all_accounts() {
 fn submitted_transaction_should_be_valid() {
 	use codec::Encode;
 	use frame_support::storage::StorageMap;
-	use sp_runtime::transaction_validity::{ValidTransaction, TransactionSource};
+	use sp_runtime::transaction_validity::{TransactionSource, TransactionTag};
 	use sp_runtime::traits::StaticLookup;
 
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	t.register_extension(KeystoreExt(keystore));
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	t.execute_with(|| {
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
@@ -216,7 +245,7 @@ fn submitted_transaction_should_be_valid() {
 	// check that transaction is valid, but reset environment storage,
 	// since CreateTransaction increments the nonce
 	let tx0 = state.read().transactions[0].clone();
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.execute_with(|| {
 		let source = TransactionSource::External;
 		let extrinsic = UncheckedExtrinsic::decode(&mut &*tx0).unwrap();
@@ -224,18 +253,16 @@ fn submitted_transaction_should_be_valid() {
 		let author = extrinsic.signature.clone().unwrap().0;
 		let address = Indices::lookup(author).unwrap();
 		let data = pallet_balances::AccountData { free: 5_000_000_000_000, ..Default::default() };
-		let account = frame_system::AccountInfo { nonce: 0u32, refcount: 0u8, data };
+		let account = frame_system::AccountInfo { nonce: 0, refcount: 0, data };
 		<frame_system::Account<Runtime>>::insert(&address, account);
 
 		// check validity
-		let res = Executive::validate_transaction(source, extrinsic);
+		let res = Executive::validate_transaction(source, extrinsic).unwrap();
 
-		assert_eq!(res.unwrap(), ValidTransaction {
-			priority: 1_410_710_000_000,
-			requires: vec![],
-			provides: vec![(address, 0).encode()],
-			longevity: 2048,
-			propagate: true,
-		});
+		// We ignore res.priority since this number can change based on updates to weights and such.
+		assert_eq!(res.requires, Vec::<TransactionTag>::new());
+		assert_eq!(res.provides, vec![(address, 0).encode()]);
+		assert_eq!(res.longevity, 2048);
+		assert_eq!(res.propagate, true);
 	});
 }
