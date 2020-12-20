@@ -192,11 +192,6 @@ benchmarks! {
 		let reason_hash = T::Hashing::hash(&reason[..]);
 		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
-
-		// Whitelist caller account from further DB operations.
-		let caller: T::AccountId = account("member", t, SEED);
-		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Root, hash)
 }
 
