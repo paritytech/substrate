@@ -400,10 +400,6 @@ pub enum DispatchError {
 	CannotLookup,
 	/// A bad origin.
 	BadOrigin,
-	/// At least one consumer is remaining so the account cannot be destroyed.
-	ConsumerRemaining,
-	/// There are no providers so the account cannot be created.
-	NoProviders,
 	/// A custom error in a module.
 	Module {
 		/// Module index, matching the metadata module index.
@@ -415,6 +411,10 @@ pub enum DispatchError {
 		#[cfg_attr(feature = "std", serde(skip_deserializing))]
 		message: Option<&'static str>,
 	},
+	/// At least one consumer is remaining so the account cannot be destroyed.
+	ConsumerRemaining,
+	/// There are no providers so the account cannot be created.
+	NoProviders,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -485,9 +485,9 @@ impl From<DispatchError> for &'static str {
 			DispatchError::Other(msg) => msg,
 			DispatchError::CannotLookup => "Cannot lookup",
 			DispatchError::BadOrigin => "Bad origin",
+			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
 			DispatchError::ConsumerRemaining => "Consumer remaining",
 			DispatchError::NoProviders => "No providers",
-			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
 		}
 	}
 }
@@ -507,8 +507,6 @@ impl traits::Printable for DispatchError {
 			Self::Other(err) => err.print(),
 			Self::CannotLookup => "Cannot lookup".print(),
 			Self::BadOrigin => "Bad origin".print(),
-			Self::ConsumerRemaining => "Consumer remaining".print(),
-			Self::NoProviders => "No providers".print(),
 			Self::Module { index, error, message } => {
 				index.print();
 				error.print();
@@ -516,6 +514,8 @@ impl traits::Printable for DispatchError {
 					msg.print();
 				}
 			}
+			Self::ConsumerRemaining => "Consumer remaining".print(),
+			Self::NoProviders => "No providers".print(),
 		}
 	}
 }
