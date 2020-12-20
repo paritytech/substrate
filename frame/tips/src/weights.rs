@@ -139,7 +139,7 @@ impl WeightInfo for () {
 	fn slash_tip(t: u32, ) -> Weight {
 		(119_313_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((372_000 as Weight).saturating_mul(t as Weight))
+			.saturating_add((362_000 as Weight).saturating_mul(t as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
