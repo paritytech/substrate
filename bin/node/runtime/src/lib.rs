@@ -940,7 +940,6 @@ impl pallet_mmr::Config for Runtime {
 parameter_types! {
 	pub const AssetDepositBase: Balance = 100 * DOLLARS;
 	pub const AssetDepositPerZombie: Balance = 1 * DOLLARS;
-	pub const AllowApprovalSpending: bool = true;
 	pub const AllowFreezing: bool = true;
 	pub const AllowBurning: bool = true;
 	pub const AllowMinting: bool = true;
@@ -954,7 +953,6 @@ impl pallet_assets::Config for Runtime {
 	type ForceOrigin = EnsureRoot<AccountId>;
 	type AssetDepositBase = AssetDepositBase;
 	type AssetDepositPerZombie = AssetDepositPerZombie;
-	type AllowApprovalSpending = AllowApprovalSpending;
 	type AllowFreezing = AllowFreezing;
 	type AllowBurning = AllowBurning;
 	type AllowMinting = AllowMinting;

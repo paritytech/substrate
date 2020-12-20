@@ -155,10 +155,13 @@ pub trait Config: frame_system::Config {
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 
-	/// Type parameters for ERC20 compatible functionality
-	type AllowApprovalSpending: Get<bool>;
+	/// The flag for determining asset freezing and thawing support.
 	type AllowFreezing: Get<bool>;
+
+	/// The flag for determing asset burning support.
 	type AllowBurning: Get<bool>;
+
+	/// The flag for determining asset minting support.
 	type AllowMinting: Get<bool>;
 }
 
@@ -219,13 +222,6 @@ decl_storage! {
 			hasher(blake2_128_concat) T::AssetId,
 			hasher(blake2_128_concat) T::AccountId
 			=> AssetBalance<T::Balance>;
-
-		/// The number of units of assets being approved by one account to another
-		/// The ordering of from, to is sequential i.e (from, to)
-		pub Approvals: double_map
-			hasher(blake2_128_concat) T::AssetId,
-			hasher(blake2_128_concat) (T::AccountId, T::AccountId)
-			=> T::Balance;		
 	}
 }
 
@@ -288,12 +284,11 @@ decl_error! {
 		MinBalanceZero,
 		/// A mint operation lead to an overflow.
 		Overflow,
-		/// An allowance for transfer from is insufficient
-		AllowanceTooLow,
-		/// Gated functionality errors
-		NoApprovalSpendingAllowed,
+		/// The asset does not allow freezing or thawing functionality
 		NoFreezingAllowed,
+		/// The asset does not allow burning functionality.
 		NoBurningAllowed,
+		/// The asset does not allow minting functionality
 		NoMintingAllowed,
 	}
 }
@@ -435,7 +430,7 @@ decl_module! {
 
 				*maybe_details = None;
 				Account::<T>::remove_prefix(&id);
-				Approvals::<T>::remove_prefix(&id);
+
 				Self::deposit_event(RawEvent::Destroyed(id));
 				Ok(())
 			})
@@ -466,7 +461,7 @@ decl_module! {
 
 				*maybe_details = None;
 				Account::<T>::remove_prefix(&id);
-				Approvals::<T>::remove_prefix(&id);
+
 				Self::deposit_event(RawEvent::Destroyed(id));
 				Ok(())
 			})
@@ -801,7 +796,6 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 {
 	type Balance = T::Balance;
 	type AssetId = T::AssetId;
-	type AllowApprovalSpending = T::AllowApprovalSpending;
 	type AllowFreezing = T::AllowFreezing;
 	type AllowBurning = T::AllowBurning;
 	type AllowMinting = T::AllowMinting;
@@ -818,29 +812,6 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 			Ok(acc) => Self::balance(id, acc),
 			Err(_) => Self::Balance::zero(),
 		}
-	}
-
-	/// Returns the remaining number of tokens a spender can spend for a specific asset.
-	fn allowance(
-		id: Self::AssetId,
-		owner: <T::Lookup as StaticLookup>::Source,
-		spender: <T::Lookup as StaticLookup>::Source
-	) -> Self::Balance {
-		if !Self::AllowApprovalSpending::get() {
-			return Self::Balance::zero();
-		}
-
-		let owner = match T::Lookup::lookup(owner) {
-			Ok(acc) => acc,
-			Err(_) => return Self::Balance::zero(),
-		};
-
-		let spender = match T::Lookup::lookup(spender) {
-			Ok(acc) => acc,
-			Err(_) => return Self::Balance::zero(),
-		};
-
-		Approvals::<T>::get(id, (owner, spender))
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
@@ -893,60 +864,6 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 
 			Ok(())
 		})
-	}
-
-	fn approve(
-		id: Self::AssetId,
-		who: <T::Lookup as StaticLookup>::Source,
-		spender: <T::Lookup as StaticLookup>::Source,
-		amount: Self::Balance
-	) -> DispatchResult {
-		ensure!(Self::AllowApprovalSpending::get(), Error::<T>::NoApprovalSpendingAllowed);
-
-		let who = T::Lookup::lookup(who)?;
-		let spender = T::Lookup::lookup(spender)?;
-		Approvals::<T>::mutate(id, (who, spender), |b| *b += amount);
-		Ok(())
-	}
-
-	fn set_approval(
-		id: Self::AssetId,
-		who: <T::Lookup as StaticLookup>::Source,
-		spender: <T::Lookup as StaticLookup>::Source,
-		amount: Self::Balance
-	) -> DispatchResult {
-		ensure!(Self::AllowApprovalSpending::get(), Error::<T>::NoApprovalSpendingAllowed);
-
-		let who = T::Lookup::lookup(who)?;
-		let spender = T::Lookup::lookup(spender)?;
-		Approvals::<T>::mutate(id, (who, spender), |b| *b = amount);
-		Ok(())
-	}
-
-	fn transfer_from(
-		id: Self::AssetId,
-		spender: <T::Lookup as StaticLookup>::Source,
-		who: <T::Lookup as StaticLookup>::Source,
-		recipient: <T::Lookup as StaticLookup>::Source,
-		amount: Self::Balance
-	) -> DispatchResult {
-		ensure!(Self::AllowApprovalSpending::get(), Error::<T>::NoApprovalSpendingAllowed);
-
-		ensure!(!amount.is_zero(), Error::<T>::AmountZero);
-		// check allowance
-		let allowance = Self::allowance(id, who.clone(), spender.clone());
-		ensure!(allowance >= amount, Error::<T>::AllowanceTooLow);
-		// transfer if allowance is sufficient
-		// frozen errors will be handled in transfer method
-		match <Self as Token<_>>::transfer(id, who.clone(), recipient, amount) {
-			Ok(_) => {
-				let who = T::Lookup::lookup(who)?;
-				let spender = T::Lookup::lookup(spender)?;
-				Approvals::<T>::mutate(id, (who, spender), |b| *b -= amount);
-				Ok(())
-			},
-			Err(e) => Err(e),
-		}
 	}
 
 	fn burn(
@@ -1146,7 +1063,6 @@ mod tests {
 	parameter_types! {
 		pub const AssetDepositBase: u64 = 1;
 		pub const AssetDepositPerZombie: u64 = 1;
-		pub const AllowApprovalSpending: bool = true;
 		pub const AllowFreezing: bool = true;
 		pub const AllowBurning: bool = true;
 		pub const AllowMinting: bool = true;
@@ -1160,7 +1076,6 @@ mod tests {
 		type ForceOrigin = frame_system::EnsureRoot<u64>;
 		type AssetDepositBase = AssetDepositBase;
 		type AssetDepositPerZombie = AssetDepositPerZombie;
-		type AllowApprovalSpending = AllowApprovalSpending;
 		type AllowFreezing = AllowFreezing;
 		type AllowBurning = AllowBurning;
 		type AllowMinting = AllowMinting;
@@ -1482,53 +1397,6 @@ mod tests {
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 2), 0);
 			assert_noop!(Assets::burn(Origin::signed(1), 0, 2, u64::max_value()), Error::<Test>::BalanceZero);
-		});
-	}
-
-	#[test]
-	fn creating_approvals_should_work() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
-			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-			assert_ok!(Assets::approve(0, 1, 2, 50));
-			assert_eq!(Assets::allowance(0, 1, 2), 50);
-			assert_ok!(Assets::approve(0, 1, 2, 50));
-			assert_eq!(Assets::allowance(0, 1, 2), 100);
-		});
-	}
-
-	#[test]
-	fn setting_approvals_should_work() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
-			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-			assert_ok!(Assets::approve(0, 1, 2, 50));
-			assert_eq!(Assets::allowance(0, 1, 2), 50);
-			assert_ok!(Assets::set_approval(0, 1, 2, 0));
-			assert_eq!(Assets::allowance(0, 1, 2), 0);
-		});
-	}
-
-	#[test]
-	fn spending_approved_assets_works() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
-			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-			assert_ok!(Assets::approve(0, 1, 2, 50));
-			assert_eq!(Assets::allowance(0, 1, 2), 50);
-			assert_ok!(Assets::transfer_from(0, 2, 1, 3, 50));
-			assert_eq!(Assets::allowance(0, 1, 2), 0);
-		});
-	}
-
-	#[test]
-	fn spending_approved_assets_without_enough_allowance_should_not_work() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
-			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-			assert_ok!(Assets::approve(0, 1, 2, 50));
-			assert_eq!(Assets::allowance(0, 1, 2), 50);
-			assert_noop!(Assets::transfer_from(0, 2, 1, 3, 100), Error::<Test>::AllowanceTooLow);
 		});
 	}
 }

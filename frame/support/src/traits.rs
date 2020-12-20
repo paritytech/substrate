@@ -1193,7 +1193,6 @@ pub trait Token<Source> {
 
 	type AssetId: Member + Parameter + Default + Copy + HasCompact;
 
-	type AllowApprovalSpending: Get<bool>;
 	type AllowFreezing: Get<bool>;
 	type AllowBurning: Get<bool>;
 	type AllowMinting: Get<bool>;
@@ -1213,31 +1212,10 @@ pub trait Token<Source> {
 	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 	fn balance_of(id: Self::AssetId, who: Source) -> Self::Balance;
 
-	/// Returns the remaining number of tokens a spender can spend for a specific asset.
-	fn allowance(id: Self::AssetId, owner: Source, spender: Source) -> Self::Balance;
-
 	// PUBLIC MUTABLES (DANGEROUS)
 
 	/// Transfer some liquid free balance of an asset to another account.
 	fn transfer(id: Self::AssetId, from: Source, to: Source, amount: Self::Balance) -> DispatchResult;
-
-	/// Approve some amount of an asset to be spent by another account.
-	/// NOTE: This adds the amount to the existing approvals for an account
-	fn approve(id: Self::AssetId, who: Source, spender: Source, amount: Self::Balance) -> DispatchResult;
-
-	/// Approve some amount of an asset to be spent by another account.
-	/// NOTE: This replaces the amount approved by the new amount provided.
-	fn set_approval(id: Self::AssetId, who: Source, spender: Source, amount: Self::Balance) -> DispatchResult;
-
-	/// Transfer some `amount` of tokens from an account `who` to another account `recipient`
-	fn transfer_from(
-		id: Self::AssetId,
-		spender: Source,
-		who: Source,
-		recipient: Source,
-		amount: Self::Balance,
-	) -> DispatchResult;
-
 
 	/// Reduce the total number of assets a specific account owns for a specific asset.
 	///
