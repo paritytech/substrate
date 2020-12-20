@@ -143,8 +143,9 @@ pub struct TestBaseCallFilter;
 impl Filter<Call> for TestBaseCallFilter {
 	fn filter(c: &Call) -> bool {
 		match *c {
-			// Use `transfer_keep_alive` for a call that doesn't pass the filter.
+			// Transfer works. Use `transfer_keep_alive` for a call that doesn't pass the filter.
 			Call::Balances(pallet_balances::Call::transfer(..)) => true,
+			Call::Utility(_) => true,
 			// For benchmarking, this acts as a noop call
 			Call::System(frame_system::Call::remark(..)) => true,
 			// For tests
@@ -271,10 +272,7 @@ fn as_derivative_handles_weight_refund() {
 #[test]
 fn as_derivative_filters() {
 	new_test_ext().execute_with(|| {
-		let sub_1_0 = Utility::derivative_account_id(1, 1);
-		assert_ok!(Balances::transfer(Origin::signed(1), sub_1_0, 5));
-		//assert_err_ignore_postinfo ??
-		assert_noop!(Utility::as_derivative(
+		assert_err_ignore_postinfo!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
 			Box::new(Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))),
