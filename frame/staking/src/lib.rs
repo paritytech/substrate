@@ -429,16 +429,16 @@ pub enum StakerStatus<AccountId> {
 
 /// Policy for receiving rewards
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
-pub enum RewardPolicy<Dest> {
+pub enum RewardPolicy<AccountId> {
 	/// Pay into single RewardDestination
-	One(Dest),
+	One(RewardDestination<AccountId>),
 	/// Pay (Perbill * Total) to 1st Dest, ((1-Perbill) * Total) to 2nd Dest
-	Split(Dest,Perbill,Dest),
+	Split(RewardDestination<AccountId>,Perbill,RewardDestination<AccountId>),
 }
 
-impl<T: Default> Default for RewardPolicy<T> {
+impl<AccountId> Default for RewardPolicy<AccountId> {
 	fn default() -> Self {
-		RewardPolicy::One(T::default())
+		RewardPolicy::One(RewardDestination::default())
 	}
 }
 
@@ -949,7 +949,7 @@ decl_storage! {
 			=> Option<StakingLedger<T::AccountId, BalanceOf<T>>>;
 
 		/// Where the reward payment should be made. Keyed by stash.
-		pub Payee get(fn payee): map hasher(twox_64_concat) T::AccountId => RewardPolicy<RewardDestination<T::AccountId>>;
+		pub Payee get(fn payee): map hasher(twox_64_concat) T::AccountId => RewardPolicy<T::AccountId>;
 
 		/// The map from (wannabe) validator stash key to the preferences of that validator.
 		pub Validators get(fn validators):
@@ -1416,7 +1416,7 @@ decl_module! {
 		pub fn bond(origin,
 			controller: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
-			payee: RewardPolicy<RewardDestination<T::AccountId>>,
+			payee: RewardPolicy<T::AccountId>,
 		) {
 			let stash = ensure_signed(origin)?;
 
@@ -1742,7 +1742,7 @@ decl_module! {
 		///     - Write: Payee
 		/// # </weight>
 		#[weight = T::WeightInfo::set_payee()]
-		fn set_payee(origin, payee: RewardPolicy<RewardDestination<T::AccountId>>) {
+		fn set_payee(origin, payee: RewardPolicy<T::AccountId>) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;

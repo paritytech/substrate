@@ -600,7 +600,7 @@ pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
 		Origin::signed(stash),
 		ctrl,
 		val,
-		RewardDestination::Controller,
+		RewardPolicy::One(RewardDestination::Controller),
 	));
 	assert_ok!(Staking::validate(
 		Origin::signed(ctrl),
@@ -620,7 +620,7 @@ pub(crate) fn bond_nominator(
 		Origin::signed(stash),
 		ctrl,
 		val,
-		RewardDestination::Controller,
+		RewardPolicy::One(RewardDestination::Controller),
 	));
 	assert_ok!(Staking::nominate(Origin::signed(ctrl), target));
 }

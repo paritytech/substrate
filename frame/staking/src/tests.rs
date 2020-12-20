@@ -185,9 +185,9 @@ fn rewards_should_work() {
 		let init_balance_101 = Balances::total_balance(&101);
 
 		// Check state
-		Payee::<Test>::insert(11, RewardDestination::Controller);
-		Payee::<Test>::insert(21, RewardDestination::Controller);
-		Payee::<Test>::insert(101, RewardDestination::Controller);
+		Payee::<Test>::insert(11, RewardPolicy::One(RewardDestination::Controller));
+		Payee::<Test>::insert(21, RewardPolicy::One(RewardDestination::Controller));
+		Payee::<Test>::insert(101, RewardPolicy::One(RewardDestination::Controller));
 
 		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
 		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
@@ -287,7 +287,7 @@ fn staking_should_work() {
 			// --- Block 2:
 			start_session(2);
 			// add a new candidate for being a validator. account 3 controlled by 4.
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller));
+			assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardPolicy::One(RewardDestination::Controller)));
 			assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
 
 			// No effects will be seen so far.
@@ -415,10 +415,10 @@ fn nominating_and_rewards_should_work() {
 			assert_eq_uvec!(validator_controllers(), vec![40, 30]);
 
 			// Set payee to controller
-			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
-			assert_ok!(Staking::set_payee(Origin::signed(20), RewardDestination::Controller));
-			assert_ok!(Staking::set_payee(Origin::signed(30), RewardDestination::Controller));
-			assert_ok!(Staking::set_payee(Origin::signed(40), RewardDestination::Controller));
+			assert_ok!(Staking::set_payee(Origin::signed(10), RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::set_payee(Origin::signed(20), RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::set_payee(Origin::signed(30), RewardPolicy::One(RewardDestination::Controller)));
+			assert_ok!(Staking::set_payee(Origin::signed(40), RewardPolicy::One(RewardDestination::Controller)));
 
 			// give the man some money
 			let initial_balance = 1000;
@@ -428,10 +428,10 @@ fn nominating_and_rewards_should_work() {
 
 			// bond two account pairs and state interest in nomination.
 			// 2 will nominate for 10, 20, 30
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
+			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardPolicy::One(RewardDestination::Controller)));
 			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 21, 31]));
 			// 4 will nominate for 10, 20, 40
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
+			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardPolicy::One(RewardDestination::Controller)));
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 21, 41]));
 
 			// the total reward for era 0
@@ -601,12 +601,12 @@ fn double_staking_should_fail() {
 		// 2 = controller, 1 stashed => ok
 		assert_ok!(
 			Staking::bond(Origin::signed(1), 2, arbitrary_value,
-			RewardDestination::default())
+			RewardPolicy::One(RewardDestination::default()))
 		);
 		// 4 = not used so far, 1 stashed => not allowed.
 		assert_noop!(
 			Staking::bond(Origin::signed(1), 4, arbitrary_value,
-			RewardDestination::default()), Error::<Test>::AlreadyBonded,
+			RewardPolicy::One(RewardDestination::default())), Error::<Test>::AlreadyBonded,
 		);
 		// 1 = stashed => attempting to nominate should fail.
 		assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), Error::<Test>::NotController);
@@ -626,11 +626,11 @@ fn double_controlling_should_fail() {
 			Origin::signed(1),
 			2,
 			arbitrary_value,
-			RewardDestination::default(),
+			RewardPolicy::One(RewardDestination::default()),
 		));
 		// 2 = controller, 3 stashed (Note that 2 is reused.) => no-op
 		assert_noop!(
-			Staking::bond(Origin::signed(3), 2, arbitrary_value, RewardDestination::default()),
+			Staking::bond(Origin::signed(3), 2, arbitrary_value, RewardPolicy::One(RewardDestination::default())),
 			Error::<Test>::AlreadyPaired,
 		);
 	});
@@ -824,7 +824,7 @@ fn reward_destination_works() {
 		mock::make_all_reward_payment(0);
 
 		// Check that RewardDestination is Staked (default)
-		assert_eq!(Staking::payee(&11), RewardDestination::Staked);
+		assert_eq!(Staking::payee(&11), RewardPolicy::One(RewardDestination::Staked));
 		// Check that reward went to the stash account of validator
 		assert_eq!(Balances::free_balance(11), 1000 + total_payout_0);
 		// Check that amount at stake increased accordingly
@@ -837,7 +837,7 @@ fn reward_destination_works() {
 		}));
 
 		//Change RewardDestination to Stash
-		<Payee<Test>>::insert(&11, RewardDestination::Stash);
+		<Payee<Test>>::insert(&11, RewardPolicy::One(RewardDestination::Stash));
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(3000);
@@ -848,7 +848,7 @@ fn reward_destination_works() {
 		mock::make_all_reward_payment(1);
 
 		// Check that RewardDestination is Stash
-		assert_eq!(Staking::payee(&11), RewardDestination::Stash);
+		assert_eq!(Staking::payee(&11), RewardPolicy::One(RewardDestination::Stash));
 		// Check that reward went to the stash account
 		assert_eq!(Balances::free_balance(11), 1000 + total_payout_0 + total_payout_1);
 		// Record this value
@@ -863,7 +863,7 @@ fn reward_destination_works() {
 		}));
 
 		// Change RewardDestination to Controller
-		<Payee<Test>>::insert(&11, RewardDestination::Controller);
+		<Payee<Test>>::insert(&11, RewardPolicy::One(RewardDestination::Controller));
 
 		// Check controller balance
 		assert_eq!(Balances::free_balance(10), 1);
@@ -877,7 +877,7 @@ fn reward_destination_works() {
 		mock::make_all_reward_payment(2);
 
 		// Check that RewardDestination is Controller
-		assert_eq!(Staking::payee(&11), RewardDestination::Controller);
+		assert_eq!(Staking::payee(&11), RewardPolicy::One(RewardDestination::Controller));
 		// Check that reward went to the controller account
 		assert_eq!(Balances::free_balance(10), 1 + total_payout_2);
 		// Check that amount at stake is NOT increased
@@ -905,8 +905,8 @@ fn validator_payment_prefs_work() {
 		});
 
 		// Reward controller so staked ratio doesn't change.
-		<Payee<Test>>::insert(&11, RewardDestination::Controller);
-		<Payee<Test>>::insert(&101, RewardDestination::Controller);
+		<Payee<Test>>::insert(&11, RewardPolicy::One(RewardDestination::Controller));
+		<Payee<Test>>::insert(&101, RewardPolicy::One(RewardDestination::Controller));
 
 		mock::start_era(1);
 		mock::make_all_reward_payment(0);
@@ -988,7 +988,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 	// * Once the unbonding period is done, it can actually take the funds out of the stash.
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		// Set payee to controller. avoids confusion
-		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
+		assert_ok!(Staking::set_payee(Origin::signed(10), RewardPolicy::One(RewardDestination::Controller)));
 
 		// Give account 11 some large free balance greater than total
 		let _ = Balances::make_free_balance_be(&11, 1000000);
@@ -1150,7 +1150,7 @@ fn rebond_works() {
 			// Set payee to controller. avoids confusion
 			assert_ok!(Staking::set_payee(
 				Origin::signed(10),
-				RewardDestination::Controller
+				RewardPolicy::One(RewardDestination::Controller)
 			));
 
 			// Give account 11 some large free balance greater than total
@@ -1295,7 +1295,7 @@ fn rebond_is_fifo() {
 			// Set payee to controller. avoids confusion
 			assert_ok!(Staking::set_payee(
 				Origin::signed(10),
-				RewardDestination::Controller
+				RewardPolicy::One(RewardDestination::Controller)
 			));
 
 			// Give account 11 some large free balance greater than total
@@ -1449,7 +1449,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 
 		// Set some storage items which we expect to be cleaned up
 		// Set payee information
-		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
+		assert_ok!(Staking::set_payee(Origin::signed(10), RewardPolicy::One(RewardDestination::Stash)));
 
 		// Check storage items that should be cleaned up
 		assert!(<Ledger<Test>>::contains_key(&10));
@@ -1503,7 +1503,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert_eq!(Balances::free_balance(11), 256000);
 
 		// Set payee information
-		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
+		assert_ok!(Staking::set_payee(Origin::signed(10), RewardPolicy::One(RewardDestination::Stash)));
 
 		// Check storage items that should be cleaned up
 		assert!(<Ledger<Test>>::contains_key(&10));
@@ -1550,7 +1550,7 @@ fn switching_roles() {
 	// Test that it should be possible to switch between roles (nominator, validator, idle) with minimal overhead.
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		// Reset reward destination
-		for i in &[10, 20] { assert_ok!(Staking::set_payee(Origin::signed(*i), RewardDestination::Controller)); }
+		for i in &[10, 20] { assert_ok!(Staking::set_payee(Origin::signed(*i), RewardPolicy::One(RewardDestination::Controller))); }
 
 		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
 
@@ -1558,14 +1558,14 @@ fn switching_roles() {
 		for i in 1..7 { let _ = Balances::deposit_creating(&i, 5000); }
 
 		// add 2 nominators
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardDestination::Controller));
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardPolicy::One(RewardDestination::Controller)));
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 5]));
 
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardPolicy::One(RewardDestination::Controller)));
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 1]));
 
 		// add a new validator candidate
-		assert_ok!(Staking::bond(Origin::signed(5), 6, 1000, RewardDestination::Controller));
+		assert_ok!(Staking::bond(Origin::signed(5), 6, 1000, RewardPolicy::One(RewardDestination::Controller)));
 		assert_ok!(Staking::validate(Origin::signed(6), ValidatorPrefs::default()));
 
 		mock::start_era(1);
@@ -1597,7 +1597,7 @@ fn wrong_vote_is_null() {
 		for i in 1..3 { let _ = Balances::deposit_creating(&i, 5000); }
 
 		// add 1 nominators
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardDestination::default()));
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardPolicy::One(RewardDestination::default())));
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![
 			11, 21, 			// good votes
 			1, 2, 15, 1000, 25  // crap votes. No effect.
@@ -1623,11 +1623,11 @@ fn bond_with_no_staked_value() {
 		.execute_with(|| {
 			// Can't bond with 1
 			assert_noop!(
-				Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller),
+				Staking::bond(Origin::signed(1), 2, 1, RewardPolicy::One(RewardDestination::Controller)),
 				Error::<Test>::InsufficientValue,
 			);
 			// bonded with absolute minimum value possible.
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardDestination::Controller));
+			assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardPolicy::One(RewardDestination::Controller)));
 			assert_eq!(Balances::locks(&1)[0].amount, 5);
 
 			// unbonding even 1 will cause all to be unbonded.
@@ -1672,12 +1672,12 @@ fn bond_with_little_staked_value_bounded() {
 		.execute_with(|| {
 			// setup
 			assert_ok!(Staking::chill(Origin::signed(30)));
-			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
+			assert_ok!(Staking::set_payee(Origin::signed(10), RewardPolicy::One(RewardDestination::Controller)));
 			let init_balance_2 = Balances::free_balance(&2);
 			let init_balance_10 = Balances::free_balance(&10);
 
 			// Stingy validator.
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
+			assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardPolicy::One(RewardDestination::Controller)));
 			assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 
 			// reward era 0
@@ -1742,10 +1742,10 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
 				let _ = Balances::make_free_balance_be(i, initial_balance);
 			}
 
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
+			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardPolicy::One(RewardDestination::Controller)));
 			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21, 31,]));
 
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
+			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardPolicy::One(RewardDestination::Controller)));
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
 
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into account.
@@ -1789,10 +1789,10 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election_elected() {
 				let _ = Balances::make_free_balance_be(i, initial_balance);
 			}
 
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
+			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardPolicy::One(RewardDestination::Controller)));
 			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21, 31,]));
 
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
+			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardPolicy::One(RewardDestination::Controller)));
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
 
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into account.
@@ -1884,7 +1884,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 
 		// only slashes out of bonded stake are applied. without this line,
 		// it is 0.
-		Staking::bond(Origin::signed(2), 20000, stake - 1, RewardDestination::default()).unwrap();
+		Staking::bond(Origin::signed(2), 20000, stake - 1, RewardPolicy::One(RewardDestination::default())).unwrap();
 		// Override exposure of 11
 		ErasStakers::<Test>::insert(0, 11, Exposure {
 			total: stake,
@@ -4175,8 +4175,8 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		let part_for_100 = Perbill::from_rational_approximation::<u32>(125, 1125);
 
 		// Check state
-		Payee::<Test>::insert(11, RewardDestination::Controller);
-		Payee::<Test>::insert(101, RewardDestination::Controller);
+		Payee::<Test>::insert(11, RewardPolicy::One(RewardDestination::Controller));
+		Payee::<Test>::insert(101, RewardPolicy::One(RewardDestination::Controller));
 
 		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
 		// Compute total payout now for whole duration as other parameter won't change
@@ -4350,7 +4350,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 					Origin::signed(stash),
 					controller,
 					balance,
-					RewardDestination::Stash
+					RewardPolicy::One(RewardDestination::Stash)
 				)
 			);
 			assert_ok!(Staking::nominate(Origin::signed(controller), vec![11]));
@@ -4679,7 +4679,7 @@ fn payout_to_any_account_works() {
 		bond_nominator(1234, 1337, 100, vec![11]);
 
 		// Update payout location
-		assert_ok!(Staking::set_payee(Origin::signed(1337), RewardDestination::Account(42)));
+		assert_ok!(Staking::set_payee(Origin::signed(1337), RewardPolicy::One(RewardDestination::Account(42))));
 
 		// Reward Destination account doesn't exist
 		assert_eq!(Balances::free_balance(42), 0);
