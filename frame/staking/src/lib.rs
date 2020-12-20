@@ -2394,21 +2394,20 @@ impl<T: Config> Module<T> {
 			}
 		};
 		match policy {
-			RewardPolicy::One(d) => payout(d,amount),
-			RewardPolicy::Split(d1,pct,d2) => {
+			RewardPolicy::One(destination) => payout(destination,amount),
+			RewardPolicy::Split(dest1,pct,dest2) => {
 				if pct.is_one() {
-					return payout(d1,amount)
+					return payout(dest1,amount)
 				}
 				if pct.is_zero() {
-					return payout(d2,amount)
+					return payout(dest2,amount)
 				}
 				let first_amt = pct * amount;
 				let remaining = amount - first_amt;
-				if let Some(payout1) = payout(d1,first_amt) {
-					let payout2 = payout(d2,remaining);
-					Some(payout1.maybe_merge(payout2))
+				if let Some(payout1) = payout(dest1,first_amt) {
+					Some(payout1.maybe_merge(payout(dest2,remaining)))
 				} else {
-					payout(d2,remaining)
+					payout(dest2,remaining)
 				}
 			}
 		}
