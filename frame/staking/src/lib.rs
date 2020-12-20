@@ -2399,11 +2399,8 @@ impl<T: Config> Module<T> {
 				let first_amt = pct * amount;
 				let remaining = amount - first_amt;
 				if let Some(payout1) = payout(d1,first_amt) {
-					if let Some(payout2) = payout(d2,remaining) {
-						Some(payout1.merge(payout2))
-					} else {
-						Some(payout1)
-					}
+					let payout2 = payout(d2,remaining);
+					Some(payout1.maybe_merge(payout2))
 				} else {
 					payout(d2,remaining)
 				}
