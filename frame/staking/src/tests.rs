@@ -852,7 +852,7 @@ fn reward_destination_works() {
 		// Check that reward went to the stash account
 		assert_eq!(Balances::free_balance(11), 1000 + total_payout_0 + total_payout_1);
 		// Record this value
-		let recorded_stash_balance = 1000 + total_payout_0 + total_payout_1;
+		let mut recorded_stash_balance = 1000 + total_payout_0 + total_payout_1;
 		// Check that amount at stake is NOT increased
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11,
@@ -889,6 +889,63 @@ fn reward_destination_works() {
 			claimed_rewards: vec![0,1,2],
 		}));
 		// Check that amount in staked account is NOT increased.
+		assert_eq!(Balances::free_balance(11), recorded_stash_balance);
+
+		// Change RewardDestination to Split Between Controller and Stash Accounts
+		<Payee<Test>>::insert(&11, RewardPolicy::Split(RewardDestination::Controller,Perbill::from_percent(50),RewardDestination::Stash));
+
+		// Check controller balance
+		assert_eq!(Balances::free_balance(10), 1 + total_payout_2);
+
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_3 = current_total_payout_for_duration(3000);
+		assert!(total_payout_3 > 100); // Test is meaningful if reward something
+		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+
+		mock::start_era(4);
+		mock::make_all_reward_payment(3);
+
+		// Check that RewardDestination is Controller
+		assert_eq!(Staking::payee(&11), RewardPolicy::Split(RewardDestination::Controller,Perbill::from_percent(50),RewardDestination::Stash));
+		// Check that 1/2 reward went to the controller account
+		assert_eq!(Balances::free_balance(10), 1 + total_payout_2 + total_payout_3 * 1/2);
+		// Check that amount at stake is NOT increased
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
+			stash: 11,
+			total: 1000 + total_payout_0,
+			active: 1000 + total_payout_0,
+			unlocking: vec![],
+			claimed_rewards: vec![0,1,2,3],
+		}));
+		// Check that amount in staked account is increased.
+		recorded_stash_balance += total_payout_3 * 1/2;
+		assert_eq!(Balances::free_balance(11), recorded_stash_balance);
+
+		// Change RewardDestination to Split Between Controller and Stash Accounts
+		<Payee<Test>>::insert(&11, RewardPolicy::Split(RewardDestination::Staked,Perbill::from_percent(50),RewardDestination::Stash));
+
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_4 = current_total_payout_for_duration(3000);
+		assert!(total_payout_4 > 100); // Test is meaningful if reward something
+		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+
+		mock::start_era(5);
+		mock::make_all_reward_payment(4);
+
+		// Check that RewardDestination is Controller
+		assert_eq!(Staking::payee(&11), RewardPolicy::Split(RewardDestination::Staked,Perbill::from_percent(50),RewardDestination::Stash));
+		// Check controller account balance is NOT increased
+		assert_eq!(Balances::free_balance(10), 1 + total_payout_2 + total_payout_3 * 1/2);
+		// Check that amount at stake is increased
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
+			stash: 11,
+			total: 1000 + total_payout_0 + total_payout_4 * 1/2,
+			active: 1000 + total_payout_0 + total_payout_4 * 1/2,
+			unlocking: vec![],
+			claimed_rewards: vec![0,1,2,3,4],
+		}));
+		// Check that amount in staked account is increased.
+		recorded_stash_balance += total_payout_4;
 		assert_eq!(Balances::free_balance(11), recorded_stash_balance);
 	});
 }
@@ -4698,7 +4755,7 @@ fn payout_to_any_account_works() {
 }
 
 #[test]
-fn split_payout_works() {
+fn split_payout_can_create_two_accounts() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
 		// Create a validator:
