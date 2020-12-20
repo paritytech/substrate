@@ -276,13 +276,7 @@ fn as_derivative_filters() {
 			Origin::signed(1),
 			1,
 			Box::new(Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))),
-		), DispatchErrorWithPostInfo {
-			post_info: PostDispatchInfo {
-				actual_weight: Some(195549000),
-				pays_fee: Pays::Yes,
-			},
-			error: DispatchError::BadOrigin,
-		});
+		), DispatchError::BadOrigin);
 	});
 }
 
