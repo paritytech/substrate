@@ -89,7 +89,11 @@ pub fn create_validators<T: Config>(
 ) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
 	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(max as usize);
 	for i in 0 .. max {
-		let (stash, controller) = create_stash_controller::<T>(i, balance_factor, RewardPolicy::One(RewardDestination::Staked))?;
+		let (stash, controller) = create_stash_controller::<T>(
+			i, 
+			balance_factor, 
+			RewardPolicy::One(RewardDestination::Staked)
+		)?;
 		let validator_prefs = ValidatorPrefs {
 			commission: Perbill::from_percent(50),
 		};
@@ -131,7 +135,11 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	// Create validators
 	for i in 0 .. validators {
 		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
-		let (v_stash, v_controller) = create_stash_controller::<T>(i, balance_factor, RewardPolicy::One(RewardDestination::Staked))?;
+		let (v_stash, v_controller) = create_stash_controller::<T>(
+			i, 
+			balance_factor, 
+			RewardPolicy::One(RewardDestination::Staked)
+		)?;
 		let validator_prefs = ValidatorPrefs {
 			commission: Perbill::from_percent(50),
 		};

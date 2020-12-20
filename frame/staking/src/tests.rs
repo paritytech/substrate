@@ -892,7 +892,14 @@ fn reward_destination_works() {
 		assert_eq!(Balances::free_balance(11), recorded_stash_balance);
 
 		// Change RewardDestination to Split Between Controller and Stash Accounts
-		<Payee<Test>>::insert(&11, RewardPolicy::Split(RewardDestination::Controller,Perbill::from_percent(50),RewardDestination::Stash));
+		<Payee<Test>>::insert(
+			&11, 
+			RewardPolicy::Split(
+				RewardDestination::Controller,
+				Perbill::from_percent(50),
+				RewardDestination::Stash
+			)
+		);
 
 		// Check controller balance
 		assert_eq!(Balances::free_balance(10), 1 + total_payout_2);
@@ -906,7 +913,14 @@ fn reward_destination_works() {
 		mock::make_all_reward_payment(3);
 
 		// Check that RewardPolicy is Split Between Controller and Stash Accounts
-		assert_eq!(Staking::payee(&11), RewardPolicy::Split(RewardDestination::Controller,Perbill::from_percent(50),RewardDestination::Stash));
+		assert_eq!(
+			Staking::payee(&11), 
+			RewardPolicy::Split(
+				RewardDestination::Controller,
+				Perbill::from_percent(50),
+				RewardDestination::Stash
+			)
+		);
 		// Check that 1/2 reward went to the controller account
 		assert_eq!(Balances::free_balance(10), 1 + total_payout_2 + total_payout_3 * 1/2);
 		// Check that amount at stake is NOT increased
@@ -922,7 +936,14 @@ fn reward_destination_works() {
 		assert_eq!(Balances::free_balance(11), recorded_stash_balance);
 
 		// Change RewardPolicy to Split Between Staked and Stash
-		<Payee<Test>>::insert(&11, RewardPolicy::Split(RewardDestination::Staked,Perbill::from_percent(50),RewardDestination::Stash));
+		<Payee<Test>>::insert(
+			&11, 
+			RewardPolicy::Split(
+				RewardDestination::Staked,
+				Perbill::from_percent(50),
+				RewardDestination::Stash
+			)
+		);
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_4 = current_total_payout_for_duration(3000);
@@ -933,7 +954,14 @@ fn reward_destination_works() {
 		mock::make_all_reward_payment(4);
 
 		// Check that RewardPolicy is Split Between Staked and Stash
-		assert_eq!(Staking::payee(&11), RewardPolicy::Split(RewardDestination::Staked,Perbill::from_percent(50),RewardDestination::Stash));
+		assert_eq!(
+			Staking::payee(&11), 
+			RewardPolicy::Split(
+				RewardDestination::Staked,
+				Perbill::from_percent(50),
+				RewardDestination::Stash
+			)
+		);
 		// Check controller account balance is NOT increased
 		assert_eq!(Balances::free_balance(10), 1 + total_payout_2 + total_payout_3 * 1/2);
 		// Check that amount at stake is increased

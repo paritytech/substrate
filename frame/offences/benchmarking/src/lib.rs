@@ -39,7 +39,7 @@ use pallet_offences::{Config as OffencesConfig, Module as Offences};
 use pallet_session::historical::{Config as HistoricalConfig, IdentificationTuple};
 use pallet_session::{Config as SessionConfig, SessionManager};
 use pallet_staking::{
-	Module as Staking, Config as StakingConfig, RewardDestination, ValidatorPrefs,
+	Module as Staking, Config as StakingConfig, RewardDestination, RewardPolicy, ValidatorPrefs,
 	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS, Event as StakingEvent
 };
 
@@ -94,7 +94,7 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 	let stash: T::AccountId = account("stash", n, SEED);
 	let controller: T::AccountId = account("controller", n, SEED);
 	let controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(controller.clone());
-	let reward_destination = RewardDestination::Staked;
+	let reward_destination = RewardPolicy::One(RewardDestination::Staked);
 	let raw_amount = bond_amount::<T>();
 	// add twice as much balance to prevent the account from being killed.
 	let free_amount = raw_amount.saturating_mul(2u32.into());

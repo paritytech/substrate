@@ -2371,7 +2371,8 @@ impl<T: Config> Module<T> {
 	/// to pay the right payee for the given staker account.
 	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
 		let policy = Self::payee(stash);
-		let payout = |dest: RewardDestination<T::AccountId>, amount: BalanceOf<T>| -> Option<PositiveImbalanceOf<T>> {
+		let payout = |dest: RewardDestination<T::AccountId>, amount: BalanceOf<T>| 
+			-> Option<PositiveImbalanceOf<T>> {
 			match dest {
 				RewardDestination::Controller => Self::bonded(stash)
 					.and_then(|controller|
