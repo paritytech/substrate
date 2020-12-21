@@ -505,6 +505,41 @@ decl_error! {
 	}
 }
 
+mod migrations {
+	use super::*;
+
+	fn migrate_all_v2_v3<T: Config>() {
+		migrate_to_u32_refcount::<T>();
+		migrate_to_dual_ref_count::<T>();
+	}
+
+	decl_storage! {
+		trait Store for Module<T: Config> as System {
+			OldAccount get(fn account):
+				map hasher(blake2_128_concat) T::AccountId => OldAccountInfo<T::Index, T::AccountData>;
+		}
+	}
+
+	#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+	struct OldAccountInfo<Index, Data> {
+		nonce: Index, refcount: u32, data: Data,
+	}
+
+	pub fn migrate_to_u32_refcount<T: Config>() -> frame_support::weights::Weight {
+		OldAccount::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)|
+			Some(OldAccountInfo { nonce, refcount: rc as RefCount, data })
+		);
+		T::BlockWeights::get().max_block
+	}
+
+	pub fn migrate_to_dual_ref_count<T: Config>() -> frame_support::weights::Weight {
+		Account::<T>::translate::<(T::Index, RefCount, T::AccountData), _>(|_key, (nonce, rc, data)|
+			Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, data })
+		);
+		T::BlockWeights::get().max_block
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 		type Error = Error<T>;
@@ -520,11 +555,8 @@ decl_module! {
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if !UpgradedToDualRefCount::get() {
-				Account::<T>::translate::<(T::Index, RefCount, T::AccountData), _>(|_key, (nonce, rc, data)|
-					Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, data })
-				);
 				UpgradedToDualRefCount::put(true);
-				T::BlockWeights::get().max_block
+				migrations::migrate_to_dual_ref_count::<T>()
 			} else {
 				0
 			}
