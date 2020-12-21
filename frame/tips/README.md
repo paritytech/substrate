@@ -30,3 +30,4 @@ any finders fee, in case of a public (and bonded) original report.
 - `tip_new` - Report an item worthy of a tip and declare a specific amount to tip.
 - `tip` - Declare or redeclare an amount to tip for a particular reason.
 - `close_tip` - Close and pay out a tip.
+- `slash_tip` - Remove and slash an already-open tip.
