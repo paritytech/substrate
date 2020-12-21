@@ -553,6 +553,7 @@ fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
 mod tests {
 	use super::{mock::*, *};
 	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
+	use sp_election_providers::Assignment;
 	use sp_runtime::PerU16;
 
 	#[test]

@@ -8,7 +8,7 @@ use sp_core::{
 	},
 	H256,
 };
-use sp_election_providers::ElectionDataProvider;
+use sp_election_providers::{Assignment, ElectionDataProvider};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
 	CompactSolution, ElectionResult, EvaluateSupport,
@@ -252,8 +252,10 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	fn desired_targets() -> u32 {
 		DesiredTargets::get()
 	}
-	fn feasibility_check_assignment<P: PerThing>(_: &AccountId, _: &[(AccountId, P)]) -> bool {
-		true
+	fn feasibility_check_assignment<P: PerThing>(
+		_: &Assignment<AccountId, P>,
+	) -> Result<(), &'static str> {
+		Ok(())
 	}
 	fn next_election_prediction(now: u64) -> u64 {
 		now + EpochLength::get() - now % EpochLength::get()

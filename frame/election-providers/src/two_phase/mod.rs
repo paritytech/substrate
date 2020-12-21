@@ -146,8 +146,8 @@ use frame_support::{
 use frame_system::{ensure_none, ensure_signed, offchain::SendTransactionTypes};
 use sp_election_providers::{ElectionDataProvider, ElectionProvider};
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, is_score_better, Assignment, CompactSolution,
-	ElectionScore, EvaluateSupport, ExtendedBalance, PerThing128, Supports, VoteWeight,
+	assignment_ratio_to_staked_normalized, is_score_better, CompactSolution, ElectionScore,
+	EvaluateSupport, ExtendedBalance, PerThing128, Supports, VoteWeight,
 };
 use sp_runtime::{
 	traits::Zero, transaction_validity::TransactionPriority, InnerOf, PerThing, Perbill,
@@ -178,10 +178,24 @@ pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::VoteWeight;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
-type PositiveImbalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::PositiveImbalance;
-type NegativeImbalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::PositiveImbalance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
+
+struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>)
+where
+	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
+impl<T: Config> crate::onchain::Config for OnChainConfig<T>
+where
+	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+{
+	type AccountId = T::AccountId;
+	type BlockNumber = T::BlockNumber;
+	type ElectionDataProvider = T::ElectionDataProvider;
+}
 
 /// Current phase of the pallet.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
@@ -805,21 +819,30 @@ where
 		// given snapshot, and check with the `ElectionDataProvider`.
 		let _ = assignments
 			.iter()
-			.map(|Assignment { who, distribution }| {
-				snapshot_voters.iter().find(|(v, _, _)| v == who).map_or(
-					Err(FeasibilityError::InvalidVoter),
-					|(_voter, _stake, targets)| {
-						if distribution.iter().map(|(d, _)| d).all(|d| targets.contains(d))
-							&& T::ElectionDataProvider::feasibility_check_assignment::<
-								CompactAccuracyOf<T>,
-							>(who, distribution)
-						{
-							Ok(())
-						} else {
-							Err(FeasibilityError::InvalidVote)
-						}
-					},
-				)
+			.map(|ref assignment| {
+				// TODO: better to rewrite this more with ?
+				snapshot_voters
+					.iter()
+					.find(|(v, _, _)| v == &assignment.who)
+					.map_or(
+						Err(FeasibilityError::InvalidVoter),
+						|(_voter, _stake, targets)| {
+							if assignment
+								.distribution
+								.iter()
+								.map(|(d, _)| d)
+								.all(|d| targets.contains(d))
+								&& T::ElectionDataProvider::feasibility_check_assignment::<
+									CompactAccuracyOf<T>,
+								>(assignment)
+								.is_ok()
+							{
+								Ok(())
+							} else {
+								Err(FeasibilityError::InvalidVote)
+							}
+						},
+					)
 			})
 			.collect::<Result<(), FeasibilityError>>()?;
 
@@ -847,22 +870,9 @@ where
 
 	/// On-chain fallback of election.
 	fn onchain_fallback() -> Result<Supports<T::AccountId>, Error> {
-		// If the length of singed phase is zero, the signed phase never starts and thus snapshot is
-		// never created.
-		let snapshot_backup = || {
-			let targets = T::ElectionDataProvider::targets();
-			let voters = T::ElectionDataProvider::voters();
-			RoundSnapshot { voters, targets }
-		};
-		let desired_targets_backup = || T::ElectionDataProvider::desired_targets();
-
-		let RoundSnapshot { voters, targets } = Self::snapshot().unwrap_or_else(snapshot_backup);
-		let desired_targets = Self::desired_targets().unwrap_or_else(desired_targets_backup);
-		<OnChainSequentialPhragmen as ElectionProvider<T::AccountId>>::elect::<Perbill>(
-			desired_targets as usize,
-			targets,
-			voters,
-		)
+		<OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<T::AccountId>>::elect::<
+			Perbill,
+		>()
 		.map_err(Into::into)
 	}
 }
@@ -871,14 +881,9 @@ impl<T: Config> ElectionProvider<T::AccountId> for Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 {
-	const NEEDS_ELECT_DATA: bool = false;
 	type Error = Error;
 
-	fn elect<P: PerThing128>(
-		_to_elect: usize,
-		_targets: Vec<T::AccountId>,
-		_voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-	) -> Result<Supports<T::AccountId>, Self::Error>
+	fn elect<P: PerThing128>() -> Result<Supports<T::AccountId>, Self::Error>
 	where
 		ExtendedBalance: From<<P as PerThing>::Inner>,
 	{
@@ -915,6 +920,7 @@ mod tests {
 	use super::{mock::*, *};
 	use sp_election_providers::ElectionProvider;
 	use sp_npos_elections::Support;
+	use sp_runtime::Perbill;
 
 	#[test]
 	fn phase_rotation_works() {
@@ -961,8 +967,7 @@ mod tests {
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(TwoPhase::snapshot().is_some());
 
-			TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
-				.unwrap();
+			TwoPhase::elect::<Perbill>().unwrap();
 
 			assert!(TwoPhase::current_phase().is_off());
 			assert!(TwoPhase::snapshot().is_none());
@@ -989,9 +994,7 @@ mod tests {
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// zilch solutions thus far.
-			let supports =
-				TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
-					.unwrap();
+			let supports = TwoPhase::elect::<Perbill>().unwrap();
 
 			assert_eq!(
 				supports,
@@ -1030,9 +1033,7 @@ mod tests {
 			roll_to(30);
 			assert!(TwoPhase::current_phase().is_unsigned_open_at(20));
 
-			let _ =
-				TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
-					.unwrap();
+			TwoPhase::elect::<Perbill>().unwrap();
 
 			assert!(TwoPhase::current_phase().is_off());
 		});
@@ -1053,9 +1054,7 @@ mod tests {
 			roll_to(30);
 			assert!(TwoPhase::current_phase().is_signed());
 
-			let _ =
-				TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
-					.unwrap();
+			let _ = TwoPhase::elect::<Perbill>().unwrap();
 
 			assert!(TwoPhase::current_phase().is_off());
 		});
@@ -1077,9 +1076,7 @@ mod tests {
 			assert!(TwoPhase::current_phase().is_off());
 
 			// this module is now only capable of doing on-chain backup.
-			let _ =
-				TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
-					.unwrap();
+			let _ = TwoPhase::elect::<Perbill>().unwrap();
 
 			assert!(TwoPhase::current_phase().is_off());
 		});
@@ -1100,8 +1097,7 @@ mod tests {
 
 			// an unexpected call to elect.
 			roll_to(20);
-			TwoPhase::elect::<sp_runtime::Perbill>(2, Default::default(), Default::default())
-				.unwrap();
+			TwoPhase::elect::<Perbill>().unwrap();
 
 			// we surely can't have any feasible solutions. This will cause an on-chain election.
 			assert_eq!(

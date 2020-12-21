@@ -50,12 +50,12 @@
 //!
 //! Typically, two types of elections exist:
 //!
-//! 1. Stateless: Election data is provided, and the election result is immediately ready.
-//! 2. Stateful: Election data is is provided, and the election result might be ready some number of
-//!    blocks in the future.
+//! 1. **Stateless**: Election data is provided, and the election result is immediately ready.
+//! 2. **Stateful**: Election data is is provided, and the election result might be ready some
+//!    number of blocks in the future.
 //!
-//! To accommodate both type of elections, the traits lean toward stateless election, as it is more
-//! general than the stateless. This translates to the [`ElectionProvider::elect`] to have no
+//! To accommodate both type of elections in one trait, the traits lean toward stateful election, as
+//! it is more general than the stateless. This is why [`ElectionProvider::elect`] has no
 //! parameters. All value and type parameter must be provided by the [`ElectionDataProvider`] trait.
 //!
 //! ## Election Data
@@ -66,7 +66,6 @@
 //! 1. A list of voters, with their stake.
 //! 2. A list of targets (i.e. _candidates_).
 //! 3. A number of desired targets to be elected (i.e. _winners_)
-//! 4. An accuracy for the election's fixed point arithmetic.
 //!
 //! In addition to that, the [`ElectionDataProvider`] must also hint [`ElectionProvider`] at when
 //! the next election might happen ([`ElectionDataProvider::next_election_prediction`]).
@@ -80,96 +79,104 @@
 //! # use sp_npos_elections::Support;
 //!
 //! type AccountId = u64;
-//!	type Balance = u64;
-//!	type BlockNumber = u32;
+//! type Balance = u64;
+//! type BlockNumber = u32;
 //!
 //! mod data_provider {
-//! 	use super::*;
+//!     use super::*;
 //!
-//! 	pub trait Config {
-//! 		type AccountId;
-//! 		type ElectionProvider: ElectionProvider<Self::AccountId>;
-//! 	}
+//!     pub trait Config {
+//!         type AccountId;
+//!         type ElectionProvider: ElectionProvider<Self::AccountId>;
+//!     }
 //!
-//!		pub struct Module<T: Config>(std::marker::PhantomData<T>);
+//!     pub struct Module<T: Config>(std::marker::PhantomData<T>);
 //!
-//!		impl<T: Config> ElectionDataProvider<AccountId, BlockNumber> for Module<T> {
-//!			fn desired_targets() -> u32 {
-//!				1
-//!			}
-//!			fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-//!				Default::default()
-//!			}
-//!			fn targets() -> Vec<AccountId> {
-//!				vec![10, 20, 30]
-//!			}
-//!			fn feasibility_check_assignment<P: PerThing>(
-//!				who: &AccountId,
-//!				distribution: &[(AccountId, P)],
-//!			) -> bool {
-//!				true
-//!			}
-//!			fn next_election_prediction(now: BlockNumber) -> BlockNumber {
-//!				0
-//!			}
-//!		}
+//!     impl<T: Config> ElectionDataProvider<AccountId, BlockNumber> for Module<T> {
+//!         fn desired_targets() -> u32 {
+//!             1
+//!         }
+//!         fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
+//!             Default::default()
+//!         }
+//!         fn targets() -> Vec<AccountId> {
+//!             vec![10, 20, 30]
+//!         }
+//!         fn feasibility_check_assignment<P: PerThing>(
+//!             who: &AccountId,
+//!             distribution: &[(AccountId, P)],
+//!         ) -> bool {
+//!             true
+//!         }
+//!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
+//!             0
+//!         }
+//!     }
 //! }
 //!
 //!
 //! mod election_provider {
-//! 	use super::*;
+//!     use super::*;
 //!
-//! 	pub struct SomeElectionProvider<T: Config>(std::marker::PhantomData<T>);
+//!     pub struct SomeElectionProvider<T: Config>(std::marker::PhantomData<T>);
 //!
-//! 	pub trait Config {
-//! 		type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
-//! 	}
+//!     pub trait Config {
+//!         type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
+//!     }
 //!
-//! 	impl<T: Config> ElectionProvider<AccountId> for SomeElectionProvider<T> {
-//! 		type Error = ();
+//!     impl<T: Config> ElectionProvider<AccountId> for SomeElectionProvider<T> {
+//!         type Error = ();
 //!
-//! 		fn elect<P: PerThing128>() -> Result<Supports<AccountId>, Self::Error> {
-//! 			T::DataProvider::targets()
-//! 				.first()
-//! 				.map(|winner| vec![(*winner, Support::default())])
-//! 				.ok_or(())
-//! 		}
-//! 		fn ongoing() -> bool {
-//!				false
-//!			}
-//! 	}
+//!         fn elect<P: PerThing128>() -> Result<Supports<AccountId>, Self::Error> {
+//!             T::DataProvider::targets()
+//!                 .first()
+//!                 .map(|winner| vec![(*winner, Support::default())])
+//!                 .ok_or(())
+//!         }
+//!         fn ongoing() -> bool {
+//!             false
+//!         }
+//!     }
 //! }
 //!
 //! mod runtime {
-//! 	use super::election_provider;
-//! 	use super::data_provider;
-//! 	use super::AccountId;
+//!     use super::election_provider;
+//!     use super::data_provider;
+//!     use super::AccountId;
 //!
-//! 	struct Runtime;
-//! 	impl election_provider::Config for Runtime {
-//! 		type DataProvider = data_provider::Module<Runtime>;
-//! 	}
+//!     struct Runtime;
+//!     impl election_provider::Config for Runtime {
+//!         type DataProvider = data_provider::Module<Runtime>;
+//!     }
 //!
-//! 	impl data_provider::Config for Runtime {
-//! 		type AccountId = AccountId;
-//! 		type ElectionProvider = election_provider::SomeElectionProvider<Runtime>;
-//! 	}
+//!     impl data_provider::Config for Runtime {
+//!         type AccountId = AccountId;
+//!         type ElectionProvider = election_provider::SomeElectionProvider<Runtime>;
+//!     }
 //!
 //! }
 //!
 //! # fn main() {}
 //! ```
 //!
+//! ## Interoperability
 //!
-//! ### ['ElectionDataProvider']'s side
+//! Note that [`ElectionProvider`] and [`ElectionDataProvider`] are not linked to one another in a
+//! strict way. Nonetheless, it is strictly recommended to adhere to these traits for election
+//! processes as there are a number of assumptions in each of them that rely on one another.
+//!
+//! That being said, once could create similar traits to achieve similar functionalities, and
+//! replace one or both of of the traits provided in this crate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
 
-/// Re-export some type as they are used in the interface.
-pub use sp_npos_elections::{CompactSolution, ExtendedBalance, PerThing128, Supports, VoteWeight};
 pub use sp_arithmetic::PerThing;
+/// Re-export some type as they are used in the interface.
+pub use sp_npos_elections::{
+	Assignment, CompactSolution, ExtendedBalance, PerThing128, Supports, VoteWeight,
+};
 
 /// Something that can provide the data to something else that implements [`ElectionProvider`].
 ///
@@ -188,24 +195,25 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// The number of targets to elect.
 	fn desired_targets() -> u32;
 
-	/// Check the feasibility of a single assignment for the underlying `ElectionProvider`. In other
-	/// words, check if `who` having a weight distribution described as `distribution` is correct or
-	/// not.
+	/// Check the feasibility of a single assignment for the underlying [`ElectionProvider`]. In
+	/// other words, check if `who` having a weight distribution described as `distribution` is
+	/// correct or not.
 	///
 	/// This might be called by the [`ElectionProvider`] upon processing election solutions.
 	///
-	/// Note that this is any feasibility check specific to `Self` that `ElectionProvider` is not
-	/// aware of. Simple feasibility (such as "did voter X actually vote for Y") should be checked
-	/// by `ElectionProvider` in any case.
+	/// Note that each this must only contain checks that the [`ElectionProvider`] cannot know
+	/// about. Basics checks that can be known from [`Self::voters`] and [`Self::targets`] can be
+	/// assumed to be done by [`ElectionProvider`].
 	fn feasibility_check_assignment<P: PerThing>(
-		who: &AccountId,
-		distribution: &[(AccountId, P)],
-	) -> bool;
+		assignment: &Assignment<AccountId, P>,
+	) -> Result<(), &'static str>;
 
 	/// Provide a best effort prediction about when the next election is about to happen.
 	///
 	/// In essence, the implementor should predict with this function when it will trigger the
 	/// [`ElectionDataProvider::elect`].
+	///
+	/// This is useful for stateful election providers only.
 	fn next_election_prediction(now: BlockNumber) -> BlockNumber;
 }
 
@@ -224,11 +232,12 @@ pub trait ElectionProvider<AccountId> {
 	/// The result is returned in a target major format, namely as vector of  supports.
 	///
 	/// The implementation should, if possible, use the accuracy `P` to compute the election result.
-	fn elect<P: PerThing128>() -> Result<Supports<AccountId>, Self::Error>;
+	fn elect<P: PerThing128>() -> Result<Supports<AccountId>, Self::Error>
+	where
+		ExtendedBalance: From<<P as PerThing>::Inner>;
 
 	/// Returns true if an election is still ongoing.
 	///
-	/// This can be used by the call site to dynamically check of a stateful is still on-going or
-	/// not.
+	/// This can be used to dynamically check if a stateful election is still on-going or not.
 	fn ongoing() -> bool;
 }
