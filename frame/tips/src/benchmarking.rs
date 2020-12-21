@@ -79,7 +79,7 @@ fn create_tips<T: Config>(t: u32, hash: T::Hash, value: BalanceOf<T>) ->
 	Ok(())
 }
 
-fn setup_pod_account<T: Config>() {
+fn setup_pot_account<T: Config>() {
 	let pot_account = TipsMod::<T>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
@@ -148,7 +148,7 @@ benchmarks! {
 		let t in 1 .. MAX_TIPPERS;
 
 		// Make sure pot is funded
-		setup_pod_account::<T>();
+		setup_pot_account::<T>();
 
 		// Set up a new tip proposal
 		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
@@ -177,7 +177,7 @@ benchmarks! {
 		let t in 1 .. MAX_TIPPERS;
 
 		// Make sure pot is funded
-		setup_pod_account::<T>();
+		setup_pot_account::<T>();
 
 		// Set up a new tip proposal
 		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
