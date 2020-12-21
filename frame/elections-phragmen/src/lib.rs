@@ -1092,7 +1092,7 @@ impl<T: Config> ContainsLengthBound for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use frame_support::{assert_ok, assert_noop, assert_err_with_weight, parameter_types,
+	use frame_support::{assert_ok, assert_noop, parameter_types,
 		traits::OnInitialize,
 	};
 	use substrate_test_utils::assert_eq_uvec;
@@ -1111,7 +1111,7 @@ mod tests {
 
 	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
-		type BlockWeights = ();
+		type BlockWeights = BlockWeights;
 		type BlockLength = ();
 		type DbWeight = ();
 		type Origin = Origin;
@@ -2502,10 +2502,17 @@ mod tests {
 			assert_eq!(members_ids(), vec![4, 5]);
 
 			// no replacement yet.
-			assert_err_with_weight!(
-				Elections::remove_member(Origin::root(), 4, true),
-				Error::<Test>::InvalidReplacement,
-				Some(34042000), // only thing that matters for now is that it is NOT the full block.
+			let unwrapped_error = Elections::remove_member(Origin::root(), 4, true).unwrap_err();
+			matches!(
+				unwrapped_error.error,
+				DispatchError::Module {
+					message: Some("InvalidReplacement"),
+					..
+				}
+			);
+			matches!(
+				unwrapped_error.post_info.actual_weight,
+				Some(x) if x < <Test as frame_system::Config>::BlockWeights::get().max_block
 			);
 		});
 
@@ -2524,10 +2531,17 @@ mod tests {
 			assert_eq!(runners_up_ids(), vec![3]);
 
 			// there is a replacement! and this one needs a weight refund.
-			assert_err_with_weight!(
-				Elections::remove_member(Origin::root(), 4, false),
-				Error::<Test>::InvalidReplacement,
-				Some(34042000) // only thing that matters for now is that it is NOT the full block.
+			let unwrapped_error = Elections::remove_member(Origin::root(), 4, false).unwrap_err();
+			matches!(
+				unwrapped_error.error,
+				DispatchError::Module {
+					message: Some("InvalidReplacement"),
+					..
+				}
+			);
+			matches!(
+				unwrapped_error.post_info.actual_weight,
+				Some(x) if x < <Test as frame_system::Config>::BlockWeights::get().max_block
 			);
 		});
 	}
