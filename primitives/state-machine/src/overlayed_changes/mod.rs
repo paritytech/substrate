@@ -49,7 +49,7 @@ use hash_db::Hasher;
 use crate::DefaultError;
 use sp_externalities::{Extensions, Extension, TaskId, WorkerResult,
 	AccessDeclaration, WorkerDeclaration};
-use filter_tree::FilterTree;
+use filter_tree::{FilterTree, AccessTreeWrite};
 use sp_std::cell::RefCell;
 
 pub use self::changeset::{OverlayedValue, NoOpenTransaction, AlreadyInRuntime, NotInRuntime};
@@ -249,8 +249,7 @@ struct StateLogger {
 	read_intervals: RefCell<Vec<(Vec<u8>, Vec<u8>)>>,
 	write_key: Map<Vec<u8>, BTreeSet<TaskId>>,
 	// this is roughly clear prefix.
-	// TODO this need to be a radix tree
-	write_prefix: Map<Vec<u8>, BTreeSet<TaskId>>,
+	write_prefix: AccessTreeWrite,
 }
 
 impl StateLogger {
@@ -268,39 +267,49 @@ impl StateLogger {
 				return false;
 			}
 		}
-		for (_, ids) in self.write_prefix.iter() {
+		for (_, ids) in self.write_prefix.iter().value_iter() {
 			if ids.contains(&marker) {
 				return false;
 			}
 		}
 		true
 	}
-	fn check_write_read(&self, access: &sp_externalities::StateLog) -> bool {
+	fn check_write_read(&self, access: &sp_externalities::StateLog, marker_set: &BTreeSet<TaskId>) -> bool {
 		let mut result = true;
 		for key in access.read_keys.iter() {
 			if !result {
 				break;
 			}
-			result = self.check_write_read_key(key);
+			result = self.check_write_read_key(key, marker_set);
 		}
 		for interval in access.read_intervals.iter() {
 			if !result {
 				break;
 			}
-			result = self.check_write_read_intervals(interval);
+			result = self.check_write_read_intervals(interval, marker_set);
 		}
 		result
 	}
-	fn check_write_read_key(&self, read_key: &Vec<u8>) -> bool {
+	// Note that if we ensure marker are in sync, we do not need to check
+	// that.
+	fn check_any_write_marker(marker_set: &BTreeSet<TaskId>, filter_set: &BTreeSet<TaskId>) -> bool {
+		for task_id in filter_set.iter() {
+			if marker_set.contains(task_id) {
+				return true;
+			}
+		}
+		false
+	}
+	fn check_write_read_key(&self, read_key: &Vec<u8>, marker_set: &BTreeSet<TaskId>) -> bool {
 		let mut result = true;
-		if let Some(ids) = self.write_key.get(key) {
-			if ids.contains(&marker) {
+		if let Some(ids) = self.write_key.get(read_key) {
+			if Self::check_any_write_marker(marker_set, ids) {
 				return false;
 			}
 		}
-		for (prefix, ids) in self.write_prefix.iter() {
+		for (prefix, ids) in self.write_prefix.seek_iter(read_key.as_slice()).value_iter() {
 			unimplemented!("TODO use a trie seek iter until first conaining id");
-			if ids.contains(&marker) {
+			if Self::check_any_write_marker(marker_set, ids) {
 				return false;
 			}
 		}
@@ -308,7 +317,7 @@ impl StateLogger {
 		unimplemented!();
 		result
 	}
-	fn check_write_read_intervals(&self, interval: &(Vec<u8>, Vec<u8>)) -> bool {
+	fn check_write_read_intervals(&self, interval: &(Vec<u8>, Vec<u8>), marker_set: &BTreeSet<TaskId>) -> bool {
 		let mut result = true;
 		// TODO there is probably a good way to merge redundant/contigus intervals here.
 		// (in fact since most of the time they are one step of iteration this is mandatory
@@ -354,14 +363,14 @@ impl AccessLogger {
 					}
 				} else {
 					if result {
-						result = self.top_logger.check_write_read(&accesses.top_logger);
+						result = self.top_logger.check_write_read(&accesses.top_logger, &self.log_write);
 					}
 					for (storage_key, child_logger) in accesses.children_logger.iter() {
 						if !result {
 							break;
 						}
 						if let Some(access_logger) = self.children_logger.get_mut().get(storage_key) {
-							result = access_logger.check_write_read(child_logger);
+							result = access_logger.check_write_read(child_logger, &self.log_write);
 						}
 					}
 				}
@@ -464,8 +473,12 @@ impl AccessLogger {
 	fn log_write_prefix(&mut self, child_info: Option<&ChildInfo>, key: &[u8]) {
 		if !self.log_write.is_empty() {
 			let logger = Self::logger_mut(&mut self.top_logger, &mut self.children_logger, child_info);
-			let mut entry = logger.write_prefix.entry(key.to_vec()).or_insert_with(Default::default);
-			entry.extend(self.log_write.iter());
+			// TODO an entry api in radix_tree would be nice.
+			if let Some(entry) = logger.write_prefix.get_mut(key) {
+				entry.extend(self.log_write.iter());
+			} else {
+				logger.write_prefix.insert(key, self.log_write.clone());
+			}
 		}
 	}
 
@@ -1576,6 +1589,8 @@ pub mod filter_tree {
 		children::{Children, ART48_256}, Value, TreeConf, Node};
 	use super::Filter;
 	use sp_std::boxed::Box;
+	use sp_std::collections::btree_set::BTreeSet;
+	use sp_externalities::TaskId;
 	use core::fmt::Debug;
 
 	radix_tree::flatten_children!(
@@ -1589,6 +1604,9 @@ pub mod filter_tree {
 
 	/// Radix tree internally use for filtering key accesses.
 	pub type FilterTree = radix_tree::Tree<Node256NoBackendART<Filter>>;
+
+	/// Write access logs.
+	pub type AccessTreeWrite = radix_tree::Tree<Node256NoBackendART<BTreeSet<TaskId>>>;
 }
 
 #[cfg(test)]
