@@ -231,31 +231,40 @@ impl DeclFailureHandling {
 	}
 }
 
+#[derive(Debug, Clone, Default)]
+struct AllowActive {
+	allow_active: bool,
+	parent_allow_active: bool,
+	children_allow_active: BTreeSet<TaskId>,
+}
+
+impl AllowActive {
+	fn enable(&mut self, from_child: Option<TaskId>) {
+		if let Some(id) = from_child {
+			self.children_allow_active.insert(id);
+		} else {
+			self.parent_allow_active = true;
+		}
+		self.allow_active = true;
+	}
+}
+
 #[derive(Debug, Clone)]
 struct Filters {
 	// For failure as declare by parent.
 	parent_failure_handler: DeclFailureHandling,
 	// For failure as declare by children.
 	children_failure_handler: BTreeMap<TaskId, DeclFailureHandling>,
-	// By default no declaration does not filter
-	// Using allows definition switch this.
-	default_allow: bool,
-	// to be able to switch back to default on changes empty
-	// we require this to be false.
-	// In practice this indicates if this is a worker filter
-	// (worker filter have defined declaration that cannot be
-	// rolledback).
-	can_switch_default: bool,
-	top_filters: FilterTree,
-	children_filters: Map<StorageKey, FilterTree>,
-	// TODO child tree filters.
+	allow_read_active: AllowActive,
+	allow_write_active: AllowActive,
+	filters_allow: FilterTree,
+	filters_forbid: FilterTree,
 	/// keeping history to remove constraint on join or dismiss.
 	/// It contains constraint for the parent (child do not need
 	/// to remove contraint), indexed by its relative child id.
 	changes: BTreeMap<TaskId, Vec<(Option<StorageKey>, WorkerDeclaration)>>,
 }
 
-/// Log read or write access when running worker.
 #[derive(Debug, Clone, Default)]
 struct AccessLogger {
 	log_read: bool,
@@ -572,90 +581,115 @@ impl Default for Filters {
 		Filters {
 			parent_failure_handler: DeclFailureHandling::default(),
 			children_failure_handler: BTreeMap::new(),
-			default_allow: true,
-			can_switch_default: true,
-			top_filters: FilterTree::new(()),
-			children_filters: Map::new(),
+			allow_read_active: Default::default(),
+			allow_write_active: Default::default(),
+			filters_allow: Default::default(),
+			filters_forbid: Default::default(),
 			changes: BTreeMap::new(),
 		}
 	}
 }
 
 impl Filters {
-	fn default_forbid(&mut self) {
-		if self.default_allow {
-			if self.changes.is_empty() && self.can_switch_default {
-				self.default_allow = false;
-			} else {
-				panic!(BROKEN_DECLARATION);
-			}
+	fn set_failure_handler(&mut self, from_child: Option<TaskId>, failure: DeclarationFailureHanling) {
+		let handling = DeclFailureHandling {
+			did_fail: Default::default(),
+			failure,
+		};
+		if let Some(id) = from_child {
+			self.children_failure_handler.insert(id, handling);
+		} else {
+			self.parent_failure_handler = handling;
 		}
 	}
 
-	fn default_allow(&mut self) {
-		if !self.default_allow {
-			if self.changes.is_empty() && self.can_switch_default {
-				self.default_allow = true;
-			} else {
-				panic!(BROKEN_DECLARATION);
-			}
-		}
-	}
-
-	fn allow_writes(&mut self, filter: AccessDeclaration, failure: DeclarationFailureHanling) {
-		self.default_forbid();
-		unimplemented!("set handling TODO set aftert guard_write if guard_write is kept (and guard write with panic in this code)");
+	fn set_filter(
+		tree: &mut FilterTree,
+		filter: AccessDeclaration,
+		from_child: Option<TaskId>,
+		write: bool,
+	) {
 		for prefix in filter.prefixes_lock {
-			// TODO actually must be a variant that just check if there
-			// is allowed
-			self.guard_write_prefix(None, prefix.as_slice());
-			if let Some(filter) = self.top_filters.get_mut(prefix.as_slice()) {
-				// append
-				debug_assert!(filter.write_prefix != FilterState::Forbid); // we did use guard
-				filter.write_prefix = FilterState::Allow;
-				filter.rc_write_prefix += 1;
+			if let Some(filter) = tree.get_mut(prefix.as_slice()) {
+				let mut f = if write {
+					&mut filter.write_prefix
+				} else {
+					&mut filter.read_only_prefix
+				};
+				if f.is_none() {
+					*f = Some(Default::default());
+				}
+				f.as_mut().map(|origin| origin.set(from_child));
 			} else {
 				// new entry
 				let mut filter = Filter::default();
-				filter.write_prefix = FilterState::Allow;
-				filter.rc_write_prefix += 1;
-				self.top_filters.insert(prefix.as_slice(), filter);
+				let mut f = if write {
+					&mut filter.write_prefix
+				} else {
+					&mut filter.read_only_prefix
+				};
+				*f = Some(Default::default());
+				f.as_mut().map(|origin| origin.set(from_child));
 			}
 		}
 		for key in filter.keys_lock {
-			self.guard_write(None, key.as_slice());
-			if let Some(filter) = self.top_filters.get_mut(key.as_slice()) {
-				debug_assert!(filter.write_key != FilterState::Forbid); // we did use guard
-				// append
-				filter.write_key = FilterState::Allow;
-				filter.rc_write_key += 1;
+			if let Some(filter) = tree.get_mut(key.as_slice()) {
+				let mut f = if write {
+					&mut filter.write_key
+				} else {
+					&mut filter.read_only_key
+				};
+
+				if f.is_none() {
+					*f = Some(Default::default());
+				}
+				f.as_mut().map(|origin| origin.set(from_child));
 			} else {
 				// new entry
 				let mut filter = Filter::default();
-				filter.write_key = FilterState::Allow;
-				filter.rc_write_key += 1;
-				self.top_filters.insert(key.as_slice(), filter);
+				let mut f = if write {
+					&mut filter.write_key
+				} else {
+					&mut filter.read_only_key
+				};
+				*f = Some(Default::default());
+				f.as_mut().map(|origin| origin.set(from_child));
 			}
 		}
 	}
 
-	fn allow_reads(&mut self, filter: AccessDeclaration, failure: DeclarationFailureHanling) {
-		self.default_forbid();
-		unimplemented!("set handling");
-		unimplemented!()
+	fn allow_writes(
+		&mut self,
+		filter: AccessDeclaration,
+		from_child: Option<TaskId>,
+	) {
+		self.allow_write_active.enable(from_child);
+		Self::set_filter(&mut self.filters_allow, filter, from_child, true);
 	}
 
-	fn forbid_writes(&mut self, filter: AccessDeclaration, failure: DeclarationFailureHanling) {
-		self.default_allow();
-		unimplemented!("set handling");
-
-		unimplemented!()
+	fn allow_reads(
+		&mut self,
+		filter: AccessDeclaration,
+		from_child: Option<TaskId>,
+	) {
+		self.allow_read_active.enable(from_child);
+		Self::set_filter(&mut self.filters_allow, filter, from_child, false);
 	}
 
-	fn forbid_reads(&mut self, filter: AccessDeclaration, failure: DeclarationFailureHanling) {
-		self.default_allow();
-		unimplemented!("set handling");
-		unimplemented!()
+	fn forbid_writes(
+		&mut self,
+		filter: AccessDeclaration,
+		from_child: Option<TaskId>,
+	) {
+		Self::set_filter(&mut self.filters_forbid, filter, from_child, true);
+	}
+
+	fn forbid_reads(
+		&mut self,
+		filter: AccessDeclaration,
+		from_child: Option<TaskId>,
+	) {
+		Self::set_filter(&mut self.filters_forbid, filter, from_child, false);
 	}
 
 	fn on_worker_result(&mut self, result: &WorkerResult) -> bool {
@@ -691,60 +725,52 @@ impl Filters {
 		false
 	}
 
-	/// TODO this implementation is borderline eg forbid prefix
-	/// does not mean that we cannot run storage_root, as we do
-	/// not know the query plan.
-	/// -> it could be easier to forbid storage root from
-	/// worker (it maybe be already the case).
-	fn guard_read_all_filter(filters: &FilterTree) -> Option<Option<TaskId>> {
-		let mut blocked = false;
-		for (key, value) in filters.iter().value_iter() {
-			match value.write_prefix {
-				FilterState::Forbid => {
-					if !value.read_only_prefix {
-						blocked = true;
-					}
-				},
-				_ => (),
-			}
-			match value.write_key {
-				FilterState::Forbid => {
-					if value.read_only_key {
-						blocked = true;
-					}
-				},
-				_ => (),
-			}
-			if blocked {
-				break;
-			}
-		}
-		blocked
-	}
-
 	fn invalid_access(&self, child: Option<TaskId>) {
 		if let Some(child) = child {
-			self.children_failure_handler.get(child).expect("TODO").invalid_access()
+			self.children_failure_handler.get(&child).expect("TODO").invalid_access()
 		} else {
 			self.parent_failure_handler.invalid_access();
 		}
 	}
 
+	fn invalid_accesses(&self, origin: FilterOrigin) {
+		if origin.parent {
+			self.parent_failure_handler.invalid_access();
+		}
+		for child in children.iter() {
+			self.children_failure_handler.get(child).expect("TODO").invalid_access()
+		}
+	}
+
 	fn guard_read_all(&self) {
 		let mut blocked = false;
-		if Self::guard_read_all_filter(&self.top_filters) {
-			blocked = true;
-		}
-		for (_storage_key, child_filters) in self.children_filters.iter() {
-			if blocked {
-				break;
+		// check not forbid write or forbid read filter.
+		// Note that this is very suboptimal, but only is for storage_root call
+		// (which is not supported by workers)
+		for (_key, filter) in self.filters_forbid.iter().value_iter() {
+			if let Some(origin) = filter.read_only_prefix {
+				self.invalid_accesses(origin)
 			}
-			if Self::guard_read_all_filter(child_filter) {
-				blocked = true;
+			if let Some(origin) = filter.read_only_key {
+				self.invalid_accesses(origin)
+			}
+			if let Some(origin) = filter.write_prefix {
+				self.invalid_accesses(origin)
+			}
+			if let Some(origin) = filter.write_key {
+				self.invalid_accesses(origin)
 			}
 		}
-		if blocked {
-			self.invalid_access();
+		// Note that we consider there is no full read access (with child trie it is difficult),
+		// generally one shall never use full filter: it should be a stand alone mode.
+		if self.allow_read_active.parent_allow_active || self.allow_write_active.parent_allow_active {
+			self.invalid_access(None);
+		}
+		for id in self.allow_read_active.children_allow_active {
+			self.invalid_access(Some(id));
+		}
+		for id in self.allow_write_active.children_allow_active {
+			self.invalid_access(Some(id));
 		}
 	}
 
@@ -875,17 +901,23 @@ impl Filters {
 	}
 }
 
-/// Filter internally use for key access.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FilterState {
-	None,
-	Forbid,
-	Allow,
+#[derive(Debug, Clone, Default)]
+pub struct FilterOrigin {
+	parent: bool,
+	// TODO consider Vec with scan
+	children: BTreeSet<TaskId>,
 }
 
-impl Default for FilterState {
-	fn default() -> Self {
-		FilterState::None
+impl FilterOrigin {
+	fn set(&mut self, from_child: Option<TaskId>) {
+		if let Some(id) = from_child {
+			self.children.insert(id);
+		} else {
+			self.parent = true;
+		}
+	}
+	fn empty(&self) {
+		!parent && self.children.is_empty()
 	}
 }
 
@@ -893,16 +925,12 @@ impl Default for FilterState {
 pub struct Filter {
 	/// write superseed read when define.
 	/// So if forbid is only defined at write level.
-	write_prefix: FilterState,
-	write_key: FilterState,
+	write_prefix: Option<FilterOrigin>,
+	write_key: Option<FilterOrigin>,
 	// read only is ignore 'false' or allow (forbid readonly
 	// is equivalent to forbid write).
-	read_only_prefix: bool,
-	read_only_key: bool,
-	rc_write_prefix: usize,
-	rc_write_key: usize,
-	rc_read_prefix: usize,
-	rc_read_key: usize,
+	read_only_prefix: Option<FilterOrigin>,
+	read_only_key: Option<FilterOrigin>,
 }
 
 /// The set of changes that are overlaid onto the backend.
@@ -1215,12 +1243,14 @@ impl OverlayedChanges {
 				self.optimistic_logger.log_writes(child_marker)
 			},
 			WorkerDeclaration::ParentWrite(filter, failure) => {
-				self.filters.changes.insert(child_marker, vec![(None, WorkerDeclaration::ParentWrite(filter.clone(), failure))]);
-				self.filters.allow_writes(filter, failure)
+				self.filters.changes.insert(child_marker, vec![(child_marker, WorkerDeclaration::ParentWrite(filter.clone(), failure))]);
+				self.filters.set_failure_handler(failure, Some(child_marker)); 
+				self.filters.allow_writes(filter, Some(child_marker));
 			},
 			WorkerDeclaration::ChildRead(filter, failure) => {
-				self.filters.changes.insert(child_marker, vec![(None, WorkerDeclaration::ChildRead(filter.clone(), failure))]);
-				self.filters.forbid_writes(filter, failure)
+				self.filters.changes.insert(child_marker, vec![(child_marker, WorkerDeclaration::ChildRead(filter.clone(), failure))]);
+				self.filters.set_failure_handler(failure, Some(child_marker)); 
+				self.filters.forbid_writes(filter, Some(child_marker));
 			},
 		}
 	}
@@ -1233,11 +1263,12 @@ impl OverlayedChanges {
 				self.optimistic_logger.log_reads()
 			},
 			WorkerDeclaration::ParentWrite(filter, failure) => {
-				self.filters.forbid_reads(filter, failure)
+				self.filters.set_failure_handler(failure, None); 
+				self.filters.forbid_reads(filter, None)
 			},
 			WorkerDeclaration::ChildRead(filter, failure) => {
-				self.filters.can_switch_default = false;
-				self.filters.allow_reads(filter, failure)
+				self.filters.set_failure_handler(failure, None); 
+				self.filters.allow_reads(filter, None)
 			},
 		}
 	}
