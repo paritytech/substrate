@@ -223,12 +223,12 @@ pub fn spawn_call_ext(
 			let backend = calling_ext.get_async_backend(handle, WorkerDeclaration::None);
 			AsyncExt::state_at_spawn_read(backend, handle)
 		},
-		WorkerType::ReadOptimistic => {
+		WorkerType::ReadAtJoinOptimistic => {
 			let backend = calling_ext.get_async_backend(handle, WorkerDeclaration::Optimistic);
 			unimplemented!("TODO optimistic backend that register keys??");
 			AsyncExt::state_at_spawn_read(backend, handle)
 		},
-		WorkerType::ReadDeclarative => {
+		WorkerType::ReadAtJoinDeclarative => {
 			let backend = calling_ext.get_async_backend(handle, declaration);
 			AsyncExt::state_at_spawn_read(backend, handle)
 		},

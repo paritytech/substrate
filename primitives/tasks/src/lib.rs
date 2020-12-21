@@ -85,17 +85,23 @@ pub enum WorkerType {
 	/// state at launch.
 	ReadAtSpawn = 2,
 
-	/// State between main thread and child workers must be the same.
+	/// State between main thread and child workers must be the same for all execution.
+	/// This means that read access on a child is not compatible with write access on
+	/// a parent.
+	/// This can only be usefull when we want the state use by child to be the one use on
+	/// join (usually we can do with it being the state use at spawn).
 	/// We return `None` on join if some state access break this asumption:
 	/// Any access to a variable that was modified in parent worker.
-	ReadOptimistic = 3,
+	ReadAtJoinOptimistic = 3,
 
 	/// State between main thread and child workers must be the same.
+	/// This means that read access on a child is not compatible with write access on
+	/// a parent.
 	/// When starting a child worker we declare exclusive write access
 	/// over the keyspace for both worker.
 	/// Writing in undeclared location or reading a location declared as writable
 	/// in another worker will result in a panic.
-	ReadDeclarative = 4,
+	ReadAtJoinDeclarative = 4,
 }
 
 impl Default for WorkerType {
@@ -123,8 +129,8 @@ impl WorkerType {
 			WorkerType::Stateless => false,
 			WorkerType::ReadLastBlock => false,
 			WorkerType::ReadAtSpawn => true,
-			WorkerType::ReadDeclarative => true,
-			WorkerType::ReadOptimistic => true,
+			WorkerType::ReadAtJoinDeclarative => true,
+			WorkerType::ReadAtJoinOptimistic => true,
 		}
 	}
 }

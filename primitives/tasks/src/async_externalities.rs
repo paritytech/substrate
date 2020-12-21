@@ -206,8 +206,8 @@ impl AsyncExternalities {
 			},
 			WorkerType::ReadLastBlock
 			| WorkerType::ReadAtSpawn
-			| WorkerType::ReadOptimistic => (),
-			WorkerType::ReadDeclarative => self.guard_read(panic, child_info, key),
+			| WorkerType::ReadAtJoinOptimistic => (),
+			WorkerType::ReadAtJoinDeclarative => self.guard_read(panic, child_info, key),
 		}
 	}
 
@@ -435,8 +435,8 @@ impl Externalities for AsyncExternalities {
 	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
 		match self.state.kind {
 			WorkerType::Stateless
-			| WorkerType::ReadOptimistic
-			| WorkerType::ReadDeclarative
+			| WorkerType::ReadAtJoinOptimistic
+			| WorkerType::ReadAtJoinDeclarative
 			| WorkerType::ReadAtSpawn => {
 				panic!("Spawning a ReadLastBlock worker is only possible from a ReadLastBlock worker");
 			},
@@ -456,8 +456,8 @@ impl Externalities for AsyncExternalities {
 			| WorkerType::ReadLastBlock => {
 				panic!("Spawning a ReadAtSpawn worker is only possible from a ReadAtSpawn worker");
 			},
-			WorkerType::ReadOptimistic
-			| WorkerType::ReadDeclarative
+			WorkerType::ReadAtJoinOptimistic
+			| WorkerType::ReadAtJoinDeclarative
 			| WorkerType::ReadAtSpawn => (),
 		}
 

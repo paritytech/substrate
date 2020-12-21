@@ -186,7 +186,7 @@ impl Markers {
 			None => false,
 		}
 	}
-	
+
 	fn on_worker_result(&mut self, result: &WorkerResult) -> bool {
 		match result {
 			WorkerResult::CallAt(_result, marker) => {
