@@ -68,10 +68,7 @@ use frame_support::traits::{
 use sp_runtime::{ Percent, RuntimeDebug, traits::{
 	Zero, AccountIdConversion, Hash, BadOrigin
 }};
-use frame_support::traits::{
-	Contains, ContainsLengthBound,
-	OnUnbalanced, EnsureOrigin,
-};
+use frame_support::traits::{Contains, ContainsLengthBound, OnUnbalanced, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
