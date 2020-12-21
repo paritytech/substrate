@@ -419,8 +419,6 @@ decl_module! {
 		/// # <weight>
 		///   `T` is charged as upper bound given by `ContainsLengthBound`.
 		///   The actual cost depends on the implementation of `T::Tippers`.
-		/// - DbReads: `Tips`,
-		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::slash_tip(T::Tippers::max_len() as u32)]
 		fn slash_tip(origin, hash: T::Hash) {
