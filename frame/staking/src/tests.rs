@@ -1752,11 +1752,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
 
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into
 			// account.
-			let election_result = <Test as Config>::ElectionProvider::elect::<Perbill>(
-				Staking::validator_count() as usize,
-				Staking::get_npos_targets(),
-				Staking::get_npos_voters(),
-			).unwrap();
+			let election_result = <Test as Config>::ElectionProvider::elect::<Perbill>().unwrap();
 
 			assert_eq_uvec!(
 				election_result,
@@ -1803,11 +1799,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election_elected() {
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
 
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into account.
-			let election_result = <Test as Config>::ElectionProvider::elect::<Perbill>(
-				Staking::validator_count() as usize,
-				Staking::get_npos_targets(),
-				Staking::get_npos_voters(),
-			).unwrap();
+			let election_result = <Test as Config>::ElectionProvider::elect::<Perbill>().unwrap();
 
 			assert_eq_uvec!(
 				election_result,

@@ -33,6 +33,7 @@ use sp_runtime::{
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use std::{cell::RefCell, collections::HashSet};
+use frame_election_providers::onchain;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 
@@ -248,6 +249,11 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 	}
 }
 
+impl onchain::Config for Test {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
+	type ElectionDataProvider = Staking;
+}
 impl Config for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
@@ -265,7 +271,7 @@ impl Config for Test {
 	type RewardCurve = RewardCurve;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
-	type ElectionProvider = frame_election_providers::onchain::OnChainSequentialPhragmen;
+	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = ();
 }
 

@@ -297,7 +297,7 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_root, ensure_signed, offchain::SendTransactionTypes};
 use pallet_session::historical;
-use sp_election_providers::{ElectionDataProvider, ElectionProvider, Supports};
+use sp_election_providers::{ElectionDataProvider, ElectionProvider, Supports, Assignment};
 use sp_npos_elections::{ExtendedBalance, VoteWeight};
 use sp_runtime::{
 	curve::PiecewiseLinear,
@@ -2249,23 +2249,12 @@ impl<T: Config> Module<T> {
 	///
 	/// This will also process the election, as noted in [`process_election`].
 	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
-		if T::ElectionProvider::NEEDS_ELECT_DATA {
-			// This election will need the real data.
-			T::ElectionProvider::elect::<ChainAccuracy>(
-				Self::validator_count() as usize,
-				Self::get_npos_targets(),
-				Self::get_npos_voters(),
-			)
+		// TODO: Worthy to denote how exactly the accuracy is playing a role here. We could at this
+		// point remove this generic as well, maybe it will also simplify some other stuff.
+		T::ElectionProvider::elect::<ChainAccuracy>()
 			.map_err(|_| ())
 			.and_then(|flat_supports| Self::process_election(flat_supports, current_era))
 			.ok()
-		} else {
-			// no need to fetch the params.
-			T::ElectionProvider::elect::<ChainAccuracy>(0, vec![], vec![])
-				.map_err(|_| ())
-				.and_then(|flat_supports| Self::process_election(flat_supports, current_era))
-				.ok()
-		}
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -2455,12 +2444,9 @@ impl<T: Config> ElectionDataProvider<T::AccountId, T::BlockNumber> for Module<T>
 		this_session_end.saturating_add(sessions_left.saturating_mul(session_length))
 	}
 
-	fn feasibility_check_assignment<P: PerThing>(
-		_who: &T::AccountId,
-		_distribution: &[(T::AccountId, P)],
-	) -> bool {
+	fn feasibility_check_assignment<P: PerThing>(_: &Assignment<T::AccountId, P>) -> Result<(), &'static str> {
 		// TODO
-		true
+		Ok(())
 	}
 }
 
