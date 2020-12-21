@@ -412,7 +412,7 @@ decl_module! {
 		///
 		/// May only be called from `T::RejectOrigin`.
 		///
-		/// As a result, API will slash the finder and the deposits are lost.
+		/// As a result, the finder is slashed and the deposits are lost.
 		///
 		/// Emits `TipSlashed` if successful.
 		///
