@@ -446,6 +446,26 @@ impl AsyncBackend for () {
 	}
 }
 
+/// How declaration error is handled.
+#[derive(Debug, Clone, Copy, codec::Encode, codec::Decode)]
+pub enum DeclarationFailureHanling {
+	/// Do panic on conflict, this is a strict mode where
+	/// we cut useless computation, and need some strong
+	/// assertion over our declaration.
+	Panic,
+	/// On conflict return `None` at join.
+	/// This is very similar to optimistic `WorkerType` because
+	/// we run the whole computation and can have a no result at
+	/// the end.
+	InvalidAtJoin,
+}
+
+impl Default for DeclarationFailureHanling {
+	fn default() -> Self {
+		DeclarationFailureHanling::Panic
+	}
+}
+
 /// Access filter on storage when spawning worker.
 #[derive(Debug, Clone, codec::Encode, codec::Decode)]
 pub enum WorkerDeclaration {
@@ -457,10 +477,10 @@ pub enum WorkerDeclaration {
 	Optimistic,
 
 	/// Parent write access only.
-	ParentWrite(AccessDeclaration),
+	ParentWrite(AccessDeclaration, DeclarationFailureHanling),
 
 	/// Child worker read access only.
-	ChildRead(AccessDeclaration),
+	ChildRead(AccessDeclaration, DeclarationFailureHanling),
 }
 
 /// Access filter on storage.

@@ -48,9 +48,9 @@ use sp_core::offchain::storage::OffchainOverlayedChanges;
 use hash_db::Hasher;
 use crate::DefaultError;
 use sp_externalities::{Extensions, Extension, TaskId, WorkerResult,
-	AccessDeclaration, WorkerDeclaration};
+	AccessDeclaration, WorkerDeclaration, DeclarationFailureHanling};
 use filter_tree::{FilterTree, AccessTreeWrite};
-use sp_std::cell::RefCell;
+use sp_std::cell::{RefCell, Cell};
 
 pub use self::changeset::{OverlayedValue, NoOpenTransaction, AlreadyInRuntime, NotInRuntime};
 
@@ -58,7 +58,10 @@ pub use self::changeset::{OverlayedValue, NoOpenTransaction, AlreadyInRuntime, N
 pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
 
 /// Worker declaration assertion failure.
-pub const BROKEN_DECLARATION: &'static str = "Key access impossible due to worker access declaration";
+pub const BROKEN_DECLARATION_ACCESS: &'static str = "Key access impossible due to worker access declaration";
+
+/// Worker declaration not possible for spawn.
+pub const BROKEN_DECLARATION: &'static str = "Spawn impossible due to incompatible access declaration";
 
 /// Storage key.
 pub type StorageKey = Vec<u8>;
@@ -211,6 +214,8 @@ impl Markers {
 
 #[derive(Debug, Clone)]
 struct Filters {
+	failure: DeclarationFailureHanling,
+	did_fail: Cell<bool>,
 	// By default no declaration does not filter
 	// Using allows definition switch this.
 	default_allow: bool,
@@ -544,6 +549,8 @@ impl AccessLogger {
 impl Default for Filters {
 	fn default() -> Self {
 		Filters {
+			failure: DeclarationFailureHanling::default(),
+			did_fail: Cell::new(false),
 			default_allow: true,
 			can_switch_default: true,
 			top_filters: FilterTree::new(()),
@@ -574,8 +581,9 @@ impl Filters {
 		}
 	}
 
-	fn allow_writes(&mut self, filter: AccessDeclaration) {
+	fn allow_writes(&mut self, filter: AccessDeclaration, failure: DeclarationFailureHanling) {
 		self.default_forbid();
+		unimplemented!("set handling TODO set aftert guard_write if guard_write is kept (and guard write with panic in this code)");
 		for prefix in filter.prefixes_lock {
 			// TODO actually must be a variant that just check if there
 			// is allowed
@@ -610,19 +618,22 @@ impl Filters {
 		}
 	}
 
-	fn allow_reads(&mut self, filter: AccessDeclaration) {
+	fn allow_reads(&mut self, filter: AccessDeclaration, failure: DeclarationFailureHanling) {
 		self.default_forbid();
+		unimplemented!("set handling");
 		unimplemented!()
 	}
 
-	fn forbid_writes(&mut self, filter: AccessDeclaration) {
+	fn forbid_writes(&mut self, filter: AccessDeclaration, failure: DeclarationFailureHanling) {
 		self.default_allow();
+		unimplemented!("set handling");
 
 		unimplemented!()
 	}
 
-	fn forbid_reads(&mut self, filter: AccessDeclaration) {
+	fn forbid_reads(&mut self, filter: AccessDeclaration, failure: DeclarationFailureHanling) {
 		self.default_allow();
+		unimplemented!("set handling");
 		unimplemented!()
 	}
 
@@ -644,7 +655,7 @@ impl Filters {
 			WorkerResult::HardPanic
 			| WorkerResult::Panic => (),
 		};
-		true
+		self.did_fail.get()
 	}
 
 	/// TODO this implementation is borderline eg forbid prefix
@@ -678,6 +689,17 @@ impl Filters {
 		blocked
 	}
 
+	fn invalid_access(&self) {
+		match self.failure {
+			DeclarationFailureHanling::Panic => {
+				panic!(BROKEN_DECLARATION_ACCESS);
+			},
+			DeclarationFailureHanling::InvalidAtJoin => {
+				self.did_fail.set(true);
+			},
+		}
+	}
+
 	fn guard_read_all(&self) {
 		let mut blocked = false;
 		if Self::guard_read_all_filter(&self.top_filters) {
@@ -692,7 +714,7 @@ impl Filters {
 			}
 		}
 		if blocked {
-			panic!(BROKEN_DECLARATION);
+			self.invalid_access();
 		}
 	}
 
@@ -752,7 +774,7 @@ impl Filters {
 			}
 		}
 		if blocked {
-			panic!(BROKEN_DECLARATION);
+			self.invalid_access();
 		}
 	}
 
@@ -769,7 +791,7 @@ impl Filters {
 			Self::guard_write_inner(&value, &mut blocked, key, len);
 		}
 		if blocked {
-			panic!(BROKEN_DECLARATION);
+			self.invalid_access();
 		}
 	}
 
@@ -789,7 +811,7 @@ impl Filters {
 			Self::guard_write_inner(&value, &mut blocked, key.as_slice(), len);
 		}
 		if blocked {
-			panic!(BROKEN_DECLARATION);
+			self.invalid_access();
 		}
 	}
 
@@ -813,7 +835,7 @@ impl Filters {
 			}
 		}
 		if blocked {
-			panic!(BROKEN_DECLARATION);
+			self.invalid_access();
 		}
 	}
 	
@@ -1162,13 +1184,13 @@ impl OverlayedChanges {
 			WorkerDeclaration::Optimistic => {
 				self.optimistic_logger.log_writes(child_marker)
 			},
-			WorkerDeclaration::ParentWrite(filter) => {
-				self.filters.changes.insert(child_marker, vec![(None, WorkerDeclaration::ParentWrite(filter.clone()))]);
-				self.filters.allow_writes(filter)
+			WorkerDeclaration::ParentWrite(filter, failure) => {
+				self.filters.changes.insert(child_marker, vec![(None, WorkerDeclaration::ParentWrite(filter.clone(), failure))]);
+				self.filters.allow_writes(filter, failure)
 			},
-			WorkerDeclaration::ChildRead(filter) => {
-				self.filters.changes.insert(child_marker, vec![(None, WorkerDeclaration::ChildRead(filter.clone()))]);
-				self.filters.forbid_writes(filter)
+			WorkerDeclaration::ChildRead(filter, failure) => {
+				self.filters.changes.insert(child_marker, vec![(None, WorkerDeclaration::ChildRead(filter.clone(), failure))]);
+				self.filters.forbid_writes(filter, failure)
 			},
 		}
 	}
@@ -1180,12 +1202,12 @@ impl OverlayedChanges {
 			WorkerDeclaration::Optimistic => {
 				self.optimistic_logger.log_reads()
 			},
-			WorkerDeclaration::ParentWrite(filter) => {
-				self.filters.forbid_reads(filter)
+			WorkerDeclaration::ParentWrite(filter, failure) => {
+				self.filters.forbid_reads(filter, failure)
 			},
-			WorkerDeclaration::ChildRead(filter) => {
+			WorkerDeclaration::ChildRead(filter, failure) => {
 				self.filters.can_switch_default = false;
-				self.filters.allow_reads(filter)
+				self.filters.allow_reads(filter, failure)
 			},
 		}
 	}
