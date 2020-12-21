@@ -866,7 +866,7 @@ mod tests {
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
 			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
-			fn f2(_origin) { unimplemented!(); }
+			fn f20(_origin) { unimplemented!(); }
 
 			#[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
 			fn f21(_origin) { unimplemented!(); }
@@ -900,13 +900,29 @@ mod tests {
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::No);
 
-		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().weight, 120);
-		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().class, DispatchClass::Normal);
-		assert_eq!(Call::<TraitImpl>::f12(10, 20).get_dispatch_info().weight, 0);
-		assert_eq!(Call::<TraitImpl>::f12(10, 20).get_dispatch_info().class, DispatchClass::Operational);
-		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().weight, 12300);
-		assert_eq!(Call::<TraitImpl>::f21().get_dispatch_info().weight, 45600);
-		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().class, DispatchClass::Normal);
+		// #[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
+		let info = Call::<TraitImpl>::f11(13, 20).get_dispatch_info();
+		assert_eq!(info.weight, 150); // 13*10 + 20
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = (0, DispatchClass::Operational, Pays::Yes)]
+		let info = Call::<TraitImpl>::f12(10, 20).get_dispatch_info();
+		assert_eq!(info.weight, 0);
+		assert_eq!(info.class, DispatchClass::Operational);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
+		let info = Call::<TraitImpl>::f20().get_dispatch_info();
+		assert_eq!(info.weight, 12300); // 100*3 + 1000*2 + 10_1000
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
+		let info = Call::<TraitImpl>::f21().get_dispatch_info();
+		assert_eq!(info.weight, 45600); // 100*6 + 1000*5 + 40_1000
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
 	}
 
 	#[test]
