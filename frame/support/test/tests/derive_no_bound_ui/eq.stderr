@@ -4,4 +4,4 @@ error[E0277]: can't compare `Foo<T>` with `Foo<T>`
 6   | struct Foo<T: Config> {
     |        ^^^ no implementation for `Foo<T> == Foo<T>`
     |
-    = help: the trait `std::cmp::PartialEq` is not implemented for `Foo<T>`
+    = help: the trait `PartialEq` is not implemented for `Foo<T>`
