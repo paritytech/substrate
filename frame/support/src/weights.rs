@@ -954,7 +954,7 @@ mod tests {
 
 	type Balance = u64;
 
-	// 0.5x^3 + 2.333x2 + 7x - 10_000
+	// 0.5x^3 + 2.333x^2 + 7x - 10_000
 	struct Poly;
 	impl WeightToFeePolynomial for Poly {
 		type Balance = Balance;
@@ -991,13 +991,16 @@ mod tests {
 
 	#[test]
 	fn polynomial_works() {
+		// 100^3/2=500000 100^2*(2+1/3)=23333 700 -10000
 		assert_eq!(Poly::calc(&100), 514033);
+		// 10123^3/2=518677865433 10123^2*(2+1/3)=239108634 70861 -10000
 		assert_eq!(Poly::calc(&10_123), 518917034928);
 	}
 
 	#[test]
 	fn polynomial_does_not_underflow() {
 		assert_eq!(Poly::calc(&0), 0);
+		assert_eq!(Poly::calc(&10), 0);
 	}
 
 	#[test]
