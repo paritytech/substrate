@@ -1185,17 +1185,13 @@ pub trait VestingSchedule<AccountId> {
 	fn remove_vesting_schedule(who: &AccountId);
 }
 
-/// Abstraction over a fungible assets system.
-pub trait Token<Source> {
+/// Abstraction over a fungible asset system.
+pub trait FungibleAsset<AccountId> {
 	/// The balance of an account.
 	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug +
 		Default + HasCompact;
 
 	type AssetId: Member + Parameter + Default + Copy + HasCompact;
-
-	type AllowFreezing: Get<bool>;
-	type AllowBurning: Get<bool>;
-	type AllowMinting: Get<bool>;
 
 	// PUBLIC IMMUTABLES
 	/// The total amount of issuance in the system for a specific asset.
@@ -1210,48 +1206,56 @@ pub trait Token<Source> {
 	///
 	/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
 	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
-	fn balance_of(id: Self::AssetId, who: Source) -> Self::Balance;
+	fn balance_of(id: Self::AssetId, who: AccountId) -> Self::Balance;
 
 	// PUBLIC MUTABLES (DANGEROUS)
 
 	/// Transfer some liquid free balance of an asset to another account.
-	fn transfer(id: Self::AssetId, from: Source, to: Source, amount: Self::Balance) -> DispatchResult;
+	fn transfer(id: Self::AssetId, from: AccountId, to: AccountId, amount: Self::Balance) -> DispatchResult;
+}
 
-	/// Reduce the total number of assets a specific account owns for a specific asset.
-	///
-	/// Returns `Ok` iff the burn was successful.
-	/// `Err` with the reason why otherwise.
-	fn burn(id: Self::AssetId, who: Source, amount: Self::Balance) -> DispatchResult;
-
+pub trait MintableAsset<AccountId>: FungibleAsset<AccountId> {
 	/// Increase the total issuance of of a specific asset by `amount` for a specific account.
 	///
 	/// Returns `Ok` iff the mint was successful.
 	/// `Err` with the reason why otherwise.
-	fn mint(id: Self::AssetId, beneficiary: Source, amount: Self::Balance) -> DispatchResult;
+	fn mint(id: Self::AssetId, beneficiary: AccountId, amount: Self::Balance) -> DispatchResult;
+}
 
+pub trait BurnableAsset<AccountId>: FungibleAsset<AccountId> {
+	/// Reduce the total number of assets a specific account owns for a specific asset.
+	///
+	/// Returns `Ok` iff the burn was successful.
+	/// `Err` with the reason why otherwise.
+	fn burn(id: Self::AssetId, who: AccountId, amount: Self::Balance) -> DispatchResult;
+}
+
+pub trait FreezableAsset<AccountId>: FungibleAsset<AccountId> {
 	/// Freeze an amount of tokens for a specific account.
 	///
 	/// Returns `Ok` iff the mint was successful.
 	/// `Err` with the reason why otherwise.
-	fn freeze(id: Self::AssetId, who: Source) -> DispatchResult;
+	fn freeze(id: Self::AssetId, who: AccountId) -> DispatchResult;
 
 	/// Unfreeze an amount of tokens for a specific account.
 	///
 	/// Returns `Ok` iff the mint was successful.
 	/// `Err` with the reason why otherwise.
-	fn thaw(id: Self::AssetId, who: Source) -> DispatchResult;
+	fn thaw(id: Self::AssetId, who: AccountId) -> DispatchResult;
+}
 
-	/// Transfer ownership of administrative functions for a specific token.
+pub trait ManageableAsset<AccountId>: FungibleAsset<AccountId> {
+	/// Set ownership of administrative functions for a specific token.
 	///
 	/// Returns `Ok` iff the ownership transfer was successful.
 	/// `Err` with the reason why otherwise.
-	fn transfer_ownership(id: Self::AssetId, owner: Source) -> DispatchResult;
+	fn set_team(id: Self::AssetId, issuer: AccountId, admin: AccountId, freezer: AccountId) -> DispatchResult;
 
-	/// Sets the team: Issuer, Admin, Freezer for a specific token
+	/// Set ownership of administrative functions for a specific token.
 	///
-	/// Returns `Ok` iff the team was successfully set.
+	/// Returns `Ok` iff the ownership transfer was successful.
 	/// `Err` with the reason why otherwise.
-	fn set_team(id: Self::AssetId, issuer: Source, admin: Source, freezer: Source) -> DispatchResult;
+	fn set_owner(id: Self::AssetId, owner: AccountId) -> DispatchResult;
 }
 
 bitflags! {

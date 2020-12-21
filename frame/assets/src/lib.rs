@@ -120,7 +120,10 @@ use sp_runtime::{RuntimeDebug, traits::{
 }};
 use codec::{Encode, Decode, HasCompact};
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
-	traits::{Token, Currency, ReservableCurrency, EnsureOrigin, Get, BalanceStatus::Reserved},
+	traits::{
+		FungibleAsset, MintableAsset, BurnableAsset, FreezableAsset, ManageableAsset,
+		Currency, ReservableCurrency, EnsureOrigin, Get, BalanceStatus::Reserved
+	},
 	dispatch::{DispatchResult, DispatchError},
 };
 use frame_system::ensure_signed;
@@ -486,10 +489,13 @@ decl_module! {
 			#[compact] amount: T::Balance
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+
+			ensure!(T::AllowMinting::get(), Error::<T>::NoMintingAllowed);
+
 			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
 			ensure!(&origin == &details.issuer, Error::<T>::NoPermission);
 
-			<Self as Token<_>>::mint(id, beneficiary, amount)
+			<Self as MintableAsset<_>>::mint(id, beneficiary, amount)
 		}
 
 		/// Reduce the balance of `who` by as much as possible up to `amount` assets of `id`.
@@ -514,10 +520,12 @@ decl_module! {
 			#[compact] amount: T::Balance
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			ensure!(T::AllowBurning::get(), Error::<T>::NoBurningAllowed);
+
 			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
 			ensure!(&origin == &details.admin, Error::<T>::NoPermission);
 
-			<Self as Token<_>>::burn(id, who, amount)
+			<Self as BurnableAsset<_>>::burn(id, who, amount)
 		}
 
 		/// Move some assets from the sender account to another.
@@ -552,7 +560,7 @@ decl_module! {
 			origin_account.balance = origin_account.balance.checked_sub(&amount)
 				.ok_or(Error::<T>::BalanceLow)?;
 
-			match <Self as Token<_>>::transfer(id, T::Lookup::unlookup(origin.clone()), target.clone(), amount) {
+			match <Self as FungibleAsset<_>>::transfer(id, T::Lookup::unlookup(origin.clone()), target.clone(), amount) {
 				Ok(_) => {
 					let target = T::Lookup::lookup(target)?;
 					Self::deposit_event(RawEvent::Transferred(id, origin, target, amount));
@@ -598,7 +606,7 @@ decl_module! {
 			let amount = amount.min(source_account.balance);
 			ensure!(!amount.is_zero(), Error::<T>::AmountZero);
 
-			match <Self as Token<_>>::transfer(id, T::Lookup::unlookup(source.clone()), dest.clone(), amount) {
+			match <Self as FungibleAsset<_>>::transfer(id, T::Lookup::unlookup(source.clone()), dest.clone(), amount) {
 				Ok(_) => {
 					let dest = T::Lookup::lookup(dest)?;
 					Self::deposit_event(RawEvent::ForceTransferred(id, source, dest, amount));
@@ -622,10 +630,12 @@ decl_module! {
 		fn freeze(origin, #[compact] id: T::AssetId, who: <T::Lookup as StaticLookup>::Source) {
 			let origin = ensure_signed(origin)?;
 
+			ensure!(T::AllowFreezing::get(), Error::<T>::NoFreezingAllowed);
+
 			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
 			ensure!(&origin == &d.freezer, Error::<T>::NoPermission);
-			
-			let _ = <Self as Token<_>>::freeze(id, who)?;
+
+			let _ = <Self as FreezableAsset<_>>::freeze(id, who)?;
 		}
 
 		/// Allow unprivileged transfers from an account again.
@@ -642,10 +652,12 @@ decl_module! {
 		fn thaw(origin, #[compact] id: T::AssetId, who: <T::Lookup as StaticLookup>::Source) {
 			let origin = ensure_signed(origin)?;
 
+			ensure!(T::AllowFreezing::get(), Error::<T>::NoFreezingAllowed);
+
 			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
 			ensure!(&origin == &details.admin, Error::<T>::NoPermission);
-			
-			let _ = <Self as Token<_>>::thaw(id, who)?;
+
+			let _ = <Self as FreezableAsset<_>>::thaw(id, who)?;
 		}
 
 		/// Change the Owner of an asset.
@@ -661,13 +673,13 @@ decl_module! {
 		#[weight = T::WeightInfo::transfer_ownership()]
 		fn transfer_ownership(origin,
 			#[compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
+			new_owner: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
 			ensure!(&origin == &details.owner, Error::<T>::NoPermission);
 
-			<Self as Token<_>>::transfer_ownership(id, owner)
+			Self::set_owner(id, new_owner)
 		}
 
 		/// Change the Issuer, Admin and Freezer of an asset.
@@ -694,7 +706,7 @@ decl_module! {
 			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
 			ensure!(&origin == &details.admin, Error::<T>::NoPermission);
 
-			<Self as Token<_>>::set_team(id, issuer, admin, freezer)
+			<Self as ManageableAsset<_>>::set_team(id, issuer, admin, freezer)
 		}
 
 		#[weight = T::WeightInfo::set_max_zombies()]
@@ -791,14 +803,11 @@ impl<T: Config> Module<T> {
 	}
 }
 
-impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
+impl<T: Config> FungibleAsset<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Balance = T::Balance;
 	type AssetId = T::AssetId;
-	type AllowFreezing = T::AllowFreezing;
-	type AllowBurning = T::AllowBurning;
-	type AllowMinting = T::AllowMinting;
 
 	// PUBLIC IMMUTABLES
 
@@ -824,13 +833,14 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	) -> DispatchResult {
 		let from = T::Lookup::lookup(from)?;
 		let dest = T::Lookup::lookup(dest)?;
-		let mut from_account = Account::<T>::get(id, &from);
-		from_account.balance = from_account.balance.checked_sub(&amount)
-			.ok_or(Error::<T>::BalanceLow)?;
 
 		if dest == from {
 			return Ok(())
 		}
+
+		let mut from_account = Account::<T>::get(id, &from);
+		from_account.balance = from_account.balance.checked_sub(&amount)
+			.ok_or(Error::<T>::BalanceLow)?;
 
 		Asset::<T>::try_mutate(id, |maybe_details| {
 			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
@@ -865,14 +875,14 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 			Ok(())
 		})
 	}
+}
 
+impl<T: Config> BurnableAsset<<T::Lookup as StaticLookup>::Source> for Module<T> {
 	fn burn(
 		id: Self::AssetId,
 		who: <T::Lookup as StaticLookup>::Source,
 		amount: Self::Balance
 	) -> DispatchResult {
-		ensure!(Self::AllowBurning::get(), Error::<T>::NoBurningAllowed);
-
 		let who = T::Lookup::lookup(who)?;
 		Asset::<T>::try_mutate(id, |maybe_details| {
 			let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
@@ -901,14 +911,14 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 			Ok(())
 		})
 	}
+}
 
+impl<T: Config> MintableAsset<<T::Lookup as StaticLookup>::Source> for Module<T> {
 	fn mint(
 		id: Self::AssetId,
 		beneficiary: <T::Lookup as StaticLookup>::Source,
 		amount: Self::Balance
 	) -> DispatchResult {
-		ensure!(Self::AllowMinting::get(), Error::<T>::NoMintingAllowed);
-
 		let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 		Asset::<T>::try_mutate(id, |maybe_details| {
@@ -928,10 +938,10 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 			Ok(())
 		})
 	}
+}
 
+impl<T: Config> FreezableAsset<<T::Lookup as StaticLookup>::Source> for Module<T> {
 	fn freeze(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
-		ensure!(Self::AllowFreezing::get(), Error::<T>::NoFreezingAllowed);
-
 		let who = T::Lookup::lookup(who)?;
 		ensure!(Account::<T>::contains_key(id, &who), Error::<T>::BalanceZero);
 
@@ -942,8 +952,6 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 	}
 
 	fn thaw(id: Self::AssetId, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
-		ensure!(Self::AllowFreezing::get(), Error::<T>::NoFreezingAllowed);
-
 		let who = T::Lookup::lookup(who)?;
 		ensure!(Account::<T>::contains_key(id, &who), Error::<T>::BalanceZero);
 
@@ -952,8 +960,10 @@ impl<T: Config> Token<<T::Lookup as StaticLookup>::Source> for Module<T> where
 		Self::deposit_event(Event::<T>::Thawed(id, who));
 		Ok(())
 	}
+}
 
-	fn transfer_ownership(id: Self::AssetId, owner: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+impl<T: Config> ManageableAsset<<T::Lookup as StaticLookup>::Source> for Module<T> {
+	fn set_owner(id: Self::AssetId, owner: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 		let owner = T::Lookup::lookup(owner)?;
 
 		Asset::<T>::try_mutate(id, |maybe_details| {
