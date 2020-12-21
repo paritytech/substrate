@@ -212,10 +212,31 @@ impl Markers {
 	}
 }
 
+#[derive(Debug, Clone, Default)]
+struct DeclFailureHandling {
+	did_fail: Cell<bool>,
+	failure: DeclarationFailureHanling,
+}
+
+impl DeclFailureHandling {
+	fn invalid_access(&self) {
+		match self.failure {
+			DeclarationFailureHanling::Panic => {
+				panic!(BROKEN_DECLARATION_ACCESS);
+			},
+			DeclarationFailureHanling::InvalidAtJoin => {
+				self.did_fail.set(true);
+			},
+		}
+	}
+}
+
 #[derive(Debug, Clone)]
 struct Filters {
-	failure: DeclarationFailureHanling,
-	did_fail: Cell<bool>,
+	// For failure as declare by parent.
+	parent_failure_handler: DeclFailureHandling,
+	// For failure as declare by children.
+	children_failure_handler: BTreeMap<TaskId, DeclFailureHandling>,
 	// By default no declaration does not filter
 	// Using allows definition switch this.
 	default_allow: bool,
@@ -549,8 +570,8 @@ impl AccessLogger {
 impl Default for Filters {
 	fn default() -> Self {
 		Filters {
-			failure: DeclarationFailureHanling::default(),
-			did_fail: Cell::new(false),
+			parent_failure_handler: DeclFailureHandling::default(),
+			children_failure_handler: BTreeMap::new(),
 			default_allow: true,
 			can_switch_default: true,
 			top_filters: FilterTree::new(()),
@@ -655,7 +676,19 @@ impl Filters {
 			WorkerResult::HardPanic
 			| WorkerResult::Panic => (),
 		};
-		self.did_fail.get()
+		self.did_fail()
+	}
+
+	fn did_fail(&self) -> bool {
+		if self.parent_failure_handler.did_fail.get() {
+			return true;
+		}
+		for (_id, handler) in self.children_failure_handler.iter() {
+			if handler.did_fail.get() {
+				return true;
+			}
+		}
+		false
 	}
 
 	/// TODO this implementation is borderline eg forbid prefix
@@ -663,7 +696,7 @@ impl Filters {
 	/// not know the query plan.
 	/// -> it could be easier to forbid storage root from
 	/// worker (it maybe be already the case).
-	fn guard_read_all_filter(filters: &FilterTree) -> bool {
+	fn guard_read_all_filter(filters: &FilterTree) -> Option<Option<TaskId>> {
 		let mut blocked = false;
 		for (key, value) in filters.iter().value_iter() {
 			match value.write_prefix {
@@ -689,14 +722,11 @@ impl Filters {
 		blocked
 	}
 
-	fn invalid_access(&self) {
-		match self.failure {
-			DeclarationFailureHanling::Panic => {
-				panic!(BROKEN_DECLARATION_ACCESS);
-			},
-			DeclarationFailureHanling::InvalidAtJoin => {
-				self.did_fail.set(true);
-			},
+	fn invalid_access(&self, child: Option<TaskId>) {
+		if let Some(child) = child {
+			self.children_failure_handler.get(child).expect("TODO").invalid_access()
+		} else {
+			self.parent_failure_handler.invalid_access();
 		}
 	}
 
@@ -709,7 +739,7 @@ impl Filters {
 			if blocked {
 				break;
 			}
-			if Self::guard_read_all_filter(&self.top_filters) {
+			if Self::guard_read_all_filter(child_filter) {
 				blocked = true;
 			}
 		}
