@@ -246,8 +246,6 @@ decl_event! {
 		TeamChanged(AssetId, AccountId, AccountId, AccountId),
 		/// The owner changed \[asset_id, owner\]
 		OwnerChanged(AssetId, AccountId),
-		/// Some assets was transferred by an admin. \[asset_id, from, to, amount\]
-		ForceTransferred(AssetId, AccountId, AccountId, Balance),
 		/// Some account `who` was frozen. \[asset_id, who\]
 		Frozen(AssetId, AccountId),
 		/// Some account `who` was thawed. \[asset_id, who\]
@@ -563,13 +561,8 @@ decl_module! {
 				.ok_or(Error::<T>::BalanceLow)?;
 
 			let target = T::Lookup::lookup(target)?;
-			match <Self as FungibleAsset<_>>::transfer(id, origin.clone(), target.clone(), amount) {
-				Ok(_) => {
-					Self::deposit_event(RawEvent::Transferred(id, origin, target, amount));
-					Ok(())
-				},
-				Err(e) => Err(e),
-			}
+			<Self as FungibleAsset<_>>::transfer(id, origin.clone(), target.clone(), amount)?;
+			Ok(())
 		}
 
 		/// Move some assets from one account to another.
@@ -609,13 +602,8 @@ decl_module! {
 			ensure!(!amount.is_zero(), Error::<T>::AmountZero);
 
 			let dest = T::Lookup::lookup(dest)?;
-			match <Self as FungibleAsset<_>>::transfer(id, source.clone(), dest.clone(), amount) {
-				Ok(_) => {
-					Self::deposit_event(RawEvent::ForceTransferred(id, source, dest, amount));
-					Ok(())
-				},
-				Err(e) => Err(e),
-			}
+			<Self as FungibleAsset<_>>::transfer(id, source.clone(), dest.clone(), amount)?;
+			Ok(())
 		}
 
 		/// Disallow further unprivileged transfers from an account.
@@ -874,6 +862,8 @@ impl<T: Config> FungibleAsset<T::AccountId> for Module<T> where
 					Account::<T>::remove(id, &from);
 				}
 			}
+
+			Self::deposit_event(RawEvent::Transferred(id, from, dest, amount));
 
 			Ok(())
 		})
