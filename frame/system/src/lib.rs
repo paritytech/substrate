@@ -508,7 +508,7 @@ decl_error! {
 mod migrations {
 	use super::*;
 
-	#[allow(dead_code)®]
+	#[allow(dead_code)]
 	pub fn migrate_all<T: Config>() -> frame_support::weights::Weight {
 		Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)|
 			Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, data })
