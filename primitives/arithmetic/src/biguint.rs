@@ -581,6 +581,12 @@ pub mod tests {
 	}
 
 	#[test]
+	fn shift_check() {
+		let shift = sp_std::mem::size_of::<Double>() - sp_std::mem::size_of::<Single>();
+		assert_eq!(shift * 8, SHIFT);
+	}
+
+	#[test]
 	fn split_works() {
 		let a = SHIFT / 2;
 		let b = SHIFT * 3 / 2;
