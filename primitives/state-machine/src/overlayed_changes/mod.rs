@@ -300,6 +300,7 @@ impl StateLogger {
 		}
 		false
 	}
+
 	fn check_write_read_key(&self, read_key: &Vec<u8>, marker_set: &BTreeSet<TaskId>) -> bool {
 		let mut result = true;
 		if let Some(ids) = self.write_key.get(read_key) {
@@ -308,21 +309,46 @@ impl StateLogger {
 			}
 		}
 		for (prefix, ids) in self.write_prefix.seek_iter(read_key.as_slice()).value_iter() {
-			unimplemented!("TODO use a trie seek iter until first conaining id");
 			if Self::check_any_write_marker(marker_set, ids) {
 				return false;
 			}
 		}
-
-		unimplemented!();
 		result
 	}
+
 	fn check_write_read_intervals(&self, interval: &(Vec<u8>, Vec<u8>), marker_set: &BTreeSet<TaskId>) -> bool {
 		let mut result = true;
+		// Could use a seek to start here, but this
+		// (check read access on write) is a marginal use case
+		// so not switching write_key to radix_tree at the time.
+		for (key, ids) in self.write_key.iter() {
+			if key > &interval.1 {
+				break;
+			}
+			if key >= &interval.0 && Self::check_any_write_marker(marker_set, ids) {
+				return false;
+			}
+		}
+		let mut iter = self.write_prefix.seek_iter(interval.0.as_slice()).value_iter();
+		while let Some((prefix, ids)) = iter.next() {
+			if Self::check_any_write_marker(marker_set, ids) {
+				return false;
+			}
+		}
 		// TODO there is probably a good way to merge redundant/contigus intervals here.
+		// Also have it ordered for single iteration check.
 		// (in fact since most of the time they are one step of iteration this is mandatory
 		// but could be do more when we register new read interval.
-		unimplemented!("hum looks tricky");
+		for (key, ids) in iter.node_iter().iter_prefix().value_iter() {
+			if key > interval.1 {
+				break;
+			}
+			// This is can do some check twice (all write prefix that are contained
+			// by start, as they also where in seek iter)
+			if Self::check_any_write_marker(marker_set, ids) {
+				return false;
+			}
+		}
 		result
 	}
 }
