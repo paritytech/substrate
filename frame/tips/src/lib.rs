@@ -427,8 +427,7 @@ decl_module! {
 			let tip = Tips::<T>::take(hash).ok_or(Error::<T>::UnknownTip)?;
 
 			if !tip.deposit.is_zero() {
-				let deposit = tip.deposit;
-				let imbalance = T::Currency::slash_reserved(&tip.finder, deposit).0;
+				let imbalance = T::Currency::slash_reserved(&tip.finder, tip.deposit).0;
 				T::OnSlash::on_unbalanced(imbalance);
 			}
 			Reasons::<T>::remove(&tip.reason);
