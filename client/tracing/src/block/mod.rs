@@ -56,7 +56,20 @@ impl<BE, Block, Client> BlockExecutor<BE, Block, Client>
 		Self { client, block, _phantom: PhantomData }
 	}
 
-	pub fn trace_block(self) -> Traces {
+	pub fn trace_block(self) -> Result<Traces, &'static str> {
+		let id = BlockId::Hash(self.block);
+		let extrinsics = self.client.block_body(&id)
+			.map_err(|_| "Invalid block id")?
+			.ok_or("Block body not stored")?;
+		let mut header = self.client.header(id)
+			.map_err(|_| "Invalid block id")?
+			.ok_or("Block not found")?;
+		// Pop digest else: "Error executing block: Execution(RuntimePanicked(\"assertion failed: `(left == right)`\\n  left: `2`,\\n right: `1`: Number of digest items must match that calculated.\"
+		header.digest_mut().pop();
+		let parent_hash = header.parent_hash();
+		let parent_id = BlockId::Hash(*parent_hash);
+		let block = Block::new(header, extrinsics);
+
 		let traces = Arc::new(Mutex::new(Traces::default()));
 		let tracer = StorageTracer {
 			traces: traces.clone(),
@@ -67,23 +80,14 @@ impl<BE, Block, Client> BlockExecutor<BE, Block, Client>
 			.finish()
 			.with(profiling_layer);
 		let dispatch = Dispatch::new(sub);
-		dispatcher::with_default(&dispatch, || {
-			let id = BlockId::Hash(self.block);
-			let extrinsics = self.client.block_body(&id).expect("Invalid block id").expect("No extrinsics");
-			let mut header = self.client.header(id).expect("Invalid block id").expect("No header");
-			// Pop digest else: "Error executing block: Execution(RuntimePanicked(\"assertion failed: `(left == right)`\\n  left: `2`,\\n right: `1`: Number of digest items must match that calculated.\"
-			header.digest_mut().pop();
-			let parent_hash = header.parent_hash();
-			let parent_id = BlockId::Hash(*parent_hash);
-			let block = Block::new(header, extrinsics);
 
-			match self.client.runtime_api().execute_block(&parent_id, block) {
-				Err(e) => log::error!("Error executing block: {:?}", e),
-				_ => (),
-			}
-		});
+		if let Err(_)  = dispatcher::with_default(&dispatch, || {
+			self.client.runtime_api().execute_block(&parent_id, block)
+		}) {
+			return Err("Error executing block")
+		}
 		drop(dispatch);
-		Arc::try_unwrap(traces).expect("").into_inner()
+		Ok(Arc::try_unwrap(traces).map_err(|_| "Unable to unwrap block traces")?.into_inner())
 	}
 }
 
