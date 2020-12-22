@@ -70,7 +70,9 @@ impl<BE, Block, Client> BlockExecutor<BE, Block, Client>
 		dispatcher::with_default(&dispatch, || {
 			let id = BlockId::Hash(self.block);
 			let extrinsics = self.client.block_body(&id).expect("Invalid block id").expect("No extrinsics");
-			let header = self.client.header(id).expect("Invalid block id").expect("No header");
+			let mut header = self.client.header(id).expect("Invalid block id").expect("No header");
+			// Pop digest else: "Error executing block: Execution(RuntimePanicked(\"assertion failed: `(left == right)`\\n  left: `2`,\\n right: `1`: Number of digest items must match that calculated.\"
+			header.digest_mut().pop();
 			let parent_hash = header.parent_hash();
 			let parent_id = BlockId::Hash(*parent_hash);
 			let block = Block::new(header, extrinsics);
