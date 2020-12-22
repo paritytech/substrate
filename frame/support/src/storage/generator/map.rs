@@ -226,6 +226,10 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 		G::from_optional_value_to_query(unhashed::get(Self::storage_map_final_key(key).as_ref()))
 	}
 
+	fn try_get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<V, ()> {
+		unhashed::get(Self::storage_map_final_key(key).as_ref()).ok_or(())
+	}
+
 	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg) {
 		unhashed::put(Self::storage_map_final_key(key).as_ref(), &val)
 	}
