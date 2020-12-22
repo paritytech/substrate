@@ -141,5 +141,5 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_traceBlock")]
 	fn trace_block(
 		&self, block: Hash
-	) -> RpcResult<sp_tracing::std_types::Traces>;
+	) -> FutureResult<sp_tracing::std_types::Traces>;
 }

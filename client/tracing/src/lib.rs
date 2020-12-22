@@ -27,7 +27,7 @@
 pub mod logging;
 pub mod block;
 
-use rustc_hash::{FxHasher};
+// use rustc_hash::{FxHasher};
 use std::fmt;
 use std::time::{Duration, Instant};
 
@@ -55,7 +55,7 @@ use tracing_subscriber::reload::Handle;
 use once_cell::sync::OnceCell;
 use tracing_subscriber::filter::Directive;
 use std::collections::HashMap;
-use std::hash::BuildHasherDefault;
+// use std::hash::BuildHasherDefault;
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 

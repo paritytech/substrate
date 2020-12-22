@@ -20,12 +20,7 @@
 /// Types for working with tracing data
 
 use std::collections::HashMap;
-use std::fmt;
-use std::time::{Duration, Instant};
-use std::sync::Arc;
-use parking_lot::Mutex;
-use serde::ser::{Serialize, Serializer, SerializeMap};
-use serde::de::{Deserialize, Deserializer};
+use std::time::Duration;
 
 /// Represents a tracing event, complete with values
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]

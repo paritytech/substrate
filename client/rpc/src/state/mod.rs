@@ -40,7 +40,9 @@ use self::error::{Error, FutureResult};
 
 pub use sc_rpc_api::state::*;
 pub use sc_rpc_api::child_state::*;
-use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend, ProofProvider};
+use sc_client_api::{
+	ExecutorProvider, StorageProvider, BlockchainEvents, Backend, BlockBackend, ProofProvider
+};
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
 
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
@@ -165,6 +167,12 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool>;
+
+	/// Trace storage changes for block
+	fn trace_block(
+		&self,
+		block: Block::Hash,
+	) -> FutureResult<sp_tracing::std_types::Traces>;
 }
 
 /// Create new state API that works on full node.
@@ -177,7 +185,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 		Block: BlockT + 'static,
 		BE: Backend<Block> + 'static,
 		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
-			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
+			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block> + BlockBackend<Block>
 			+ CallApiAt<Block, Error = sp_blockchain::Error>
 			+ ProvideRuntimeApi<Block> + Send + Sync + 'static,
 		Client::Api: Metadata<Block, Error = sp_blockchain::Error>,
@@ -348,9 +356,8 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		self.backend.unsubscribe_runtime_version(meta, id)
 	}
 
-	fn trace_block(&self, block: Block::Hash) -> RpcResult<sp_tracing::std_types::Traces> {
-		let targets= "pallet=trace,frame=trace,state=trace".to_owned();
-		Ok(sc_tracing::block::trace_block::<Block>(targets, block))
+	fn trace_block(&self, block: Block::Hash) -> FutureResult<sp_tracing::std_types::Traces> {
+		self.backend.trace_block(block)
 	}
 }
 
