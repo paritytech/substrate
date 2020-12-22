@@ -476,10 +476,11 @@ pub enum WorkerDeclaration {
 	/// error on result access only.
 	Optimistic,
 
-	/// Parent write access only.
-	ParentWrite(AccessDeclaration, DeclarationFailureHanling),
-
 	/// Child worker read access only.
+	/// Makes parent write forbidden for the same declaration,
+	/// this can be use when we want to check consistency from the
+	/// state at join (otherwhise there is no sense in forbidding write).
+	/// TODO rename to ChildReadJoin?
 	ChildRead(AccessDeclaration, DeclarationFailureHanling),
 }
 
