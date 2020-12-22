@@ -144,7 +144,7 @@ where
 	/// Try to get the value for the given key from the double map.
 	///
 	/// Returns `Ok` if it exists, `Err` if not.
-	pub fn try_get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Result<QueryKind::Query, ()>
+	pub fn try_get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Result<Value, ()>
 	where
 		KArg1: EncodeLike<Key1>,
 		KArg2: EncodeLike<Key2> {
@@ -524,7 +524,7 @@ mod test {
 			});
 			assert_eq!(A::contains_key(2, 20), true);
 			assert_eq!(A::get(2, 20), Some(100));
-			assert_eq!(A::try_get(2, 20), Ok(Some(100)));
+			assert_eq!(A::try_get(2, 20), Ok(100));
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists(2, 20, |v| {
 				*v = Some(v.unwrap() * 10);
 				Err(())

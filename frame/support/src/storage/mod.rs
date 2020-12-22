@@ -217,7 +217,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Try to get the value for the given key from the map.
 	///
 	/// Returns `Ok` if it exists, `Err` if not.
-	fn try_get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<Self::Query, ()>;
+	fn try_get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<V, ()>;
 
 	/// Swap the values of two keys.
 	fn swap<KeyArg1: EncodeLike<K>, KeyArg2: EncodeLike<K>>(key1: KeyArg1, key2: KeyArg2);
@@ -386,7 +386,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// Try to get the value for the given key from the double map.
 	///
 	/// Returns `Ok` if it exists, `Err` if not.
-	fn try_get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Result<Self::Query, ()>
+	fn try_get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Result<V, ()>
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
