@@ -24,7 +24,7 @@ use std::time::Duration;
 
 /// Represents a tracing event, complete with values
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
-pub struct TraceEvent {
+pub struct Event {
 	/// Event name
 	pub name: String,
 	/// Event target
@@ -37,7 +37,7 @@ pub struct TraceEvent {
 
 /// Represents a single instance of a tracing span
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
-pub struct SpanDatum {
+pub struct Span {
 	/// id for this span
 	pub id: u64,
 	/// id of the parent span, if any
@@ -70,6 +70,6 @@ pub struct Values {
 /// Container for all related spans and events
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct Traces {
-	pub spans: Vec<SpanDatum>,
-	pub events: Vec<TraceEvent>,
+	pub spans: Vec<Span>,
+	pub events: Vec<Event>,
 }

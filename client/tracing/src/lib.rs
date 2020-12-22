@@ -209,39 +209,38 @@ pub struct SpanDatum {
 	pub values: Values,
 }
 
-impl From<SpanDatum> for sp_tracing::std_types::SpanDatum {
+impl From<SpanDatum> for sp_tracing::std_types::Span {
 	fn from(s: SpanDatum) -> Self {
-		let values = sp_tracing::std_types::Values {
-			bool_values: s.values.bool_values,
-			i64_values: s.values.i64_values,
-			u64_values: s.values.u64_values,
-			string_values: s.values.string_values,
-		};
-		sp_tracing::std_types::SpanDatum {
+		sp_tracing::std_types::Span {
 			id: s.id.into_u64(),
 			parent_id: s.parent_id.map(|id| id.into_u64()),
 			name: s.name,
 			target: s.target,
 			line: s.line,
 			overall_time: s.overall_time,
-			values,
+			values: e.values.into(),
 		}
 	}
 }
 
-impl From<TraceEvent> for sp_tracing::std_types::TraceEvent {
+impl From<TraceEvent> for sp_tracing::std_types::Event {
 	fn from(e: TraceEvent) -> Self {
-		let values = sp_tracing::std_types::Values {
+		sp_tracing::std_types::Event {
+			name: e.name.to_owned(),
+			target: e.target,
+			values: e.values.into(),
+			parent_id: e.parent_id.map(|id| id.into_u64()),
+		}
+	}
+}
+
+impl From<Values> for sp_tracing::std_types::Values {
+	fn from(e: TraceEvent) -> Self {
+		sp_tracing::std_types::Values {
 			bool_values: e.values.bool_values,
 			i64_values: e.values.i64_values,
 			u64_values: e.values.u64_values,
 			string_values: e.values.string_values,
-		};
-		sp_tracing::std_types::TraceEvent {
-			name: e.name.to_owned(),
-			target: e.target,
-			values,
-			parent_id: e.parent_id.map(|id| id.into_u64()),
 		}
 	}
 }
