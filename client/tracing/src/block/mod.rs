@@ -76,7 +76,7 @@ impl<BE, Block, Client> BlockExecutor<BE, Block, Client>
 		};
 		let profiling_layer = ProfilingLayer::new_with_handler(Box::new(tracer), "pallet,frame,state");
 		let sub = FmtSubscriber::builder()
-			.with_writer(|| std::io::sink())
+			.with_writer(std::io::sink)
 			.finish()
 			.with(profiling_layer);
 		let dispatch = Dispatch::new(sub);

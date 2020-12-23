@@ -218,7 +218,7 @@ impl From<SpanDatum> for sp_tracing::std_types::Span {
 			target: s.target,
 			line: s.line,
 			overall_time: s.overall_time,
-			values: e.values.into(),
+			values: s.values.into(),
 		}
 	}
 }
@@ -235,12 +235,12 @@ impl From<TraceEvent> for sp_tracing::std_types::Event {
 }
 
 impl From<Values> for sp_tracing::std_types::Values {
-	fn from(e: TraceEvent) -> Self {
+	fn from(v: Values) -> Self {
 		sp_tracing::std_types::Values {
-			bool_values: e.values.bool_values,
-			i64_values: e.values.i64_values,
-			u64_values: e.values.u64_values,
-			string_values: e.values.string_values,
+			bool_values: v.bool_values,
+			i64_values: v.i64_values,
+			u64_values: v.u64_values,
+			string_values: v.string_values,
 		}
 	}
 }
@@ -415,7 +415,7 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 			parent_id: attrs.parent().cloned().or_else(|| self.current_span.id()),
 			name: attrs.metadata().name().to_owned(),
 			target: attrs.metadata().target().to_owned(),
-			level: attrs.metadata().level().clone(),
+			level: *attrs.metadata().level(),
 			line: attrs.metadata().line().unwrap_or(0),
 			start_time: Instant::now(),
 			overall_time: ZERO_DURATION,
@@ -437,7 +437,7 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 		let trace_event = TraceEvent {
 			name: event.metadata().name(),
 			target: event.metadata().target().to_owned(),
-			level: event.metadata().level().clone(),
+			level: *event.metadata().level(),
 			values,
 			parent_id: event.parent().cloned().or_else(|| self.current_span.id()),
 		};
