@@ -582,7 +582,6 @@ mod tests {
 				&number,
 				&hash,
 				&Default::default(),
-				&Default::default(),
 				Default::default()
 			);
 
@@ -680,7 +679,6 @@ mod tests {
 			header.digest_mut().pop(); // pop the seal off.
 			System::initialize(
 				&1,
-				&Default::default(),
 				&Default::default(),
 				header.digest(),
 				Default::default(),

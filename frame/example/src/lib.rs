@@ -131,7 +131,7 @@
 //! <!-- Original author of paragraph: ??? -->
 //!
 //! // Reference documentation of aspects such as `storageItems` and `dispatchable` functions should only be
-//! // included in the https://docs.rs Rustdocs for Substrate and not repeated in the README file.
+//! // included in the <https://docs.rs> Rustdocs for Substrate and not repeated in the README file.
 //!
 //! \### Dispatchable Functions
 //!
@@ -224,8 +224,8 @@
 //! // Show a usage example in an actual runtime
 //!
 //! // See:
-//! // - Substrate TCR https://github.com/parity-samples/substrate-tcr
-//! // - Substrate Kitties https://shawntabrizi.github.io/substrate-collectables-workshop/#/
+//! // - Substrate TCR <https://github.com/parity-samples/substrate-tcr>
+//! // - Substrate Kitties <https://shawntabrizi.github.io/substrate-collectables-workshop/#/>
 //!
 //! \## Genesis Config
 //!

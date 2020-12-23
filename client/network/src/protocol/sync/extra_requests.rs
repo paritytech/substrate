@@ -545,6 +545,7 @@ mod tests {
 	impl Arbitrary for ArbitraryPeerSync {
 		fn arbitrary<G: Gen>(g: &mut G) -> Self {
 			let ps = PeerSync {
+				peer_id: PeerId::random(),
 				common_number: g.gen(),
 				best_hash: Hash::random(),
 				best_number: g.gen(),
@@ -561,10 +562,10 @@ mod tests {
 		fn arbitrary<G: Gen>(g: &mut G) -> Self {
 			let mut peers = HashMap::with_capacity(g.size());
 			for _ in 0 .. g.size() {
-				peers.insert(PeerId::random(), ArbitraryPeerSync::arbitrary(g).0);
+				let ps = ArbitraryPeerSync::arbitrary(g).0;
+				peers.insert(ps.peer_id.clone(), ps);
 			}
 			ArbitraryPeers(peers)
 		}
 	}
-
 }
