@@ -34,11 +34,7 @@ use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
 
 /// Re-export for backward compatibility
-pub use crate::currency::{
-	ExistenceRequirement, BalanceStatus, WithdrawReasons, OnUnbalanced, Imbalance, SignedImbalance,
-	SplitTwoWays, Currency, ReservableCurrency, ReserveIdentifier, NamedReservableCurrency,
-	LockIdentifier, LockableCurrency
-};
+pub use crate::currency::*;
 
 /// Re-exported for the macro.
 #[doc(hidden)]
