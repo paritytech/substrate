@@ -76,7 +76,11 @@ impl<BE, Block, Client> BlockExecutor<BE, Block, Client>
 		let dispatch = create_dispatch(traces.clone(), &self.targets)?;
 
 		if let Err(e) = dispatcher::with_default(&dispatch, || {
-			let span = tracing::info_span!(target: TRACE_TARGET, "trace_block", targets: self.targets.unwrap_or(DEFAULT_TARGETS));
+			let span = tracing::info_span!(
+				target: TRACE_TARGET,
+				"trace_block",
+				?self.targets
+			);
 			let _enter = span.enter();
 			self.client.runtime_api().execute_block(&parent_id, block)
 		}) {
