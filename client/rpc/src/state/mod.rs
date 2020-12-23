@@ -171,7 +171,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	/// Trace storage changes for block
 	fn trace_block(
 		&self,
-		block: Block::Hash,
+		block: Block::Hash, targets: Option<String>
 	) -> FutureResult<sp_tracing::std_types::Traces>;
 }
 
@@ -356,8 +356,8 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		self.backend.unsubscribe_runtime_version(meta, id)
 	}
 
-	fn trace_block(&self, block: Block::Hash) -> FutureResult<sp_tracing::std_types::Traces> {
-		self.backend.trace_block(block)
+	fn trace_block(&self, block: Block::Hash, targets: Option<String>) -> FutureResult<sp_tracing::std_types::Traces> {
+		self.backend.trace_block(block, targets)
 	}
 }
 

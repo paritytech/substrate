@@ -36,9 +36,13 @@ use sp_runtime::{
 use crate::{TraceHandler, ProfilingLayer};
 use std::marker::PhantomData;
 
+// Default to only runtime and state related traces
+const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
+
 pub struct BlockExecutor<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
 	block: Block::Hash,
+	targets: Option<String>,
 	_phantom: PhantomData<(BE, Block)>,
 }
 
@@ -52,11 +56,11 @@ impl<BE, Block, Client> BlockExecutor<BE, Block, Client>
 		+ Send + Sync + 'static,
 		Client::Api: Metadata<Block, Error=sp_blockchain::Error>,
 {
-	pub fn new(client: Arc<Client>, block: Block::Hash) -> Self{
-		Self { client, block, _phantom: PhantomData }
+	pub fn new(client: Arc<Client>, block: Block::Hash, targets: Option<String>) -> Self{
+		Self { client, block, targets, _phantom: PhantomData }
 	}
 
-	pub fn trace_block(self) -> Result<Traces, &'static str> {
+	pub fn trace_block(&self) -> Result<Traces, &'static str> {
 		let id = BlockId::Hash(self.block);
 		let extrinsics = self.client.block_body(&id)
 			.map_err(|_| "Invalid block id")?
@@ -71,15 +75,7 @@ impl<BE, Block, Client> BlockExecutor<BE, Block, Client>
 		let block = Block::new(header, extrinsics);
 
 		let traces = Arc::new(Mutex::new(Traces::default()));
-		let tracer = StorageTracer {
-			traces: traces.clone(),
-		};
-		let profiling_layer = ProfilingLayer::new_with_handler(Box::new(tracer), "pallet,frame,state");
-		let sub = FmtSubscriber::builder()
-			.with_writer(std::io::sink)
-			.finish()
-			.with(profiling_layer);
-		let dispatch = Dispatch::new(sub);
+		let dispatch = create_dispatcher(traces.clone(), &self.targets);
 
 		if let Err(_)  = dispatcher::with_default(&dispatch, || {
 			self.client.runtime_api().execute_block(&parent_id, block)
@@ -103,6 +99,21 @@ impl TraceHandler for StorageTracer {
 	fn handle_event(&self, event: crate::TraceEvent) {
 		self.traces.lock().events.push(event.into());
 	}
+}
+
+fn create_dispatcher(traces: Arc<Mutex<Traces>>, targets: &Option<String>) -> Dispatch {
+	let tracer = StorageTracer {
+		traces,
+	};
+	let profiling_layer = ProfilingLayer::new_with_handler(
+		Box::new(tracer),
+		if let Some(t) = targets { t } else { DEFAULT_TARGETS }
+	);
+	let sub = FmtSubscriber::builder()
+		.with_writer(std::io::sink)
+		.finish()
+		.with(profiling_layer);
+	Dispatch::new(sub)
 }
 
 #[cfg(test)]

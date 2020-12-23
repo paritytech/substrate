@@ -521,10 +521,10 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 
 	fn trace_block(
 		&self,
-		block: Block::Hash,
+		block: Block::Hash, targets: Option<String>,
 	) -> FutureResult<sp_tracing::std_types::Traces> {
 		Box::new(result(
-			sc_tracing::block::BlockExecutor::new(self.client.clone(), block)
+			sc_tracing::block::BlockExecutor::new(self.client.clone(), block, targets)
 				.trace_block()
 				.map_err(|e| invalid_block::<Block>(block, None, e.to_owned()))
 		))
