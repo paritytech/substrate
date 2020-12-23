@@ -502,6 +502,8 @@ ss58_address_format!(
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>
 		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
+	ValiuAccount =>
+		(35, "vln", "Valiu Liquidity Network mainnet, standard account (*25519).")
 	CentrifugeAccount =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
 	NodleAccount =>
