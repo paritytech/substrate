@@ -15,15 +15,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Some instance placeholder to be used in `pallet` attribute macro.
+//! Some instance placeholder to be used in [`frame_support::pallet`] attribute macro.
 //!
-//! `pallet` attribute macro do not make use of `I` instance generic for anything, thus the
-//! placeholder can reexported from frame-support.
-//! This can allow some instantiable pallet to depend on specific instance of another:
+//! [`frame_support::pallet`] attribute macro does only requires the instance generic `I` to be
+//! static (contrary to `decl_*` macro which requires instance generic to implement
+//! [`frame_support::traits::Instance`]).
+//!
+//! Thus support provides some instance types to be used, This allow some instantiable pallet to
+//! depend on specific instance of another:
 //! ```
 //! # mod another_pallet { pub trait Config<I: 'static = ()> {} }
 //! pub trait Config<I: 'static = ()>: another_pallet::Config<I> {}
 //! ```
+//!
+//! NOTE: [`frame_support::pallet`] will reexport them inside the module, in order to make them
+//! accessible to [`frame_support::construct_runtime`].
 
 /// Instance0 to be used for instantiable pallet define with `pallet` macro.
 #[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]

@@ -1014,26 +1014,22 @@ mod tests {
 	}
 }
 
-/// prelude to be used alongside pallet macro, for ease of use.
+/// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
 	pub use sp_std::marker::PhantomData;
-	pub use frame_support::traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin};
 	#[cfg(feature = "std")]
 	pub use frame_support::traits::GenesisBuild;
-	pub use frame_support::dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError};
-	pub use frame_support::storage::types::{
-		StorageValue, StorageMap, StorageDoubleMap, ValueQuery, OptionQuery,
-	};
 	pub use frame_support::{
-		EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, DebugNoBound, CloneNoBound
+		EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, DebugNoBound, CloneNoBound, Twox256,
+		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, debug, ensure,
+		RuntimeDebug, storage,
+		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin},
+		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError},
+		weights::{DispatchClass, Pays, Weight},
+		storage::types::{StorageValue, StorageMap, StorageDoubleMap, ValueQuery, OptionQuery},
 	};
 	pub use codec::{Encode, Decode};
 	pub use sp_inherents::{InherentData, InherentIdentifier, ProvideInherent};
-	pub use crate::weights::{DispatchClass, Pays, Weight};
-	pub use crate::{
-		Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat,
-		debug, ensure, RuntimeDebug, storage
-	};
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
 		transaction_validity::{
