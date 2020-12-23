@@ -1267,24 +1267,38 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 	fn unreserve_named(id: &ReserveIdentifier, who: &T::AccountId, value: Self::Balance) -> Self::Balance {
 		if value.is_zero() { return Zero::zero() }
 
-		Reserves::<T, I>::mutate(who, |reserves| -> Self::Balance {
-			match reserves.binary_search_by_key(id, |data| data.id) {
-				Ok(idx) => {
-					let to_change = cmp::min(reserves[idx].amount, value);
+		Reserves::<T, I>::mutate_exists(who, |maybe_reserves| -> Self::Balance {
+			if let Some(reserves) = maybe_reserves.as_mut() {
+				match reserves.binary_search_by_key(id, |data| data.id) {
+					Ok(idx) => {
+						let to_change = cmp::min(reserves[idx].amount, value);
 
-					let remain = <Self as ReservableCurrency<_>>::unreserve(who, to_change);
+						let remain = <Self as ReservableCurrency<_>>::unreserve(who, to_change);
 
-					// remain should always be zero but just to be defensive here
-					let actual = to_change.saturating_sub(remain);
+						// remain should always be zero but just to be defensive here
+						let actual = to_change.saturating_sub(remain);
 
-					// `actual <= to_change` and `to_change <= amount`; qed;
-					reserves[idx].amount -= actual;
+						// `actual <= to_change` and `to_change <= amount`; qed;
+						reserves[idx].amount -= actual;
 
-					value - actual
-				},
-				Err(_) => {
-					value
-				},
+						if reserves[idx].amount.is_zero() {
+							if reserves.len() == 1 {
+								// no more named reserves
+								*maybe_reserves = None;
+							} else {
+								// remove this named reserve
+								reserves.remove(idx);
+							}
+						}
+
+						value - actual
+					},
+					Err(_) => {
+						value
+					},
+				}
+			} else {
+				value
 			}
 		})
 	}
