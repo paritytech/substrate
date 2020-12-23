@@ -276,8 +276,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///
 /// We provide support for the following module parts in a pallet:
 ///
-/// - `Pallet` or `Module`, mandatory. (one or the other must be provided depending if the pallet
-/// 	uses the pallet attribute macro or old `decl_module` macro.
+/// - `Module`
 /// - `Call`
 /// - `Storage`
 /// - `Event` or `Event<T>` (if the event is generic)

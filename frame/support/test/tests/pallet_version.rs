@@ -178,10 +178,10 @@ frame_support::construct_runtime!(
 		Module2: module2::{Module, Call},
 		Module2_1: module2::<Instance1>::{Module, Call},
 		Module2_2: module2::<Instance2>::{Module, Call},
-		Pallet3: pallet3::{Pallet, Call},
-		Pallet4: pallet4::{Pallet, Call},
-		Pallet4_1: pallet4::<Instance1>::{Pallet, Call},
-		Pallet4_2: pallet4::<Instance2>::{Pallet, Call},
+		Pallet3: pallet3::{Module, Call},
+		Pallet4: pallet4::{Module, Call},
+		Pallet4_1: pallet4::<Instance1>::{Module, Call},
+		Pallet4_2: pallet4::<Instance2>::{Module, Call},
 	}
 );
 

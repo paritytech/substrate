@@ -276,10 +276,10 @@ impl Def {
 
 	/// Depending on if pallet is instantiable:
 	/// * either `T`
-	/// * or `T, I`
+	/// * or `T, I = ()`
 	pub fn type_decl_generics(&self) -> proc_macro2::TokenStream {
 		if self.config.has_instance {
-			quote::quote!(T, I)
+			quote::quote!(T, I = ())
 		} else {
 			quote::quote!(T)
 		}

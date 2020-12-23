@@ -1144,9 +1144,11 @@ pub mod pallet_prelude {
 /// ```
 ///
 /// It implements on pallet:
-/// * [`GetPalletVersion`]
-/// * [`OnGenesis`]: contains some logic to write pallet version into storage.
-/// * [`ModuleErrorMetadata`]: using error declared or no metadata.
+/// * [`traits::GetPalletVersion`]
+/// * [`traits::OnGenesis`]: contains some logic to write pallet version into storage.
+/// * `ModuleErrorMetadata`: using error declared or no metadata.
+///
+/// It declare `type Module` type alias for `Pallet`, used by [`construct_runtime`].
 ///
 /// If attribute generate_store then macro create the trait `Store` and implement it on `Pallet`.
 ///

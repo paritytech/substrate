@@ -250,7 +250,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Event<T>},
 		// NOTE: name Example here is needed in order to have same module prefix
-		Example: pallet::{Pallet, Call, Event<T>, Config<T>, Storage},
+		Example: pallet::{Module, Call, Event<T>, Config<T>, Storage},
 		PalletOld: pallet_old::{Module, Call, Event<T>, Config<T>, Storage},
 	}
 );

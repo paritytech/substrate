@@ -25,7 +25,6 @@ use proc_macro2::{TokenStream as TokenStream2};
 use quote::quote;
 use syn::{Ident, Result, TypePath};
 use std::collections::HashMap;
-use syn::spanned::Spanned;
 
 /// The fixed name of the system module.
 const SYSTEM_MODULE_NAME: &str = "System";
@@ -33,9 +32,6 @@ const SYSTEM_MODULE_NAME: &str = "System";
 /// The complete definition of a module with the resulting fixed index.
 #[derive(Debug, Clone)]
 pub struct Module {
-	/// A Pallet use either Module (if defined with old macros) or Pallet.
-	/// This contains the struct to access Pallet information.
-	pub pallet_or_module: syn::Ident,
 	pub name: Ident,
 	pub index: u8,
 	pub module: Ident,
@@ -92,29 +88,7 @@ fn complete_modules(decl: impl Iterator<Item = ModuleDeclaration>) -> syn::Resul
 				return Err(err);
 			}
 
-			// Get if pallet use struct Module or Pallet.
-			let module_part = module.module_parts.iter().find(|part| part.name() == "Module");
-			let pallet_part = module.module_parts.iter().find(|part| part.name() == "Pallet");
-			let pallet_or_module = match (module_part, pallet_part) {
-				(Some(module_part), None) => syn::Ident::new("Module", module_part.keyword.span()),
-				(None, Some(pallet_part)) => syn::Ident::new("Pallet", pallet_part.keyword.span()),
-				(None, None) => {
-					let msg = "Cannot find part `Module` nor `Pallet`, one must be defined";
-					return Err(syn::Error::new(module.name.span(), msg));
-				},
-				(Some(module_part), Some(pallet_part)) => {
-					let msg = "`Module` cannot be defined when `Pallet` is defined";
-					let mut err = syn::Error::new(module_part.keyword.span(), msg);
-					let msg1 = "`Module` cannot be defined when `Pallet` is defined";
-					let err1 = syn::Error::new(pallet_part.keyword.span(), msg1);
-					err.combine(err1);
-					return Err(err);
-				},
-			};
-
-
 			Ok(Module {
-				pallet_or_module,
 				name: module.name,
 				index: final_index,
 				module: module.module,
@@ -321,22 +295,30 @@ fn decl_runtime_metadata<'a>(
 	extrinsic: &TypePath,
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations
-		.map(|module_declaration| {
-			let parts = module_declaration.module_parts().into_iter()
-				.map(|part| part.ident());
-
+		.filter_map(|module_declaration| {
+			module_declaration.find_part("Module").map(|_| {
+				let filtered_names: Vec<_> = module_declaration
+					.module_parts()
+					.into_iter()
+					.filter(|part| part.name() != "Module")
+					.map(|part| part.ident())
+					.collect();
+				(module_declaration, filtered_names)
+			})
+		})
+		.map(|(module_declaration, filtered_names)| {
 			let module = &module_declaration.module;
 			let name = &module_declaration.name;
-			let instance = module_declaration.instance.as_ref()
-				.map(|name| quote!(<#name>));
-
-			let pallet_or_module = &module_declaration.pallet_or_module;
+			let instance = module_declaration
+				.instance
+				.as_ref()
+				.map(|name| quote!(<#name>))
+				.into_iter();
 
 			let index = module_declaration.index;
 
 			quote!(
-				// Note: impl_runtime_metadata can be given all parts, no need to filter out any part
-				#module::#pallet_or_module #instance as #name { index #index } with #(#parts)*,
+				#module::Module #(#instance)* as #name { index #index } with #(#filtered_names)*,
 			)
 		});
 	quote!(
@@ -468,11 +450,8 @@ fn decl_all_modules<'a>(
 				.iter()
 				.map(|name| quote!(#module::#name)),
 		);
-
-		let pallet_or_module = &module_declaration.pallet_or_module;
-
 		let type_decl = quote!(
-			pub type #type_name = #module::#pallet_or_module <#(#generics),*>;
+			pub type #type_name = #module::Module <#(#generics),*>;
 		);
 		types.extend(type_decl);
 		names.push(&module_declaration.name);

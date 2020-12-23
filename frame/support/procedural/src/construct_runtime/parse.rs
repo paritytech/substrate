@@ -29,7 +29,6 @@ mod keyword {
 	syn::custom_keyword!(NodeBlock);
 	syn::custom_keyword!(UncheckedExtrinsic);
 	syn::custom_keyword!(Module);
-	syn::custom_keyword!(Pallet);
 	syn::custom_keyword!(Call);
 	syn::custom_keyword!(Storage);
 	syn::custom_keyword!(Event);
@@ -222,7 +221,6 @@ fn parse_module_parts(input: ParseStream) -> Result<Vec<ModulePart>> {
 #[derive(Debug, Clone)]
 pub enum ModulePartKeyword {
 	Module(keyword::Module),
-	Pallet(keyword::Pallet),
 	Call(keyword::Call),
 	Storage(keyword::Storage),
 	Event(keyword::Event),
@@ -238,8 +236,6 @@ impl Parse for ModulePartKeyword {
 
 		if lookahead.peek(keyword::Module) {
 			Ok(Self::Module(input.parse()?))
-		} else if lookahead.peek(keyword::Pallet) {
-			Ok(Self::Pallet(input.parse()?))
 		} else if lookahead.peek(keyword::Call) {
 			Ok(Self::Call(input.parse()?))
 		} else if lookahead.peek(keyword::Storage) {
@@ -265,7 +261,6 @@ impl ModulePartKeyword {
 	fn name(&self) -> &'static str {
 		match self {
 			Self::Module(_) => "Module",
-			Self::Pallet(_) => "Pallet",
 			Self::Call(_) => "Call",
 			Self::Storage(_) => "Storage",
 			Self::Event(_) => "Event",
@@ -296,7 +291,6 @@ impl Spanned for ModulePartKeyword {
 	fn span(&self) -> Span {
 		match self {
 			Self::Module(inner) => inner.span(),
-			Self::Pallet(inner) => inner.span(),
 			Self::Call(inner) => inner.span(),
 			Self::Storage(inner) => inner.span(),
 			Self::Event(inner) => inner.span(),
