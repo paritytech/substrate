@@ -252,31 +252,32 @@ fn session_changed_flag_works() {
 
 #[test]
 fn periodic_session_works() {
-	struct Period;
-	struct Offset;
 
-	impl Get<u64> for Period {
-		fn get() -> u64 { 10 }
+	frame_support::parameter_types! {
+		const Period: u64 = 10;
+		const Offset: u64 = 3;
 	}
-
-	impl Get<u64> for Offset {
-		fn get() -> u64 { 3 }
-	}
-
 
 	type P = PeriodicSessions<Period, Offset>;
 
-	for i in 0..3 {
+	for i in 0u64..3 {
 		assert!(!P::should_end_session(i));
+		assert_eq!(P::estimate_next_session_rotation(i).unwrap(), 3);
 	}
 
-	assert!(P::should_end_session(3));
+	assert!(P::should_end_session(3u64));
+	assert_eq!(P::estimate_next_session_rotation(3u64).unwrap(), 3);
 
-	for i in (1..10).map(|i| 3 + i) {
+	for i in (1u64..10).map(|i| 3 + i) {
 		assert!(!P::should_end_session(i));
+		assert_eq!(P::estimate_next_session_rotation(i).unwrap(), 13);
 	}
 
-	assert!(P::should_end_session(13));
+	assert!(P::should_end_session(13u64));
+	assert_eq!(P::estimate_next_session_rotation(13u64).unwrap(), 13);
+
+	assert!(!P::should_end_session(14u64));
+	assert_eq!(P::estimate_next_session_rotation(14u64).unwrap(), 23);
 }
 
 #[test]
