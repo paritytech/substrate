@@ -166,6 +166,7 @@ use frame_support::{
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
 		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status,
+		ReserveIdentifier, NamedReservableCurrency,
 	}
 };
 use sp_runtime::{
@@ -322,6 +323,12 @@ pub struct BalanceLock<Balance> {
 	pub reasons: Reasons,
 }
 
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct ReserveData<Balance> {
+	pub id: ReserveIdentifier,
+	pub amount: Balance,
+}
+
 /// All balance information for an account.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug)]
 pub struct AccountData<Balance> {
@@ -396,6 +403,8 @@ decl_storage! {
 		/// Any liquidity locks on some account balances.
 		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
 		pub Locks get(fn locks): map hasher(blake2_128_concat) T::AccountId => Vec<BalanceLock<T::Balance>>;
+
+		pub Reserves get(fn reserves): map hasher(blake2_128_concat) T::AccountId => Vec<ReserveData<T::Balance>>;
 
 		/// Storage version of the pallet.
 		///
@@ -1216,6 +1225,144 @@ impl<T: Config<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I
 
 		Self::deposit_event(RawEvent::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual, status));
 		Ok(value - actual)
+	}
+}
+
+impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module<T, I>  where
+	T::Balance: MaybeSerializeDeserialize + Debug
+{
+	fn reserved_balance_named(id: &ReserveIdentifier, who: &T::AccountId) -> Self::Balance {
+		let reserves = Self::reserves(who);
+		reserves
+			.binary_search_by_key(id, |data| data.id)
+			.map(|idx| reserves[idx].amount)
+			.unwrap_or_default()
+	}
+
+	/// Move `value` from the free balance from `who` to their reserved balance.
+	///
+	/// Is a no-op if value to be reserved is zero.
+	fn reserve_named(id: &ReserveIdentifier, who: &T::AccountId, value: Self::Balance) -> DispatchResult {
+		<Self as ReservableCurrency<_>>::reserve(who, value)?;
+		Reserves::<T, I>::mutate(who, |reserves| {
+			match reserves.binary_search_by_key(id, |data| data.id) {
+				Ok(idx) => {
+					// this add can't overflow but just to be defensive.
+					reserves[idx].amount = reserves[idx].amount.saturating_add(value)
+				},
+				Err(idx) => {
+					reserves.insert(idx, ReserveData {
+						id: id.clone(),
+						amount: value
+					})
+				},
+			}
+		});
+		Ok(())
+	}
+
+	/// Unreserve some funds, returning any amount that was unable to be unreserved.
+	///
+	/// Is a no-op if the value to be unreserved is zero.
+	fn unreserve_named(id: &ReserveIdentifier, who: &T::AccountId, value: Self::Balance) -> Self::Balance {
+		if value.is_zero() { return Zero::zero() }
+
+		Reserves::<T, I>::mutate(who, |reserves| -> Self::Balance {
+			match reserves.binary_search_by_key(id, |data| data.id) {
+				Ok(idx) => {
+					let to_change = cmp::min(reserves[idx].amount, value);
+
+					let remain = <Self as ReservableCurrency<_>>::unreserve(who, to_change);
+
+					// remain should always be zero but just to be defensive here
+					let actual = to_change.saturating_sub(remain);
+
+					// `actual <= to_change` and `to_change <= amount`; qed;
+					reserves[idx].amount -= actual;
+
+					value - actual
+				},
+				Err(_) => {
+					value
+				},
+			}
+		})
+	}
+
+	/// Slash from reserved balance, returning the negative imbalance created,
+	/// and any amount that was unable to be slashed.
+	///
+	/// Is a no-op if the value to be slashed is zero.
+	fn slash_reserved_named(
+		id: &ReserveIdentifier,
+		who: &T::AccountId,
+		value: Self::Balance
+	) -> (Self::NegativeImbalance, Self::Balance) {
+		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
+
+		Reserves::<T, I>::mutate(who, |reserves| -> (Self::NegativeImbalance, Self::Balance) {
+			match reserves.binary_search_by_key(id, |data| data.id) {
+				Ok(idx) => {
+					let to_change = cmp::min(reserves[idx].amount, value);
+
+					let (imb, remain) = <Self as ReservableCurrency<_>>::slash_reserved(who, to_change);
+
+					// remain should always be zero but just to be defensive here
+					let actual = to_change.saturating_sub(remain);
+
+					// `actual <= to_change` and `to_change <= amount`; qed;
+					reserves[idx].amount -= actual;
+
+					(imb, value - actual)
+				},
+				Err(_) => {
+					(NegativeImbalance::zero(), value)
+				},
+			}
+		})
+	}
+
+	/// Move the reserved balance of one account into the balance of another, according to `status`.
+	///
+	/// Is a no-op if:
+	/// - the value to be moved is zero; or
+	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
+	fn repatriate_reserved_named(
+		id: &ReserveIdentifier,
+		slashed: &T::AccountId,
+		beneficiary: &T::AccountId,
+		value: Self::Balance,
+		status: Status,
+	) -> Result<Self::Balance, DispatchError> {
+		if value.is_zero() { return Ok(Zero::zero()) }
+
+		if slashed == beneficiary {
+			return match status {
+				Status::Free => Ok(Self::unreserve_named(id, slashed, value)),
+				Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance_named(id, slashed))),
+			};
+		}
+
+		Reserves::<T, I>::try_mutate(slashed, |reserves| -> Result<Self::Balance, DispatchError> {
+			match reserves.binary_search_by_key(id, |data| data.id) {
+				Ok(idx) => {
+					let to_change = cmp::min(reserves[idx].amount, value);
+
+					let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(slashed, beneficiary, to_change, status)?;
+
+					// remain should always be zero but just to be defensive here
+					let actual = to_change.saturating_sub(remain);
+
+					// `actual <= to_change` and `to_change <= amount`; qed;
+					reserves[idx].amount -= actual;
+
+					Ok(value - actual)
+				},
+				Err(_) => {
+					Ok(value)
+				},
+			}
+		})
 	}
 }
 
