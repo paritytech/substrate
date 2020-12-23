@@ -451,14 +451,19 @@ where
 			origin_contract.last_write
 		};
 
-		let key_values_taken = delta.iter()
+		// We are allowed to eagerly modify storage even though the function can
+		// fail later due to tombstones not matching. This is because the restoration
+		// is always called from a contract and therefore in a storage transaction.
+		// The failure of this function will lead to this transaction's rollback.
+		let bytes_taken: u32 = delta.iter()
 			.filter_map(|key| {
-				child::get_raw(&child_trie_info, &blake2_256(key)).map(|value| {
-					child::kill(&child_trie_info, &blake2_256(key));
-					(key, value)
+				let key = blake2_256(key);
+				child::get_raw(&child_trie_info, &key).map(|value| {
+					child::kill(&child_trie_info, &key);
+					value.len() as u32
 				})
 			})
-			.collect::<Vec<_>>();
+			.sum();
 
 		let tombstone = <TombstoneContractInfo<T>>::new(
 			// This operation is cheap enough because last_write (delta not included)
@@ -468,15 +473,10 @@ where
 		);
 
 		if tombstone != dest_tombstone {
-			for (key, value) in key_values_taken {
-				child::put_raw(&child_trie_info, &blake2_256(key), &value);
-			}
 			return Err(Error::<T>::InvalidTombstone.into());
 		}
 
-		origin_contract.storage_size -= key_values_taken.iter()
-			.map(|(_, value)| value.len() as u32)
-			.sum::<u32>();
+		origin_contract.storage_size -= bytes_taken;
 
 		<ContractInfoOf<T>>::remove(&origin);
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
