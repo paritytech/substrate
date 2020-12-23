@@ -871,7 +871,7 @@ macro_rules! decl_tests {
 					// Account is still alive
 					assert!(System::account_exists(&1));
 
-					// SCENARIO: Over-slash can take as much as possible from reserved, kill, and report missing amount.
+					// SCENARIO: Over-slash can take as much as possible from reserved and report missing amount.
 					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 250));
 					// Slashed full free_balance and 300 of reserved balance
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(1150), 150));
