@@ -5,6 +5,7 @@ error: free type alias without body
    |     ^^^^^^^^-
    |             |
    |             help: provide a definition for the type: `= <type>;`
+
 error[E0433]: failed to resolve: use of undeclared crate or module `pallet`
   --> $DIR/storage_incomplete_item.rs:18:4
    |

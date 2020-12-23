@@ -5,6 +5,7 @@ error[E0369]: binary operation `==` cannot be applied to type `&Bar`
    |                                           ^^^
    |
    = note: an implementation of `std::cmp::PartialEq` might be missing for `&Bar`
+
 error[E0277]: the trait bound `Bar: Clone` is not satisfied
   --> $DIR/call_argument_invalid_bound_3.rs:22:37
    |
@@ -12,6 +13,7 @@ error[E0277]: the trait bound `Bar: Clone` is not satisfied
    |                                           ^^^ the trait `Clone` is not implemented for `Bar`
    |
    = note: required by `clone`
+
 error[E0277]: `Bar` doesn't implement `std::fmt::Debug`
   --> $DIR/call_argument_invalid_bound_3.rs:22:37
    |
