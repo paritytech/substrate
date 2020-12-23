@@ -75,7 +75,7 @@ impl<BE, Block, Client> BlockExecutor<BE, Block, Client>
 		let block = Block::new(header, extrinsics);
 
 		let traces = Arc::new(Mutex::new(Traces::default()));
-		let dispatch = create_dispatcher(traces.clone(), &self.targets);
+		let dispatch = create_dispatch(traces.clone(), &self.targets);
 
 		if let Err(_)  = dispatcher::with_default(&dispatch, || {
 			self.client.runtime_api().execute_block(&parent_id, block)
@@ -101,7 +101,7 @@ impl TraceHandler for StorageTracer {
 	}
 }
 
-fn create_dispatcher(traces: Arc<Mutex<Traces>>, targets: &Option<String>) -> Dispatch {
+fn create_dispatch(traces: Arc<Mutex<Traces>>, targets: &Option<String>) -> Dispatch {
 	let tracer = StorageTracer {
 		traces,
 	};
