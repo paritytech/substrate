@@ -8,15 +8,13 @@ help: consider further restricting this bound
    |
 1  | #[frame_support::pallet] + std::cmp::PartialEq
    |                          ^^^^^^^^^^^^^^^^^^^^^
-
-error[E0277]: the trait bound `<T as pallet::Config>::Bar: std::clone::Clone` is not satisfied
+error[E0277]: the trait bound `<T as pallet::Config>::Bar: Clone` is not satisfied
   --> $DIR/call_argument_invalid_bound.rs:20:37
    |
 20 |         fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
-   |                                           ^ the trait `std::clone::Clone` is not implemented for `<T as pallet::Config>::Bar`
+   |                                           ^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
    |
-   = note: required by `std::clone::Clone::clone`
-
+   = note: required by `clone`
 error[E0277]: `<T as pallet::Config>::Bar` doesn't implement `std::fmt::Debug`
   --> $DIR/call_argument_invalid_bound.rs:20:37
    |

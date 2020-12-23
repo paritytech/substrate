@@ -7,4 +7,4 @@ error[E0277]: the trait bound `pallet::GenesisConfig: std::default::Default` is 
     ::: $WORKSPACE/frame/support/src/traits.rs
      |
      | pub trait GenesisBuild<T, I=()>: Default + MaybeSerializeDeserialize {
-     |                                  ------- required by this bound in `frame_support::traits::GenesisBuild`
+     |                                  ------- required by this bound in `GenesisBuild`
