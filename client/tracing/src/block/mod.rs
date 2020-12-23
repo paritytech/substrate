@@ -19,10 +19,7 @@
 use std::sync::Arc;
 use parking_lot::Mutex;
 use tracing::{Dispatch, dispatcher};
-use tracing_subscriber::{
-	FmtSubscriber,
-	layer::SubscriberExt,
-};
+use tracing_subscriber::{FmtSubscriber, layer::SubscriberExt, EnvFilter};
 
 use sp_tracing::std_types::Traces;
 use sc_client_api::{BlockBackend, BlockchainEvents, ExecutorProvider, ProofProvider, backend::{Backend, StorageProvider}};
@@ -38,6 +35,7 @@ use std::marker::PhantomData;
 
 // Default to only runtime and state related traces
 const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
+const TRACE_TARGET: &'static str = "block_trace";
 
 pub struct BlockExecutor<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
@@ -56,18 +54,18 @@ impl<BE, Block, Client> BlockExecutor<BE, Block, Client>
 		+ Send + Sync + 'static,
 		Client::Api: Metadata<Block, Error=sp_blockchain::Error>,
 {
-	pub fn new(client: Arc<Client>, block: Block::Hash, targets: Option<String>) -> Self{
+	pub fn new(client: Arc<Client>, block: Block::Hash, targets: Option<String>) -> Self {
 		Self { client, block, targets, _phantom: PhantomData }
 	}
 
-	pub fn trace_block(&self) -> Result<Traces, &'static str> {
+	pub fn trace_block(&self) -> Result<Traces, String> {
 		let id = BlockId::Hash(self.block);
 		let extrinsics = self.client.block_body(&id)
-			.map_err(|_| "Invalid block id")?
-			.ok_or("Block body not stored")?;
+			.map_err(|e| format!("Invalid block id: {:?}", e))?
+			.ok_or("Block body not stored".to_string())?;
 		let mut header = self.client.header(id)
-			.map_err(|_| "Invalid block id")?
-			.ok_or("Block not found")?;
+			.map_err(|e| format!("Invalid block id: {:?}", e))?
+			.ok_or("Block not found".to_string())?;
 		// Pop digest else: "Error executing block: Execution(RuntimePanicked(\"assertion failed: `(left == right)`\\n  left: `2`,\\n right: `1`: Number of digest items must match that calculated.\"
 		header.digest_mut().pop();
 		let parent_hash = header.parent_hash();
@@ -75,15 +73,17 @@ impl<BE, Block, Client> BlockExecutor<BE, Block, Client>
 		let block = Block::new(header, extrinsics);
 
 		let traces = Arc::new(Mutex::new(Traces::default()));
-		let dispatch = create_dispatch(traces.clone(), &self.targets);
+		let dispatch = create_dispatch(traces.clone(), &self.targets)?;
 
-		if let Err(_)  = dispatcher::with_default(&dispatch, || {
+		if let Err(e) = dispatcher::with_default(&dispatch, || {
+			let span = tracing::info_span!(target: TRACE_TARGET, "trace_block", targets: self.targets.unwrap_or(DEFAULT_TARGETS));
+			let _enter = span.enter();
 			self.client.runtime_api().execute_block(&parent_id, block)
 		}) {
-			return Err("Error executing block")
+			return Err(format!("Error executing block: {:?}", e));
 		}
 		drop(dispatch);
-		Ok(Arc::try_unwrap(traces).map_err(|_| "Unable to unwrap block traces")?.into_inner())
+		Ok(Arc::try_unwrap(traces).map_err(|_| "Unable to unwrap block traces".to_string())?.into_inner())
 	}
 }
 
@@ -101,19 +101,26 @@ impl TraceHandler for StorageTracer {
 	}
 }
 
-fn create_dispatch(traces: Arc<Mutex<Traces>>, targets: &Option<String>) -> Dispatch {
+fn create_dispatch(traces: Arc<Mutex<Traces>>, targets: &Option<String>) -> Result<Dispatch, String> {
 	let tracer = StorageTracer {
 		traces,
 	};
+	let targets = if let Some(t) = targets { t } else { DEFAULT_TARGETS };
+	let filter = EnvFilter::try_new(targets)
+		.map_err(|e| format!("{:?}", e))?
+		.add_directive(
+			TRACE_TARGET.parse().expect("TRACE_TARGET is valid; qed")
+		);
 	let profiling_layer = ProfilingLayer::new_with_handler(
 		Box::new(tracer),
-		if let Some(t) = targets { t } else { DEFAULT_TARGETS }
+		targets,
 	);
 	let sub = FmtSubscriber::builder()
+		.with_env_filter(filter)
 		.with_writer(std::io::sink)
 		.finish()
 		.with(profiling_layer);
-	Dispatch::new(sub)
+	Ok(Dispatch::new(sub))
 }
 
 #[cfg(test)]
