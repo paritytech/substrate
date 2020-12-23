@@ -261,7 +261,7 @@ pub fn check_type_def_gen_no_bounds(
 ///
 /// `span` is used in case generics is empty (empty generics has span == call_site).
 ///
-/// return the instance if found.
+/// return some instance usage if there is some generic, or none otherwise.
 pub fn check_type_def_optional_gen(
 	gen: &syn::Generics,
 	span: proc_macro2::Span,

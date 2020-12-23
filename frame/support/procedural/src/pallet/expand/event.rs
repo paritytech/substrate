@@ -40,8 +40,8 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	let event_ident = &event.event;
 	let frame_system = &def.frame_system;
 	let frame_support = &def.frame_support;
-	let event_use_gen = &event.event_use_gen();
-	let event_impl_gen= &event.event_impl_gen();
+	let event_use_gen = &event.gen_kind.type_use_gen();
+	let event_impl_gen= &event.gen_kind.type_impl_gen();
 	let metadata = event.metadata.iter()
 		.map(|(ident, args, docs)| {
 			let name = format!("{}", ident);
@@ -71,7 +71,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	// Phantom data is added for generic event.
-	if event.is_generic {
+	if event.gen_kind.is_generic() {
 		let variant = syn::parse_quote!(
 			#[doc(hidden)]
 			#[codec(skip)]
@@ -99,7 +99,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 
 
 	let deposit_event = if let Some((fn_vis, fn_span)) = &event.deposit_event {
-		let event_use_gen = &event.event_use_gen();
+		let event_use_gen = &event.gen_kind.type_use_gen();
 		let trait_use_gen = &def.trait_use_generics();
 		let type_impl_gen = &def.type_impl_generics();
 		let type_use_gen = &def.type_use_generics();

@@ -38,12 +38,7 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 	let gen_cfg_ident = &genesis_config.genesis_config;
 
-	let gen_cfg_use_gen = match (genesis_config.has_trait, genesis_config.has_instance) {
-		(false, false) => (quote::quote!()),
-		(true, false) => (quote::quote!(T)),
-		(true, true) => (quote::quote!(T, I)),
-		(false, true) => unreachable!("Checked by def parser"),
-	};
+	let gen_cfg_use_gen = genesis_config.gen_kind.type_use_gen();
 
 	let genesis_build = def.genesis_build.as_ref().expect("Checked by def parser");
 	let genesis_build_item = &mut def.item.content.as_mut()

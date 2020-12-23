@@ -39,44 +39,12 @@ pub struct EventDef {
 	pub metadata: Vec<(syn::Ident, Vec<String>, Vec<syn::Lit>)>,
 	/// A set of usage of instance, must be check for consistency with trait.
 	pub instances: Vec<helper::InstanceUsage>,
-	/// If event is declared with instance.
-	pub has_instance: bool,
-	/// If event is declared with generics.
-	pub is_generic: bool,
+	/// The kind of generic the type `Event` has.
+	pub gen_kind: super::GenericKind,
 	/// Whether the function `deposit_event` must be generated.
 	pub deposit_event: Option<(syn::Visibility, proc_macro2::Span)>,
 	/// Where clause used in event definition.
 	pub where_clause: Option<syn::WhereClause>,
-}
-
-impl EventDef {
-	/// Return the generic to be used when using Event type
-	///
-	/// Depending on its definition it can be: ``, `T` or `T, I`
-	pub fn event_use_gen(&self) -> proc_macro2::TokenStream {
-		if self.is_generic {
-			if self.has_instance {
-				quote::quote!(T, I)
-			} else {
-				quote::quote!(T)
-			}
-		} else {
-			quote::quote!()
-		}
-	}
-
-	/// Return the generic to be used in `impl<..>` when implementing on Event type.
-	pub fn event_impl_gen(&self) -> proc_macro2::TokenStream {
-		if self.is_generic {
-			if self.has_instance {
-				quote::quote!(T: Config<I>, I: 'static)
-			} else {
-				quote::quote!(T: Config)
-			}
-		} else {
-			quote::quote!()
-		}
-	}
 }
 
 /// Attribute for Event: defines metadata name to use.
@@ -200,19 +168,24 @@ impl EventDef {
 		}
 
 		let where_clause = item.generics.where_clause.clone();
-		let has_instance = item.generics.params.len() == 2;
-		let is_generic = item.generics.params.len() > 0;
 
 		let mut instances = vec![];
+		// NOTE: Event is not allowed to be only generic on I because it is not supported
+		// by construct_runtime.
 		if let Some(u) = helper::check_type_def_optional_gen(&item.generics, item.ident.span())? {
 			instances.push(u);
 		} else {
-			// construct_runtime only allow generic event for instantiable pallet.
+			// construct_runtime only allow non generic event for non instantiable pallet.
 			instances.push(helper::InstanceUsage {
 				has_instance: false,
 				span: item.ident.span(),
 			})
 		}
+
+		let has_instance = item.generics.type_params().any(|t| t.ident == "I");
+		let has_config = item.generics.type_params().any(|t| t.ident == "T");
+		let gen_kind = super::GenericKind::from_gens(has_config, has_instance)
+			.expect("Checked by `helper::check_type_def_optional_gen` above");
 
 		let event = syn::parse2::<keyword::Event>(item.ident.to_token_stream())?;
 
@@ -238,10 +211,9 @@ impl EventDef {
 			index,
 			metadata,
 			instances,
-			has_instance,
 			deposit_event,
 			event,
-			is_generic,
+			gen_kind,
 			where_clause,
 		})
 	}

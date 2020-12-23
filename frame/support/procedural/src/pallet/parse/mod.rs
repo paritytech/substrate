@@ -309,6 +309,54 @@ impl Def {
 	}
 }
 
+/// Some generic kind for type which can be not generic, or generic over config,
+/// or generic over config and instance, but not generic only over instance.
+pub enum GenericKind {
+	None,
+	Config,
+	ConfigAndInstance,
+}
+
+impl GenericKind {
+	/// Return Err if it is only generics over instance but not over config.
+	pub fn from_gens(has_config: bool, has_instance: bool) -> Result<Self, ()> {
+		match (has_config, has_instance) {
+			(false, false) => Ok(GenericKind::None),
+			(true, false) => Ok(GenericKind::Config),
+			(true, true) => Ok(GenericKind::ConfigAndInstance),
+			(false, true) => Err(()),
+		}
+	}
+
+	/// Return the generic to be used when using the type.
+	///
+	/// Depending on its definition it can be: ``, `T` or `T, I`
+	pub fn type_use_gen(&self) -> proc_macro2::TokenStream {
+		match self {
+			GenericKind::None => quote::quote!(),
+			GenericKind::Config => quote::quote!(T),
+			GenericKind::ConfigAndInstance => quote::quote!(T, I),
+		}
+	}
+
+	/// Return the generic to be used in `impl<..>` when implementing on the type.
+	pub fn type_impl_gen(&self) -> proc_macro2::TokenStream {
+		match self {
+			GenericKind::None => quote::quote!(),
+			GenericKind::Config => quote::quote!(T: Config),
+			GenericKind::ConfigAndInstance => quote::quote!(T: Config<I>, I: 'static),
+		}
+	}
+
+	/// Return whereas the type has some generic.
+	pub fn is_generic(&self) -> bool {
+		match self {
+			GenericKind::None => false,
+			GenericKind::Config | GenericKind::ConfigAndInstance => true,
+		}
+	}
+}
+
 /// List of additional token to be used for parsing.
 mod keyword {
 	syn::custom_keyword!(origin);

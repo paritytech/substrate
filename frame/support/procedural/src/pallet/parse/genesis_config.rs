@@ -26,10 +26,8 @@ use super::helper;
 pub struct GenesisConfigDef {
 	/// The index of item in pallet module.
 	pub index: usize,
-	/// Whether type has instance generic.
-	pub has_instance: bool,
-	/// Whether type has trait generic.
-	pub has_trait: bool,
+	/// The kind of generic the type `GenesisConfig` has.
+	pub gen_kind: super::GenericKind,
 	/// A set of usage of instance, must be check for consistency with trait.
 	pub instances: Vec<helper::InstanceUsage>,
 	/// The ident of genesis_config, can be used for span.
@@ -48,15 +46,17 @@ impl GenesisConfigDef {
 			},
 		};
 
-		let has_instance = generics.type_params().any(|t| t.ident == "I");
-		let has_trait = generics.type_params().any(|t| t.ident == "T");
-
 		let mut instances = vec![];
 		// NOTE: GenesisConfig is not allowed to be only generic on I because it is not supported
 		// by construct_runtime.
 		if let Some(u) = helper::check_type_def_optional_gen(&generics, ident.span())? {
 			instances.push(u);
 		}
+
+		let has_instance = generics.type_params().any(|t| t.ident == "I");
+		let has_config = generics.type_params().any(|t| t.ident == "T");
+		let gen_kind = super::GenericKind::from_gens(has_config, has_instance)
+			.expect("Checked by `helper::check_type_def_optional_gen` above");
 
 		if !matches!(vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::genesis_config, GenesisConfig must be public";
@@ -71,9 +71,8 @@ impl GenesisConfigDef {
 		Ok(GenesisConfigDef {
 			index,
 			genesis_config: ident.clone(),
-			has_instance,
-			has_trait,
 			instances,
+			gen_kind,
 		})
 	}
 }
