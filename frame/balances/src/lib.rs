@@ -1236,7 +1236,7 @@ impl<T: Config<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I
 					0 => value,
 					// If acting as a critical provider (i.e. first attempt failed), then ensure
 					// slash leaves at least the ED.
-					_ => value.min(account.free + account.reserved - T::ExistentialDeposit::get()),
+					_ => value.min((account.free + account.reserved).saturating_sub(T::ExistentialDeposit::get())),
 				};
 
 				let actual = cmp::min(account.reserved, best_value);
