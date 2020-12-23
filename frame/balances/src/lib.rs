@@ -1251,7 +1251,7 @@ impl<T: Config<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I
 		}
 		// Should never get here as we ensure that ED is left in the second attempt.
 		// In case we do, though, then we fail gracefully.
-		(NegativeImbalance::zero(), Zero::zero())
+		(Self::NegativeImbalance::zero(), value)
 	}
 
 	/// Move the reserved balance of one account into the balance of another, according to `status`.
