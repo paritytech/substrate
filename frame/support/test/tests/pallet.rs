@@ -274,6 +274,67 @@ pub mod pallet {
 	pub const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"testpall";
 }
 
+// Test that a pallet with non generic event and generic genesis_config is correctly handled
+#[frame_support::pallet]
+pub mod pallet2 {
+	use super::{SomeType1, SomeAssociation1};
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config
+	where <Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
+	{
+		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
+	}
+
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(crate) trait Store)]
+	pub struct Pallet<T>(PhantomData<T>);
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	where T::AccountId: From<SomeType1> + SomeAssociation1,
+	{
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T>
+	where T::AccountId: From<SomeType1> + SomeAssociation1,
+	{
+	}
+
+	#[pallet::event]
+	pub enum Event {
+		/// Something
+		Something(u32),
+	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config>
+	where T::AccountId: From<SomeType1> + SomeAssociation1,
+	{
+		phantom: PhantomData<T>,
+	}
+
+	impl<T: Config> Default for GenesisConfig<T>
+	where T::AccountId: From<SomeType1> + SomeAssociation1,
+	{
+		fn default() -> Self {
+			GenesisConfig {
+				phantom: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T>
+	where T::AccountId: From<SomeType1> + SomeAssociation1,
+	{
+		fn build(&self) {}
+	}
+}
+
 frame_support::parameter_types!(
 	pub const MyGetParam: u32= 10;
 	pub const MyGetParam2: u32= 11;
@@ -312,6 +373,10 @@ impl pallet::Config for Runtime {
 	type Balance = u64;
 }
 
+impl pallet2::Config for Runtime {
+	type Event = Event;
+}
+
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
@@ -324,6 +389,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Event<T>},
 		Example: pallet::{Module, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
+		Example2: pallet2::{Module, Call, Event, Config<T>, Storage},
 	}
 );
 

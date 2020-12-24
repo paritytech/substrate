@@ -186,6 +186,52 @@ pub mod pallet {
 	pub const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"testpall";
 }
 
+// Test that a instantiable pallet with a generic genesis_config is correctly handled
+#[frame_support::pallet]
+pub mod pallet2 {
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+
+	#[pallet::config]
+	pub trait Config<I: 'static = ()>: frame_system::Config {
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+	}
+
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(crate) trait Store)]
+	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
+
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
+
+	#[pallet::call]
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {}
+
+	#[pallet::event]
+	pub enum Event<T: Config<I>, I: 'static = ()> {
+		/// Something
+		Something(u32),
+	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		phantom: PhantomData<(T, I)>,
+	}
+
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			GenesisConfig {
+				phantom: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+		fn build(&self) {}
+	}
+}
+
 frame_support::parameter_types!(
 	pub const MyGetParam: u32= 10;
 	pub const BlockHashCount: u32 = 250;
@@ -224,6 +270,12 @@ impl pallet::Config<pallet::Instance1> for Runtime {
 	type MyGetParam= MyGetParam;
 	type Balance = u64;
 }
+impl pallet2::Config for Runtime {
+	type Event = Event;
+}
+impl pallet2::Config<pallet::Instance1> for Runtime {
+	type Event = Event;
+}
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -240,6 +292,8 @@ frame_support::construct_runtime!(
 		Instance1Example: pallet::<Instance1>::{
 			Module, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned
 		},
+		Example2: pallet2::{Module, Call, Event<T>, Config<T>, Storage},
+		Instance1Example2: pallet2::<Instance1>::{Module, Call, Event<T>, Config<T>, Storage},
 	}
 );
 
