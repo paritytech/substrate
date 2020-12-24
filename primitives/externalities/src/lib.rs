@@ -310,13 +310,13 @@ pub enum WorkerResult {
 	/// Payload resulting from a successfull
 	/// stateless call, or a call that
 	/// is guaranted to be valid at this point.
-	Valid(Vec<u8>),
+	Valid(Vec<u8>, Option<StateDelta>),
 	/// Result that require to be checked against
 	/// its parent externality state.
-	CallAt(Vec<u8>, TaskId),
+	CallAt(Vec<u8>, Option<StateDelta>, TaskId),
 	/// Optimistic strategy call reply, it contains
 	/// a log of accessed keys.
-	Optimistic(Vec<u8>, TaskId, AccessLog),
+	Optimistic(Vec<u8>, Option<StateDelta>, TaskId, AccessLog),
 	/// A worker execution that is not valid.
 	/// For instance when asumption on state
 	/// are required.
@@ -327,6 +327,33 @@ pub enum WorkerResult {
 	/// Technical panic when runing the worker.
 	/// This always propagate panic in caller.
 	HardPanic,
+}
+
+/// Changes to state made by a worker.
+#[derive(codec::Encode, codec::Decode)]
+pub struct StateDelta {
+	pub top: TrieDelta,
+	pub children: Vec<(ChildInfo, TrieDelta)>,
+}
+
+impl Default for StateDelta {
+	fn default() -> Self {
+		StateDelta {
+			top: TrieDelta {
+				added: Vec::new(),
+				deleted: Vec::new(),
+			},
+			children: Vec::new(),
+		}
+	}
+}
+
+#[derive(codec::Encode, codec::Decode)]
+pub struct TrieDelta {
+	/// Key values added.
+	pub added: Vec<(Vec<u8>, Vec<u8>)>,
+	/// Keys deleted.
+	pub deleted: Vec<Vec<u8>>,
 }
 
 /// Log of a given worker call.
@@ -369,7 +396,7 @@ impl WorkerResult {
 		match self {
 			WorkerResult::CallAt(result, ..) => Some(result),
 			WorkerResult::Optimistic(result, ..) => Some(result),
-			WorkerResult::Valid(result) => Some(result),
+			WorkerResult::Valid(result, ..) => Some(result),
 			WorkerResult::Invalid => None,
 			WorkerResult::Panic => {
 				panic!("Panic in worker")

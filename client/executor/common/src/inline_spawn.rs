@@ -225,7 +225,6 @@ pub fn spawn_call_ext(
 		},
 		WorkerType::ReadAtJoinOptimistic => {
 			let backend = calling_ext.get_async_backend(handle, WorkerDeclaration::Optimistic);
-			unimplemented!("TODO optimistic backend that register keys??");
 			AsyncExt::state_at_spawn_read(backend, handle)
 		},
 		WorkerType::ReadAtJoinDeclarative => {
@@ -302,7 +301,6 @@ pub fn process_task_inline<
 				"Failed to setup runtime extension for async externalities: {}",
 				e,
 			);
-
 			return WorkerResult::HardPanic;
 		}
 	};
@@ -376,15 +374,16 @@ pub fn process_task<
 		},
 	};
 	let need_resolve = async_ext.need_resolve();
+	let state_delta = async_ext.extract_delta();
 	match result {
 		Ok(Ok(result)) => if need_resolve {
 			if let Some(access) = async_ext.extract_optimistic_log() {
-				WorkerResult::Optimistic(result, handle, access)
+				WorkerResult::Optimistic(result, state_delta, handle, access)
 			} else {
-				WorkerResult::CallAt(result, handle)
+				WorkerResult::CallAt(result, state_delta, handle)
 			}
 		} else {
-			WorkerResult::Valid(result)
+			WorkerResult::Valid(result, state_delta)
 		},
 		Ok(Err(error)) => {
 			log_error!("Wasm instance error in : {:?}", error);

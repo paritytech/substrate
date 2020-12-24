@@ -298,10 +298,10 @@ impl Filters {
 
 	pub(super) fn on_worker_result(&mut self, result: &WorkerResult) -> bool {
 		match result {
-			WorkerResult::CallAt(_result, marker) => {
+			WorkerResult::CallAt(_result, _delta, marker) => {
 				self.remove_worker(*marker);
 			},
-			WorkerResult::Optimistic(_result, marker, ..) => {
+			WorkerResult::Optimistic(_result, _delta, marker, ..) => {
 				// This is actually a noops since optimistic don't
 				// use filter.
 				self.remove_worker(*marker);

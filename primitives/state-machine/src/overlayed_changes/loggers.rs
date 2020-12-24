@@ -78,6 +78,7 @@ impl StateLogger {
 		}
 		true
 	}
+	// TODO rename
 	fn check_write_read(&self, access: &sp_externalities::StateLog, marker_set: &BTreeSet<TaskId>) -> bool {
 		let mut result = true;
 		for key in access.read_keys.iter() {
@@ -92,6 +93,25 @@ impl StateLogger {
 			}
 			result = self.check_write_read_intervals(interval, marker_set);
 		}
+		result
+	}
+	fn check_write_delta(&self, delta: &sp_externalities::TrieDelta, marker_set: &BTreeSet<TaskId>) -> bool {
+		let mut result = true;
+		for (key, _value) in delta.added.iter() {
+			if !result {
+				break;
+			}
+			result = self.check_write_read_key(key, marker_set);
+		}
+		for key in delta.deleted.iter() {
+			if !result {
+				break;
+			}
+			result = self.check_write_read_key(key, marker_set);
+		}
+
+		// TODO child trie
+
 		result
 	}
 	// Note that if we ensure marker are in sync, we do not need to check
@@ -173,12 +193,12 @@ impl AccessLogger {
 
 	pub(super) fn on_worker_result(&mut self, result: &WorkerResult) -> bool {
 		match result {
-			WorkerResult::CallAt(result, marker) => {
+			WorkerResult::CallAt(_result, _delta, marker) => {
 				// should not be usefull here
 				self.remove_worker(*marker);
 				true
 			},
-			WorkerResult::Optimistic(result, marker, accesses) => {
+			WorkerResult::Optimistic(_result, delta, marker, accesses) => {
 				let mut result = true;
 
 				if accesses.read_all {
@@ -195,6 +215,11 @@ impl AccessLogger {
 					if result {
 						result = self.top_logger.check_write_read(&accesses.top_logger, &self.log_write);
 					}
+					if result {
+						if let Some(delta) = delta.as_ref() {
+							result = self.top_logger.check_write_delta(&delta.top, &self.log_write);
+						}
+					}
 					for (storage_key, child_logger) in accesses.children_logger.iter() {
 						if !result {
 							break;
@@ -203,13 +228,23 @@ impl AccessLogger {
 							result = access_logger.check_write_read(child_logger, &self.log_write);
 						}
 					}
+					if let Some(delta) = delta.as_ref() {
+						for (child_info, delta) in delta.children.iter() {
+							if !result {
+								break;
+							}
+							if let Some(access_logger) = self.children_logger.get_mut().get(child_info.storage_key()) {
+								result = access_logger.check_write_delta(delta, &self.log_write);
+							}
+						}
+					}
 				}
 
 				self.remove_worker(*marker);
 				result
 			},
 			// When using filter there is no directly valid case.
-			WorkerResult::Valid(result) => true,
+			WorkerResult::Valid(_result, _delta) => true,
 			// When using filter there is no invalid case.
 			WorkerResult::Invalid => true,
 			// will panic on resolve so no need to clean filter
@@ -334,7 +369,8 @@ impl AccessLogger {
 		let read_keys = sp_std::mem::take(self.top_logger.read_key.get_mut());
 		let read_intervals = sp_std::mem::take(self.top_logger.read_intervals.get_mut());
 		let top_logger = sp_externalities::StateLog { read_keys, read_intervals };
-		let children_logger: Vec<_> = self.children_logger.get_mut().iter_mut().map(|(storage_key, logger)| {
+		let children_logger: Vec<_> = self.children_logger.get_mut().iter_mut()
+			.map(|(storage_key, logger)| {
 			let read_keys = sp_std::mem::take(logger.read_key.get_mut());
 			let read_intervals = sp_std::mem::take(logger.read_intervals.get_mut());
 			(storage_key.clone(), sp_externalities::StateLog { read_keys, read_intervals })

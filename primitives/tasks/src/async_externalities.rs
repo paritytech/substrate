@@ -47,7 +47,7 @@ use sp_core::{
 	traits::{SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
 use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend,
-	WorkerResult, AccessDeclaration, WorkerDeclaration};
+	WorkerResult, WorkerDeclaration};
 use crate::WorkerType;
 use sp_state_machine::ext_guard as guard;
 use sp_state_machine::trace;
@@ -130,6 +130,11 @@ impl AsyncExt {
 	pub fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
 		self.overlay.extract_optimistic_log()
 	}
+
+	/// Extract changes made to state for this worker.
+	fn extract_delta(&mut self) -> sp_externalities::StateDelta {
+		self.overlay.extract_delta()
+	}
 }
 
 /// Simple state-less externalities for use in async context.
@@ -197,8 +202,6 @@ impl AsyncExternalities {
 	fn guard_stateless(
 		&self,
 		panic: &'static str,
-		child_info: Option<&ChildInfo>,
-		key: &[u8],
 	) {
 		match self.state.kind {
 			WorkerType::Stateless => {
@@ -206,18 +209,9 @@ impl AsyncExternalities {
 			},
 			WorkerType::ReadLastBlock
 			| WorkerType::ReadAtSpawn
-			| WorkerType::ReadAtJoinOptimistic => (),
-			WorkerType::ReadAtJoinDeclarative => self.guard_read(panic, child_info, key),
+			| WorkerType::ReadAtJoinOptimistic
+			| WorkerType::ReadAtJoinDeclarative => (),
 		}
-	}
-
-	fn guard_read(
-		&self,
-		panic: &'static str,
-		child_info: Option<&ChildInfo>,
-		key: &[u8],
-	) {
-		unimplemented!("TODO check against parent write access");
 	}
 
 	/// Depending on kind the result may be already
@@ -232,6 +226,20 @@ impl AsyncExternalities {
 	pub fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
 		self.state.extract_optimistic_log()
 	}
+
+	/// Extract changes made to state for this worker.
+	pub fn extract_delta(&mut self) -> Option<sp_externalities::StateDelta> {
+		match self.state.kind {
+			WorkerType::Stateless
+			| WorkerType::ReadLastBlock
+			| WorkerType::ReadAtSpawn
+			| WorkerType::ReadAtJoinOptimistic
+			| WorkerType::ReadAtJoinDeclarative => None,
+			// TODO write type and return
+			// Some(self.state.extract_delta())
+		}
+
+	}
 }
 
 impl Externalities for AsyncExternalities {
@@ -240,7 +248,7 @@ impl Externalities for AsyncExternalities {
 	}
 
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
-		self.guard_stateless("`storage`: should not be used in async externalities!", None, key);
+		self.guard_stateless("`storage`: should not be used in async externalities!");
 		let _guard = guard();
 		let result = self.state.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.state.backend.storage(key));
@@ -265,8 +273,6 @@ impl Externalities for AsyncExternalities {
 	) -> Option<StorageValue> {
 		self.guard_stateless(
 			"`child_storage`: should not be used in async externalities!",
-			Some(child_info),
-			key,
 		);
 		let _guard = guard();
 		let result = self.state.overlay
@@ -294,7 +300,7 @@ impl Externalities for AsyncExternalities {
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		self.guard_stateless("`next_storage_key`: should not be used in async externalities!", None, key);
+		self.guard_stateless("`next_storage_key`: should not be used in async externalities!");
 		let next_backend_key = self.state.backend.next_storage_key(key);
 		let next_overlay_key_change = self.state.overlay.next_storage_key_change(key);
 
@@ -316,8 +322,6 @@ impl Externalities for AsyncExternalities {
 	) -> Option<StorageKey> {
 		self.guard_stateless(
 			"`next_child_storage_key`: should not be used in async externalities!",
-			Some(child_info),
-			key,
 		);
 		let next_backend_key = self.state.backend.next_child_storage_key(child_info, key);
 		let next_overlay_key_change = self.state.overlay.next_child_storage_key_change(

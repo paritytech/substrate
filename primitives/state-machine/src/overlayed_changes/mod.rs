@@ -446,9 +446,14 @@ impl OverlayedChanges {
 		}
 
 		match result {
-			WorkerResult::Optimistic(result, ..)
-			| WorkerResult::Valid(result)
-			| WorkerResult::CallAt(result, ..) => Some(result),
+			WorkerResult::Optimistic(result, state_delta, ..)
+			| WorkerResult::Valid(result, state_delta)
+			| WorkerResult::CallAt(result, state_delta, ..) => {
+				if let Some(delta) = state_delta {
+					self.inject_worker_delta(delta);
+				}
+				Some(result)
+			},
 			WorkerResult::Invalid => None,
 			WorkerResult::HardPanic
 			| WorkerResult::Panic => {
@@ -762,6 +767,61 @@ impl OverlayedChanges {
 	/// When call on a non optimistic worker returns `None`.
 	pub fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
 		self.optimistic_logger.extract_read()
+	}
+
+	/// Extract changes from overlay.
+	pub fn extract_delta(&mut self) -> sp_externalities::StateDelta {
+		let (top_iter, children_iter) = self.drain_committed();
+		let mut children = Vec::new();
+		for (_, (iter, info)) in children_iter {
+			let mut added = Vec::new();
+			let mut deleted = Vec::new();
+			for (key, change) in iter {
+				if let Some(value) = change {
+					added.push((key, value));
+				} else {
+					deleted.push(key);
+				}
+			}
+			children.push((info, sp_externalities::TrieDelta {
+				added,
+				deleted,
+			}));
+		}
+
+		let mut added = Vec::new();
+		let mut deleted = Vec::new();
+		for (key, change) in top_iter {
+			if let Some(value) = change {
+				added.push((key, value));
+			} else {
+				deleted.push(key);
+			}
+		}
+		sp_externalities::StateDelta {
+			top: sp_externalities::TrieDelta {
+				added,
+				deleted,
+			},
+			children,
+		}
+	}
+
+	fn inject_worker_delta(&mut self, delta: sp_externalities::StateDelta) {
+		for (key, value) in delta.top.added.into_iter() {
+			self.set_storage(key, Some(value));
+		}
+		for key in delta.top.deleted.into_iter() {
+			self.set_storage(key, None);
+		}
+		for (child_info, delta) in delta.children.into_iter() {
+			for (key, value) in delta.added.into_iter() {
+				self.set_child_storage(&child_info, key, Some(value));
+			}
+			for key in delta.deleted.into_iter() {
+				self.set_child_storage(&child_info, key, None);
+			}
+		}
 	}
 }
 

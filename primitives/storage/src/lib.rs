@@ -183,7 +183,7 @@ pub mod well_known_keys {
 }
 
 /// Information related to a child state.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub enum ChildInfo {
 	/// This is the one used by default.
@@ -338,7 +338,7 @@ impl ChildType {
 /// that will be use only once.
 /// Those unique id also required to be long enough to avoid any
 /// unique id to be prefixed by an other unique id.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub struct ChildTrieParentKeyId {
 	/// Data is the storage key without prefix.

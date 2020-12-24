@@ -122,15 +122,15 @@ impl Markers {
 
 	pub(super) fn on_worker_result(&mut self, result: &WorkerResult) -> bool {
 		match result {
-			WorkerResult::CallAt(_result, marker) => {
+			WorkerResult::CallAt(_result, _delta, marker) => {
 				// invalid when nothing
 				self.remove_worker(*marker)
 			},
-			WorkerResult::Optimistic(_result, marker, _accesses) => {
+			WorkerResult::Optimistic(_result, _delta, marker, _accesses) => {
 				// invalid when nothing
 				self.remove_worker(*marker)
 			},
-			WorkerResult::Valid(_result) => true,
+			WorkerResult::Valid(_result, _delta) => true,
 			WorkerResult::Invalid => true,
 			WorkerResult::HardPanic
 			| WorkerResult::Panic => true,
