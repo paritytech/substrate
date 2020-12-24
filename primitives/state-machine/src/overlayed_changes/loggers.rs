@@ -95,6 +95,7 @@ impl StateLogger {
 		}
 		result
 	}
+
 	fn check_write_delta(&self, delta: &sp_externalities::TrieDelta, marker_set: &BTreeSet<TaskId>) -> bool {
 		let mut result = true;
 		for (key, _value) in delta.added.iter() {
@@ -109,8 +110,6 @@ impl StateLogger {
 			}
 			result = self.check_write_read_key(key, marker_set);
 		}
-
-		// TODO child trie
 
 		result
 	}
