@@ -178,16 +178,16 @@ macro_rules! benchmarks {
 	(
 		$( where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? } )?
 		_ {
-			$(
-				let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
-			)*
+		// // 	// $(
+		// // 	// 	let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
+		// // 	// )*
 		}
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter!(
 			{ }
 			{ $( $( $where_ty: $where_bound ),* )? }
-			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
+			//{ $( { $common , $common_from , $common_to , $common_instancer } )* }
 			( )
 			( )
 			$( $rest )*
@@ -225,7 +225,7 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		#[extra]
@@ -235,7 +235,7 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			( $( $names )* )
 			( $( $names_extra )* $name )
 			$name
@@ -246,7 +246,7 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		( $( $names:tt )* ) // This contains $( $( { $instance } )? $name:ident )*
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
@@ -256,7 +256,7 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$name { $( $code )* }: $name ( $origin $( , $arg )* )
@@ -268,7 +268,7 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
@@ -278,7 +278,7 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$name { $( $code )* }: {
@@ -296,7 +296,7 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $eval:block
@@ -307,7 +307,7 @@ macro_rules! benchmarks_iter {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			{ }
 			{ $eval }
 			{ $( $code )* }
@@ -324,7 +324,7 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter!(
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			( $( $names )* { $( $instance )? } $name )
 			( $( $names_extra )* )
 			$( $rest )*
@@ -334,7 +334,7 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 	) => {
@@ -354,7 +354,7 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
@@ -363,7 +363,7 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$name { $( $code )* }: _ ( $origin $( , $arg )* )
@@ -375,7 +375,7 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
@@ -384,7 +384,7 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$name { $( $code )* }: $dispatch ( $origin $( , $arg )* )
@@ -396,7 +396,7 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $eval:block
@@ -405,7 +405,7 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter!(
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$name { $( $code )* }: $eval
@@ -423,7 +423,7 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		{ $( PRE { $( $pre_parsed:tt )* } )* }
 		{ $eval:block }
 		{
@@ -436,7 +436,7 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			{
 				$( PRE { $( $pre_parsed )* } )*
 				PRE { $pre_id , $pre_ty , $pre_ex }
@@ -450,7 +450,7 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		{ $( $parsed:tt )* }
 		{ $eval:block }
 		{
@@ -463,7 +463,7 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			{
 				$( $parsed )*
 				PARAM { $param , $param_from , $param_to , $param_instancer }
@@ -478,7 +478,7 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )* }
+		//{ $( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )* }
 		{ $( $parsed:tt )* }
 		{ $eval:block }
 		{
@@ -491,16 +491,16 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
+			//{ $( { $common , $common_from , $common_to , $common_instancer } )* }
 			{ $( $parsed )* }
 			{ $eval }
-			{
-				let $param
-					in ({ $( let $common = $common_from; )* $param })
-					.. ({ $( let $common = $common_to; )* $param })
-					=> ({ $( let $common = || -> Result<(), &'static str> { $common_instancer ; Ok(()) }; )* $param()? });
-				$( $rest )*
-			}
+			// {
+			// 	let $param
+			// 		in ({ $( let $common = $common_from; )* $param })
+			// 		.. ({ $( let $common = $common_to; )* $param })
+			// 		=> ({ $( let $common = || -> Result<(), &'static str> { $common_instancer ; Ok(()) }; )* $param()? });
+			// 	$( $rest )*
+			// }
 			$postcode
 		}
 	};
@@ -509,7 +509,7 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )* }
+		//{ $( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )* }
 		{ $( $parsed:tt )* }
 		{ $eval:block }
 		{
@@ -522,16 +522,16 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
+			//{ $( { $common , $common_from , $common_to , $common_instancer } )* }
 			{ $( $parsed )* }
 			{ $eval }
-			{
-				let $param
-					in ({ $( let $common = $common_from; )* $param })
-					.. ({ $( let $common = $common_to; )* $param })
-					=> $param_instancer ;
-				$( $rest )*
-			}
+			// {
+			// 	let $param
+			// 		in ({ $( let $common = $common_from; )* $param })
+			// 		.. ({ $( let $common = $common_to; )* $param })
+			// 		=> $param_instancer ;
+			// 	$( $rest )*
+			// }
 			$postcode
 		}
 	};
@@ -540,7 +540,7 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		{ $( $parsed:tt )* }
 		{ $eval:block }
 		{
@@ -553,7 +553,7 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			{ $( $parsed )* }
 			{ $eval }
 			{
@@ -568,7 +568,7 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		{ $( $parsed:tt )* }
 		{ $eval:block }
 		{
@@ -581,7 +581,7 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			{ $( $parsed )* }
 			{ $eval }
 			{
@@ -596,7 +596,7 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
+		//{ $( $common:tt )* }
 		{ $( $parsed:tt )* }
 		{ $eval:block }
 		{
@@ -609,7 +609,7 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( $common )* }
+			//{ $( $common )* }
 			{ $( $parsed )* }
 			{ $eval }
 			{
@@ -624,7 +624,7 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )* }
+		//{ $( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )* }
 		{
 			$( PRE { $pre_id:tt , $pre_ty:ty , $pre_ex:expr } )*
 			$( PARAM { $param:ident , $param_from:expr , $param_to:expr , $param_instancer:expr } )*
@@ -653,9 +653,9 @@ macro_rules! benchmark_backend {
 				components: &[($crate::BenchmarkParameter, u32)],
 				verify: bool
 			) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str> {
-				$(
-					let $common = $common_from;
-				)*
+				// $(
+				// 	let $common = $common_from;
+				// )*
 				$(
 					// Prepare instance
 					let $param = components.iter()
