@@ -701,7 +701,11 @@ where
 	}
 
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
-		self.overlay.resolve_worker_result(state_update)
+		let result = self.overlay.resolve_worker_result(state_update);
+		if result.is_some() {
+			self.backend.commit_worker_proof();
+		}
+		result
 	}
 
 	fn dismiss_worker(&mut self, id: TaskId) {
