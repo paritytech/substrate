@@ -215,10 +215,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'static + Hasher> TrieBackendStorage<
 	fn async_storage(&self) -> Self::AsyncStorage {
 		OwnedProofRecorderBackend {
 			backend: self.backend.async_storage(),
-			// Here using existing recorder would be incorrect as we only need
-			// to record change when and if the async worker does join.
-			// TODO joining and merging proof_recorder is unimplemented
-			proof_recorder: Default::default(),
+			proof_recorder: self.proof_recorder.clone(),
 		}
 	}
 }
@@ -242,9 +239,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher + 'static> TrieBackendStorage<H>
 	fn async_storage(&self) -> Self::AsyncStorage {
 		OwnedProofRecorderBackend {
 			backend: self.backend.async_storage(),
-			// Here using existing recorder would be incorrect as we only need
-			// to record change when and if the async worker does join.
-			proof_recorder: Default::default(),
+			proof_recorder: self.proof_recorder.clone(),
 		}
 	}
 }
