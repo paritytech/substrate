@@ -448,7 +448,7 @@ impl AsyncBackend for () {
 
 /// How declaration error is handled.
 #[derive(Debug, Clone, Copy, codec::Encode, codec::Decode)]
-pub enum DeclarationFailureHanling {
+pub enum DeclarationFailureHandling {
 	/// Do panic on conflict, this is a strict mode where
 	/// we cut useless computation, and need some strong
 	/// assertion over our declaration.
@@ -460,9 +460,9 @@ pub enum DeclarationFailureHanling {
 	InvalidAtJoin,
 }
 
-impl Default for DeclarationFailureHanling {
+impl Default for DeclarationFailureHandling {
 	fn default() -> Self {
-		DeclarationFailureHanling::Panic
+		DeclarationFailureHandling::Panic
 	}
 }
 
@@ -481,7 +481,7 @@ pub enum WorkerDeclaration {
 	/// this can be use when we want to check consistency from the
 	/// state at join (otherwhise there is no sense in forbidding write).
 	/// TODO rename to ChildReadJoin?
-	ChildRead(AccessDeclaration, DeclarationFailureHanling),
+	ChildRead(AccessDeclaration, DeclarationFailureHandling),
 }
 
 /// Access filter on storage.
