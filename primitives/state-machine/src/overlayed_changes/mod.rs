@@ -681,6 +681,7 @@ impl OverlayedChanges {
 		where H::Out: Ord + Encode,
 	{
 		self.filters.guard_read_all();
+		self.optimistic_logger.log_read_all();
 		let delta = self.changes().map(|(k, v)| (&k[..], v.value().map(|v| &v[..])));
 		let child_delta = self.children()
 			.map(|(changes, info)| (info, changes.map(

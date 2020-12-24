@@ -28,7 +28,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use std::collections::HashMap as Map;
 #[cfg(not(feature = "std"))]
 use sp_std::collections::btree_map::BTreeMap as Map;
-use sp_std::cell::RefCell;
+use sp_std::cell::{Cell, RefCell};
 use crate::overlayed_changes::radix_trees::AccessTreeWrite;
 use sp_core::storage::ChildInfo;
 use super::StorageKey;
@@ -39,7 +39,7 @@ pub(super) struct AccessLogger {
 	log_read: bool,
 	log_write: BTreeSet<TaskId>,
 	// this is roughly storage root call.
-	read_all: bool,
+	read_all: Cell<bool>,
 	write_loggings_id: Vec<TaskId>,
 	top_logger: StateLogger,
 	children_logger: RefCell<Map<StorageKey, StateLogger>>,
@@ -57,9 +57,9 @@ struct StateLogger {
 }
 
 impl StateLogger {
-	fn remove_read_logs(&mut self) {
-		self.read_key.get_mut().clear();
-		self.read_intervals.get_mut().clear();
+	fn remove_read_logs(&self) {
+		self.read_key.borrow_mut().clear();
+		self.read_intervals.borrow_mut().clear();
 	}
 	fn remove_write_logs(&mut self) {
 		self.write_key.clear();
@@ -231,11 +231,13 @@ impl AccessLogger {
 	}
 
 //	fn guard_read_all(&self) {
-	fn log_read_all(&mut self) {
-		self.read_all = true;
-		self.top_logger.remove_read_logs();
-		for child_logger in self.children_logger.get_mut().iter_mut() {
-			child_logger.1.remove_read_logs();
+	pub(super) fn log_read_all(&self) {
+		if self.log_read && !self.read_all.get() {
+			self.read_all.set(true);
+			self.top_logger.remove_read_logs();
+			for child_logger in self.children_logger.borrow_mut().iter_mut() {
+				child_logger.1.remove_read_logs();
+			}
 		}
 	}
 
@@ -254,7 +256,7 @@ impl AccessLogger {
 
 //	fn guard_read(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
 	pub(super) fn log_read(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
-		if self.log_read && !self.read_all {
+		if self.log_read && !self.read_all.get() {
 			let mut ref_children;
 			let logger = if let Some(child_info) = child_info {
 				let storage_key = child_info.storage_key();
@@ -273,7 +275,7 @@ impl AccessLogger {
 
 //	fn guard_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
 	pub(super) fn log_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
-		if self.log_read && !self.read_all {
+		if self.log_read && !self.read_all.get() {
 			let mut ref_children;
 			let logger = if let Some(child_info) = child_info {
 				let storage_key = child_info.storage_key();
@@ -317,11 +319,11 @@ impl AccessLogger {
 			return None;
 		}
 
-		if self.read_all {
+		if self.read_all.get() {
 			// Resetting state is not strictly needed, extract read should only happen
 			// on end of lifetime of the overlay (at worker return).
 			// But writing it for having explicitly a clean read state.
-			self.read_all = false;
+			self.read_all.set(false);
 			return Some(sp_externalities::AccessLog {
 				read_all: true,
 				top_logger: Default::default(),
@@ -335,13 +337,12 @@ impl AccessLogger {
 		let children_logger: Vec<_> = self.children_logger.get_mut().iter_mut().map(|(storage_key, logger)| {
 			let read_keys = sp_std::mem::take(logger.read_key.get_mut());
 			let read_intervals = sp_std::mem::take(logger.read_intervals.get_mut());
-			(storage_key, sp_externalities::StateLog { read_keys, read_intervals })
+			(storage_key.clone(), sp_externalities::StateLog { read_keys, read_intervals })
 		}).collect();
 		Some(sp_externalities::AccessLog {
 			read_all: false,
-			top_logger: Default::default(),
-			children_logger: Default::default(),
+			top_logger,
+			children_logger,
 		})
 	}
 }
-
