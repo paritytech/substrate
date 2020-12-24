@@ -250,12 +250,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Get backend to use with threads.
 	fn async_backend(&self) -> Box<dyn AsyncBackend>;
-
-	/// Backend used in worker successfully.
-	/// This call is used to commit a proof recording in
-	/// backend of a worker. This is needed because only
-	/// proof from successful worker is recorded.
-	fn commit_worker_proof(&self)
 }
 
 /// Async Backend implemented for a given state machine backend.
