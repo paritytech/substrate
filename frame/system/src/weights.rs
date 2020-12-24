@@ -70,17 +70,17 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
 			.saturating_add((833_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+			.saturating_add(T::DbWeight::get().writes(i as Weight))
 	}
 	fn kill_storage(i: u32, ) -> Weight {
 		(2_131_000 as Weight)
 			.saturating_add((597_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+			.saturating_add(T::DbWeight::get().writes(i as Weight))
 	}
 	fn kill_prefix(p: u32, ) -> Weight {
 		(11_844_000 as Weight)
 			.saturating_add((857_000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
+			.saturating_add(T::DbWeight::get().writes(p as Weight))
 	}
 	fn suicide() -> Weight {
 		(37_209_000 as Weight)
@@ -104,17 +104,17 @@ impl WeightInfo for () {
 	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
 			.saturating_add((833_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(i as Weight))
 	}
 	fn kill_storage(i: u32, ) -> Weight {
 		(2_131_000 as Weight)
 			.saturating_add((597_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(i as Weight))
 	}
 	fn kill_prefix(p: u32, ) -> Weight {
 		(11_844_000 as Weight)
 			.saturating_add((857_000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(p as Weight))
 	}
 	fn suicide() -> Weight {
 		(37_209_000 as Weight)
