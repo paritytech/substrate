@@ -404,9 +404,11 @@ where
 		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
 
-		header.extrinsics_root().check_equal(&new_header.extrinsics_root());
+		// check extrinsics root
+		let extrinsics_root = new_header.extrinsics_root();
+		header.extrinsics_root().check_equal(&extrinsics_root);
 		assert!(
-			header.extrinsics_root() == new_header.extrinsics_root(),
+			header.extrinsics_root() == extrinsics_root,
 			"Transaction trie root must be valid.",
 		);
 	}
