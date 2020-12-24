@@ -314,7 +314,7 @@ impl Filters {
 			WorkerResult::HardPanic
 			| WorkerResult::Panic => (),
 		};
-		self.failure_handlers.did_fail()
+		!self.failure_handlers.did_fail()
 	}
 
 	// TODO case where we allow all (forbid all on the other side) really need to be tested.

@@ -137,7 +137,7 @@ impl Markers {
 		}
 	}
 
-	pub fn dissmiss_worker(&mut self, id: TaskId) {
+	pub(super) fn dissmiss_worker(&mut self, id: TaskId) {
 		self.remove_worker(id);
 	}
 }
