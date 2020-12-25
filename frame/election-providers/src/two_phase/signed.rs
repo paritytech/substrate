@@ -27,6 +27,7 @@ use sp_npos_elections::CompactSolution;
 impl<T: Config> Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>
 {
 	/// Start the signed phase.
 	///
@@ -35,9 +36,9 @@ where
 	///
 	/// The signed phase must always start before the unsigned phase.
 	pub fn start_signed_phase() {
-		let targets = T::ElectionDataProvider::targets();
-		let voters = T::ElectionDataProvider::voters();
-		let desired_targets = T::ElectionDataProvider::desired_targets();
+		let targets = T::DataProvider::targets();
+		let voters = T::DataProvider::voters();
+		let desired_targets = T::DataProvider::desired_targets();
 
 		SnapshotMetadata::put(RoundSnapshotMetadata {
 			voters_len: voters.len() as u32,

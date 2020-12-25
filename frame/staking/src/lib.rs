@@ -736,7 +736,7 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 	/// Something that provides the election functionality.
-	type ElectionProvider: ElectionProvider<Self::AccountId>;
+	type ElectionProvider: ElectionProvider<Self::AccountId, Self::BlockNumber, DataProvider = Module<Self>>;
 
 	/// Tokens have been minted and are unused for validator-reward.
 	/// See [Era payout](./index.html#era-payout).

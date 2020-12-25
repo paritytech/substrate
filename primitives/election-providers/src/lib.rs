@@ -76,7 +76,7 @@
 //!
 //! ```rust
 //! # use sp_election_providers::*;
-//! # use sp_npos_elections::Support;
+//! # use sp_npos_elections::{Support, Assignment};
 //!
 //! type AccountId = u64;
 //! type Balance = u64;
@@ -85,9 +85,8 @@
 //! mod data_provider {
 //!     use super::*;
 //!
-//!     pub trait Config {
-//!         type AccountId;
-//!         type ElectionProvider: ElectionProvider<Self::AccountId>;
+//!     pub trait Config: Sized {
+//!         type ElectionProvider: ElectionProvider<AccountId, BlockNumber, DataProvider = Module<Self>>;
 //!     }
 //!
 //!     pub struct Module<T: Config>(std::marker::PhantomData<T>);
@@ -103,10 +102,9 @@
 //!             vec![10, 20, 30]
 //!         }
 //!         fn feasibility_check_assignment<P: PerThing>(
-//!             who: &AccountId,
-//!             distribution: &[(AccountId, P)],
-//!         ) -> bool {
-//!             true
+//!             _: &Assignment<AccountId, P>,
+//!         ) -> Result<(), &'static str> {
+//!             Ok(())
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
 //!             0
@@ -115,20 +113,21 @@
 //! }
 //!
 //!
-//! mod election_provider {
+//! mod generic_election_provider {
 //!     use super::*;
 //!
-//!     pub struct SomeElectionProvider<T: Config>(std::marker::PhantomData<T>);
+//!     pub struct GenericElectionProvider<T: Config>(std::marker::PhantomData<T>);
 //!
 //!     pub trait Config {
 //!         type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
 //!     }
 //!
-//!     impl<T: Config> ElectionProvider<AccountId> for SomeElectionProvider<T> {
+//!     impl<T: Config> ElectionProvider<AccountId, BlockNumber> for GenericElectionProvider<T> {
 //!         type Error = ();
+//! 		type DataProvider = T::DataProvider;
 //!
 //!         fn elect<P: PerThing128>() -> Result<Supports<AccountId>, Self::Error> {
-//!             T::DataProvider::targets()
+//!             Self::DataProvider::targets()
 //!                 .first()
 //!                 .map(|winner| vec![(*winner, Support::default())])
 //!                 .ok_or(())
@@ -140,18 +139,17 @@
 //! }
 //!
 //! mod runtime {
-//!     use super::election_provider;
+//!     use super::generic_election_provider;
 //!     use super::data_provider;
 //!     use super::AccountId;
 //!
 //!     struct Runtime;
-//!     impl election_provider::Config for Runtime {
+//!     impl generic_election_provider::Config for Runtime {
 //!         type DataProvider = data_provider::Module<Runtime>;
 //!     }
 //!
 //!     impl data_provider::Config for Runtime {
-//!         type AccountId = AccountId;
-//!         type ElectionProvider = election_provider::SomeElectionProvider<Runtime>;
+//!         type ElectionProvider = generic_election_provider::GenericElectionProvider<Runtime>;
 //!     }
 //!
 //! }
@@ -223,9 +221,12 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 /// [`ElectionProvider::elect`]. That data required for the election need to be passed to the
 /// implemented of this trait through some other way. One example of such is the
 /// [`ElectionDataProvider`] traits.
-pub trait ElectionProvider<AccountId> {
+pub trait ElectionProvider<AccountId, BlockNumber> {
 	/// The error type that is returned by the provider.
 	type Error;
+
+	/// The data provider of this election.
+	type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
 
 	/// Elect a new set of winners.
 	///

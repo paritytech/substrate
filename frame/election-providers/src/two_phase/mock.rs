@@ -223,8 +223,9 @@ impl crate::two_phase::Config for Runtime {
 	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
 	type UnsignedPriority = UnsignedPriority;
-	type ElectionDataProvider = StakingMock;
+	type DataProvider = StakingMock;
 	type WeightInfo = ();
+	type OnChainAccuracy = Perbill;
 	type CompactSolution = TestCompact;
 }
 

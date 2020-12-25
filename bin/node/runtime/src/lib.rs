@@ -528,8 +528,9 @@ impl pallet_two_phase_election_provider::Config for Runtime {
 	type MinerMaxIterations = MaxUnsignedIterations;
 	type MinerMaxWeight = ();
 	type UnsignedPriority = ();
-	type ElectionDataProvider = Staking;
+	type DataProvider = Staking;
 	type CompactSolution = CompactU16Solution;
+	type OnChainAccuracy = Perbill;
 	type WeightInfo = ();
 }
 

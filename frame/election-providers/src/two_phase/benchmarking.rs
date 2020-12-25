@@ -43,6 +43,7 @@ fn solution_with_size<T: Config>(
 ) -> RawSolution<CompactOf<T>>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 	<InnerOf<CompactAccuracyOf<T>> as sp_std::convert::TryFrom<usize>>::Error: sp_std::fmt::Debug,
 {
 	assert!(witness.targets >= winners_count, "must have enough targets");
@@ -152,6 +153,7 @@ benchmarks! {
 	where_clause {
 		where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 		<InnerOf<CompactAccuracyOf<T>> as sp_std::convert::TryFrom<usize>>::Error: sp_std::fmt::Debug,
+		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 	}
 	_{}
 
@@ -166,7 +168,7 @@ benchmarks! {
 	on_initialize_open_signed_phase {
 		assert!(<TwoPhase<T>>::snapshot().is_none());
 		assert!(<TwoPhase<T>>::current_phase().is_off());
-		let next_election = T::ElectionDataProvider::next_election_prediction(1u32.into());
+		let next_election = T::DataProvider::next_election_prediction(1u32.into());
 
 		let signed_deadline = T::SignedPhase::get() + T::UnsignedPhase::get();
 		let unsigned_deadline = T::UnsignedPhase::get();

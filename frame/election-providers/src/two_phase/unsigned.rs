@@ -42,7 +42,7 @@ pub(crate) const DEFAULT_LONGEVITY: u64 = 25;
 
 impl<T: Config> Module<T>
 where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> + From<InnerOf<OnChainAccuracyOf<T>>>,
 {
 	/// Min a new npos solution.
 	pub fn mine_solution(iters: usize) -> Result<(RawSolution<CompactOf<T>>, WitnessData), Error> {
@@ -344,6 +344,7 @@ where
 impl<T: Config> ValidateUnsigned for Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>
 {
 	type Call = Call<T>;
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {

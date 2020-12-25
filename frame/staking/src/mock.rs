@@ -252,7 +252,7 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 impl onchain::Config for Test {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
-	type ElectionDataProvider = Staking;
+	type DataProvider = Staking;
 }
 impl Config for Test {
 	type Currency = Balances;

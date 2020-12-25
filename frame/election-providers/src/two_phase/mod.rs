@@ -118,7 +118,10 @@
 //!
 //! ## Accuracy
 //!
-//! Solutions are encoded using indices of the [Snapshot]. The accuracy used for these indices
+//!
+//! TODO: onchain: whatever comes through elect, offchain, whatever is configured in trait.
+//!
+//! Solutions are encoded using indices of the [`Snapshot`]. The accuracy used for these indices
 //! heavily influences the size of the solution. These indices are configured by an upstream user of
 //! this pallet, through `CompactSolution` type of the `ElectionDataProvider`.
 //!
@@ -172,8 +175,10 @@ pub type CompactOf<T> = <T as Config>::CompactSolution;
 pub type CompactVoterIndexOf<T> = <CompactOf<T> as CompactSolution>::Voter;
 /// The target index. Derived from [`CompactOf`].
 pub type CompactTargetIndexOf<T> = <CompactOf<T> as CompactSolution>::Target;
-/// The accuracy of the election. Derived from [`CompactOf`].
+/// The accuracy of the election, when submitted from offchain. Derived from [`CompactOf`].
 pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::VoteWeight;
+/// The accuracy of the election, when computed on-chain. Equal to [`T::OnChainAccuracy`].
+pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -187,14 +192,16 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 
 struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>)
 where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>;
+	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>;
 impl<T: Config> crate::onchain::Config for OnChainConfig<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
-	type ElectionDataProvider = T::ElectionDataProvider;
+	type DataProvider = T::DataProvider;
 }
 
 /// Current phase of the pallet.
@@ -459,6 +466,7 @@ impl WeightInfo for () {
 pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<Self>>>,
+	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<Self>>>,
 {
 	/// Event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
@@ -498,7 +506,7 @@ where
 	type RewardHandler: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
 	/// Something that will provide the election data.
-	type ElectionDataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
+	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 
 	/// The compact solution type
 	type CompactSolution: codec::Codec
@@ -509,12 +517,19 @@ where
 		+ sp_std::fmt::Debug
 		+ CompactSolution;
 
+	/// Accuracy used for fallback on-chain election.
+	type OnChainAccuracy: PerThing128;
+
 	/// The weight of the pallet.
 	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
-	trait Store for Module<T: Config> as TwoPhaseElectionProvider where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> {
+	trait Store for Module<T: Config> as TwoPhaseElectionProvider
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>
+	{
 		/// Internal counter for the number of rounds.
 		///
 		/// This is useful for de-duplication of transactions submitted to the pool, and general
@@ -570,7 +585,11 @@ decl_event!(
 );
 
 frame_support::decl_error! {
-	pub enum PalletError for Module<T: Config> where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> {
+	pub enum PalletError for Module<T: Config>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>
+	{
 		/// Submission was too early.
 		EarlySubmission,
 		/// Submission was too weak, score-wise.
@@ -590,13 +609,14 @@ decl_module! {
 	pub struct Module<T: Config> for enum Call
 	where
 		origin: T::Origin,
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>
 	{
 		type Error = PalletError<T>;
 		fn deposit_event() = default;
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
-			let next_election = T::ElectionDataProvider::next_election_prediction(now);
+			let next_election = T::DataProvider::next_election_prediction(now);
 			let next_election = next_election.max(now);
 
 			let signed_deadline = T::SignedPhase::get() + T::UnsignedPhase::get();
@@ -740,6 +760,7 @@ decl_module! {
 impl<T: Config> Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
 	/// Perform the tasks to be done after a new `elect` has been triggered:
 	///
@@ -832,7 +853,7 @@ where
 								.iter()
 								.map(|(d, _)| d)
 								.all(|d| targets.contains(d))
-								&& T::ElectionDataProvider::feasibility_check_assignment::<
+								&& T::DataProvider::feasibility_check_assignment::<
 									CompactAccuracyOf<T>,
 								>(assignment)
 								.is_ok()
@@ -869,19 +890,25 @@ where
 	}
 
 	/// On-chain fallback of election.
-	fn onchain_fallback() -> Result<Supports<T::AccountId>, Error> {
-		<OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<T::AccountId>>::elect::<
-			Perbill,
-		>()
+	fn onchain_fallback() -> Result<Supports<T::AccountId>, Error>
+	where
+		ExtendedBalance: From<<T::OnChainAccuracy as PerThing>::Inner>,
+	{
+		<OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<
+			T::AccountId,
+			T::BlockNumber,
+		>>::elect::<T::OnChainAccuracy>()
 		.map_err(Into::into)
 	}
 }
 
-impl<T: Config> ElectionProvider<T::AccountId> for Module<T>
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
 	type Error = Error;
+	type DataProvider = T::DataProvider;
 
 	fn elect<P: PerThing128>() -> Result<Supports<T::AccountId>, Self::Error>
 	where

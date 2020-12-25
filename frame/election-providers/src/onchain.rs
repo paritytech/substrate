@@ -59,19 +59,20 @@ pub trait Config {
 	/// The block number type.
 	type BlockNumber;
 	/// Something that provides the data for election.
-	type ElectionDataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
+	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 }
 
-impl<T: Config> ElectionProvider<T::AccountId> for OnChainSequentialPhragmen<T> {
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
 	type Error = Error;
+	type DataProvider = T::DataProvider;
 
 	fn elect<P: PerThing128>() -> Result<Supports<T::AccountId>, Self::Error>
 	where
 		ExtendedBalance: From<<P as PerThing>::Inner>,
 	{
-		let voters = T::ElectionDataProvider::voters();
-		let targets = T::ElectionDataProvider::targets();
-		let desired_targets = T::ElectionDataProvider::desired_targets() as usize;
+		let voters = Self::DataProvider::voters();
+		let targets = Self::DataProvider::targets();
+		let desired_targets = Self::DataProvider::desired_targets() as usize;
 
 		let mut stake_map: BTreeMap<T::AccountId, VoteWeight> = BTreeMap::new();
 
@@ -92,7 +93,7 @@ impl<T: Config> ElectionProvider<T::AccountId> for OnChainSequentialPhragmen<T> 
 		// check all assignments for feasibility, based on election data provider.
 		assignments
 			.iter()
-			.map(T::ElectionDataProvider::feasibility_check_assignment)
+			.map(Self::DataProvider::feasibility_check_assignment)
 			.collect::<Result<_, _>>()
 			.map_err(|e| Error::Feasibility(e))?;
 
@@ -122,7 +123,7 @@ mod tests {
 	impl Config for Runtime {
 		type AccountId = AccountId;
 		type BlockNumber = BlockNumber;
-		type ElectionDataProvider = mock_data_provider::DataProvider;
+		type DataProvider = mock_data_provider::DataProvider;
 	}
 
 	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;
