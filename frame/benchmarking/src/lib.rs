@@ -177,11 +177,12 @@ pub use sp_storage::TrackedStorageKey;
 macro_rules! benchmarks {
 	(
 		$( where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? } )?
-		_ {
+		,
+		//_ {
 		// // 	// $(
 		// // 	// 	let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
 		// // 	// )*
-		}
+		//}
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter!(
@@ -205,7 +206,7 @@ macro_rules! benchmarks_instance {
 			// 	let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
 			// )*
 		//}
-		$( $rest:tt )?
+		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter!(
 			{ I }

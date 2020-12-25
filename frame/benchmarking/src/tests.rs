@@ -110,11 +110,12 @@ fn new_test_ext() -> sp_io::TestExternalities {
 
 benchmarks!{
 	where_clause { where <T as OtherConfig>::OtherEvent: Into<<T as Config>::Event> }
+	,
 
-	_ {
+	//_ {
 	// // 	// Define a common range for `b`.
 		
-	}
+	//}
 
 	set_value {
 		let b in 1 .. 1000;
