@@ -732,6 +732,10 @@ cfg_if! {
 					}
 				}
 
+				fn current_epoch_start() -> sp_consensus_babe::SlotNumber {
+					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
+
 				fn current_epoch() -> sp_consensus_babe::Epoch {
 					<pallet_babe::Module<Runtime>>::current_epoch()
 				}
@@ -981,6 +985,10 @@ cfg_if! {
 						randomness: <pallet_babe::Module<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
+				}
+
+				fn current_epoch_start() -> sp_consensus_babe::SlotNumber {
+					<pallet_babe::Module<Runtime>>::current_epoch_start()
 				}
 
 				fn current_epoch() -> sp_consensus_babe::Epoch {

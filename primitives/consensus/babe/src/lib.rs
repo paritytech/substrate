@@ -376,6 +376,9 @@ sp_api::decl_runtime_apis! {
 		#[changed_in(2)]
 		fn configuration() -> BabeGenesisConfigurationV1;
 
+		/// Returns the slot number that started the current epoch.
+		fn current_epoch_start() -> SlotNumber;
+
 		/// Returns information regarding the current epoch.
 		fn current_epoch() -> Epoch;
 
