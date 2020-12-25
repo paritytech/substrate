@@ -200,17 +200,17 @@ macro_rules! benchmarks {
 macro_rules! benchmarks_instance {
 	(
 		$( where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? } )?
-		_ {
-			$(
-				let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
-			)*
-		}
-		$( $rest:tt )*
+		//_ {
+			// $(
+			// 	let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
+			// )*
+		//}
+		$( $rest:tt )?
 	) => {
 		$crate::benchmarks_iter!(
 			{ I }
 			{ $( $( $where_ty: $where_bound ),* )? }
-			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
+			//{ $( { $common , $common_from , $common_to , $common_instancer } )* }
 			( )
 			( )
 			$( $rest )*
