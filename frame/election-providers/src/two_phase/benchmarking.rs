@@ -166,6 +166,9 @@ benchmarks! {
 	}
 
 	on_initialize_open_signed_phase {
+		// NOTE: this benchmark currently doesn't have any components because the length of a db
+		// read/write is not captured. Otherwise, it is quite influenced by how much data
+		// `T::ElectionDataProvider` is reading and passing on.
 		assert!(<TwoPhase<T>>::snapshot().is_none());
 		assert!(<TwoPhase<T>>::current_phase().is_off());
 		let next_election = T::DataProvider::next_election_prediction(1u32.into());
@@ -208,6 +211,14 @@ benchmarks! {
 	} verify {
 		assert_eq!(T::Currency::free_balance(&receiver), 90u32.into());
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
+	}
+
+	create_snapshot {
+		assert!(<TwoPhase<T>>::snapshot().is_none());
+	}: {
+		<TwoPhase::<T>>::create_snapshot()
+	} verify {
+		assert!(<TwoPhase<T>>::snapshot().is_some());
 	}
 
 	submit {
@@ -317,6 +328,10 @@ mod test {
 			assert_ok!(test_benchmark_finalize_signed_phase_reject_solution::<
 				Runtime,
 			>());
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_create_snapshot::<Runtime>());
 		});
 	}
 }

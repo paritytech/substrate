@@ -2257,7 +2257,7 @@ impl<T: Config> Module<T> {
 	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
 		// TODO: Worthy to denote how exactly the accuracy is playing a role here. We could at this
 		// point remove this generic as well, maybe it will also simplify some other stuff.
-		T::ElectionProvider::elect::<ChainAccuracy>()
+		T::ElectionProvider::elect()
 			.map_err(|_| ())
 			.and_then(|flat_supports| Self::process_election(flat_supports, current_era))
 			.ok()

@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Two phase election provider pallet.
+//! # Two phase, offchain election provider pallet.
 //!
-//! As the name suggests, this election-provider has two distinct phases (see
-//! [Phase](two_phase::Phase)), signed and unsigned.
+//! As the name suggests, this election-provider has two distinct phases (see [`Phase`]), signed and
+//! unsigned.
 //!
 //! ## Phases
 //!
@@ -35,24 +35,24 @@
 //!
 //! ```
 //!
-//! Note that the unsigned phase starts [Config::UnsignedPhase](two_phase::Config::UnsignedPhase)
-//! blocks before the `next_election_prediction`, but only ends when a call to
-//! `ElectionProvider::elect` happens.
+//! Note that the unsigned phase starts [`Config::UnsignedPhase`] blocks before the
+//! `next_election_prediction`, but only ends when a call to [`Config::ElectionProvider::elect`]
+//! happens.
 //!
 //! Each of the phases can be disabled by essentially setting their length to zero. If both phases
 //! have length zero, then the pallet essentially runs only the on-chain backup.
 //!
 //! ### Signed Phase
 //!
-//!	In the signed phase, solutions (of type [RawSolution](struct.RawSolution.html)) are submitted
-//! and queued on chain. A deposit is reserved, based on the size of the solution, for the cost of
-//! keeping this solution on-chain for a number of blocks, and the potential weight of the solution
-//! upon being checked. A maximum of [`Config::MaxSignedSubmissions`] solutions are stored. The
-//! queue is always sorted based on score (worse to best).
+//!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
+//! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
+//! on-chain for a number of blocks, and the potential weight of the solution upon being checked. A
+//! maximum of [`Config::MaxSignedSubmissions`] solutions are stored. The queue is always sorted
+//! based on score (worse to best).
 //!
 //! Upon arrival of a new solution:
 //!
-//! 1. If the queue is not full, it is stored in the appropriate index.
+//! 1. If the queue is not full, it is stored in the appropriate sorted index.
 //! 2. If the queue is full but the submitted solution is better than one of the queued ones, the
 //!    worse solution is discarded, the bond of the outgoing solution is returned, and the new
 //!    solution is stored in the correct index.
@@ -60,14 +60,14 @@
 //!    ones, it is instantly rejected and no additional bond is reserved.
 //!
 //! A signed solution cannot be reversed, taken back, updated, or retracted. In other words, the
-//! origin can not bail out in any way.
+//! origin can not bail out in any way, if their solution is queued.
 //!
-//! Upon the end of the signed phase, the solutions are examined from worse to best (i.e. `pop()`ed
-//! until drained). Each solution undergoes an expensive [`Module::feasibility_check`], which ensure
-//! the score claimed by this score was correct, among other checks. At each step, if the current
-//! best solution passes the feasibility check, it is considered to be the best one. The sender of
-//! the origin is rewarded, and the rest of the queued solutions get their deposit back, without
-//! being checked.
+//! Upon the end of the signed phase, the solutions are examined from best to worse (i.e. `pop()`ed
+//! until drained). Each solution undergoes an expensive [`Module::feasibility_check`], which
+//! ensures the score claimed by this score was correct, and it is valid based on the election data
+//! (i.e. votes and candidates). At each step, if the current best solution passes the feasibility
+//! check, it is considered to be the best one. The sender of the origin is rewarded, and the rest
+//! of the queued solutions get their deposit back and are discarded, without being checked.
 //!
 //! The following example covers all of the cases at the end of the signed phase:
 //!
@@ -76,7 +76,7 @@
 //! +-------------------------------+
 //! |Solution(score=20, valid=false)| +-->  Slashed
 //! +-------------------------------+
-//! |Solution(score=15, valid=true )| +-->  Rewarded
+//! |Solution(score=15, valid=true )| +-->  Rewarded, Saved
 //! +-------------------------------+
 //! |Solution(score=10, valid=true )| +-->  Discarded
 //! +-------------------------------+
@@ -87,43 +87,50 @@
 //! ```
 //!
 //! Note that both of the bottom solutions end up being discarded and get their deposit back,
-//! despite one of them being invalid.
+//! despite one of them being *invalid*.
 //!
 //! ## Unsigned Phase
 //!
 //! The unsigned phase will always follow the signed phase, with the specified duration. In this
 //! phase, only validator nodes can submit solutions. A validator node who has offchain workers
 //! enabled will start to mine a solution in this phase and submits it back to the chain as an
-//! unsigned transaction, thus the name _unsigned_ phase.
+//! unsigned transaction, thus the name _unsigned_ phase. This unsigned transaction can never be
+//! valid if propagated, and it acts similar to an inherent.
 //!
 //! Validators will only submit solutions if the one that they have computed is sufficiently better
-//! than the best queued one (see [SolutionImprovementThreshold]) and will limit the weigh of the
-//! solution to [MinerMaxWeight].
+//! than the best queued one (see [`SolutionImprovementThreshold`]) and will limit the weigh of the
+//! solution to [`MinerMaxWeight`].
 //!
 //! ### Fallback
 //!
-//! If we reach the end of both phases (i.e. call to [ElectionProvider::elect] happens) and no good
-//! solution is queued, then we fallback to an on-chain election. The on-chain election is slow, and
-//! contains to balancing or reduction post-processing.
+//! If we reach the end of both phases (i.e. call to [`ElectionProvider::elect`] happens) and no
+//! good solution is queued, then we fallback to an on-chain election. The on-chain election is
+//! slow, and contains no balancing or reduction post-processing. See
+//! [`onchain::OnChainSequentialPhragmen`].
 //!
 //! ## Feasible Solution (correct solution)
 //!
-//! All submissions must undergo a feasibility check. A feasible solution is as follows:
+//! All submissions must undergo a feasibility check. Signed solutions are checked on by one at the
+//! end of the signed phase, and the unsigned solutions are checked on the spot. A feasible solution
+//! is as follows:
 //!
 //! 0. **all** of the used indices must be correct.
 //! 1. present correct number of winners.
-//! 2. any assignment is checked to match with [Snapshot::voters].
-//! 3. for each assignment, the check of `ElectionDataProvider` is also examined.
+//! 2. any assignment is checked to match with [`Snapshot::voters`].
+//! 3. for each assignment, the check of ``ElectionDataProvider::feasibility_check_assignment`` is
+//!    also examined and must be correct.
 //! 4. the claimed score is valid.
 //!
 //! ## Accuracy
 //!
+//! The accuracy of the election is configured via two trait parameters. namely,
+//! [`Config::OnChainAccuracy`] dictates the accuracy used to compute the on-chain fallback election
+//! (see [`OnChainAccuracyOf`]) and `[Config::DataProvider::CompactSolution::Accuracy]` is the
+//! accuracy that the submitted solutions must adhere to.
 //!
-//! TODO: onchain: whatever comes through elect, offchain, whatever is configured in trait.
-//!
-//! Solutions are encoded using indices of the [`Snapshot`]. The accuracy used for these indices
-//! heavily influences the size of the solution. These indices are configured by an upstream user of
-//! this pallet, through `CompactSolution` type of the `ElectionDataProvider`.
+//! Note that both accuracies are of great importance. The offchain solution should be as small as
+//! possible, reducing solutions size/weight. The on-chain solution can use more space for accuracy,
+//! but should still be fast to prevent massively large blocks in case of a fallback.
 //!
 //! ## Future Plans
 //!
@@ -136,6 +143,18 @@
 //! 1. We must surely slash whoever submitted that solution (might be a challenge for unsigned
 //!    solutions).
 //! 2. It is probably fine to fallback to the on-chain election, as we expect this to happen rarely.
+//!
+//! **Bailing out**. The functionality of bailing out of a queued solution is nice. A miner can
+//! submit a solution as soon as they _think_ it is high probability feasible, and do the checks
+//! afterwards, and remove their solution (for a small cost of probably just transaction fees, or a
+//! portion of the bond).
+//!
+//! ** Conditionally open unsigned phase: Currently, the unsigned phase is always opened. This is
+//! useful because an honest validation will run our OCW code, which should be good enough to trump
+//! a mediocre or malicious signed submission (assuming in the absence of honest signed bots). If an
+//! when the signed submissions are checked against an absolute measure (e.g. PJR), then we can only
+//! open the unsigned phase in extreme conditions (i.e. "not good signed solution received") to
+//! spare some work in the validators
 
 use crate::onchain::OnChainSequentialPhragmen;
 use codec::{Decode, Encode, HasCompact};
@@ -176,7 +195,7 @@ pub type CompactVoterIndexOf<T> = <CompactOf<T> as CompactSolution>::Voter;
 /// The target index. Derived from [`CompactOf`].
 pub type CompactTargetIndexOf<T> = <CompactOf<T> as CompactSolution>::Target;
 /// The accuracy of the election, when submitted from offchain. Derived from [`CompactOf`].
-pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::VoteWeight;
+pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::Accuracy;
 /// The accuracy of the election, when computed on-chain. Equal to [`T::OnChainAccuracy`].
 pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
 
@@ -435,6 +454,7 @@ pub trait WeightInfo {
 	fn on_initialize_open_signed_phase() -> Weight;
 	fn finalize_signed_phase_accept_solution() -> Weight;
 	fn finalize_signed_phase_reject_solution() -> Weight;
+	fn create_snapshot() -> Weight;
 	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight;
 	fn submit(c: u32) -> Weight;
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight;
@@ -454,6 +474,9 @@ impl WeightInfo for () {
 		Default::default()
 	}
 	fn on_initialize_open_signed_phase() -> Weight {
+		Default::default()
+	}
+	fn create_snapshot() -> Weight {
 		Default::default()
 	}
 	fn finalize_signed_phase_accept_solution() -> Weight {
@@ -624,21 +647,37 @@ decl_module! {
 			let unsigned_deadline = T::UnsignedPhase::get();
 
 			let remaining = next_election - now;
-			match Self::current_phase() {
+			let current_phase = Self::current_phase();
+			match current_phase {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
-					// signed phase can only start after Off.
 					<CurrentPhase<T>>::put(Phase::Signed);
-					Self::start_signed_phase();
+					Self::create_snapshot();
+
 					Self::deposit_event(RawEvent::SignedPhaseStarted(Self::round()));
 					log!(info, "Starting signed phase at #{:?} , round {}.", now, Self::round());
+
 					T::WeightInfo::on_initialize_open_signed_phase()
 				},
 				Phase::Signed | Phase::Off if remaining <= unsigned_deadline && remaining > 0u32.into() => {
-					// unsigned phase can start after Off or Signed.
-					let (_, consumed_weight) = Self::finalize_signed_phase();
+					let mut consumed_weight: Weight = 0;
+					if current_phase == Phase::Off {
+						// if not being followed by a signed phase, then create the snapshots.
+						debug_assert!(Self::snapshot().is_none());
+						Self::create_snapshot();
+						consumed_weight = consumed_weight.saturating_add(T::WeightInfo::create_snapshot());
+					} else {
+						// if followed by a signed phase, then finalize the signed stuff.
+						debug_assert!(Self::signed_submissions().is_empty());
+					}
+
+					// noop if no signed phase has been open
+					let (_, weight) = Self::finalize_signed_phase();
+					consumed_weight = consumed_weight.saturating_add(weight);
+
 					// for now always start the unsigned phase.
 					<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
 					Self::deposit_event(RawEvent::UnsignedPhaseStarted(Self::round()));
+
 					log!(info, "Starting unsigned phase at #{:?}.", now);
 					consumed_weight
 				},
@@ -763,6 +802,25 @@ where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
+	/// Creates the snapshot. Writes new data to:
+	///
+	/// 1. [`SnapshotMetadata`]
+	/// 2. [`RoundSnapshot`]
+	/// 3. [`DesiredTargets`]
+	pub fn create_snapshot() {
+		// if any of them don't exist, create all of them. This is a bit conservative.
+		let targets = T::DataProvider::targets();
+		let voters = T::DataProvider::voters();
+		let desired_targets = T::DataProvider::desired_targets();
+
+		SnapshotMetadata::put(RoundSnapshotMetadata {
+			voters_len: voters.len() as u32,
+			targets_len: targets.len() as u32,
+		});
+		DesiredTargets::put(desired_targets);
+		<Snapshot<T>>::put(RoundSnapshot { voters, targets });
+	}
+
 	/// Perform the tasks to be done after a new `elect` has been triggered:
 	///
 	/// 1. Increment round.
@@ -1053,6 +1111,7 @@ mod tests {
 
 			roll_to(20);
 			assert!(TwoPhase::current_phase().is_unsigned_open_at(20));
+			assert!(TwoPhase::snapshot().is_some());
 
 			roll_to(30);
 			assert!(TwoPhase::current_phase().is_unsigned_open_at(20));
@@ -1060,6 +1119,7 @@ mod tests {
 			TwoPhase::elect().unwrap();
 
 			assert!(TwoPhase::current_phase().is_off());
+			assert!(TwoPhase::snapshot().is_none());
 		});
 	}
 
@@ -1074,6 +1134,7 @@ mod tests {
 
 			roll_to(20);
 			assert!(TwoPhase::current_phase().is_signed());
+			assert!(TwoPhase::snapshot().is_some());
 
 			roll_to(30);
 			assert!(TwoPhase::current_phase().is_signed());
@@ -1081,6 +1142,7 @@ mod tests {
 			let _ = TwoPhase::elect().unwrap();
 
 			assert!(TwoPhase::current_phase().is_off());
+			assert!(TwoPhase::snapshot().is_none());
 		});
 	}
 

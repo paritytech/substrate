@@ -27,27 +27,8 @@ use sp_npos_elections::CompactSolution;
 impl<T: Config> Module<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>
+	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
-	/// Start the signed phase.
-	///
-	/// Upon calling this, auxillary data for election is stored and signed solutions will be
-	/// accepted.
-	///
-	/// The signed phase must always start before the unsigned phase.
-	pub fn start_signed_phase() {
-		let targets = T::DataProvider::targets();
-		let voters = T::DataProvider::voters();
-		let desired_targets = T::DataProvider::desired_targets();
-
-		SnapshotMetadata::put(RoundSnapshotMetadata {
-			voters_len: voters.len() as u32,
-			targets_len: targets.len() as u32,
-		});
-		DesiredTargets::put(desired_targets);
-		<Snapshot<T>>::put(RoundSnapshot { voters, targets });
-	}
-
 	/// Finish the singed phase. Process the signed submissions from best to worse until a valid one
 	/// is found, rewarding the best oen and slashing the invalid ones along the way.
 	///
@@ -294,7 +275,7 @@ mod tests {
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
 
 			// create a temp snapshot only for this test.
-			TwoPhase::start_signed_phase();
+			TwoPhase::create_snapshot();
 			let solution = raw_solution();
 
 			assert_noop!(

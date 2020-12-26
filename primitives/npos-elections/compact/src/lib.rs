@@ -177,7 +177,7 @@ fn struct_def(
 			const LIMIT: usize = #count;
 			type Voter = #voter_type;
 			type Target = #target_type;
-			type VoteWeight = #weight_type;
+			type Accuracy = #weight_type;
 
 			fn voters_count(&self) -> usize {
 				let mut all_len = 0usize;

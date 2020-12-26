@@ -144,11 +144,11 @@ pub trait CompactSolution: Sized {
 	/// The target type
 	type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
 
-	/// The weight type of each vote.
-	type VoteWeight: PerThing128;
+	/// The weight/accuracy type of each vote.
+	type Accuracy: PerThing128;
 
 	fn from_assignment<FV, FT, A>(
-		assignments: Vec<Assignment<A, Self::VoteWeight>>,
+		assignments: Vec<Assignment<A, Self::Accuracy>>,
 		voter_index: FV,
 		target_index: FT,
 	) -> Result<Self, Error>
@@ -161,7 +161,7 @@ pub trait CompactSolution: Sized {
 		self,
 		voter_at: impl Fn(Self::Voter) -> Option<A>,
 		target_at: impl Fn(Self::Target) -> Option<A>,
-	) -> Result<Vec<Assignment<A, Self::VoteWeight>>, Error>;
+	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
 
 	/// Get the length of all the assignments that this type is encoding.
 	///
@@ -211,7 +211,7 @@ pub trait CompactSolution: Sized {
 	where
 		for<'r> FS: Fn(&'r A) -> VoteWeight,
 		A: IdentifierT,
-		ExtendedBalance: From<InnerOf<Self::VoteWeight>>,
+		ExtendedBalance: From<InnerOf<Self::Accuracy>>,
 	{
 		let ratio = self.into_assignment(voter_at, target_at)?;
 		let staked = helpers::assignment_ratio_to_staked_normalized(ratio, stake_of)?;
