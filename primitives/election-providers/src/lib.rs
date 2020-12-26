@@ -17,9 +17,13 @@
 
 //! Primitive traits for providing election functionality.
 //!
-//! This crate provides two traits that could potentially be implemented by two entities. The struct
-//! receiving the functionality election should implement [`ElectionDataProvider`] and the struct
-//! providing the election functionality implements [`ElectionProvider`], as such:
+//! This crate provides two traits that could interact to enable extensible election functionality
+//! within FRAME pallets.
+//!
+//! Something that will provide the functionality of election will implement [`ElectionProvider`],
+//! whilst needing an associated [`ElectionProvider::DataProvider`], which needs to be fulfilled by
+//! an entity implementing [`ElectionDataProvider`]. Most often, the data provider *is* the receiver
+//! of the election, resulting in a diagram as below:
 //!
 //! ```ignore
 //!                                         ElectionDataProvider
@@ -28,7 +32,7 @@
 //!                          v                                          |
 //!                    +-----+----+                              +------+---+
 //!                    |          |                              |          |
-//! pallet-do-election |          |                              |          |pallet-elect-winner
+//! pallet-do-election |          |                              |          | pallet-needs-election
 //!                    |          |                              |          |
 //!                    |          |                              |          |
 //!                    +-----+----+                              +------+---+
@@ -36,27 +40,23 @@
 //!                          |                                          |
 //!                          +------------------------------------------+
 //!                                         ElectionProvider
-//!
 //! ```
 //!
 //! > It could also be possible that a third party pallet (C), provides the data of election to an
 //! > election provider (B), which then passes the election result to another pallet (A).
-//!
-//! Note that the [`ElectionProvider`] does not have a hard tie to the [`ElectionDataProvider`],
-//! rather the link must be created by other means during implementation (i.e. an associated type in
-//! `Config` trait the case of FRAME pallets).
 //!
 //! ## Election Types
 //!
 //! Typically, two types of elections exist:
 //!
 //! 1. **Stateless**: Election data is provided, and the election result is immediately ready.
-//! 2. **Stateful**: Election data is is provided, and the election result might be ready some
-//!    number of blocks in the future.
+//! 2. **Stateful**: Election data is is queried ahead of time, and the election result might be
+//!    ready some number of blocks in the future.
 //!
-//! To accommodate both type of elections in one trait, the traits lean toward stateful election, as
-//! it is more general than the stateless. This is why [`ElectionProvider::elect`] has no
-//! parameters. All value and type parameter must be provided by the [`ElectionDataProvider`] trait.
+//! To accommodate both type of elections in one trait, the traits lean toward **stateful
+//! election**, as it is more general than the stateless. This is why [`ElectionProvider::elect`]
+//! has no parameters. All value and type parameter must be provided by the [`ElectionDataProvider`]
+//! trait, even if the election happens immediately.
 //!
 //! ## Election Data
 //!
@@ -86,7 +86,11 @@
 //!     use super::*;
 //!
 //!     pub trait Config: Sized {
-//!         type ElectionProvider: ElectionProvider<AccountId, BlockNumber, DataProvider = Module<Self>>;
+//!         type ElectionProvider: ElectionProvider<
+//!             AccountId,
+//!             BlockNumber,
+//!             DataProvider = Module<Self>,
+//!         >;
 //!     }
 //!
 //!     pub struct Module<T: Config>(std::marker::PhantomData<T>);
@@ -124,9 +128,9 @@
 //!
 //!     impl<T: Config> ElectionProvider<AccountId, BlockNumber> for GenericElectionProvider<T> {
 //!         type Error = ();
-//! 		type DataProvider = T::DataProvider;
+//!         type DataProvider = T::DataProvider;
 //!
-//!         fn elect<P: PerThing128>() -> Result<Supports<AccountId>, Self::Error> {
+//!         fn elect() -> Result<Supports<AccountId>, Self::Error> {
 //!             Self::DataProvider::targets()
 //!                 .first()
 //!                 .map(|winner| vec![(*winner, Support::default())])
@@ -156,31 +160,20 @@
 //!
 //! # fn main() {}
 //! ```
-//!
-//! ## Interoperability
-//!
-//! Note that [`ElectionProvider`] and [`ElectionDataProvider`] are not linked to one another in a
-//! strict way. Nonetheless, it is strictly recommended to adhere to these traits for election
-//! processes as there are a number of assumptions in each of them that rely on one another.
-//!
-//! That being said, once could create similar traits to achieve similar functionalities, and
-//! replace one or both of of the traits provided in this crate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
 
-pub use sp_arithmetic::PerThing;
 /// Re-export some type as they are used in the interface.
+pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, CompactSolution, ExtendedBalance, PerThing128, Supports, VoteWeight,
+	Assignment, ExtendedBalance, PerThing128, Supports, VoteWeight,
 };
 
 /// Something that can provide the data to something else that implements [`ElectionProvider`].
 ///
-/// The underlying purpose of this is to provide auxillary data to stateful election providers. For
-/// example, multi-block election provider needs to know the voters/targets list well in advance and
-/// before a call to [`ElectionProvider::elect`].
+/// The underlying purpose of this is to provide auxillary data to stateful election providers.
 pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// All possible targets for the election, i.e. the candidates.
 	fn targets() -> Vec<AccountId>;
@@ -193,15 +186,17 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// The number of targets to elect.
 	fn desired_targets() -> u32;
 
-	/// Check the feasibility of a single assignment for the underlying [`ElectionProvider`]. In
-	/// other words, check if `who` having a weight distribution described as `distribution` is
-	/// correct or not.
+	/// Check the feasibility of a single assignment for the underlying [`ElectionProvider`].
 	///
 	/// This might be called by the [`ElectionProvider`] upon processing election solutions.
 	///
 	/// Note that each this must only contain checks that the [`ElectionProvider`] cannot know
-	/// about. Basics checks that can be known from [`Self::voters`] and [`Self::targets`] can be
-	/// assumed to be done by [`ElectionProvider`].
+	/// about. Basics checks that can be known from [`Self::voters`] and [`Self::targets`] should
+	/// typically be done by [`ElectionProvider`].
+	///
+	/// For example, if a pallet contains some *private* knowledge that could potentially invalidate
+	/// an `assignment`, it should be checked here, as [`ElectionProvider`] has no way of knowing
+	/// about this.
 	fn feasibility_check_assignment<P: PerThing>(
 		assignment: &Assignment<AccountId, P>,
 	) -> Result<(), &'static str>;
@@ -211,7 +206,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// In essence, the implementor should predict with this function when it will trigger the
 	/// [`ElectionDataProvider::elect`].
 	///
-	/// This is useful for stateful election providers only.
+	/// This is only useful for stateful election providers.
 	fn next_election_prediction(now: BlockNumber) -> BlockNumber;
 }
 
@@ -219,23 +214,20 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 ///
 /// This trait only provides an interface to _request_ an election, i.e.
 /// [`ElectionProvider::elect`]. That data required for the election need to be passed to the
-/// implemented of this trait through some other way. One example of such is the
-/// [`ElectionDataProvider`] traits.
+/// implemented of this trait through [`ElectionProvider::DataProvider`].
 pub trait ElectionProvider<AccountId, BlockNumber> {
 	/// The error type that is returned by the provider.
 	type Error;
 
-	/// The data provider of this election.
+	/// The data provider of the election.
 	type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
 
 	/// Elect a new set of winners.
 	///
 	/// The result is returned in a target major format, namely as vector of  supports.
-	///
-	/// The implementation should, if possible, use the accuracy `P` to compute the election result.
-	fn elect<P: PerThing128>() -> Result<Supports<AccountId>, Self::Error>
-	where
-		ExtendedBalance: From<<P as PerThing>::Inner>;
+	fn elect() -> Result<Supports<AccountId>, Self::Error>;
+	// where
+	// 	ExtendedBalance: From<<P as PerThing>::Inner>;
 
 	/// Returns true if an election is still ongoing.
 	///

@@ -58,18 +58,20 @@ pub trait Config {
 	type AccountId: IdentifierT;
 	/// The block number type.
 	type BlockNumber;
+	/// The accuracy used to compute the election:
+	type Accuracy: PerThing128;
 	/// Something that provides the data for election.
 	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T>
+where
+	ExtendedBalance: From<<T::Accuracy as PerThing>::Inner>,
+{
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
-	fn elect<P: PerThing128>() -> Result<Supports<T::AccountId>, Self::Error>
-	where
-		ExtendedBalance: From<<P as PerThing>::Inner>,
-	{
+	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		let voters = Self::DataProvider::voters();
 		let targets = Self::DataProvider::targets();
 		let desired_targets = Self::DataProvider::desired_targets() as usize;
@@ -87,7 +89,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 		let ElectionResult {
 			winners,
 			assignments,
-		} = sp_npos_elections::seq_phragmen::<_, P>(desired_targets, targets, voters, None)
+		} = sp_npos_elections::seq_phragmen::<_, T::Accuracy>(desired_targets, targets, voters, None)
 			.map_err(Error::from)?;
 
 		// check all assignments for feasibility, based on election data provider.
@@ -114,15 +116,16 @@ mod tests {
 	use super::*;
 	use sp_election_providers::{Assignment, VoteWeight};
 	use sp_npos_elections::Support;
+	use sp_runtime::Perbill;
 
 	type AccountId = u64;
 	type BlockNumber = u32;
-	type Accuracy = sp_runtime::Perbill;
 
 	struct Runtime;
 	impl Config for Runtime {
 		type AccountId = AccountId;
 		type BlockNumber = BlockNumber;
+		type Accuracy = Perbill;
 		type DataProvider = mock_data_provider::DataProvider;
 	}
 
@@ -165,7 +168,7 @@ mod tests {
 	#[test]
 	fn onchain_seq_phragmen_works() {
 		assert_eq!(
-			OnChainPhragmen::elect::<Accuracy>().unwrap(),
+			OnChainPhragmen::elect().unwrap(),
 			vec![
 				(
 					10,

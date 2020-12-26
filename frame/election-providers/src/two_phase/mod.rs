@@ -201,6 +201,7 @@ where
 {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
+	type Accuracy = T::OnChainAccuracy;
 	type DataProvider = T::DataProvider;
 }
 
@@ -897,7 +898,7 @@ where
 		<OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<
 			T::AccountId,
 			T::BlockNumber,
-		>>::elect::<T::OnChainAccuracy>()
+		>>::elect()
 		.map_err(Into::into)
 	}
 }
@@ -910,10 +911,7 @@ where
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
-	fn elect<P: PerThing128>() -> Result<Supports<T::AccountId>, Self::Error>
-	where
-		ExtendedBalance: From<<P as PerThing>::Inner>,
-	{
+	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		Self::queued_solution()
 			.map_or_else(
 				|| {
@@ -947,7 +945,6 @@ mod tests {
 	use super::{mock::*, *};
 	use sp_election_providers::ElectionProvider;
 	use sp_npos_elections::Support;
-	use sp_runtime::Perbill;
 
 	#[test]
 	fn phase_rotation_works() {
@@ -994,7 +991,7 @@ mod tests {
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(TwoPhase::snapshot().is_some());
 
-			TwoPhase::elect::<Perbill>().unwrap();
+			TwoPhase::elect().unwrap();
 
 			assert!(TwoPhase::current_phase().is_off());
 			assert!(TwoPhase::snapshot().is_none());
@@ -1021,7 +1018,7 @@ mod tests {
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// zilch solutions thus far.
-			let supports = TwoPhase::elect::<Perbill>().unwrap();
+			let supports = TwoPhase::elect().unwrap();
 
 			assert_eq!(
 				supports,
@@ -1060,7 +1057,7 @@ mod tests {
 			roll_to(30);
 			assert!(TwoPhase::current_phase().is_unsigned_open_at(20));
 
-			TwoPhase::elect::<Perbill>().unwrap();
+			TwoPhase::elect().unwrap();
 
 			assert!(TwoPhase::current_phase().is_off());
 		});
@@ -1081,7 +1078,7 @@ mod tests {
 			roll_to(30);
 			assert!(TwoPhase::current_phase().is_signed());
 
-			let _ = TwoPhase::elect::<Perbill>().unwrap();
+			let _ = TwoPhase::elect().unwrap();
 
 			assert!(TwoPhase::current_phase().is_off());
 		});
@@ -1103,7 +1100,7 @@ mod tests {
 			assert!(TwoPhase::current_phase().is_off());
 
 			// this module is now only capable of doing on-chain backup.
-			let _ = TwoPhase::elect::<Perbill>().unwrap();
+			let _ = TwoPhase::elect().unwrap();
 
 			assert!(TwoPhase::current_phase().is_off());
 		});
@@ -1124,7 +1121,7 @@ mod tests {
 
 			// an unexpected call to elect.
 			roll_to(20);
-			TwoPhase::elect::<Perbill>().unwrap();
+			TwoPhase::elect().unwrap();
 
 			// we surely can't have any feasible solutions. This will cause an on-chain election.
 			assert_eq!(
