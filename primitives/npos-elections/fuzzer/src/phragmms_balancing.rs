@@ -91,7 +91,7 @@ fn main() {
 			let balanced_score = {
 				let staked = assignment_ratio_to_staked_normalized(balanced.assignments.clone(), &stake_of).unwrap();
 				let winners = to_without_backing(balanced.winners);
-				let support = to_support_map(winners.as_ref(), staked.as_ref()).unwrap().evaluate()
+				to_support_map(winners.as_ref(), staked.as_ref()).unwrap().evaluate()
 			};
 
 			let enhance = is_score_better(balanced_score, unbalanced_score, Perbill::zero());

@@ -1189,7 +1189,7 @@ mod solution_type {
 			compact,
 			Decode::decode(&mut &encoded[..]).unwrap(),
 		);
-		assert_eq!(compact.len(), 4);
+		assert_eq!(compact.voters_count(), 4);
 		assert_eq!(compact.edge_count(), 2 + 4);
 		assert_eq!(compact.unique_targets(), vec![10, 11, 20, 40, 50, 51]);
 	}
@@ -1325,7 +1325,7 @@ mod solution_type {
 		).unwrap();
 
 		// basically number of assignments that it is encoding.
-		assert_eq!(compacted.len(), assignments.len());
+		assert_eq!(compacted.voters_count(), assignments.len());
 		assert_eq!(
 			compacted.edge_count(),
 			assignments.iter().fold(0, |a, b| a + b.distribution.len()),
@@ -1411,7 +1411,7 @@ mod solution_type {
 
 		assert_eq!(compact.unique_targets(), vec![1, 2, 3, 4, 7, 8, 11, 12, 13, 66, 67]);
 		assert_eq!(compact.edge_count(), 2 + (2 * 2) + 3 + 16);
-		assert_eq!(compact.len(), 6);
+		assert_eq!(compact.voters_count(), 6);
 
 		// this one has some duplicates.
 		let compact = TestSolutionCompact {
@@ -1428,7 +1428,7 @@ mod solution_type {
 
 		assert_eq!(compact.unique_targets(), vec![1, 3, 4, 7, 8, 11, 13]);
 		assert_eq!(compact.edge_count(), 2 + (2 * 2) + 3);
-		assert_eq!(compact.len(), 5);
+		assert_eq!(compact.voters_count(), 5);
 	}
 
 	#[test]

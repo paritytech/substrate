@@ -838,11 +838,14 @@ decl_storage! {
 
 		/// The active era information, it holds index and start.
 		///
-		/// The active era is the era currently rewarded.
-		/// Validator set of this era must be equal to `SessionInterface::validators`.
+		/// The active era is the era being currently rewarded. Validator set of this era must be
+		/// equal to [`SessionInterface::validators`].
 		pub ActiveEra get(fn active_era): Option<ActiveEraInfo>;
 
 		/// The session index at which the era start for the last `HISTORY_DEPTH` eras.
+		///
+		/// Note: This tracks the starting session (i.e. session index when era start being active)
+		/// for the eras in `[CurrentEra - HISTORY_DEPTH, CurrentEra]`.
 		pub ErasStartSessionIndex get(fn eras_start_session_index):
 			map hasher(twox_64_concat) EraIndex => Option<SessionIndex>;
 
@@ -2030,14 +2033,17 @@ impl<T: Config> Module<T> {
 	/// Start a session potentially starting an era.
 	fn start_session(start_session: SessionIndex) {
 		let next_active_era = Self::active_era().map(|e| e.index + 1).unwrap_or(0);
+		// This is only `Some` when current era has already progressed to the next era, while the
+		// active era is one behind (i.e. in the *last session of the active era*, or *first session
+		// of the new current era*, depending on how you look at it).
 		if let Some(next_active_era_start_session_index) =
 			Self::eras_start_session_index(next_active_era)
 		{
 			if next_active_era_start_session_index == start_session {
 				Self::start_era(start_session);
 			} else if next_active_era_start_session_index < start_session {
-				// This arm should never happen, but better handle it than to stall the
-				// staking pallet.
+				// This arm should never happen, but better handle it than to stall the staking
+				// pallet.
 				frame_support::print("Warning: A session appears to have been skipped.");
 				Self::start_era(start_session);
 			}
@@ -2199,7 +2205,7 @@ impl<T: Config> Module<T> {
 
 		if (elected_stashes.len() as u32) <= Self::minimum_validator_count() {
 			log!(
-				error,
+				warn,
 				"💸  Chain does not have enough staking candidates to operate for era {:?}",
 				current_era,
 			);
@@ -2457,12 +2463,30 @@ impl<T: Config> ElectionDataProvider<T::AccountId, T::BlockNumber> for Module<T>
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+		frame_support::debug::native::trace!(
+			target: LOG_TARGET,
+			"[{}] planning new_session({})",
+			<frame_system::Module<T>>::block_number(),
+			new_index
+		);
 		Self::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex) {
+		frame_support::debug::native::trace!(
+			target: LOG_TARGET,
+			"[{}] starting start_session({})",
+			<frame_system::Module<T>>::block_number(),
+			start_index
+		);
 		Self::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {
+		frame_support::debug::native::trace!(
+			target: LOG_TARGET,
+			"[{}] ending end_session({})",
+			<frame_system::Module<T>>::block_number(),
+			end_index
+		);
 		Self::end_session(end_index)
 	}
 }

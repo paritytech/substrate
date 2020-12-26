@@ -307,27 +307,35 @@ struct BlockAnnouncesHandshake<B: BlockT> {
 }
 
 impl<B: BlockT> BlockAnnouncesHandshake<B> {
-	fn build(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B>>) -> Self {
-		let info = chain.info();
+	fn build(
+		protocol_config: &ProtocolConfig,
+		best_number: NumberFor<B>,
+		best_hash: B::Hash,
+		genesis_hash: B::Hash,
+	) -> Self {
 		BlockAnnouncesHandshake {
-			genesis_hash: info.genesis_hash,
+			genesis_hash,
 			roles: protocol_config.roles,
-			best_number: info.best_number,
-			best_hash: info.best_hash,
+			best_number,
+			best_hash,
 		}
 	}
 }
 
 /// Builds a SCALE-encoded "Status" message to send as handshake for the legacy protocol.
-fn build_status_message<B: BlockT>(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B>>) -> Vec<u8> {
-	let info = chain.info();
+fn build_status_message<B: BlockT>(
+	protocol_config: &ProtocolConfig,
+	best_number: NumberFor<B>,
+	best_hash: B::Hash,
+	genesis_hash: B::Hash,
+) -> Vec<u8> {
 	let status = message::generic::Status {
 		version: CURRENT_VERSION,
 		min_supported_version: MIN_VERSION,
-		genesis_hash: info.genesis_hash,
+		genesis_hash,
 		roles: protocol_config.roles.into(),
-		best_number: info.best_number,
-		best_hash: info.best_hash,
+		best_number,
+		best_hash,
 		chain_status: Vec::new(), // TODO: find a way to make this backwards-compatible
 	};
 
@@ -400,12 +408,22 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let behaviour = {
 			let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
-			let block_announces_handshake = BlockAnnouncesHandshake::build(&config, &chain).encode();
+
+			let best_number = info.best_number;
+			let best_hash = info.best_hash;
+			let genesis_hash = info.genesis_hash;
+
+			let block_announces_handshake = BlockAnnouncesHandshake::<B>::build(
+				&config,
+				best_number,
+				best_hash,
+				genesis_hash,
+			).encode();
 			GenericProto::new(
 				local_peer_id,
 				protocol_id.clone(),
 				versions,
-				build_status_message(&config, &chain),
+				build_status_message::<B>(&config, best_number, best_hash, genesis_hash),
 				peerset,
 				// As documented in `GenericProto`, the first protocol in the list is always the
 				// one carrying the handshake reported in the `CustomProtocolOpen` event.
@@ -528,13 +546,21 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 	/// Inform sync about new best imported block.
 	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
+		trace!(target: "sync", "New best block imported {:?}/#{}", hash, number);
+
 		self.sync.update_chain_info(&hash, number);
+
 		self.behaviour.set_legacy_handshake_message(
-			build_status_message(&self.config, &self.context_data.chain),
+			build_status_message::<B>(&self.config, number, hash, self.genesis_hash),
 		);
 		self.behaviour.set_notif_protocol_handshake(
 			&self.block_announces_protocol,
-			BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
+			BlockAnnouncesHandshake::<B>::build(
+				&self.config,
+				number,
+				hash,
+				self.genesis_hash,
+			).encode()
 		);
 	}
 
@@ -1148,7 +1174,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				self.update_peer_info(&who);
 				(header, is_best, who)
 			}
-			sync::PollBlockAnnounceValidation::Failure { who } => {
+			sync::PollBlockAnnounceValidation::Failure { who, disconnect } => {
+				if disconnect {
+					self.disconnect_peer(&who);
+				}
+
 				self.report_peer(who, rep::BAD_BLOCK_ANNOUNCEMENT);
 				return CustomMessageOutcome::None
 			}
