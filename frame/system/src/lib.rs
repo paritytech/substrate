@@ -162,6 +162,7 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 /// An object to track the currently used extrinsic weight in a block.
 pub type ConsumedWeight = PerDispatchClass<Weight>;
 
+/// System configuration trait. Implemented by runtime.
 pub trait Config: 'static + Eq + Clone {
 	/// The basic call filter to use in Origin. All origins are built with this filter as base,
 	/// except Root.
@@ -520,6 +521,11 @@ mod migrations {
 		T::BlockWeights::get().max_block
 	}
 }
+
+/// Pallet struct placeholder on which is implemented the pallet logic.
+///
+/// It is currently an alias for `Module` as old macros still generate/use old name.
+pub type Pallet<T> = Module<T>;
 
 decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
@@ -1442,4 +1448,15 @@ impl<T: Config> Lookup for ChainContext<T> {
 	fn lookup(&self, s: Self::Source) -> Result<Self::Target, LookupError> {
 		<T::Lookup as StaticLookup>::lookup(s)
 	}
+}
+
+/// Prelude to be used alongside pallet macro, for ease of use.
+pub mod pallet_prelude {
+	pub use crate::{ensure_signed, ensure_none, ensure_root};
+
+	/// Type alias for the `Origin` associated type of system config.
+	pub type OriginFor<T> = <T as crate::Config>::Origin;
+
+	/// Type alias for the `BlockNumber` associated type of system config.
+	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;
 }
