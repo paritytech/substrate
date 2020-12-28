@@ -206,12 +206,11 @@ pub fn instantiate(
 /// here.
 pub fn spawn_call_ext(
 	handle: u64,
-	kind: u8,
+	kind: WorkerType,
 	declaration: WorkerDeclaration,
 	calling_ext: &mut dyn Externalities,
 ) -> AsyncExt {
-	match WorkerType::from_u8(kind)
-		.expect("Unsupported worker type.") {
+	match kind {
 		WorkerType::Stateless => {
 			AsyncExt::stateless_ext()
 		},

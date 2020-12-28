@@ -64,105 +64,11 @@ mod async_externalities;
 
 #[cfg(feature = "std")]
 pub use async_externalities::new_async_externalities;
-pub use async_externalities::{new_inline_only_externalities, AsyncExternalities, AsyncExt};
-pub use sp_externalities::{WorkerResult, WorkerDeclaration};
+pub use async_externalities::{new_inline_only_externalities, AsyncExternalities};
+pub use sp_state_machine::async_ext::AsyncExt;
+pub use sp_externalities::{WorkerResult, WorkerDeclaration, WorkerType};
 pub use sp_io::Crossing;
 use sp_std::vec::Vec;
-
-/// Differents workers execution mode `AsyncState`, it results
-/// in differents `AsyncExt externality.
-#[derive(Debug)]
-#[repr(u8)]
-pub enum WorkerType {
-	/// Externalities do not access state, so we join
-	Stateless = 0,
-
-	/// Externalities access read only the backend unmodified state.
-	ReadLastBlock = 1,
-
-	/// Externalities access read only the backend unmodified state,
-	/// and the change at the time of spawn.
-	/// In this case when joining we return an identifier of the
-	/// state at launch.
-	ReadAtSpawn = 2,
-
-	/// State between main thread and child workers must be the same for all execution.
-	/// This means that read access on a child is not compatible with write access on
-	/// a parent.
-	/// This can only be usefull when we want the state use by child to be the one use on
-	/// join (usually we can do with it being the state use at spawn).
-	/// We return `None` on join if some state access break this asumption:
-	/// Any access to a variable that was modified in parent worker.
-	ReadAtJoinOptimistic = 3,
-
-	/// State between main thread and child workers must be the same.
-	/// This means that read access on a child is not compatible with write access on
-	/// a parent.
-	/// When starting a child worker we declare exclusive write access
-	/// over the keyspace for both worker.
-	/// Writing in undeclared location or reading a location declared as writable
-	/// in another worker will result in a panic.
-	ReadAtJoinDeclarative = 4,
-
-	/// `ReadAtSpawn` with allowed write.
-	/// Write from child workers always overwrite write from parent workers
-	/// at `join`.
-	WriteAtSpawn = 5,
-
-	/// Write where parent and child writes accesses exclude themselves.
-	/// When conflict happens, child worker returns `None` on join.
-	WriteOptimistic = 6,
-
-	/// Write where parent and child writes accesses exclude themselves.
-	/// User need to declare child write access and parent will not be allowed
-	/// write access for these declaration (child worker is not allowed write access
-	/// to other location than the declared one).
-	WriteDeclarative = 7,
-
-	/// Same as `WriteOptimistic`, with the additional constraint that we connot read data
-	/// when it is writable in a parent or a child worker.
-	WriteAtJoinOptimistic = 8,
-
-	/// Same as `WriteDeclarative`, but with also read only access declared for children.
-	/// Data in read access forbid parent/children access.
-	WriteAtJoinDeclarative = 9,
-}
-
-impl Default for WorkerType {
-	fn default() -> Self {
-		WorkerType::Stateless
-	}
-}
-
-impl WorkerType {
-	/// Similar purpose as `TryFrom<u8>`.
-	pub fn from_u8(kind: u8) -> Option<WorkerType> {
-		Some(match kind {
-			0 => WorkerType::Stateless,
-			1 => WorkerType::ReadLastBlock,
-			2 => WorkerType::ReadAtSpawn,
-			3 => WorkerType::ReadAtJoinOptimistic,
-			4 => WorkerType::ReadAtJoinDeclarative,
-			5 => WorkerType::WriteAtSpawn,
-			6 => WorkerType::WriteOptimistic,
-			7 => WorkerType::WriteDeclarative,
-			8 => WorkerType::WriteAtJoinOptimistic,
-			9 => WorkerType::WriteAtJoinDeclarative,
-			_ => return None,
-		})
-	}
-
-	/// Depending on concurrency management strategy
-	/// we may need to resolve the result against
-	/// parent externalities.
-	pub fn need_resolve(&self) -> bool {
-		match *self {
-			WorkerType::Stateless => false,
-			WorkerType::ReadLastBlock => false,
-			_ => true,
-		}
-	}
-}
 
 /// Task handle.
 ///

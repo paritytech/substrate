@@ -29,7 +29,7 @@ use sp_core::{
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{
 	Externalities, Extensions, Extension, ExtensionStore, AsyncBackend, TaskId,
-	WorkerResult, WorkerDeclaration,
+	WorkerResult, WorkerDeclaration, WorkerType,
 };
 use codec::{Decode, Encode, EncodeAppend};
 
@@ -680,26 +680,22 @@ where
 		self.backend.set_whitelist(new)
 	}
 
-	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
-		self.backend.async_backend()
-	}
-
-	fn get_async_backend(
+	fn get_worker_externalities(
 		&mut self,
-		marker: TaskId,
+		worker_id: u64,
+		kind: WorkerType,
 		declaration: WorkerDeclaration,
-	) -> Box<dyn AsyncBackend> {
-		let backend = self.get_past_async_backend();
-
-		let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
+	) -> Box<dyn Externalities> {
+		let backend = self.backend.async_backend();
+		Box::new(crate::async_ext::spawn_call_ext(
+			worker_id,
+			kind,
+			declaration,
 			backend,
-			self.overlay,
-			&declaration,
-		));
-		self.overlay.set_parent_declaration(marker, declaration);
-		backend
+			Some(&mut self.overlay),
+		))
 	}
-
+	
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		self.overlay.resolve_worker_result(state_update)
 	}
@@ -719,7 +715,7 @@ impl Encode for EncodeOpaqueValue {
 }
 
 /// Auxialiary structure for appending a value to a storage item.
-pub struct StorageAppend<'a>(&'a mut Vec<u8>);
+pub(crate) struct StorageAppend<'a>(&'a mut Vec<u8>);
 
 impl<'a> StorageAppend<'a> {
 	/// Create a new instance using the given `storage` reference.

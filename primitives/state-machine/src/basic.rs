@@ -34,7 +34,7 @@ use sp_core::{
 use log::warn;
 use codec::Encode;
 use sp_externalities::{Extensions, Extension, AsyncBackend, TaskId,
-	WorkerResult, WorkerDeclaration};
+	WorkerResult, WorkerDeclaration, WorkerType};
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
@@ -334,18 +334,15 @@ impl Externalities for BasicExternalities {
 		unimplemented!("set_whitelist is not supported in Basic")
 	}
 
-	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
-		unimplemented!("TODO empty one")
-	}
-
-	fn get_async_backend(
+	fn get_worker_externalities(
 		&mut self,
-		_marker: TaskId,
-		_decl: WorkerDeclaration,
-	) -> Box<dyn AsyncBackend> {
-		unimplemented!("TODO from self.storage cloned")
+		worker_id: u64,
+		kind: WorkerType,
+		declaration: WorkerDeclaration,
+	) -> Box<dyn Externalities> {
+		unimplemented!("TODO")
 	}
-
+	
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		// No transaction, works as read (TODO this will not be true for worker in write mode).
 		// TODO this is actually incorrect for optimistic, similarily callat should fail on drop Tx.

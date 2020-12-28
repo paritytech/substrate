@@ -372,7 +372,6 @@ impl AsyncBackendAt {
 		access: &WorkerDeclaration,
 	) -> Self {
 		let mut overlay = overlay.clone();
-		overlay.set_child_declaration(access.clone());
 
 		AsyncBackendAt { backend, overlay }
 	}

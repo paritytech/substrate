@@ -28,7 +28,7 @@ use sp_core::{
 	traits::Externalities, Blake2Hasher,
 };
 use codec::Encode;
-use sp_externalities::{TaskId, AsyncBackend, WorkerResult, WorkerDeclaration};
+use sp_externalities::{TaskId, AsyncBackend, WorkerResult, WorkerDeclaration, WorkerType};
 
 /// Trait for inspecting state in any backend.
 ///
@@ -205,18 +205,23 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
 	}
 
-	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
-		self.backend.async_backend()
-	}
-
-	fn get_async_backend(
+	fn get_worker_externalities(
 		&mut self,
-		_marker: TaskId,
-		_decl: WorkerDeclaration,
-	) -> Box<dyn AsyncBackend> {
-		self.get_past_async_backend()
+		worker_id: u64,
+		kind: WorkerType,
+		declaration: WorkerDeclaration,
+	) -> Box<dyn Externalities> {
+		kind.guard_declaration(&declaration);
+		let backend = self.backend.async_backend();
+		Box::new(crate::async_ext::spawn_call_ext(
+			worker_id,
+			kind,
+			declaration,
+			backend,
+			None
+		))
 	}
-
+	
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		state_update.read_resolve()
 	}
