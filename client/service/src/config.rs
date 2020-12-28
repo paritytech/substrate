@@ -263,6 +263,13 @@ impl BasePath {
 			BasePath::Permanenent(path) => path.as_path(),
 		}
 	}
+
+	/// Returns the configuration directory inside this base path.
+	///
+	/// The path looks like `$base_path/chains/$chain_id`
+	pub fn config_dir(&self, chain_id: &str) -> PathBuf {
+		self.path().join("chains").join(chain_id)
+	}
 }
 
 impl std::convert::From<PathBuf> for BasePath {
