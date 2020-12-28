@@ -280,34 +280,6 @@ impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackend for AsyncBackendAda
 		self.0.next_child_storage_key(child_info, key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
-	fn keys_with_prefix(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		let mut result = Vec::new();
-		self.0.for_keys_with_prefix(prefix, |key| {
-			result.push(key.to_vec());
-		});
-		result
-	}
-
-	fn child_storage_keys(&self, child_info: &ChildInfo) -> Vec<Vec<u8>> {
-		let mut result = Vec::new();
-		self.0.for_keys_in_child_storage(child_info, |key| {
-			result.push(key.to_vec());
-		});
-		result
-	}
-
-	fn child_storage_keys_with_prefix(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-	) -> Vec<Vec<u8>> {
-		let mut result = Vec::new();
-		self.0.for_child_keys_with_prefix(child_info, prefix, |key| {
-			result.push(key.to_vec());
-		});
-		result
-	}
-
 	fn async_backend(&self) -> Box<dyn AsyncBackend> {
 		self.0.async_backend()
 	}
@@ -376,35 +348,6 @@ impl AsyncBackend for AsyncBackendAt {
 			},
 		}
 	}
-
-	fn keys_with_prefix(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		let mut result = Vec::new();
-		self.backend.for_keys_with_prefix(prefix, |key| {
-			result.push(key.to_vec());
-		});
-		result
-	}
-
-	fn child_storage_keys(&self, child_info: &ChildInfo) -> Vec<Vec<u8>> {
-		let mut result = Vec::new();
-		self.0.for_keys_in_child_storage(child_info, |key| {
-			result.push(key.to_vec());
-		});
-		result
-	}
-
-	fn child_storage_keys_with_prefix(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-	) -> Vec<Vec<u8>> {
-		let mut result = Vec::new();
-		self.0.for_child_keys_with_prefix(child_info, prefix, |key| {
-			result.push(key.to_vec());
-		});
-		result
-	}
-
 
 	fn async_backend(&self) -> Box<dyn AsyncBackend> {
 		let backend = self.backend.async_backend();

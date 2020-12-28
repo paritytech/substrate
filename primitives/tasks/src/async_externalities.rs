@@ -382,35 +382,19 @@ impl Externalities for AsyncExternalities {
 		&mut self,
 		child_info: &ChildInfo,
 	) {
-		self.guard_read_only("`kill_child_storage`: should not be used in read only worker externalities!");
-		self.state.overlay.clear_child_storage(child_info);
-		for key in self.state.backend.child_storage_keys(child_info) {
-			self.state.overlay.set_child_storage(child_info, key.to_vec(), None);
-		}
+		panic!("`kill_child_storage`: should not be used in read only worker externalities!");
 	}
 
-	fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.guard_read_only("`clear_prefix`: should not be used in read only worker externalities!");
-		if sp_core::storage::well_known_keys::contains_child_storage_key(prefix) {
-			return;
-		}
-
-		self.state.overlay.clear_prefix(prefix);
-		for key in self.state.backend.keys_with_prefix(prefix) {
-			self.state.overlay.set_storage(key.to_vec(), None);
-		}
+	fn clear_prefix(&mut self, _prefix: &[u8]) {
+		panic!("`clear_prefix`: should not be used in read only worker externalities!");
 	}
 
 	fn clear_child_prefix(
 		&mut self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
+		_child_info: &ChildInfo,
+		_prefix: &[u8],
 	) {
-		self.guard_read_only("`clear_child_prefix`: should not be used in read only worker externalities!");
-		self.state.overlay.clear_child_prefix(child_info, prefix);
-		for key in self.state.backend.child_storage_keys_with_prefix(child_info, prefix) {
-			self.state.overlay.set_child_storage(child_info, key.to_vec(), None);
-		}
+		panic!("`clear_child_prefix`: should not be used in read only worker externalities!");
 	}
 
 	fn storage_append(
