@@ -207,10 +207,16 @@ impl AsyncExternalities {
 			WorkerType::Stateless => {
 				panic!(panic)
 			},
-			WorkerType::ReadLastBlock
-			| WorkerType::ReadAtSpawn
-			| WorkerType::ReadAtJoinOptimistic
-			| WorkerType::ReadAtJoinDeclarative => (),
+			_ => (),
+		}
+	}
+
+	fn guard_read_only(
+		&self,
+		panic: &'static str,
+	) {
+		if !self.write_access() {
+			panic!(panic)
 		}
 	}
 
@@ -227,18 +233,32 @@ impl AsyncExternalities {
 		self.state.extract_optimistic_log()
 	}
 
-	/// Extract changes made to state for this worker.
-	pub fn extract_delta(&mut self) -> Option<sp_externalities::StateDelta> {
+	/// Check if externality can write.
+	/// This does not indicate that a given write will
+	/// be allowend or will not result in an invalid
+	/// worker execution.
+	pub fn write_access(&self) -> bool {
 		match self.state.kind {
 			WorkerType::Stateless
 			| WorkerType::ReadLastBlock
 			| WorkerType::ReadAtSpawn
 			| WorkerType::ReadAtJoinOptimistic
-			| WorkerType::ReadAtJoinDeclarative => None,
-			// TODO write type and return
-			// Some(self.state.extract_delta())
+			| WorkerType::ReadAtJoinDeclarative => false,
+			WorkerType::WriteAtSpawn
+			| WorkerType::WriteOptimistic
+			| WorkerType::WriteDeclarative
+			| WorkerType::WriteAtJoinOptimistic
+			| WorkerType::WriteAtJoinDeclarative => true,
 		}
+	}
 
+	/// Extract changes made to state for this worker.
+	pub fn extract_delta(&mut self) -> Option<sp_externalities::StateDelta> {
+		if self.write_access() {
+			Some(self.state.extract_delta())
+		} else {
+			None
+		}
 	}
 }
 
@@ -343,44 +363,68 @@ impl Externalities for AsyncExternalities {
 		}
 	}
 
-	fn place_storage(&mut self, _key: StorageKey, _maybe_value: Option<StorageValue>) {
-		panic!("`place_storage`: should not be used in async externalities!")
+	fn place_storage(&mut self, key: StorageKey, maybe_value: Option<StorageValue>) {
+		self.guard_read_only("`place_storage`: should not be used in read only worker externalities!");
+		self.state.overlay.set_storage(key, maybe_value);
 	}
 
 	fn place_child_storage(
 		&mut self,
-		_child_info: &ChildInfo,
-		_key: StorageKey,
-		_value: Option<StorageValue>,
+		child_info: &ChildInfo,
+		key: StorageKey,
+		value: Option<StorageValue>,
 	) {
-		panic!("`place_child_storage`: should not be used in async externalities!")
+		self.guard_read_only("`place_child_storage`: should not be used in read only worker externalities!");
+		self.state.overlay.set_child_storage(child_info, key, value);
 	}
 
 	fn kill_child_storage(
 		&mut self,
-		_child_info: &ChildInfo,
+		child_info: &ChildInfo,
 	) {
-		panic!("`kill_child_storage`: should not be used in async externalities!")
+		self.guard_read_only("`kill_child_storage`: should not be used in read only worker externalities!");
+		self.state.overlay.clear_child_storage(child_info);
+		for key in self.state.backend.child_storage_keys(child_info) {
+			self.state.overlay.set_child_storage(child_info, key.to_vec(), None);
+		}
 	}
 
-	fn clear_prefix(&mut self, _prefix: &[u8]) {
-		panic!("`clear_prefix`: should not be used in async externalities!")
+	fn clear_prefix(&mut self, prefix: &[u8]) {
+		self.guard_read_only("`clear_prefix`: should not be used in read only worker externalities!");
+		if sp_core::storage::well_known_keys::contains_child_storage_key(prefix) {
+			return;
+		}
+
+		self.state.overlay.clear_prefix(prefix);
+		for key in self.state.backend.keys_with_prefix(prefix) {
+			self.state.overlay.set_storage(key.to_vec(), None);
+		}
 	}
 
 	fn clear_child_prefix(
 		&mut self,
-		_child_info: &ChildInfo,
-		_prefix: &[u8],
+		child_info: &ChildInfo,
+		prefix: &[u8],
 	) {
-		panic!("`clear_child_prefix`: should not be used in async externalities!")
+		self.guard_read_only("`clear_child_prefix`: should not be used in read only worker externalities!");
+		self.state.overlay.clear_child_prefix(child_info, prefix);
+		for key in self.state.backend.child_storage_keys_with_prefix(child_info, prefix) {
+			self.state.overlay.set_child_storage(child_info, key.to_vec(), None);
+		}
 	}
 
 	fn storage_append(
 		&mut self,
-		_key: Vec<u8>,
-		_value: Vec<u8>,
+		key: Vec<u8>,
+		value: Vec<u8>,
 	) {
-		panic!("`storage_append`: should not be used in async externalities!")
+		self.guard_read_only("`storage_append`: should not be used in read only worker externalities!");
+		let backend = &mut self.state.backend;
+		let current_value = self.state.overlay.value_mut_or_insert_with(
+			&key,
+			|| backend.storage(&key).unwrap_or_default()
+		);
+		sp_state_machine::StorageAppend::new(current_value).append(value);
 	}
 
 	fn chain_id(&self) -> u64 { 42 }
@@ -405,15 +449,18 @@ impl Externalities for AsyncExternalities {
 	}
 
 	fn storage_start_transaction(&mut self) {
-		unimplemented!("Transactions are not supported by AsyncExternalities");
+		self.guard_read_only("`storage_start_transaction`: should not be used in read only worker externalities!");
+		self.state.overlay.start_transaction()
 	}
 
 	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
-		unimplemented!("Transactions are not supported by AsyncExternalities");
+		self.guard_read_only("`storage_rollback_transaction`: should not be used in read only worker externalities!");
+		self.state.overlay.rollback_transaction().map_err(|_| ())
 	}
 
 	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
-		unimplemented!("Transactions are not supported by AsyncExternalities");
+		self.guard_read_only("`storage_commit_transaction`: should not be used in read only worker externalities!");
+		self.state.overlay.commit_transaction().map_err(|_| ())
 	}
 
 	fn wipe(&mut self) {}
@@ -438,13 +485,10 @@ impl Externalities for AsyncExternalities {
 
 	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
 		match self.state.kind {
-			WorkerType::Stateless
-			| WorkerType::ReadAtJoinOptimistic
-			| WorkerType::ReadAtJoinDeclarative
-			| WorkerType::ReadAtSpawn => {
+			WorkerType::ReadLastBlock => (),
+			_ => {
 				panic!("Spawning a ReadLastBlock worker is only possible from a ReadLastBlock worker");
 			},
-			WorkerType::ReadLastBlock => (),
 		}
 
 		self.state.backend.async_backend()
@@ -460,9 +504,32 @@ impl Externalities for AsyncExternalities {
 			| WorkerType::ReadLastBlock => {
 				panic!("Spawning a ReadAtSpawn worker is only possible from a ReadAtSpawn worker");
 			},
+			WorkerType::WriteAtJoinDeclarative => match &declaration {
+// TODO				WorkerDeclaration::ChildWriteRead(..) => (),
+				_ => {
+					panic!("Incorrect declaration with declarative worker");
+				},
+			},
+			WorkerType::WriteDeclarative => match &declaration {
+// TODO				WorkerDeclaration::ChildWrite(..) => (),
+				_ => {
+					panic!("Incorrect declaration with declarative worker");
+				},
+			},
+			WorkerType::ReadAtJoinDeclarative => match &declaration {
+				WorkerDeclaration::ChildRead(..) => (),
+				_ => {
+					panic!("Incorrect declaration with declarative worker");
+				},
+			},
 			WorkerType::ReadAtJoinOptimistic
-			| WorkerType::ReadAtJoinDeclarative
-			| WorkerType::ReadAtSpawn => (),
+			| WorkerType::WriteAtJoinOptimistic
+			| WorkerType::WriteOptimistic => match &declaration {
+				WorkerDeclaration::Optimistic => (),
+				_ => {
+					panic!("Incorrect declaration for optimistic worker");
+				},
+			},
 		}
 
 		let backend = self.state.backend.async_backend();

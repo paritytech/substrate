@@ -103,6 +103,29 @@ pub enum WorkerType {
 	/// Writing in undeclared location or reading a location declared as writable
 	/// in another worker will result in a panic.
 	ReadAtJoinDeclarative = 4,
+
+	/// `ReadAtSpawn` with allowed write.
+	/// Write from child workers always overwrite write from parent workers
+	/// at `join`.
+	WriteAtSpawn = 5,
+
+	/// Write where parent and child writes accesses exclude themselves.
+	/// When conflict happens, child worker returns `None` on join.
+	WriteOptimistic = 6,
+
+	/// Write where parent and child writes accesses exclude themselves.
+	/// User need to declare child write access and parent will not be allowed
+	/// write access for these declaration (child worker is not allowed write access
+	/// to other location than the declared one).
+	WriteDeclarative = 7,
+
+	/// Same as `WriteOptimistic`, with the additional constraint that we connot read data
+	/// when it is writable in a parent or a child worker.
+	WriteAtJoinOptimistic = 8,
+
+	/// Same as `WriteDeclarative`, but with also read only access declared for children.
+	/// Data in read access forbid parent/children access.
+	WriteAtJoinDeclarative = 9,
 }
 
 impl Default for WorkerType {

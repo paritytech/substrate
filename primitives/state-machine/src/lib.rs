@@ -51,6 +51,7 @@ pub use sp_externalities::AsyncBackend;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 pub use crate::ext::guard as ext_guard;
+pub use crate::ext::StorageAppend;
 
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.

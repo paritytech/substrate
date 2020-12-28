@@ -288,7 +288,7 @@ impl OverlayedChanges {
 	/// Set a new value for the specified key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub(crate) fn set_storage(&mut self, key: StorageKey, val: Option<StorageValue>) {
+	pub fn set_storage(&mut self, key: StorageKey, val: Option<StorageValue>) {
 		self.filters.guard_write(None, key.as_slice());
 		self.optimistic_logger.log_write(None, key.as_slice());
 		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
@@ -301,7 +301,7 @@ impl OverlayedChanges {
 	/// `None` can be used to delete a value specified by the given key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub(crate) fn set_child_storage(
+	pub fn set_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
 		key: StorageKey,
@@ -328,7 +328,7 @@ impl OverlayedChanges {
 	/// Clear child storage of given storage key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub(crate) fn clear_child_storage(
+	pub fn clear_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
 	) {
@@ -351,7 +351,7 @@ impl OverlayedChanges {
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
+	pub fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.filters.guard_write_prefix(None, prefix);
 		self.optimistic_logger.log_write_prefix(None, prefix);
 		self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index());
@@ -360,7 +360,7 @@ impl OverlayedChanges {
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
 	/// Can be rolled back or committed when called inside a transaction
-	pub(crate) fn clear_child_prefix(
+	pub fn clear_child_prefix(
 		&mut self,
 		child_info: &ChildInfo,
 		prefix: &[u8],

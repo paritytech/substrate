@@ -439,6 +439,15 @@ pub trait AsyncBackend: Send {
 		key: &[u8]
 	) -> Option<Vec<u8>>;
 
+	/// Returns all keys starting with a given prefix.
+	fn keys_with_prefix(&self, prefix: &[u8]) -> Vec<Vec<u8>>;
+
+	/// Returns all keys into a given child trie.
+	fn child_storage_keys(&self, child_info: &ChildInfo) -> Vec<Vec<u8>>;
+
+	/// Returns all keys into a given child trie with a given prefix.
+	fn child_storage_keys_with_prefix(&self, child_info: &ChildInfo, prefix: &[u8]) -> Vec<Vec<u8>>;
+
 	/// Alternative to Clone for backend.
 	/// If dyn_clonable get compatible with no_std, this
 	/// function could be removed.
@@ -468,6 +477,22 @@ impl AsyncBackend for () {
 		_key: &[u8]
 	) -> Option<Vec<u8>> {
 		None
+	}
+
+	fn keys_with_prefix(&self, _prefix: &[u8]) -> Vec<Vec<u8>> {
+		Default::default()
+	}
+
+	fn child_storage_keys(&self, _child_info: &ChildInfo) -> Vec<Vec<u8>> {
+		Default::default()
+	}
+
+	fn child_storage_keys_with_prefix(
+		&self,
+		_child_info: &ChildInfo,
+		_prefix: &[u8],
+	) -> Vec<Vec<u8>> {
+		Default::default()
 	}
 
 	fn async_backend(&self) -> Box<dyn AsyncBackend> {
