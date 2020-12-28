@@ -141,6 +141,13 @@ impl WorkerType {
 			0 => WorkerType::Stateless,
 			1 => WorkerType::ReadLastBlock,
 			2 => WorkerType::ReadAtSpawn,
+			3 => WorkerType::ReadAtJoinOptimistic,
+			4 => WorkerType::ReadAtJoinDeclarative,
+			5 => WorkerType::WriteAtSpawn,
+			6 => WorkerType::WriteOptimistic,
+			7 => WorkerType::WriteDeclarative,
+			8 => WorkerType::WriteAtJoinOptimistic,
+			9 => WorkerType::WriteAtJoinDeclarative,
 			_ => return None,
 		})
 	}
@@ -152,9 +159,7 @@ impl WorkerType {
 		match *self {
 			WorkerType::Stateless => false,
 			WorkerType::ReadLastBlock => false,
-			WorkerType::ReadAtSpawn => true,
-			WorkerType::ReadAtJoinDeclarative => true,
-			WorkerType::ReadAtJoinOptimistic => true,
+			_ => true,
 		}
 	}
 }

@@ -506,11 +506,24 @@ pub enum WorkerDeclaration {
 	Optimistic,
 
 	/// Child worker read access only.
-	/// Makes parent write forbidden for the same declaration,
+	/// Makes parent write forbidden for any access declaration,
 	/// this can be use when we want to check consistency from the
 	/// state at join (otherwhise there is no sense in forbidding write).
 	/// TODO rename to ChildReadJoin?
 	ChildRead(AccessDeclaration, DeclarationFailureHandling),
+
+	/// Child worker write access only.
+	/// Makes parent write forbidden for any access declaration,
+	/// this can be use when we want to check consistency from the
+	/// state at spawn.
+	ChildWrite(AccessDeclaration, DeclarationFailureHandling),
+	
+	/// Child worker write read and read access declarations.
+	/// Makes parent write forbidden for any declaration.
+	/// Makes parent read forbidden for any write access declaration.
+	/// this can be use when we want to check consistency from the
+	/// state at join (otherwhise there is no sense in forbidding write).
+	ChildWriteRead(AccessDeclaration, AccessDeclaration, DeclarationFailureHandling),
 }
 
 /// Access filter on storage.

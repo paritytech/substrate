@@ -296,6 +296,17 @@ impl Filters {
 		}
 	}
 
+	// Declaring a child write access, we ensure access is allowed in the first place.
+	pub(super) fn guard_child_filter_write(&mut self, filter: &AccessDeclaration) {
+		for top_prefix in filter.prefixes_lock.iter() {
+			self.guard_write_prefix(None, top_prefix);
+		}
+		for top_key in filter.keys_lock.iter() {
+			self.guard_write(None, top_key);
+		}
+	}
+
+
 	pub(super) fn on_worker_result(&mut self, result: &WorkerResult) -> bool {
 		match result {
 			WorkerResult::CallAt(_result, _delta, marker) => {
@@ -758,6 +769,15 @@ impl Filters {
 						// undo a `set_parent_declaration` call.
 						self.failure_handlers.remove(task_id);
 						self.remove_forbid_writes(filter, task_id);
+					},
+					WorkerDeclaration::ChildWrite(filter, _failure) => {
+						self.failure_handlers.remove(task_id);
+						self.remove_forbid_writes(filter, task_id);
+					},
+					WorkerDeclaration::ChildWriteRead(write_filter, read_filter, _failure) => {
+						self.failure_handlers.remove(task_id);
+						self.remove_forbid_writes(write_filter, task_id);
+						self.remove_forbid_writes(read_filter, task_id);
 					},
 				}
 			}

@@ -403,10 +403,23 @@ impl OverlayedChanges {
 			},
 			WorkerDeclaration::ChildRead(filter, failure) => {
 				self.filters.guard_child_filter_read(&filter);
-				self.filters.set_failure_handler(Some(child_marker), failure); 
+				self.filters.set_failure_handler(Some(child_marker), failure);
 				// TODO consider merging add_change and forbid_writes (or even the full block).
 				self.filters.add_change(WorkerDeclaration::ChildRead(filter.clone(), failure), child_marker);
 				self.filters.forbid_writes(filter, child_marker);
+			},
+			WorkerDeclaration::ChildWrite(filter, failure) => {
+				self.filters.guard_child_filter_write(&filter);
+				self.filters.set_failure_handler(Some(child_marker), failure);
+				self.filters.add_change(WorkerDeclaration::ChildWrite(filter.clone(), failure), child_marker);
+				self.filters.forbid_writes(filter, child_marker);
+			},
+			WorkerDeclaration::ChildWriteRead(write_filter, read_filter, failure) => {
+				self.filters.guard_child_filter_read(&read_filter);
+				self.filters.guard_child_filter_write(&write_filter);
+				self.filters.add_change(WorkerDeclaration::ChildWriteRead(write_filter.clone(), read_filter.clone(), failure), child_marker);
+				self.filters.forbid_writes(write_filter, child_marker);
+				self.filters.forbid_writes(read_filter, child_marker);
 			},
 		}
 	}
@@ -417,11 +430,20 @@ impl OverlayedChanges {
 		match declaration {
 			WorkerDeclaration::None => (),
 			WorkerDeclaration::Optimistic => {
-				self.optimistic_logger.log_reads()
+				self.optimistic_logger.log_reads();
 			},
 			WorkerDeclaration::ChildRead(filter, failure) => {
 				self.filters.set_failure_handler(None, failure); 
-				self.filters.allow_reads(filter)
+				self.filters.allow_reads(filter);
+			},
+			WorkerDeclaration::ChildWrite(filter, failure) => {
+				self.filters.set_failure_handler(None, failure);
+				self.filters.allow_writes(filter);
+			},
+			WorkerDeclaration::ChildWriteRead(write_filter, read_filter, failure) => {
+				self.filters.set_failure_handler(None, failure);
+				self.filters.allow_reads(read_filter);
+				self.filters.allow_writes(write_filter);
 			},
 		}
 	}

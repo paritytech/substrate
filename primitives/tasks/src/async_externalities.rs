@@ -489,13 +489,13 @@ impl Externalities for AsyncExternalities {
 				panic!("Spawning a ReadAtSpawn worker is only possible from a ReadAtSpawn worker");
 			},
 			WorkerType::WriteAtJoinDeclarative => match &declaration {
-// TODO				WorkerDeclaration::ChildWriteRead(..) => (),
+				WorkerDeclaration::ChildWriteRead(..) => (),
 				_ => {
 					panic!("Incorrect declaration with declarative worker");
 				},
 			},
 			WorkerType::WriteDeclarative => match &declaration {
-// TODO				WorkerDeclaration::ChildWrite(..) => (),
+				WorkerDeclaration::ChildWrite(..) => (),
 				_ => {
 					panic!("Incorrect declaration with declarative worker");
 				},
@@ -512,6 +512,13 @@ impl Externalities for AsyncExternalities {
 				WorkerDeclaration::Optimistic => (),
 				_ => {
 					panic!("Incorrect declaration for optimistic worker");
+				},
+			},
+			WorkerType::ReadAtSpawn
+			| WorkerType::WriteAtSpawn => match &declaration {
+				WorkerDeclaration::None => (),
+				_ => {
+					panic!("No declaration needed for worker");
 				},
 			},
 		}
