@@ -590,7 +590,7 @@ impl RuntimeInstanceSpawn {
 				};
 
 				let mut end = false;
-				if let &WorkerResult::Panic = &result {
+				if let &WorkerResult::RuntimePanic = &result {
 					log::error!("Panic error in spawned task, dropping instance");
 					// Here we don't just shut all because panic will only transmit to parent
 					// if 'join' is call, if 'dismiss' is call then it is fine to ignore a panic.
@@ -692,7 +692,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 				Ok(None)
 				| Err(_) => {
 					// spawned task did end with no result, so panic
-					WorkerResult::Panic
+					WorkerResult::RuntimePanic
 				},
 			},
 			Some(PendingTask::Inline(task)) => {

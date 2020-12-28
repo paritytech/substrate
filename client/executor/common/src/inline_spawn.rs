@@ -390,8 +390,8 @@ pub fn process_task<
 			WorkerResult::HardPanic
 		},
 		Err(error) => {
-			log_error!("Panic error in inlined task: {:?}", error);
-			WorkerResult::Panic
+			log_error!("Runtime panic error in inlined task: {:?}", error);
+			WorkerResult::RuntimePanic
 		}
 	}
 }

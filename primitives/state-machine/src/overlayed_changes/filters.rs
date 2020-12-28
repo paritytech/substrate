@@ -311,8 +311,8 @@ impl Filters {
 			// When using filter there is no invalid case.
 			WorkerResult::Invalid => (),
 			// will panic on resolve so no need to clean filter
-			WorkerResult::HardPanic
-			| WorkerResult::Panic => (),
+			WorkerResult::RuntimePanic
+			| WorkerResult::HardPanic => (),
 		};
 		!self.failure_handlers.did_fail()
 	}

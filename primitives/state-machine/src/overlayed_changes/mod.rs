@@ -447,12 +447,11 @@ impl OverlayedChanges {
 				Some(result)
 			},
 			WorkerResult::Invalid => None,
-			WorkerResult::HardPanic
-			| WorkerResult::Panic => {
-				// Hard panic distinction is mainly for implementation
-				// purpose, here both will be handled as a panic in
-				// the parent worker.
-				panic!("Panic from a worker")
+			WorkerResult::RuntimePanic => {
+				panic!("Runtime panic from a worker.")
+			},
+			WorkerResult::HardPanic => {
+				panic!("Panic running a worker.")
 			},
 		}
 	}

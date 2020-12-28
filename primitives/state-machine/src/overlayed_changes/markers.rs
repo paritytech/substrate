@@ -32,7 +32,7 @@
 
 use sp_std::collections::btree_map::BTreeMap;
 use sp_externalities::{WorkerResult, TaskId};
-use sp_std::vec::Vec;
+use sp_std::{vec, vec::Vec};
 
 #[derive(Debug, Clone)]
 pub(super) struct Markers {
@@ -140,8 +140,8 @@ impl Markers {
 			},
 			WorkerResult::Valid(_result, _delta) => true,
 			WorkerResult::Invalid => true,
-			WorkerResult::HardPanic
-			| WorkerResult::Panic => true,
+			WorkerResult::RuntimePanic
+			| WorkerResult::HardPanic => true,
 		}
 	}
 }

@@ -247,8 +247,8 @@ impl AccessLogger {
 			// When using filter there is no invalid case.
 			WorkerResult::Invalid => true,
 			// will panic on resolve so no need to clean filter
-			WorkerResult::HardPanic
-			| WorkerResult::Panic => true,
+			WorkerResult::RuntimePanic
+			| WorkerResult::HardPanic => true,
 		}
 	}
 

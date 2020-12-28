@@ -308,24 +308,26 @@ pub trait Externalities: ExtensionStore {
 #[derive(codec::Encode, codec::Decode)]
 pub enum WorkerResult {
 	/// Payload resulting from a successfull
-	/// stateless call, or a call that
-	/// is guaranted to be valid at this point.
+	/// call that is guaranted to be valid
+	/// at this point.
+	/// eg. a stateless worker.
 	Valid(Vec<u8>, Option<StateDelta>),
 	/// Result that require to be checked against
 	/// its parent externality state.
 	CallAt(Vec<u8>, Option<StateDelta>, TaskId),
 	/// Optimistic strategy call reply, it contains
-	/// a log of accessed keys.
+	/// a log of accessed keys during child execution.
 	Optimistic(Vec<u8>, Option<StateDelta>, TaskId, AccessLog),
 	/// A worker execution that is not valid.
 	/// For instance when asumption on state
 	/// are required.
 	Invalid,
 	/// Internal panic when runing the worker.
-	/// This should propagate panic in caller.
-	Panic,
+	/// This propagate panic in caller.
+	RuntimePanic,
 	/// Technical panic when runing the worker.
-	/// This always propagate panic in caller.
+	/// This propagate panic in caller, and also
+	/// indicate the process should be stop. 
 	HardPanic,
 }
 
@@ -398,11 +400,11 @@ impl WorkerResult {
 			WorkerResult::Optimistic(result, ..) => Some(result),
 			WorkerResult::Valid(result, ..) => Some(result),
 			WorkerResult::Invalid => None,
-			WorkerResult::Panic => {
-				panic!("Panic in worker")
+			WorkerResult::RuntimePanic => {
+				panic!("Runtime panic from a worker.")
 			},
 			WorkerResult::HardPanic => {
-				panic!("Hard panic in worker")
+				panic!("Hard panic runing a worker.")
 			},
 		}
 	}
