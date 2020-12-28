@@ -22,9 +22,9 @@
 //! As a minimal implementation it can run in no_std (with alloc), but do not
 //! actually spawn threads, all execution is done inline in the parent thread.
 
-use sp_tasks::{new_inline_only_externalities, AsyncExt, WorkerType, Crossing};
+use sp_tasks::{new_inline_only_externalities, WorkerType, Crossing};
 use sp_core::traits::RuntimeSpawn;
-use sp_externalities::{WorkerResult, WorkerDeclaration, Externalities};
+use sp_externalities::{WorkerResult, WorkerDeclaration, Externalities, AsyncExternalities};
 use sp_std::rc::Rc;
 use sp_std::cell::RefCell;
 use sp_std::collections::btree_map::BTreeMap;
@@ -174,7 +174,7 @@ pub struct PendingTask {
 	pub task: Task,
 	/// The associated `Externalities`
 	/// this task will get access to.
-	pub ext: AsyncExt,
+	pub ext: Box<dyn AsyncExternalities>,
 }
 
 #[cfg(feature = "std")]
@@ -199,38 +199,6 @@ pub fn instantiate(
 			return None;
 		},
 	})
-}
-
-/// Obtain externality and get id for worker.
-/// TODO consider having declaration param only for kind declarative and uses default when not
-/// here.
-pub fn spawn_call_ext(
-	handle: u64,
-	kind: WorkerType,
-	declaration: WorkerDeclaration,
-	calling_ext: &mut dyn Externalities,
-) -> AsyncExt {
-	match kind {
-		WorkerType::Stateless => {
-			AsyncExt::stateless_ext()
-		},
-		WorkerType::ReadLastBlock => {
-			let backend = calling_ext.get_past_async_backend();
-			AsyncExt::previous_block_read(backend)
-		},
-		WorkerType::ReadAtSpawn => {
-			let backend = calling_ext.get_async_backend(handle, WorkerDeclaration::None);
-			AsyncExt::state_at_spawn_read(backend, handle)
-		},
-		WorkerType::ReadAtJoinOptimistic => {
-			let backend = calling_ext.get_async_backend(handle, WorkerDeclaration::Optimistic);
-			AsyncExt::state_at_spawn_read(backend, handle)
-		},
-		WorkerType::ReadAtJoinDeclarative => {
-			let backend = calling_ext.get_async_backend(handle, declaration);
-			AsyncExt::state_at_spawn_read(backend, handle)
-		},
-	}
 }
 
 /// Technical trait to factor code.
@@ -275,7 +243,7 @@ pub fn process_task_inline<
 	I: LazyInstanciate<'a> + 'a,
 >(
 	task: Task,
-	ext: AsyncExt,
+	ext: Box<dyn AsyncExternalities>,
 	handle: u64,
 	runtime_ext: Box<dyn RuntimeSpawn>,
 	#[cfg(feature = "std")]
@@ -428,13 +396,13 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 	fn spawn_call_inner(
 		&mut self,
 		task: Task,
-		kind: u8,
+		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let handle = self.counter;
 		self.counter += 1;
-		let ext = spawn_call_ext(handle, kind, declaration, calling_ext);
+		let ext = calling_ext.get_worker_externalities(handle, kind, declaration);
 
 		self.tasks.insert(handle, PendingTask {task, ext});
 
@@ -446,7 +414,7 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 		&mut self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: u8,
+		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
@@ -460,7 +428,7 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		kind: u8,
+		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
@@ -496,7 +464,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: u8,
+		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
@@ -508,7 +476,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		kind: u8,
+		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
@@ -581,7 +549,7 @@ impl<HostLocal: HostLocalFunction> RuntimeSpawn for RuntimeInstanceSpawnForceSen
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: u8,
+		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
@@ -593,7 +561,7 @@ impl<HostLocal: HostLocalFunction> RuntimeSpawn for RuntimeInstanceSpawnForceSen
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		kind: u8,
+		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
@@ -688,6 +656,7 @@ pub mod hosted_runtime {
 			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
 			// a given id, to make this safer.
 			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+			let kind = WorkerType::from_u8(kind).expect("Invalid worker type");
 			let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, kind, declaration.into_inner(), ext_unsafe);
 			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
 			result

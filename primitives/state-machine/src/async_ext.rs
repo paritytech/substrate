@@ -29,7 +29,7 @@ use sp_core::{
 	traits::{SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
 use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend,
-	WorkerResult, WorkerDeclaration, WorkerType};
+	WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities};
 use sp_core::hexdisplay::HexDisplay;
 use crate::ext::guard;
 use crate::{StorageValue, StorageKey, trace};
@@ -45,30 +45,6 @@ pub struct AsyncExt {
 	backend: Box<dyn AsyncBackend>,
 }
 
-impl AsyncExt {
-	/// Depending on kind the result may be already
-	/// valid, in this case we do not need to resolve
-	/// it.
-	pub fn need_resolve(&self) -> bool {
-		self.kind.need_resolve()
-	}
-
-	/// For optimistic worker, we extract logs from the overlay.
-	/// When call on a non optimistic worker returns `None`.
-	pub fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
-		self.overlay.extract_optimistic_log()
-	}
-
-	/// Extract changes made to state for this worker.
-	pub fn extract_delta(&mut self) -> Option<sp_externalities::StateDelta> {
-		if self.write_access() {
-			Some(self.overlay.extract_delta())
-		} else {
-			None
-		}
-	}
-}
-
 #[cfg(feature = "std")]
 impl std::fmt::Debug for AsyncExt
 {
@@ -76,8 +52,6 @@ impl std::fmt::Debug for AsyncExt
 		write!(f, "AsyncExt {:?} at {:?}", self.kind, self.spawn_id)
 	}
 }
-
-
 
 /// Obtain externality and get id for worker.
 /// TODO consider having declaration param only for kind declarative and uses default when not
@@ -381,7 +355,7 @@ impl Externalities for AsyncExt {
 		worker_id: u64,
 		kind: WorkerType,
 		declaration: WorkerDeclaration,
-	) -> Box<dyn Externalities> {
+	) -> Box<dyn AsyncExternalities> {
 		kind.guard_declaration(&declaration);
 		let backend = self.backend.async_backend();
 		Box::new(crate::async_ext::spawn_call_ext(
@@ -417,5 +391,23 @@ impl sp_externalities::ExtensionStore for AsyncExt {
 
 	fn deregister_extension_by_type_id(&mut self, _type_id: TypeId) -> Result<(), sp_externalities::Error> {
 		Err(sp_externalities::Error::ExtensionsAreNotSupported)
+	}
+}
+
+impl AsyncExternalities for AsyncExt {
+	fn need_resolve(&self) -> bool {
+		self.kind.need_resolve()
+	}
+	
+	fn extract_delta(&mut self) -> Option<sp_externalities::StateDelta> {
+		if self.write_access() {
+			Some(self.overlay.extract_delta())
+		} else {
+			None
+		}
+	}
+
+	fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
+		self.overlay.extract_optimistic_log()
 	}
 }

@@ -276,7 +276,7 @@ pub trait Externalities: ExtensionStore {
 		worker_id: u64,
 		kind: WorkerType,
 		declaration: WorkerDeclaration,
-	) -> Box<dyn Externalities>;
+	) -> Box<dyn AsyncExternalities>;
 
 	/// Resolve worker result does update externality state
 	/// and also apply rules relative to the exernality state.
@@ -291,6 +291,21 @@ pub trait Externalities: ExtensionStore {
 	/// needs to be lifted.
 	/// TODO consider making it a worker result varian and only have 'resolve_worker_result'.
 	fn dismiss_worker(&mut self, id: TaskId);
+}
+
+/// Substrate externalities that can be use within a worker context.
+pub trait AsyncExternalities: Externalities + Send {
+	/// Depending on concurrency management strategy
+	/// we may need to resolve the result against
+	/// parent externalities.
+	fn need_resolve(&self) -> bool;
+	
+	/// Extract changes made to state for this worker.
+	fn extract_delta(&mut self) -> Option<StateDelta>;
+
+	/// For optimistic worker, we extract logs from the overlay.
+	/// When call on a non optimistic worker returns `None`.
+	fn extract_optimistic_log(&mut self) -> Option<AccessLog>;
 }
 
 /// Result from worker execution.

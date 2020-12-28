@@ -48,7 +48,7 @@ use sp_core::{
 	traits::{SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
 use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend,
-	WorkerResult, WorkerDeclaration, WorkerType};
+	WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities as AsyncExternalitiesTrait};
 use sp_core::hexdisplay::HexDisplay;
 
 /// Simple state-less externalities for use in async context.
@@ -56,14 +56,14 @@ use sp_core::hexdisplay::HexDisplay;
 /// Will panic if anything is accessing the storage.
 pub struct AsyncExternalities {
 	extensions: Extensions,
-	state: Box<dyn Externalities>,
+	state: Box<dyn AsyncExternalitiesTrait>,
 }
 
 /// New Async externalities.
 #[cfg(feature = "std")]
 pub fn new_async_externalities(
 	scheduler: Box<dyn SpawnNamed>,
-	async_ext: Box<dyn Externalities>,
+	async_ext: Box<dyn AsyncExternalitiesTrait>,
 ) -> Result<AsyncExternalities, &'static str> {
 	let mut res = AsyncExternalities {
 		extensions: Default::default(),
@@ -77,7 +77,7 @@ pub fn new_async_externalities(
 }
 
 pub fn new_inline_only_externalities(
-	async_ext: Box<dyn Externalities>,
+	async_ext: Box<dyn AsyncExternalitiesTrait>,
 ) -> Result<AsyncExternalities, &'static str> {
 	Ok(AsyncExternalities {
 		extensions: Default::default(),
@@ -240,7 +240,7 @@ impl Externalities for AsyncExternalities {
 		worker_id: u64,
 		kind: WorkerType,
 		declaration: WorkerDeclaration,
-	) -> Box<dyn Externalities> {
+	) -> Box<dyn AsyncExternalitiesTrait> {
 		self.state.get_worker_externalities(worker_id, kind, declaration)
 	}
 	
@@ -274,3 +274,19 @@ impl sp_externalities::ExtensionStore for AsyncExternalities {
 		}
 	}
 }
+
+impl AsyncExternalitiesTrait for AsyncExternalities {
+	fn need_resolve(&self) -> bool {
+		self.state.need_resolve()
+	}
+	
+	fn extract_delta(&mut self) -> Option<sp_externalities::StateDelta> {
+		self.state.extract_delta()
+	}
+
+	fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
+		self.state.extract_optimistic_log()
+	}
+}
+
+

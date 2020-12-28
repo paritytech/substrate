@@ -34,7 +34,7 @@ use sp_core::{
 use log::warn;
 use codec::Encode;
 use sp_externalities::{Extensions, Extension, AsyncBackend, TaskId,
-	WorkerResult, WorkerDeclaration, WorkerType};
+	WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities};
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
@@ -339,7 +339,7 @@ impl Externalities for BasicExternalities {
 		worker_id: u64,
 		kind: WorkerType,
 		declaration: WorkerDeclaration,
-	) -> Box<dyn Externalities> {
+	) -> Box<dyn AsyncExternalities> {
 		unimplemented!("TODO")
 	}
 	

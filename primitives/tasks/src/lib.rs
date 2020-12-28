@@ -120,7 +120,7 @@ mod inner {
 			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
 			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
 			// a given id, to make this safer.
-			let result = runtime_spawn.spawn_call_native(entry_point, data, kind as u8, declaration, ext_unsafe);
+			let result = runtime_spawn.spawn_call_native(entry_point, data, kind, declaration, ext_unsafe);
 			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 			// Not necessary (same lifetime as runtime_spawn), but shows intent to keep
 			// ext alive as long as ext_unsafe is in scope.
