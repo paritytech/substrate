@@ -465,11 +465,12 @@ impl Externalities for AsyncExternalities {
 			| WorkerType::ReadAtSpawn => (),
 		}
 
-		self.state.overlay.set_marker(marker);
-
 		let backend = self.state.backend.async_backend();
-		// TODO backend at
-		// backend.state.overlay.set_child_declaration(declaration.clone());
+		let backend: Box<dyn AsyncBackend> = Box::new(sp_state_machine::backend::AsyncBackendAt::new(
+			backend,
+			&self.state.overlay,
+			&declaration,
+		));
 		self.state.overlay.set_parent_declaration(marker, declaration);
 
 		backend

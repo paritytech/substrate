@@ -690,7 +690,6 @@ where
 	) -> Box<dyn AsyncBackend> {
 		let backend = self.get_past_async_backend();
 
-		self.overlay.set_marker(marker);
 		let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
 			backend,
 			self.overlay,

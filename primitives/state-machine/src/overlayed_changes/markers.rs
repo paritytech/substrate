@@ -30,7 +30,6 @@
 ///	report result to the main thread
 ///	for a rollbacked the spawning transaction.
 
-
 use sp_std::collections::btree_map::BTreeMap;
 use sp_externalities::{WorkerResult, TaskId};
 use sp_std::vec::Vec;
@@ -51,24 +50,22 @@ struct MarkerDesc {
 
 impl Default for Markers {
 	fn default() -> Self {
+		
 		Markers {
 			markers: BTreeMap::new(),
-			transactions: Vec::new(),
+			transactions: vec![Default::default()],
 		}
 	}
 }
 
 impl Markers {
 	fn current_transaction_internal(transactions: &mut Vec<Vec<TaskId>>) -> (&mut Vec<TaskId>, usize) {
-		if transactions.is_empty() {
-			// always a runing context
-			transactions.push(Default::default());
-		}
 		let len = transactions.len();
 		(transactions.last_mut()
 			.expect("Initialized above"), len)
 	}
 
+	/// Add a marker at current transaction depth.
 	pub(super) fn set_marker(&mut self, marker: TaskId) {
 		let (tx, index) = Self::current_transaction_internal(&mut self.transactions);
 		self.markers.insert(marker, MarkerDesc {
@@ -77,12 +74,21 @@ impl Markers {
 		tx.push(marker)
 	}
 
+	/// Set current transaction depth as a transactional limit.
+	pub(super) fn set_limit(&mut self) {
+		self.transactions.clear();
+		self.transactions.push(Default::default());
+	}
+
 	pub(super) fn start_transaction(&mut self) {
 		self.transactions.push(Default::default());
 	}
 
 	#[must_use]
 	pub(super) fn rollback_transaction(&mut self) -> Vec<TaskId> {
+		if self.transactions.len() < 2 {
+			panic!("Trying to rollback a transaction that was not open by the worker.");
+		}
 		if let Some(markers) = self.transactions.pop() {
 			for marker in markers.iter() {
 				self.markers.remove(marker);
@@ -95,6 +101,9 @@ impl Markers {
 
 	#[must_use]
 	pub(super) fn commit_transaction(&mut self) -> Vec<TaskId> {
+		if self.transactions.len() < 2 {
+			panic!("Trying to commit a transaction that was not open by the worker.");
+		}
 		if let Some(markers) = self.transactions.pop() {
 			for marker in markers.iter() {
 				self.markers.remove(marker);
@@ -103,7 +112,6 @@ impl Markers {
 		} else {
 			Default::default()
 		}
-
 	}
 
 	pub(super) fn remove_worker(&mut self, marker: TaskId) -> bool {
@@ -136,10 +144,4 @@ impl Markers {
 			| WorkerResult::Panic => true,
 		}
 	}
-
-	pub(super) fn dissmiss_worker(&mut self, id: TaskId) {
-		self.remove_worker(id);
-	}
 }
-
-

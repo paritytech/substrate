@@ -23,13 +23,13 @@
 //! NOTE: When using in actual runtime, make sure you don't produce unbounded parallelism.
 //! So this is bad example to use it:
 //! ```rust
-//!    use sp_tasks::WorkerType;
+//!    use sp_tasks::{WorkerType, WorkerDeclaration};
 //!    fn my_parallel_computator(data: Vec<u8>) -> Vec<u8> {
 //!        unimplemented!()
 //!    }
 //!    fn test(dynamic_variable: i32) {
 //!       for _ in 0..dynamic_variable {
-//!					sp_tasks::spawn(my_parallel_computator, vec![], WorkerType::Stateless);
+//!					sp_tasks::spawn(my_parallel_computator, vec![], WorkerType::Stateless, WorkerDeclaration::None);
 //!				}
 //!    }
 //! ```
@@ -37,7 +37,7 @@
 //! While this is a good example:
 //! ```rust
 //!    use codec::Encode;
-//!    use sp_tasks::WorkerType;
+//!    use sp_tasks::{WorkerType, WorkerDeclaration};
 //!    static STATIC_VARIABLE: i32 = 4;
 //!
 //!    fn my_parallel_computator(data: Vec<u8>) -> Vec<u8> {
@@ -49,6 +49,7 @@
 //!            my_parallel_computator,
 //!            computation_payload.chunks(10).nth(idx as _).encode(),
 //!            WorkerType::Stateless,
+//!            WorkerDeclaration::None,
 //!        ));
 //!    }
 //! ```

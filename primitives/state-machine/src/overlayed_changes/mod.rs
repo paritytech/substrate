@@ -390,16 +390,12 @@ impl OverlayedChanges {
 		self.top.transaction_depth()
 	}
 
-	/// Add marker of given worker at current transaction.
-	pub fn set_marker(&mut self, marker: TaskId) {
-		self.markers.set_marker(marker);
-	}
-
 	/// Set access declaration in the parent worker.
 	///
 	/// For worker declaration it also guard child declaration on parent, resulting in failure when
 	/// child declaration allows more than current parent allowed access.
 	pub fn set_parent_declaration(&mut self, child_marker: TaskId, declaration: WorkerDeclaration) {
+		self.markers.set_marker(child_marker);
 		match declaration {
 			WorkerDeclaration::None => (),
 			WorkerDeclaration::Optimistic => {
@@ -417,6 +413,7 @@ impl OverlayedChanges {
 
 	/// Set access declaration in the parent worker.
 	pub fn set_child_declaration(&mut self, declaration: WorkerDeclaration) {
+		self.markers.set_limit();
 		match declaration {
 			WorkerDeclaration::None => (),
 			WorkerDeclaration::Optimistic => {
@@ -427,11 +424,6 @@ impl OverlayedChanges {
 				self.filters.allow_reads(filter)
 			},
 		}
-	}
-
-	/// Set access declaration in the parent worker.
-	pub fn remove_parent_declaration(&mut self, marker: TaskId) {
-		self.filters.remove_worker(marker);
 	}
 
 	/// Check if worker result is compatible with changes
