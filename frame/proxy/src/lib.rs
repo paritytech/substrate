@@ -168,6 +168,8 @@ decl_error! {
 		NoPermission,
 		/// Announcement, if made at all, was made too recently.
 		Unannounced,
+		/// Cannot add self as proxy.
+		NoSelfProxy,
 	}
 }
 
@@ -567,6 +569,7 @@ impl<T: Config> Module<T> {
 		proxy_type: T::ProxyType,
 		delay: T::BlockNumber,
 	) -> DispatchResult {
+		ensure!(delegator != &delegatee, Error::<T>::NoSelfProxy);
 		Proxies::<T>::try_mutate(delegator, |(ref mut proxies, ref mut deposit)| {
 			ensure!(proxies.len() < T::MaxProxies::get() as usize, Error::<T>::TooMany);
 			let proxy_def = ProxyDefinition { delegate: delegatee, proxy_type, delay };
