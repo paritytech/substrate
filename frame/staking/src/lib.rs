@@ -2405,10 +2405,10 @@ impl<T: Config> Module<T> {
 				}
 				let first_amt = pct * amount;
 				let remaining = amount - first_amt;
-				if let Some(payout1) = payout(dest1,first_amt) {
-					Some(payout1.maybe_merge(payout(dest2,remaining)))
+				if let Some(payout1) = payout(dest1, first_amt) {
+					Some(payout1.maybe_merge(payout(dest2, remaining)))
 				} else {
-					payout(dest2,remaining)
+					payout(dest2, remaining)
 				}
 			}
 		}
