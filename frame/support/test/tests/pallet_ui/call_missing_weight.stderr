@@ -1,0 +1,5 @@
+error: Invalid pallet::call, require weight attribute i.e. `#[pallet::weight = $expr]`
+  --> $DIR/call_missing_weight.rs:17:3
+   |
+17 |         fn foo(origin: OriginFor<T>) -> DispatchResultWithPostInfo {}
+   |         ^^

@@ -732,8 +732,12 @@ cfg_if! {
 					}
 				}
 
-				fn current_epoch_start() -> SlotNumber {
+				fn current_epoch_start() -> sp_consensus_babe::SlotNumber {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
+
+				fn current_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::current_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
@@ -983,8 +987,12 @@ cfg_if! {
 					}
 				}
 
-				fn current_epoch_start() -> SlotNumber {
+				fn current_epoch_start() -> sp_consensus_babe::SlotNumber {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
+
+				fn current_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::current_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
