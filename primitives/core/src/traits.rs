@@ -28,7 +28,7 @@ use sp_std::{
 	vec::Vec,
 };
 
-pub use sp_externalities::{Externalities, ExternalitiesExt, WorkerResult, WorkerDeclaration, WorkerType};
+pub use sp_externalities::{Externalities, ExternalitiesExt, AsyncExternalities, WorkerResult, WorkerDeclaration, WorkerType};
 
 /// Code execution engine.
 #[cfg(feature = "std")]

@@ -33,7 +33,7 @@ use codec::{Decode, Encode};
 use sp_core::{
 	NativeOrEncoded,
 	traits::{
-		CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions,
+		CodeExecutor, Externalities, AsyncExternalities, RuntimeCode, MissingHostFunctions,
 		RuntimeSpawnExt, RuntimeSpawn, RemoteHandle, BoxFuture,
 	},
 };
@@ -41,8 +41,8 @@ use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule};
 use sp_externalities::{ExternalitiesExt as _, WorkerResult};
-use sp_tasks::{new_async_externalities, AsyncExt, WorkerDeclaration};
-use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task, PendingTask as InlineTask, spawn_call_ext};
+use sp_tasks::{new_async_externalities, WorkerDeclaration, WorkerType};
+use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task, PendingTask as InlineTask};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -431,7 +431,7 @@ enum PendingTask {
 struct RemoteTask {
 	handle: u64,
 	task: Task,
-	ext: AsyncExt,
+	ext: Box<dyn AsyncExternalities>,
 	result_sender: mpsc::Sender<Option<WorkerResult>>,
 }
 
@@ -499,7 +499,7 @@ impl RuntimeInstanceSpawn {
 		&self,
 		handle: u64,
 		task: Task,
-		ext: AsyncExt,
+		ext: Box<dyn AsyncExternalities>,
 	) {
 		let mut infos = self.infos.lock();
 		match infos.start(self.recursive_level) {
@@ -645,12 +645,12 @@ impl RuntimeInstanceSpawn {
 	fn spawn_call_inner(
 		&self,
 		task: Task,
-		kind: u8,
+		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let handle = self.counter.fetch_add(1, Ordering::Relaxed);
-		let ext = spawn_call_ext(handle, kind, declaration, calling_ext);
+		let ext = calling_ext.get_worker_externalities(handle, kind, declaration);
 
 		self.insert(handle, task, ext);
 
@@ -663,7 +663,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: u8,
+		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
@@ -676,7 +676,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		kind: u8,
+		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
