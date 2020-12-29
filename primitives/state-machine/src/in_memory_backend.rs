@@ -21,7 +21,7 @@ use crate::{
 };
 use std::collections::{BTreeMap, HashMap};
 use hash_db::Hasher;
-use sp_trie::MemoryDB;
+use sp_trie::{MemoryDB, empty_trie_root, Layout};
 use codec::Codec;
 use sp_core::storage::{ChildInfo, Storage};
 
@@ -31,9 +31,7 @@ where
 	H::Out: Codec + Ord,
 {
 	let db = MemoryDB::default();
-	let mut backend = TrieBackend::new(db, Default::default());
-	backend.insert(std::iter::empty());
-	backend
+	TrieBackend::new(db, empty_trie_root::<Layout<H>>())
 }
 
 impl<H: Hasher> TrieBackend<MemoryDB<H>, H>
