@@ -22,7 +22,7 @@ use crate::arg_enums::Database;
 use crate::error::Result;
 use crate::{
 	init_logger, DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
-	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
+	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli, InitLoggerParams,
 };
 use log::warn;
 use names::{Generator, Name};
@@ -538,6 +538,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.shared_params().is_log_filter_reloading_disabled())
 	}
 
+	/// Should the log color output be disabled?
+	fn disable_log_color(&self) -> Result<bool> {
+		Ok(self.shared_params().disable_log_color())
+	}
+
 	/// Initialize substrate. This must be done only once per process.
 	///
 	/// This method:
@@ -550,15 +555,17 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let tracing_receiver = self.tracing_receiver()?;
 		let tracing_targets = self.tracing_targets()?;
 		let disable_log_reloading = self.is_log_filter_reloading_disabled()?;
+		let disable_log_color = self.disable_log_color()?;
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		init_logger(
-			&logger_pattern,
+		init_logger(InitLoggerParams {
+			pattern: logger_pattern,
 			tracing_receiver,
 			tracing_targets,
 			disable_log_reloading,
-		)?;
+			disable_log_color,
+		})?;
 
 		if let Some(new_limit) = fdlimit::raise_fd_limit() {
 			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {
