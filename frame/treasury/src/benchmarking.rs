@@ -59,7 +59,7 @@ fn create_approved_proposals<T: Config<I>, I: Instance>(n: u32) -> Result<(), &'
 	Ok(())
 }
 
-fn setup_pod_account<T: Config<I>, I: Instance>() {
+fn setup_pot_account<T: Config<I>, I: Instance>() {
 	let pot_account = Treasury::<T, I>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
@@ -97,7 +97,7 @@ benchmarks_instance! {
 
 	on_initialize_proposals {
 		let p in 0 .. 100;
-		setup_pod_account::<T, _>();
+		setup_pot_account::<T, _>();
 		create_approved_proposals::<T, _>(p)?;
 	}: {
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
