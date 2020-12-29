@@ -20,7 +20,7 @@ libp2p = { version = "0.32.2", default-features = false }
 log = "0.4.8"
 sp-core = { path= "../../core", version = "2.0.0"}
 sp-inherents = { version = "2.0.0", path = "../../inherents" }
-sp-state-machine = { version = "0.8.0", path = "../../../primitives/state-machine" }
+sp-state-machine = { version = "0.8.0", path = "../../state-machine" }
 futures = { version = "0.3.1", features = ["thread-pool"] }
 futures-timer = "3.0.1"
 sp-std = { version = "2.0.0", path = "../../std" }

@@ -153,6 +153,13 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 		G::from_optional_value_to_query(unhashed::get(&Self::storage_double_map_final_key(k1, k2)))
 	}
 
+	fn try_get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Result<V, ()>
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2> {
+		unhashed::get(&Self::storage_double_map_final_key(k1, k2)).ok_or(())
+	}
+
 	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
