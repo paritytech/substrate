@@ -2396,7 +2396,7 @@ impl<T: Config> Module<T> {
 		};
 		match policy {
 			RewardPolicy::One(destination) => payout(destination,amount),
-			RewardPolicy::Split(dest1,pct,dest2) => {
+			RewardPolicy::Split(dest1, pct, dest2) => {
 				if pct.is_one() {
 					return payout(dest1,amount)
 				}
