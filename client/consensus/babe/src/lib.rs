@@ -342,6 +342,11 @@ impl Config {
 			}
 		}
 	}
+
+	/// Get the inner slot duration, in milliseconds.
+	pub fn slot_duration(&self) -> u64 {
+		self.0.slot_duration()
+	}
 }
 
 impl std::ops::Deref for Config {

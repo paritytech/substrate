@@ -502,6 +502,8 @@ ss58_address_format!(
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>
 		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
+	ValiuAccount =>
+		(35, "vln", "Valiu Liquidity Network mainnet, standard account (*25519).")
 	CentrifugeAccount =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
 	NodleAccount =>
@@ -1050,6 +1052,7 @@ impl From<KeyTypeId> for u32 {
 
 impl<'a> TryFrom<&'a str> for KeyTypeId {
 	type Error = ();
+
 	fn try_from(x: &'a str) -> Result<Self, ()> {
 		let b = x.as_bytes();
 		if b.len() != 4 {
