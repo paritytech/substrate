@@ -378,6 +378,14 @@ decl_error! {
 		/// on the call stack. Those actions are contract self destruction and restoration
 		/// of a tombstone.
 		ReentranceDenied,
+		/// `seal_input` was called twice from the same contract execution context.
+		InputAlreadyRead,
+		/// The subject passed to `seal_random` exceeds the limit.
+		RandomSubjectTooLong,
+		/// The amount of topics passed to `seal_deposit_events` exceeds the limit.
+		TooManyTopics,
+		/// The topics passed to `seal_deposit_events` contains at least one duplicate.
+		DuplicateTopics,
 	}
 }
 

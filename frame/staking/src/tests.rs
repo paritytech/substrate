@@ -45,7 +45,7 @@ fn force_unstake_works() {
 		// Force unstake requires root.
 		assert_noop!(Staking::force_unstake(Origin::signed(11), 11, 2), BadOrigin);
 		// Force unstake needs correct number of slashing spans (for weight calculation)
-		assert_noop!(Staking::force_unstake(Origin::signed(11), 11, 0), BadOrigin);
+		assert_noop!(Staking::force_unstake(Origin::root(), 11, 0), Error::<Test>::IncorrectSlashingSpans);
 		// We now force them to unstake
 		assert_ok!(Staking::force_unstake(Origin::root(), 11, 2));
 		// No longer bonded.

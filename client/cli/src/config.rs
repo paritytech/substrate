@@ -186,11 +186,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 	/// Get the keystore configuration.
 	///
-	/// Bu default this is retrieved from `KeystoreParams` if it is available. Otherwise it uses
+	/// By default this is retrieved from `KeystoreParams` if it is available. Otherwise it uses
 	/// `KeystoreConfig::InMemory`.
-	fn keystore_config(&self, base_path: &PathBuf) -> Result<(Option<String>, KeystoreConfig)> {
+	fn keystore_config(&self, config_dir: &PathBuf) -> Result<(Option<String>, KeystoreConfig)> {
 		self.keystore_params()
-			.map(|x| x.keystore_config(base_path))
+			.map(|x| x.keystore_config(config_dir))
 			.unwrap_or_else(|| Ok((None, KeystoreConfig::InMemory)))
 	}
 
@@ -454,15 +454,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
-		let chain_spec = cli.load_spec(chain_id.as_str())?;
+		let chain_spec = cli.load_spec(&chain_id)?;
 		let base_path = self
 			.base_path()?
 			.unwrap_or_else(|| BasePath::from_project("", "", &C::executable_name()));
-		let config_dir = base_path
-			.path()
-			.to_path_buf()
-			.join("chains")
-			.join(chain_spec.id());
+		let config_dir = base_path.config_dir(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		let database_cache_size = self.database_cache_size()?.unwrap_or(128);

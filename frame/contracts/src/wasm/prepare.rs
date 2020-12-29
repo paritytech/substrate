@@ -491,18 +491,24 @@ mod tests {
 		}
 	}
 
-	// Define test environment for tests. We need ImportSatisfyCheck
-	// implementation from it. So actual implementations doesn't matter.
-	define_env!(TestEnv, <E: Ext>,
-		panic(_ctx) => { unreachable!(); },
+	/// Using unreachable statements triggers unreachable warnings in the generated code
+	#[allow(unreachable_code)]
+	mod env {
+		use super::*;
 
-		// gas is an implementation defined function and a contract can't import it.
-		gas(_ctx, _amount: u32) => { unreachable!(); },
+		// Define test environment for tests. We need ImportSatisfyCheck
+		// implementation from it. So actual implementations doesn't matter.
+		define_env!(Test, <E: Ext>,
+			panic(_ctx) => { unreachable!(); },
 
-		nop(_ctx, _unused: u64) => { unreachable!(); },
+			// gas is an implementation defined function and a contract can't import it.
+			gas(_ctx, _amount: u32) => { unreachable!(); },
 
-		seal_println(_ctx, _ptr: u32, _len: u32) => { unreachable!(); },
-	);
+			nop(_ctx, _unused: u64) => { unreachable!(); },
+
+			seal_println(_ctx, _ptr: u32, _len: u32) => { unreachable!(); },
+		);
+	}
 
 	macro_rules! prepare_test {
 		($name:ident, $wat:expr, $($expected:tt)*) => {
@@ -520,7 +526,7 @@ mod tests {
 					},
 					.. Default::default()
 				};
-				let r = prepare_contract::<TestEnv, crate::tests::Test>(wasm.as_ref(), &schedule);
+				let r = prepare_contract::<env::Test, crate::tests::Test>(wasm.as_ref(), &schedule);
 				assert_matches!(r, $($expected)*);
 			}
 		};
@@ -931,7 +937,7 @@ mod tests {
 			).unwrap();
 			let mut schedule = Schedule::default();
 			schedule.enable_println = true;
-			let r = prepare_contract::<TestEnv, crate::tests::Test>(wasm.as_ref(), &schedule);
+			let r = prepare_contract::<env::Test, crate::tests::Test>(wasm.as_ref(), &schedule);
 			assert_matches!(r, Ok(_));
 		}
 	}
