@@ -21,9 +21,18 @@ use sp_debug_derive::RuntimeDebug;
 struct Unnamed(u64, String);
 
 #[derive(RuntimeDebug)]
+struct UnnamedT<A, B>(A, B);
+
+#[derive(RuntimeDebug)]
 struct Named {
 	a: u64,
 	b: String,
+}
+
+#[derive(RuntimeDebug)]
+struct NamedT<A, B> {
+	a: A,
+	b: B,
 }
 
 #[derive(RuntimeDebug)]
@@ -46,8 +55,16 @@ fn should_display_proper_debug() {
 		"Unnamed(1, \"abc\")"
 	);
 	assert_eq!(
+		format!("{:?}", UnnamedT(1, "abc")),
+		"UnnamedT(1, \"abc\")"
+	);
+	assert_eq!(
 		format!("{:?}", Named { a: 1, b: "abc".into() }),
 		"Named { a: 1, b: \"abc\" }"
+	);
+	assert_eq!(
+		format!("{:?}", NamedT { a: 1, b: "abc" }),
+		"NamedT { a: 1, b: \"abc\" }"
 	);
 	assert_eq!(
 		format!("{:?}", Enum::<u64>::A),
