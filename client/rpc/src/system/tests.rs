@@ -344,13 +344,15 @@ fn test_add_reset_log_filter() {
 
 	// Enter log generation / filter reload
 	if std::env::var("TEST_LOG_FILTER").is_ok() {
-		sc_cli::init_logger("test_before_add=debug", Default::default(), Default::default(), false).unwrap();
+		sc_cli::init_logger(
+			sc_cli::InitLoggerParams { pattern: "test_before_add=debug".into(), ..Default::default() },
+		).unwrap();
 		for line in std::io::stdin().lock().lines() {
 			let line = line.expect("Failed to read bytes");
 			if line.contains("add_reload") {
-				assert!(api(None).system_add_log_filter("test_after_add".to_owned()).is_ok(), "`system_add_log_filter` failed");
+				api(None).system_add_log_filter("test_after_add".into()).expect("`system_add_log_filter` failed");
 			} else if line.contains("reset") {
-				assert!(api(None).system_reset_log_filter().is_ok(), "`system_reset_log_filter` failed");
+				api(None).system_reset_log_filter().expect("`system_reset_log_filter` failed");
 			} else if line.contains("exit") {
 				return;
 			}
