@@ -116,6 +116,13 @@ where
 		<Self as crate::storage::StorageMap<Key, Value>>::get(key)
 	}
 
+	/// Try to get the value for the given key from the map.
+	///
+	/// Returns `Ok` if it exists, `Err` if not.
+	pub fn try_get<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Result<Value, ()> {
+		<Self as crate::storage::StorageMap<Key, Value>>::try_get(key)
+	}
+
 	/// Swap the values of two keys.
 	pub fn swap<KeyArg1: EncodeLike<Key>, KeyArg2: EncodeLike<Key>>(key1: KeyArg1, key2: KeyArg2) {
 		<Self as crate::storage::StorageMap<Key, Value>>::swap(key1, key2)
@@ -352,12 +359,14 @@ mod test {
 			A::insert(3, 10);
 			assert_eq!(A::contains_key(3), true);
 			assert_eq!(A::get(3), Some(10));
+			assert_eq!(A::try_get(3), Ok(10));
 			assert_eq!(AValueQueryWithAnOnEmpty::get(3), 10);
 
 			A::swap(3, 2);
 			assert_eq!(A::contains_key(3), false);
 			assert_eq!(A::contains_key(2), true);
 			assert_eq!(A::get(3), None);
+			assert_eq!(A::try_get(3), Err(()));
 			assert_eq!(AValueQueryWithAnOnEmpty::get(3), 97);
 			assert_eq!(A::get(2), Some(10));
 			assert_eq!(AValueQueryWithAnOnEmpty::get(2), 10);

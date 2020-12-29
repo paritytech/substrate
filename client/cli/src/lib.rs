@@ -112,10 +112,7 @@ pub trait SubstrateCli: Sized {
 	///
 	/// Gets the struct from the command line arguments. Print the
 	/// error message and quit the program in case of failure.
-	fn from_args() -> Self
-	where
-		Self: StructOpt + Sized,
-	{
+	fn from_args() -> Self where Self: StructOpt + Sized {
 		<Self as SubstrateCli>::from_iter(&mut std::env::args_os())
 	}
 

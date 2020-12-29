@@ -94,7 +94,7 @@ pub fn run() -> Result<()> {
 				You can enable it with `--features runtime-benchmarks`.".into())
 			}
 		}
-		Some(Subcommand::Key(cmd)) => cmd.run(),
+		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
 		Some(Subcommand::Sign(cmd)) => cmd.run(),
 		Some(Subcommand::Verify(cmd)) => cmd.run(),
 		Some(Subcommand::Vanity(cmd)) => cmd.run(),

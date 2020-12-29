@@ -141,6 +141,16 @@ where
 		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::get(k1, k2)
 	}
 
+	/// Try to get the value for the given key from the double map.
+	///
+	/// Returns `Ok` if it exists, `Err` if not.
+	pub fn try_get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Result<Value, ()>
+	where
+		KArg1: EncodeLike<Key1>,
+		KArg2: EncodeLike<Key2> {
+		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::try_get(k1, k2)
+	}
+
 	/// Take a value from storage, removing it afterwards.
 	pub fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> QueryKind::Query
 	where
@@ -514,6 +524,7 @@ mod test {
 			});
 			assert_eq!(A::contains_key(2, 20), true);
 			assert_eq!(A::get(2, 20), Some(100));
+			assert_eq!(A::try_get(2, 20), Ok(100));
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists(2, 20, |v| {
 				*v = Some(v.unwrap() * 10);
 				Err(())
@@ -527,6 +538,7 @@ mod test {
 			assert_eq!(A::contains_key(2, 20), false);
 			assert_eq!(AValueQueryWithAnOnEmpty::take(2, 20), 97);
 			assert_eq!(A::contains_key(2, 20), false);
+			assert_eq!(A::try_get(2, 20), Err(()));
 
 			B::insert(2, 20, 10);
 			assert_eq!(A::migrate_keys::<Blake2_256, Twox128, _, _>(2, 20), Some(10));
