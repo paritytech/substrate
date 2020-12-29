@@ -643,6 +643,8 @@ impl WorkerType {
 
 impl WorkerType {
 	/// Assert a right declaration is use with worker type.
+	/// TODO this is looking like bad design, consider merging WorkerDeclaration
+	/// with WorkerType.
 	pub fn guard_declaration(&self, declaration: &WorkerDeclaration) {
 		match self {
 			WorkerType::WriteAtJoinDeclarative => match &declaration {
@@ -663,10 +665,21 @@ impl WorkerType {
 					panic!("Incorrect declaration with declarative worker");
 				},
 			},
-			WorkerType::ReadAtJoinOptimistic
-			| WorkerType::WriteAtJoinOptimistic
-			| WorkerType::WriteOptimistic => match &declaration {
-				WorkerDeclaration::Optimistic => (),
+			WorkerType::ReadAtJoinOptimistic => match &declaration {
+				WorkerDeclaration::OptimisticRead => (),
+				_ => {
+					panic!("Incorrect declaration for optimistic worker");
+				},
+			},
+			WorkerType::WriteAtJoinOptimistic => match &declaration {
+				WorkerDeclaration::OptimisticWriteRead => (),
+				_ => {
+					panic!("Incorrect declaration for optimistic worker");
+				},
+			},
+
+			WorkerType::WriteOptimistic => match &declaration {
+				WorkerDeclaration::OptimisticWrite => (),
 				_ => {
 					panic!("Incorrect declaration for optimistic worker");
 				},
@@ -692,7 +705,18 @@ pub enum WorkerDeclaration {
 
 	/// The worker type need to log access and resolve
 	/// error on result access only.
-	Optimistic,
+	/// This compare parent worker write access with child
+	/// worker write access.
+	OptimisticWrite,
+
+	/// Optimistic variant which compares parent worker write access with child
+	/// worker read and write access, and child worker read access with parent worker
+	/// write access.
+	OptimisticWriteRead,
+
+	/// Optimistic variant which compares parent worker write access with child
+	/// worker read access.
+	OptimisticRead,
 
 	/// Child worker read access only.
 	/// Makes parent write forbidden for any access declaration,

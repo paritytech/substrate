@@ -28,7 +28,7 @@ use sp_core::{
 	traits::Externalities, Blake2Hasher,
 };
 use codec::Encode;
-use sp_externalities::{TaskId, AsyncBackend, WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities};
+use sp_externalities::{TaskId, WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities};
 
 /// Trait for inspecting state in any backend.
 ///

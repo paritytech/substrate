@@ -26,9 +26,8 @@ use sp_std::{
 };
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
-	traits::{SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
-use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend,
+use sp_externalities::{Externalities, TaskId, AsyncBackend,
 	WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities};
 use sp_core::hexdisplay::HexDisplay;
 use crate::ext::guard;
@@ -263,7 +262,7 @@ impl Externalities for AsyncExt {
 
 	fn kill_child_storage(
 		&mut self,
-		child_info: &ChildInfo,
+		_child_info: &ChildInfo,
 	) {
 		panic!("`kill_child_storage`: should not be used in read only worker externalities!");
 	}

@@ -30,7 +30,7 @@ use crate::{
 use sp_std::{vec::Vec, boxed::Box};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
-use sp_externalities::{AsyncBackend, WorkerDeclaration};
+use sp_externalities::AsyncBackend;
 use super::EXT_NOT_ALLOWED_TO_FAIL;
 
 /// A state backend is used to read state data and can have changes committed

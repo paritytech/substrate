@@ -398,8 +398,15 @@ impl OverlayedChanges {
 		self.markers.set_marker(child_marker);
 		match declaration {
 			WorkerDeclaration::None => (),
-			WorkerDeclaration::Optimistic => {
-				self.optimistic_logger.log_writes(Some(child_marker))
+			WorkerDeclaration::OptimisticRead => {
+				self.optimistic_logger.log_writes(Some(child_marker));
+			},
+			WorkerDeclaration::OptimisticWrite => {
+				self.optimistic_logger.log_writes(Some(child_marker));
+			},
+			WorkerDeclaration::OptimisticWriteRead => {
+				self.optimistic_logger.log_reads(Some(child_marker));
+				self.optimistic_logger.log_writes(Some(child_marker));
 			},
 			WorkerDeclaration::ChildRead(filter, failure) => {
 				self.filters.guard_child_filter_read(&filter);
@@ -429,8 +436,15 @@ impl OverlayedChanges {
 		self.markers.set_limit();
 		match declaration {
 			WorkerDeclaration::None => (),
-			WorkerDeclaration::Optimistic => {
+			WorkerDeclaration::OptimisticRead => {
 				self.optimistic_logger.log_reads(None);
+			},
+			WorkerDeclaration::OptimisticWrite => {
+				self.optimistic_logger.log_writes(None);
+			},
+			WorkerDeclaration::OptimisticWriteRead => {
+				self.optimistic_logger.log_reads(None);
+				self.optimistic_logger.log_writes(None);
 			},
 			WorkerDeclaration::ChildRead(filter, failure) => {
 				self.filters.set_failure_handler(None, failure); 
@@ -927,8 +941,6 @@ pub mod radix_trees {
 		children::{Children, ART48_256}, Value, TreeConf, Node};
 	use super::filters::Filter;
 	use sp_std::boxed::Box;
-	use sp_std::collections::btree_set::BTreeSet;
-	use sp_externalities::TaskId;
 	use core::fmt::Debug;
 
 	radix_tree::flatten_children!(

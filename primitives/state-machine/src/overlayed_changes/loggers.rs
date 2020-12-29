@@ -157,29 +157,48 @@ impl StateLogger {
 	// TODO rename
 	// compare write from parent (`self`) against read from child (`access`).
 	fn check_write_read(&self, access: &sp_externalities::StateLog, marker: TaskId) -> bool {
-		let mut result = true;
 		for key in access.read_keys.iter() {
-			if !result {
-				break;
+			if !self.check_key_against_write(key, marker) {
+				return false;
 			}
-			result = self.check_write_read_key(key, marker);
 		}
 		for interval in access.read_intervals.iter() {
-			if !result {
-				break;
+			if !self.check_interval_against_write(interval, marker) {
+				return false;
 			}
-			result = self.check_write_read_intervals(interval, marker);
 		}
-		result
+		true
 	}
 
 	// compare read from parent (`self`) against write from child (`access`).
 	fn check_read_write(&self, access: &sp_externalities::StateLog, marker: TaskId) -> bool {
-		unimplemented!()
+		for key in access.write_keys.iter() {
+			if !self.check_key_against_read(key, marker) {
+				return false;
+			}
+		}
+		// Here ordering prefix could be use to optimize check (skiping child of a given prefix).
+		for prefix in access.write_prefix.iter() {
+			if !self.check_prefix_against_read(prefix, marker) {
+				return false;
+			}
+		}
+		true
 	}
 	// compare write from parent (`self`) against write from child (`access`).
 	fn check_write_write(&self, access: &sp_externalities::StateLog, marker: TaskId) -> bool {
-		unimplemented!()
+		for key in access.write_keys.iter() {
+			if !self.check_key_against_write(key, marker) {
+				return false;
+			}
+		}
+		// Here ordering prefix could be use to optimize check (skiping child of a given prefix).
+		for prefix in access.write_prefix.iter() {
+			if !self.check_prefix_against_write(prefix, marker) {
+				return false;
+			}
+		}
+		true
 	}
 /*
 	// Note that if we ensure marker are in sync, we do not need to check
@@ -195,23 +214,92 @@ impl StateLogger {
 		false
 	}
 */
-	fn check_write_read_key(&self, read_key: &Vec<u8>, marker: TaskId) -> bool {
-		let mut result = true;
+	fn check_key_against_write(&self, read_key: &Vec<u8>, marker: TaskId) -> bool {
 		if let Some(ids) = self.children_write_key.get(read_key) {
 			if ids.contains(&marker) {
 				return false;
 			}
 		}
-		for (prefix, ids) in self.children_write_prefix.seek_iter(read_key.as_slice()).value_iter() {
+		for (_prefix, ids) in self.children_write_prefix.seek_iter(read_key.as_slice()).value_iter() {
 			if ids.contains(&marker) {
 				return false;
 			}
 		}
-		result
+		true
 	}
 
-	fn check_write_read_intervals(&self, interval: &(Vec<u8>, Vec<u8>), marker: TaskId) -> bool {
-		let mut result = true;
+	fn check_key_against_read(&self, read_key: &Vec<u8>, marker: TaskId) -> bool {
+		if let Some(ids) = self.children_read_key.borrow().get(read_key) {
+			if ids.contains(&marker) {
+				return false;
+			}
+		}
+		// TODO this needs proper children_read_intervals structure.
+		for ((start, end), ids) in self.children_read_intervals.borrow().iter() {
+			if read_key >= start && read_key <= end {
+				if ids.contains(&marker) {
+					return false;
+				}
+			}
+		}
+		true
+	}
+
+	fn check_prefix_against_write(&self, prefix: &Vec<u8>, marker: TaskId) -> bool {
+		// TODO here could benefit from a seek then iter.
+		let mut first = false;
+		for (key, ids) in self.children_write_key.iter() {
+			if key.starts_with(prefix) {
+				if ids.contains(&marker) {
+					return false;
+				} else {
+					first = true;
+				}
+			} else if first {
+				break;
+			}
+		}
+		let mut iter = self.children_write_prefix.seek_iter(prefix).value_iter();
+		while let Some((prefix, ids)) = iter.next() {
+			if ids.contains(&marker) {
+				return false;
+			}
+		}
+		for (key, ids) in iter.node_iter().iter_prefix().value_iter() {
+			if ids.contains(&marker) {
+				return false;
+			}
+		}
+		true	
+	}
+
+	fn check_prefix_against_read(&self, prefix: &Vec<u8>, marker: TaskId) -> bool {
+		// TODO here could benefit from a seek then iter.
+		let mut first = false;
+		for (key, ids) in self.children_read_key.borrow().iter() {
+			if key.starts_with(prefix) {
+				if ids.contains(&marker) {
+					return false;
+				} else {
+					first = true;
+				}
+			} else if first {
+				break;
+			}
+		}
+		// TODO this needs proper children_read_intervals structure.
+		for ((start, end), ids) in self.children_read_intervals.borrow().iter() {
+			if start.starts_with(prefix) || end.starts_with(prefix) || (start >= start && prefix <= end) {
+				if ids.contains(&marker) {
+					return false;
+				}
+			}
+		}
+		true	
+	}
+
+
+	fn check_interval_against_write(&self, interval: &(Vec<u8>, Vec<u8>), marker: TaskId) -> bool {
 		// Could use a seek to start here, but this
 		// (check read access on write) is a marginal use case
 		// so not switching write_key to radix_tree at the time.
@@ -233,7 +321,7 @@ impl StateLogger {
 		// Also have it ordered for single iteration check.
 		// (in fact since most of the time they are one step of iteration this is mandatory
 		// but could be do more when we register new read interval.
-		for (key, ids) in iter.node_iter().iter_prefix().value_iter() {
+		for (key, ids) in iter.node_iter().iter().value_iter() {
 			if key > interval.1 {
 				break;
 			}
@@ -243,7 +331,7 @@ impl StateLogger {
 				return false;
 			}
 		}
-		result
+		true
 	}
 }
 

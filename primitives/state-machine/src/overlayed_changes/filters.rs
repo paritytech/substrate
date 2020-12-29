@@ -306,7 +306,6 @@ impl Filters {
 		}
 	}
 
-
 	pub(super) fn on_worker_result(&mut self, result: &WorkerResult) -> bool {
 		match result {
 			WorkerResult::CallAt(_result, _delta, marker) => {
@@ -764,7 +763,9 @@ impl Filters {
 			for (_child_storage, declaration) in decl.into_iter() {
 				match declaration {
 					WorkerDeclaration::None => (),
-					WorkerDeclaration::Optimistic => (),
+					WorkerDeclaration::OptimisticRead => (),
+					WorkerDeclaration::OptimisticWrite => (),
+					WorkerDeclaration::OptimisticWriteRead => (),
 					WorkerDeclaration::ChildRead(filter, _failure) => {
 						// undo a `set_parent_declaration` call.
 						self.failure_handlers.remove(task_id);
