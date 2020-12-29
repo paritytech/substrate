@@ -68,10 +68,7 @@ use frame_support::traits::{
 use sp_runtime::{ Percent, RuntimeDebug, traits::{
 	Zero, AccountIdConversion, Hash, BadOrigin
 }};
-use frame_support::traits::{
-	Contains, ContainsLengthBound,
-	OnUnbalanced, EnsureOrigin,
-};
+use frame_support::traits::{Contains, ContainsLengthBound, OnUnbalanced, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
@@ -415,15 +412,13 @@ decl_module! {
 		///
 		/// May only be called from `T::RejectOrigin`.
 		///
-		/// As a result, API will slash the finder and the deposits are lost.
+		/// As a result, the finder is slashed and the deposits are lost.
 		///
 		/// Emits `TipSlashed` if successful.
 		///
 		/// # <weight>
 		///   `T` is charged as upper bound given by `ContainsLengthBound`.
 		///   The actual cost depends on the implementation of `T::Tippers`.
-		/// - DbReads: `Tips`,
-		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::slash_tip(T::Tippers::max_len() as u32)]
 		fn slash_tip(origin, hash: T::Hash) {
@@ -432,8 +427,7 @@ decl_module! {
 			let tip = Tips::<T>::take(hash).ok_or(Error::<T>::UnknownTip)?;
 
 			if !tip.deposit.is_zero() {
-				let deposit = tip.deposit;
-				let imbalance = T::Currency::slash_reserved(&tip.finder, deposit).0;
+				let imbalance = T::Currency::slash_reserved(&tip.finder, tip.deposit).0;
 				T::OnSlash::on_unbalanced(imbalance);
 			}
 			Reasons::<T>::remove(&tip.reason);
