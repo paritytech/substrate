@@ -433,7 +433,7 @@ pub enum RewardPolicy<AccountId> {
 	/// Pay into single RewardDestination
 	One(RewardDestination<AccountId>),
 	/// Pay (Perbill * Total) to 1st Dest, ((1-Perbill) * Total) to 2nd Dest
-	Split(RewardDestination<AccountId>,Perbill,RewardDestination<AccountId>),
+	Split(RewardDestination<AccountId>, Perbill, RewardDestination<AccountId>),
 }
 
 impl<AccountId> Default for RewardPolicy<AccountId> {
