@@ -33,7 +33,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
 	DispatchError,
 };
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use pallet_contracts_primitives::ContractExecResult;
 
 pub use pallet_contracts_rpc_runtime_api::ContractsApi as ContractsRuntimeApi;
@@ -201,7 +201,7 @@ where
 		<<Block as BlockT>::Header as HeaderT>::Number,
 	>,
 	AccountId: Codec,
-	Balance: Codec + From<u128>,
+	Balance: Codec + TryFrom<number::NumberOrHex>,
 {
 	fn call(
 		&self,
@@ -221,10 +221,10 @@ where
 			input_data,
 		} = call_request;
 
-		// Make sure that value fits into 128 bits.
-		let value: u128 = value.try_into().map_err(|_| Error {
+		// Make sure that value fits into the balance type.
+		let value: Balance = value.try_into().map_err(|_| Error {
 			code: ErrorCode::InvalidParams,
-			message: format!("{:?} doesn't fit in u128 unsigned value", value),
+			message: format!("{:?} doesn't fit into the balance type", value),
 			data: None,
 		})?;
 
@@ -248,7 +248,7 @@ where
 		}
 
 		let exec_result = api
-			.call(&at, origin, dest, value.into(), gas_limit, input_data.to_vec())
+			.call(&at, origin, dest, value, gas_limit, input_data.to_vec())
 			.map_err(runtime_error_into_rpc_err)?;
 
 		Ok(exec_result.into())
