@@ -1195,7 +1195,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				),
 				Error::<Test>::NotCallable
 			);
-			assert_eq!(System::events(), vec![]);
+			assert!(System::events().is_empty());
 			assert!(ContractInfoOf::<Test>::get(&addr_bob).unwrap().get_alive().is_some());
 			assert_ok!(Contracts::claim_surcharge(Origin::none(), addr_bob.clone(), Some(ALICE)));
 			assert!(ContractInfoOf::<Test>::get(&addr_bob).unwrap().get_tombstone().is_some());
