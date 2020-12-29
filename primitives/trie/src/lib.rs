@@ -184,7 +184,11 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>,
 {
 	{
-		let mut trie = TrieDBMut::<L>::from_existing(&mut *db, &mut root)?;
+		let mut trie = if root == Default::default() {
+			TrieDBMut::<L>::new(db, &mut root)
+		} else {
+			TrieDBMut::<L>::from_existing(db, &mut root)?
+		};
 
 		let mut delta = delta.into_iter().collect::<Vec<_>>();
 		delta.sort_by(|l, r| l.0.borrow().cmp(r.0.borrow()));
@@ -530,6 +534,17 @@ mod tests {
 		).as_ref().iter().cloned().collect();
 
 		assert_eq!(root1, root2);
+	}
+
+
+	#[test]
+	fn delta_trie_root_works_with_empty_db() {
+		let mut db = MemoryDB::default();
+		delta_trie_root::<Layout, _, _, _, _, _>(
+			&mut db,
+			Default::default(),
+			vec![(&b"test"[..], Some(&b"value"[..]))],
+		).unwrap();
 	}
 
 	#[test]

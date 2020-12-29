@@ -154,7 +154,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	}
 
 	/// Return a new backend with all pending value.
-	pub fn commit_all(&self) -> InMemoryBackend<H> {
+	pub fn as_backend(&self) -> InMemoryBackend<H> {
 		let top: Vec<_> = self.overlay.changes()
 			.map(|(k, v)| (k.clone(), v.value().cloned()))
 			.collect();
@@ -170,6 +170,12 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		}
 
 		self.backend.update(transaction)
+	}
+
+	/// Commit all pending changes to the underlying backend.
+	pub fn commit_all(&mut self) {
+		self.backend = self.as_backend();
+		self.overlay.clear();
 	}
 
 	/// Execute the given closure while `self` is set as externalities.
@@ -209,7 +215,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N>
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
 	fn eq(&self, other: &TestExternalities<H, N>) -> bool {
-		self.commit_all().eq(&other.commit_all())
+		self.as_backend().eq(&other.as_backend())
 	}
 }
 
@@ -258,7 +264,7 @@ impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N> where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::{H256, traits::Externalities};
+	use sp_core::{H256, traits::Externalities, storage::ChildInfo};
 	use sp_runtime::traits::BlakeTwo256;
 	use hex_literal::hex;
 
@@ -288,5 +294,28 @@ mod tests {
 	fn check_send() {
 		fn assert_send<T: Send>() {}
 		assert_send::<TestExternalities::<BlakeTwo256, u64>>();
+	}
+
+	#[test]
+	fn commit_all_and_kill_child_storage() {
+		let mut ext = TestExternalities::<BlakeTwo256, u64>::default();
+		let child_info = ChildInfo::new_default(&b"test_child"[..]);
+
+		{
+			let mut ext = ext.ext();
+			ext.place_child_storage(&child_info, b"doe".to_vec(), Some(b"reindeer".to_vec()));
+			ext.place_child_storage(&child_info, b"dog".to_vec(), Some(b"puppy".to_vec()));
+			ext.place_child_storage(&child_info, b"dog2".to_vec(), Some(b"puppy2".to_vec()));
+		}
+
+		ext.commit_all();
+
+		{
+			let mut ext = ext.ext();
+
+			assert!(!ext.kill_child_storage(&child_info, Some(2)), "Should not delete all keys");
+
+			assert!(ext.child_storage(&child_info, &b"dog2"[..]).is_some());
+		}
 	}
 }
