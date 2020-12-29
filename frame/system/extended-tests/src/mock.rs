@@ -25,8 +25,7 @@ use sp_runtime::{
 	testing::Header,
 };
 use frame_support::{
-	impl_outer_origin, parameter_types, impl_outer_event,
-	dispatch::{Dispatchable, DispatchInfo, PostDispatchInfo},
+	impl_outer_origin, impl_outer_dispatch, impl_outer_event, parameter_types,
 };
 
 type AccountId = u64;
@@ -41,22 +40,16 @@ impl_outer_event! {
 	}
 }
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
+impl_outer_dispatch! {
+	pub enum Call for Test where origin: Origin {
+		frame_system::System,
+		pallet_assets::Assets,
+		pallet_balances::Balances,
+	}
 }
 
-#[derive(Debug, codec::Encode, codec::Decode)]
-pub struct Call;
-
-impl Dispatchable for Call {
-	type Origin = ();
-	type Config = ();
-	type Info = DispatchInfo;
-	type PostInfo = PostDispatchInfo;
-	fn dispatch(self, _origin: Self::Origin)
-		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-			panic!("Do not use dummy implementation for dispatch.");
-	}
+impl_outer_origin! {
+	pub enum Origin for Test where system = frame_system {}
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -73,7 +66,7 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Origin = Origin;
 	type Index = AccountIndex;
-	type Call = ();
+	type Call = Call;
 	type BlockNumber = BlockNumber;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;

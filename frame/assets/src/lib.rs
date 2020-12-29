@@ -201,14 +201,14 @@ pub struct AssetBalance<
 decl_storage! {
 	trait Store for Module<T: Config> as Assets {
 		/// Details of an asset.
-		Asset: map hasher(blake2_128_concat) T::AssetId => Option<AssetDetails<
+		pub Asset: map hasher(blake2_128_concat) T::AssetId => Option<AssetDetails<
 			T::Balance,
 			T::AccountId,
 			BalanceOf<T>,
 		>>;
 
 		/// The number of units of assets held by any given account.
-		Account: double_map
+		pub Account: double_map
 			hasher(blake2_128_concat) T::AssetId,
 			hasher(blake2_128_concat) T::AccountId
 			=> AssetBalance<T::Balance>;
