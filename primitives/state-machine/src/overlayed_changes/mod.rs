@@ -399,7 +399,7 @@ impl OverlayedChanges {
 		match declaration {
 			WorkerDeclaration::None => (),
 			WorkerDeclaration::Optimistic => {
-				self.optimistic_logger.log_writes(child_marker)
+				self.optimistic_logger.log_writes(Some(child_marker))
 			},
 			WorkerDeclaration::ChildRead(filter, failure) => {
 				self.filters.guard_child_filter_read(&filter);
@@ -430,7 +430,7 @@ impl OverlayedChanges {
 		match declaration {
 			WorkerDeclaration::None => (),
 			WorkerDeclaration::Optimistic => {
-				self.optimistic_logger.log_reads();
+				self.optimistic_logger.log_reads(None);
 			},
 			WorkerDeclaration::ChildRead(filter, failure) => {
 				self.filters.set_failure_handler(None, failure); 
@@ -779,7 +779,7 @@ impl OverlayedChanges {
 	/// For optimistic worker, we extract logs from the overlay.
 	/// When call on a non optimistic worker returns `None`.
 	pub fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
-		self.optimistic_logger.extract_read()
+		self.optimistic_logger.extract_parent_log()
 	}
 
 	/// Extract changes from overlay.
@@ -943,8 +943,11 @@ pub mod radix_trees {
 	/// Radix tree internally use for filtering key accesses.
 	pub type FilterTree<F> = radix_tree::Tree<Node256NoBackendART<Filter<F>>>;
 
+	/// Write access logs with children origin.
+	pub type AccessTreeWrite = radix_tree::Tree<Node256NoBackendART<super::loggers::OriginLog>>;
+
 	/// Write access logs.
-	pub type AccessTreeWrite = radix_tree::Tree<Node256NoBackendART<BTreeSet<TaskId>>>;
+	pub type AccessTreeWriteParent = radix_tree::Tree<Node256NoBackendART<()>>;
 }
 
 #[cfg(test)]

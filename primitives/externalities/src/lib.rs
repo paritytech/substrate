@@ -383,18 +383,60 @@ pub struct AccessLog {
 	pub children_logger: Vec<(Vec<u8>, StateLog)>,
 }
 
+impl AccessLog {
+	/// Return true if a read related information was logged.
+	pub fn has_read(&self) -> bool {
+		if self.read_all {
+			return true;
+		}
+		if self.top_logger.has_read() {
+			return true;
+		}
+		for (_key, logger) in self.children_logger.iter() {
+			if logger.has_read() {
+				return true;
+			}
+		}
+		false
+	}
+	/// Return true if a write related information was logged.
+	pub fn has_write(&self) -> bool {
+		if self.top_logger.has_write() {
+			return true;
+		}
+		for (_key, logger) in self.children_logger.iter() {
+			if logger.has_write() {
+				return true;
+			}
+		}
+		false
+	}
+}
+
 /// Log of a given trie state.
 #[derive(codec::Encode, codec::Decode, Default)]
 pub struct StateLog {
 	/// Read access to a key.
-	/// Note that write access are not included because
-	/// they are in the worker payload.
-	/// Writes that got rollback are not an issue as long
-	/// as previous value was not read.
 	pub read_keys: Vec<Vec<u8>>,
+	/// Write access to a key.
+	pub write_keys: Vec<Vec<u8>>,
+	/// Write access to a whole prefix (eg key removal
+	/// by prefix).
+	pub write_prefix: Vec<Vec<u8>>,
 	/// Worker did iterate over a given interval.
 	/// Interval is a pair of inclusive start and end key.
 	pub read_intervals: Vec<(Vec<u8>, Vec<u8>)>,
+}
+
+impl StateLog {
+	/// Return true if a read related information was logged.
+	pub fn has_read(&self) -> bool {
+		!self.read_keys.is_empty() || !self.read_intervals.is_empty()
+	}
+	/// Return true if a write related information was logged.
+	pub fn has_write(&self) -> bool {
+		!self.write_keys.is_empty() || !self.write_prefix.is_empty()
+	}
 }
 
 impl WorkerResult {
