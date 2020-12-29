@@ -167,9 +167,7 @@ impl SyncCryptoStore for LocalKeystore {
 		let all_keys = SyncCryptoStore::keys(self, id)?
 			.into_iter()
 			.collect::<HashSet<_>>();
-		Ok(keys.into_iter()
-		   .filter(|key| all_keys.contains(key))
-		   .collect::<Vec<_>>())
+		Ok(keys.into_iter().filter(|key| all_keys.contains(key)).collect::<Vec<_>>())
 	}
 
 	fn sign_with(
