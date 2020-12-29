@@ -900,7 +900,7 @@ define_env!(Env, <E: Ext>,
 			ctx.read_sandbox_memory_as(beneficiary_ptr, beneficiary_len)?;
 
 		ctx.ext.terminate(&beneficiary)?;
-		Err(TrapReason::Termination.into())
+		Err(TrapReason::Termination)
 	},
 
 	seal_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
@@ -1164,7 +1164,7 @@ define_env!(Env, <E: Ext>,
 		};
 
 		ctx.ext.restore_to(dest, code_hash, rent_allowance, delta)?;
-		Err(TrapReason::Restoration.into())
+		Err(TrapReason::Restoration)
 	},
 
 	// Deposit a contract event with the data buffer and optional list of topics. There is a limit
