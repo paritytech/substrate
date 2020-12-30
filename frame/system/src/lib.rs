@@ -257,6 +257,13 @@ pub trait Config: 'static + Eq + Clone {
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
 
 	type SystemWeightInfo: WeightInfo;
+
+	/// The designated SS85 prefix of this chain.
+	///
+	/// This replaces the "ss58Format" property declared in the chain spec. Reason is
+	/// that the runtime should know about the prefix in order to make use of it as
+	/// an identifier of the chain.
+	type SS58Prefix: Get<u8>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Config>::Hash>;
@@ -515,6 +522,13 @@ decl_module! {
 
 		/// The weight configuration (limits & base values) for each class of extrinsics and block.
 		const BlockWeights: limits::BlockWeights = T::BlockWeights::get();
+
+		/// The designated SS85 prefix of this chain.
+		///
+		/// This replaces the "ss58Format" property declared in the chain spec. Reason is
+		/// that the runtime should know about the prefix in order to make use of it as
+		/// an identifier of the chain.
+		const SS58Prefix: u8 = T::SS58Prefix::get();
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if !UpgradedToU32RefCount::get() {

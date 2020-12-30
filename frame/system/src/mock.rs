@@ -117,6 +117,7 @@ impl Config for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = RecordKilled;
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 pub type System = Module<Test>;
