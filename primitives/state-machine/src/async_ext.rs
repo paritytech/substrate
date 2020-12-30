@@ -64,7 +64,6 @@ pub fn spawn_call_ext(
 	backend: Box<dyn AsyncBackend>,
 	parent_overlay: Option<&mut OverlayedChanges>, 
 ) -> AsyncExt {
-	const OVERLAY_REQUIRED: &'static str = "Externalities does not implement these workers";
 	let mut result = match kind {
 		WorkerType::Stateless => {
 			return AsyncExt {

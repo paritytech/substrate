@@ -47,9 +47,11 @@ use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	traits::{SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
-use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend,
-	WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities as AsyncExternalitiesTrait};
-use sp_core::hexdisplay::HexDisplay;
+use sp_externalities::{
+	Externalities, Extensions, ExternalitiesExt as _, TaskId,
+	WorkerResult, WorkerDeclaration, WorkerType,
+	AsyncExternalities as AsyncExternalitiesTrait,
+};
 
 /// Simple state-less externalities for use in async context.
 ///

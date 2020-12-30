@@ -425,7 +425,7 @@ impl OverlayedChanges {
 				self.filters.guard_child_filter_read(&read_filter);
 				self.filters.guard_child_filter_write(&write_filter);
 				self.filters.add_change(WorkerDeclaration::ChildWriteRead(write_filter.clone(), read_filter.clone(), failure), child_marker);
-				self.filters.forbid_writes(write_filter, child_marker);
+				self.filters.forbid_reads(write_filter, child_marker);
 				self.filters.forbid_writes(read_filter, child_marker);
 			},
 		}

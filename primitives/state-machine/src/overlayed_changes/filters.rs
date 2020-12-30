@@ -32,9 +32,6 @@ use failure::{FailureHandlers, DeclFailureHandling};
 /// Worker declaration assertion failure.
 pub const BROKEN_DECLARATION_ACCESS: &'static str = "Key access impossible due to worker access declaration";
 
-/// Worker declaration not possible for spawn.
-pub const BROKEN_DECLARATION: &'static str = "Spawn impossible due to incompatible access declaration";
-
 /// Main filter state.
 #[derive(Debug, Clone)]
 pub(super) struct Filters {
@@ -200,12 +197,11 @@ impl Filters {
 	) {
 		for prefix in filter.prefixes_lock {
 			if let Some(filter) = tree.get_mut(prefix.as_slice()) {
-				let mut f = if write {
-					&mut filter.write_prefix
+				if write {
+					filter.write_prefix = true;
 				} else {
-					&mut filter.read_only_prefix
-				};
-				*f = true;
+					filter.read_only_prefix = true;
+				}
 			} else {
 				// new entry
 				let mut filter = Filter::<bool>::default();
@@ -278,7 +274,7 @@ impl Filters {
 		Self::remove_filter(&mut self.filters_forbid, filter, from_child, true);
 	}
 
-	fn forbid_reads(
+	pub(super) fn forbid_reads(
 		&mut self,
 		filter: AccessDeclaration,
 		from_child: TaskId,
@@ -815,11 +811,6 @@ pub struct FilterOrigin {
 impl FilterOrigin {
 	fn is_defined(&self) -> bool {
 		self.children.is_some()
-	}
-
-	// TODO used?
-	fn tasks(&self) -> Option<&BTreeSet<TaskId>> {
-		self.children.as_ref()
 	}
 
 	fn set(&mut self, from_child: TaskId) {

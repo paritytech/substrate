@@ -60,6 +60,8 @@ pub(super) struct AccessLogger {
 	children_read_all: RefCell<OriginLog>,
 	top_logger: StateLogger,
 	children_logger: RefCell<Map<StorageKey, StateLogger>>,
+	// TODO unused.
+	eager_clean: bool,
 }
 
 /// Logger for a given trie state.
@@ -88,6 +90,11 @@ impl StateLogger {
 		self.children_read_intervals.get_mut().clear();
 	}
 
+	fn remove_all_children_write_logs(&mut self) {
+		self.children_write_key.clear();
+		self.children_write_prefix.clear();
+	}
+
 	fn remove_children_read_logs(&mut self, marker: TaskId) {
 		retain_map(self.children_read_key.get_mut(), |_key, value| {
 			value.remove(&marker);
@@ -97,16 +104,6 @@ impl StateLogger {
 			value.remove(&marker);
 			!value.is_empty()
 		});
-	}
-
-	fn remove_parent_write_logs(&mut self) {
-		self.parent_write_key.clear();
-		self.parent_write_prefix.clear();
-	}
-
-	fn remove_all_children_write_logs(&mut self) {
-		self.children_write_key.clear();
-		self.children_write_prefix.clear();
 	}
 
 	fn remove_children_write_logs(&mut self, marker: TaskId) {
@@ -260,12 +257,12 @@ impl StateLogger {
 			}
 		}
 		let mut iter = self.children_write_prefix.seek_iter(prefix).value_iter();
-		while let Some((prefix, ids)) = iter.next() {
+		while let Some((_prefix, ids)) = iter.next() {
 			if ids.contains(&marker) {
 				return false;
 			}
 		}
-		for (key, ids) in iter.node_iter().iter_prefix().value_iter() {
+		for (_key, ids) in iter.node_iter().iter_prefix().value_iter() {
 			if ids.contains(&marker) {
 				return false;
 			}
@@ -312,7 +309,7 @@ impl StateLogger {
 			}
 		}
 		let mut iter = self.children_write_prefix.seek_iter(interval.0.as_slice()).value_iter();
-		while let Some((prefix, ids)) = iter.next() {
+		while let Some((_prefix, ids)) = iter.next() {
 			if ids.contains(&marker) {
 				return false;
 			}
@@ -458,6 +455,9 @@ impl AccessLogger {
 	}
 
 	pub(super) fn remove_worker(&mut self, worker: TaskId) {
+		if self.eager_clean {
+			return self.remove_worker_eager(worker);
+		}
 		self.log_write.remove(&worker);
 		// we could remove all occurence, but we only do when no runing thread
 		// to just clear.
@@ -472,6 +472,35 @@ impl AccessLogger {
 			self.top_logger.remove_all_children_read_logs();
 			for child_logger in self.children_logger.get_mut().iter_mut() {
 				child_logger.1.remove_all_children_read_logs();
+			}
+		}
+	}
+
+	fn remove_worker_eager(&mut self, worker: TaskId) {
+		if self.log_write.remove(&worker) {
+			if self.log_write.is_empty() {
+				self.top_logger.remove_all_children_write_logs();
+				for child_logger in self.children_logger.get_mut().iter_mut() {
+					child_logger.1.remove_all_children_write_logs();
+				}
+			} else {
+				self.top_logger.remove_children_write_logs(worker);
+				for child_logger in self.children_logger.get_mut().iter_mut() {
+					child_logger.1.remove_children_write_logs(worker);
+				}
+			}
+		}
+		if self.log_read.remove(&worker) {
+			if self.log_read.is_empty() {
+				self.top_logger.remove_all_children_read_logs();
+				for child_logger in self.children_logger.get_mut().iter_mut() {
+					child_logger.1.remove_all_children_read_logs();
+				}
+			} else {
+				self.top_logger.remove_children_read_logs(worker);
+				for child_logger in self.children_logger.get_mut().iter_mut() {
+					child_logger.1.remove_children_read_logs(worker);
+				}
 			}
 		}
 	}
