@@ -173,9 +173,28 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	}
 
 	/// Commit all pending changes to the underlying backend.
-	pub fn commit_all(&mut self) {
-		self.backend = self.as_backend();
-		self.overlay.clear();
+	///
+	/// # Panic
+	///
+	/// This will panic if there are still open transactions.
+	pub fn commit_all(&mut self) -> Result<(), String> {
+		let changes_trie_state = match self.changes_trie_config.clone() {
+			Some(config) => Some(ChangesTrieState {
+				config,
+				zero: 0.into(),
+				storage: &self.changes_trie_storage,
+			}),
+			None => None,
+		};
+		let changes = self.overlay.drain_storage_changes(
+			&self.backend,
+			changes_trie_state.as_ref(),
+			Default::default(),
+			&mut Default::default(),
+		)?;
+
+		self.backend.apply_transaction(changes.transaction_storage_root, changes.transaction);
+		Ok(())
 	}
 
 	/// Execute the given closure while `self` is set as externalities.
@@ -308,7 +327,7 @@ mod tests {
 			ext.place_child_storage(&child_info, b"dog2".to_vec(), Some(b"puppy2".to_vec()));
 		}
 
-		ext.commit_all();
+		ext.commit_all().unwrap();
 
 		{
 			let mut ext = ext.ext();
@@ -319,5 +338,21 @@ mod tests {
 			assert!(ext.child_storage(&child_info, &b"dog"[..]).is_none());
 			assert!(ext.child_storage(&child_info, &b"dog2"[..]).is_some());
 		}
+	}
+
+	#[test]
+	fn as_backend_generates_same_backend_as_commit_all() {
+		let mut ext = TestExternalities::<BlakeTwo256, u64>::default();
+		{
+			let mut ext = ext.ext();
+			ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
+			ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
+			ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
+		}
+
+		let backend = ext.as_backend();
+
+		ext.commit_all().unwrap();
+		assert!(ext.backend.eq(&backend), "Both backend should be equal.");
 	}
 }

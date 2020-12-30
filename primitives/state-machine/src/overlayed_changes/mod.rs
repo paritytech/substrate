@@ -215,12 +215,6 @@ impl<Transaction: Default, H: Hasher, N: BlockNumber> Default for StorageChanges
 }
 
 impl OverlayedChanges {
-	/// Clear all changes.
-	pub fn clear(&mut self) {
-		self.top = Default::default();
-		self.children.clear();
-	}
-
 	/// Whether no changes are contained in the top nor in any of the child changes.
 	pub fn is_empty(&self) -> bool {
 		self.top.is_empty() && self.children.is_empty()

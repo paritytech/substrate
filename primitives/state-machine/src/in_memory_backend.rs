@@ -77,6 +77,12 @@ where
 		Self::new(clone, root)
 	}
 
+	/// Apply the given transaction to this backend and set the root to the given value.
+	pub fn apply_transaction(&mut self, root: H::Out, transaction: MemoryDB<H>) {
+		self.backend_storage_mut().consolidate(transaction);
+		self.essence.set_root(root);
+	}
+
 	/// Compare with another in-memory backend.
 	pub fn eq(&self, other: &Self) -> bool {
 		self.root() == other.root()
