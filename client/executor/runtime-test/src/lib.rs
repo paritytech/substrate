@@ -373,6 +373,16 @@ sp_core::wasm_export_functions! {
 			sp_io::storage::set(b"foo", b"bar");
 		}
 	}
+
+	fn test_optimistic_read_conflict_nested() {
+		sp_tasks::set_capacity(2);
+		let handle = sp_tasks::spawn(tasks::read_key_nested, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		sp_io::storage::set(b"key", b"val");
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
 }
 
 #[cfg(not(feature = "std"))]
@@ -396,6 +406,12 @@ mod tasks {
 
 	pub fn read_key(_data: Vec<u8>) -> Vec<u8> {
 		let _foo = sp_io::storage::get(b"key");
+		Default::default()
+	}
+
+	pub fn read_key_nested(_data: Vec<u8>) -> Vec<u8> {
+		let handle = sp_tasks::spawn(read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		handle.join().unwrap();
 		Default::default()
 	}
 }
