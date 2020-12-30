@@ -1982,6 +1982,100 @@ fn lazy_removal_works() {
 }
 
 #[test]
+fn lazy_removal_partial_remove_works() {
+	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
+
+	// We create a contract with some extra keys above the weight limit
+	let extra_keys = 7u32;
+	let weight_limit = 5_000_000_000;
+	let (_, max_keys) = Storage::<Test>::deletion_budget(1, weight_limit);
+	let vals: Vec<_> = (0..max_keys + extra_keys).map(|i| {
+		(blake2_256(&i.encode()), (i as u32), (i as u32).encode())
+	})
+	.collect();
+
+	let mut ext = ExtBuilder::default().existential_deposit(50).build();
+
+	let trie = ext.execute_with(|| {
+		let subsistence = ConfigCache::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), code));
+
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				subsistence,
+				GAS_LIMIT,
+				hash.into(),
+				vec![],
+				vec![],
+			),
+		);
+
+		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
+		let info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
+		let trie = &info.child_trie_info();
+
+		// Put value into the contracts child trie
+		for val in &vals {
+			Storage::<Test>::write(
+				&addr,
+				&info.trie_id,
+				&val.0,
+				Some(val.2.clone()),
+			).unwrap();
+		}
+
+		// Terminate the contract
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![],
+		));
+
+		// Contract info should be gone
+		assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
+
+		// But value should be still there as the lazy removal did not run, yet.
+		for val in &vals {
+			assert_eq!(child::get::<u32>(trie, &blake2_256(&val.0)), Some(val.1));
+		}
+
+		trie.clone()
+	});
+
+	// The lazy removal limit only applies to the backend but not to the overlay.
+	// This commits all keys from the overlay to the backend.
+	ext.commit_all().unwrap();
+
+	ext.execute_with(|| {
+		// Run the lazy removal
+		let weight_used = Storage::<Test>::process_deletion_queue_batch(weight_limit).unwrap();
+
+		// Weight should be exhausted because we could not even delete all keys
+		assert_eq!(weight_used, weight_limit);
+
+		let mut num_deleted = 0u32;
+		let mut num_remaining = 0u32;
+
+		for val in &vals {
+			match child::get::<u32>(&trie, &blake2_256(&val.0)) {
+				None => num_deleted += 1,
+				Some(x) if x == val.1 => num_remaining += 1,
+				Some(_) => panic!("Unexpected value in contract storage"),
+			}
+		}
+
+		// All but one key is removed
+		assert_eq!(num_deleted + num_remaining, vals.len() as u32);
+		assert_eq!(num_deleted, max_keys);
+		assert_eq!(num_remaining, extra_keys);
+	});
+}
+
+#[test]
 fn lazy_removal_does_not_use_all_weight() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
