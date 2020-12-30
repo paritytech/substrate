@@ -1072,7 +1072,7 @@ macro_rules! impl_benchmark_test {
 
 #[macro_export]
 macro_rules! add_benchmark {
-	( $params:ident, $batches:ident, $name:ident, $( $location:tt )* ) => (
+	( $params:ident, $batches:ident, $name:path, $( $location:tt )* ) => (
 		let name_string = stringify!($name).as_bytes();
 		let instance_string = stringify!( $( $location )* ).as_bytes();
 		let (config, whitelist) = $params;
