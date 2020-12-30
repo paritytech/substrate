@@ -77,7 +77,7 @@ fn create_bounty<T: Config>() -> Result<(
 	Ok((curator_lookup, bounty_id))
 }
 
-fn setup_pod_account<T: Config>() {
+fn setup_pot_account<T: Config>() {
 	let pot_account = Bounties::<T>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
@@ -109,7 +109,7 @@ benchmarks! {
 	}: _(RawOrigin::Root, bounty_id)
 
 	propose_curator {
-		setup_pod_account::<T>();
+		setup_pot_account::<T>();
 		let (caller, curator, fee, value, reason) = setup_bounty::<T>(0, MAX_BYTES);
 		let curator_lookup = T::Lookup::unlookup(curator.clone());
 		Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
@@ -120,7 +120,7 @@ benchmarks! {
 
 	// Worst case when curator is inactive and any sender unassigns the curator.
 	unassign_curator {
-		setup_pod_account::<T>();
+		setup_pot_account::<T>();
 		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 		let bounty_id = BountyCount::get() - 1;
@@ -129,7 +129,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), bounty_id)
 
 	accept_curator {
-		setup_pod_account::<T>();
+		setup_pot_account::<T>();
 		let (caller, curator, fee, value, reason) = setup_bounty::<T>(0, MAX_BYTES);
 		let curator_lookup = T::Lookup::unlookup(curator.clone());
 		Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
@@ -140,7 +140,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(curator), bounty_id)
 
 	award_bounty {
-		setup_pod_account::<T>();
+		setup_pot_account::<T>();
 		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 
@@ -150,7 +150,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(curator), bounty_id, beneficiary)
 
 	claim_bounty {
-		setup_pod_account::<T>();
+		setup_pot_account::<T>();
 		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 
@@ -170,14 +170,14 @@ benchmarks! {
 	}
 
 	close_bounty_proposed {
-		setup_pod_account::<T>();
+		setup_pot_account::<T>();
 		let (caller, curator, fee, value, reason) = setup_bounty::<T>(0, 0);
 		Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::get() - 1;
 	}: close_bounty(RawOrigin::Root, bounty_id)
 
 	close_bounty_active {
-		setup_pod_account::<T>();
+		setup_pot_account::<T>();
 		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 		let bounty_id = BountyCount::get() - 1;
@@ -187,7 +187,7 @@ benchmarks! {
 	}
 
 	extend_bounty_expiry {
-		setup_pod_account::<T>();
+		setup_pot_account::<T>();
 		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 
@@ -200,7 +200,7 @@ benchmarks! {
 
 	spend_funds {
 		let b in 1 .. 100;
-		setup_pod_account::<T>();
+		setup_pot_account::<T>();
 		create_approved_bounties::<T>(b)?;
 
 		let mut budget_remaining = BalanceOf::<T>::max_value();
