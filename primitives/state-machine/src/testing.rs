@@ -181,7 +181,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	///
 	/// This will panic if there are still open transactions.
 	pub fn commit_all(&mut self) -> Result<(), String> {
-		let changes = self.overlay.drain_storage_changes(
+		let changes = self.overlay.drain_storage_changes::<_, _, N>(
 			&self.backend,
 			None,
 			Default::default(),
