@@ -17,46 +17,13 @@
 //! State machine in memory backend.
 
 use crate::{
-	StorageKey, StorageValue, StorageCollection,
-	trie_backend::TrieBackend,
+	StorageKey, StorageValue, StorageCollection, trie_backend::TrieBackend, backend::Backend,
 };
-use std::{collections::{BTreeMap, HashMap}};
+use std::collections::{BTreeMap, HashMap};
 use hash_db::Hasher;
-use sp_trie::{
-	MemoryDB, TrieMut,
-	trie_types::TrieDBMut,
-};
+use sp_trie::{MemoryDB, empty_trie_root, Layout};
 use codec::Codec;
 use sp_core::storage::{ChildInfo, Storage};
-
-/// Insert input pairs into memory db.
-fn insert_into_memory_db<H, I>(mut root: H::Out, mdb: &mut MemoryDB<H>, input: I) -> H::Out
-where
-	H: Hasher,
-	I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-{
-	{
-		let mut trie = if root == Default::default() {
-			TrieDBMut::<H>::new(mdb, &mut root)
-		} else {
-			TrieDBMut::<H>::from_existing(mdb, &mut root).unwrap()
-		};
-		for (key, value) in input {
-			if let Err(e) = match value {
-				Some(value) => {
-					trie.insert(&key, &value)
-				},
-				None => {
-					trie.remove(&key)
-				},
-			}  {
-				panic!("Failed to write to trie: {}", e);
-			}
-		}
-		trie.commit();
-	}
-	root
-}
 
 /// Create a new empty instance of in-memory backend.
 pub fn new_in_mem<H: Hasher>() -> TrieBackend<MemoryDB<H>, H>
@@ -64,9 +31,7 @@ where
 	H::Out: Codec + Ord,
 {
 	let db = MemoryDB::default();
-	let mut backend = TrieBackend::new(db, Default::default());
-	backend.insert(std::iter::empty());
-	backend
+	TrieBackend::new(db, empty_trie_root::<Layout<H>>())
 }
 
 impl<H: Hasher> TrieBackend<MemoryDB<H>, H>
@@ -92,32 +57,16 @@ where
 		&mut self,
 		changes: T,
 	) {
-		let mut new_child_roots = Vec::new();
-		let mut root_map = None;
-		let root = self.root().clone();
-		for (child_info, map) in changes {
-			if let Some(child_info) = child_info.as_ref() {
-				let prefix_storage_key = child_info.prefixed_storage_key();
-				let ch = insert_into_memory_db::<H, _>(root, self.backend_storage_mut(), map.clone().into_iter());
-				new_child_roots.push((prefix_storage_key.into_inner(), Some(ch.as_ref().into())));
-			} else {
-				root_map = Some(map);
-			}
-		}
+		let (top, child) = changes.into_iter().partition::<Vec<_>, _>(|v| v.0.is_none());
+		let (root, transaction) = self.full_storage_root(
+			top.iter().map(|(_, v)| v).flatten().map(|(k, v)| (&k[..], v.as_deref())),
+			child.iter()
+				.filter_map(|v|
+					v.0.as_ref().map(|c| (c, v.1.iter().map(|(k, v)| (&k[..], v.as_deref()))))
+				),
+		);
 
-		let root = match root_map {
-			Some(map) => insert_into_memory_db::<H, _>(
-				root,
-				self.backend_storage_mut(),
-				map.into_iter().chain(new_child_roots.into_iter()),
-			),
-			None => insert_into_memory_db::<H, _>(
-				root,
-				self.backend_storage_mut(),
-				new_child_roots.into_iter(),
-			),
-		};
-		self.essence.set_root(root);
+		self.apply_transaction(root, transaction);
 	}
 
 	/// Merge trie nodes into this backend.
@@ -125,6 +74,12 @@ where
 		let mut clone = self.backend_storage().clone();
 		clone.consolidate(changes);
 		Self::new(clone, root)
+	}
+
+	/// Apply the given transaction to this backend and set the root to the given value.
+	pub fn apply_transaction(&mut self, root: H::Out, transaction: MemoryDB<H>) {
+		self.backend_storage_mut().consolidate(transaction);
+		self.essence.set_root(root);
 	}
 
 	/// Compare with another in-memory backend.
@@ -158,7 +113,9 @@ where
 {
 	fn from(inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>) -> Self {
 		let mut backend = new_in_mem();
-		backend.insert(inner.into_iter().map(|(k, m)| (k, m.into_iter().map(|(k, v)| (k, Some(v))).collect())));
+		backend.insert(
+			inner.into_iter().map(|(k, m)| (k, m.into_iter().map(|(k, v)| (k, Some(v))).collect())),
+		);
 		backend
 	}
 }
@@ -231,5 +188,17 @@ mod tests {
 			Some(b"3".to_vec()));
 		let storage_key = child_info.prefixed_storage_key();
 		assert!(trie_backend.storage(storage_key.as_slice()).unwrap().is_some());
+	}
+
+	#[test]
+	fn insert_multiple_times_child_data_works() {
+		let mut storage = new_in_mem::<BlakeTwo256>();
+		let child_info = ChildInfo::new_default(b"1");
+
+		storage.insert(vec![(Some(child_info.clone()), vec![(b"2".to_vec(), Some(b"3".to_vec()))])]);
+		storage.insert(vec![(Some(child_info.clone()), vec![(b"1".to_vec(), Some(b"3".to_vec()))])]);
+
+		assert_eq!(storage.child_storage(&child_info, &b"2"[..]), Ok(Some(b"3".to_vec())));
+		assert_eq!(storage.child_storage(&child_info, &b"1"[..]), Ok(Some(b"3".to_vec())));
 	}
 }
