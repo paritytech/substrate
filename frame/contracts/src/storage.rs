@@ -282,7 +282,7 @@ where
 				match outcome {
 					// This should not happen as our budget was large enough to remove all keys.
 					KillOutcome::SomeRemaining => {
-						debug::warn!(
+						debug::error!(
 							"After deletion keys are remaining in this child trie: {:?}",
 							removed.trie_id,
 						);
