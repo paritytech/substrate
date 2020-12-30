@@ -29,7 +29,7 @@ use sp_core::{
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{
 	Externalities, Extensions, Extension, ExtensionStore, TaskId,
-	WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities,
+	WorkerResult, WorkerDeclaration, AsyncExternalities,
 };
 use codec::{Decode, Encode, EncodeAppend};
 
@@ -683,13 +683,11 @@ where
 	fn get_worker_externalities(
 		&mut self,
 		worker_id: u64,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
 		let backend = self.backend.async_backend();
 		Box::new(crate::async_ext::spawn_call_ext(
 			worker_id,
-			kind,
 			declaration,
 			backend,
 			Some(&mut self.overlay),

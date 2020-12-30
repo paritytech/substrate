@@ -758,20 +758,23 @@ impl Filters {
 		if let Some(decl) = self.changes.remove(&task_id) {
 			for (_child_storage, declaration) in decl.into_iter() {
 				match declaration {
-					WorkerDeclaration::None => (),
-					WorkerDeclaration::OptimisticRead => (),
-					WorkerDeclaration::OptimisticWrite => (),
-					WorkerDeclaration::OptimisticWriteRead => (),
-					WorkerDeclaration::ChildRead(filter, _failure) => {
+					WorkerDeclaration::Stateless
+					| WorkerDeclaration::ReadLastBlock
+					| WorkerDeclaration::ReadAtSpawn
+					| WorkerDeclaration::WriteAtSpawn => (),
+					WorkerDeclaration::ReadAtJoinOptimistic => (),
+					WorkerDeclaration::WriteOptimistic => (),
+					WorkerDeclaration::WriteAtJoinOptimistic => (),
+					WorkerDeclaration::ReadAtJoinDeclarative(filter, _failure) => {
 						// undo a `set_parent_declaration` call.
 						self.failure_handlers.remove(task_id);
 						self.remove_forbid_writes(filter, task_id);
 					},
-					WorkerDeclaration::ChildWrite(filter, _failure) => {
+					WorkerDeclaration::WriteDeclarative(filter, _failure) => {
 						self.failure_handlers.remove(task_id);
 						self.remove_forbid_writes(filter, task_id);
 					},
-					WorkerDeclaration::ChildWriteRead(write_filter, read_filter, _failure) => {
+					WorkerDeclaration::WriteAtJoinDeclarative(write_filter, read_filter, _failure) => {
 						self.failure_handlers.remove(task_id);
 						self.remove_forbid_writes(write_filter, task_id);
 						self.remove_forbid_writes(read_filter, task_id);

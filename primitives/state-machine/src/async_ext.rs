@@ -59,13 +59,12 @@ impl std::fmt::Debug for AsyncExt
 /// TODO renma
 pub fn spawn_call_ext(
 	worker_id: u64,
-	kind: WorkerType,
 	declaration: WorkerDeclaration,
 	backend: Box<dyn AsyncBackend>,
 	parent_overlay: Option<&mut OverlayedChanges>, 
 ) -> AsyncExt {
-	let mut result = match kind {
-		WorkerType::Stateless => {
+	let mut result = match &declaration {
+		WorkerDeclaration::Stateless => {
 			return AsyncExt {
 				kind: WorkerType::Stateless,
 				overlay: Default::default(),
@@ -73,9 +72,9 @@ pub fn spawn_call_ext(
 				backend: Box::new(()),
 			}
 		},
-		WorkerType::ReadLastBlock => {
+		WorkerDeclaration::ReadLastBlock => {
 			return AsyncExt {
-				kind,
+				kind: declaration.get_type(),
 				overlay: Default::default(),
 				spawn_id: None,
 				backend,
@@ -83,7 +82,7 @@ pub fn spawn_call_ext(
 		},
 		_ => {
 			AsyncExt {
-				kind,
+				kind: declaration.get_type(),
 				overlay: Default::default(),
 				spawn_id: Some(worker_id),
 				backend: backend,
@@ -351,14 +350,11 @@ impl Externalities for AsyncExt {
 	fn get_worker_externalities(
 		&mut self,
 		worker_id: u64,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
-		kind.guard_declaration(&declaration);
 		let backend = self.backend.async_backend();
 		Box::new(crate::async_ext::spawn_call_ext(
 			worker_id,
-			kind,
 			declaration,
 			backend,
 			Some(&mut self.overlay),

@@ -397,34 +397,38 @@ impl OverlayedChanges {
 	pub fn set_parent_declaration(&mut self, child_marker: TaskId, declaration: WorkerDeclaration) {
 		self.markers.set_marker(child_marker);
 		match declaration {
-			WorkerDeclaration::None => (),
-			WorkerDeclaration::OptimisticRead => {
+			WorkerDeclaration::Stateless
+			| WorkerDeclaration::ReadLastBlock
+			| WorkerDeclaration::ReadAtSpawn
+			| WorkerDeclaration::WriteAtSpawn => (),
+			WorkerDeclaration::ReadAtJoinOptimistic => {
 				self.optimistic_logger.log_writes(Some(child_marker));
 			},
-			WorkerDeclaration::OptimisticWrite => {
+			WorkerDeclaration::WriteOptimistic => {
 				self.optimistic_logger.log_writes(Some(child_marker));
 			},
-			WorkerDeclaration::OptimisticWriteRead => {
+			WorkerDeclaration::WriteAtJoinOptimistic => {
 				self.optimistic_logger.log_reads(Some(child_marker));
 				self.optimistic_logger.log_writes(Some(child_marker));
 			},
-			WorkerDeclaration::ChildRead(filter, failure) => {
+			WorkerDeclaration::ReadAtJoinDeclarative(filter, failure) => {
 				self.filters.guard_child_filter_read(&filter);
 				self.filters.set_failure_handler(Some(child_marker), failure);
 				// TODO consider merging add_change and forbid_writes (or even the full block).
-				self.filters.add_change(WorkerDeclaration::ChildRead(filter.clone(), failure), child_marker);
+				self.filters.add_change(WorkerDeclaration::ReadAtJoinDeclarative(filter.clone(), failure), child_marker);
 				self.filters.forbid_writes(filter, child_marker);
 			},
-			WorkerDeclaration::ChildWrite(filter, failure) => {
+			WorkerDeclaration::WriteDeclarative(filter, failure) => {
 				self.filters.guard_child_filter_write(&filter);
 				self.filters.set_failure_handler(Some(child_marker), failure);
-				self.filters.add_change(WorkerDeclaration::ChildWrite(filter.clone(), failure), child_marker);
+				// TODO see if possible to only push worker type??
+				self.filters.add_change(WorkerDeclaration::WriteDeclarative(filter.clone(), failure), child_marker);
 				self.filters.forbid_writes(filter, child_marker);
 			},
-			WorkerDeclaration::ChildWriteRead(write_filter, read_filter, failure) => {
+			WorkerDeclaration::WriteAtJoinDeclarative(write_filter, read_filter, failure) => {
 				self.filters.guard_child_filter_read(&read_filter);
 				self.filters.guard_child_filter_write(&write_filter);
-				self.filters.add_change(WorkerDeclaration::ChildWriteRead(write_filter.clone(), read_filter.clone(), failure), child_marker);
+				self.filters.add_change(WorkerDeclaration::WriteAtJoinDeclarative(write_filter.clone(), read_filter.clone(), failure), child_marker);
 				self.filters.forbid_reads(write_filter, child_marker);
 				self.filters.forbid_writes(read_filter, child_marker);
 			},
@@ -435,26 +439,29 @@ impl OverlayedChanges {
 	pub fn set_child_declaration(&mut self, declaration: WorkerDeclaration) {
 		self.markers.set_limit();
 		match declaration {
-			WorkerDeclaration::None => (),
-			WorkerDeclaration::OptimisticRead => {
+			WorkerDeclaration::Stateless
+			| WorkerDeclaration::ReadLastBlock
+			| WorkerDeclaration::ReadAtSpawn
+			| WorkerDeclaration::WriteAtSpawn => (),
+			WorkerDeclaration::ReadAtJoinOptimistic => {
 				self.optimistic_logger.log_reads(None);
 			},
-			WorkerDeclaration::OptimisticWrite => {
+			WorkerDeclaration::WriteOptimistic => {
 				self.optimistic_logger.log_writes(None);
 			},
-			WorkerDeclaration::OptimisticWriteRead => {
+			WorkerDeclaration::WriteAtJoinOptimistic => {
 				self.optimistic_logger.log_reads(None);
 				self.optimistic_logger.log_writes(None);
 			},
-			WorkerDeclaration::ChildRead(filter, failure) => {
+			WorkerDeclaration::ReadAtJoinDeclarative(filter, failure) => {
 				self.filters.set_failure_handler(None, failure); 
 				self.filters.allow_reads(filter);
 			},
-			WorkerDeclaration::ChildWrite(filter, failure) => {
+			WorkerDeclaration::WriteDeclarative(filter, failure) => {
 				self.filters.set_failure_handler(None, failure);
 				self.filters.allow_writes(filter);
 			},
-			WorkerDeclaration::ChildWriteRead(write_filter, read_filter, failure) => {
+			WorkerDeclaration::WriteAtJoinDeclarative(write_filter, read_filter, failure) => {
 				self.filters.set_failure_handler(None, failure);
 				self.filters.allow_reads(read_filter);
 				self.filters.allow_writes(write_filter);

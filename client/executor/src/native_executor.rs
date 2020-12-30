@@ -41,7 +41,7 @@ use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule};
 use sp_externalities::{ExternalitiesExt as _, WorkerResult};
-use sp_tasks::{new_async_externalities, WorkerDeclaration, WorkerType};
+use sp_tasks::{new_async_externalities, WorkerDeclaration};
 use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task, PendingTask as InlineTask};
 
 /// Default num of pages for the heap
@@ -645,12 +645,11 @@ impl RuntimeInstanceSpawn {
 	fn spawn_call_inner(
 		&self,
 		task: Task,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let handle = self.counter.fetch_add(1, Ordering::Relaxed);
-		let ext = calling_ext.get_worker_externalities(handle, kind, declaration);
+		let ext = calling_ext.get_worker_externalities(handle, declaration);
 
 		self.insert(handle, task, ext);
 
@@ -663,12 +662,11 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let task = Task::Native(NativeTask { func, data });
-		self.spawn_call_inner(task, kind, declaration, calling_ext)
+		self.spawn_call_inner(task, declaration, calling_ext)
 	}
 
 	fn spawn_call(
@@ -676,12 +674,11 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let task = Task::Wasm(WasmTask { dispatcher_ref, func, data });
-		self.spawn_call_inner(task, kind, declaration, calling_ext)
+		self.spawn_call_inner(task, declaration, calling_ext)
 	}
 
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {

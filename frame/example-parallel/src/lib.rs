@@ -173,8 +173,7 @@ fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParti
 	let handle = sp_tasks::spawn(
 		spawn_verify,
 		async_payload,
-		sp_tasks::WorkerType::Stateless,
-		sp_tasks::WorkerDeclaration::None,
+		sp_tasks::WorkerDeclaration::Stateless,
 	);
 	let mut result = true;
 
@@ -223,8 +222,7 @@ fn validate_pending_participants_parallel(number: usize) {
 	let handle = sp_tasks::spawn(
 		spawn_verify,
 		async_payload,
-		sp_tasks::WorkerType::ReadAtSpawn,
-		sp_tasks::WorkerDeclaration::None,
+		sp_tasks::WorkerDeclaration::ReadAtSpawn,
 	);
 
 	for participant in &participants[split..number] {

@@ -274,7 +274,6 @@ pub trait Externalities: ExtensionStore {
 	fn get_worker_externalities(
 		&mut self,
 		worker_id: u64,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities>;
 
@@ -551,34 +550,39 @@ impl Default for DeclarationFailureHandling {
 #[derive(Debug)]
 #[repr(u8)]
 pub enum WorkerType {
-	/// Externalities do not access state, so we join
+	/// Worker panic on state access from externalities.
 	Stateless = 0,
 
-	/// Externalities access read only the backend unmodified state.
+	/// Worker access state read only on the backend unmodified state,
+	/// it does not see change made during previous processing
+	/// (same state at the one resulting from last state transition:
+	/// last block state).
 	ReadLastBlock = 1,
 
 	/// Externalities access read only the backend unmodified state,
 	/// and the change at the time of spawn.
-	/// In this case when joining we return an identifier of the
-	/// state at launch.
+	/// In this case when joining we ensure the transaction at launch
+	/// is still valid.
 	ReadAtSpawn = 2,
 
-	/// State between main thread and child workers must be the same for all execution.
-	/// This means that read access on a child is not compatible with write access on
-	/// a parent.
+	/// Same as `ReadAtSpawn`, but we also check that the between parent and child worker
+	/// is the same for the whole worker execution.
+	/// So read access on a child worker is not compatible with write access on
+	/// the parent.
+	///
 	/// This can only be usefull when we want the state use by child to be the one use on
 	/// join (usually we can do with it being the state use at spawn).
-	/// We return `None` on join if some state access break this asumption:
-	/// Any access to a variable that was modified in parent worker.
+	///
+	/// We return `None` on join if some state access break this asumption.
 	ReadAtJoinOptimistic = 3,
 
-	/// State between main thread and child workers must be the same.
-	/// This means that read access on a child is not compatible with write access on
-	/// a parent.
-	/// When starting a child worker we declare exclusive write access
-	/// over the keyspace for both worker.
-	/// Writing in undeclared location or reading a location declared as writable
-	/// in another worker will result in a panic.
+	/// Same as `ReadAtJoinOptimistic`, but we do not check conflict on join.
+	/// Instead we declare child workre read accesses and check during processing
+	/// that there is no invalid access.
+	///
+	/// As for all declarative types, depending on failure access declaration
+	/// an illegal access can either result in panic or returning `None`
+	/// on join (as in optimistic mode).
 	ReadAtJoinDeclarative = 4,
 
 	/// `ReadAtSpawn` with allowed write.
@@ -586,22 +590,30 @@ pub enum WorkerType {
 	/// at `join`.
 	WriteAtSpawn = 5,
 
-	/// Write where parent and child writes accesses exclude themselves.
+	/// Write on parent and child workers are mutually exclusives.
 	/// When conflict happens, child worker returns `None` on join.
+	///
+	/// As for all optimistic type, the workers need to log access and resolve
+	/// error on result access only.
 	WriteOptimistic = 6,
 
-	/// Write where parent and child writes accesses exclude themselves.
-	/// User need to declare child write access and parent will not be allowed
-	/// write access for these declaration (child worker is not allowed write access
-	/// to other location than the declared one).
+	/// Same as `WriteOptimistic`, but conflict are detected depending on access
+	/// declaration.
+	/// We declare allowed write access for child worker (which is forbidden access
+	/// in the parent worker).
 	WriteDeclarative = 7,
 
 	/// Same as `WriteOptimistic`, with the additional constraint that we connot read data
 	/// when it is writable in a parent or a child worker.
+	///
+	/// So write from child exclude read from parent and write from parent exclude read
+	/// from child.
 	WriteAtJoinOptimistic = 8,
 
-	/// Same as `WriteDeclarative`, but with also read only access declared for children.
-	/// Data in read access forbid parent/children access.
+	/// Same as `WriteAtJoinOptimistic`, but conflict are detected depending on access
+	/// declaration.
+	/// We declare allowed write access for child worker and allowed read only access
+	/// (no need to declare read access for already declared write access).
 	WriteAtJoinDeclarative = 9,
 }
 
@@ -640,7 +652,7 @@ impl WorkerType {
 		}
 	}
 }
-
+/*
 impl WorkerType {
 	/// Assert a right declaration is use with worker type.
 	/// TODO this is looking like bad design, consider merging WorkerDeclaration
@@ -677,7 +689,6 @@ impl WorkerType {
 					panic!("Incorrect declaration for optimistic worker");
 				},
 			},
-
 			WorkerType::WriteOptimistic => match &declaration {
 				WorkerDeclaration::OptimisticWrite => (),
 				_ => {
@@ -695,48 +706,63 @@ impl WorkerType {
 			},
 		}
 	}
-}
+}*/
 
 /// Access filter on storage when spawning worker.
 #[derive(Debug, Clone, codec::Encode, codec::Decode)]
 pub enum WorkerDeclaration {
-	/// The worker type need no declaration.
-	None,
+	/// Declaration for `WorkerType::Stateless`, no content.
+	Stateless,
 
-	/// The worker type need to log access and resolve
-	/// error on result access only.
-	/// This compare parent worker write access with child
-	/// worker write access.
-	OptimisticWrite,
+	/// Declaration for `WorkerType::ReadLastBlock`, no content.
+	ReadLastBlock,
 
-	/// Optimistic variant which compares parent worker write access with child
-	/// worker read and write access, and child worker read access with parent worker
-	/// write access.
-	OptimisticWriteRead,
+	/// Declaration for `WorkerType::ReadAtSpawn`, no content.
+	ReadAtSpawn,
 
-	/// Optimistic variant which compares parent worker write access with child
-	/// worker read access.
-	OptimisticRead,
+	/// Declaration for `WorkerType::ReadAtJoinOptimistic`, no content.
+	ReadAtJoinOptimistic,
 
-	/// Child worker read access only.
-	/// Makes parent write forbidden for any access declaration,
-	/// this can be use when we want to check consistency from the
-	/// state at join (otherwhise there is no sense in forbidding write).
-	/// TODO rename to ChildReadJoin?
-	ChildRead(AccessDeclaration, DeclarationFailureHandling),
+	/// Declaration for `WorkerType::ReadAtJoinDeclarative`.
+	/// Declaration is child worker allowed read access.
+	ReadAtJoinDeclarative(AccessDeclaration, DeclarationFailureHandling),
 
-	/// Child worker write access only.
-	/// Makes parent write forbidden for any access declaration,
-	/// this can be use when we want to check consistency from the
-	/// state at spawn.
-	ChildWrite(AccessDeclaration, DeclarationFailureHandling),
-	
-	/// Child worker write read and read access declarations.
-	/// Makes parent write forbidden for any declaration.
-	/// Makes parent read forbidden for any write access declaration.
-	/// this can be use when we want to check consistency from the
-	/// state at join (otherwhise there is no sense in forbidding write).
-	ChildWriteRead(AccessDeclaration, AccessDeclaration, DeclarationFailureHandling),
+	/// Declaration for `WorkerType::ReadAtSpawn`, no content.
+	WriteAtSpawn,
+
+	/// Declaration for `WorkerType::WriteOptimistic`, no content.
+	WriteOptimistic,
+
+	/// Declaration for `WorkerType::WriteDeclarative`.
+	/// Declaration is child worker allowed write access, read access
+	/// is not filtered.
+	WriteDeclarative(AccessDeclaration, DeclarationFailureHandling),
+
+	/// Declaration for `WorkerType::WriteAtJoinOptimistic`, no content.
+	WriteAtJoinOptimistic,
+
+	/// Declaration for `WorkerType::WriteAtJoinDeclarative`.
+	/// First declaration is child write allowed access, second declaration
+	/// is child read only allowed access (only needed if not declared in write access).
+	WriteAtJoinDeclarative(AccessDeclaration, AccessDeclaration, DeclarationFailureHandling),
+}
+
+impl WorkerDeclaration {
+	/// Extract type from declaration.
+	pub fn get_type(&self) -> WorkerType {
+		match self {
+			WorkerDeclaration::Stateless => WorkerType::Stateless,
+			WorkerDeclaration::ReadLastBlock => WorkerType::ReadLastBlock,
+			WorkerDeclaration::ReadAtSpawn => WorkerType::ReadAtSpawn,
+			WorkerDeclaration::ReadAtJoinOptimistic => WorkerType::ReadAtJoinOptimistic,
+			WorkerDeclaration::ReadAtJoinDeclarative(..) => WorkerType::ReadAtJoinDeclarative,
+			WorkerDeclaration::WriteAtSpawn => WorkerType::WriteAtSpawn,
+			WorkerDeclaration::WriteOptimistic => WorkerType::WriteOptimistic,
+			WorkerDeclaration::WriteDeclarative(..) => WorkerType::WriteDeclarative,
+			WorkerDeclaration::WriteAtJoinOptimistic => WorkerType::WriteAtJoinOptimistic,
+			WorkerDeclaration::WriteAtJoinDeclarative(..) => WorkerType::WriteAtJoinDeclarative,
+		}
+	}
 }
 
 /// Access filter on storage.

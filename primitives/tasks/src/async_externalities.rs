@@ -48,9 +48,8 @@ use sp_core::{
 	traits::{SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
 use sp_externalities::{
-	Externalities, Extensions, ExternalitiesExt as _, TaskId,
-	WorkerResult, WorkerDeclaration, WorkerType,
-	AsyncExternalities as AsyncExternalitiesTrait,
+	Externalities, Extensions, ExternalitiesExt as _, TaskId, WorkerResult,
+	WorkerDeclaration, AsyncExternalities as AsyncExternalitiesTrait,
 };
 
 /// Simple state-less externalities for use in async context.
@@ -240,10 +239,9 @@ impl Externalities for AsyncExternalities {
 	fn get_worker_externalities(
 		&mut self,
 		worker_id: u64,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalitiesTrait> {
-		self.state.get_worker_externalities(worker_id, kind, declaration)
+		self.state.get_worker_externalities(worker_id, declaration)
 	}
 	
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {

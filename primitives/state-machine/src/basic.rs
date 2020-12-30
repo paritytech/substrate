@@ -34,7 +34,7 @@ use sp_core::{
 use log::warn;
 use codec::Encode;
 use sp_externalities::{Extensions, Extension, TaskId,
-	WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities};
+	WorkerResult, WorkerDeclaration, AsyncExternalities};
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
@@ -337,7 +337,6 @@ impl Externalities for BasicExternalities {
 	fn get_worker_externalities(
 		&mut self,
 		_worker_id: u64,
-		_kind: WorkerType,
 		_declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
 		unimplemented!("TODO")

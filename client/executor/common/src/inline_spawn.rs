@@ -22,7 +22,7 @@
 //! As a minimal implementation it can run in no_std (with alloc), but do not
 //! actually spawn threads, all execution is done inline in the parent thread.
 
-use sp_tasks::{new_inline_only_externalities, WorkerType, Crossing};
+use sp_tasks::{new_inline_only_externalities, Crossing};
 use sp_core::traits::RuntimeSpawn;
 use sp_externalities::{WorkerResult, WorkerDeclaration, Externalities, AsyncExternalities};
 use sp_std::rc::Rc;
@@ -396,13 +396,12 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 	fn spawn_call_inner(
 		&mut self,
 		task: Task,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let handle = self.counter;
 		self.counter += 1;
-		let ext = calling_ext.get_worker_externalities(handle, kind, declaration);
+		let ext = calling_ext.get_worker_externalities(handle, declaration);
 
 		self.tasks.insert(handle, PendingTask {task, ext});
 
@@ -414,12 +413,11 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 		&mut self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let task = Task::Native(NativeTask { func, data });
-		self.spawn_call_inner(task, kind, declaration, calling_ext)
+		self.spawn_call_inner(task, declaration, calling_ext)
 	}
 
 	/// Base implementation for `RuntimeSpawn` method.
@@ -428,12 +426,11 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let task = Task::Wasm(WasmTask { dispatcher_ref, func, data });
-		self.spawn_call_inner(task, kind, declaration, calling_ext)
+		self.spawn_call_inner(task, declaration, calling_ext)
 	}
 }
 
@@ -464,11 +461,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		self.0.lock().spawn_call_native(func, data, kind, declaration, calling_ext)
+		self.0.lock().spawn_call_native(func, data, declaration, calling_ext)
 	}
 
 	fn spawn_call(
@@ -476,11 +472,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		self.0.lock().spawn_call(dispatcher_ref, func, data, kind, declaration, calling_ext)
+		self.0.lock().spawn_call(dispatcher_ref, func, data, declaration, calling_ext)
 	}
 
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
@@ -549,11 +544,10 @@ impl<HostLocal: HostLocalFunction> RuntimeSpawn for RuntimeInstanceSpawnForceSen
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		self.0.borrow_mut().spawn_call_native(func, data, kind, declaration, calling_ext)
+		self.0.borrow_mut().spawn_call_native(func, data, declaration, calling_ext)
 	}
 
 	fn spawn_call(
@@ -561,11 +555,10 @@ impl<HostLocal: HostLocalFunction> RuntimeSpawn for RuntimeInstanceSpawnForceSen
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		kind: WorkerType,
 		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		self.0.borrow_mut().spawn_call(dispatcher_ref, func, data, kind, declaration, calling_ext)
+		self.0.borrow_mut().spawn_call(dispatcher_ref, func, data, declaration, calling_ext)
 	}
 
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
@@ -646,7 +639,6 @@ pub mod hosted_runtime {
 		dispatcher_ref: u32,
 		entry: u32,
 		payload: Vec<u8>,
-		kind: u8,
 		declaration: Crossing<WorkerDeclaration>,
 	) -> u64 {
 		sp_externalities::with_externalities(|mut ext| {
@@ -656,8 +648,7 @@ pub mod hosted_runtime {
 			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
 			// a given id, to make this safer.
 			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-			let kind = WorkerType::from_u8(kind).expect("Invalid worker type");
-			let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, kind, declaration.into_inner(), ext_unsafe);
+			let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, declaration.into_inner(), ext_unsafe);
 			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
 			result
 		}).unwrap()
