@@ -66,8 +66,7 @@ where
 				),
 		);
 
-		self.essence.set_root(root);
-		self.backend_storage_mut().consolidate(transaction);
+		self.apply_transaction(root, transaction);
 	}
 
 	/// Merge trie nodes into this backend.
