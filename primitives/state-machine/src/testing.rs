@@ -153,7 +153,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		&mut self.changes_trie_storage
 	}
 
-	/// Return a new backend with all pending values.
+	/// Return a new backend with all pending changes.
 	///
 	/// In contrast to [`commit_all`](Self::commit_all) this will not panic if there are open
 	/// transactions.
