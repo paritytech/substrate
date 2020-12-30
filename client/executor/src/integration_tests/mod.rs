@@ -730,66 +730,71 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	assert_eq!(len, 2);
 }
 
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-fn inline_runtime_call_should_work(wasm_method: WasmExecutionMethod) {
+macro_rules! does_panic {
+	($test_name: ident, $method_name: expr) => {
+		#[test_case(WasmExecutionMethod::Interpreted)]
+		#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+		fn $test_name(wasm_method: WasmExecutionMethod) {
 
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
+			let mut ext = TestExternalities::default();
+			let mut ext = ext.ext();
 
-	call_in_wasm(
-		"test_inline",
-		&[],
-		wasm_method,
-		&mut ext,
-	).unwrap();
+			let error_result = call_in_wasm(
+				$method_name,	
+				&[],
+				wasm_method,
+				&mut ext,
+			).unwrap_err();
+
+			dbg!(&error_result);
+			assert!(format!("{}", error_result).contains("Runtime panicked"));
+		}
+	}; 
+}
+
+macro_rules! dont_panic {
+	($test_name: ident, $method_name: expr) => {
+		#[test_case(WasmExecutionMethod::Interpreted)]
+		#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+		fn $test_name(wasm_method: WasmExecutionMethod) {
+
+			let mut ext = TestExternalities::default();
+			let mut ext = ext.ext();
+
+			call_in_wasm(
+				$method_name,	
+				&[],
+				wasm_method,
+				&mut ext,
+			).unwrap();
+		}
+	}; 
+}
+
+macro_rules! does_write_foo {
+	($test_name: ident, $method_name: expr) => {
+		#[test_case(WasmExecutionMethod::Interpreted)]
+		#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+		fn $test_name(wasm_method: WasmExecutionMethod) {
+
+			let mut ext = TestExternalities::default();
+			let mut ext = ext.ext();
+
+			call_in_wasm(
+				$method_name,	
+				&[],
+				wasm_method,
+				&mut ext,
+			).unwrap();
+			assert_eq!(ext.storage(b"foo"), Some(b"bar".to_vec()));
+		}
+	}; 
 }
 
 
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-fn spawning_runtime_instance_should_work(wasm_method: WasmExecutionMethod) {
-
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
-
-	call_in_wasm(
-		"test_spawn",
-		&[],
-		wasm_method,
-		&mut ext,
-	).unwrap();
-}
-
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-fn spawning_runtime_instance_nested_should_work(wasm_method: WasmExecutionMethod) {
-
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
-
-	call_in_wasm(
-		"test_nested_spawn",
-		&[],
-		wasm_method,
-		&mut ext,
-	).unwrap();
-}
-
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecutionMethod) {
-
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
-
-	let error_result = call_in_wasm(
-		"test_panic_in_spawned",
-		&[],
-		wasm_method,
-		&mut ext,
-	).unwrap_err();
-
-	dbg!(&error_result);
-	assert!(format!("{}", error_result).contains("Runtime panicked"));
-}
+dont_panic!(inline_runtime_call_should_work, "test_inline");
+dont_panic!(spawning_runtime_instance_should_work, "test_spawn");
+dont_panic!(spawning_runtime_instance_nested_should_work, "test_nested_spawn");
+does_panic!(panic_in_spawned_instance_panics_on_joining_its_result, "test_panic_in_spawned");
+does_write_foo!(optimistic_read_no_conflict, "test_optimistic_read_no_conflict");
+does_write_foo!(optimistic_read_conflict, "test_optimistic_read_conflict");

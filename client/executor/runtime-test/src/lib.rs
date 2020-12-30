@@ -355,6 +355,24 @@ sp_core::wasm_export_functions! {
 		sp_tasks::set_capacity(1);
 		sp_tasks::spawn(tasks::panicker, vec![], WorkerDeclaration::Stateless).join();
 	}
+
+	fn test_optimistic_read_no_conflict() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		sp_io::storage::set(b"key2", b"val");
+		if handle.join().is_some() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_optimistic_read_conflict() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		sp_io::storage::set(b"key", b"val");
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
 }
 
 #[cfg(not(feature = "std"))]
@@ -374,6 +392,11 @@ mod tasks {
 	   let first = data.into_iter().map(|v| v + 2).collect::<Vec<_>>();
 	   let second = sp_tasks::spawn(incrementer, first, WorkerDeclaration::Stateless).join();
 	   second.unwrap()
+	}
+
+	pub fn read_key(_data: Vec<u8>) -> Vec<u8> {
+		let _foo = sp_io::storage::get(b"key");
+		Default::default()
 	}
 }
 
