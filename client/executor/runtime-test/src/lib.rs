@@ -382,7 +382,6 @@ sp_core::wasm_export_functions! {
 			sp_io::storage::set(b"foo", b"bar");
 		}
 	}
-
 }
 
 #[cfg(not(feature = "std"))]

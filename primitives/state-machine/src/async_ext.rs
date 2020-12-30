@@ -353,6 +353,7 @@ impl Externalities for AsyncExt {
 		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
 		let backend = self.backend.async_backend();
+		self.kind.guard_compatible_child_workers(declaration.get_type());
 		Box::new(crate::async_ext::spawn_call_ext(
 			worker_id,
 			declaration,

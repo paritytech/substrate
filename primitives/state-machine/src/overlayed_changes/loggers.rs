@@ -436,8 +436,48 @@ impl AccessLogger {
 								}
 							}
 						}
-	
 					}
+					// merge accesses with parent if needed
+					if self.parent_log_write && has_write_child {
+						// relative to the current three configs when write is logged for child, it is also for
+						// parent.
+						for key in accesses.top_logger.write_keys.iter() {
+							self.log_write(None, key.as_slice());
+						}
+						for key in accesses.top_logger.write_prefix.iter() {
+							self.log_write_prefix(None, key.as_slice());
+						}
+						for (storage_key, child_logger) in accesses.children_logger.iter() {
+							for key in child_logger.write_keys.iter() {
+								self.log_write_storage_key(Some(storage_key.as_slice()), key.as_slice());
+							}
+							for key in child_logger.write_prefix.iter() {
+								self.log_write_prefix_storage_key(Some(storage_key.as_slice()), key.as_slice());
+							}
+						}
+
+					}
+					if self.parent_log_read && accesses.read_all {
+						// relative to the current three configs when read is logged for child, it is also for
+						// parent.
+						self.log_read_all();
+					} else if self.parent_log_read && has_read_child {
+						for key in accesses.top_logger.read_keys.iter() {
+							self.log_read(None, key.as_slice());
+						}
+						for key in accesses.top_logger.read_intervals.iter() {
+							self.log_read_interval(None, key.0.as_slice(), key.1.as_slice());
+						}
+						for (storage_key, child_logger) in accesses.children_logger.iter() {
+							for key in child_logger.read_keys.iter() {
+								self.log_read_storage_key(Some(storage_key.as_slice()), key.as_slice());
+							}
+							for key in child_logger.read_intervals.iter() {
+								self.log_read_interval_storage_key(Some(storage_key.as_slice()), key.0.as_slice(), key.1.as_slice());
+							}
+						}
+					}
+
 					true
 				} ();
 
@@ -523,10 +563,9 @@ impl AccessLogger {
 	fn logger_mut<'a>(
 		top_logger: &'a mut StateLogger,
 		children_logger: &'a mut RefCell<Map<StorageKey, StateLogger>>,
-		child_info: Option<&ChildInfo>,
+		storage_key: Option<&[u8]>,
 	) -> &'a mut StateLogger {
-		if let Some(child_info) = child_info {
-			let storage_key = child_info.storage_key();
+		if let Some(storage_key) = storage_key {
 			children_logger.get_mut().entry(storage_key.to_vec()).or_insert_with(Default::default)
 		} else {
 			top_logger
@@ -535,10 +574,12 @@ impl AccessLogger {
 
 //	fn guard_read(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
 	pub(super) fn log_read(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
+		self.log_read_storage_key(child_info.map(|child_info| child_info.storage_key()), key)
+	}
+	fn log_read_storage_key(&self, storage_key: Option<&[u8]>, key: &[u8]) {
 		let mut ref_children;
 		if self.parent_log_read && !self.parent_read_all.get() {
-			let logger = if let Some(child_info) = child_info {
-				let storage_key = child_info.storage_key();
+			let logger = if let Some(storage_key) = storage_key {
 				if !self.children_logger.borrow().contains_key(storage_key) {
 					self.children_logger.borrow_mut().insert(storage_key.to_vec(), Default::default());
 				}
@@ -554,8 +595,7 @@ impl AccessLogger {
 			let children_read_all = self.children_read_all.borrow();
 			let mut children = self.log_read.difference(&children_read_all);
 			if !children.next().is_none() {
-				let logger = if let Some(child_info) = child_info {
-					let storage_key = child_info.storage_key();
+				let logger = if let Some(storage_key) = storage_key {
 					if !self.children_logger.borrow().contains_key(storage_key) {
 						self.children_logger.borrow_mut().insert(storage_key.to_vec(), Default::default());
 					}
@@ -573,10 +613,13 @@ impl AccessLogger {
 
 //	fn guard_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
 	pub(super) fn log_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
+		self.log_read_interval_storage_key(child_info.map(|child_info| child_info.storage_key()), key, key_end)
+	}
+
+	fn log_read_interval_storage_key(&self, storage_key: Option<&[u8]>, key: &[u8], key_end: &[u8]) {
 		let mut ref_children;
 		if self.parent_log_read && !self.parent_read_all.get() {
-			let logger = if let Some(child_info) = child_info {
-				let storage_key = child_info.storage_key();
+			let logger = if let Some(storage_key) = storage_key {
 				if !self.children_logger.borrow().contains_key(storage_key) {
 					self.children_logger.borrow_mut().insert(storage_key.to_vec(), Default::default());
 				}
@@ -592,8 +635,7 @@ impl AccessLogger {
 			let children_read_all = self.children_read_all.borrow();
 			let mut children = self.log_read.difference(&children_read_all);
 			if !children.next().is_none() {
-				let logger = if let Some(child_info) = child_info {
-					let storage_key = child_info.storage_key();
+				let logger = if let Some(storage_key) = storage_key {
 					if !self.children_logger.borrow().contains_key(storage_key) {
 						self.children_logger.borrow_mut().insert(storage_key.to_vec(), Default::default());
 					}
@@ -611,12 +653,16 @@ impl AccessLogger {
 
 //	fn guard_write(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
 	pub(super) fn log_write(&mut self, child_info: Option<&ChildInfo>, key: &[u8]) {
+		self.log_write_storage_key(child_info.map(|child_info| child_info.storage_key()), key)
+	}
+
+	fn log_write_storage_key(&mut self, storage_key: Option<&[u8]>, key: &[u8]) {
 		if self.parent_log_write {
-			let logger = Self::logger_mut(&mut self.top_logger, &mut self.children_logger, child_info);
+			let logger = Self::logger_mut(&mut self.top_logger, &mut self.children_logger, storage_key);
 			logger.parent_write_key.push(key.to_vec())
 		}
 		if !self.log_write.is_empty() {
-			let logger = Self::logger_mut(&mut self.top_logger, &mut self.children_logger, child_info);
+			let logger = Self::logger_mut(&mut self.top_logger, &mut self.children_logger, storage_key);
 			logger.children_write_key.entry(key.to_vec())
 				.or_default().extend(self.log_write.iter());
 		}
@@ -624,12 +670,16 @@ impl AccessLogger {
 
 //	fn guard_write_prefix(&self, child_info: Option<&ChildInfo>, key: &[u8]) {
 	pub(super) fn log_write_prefix(&mut self, child_info: Option<&ChildInfo>, key: &[u8]) {
+		self.log_write_prefix_storage_key(child_info.map(|child_info| child_info.storage_key()), key)
+	}
+
+	fn log_write_prefix_storage_key(&mut self, storage_key: Option<&[u8]>, key: &[u8]) {
 		if self.parent_log_write {
-			let logger = Self::logger_mut(&mut self.top_logger, &mut self.children_logger, child_info);
+			let logger = Self::logger_mut(&mut self.top_logger, &mut self.children_logger, storage_key);
 			logger.parent_write_prefix.insert(key, ());
 		}
 		if !self.log_write.is_empty() {
-			let logger = Self::logger_mut(&mut self.top_logger, &mut self.children_logger, child_info);
+			let logger = Self::logger_mut(&mut self.top_logger, &mut self.children_logger, storage_key);
 			// TODO an entry api in radix_tree would be nice.
 			if let Some(entry) = logger.children_write_prefix.get_mut(key) {
 				entry.extend(self.log_write.iter());

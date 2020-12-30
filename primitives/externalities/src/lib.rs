@@ -35,6 +35,8 @@ pub use extensions::{Extension, Extensions, ExtensionStore};
 mod extensions;
 mod scope_limited;
 
+const INCOMPATIBLE_CHILD_WORKER_TYPE: &str = "Incompatible child worker type";
+
 /// Externalities error.
 #[derive(Debug)]
 pub enum Error {
@@ -649,6 +651,57 @@ impl WorkerType {
 			WorkerType::Stateless => false,
 			WorkerType::ReadLastBlock => false,
 			_ => true,
+		}
+	}
+
+	/// Panic if spawning a child worker of a given type is not possible.
+	/// TODO there is way to have more compatibility
+	/// eg : - declarative from a optimistic by logging declarative accesses
+	/// on join.
+	/// - optimistic from declarative by runing accesses on join.
+	pub fn guard_compatible_child_workers(&self, kind: WorkerType) {
+		match kind {
+			WorkerType::Stateless => (),
+			WorkerType::ReadLastBlock => match kind {
+				WorkerType::ReadLastBlock => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::ReadAtSpawn => match kind {
+				WorkerType::Stateless => (),
+				WorkerType::ReadAtSpawn => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::ReadAtJoinOptimistic => match kind {
+				WorkerType::Stateless => (),
+				WorkerType::ReadAtSpawn => (),
+				WorkerType::ReadAtJoinOptimistic => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::ReadAtJoinDeclarative => match kind {
+				WorkerType::ReadAtSpawn => (),
+				WorkerType::ReadAtJoinDeclarative => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::WriteAtSpawn => match kind {
+				WorkerType::WriteAtSpawn => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::WriteOptimistic => match kind {
+				WorkerType::WriteOptimistic => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::WriteDeclarative => match kind {
+				WorkerType::WriteDeclarative => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::WriteAtJoinOptimistic => match kind {
+				WorkerType::WriteAtJoinOptimistic => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::WriteAtJoinDeclarative => match kind {
+				WorkerType::WriteAtJoinDeclarative => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
 		}
 	}
 }
