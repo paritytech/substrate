@@ -157,7 +157,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	///
 	/// In contrast to [`commit_all`](Self::commit_all) this will not panic if there are open
 	/// transactions.
-	pub fn as_backend(&self) -> InMemoryBackend<H> {
+	fn as_backend(&self) -> InMemoryBackend<H> {
 		let top: Vec<_> = self.overlay.changes()
 			.map(|(k, v)| (k.clone(), v.value().cloned()))
 			.collect();
