@@ -181,17 +181,9 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	///
 	/// This will panic if there are still open transactions.
 	pub fn commit_all(&mut self) -> Result<(), String> {
-		let changes_trie_state = match self.changes_trie_config.clone() {
-			Some(config) => Some(ChangesTrieState {
-				config,
-				zero: 0.into(),
-				storage: &self.changes_trie_storage,
-			}),
-			None => None,
-		};
 		let changes = self.overlay.drain_storage_changes(
 			&self.backend,
-			changes_trie_state.as_ref(),
+			None,
 			Default::default(),
 			&mut Default::default(),
 		)?;
