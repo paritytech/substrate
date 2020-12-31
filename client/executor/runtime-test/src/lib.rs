@@ -421,7 +421,7 @@ sp_core::wasm_export_functions! {
 				prefixes_lock: vec![b"key".to_vec()],
 				keys_lock: Default::default(),
 			},
-			DeclarationFailureHandling::InvalidAtJoin,
+			DeclarationFailureHandling::Panic,
 		));
 		sp_io::storage::set(b"key2", b"val");
 		if handle.join().is_none() {

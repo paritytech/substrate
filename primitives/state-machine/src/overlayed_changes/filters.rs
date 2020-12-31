@@ -303,6 +303,7 @@ impl Filters {
 	}
 
 	pub(super) fn on_worker_result(&mut self, result: &WorkerResult) -> bool {
+		let did_fail = self.failure_handlers.did_fail();
 		match result {
 			WorkerResult::CallAt(_result, _delta, marker) => {
 				self.remove_worker(*marker);
@@ -320,7 +321,7 @@ impl Filters {
 			WorkerResult::RuntimePanic
 			| WorkerResult::HardPanic => (),
 		};
-		!self.failure_handlers.did_fail()
+		!did_fail
 	}
 
 	// TODO case where we allow all (forbid all on the other side) really need to be tested.
