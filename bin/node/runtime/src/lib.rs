@@ -717,8 +717,11 @@ parameter_types! {
 	pub const MaxDepth: u32 = 32;
 	pub const StorageSizeOffset: u32 = 8;
 	pub const MaxValueSize: u32 = 16 * 1024;
-	pub DeletionWeightLimit: Weight = Perbill::from_percent(20) *
+	// The lazy deletion runs inside on_initialize.
+	pub DeletionWeightLimit: Weight = AVERAGE_ON_INITIALIZE_RATIO *
 		RuntimeBlockWeights::get().max_block;
+	// The weight needed for decoding the queue should be less or equal than a fifth
+	// of the overall weight dedicated to the lazy deletion.
 	pub DeletionQueueDepth: u32 = ((DeletionWeightLimit::get() / (
 			<Runtime as pallet_contracts::Config>::WeightInfo::on_initialize_per_queue_item(1) -
 			<Runtime as pallet_contracts::Config>::WeightInfo::on_initialize_per_queue_item(0)
