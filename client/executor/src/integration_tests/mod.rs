@@ -799,3 +799,6 @@ does_panic!(panic_in_spawned_instance_panics_on_joining_its_result, "test_panic_
 does_write_foo!(optimistic_read_no_conflict, "test_optimistic_read_no_conflict");
 does_write_foo!(optimistic_read_conflict, "test_optimistic_read_conflict");
 does_write_foo!(optimistic_read_conflict_nested, "test_optimistic_read_conflict_nested");
+does_write_foo!(declarative_read_no_conflict, "test_declarative_read_no_conflict");
+does_write_foo!(declarative_read_conflict, "test_declarative_read_conflict");
+does_write_foo!(declarative_read_conflict_nested, "test_declarative_read_conflict_nested");

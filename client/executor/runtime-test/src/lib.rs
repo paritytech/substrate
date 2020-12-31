@@ -26,7 +26,7 @@ use sp_core::{ed25519, sr25519};
 #[cfg(not(feature = "std"))]
 use sp_sandbox::Value;
 #[cfg(not(feature = "std"))]
-use sp_tasks::WorkerDeclaration;
+use sp_tasks::{WorkerDeclaration, AccessDeclaration, DeclarationFailureHandling};
 
 extern "C" {
 	#[allow(dead_code)]
@@ -382,6 +382,53 @@ sp_core::wasm_export_functions! {
 			sp_io::storage::set(b"foo", b"bar");
 		}
 	}
+
+	fn test_declarative_read_no_conflict() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
+			AccessDeclaration {
+				prefixes_lock: vec![b"key".to_vec()],
+				keys_lock: Default::default(),
+			},
+			DeclarationFailureHandling::Panic,
+		));
+		sp_io::storage::set(b"kfy", b"val");
+		if handle.join().is_some() {
+			sp_io::storage::set(b"key", b"bar");
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_declarative_read_conflict() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
+			AccessDeclaration {
+				prefixes_lock: vec![b"key".to_vec()],
+				keys_lock: Default::default(),
+			},
+			DeclarationFailureHandling::InvalidAtJoin,
+		));
+		sp_io::storage::set(b"key", b"val");
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_declarative_read_conflict_nested() {
+		sp_tasks::set_capacity(2);
+		let handle = sp_tasks::spawn(tasks::read_key_nested, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
+			AccessDeclaration {
+				prefixes_lock: vec![b"key".to_vec()],
+				keys_lock: Default::default(),
+			},
+			DeclarationFailureHandling::InvalidAtJoin,
+		));
+		sp_io::storage::set(b"key2", b"val");
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
 }
 
 #[cfg(not(feature = "std"))]
