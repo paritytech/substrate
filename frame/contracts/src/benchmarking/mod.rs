@@ -2409,7 +2409,20 @@ benchmarks! {
 	#[extra]
 	print_schedule {
 		#[cfg(feature = "std")]
-		println!("{:#?}", Schedule::<T>::default());
+		{
+			let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
+				T::WeightInfo::on_initialize_per_trie_key(0);
+			let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
+				T::WeightInfo::on_initialize_per_queue_item(0);
+			let weight_limit = T::DeletionWeightLimit::get();
+			let queue_depth: u64 = T::DeletionQueueDepth::get().into();
+			println!("{:#?}", Schedule::<T>::default());
+			println!("###############################################");
+			println!("Lazy deletion throughput per block (empty queue, full queue): {}, {}",
+				weight_limit / weight_per_key,
+				(weight_limit - weight_per_queue_item * queue_depth) / weight_per_key,
+			);
+		}
 		#[cfg(not(feature = "std"))]
 		return Err("Run this bench with a native runtime in order to see the schedule.");
 	}: {}
