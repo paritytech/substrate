@@ -287,6 +287,10 @@ impl AsyncExternalitiesTrait for AsyncExternalities {
 	fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
 		self.state.extract_optimistic_log()
 	}
+
+	fn did_fail(&self) -> bool {
+		self.state.did_fail()
+	}
 }
 
 

@@ -784,6 +784,10 @@ impl Filters {
 			}
 		}
 	}
+
+	pub(super) fn is_result_for_parent_invalid(&self) -> bool {
+		self.failure_handlers.parent_failure_handler.did_fail()
+	}
 }
 
 #[derive(Debug, Clone, Default)]
@@ -864,6 +868,10 @@ pub(super) mod failure {
 	}
 
 	impl DeclFailureHandling {
+		pub(super) fn did_fail(&self) -> bool {
+			self.did_fail.get()
+		}
+
 		fn invalid_access(&self) {
 			match self.failure {
 				DeclarationFailureHandling::Panic => {
@@ -922,6 +930,7 @@ pub(super) mod failure {
 			self.children_failure_handler.remove(&child);
 		}
 
+		// TODO this does not make much sense, should be specific to a child marker
 		pub(super) fn did_fail(&self) -> bool {
 			if self.parent_failure_handler.did_fail.get() {
 				return true;

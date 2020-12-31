@@ -344,7 +344,9 @@ pub fn process_task<
 	let state_delta = async_ext.extract_delta();
 	match result {
 		Ok(Ok(result)) => if need_resolve {
-			if let Some(access) = async_ext.extract_optimistic_log() {
+			if async_ext.did_fail() {
+				WorkerResult::Invalid
+			} else if let Some(access) = async_ext.extract_optimistic_log() {
 				WorkerResult::Optimistic(result, state_delta, handle, access)
 			} else {
 				WorkerResult::CallAt(result, state_delta, handle)

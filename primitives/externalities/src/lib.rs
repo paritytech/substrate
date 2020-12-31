@@ -307,6 +307,11 @@ pub trait AsyncExternalities: Externalities + Send {
 	/// For optimistic worker, we extract logs from the overlay.
 	/// When call on a non optimistic worker returns `None`.
 	fn extract_optimistic_log(&mut self) -> Option<AccessLog>;
+
+	/// For declarative worker, check if we did register a failure.
+	/// Note TODO all those resulting fn could be fuse but keeping
+	/// them until it gets clear which worker types are needed.
+	fn did_fail(&self) -> bool;
 }
 
 /// Result from worker execution.

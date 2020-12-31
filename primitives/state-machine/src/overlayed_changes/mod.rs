@@ -803,6 +803,12 @@ impl OverlayedChanges {
 		self.optimistic_logger.extract_parent_log()
 	}
 
+	/// Did the filters of this worker (not children) fail.
+	pub fn did_fail(&self) -> bool {
+		self.filters.is_result_for_parent_invalid()
+	}
+
+
 	/// Extract changes from overlay.
 	pub fn extract_delta(&mut self) -> sp_externalities::StateDelta {
 		let (top_iter, children_iter) = self.drain_committed();

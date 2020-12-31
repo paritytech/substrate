@@ -374,6 +374,15 @@ sp_core::wasm_export_functions! {
 		}
 	}
 
+	fn test_optimistic_read_conflict_2() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
+		sp_io::storage::set(b"key", b"val");
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
 	fn test_optimistic_read_conflict_nested() {
 		sp_tasks::set_capacity(2);
 		let handle = sp_tasks::spawn(tasks::read_key_nested, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
@@ -404,6 +413,22 @@ sp_core::wasm_export_functions! {
 		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
 			AccessDeclaration {
 				prefixes_lock: vec![b"key".to_vec()],
+				keys_lock: Default::default(),
+			},
+			DeclarationFailureHandling::InvalidAtJoin,
+		));
+		sp_io::storage::set(b"key", b"val");
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_declarative_read_conflict_2() {
+		sp_tasks::set_capacity(1);
+		// read key reading at undeclared location
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
+			AccessDeclaration {
+				prefixes_lock: vec![b"aey".to_vec()],
 				keys_lock: Default::default(),
 			},
 			DeclarationFailureHandling::InvalidAtJoin,
@@ -452,6 +477,11 @@ mod tasks {
 
 	pub fn read_key(_data: Vec<u8>) -> Vec<u8> {
 		let _foo = sp_io::storage::get(b"key");
+		Default::default()
+	}
+
+	pub fn write_key(_data: Vec<u8>) -> Vec<u8> {
+		let _foo = sp_io::storage::set(b"key", b"foo");
 		Default::default()
 	}
 

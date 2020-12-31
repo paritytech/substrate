@@ -405,4 +405,8 @@ impl AsyncExternalities for AsyncExt {
 	fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
 		self.overlay.extract_optimistic_log()
 	}
+
+	fn did_fail(&self) -> bool {
+		self.overlay.did_fail()
+	}
 }
