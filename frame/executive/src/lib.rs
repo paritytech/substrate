@@ -130,7 +130,7 @@ use sp_runtime::{
 	transaction_validity::{TransactionValidity, TransactionSource},
 };
 use codec::{Codec, Encode};
-use frame_system::{extrinsics_root, DigestOf};
+use frame_system::DigestOf;
 
 /// Trait that can be used to execute a block.
 pub trait ExecuteBlock<Block: BlockT> {
@@ -213,7 +213,6 @@ where
 		Self::initialize_block_impl(
 			header.number(),
 			header.parent_hash(),
-			header.extrinsics_root(),
 			&digests
 		);
 	}
@@ -231,7 +230,6 @@ where
 	fn initialize_block_impl(
 		block_number: &System::BlockNumber,
 		parent_hash: &System::Hash,
-		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
 		let mut weight = 0;
@@ -244,15 +242,18 @@ where
 		<frame_system::Module<System>>::initialize(
 			block_number,
 			parent_hash,
-			extrinsics_root,
 			digest,
 			frame_system::InitKind::Full,
 		);
 		weight = weight.saturating_add(
 			<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number)
 		);
-		weight = weight.saturating_add(<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number))
-			.saturating_add(<System::BlockExecutionWeight as frame_support::traits::Get<_>>::get());
+		weight = weight.saturating_add(
+			<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number)
+		);
+		weight = weight.saturating_add(
+			<System::BlockWeights as frame_support::traits::Get<_>>::get().base_block
+		);
 		<frame_system::Module::<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
 
 		frame_system::Module::<System>::note_finished_initialize();
@@ -282,13 +283,8 @@ where
 		assert!(
 			n > System::BlockNumber::zero()
 			&& <frame_system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
-			"Parent hash should be valid."
+			"Parent hash should be valid.",
 		);
-
-		// Check that transaction trie root represents the transactions.
-		let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
-		header.extrinsics_root().check_equal(&xts_root);
-		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
 	/// Actually execute all transitions for `block`.
@@ -318,8 +314,14 @@ where
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
-	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
-		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
+	fn execute_extrinsics_with_book_keeping(
+		extrinsics: Vec<Block::Extrinsic>,
+		block_number: NumberFor<Block>,
+	) {
+		extrinsics.into_iter().for_each(|e| if let Err(e) = Self::apply_extrinsic(e) {
+			let err: &'static str = e.into();
+			panic!(err)
+		});
 
 		// post-extrinsics book-keeping
 		<frame_system::Module<System>>::note_finished_extrinsics();
@@ -337,8 +339,6 @@ where
 		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 
-		// set up extrinsics
-		<frame_system::Module<System>>::derive_extrinsics();
 		<frame_system::Module<System>>::finalize()
 	}
 
@@ -350,23 +350,14 @@ where
 		sp_io::init_tracing();
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
-		Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded))
-	}
-
-	/// Apply an extrinsic inside the block execution function.
-	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
-		let l = uxt.encode().len();
-		match Self::apply_extrinsic_with_len(uxt, l, None) {
-			Ok(_) => (),
-			Err(e) => { let err: &'static str = e.into(); panic!(err) },
-		}
+		Self::apply_extrinsic_with_len(uxt, encoded_len, encoded)
 	}
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
 	fn apply_extrinsic_with_len(
 		uxt: Block::Extrinsic,
 		encoded_len: usize,
-		to_note: Option<Vec<u8>>,
+		to_note: Vec<u8>,
 	) -> ApplyExtrinsicResult {
 		sp_tracing::enter_span!(
 			sp_tracing::info_span!("apply_extrinsic",
@@ -378,9 +369,7 @@ where
 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
 		// executed to prevent it from leaking in storage since at this point, it will either
 		// execute or panic (and revert storage changes).
-		if let Some(encoded) = to_note {
-			<frame_system::Module<System>>::note_extrinsic(encoded);
-		}
+		<frame_system::Module<System>>::note_extrinsic(to_note);
 
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
@@ -414,6 +403,11 @@ where
 		let storage_root = new_header.state_root();
 		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == storage_root, "Storage root must match that calculated.");
+
+		assert!(
+			header.extrinsics_root() == new_header.extrinsics_root(),
+			"Transaction trie root must be valid.",
+		);
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any
@@ -458,7 +452,6 @@ where
 		<frame_system::Module<System>>::initialize(
 			header.number(),
 			header.parent_hash(),
-			header.extrinsics_root(),
 			&digests,
 			frame_system::InitKind::Inspection,
 		);
@@ -482,7 +475,7 @@ mod tests {
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
-		generic::{Era, DigestItem}, Perbill, DispatchError, testing::{Digest, Header, Block},
+		generic::{Era, DigestItem}, DispatchError, testing::{Digest, Header, Block},
 		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup},
 		transaction_validity::{
 			InvalidTransaction, ValidTransaction, TransactionValidityError, UnknownTransaction
@@ -493,7 +486,9 @@ mod tests {
 		weights::{Weight, RuntimeDbWeight, IdentityFee, WeightToFeePolynomial},
 		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons},
 	};
-	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
+	use frame_system::{
+		Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo,
+	};
 	use pallet_transaction_payment::CurrencyAdapter;
 	use pallet_balances::Call as BalancesCall;
 	use hex_literal::hex;
@@ -552,6 +547,12 @@ mod tests {
 				fn offchain_worker(n: T::BlockNumber) {
 					assert_eq!(T::BlockNumber::from(1u32), n);
 				}
+
+				#[weight = 0]
+				fn calculate_storage_root(origin) {
+					let root = sp_io::storage::root();
+					sp_io::storage::set("storage_root".as_bytes(), &root);
+				}
 			}
 		}
 
@@ -584,11 +585,12 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
-		pub const BlockExecutionWeight: Weight = 10;
-		pub const ExtrinsicBaseWeight: Weight = 5;
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::builder()
+				.base_block(10)
+				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = 5)
+				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = 1024.into())
+				.build_or_panic();
 		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 			read: 10,
 			write: 100,
@@ -596,6 +598,9 @@ mod tests {
 	}
 	impl frame_system::Config for Runtime {
 		type BaseCallFilter = ();
+		type BlockWeights = BlockWeights;
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type Call = Call;
@@ -607,19 +612,13 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = DbWeight;
-		type BlockExecutionWeight = BlockExecutionWeight;
-		type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type MaximumBlockLength = MaximumBlockLength;
 		type Version = RuntimeVersion;
 		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<Balance>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 
 	type Balance = u64;
@@ -715,7 +714,8 @@ mod tests {
 			balances: vec![(1, 211)],
 		}.assimilate_storage(&mut t).unwrap();
 		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(2, 69)), sign_extra(1, 0, 0));
-		let weight = xt.get_dispatch_info().weight + <Runtime as frame_system::Config>::ExtrinsicBaseWeight::get();
+		let weight = xt.get_dispatch_info().weight +
+			<Runtime as frame_system::Config>::BlockWeights::get().get(DispatchClass::Normal).base_extrinsic;
 		let fee: Balance
 			= <Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
 		let mut t = sp_io::TestExternalities::new(t);
@@ -749,7 +749,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("465a1569d309039bdf84b0479d28064ea29e6584584dc7d788904bb14489c6f6").into(),
+					state_root: hex!("ba1a82a264b8007e0c04c9ea35e541593daad08b6e2bf7c0a6780a67d1c55018").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -817,9 +817,11 @@ mod tests {
 		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as Weight;
-		// on_initialize weight + block execution weight
-		let base_block_weight = 175 + <Runtime as frame_system::Config>::BlockExecutionWeight::get();
-		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get() - base_block_weight;
+		// on_initialize weight + base block execution weight
+		let block_weights = <Runtime as frame_system::Config>::BlockWeights::get();
+		let base_block_weight = 175 + block_weights.base_block;
+		let limit = block_weights.get(DispatchClass::Normal).max_total.unwrap()
+			- base_block_weight;
 		let num_to_exhaust_block = limit / (encoded_len + 5);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -861,7 +863,7 @@ mod tests {
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
 			// Block execution weight + on_initialize weight from custom module
-			let base_block_weight = 175 + <Runtime as frame_system::Config>::BlockExecutionWeight::get();
+			let base_block_weight = 175 + <Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
 			Executive::initialize_block(&Header::new(
 				1,
@@ -879,7 +881,8 @@ mod tests {
 			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
-			let extrinsic_weight = len as Weight + <Runtime as frame_system::Config>::ExtrinsicBaseWeight::get();
+			let extrinsic_weight = len as Weight + <Runtime as frame_system::Config>::BlockWeights
+				::get().get(DispatchClass::Normal).base_extrinsic;
 			assert_eq!(
 				<frame_system::Module<Runtime>>::block_weight().total(),
 				base_block_weight + 3 * extrinsic_weight,
@@ -945,8 +948,11 @@ mod tests {
 					Call::System(SystemCall::remark(vec![1u8])),
 					sign_extra(1, 0, 0),
 				);
-				let weight = xt.get_dispatch_info().weight
-					+ <Runtime as frame_system::Config>::ExtrinsicBaseWeight::get();
+				let weight = xt.get_dispatch_info().weight + <Runtime as frame_system::Config>
+					::BlockWeights
+					::get()
+					.get(DispatchClass::Normal)
+					.base_extrinsic;
 				let fee: Balance =
 					<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
 				Executive::initialize_block(&Header::new(
@@ -1106,7 +1112,7 @@ mod tests {
 			let runtime_upgrade_weight = <AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
 			let frame_system_on_initialize_weight = frame_system::Module::<Runtime>::on_initialize(block_number);
 			let on_initialize_weight = <AllModules as OnInitialize<u64>>::on_initialize(block_number);
-			let base_block_weight = <Runtime as frame_system::Config>::BlockExecutionWeight::get();
+			let base_block_weight = <Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
 			// Weights are recorded correctly
 			assert_eq!(
@@ -1141,6 +1147,31 @@ mod tests {
 			assert_eq!(digest, System::digest());
 			assert_eq!(parent_hash, System::block_hash(0));
 			assert_eq!(header.hash(), System::block_hash(1));
+		});
+	}
+
+	#[test]
+	fn calculating_storage_root_twice_works() {
+		let call = Call::Custom(custom::Call::calculate_storage_root());
+		let xt = TestXt::new(call, sign_extra(1, 0, 0));
+
+		let header = new_test_ext(1).execute_with(|| {
+			// Let's build some fake block.
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			Executive::apply_extrinsic(xt.clone()).unwrap().unwrap();
+
+			Executive::finalize_block()
+		});
+
+		new_test_ext(1).execute_with(|| {
+			Executive::execute_block(Block::new(header, vec![xt]));
 		});
 	}
 }

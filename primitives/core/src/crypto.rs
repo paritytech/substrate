@@ -502,10 +502,16 @@ ss58_address_format!(
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>
 		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
+	ValiuAccount =>
+		(35, "vln", "Valiu Liquidity Network mainnet, standard account (*25519).")
 	CentrifugeAccount =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
 	NodleAccount =>
 		(37, "nodle", "Nodle Chain mainnet, standard account (*25519).")
+	KiltAccount =>
+		(38, "kilt", "KILT Chain mainnet, standard account (*25519).")
+	PolimecAccount =>
+		(41, "poli", "Polimec Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
 	Reserved43 =>
@@ -1029,6 +1035,7 @@ pub trait CryptoType {
 	Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode, PassByInner,
 	crate::RuntimeDebug
 )]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyTypeId(pub [u8; 4]);
 
 impl From<u32> for KeyTypeId {
@@ -1045,6 +1052,7 @@ impl From<KeyTypeId> for u32 {
 
 impl<'a> TryFrom<&'a str> for KeyTypeId {
 	type Error = ();
+
 	fn try_from(x: &'a str) -> Result<Self, ()> {
 		let b = x.as_bytes();
 		if b.len() != 4 {
@@ -1058,10 +1066,12 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 
 /// An identifier for a specific cryptographic algorithm used by a key pair
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct CryptoTypeId(pub [u8; 4]);
 
 /// A type alias of CryptoTypeId & a public key
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
 
 #[cfg(feature = "std")]
