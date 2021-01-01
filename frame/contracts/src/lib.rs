@@ -120,7 +120,7 @@ use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 };
-use frame_system::{ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root, Module as System};
 use pallet_contracts_primitives::{
 	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult, ExecResult,
 };
@@ -465,7 +465,12 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_initialize() -> Weight {
-			Storage::<T>::process_deletion_queue_batch(T::DeletionWeightLimit::get())
+			// We do not want to go above the block limit and rather avoid lazy deletion
+			// in that case. This should only happen on runtime upgrades.
+			let weight_limit = T::BlockWeights::get().max_block
+				.saturating_sub(System::<T>::block_weight().total())
+				.min(T::DeletionWeightLimit::get());
+			Storage::<T>::process_deletion_queue_batch(weight_limit)
 				.unwrap_or_else(T::WeightInfo::on_initialize)
 		}
 
