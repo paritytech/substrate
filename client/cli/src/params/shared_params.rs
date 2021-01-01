@@ -46,6 +46,10 @@ pub struct SharedParams {
 	#[structopt(short = "l", long, value_name = "LOG_PATTERN")]
 	pub log: Vec<String>,
 
+	/// Disable log color output.
+	#[structopt(long)]
+	pub disable_log_color: bool,
+
 	/// Disable feature to dynamically update and reload the log filter.
 	///
 	/// By default this feature is enabled, however it leads to a small performance decrease.
@@ -97,6 +101,11 @@ impl SharedParams {
 	/// Get the filters for the logging
 	pub fn log_filters(&self) -> &[String] {
 		&self.log
+	}
+
+	/// Should the log color output be disabled?
+	pub fn disable_log_color(&self) -> bool {
+		self.disable_log_color
 	}
 
 	/// Is log reloading disabled

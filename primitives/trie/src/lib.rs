@@ -184,7 +184,7 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>,
 {
 	{
-		let mut trie = TrieDBMut::<L>::from_existing(&mut *db, &mut root)?;
+		let mut trie = TrieDBMut::<L>::from_existing(db, &mut root)?;
 
 		let mut delta = delta.into_iter().collect::<Vec<_>>();
 		delta.sort_by(|l, r| l.0.borrow().cmp(r.0.borrow()));
@@ -223,9 +223,13 @@ pub fn read_trie_value_with<
 	Ok(TrieDB::<L>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
+/// Determine the empty trie root.
+pub fn empty_trie_root<L: TrieConfiguration>() -> <L::Hash as Hasher>::Out {
+	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
+}
+
 /// Determine the empty child trie root.
-pub fn empty_child_trie_root<L: TrieConfiguration>(
-) -> <L::Hash as Hasher>::Out {
+pub fn empty_child_trie_root<L: TrieConfiguration>() -> <L::Hash as Hasher>::Out {
 	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
 }
 

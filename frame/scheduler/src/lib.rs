@@ -837,6 +837,7 @@ mod tests {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+	type SS58Prefix = ();
 	}
 	impl logger::Config for Test {
 		type Event = ();

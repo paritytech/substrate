@@ -156,8 +156,6 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("storage_append is not supported in ReadOnlyExternalities")
 	}
 
-	fn chain_id(&self) -> u64 { 42 }
-
 	fn storage_root(&mut self) -> Vec<u8> {
 		unimplemented!("storage_root is not supported in ReadOnlyExternalities")
 	}
