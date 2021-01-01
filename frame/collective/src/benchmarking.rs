@@ -42,8 +42,7 @@ fn assert_last_event<T: Config<I>, I: Instance>(generic_event: <T as Config<I>>:
 }
 
 benchmarks_instance! {
-	_{ }
-
+	
 	set_members {
 		let m in 1 .. T::MaxMembers::get();
 		let n in 1 .. T::MaxMembers::get();
