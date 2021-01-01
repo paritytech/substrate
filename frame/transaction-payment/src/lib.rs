@@ -353,8 +353,6 @@ impl<T: Config> Module<T> where
 		len: u32,
 	) -> FeeDetails<BalanceOf<T>>
 	where
-		T: Send + Sync,
-		BalanceOf<T>: Send + Sync,
 		T::Call: Dispatchable<Info=DispatchInfo>,
 	{
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
