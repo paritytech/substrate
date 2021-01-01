@@ -32,8 +32,7 @@ use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 pub use self::gen_client::Client as TransactionPaymentClient;
 
-/// The base fee and adjusted weight and length fees constitute the _inclusion fee_, which is
-/// the minimum fee for a transaction to be included in a block.
+/// `RpcInclusionFee` is used to represent `InclusionFee` in RPC.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcInclusionFee {
@@ -51,10 +50,7 @@ pub struct RpcInclusionFee {
 	pub adjusted_weight_fee: NumberOrHex,
 }
 
-/// The `FeeDetails` is composed of:
-///   - (Optional) `inclusion_fee`: Only the `Pays::Yes` transaction can have the inclusion fee.
-///   - `tip`: If included in the transaction, the tip will be added on top. Only
-///     signed transactions can have a tip.
+/// The `RpcFeeDetails` is used to represent `FeeDetails` without the `tip` field in RPC.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcFeeDetails {
