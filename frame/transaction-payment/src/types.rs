@@ -24,7 +24,7 @@ use codec::{Encode, Decode};
 use serde::{Serialize, Deserialize};
 use sp_runtime::traits::AtLeast32BitUnsigned;
 
-/// The base fee and adjusted weight and length fees constitute the _inclusion fee,_ which is
+/// The base fee and adjusted weight and length fees constitute the _inclusion fee_, which is
 /// the minimum fee for a transaction to be included in a block.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
