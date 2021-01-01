@@ -125,6 +125,10 @@ benchmarks! {
 		assert_eq!(TicketsCount::get(), 1);
 		assert!(!Lottery::<T>::pot().1.is_zero());
 	}: {
+		// Generate `MaxGenerateRandom` numbers for worst case scenario
+		for i in 0 .. T::MaxGenerateRandom::get() {
+			Lottery::<T>::generate_random_number(i);
+		}
 		// Start lottery has block 15 configured for payout
 		Lottery::<T>::on_initialize(15u32.into());
 	}
@@ -152,6 +156,10 @@ benchmarks! {
 		assert_eq!(TicketsCount::get(), 1);
 		assert!(!Lottery::<T>::pot().1.is_zero());
 	}: {
+		// Generate `MaxGenerateRandom` numbers for worst case scenario
+		for i in 0 .. T::MaxGenerateRandom::get() {
+			Lottery::<T>::generate_random_number(i);
+		}
 		// Start lottery has block 15 configured for payout
 		Lottery::<T>::on_initialize(15u32.into());
 	}
