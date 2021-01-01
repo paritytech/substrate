@@ -66,28 +66,28 @@ pub struct TryFromIntError(pub(crate) ());
 
 impl TryFrom<NumberOrHex> for u32 {
 	type Error = TryFromIntError;
-	fn try_from(num_or_hex: NumberOrHex) -> Result<u32, TryFromIntError> {
+	fn try_from(num_or_hex: NumberOrHex) -> Result<u32, Self::Error> {
 		num_or_hex.into_u256().try_into().map_err(|_| TryFromIntError(()))
 	}
 }
 
 impl TryFrom<NumberOrHex> for u64 {
 	type Error = TryFromIntError;
-	fn try_from(num_or_hex: NumberOrHex) -> Result<u64, TryFromIntError> {
+	fn try_from(num_or_hex: NumberOrHex) -> Result<u64, Self::Error> {
 		num_or_hex.into_u256().try_into().map_err(|_| TryFromIntError(()))
 	}
 }
 
 impl TryFrom<NumberOrHex> for u128 {
 	type Error = TryFromIntError;
-	fn try_from(num_or_hex: NumberOrHex) -> Result<u128, TryFromIntError> {
+	fn try_from(num_or_hex: NumberOrHex) -> Result<u128, Self::Error> {
 		num_or_hex.into_u256().try_into().map_err(|_| TryFromIntError(()))
 	}
 }
 
 impl TryInto<NumberOrHex> for u128 {
 	type Error = TryFromIntError;
-	fn try_into(self) -> Result<NumberOrHex, TryFromIntError> {
+	fn try_into(self) -> Result<NumberOrHex, Self::Error> {
 		let value: U256 = self.into();
 		value.try_into().map_err(|_| TryFromIntError(()))
 	}
