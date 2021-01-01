@@ -942,6 +942,7 @@ impl pallet_mmr::Config for Runtime {
 parameter_types! {
 	pub const LotteryModuleId: ModuleId = ModuleId(*b"py/lotto");
 	pub const MaxCalls: usize = 10;
+	pub const MaxGenerateRandom: u32 = 10;
 }
 
 impl pallet_lottery::Config for Runtime {
@@ -953,6 +954,7 @@ impl pallet_lottery::Config for Runtime {
 	type ManagerOrigin = EnsureRoot<AccountId>;
 	type MaxCalls = MaxCalls;
 	type ValidateCall = Lottery;
+	type MaxGenerateRandom = MaxGenerateRandom;
 	type WeightInfo = pallet_lottery::weights::SubstrateWeight<Runtime>;
 }
 

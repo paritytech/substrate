@@ -93,6 +93,7 @@ impl pallet_balances::Config for Test {
 parameter_types! {
 	pub const LotteryModuleId: ModuleId = ModuleId(*b"py/lotto");
 	pub const MaxCalls: usize = 2;
+	pub const MaxGenerateRandom: u32 = 10;
 }
 
 impl Config for Test {
@@ -104,6 +105,7 @@ impl Config for Test {
 	type ManagerOrigin = EnsureRoot<u64>;
 	type MaxCalls = MaxCalls;
 	type ValidateCall = Lottery;
+	type MaxGenerateRandom = MaxGenerateRandom;
 	type WeightInfo = ();
 }
 

@@ -36,6 +36,13 @@
 //! storage item. You can also make your own implementation at the runtime level
 //! which can contain much more complex logic, such as validation of the
 //! parameters, which this pallet alone cannot do.
+//!
+//! This pallet uses the modulus operator to pick a random winner. It is known
+//! that this might introduce a bias if the random number chosen in a range that
+//! is not perfectly divisible by the total number of participants. The
+//! `MaxGenerateRandom` configuration can help mitigate this by generating new
+//! numbers until we hit the limit or we find a "fair" number. This is best
+//! effort only.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -86,6 +93,11 @@ pub trait Config: frame_system::Config {
 
 	/// Used to determine if a call would be valid for purchasing a ticket.
 	type ValidateCall: ValidateCall<Self>;
+
+	/// Number of time we should try to generate a random number that has no modulo bias.
+	/// The larger this number, the more potential computation is used for picking the winner,
+	/// but also the more likely that the chosen winner is done fairly.
+	type MaxGenerateRandom: Get<u32>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -393,9 +405,28 @@ impl<T: Config> Module<T> {
 
 	// Randomly choose a winner from among the total number of participants.
 	fn choose_winner(total: u32) -> u32 {
-		let random_seed = T::Randomness::random(&T::ModuleId::get().encode());
+		let mut random_number = Self::generate_random_number(0);
+
+		// Best effort attempt to remove bias from modulus operator.
+		for i in 1 .. T::MaxGenerateRandom::get() {
+			if random_number < u32::MAX - u32::MAX % total {
+				break;
+			}
+
+			random_number = Self::generate_random_number(i);
+		}
+
+		random_number % total
+	}
+
+	// Generate a random number from a given seed.
+	// Note that there is potential bias introduced by using modulus operator.
+	// You should call this function with different seed values until the random
+	// number lies within `u32::MAX - u32::MAX % n`.
+	fn generate_random_number(seed: u32) -> u32 {
+		let random_seed = T::Randomness::random(&(T::ModuleId::get(), seed).encode());
 		let random_number = <u32>::decode(&mut random_seed.as_ref())
 			.expect("secure hashes should always be bigger than u32; qed");
-		random_number % total
+		random_number
 	}
 }
