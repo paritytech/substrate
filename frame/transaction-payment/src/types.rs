@@ -22,22 +22,17 @@ use frame_support::weights::{Weight, DispatchClass};
 use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
 
-/// The base fee and adjusted weight and length fees constitute the _inclusion fee_, which is
-/// the minimum fee for a transaction to be included in a block.
+/// The base fee and adjusted weight and length fees constitute the _inclusion fee_.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
-#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
-pub struct InclusionFee<Balance: Default> {
+pub struct InclusionFee<Balance> {
 	/// This is the minimum amount a user pays for a transaction. It is declared
 	/// as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
-	#[cfg_attr(feature = "std", serde(with = "serde_balance"))]
 	pub base_fee: Balance,
 	/// The length fee, the amount paid for the encoded length (in bytes) of the transaction.
-	#[cfg_attr(feature = "std", serde(with = "serde_balance"))]
 	pub len_fee: Balance,
 	/// - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
 	///     the congestion of the network.
@@ -45,11 +40,10 @@ pub struct InclusionFee<Balance: Default> {
 	/// accounts for the execution time of a transaction.
 	///
 	/// adjusted_weight_fee = targeted_fee_adjustment * weight_fee
-	#[cfg_attr(feature = "std", serde(with = "serde_balance"))]
 	pub adjusted_weight_fee: Balance,
 }
 
-impl<Balance: AtLeast32BitUnsigned + Default + Copy> InclusionFee<Balance> {
+impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
 	/// Returns the total of inclusion fee.
 	///
 	/// ```ignore
@@ -69,23 +63,22 @@ impl<Balance: AtLeast32BitUnsigned + Default + Copy> InclusionFee<Balance> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
-#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
-pub struct FeeDetails<Balance: Default> {
+pub struct FeeDetails<Balance> {
+	/// The minimum fee for a transaction to be included in a block.
 	pub inclusion_fee: Option<InclusionFee<Balance>>,
 	// Do not serialize and deserialize `tip` as we actually can not pass any tip to the RPC.
 	#[cfg_attr(feature = "std", serde(skip))]
 	pub tip: Balance,
 }
 
-impl<Balance: AtLeast32BitUnsigned + Default + Copy> FeeDetails<Balance> {
+impl<Balance: AtLeast32BitUnsigned + Copy> FeeDetails<Balance> {
 	/// Returns the final fee.
 	///
 	/// ```ignore
 	/// final_fee = inclusion_fee + tip;
 	/// ```
 	pub fn final_fee(&self) -> Balance {
-		self.inclusion_fee.as_ref().map(|i|i.total()).unwrap_or_default().saturating_add(self.tip)
+		self.inclusion_fee.as_ref().map(|i|i.total()).unwrap_or_else(||Zero::zero()).saturating_add(self.tip)
 	}
 }
 

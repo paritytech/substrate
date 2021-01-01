@@ -18,19 +18,51 @@
 //! RPC interface for the transaction payment module.
 
 use std::sync::Arc;
+use std::convert::TryInto;
 use codec::{Codec, Decode};
+use serde::{Serialize, Deserialize};
 use sp_blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, MaybeDisplay, MaybeFromStr}};
+use sp_runtime::{generic::BlockId, traits::{Block as BlockT, MaybeDisplay}};
 use sp_api::ProvideRuntimeApi;
 use sp_core::Bytes;
-use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, RuntimeDispatchInfo};
+use sp_rpc::number::NumberOrHex;
+use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 pub use self::gen_client::Client as TransactionPaymentClient;
 
+/// The base fee and adjusted weight and length fees constitute the _inclusion fee_, which is
+/// the minimum fee for a transaction to be included in a block.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcInclusionFee {
+	/// This is the minimum amount a user pays for a transaction. It is declared
+	/// as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
+	pub base_fee: NumberOrHex,
+	/// The length fee, the amount paid for the encoded length (in bytes) of the transaction.
+	pub len_fee: NumberOrHex,
+	/// - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
+	///     the congestion of the network.
+	/// - `weight_fee`: This amount is computed based on the weight of the transaction. Weight
+	/// accounts for the execution time of a transaction.
+	///
+	/// adjusted_weight_fee = targeted_fee_adjustment * weight_fee
+	pub adjusted_weight_fee: NumberOrHex,
+}
+
+/// The `FeeDetails` is composed of:
+///   - (Optional) `inclusion_fee`: Only the `Pays::Yes` transaction can have the inclusion fee.
+///   - `tip`: If included in the transaction, the tip will be added on top. Only
+///     signed transactions can have a tip.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcFeeDetails {
+	pub inclusion_fee: Option<RpcInclusionFee>,
+}
+
 #[rpc]
-pub trait TransactionPaymentApi<BlockHash, ResponseType, FeeDetails> {
+pub trait TransactionPaymentApi<BlockHash, ResponseType> {
 	#[rpc(name = "payment_queryInfo")]
 	fn query_info(
 		&self,
@@ -42,7 +74,7 @@ pub trait TransactionPaymentApi<BlockHash, ResponseType, FeeDetails> {
 		&self,
 		encoded_xt: Bytes,
 		at: Option<BlockHash>
-	) -> Result<FeeDetails>;
+	) -> Result<RpcFeeDetails>;
 }
 
 /// A struct that implements the [`TransactionPaymentApi`].
@@ -78,13 +110,12 @@ impl From<Error> for i64 {
 impl<C, Block, Balance> TransactionPaymentApi<
 	<Block as BlockT>::Hash,
 	RuntimeDispatchInfo<Balance>,
-	FeeDetails<Balance>,
 > for TransactionPayment<C, Block>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
-	Balance: Codec + MaybeDisplay + MaybeFromStr + Default,
+	Balance: Codec + MaybeDisplay + Copy + TryInto<NumberOrHex>,
 {
 	fn query_info(
 		&self,
@@ -115,7 +146,7 @@ where
 		&self,
 		encoded_xt: Bytes,
 		at: Option<<Block as BlockT>::Hash>
-	) -> Result<FeeDetails<Balance>> {
+	) -> Result<RpcFeeDetails> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -129,10 +160,28 @@ where
 			message: "Unable to query fee details.".into(),
 			data: Some(format!("{:?}", e).into()),
 		})?;
-		api.query_fee_details(&at, uxt, encoded_len).map_err(|e| RpcError {
+		let fee_details = api.query_fee_details(&at, uxt, encoded_len).map_err(|e| RpcError {
 			code: ErrorCode::ServerError(Error::RuntimeError.into()),
 			message: "Unable to query fee details.".into(),
 			data: Some(format!("{:?}", e).into()),
+		})?;
+
+		let try_into_rpc_balance = |value: Balance| value.try_into().map_err(|_| RpcError {
+			code: ErrorCode::InvalidParams,
+			message: format!("{} doesn't fit in 64 bit unsigned value", value),
+			data: None,
+		});
+
+		Ok(RpcFeeDetails {
+			inclusion_fee: if let Some(inclusion_fee) = fee_details.inclusion_fee {
+				Some(RpcInclusionFee {
+					base_fee: try_into_rpc_balance(inclusion_fee.base_fee)?,
+					len_fee: try_into_rpc_balance(inclusion_fee.len_fee)?,
+					adjusted_weight_fee: try_into_rpc_balance(inclusion_fee.adjusted_weight_fee)?,
+				})
+			} else {
+				None
+			}
 		})
 	}
 }

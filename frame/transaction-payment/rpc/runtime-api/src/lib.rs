@@ -20,13 +20,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Codec;
-use sp_runtime::traits::{MaybeDisplay, MaybeFromStr};
+use sp_runtime::traits::MaybeDisplay;
 
 pub use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 
 sp_api::decl_runtime_apis! {
 	pub trait TransactionPaymentApi<Balance> where
-		Balance: Codec + MaybeDisplay + MaybeFromStr + Default,
+		Balance: Codec + MaybeDisplay,
 	{
 		fn query_info(uxt: Block::Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance>;
 		fn query_fee_details(uxt: Block::Extrinsic, len: u32) -> FeeDetails<Balance>;

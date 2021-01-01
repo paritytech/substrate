@@ -85,6 +85,14 @@ impl TryFrom<NumberOrHex> for u128 {
 	}
 }
 
+impl TryInto<NumberOrHex> for u128 {
+	type Error = TryFromIntError;
+	fn try_into(self) -> Result<NumberOrHex, TryFromIntError> {
+		let value: U256 = self.into();
+		value.try_into().map_err(|_| TryFromIntError(()))
+	}
+}
+
 impl From<NumberOrHex> for U256 {
 	fn from(num_or_hex: NumberOrHex) -> U256 {
 		num_or_hex.into_u256()
