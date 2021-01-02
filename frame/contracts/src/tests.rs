@@ -2052,7 +2052,7 @@ fn lazy_removal_partial_remove_works() {
 
 	ext.execute_with(|| {
 		// Run the lazy removal
-		let weight_used = Storage::<Test>::process_deletion_queue_batch(weight_limit).unwrap();
+		let weight_used = Storage::<Test>::process_deletion_queue_batch(weight_limit);
 
 		// Weight should be exhausted because we could not even delete all keys
 		assert_eq!(weight_used, weight_limit);
@@ -2134,7 +2134,7 @@ fn lazy_removal_does_not_use_all_weight() {
 		}
 
 		// Run the lazy removal
-		let weight_used = Storage::<Test>::process_deletion_queue_batch(weight_limit).unwrap();
+		let weight_used = Storage::<Test>::process_deletion_queue_batch(weight_limit);
 
 		// We have one less key in our trie than our weight limit suffices for
 		assert_eq!(weight_used, weight_limit - weight_per_key);

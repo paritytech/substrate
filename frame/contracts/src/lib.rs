@@ -471,7 +471,7 @@ decl_module! {
 				.saturating_sub(System::<T>::block_weight().total())
 				.min(T::DeletionWeightLimit::get());
 			Storage::<T>::process_deletion_queue_batch(weight_limit)
-				.unwrap_or_else(T::WeightInfo::on_initialize)
+				.saturating_add(T::WeightInfo::on_initialize())
 		}
 
 		/// Updates the schedule for metering contracts.

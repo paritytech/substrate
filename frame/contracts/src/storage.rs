@@ -249,20 +249,25 @@ where
 	///
 	/// It returns the amount of weight used for that task or `None` when no weight was used
 	/// apart from the base weight.
-	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Option<Weight> {
-		// We can decode the queue eagerly because we cap the queue depth and assume
-		// that the weight is large enough to do at least one round of deletions.
-		// We can assume that because any other static configuration of the runtime
-		// would make no sense at all.
-		let mut queue = DeletionQueue::get();
-		if queue.is_empty() {
-			return None;
+	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
+		let queue_len = DeletionQueue::decode_len().unwrap_or(0);
+		if queue_len == 0 {
+			return weight_limit;
 		}
 
 		let (weight_per_key, mut remaining_key_budget) = Self::deletion_budget(
-			queue.len(),
+			queue_len,
 			weight_limit,
 		);
+
+		// We want to check whether we have enough weight to decode the queue before
+		// proceeding. Too little weight for decoding might happen during runtime upgrades
+		// which consume the whole block before the other `on_initialize` blocks are called.
+		if remaining_key_budget == 0 {
+			return weight_limit;
+		}
+
+		let mut queue = DeletionQueue::get();
 
 		while !queue.is_empty() && remaining_key_budget > 0 {
 			// Cannot panic due to loop condition
@@ -295,10 +300,7 @@ where
 		}
 
 		DeletionQueue::put(queue);
-		Some(
-			weight_limit
-			.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
-		)
+		weight_limit.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
 	}
 
 	/// This generator uses inner counter for account id and applies the hash over `AccountId +
