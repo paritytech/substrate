@@ -32,7 +32,7 @@ use frame_support::{
 	assert_ok, assert_err, assert_err_ignore_postinfo, impl_outer_dispatch, impl_outer_event,
 	impl_outer_origin, parameter_types, StorageMap,
 	traits::{Currency, ReservableCurrency, OnInitialize},
-	weights::{Weight, PostDispatchInfo},
+	weights::{Weight, PostDispatchInfo, DispatchClass, constants::WEIGHT_PER_SECOND},
 	dispatch::DispatchErrorWithPostInfo,
 	storage::child,
 };
@@ -107,12 +107,12 @@ pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();
-	type BlockWeights = ();
+	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
 	type Origin = Origin;
@@ -1974,7 +1974,7 @@ fn lazy_removal_works() {
 		assert_matches!(child::get(trie, &[99]), Some(42));
 
 		// Run the lazy removal
-		Contracts::on_initialize(0);
+		Contracts::on_initialize(Weight::max_value());
 
 		// Value should be gone now
 		assert_matches!(child::get::<i32>(trie, &[99]), None);
@@ -2074,6 +2074,91 @@ fn lazy_removal_partial_remove_works() {
 		assert_eq!(num_remaining, extra_keys);
 	});
 }
+
+#[test]
+fn lazy_removal_does_no_run_on_full_block() {
+	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = ConfigCache::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), code));
+
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				subsistence,
+				GAS_LIMIT,
+				hash.into(),
+				vec![],
+				vec![],
+			),
+		);
+
+		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
+		let info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
+		let trie = &info.child_trie_info();
+		let max_keys = 30;
+
+		// Create some storage items for the contract.
+		let vals: Vec<_> = (0..max_keys).map(|i| {
+			(blake2_256(&i.encode()), (i as u32), (i as u32).encode())
+		})
+		.collect();
+
+		// Put value into the contracts child trie
+		for val in &vals {
+			Storage::<Test>::write(
+				&addr,
+				&info.trie_id,
+				&val.0,
+				Some(val.2.clone()),
+			).unwrap();
+		}
+
+		// Terminate the contract
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![],
+		));
+
+		// Contract info should be gone
+		assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
+
+		// But value should be still there as the lazy removal did not run, yet.
+		for val in &vals {
+			assert_eq!(child::get::<u32>(trie, &blake2_256(&val.0)), Some(val.1));
+		}
+
+		// Fill up the block which should prevent the lazy storage removal from running.
+		System::register_extra_weight_unchecked(
+			<Test as system::Config>::BlockWeights::get().max_block,
+			DispatchClass::Mandatory,
+		);
+
+		// Run the lazy removal without any limit so that all keys would be removed if there
+		// had been some weight left in the block.
+		let weight_used = Contracts::on_initialize(Weight::max_value());
+		let base = <<Test as crate::Config>::WeightInfo as crate::WeightInfo>::on_initialize();
+		assert_eq!(weight_used, base);
+
+		// All the keys are still in place
+		for val in &vals {
+			assert_eq!(child::get::<u32>(trie, &blake2_256(&val.0)), Some(val.1));
+		}
+
+		// Run the lazy removal directly which disregards the block limits
+		Storage::<Test>::process_deletion_queue_batch(Weight::max_value());
+
+		// Now the keys should be gone
+		for val in &vals {
+			assert_eq!(child::get::<u32>(trie, &blake2_256(&val.0)), None);
+		}
+	});
+}
+
 
 #[test]
 fn lazy_removal_does_not_use_all_weight() {
