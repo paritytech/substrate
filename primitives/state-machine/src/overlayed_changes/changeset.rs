@@ -259,7 +259,16 @@ impl OverlayedChangeSet {
 	/// Panics:
 	/// Panics if there are open transactions: `transaction_depth() > 0`
 	pub fn drain_commited(self) -> impl Iterator<Item=(StorageKey, Option<StorageValue>)> {
-		assert!(self.transaction_depth() == 0, "Drain is not allowed with open transactions.");
+		self.drain_commited_for(0)
+	}
+
+	/// Consume this changeset and return all committed changes.
+	///
+	/// Panics:
+	/// Panics if there are open transactions: `transaction_depth() > 0`
+	/// with inital_depth being 0.
+	pub fn drain_commited_for(self, inital_depth: usize) -> impl Iterator<Item=(StorageKey, Option<StorageValue>)> {
+		assert!(self.transaction_depth() == inital_depth, "Drain is not allowed with open transactions.");
 		self.changes.into_iter().map(|(k, mut v)| (k, v.pop_transaction().value))
 	}
 

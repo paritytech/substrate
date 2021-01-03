@@ -41,6 +41,13 @@ pub(super) struct Markers {
 	// current transaction and associated
 	// task ids.
 	transactions: Vec<Vec<TaskId>>,
+	// Depth of overlay transaction when
+	// starting the worker.
+	// When extracting data we would check
+	// transactions.len() == 1
+	// and then extract from overlay up to this
+	// depth.
+	start_depth: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -50,11 +57,27 @@ struct MarkerDesc {
 
 impl Default for Markers {
 	fn default() -> Self {
-		
 		Markers {
 			markers: BTreeMap::new(),
 			transactions: vec![Default::default()],
+			start_depth: 0,
 		}
+	}
+}
+
+impl Markers {
+	/// Initialize marker for an existing overlay.
+	pub(super) fn from_start_depth(start_depth: usize) -> Self {
+		Markers {
+			markers: BTreeMap::new(),
+			transactions: vec![Default::default()],
+			start_depth,
+		}
+	}
+
+	/// Access base depth for this worker overlay.
+	pub(super) fn start_depth(&self) -> usize {
+		self.start_depth
 	}
 }
 
@@ -72,12 +95,6 @@ impl Markers {
 			transaction_depth: index,
 		});
 		tx.push(marker)
-	}
-
-	/// Set current transaction depth as a transactional limit.
-	pub(super) fn set_limit(&mut self) {
-		self.transactions.clear();
-		self.transactions.push(Default::default());
 	}
 
 	pub(super) fn start_transaction(&mut self) {

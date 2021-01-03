@@ -55,13 +55,13 @@ impl std::fmt::Debug for AsyncExt
 /// Obtain externality and get id for worker.
 /// TODO consider having declaration param only for kind declarative and uses default when not
 /// here.
-/// TODO consider moving it 
+/// TODO consider moving it
 /// TODO renma
 pub fn spawn_call_ext(
 	worker_id: u64,
 	declaration: WorkerDeclaration,
 	backend: Box<dyn AsyncBackend>,
-	parent_overlay: Option<&mut OverlayedChanges>, 
+	parent_overlay: Option<&mut OverlayedChanges>,
 ) -> AsyncExt {
 	let mut result = match &declaration {
 		WorkerDeclaration::Stateless => {
@@ -90,9 +90,7 @@ pub fn spawn_call_ext(
 		},
 	};
 	parent_overlay.map(|overlay| {
-		result.overlay = overlay.clone();
-		// TODO can also clean past data or get a specific one layer overlay
-		result.overlay.start_transaction();
+		result.overlay = overlay.child_worker_overlay();
 		overlay.set_parent_declaration(worker_id, declaration.clone());
 	});
 	result.overlay.set_child_declaration(declaration);
