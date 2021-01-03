@@ -27,7 +27,7 @@ use sp_std::{
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 };
-use sp_externalities::{Externalities, TaskId, AsyncBackend,
+use sp_externalities::{Externalities, TaskId, AsyncBackend, AsyncExternalitiesPostExecution,
 	WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities};
 use sp_core::hexdisplay::HexDisplay;
 use crate::ext::guard;
@@ -390,10 +390,6 @@ impl sp_externalities::ExtensionStore for AsyncExt {
 }
 
 impl AsyncExternalities for AsyncExt {
-	fn need_resolve(&self) -> bool {
-		self.kind.need_resolve()
-	}
-	
 	fn extract_delta(&mut self) -> Option<sp_externalities::StateDelta> {
 		if self.write_access() {
 			Some(self.overlay.extract_delta())
@@ -402,11 +398,16 @@ impl AsyncExternalities for AsyncExt {
 		}
 	}
 
-	fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
-		self.overlay.extract_optimistic_log()
-	}
-
-	fn did_fail(&self) -> bool {
-		self.overlay.did_fail()
+	fn extract_state(&mut self) -> AsyncExternalitiesPostExecution {
+		if !self.kind.need_resolve() {
+			return AsyncExternalitiesPostExecution::Valid;
+		}
+		if self.overlay.did_fail() {
+			return AsyncExternalitiesPostExecution::Invalid;
+		}
+		if let Some(optimistic) = self.overlay.extract_optimistic_log() {
+			return AsyncExternalitiesPostExecution::Optimistic(optimistic);
+		}
+		AsyncExternalitiesPostExecution::NeedResolve
 	}
 }

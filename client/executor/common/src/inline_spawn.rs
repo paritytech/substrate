@@ -24,7 +24,8 @@
 
 use sp_tasks::{new_inline_only_externalities, Crossing};
 use sp_core::traits::RuntimeSpawn;
-use sp_externalities::{WorkerResult, WorkerDeclaration, Externalities, AsyncExternalities};
+use sp_externalities::{WorkerResult, WorkerDeclaration, Externalities, AsyncExternalities,
+	AsyncExternalitiesPostExecution};
 use sp_std::rc::Rc;
 use sp_std::cell::RefCell;
 use sp_std::collections::btree_map::BTreeMap;
@@ -340,19 +341,20 @@ pub fn process_task<
 			}
 		},
 	};
-	let need_resolve = async_ext.need_resolve();
-	let state_delta = async_ext.extract_delta();
 	match result {
-		Ok(Ok(result)) => if need_resolve {
-			if async_ext.did_fail() {
+		Ok(Ok(result)) =>	match async_ext.extract_state() {
+			AsyncExternalitiesPostExecution::Invalid => {
 				WorkerResult::Invalid
-			} else if let Some(access) = async_ext.extract_optimistic_log() {
-				WorkerResult::Optimistic(result, state_delta, handle, access)
-			} else {
-				WorkerResult::CallAt(result, state_delta, handle)
-			}
-		} else {
-			WorkerResult::Valid(result, state_delta)
+			},
+			AsyncExternalitiesPostExecution::NeedResolve => {
+				WorkerResult::CallAt(result, async_ext.extract_delta(), handle)
+			},
+			AsyncExternalitiesPostExecution::Valid => {
+				WorkerResult::Valid(result, async_ext.extract_delta())
+			},
+			AsyncExternalitiesPostExecution::Optimistic(access) => {
+				WorkerResult::Optimistic(result, async_ext.extract_delta(), handle, access)
+			},
 		},
 		Ok(Err(error)) => {
 			log_error!("Wasm instance error in : {:?}", error);

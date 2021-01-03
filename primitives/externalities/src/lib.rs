@@ -296,22 +296,36 @@ pub trait Externalities: ExtensionStore {
 
 /// Substrate externalities that can be use within a worker context.
 pub trait AsyncExternalities: Externalities + Send {
-	/// Depending on concurrency management strategy
-	/// we may need to resolve the result against
-	/// parent externalities.
-	fn need_resolve(&self) -> bool;
-	
 	/// Extract changes made to state for this worker.
 	fn extract_delta(&mut self) -> Option<StateDelta>;
 
-	/// For optimistic worker, we extract logs from the overlay.
-	/// When call on a non optimistic worker returns `None`.
-	fn extract_optimistic_log(&mut self) -> Option<AccessLog>;
+	/// After execution, we call back async externalities to check
+	/// produce worker result.
+	fn extract_state(&mut self) -> AsyncExternalitiesPostExecution;
+}
 
-	/// For declarative worker, check if we did register a failure.
-	/// Note TODO all those resulting fn could be fuse but keeping
-	/// them until it gets clear which worker types are needed.
-	fn did_fail(&self) -> bool;
+/// State of async externality of a child workre after 'join' is called.
+pub enum AsyncExternalitiesPostExecution {
+	/// Some condition fails and the state is invalid.
+	/// With an invalid state we consider that worker
+	/// execution, even if it did finish is invalid.
+	/// Therefore 'join' implementation should never
+	/// return result when externality is in this state.
+	Invalid,
+
+	/// Assuming that child worker state is valid, we can
+	/// return the result to the parent worker on 'join'.
+	Valid,
+
+	/// This requires to check the result against
+	/// parent worker externalities with `resolve_worker_result`.
+	NeedResolve,
+
+	/// Optimistic worker state accesses to be checked
+	/// against other worker results.
+	/// This can result in 'join' returning an invalid
+	/// result.
+	Optimistic(AccessLog),
 }
 
 /// Result from worker execution.

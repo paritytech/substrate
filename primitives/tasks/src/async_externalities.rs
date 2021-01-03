@@ -50,6 +50,7 @@ use sp_core::{
 use sp_externalities::{
 	Externalities, Extensions, ExternalitiesExt as _, TaskId, WorkerResult,
 	WorkerDeclaration, AsyncExternalities as AsyncExternalitiesTrait,
+	AsyncExternalitiesPostExecution,
 };
 
 /// Simple state-less externalities for use in async context.
@@ -276,21 +277,11 @@ impl sp_externalities::ExtensionStore for AsyncExternalities {
 }
 
 impl AsyncExternalitiesTrait for AsyncExternalities {
-	fn need_resolve(&self) -> bool {
-		self.state.need_resolve()
-	}
-	
 	fn extract_delta(&mut self) -> Option<sp_externalities::StateDelta> {
 		self.state.extract_delta()
 	}
 
-	fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
-		self.state.extract_optimistic_log()
-	}
-
-	fn did_fail(&self) -> bool {
-		self.state.did_fail()
+	fn extract_state(&mut self) -> AsyncExternalitiesPostExecution {
+		self.state.extract_state()
 	}
 }
-
-
