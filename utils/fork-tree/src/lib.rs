@@ -1224,7 +1224,7 @@ mod test {
 	#[test]
 	fn finalize_with_descendent_works() {
 		#[derive(Debug, PartialEq)]
-		struct Change { effective: u64 };
+		struct Change { effective: u64 }
 
 		let (mut tree, is_descendent_of) = {
 			let mut tree = ForkTree::new();
