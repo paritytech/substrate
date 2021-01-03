@@ -25,7 +25,7 @@ use parking_lot::RwLockWriteGuard;
 use sp_blockchain::{BlockStatus, well_known_cache_keys};
 use sc_client_api::{backend::Backend, utils::is_descendent_of};
 use sp_utils::mpsc::TracingUnboundedSender;
-use sp_api::{TransactionFor};
+use sp_api::TransactionFor;
 
 use sp_consensus::{
 	BlockImport, Error as ConsensusError,
