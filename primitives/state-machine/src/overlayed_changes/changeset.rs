@@ -259,7 +259,8 @@ impl OverlayedChangeSet {
 	/// Panics:
 	/// Panics if there are open transactions: `transaction_depth() > 0`
 	pub fn drain_commited(self) -> impl Iterator<Item=(StorageKey, Option<StorageValue>)> {
-		self.drain_commited_for(0)
+		assert!(self.transaction_depth() == 0, "Drain is not allowed with open transactions.");
+		self.changes.into_iter().map(|(k, mut v)| (k, v.pop_transaction().value))
 	}
 
 	/// Consume this changeset and return all committed changes.
@@ -267,9 +268,22 @@ impl OverlayedChangeSet {
 	/// Panics:
 	/// Panics if there are open transactions: `transaction_depth() > 0`
 	/// with inital_depth being 0.
-	pub fn drain_commited_for(self, inital_depth: usize) -> impl Iterator<Item=(StorageKey, Option<StorageValue>)> {
-		assert!(self.transaction_depth() == inital_depth, "Drain is not allowed with open transactions.");
-		self.changes.into_iter().map(|(k, mut v)| (k, v.pop_transaction().value))
+	pub fn drain_commited_from(self, initial_overlay: Option<OverlayedChangeSet>) -> impl Iterator<Item=(StorageKey, Option<StorageValue>)> {
+		let initial_depth = initial_overlay.as_ref().map(|overlay| overlay.transaction_depth()).unwrap_or(0);
+		assert!(self.transaction_depth() == initial_depth, "Drain is not allowed with open transactions.");
+		// TODO use zip iter for efficiency.
+		self.changes.into_iter().filter_map(move |(k, mut v)| {
+			let initial_depth = initial_overlay.as_ref().map(|overlay| overlay.changes.get(&k)).flatten();
+			if let Some(initial_value) = initial_depth {
+				if v.transactions.len() > initial_value.transactions.len() {
+					Some((k, v.pop_transaction().value))
+				} else {
+					None
+				}
+			} else {
+				Some((k, v.pop_transaction().value))
+			}
+		})
 	}
 
 	/// Returns the current nesting depth of the transaction stack.

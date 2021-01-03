@@ -124,8 +124,7 @@ impl OverlayedChanges {
 		result.children = self.children.clone();
 		result.stats = Default::default();
 		result.start_transaction();
-		let transaction_offset = result.top.transaction_depth();
-		result.markers = markers::Markers::from_start_depth(transaction_offset);
+		result.markers = markers::Markers::from_start_state(&result);
 		result
 	}
 }
@@ -595,24 +594,27 @@ impl OverlayedChanges {
 		Ok(())
 	}
 
-	/// Consume all changes up to a given transaction depth (top + children)
+	/// Consume all changes up to a given transaction start state (top + children)
 	/// and return them.
 	///
 	/// Panics:
 	/// Panics if `transaction_depth() > initial_depth`
-	fn drain_committed_for(&mut self, initial_depth: usize) -> (
+	fn drain_committed_from(&mut self, initial_change: (OverlayedChangeSet, Map<StorageKey, (OverlayedChangeSet, ChildInfo)>)) -> (
 		impl Iterator<Item=(StorageKey, Option<StorageValue>)>,
 		impl Iterator<Item=(StorageKey, (impl Iterator<Item=(StorageKey, Option<StorageValue>)>, ChildInfo))>,
 	) {
+		let (top, mut children) = initial_change;
 		use sp_std::mem::take;
 		(
-			take(&mut self.top).drain_commited_for(initial_depth),
+			take(&mut self.top).drain_commited_from(Some(top)),
 			take(&mut self.children).into_iter()
-				.map(move |(key, (val, info))| (
+				.map(move |(key, (val, info))| {
+					let initial_set = children.remove(&key).map(|change_set| change_set.0);
+					(
 						key,
-						(val.drain_commited_for(initial_depth), info)
+						(val.drain_commited_from(initial_set), info)
 					)
-				),
+				}),
 		)
 	}
 
@@ -847,7 +849,8 @@ impl OverlayedChanges {
 
 	/// Extract changes from overlay.
 	pub fn extract_delta(&mut self) -> sp_externalities::StateDelta {
-		let (top_iter, children_iter) = self.drain_committed_for(self.markers.start_depth());
+		let start_state = self.markers.start_state();
+		let (top_iter, children_iter) = self.drain_committed_from(start_state);
 		let mut children = Vec::new();
 		for (_, (iter, info)) in children_iter {
 			let mut added = Vec::new();
