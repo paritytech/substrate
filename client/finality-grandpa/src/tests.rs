@@ -1068,7 +1068,7 @@ fn voter_persists_its_votes() {
 				drop(_block_import);
 				r
 			})
-	};
+	}
 
 	runtime.spawn(alice_voter1);
 
