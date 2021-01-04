@@ -1480,9 +1480,14 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 							}
 						}
 					},
-					Poll::Ready(Err(e)) => {
+					Poll::Ready(Err(oneshot::Canceled)) => {
 						peer.block_request.take();
-						trace!(target: "sync", "Block request to peer {:?} failed: {:?}.", id, e);
+						self.behaviour.disconnect_peer(id);
+						trace!(
+							target: "sync",
+							"Block request to peer {:?} failed due to oneshot being canceled.",
+							id,
+						);
 					},
 					Poll::Pending => {},
 				}
