@@ -599,11 +599,11 @@ impl OverlayedChanges {
 	///
 	/// Panics:
 	/// Panics if `transaction_depth() > initial_depth`
-	fn drain_committed_from(&mut self, initial_change: (OverlayedChangeSet, Map<StorageKey, (OverlayedChangeSet, ChildInfo)>)) -> (
+	fn drain_committed_from(&mut self, initial_state: markers::StartState) -> (
 		impl Iterator<Item=(StorageKey, Option<StorageValue>)>,
 		impl Iterator<Item=(StorageKey, (impl Iterator<Item=(StorageKey, Option<StorageValue>)>, ChildInfo))>,
 	) {
-		let (top, mut children) = initial_change;
+		let markers::StartState {top, mut children} = initial_state;
 		use sp_std::mem::take;
 		(
 			take(&mut self.top).drain_commited_from(Some(top)),

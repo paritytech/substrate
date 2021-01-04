@@ -47,8 +47,19 @@ pub(super) struct Markers {
 	// With different overlay design (attach
 	// depth to value), only transaction depth
 	// would be needed here.
-	start_state_top: OverlayedChangeSet,
-	start_state_children: Map<StorageKey, (OverlayedChangeSet, ChildInfo)>,
+	start_state: StartState,
+}
+
+// NOTE: this involves a costly clone on any write child.
+//
+// This could change to a simple depth for any key
+// or change in initialization of children (clone only
+// last value), or change in overlay changes design (to be
+// able to extract.
+#[derive(Default, Debug, Clone)]
+pub(super) struct StartState {
+	pub(super) top: OverlayedChangeSet,
+	pub(super) children: Map<StorageKey, (OverlayedChangeSet, ChildInfo)>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,8 +72,7 @@ impl Default for Markers {
 		Markers {
 			markers: BTreeMap::new(),
 			transactions: vec![Default::default()],
-			start_state_top: Default::default(),
-			start_state_children: Default::default(),
+			start_state: Default::default(),
 		}
 	}
 }
@@ -73,14 +83,16 @@ impl Markers {
 		Markers {
 			markers: BTreeMap::new(),
 			transactions: vec![Default::default()],
-			start_state_top: start_state.top.clone(),
-			start_state_children: start_state.children.clone(),
+			start_state: StartState {
+				top: start_state.top.clone(),
+				children: start_state.children.clone(),
+			},
 		}
 	}
 
 	/// Access base depth for this worker overlay.
-	pub(super) fn start_state(&mut self) -> (OverlayedChangeSet, Map<StorageKey, (OverlayedChangeSet, ChildInfo)>) {
-		(sp_std::mem::take(&mut self.start_state_top), sp_std::mem::take(&mut self.start_state_children))
+	pub(super) fn start_state(&mut self) -> StartState {
+		sp_std::mem::take(&mut self.start_state)
 	}
 }
 
