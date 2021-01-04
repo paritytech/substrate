@@ -36,6 +36,7 @@ use scale_info::{
 	form::{
 		CompactForm,
 		Form,
+		FormString,
 		MetaForm,
 	},
 	meta_type,
@@ -52,7 +53,7 @@ pub type RuntimeMetadataLastVersion<T> = RuntimeMetadataV12<T>;
 #[cfg_attr(feature = "std", derive(Decode))]
 pub struct RuntimeMetadataPrefixed<S = &'static str>
 where
-	S: PartialEq + Eq + PartialOrd + Ord + Clone + Debug,
+	S: FormString,
 {
 	pub prefix: u32,
 	pub types: RegistryReadOnly<S>,
