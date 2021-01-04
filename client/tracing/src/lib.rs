@@ -454,7 +454,6 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 	}
 
 	fn on_exit(&self, span: &Id, _ctx: Context<S>) {
-		self.current_span.exit();
 		let end_time = Instant::now();
 		let span_datum = {
 			let mut span_data = self.span_data.lock();
@@ -462,6 +461,7 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 		};
 
 		if let Some(mut span_datum) = span_datum {
+			self.current_span.exit();
 			span_datum.overall_time += end_time - span_datum.start_time;
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
 				span_datum.values.bool_values.insert("wasm".to_owned(), true);
@@ -480,9 +480,7 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 		};
 	}
 
-	fn on_close(&self, span: Id, ctx: Context<S>) {
-		self.on_exit(&span, ctx)
-	}
+	fn on_close(&self, _span: Id, _ctx: Context<S>) {}
 }
 
 /// TraceHandler for sending span data to the logger
