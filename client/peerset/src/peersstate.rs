@@ -252,7 +252,14 @@ impl PeersState {
 		let outcome = self
 			.nodes
 			.iter_mut()
-			.filter(|(_, Node { sets, .. })| !sets[set].is_connected())
+			.filter(|(_, Node { sets, .. })| {
+				match sets[set] {
+					MembershipState::NotMember => false,
+					MembershipState::In => false,
+					MembershipState::Out => false,
+					MembershipState::NotConnected { .. } => true,
+				}
+			})
 			.fold(None::<(&PeerId, &mut Node)>, |mut cur_node, to_try| {
 				if let Some(cur_node) = cur_node.take() {
 					if cur_node.1.reputation >= to_try.1.reputation {
