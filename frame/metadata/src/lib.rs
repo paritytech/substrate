@@ -23,6 +23,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod vnext;
+
 #[cfg(feature = "std")]
 use serde::Serialize;
 #[cfg(feature = "std")]
