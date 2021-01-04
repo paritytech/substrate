@@ -923,6 +923,8 @@ define_env!(Env, <E: Ext>,
 	// # Traps
 	//
 	// - The contract is live i.e is already on the call stack.
+	// - Failed to send the balance to the beneficiary.
+	// - The deletion queue is full.
 	seal_terminate(
 		ctx,
 		beneficiary_ptr: u32,
