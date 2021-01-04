@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -115,8 +115,8 @@ fn test_once() {
 				4 => if let Some(id) = known_nodes.iter()
 					.filter(|n| incoming_nodes.values().all(|m| m != *n) && !connected_nodes.contains(*n))
 					.choose(&mut rng) {
-					peerset.incoming(id.clone(), next_incoming_id.clone());
-					incoming_nodes.insert(next_incoming_id.clone(), id.clone());
+					peerset.incoming(id.clone(), next_incoming_id);
+					incoming_nodes.insert(next_incoming_id, id.clone());
 					next_incoming_id.0 += 1;
 				}
 

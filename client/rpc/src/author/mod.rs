@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -215,7 +215,7 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 				Ok(watcher) => {
 					subscriptions.add(subscriber, move |sink| {
 						sink
-							.sink_map_err(|_| unimplemented!())
+							.sink_map_err(|e| log::debug!("Subscription sink failed: {:?}", e))
 							.send_all(Compat::new(watcher))
 							.map(|_| ())
 					});

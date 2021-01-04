@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -32,15 +32,3 @@ impl<Block: BlockT, T> Client<Block> for T
 		T: HeaderBackend<Block> + ProofProvider<Block> + BlockIdTo<Block, Error = Error>
 			+ BlockBackend<Block> + HeaderMetadata<Block, Error = Error> + Send + Sync
 {}
-
-/// Finality proof provider.
-pub trait FinalityProofProvider<Block: BlockT>: Send + Sync {
-	/// Prove finality of the block.
-	fn prove_finality(&self, for_block: Block::Hash, request: &[u8]) -> Result<Option<Vec<u8>>, Error>;
-}
-
-impl<Block: BlockT> FinalityProofProvider<Block> for () {
-	fn prove_finality(&self, _for_block: Block::Hash, _request: &[u8]) -> Result<Option<Vec<u8>>, Error> {
-		Ok(None)
-	}
-}

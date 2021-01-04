@@ -19,8 +19,9 @@ sp-core = { version = "2.0.0", default-features = false, path = "../core" }
 sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
 sp-version = { version = "2.0.0", default-features = false, path = "../version" }
-sp-state-machine = { version = "0.8.0", optional = true, path = "../../primitives/state-machine" }
+sp-state-machine = { version = "0.8.0", optional = true, path = "../state-machine" }
 hash-db = { version = "0.15.2", optional = true }
+thiserror = { version = "1.0.21", optional = true }
 
 [dev-dependencies]
 sp-test-primitives = { version = "2.0.0", path = "../test-primitives" }
@@ -35,4 +36,5 @@ std = [
 	"sp-state-machine",
 	"sp-version/std",
 	"hash-db",
+	"thiserror",
 ]

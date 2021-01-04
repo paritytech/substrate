@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,14 +48,14 @@ use sp_staking::{
 };
 use sp_std::prelude::*;
 
-use crate::{Call, Module, Trait};
+use crate::{Call, Module, Config};
 
 /// A trait with utility methods for handling equivocation reports in BABE.
 /// The trait provides methods for reporting an offence triggered by a valid
 /// equivocation report, checking the current block author (to declare as the
 /// reporter), and also for creating and submitting equivocation report
 /// extrinsics (useful only in offchain context).
-pub trait HandleEquivocation<T: Trait> {
+pub trait HandleEquivocation<T: Config> {
 	/// Report an offence proved by the given reporters.
 	fn report_offence(
 		reporters: Vec<T::AccountId>,
@@ -75,7 +75,7 @@ pub trait HandleEquivocation<T: Trait> {
 	fn block_author() -> Option<T::AccountId>;
 }
 
-impl<T: Trait> HandleEquivocation<T> for () {
+impl<T: Config> HandleEquivocation<T> for () {
 	fn report_offence(
 		_reporters: Vec<T::AccountId>,
 		_offence: BabeEquivocationOffence<T::KeyOwnerIdentification>,
@@ -120,7 +120,7 @@ where
 	// We use the authorship pallet to fetch the current block author and use
 	// `offchain::SendTransactionTypes` for unsigned extrinsic creation and
 	// submission.
-	T: Trait + pallet_authorship::Trait + frame_system::offchain::SendTransactionTypes<Call<T>>,
+	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
 	// A system for reporting offences after valid equivocation reports are
 	// processed.
 	R: ReportOffence<
@@ -164,7 +164,7 @@ where
 /// A `ValidateUnsigned` implementation that restricts calls to `report_equivocation_unsigned`
 /// to local calls (i.e. extrinsics generated on this node) or that already in a block. This
 /// guarantees that only block authors can include unsigned equivocation reports.
-impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
+impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 		if let Call::report_equivocation_unsigned(equivocation_proof, _) = call {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -56,8 +56,12 @@ pub mod traits;
 pub mod transaction_validity;
 pub mod random_number_generator;
 mod runtime_string;
+mod multiaddress;
 
 pub use crate::runtime_string::*;
+
+// Re-export Multiaddress
+pub use multiaddress::MultiAddress;
 
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};

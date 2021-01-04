@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use codec::{Encode, Decode};
-use crate::Trait;
+use crate::Config;
 use frame_support::{
 	weights::DispatchInfo,
 	StorageMap,
@@ -35,16 +35,16 @@ use sp_std::vec;
 /// Note that this does not set any priority by default. Make sure that AT LEAST one of the signed
 /// extension sets some kind of priority upon validating transactions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckNonce<T: Trait>(#[codec(compact)] T::Index);
+pub struct CheckNonce<T: Config>(#[codec(compact)] T::Index);
 
-impl<T: Trait> CheckNonce<T> {
+impl<T: Config> CheckNonce<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(nonce: T::Index) -> Self {
 		Self(nonce)
 	}
 }
 
-impl<T: Trait> sp_std::fmt::Debug for CheckNonce<T> {
+impl<T: Config> sp_std::fmt::Debug for CheckNonce<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckNonce({})", self.0)
@@ -56,7 +56,7 @@ impl<T: Trait> sp_std::fmt::Debug for CheckNonce<T> {
 	}
 }
 
-impl<T: Trait> SignedExtension for CheckNonce<T> where
+impl<T: Config> SignedExtension for CheckNonce<T> where
 	T::Call: Dispatchable<Info=DispatchInfo>
 {
 	type AccountId = T::AccountId;

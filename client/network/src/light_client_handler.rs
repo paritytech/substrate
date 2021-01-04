@@ -1,18 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
-//
-// Substrate is free software: you can redistribute it and/or modify
+
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-//
-// Substrate is distributed in the hope that it will be useful,
+
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
-//
+
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! [`NetworkBehaviour`] implementation which handles light client requests.
 //!
@@ -44,6 +46,7 @@ use libp2p::{
 		upgrade::{OutboundUpgrade, read_one, write_one}
 	},
 	swarm::{
+		AddressRecord,
 		NegotiatedSubstream,
 		NetworkBehaviour,
 		NetworkBehaviourAction,
@@ -627,7 +630,7 @@ where
 		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
 		let child_info = match ChildType::from_prefixed_key(prefixed_key) {
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
-			None => Err("Invalid child storage key".into()),
+			None => Err(sp_blockchain::Error::InvalidChildStorageKey),
 		};
 		let proof = match child_info.and_then(|child_info| self.chain.read_child_proof(
 			&BlockId::Hash(block),
@@ -1355,7 +1358,7 @@ mod tests {
 		let transport = MemoryTransport::default()
 			.upgrade(upgrade::Version::V1)
 			.authenticate(NoiseConfig::xx(dh_key).into_authenticated())
-			.multiplex(yamux::Config::default())
+			.multiplex(yamux::YamuxConfig::default())
 			.boxed();
 		Swarm::new(transport, LightClientHandler::new(cf, client, checker, ps), local_peer)
 	}
@@ -1463,7 +1466,7 @@ mod tests {
 	impl PollParameters for EmptyPollParams {
 		type SupportedProtocolsIter = iter::Empty<Vec<u8>>;
 		type ListenedAddressesIter = iter::Empty<Multiaddr>;
-		type ExternalAddressesIter = iter::Empty<Multiaddr>;
+		type ExternalAddressesIter = iter::Empty<AddressRecord>;
 
 		fn supported_protocols(&self) -> Self::SupportedProtocolsIter {
 			iter::empty()

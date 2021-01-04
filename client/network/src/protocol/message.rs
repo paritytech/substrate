@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
 	RemoteChangesRequest, RemoteChangesResponse,
-	FinalityProofRequest, FinalityProofResponse,
 	FromBlock, RemoteReadChildRequest, Roles,
 };
 use sc_client_api::StorageProof;
@@ -216,7 +215,7 @@ pub mod generic {
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct ConsensusMessage {
 		/// Identifies consensus engine.
-		pub engine_id: ConsensusEngineId,
+		pub protocol: ConsensusEngineId,
 		/// Message payload.
 		pub data: Vec<u8>,
 	}
@@ -280,11 +279,10 @@ pub mod generic {
 		RemoteChangesResponse(RemoteChangesResponse<Number, Hash>),
 		/// Remote child storage read request.
 		RemoteReadChildRequest(RemoteReadChildRequest<Hash>),
-		/// Finality proof request.
-		FinalityProofRequest(FinalityProofRequest<Hash>),
-		/// Finality proof response.
-		FinalityProofResponse(FinalityProofResponse<Hash>),
 		/// Batch of consensus protocol messages.
+		// NOTE: index is incremented by 2 due to finality proof related
+		// messages that were removed.
+		#[codec(index = "17")]
 		ConsensusBatch(Vec<ConsensusMessage>),
 	}
 
@@ -307,8 +305,6 @@ pub mod generic {
 				Message::RemoteChangesRequest(_) => "RemoteChangesRequest",
 				Message::RemoteChangesResponse(_) => "RemoteChangesResponse",
 				Message::RemoteReadChildRequest(_) => "RemoteReadChildRequest",
-				Message::FinalityProofRequest(_) => "FinalityProofRequest",
-				Message::FinalityProofResponse(_) => "FinalityProofResponse",
 				Message::ConsensusBatch(_) => "ConsensusBatch",
 			}
 		}
@@ -545,27 +541,5 @@ pub mod generic {
 		pub roots: Vec<(N, H)>,
 		/// Missing changes tries roots proof.
 		pub roots_proof: StorageProof,
-	}
-
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	/// Finality proof request.
-	pub struct FinalityProofRequest<H> {
-		/// Unique request id.
-		pub id: RequestId,
-		/// Hash of the block to request proof for.
-		pub block: H,
-		/// Additional data blob (that both requester and provider understood) required for proving finality.
-		pub request: Vec<u8>,
-	}
-
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	/// Finality proof response.
-	pub struct FinalityProofResponse<H> {
-		/// Id of a request this response was made for.
-		pub id: RequestId,
-		/// Hash of the block (the same as in the FinalityProofRequest).
-		pub block: H,
-		/// Finality proof (if available).
-		pub proof: Option<Vec<u8>>,
 	}
 }

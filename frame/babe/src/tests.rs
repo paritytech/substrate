@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -77,7 +77,6 @@ fn first_block_epoch_zero_start() {
 		System::initialize(
 			&1,
 			&Default::default(),
-			&Default::default(),
 			&pre_digest,
 			Default::default(),
 		);
@@ -128,7 +127,6 @@ fn author_vrf_output_for_primary() {
 		System::initialize(
 			&1,
 			&Default::default(),
-			&Default::default(),
 			&primary_pre_digest,
 			Default::default(),
 		);
@@ -155,7 +153,6 @@ fn author_vrf_output_for_secondary_vrf() {
 		System::initialize(
 			&1,
 			&Default::default(),
-			&Default::default(),
 			&secondary_vrf_pre_digest,
 			Default::default(),
 		);
@@ -178,7 +175,6 @@ fn no_author_vrf_output_for_secondary_plain() {
 
 		System::initialize(
 			&1,
-			&Default::default(),
 			&Default::default(),
 			&secondary_plain_pre_digest,
 			Default::default(),
@@ -206,7 +202,7 @@ fn authority_index() {
 #[test]
 fn can_predict_next_epoch_change() {
 	new_test_ext(1).execute_with(|| {
-		assert_eq!(<Test as Trait>::EpochDuration::get(), 3);
+		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
 		// this sets the genesis slot to 6;
 		go_to_block(1, 6);
 		assert_eq!(Babe::genesis_slot(), 6);
@@ -227,7 +223,7 @@ fn can_predict_next_epoch_change() {
 #[test]
 fn can_enact_next_config() {
 	new_test_ext(1).execute_with(|| {
-		assert_eq!(<Test as Trait>::EpochDuration::get(), 3);
+		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
 		// this sets the genesis slot to 6;
 		go_to_block(1, 6);
 		assert_eq!(Babe::genesis_slot(), 6);
@@ -661,7 +657,7 @@ fn report_equivocation_has_valid_weight() {
 	// but there's a lower bound of 100 validators.
 	assert!(
 		(1..=100)
-			.map(<Test as Trait>::WeightInfo::report_equivocation)
+			.map(<Test as Config>::WeightInfo::report_equivocation)
 			.collect::<Vec<_>>()
 			.windows(2)
 			.all(|w| w[0] == w[1])
@@ -671,7 +667,7 @@ fn report_equivocation_has_valid_weight() {
 	// with every extra validator.
 	assert!(
 		(100..=1000)
-			.map(<Test as Trait>::WeightInfo::report_equivocation)
+			.map(<Test as Config>::WeightInfo::report_equivocation)
 			.collect::<Vec<_>>()
 			.windows(2)
 			.all(|w| w[0] < w[1])

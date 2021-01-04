@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -342,7 +342,7 @@ fn weight_soft_limit_is_used() {
 	new_test_ext().execute_with(|| {
 		set_can_report(false);
 		// Only 2 can fit in one block
-		set_offence_weight(<mock::Runtime as Trait>::WeightSoftLimit::get() / 2);
+		set_offence_weight(<mock::Runtime as Config>::WeightSoftLimit::get() / 2);
 
 		// Queue 3 offences
 		// #1

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1265,7 +1265,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
 	}
 
-	/// Compute diff between new and old members; they **must already be sorted**. 
+	/// Compute diff between new and old members; they **must already be sorted**.
 	///
 	/// Returns incoming and outgoing members.
 	fn compute_members_diff(
@@ -1427,6 +1427,9 @@ pub trait GetCallMetadata {
 #[impl_for_tuples(30)]
 pub trait OnFinalize<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
+	///
+	/// NOTE: This function is called AFTER ALL extrinsics in a block are applied,
+	/// including inherent extrinsics.
 	fn on_finalize(_n: BlockNumber) {}
 }
 
@@ -1438,6 +1441,10 @@ pub trait OnInitialize<BlockNumber> {
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
+	///
+	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
+	/// including inherent extrinsics. Hence for instance, if you runtime includes
+	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
 	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
 }
 
@@ -1569,7 +1576,7 @@ pub mod schedule {
 		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
 		/// only if it is executed *before* the currently scheduled block. For periodic tasks,
 		/// this dispatch is guaranteed to succeed only before the *initial* execution; for
-		/// others, use `reschedule_named`. 
+		/// others, use `reschedule_named`.
 		///
 		/// Will return an error if the `address` is invalid.
 		fn reschedule(
@@ -1646,16 +1653,16 @@ pub trait EnsureOrigin<OuterOrigin> {
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
 /// `construct_runtime` and `impl_outer_dispatch`.
 pub trait UnfilteredDispatchable {
-	/// The origin type of the runtime, (i.e. `frame_system::Trait::Origin`).
+	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
 	type Origin;
 
 	/// Dispatch this call but do not check the filter in origin.
 	fn dispatch_bypass_filter(self, origin: Self::Origin) -> crate::dispatch::DispatchResultWithPostInfo;
 }
 
-/// Methods available on `frame_system::Trait::Origin`.
+/// Methods available on `frame_system::Config::Origin`.
 pub trait OriginTrait: Sized {
-	/// Runtime call type, as in `frame_system::Trait::Call`
+	/// Runtime call type, as in `frame_system::Config::Call`
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
@@ -1667,7 +1674,7 @@ pub trait OriginTrait: Sized {
 	/// Add a filter to the origin.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
 
-	/// Reset origin filters to default one, i.e `frame_system::Trait::BaseCallFilter`.
+	/// Reset origin filters to default one, i.e `frame_system::Config::BaseCallFilter`.
 	fn reset_filter(&mut self);
 
 	/// Replace the caller with caller from the other origin
@@ -1679,13 +1686,13 @@ pub trait OriginTrait: Sized {
 	/// Get the caller.
 	fn caller(&self) -> &Self::PalletsOrigin;
 
-	/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+	/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
 	fn none() -> Self;
 
 	/// Create with system root origin and no filter.
 	fn root() -> Self;
 
-	/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+	/// Create with system signed origin and `frame-system::Config::BaseCallFilter`.
 	fn signed(by: Self::AccountId) -> Self;
 }
 
@@ -1724,13 +1731,19 @@ pub trait Instance: 'static {
 	const PREFIX: &'static str;
 }
 
-/// An instance of a storage.
+/// An instance of a storage in a pallet.
 ///
-/// It is required the the couple `(PalletInfo::name<Pallet>(), STORAGE_PREFIX)` is unique.
-/// Any storage with same couple will collide.
+/// Define an instance for an individual storage inside a pallet.
+/// The pallet prefix is used to isolate the storage between pallets, and the storage prefix is
+/// used to isolate storages inside a pallet.
+///
+/// NOTE: These information can be used to define storages in pallet such as a `StorageMap` which
+/// can use keys after `twox_128(pallet_prefix())++twox_128(STORAGE_PREFIX)`
 pub trait StorageInstance {
-	type Pallet: 'static;
-	type PalletInfo: PalletInfo;
+	/// Prefix of a pallet to isolate it from other pallets.
+	fn pallet_prefix() -> &'static str;
+
+	/// Prefix given to a storage to isolate from other storages in the pallet.
 	const STORAGE_PREFIX: &'static str;
 }
 
@@ -1856,6 +1869,79 @@ pub trait IsSubType<T> {
 	fn is_sub_type(&self) -> Option<&T>;
 }
 
+/// The pallet hooks trait. Implementing this lets you express some logic to execute.
+pub trait Hooks<BlockNumber> {
+	/// The block is being finalized. Implement to have something happen.
+	fn on_finalize(_n: BlockNumber) {}
+
+	/// The block is being initialized. Implement to have something happen.
+	///
+	/// Return the non-negotiable weight consumed in the block.
+	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
+
+	/// Perform a module upgrade.
+	///
+	/// NOTE: this doesn't include all pallet logic triggered on runtime upgrade. For instance it
+	/// doesn't include the write of the pallet version in storage. The final complete logic
+	/// triggered on runtime upgrade is given by implementation of `OnRuntimeUpgrade` trait by
+	/// `Pallet`.
+	///
+	/// # Warning
+	///
+	/// This function will be called before we initialized any runtime state, aka `on_initialize`
+	/// wasn't called yet. So, information like the block number and any other
+	/// block local data are not accessible.
+	///
+	/// Return the non-negotiable weight consumed for runtime upgrade.
+	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+
+	/// Implementing this function on a module allows you to perform long-running tasks
+	/// that make (by default) validators generate transactions that feed results
+	/// of those long-running computations back on chain.
+	///
+	/// NOTE: This function runs off-chain, so it can access the block state,
+	/// but cannot preform any alterations. More specifically alterations are
+	/// not forbidden, but they are not persisted in any way after the worker
+	/// has finished.
+	///
+	/// This function is being called after every block import (when fully synced).
+	///
+	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
+	/// to perform off-chain computations, calls and submit transactions
+	/// with results to trigger any on-chain changes.
+	/// Any state alterations are lost and are not persisted.
+	fn offchain_worker(_n: BlockNumber) {}
+
+	/// Run integrity test.
+	///
+	/// The test is not executed in a externalities provided environment.
+	fn integrity_test() {}
+}
+
+/// A trait to define the build function of a genesis config, T and I are placeholder for pallet
+/// trait and pallet instance.
+#[cfg(feature = "std")]
+pub trait GenesisBuild<T, I=()>: Default + MaybeSerializeDeserialize {
+	/// The build function is called within an externalities allowing storage APIs.
+	/// Thus one can write to storage using regular pallet storages.
+	fn build(&self);
+
+	/// Build the storage using `build` inside default storage.
+	fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
+		let mut storage = Default::default();
+		self.assimilate_storage(&mut storage)?;
+		Ok(storage)
+	}
+
+	/// Assimilate the storage for this module into pre-existing overlays.
+	fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
+		sp_state_machine::BasicExternalities::execute_with_storage(storage, || {
+			self.build();
+			Ok(())
+		})
+	}
+}
+
 /// The storage key postfix that is used to store the [`PalletVersion`] per pallet.
 ///
 /// The full storage key is built by using:
@@ -1888,7 +1974,7 @@ impl PalletVersion {
 
 	/// Returns the storage key for a pallet version.
 	///
-	/// See [`PALLET_VERSION_STORAGE_KEY_POSTIFX`] on how this key is built.
+	/// See [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] on how this key is built.
 	///
 	/// Returns `None` if the given `PI` returned a `None` as name for the given
 	/// `Pallet`.

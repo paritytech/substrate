@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -56,7 +56,6 @@ pub struct Metrics {
 	pub distinct_peers_connections_closed_total: Counter<U64>,
 	pub distinct_peers_connections_opened_total: Counter<U64>,
 	pub import_queue_blocks_submitted: Counter<U64>,
-	pub import_queue_finality_proofs_submitted: Counter<U64>,
 	pub import_queue_justifications_submitted: Counter<U64>,
 	pub incoming_connections_errors_total: CounterVec<U64>,
 	pub incoming_connections_total: Counter<U64>,
@@ -111,10 +110,6 @@ impl Metrics {
 			import_queue_blocks_submitted: prometheus::register(Counter::new(
 				"import_queue_blocks_submitted",
 				"Number of blocks submitted to the import queue.",
-			)?, registry)?,
-			import_queue_finality_proofs_submitted: prometheus::register(Counter::new(
-				"import_queue_finality_proofs_submitted",
-				"Number of finality proofs submitted to the import queue.",
 			)?, registry)?,
 			import_queue_justifications_submitted: prometheus::register(Counter::new(
 				"import_queue_justifications_submitted",

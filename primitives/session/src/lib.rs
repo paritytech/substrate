@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -119,7 +119,7 @@ pub trait ValidatorSet<AccountId> {
 	/// Type for representing validator id in a session.
 	///
 	/// This could be `frame_support::Parameter`, but such import is not allowed in primitives.
-	type ValidatorId: codec::Codec + codec::EncodeLike + Clone + Eq + sp_std::fmt::Debug;
+	type ValidatorId: codec::FullCodec + Clone + Eq + sp_std::fmt::Debug;
 	/// A type for converting `AccountId` to `ValidatorId`.
 	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
 
@@ -135,7 +135,7 @@ pub trait ValidatorSet<AccountId> {
 /// `ValidatorSet` combined with identification type for pallet-session-historical module.
 pub trait ValidatorSetWithIdentification<AccountId>: ValidatorSet<AccountId> {
 	/// Full identification of `ValidatorId`.
-	type Identification: codec::Codec + codec::EncodeLike + Clone + Eq + sp_std::fmt::Debug;
+	type Identification: codec::FullCodec + Clone + Eq + sp_std::fmt::Debug;
 	/// A type for converting `ValidatorId` to `Identification`.
 	type IdentificationOf: Convert<Self::ValidatorId, Option<Self::Identification>>;
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +34,7 @@ use sp_std::vec::Vec;
 ///
 /// Each value is stored at:
 /// ```nocompile
-/// Twox128(<Prefix::Pallet as PalletInfo>::name())
+/// Twox128(Prefix::pallet_prefix())
 ///		++ Twox128(Prefix::STORAGE_PREFIX)
 ///		++ Hasher1(encode(key1))
 ///		++ Hasher2(encode(key2))
@@ -68,8 +68,7 @@ where
 	type Hasher1 = Hasher1;
 	type Hasher2 = Hasher2;
 	fn module_prefix() -> &'static [u8] {
-		<Prefix::PalletInfo as crate::traits::PalletInfo>::name::<Prefix::Pallet>()
-			.expect("Every active pallet has a name in the runtime; qed").as_bytes()
+		Prefix::pallet_prefix().as_bytes()
 	}
 	fn storage_prefix() -> &'static [u8] {
 		Prefix::STORAGE_PREFIX.as_bytes()
@@ -140,6 +139,16 @@ where
 		KArg2: EncodeLike<Key2>,
 	{
 		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::get(k1, k2)
+	}
+
+	/// Try to get the value for the given key from the double map.
+	///
+	/// Returns `Ok` if it exists, `Err` if not.
+	pub fn try_get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Result<Value, ()>
+	where
+		KArg1: EncodeLike<Key1>,
+		KArg2: EncodeLike<Key2> {
+		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::try_get(k1, k2)
 	}
 
 	/// Take a value from storage, removing it afterwards.
@@ -415,8 +424,7 @@ mod test {
 
 	struct Prefix;
 	impl StorageInstance for Prefix {
-		type Pallet = ();
-		type PalletInfo = ();
+		fn pallet_prefix() -> &'static str { "test" }
 		const STORAGE_PREFIX: &'static str = "foo";
 	}
 
@@ -516,6 +524,7 @@ mod test {
 			});
 			assert_eq!(A::contains_key(2, 20), true);
 			assert_eq!(A::get(2, 20), Some(100));
+			assert_eq!(A::try_get(2, 20), Ok(100));
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists(2, 20, |v| {
 				*v = Some(v.unwrap() * 10);
 				Err(())
@@ -529,6 +538,7 @@ mod test {
 			assert_eq!(A::contains_key(2, 20), false);
 			assert_eq!(AValueQueryWithAnOnEmpty::take(2, 20), 97);
 			assert_eq!(A::contains_key(2, 20), false);
+			assert_eq!(A::try_get(2, 20), Err(()));
 
 			B::insert(2, 20, 10);
 			assert_eq!(A::migrate_keys::<Blake2_256, Twox128, _, _>(2, 20), Some(10));

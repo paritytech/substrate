@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{io, sync::Arc};
+use std::{io, path::PathBuf, sync::Arc};
 use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{DatabaseConfig, Database};
 
@@ -124,7 +124,7 @@ impl Clone for TempDatabase {
 			.map(|f_result|
 				f_result.expect("failed to read file in seed db")
 					.path()
-			).collect();
+			).collect::<Vec<PathBuf>>();
 		fs_extra::copy_items(
 			&self_db_files,
 			new_dir.path(),

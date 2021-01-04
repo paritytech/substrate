@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,6 +43,8 @@ impl std::fmt::Display for BenchmarkParameter {
 pub struct BenchmarkBatch {
 	/// The pallet containing this benchmark.
 	pub pallet: Vec<u8>,
+	/// The instance of this pallet being benchmarked.
+	pub instance: Vec<u8>,
 	/// The extrinsic (or benchmark name) of this benchmark.
 	pub benchmark: Vec<u8>,
 	/// The results from this benchmark.

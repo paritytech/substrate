@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,8 +30,8 @@ use sp_core::{sr25519::Public, wasm_export_functions};
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+/// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
 #[cfg(feature = "std")]
-/// Wasm binary unwrapped. If built with `BUILD_DUMMY_WASM_BINARY`, the function panics.
 pub fn wasm_binary_unwrap() -> &'static [u8] {
 	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
 						supported with the flag disabled.")
@@ -119,6 +119,16 @@ pub trait TestApi {
 	#[version(2)]
 	fn test_versionning(&self, data: u32) -> bool {
 		data == 42
+	}
+
+	/// Returns the input values as tuple.
+	fn return_input_as_tuple(
+		a: Vec<u8>,
+		b: u32,
+		c: Option<Vec<u32>>,
+		d: u8,
+	) -> (Vec<u8>, u32, Option<Vec<u32>>, u8) {
+		(a, b, c, d)
 	}
 }
 
@@ -257,5 +267,19 @@ wasm_export_functions! {
 
 		assert!(!test_api::test_versionning(50));
 		assert!(!test_api::test_versionning(102));
+	}
+
+	fn test_return_input_as_tuple() {
+		let a = vec![1, 3, 4, 5];
+		let b = 10000;
+		let c = Some(vec![2, 3]);
+		let d = 5;
+
+		let res = test_api::return_input_as_tuple(a.clone(), b, c.clone(), d);
+
+		assert_eq!(a, res.0);
+		assert_eq!(b, res.1);
+		assert_eq!(c, res.2);
+		assert_eq!(d, res.3);
 	}
 }

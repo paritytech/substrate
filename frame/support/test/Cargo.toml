@@ -21,10 +21,11 @@ sp-inherents = { version = "2.0.0", default-features = false, path = "../../../p
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
-trybuild = "1.0.33"
+trybuild = "1.0.38"
 pretty_assertions = "0.6.1"
 rustversion = "1.0.0"
 frame-metadata = { version = "12.0.0", default-features = false, path = "../../metadata" }
+frame-system = { version = "2.0.0", default-features = false, path = "../../system" }
 
 [features]
 default = ["std"]
@@ -33,6 +34,7 @@ std = [
 	"codec/std",
 	"sp-io/std",
 	"frame-support/std",
+	"frame-system/std",
 	"sp-inherents/std",
 	"sp-core/std",
 	"sp-std/std",

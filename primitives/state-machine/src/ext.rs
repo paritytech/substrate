@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -411,18 +411,41 @@ where
 	fn kill_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
-	) {
+		limit: Option<u32>,
+	) -> bool {
 		trace!(target: "state", "{:04x}: KillChild({})",
 			self.id,
 			HexDisplay::from(&child_info.storage_key()),
 		);
 		let _guard = guard();
-
 		self.mark_dirty();
 		self.overlay.clear_child_storage(child_info);
-		self.backend.for_keys_in_child_storage(child_info, |key| {
-			self.overlay.set_child_storage(child_info, key.to_vec(), None);
-		});
+
+		if let Some(limit) = limit {
+			let mut num_deleted: u32 = 0;
+			let mut all_deleted = true;
+			self.backend.apply_to_child_keys_while(child_info, |key| {
+				if num_deleted == limit {
+					all_deleted = false;
+					return false;
+				}
+				if let Some(num) = num_deleted.checked_add(1) {
+					num_deleted = num;
+				} else {
+					all_deleted = false;
+					return false;
+				}
+				self.overlay.set_child_storage(child_info, key.to_vec(), None);
+				true
+			});
+			all_deleted
+		} else {
+			self.backend.apply_to_child_keys_while(child_info, |key| {
+				self.overlay.set_child_storage(child_info, key.to_vec(), None);
+				true
+			});
+			true
+		}
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -482,10 +505,6 @@ where
 			|| backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL).unwrap_or_default()
 		);
 		StorageAppend::new(current_value).append(value);
-	}
-
-	fn chain_id(&self) -> u64 {
-		42
 	}
 
 	fn storage_root(&mut self) -> Vec<u8> {
