@@ -22,13 +22,8 @@ use frame_support::{dispatch::DispatchResult, unsigned::ValidateUnsigned};
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{seq_phragmen, CompactSolution, ElectionResult};
 use sp_runtime::{
-	offchain::storage::StorageValueRef,
-	traits::TrailingZeroInput,
-	transaction_validity::{
-		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
-		ValidTransaction,
-	},
-	DispatchError, SaturatedConversion,
+	offchain::storage::StorageValueRef, traits::TrailingZeroInput, DispatchError,
+	SaturatedConversion,
 };
 use sp_std::{cmp::Ordering, convert::TryInto};
 
@@ -40,15 +35,18 @@ pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
 /// Default number of blocks for which the unsigned transaction should stay in the pool
 pub(crate) const DEFAULT_LONGEVITY: u64 = 25;
 
-impl<T: Config> Module<T>
+impl<T: Config> Pallet<T>
 where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>> + From<InnerOf<OnChainAccuracyOf<T>>>,
+	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
 	/// Min a new npos solution.
-	pub fn mine_solution(iters: usize) -> Result<(RawSolution<CompactOf<T>>, WitnessData), Error> {
+	pub fn mine_solution(
+		iters: usize,
+	) -> Result<(RawSolution<CompactOf<T>>, WitnessData), InternalError> {
 		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
-		let desired_targets = Self::desired_targets().ok_or(Error::SnapshotUnAvailable)?;
+			Self::snapshot().ok_or(InternalError::SnapshotUnAvailable)?;
+		let desired_targets = Self::desired_targets().ok_or(InternalError::SnapshotUnAvailable)?;
 
 		seq_phragmen::<_, CompactAccuracyOf<T>>(
 			desired_targets as usize,
@@ -66,11 +64,11 @@ where
 	/// Will always reduce the solution as well.
 	pub fn prepare_election_result(
 		election_result: ElectionResult<T::AccountId, CompactAccuracyOf<T>>,
-	) -> Result<(RawSolution<CompactOf<T>>, WitnessData), Error> {
+	) -> Result<(RawSolution<CompactOf<T>>, WitnessData), InternalError> {
 		// storage items. Note: we have already read this from storage, they must be in cache.
 		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
-		let desired_targets = Self::desired_targets().ok_or(Error::SnapshotUnAvailable)?;
+			Self::snapshot().ok_or(InternalError::SnapshotUnAvailable)?;
+		let desired_targets = Self::desired_targets().ok_or(InternalError::SnapshotUnAvailable)?;
 
 		// closures.
 		let voter_index = crate::voter_index_fn!(voters, T::AccountId, T);
@@ -87,7 +85,7 @@ where
 		// convert to staked and reduce.
 		let mut staked =
 			sp_npos_elections::assignment_ratio_to_staked_normalized(assignments, &stake_of)
-				.map_err::<Error, _>(Into::into)?;
+				.map_err::<InternalError, _>(Into::into)?;
 		sp_npos_elections::reduce(&mut staked);
 
 		// convert back to ration and make compact.
@@ -151,14 +149,14 @@ where
 		maximum_allowed_voters: u32,
 		mut compact: CompactOf<T>,
 		nominator_index: FN,
-	) -> Result<CompactOf<T>, Error>
+	) -> Result<CompactOf<T>, InternalError>
 	where
 		for<'r> FN: Fn(&'r T::AccountId) -> Option<CompactVoterIndexOf<T>>,
 	{
 		match compact.voters_count().checked_sub(maximum_allowed_voters as usize) {
 			Some(to_remove) if to_remove > 0 => {
 				// grab all voters and sort them by least stake.
-				let RoundSnapshot { voters, .. } = Self::snapshot().ok_or(Error::SnapshotUnAvailable)?;
+				let RoundSnapshot { voters, .. } = Self::snapshot().ok_or(InternalError::SnapshotUnAvailable)?;
 				let mut voters_sorted = voters
 					.into_iter()
 					.map(|(who, stake, _)| (who.clone(), stake))
@@ -172,7 +170,7 @@ where
 					.iter()
 					.map(|(who, stake)| (nominator_index(&who), stake))
 				{
-					let index = maybe_index.ok_or(Error::SnapshotUnAvailable)?;
+					let index = maybe_index.ok_or(InternalError::SnapshotUnAvailable)?;
 					if compact.remove_voter(index) {
 						removed += 1
 					}
@@ -309,7 +307,7 @@ where
 	}
 
 	/// Mine a new solution, and submit it back to the chian as an unsigned transaction.
-	pub(crate) fn mine_and_submit() -> Result<(), Error> {
+	pub(crate) fn mine_and_submit() -> Result<(), InternalError> {
 		let balancing = Self::get_balancing_iters();
 		let (raw_solution, witness) = Self::mine_solution(balancing)?;
 
@@ -317,7 +315,7 @@ where
 		let call = Call::submit_unsigned(raw_solution, witness).into();
 
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
-			.map_err(|_| Error::PoolSubmissionFailed)
+			.map_err(|_| InternalError::PoolSubmissionFailed)
 	}
 
 	pub(crate) fn unsigned_pre_dispatch_checks(
@@ -326,7 +324,7 @@ where
 		// ensure solution is timely. Don't panic yet. This is a cheap check.
 		ensure!(
 			Self::current_phase().is_unsigned_open(),
-			PalletError::<T>::EarlySubmission
+			Error::<T>::EarlySubmission
 		);
 
 		// ensure score is being improved. Panic henceforth.
@@ -336,74 +334,11 @@ where
 				q.score,
 				T::SolutionImprovementThreshold::get()
 			)),
-			PalletError::<T>::WeakSubmission
+			Error::<T>::WeakSubmission
 		);
 
 		Ok(())
 	}
-}
-
-#[allow(deprecated)]
-impl<T: Config> ValidateUnsigned for Module<T>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>
-{
-	type Call = Call<T>;
-	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-		if let Call::submit_unsigned(solution, _) = call {
-			// discard solution not coming from the local OCW.
-			match source {
-				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
-				_ => {
-					return InvalidTransaction::Call.into();
-				}
-			}
-
-
-			let _ = Self::unsigned_pre_dispatch_checks(solution)
-				.map_err(dispatch_error_to_invalid)
-				.map(Into::into)?;
-
-			ValidTransaction::with_tag_prefix("OffchainElection")
-				// The higher the score[0], the better a solution is.
-				.priority(
-					T::UnsignedPriority::get().saturating_add(solution.score[0].saturated_into()),
-				)
-				// used to deduplicate unsigned solutions: each validator should produce one
-				// solution per round at most, and solutions are not propagate.
-				.and_provides(solution.round)
-				// transaction should stay in the pool for the duration of the unsigned phase.
-				.longevity(TryInto::<u64>::try_into(
-					T::UnsignedPhase::get()).unwrap_or(DEFAULT_LONGEVITY)
-				)
-				// We don't propagate this. This can never the validated at a remote node.
-				.propagate(false)
-				.build()
-		} else {
-			InvalidTransaction::Call.into()
-		}
-	}
-
-	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-		if let Call::submit_unsigned(solution, _) = call {
-			Self::unsigned_pre_dispatch_checks(solution)
-				.map_err(dispatch_error_to_invalid)
-				.map_err(Into::into)
-		} else {
-			Err(InvalidTransaction::Call.into())
-		}
-	}
-}
-
-/// convert a DispatchError to a custom InvalidTransaction with the inner code being the error
-/// number.
-fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
-	let error_number = match error {
-		DispatchError::Module { error, .. } => error,
-		_ => 0,
-	};
-	InvalidTransaction::Custom(error_number)
 }
 
 #[cfg(test)]
@@ -831,7 +766,7 @@ mod tests {
 
 				assert_noop!(
 					TwoPhase::submit_unsigned(Origin::none(), solution, witness),
-					PalletError::<Runtime>::WeakSubmission,
+					Error::<Runtime>::WeakSubmission,
 				);
 
 				// trial 2: a solution who's score is only 7, i.e. 70% better in the first element.

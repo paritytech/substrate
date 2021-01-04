@@ -16,15 +16,16 @@
 // limitations under the License.
 
 //! The signed phase implementation.
+//!
+//! THis is asda  asdasda asd asdasdasd
 
 use crate::two_phase::*;
 use codec::Encode;
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_npos_elections::is_score_better;
+use sp_npos_elections::{is_score_better, CompactSolution};
 use sp_runtime::Perbill;
-use sp_npos_elections::CompactSolution;
 
-impl<T: Config> Module<T>
+impl<T: Config> Pallet<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
@@ -280,7 +281,7 @@ mod tests {
 
 			assert_noop!(
 				submit_with_witness(Origin::signed(10), solution),
-				PalletError::<Runtime>::EarlySubmission,
+				Error::<Runtime>::EarlySubmission,
 			);
 		})
 	}
@@ -434,7 +435,7 @@ mod tests {
 
 			assert_noop!(
 				submit_with_witness(Origin::signed(99), solution),
-				PalletError::<Runtime>::QueueFull,
+				Error::<Runtime>::QueueFull,
 			);
 		})
 	}
@@ -590,7 +591,7 @@ mod tests {
 				};
 				assert_noop!(
 					submit_with_witness(Origin::signed(99), solution),
-					PalletError::<Runtime>::QueueFull,
+					Error::<Runtime>::QueueFull,
 				);
 			})
 	}

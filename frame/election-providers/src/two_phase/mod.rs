@@ -159,7 +159,6 @@
 use crate::onchain::OnChainSequentialPhragmen;
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
-	decl_event, decl_module, decl_storage,
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
@@ -172,10 +171,14 @@ use sp_npos_elections::{
 	EvaluateSupport, ExtendedBalance, PerThing128, Supports, VoteWeight,
 };
 use sp_runtime::{
-	traits::Zero, transaction_validity::TransactionPriority, InnerOf, PerThing, Perbill,
-	RuntimeDebug,
+	traits::Zero,
+	transaction_validity::{
+		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+		TransactionValidityError, ValidTransaction,
+	},
+	DispatchError, InnerOf, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
-use sp_std::prelude::*;
+use sp_std::{convert::TryInto, prelude::*};
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -388,11 +391,11 @@ pub struct RoundSnapshotMetadata {
 	targets_len: u32,
 }
 
-/// The crate errors.
+/// Internal errors of the pallet.
 ///
-/// Note that this is different from the [`PalletError`].
+/// Note that this is different from [`pallet::Error`].
 #[derive(RuntimeDebug, Eq, PartialEq)]
-pub enum Error {
+pub enum InternalError {
 	/// A feasibility error.
 	Feasibility(FeasibilityError),
 	/// An error in the on-chain fallback.
@@ -407,21 +410,21 @@ pub enum Error {
 	PoolSubmissionFailed,
 }
 
-impl From<crate::onchain::Error> for Error {
+impl From<crate::onchain::Error> for InternalError {
 	fn from(e: crate::onchain::Error) -> Self {
-		Error::OnChainFallback(e)
+		InternalError::OnChainFallback(e)
 	}
 }
 
-impl From<sp_npos_elections::Error> for Error {
+impl From<sp_npos_elections::Error> for InternalError {
 	fn from(e: sp_npos_elections::Error) -> Self {
-		Error::NposElections(e)
+		InternalError::NposElections(e)
 	}
 }
 
-impl From<FeasibilityError> for Error {
+impl From<FeasibilityError> for InternalError {
 	fn from(e: FeasibilityError) -> Self {
-		Error::Feasibility(e)
+		InternalError::Feasibility(e)
 	}
 }
 
@@ -454,161 +457,99 @@ impl From<sp_npos_elections::Error> for FeasibilityError {
 	}
 }
 
-pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<Self>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<Self>>>,
-{
-	/// Event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
+pub use pallet::*;
+#[frame_support::pallet]
+pub mod pallet {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
-	/// Currency type.
-	type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
+	#[pallet::config]
+	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<Self>>>,
+		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<Self>>>,
+	{
+		type Event: From<Event<Self>>
+			+ Into<<Self as frame_system::Config>::Event>
+			+ IsType<<Self as frame_system::Config>::Event>;
 
-	/// Duration of the signed phase.
-	type SignedPhase: Get<Self::BlockNumber>;
-	/// Duration of the unsigned phase.
-	type UnsignedPhase: Get<Self::BlockNumber>;
-	/// Maximum number of singed submissions that can be queued.
-	type MaxSignedSubmissions: Get<u32>;
+		/// Currency type.
+		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
 
-	type SignedRewardBase: Get<BalanceOf<Self>>;
-	type SignedRewardFactor: Get<Perbill>;
-	type SignedRewardMax: Get<Option<BalanceOf<Self>>>;
+		/// Duration of the signed phase.
+		#[pallet::constant]
+		type SignedPhase: Get<Self::BlockNumber>;
+		/// Duration of the unsigned phase.
+		#[pallet::constant]
+		type UnsignedPhase: Get<Self::BlockNumber>;
+		/// Maximum number of singed submissions that can be queued.
+		#[pallet::constant]
+		type MaxSignedSubmissions: Get<u32>;
 
-	type SignedDepositBase: Get<BalanceOf<Self>>;
-	type SignedDepositByte: Get<BalanceOf<Self>>;
-	type SignedDepositWeight: Get<BalanceOf<Self>>;
+		#[pallet::constant]
+		type SignedRewardBase: Get<BalanceOf<Self>>;
+		#[pallet::constant]
+		type SignedRewardFactor: Get<Perbill>;
+		#[pallet::constant]
+		type SignedRewardMax: Get<Option<BalanceOf<Self>>>;
 
-	/// The minimum amount of improvement to the solution score that defines a solution as "better".
-	type SolutionImprovementThreshold: Get<Perbill>;
+		#[pallet::constant]
+		type SignedDepositBase: Get<BalanceOf<Self>>;
+		#[pallet::constant]
+		type SignedDepositByte: Get<BalanceOf<Self>>;
+		#[pallet::constant]
+		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
-	/// The priority of the unsigned transaction submitted in the unsigned-phase
-	type UnsignedPriority: Get<TransactionPriority>;
-	/// Maximum number of iteration of balancing that will be executed in the embedded miner of the
-	/// pallet.
-	type MinerMaxIterations: Get<u32>;
-	/// Maximum weight that the miner should consume.
-	type MinerMaxWeight: Get<Weight>;
+		/// The minimum amount of improvement to the solution score that defines a solution as
+		/// "better".
+		#[pallet::constant]
+		type SolutionImprovementThreshold: Get<Perbill>;
 
-	/// Handler for the slashed deposits.
-	type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
-	/// Handler for the rewards.
-	type RewardHandler: OnUnbalanced<PositiveImbalanceOf<Self>>;
+		/// The priority of the unsigned transaction submitted in the unsigned-phase
+		type UnsignedPriority: Get<TransactionPriority>;
+		/// Maximum number of iteration of balancing that will be executed in the embedded miner of
+		/// the pallet.
+		type MinerMaxIterations: Get<u32>;
+		/// Maximum weight that the miner should consume.
+		type MinerMaxWeight: Get<Weight>;
 
-	/// Something that will provide the election data.
-	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
+		/// Handler for the slashed deposits.
+		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
+		/// Handler for the rewards.
+		type RewardHandler: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
-	/// The compact solution type
-	type CompactSolution: codec::Codec
-		+ Default
-		+ PartialEq
-		+ Eq
-		+ Clone
-		+ sp_std::fmt::Debug
-		+ CompactSolution;
+		/// Something that will provide the election data.
+		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 
-	/// Accuracy used for fallback on-chain election.
-	type OnChainAccuracy: PerThing128;
+		/// The compact solution type
+		type CompactSolution: codec::Codec
+			+ Default
+			+ PartialEq
+			+ Eq
+			+ Clone
+			+ sp_std::fmt::Debug
+			+ CompactSolution;
 
-	/// The weight of the pallet.
-	type WeightInfo: WeightInfo;
-}
+		/// Accuracy used for fallback on-chain election.
+		type OnChainAccuracy: PerThing128;
 
-decl_storage! {
-	trait Store for Module<T: Config> as TwoPhaseElectionProvider
+		/// The weight of the pallet.
+		type WeightInfo: WeightInfo;
+	}
+
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(PhantomData<T>);
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
 	where
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>
+		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 	{
-		/// Internal counter for the number of rounds.
-		///
-		/// This is useful for de-duplication of transactions submitted to the pool, and general
-		/// diagnostics of the module.
-		///
-		/// This is merely incremented once per every time that an upstream `elect` is called.
-		pub Round get(fn round): u32 = 1;
-		/// Current phase.
-		pub CurrentPhase get(fn current_phase): Phase<T::BlockNumber> = Phase::Off;
-
-		/// Sorted (worse -> best) list of unchecked, signed solutions.
-		pub SignedSubmissions get(fn signed_submissions): Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>;
-
-		/// Current best solution, signed or unsigned.
-		pub QueuedSolution get(fn queued_solution): Option<ReadySolution<T::AccountId>>;
-
-		/// Snapshot data of the round.
-		///
-		/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
-		pub Snapshot get(fn snapshot): Option<RoundSnapshot<T::AccountId>>;
-
-		/// Desired number of targets to elect for this round.
-		///
-		/// Only exists when [`Snapshot`] is present.
-		pub DesiredTargets get(fn desired_targets): Option<u32>;
-
-		/// The metadata of the [`RoundSnapshot`]
-		///
-		/// Only exists when [`Snapshot`] is present.
-		pub SnapshotMetadata get(fn snapshot_metadata): Option<RoundSnapshotMetadata>;
-	}
-}
-
-decl_event!(
-	pub enum Event<T> where <T as frame_system::Config>::AccountId {
-		/// A solution was stored with the given compute.
-		///
-		/// If the solution is signed, this means that it hasn't yet been processed. If the solution
-		/// is unsigned, this means that it has also been processed.
-		SolutionStored(ElectionCompute),
-		/// The election has been finalized, with `Some` of the given computation, or else if the
-		/// election failed, `None`.
-		ElectionFinalized(Option<ElectionCompute>),
-		/// An account has been rewarded for their signed submission being finalized.
-		Rewarded(AccountId),
-		/// An account has been slashed for submitting an invalid signed submission.
-		Slashed(AccountId),
-		/// The signed phase of the given round has started.
-		SignedPhaseStarted(u32),
-		/// The unsigned phase of the given round has started.
-		UnsignedPhaseStarted(u32),
-	}
-);
-
-frame_support::decl_error! {
-	pub enum PalletError for Module<T: Config>
-	where
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>
-	{
-		/// Submission was too early.
-		EarlySubmission,
-		/// Submission was too weak, score-wise.
-		WeakSubmission,
-		/// The queue was full, and the solution was not better than any of the existing ones.
-		QueueFull,
-		/// The origin failed to pay the deposit.
-		CannotPayDeposit,
-		/// WitnessData is invalid.
-		InvalidWitness,
-		/// Round number is invalid.
-		InvalidRound,
-	}
-}
-
-decl_module! {
-	pub struct Module<T: Config> for enum Call
-	where
-		origin: T::Origin,
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>
-	{
-		type Error = PalletError<T>;
-		fn deposit_event() = default;
-
 		fn on_initialize(now: T::BlockNumber) -> Weight {
-			let next_election = T::DataProvider::next_election_prediction(now);
-			let next_election = next_election.max(now);
+			let next_election = T::DataProvider::next_election_prediction(now).max(now);
 
 			let signed_deadline = T::SignedPhase::get() + T::UnsignedPhase::get();
 			let unsigned_deadline = T::UnsignedPhase::get();
@@ -644,7 +585,14 @@ decl_module! {
 				});
 			}
 		}
+	}
 
+	#[pallet::call]
+	impl<T: Config> Pallet<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
+	{
 		/// Submit a solution for the signed phase.
 		///
 		/// The dispatch origin fo this call must be __signed__.
@@ -658,18 +606,28 @@ decl_module! {
 		/// # <weight>
 		/// Queue size must be provided as witness data.
 		/// # </weight>
-		#[weight = T::WeightInfo::submit(*witness_data)]
-		fn submit(origin, solution: RawSolution<CompactOf<T>>, witness_data: u32) -> DispatchResultWithPostInfo {
+		#[pallet::weight(T::WeightInfo::submit(*witness_data))]
+		fn submit(
+			origin: OriginFor<T>,
+			solution: RawSolution<CompactOf<T>>,
+			witness_data: u32,
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
 			// ensure witness data is correct.
-			ensure!(witness_data == <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32, PalletError::<T>::InvalidWitness);
+			ensure!(
+				witness_data == <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
+				Error::<T>::InvalidWitness
+			);
 
 			// ensure solution is timely.
-			ensure!(Self::current_phase().is_signed(), PalletError::<T>::EarlySubmission);
+			ensure!(
+				Self::current_phase().is_signed(),
+				Error::<T>::EarlySubmission
+			);
 
 			// ensure round is correct.
-			ensure!(Self::round() == solution.round, PalletError::<T>::InvalidRound);
+			ensure!(Self::round() == solution.round, Error::<T>::InvalidRound);
 
 			// NOTE: this is the only case where having separate snapshot would have been better
 			// because could do just decode_len. But we can create abstractions to do this.
@@ -680,14 +638,18 @@ decl_module! {
 
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
-			let maybe_index = Self::insert_submission(&who, &mut signed_submissions, solution, witness);
-			ensure!(maybe_index.is_some(), PalletError::<T>::QueueFull);
+			let maybe_index =
+				Self::insert_submission(&who, &mut signed_submissions, solution, witness);
+			ensure!(maybe_index.is_some(), Error::<T>::QueueFull);
 			let index = maybe_index.expect("Option checked to be `Some`; qed.");
 
 			// collect deposit. Thereafter, the function cannot fail.
 			// Defensive -- index is valid.
-			let deposit = signed_submissions.get(index).map(|s| s.deposit).unwrap_or_default();
-			T::Currency::reserve(&who, deposit).map_err(|_| PalletError::<T>::CannotPayDeposit)?;
+			let deposit = signed_submissions
+				.get(index)
+				.map(|s| s.deposit)
+				.unwrap_or_default();
+			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::CannotPayDeposit)?;
 
 			// store the new signed submission.
 			debug_assert!(signed_submissions.len() as u32 <= T::MaxSignedSubmissions::get());
@@ -711,13 +673,17 @@ decl_module! {
 		/// authoring reward at risk.
 		///
 		/// No deposit or reward is associated with this.
-		#[weight = T::WeightInfo::submit_unsigned(
+		#[pallet::weight(T::WeightInfo::submit_unsigned(
 			witness.voters,
 			witness.targets,
 			solution.compact.voters_count() as u32,
 			solution.compact.unique_targets().len() as u32
-		)]
-		fn submit_unsigned(origin, solution: RawSolution<CompactOf<T>>, witness: WitnessData) {
+		))]
+		fn submit_unsigned(
+			origin: OriginFor<T>,
+			solution: RawSolution<CompactOf<T>>,
+			witness: WitnessData,
+		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
 			// check phase and score.
@@ -725,9 +691,18 @@ decl_module! {
 			let _ = Self::unsigned_pre_dispatch_checks(&solution)?;
 
 			// ensure witness was correct.
-			let RoundSnapshotMetadata { voters_len, targets_len } = Self::snapshot_metadata().unwrap_or_default();
-			ensure!(voters_len as u32 == witness.voters, PalletError::<T>::InvalidWitness);
-			ensure!(targets_len as u32 == witness.targets, PalletError::<T>::InvalidWitness);
+			let RoundSnapshotMetadata {
+				voters_len,
+				targets_len,
+			} = Self::snapshot_metadata().unwrap_or_default();
+			ensure!(
+				voters_len as u32 == witness.voters,
+				Error::<T>::InvalidWitness
+			);
+			ensure!(
+				targets_len as u32 == witness.targets,
+				Error::<T>::InvalidWitness
+			);
 
 			let ready =
 				Self::feasibility_check(solution, ElectionCompute::Unsigned)
@@ -739,11 +714,178 @@ decl_module! {
 			// store the newly received solution.
 			<QueuedSolution<T>>::put(ready);
 			Self::deposit_event(RawEvent::SolutionStored(ElectionCompute::Unsigned));
+
+			Ok(None.into())
 		}
 	}
+
+	#[pallet::event]
+	#[pallet::metadata(<T as frame_system::Config>::AccountId = "AccountId")]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
+	{
+		/// A solution was stored with the given compute.
+		///
+		/// If the solution is signed, this means that it hasn't yet been processed. If the solution
+		/// is unsigned, this means that it has also been processed.
+		SolutionStored(ElectionCompute),
+		/// The election has been finalized, with `Some` of the given computation, or else if the
+		/// election failed, `None`.
+		ElectionFinalized(Option<ElectionCompute>),
+		/// An account has been rewarded for their signed submission being finalized.
+		Rewarded(<T as frame_system::Config>::AccountId),
+		/// An account has been slashed for submitting an invalid signed submission.
+		Slashed(<T as frame_system::Config>::AccountId),
+		/// The signed phase of the given round has started.
+		SignedPhaseStarted(u32),
+		/// The unsigned phase of the given round has started.
+		UnsignedPhaseStarted(u32),
+	}
+
+	/// Old name generated by `decl_event`.
+	#[deprecated(note = "use `Event` instead")]
+	pub type RawEvent<T> = Event<T>;
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Submission was too early.
+		EarlySubmission,
+		/// Submission was too weak, score-wise.
+		WeakSubmission,
+		/// The queue was full, and the solution was not better than any of the existing ones.
+		QueueFull,
+		/// The origin failed to pay the deposit.
+		CannotPayDeposit,
+		/// WitnessData is invalid.
+		InvalidWitness,
+		/// Round number is invalid.
+		InvalidRound,
+	}
+
+	#[pallet::origin]
+	pub struct Origin<T>(PhantomData<T>);
+
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T>
+	where
+		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
+		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
+	{
+		type Call = Call<T>;
+		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			if let Call::submit_unsigned(solution, _) = call {
+				// discard solution not coming from the local OCW.
+				match source {
+					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
+					_ => {
+						return InvalidTransaction::Call.into();
+					}
+				}
+
+				let _ = Self::unsigned_pre_dispatch_checks(solution)
+					.map_err(dispatch_error_to_invalid)
+					.map(Into::into)?;
+
+				ValidTransaction::with_tag_prefix("OffchainElection")
+					// The higher the score[0], the better a solution is.
+					.priority(
+						T::UnsignedPriority::get()
+							.saturating_add(solution.score[0].saturated_into()),
+					)
+					// used to deduplicate unsigned solutions: each validator should produce one
+					// solution per round at most, and solutions are not propagate.
+					.and_provides(solution.round)
+					// transaction should stay in the pool for the duration of the unsigned phase.
+					.longevity(
+						TryInto::<u64>::try_into(T::UnsignedPhase::get())
+							.unwrap_or(crate::two_phase::unsigned::DEFAULT_LONGEVITY),
+					)
+					// We don't propagate this. This can never the validated at a remote node.
+					.propagate(false)
+					.build()
+			} else {
+				InvalidTransaction::Call.into()
+			}
+		}
+
+		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+			if let Call::submit_unsigned(solution, _) = call {
+				Self::unsigned_pre_dispatch_checks(solution)
+					.map_err(dispatch_error_to_invalid)
+					.map_err(Into::into)
+			} else {
+				Err(InvalidTransaction::Call.into())
+			}
+		}
+	}
+
+	#[pallet::type_value]
+	pub fn DefaultForRound() -> u32 {
+		1
+	}
+
+	/// Internal counter for the number of rounds.
+	///
+	/// This is useful for de-duplication of transactions submitted to the pool, and general
+	/// diagnostics of the module.
+	///
+	/// This is merely incremented once per every time that an upstream `elect` is called.
+	#[pallet::storage]
+	#[pallet::getter(fn round)]
+	pub type Round<T: Config> = StorageValue<_, u32, ValueQuery, DefaultForRound>;
+
+	#[pallet::type_value]
+	pub fn DefaultForCurrentPhase<T: Config>() -> Phase<T::BlockNumber> {
+		Phase::Off
+	}
+
+	/// Current phase.
+	#[pallet::storage]
+	#[pallet::getter(fn current_phase)]
+	pub type CurrentPhase<T: Config> =
+		StorageValue<_, Phase<T::BlockNumber>, ValueQuery, DefaultForCurrentPhase<T>>;
+
+	/// Sorted (worse -> best) list of unchecked, signed solutions.
+	#[pallet::storage]
+	#[pallet::getter(fn signed_submissions)]
+	pub type SignedSubmissions<T: Config> = StorageValue<
+		_,
+		Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
+		ValueQuery,
+	>;
+
+	/// Current best solution, signed or unsigned.
+	#[pallet::storage]
+	#[pallet::getter(fn queued_solution)]
+	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolution<T::AccountId>>;
+
+	/// Snapshot data of the round.
+	///
+	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
+	#[pallet::storage]
+	#[pallet::getter(fn snapshot)]
+	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T::AccountId>>;
+
+	/// Desired number of targets to elect for this round.
+	///
+	/// Only exists when [`Snapshot`] is present.
+	#[pallet::storage]
+	#[pallet::getter(fn desired_targets)]
+	// TODO: remove the generic here, neh?
+	pub type DesiredTargets<T: Config> = StorageValue<_, u32>;
+
+	/// The metadata of the [`RoundSnapshot`]
+	///
+	/// Only exists when [`Snapshot`] is present.
+	#[pallet::storage]
+	#[pallet::getter(fn snapshot_metadata)]
+	pub type SnapshotMetadata<T: Config> = StorageValue<_, RoundSnapshotMetadata>;
 }
 
-impl<T: Config> Module<T>
+impl<T: Config> Pallet<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
@@ -796,11 +938,11 @@ where
 		let voters = T::DataProvider::voters();
 		let desired_targets = T::DataProvider::desired_targets();
 
-		SnapshotMetadata::put(RoundSnapshotMetadata {
+		<SnapshotMetadata<T>>::put(RoundSnapshotMetadata {
 			voters_len: voters.len() as u32,
 			targets_len: targets.len() as u32,
 		});
-		DesiredTargets::put(desired_targets);
+		<DesiredTargets<T>>::put(desired_targets);
 		<Snapshot<T>>::put(RoundSnapshot { voters, targets });
 	}
 
@@ -811,15 +953,15 @@ where
 	/// 3. Clear all snapshot data.
 	fn post_elect() {
 		// inc round
-		Round::mutate(|r| *r = *r + 1);
+		<Round<T>>::mutate(|r| *r = *r + 1);
 
 		// change phase
 		<CurrentPhase<T>>::put(Phase::Off);
 
 		// kill snapshots
 		<Snapshot<T>>::kill();
-		SnapshotMetadata::kill();
-		DesiredTargets::kill();
+		<SnapshotMetadata<T>>::kill();
+		<DesiredTargets<T>>::kill();
 	}
 
 	/// Build the witness data from the snapshot metadata, if it exists. Else, returns `None`.
@@ -905,7 +1047,7 @@ where
 		// ----- Start building support. First, we need some more closures.
 		let stake_of = stake_of_fn!(snapshot_voters, T::AccountId);
 
-		// This might fail if the normalization fails. Very unlikely.
+		// // This might fail if the normalization fails. Very unlikely.
 		let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
 			.map_err::<FeasibilityError, _>(Into::into)?;
 		// This might fail if one of the voter edges is pointing to a non-winner.
@@ -925,7 +1067,7 @@ where
 	}
 
 	/// On-chain fallback of election.
-	fn onchain_fallback() -> Result<Supports<T::AccountId>, Error>
+	fn onchain_fallback() -> Result<Supports<T::AccountId>, InternalError>
 	where
 		ExtendedBalance: From<<T::OnChainAccuracy as PerThing>::Inner>,
 	{
@@ -937,12 +1079,12 @@ where
 	}
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Module<T>
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
-	type Error = Error;
+	type Error = InternalError; // TODO: rename to ELectionError
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
@@ -972,6 +1114,16 @@ where
 	fn ongoing() -> bool {
 		matches!(Self::current_phase(), Phase::Signed | Phase::Unsigned(_))
 	}
+}
+
+/// convert a DispatchError to a custom InvalidTransaction with the inner code being the error
+/// number.
+fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
+	let error_number = match error {
+		DispatchError::Module { error, .. } => error,
+		_ => 0,
+	};
+	InvalidTransaction::Custom(error_number)
 }
 
 #[cfg(test)]

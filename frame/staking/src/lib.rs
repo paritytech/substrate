@@ -2441,7 +2441,6 @@ impl<T: Config> ElectionDataProvider<T::AccountId, T::BlockNumber> for Module<T>
 
 		let session_length = T::NextNewSession::average_session_length();
 
-		// TODO: consider removing the `now` here, does not serve much.
 		let until_this_session_end = T::NextNewSession::estimate_next_new_session(now)
 			.unwrap_or_default()
 			.saturating_sub(now);
