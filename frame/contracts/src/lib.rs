@@ -89,6 +89,8 @@ mod wasm;
 mod rent;
 mod benchmarking;
 mod schedule;
+
+pub mod chain_extension;
 pub mod weights;
 
 #[cfg(test)]
@@ -321,6 +323,9 @@ pub trait Config: frame_system::Config {
 	/// construct a default cost schedule.
 	type WeightInfo: WeightInfo;
 
+	/// Type that allows the runtime authors to add new host functions for a contract to call.
+	type ChainExtension: chain_extension::ChainExtension;
+
 	/// The maximum number of tries that can be queued for deletion.
 	type DeletionQueueDepth: Get<u32>;
 
@@ -393,6 +398,10 @@ decl_error! {
 		TooManyTopics,
 		/// The topics passed to `seal_deposit_events` contains at least one duplicate.
 		DuplicateTopics,
+		/// The chain does not provide a chain extension. Calling the chain extension results
+		/// in this error. Note that this usually  shouldn't happen as deploying such contracts
+		/// is rejected.
+		NoChainExtension,
 		/// Removal of a contract failed because the deletion queue is full.
 		///
 		/// This can happen when either calling [`Module::claim_surcharge`] or `seal_terminate`.
