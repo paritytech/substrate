@@ -913,10 +913,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id.clone(), addr));
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::AddReserved(peer_id.clone()));
+			.unbounded_send(ServiceToWorkerMsg::AddReserved(peer_id));
 		Ok(())
 	}
 
