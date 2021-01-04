@@ -78,6 +78,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 impl pallet_balances::Config for Test {

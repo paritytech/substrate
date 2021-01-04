@@ -1068,7 +1068,7 @@ fn voter_persists_its_votes() {
 				drop(_block_import);
 				r
 			})
-	};
+	}
 
 	runtime.spawn(alice_voter1);
 
@@ -1110,7 +1110,7 @@ fn voter_persists_its_votes() {
 			let runtime_handle = runtime_handle.clone();
 
 			async move {
-				if state.compare_and_swap(0, 1, Ordering::SeqCst) == 0 {
+				if state.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst).unwrap() == 0 {
 					// the first message we receive should be a prevote from alice.
 					let prevote = match signed.message {
 						finality_grandpa::Message::Prevote(prevote) => prevote,
@@ -1156,7 +1156,7 @@ fn voter_persists_its_votes() {
 					// we send in a loop including a delay until items are received, this can be
 					// ignored for the sake of reduced complexity.
 					Pin::new(&mut *round_tx.lock()).start_send(finality_grandpa::Message::Prevote(prevote)).unwrap();
-				} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
+				} else if state.compare_exchange(1, 2, Ordering::SeqCst, Ordering::SeqCst).unwrap() == 1 {
 					// the next message we receive should be our own prevote
 					let prevote = match signed.message {
 						finality_grandpa::Message::Prevote(prevote) => prevote,
@@ -1170,7 +1170,7 @@ fn voter_persists_its_votes() {
 					// therefore we won't ever receive it again since it will be a
 					// known message on the gossip layer
 
-				} else if state.compare_and_swap(2, 3, Ordering::SeqCst) == 2 {
+				} else if state.compare_exchange(2, 3, Ordering::SeqCst, Ordering::SeqCst).unwrap() == 2 {
 					// we then receive a precommit from alice for block 15
 					// even though we casted a prevote for block 30
 					let precommit = match signed.message {

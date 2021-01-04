@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The Substrate runtime. This can be compiled with #[no_std], ready for Wasm.
+//! The Substrate runtime. This can be compiled with `#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -462,6 +462,7 @@ impl frame_system::Config for Runtime {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -732,8 +733,12 @@ cfg_if! {
 					}
 				}
 
-				fn current_epoch_start() -> SlotNumber {
+				fn current_epoch_start() -> sp_consensus_babe::SlotNumber {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
+
+				fn current_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::current_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
@@ -983,8 +988,12 @@ cfg_if! {
 					}
 				}
 
-				fn current_epoch_start() -> SlotNumber {
+				fn current_epoch_start() -> sp_consensus_babe::SlotNumber {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
+
+				fn current_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::current_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(

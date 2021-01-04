@@ -180,6 +180,7 @@ mod tests {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 
 	type System = frame_system::Module<Test>;
@@ -204,7 +205,6 @@ mod tests {
 			System::initialize(
 				&i,
 				&parent_hash,
-				&Default::default(),
 				&Default::default(),
 				frame_system::InitKind::Full,
 			);
