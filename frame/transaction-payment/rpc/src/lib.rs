@@ -164,7 +164,7 @@ where
 
 		let try_into_rpc_balance = |value: Balance| value.try_into().map_err(|_| RpcError {
 			code: ErrorCode::InvalidParams,
-			message: format!("{} doesn't fit in 64 bit unsigned value", value),
+			message: format!("{} doesn't fit in NumberOrHex representation", value),
 			data: None,
 		});
 

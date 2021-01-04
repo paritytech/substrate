@@ -49,10 +49,18 @@ impl NumberOrHex {
 	}
 }
 
+impl From<u32> for NumberOrHex {
+	fn from(n: u32) -> Self { NumberOrHex::Number(n.into()) }
+}
+
 impl From<u64> for NumberOrHex {
 	fn from(n: u64) -> Self {
 		NumberOrHex::Number(n)
 	}
+}
+
+impl From<u128> for NumberOrHex {
+	fn from(n: u128) -> Self { NumberOrHex::Hex(n.into()) }
 }
 
 impl From<U256> for NumberOrHex {
@@ -82,14 +90,6 @@ impl TryFrom<NumberOrHex> for u128 {
 	type Error = TryFromIntError;
 	fn try_from(num_or_hex: NumberOrHex) -> Result<u128, Self::Error> {
 		num_or_hex.into_u256().try_into().map_err(|_| TryFromIntError(()))
-	}
-}
-
-impl TryInto<NumberOrHex> for u128 {
-	type Error = TryFromIntError;
-	fn try_into(self) -> Result<NumberOrHex, Self::Error> {
-		let value: U256 = self.into();
-		value.try_into().map_err(|_| TryFromIntError(()))
 	}
 }
 
