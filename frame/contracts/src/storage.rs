@@ -1,37 +1,55 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! This module contains routines for accessing and altering a contract related state.
 
 use crate::{
 	exec::{AccountIdOf, StorageKey},
 	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Config, TrieId,
-	AccountCounter,
+	AccountCounter, DeletionQueue, Error,
+	weights::WeightInfo,
 };
+use codec::{Encode, Decode};
 use sp_std::prelude::*;
 use sp_std::marker::PhantomData;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::Bounded;
 use sp_core::crypto::UncheckedFrom;
-use frame_support::{storage::child, StorageMap};
+use frame_support::{
+	dispatch::DispatchResult,
+	StorageMap,
+	debug,
+	storage::{child::{self, KillOutcome}, StorageValue},
+	traits::Get,
+	weights::Weight,
+};
 
 /// An error that means that the account requested either doesn't exist or represents a tombstone
 /// account.
 #[cfg_attr(test, derive(PartialEq, Eq, Debug))]
 pub struct ContractAbsentError;
+
+#[derive(Encode, Decode)]
+pub struct DeletedContract {
+	pair_count: u32,
+	trie_id: TrieId,
+}
+
+
 
 pub struct Storage<T>(PhantomData<T>);
 
@@ -190,18 +208,105 @@ where
 		})
 	}
 
-	/// Removes the contract and all the storage associated with it.
+	/// Push a contract's trie to the deletion queue for lazy removal.
 	///
-	/// This function doesn't affect the account.
-	pub fn destroy_contract(address: &AccountIdOf<T>, trie_id: &TrieId) {
-		<ContractInfoOf<T>>::remove(address);
-		child::kill_storage(&crate::child_trie_info(&trie_id), None);
+	/// You must make sure that the contract is also removed or converted into a tombstone
+	/// when queuing the trie for deletion.
+	pub fn queue_trie_for_deletion(contract: &AliveContractInfo<T>) -> DispatchResult {
+		if DeletionQueue::decode_len().unwrap_or(0) >= T::DeletionQueueDepth::get() as usize {
+			Err(Error::<T>::DeletionQueueFull.into())
+		} else {
+			DeletionQueue::append(DeletedContract {
+				pair_count: contract.total_pair_count,
+				trie_id: contract.trie_id.clone(),
+			});
+			Ok(())
+		}
+	}
+
+	/// Calculates the weight that is necessary to remove one key from the trie and how many
+	/// of those keys can be deleted from the deletion queue given the supplied queue length
+	/// and weight limit.
+	pub fn deletion_budget(queue_len: usize, weight_limit: Weight) -> (u64, u32) {
+		let base_weight = T::WeightInfo::on_initialize();
+		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
+			T::WeightInfo::on_initialize_per_queue_item(0);
+		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
+			T::WeightInfo::on_initialize_per_trie_key(0);
+		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as Weight);
+
+		// `weight_per_key` being zero makes no sense and would constitute a failure to
+		// benchmark properly. We opt for not removing any keys at all in this case.
+		let key_budget = weight_limit
+			.saturating_sub(base_weight)
+			.saturating_sub(decoding_weight)
+			.checked_div(weight_per_key)
+			.unwrap_or(0) as u32;
+
+		(weight_per_key, key_budget)
+	}
+
+	/// Delete as many items from the deletion queue possible within the supplied weight limit.
+	///
+	/// It returns the amount of weight used for that task or `None` when no weight was used
+	/// apart from the base weight.
+	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
+		let queue_len = DeletionQueue::decode_len().unwrap_or(0);
+		if queue_len == 0 {
+			return weight_limit;
+		}
+
+		let (weight_per_key, mut remaining_key_budget) = Self::deletion_budget(
+			queue_len,
+			weight_limit,
+		);
+
+		// We want to check whether we have enough weight to decode the queue before
+		// proceeding. Too little weight for decoding might happen during runtime upgrades
+		// which consume the whole block before the other `on_initialize` blocks are called.
+		if remaining_key_budget == 0 {
+			return weight_limit;
+		}
+
+		let mut queue = DeletionQueue::get();
+
+		while !queue.is_empty() && remaining_key_budget > 0 {
+			// Cannot panic due to loop condition
+			let trie = &mut queue[0];
+			let pair_count = trie.pair_count;
+			let outcome = child::kill_storage(
+				&crate::child_trie_info(&trie.trie_id),
+				Some(remaining_key_budget),
+			);
+			if pair_count > remaining_key_budget {
+				// Cannot underflow because of the if condition
+				trie.pair_count -= remaining_key_budget;
+			} else {
+				// We do not care to preserve order. The contract is deleted already and
+				// noone waits for the trie to be deleted.
+				let removed = queue.swap_remove(0);
+				match outcome {
+					// This should not happen as our budget was large enough to remove all keys.
+					KillOutcome::SomeRemaining => {
+						debug::error!(
+							"After deletion keys are remaining in this child trie: {:?}",
+							removed.trie_id,
+						);
+					},
+					KillOutcome::AllRemoved => (),
+				}
+			}
+			remaining_key_budget = remaining_key_budget
+				.saturating_sub(remaining_key_budget.min(pair_count));
+		}
+
+		DeletionQueue::put(queue);
+		weight_limit.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
 	}
 
 	/// This generator uses inner counter for account id and applies the hash over `AccountId +
 	/// accountid_counter`.
 	pub fn generate_trie_id(account_id: &AccountIdOf<T>) -> TrieId {
-		use frame_support::StorageValue;
 		use sp_runtime::traits::Hash;
 		// Note that skipping a value due to error is not an issue here.
 		// We only need uniqueness, not sequence.
@@ -224,5 +329,16 @@ where
 		<ContractInfoOf<T>>::get(account)
 			.and_then(|i| i.as_alive().map(|i| i.code_hash))
 			.ok_or(ContractAbsentError)
+	}
+
+	/// Fill up the queue in order to exercise the limits during testing.
+	#[cfg(test)]
+	pub fn fill_queue_with_dummies() {
+		let queue: Vec<_> = (0..T::DeletionQueueDepth::get()).map(|_| DeletedContract {
+			pair_count: 0,
+			trie_id: vec![],
+		})
+		.collect();
+		DeletionQueue::put(queue);
 	}
 }
