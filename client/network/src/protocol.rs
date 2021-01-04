@@ -1467,7 +1467,19 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 								self.behaviour.disconnect_peer(id);
 							}
 							RequestFailure::Network(OutboundFailure::ConnectionClosed)
-							| RequestFailure::NotConnected => {},
+							| RequestFailure::NotConnected => {
+								// TODO: Log line likely not needed once stalling issue is fixed.
+								if self.sync.peer_info(id).is_some() {
+									debug!(
+										target: "sync",
+										"Block request to peer {:?} failed due to connection \
+										 closed or not connected while sync assumes peer is \
+										 connected.",
+										id
+									);
+								}
+								self.behaviour.disconnect_peer(id);
+							},
 							RequestFailure::UnknownProtocol => {
 								debug_assert!(false, "Block request protocol should always be known.");
 							}
