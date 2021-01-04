@@ -388,11 +388,6 @@ pub trait Trie {
 /// Interface that provides miscellaneous functions for communicating between the runtime and the node.
 #[runtime_interface]
 pub trait Misc {
-	/// The current relay chain identifier.
-	fn chain_id(&self) -> u64 {
-		sp_externalities::Externalities::chain_id(*self)
-	}
-
 	/// Print a number.
 	fn print_num(val: u64) {
 		log::debug!(target: "runtime", "{}", val);

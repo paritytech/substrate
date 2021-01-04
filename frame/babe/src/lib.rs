@@ -43,7 +43,7 @@ use sp_timestamp::OnTimestampSet;
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
 	inherents::{BabeInherentData, INHERENT_IDENTIFIER},
-	BabeAuthorityWeight, ConsensusLog, EquivocationProof, SlotNumber, BABE_ENGINE_ID,
+	BabeAuthorityWeight, ConsensusLog, Epoch, EquivocationProof, SlotNumber, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
 use sp_inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent};
@@ -484,6 +484,17 @@ impl<T: Config> Module<T> {
 	// in the chain (as its result is based off of `GenesisSlot`).
 	pub fn current_epoch_start() -> SlotNumber {
 		(EpochIndex::get() * T::EpochDuration::get()) + GenesisSlot::get()
+	}
+
+	/// Produces information about the current epoch.
+	pub fn current_epoch() -> Epoch {
+		Epoch {
+			epoch_index: EpochIndex::get(),
+			start_slot: Self::current_epoch_start(),
+			duration: T::EpochDuration::get(),
+			authorities: Self::authorities(),
+			randomness: Self::randomness(),
+		}
 	}
 
 	fn deposit_consensus<U: Encode>(new: U) {

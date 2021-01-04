@@ -401,7 +401,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			storage: &'a dyn ChangesTrieStorage<HashFor<Block>, NumberFor<Block>>,
 			min: NumberFor<Block>,
 			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, Block::Hash>>,
-		};
+		}
 
 		impl<'a, Block: BlockT> ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>> for
 			AccessedRootsRecorder<'a, Block>

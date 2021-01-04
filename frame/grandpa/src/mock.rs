@@ -100,6 +100,7 @@ impl frame_system::Config for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
@@ -359,7 +360,6 @@ pub fn start_session(session_index: SessionIndex) {
 			&(i as u64 + 1),
 			&parent_hash,
 			&Default::default(),
-			&Default::default(),
 			Default::default(),
 		);
 		System::set_block_number((i + 1).into());
@@ -383,7 +383,6 @@ pub fn initialize_block(number: u64, parent_hash: H256) {
 	System::initialize(
 		&number,
 		&parent_hash,
-		&Default::default(),
 		&Default::default(),
 		Default::default(),
 	);
