@@ -1256,6 +1256,8 @@ pub mod pallet_prelude {
 /// }
 /// ```
 /// I.e. a regular rust enum named `Error`, with generic `T` and fieldless variants.
+/// The generic `T` mustn't bound anything and where clause is not allowed. But bounds and where
+/// clause shouldn't be needed for any usecase.
 ///
 /// ### Macro expansion
 ///
