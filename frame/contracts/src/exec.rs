@@ -268,12 +268,12 @@ where
 			Err(Error::<T>::MaxCallDepthReached)?
 		}
 
-		// Assumption: `collect` doesn't collide with overlay because
-		// `collect` will be done on first call and destination contract and balance
-		// cannot be changed before the first call
-		// We do not allow 'calling' plain accounts. For transfering value
-		// `seal_transfer` must be used.
-		let contract = if let Some(ContractInfo::Alive(info)) = Rent::<T>::collect(&dest) {
+		// This charges the rent and denies access to a contract that is in need of
+		// eviction by returning `None`. We cannot evict eagerly here because those
+		// changes would be rolled back in case this contract is called by another
+		// contract.
+		// See: https://github.com/paritytech/substrate/issues/6439#issuecomment-648754324
+		let contract = if let Ok(Some(ContractInfo::Alive(info))) = Rent::<T>::charge(&dest) {
 			info
 		} else {
 			Err(Error::<T>::NotCallable)?
@@ -575,13 +575,16 @@ where
 			value,
 			self.ctx,
 		)?;
-		let self_trie_id = self.ctx.self_trie_id.as_ref().expect(
-			"this function is only invoked by in the context of a contract;\
-				a contract has a trie id;\
-				this can't be None; qed",
-		);
-		Storage::<T>::destroy_contract(&self_id, self_trie_id);
-		Ok(())
+		if let Some(ContractInfo::Alive(info)) = ContractInfoOf::<T>::take(&self_id) {
+			Storage::<T>::queue_trie_for_deletion(&info)?;
+			Ok(())
+		} else {
+			panic!(
+				"this function is only invoked by in the context of a contract;\
+				this contract is therefore alive;\
+				qed"
+			);
+		}
 	}
 
 	fn call(

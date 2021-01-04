@@ -123,7 +123,7 @@ use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 };
-use frame_system::{ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root, Module as System};
 use pallet_contracts_primitives::{
 	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult, ExecResult,
 };
@@ -325,6 +325,12 @@ pub trait Config: frame_system::Config {
 
 	/// Type that allows the runtime authors to add new host functions for a contract to call.
 	type ChainExtension: chain_extension::ChainExtension;
+
+	/// The maximum number of tries that can be queued for deletion.
+	type DeletionQueueDepth: Get<u32>;
+
+	/// The maximum amount of weight that can be consumed per block for lazy trie removal.
+	type DeletionWeightLimit: Get<Weight>;
 }
 
 decl_error! {
@@ -396,6 +402,17 @@ decl_error! {
 		/// in this error. Note that this usually  shouldn't happen as deploying such contracts
 		/// is rejected.
 		NoChainExtension,
+		/// Removal of a contract failed because the deletion queue is full.
+		///
+		/// This can happen when either calling [`Module::claim_surcharge`] or `seal_terminate`.
+		/// The queue is filled by deleting contracts and emptied by a fixed amount each block.
+		/// Trying again during another block is the only way to resolve this issue.
+		DeletionQueueFull,
+		/// A contract could not be evicted because it has enough balance to pay rent.
+		///
+		/// This can be returned from [`Module::claim_surcharge`] because the target
+		/// contract has enough balance to pay for its rent.
+		ContractNotEvictable,
 	}
 }
 
@@ -449,7 +466,23 @@ decl_module! {
 		/// The maximum size of a storage value in bytes. A reasonable default is 16 KiB.
 		const MaxValueSize: u32 = T::MaxValueSize::get();
 
+		/// The maximum number of tries that can be queued for deletion.
+		const DeletionQueueDepth: u32 = T::DeletionQueueDepth::get();
+
+		/// The maximum amount of weight that can be consumed per block for lazy trie removal.
+		const DeletionWeightLimit: Weight = T::DeletionWeightLimit::get();
+
 		fn deposit_event() = default;
+
+		fn on_initialize() -> Weight {
+			// We do not want to go above the block limit and rather avoid lazy deletion
+			// in that case. This should only happen on runtime upgrades.
+			let weight_limit = T::BlockWeights::get().max_block
+				.saturating_sub(System::<T>::block_weight().total())
+				.min(T::DeletionWeightLimit::get());
+			Storage::<T>::process_deletion_queue_batch(weight_limit)
+				.saturating_add(T::WeightInfo::on_initialize())
+		}
 
 		/// Updates the schedule for metering contracts.
 		///
@@ -549,10 +582,14 @@ decl_module! {
 		/// Allows block producers to claim a small reward for evicting a contract. If a block producer
 		/// fails to do so, a regular users will be allowed to claim the reward.
 		///
-		/// If contract is not evicted as a result of this call, no actions are taken and
-		/// the sender is not eligible for the reward.
+		/// If contract is not evicted as a result of this call, [`Error::ContractNotEvictable`]
+		/// is returned and the sender is not eligible for the reward.
 		#[weight = T::WeightInfo::claim_surcharge()]
-		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
+		pub fn claim_surcharge(
+			origin,
+			dest: T::AccountId,
+			aux_sender: Option<T::AccountId>
+		) -> DispatchResult {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
 				(Ok(frame_system::RawOrigin::Signed(account)), None) => {
@@ -574,8 +611,10 @@ decl_module! {
 			};
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
-			if Rent::<T>::snitch_contract_should_be_evicted(&dest, handicap) {
-				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get())?;
+			if Rent::<T>::snitch_contract_should_be_evicted(&dest, handicap)? {
+				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get()).map(|_| ())
+			} else {
+				Err(Error::<T>::ContractNotEvictable.into())
 			}
 		}
 	}
@@ -733,6 +772,11 @@ decl_storage! {
 		///
 		/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 		pub ContractInfoOf: map hasher(twox_64_concat) T::AccountId => Option<ContractInfo<T>>;
+		/// Evicted contracts that await child trie deletion.
+		///
+		/// Child trie deletion is a heavy operation depending on the amount of storage items
+		/// stored in said trie. Therefore this operation is performed lazily in `on_initialize`.
+		pub DeletionQueue: Vec<storage::DeletedContract>;
 	}
 }
 
