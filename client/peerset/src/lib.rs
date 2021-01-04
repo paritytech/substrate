@@ -534,22 +534,19 @@ impl Peerset {
 			}
 
 			// Try to grab the next node to attempt to connect to.
-			let next = match self.data.highest_not_connected_peer(set_index) {
-				Some(p) => p,
-				None => break,	// No known node to add.
-			};
+			while let Some(next) = self.data.highest_not_connected_peer(set_index) {
+				// Don't connect to nodes with an abysmal reputation.
+				if next.reputation() < BANNED_THRESHOLD {
+					break;
+				}
 
-			// Don't connect to nodes with an abysmal reputation.
-			if next.reputation() < BANNED_THRESHOLD {
-				break;
-			}
-
-			match next.try_outgoing() {
-				Ok(conn) => self.message_queue.push_back(Message::Connect {
-					set_id: SetId(set_index),
-					peer_id: conn.into_peer_id()
-				}),
-				Err(_) => break,	// No more slots available.
+				match next.try_outgoing() {
+					Ok(conn) => self.message_queue.push_back(Message::Connect {
+						set_id: SetId(set_index),
+						peer_id: conn.into_peer_id()
+					}),
+					Err(_) => break,	// No more slots available.
+				}
 			}
 		}
 	}
