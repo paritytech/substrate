@@ -250,7 +250,6 @@ where
 				payload: mmr_root,
 				block_number: notification.header.number(),
 				validator_set_id: 0,
-				is_set_transition_block: false,
 			};
 
 			let signature = match SyncCryptoStore::sign_with(
@@ -304,7 +303,6 @@ where
 					payload: round.0,
 					block_number: round.1,
 					validator_set_id: 0,
-					is_set_transition_block: false,
 				};
 
 				let signed_commitment = SignedCommitment { commitment, signatures };
