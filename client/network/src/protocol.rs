@@ -950,7 +950,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				},
 				Err(sync::BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, sc_peerset::SetId::from(0));
-					self.peerset_handle.report_peer(id, repu)
+					self.peerset_handle.report_peer(id, repu);
+					return Err(())
 				}
 			}
 		}
