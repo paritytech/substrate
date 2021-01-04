@@ -97,7 +97,7 @@ fn account_vote<T: Config>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
 }
 
 benchmarks! {
-	_ { }
+	,
 
 	propose {
 		let p = T::MaxProposals::get();

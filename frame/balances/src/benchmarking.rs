@@ -33,7 +33,7 @@ const ED_MULTIPLIER: u32 = 10;
 
 
 benchmarks! {
-	_ { }
+	,
 
 	// Benchmark `transfer` extrinsic with the worst possible conditions:
 	// * Transfer will kill the sender account.

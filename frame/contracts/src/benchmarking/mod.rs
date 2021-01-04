@@ -265,7 +265,7 @@ benchmarks! {
 	where_clause { where
 		T::AccountId: UncheckedFrom<T::Hash>,
 		T::AccountId: AsRef<[u8]>,
-	}
+	},
 
 	_ {
 	}

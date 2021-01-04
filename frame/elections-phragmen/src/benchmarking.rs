@@ -166,7 +166,7 @@ fn clean<T: Config>() {
 }
 
 benchmarks! {
-	_ {}
+	,
 
 	// -- Signed ones
 	vote {
