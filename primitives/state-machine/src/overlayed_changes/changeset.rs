@@ -266,23 +266,15 @@ impl OverlayedChangeSet {
 	/// Consume this changeset and return all committed changes.
 	///
 	/// Panics:
-	/// Panics if there are open transactions: `transaction_depth() > 0`
-	/// with inital_depth being 0.
-	pub fn drain_commited_from(self, initial_overlay: Option<OverlayedChangeSet>) -> impl Iterator<Item=(StorageKey, Option<StorageValue>)> {
-		let initial_depth = initial_overlay.as_ref().map(|overlay| overlay.transaction_depth()).unwrap_or(0);
+	/// Panics if there are open transactions: `transaction_depth() > inital_depth`
+	pub fn drain_commited_for(mut self, initial_depth: usize) -> impl Iterator<Item=(StorageKey, Option<StorageValue>)> {
 		assert!(self.transaction_depth() == initial_depth, "Drain is not allowed with open transactions.");
-		// TODO use zip iter for efficiency.
-		self.changes.into_iter().filter_map(move |(k, mut v)| {
-			let initial_depth = initial_overlay.as_ref().map(|overlay| overlay.changes.get(&k)).flatten();
-			if let Some(initial_value) = initial_depth {
-				if v.transactions.len() > initial_value.transactions.len() {
-					Some((k, v.pop_transaction().value))
-				} else {
-					None
-				}
-			} else {
-				Some((k, v.pop_transaction().value))
-			}
+		// we have a single transaction opened over the parent ones (initial depth includes
+		// this transaction).
+		let changed_keys = self.dirty_keys.pop().expect(PROOF_OVERLAY_NON_EMPTY);
+		changed_keys.into_iter().filter_map(move |key| {
+			self.changes.remove(&key)
+				.map(|mut value| (key, value.pop_transaction().value))
 		})
 	}
 

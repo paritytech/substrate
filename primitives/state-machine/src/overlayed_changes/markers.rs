@@ -33,7 +33,6 @@
 use sp_std::collections::btree_map::BTreeMap;
 use sp_externalities::{WorkerResult, TaskId};
 use sp_std::{vec, vec::Vec};
-use super::{OverlayedChangeSet, Map, StorageKey, ChildInfo};
 
 #[derive(Debug, Clone)]
 pub(super) struct Markers {
@@ -42,24 +41,13 @@ pub(super) struct Markers {
 	// current transaction and associated
 	// task ids.
 	transactions: Vec<Vec<TaskId>>,
-	// State at start, we keep this to be able
-	// to extract only the changes.
-	// With different overlay design (attach
-	// depth to value), only transaction depth
-	// would be needed here.
-	start_state: StartState,
-}
-
-// NOTE: this involves a costly clone on any write child.
-//
-// This could change to a simple depth for any key
-// or change in initialization of children (clone only
-// last value), or change in overlay changes design (to be
-// able to extract.
-#[derive(Default, Debug, Clone)]
-pub(super) struct StartState {
-	pub(super) top: OverlayedChangeSet,
-	pub(super) children: Map<StorageKey, (OverlayedChangeSet, ChildInfo)>,
+	// Depth of overlay transaction when
+	// starting the worker.
+	// When extracting data we would check
+	// transactions.len() == 1
+	// and then extract from overlay up to this
+	// depth.
+	start_depth: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -72,27 +60,24 @@ impl Default for Markers {
 		Markers {
 			markers: BTreeMap::new(),
 			transactions: vec![Default::default()],
-			start_state: Default::default(),
+			start_depth: 0,
 		}
 	}
 }
 
 impl Markers {
 	/// Initialize marker for an existing overlay.
-	pub(super) fn from_start_state(start_state: &super::OverlayedChanges) -> Self {
+	pub(super) fn from_start_depth(start_depth: usize) -> Self {
 		Markers {
 			markers: BTreeMap::new(),
 			transactions: vec![Default::default()],
-			start_state: StartState {
-				top: start_state.top.clone(),
-				children: start_state.children.clone(),
-			},
+			start_depth,
 		}
 	}
 
 	/// Access base depth for this worker overlay.
-	pub(super) fn start_state(&mut self) -> StartState {
-		sp_std::mem::take(&mut self.start_state)
+	pub(super) fn start_depth(&self) -> usize {
+		self.start_depth
 	}
 }
 
