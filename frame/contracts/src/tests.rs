@@ -1,23 +1,28 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::{
 	BalanceOf, ContractInfo, ContractInfoOf, GenesisConfig, Module,
 	RawAliveContractInfo, RawEvent, Config, Schedule, gas::Gas,
 	Error, ConfigCache, RuntimeReturnCode, storage::Storage,
+	chain_extension::{
+		Result as ExtensionResult, Environment, ChainExtension, Ext, SysConfig, RetVal,
+		UncheckedFrom, InitState, ReturnFlags,
+	},
 	exec::AccountIdOf,
 };
 use assert_matches::assert_matches;
@@ -100,6 +105,85 @@ pub mod test_utils {
 	}
 }
 
+thread_local! {
+	static TEST_EXTENSION: sp_std::cell::RefCell<TestExtension> = Default::default();
+}
+
+pub struct TestExtension {
+	enabled: bool,
+	last_seen_buffer: Vec<u8>,
+	last_seen_inputs: (u32, u32, u32, u32),
+}
+
+impl TestExtension {
+	fn disable() {
+		TEST_EXTENSION.with(|e| e.borrow_mut().enabled = false)
+	}
+
+	fn last_seen_buffer() -> Vec<u8> {
+		TEST_EXTENSION.with(|e| e.borrow().last_seen_buffer.clone())
+	}
+
+	fn last_seen_inputs() -> (u32, u32, u32, u32) {
+		TEST_EXTENSION.with(|e| e.borrow().last_seen_inputs.clone())
+	}
+}
+
+impl Default for TestExtension {
+	fn default() -> Self {
+		Self {
+			enabled: true,
+			last_seen_buffer: vec![],
+			last_seen_inputs: (0, 0, 0, 0),
+		}
+	}
+}
+
+impl ChainExtension for TestExtension {
+	fn call<E: Ext>(func_id: u32, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	where
+		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+	{
+		match func_id {
+			0 => {
+				let mut env = env.buf_in_buf_out();
+				let input = env.read(2)?;
+				env.write(&input, false, None)?;
+				TEST_EXTENSION.with(|e| e.borrow_mut().last_seen_buffer = input);
+				Ok(RetVal::Converging(func_id))
+			},
+			1 => {
+				let env = env.only_in();
+				TEST_EXTENSION.with(|e|
+					e.borrow_mut().last_seen_inputs = (
+						env.val0(), env.val1(), env.val2(), env.val3()
+					)
+				);
+				Ok(RetVal::Converging(func_id))
+			},
+			2 => {
+				let mut env = env.buf_in_buf_out();
+				let weight = env.read(2)?[1].into();
+				env.charge_weight(weight)?;
+				Ok(RetVal::Converging(func_id))
+			},
+			3 => {
+				Ok(RetVal::Diverging{
+					flags: ReturnFlags::REVERT,
+					data: vec![42, 99],
+				})
+			},
+			_ => {
+				panic!("Passed unknown func_id to test chain extension: {}", func_id);
+			}
+		}
+	}
+
+	fn enabled() -> bool {
+		TEST_EXTENSION.with(|e| e.borrow().enabled)
+	}
+}
+
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
 parameter_types! {
@@ -130,6 +214,7 @@ impl frame_system::Config for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
@@ -186,6 +271,7 @@ impl Config for Test {
 	type MaxValueSize = MaxValueSize;
 	type WeightPrice = Self;
 	type WeightInfo = ();
+	type ChainExtension = TestExtension;
 }
 
 type Balances = pallet_balances::Module<Test>;
@@ -697,7 +783,6 @@ fn empty_kv_pairs() {
 fn initialize_block(number: u64) {
 	System::initialize(
 		&number,
-		&[0u8; 32].into(),
 		&[0u8; 32].into(),
 		&Default::default(),
 		Default::default(),
@@ -1221,7 +1306,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				30_000,
 				GAS_LIMIT,
 				restoration_code_hash.into(),
-				<Test as pallet_balances::Config>::Balance::from(0u32).encode(),
+				vec![],
 				vec![],
 			));
 			let addr_django = Contracts::contract_address(&CHARLIE, &restoration_code_hash, &[]);
@@ -1253,6 +1338,15 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				)
 			};
 
+			// The key that is used in the restorer contract but is not in the target contract.
+			// Is supplied as delta to the restoration. We need it to check whether the key
+			// is properly removed on success but still there on failure.
+			let delta_key = {
+				let mut key = [0u8; 32];
+				key[0] = 1;
+				key
+			};
+
 			if test_different_storage || test_restore_to_with_dirty_storage {
 				// Parametrization of the test imply restoration failure. Check that `DJANGO` aka
 				// restoration contract is still in place and also that `BOB` doesn't exist.
@@ -1263,6 +1357,10 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				assert_eq!(django_contract.storage_size, 8);
 				assert_eq!(django_contract.trie_id, django_trie_id);
 				assert_eq!(django_contract.deduct_block, System::block_number());
+				assert_eq!(
+					Storage::<Test>::read(&django_trie_id, &delta_key),
+					Some(vec![40, 0, 0, 0]),
+				);
 				match (test_different_storage, test_restore_to_with_dirty_storage) {
 					(true, false) => {
 						assert_err_ignore_postinfo!(
@@ -1321,7 +1419,6 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 				// Here we expect that the restoration is succeeded. Check that the restoration
 				// contract `DJANGO` ceased to exist and that `BOB` returned back.
-				println!("{:?}", ContractInfoOf::<Test>::get(&addr_bob));
 				let bob_contract = ContractInfoOf::<Test>::get(&addr_bob).unwrap()
 					.get_alive().unwrap();
 				assert_eq!(bob_contract.rent_allowance, 50);
@@ -1329,6 +1426,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				assert_eq!(bob_contract.trie_id, django_trie_id);
 				assert_eq!(bob_contract.deduct_block, System::block_number());
 				assert!(ContractInfoOf::<Test>::get(&addr_django).is_none());
+				assert_matches!(Storage::<Test>::read(&django_trie_id, &delta_key), None);
 				assert_eq!(System::events(), vec![
 					EventRecord {
 						phase: Phase::Initialization,
@@ -1919,3 +2017,120 @@ fn instantiate_return_code() {
 
 	});
 }
+
+#[test]
+fn disabled_chain_extension_wont_deploy() {
+	let (code, _hash) = compile_module::<Test>("chain_extension").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = ConfigCache::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		TestExtension::disable();
+		assert_eq!(
+			Contracts::put_code(Origin::signed(ALICE), code),
+			Err("module uses chain extensions but chain extensions are disabled".into()),
+		);
+	});
+}
+
+#[test]
+fn disabled_chain_extension_errors_on_call() {
+	let (code, hash) = compile_module::<Test>("chain_extension").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = ConfigCache::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), code));
+		TestExtension::disable();
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				subsistence,
+				GAS_LIMIT,
+				hash.into(),
+				vec![],
+				vec![],
+			),
+		);
+		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				vec![],
+			),
+			Error::<Test>::NoChainExtension,
+		);
+	});
+}
+
+#[test]
+fn chain_extension_works() {
+	let (code, hash) = compile_module::<Test>("chain_extension").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = ConfigCache::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), code));
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				subsistence,
+				GAS_LIMIT,
+				hash.into(),
+				vec![],
+				vec![],
+			),
+		);
+		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
+
+		// The contract takes a up to 2 byte buffer where the first byte passed is used as
+		// as func_id to the chain extension which behaves differently based on the
+		// func_id.
+
+		// 0 = read input buffer and pass it through as output
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![0, 99],
+		);
+		let gas_consumed = result.gas_consumed;
+		assert_eq!(TestExtension::last_seen_buffer(), vec![0, 99]);
+		assert_eq!(result.exec_result.unwrap().data, vec![0, 99]);
+
+		// 1 = treat inputs as integer primitives and store the supplied integers
+		Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![1],
+		).exec_result.unwrap();
+		// those values passed in the fixture
+		assert_eq!(TestExtension::last_seen_inputs(), (4, 1, 16, 12));
+
+		// 2 = charge some extra weight (amount supplied in second byte)
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![2, 42],
+		);
+		assert_ok!(result.exec_result);
+		assert_eq!(result.gas_consumed, gas_consumed + 42);
+
+		// 3 = diverging chain extension call that sets flags to 0x1 and returns a fixed buffer
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			vec![3],
+		).exec_result.unwrap();
+		assert_eq!(result.flags, ReturnFlags::REVERT);
+		assert_eq!(result.data, vec![42, 99]);
+	});
+}
+

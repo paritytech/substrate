@@ -281,6 +281,15 @@
 			"website": null
 		},
 		{
+			"prefix": 35,
+			"network": "vln",
+			"displayName": "Valiu Liquidity Network",
+			"symbols": ["USDv"],
+			"decimals": [15],
+			"standardAccount": "*25519",
+			"website": "https://valiu.com/"
+		},
+		{
 			"prefix": 36,
 			"network": "centrifuge",
 			"displayName": "Centrifuge Chain",

@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! A module responsible for computing the right amount of weight and charging it.
 
@@ -451,14 +452,19 @@ where
 			origin_contract.last_write
 		};
 
-		let key_values_taken = delta.iter()
+		// We are allowed to eagerly modify storage even though the function can
+		// fail later due to tombstones not matching. This is because the restoration
+		// is always called from a contract and therefore in a storage transaction.
+		// The failure of this function will lead to this transaction's rollback.
+		let bytes_taken: u32 = delta.iter()
 			.filter_map(|key| {
-				child::get_raw(&child_trie_info, &blake2_256(key)).map(|value| {
-					child::kill(&child_trie_info, &blake2_256(key));
-					(key, value)
+				let key = blake2_256(key);
+				child::get_raw(&child_trie_info, &key).map(|value| {
+					child::kill(&child_trie_info, &key);
+					value.len() as u32
 				})
 			})
-			.collect::<Vec<_>>();
+			.sum();
 
 		let tombstone = <TombstoneContractInfo<T>>::new(
 			// This operation is cheap enough because last_write (delta not included)
@@ -468,15 +474,10 @@ where
 		);
 
 		if tombstone != dest_tombstone {
-			for (key, value) in key_values_taken {
-				child::put_raw(&child_trie_info, &blake2_256(key), &value);
-			}
 			return Err(Error::<T>::InvalidTombstone.into());
 		}
 
-		origin_contract.storage_size -= key_values_taken.iter()
-			.map(|(_, value)| value.len() as u32)
-			.sum::<u32>();
+		origin_contract.storage_size -= bytes_taken;
 
 		<ContractInfoOf<T>>::remove(&origin);
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {

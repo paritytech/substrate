@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -412,6 +412,12 @@ decl_storage! {
 					"the balance of any account should always be at least the existential deposit.",
 				)
 			}
+
+			// ensure no duplicates exist.
+			let endowed_accounts = config.balances.iter().map(|(x, _)| x).cloned().collect::<std::collections::BTreeSet<_>>();
+
+			assert!(endowed_accounts.len() == config.balances.len(), "duplicate balances in genesis.");
+
 			for &(ref who, free) in config.balances.iter() {
 				T::AccountStore::insert(who, AccountData { free, .. Default::default() });
 			}

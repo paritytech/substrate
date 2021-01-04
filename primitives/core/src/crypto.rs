@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -502,6 +502,8 @@ ss58_address_format!(
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>
 		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
+	ValiuAccount =>
+		(35, "vln", "Valiu Liquidity Network mainnet, standard account (*25519).")
 	CentrifugeAccount =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
 	NodleAccount =>
@@ -1050,6 +1052,7 @@ impl From<KeyTypeId> for u32 {
 
 impl<'a> TryFrom<&'a str> for KeyTypeId {
 	type Error = ();
+
 	fn try_from(x: &'a str) -> Result<Self, ()> {
 		let b = x.as_bytes();
 		if b.len() != 4 {
