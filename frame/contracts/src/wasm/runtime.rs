@@ -448,7 +448,7 @@ where
 	/// It is safe to forgo benchmarking and charging weight relative to `len` for fixed
 	/// size types (basically everything not containing a heap collection):
 	/// Despite the fact that we are usually about to read the encoding of a fixed size
-	/// type, we cannot know the ecoded size of that type. We therefore are required to
+	/// type, we cannot know the encoded size of that type. We therefore are required to
 	/// use the length provided by the contract. This length is untrusted and therefore
 	/// we charge weight relative to the provided size upfront that covers the copy costs.
 	/// On success this cost is refunded as the copying was already covered in the
