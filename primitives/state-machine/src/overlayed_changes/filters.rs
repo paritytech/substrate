@@ -619,7 +619,6 @@ impl Filters {
 	}
 
 	/// allow iteration is only allowing interval definition.
-	/// TODO simple test case with limit condition
 	fn guard_read_allow_interval(
 		filters: &FilterTrees<bool>,
 		child_info: Option<&ChildInfo>,
@@ -635,37 +634,29 @@ impl Filters {
 		let mut start_interval = None;
 		while let Some((key, value)) = iter.next() {
 			// forbid write implies forbid read.
-			if value.write_prefix {
-				start_interval = Some(key);
-				break;
-			}
-			if value.read_only_prefix {
+			if value.write_prefix || value.read_only_prefix {
 				start_interval = Some(key);
 				break;
 			}
 		}
-		let mut last_prefix = if let Some(key) = start_interval {
+		if let Some(key) = start_interval {
 			if key_end.map(|end| end.starts_with(key)).unwrap_or(false) {
 				return true;
 			}
-			key.to_vec()
 		} else {
 			return false;
 		};
 		for (key, value) in iter.node_iter().iter().value_iter() {
-			if key_end.map(|end| key.as_slice() <= end).unwrap_or(true) {
-				if !key.starts_with(last_prefix.as_slice()) {
-					if value.write_prefix || value.read_only_prefix {
-						last_prefix = key;
-					} else {
-						return false;
-					}
+			if key_end.map(|end| end.starts_with(&key)).unwrap_or(false) {
+				if value.write_prefix || value.read_only_prefix {
+					return true;
 				}
-			} else {
+			}
+			if key_end.map(|end| key.as_slice() > end).unwrap_or(true) {
 				break;
 			}
 		}
-		true
+		false
 	}
 
 	//TODO factor with guard_read_alow
@@ -948,5 +939,60 @@ pub(super) mod failure {
 			}
 			false
 		}
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn test_guard_read_allow_interval() {
+		let mut filters1 = Filters::default();
+		filters1.allow_writes(AccessDeclaration {
+			prefixes_lock: vec![b"key".to_vec()],
+			keys_lock: vec![],
+		});
+		assert!(Filters::guard_read_allow_interval(
+			&filters1.filters_allow,
+			None,
+			&b"key"[..],
+			Some(&b"key8"[..]),
+		));
+		assert!(!Filters::guard_read_allow_interval(
+			&filters1.filters_allow,
+			None,
+			&b"key"[..],
+			Some(&b"kez"[..]),
+		));
+		assert!(!Filters::guard_read_allow_interval(
+			&filters1.filters_allow,
+			None,
+			&b"key"[..],
+			None,
+		));
+		//let mut filters1 = Filters::default();
+		filters1.allow_writes(AccessDeclaration {
+			prefixes_lock: vec![b"".to_vec()],
+			keys_lock: vec![],
+		});
+		assert!(Filters::guard_read_allow_interval(
+			&filters1.filters_allow,
+			None,
+			&b"a"[..],
+			Some(&b"kez"[..]),
+		));
+		assert!(Filters::guard_read_allow_interval(
+			&filters1.filters_allow,
+			None,
+			&b""[..],
+			None,
+		));
+		assert!(Filters::guard_read_allow_interval(
+			&filters1.filters_allow,
+			None,
+			&b"key"[..],
+			None,
+		));
 	}
 }
