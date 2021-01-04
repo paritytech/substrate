@@ -1,25 +1,26 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
 	HostFnWeights, Schedule, Config, CodeHash, BalanceOf, Error,
 	exec::{Ext, StorageKey, TopicOf},
-	gas::{Gas, GasMeter, Token, GasMeterResult},
+	gas::{Gas, GasMeter, Token, GasMeterResult, ChargedAmount},
 	wasm::env_def::ConvertibleToWasm,
 };
 use sp_sandbox;
@@ -27,7 +28,7 @@ use parity_wasm::elements::ValueType;
 use frame_system;
 use frame_support::dispatch::DispatchError;
 use sp_std::prelude::*;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeAll, Encode};
 use sp_runtime::traits::SaturatedConversion;
 use sp_core::crypto::UncheckedFrom;
 use sp_io::hashing::{
@@ -125,7 +126,7 @@ impl<T: Into<DispatchError>> From<T> for TrapReason {
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
-enum RuntimeToken {
+pub enum RuntimeToken {
 	/// Charge the gas meter with the cost of a metering block. The charged costs are
 	/// the supplied cost of the block plus the overhead of the metering itself.
 	MeteringBlock(u32),
@@ -197,6 +198,10 @@ enum RuntimeToken {
 	HashBlake256(u32),
 	/// Weight of calling `seal_hash_blake2_128` for the given input size.
 	HashBlake128(u32),
+	/// Weight charged by a chain extension through `seal_call_chain_extension`.
+	ChainExtension(u64),
+	/// Weight charged for copying data from the sandbox.
+	CopyIn(u32),
 }
 
 impl<T: Config> Token<T> for RuntimeToken
@@ -255,6 +260,8 @@ where
 				.saturating_add(s.hash_blake2_256_per_byte.saturating_mul(len.into())),
 			HashBlake128(len) => s.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
+			ChainExtension(amount) => amount,
+			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
 		}
 	}
 }
@@ -375,6 +382,14 @@ where
 		}
 	}
 
+	/// Get a mutable reference to the inner `Ext`.
+	///
+	/// This is mainly for the chain extension to have access to the environment the
+	/// contract is executing in.
+	pub fn ext(&mut self) -> &mut E {
+		self.ext
+	}
+
 	/// Store the reason for a host function triggered trap.
 	///
 	/// This is called by the `define_env` macro in order to store any error returned by
@@ -387,12 +402,12 @@ where
 	/// Charge the gas meter with the specified token.
 	///
 	/// Returns `Err(HostError)` if there is not enough gas.
-	fn charge_gas<Tok>(&mut self, token: Tok) -> Result<(), DispatchError>
+	pub fn charge_gas<Tok>(&mut self, token: Tok) -> Result<ChargedAmount, DispatchError>
 	where
 		Tok: Token<E::T, Metadata=HostFnWeights<E::T>>,
 	{
 		match self.gas_meter.charge(&self.schedule.host_fn_weights, token) {
-			GasMeterResult::Proceed => Ok(()),
+			GasMeterResult::Proceed(amount) => Ok(amount),
 			GasMeterResult::OutOfGas => Err(Error::<E::T>::OutOfGas.into())
 		}
 	}
@@ -402,7 +417,7 @@ where
 	/// Returns `Err` if one of the following conditions occurs:
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
-	fn read_sandbox_memory(&self, ptr: u32, len: u32)
+	pub fn read_sandbox_memory(&self, ptr: u32, len: u32)
 	-> Result<Vec<u8>, DispatchError>
 	{
 		let mut buf = vec![0u8; len as usize];
@@ -416,7 +431,7 @@ where
 	/// Returns `Err` if one of the following conditions occurs:
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
-	fn read_sandbox_memory_into_buf(&self, ptr: u32, buf: &mut [u8])
+	pub fn read_sandbox_memory_into_buf(&self, ptr: u32, buf: &mut [u8])
 	-> Result<(), DispatchError>
 	{
 		self.memory.get(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
@@ -428,20 +443,29 @@ where
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
 	/// - the buffer contents cannot be decoded as the required type.
-	fn read_sandbox_memory_as<D: Decode>(&self, ptr: u32, len: u32)
+	///
+	/// # Note
+	///
+	/// It is safe to forgo benchmarking and charging weight relative to `len` for fixed
+	/// size types (basically everything not containing a heap collection):
+	/// Despite the fact that we are usually about to read the encoding of a fixed size
+	/// type, we cannot know the encoded size of that type. We therefore are required to
+	/// use the length provided by the contract. This length is untrusted and therefore
+	/// we charge weight relative to the provided size upfront that covers the copy costs.
+	/// On success this cost is refunded as the copying was already covered in the
+	/// overall cost of the host function. This is different from `read_sandbox_memory`
+	/// where the size is dynamic and the costs resulting from that dynamic size must
+	/// be charged relative to this dynamic size anyways (before reading) by constructing
+	/// the benchmark for that.
+	pub fn read_sandbox_memory_as<D: Decode>(&mut self, ptr: u32, len: u32)
 	-> Result<D, DispatchError>
 	{
+		let amount = self.charge_gas(RuntimeToken::CopyIn(len))?;
 		let buf = self.read_sandbox_memory(ptr, len)?;
-		D::decode(&mut &buf[..]).map_err(|_| Error::<E::T>::DecodingFailed.into())
-	}
-
-	/// Write the given buffer to the designated location in the sandbox memory.
-	///
-	/// Returns `Err` if one of the following conditions occurs:
-	///
-	/// - designated area is not within the bounds of the sandbox memory.
-	fn write_sandbox_memory(&mut self, ptr: u32, buf: &[u8]) -> Result<(), DispatchError> {
-		self.memory.set(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
+		let decoded = D::decode_all(&mut &buf[..])
+			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
+		self.gas_meter.refund(amount);
+		Ok(decoded)
 	}
 
 	/// Write the given buffer and its length to the designated locations in sandbox memory and
@@ -463,7 +487,7 @@ where
 	///
 	/// In addition to the error conditions of `write_sandbox_memory` this functions returns
 	/// `Err` if the size of the buffer located at `out_ptr` is too small to fit `buf`.
-	fn write_sandbox_output(
+	pub fn write_sandbox_output(
 		&mut self,
 		out_ptr: u32,
 		out_len_ptr: u32,
@@ -493,6 +517,15 @@ where
 		.map_err(|_| Error::<E::T>::OutOfBounds)?;
 
 		Ok(())
+	}
+
+	/// Write the given buffer to the designated location in the sandbox memory.
+	///
+	/// Returns `Err` if one of the following conditions occurs:
+	///
+	/// - designated area is not within the bounds of the sandbox memory.
+	fn write_sandbox_memory(&mut self, ptr: u32, buf: &[u8]) -> Result<(), DispatchError> {
+		self.memory.set(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
 	}
 
 	/// Computes the given hash function on the supplied input.
@@ -890,6 +923,8 @@ define_env!(Env, <E: Ext>,
 	// # Traps
 	//
 	// - The contract is live i.e is already on the call stack.
+	// - Failed to send the balance to the beneficiary.
+	// - The deletion queue is full.
 	seal_terminate(
 		ctx,
 		beneficiary_ptr: u32,
@@ -1360,5 +1395,38 @@ define_env!(Env, <E: Ext>,
 	seal_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::HashBlake128(input_len))?;
 		Ok(ctx.compute_hash_on_intermediate_buffer(blake2_128, input_ptr, input_len, output_ptr)?)
+	},
+
+	// Call into the chain extension provided by the chain if any.
+	//
+	// Handling of the input values is up to the specific chain extension and so is the
+	// return value. The extension can decide to use the inputs as primitive inputs or as
+	// in/out arguments by interpreting them as pointers. Any caller of this function
+	// must therefore coordinate with the chain that it targets.
+	//
+	// # Note
+	//
+	// If no chain extension exists the contract will trap with the `NoChainExtension`
+	// module error.
+	seal_call_chain_extension(
+		ctx,
+		func_id: u32,
+		input_ptr: u32,
+		input_len: u32,
+		output_ptr: u32,
+		output_len_ptr: u32
+	) -> u32 => {
+		use crate::chain_extension::{ChainExtension, Environment, RetVal};
+		if <E::T as Config>::ChainExtension::enabled() == false {
+			Err(Error::<E::T>::NoChainExtension)?;
+		}
+		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
+		match <E::T as Config>::ChainExtension::call(func_id, env)? {
+			RetVal::Converging(val) => Ok(val),
+			RetVal::Diverging{flags, data} => Err(TrapReason::Return(ReturnData {
+				flags: flags.bits(),
+				data,
+			})),
+		}
 	},
 );
