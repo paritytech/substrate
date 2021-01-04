@@ -804,3 +804,8 @@ does_write_foo!(declarative_read_no_conflict, "test_declarative_read_no_conflict
 does_write_foo!(declarative_read_conflict, "test_declarative_read_conflict");
 does_write_foo!(declarative_read_conflict_2, "test_declarative_read_conflict_2");
 does_panic!(declarative_read_conflict_nested, "test_declarative_read_conflict_nested");
+does_write_foo!(optimistic_write_success, "test_optimistic_write_success");
+does_write_foo!(close_parent_transaction, "test_close_parent_transaction");
+does_write_foo!(close_parent_transaction_2, "test_close_parent_transaction_2");
+does_write_foo!(unclose_parent_transaction, "test_unclose_parent_transaction");
+does_panic!(unclose_child_transaction, "test_unclose_child_transaction");

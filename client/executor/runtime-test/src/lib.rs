@@ -454,6 +454,67 @@ sp_core::wasm_export_functions! {
 		}
 	}
 
+	fn test_optimistic_write_success() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
+		assert!(sp_io::storage::get(b"key").is_none());
+		if handle.join().is_some() {
+			if sp_io::storage::get(b"key") == Some(b"foo".to_vec()) {
+				sp_io::storage::set(b"foo", b"bar");
+			}
+		}
+	}
+
+	fn test_close_parent_transaction() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::start_transaction();
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		sp_io::storage::commit_transaction();
+		// even if no conflict we do not validate a result when transaction context is lower.
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_close_parent_transaction_2() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::start_transaction();
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		sp_io::storage::commit_transaction();
+		sp_io::storage::start_transaction();
+		// even if no conflict we do not validate a result when transaction context is lower.
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+		sp_io::storage::commit_transaction();
+	}
+	
+	fn test_unclose_parent_transaction() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::start_transaction();
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
+		sp_io::storage::start_transaction();
+		assert!(sp_io::storage::get(b"key").is_none());
+		// we allow to get content in a different transaction if it is a child of the starting
+		// transaciton.
+		if handle.join().is_some() {
+			if sp_io::storage::get(b"key") == Some(b"foo".to_vec()) {
+				sp_io::storage::set(b"foo", b"bar");
+			}
+		}
+		sp_io::storage::commit_transaction();
+		sp_io::storage::commit_transaction();
+	}
+
+	fn test_unclose_child_transaction() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::unclose_child_transaction, vec![], WorkerDeclaration::WriteOptimistic);
+		// unclose tx in child is a panic case as unclose tx in result, so we expect panic, code
+		// is hear to make it explicit join is called.
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
 }
 
 #[cfg(not(feature = "std"))]
@@ -482,6 +543,10 @@ mod tasks {
 
 	pub fn write_key(_data: Vec<u8>) -> Vec<u8> {
 		let _foo = sp_io::storage::set(b"key", b"foo");
+		Default::default()
+	}
+	pub fn unclose_child_transaction(_data: Vec<u8>) -> Vec<u8> {
+		sp_io::storage::start_transaction();
 		Default::default()
 	}
 
