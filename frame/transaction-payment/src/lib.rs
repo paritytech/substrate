@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -314,8 +314,6 @@ impl<T: Config> Module<T> where
 		len: u32,
 	) -> RuntimeDispatchInfo<BalanceOf<T>>
 	where
-		T: Send + Sync,
-		BalanceOf<T>: Send + Sync,
 		T::Call: Dispatchable<Info=DispatchInfo>,
 	{
 		// NOTE: we can actually make it understand `ChargeTransactionPayment`, but would be some
@@ -444,9 +442,9 @@ impl<T> Convert<Weight, BalanceOf<T>> for Module<T> where
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct ChargeTransactionPayment<T: Config + Send + Sync>(#[codec(compact)] BalanceOf<T>);
+pub struct ChargeTransactionPayment<T: Config>(#[codec(compact)] BalanceOf<T>);
 
-impl<T: Config + Send + Sync> ChargeTransactionPayment<T> where
+impl<T: Config> ChargeTransactionPayment<T> where
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 	BalanceOf<T>: Send + Sync + FixedPointOperand,
 {
@@ -494,7 +492,7 @@ impl<T: Config + Send + Sync> ChargeTransactionPayment<T> where
 	}
 }
 
-impl<T: Config + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
+impl<T: Config> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "ChargeTransactionPayment<{:?}>", self.0)
@@ -505,7 +503,7 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T>
 	}
 }
 
-impl<T: Config + Send + Sync> SignedExtension for ChargeTransactionPayment<T> where
+impl<T: Config> SignedExtension for ChargeTransactionPayment<T> where
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 {
@@ -662,6 +660,7 @@ mod tests {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 
 	parameter_types! {
