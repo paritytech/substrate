@@ -445,7 +445,7 @@ pub struct StateLog {
 	pub write_prefix: Vec<Vec<u8>>,
 	/// Worker did iterate over a given interval.
 	/// Interval is a pair of inclusive start and end key.
-	pub read_intervals: Vec<(Vec<u8>, Vec<u8>)>,
+	pub read_intervals: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 }
 
 impl StateLog {

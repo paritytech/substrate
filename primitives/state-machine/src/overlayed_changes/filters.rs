@@ -554,7 +554,7 @@ impl Filters {
 		filters: &'a FilterTrees<FilterOrigin>,
 		child_info: Option<&ChildInfo>,
 		key: &'a [u8],
-		key_end: &'a [u8],
+		key_end: Option<&'a [u8]>,
 	) -> Vec<&'a FilterOrigin> {
 		let mut blocked = Vec::new();
 		let filters = if let Some(filter) = filters.filter(child_info) {
@@ -575,7 +575,7 @@ impl Filters {
 			}
 		}
 		for (key, value) in iter.node_iter().iter().value_iter() {
-			if key.as_slice() <= key_end {
+			if key_end.map(|end| key.as_slice() <= end).unwrap_or(true) {
 				if value.read_only_prefix.is_defined() {
 					blocked.push(&value.read_only_prefix);
 				}
@@ -619,11 +619,12 @@ impl Filters {
 	}
 
 	/// allow iteration is only allowing interval definition.
+	/// TODO simple test case with limit condition
 	fn guard_read_allow_interval(
 		filters: &FilterTrees<bool>,
 		child_info: Option<&ChildInfo>,
 		key: &[u8],
-		key_end: &[u8],
+		key_end: Option<&[u8]>,
 	) -> bool {
 		let filters = if let Some(filter) = filters.filter(child_info) {
 			filter
@@ -644,7 +645,7 @@ impl Filters {
 			}
 		}
 		let mut last_prefix = if let Some(key) = start_interval {
-			if key_end.starts_with(key) {
+			if key_end.map(|end| end.starts_with(key)).unwrap_or(false) {
 				return true;
 			}
 			key.to_vec()
@@ -652,7 +653,7 @@ impl Filters {
 			return false;
 		};
 		for (key, value) in iter.node_iter().iter().value_iter() {
-			if key.as_slice() <= key_end {
+			if key_end.map(|end| key.as_slice() <= end).unwrap_or(true) {
 				if !key.starts_with(last_prefix.as_slice()) {
 					if value.write_prefix || value.read_only_prefix {
 						last_prefix = key;
@@ -743,7 +744,12 @@ impl Filters {
 		}
 	}
 
-	pub(super) fn guard_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
+	pub(super) fn guard_read_interval(
+		&self,
+		child_info: Option<&ChildInfo>,
+		key: &[u8],
+		key_end: Option<&[u8]>,
+	) {
 		let blocked = Self::key_read_forbid_interval(&self.filters_forbid, child_info, key, key_end);
 		for origin in blocked {
 			self.failure_handlers.invalid_accesses(origin);

@@ -824,12 +824,22 @@ impl OverlayedChanges {
 	/// Assert read worker access over a given interval.
 	/// Generally such assertion are done at overlay level, but this one needs to be exposed
 	/// as the result from the overlay can be a bigger interval than the one from the backend.
-	pub fn guard_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
+	pub fn guard_read_interval(
+		&self,
+		child_info: Option<&ChildInfo>,
+		key: &[u8],
+		key_end: Option<&[u8]>,
+	) {
 		self.filters.guard_read_interval(child_info, key, key_end)
 	}
 
 	/// Similar use as `guard_read_interval` but for optimistic worker.
-	pub fn log_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
+	pub fn log_read_interval(
+		&self,
+		child_info: Option<&ChildInfo>,
+		key: &[u8],
+		key_end: Option<&[u8]>,
+	) {
 		self.optimistic_logger.log_read_interval(child_info, key, key_end)
 	}
 

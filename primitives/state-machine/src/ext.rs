@@ -349,8 +349,8 @@ where
 				self.next_storage_key(&overlay_key.0[..])
 			},
 		};
-		self.overlay.guard_read_interval(None, key, res.as_ref().map(Vec::as_slice).unwrap_or(&[]));
-		self.overlay.log_read_interval(None, key, res.as_ref().map(Vec::as_slice).unwrap_or(&[]));
+		self.overlay.guard_read_interval(None, key, res.as_ref().map(Vec::as_slice));
+		self.overlay.log_read_interval(None, key, res.as_ref().map(Vec::as_slice));
 		res
 	}
 
@@ -379,8 +379,8 @@ where
 				)
 			},
 		};
-		self.overlay.guard_read_interval(Some(child_info), key, res.as_ref().map(Vec::as_slice).unwrap_or(&[]));
-		self.overlay.log_read_interval(Some(child_info), key, res.as_ref().map(Vec::as_slice).unwrap_or(&[]));
+		self.overlay.guard_read_interval(Some(child_info), key, res.as_ref().map(Vec::as_slice));
+		self.overlay.log_read_interval(Some(child_info), key, res.as_ref().map(Vec::as_slice));
 		res
 	}
 

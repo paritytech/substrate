@@ -809,3 +809,8 @@ does_write_foo!(close_parent_transaction, "test_close_parent_transaction");
 does_write_foo!(close_parent_transaction_2, "test_close_parent_transaction_2");
 does_write_foo!(unclose_parent_transaction, "test_unclose_parent_transaction");
 does_panic!(unclose_child_transaction, "test_unclose_child_transaction");
+does_write_foo!(read_write_conflict_1, "test_read_write_conflict_1");
+does_write_foo!(read_write_conflict_2, "test_read_write_conflict_2");
+does_write_foo!(read_write_conflict_3, "test_read_write_conflict_3");
+does_write_foo!(read_write_conflict_4, "test_read_write_conflict_4");
+does_write_foo!(read_write_conflict_5, "test_read_write_conflict_5");

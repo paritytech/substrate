@@ -515,6 +515,59 @@ sp_core::wasm_export_functions! {
 			sp_io::storage::set(b"foo", b"bar");
 		}
 	}
+
+	fn test_read_write_conflict_1() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		assert!(sp_io::storage::get(b"key").is_none());
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_read_write_conflict_2() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::set(b"aaaa", b"dummy");
+		sp_io::storage::set(b"z", b"dummy");
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		assert_eq!(sp_io::storage::next_key(b"aaaaaaaa"), Some(b"z".to_vec()));
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_read_write_conflict_3() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::set(b"k", b"dummy");
+		sp_io::storage::set(b"z", b"dummy");
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		assert_eq!(sp_io::storage::next_key(b"k"), Some(b"z".to_vec()));
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_read_write_conflict_4() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::set(b"k", b"dummy");
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		assert_eq!(sp_io::storage::next_key(b"k"), None);
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_read_write_conflict_5() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::set(b"k", b"dummy");
+//		sp_io::storage::set(b"z", b"dummy");
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		assert_eq!(sp_io::storage::next_key(b"key2"), None);
+//		assert_eq!(sp_io::storage::next_key(b"key2"), Some(b"z".to_vec()));
+		if handle.join().is_some() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
 }
 
 #[cfg(not(feature = "std"))]
@@ -545,6 +598,7 @@ mod tasks {
 		let _foo = sp_io::storage::set(b"key", b"foo");
 		Default::default()
 	}
+
 	pub fn unclose_child_transaction(_data: Vec<u8>) -> Vec<u8> {
 		sp_io::storage::start_transaction();
 		Default::default()

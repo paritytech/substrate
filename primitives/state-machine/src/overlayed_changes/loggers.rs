@@ -70,8 +70,8 @@ struct StateLogger {
 	parent_read_key: RefCell<Vec<Vec<u8>>>,
 	children_read_key: RefCell<Map<Vec<u8>, OriginLog>>,
 	// Intervals are inclusive for start and end.
-	parent_read_intervals: RefCell<Vec<(Vec<u8>, Vec<u8>)>>,
-	children_read_intervals: RefCell<Map<(Vec<u8>, Vec<u8>), OriginLog>>,
+	parent_read_intervals: RefCell<Vec<(Vec<u8>, Option<Vec<u8>>)>>,
+	children_read_intervals: RefCell<Map<(Vec<u8>, Option<Vec<u8>>), OriginLog>>,
 	parent_write_key: Vec<Vec<u8>>,
 	children_write_key: Map<Vec<u8>, OriginLog>,
 	// this is roughly clear prefix.
@@ -233,7 +233,7 @@ impl StateLogger {
 		}
 		// TODO this needs proper children_read_intervals structure.
 		for ((start, end), ids) in self.children_read_intervals.borrow().iter() {
-			if read_key >= start && read_key <= end {
+			if read_key >= start && end.as_ref().map(|end| read_key <= end).unwrap_or(true) {
 				if ids.contains(&marker) {
 					return false;
 				}
@@ -286,7 +286,10 @@ impl StateLogger {
 		}
 		// TODO this needs proper children_read_intervals structure.
 		for ((start, end), ids) in self.children_read_intervals.borrow().iter() {
-			if start.starts_with(prefix) || end.starts_with(prefix) || (start >= start && prefix <= end) {
+			if prefix.len() == 0
+				|| start.starts_with(prefix)
+				|| end.as_ref().map(|end| end.starts_with(prefix)).unwrap_or(false)
+				|| (start >= start && end.as_ref().map(|end| prefix <= end).unwrap_or(true)) {
 				if ids.contains(&marker) {
 					return false;
 				}
@@ -295,13 +298,16 @@ impl StateLogger {
 		true	
 	}
 
-
-	fn check_interval_against_write(&self, interval: &(Vec<u8>, Vec<u8>), marker: TaskId) -> bool {
+	fn check_interval_against_write(
+		&self,
+		interval: &(Vec<u8>, Option<Vec<u8>>),
+		marker: TaskId,
+	) -> bool {
 		// Could use a seek to start here, but this
 		// (check read access on write) is a marginal use case
 		// so not switching write_key to radix_tree at the time.
 		for (key, ids) in self.children_write_key.iter() {
-			if key > &interval.1 {
+			if interval.1.as_ref().map(|end| key > end).unwrap_or(false) {
 				break;
 			}
 			if key >= &interval.0 && ids.contains(&marker) {
@@ -319,7 +325,7 @@ impl StateLogger {
 		// (in fact since most of the time they are one step of iteration this is mandatory
 		// but could be do more when we register new read interval.
 		for (key, ids) in iter.node_iter().iter().value_iter() {
-			if key > interval.1 {
+			if interval.1.as_ref().map(|end| &key > end).unwrap_or(false) {
 				break;
 			}
 			// This is can do some check twice (all write prefix that are contained
@@ -466,14 +472,18 @@ impl AccessLogger {
 							self.log_read(None, key.as_slice());
 						}
 						for key in accesses.top_logger.read_intervals.iter() {
-							self.log_read_interval(None, key.0.as_slice(), key.1.as_slice());
+							self.log_read_interval(None, key.0.as_slice(), key.1.as_ref().map(|end| end.as_slice()));
 						}
 						for (storage_key, child_logger) in accesses.children_logger.iter() {
 							for key in child_logger.read_keys.iter() {
 								self.log_read_storage_key(Some(storage_key.as_slice()), key.as_slice());
 							}
 							for key in child_logger.read_intervals.iter() {
-								self.log_read_interval_storage_key(Some(storage_key.as_slice()), key.0.as_slice(), key.1.as_slice());
+								self.log_read_interval_storage_key(
+									Some(storage_key.as_slice()),
+									key.0.as_slice(),
+									key.1.as_ref().map(|end| end.as_slice()),
+								);
 							}
 						}
 					}
@@ -611,12 +621,21 @@ impl AccessLogger {
 		}
 	}
 
-//	fn guard_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
-	pub(super) fn log_read_interval(&self, child_info: Option<&ChildInfo>, key: &[u8], key_end: &[u8]) {
+	pub(super) fn log_read_interval(
+		&self,
+		child_info: Option<&ChildInfo>,
+		key: &[u8],
+		key_end: Option<&[u8]>,
+	) {
 		self.log_read_interval_storage_key(child_info.map(|child_info| child_info.storage_key()), key, key_end)
 	}
 
-	fn log_read_interval_storage_key(&self, storage_key: Option<&[u8]>, key: &[u8], key_end: &[u8]) {
+	fn log_read_interval_storage_key(
+		&self,
+		storage_key: Option<&[u8]>,
+		key: &[u8],
+		key_end: Option<&[u8]>,
+	) {
 		let mut ref_children;
 		if self.parent_log_read && !self.parent_read_all.get() {
 			let logger = if let Some(storage_key) = storage_key {
@@ -629,7 +648,7 @@ impl AccessLogger {
 				&self.top_logger
 			};
 			// TODO consider map
-			logger.parent_read_intervals.borrow_mut().push((key.to_vec(), key_end.to_vec()));
+			logger.parent_read_intervals.borrow_mut().push((key.to_vec(), key_end.map(|end| end.to_vec())));
 		}
 		if !self.log_read.is_empty() {
 			let children_read_all = self.children_read_all.borrow();
@@ -645,7 +664,7 @@ impl AccessLogger {
 					&self.top_logger
 				};
 				let children = self.log_read.difference(&children_read_all);
-				logger.children_read_intervals.borrow_mut().entry((key.to_vec(), key_end.to_vec()))
+				logger.children_read_intervals.borrow_mut().entry((key.to_vec(), key_end.map(|end| end.to_vec())))
 					.or_default().extend(children.cloned());
 			}
 		}
