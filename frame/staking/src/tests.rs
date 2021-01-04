@@ -4680,39 +4680,6 @@ fn offences_weight_calculated_correctly() {
 	});
 }
 
-// #[test]
-// fn on_initialize_weight_is_correct() {
-// 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-// 		assert_eq!(Validators::<Test>::iter().count(), 0);
-// 		assert_eq!(Nominators::<Test>::iter().count(), 0);
-// 		// When this pallet has nothing, we do 4 reads each block
-// 		let base_weight = <Test as frame_system::Config>::DbWeight::get().reads(4);
-// 		assert_eq!(base_weight, Staking::on_initialize(0));
-// 	});
-
-// 	ExtBuilder::default()
-// 	.offchain_election_ext()
-// 	.validator_count(4)
-// 	.has_stakers(false)
-// 	.build()
-// 	.execute_with(|| {
-// 		crate::tests::offchain_election::build_offchain_election_test_ext();
-// 		run_to_block(11);
-// 		Staking::on_finalize(System::block_number());
-// 		System::set_block_number((System::block_number() + 1).into());
-// 		Timestamp::set_timestamp(System::block_number() * 1000 + INIT_TIMESTAMP);
-// 		Session::on_initialize(System::block_number());
-
-// 		assert_eq!(Validators::<Test>::iter().count(), 4);
-// 		assert_eq!(Nominators::<Test>::iter().count(), 5);
-// 		// With 4 validators and 5 nominator, we should increase weight by:
-// 		// - (4 + 5) reads
-// 		// - 3 Writes
-// 		let final_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4 + 9, 3);
-// 		assert_eq!(final_weight, Staking::on_initialize(System::block_number()));
-// 	});
-// }
-
 #[test]
 fn payout_creates_controller() {
 	ExtBuilder::default()
@@ -4958,67 +4925,106 @@ fn cannot_bond_extra_to_lower_than_ed() {
 		})
 }
 
-// TODO: uncomment once https://github.com/paritytech/substrate/pull/7719 is merged.
-// mod election_provider {
-// 	use super::*;
+mod election_data_provider {
+	use super::*;
+	use sp_election_providers::ElectionDataProvider;
 
-// 	#[test]
-// 	fn estimate_next_election_works() {
-// 		ExtBuilder::default()
-// 			.session_per_era(5)
-// 			.session_length(5)
-// 			.build()
-// 			.execute_with(|| {
-// 				// TODO: prediction for the first session is incorrect. correct is 20 because of
-// 				// first session having zero length
-// 				assert_session_era!(0, 0);
-// 				assert_eq!(
-// 					Staking::next_election_prediction(System::block_number()),
-// 					25
-// 				);
+	#[test]
+	fn voters_include_self_vote() {
+		ExtBuilder::default()
+			.nominate(false)
+			.build()
+			.execute_with(|| {
+				assert!(<Validators<Test>>::iter()
+					.map(|(x, _)| x)
+					.all(|v| Staking::voters()
+						.into_iter()
+						.find(|(w, _, t)| { v == *w && t[0] == *w })
+						.is_some()))
+			})
+	}
 
-// 				run_to_block(4);
-// 				assert_session_era!(0, 0);
-// 				assert_eq!(
-// 					Staking::next_election_prediction(System::block_number()),
-// 					25
-// 				);
+	#[test]
+	fn voters_exclude_slashed() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+			assert_eq!(
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters()
+					.iter()
+					.find(|x| x.0 == 101)
+					.unwrap()
+					.2,
+				vec![11, 21]
+			);
 
-// 				run_to_block(19);
-// 				assert_session_era!(3, 0);
-// 				assert_eq!(
-// 					Staking::next_election_prediction(System::block_number()),
-// 					25
-// 				);
+			start_active_era(1);
+			add_slash(&11);
 
-// 				run_to_block(20);
-// 				assert_session_era!(4, 1);
-// 				assert_eq!(
-// 					Staking::next_election_prediction(System::block_number()),
-// 					45
-// 				);
+			// 11 is gone.
+			start_active_era(2);
+			assert_eq!(
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters()
+					.iter()
+					.find(|x| x.0 == 101)
+					.unwrap()
+					.2,
+				vec![21]
+			);
 
-// 				run_to_block(21);
-// 				assert_session_era!(4, 1);
-// 				assert_eq!(
-// 					Staking::next_election_prediction(System::block_number()),
-// 					45
-// 				);
+			// resubmit and it is back
+			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
+			assert_eq!(
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters()
+					.iter()
+					.find(|x| x.0 == 101)
+					.unwrap()
+					.2,
+				vec![11, 21]
+			);
+		})
+	}
 
-// 				run_to_block(25);
-// 				assert_eq!(System::block_number(), 25);
-// 				assert_session_era!(5, 1);
-// 				assert_eq!(
-// 					Staking::next_election_prediction(System::block_number()),
-// 					45
-// 				);
+	#[test]
+	fn estimate_next_election_works() {
+		ExtBuilder::default()
+			.session_per_era(5)
+			.period(5)
+			.build()
+			.execute_with(|| {
+				// first session is always length 0.
+				for b in 1..20 {
+					run_to_block(b);
+					assert_eq!(
+						Staking::next_election_prediction(System::block_number()),
+						20
+					);
+				}
 
-// 				run_to_block(32);
-// 				assert_session_era!(6, 1);
-// 				assert_eq!(
-// 					Staking::next_election_prediction(System::block_number()),
-// 					45
-// 				);
-// 			})
-// 	}
-// }
+				// election
+				run_to_block(20);
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					45
+				);
+				assert_eq!(staking_events().len(), 1);
+				assert_eq!(*staking_events().last().unwrap(), RawEvent::StakingElection);
+
+				for b in 21..45 {
+					run_to_block(b);
+					assert_eq!(
+						Staking::next_election_prediction(System::block_number()),
+						45
+					);
+				}
+
+				// election
+				run_to_block(45);
+				assert_eq!(
+					Staking::next_election_prediction(System::block_number()),
+					70
+				);
+				assert_eq!(staking_events().len(), 3);
+				assert_eq!(*staking_events().last().unwrap(), RawEvent::StakingElection);
+			})
+	}
+}

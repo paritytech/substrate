@@ -20,6 +20,7 @@ sp-npos-elections = { version = "2.0.0-rc6", default-features = false, path = ".
 
 [features]
 default = ["std"]
+runtime-benchmarks = []
 std = [
 	"codec/std",
 	"sp-std/std",

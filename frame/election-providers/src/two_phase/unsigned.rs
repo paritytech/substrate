@@ -98,8 +98,11 @@ where
 			voters: voters.len() as u32,
 			targets: targets.len() as u32,
 		};
-		let maximum_allowed_voters =
-			Self::maximum_compact_len::<T::WeightInfo>(desired_targets, witness, T::MinerMaxWeight::get());
+		let maximum_allowed_voters = Self::maximum_voter_for_weight::<T::WeightInfo>(
+			desired_targets,
+			witness,
+			T::MinerMaxWeight::get(),
+		);
 		let compact = Self::trim_compact(maximum_allowed_voters, compact, &voter_index)?;
 
 		// re-calc score.
@@ -191,7 +194,7 @@ where
 	/// Find the maximum `len` that a compact can have in order to fit into the block weight.
 	///
 	/// This only returns a value between zero and `size.nominators`.
-	pub fn maximum_compact_len<W: WeightInfo>(
+	pub fn maximum_voter_for_weight<W: WeightInfo>(
 		desired_winners: u32,
 		witness: WitnessData,
 		max_weight: Weight,
@@ -403,152 +406,211 @@ fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
 	InvalidTransaction::Custom(error_number)
 }
 
-// #[cfg(test)]
-// mod test {
-// 	#![allow(unused_variables)]
-// 	use super::*;
-// 	use crate::ElectionSize;
+#[cfg(test)]
+mod max_weight {
+	#![allow(unused_variables)]
+	use super::*;
+	use mock::*;
 
-// 	struct Staking;
+	struct TestWeight;
+	impl crate::two_phase::weights::WeightInfo for TestWeight {
+		fn on_initialize_nothing() -> Weight {
+			unreachable!()
+		}
+		fn on_initialize_open_signed() -> Weight {
+			unreachable!()
+		}
+		fn on_initialize_open_unsigned() -> Weight {
+			unreachable!()
+		}
+		fn finalize_signed_phase_accept_solution() -> Weight {
+			unreachable!()
+		}
+		fn finalize_signed_phase_reject_solution() -> Weight {
+			unreachable!()
+		}
+		fn submit(c: u32) -> Weight {
+			unreachable!()
+		}
+		fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
+			(0 * v + 0 * t + 1000 * a + 0 * d) as Weight
+		}
+		fn feasibility_check(v: u32, _t: u32, a: u32, d: u32) -> Weight {
+			unreachable!()
+		}
+	}
 
-// 	impl crate::WeightInfo for Staking {
-// 		fn bond() -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn bond_extra() -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn unbond() -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn withdraw_unbonded_update(s: u32) -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn withdraw_unbonded_kill(s: u32) -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn validate() -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn nominate(n: u32) -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn chill() -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn set_payee() -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn set_controller() -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn set_validator_count() -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn force_no_eras() -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn force_new_era() -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn force_new_era_always() -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn set_invulnerables(v: u32) -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn force_unstake(s: u32) -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn cancel_deferred_slash(s: u32) -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn payout_stakers_dead_controller(n: u32) -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn payout_stakers_alive_staked(n: u32) -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn rebond(l: u32) -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn set_history_depth(e: u32) -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn reap_stash(s: u32) -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn new_era(v: u32, n: u32) -> Weight {
-// 			unimplemented!()
-// 		}
-// 		fn submit_solution_better(v: u32, n: u32, a: u32, w: u32) -> Weight {
-// 			(0 * v + 0 * n + 1000 * a + 0 * w) as Weight
-// 		}
-// 	}
+	#[test]
+	fn find_max_voter_binary_search_works() {
+		let w = WitnessData {
+			voters: 10,
+			targets: 0,
+		};
 
-// 	#[test]
-// 	fn find_max_voter_binary_search_works() {
-// 		let size = ElectionSize {
-// 			validators: 0,
-// 			nominators: 10,
-// 		};
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 999),
+			0
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1000),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1001),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1990),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1999),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2000),
+			2
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2001),
+			2
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010),
+			2
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2990),
+			2
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2999),
+			2
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3000),
+			3
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333),
+			3
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 5500),
+			5
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 7777),
+			7
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 9999),
+			9
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 10_000),
+			10
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 10_999),
+			10
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 11_000),
+			10
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 22_000),
+			10
+		);
 
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 0), 0);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1), 0);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 999), 0);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1000), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1001), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1990), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1999), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2000), 2);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2001), 2);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2010), 2);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2990), 2);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2999), 2);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 3000), 3);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 3333), 3);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 5500), 5);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 7777), 7);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 9999), 9);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 10_000), 10);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 10_999), 10);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 11_000), 10);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 22_000), 10);
+		let w = WitnessData {
+			voters: 1,
+			targets: 0,
+		};
 
-// 		let size = ElectionSize {
-// 			validators: 0,
-// 			nominators: 1,
-// 		};
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 999),
+			0
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1000),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1001),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1990),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1999),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2000),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2001),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333),
+			1
+		);
 
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 0), 0);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1), 0);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 999), 0);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1000), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1001), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1990), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1999), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2000), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2001), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2010), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 3333), 1);
+		let w = WitnessData {
+			voters: 2,
+			targets: 0,
+		};
 
-// 		let size = ElectionSize {
-// 			validators: 0,
-// 			nominators: 2,
-// 		};
-
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 0), 0);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1), 0);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 999), 0);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1000), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1001), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1999), 1);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2000), 2);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2001), 2);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2010), 2);
-// 		assert_eq!(maximum_compact_len::<Staking>(0, size, 3333), 2);
-// 	}
-// }
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 999),
+			0
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1000),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1001),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1999),
+			1
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2000),
+			2
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2001),
+			2
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010),
+			2
+		);
+		assert_eq!(
+			TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333),
+			2
+		);
+	}
+}
 
 #[cfg(test)]
 mod tests {

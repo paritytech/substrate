@@ -769,7 +769,7 @@ pub(crate) fn add_slash(who: &AccountId) {
 	on_offence_now(
 		&[
 			OffenceDetails {
-				offender: (who.clone(), Staking::eras_stakers(Staking::active_era().unwrap().index, who.clone())),
+				offender: (who.clone(), Staking::eras_stakers(active_era(), who.clone())),
 				reporters: vec![],
 			},
 		],

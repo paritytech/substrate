@@ -683,8 +683,6 @@ pub trait SessionInterface<AccountId>: frame_system::Config {
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: SessionIndex);
-	/// The current session index.
-	fn current_index() -> SessionIndex;
 }
 
 impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T
@@ -707,10 +705,6 @@ where
 
 	fn validators() -> Vec<<T as frame_system::Config>::AccountId> {
 		<pallet_session::Module<T>>::validators()
-	}
-
-	fn current_index() -> SessionIndex {
-		<pallet_session::Module<T>>::current_index()
 	}
 
 	fn prune_historical_up_to(up_to: SessionIndex) {
@@ -944,6 +938,12 @@ decl_storage! {
 
 		/// The earliest era for which we have a pending, unapplied slash.
 		EarliestUnappliedSlash: Option<EraIndex>;
+
+		/// The last planned session scheduled by the session pallet.
+		///
+		/// This is basically in sync with the call to [`SessionManager::new_session`].
+		/// TODO: needs care to set the initial value upon migration.
+		pub CurrentPlannedSession get(fn current_planned_session): SessionIndex;
 
 		// TODO: removed storage items:
 		// IsCurrentSessionFinal
@@ -2255,10 +2255,16 @@ impl<T: Config> Module<T> {
 	///
 	/// This will also process the election, as noted in [`process_election`].
 	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
-		// TODO: Worthy to denote how exactly the accuracy is playing a role here. We could at this
-		// point remove this generic as well, maybe it will also simplify some other stuff.
 		T::ElectionProvider::elect()
-			.map_err(|_| ())
+			.map_err(|err| {
+				log!(
+					error,
+					"enacting new validator set at the end of era {} failed due to {:?}",
+					current_era,
+					err,
+				);
+				()
+			})
 			.and_then(|flat_supports| Self::process_election(flat_supports, current_era))
 			.ok()
 	}
@@ -2426,33 +2432,80 @@ impl<T: Config> ElectionDataProvider<T::AccountId, T::BlockNumber> for Module<T>
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
 		let current_era = Self::current_era().unwrap_or(0);
-		// Note: this happens after the on_initialize of the session module, therefore, this is the
-		// updated session index in the border cases.
-		let session_index = T::SessionInterface::current_index();
+		let current_session = Self::current_planned_session();
 		let current_era_start_session_index =
 			Self::eras_start_session_index(current_era).unwrap_or(0);
-		let era_length = session_index
+		let era_length = current_session
 			.saturating_sub(current_era_start_session_index)
 			.min(T::SessionsPerEra::get());
-		// TODO: this is probably an ugly hack here and can be re-done.
-		// TODO: cases to consider: session length = 1, session length > 1,
-		let session_length = T::NextNewSession::estimate_next_new_session(1u32.into())
-			.unwrap_or(0u32.into())
-			.max(1u32.into());
 
-		let this_session_end = T::NextNewSession::estimate_next_new_session(now)
-			.unwrap_or_default();
+		let session_length = T::NextNewSession::average_session_length();
+
+		// TODO: consider removing the `now` here, does not serve much.
+		let until_this_session_end = T::NextNewSession::estimate_next_new_session(now)
+			.unwrap_or_default()
+			.saturating_sub(now);
+
 		let sessions_left: T::BlockNumber = T::SessionsPerEra::get()
 			.saturating_sub(era_length)
-			.saturating_sub(1) // one session is computed in this_session_end.
+			// one session is computed in this_session_end.
+			.saturating_sub(1)
 			.into();
 
-		this_session_end.saturating_add(sessions_left.saturating_mul(session_length))
+		now.saturating_add(
+			until_this_session_end.saturating_add(sessions_left.saturating_mul(session_length)),
+		)
 	}
 
-	fn feasibility_check_assignment<P: PerThing>(_: &Assignment<T::AccountId, P>) -> Result<(), &'static str> {
-		// TODO
-		Ok(())
+	fn feasibility_check_assignment<P: PerThing>(
+		assignment: &Assignment<T::AccountId, P>,
+	) -> Result<(), &'static str> {
+		if let Some(nomination) = Self::nominators(&assignment.who) {
+			if assignment.distribution.iter().all(|(t, _)| {
+				Self::slashing_spans(t).map_or(true, |spans| {
+					nomination.submitted_in >= spans.last_nonzero_slash()
+				})
+			}) {
+				Ok(())
+			} else {
+				Err("Slashed distribution.")
+			}
+		} else if <Validators<T>>::contains_key(&assignment.who) {
+			// validators can self-vote in any case if they want to. NOTE: self vote itself is
+			// checked by the election provider module, because we inject the self vote.
+			Ok(())
+		} else {
+			sp_std::if_std! {
+				dbg!(assignment);
+			}
+			Err("Unknown assignment")
+		}
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn put_npos_snapshot(
+		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+		targets: Vec<T::AccountId>,
+	) {
+		targets.into_iter().for_each(|v| {
+			<Validators<T>>::insert(
+				v,
+				ValidatorPrefs {
+					commission: Perbill::zero(),
+				},
+			);
+		});
+
+		voters.into_iter().for_each(|(v, _s, t)| {
+			<Nominators<T>>::insert(
+				v,
+				Nominations {
+					targets: t,
+					submitted_in: 0,
+					suppressed: false,
+				},
+			);
+		});
 	}
 }
 
@@ -2469,6 +2522,7 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 			<frame_system::Module<T>>::block_number(),
 			new_index
 		);
+		CurrentPlannedSession::put(new_index);
 		Self::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex) {

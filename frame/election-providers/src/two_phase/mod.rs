@@ -186,6 +186,9 @@ pub(crate) mod macros;
 
 pub mod signed;
 pub mod unsigned;
+pub mod weights;
+
+use weights::WeightInfo;
 
 /// The compact solution type used by this crate.
 pub type CompactOf<T> = <T as Config>::CompactSolution;
@@ -441,49 +444,13 @@ pub enum FeasibilityError {
 	InvalidWinner,
 	/// The given score was invalid.
 	InvalidScore,
+	/// An error from the data provider's feasibility check
+	DataProvider(&'static str),
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
 	fn from(e: sp_npos_elections::Error) -> Self {
 		FeasibilityError::NposElection(e)
-	}
-}
-
-pub trait WeightInfo {
-	fn on_initialize_nothing() -> Weight;
-	fn on_initialize_open_signed_phase() -> Weight;
-	fn finalize_signed_phase_accept_solution() -> Weight;
-	fn finalize_signed_phase_reject_solution() -> Weight;
-	fn create_snapshot() -> Weight;
-	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight;
-	fn submit(c: u32) -> Weight;
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn feasibility_check(_: u32, _: u32, _: u32, _: u32) -> Weight {
-		Default::default()
-	}
-	fn submit(_: u32) -> Weight {
-		Default::default()
-	}
-	fn submit_unsigned(_: u32, _: u32, _: u32, _: u32) -> Weight {
-		Default::default()
-	}
-	fn on_initialize_nothing() -> Weight {
-		Default::default()
-	}
-	fn on_initialize_open_signed_phase() -> Weight {
-		Default::default()
-	}
-	fn create_snapshot() -> Weight {
-		Default::default()
-	}
-	fn finalize_signed_phase_accept_solution() -> Weight {
-		Default::default()
-	}
-	fn finalize_signed_phase_reject_solution() -> Weight {
-		Default::default()
 	}
 }
 
@@ -648,41 +615,20 @@ decl_module! {
 
 			let remaining = next_election - now;
 			let current_phase = Self::current_phase();
+
 			match current_phase {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
-					<CurrentPhase<T>>::put(Phase::Signed);
-					Self::create_snapshot();
-
-					Self::deposit_event(RawEvent::SignedPhaseStarted(Self::round()));
+					Self::on_initialize_open_signed();
 					log!(info, "Starting signed phase at #{:?} , round {}.", now, Self::round());
-
-					T::WeightInfo::on_initialize_open_signed_phase()
+					T::WeightInfo::on_initialize_open_signed()
 				},
 				Phase::Signed | Phase::Off if remaining <= unsigned_deadline && remaining > 0u32.into() => {
-					let mut consumed_weight: Weight = 0;
-					if current_phase == Phase::Off {
-						// if not being followed by a signed phase, then create the snapshots.
-						debug_assert!(Self::snapshot().is_none());
-						Self::create_snapshot();
-						consumed_weight = consumed_weight.saturating_add(T::WeightInfo::create_snapshot());
-					} else {
-						// if followed by a signed phase, then finalize the signed stuff.
-						debug_assert!(Self::signed_submissions().is_empty());
-					}
-
-					// noop if no signed phase has been open
-					let (_, weight) = Self::finalize_signed_phase();
-					consumed_weight = consumed_weight.saturating_add(weight);
-
-					// for now always start the unsigned phase.
-					<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
-					Self::deposit_event(RawEvent::UnsignedPhaseStarted(Self::round()));
-
+					let additional = Self::on_initialize_open_unsigned(current_phase, now);
 					log!(info, "Starting unsigned phase at #{:?}.", now);
-					consumed_weight
+					T::WeightInfo::on_initialize_open_signed().saturating_add(additional)
 				},
 				_ => {
-					Zero::zero()
+					T::WeightInfo::on_initialize_nothing()
 				}
 			}
 		}
@@ -802,6 +748,43 @@ where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
+	/// Logic for [`Module::on_initialize`] when signed phase is being opened.
+	///
+	/// This is decoupled for easy weight calculation.
+	pub fn on_initialize_open_signed() {
+		<CurrentPhase<T>>::put(Phase::Signed);
+		Self::create_snapshot();
+		Self::deposit_event(RawEvent::SignedPhaseStarted(Self::round()));
+	}
+
+	/// Logic for [`Module::on_initialize`] when unsigned phase is being opened.
+	///
+	/// This is decoupled for easy weight calculation. Note that the default weight benchmark of
+	/// this function will assume an empty signed queue for `finalize_signed_phase`.
+	pub fn on_initialize_open_unsigned(
+		current_phase: Phase<T::BlockNumber>,
+		now: T::BlockNumber,
+	) -> Weight {
+		if current_phase == Phase::Off {
+			// if not being followed by a signed phase, then create the snapshots.
+			debug_assert!(Self::snapshot().is_none());
+			Self::create_snapshot();
+		} else {
+			// if followed by a signed phase, then finalize the signed stuff.
+			debug_assert!(Self::signed_submissions().is_empty());
+		}
+
+		// noop if no signed phase has been open. NOTE: benchmarks assume this is noop, we return
+		//additional weight manually.
+		let (_, additional_weight) = Self::finalize_signed_phase();
+
+		// for now always start the unsigned phase.
+		<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
+		Self::deposit_event(RawEvent::UnsignedPhaseStarted(Self::round()));
+
+		additional_weight
+	}
+
 	/// Creates the snapshot. Writes new data to:
 	///
 	/// 1. [`SnapshotMetadata`]
@@ -890,39 +873,32 @@ where
 			.map(|i| target_at(i).ok_or(FeasibilityError::InvalidWinner))
 			.collect::<Result<Vec<T::AccountId>, FeasibilityError>>()?;
 
-		// Then convert compact -> Assignment.
+		// Then convert compact -> Assignment. This will fail if any of the indices are gibberish.
 		let assignments = compact
 			.into_assignment(voter_at, target_at)
 			.map_err::<FeasibilityError, _>(Into::into)?;
 
-		// Ensure that assignments is correct. We perform two checks: 1. local match against the
-		// given snapshot, and check with the `ElectionDataProvider`.
+		// Ensure that assignments is correct.
 		let _ = assignments
 			.iter()
 			.map(|ref assignment| {
-				// TODO: better to rewrite this more with ?
-				snapshot_voters
+				// check that assignment.who is actually a voter.
+				let (_voter, _stake, targets) = snapshot_voters
 					.iter()
 					.find(|(v, _, _)| v == &assignment.who)
-					.map_or(
-						Err(FeasibilityError::InvalidVoter),
-						|(_voter, _stake, targets)| {
-							if assignment
-								.distribution
-								.iter()
-								.map(|(d, _)| d)
-								.all(|d| targets.contains(d))
-								&& T::DataProvider::feasibility_check_assignment::<
-									CompactAccuracyOf<T>,
-								>(assignment)
-								.is_ok()
-							{
-								Ok(())
-							} else {
-								Err(FeasibilityError::InvalidVote)
-							}
-						},
-					)
+					.ok_or(FeasibilityError::InvalidVoter)?;
+				// check that all of the targets are valid based on the snapshot.
+				if !assignment
+					.distribution
+					.iter()
+					.all(|(d, _)| targets.contains(d))
+				{
+					return Err(FeasibilityError::InvalidVote);
+				}
+				// check the feasibility based on the data provider
+				T::DataProvider::feasibility_check_assignment::<CompactAccuracyOf<T>>(assignment)
+					.map_err(|r| FeasibilityError::DataProvider(r))?;
+				Ok(())
 			})
 			.collect::<Result<(), FeasibilityError>>()?;
 

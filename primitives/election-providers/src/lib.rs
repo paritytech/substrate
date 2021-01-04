@@ -191,8 +191,8 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// This might be called by the [`ElectionProvider`] upon processing election solutions.
 	///
 	/// Note that each this must only contain checks that the [`ElectionProvider`] cannot know
-	/// about. Basics checks that can be known from [`Self::voters`] and [`Self::targets`] should
-	/// typically be done by [`ElectionProvider`].
+	/// about. Basics checks that can be known from [`Self::npos_voters`] and [`Self::npos_targets`]
+	/// should typically be done by [`ElectionProvider`].
 	///
 	/// For example, if a pallet contains some *private* knowledge that could potentially invalidate
 	/// an `assignment`, it should be checked here, as [`ElectionProvider`] has no way of knowing
@@ -208,6 +208,15 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// This is only useful for stateful election providers.
 	fn next_election_prediction(now: BlockNumber) -> BlockNumber;
+
+	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
+	/// else a noop.
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn put_npos_snapshot(
+		_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+		_targets: Vec<AccountId>,
+	) {
+	}
 }
 
 /// Something that can compute the result of an election and pass it back to the caller.
@@ -217,7 +226,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 /// implemented of this trait through [`ElectionProvider::DataProvider`].
 pub trait ElectionProvider<AccountId, BlockNumber> {
 	/// The error type that is returned by the provider.
-	type Error;
+	type Error: sp_std::fmt::Debug;
 
 	/// The data provider of the election.
 	type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;

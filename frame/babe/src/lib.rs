@@ -695,6 +695,10 @@ impl<T: Config> OnTimestampSet<T::Moment> for Module<T> {
 }
 
 impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
+	fn average_session_length() -> T::BlockNumber {
+		T::EpochDuration::get().saturated_into()
+	}
+
 	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		Self::next_expected_epoch_change(now)
 	}

@@ -34,8 +34,6 @@ const SEED: u32 = 0;
 /// Creates a **valid** solution with exactly the given size.
 ///
 /// The snapshot is also created internally.
-///
-/// The snapshot size must be bigger, otherwise this will panic.
 fn solution_with_size<T: Config>(
 	witness: WitnessData,
 	active_voters_count: u32,
@@ -117,6 +115,7 @@ where
 		voters: all_voters.clone(),
 		targets: targets.clone(),
 	});
+	T::DataProvider::put_npos_snapshot(all_voters.clone(), targets.clone());
 
 	let stake_of = crate::stake_of_fn!(all_voters, T::AccountId);
 	let voter_index = crate::voter_index_fn!(all_voters, T::AccountId, T);
@@ -165,54 +164,63 @@ benchmarks! {
 		assert!(<TwoPhase<T>>::current_phase().is_off());
 	}
 
-	on_initialize_open_signed_phase {
+	on_initialize_open_signed {
 		// NOTE: this benchmark currently doesn't have any components because the length of a db
 		// read/write is not captured. Otherwise, it is quite influenced by how much data
 		// `T::ElectionDataProvider` is reading and passing on.
 		assert!(<TwoPhase<T>>::snapshot().is_none());
 		assert!(<TwoPhase<T>>::current_phase().is_off());
-		let next_election = T::DataProvider::next_election_prediction(1u32.into());
-
-		let signed_deadline = T::SignedPhase::get() + T::UnsignedPhase::get();
-		let unsigned_deadline = T::UnsignedPhase::get();
 	}: {
-		<TwoPhase<T>>::on_initialize(next_election - signed_deadline + 1u32.into());
+		<TwoPhase<T>>::on_initialize_open_signed();
 	} verify {
 		assert!(<TwoPhase<T>>::snapshot().is_some());
 		assert!(<TwoPhase<T>>::current_phase().is_signed());
 	}
 
+	on_initialize_open_unsigned {
+		assert!(<TwoPhase<T>>::snapshot().is_none());
+		assert!(<TwoPhase<T>>::current_phase().is_off());
+	}: {
+		<TwoPhase<T>>::on_initialize_open_unsigned(Phase::Off, 1u32.into());
+	} verify {
+		assert!(<TwoPhase<T>>::snapshot().is_some());
+		assert!(<TwoPhase<T>>::current_phase().is_unsigned());
+	}
+
 	finalize_signed_phase_accept_solution {
 		let receiver = account("receiver", 0, SEED);
-		T::Currency::make_free_balance_be(&receiver, 100u32.into());
+		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
+		T::Currency::make_free_balance_be(&receiver, initial_balance);
 		let ready: ReadySolution<T::AccountId> = Default::default();
 		let deposit: BalanceOf<T> = 10u32.into();
 		let reward: BalanceOf<T> = 20u32.into();
 
 		assert_ok!(T::Currency::reserve(&receiver, deposit));
-		assert_eq!(T::Currency::free_balance(&receiver), 90u32.into());
+		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
 	}: {
 		<TwoPhase<T>>::finalize_signed_phase_accept_solution(ready, &receiver, deposit, reward)
 	} verify {
-		assert_eq!(T::Currency::free_balance(&receiver), 120u32.into());
+		assert_eq!(T::Currency::free_balance(&receiver), initial_balance + 20u32.into());
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
 	}
 
 	finalize_signed_phase_reject_solution {
 		let receiver = account("receiver", 0, SEED);
+		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
 		let deposit: BalanceOf<T> = 10u32.into();
-		T::Currency::make_free_balance_be(&receiver, 100u32.into());
+		T::Currency::make_free_balance_be(&receiver, initial_balance);
 		assert_ok!(T::Currency::reserve(&receiver, deposit));
 
-		assert_eq!(T::Currency::free_balance(&receiver), 90u32.into());
+		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
 		assert_eq!(T::Currency::reserved_balance(&receiver), 10u32.into());
 	}: {
 		<TwoPhase<T>>::finalize_signed_phase_reject_solution(&receiver, deposit)
 	} verify {
-		assert_eq!(T::Currency::free_balance(&receiver), 90u32.into());
+		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
 	}
 
+	#[extra]
 	create_snapshot {
 		assert!(<TwoPhase<T>>::snapshot().is_none());
 	}: {
@@ -311,7 +319,11 @@ mod test {
 		});
 
 		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(test_benchmark_on_initialize_open_signed_phase::<Runtime>());
+			assert_ok!(test_benchmark_on_initialize_open_signed::<Runtime>());
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_on_initialize_open_unsigned::<Runtime>());
 		});
 
 		ExtBuilder::default().build_and_execute(|| {
