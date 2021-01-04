@@ -194,7 +194,7 @@ where F: Clone + Send + 'static, L: Clone + Send +'static, U: Clone + Send + 'st
 		match self.runtime.block_on(interval) {
 			Ok(()) => unreachable!("interval always fails; qed"),
 			Err(ref err) if err.is_inner() => (),
-			Err(_) => { log::error!("Waited for too long"); panic!("Waited for too long"); },
+			Err(_) => panic!("Waited for too long"),
 		}
 	}
 }
