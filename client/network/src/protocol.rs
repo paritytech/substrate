@@ -1729,9 +1729,9 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						);
 						CustomMessageOutcome::SyncDisconnected(peer_id)
 					} else {
-						log::error!(
+						log::debug!(
 							target: "sync",
-							"State mismatch: disconnected peer wasn't connected {}",
+							"Disconnected peer which had earlier been refused by on_sync_peer_connected {}",
 							peer_id
 						);
 						CustomMessageOutcome::None
