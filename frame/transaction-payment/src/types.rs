@@ -78,7 +78,7 @@ impl<Balance: AtLeast32BitUnsigned + Copy> FeeDetails<Balance> {
 	/// final_fee = inclusion_fee + tip;
 	/// ```
 	pub fn final_fee(&self) -> Balance {
-		self.inclusion_fee.as_ref().map(|i|i.total()).unwrap_or_else(||Zero::zero()).saturating_add(self.tip)
+		self.inclusion_fee.as_ref().map(|i| i.total()).unwrap_or_else(|| Zero::zero()).saturating_add(self.tip)
 	}
 }
 
