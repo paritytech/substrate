@@ -25,7 +25,10 @@ use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionMan
 use rpc::{Result as RpcResult, futures::{stream, Future, Sink, Stream, future::result}};
 
 use sc_rpc_api::state::ReadProof;
-use sp_blockchain::{Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata, HeaderBackend};
+use sp_blockchain::{
+	Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata,
+	HeaderBackend
+};
 use sp_core::{
 	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet,
 	ChildInfo, ChildType, PrefixedStorageKey},
@@ -39,7 +42,10 @@ use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
 use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error, Result}, client_err};
 use std::marker::PhantomData;
-use sc_client_api::{Backend, BlockBackend, BlockchainEvents, CallExecutor, StorageProvider, ExecutorProvider, ProofProvider};
+use sc_client_api::{
+	Backend, BlockBackend, BlockchainEvents, CallExecutor, StorageProvider, ExecutorProvider,
+	ProofProvider
+};
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {

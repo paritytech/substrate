@@ -184,10 +184,10 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	where
 		Block: BlockT + 'static,
 		BE: Backend<Block> + 'static,
-		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
-			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block> + BlockBackend<Block>
-			+ CallApiAt<Block, Error = sp_blockchain::Error>
-			+ ProvideRuntimeApi<Block> + Send + Sync + 'static,
+		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block>
+			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
+			+ CallApiAt<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
+			+ BlockBackend<Block> + ProvideRuntimeApi<Block> + Send + Sync + 'static,
 		Client::Api: Metadata<Block, Error = sp_blockchain::Error>,
 {
 	let child_backend = Box::new(
