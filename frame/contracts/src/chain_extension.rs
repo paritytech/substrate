@@ -326,9 +326,9 @@ where
 	///
 	/// If the contract supplied buffer is smaller than the passed `buffer` an `Err` is returned.
 	/// If `allow_skip` is set to true the contract is allowed to skip the copying of the buffer
-	/// by supplying the guard value of [`u32::max_value()`] as `input_len_ptr`. The
-	/// `weight_per_byte` is charged per actually copied byte meaning
-	/// `min(buffer.len, *input_len_ptr)`.
+	/// by supplying the guard value of [`u32::max_value()`] as `out_ptr`. The
+	/// `weight_per_byte` is only charged when the write actually happens and is not skipped or
+	/// failed due to a too small output buffer.
 	pub fn write(
 		&mut self,
 		buffer: &[u8],
