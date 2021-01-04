@@ -36,7 +36,7 @@ use sp_std::prelude::*;
 /// change has been made (`difference = 0`).
 ///
 /// In almost all cases, a balanced solution will have a better score than an unbalanced solution,
-/// yet this is not 100% guaranteed because the first element of a [`ElectionScore`] does not
+/// yet this is not 100% guaranteed because the first element of a [`crate::ElectionScore`] does not
 /// directly related to balancing.
 ///
 /// Note that some reference implementation adopt an approach in which voters are balanced randomly

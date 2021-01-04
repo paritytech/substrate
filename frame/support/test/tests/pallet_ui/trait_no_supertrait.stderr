@@ -1,0 +1,5 @@
+error: Invalid pallet::trait, expected explicit `frame_system::Config` as supertrait, found none. (try `pub trait Config: frame_system::Config { ...` or `pub trait Config<I: 'static>: frame_system::Config { ...`). To disable this check, use `#[pallet::disable_frame_system_supertrait_check]`
+ --> $DIR/trait_no_supertrait.rs:7:2
+  |
+7 |     pub trait Config {
+  |     ^^^

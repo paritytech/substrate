@@ -118,7 +118,8 @@ impl Externalities for AsyncExternalities {
 	fn kill_child_storage(
 		&mut self,
 		_child_info: &ChildInfo,
-	) {
+		_limit: Option<u32>,
+	) -> bool {
 		panic!("`kill_child_storage`: should not be used in async externalities!")
 	}
 
@@ -141,8 +142,6 @@ impl Externalities for AsyncExternalities {
 	) {
 		panic!("`storage_append`: should not be used in async externalities!")
 	}
-
-	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> Vec<u8> {
 		panic!("`storage_root`: should not be used in async externalities!")
