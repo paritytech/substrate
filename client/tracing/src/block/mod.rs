@@ -17,48 +17,49 @@
 //! Utilities for tracing block execution
 
 use std::sync::Arc;
+
 use parking_lot::Mutex;
 use tracing::{Dispatch, dispatcher};
 use tracing_subscriber::{FmtSubscriber, layer::SubscriberExt, EnvFilter};
 
-use sp_tracing::std_types::Traces;
-use sc_client_api::{BlockBackend, BlockchainEvents, ExecutorProvider, ProofProvider, backend::{Backend, StorageProvider}};
-use sp_api::{Core, Metadata, ProvideRuntimeApi, CallApiAt};
-use sp_blockchain::{HeaderMetadata, HeaderBackend};
+use sc_client_api::BlockBackend;
+use sp_api::{Core, Metadata, ProvideRuntimeApi};
+use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header},
 };
+use sp_tracing::std_types::Traces;
 
 use crate::{TraceHandler, ProfilingLayer};
-use std::marker::PhantomData;
 
 // Default to only runtime and state related traces
 const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
 const TRACE_TARGET: &'static str = "block_trace";
 
-pub struct BlockExecutor<BE, Block: BlockT, Client> {
+/// Holds a reference to the client in order to execute the given block
+/// and record traces for the supplied targets (eg. "pallet,frame,state")
+pub struct BlockExecutor<Block: BlockT, Client> {
 	client: Arc<Client>,
 	block: Block::Hash,
-	targets: Option<String>,
-	_phantom: PhantomData<(BE, Block)>,
+	targets: Option<String>
 }
 
-impl<BE, Block, Client> BlockExecutor<BE, Block, Client>
+impl<Block, Client> BlockExecutor<Block, Client>
 	where
 		Block: BlockT + 'static,
-		BE: Backend<Block> + 'static,
-		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
-		+ BlockBackend<Block> + HeaderMetadata<Block, Error=sp_blockchain::Error> + BlockchainEvents<Block>
-		+ CallApiAt<Block, Error=sp_blockchain::Error> + ProvideRuntimeApi<Block>
+		Client: HeaderBackend<Block> + BlockBackend<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + 'static,
 		Client::Api: Metadata<Block, Error=sp_blockchain::Error>,
 {
+	/// Create a new `BlockExecutor`
 	pub fn new(client: Arc<Client>, block: Block::Hash, targets: Option<String>) -> Self {
-		Self { client, block, targets, _phantom: PhantomData }
+		Self { client, block, targets }
 	}
 
+	/// Execute block, recording all spans and events belonging to `Self::targets`
 	pub fn trace_block(&self) -> Result<Traces, String> {
+		// Prepare block
 		let id = BlockId::Hash(self.block);
 		let extrinsics = self.client.block_body(&id)
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
@@ -66,10 +67,9 @@ impl<BE, Block, Client> BlockExecutor<BE, Block, Client>
 		let mut header = self.client.header(id)
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
 			.ok_or("Block not found".to_string())?;
-		// Pop digest else: "Error executing block: Execution(RuntimePanicked(\"assertion failed: `(left == right)`\\n  left: `2`,\\n right: `1`: Number of digest items must match that calculated.\"
+		let parent_id = BlockId::Hash(*header.parent_hash());
+		// Pop digest else RuntimePanic due to: 'Number of digest items must match that calculated.'
 		header.digest_mut().pop();
-		let parent_hash = header.parent_hash();
-		let parent_id = BlockId::Hash(*parent_hash);
 		let block = Block::new(header, extrinsics);
 
 		let traces = Arc::new(Mutex::new(Traces::default()));
