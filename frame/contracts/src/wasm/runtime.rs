@@ -1184,7 +1184,8 @@ define_env!(Env, <E: Ext>,
 			// We still need to make sure that the allocation isn't larger than the memory
 			// allocator can handle.
 			ensure!(
-				delta_count * KEY_SIZE as u32 <= ctx.schedule.limits.max_memory_size(),
+				delta_count
+					.saturating_mul(KEY_SIZE as u32) <= ctx.schedule.limits.max_memory_size(),
 				Error::<E::T>::OutOfBounds,
 			);
 			let mut delta = vec![[0; KEY_SIZE]; delta_count as usize];
