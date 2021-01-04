@@ -263,8 +263,6 @@ impl Externalities for BasicExternalities {
 		crate::ext::StorageAppend::new(current).append(value);
 	}
 
-	fn chain_id(&self) -> u64 { 42 }
-
 	fn storage_root(&mut self) -> Vec<u8> {
 		let mut top = self.inner.top.clone();
 		let prefixed_keys: Vec<_> = self.inner.children_default.iter().map(|(_k, v)| {

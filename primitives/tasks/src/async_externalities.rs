@@ -143,8 +143,6 @@ impl Externalities for AsyncExternalities {
 		panic!("`storage_append`: should not be used in async externalities!")
 	}
 
-	fn chain_id(&self) -> u64 { 42 }
-
 	fn storage_root(&mut self) -> Vec<u8> {
 		panic!("`storage_root`: should not be used in async externalities!")
 	}
