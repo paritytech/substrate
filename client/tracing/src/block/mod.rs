@@ -126,11 +126,3 @@ fn create_dispatch(traces: Arc<Mutex<Traces>>, targets: &Option<String>) -> Resu
 		.with(profiling_layer);
 	Ok(Dispatch::new(sub))
 }
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_state_trace() {}
-}
