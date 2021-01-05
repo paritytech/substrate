@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 sc-network = { version = "0.8.0", path = "../" }
 log = "0.4.8"
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 futures = "0.3.4"
 futures-timer = "3.0.1"
 rand = "0.7.2"
