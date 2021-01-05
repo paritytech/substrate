@@ -639,19 +639,31 @@ impl Filters {
 				break;
 			}
 		}
-		if let Some(key) = start_interval {
+		let mut previous_prefix = if let Some(key) = start_interval {
 			if key_end.map(|end| end.starts_with(key)).unwrap_or(key.is_empty()) {
 				return true;
 			}
+			key.to_vec()
 		} else {
 			return false;
 		};
 		for (key, value) in iter.node_iter().iter().value_iter() {
-			if key_end.map(|end| end.starts_with(&key)).unwrap_or(false) {
-				if value.write_prefix || value.read_only_prefix {
-					return true;
+			if value.write_prefix || value.read_only_prefix {
+				if !key.starts_with(previous_prefix.as_slice()) {
+					// only allow contigous prefix
+					while previous_prefix.last() == Some(&255u8) {
+						previous_prefix.pop();
+					}
+					previous_prefix.last_mut().map(|b| *b += 1);
+					if previous_prefix != key {
+						return false;
+					}
+				}
+				if key_end.map(|end| end.starts_with(&key)).unwrap_or(false) {
+						return true;
 				}
 			}
+			// TODO can it be removed?
 			if key_end.map(|end| key.as_slice() > end).unwrap_or(true) {
 				break;
 			}
@@ -994,5 +1006,30 @@ mod test {
 			&b"key"[..],
 			None,
 		));
+
+		let mut filters1 = Filters::default();
+		filters1.allow_writes(AccessDeclaration {
+			prefixes_lock: vec![b"key".to_vec(), b"kez".to_vec()],
+			keys_lock: vec![],
+		});
+		assert!(Filters::guard_read_allow_interval(
+			&filters1.filters_allow,
+			None,
+			&b"key"[..],
+			Some(&b"kez"[..]),
+		));
+
+		let mut filters1 = Filters::default();
+		filters1.allow_writes(AccessDeclaration {
+			prefixes_lock: vec![b"kex".to_vec(), b"kez".to_vec()],
+			keys_lock: vec![],
+		});
+		assert!(!Filters::guard_read_allow_interval(
+			&filters1.filters_allow,
+			None,
+			&b"kex"[..],
+			Some(&b"kez"[..]),
+		));
+
 	}
 }
