@@ -282,9 +282,6 @@ benchmarks! {
 		T::AccountId: AsRef<[u8]>,
 	}
 
-	_ {
-	}
-
 	// The base weight without any actual work performed apart from the setup costs.
 	on_initialize {}: {
 		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
