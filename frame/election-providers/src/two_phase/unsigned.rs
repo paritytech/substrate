@@ -18,14 +18,11 @@
 //! The unsigned phase implementation.
 
 use crate::two_phase::*;
-use frame_support::{dispatch::DispatchResult, unsigned::ValidateUnsigned};
+use frame_support::dispatch::DispatchResult;
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{seq_phragmen, CompactSolution, ElectionResult};
-use sp_runtime::{
-	offchain::storage::StorageValueRef, traits::TrailingZeroInput, DispatchError,
-	SaturatedConversion,
-};
-use sp_std::{cmp::Ordering, convert::TryInto};
+use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
+use sp_std::cmp::Ordering;
 
 /// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/unsigned-election/";
@@ -344,8 +341,7 @@ where
 #[cfg(test)]
 mod max_weight {
 	#![allow(unused_variables)]
-	use super::*;
-	use mock::*;
+	use super::{mock::*, *};
 
 	struct TestWeight;
 	impl crate::two_phase::weights::WeightInfo for TestWeight {
@@ -549,10 +545,14 @@ mod max_weight {
 
 #[cfg(test)]
 mod tests {
-	use super::{mock::*, *};
+	use super::{
+		mock::{Origin, *},
+		Call, *,
+	};
 	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
+	use mock::Call as OuterCall;
 	use sp_election_providers::Assignment;
-	use sp_runtime::PerU16;
+	use sp_runtime::{traits::ValidateUnsigned, PerU16};
 
 	#[test]
 	fn validate_unsigned_retracts_wrong_phase() {

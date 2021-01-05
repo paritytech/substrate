@@ -1,4 +1,6 @@
 use super::*;
+use crate::two_phase;
+pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{parameter_types, traits::OnInitialize, weights::Weight};
 use parking_lot::RwLock;
 use sp_core::{
@@ -15,18 +17,26 @@ use sp_npos_elections::{
 };
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, Block as BlockT, IdentityLookup},
 	PerU16,
 };
 use std::sync::Arc;
 
-pub use frame_support::{assert_noop, assert_ok};
+pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<AccountId, Call, (), ()>;
 
-#[derive(Eq, PartialEq, Clone)]
-pub struct Runtime;
-pub(crate) type Balances = pallet_balances::Module<Runtime>;
-pub(crate) type System = frame_system::Module<Runtime>;
-pub(crate) type TwoPhase = super::Module<Runtime>;
+frame_support::construct_runtime!(
+	pub enum Runtime where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic
+	{
+		System: frame_system::{Module, Call, Event<T>},
+		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
+		TwoPhase: two_phase::{Module, Call, Event<T>},
+	}
+);
+
 pub(crate) type Balance = u64;
 pub(crate) type AccountId = u64;
 
@@ -36,12 +46,12 @@ sp_npos_elections::generate_solution_type!(
 );
 
 /// All events of this pallet.
-pub(crate) fn two_phase_events() -> Vec<Event<Runtime>> {
+pub(crate) fn two_phase_events() -> Vec<super::Event<Runtime>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
 		.filter_map(|e| {
-			if let MetaEvent::two_phase(inner) = e {
+			if let Event::two_phase(inner) = e {
 				Some(inner)
 			} else {
 				None
@@ -112,43 +122,18 @@ pub fn witness() -> WitnessData {
 		.unwrap_or_default()
 }
 
-frame_support::impl_outer_dispatch! {
-	pub enum OuterCall for Runtime where origin: Origin {
-		two_phase::TwoPhase,
-	}
-}
-
-frame_support::impl_outer_origin! {
-	pub enum Origin for Runtime where system = frame_system {}
-}
-
-mod two_phase {
-	// Re-export needed for `impl_outer_event!`.
-	pub use super::super::*;
-}
-use frame_system as system;
-use pallet_balances as balances;
-
-frame_support::impl_outer_event! {
-	pub enum MetaEvent for Runtime {
-		system<T>,
-		balances<T>,
-		two_phase<T>,
-	}
-}
-
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = OuterCall;
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = MetaEvent;
+	type Event = Event;
 	type BlockHashCount = ();
 	type DbWeight = ();
 	type BlockLength = ();
@@ -170,7 +155,7 @@ parameter_types! {
 
 impl pallet_balances::Config for Runtime {
 	type Balance = Balance;
-	type Event = MetaEvent;
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -209,7 +194,7 @@ parameter_types! {
 }
 
 impl crate::two_phase::Config for Runtime {
-	type Event = MetaEvent;
+	type Event = Event;
 	type Currency = Balances;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
@@ -234,13 +219,13 @@ impl crate::two_phase::Config for Runtime {
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
 where
-	OuterCall: From<LocalCall>,
+	Call: From<LocalCall>,
 {
-	type OverarchingCall = OuterCall;
+	type OverarchingCall = Call;
 	type Extrinsic = Extrinsic;
 }
 
-pub type Extrinsic = sp_runtime::testing::TestXt<OuterCall, ()>;
+pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
 #[derive(Default)]
 pub struct ExtBuilder {}

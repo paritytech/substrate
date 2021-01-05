@@ -255,7 +255,10 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::{mock::*, *};
+	use super::{
+		mock::{Origin, *},
+		Error, Phase, *,
+	};
 	use frame_support::dispatch::DispatchResultWithPostInfo;
 
 	fn submit_with_witness(

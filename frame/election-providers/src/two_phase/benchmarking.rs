@@ -106,11 +106,11 @@ where
 	assert_eq!(all_voters.len() as u32, witness.voters);
 	assert_eq!(winners.len() as u32, winners_count);
 
-	SnapshotMetadata::put(RoundSnapshotMetadata {
+	<SnapshotMetadata<T>>::put(RoundSnapshotMetadata {
 		voters_len: all_voters.len() as u32,
 		targets_len: targets.len() as u32,
 	});
-	DesiredTargets::put(winners_count);
+	<DesiredTargets<T>>::put(winners_count);
 	<Snapshot<T>>::put(RoundSnapshot {
 		voters: all_voters.clone(),
 		targets: targets.clone(),
@@ -236,7 +236,7 @@ benchmarks! {
 		let solution = RawSolution { score: [(1000_0000u128 - 1).into(), 0, 0], ..Default::default() };
 
 		<CurrentPhase<T>>::put(Phase::Signed);
-		<Round>::put(1);
+		<Round<T>>::put(1);
 
 		for i in 0..c {
 			<SignedSubmissions<T>>::mutate(|queue| {
