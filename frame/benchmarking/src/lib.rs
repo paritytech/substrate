@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1072,7 +1072,7 @@ macro_rules! impl_benchmark_test {
 
 #[macro_export]
 macro_rules! add_benchmark {
-	( $params:ident, $batches:ident, $name:ident, $( $location:tt )* ) => (
+	( $params:ident, $batches:ident, $name:path, $( $location:tt )* ) => (
 		let name_string = stringify!($name).as_bytes();
 		let instance_string = stringify!( $( $location )* ).as_bytes();
 		let (config, whitelist) = $params;

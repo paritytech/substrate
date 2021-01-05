@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,7 +53,7 @@ impl ErrorDef {
 		instances.push(helper::check_type_def_gen_no_bounds(&item.generics, item.ident.span())?);
 
 		if item.generics.where_clause.is_some() {
-			let msg = "Invalid pallet::error, unexpected where clause";
+			let msg = "Invalid pallet::error, where clause is not allowed on pallet error item";
 			return Err(syn::Error::new(item.generics.where_clause.as_ref().unwrap().span(), msg));
 		}
 

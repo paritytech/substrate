@@ -323,10 +323,6 @@ pub mod pallet {{
 	#[pallet::generate_store({store_vis} trait Store)]
 	pub struct Pallet{decl_gen}(PhantomData{use_gen_tuple});
 
-	/// Old name for pallet.
-	#[deprecated(note=\"use `Pallet` instead\")]
-	pub type Module{decl_gen} = Pallet{use_gen};
-
 	#[pallet::interface]
 	impl{impl_gen} Hooks<BlockNumberFor<T>> for Pallet{use_gen}
 		// TODO_MAYBE_WHERE_CLAUSE
