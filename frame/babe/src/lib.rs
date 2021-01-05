@@ -192,6 +192,9 @@ decl_storage! {
 		/// Next epoch randomness.
 		NextRandomness: schnorrkel::Randomness;
 
+		/// Next epoch authorities.
+		NextAuthorities: Vec<(AuthorityId, BabeAuthorityWeight)>;
+
 		/// Randomness under construction.
 		///
 		/// We make a tradeoff between storage accesses and list length.
@@ -464,9 +467,13 @@ impl<T: Config> Module<T> {
 		let randomness = Self::randomness_change_epoch(next_epoch_index);
 		Randomness::put(randomness);
 
+		// Update the next epoch authorities.
+		NextAuthorities::put(next_authorities);
+
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
 		let next_randomness = NextRandomness::get();
+		let next_authorities = NextAuthorities::get();
 
 		let next_epoch = NextEpochDescriptor {
 			authorities: next_authorities,
@@ -483,7 +490,7 @@ impl<T: Config> Module<T> {
 	// give correct results after `do_initialize` of the first block
 	// in the chain (as its result is based off of `GenesisSlot`).
 	pub fn current_epoch_start() -> SlotNumber {
-		(EpochIndex::get() * T::EpochDuration::get()) + GenesisSlot::get()
+		Self::epoch_start(EpochIndex::get())
 	}
 
 	/// Produces information about the current epoch.
@@ -495,6 +502,23 @@ impl<T: Config> Module<T> {
 			authorities: Self::authorities(),
 			randomness: Self::randomness(),
 		}
+	}
+
+	/// Produces information about the next epoch.
+	pub fn next_epoch() -> Epoch {
+		let next_epoch_index = EpochIndex::get() + 1;
+
+		Epoch {
+			epoch_index: next_epoch_index,
+			start_slot: Self::epoch_start(next_epoch_index),
+			duration: T::EpochDuration::get(),
+			authorities: NextAuthorities::get(),
+			randomness: NextRandomness::get(),
+		}
+	}
+
+	fn epoch_start(epoch_index: u64) -> SlotNumber {
+		(epoch_index * T::EpochDuration::get()) + GenesisSlot::get()
 	}
 
 	fn deposit_consensus<U: Encode>(new: U) {
