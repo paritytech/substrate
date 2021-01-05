@@ -20,7 +20,7 @@ futures-diagnose = "1.0"
 intervalier = "0.4.0"
 log = "0.4.8"
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0"}
 sc-client-api = { version = "2.0.0", path = "../api" }
 sc-transaction-graph = { version = "2.0.0", path = "./graph" }

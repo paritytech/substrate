@@ -32,7 +32,7 @@ num-traits = { version = "0.2.8", default-features = false }
 zeroize = { version = "1.2.0", default-features = false }
 secrecy = { version = "0.7.0", default-features = false }
 lazy_static = { version = "1.4.0", default-features = false, optional = true }
-parking_lot = { version = "0.10.0", optional = true }
+parking_lot = { version = "0.11.1", optional = true }
 sp-debug-derive = { version = "2.0.0", path = "../debug-derive" }
 sp-externalities = { version = "0.8.0", optional = true, path = "../externalities" }
 sp-storage = { version = "2.0.0", default-features = false, path = "../storage" }

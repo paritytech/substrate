@@ -30,7 +30,7 @@ futures = { version = "0.3.4", features = ["compat"] }
 jsonrpc-pubsub = "15.1"
 jsonrpc-core = "15.1"
 rand = "0.7.3"
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 lazy_static = "1.4.0"
 log = "0.4.11"
 slog = { version = "2.5.2", features = ["nested-values"] }

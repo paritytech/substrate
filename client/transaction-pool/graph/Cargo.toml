@@ -17,7 +17,7 @@ derive_more = "0.99.2"
 thiserror = "1.0.21"
 futures = "0.3.4"
 log = "0.4.8"
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 serde = { version = "1.0.101", features = ["derive"] }
 wasm-timer = "0.2"
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
