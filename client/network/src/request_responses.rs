@@ -541,18 +541,10 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							error,
 							..
 						} => {
-							// TODO: Remove hack by deriving `Clone` for `OutboundFailure`.
-							let error_clone = match &error {
-								OutboundFailure::ConnectionClosed => OutboundFailure::ConnectionClosed,
-								OutboundFailure::DialFailure => OutboundFailure::DialFailure,
-								OutboundFailure::Timeout => OutboundFailure::Timeout,
-								OutboundFailure::UnsupportedProtocols => OutboundFailure::UnsupportedProtocols,
-							};
-
 							let started = match self.pending_requests.remove(&request_id) {
 								Some((started, pending_response)) => {
 									if pending_response.send(
-										Err(RequestFailure::Network(error)),
+										Err(RequestFailure::Network(error.clone())),
 									).is_err() {
 										log::debug!(
 											target: "sub-libp2p",
@@ -578,7 +570,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								peer,
 								protocol: protocol.clone(),
 								duration: started.elapsed(),
-								result: Err(RequestFailure::Network(error_clone)),
+								result: Err(RequestFailure::Network(error)),
 							};
 
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
