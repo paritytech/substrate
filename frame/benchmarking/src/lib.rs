@@ -89,17 +89,16 @@ pub use sp_storage::TrackedStorageKey;
 ///   where_clause {  where T::A: From<u32> } // Optional line to give additional bound on `T`.
 ///
 ///   // first dispatchable: foo; this is a user dispatchable and operates on a `u8` vector of
-///   // size `l`, which we allow to be initialized as usual.
+///   // size `l`
 ///   foo {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
-///     let l = ...;
+///     let l in 1 .. MAX_LENGTH => initialize_l(l);
 ///   }: _(Origin::Signed(caller), vec![0u8; l])
 ///
 ///   // second dispatchable: bar; this is a root dispatchable and accepts a `u8` vector of size
-///   // `l`. We don't want it pre-initialized like before so we override using the `=> ()` notation.
-///   // In this case, we explicitly name the call using `bar` instead of `_`.
+///   // `l`.
 ///   bar {
-///     let l = _ .. _ => ();
+///     let l in 1 .. MAX_LENGTH => initialize_l(l);
 ///   }: bar(Origin::Root, vec![0u8; l])
 ///
 ///   // third dispatchable: baz; this is a user dispatchable. It isn't dependent on length like the
