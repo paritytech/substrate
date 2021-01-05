@@ -407,9 +407,11 @@ impl<T: Config> Module<T> {
 	/// In other word, this is only accurate if no slots are missed. Given missed slots, the slot
 	/// number will grow while the block number will not. Hence, the result can be interpreted as an
 	/// upper bound.
-	// -------------- IMPORTANT NOTE -------------- This implementation is linked to how
-	// [`should_epoch_change`] is working. This might need to be updated accordingly, if the
-	// underlying mechanics of slot and epochs change.
+	//
+	// ## IMPORTANT NOTE
+	//
+	// This implementation is linked to how [`should_epoch_change`] is working. This might need to
+	// be updated accordingly, if the underlying mechanics of slot and epochs change.
 	//
 	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you
 	// update this function, you must also update the corresponding weight.

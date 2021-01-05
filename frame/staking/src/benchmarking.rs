@@ -199,9 +199,9 @@ benchmarks! {
 		assert!(Validators::<T>::contains_key(stash));
 	}
 
-	// Worst case scenario, T::MaxNominations::get()
+	// Worst case scenario, MAX_NOMINATIONS
 	nominate {
-		let n in 1 .. T::MaxNominations::get() as u32;
+		let n in 1 .. MAX_NOMINATIONS as u32;
 		let (stash, controller) = create_stash_controller::<T>(n + 1, 100, Default::default())?;
 		let validators = create_validators::<T>(n, 100)?;
 		whitelist_account!(controller);
@@ -410,7 +410,7 @@ benchmarks! {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
 
-		create_validators_with_nominators_for_era::<T>(v, n, T::MaxNominations::get() as usize, false, None)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 		let session_index = SessionIndex::one();
 	}: {
 		let validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
@@ -421,7 +421,7 @@ benchmarks! {
 	payout_all {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
-		create_validators_with_nominators_for_era::<T>(v, n, T::MaxNominations::get() as usize, false, None)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 		// Start a new Era
 		let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 		assert!(new_validators.len() == v as usize);
@@ -483,7 +483,6 @@ benchmarks! {
 		assert!(balance_before > balance_after);
 	}
 
-	/*
 	// This benchmark create `v` validators intent, `n` nominators intent, in total creating `e`
 	// edges.
 	#[extra]
@@ -498,12 +497,12 @@ benchmarks! {
 		// number of winners, also ValidatorCount. This will be equal to `winner.len()`.
 		let w in 16 .. 100;
 
-		ensure!(w >= T::MaxNominations::get(), "doesn't support lower value");
+		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
 
 		let winners = create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			T::MaxNominations::get(),
+			MAX_NOMINATIONS,
 			false,
 			Some(w),
 		)?;
@@ -569,12 +568,12 @@ benchmarks! {
 		// number of winners, also ValidatorCount.
 		let w in 16 .. 100;
 
-		ensure!(w as usize >= T::MaxNominations::get(), "doesn't support lower value");
+		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
 
 		let winners = create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			T::MaxNominations::get(),
+			MAX_NOMINATIONS,
 			false,
 			Some(w),
 		)?;
@@ -659,7 +658,7 @@ benchmarks! {
 		// number of nominator intention.
 		let n in 500 .. 1000;
 
-		create_validators_with_nominators_for_era::<T>(v, n, T::MaxNominations::get(), false, None)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 
 		// needed for the solution to be generates.
 		assert!(<Staking<T>>::create_stakers_snapshot().0);
@@ -708,7 +707,6 @@ benchmarks! {
 			).is_err()
 		);
 	}
-	*/
 }
 
 #[cfg(test)]
@@ -723,7 +721,7 @@ mod tests {
 			let v = 10;
 			let n = 100;
 
-			create_validators_with_nominators_for_era::<Test>(v, n, <Test as Config>::MaxNominations::get() as usize, false, None)
+			create_validators_with_nominators_for_era::<Test>(v, n, MAX_NOMINATIONS, false, None)
 				.unwrap();
 
 			let count_validators = Validators::<Test>::iter().count();
@@ -836,6 +834,18 @@ mod tests {
 			assert_ok!(test_benchmark_new_era::<Test>());
 			assert_ok!(test_benchmark_do_slash::<Test>());
 			assert_ok!(test_benchmark_payout_all::<Test>());
+			// only run one of them to same time on the CI. ignore the other two.
+			assert_ok!(test_benchmark_submit_solution_initial::<Test>());
 		});
 	}
+
+	#[test]
+	#[ignore]
+	fn test_benchmarks_offchain() {
+		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+			assert_ok!(test_benchmark_submit_solution_better::<Test>());
+			assert_ok!(test_benchmark_submit_solution_weaker::<Test>());
+		});
+	}
+
 }

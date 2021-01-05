@@ -24,7 +24,7 @@ use frame_benchmarking::account;
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
-// use sp_npos_elections::*;
+use sp_npos_elections::*;
 
 const SEED: u32 = 0;
 
@@ -171,7 +171,6 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 }
 
 
-/*
 /// Build a _really bad_ but acceptable solution for election. This should always yield a solution
 /// which has a less score than the seq-phragmen.
 pub fn get_weak_solution<T: Config>(
@@ -245,11 +244,11 @@ pub fn get_weak_solution<T: Config>(
 			<Module<T>>::slashable_balance_of_fn(),
 		);
 
-		let support_map = build_support_map::<T::AccountId>(
+		let support_map = to_supports::<T::AccountId>(
 			winners.as_slice(),
 			staked.as_slice(),
 		).unwrap();
-		evaluate_support::<T::AccountId>(&support_map)
+		support_map.evaluate()
 	};
 
 	// compact encode the assignment.
@@ -394,4 +393,4 @@ pub fn create_assignments_for_offchain<T: Config>(
 
 	Ok((winners, assignments))
 }
-*/
+

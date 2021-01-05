@@ -24,28 +24,23 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_benchmarking::{account, benchmarks};
-use frame_support::traits::{Currency, Get, OnInitialize};
-use frame_system::{Config as SystemConfig, Module as System, RawOrigin};
+use frame_system::{RawOrigin, Module as System, Config as SystemConfig};
+use frame_benchmarking::{benchmarks, account};
+use frame_support::traits::{Currency, OnInitialize};
 
-use sp_runtime::{
-	traits::{Convert, Saturating, StaticLookup, UniqueSaturatedInto},
-	Perbill,
-};
-use sp_staking::offence::{Offence, OffenceDetails, ReportOffence};
+use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto}};
+use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
 
+use pallet_balances::{Config as BalancesConfig};
 use pallet_babe::BabeEquivocationOffence;
-use pallet_balances::Config as BalancesConfig;
 use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
 use pallet_im_online::{Config as ImOnlineConfig, Module as ImOnline, UnresponsivenessOffence};
 use pallet_offences::{Config as OffencesConfig, Module as Offences};
-use pallet_session::{
-	historical::{Config as HistoricalConfig, IdentificationTuple},
-	Config as SessionConfig, SessionManager,
-};
+use pallet_session::historical::{Config as HistoricalConfig, IdentificationTuple};
+use pallet_session::{Config as SessionConfig, SessionManager};
 use pallet_staking::{
-	Config as StakingConfig, Event as StakingEvent, Exposure, IndividualExposure,
-	Module as Staking, RewardDestination, ValidatorPrefs,
+	Module as Staking, Config as StakingConfig, RewardDestination, ValidatorPrefs,
+	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS, Event as StakingEvent
 };
 
 const SEED: u32 = 0;
@@ -214,7 +209,7 @@ benchmarks! {
 		let r in 1 .. MAX_REPORTERS;
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
+		let n in 0 .. MAX_NOMINATORS.min(MAX_NOMINATIONS as u32);
 
 		// Make r reporters
 		let mut reporters = vec![];
@@ -288,7 +283,7 @@ benchmarks! {
 	}
 
 	report_offence_grandpa {
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
+		let n in 0 .. MAX_NOMINATORS.min(MAX_NOMINATIONS as u32);
 
 		// for grandpa equivocation reports the number of reporters
 		// and offenders is always 1
@@ -324,7 +319,7 @@ benchmarks! {
 	}
 
 	report_offence_babe {
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
+		let n in 0 .. MAX_NOMINATORS.min(MAX_NOMINATIONS as u32);
 
 		// for babe equivocation reports the number of reporters
 		// and offenders is always 1
@@ -364,7 +359,7 @@ benchmarks! {
 		let o = 10;
 		let n = 100;
 
-		// Staking::<T>::put_election_status(ElectionStatus::Closed);
+		Staking::<T>::put_election_status(ElectionStatus::Closed);
 
 		let mut deferred_offences = vec![];
 		let offenders = make_offenders::<T>(o, n)?.0;

@@ -18,16 +18,16 @@
 //! Tests for the module.
 
 use super::*;
-use frame_support::{
-	assert_noop, assert_ok,
-	traits::{Currency, OnInitialize, ReservableCurrency},
-	StorageMap,
-};
 use mock::*;
-use pallet_balances::Error as BalancesError;
-use sp_npos_elections::Support;
-use sp_runtime::{assert_eq_error_rate, traits::BadOrigin};
+use sp_runtime::{
+	assert_eq_error_rate, traits::BadOrigin,
+};
 use sp_staking::offence::OffenceDetails;
+use frame_support::{
+	assert_ok, assert_noop, StorageMap,
+	traits::{Currency, ReservableCurrency, OnInitialize, OnFinalize},
+};
+use pallet_balances::Error as BalancesError;
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
@@ -1815,17 +1815,16 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
 			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
 
-			// winners should be 21 and 31. Otherwise this election is taking duplicates into
-			// account.
-			let election_result = <Test as Config>::ElectionProvider::elect().unwrap();
+			// winners should be 21 and 31. Otherwise this election is taking duplicates into account.
+			let sp_npos_elections::ElectionResult {
+				winners,
+				assignments,
+			} = Staking::do_phragmen::<Perbill>(0).unwrap();
+			let winners = sp_npos_elections::to_without_backing(winners);
 
-			assert_eq_uvec!(
-				election_result,
-				vec![
-					(21, Support::<AccountId> { total: 1800, voters: vec![(21, 1000), (3, 400), (1, 400)] }),
-					(31, Support::<AccountId> { total: 2200, voters: vec![(31, 1000), (3, 600), (1, 600)] }),
-				]
-			);
+			assert_eq!(winners, vec![31, 21]);
+			// only distribution to 21 and 31.
+			assert_eq!(assignments.iter().find(|a| a.who == 1).unwrap().distribution.len(), 2);
 		});
 }
 
@@ -1864,15 +1863,15 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election_elected() {
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
 
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into account.
-			let election_result = <Test as Config>::ElectionProvider::elect().unwrap();
+			let sp_npos_elections::ElectionResult {
+				winners,
+				assignments,
+			} = Staking::do_phragmen::<Perbill>(0).unwrap();
 
-			assert_eq_uvec!(
-				election_result,
-				vec![
-					(21, Support::<AccountId> { total: 2500, voters: vec![(21, 1000), (3, 1000), (1, 500)] }),
-					(11, Support::<AccountId> { total: 1500, voters: vec![(11, 1000), (1, 500)] }),
-				]
-			);
+			let winners = sp_npos_elections::to_without_backing(winners);
+			assert_eq!(winners, vec![21, 11]);
+			// only distribution to 21 and 31.
+			assert_eq!(assignments.iter().find(|a| a.who == 1).unwrap().distribution.len(), 2);
 		});
 }
 
@@ -2882,7 +2881,6 @@ fn remove_multi_deferred() {
 	})
 }
 
-/*
 mod offchain_election {
 	use crate::*;
 	use codec::Encode;
@@ -3026,7 +3024,7 @@ mod offchain_election {
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(37));
 
 				run_to_block(40);
-				assert_session_era!(4, 0);
+				assert_session_era!(4, 1);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 				assert!(Staking::snapshot_nominators().is_none());
 				assert!(Staking::snapshot_validators().is_none());
@@ -3044,7 +3042,7 @@ mod offchain_election {
 				assert!(Staking::snapshot_validators().is_some());
 
 				run_to_block(90);
-				assert_session_era!(9, 1);
+				assert_session_era!(9, 2);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 				assert!(Staking::snapshot_nominators().is_none());
 				assert!(Staking::snapshot_validators().is_none());
@@ -4170,7 +4168,6 @@ mod offchain_election {
 			})
 	}
 }
-*/
 
 #[test]
 fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_validator() {
@@ -4234,7 +4231,6 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert_eq!(exposure_21.total, 1000 + 500 - nominator_slash_amount_11);
 	});
 }
-
 
 #[test]
 fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
@@ -4681,6 +4677,39 @@ fn offences_weight_calculated_correctly() {
 }
 
 #[test]
+fn on_initialize_weight_is_correct() {
+	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+		assert_eq!(Validators::<Test>::iter().count(), 0);
+		assert_eq!(Nominators::<Test>::iter().count(), 0);
+		// When this pallet has nothing, we do 4 reads each block
+		let base_weight = <Test as frame_system::Config>::DbWeight::get().reads(4);
+		assert_eq!(base_weight, Staking::on_initialize(0));
+	});
+
+	ExtBuilder::default()
+	.offchain_election_ext()
+	.validator_count(4)
+	.has_stakers(false)
+	.build()
+	.execute_with(|| {
+		crate::tests::offchain_election::build_offchain_election_test_ext();
+		run_to_block(11);
+		Staking::on_finalize(System::block_number());
+		System::set_block_number((System::block_number() + 1).into());
+		Timestamp::set_timestamp(System::block_number() * 1000 + INIT_TIMESTAMP);
+		Session::on_initialize(System::block_number());
+
+		assert_eq!(Validators::<Test>::iter().count(), 4);
+		assert_eq!(Nominators::<Test>::iter().count(), 5);
+		// With 4 validators and 5 nominator, we should increase weight by:
+		// - (4 + 5) reads
+		// - 3 Writes
+		let final_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4 + 9, 3);
+		assert_eq!(final_weight, Staking::on_initialize(System::block_number()));
+	});
+}
+
+#[test]
 fn payout_creates_controller() {
 	ExtBuilder::default()
 		.has_stakers(false)
@@ -5007,7 +5036,8 @@ mod election_data_provider {
 					45
 				);
 				assert_eq!(staking_events().len(), 1);
-				assert_eq!(*staking_events().last().unwrap(), RawEvent::StakingElection);
+				// TODO: TWO_PHASE: remove the internal value.
+				assert_eq!(*staking_events().last().unwrap(), RawEvent::StakingElection(ElectionCompute::OnChain));
 
 				for b in 21..45 {
 					run_to_block(b);
@@ -5024,7 +5054,8 @@ mod election_data_provider {
 					70
 				);
 				assert_eq!(staking_events().len(), 3);
-				assert_eq!(*staking_events().last().unwrap(), RawEvent::StakingElection);
+				// TODO: TWO_PHASE: remove the internal value.
+				assert_eq!(*staking_events().last().unwrap(), RawEvent::StakingElection(ElectionCompute::OnChain));
 			})
 	}
 }

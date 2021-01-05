@@ -123,6 +123,7 @@ pub fn witness() -> WitnessData {
 }
 
 impl frame_system::Config for Runtime {
+	type SS58Prefix = ();
 	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
