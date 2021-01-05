@@ -23,10 +23,8 @@ use crate::{
 	gas::{Gas, GasMeter, Token, GasMeterResult, ChargedAmount},
 	wasm::env_def::ConvertibleToWasm,
 };
-use sp_sandbox;
 use parity_wasm::elements::ValueType;
-use frame_system;
-use frame_support::dispatch::DispatchError;
+use frame_support::{dispatch::DispatchError, ensure};
 use sp_std::prelude::*;
 use codec::{Decode, DecodeAll, Encode};
 use sp_runtime::traits::SaturatedConversion;
@@ -420,6 +418,7 @@ where
 	pub fn read_sandbox_memory(&self, ptr: u32, len: u32)
 	-> Result<Vec<u8>, DispatchError>
 	{
+		ensure!(len <= self.schedule.limits.max_memory_size(), Error::<E::T>::OutOfBounds);
 		let mut buf = vec![0u8; len as usize];
 		self.memory.get(ptr, buf.as_mut_slice())
 			.map_err(|_| Error::<E::T>::OutOfBounds)?;
@@ -1179,17 +1178,23 @@ define_env!(Env, <E: Ext>,
 		let rent_allowance: BalanceOf<<E as Ext>::T> =
 			ctx.read_sandbox_memory_as(rent_allowance_ptr, rent_allowance_len)?;
 		let delta = {
+			const KEY_SIZE: usize = 32;
+
 			// We can eagerly allocate because we charged for the complete delta count already
-			let mut delta = Vec::with_capacity(delta_count as usize);
+			// We still need to make sure that the allocation isn't larger than the memory
+			// allocator can handle.
+			ensure!(
+				delta_count
+					.saturating_mul(KEY_SIZE as u32) <= ctx.schedule.limits.max_memory_size(),
+				Error::<E::T>::OutOfBounds,
+			);
+			let mut delta = vec![[0; KEY_SIZE]; delta_count as usize];
 			let mut key_ptr = delta_ptr;
 
-			for _ in 0..delta_count {
-				const KEY_SIZE: usize = 32;
-
-				// Read the delta into the provided buffer and collect it into the buffer.
-				let mut delta_key: StorageKey = [0; KEY_SIZE];
-				ctx.read_sandbox_memory_into_buf(key_ptr, &mut delta_key)?;
-				delta.push(delta_key);
+			for i in 0..delta_count {
+				// Read the delta into the provided buffer
+				// This cannot panic because of the loop condition
+				ctx.read_sandbox_memory_into_buf(key_ptr, &mut delta[i as usize])?;
 
 				// Offset key_ptr to the next element.
 				key_ptr = key_ptr.checked_add(KEY_SIZE as u32).ok_or(Error::<E::T>::OutOfBounds)?;
