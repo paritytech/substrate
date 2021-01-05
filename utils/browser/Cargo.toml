@@ -30,7 +30,7 @@ sc-network = { path = "../../client/network", version = "0.8.0"}
 sc-chain-spec = { path = "../../client/chain-spec", version = "2.0.0"}
 
 # Imported just for the `wasm-bindgen` feature
-rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"] }
+getrandom = { version = "0.2", features = ["js"] }
 rand = { version = "0.7", features = ["wasm-bindgen"] }
 futures-timer = { version = "3.0.1", features = ["wasm-bindgen"]}
 chrono = { version = "0.4", features = ["wasmbind"] }
