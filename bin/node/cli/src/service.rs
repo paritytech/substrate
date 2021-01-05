@@ -180,6 +180,7 @@ pub fn new_full_base(
 
 	config.network.notifications_protocols.push(grandpa::GRANDPA_PROTOCOL_NAME.into());
 
+	#[cfg(feature = "cli")]
 	config.network.request_response_protocols.push(sc_grandpa_warp_sync::request_response_config_for_chain(
 		&config, task_manager.spawn_handle(), backend.clone(),
 	));
