@@ -64,6 +64,8 @@ pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquiv
 
 pub trait Config: pallet_timestamp::Config {
 	/// The amount of time, in slots, that each epoch should last.
+	/// NOTE: Currently it is not possible to change the epoch duration after
+	/// the chain has started. Attempting to do so will brick block production.
 	type EpochDuration: Get<SlotNumber>;
 
 	/// The expected average block time at which BABE should be creating
@@ -236,6 +238,9 @@ decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		/// The number of **slots** that an epoch takes. We couple sessions to
 		/// epochs, i.e. we start a new session once the new epoch begins.
+		/// NOTE: Currently it is not possible to change the epoch duration
+		/// after the chain has started. Attempting to do so will brick block
+		/// production.
 		const EpochDuration: u64 = T::EpochDuration::get();
 
 		/// The expected average block time at which BABE should be creating
