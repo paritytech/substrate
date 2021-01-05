@@ -448,16 +448,12 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 /// We only return proof for finalized blocks (with justification).
 ///
 /// It is assumed that the caller already have a proof-of-finality for the block 'begin'.
-/// TODO switch to pub(crate)
 pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
 	blockchain: &B,
 	begin: Block::Hash,
 ) -> ::sp_blockchain::Result<Vec<u8>>
 	where
 		J: ProvableJustification<Block::Header>,
-
-		NumberFor<Block>: BlockNumberOps, // TODO remove after debugging
-		B: BlockchainBackend<Block>, // TODO remove after debugging
 {
 
   let begin = BlockId::Hash(begin);
@@ -473,8 +469,6 @@ pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
 	}
 
 	// TODO fetch bonding duration and store it to error when not from it.
-
-	// TODO use a cache here and encode on slice.
 	let mut result = Vec::new();
 
 	let mut header = blockchain.expect_header(begin)?;
@@ -775,7 +769,6 @@ pub trait BlockJustification<Header: HeaderT> {
 }
 
 /// Justification used to prove block finality.
-/// TODO switch back to pub(crate)
 pub trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 	/// Verify justification with respect to authorities set and authorities set id.
 	fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()>;
