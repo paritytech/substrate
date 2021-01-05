@@ -78,7 +78,7 @@ pub trait Network<B: BlockT> {
 	/// Adds the peer to the set of peers to be connected to with this protocol.
 	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
 
-	/// Removes the peer to the set of peers to be connected to with this protocol.
+	/// Removes the peer from the set of peers to be connected to with this protocol.
 	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
 
 	/// Force-disconnect a peer.

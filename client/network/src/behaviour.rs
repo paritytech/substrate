@@ -341,7 +341,7 @@ Behaviour<B, H> {
 				self.events.push_back(BehaviourOut::NotificationStreamReplaced {
 					remote,
 					protocol,
-					notifications_sink: notifications_sink.clone(),
+					notifications_sink,
 				}),
 			CustomMessageOutcome::NotificationStreamClosed { remote, protocol } =>
 				self.events.push_back(BehaviourOut::NotificationStreamClosed {
