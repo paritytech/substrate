@@ -28,7 +28,8 @@
 //! users to make those calls on your network. An example of how this could be
 //! used is to set validator nominations as a valid lottery call. If the lottery
 //! is set to repeat every month, then users would be encouraged to re-nominate
-//! validators every month.
+//! validators every month. A user can ony purchase one ticket per valid call
+//! per lottery.
 //!
 //! This pallet can be configured to use dynamically set calls or statically set
 //! calls. Call validation happens through the `ValidateCall` implementation.
@@ -54,12 +55,16 @@ mod benchmarking;
 pub mod weights;
 
 use sp_std::prelude::*;
-use sp_runtime::{DispatchError, ModuleId};
-use sp_runtime::traits::{AccountIdConversion, Saturating};
-use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure, RuntimeDebug};
-use frame_support::dispatch::{Dispatchable, DispatchResult, GetDispatchInfo};
-use frame_support::traits::{
-	Currency, ReservableCurrency, Get, EnsureOrigin, ExistenceRequirement::KeepAlive, Randomness,
+use sp_runtime::{
+	DispatchError, ModuleId,
+	traits::{AccountIdConversion, Saturating, Zero},
+};
+use frame_support::{
+	Parameter, decl_module, decl_error, decl_event, decl_storage, ensure, RuntimeDebug,
+	dispatch::{Dispatchable, DispatchResult, GetDispatchInfo},
+	traits::{
+		Currency, ReservableCurrency, Get, EnsureOrigin, ExistenceRequirement::KeepAlive, Randomness,
+	},
 };
 use frame_support::weights::Weight;
 use frame_system::ensure_signed;
@@ -92,6 +97,10 @@ pub trait Config: frame_system::Config {
 	type MaxCalls: Get<usize>;
 
 	/// Used to determine if a call would be valid for purchasing a ticket.
+	///
+	/// Be conscious of the implementation used here. We assume at worst that
+	/// a vector of `MaxCalls` indices are queried for any call validation.
+	/// You may need to provide a custom benchmark if this assumption is broken.
 	type ValidateCall: ValidateCall<Self>;
 
 	/// Number of time we should try to generate a random number that has no modulo bias.
@@ -227,6 +236,12 @@ decl_module! {
 			let _ = Self::do_buy_ticket(&caller, &call);
 		}
 
+		/// Set calls in storage which can be used to purchase a lottery ticket.
+		///
+		/// This function only matters if you use the `ValidateCall` implementation
+		/// provided by this pallet, which uses storage to determine the valid calls.
+		///
+		/// This extrinsic must be called by the Manager origin.
 		#[weight = T::WeightInfo::set_calls(calls.len() as u32)]
 		fn set_calls(origin, calls: Vec<<T as Config>::Call>) {
 			T::ManagerOrigin::ensure_origin(origin)?;
@@ -274,6 +289,11 @@ decl_module! {
 				LotteryIndex::put(new_index);
 				Ok(())
 			})?;
+			// Make sure pot exists.
+			let lottery_account = Self::account_id();
+			if T::Currency::total_balance(&lottery_account).is_zero() {
+				T::Currency::deposit_creating(&lottery_account, T::Currency::minimum_balance());
+			}
 			Self::deposit_event(RawEvent::LotteryStarted);
 		}
 

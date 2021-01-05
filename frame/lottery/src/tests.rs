@@ -29,7 +29,7 @@ use pallet_balances::Error as BalancesError;
 #[test]
 fn initial_state() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Balances::free_balance(Lottery::account_id()), 1);
+		assert_eq!(Balances::free_balance(Lottery::account_id()), 0);
 		assert!(crate::Lottery::<Test>::get().is_none());
 		assert_eq!(Participants::<Test>::get(&1), (0, vec![]));
 		assert_eq!(TicketsCount::get(), 0);
@@ -134,13 +134,11 @@ fn start_lottery_works() {
 		let length = 20;
 		let delay = 5;
 
-
 		// Setup ignores bad origin
 		assert_noop!(
 			Lottery::start_lottery(Origin::signed(1), price, length, delay, false),
 			BadOrigin,
 		);
-
 
 		// All good
 		assert_ok!(Lottery::start_lottery(Origin::root(), price, length, delay, false));
@@ -246,5 +244,18 @@ fn buy_ticket_works() {
 		assert_ok!(Lottery::buy_ticket(Origin::signed(2), call.clone()));
 		assert_eq!(TicketsCount::get(), 0);
 		assert_eq!(LotteryIndex::get(), 1);
+	});
+}
+
+#[test]
+fn start_lottery_will_create_account() {
+	new_test_ext().execute_with(|| {
+		let price = 10;
+		let length = 20;
+		let delay = 5;
+
+		assert_eq!(Balances::total_balance(&Lottery::account_id()), 0);
+		assert_ok!(Lottery::start_lottery(Origin::root(), price, length, delay, false));
+		assert_eq!(Balances::total_balance(&Lottery::account_id()), 1);
 	});
 }
