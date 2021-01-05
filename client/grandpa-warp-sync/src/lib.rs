@@ -108,7 +108,7 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 	{
 		let request = Request::<TBlock>::decode(&mut &payload[..])?;
 
-		let response = sc_finality_grandpa::finality_proof::prove_warp_sync(
+		let response = sc_finality_grandpa::prove_warp_sync(
 			self.backend.blockchain(), request.begin,
 		)?;
 
