@@ -20,7 +20,6 @@
 use codec::Decode;
 use sc_network::config::{ProtocolId, IncomingRequest, RequestResponseConfig};
 use sc_client_api::Backend;
-use sc_finality_grandpa::GrandpaJustification;
 use sp_runtime::traits::NumberFor;
 use futures::channel::{mpsc, oneshot};
 use futures::stream::StreamExt;
