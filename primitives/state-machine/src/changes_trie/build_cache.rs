@@ -34,7 +34,7 @@ use sp_core::storage::PrefixedStorageKey;
 /// is inserted (because digest block will includes all keys from this entry).
 /// When there's a fork, entries are pruned when first changes trie is inserted.
 pub struct BuildCache<H, N> {
-	/// Map of block (implies changes true) number => changes trie root.
+	/// Map of block (implies changes trie) number => changes trie root.
 	roots_by_number: HashMap<N, H>,
 	/// Map of changes trie root => set of storage keys that are in this trie.
 	/// The `Option<Vec<u8>>` in inner `HashMap` stands for the child storage key.
