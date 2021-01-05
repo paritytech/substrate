@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 use crate::*;
 use mock::{*, Origin};
 use sp_core::H256;
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, traits::{Header, BlakeTwo256}};
 use frame_support::weights::WithPostDispatchInfo;
 
 #[test]
@@ -55,7 +55,6 @@ fn deposit_event_should_work() {
 		System::initialize(
 			&1,
 			&[0u8; 32].into(),
-			&[0u8; 32].into(),
 			&Default::default(),
 			InitKind::Full,
 		);
@@ -75,7 +74,6 @@ fn deposit_event_should_work() {
 
 		System::initialize(
 			&2,
-			&[0u8; 32].into(),
 			&[0u8; 32].into(),
 			&Default::default(),
 			InitKind::Full,
@@ -132,7 +130,6 @@ fn deposit_event_uses_actual_weight() {
 	new_test_ext().execute_with(|| {
 		System::initialize(
 			&1,
-			&[0u8; 32].into(),
 			&[0u8; 32].into(),
 			&Default::default(),
 			InitKind::Full,
@@ -218,7 +215,6 @@ fn deposit_event_topics() {
 		System::initialize(
 			&BLOCK_NUMBER,
 			&[0u8; 32].into(),
-			&[0u8; 32].into(),
 			&Default::default(),
 			InitKind::Full,
 		);
@@ -284,7 +280,6 @@ fn prunes_block_hash_mappings() {
 			System::initialize(
 				&n,
 				&[n as u8 - 1; 32].into(),
-				&[0u8; 32].into(),
 				&Default::default(),
 				InitKind::Full,
 			);
@@ -421,4 +416,29 @@ fn ensure_one_of_works() {
 	assert_eq!(ensure_root_or_signed(RawOrigin::Root).unwrap(), Either::Left(()));
 	assert_eq!(ensure_root_or_signed(RawOrigin::Signed(0)).unwrap(), Either::Right(0));
 	assert!(ensure_root_or_signed(RawOrigin::None).is_err())
+}
+
+#[test]
+fn extrinsics_root_is_calculated_correctly() {
+	new_test_ext().execute_with(|| {
+		System::initialize(
+			&1,
+			&[0u8; 32].into(),
+			&Default::default(),
+			InitKind::Full,
+		);
+		System::note_finished_initialize();
+		System::note_extrinsic(vec![1]);
+		System::note_applied_extrinsic(&Ok(().into()), Default::default());
+		System::note_extrinsic(vec![2]);
+		System::note_applied_extrinsic(
+			&Err(DispatchError::BadOrigin.into()),
+			Default::default()
+		);
+		System::note_finished_extrinsics();
+		let header = System::finalize();
+
+		let ext_root = extrinsics_data_root::<BlakeTwo256>(vec![vec![1], vec![2]]);
+		assert_eq!(ext_root, *header.extrinsics_root());
+	});
 }

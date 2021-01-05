@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -475,8 +475,6 @@ fn offchain_index(wasm_method: WasmExecutionMethod) {
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
-	use sp_core::offchain::OffchainStorage;
-
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();
 	ext.register_extension(OffchainExt::new(offchain));
@@ -489,7 +487,7 @@ fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
 		).unwrap(),
 		true.encode(),
 	);
-	assert_eq!(state.read().persistent_storage.get(b"", b"test"), Some(vec![]));
+	assert_eq!(state.read().persistent_storage.get(b"test"), Some(vec![]));
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]

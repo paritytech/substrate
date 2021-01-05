@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +16,11 @@
 // limitations under the License.
 
 //! Hashing functions.
+//!
+//! This module is gated by `full-crypto` feature. If you intend to use any of the functions
+//! defined here within your runtime, you should most likely rather use [sp_io::hashing] instead,
+//! unless you know what you're doing. Using `sp_io` will be more performant, since instead of
+//! computing the hash in WASM it delegates that computation to the host client.
 
 use blake2_rfc;
 use sha2::{Digest, Sha256};

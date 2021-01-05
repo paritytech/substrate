@@ -259,7 +259,8 @@ impl Externalities for AsyncExt {
 	fn kill_child_storage(
 		&mut self,
 		_child_info: &ChildInfo,
-	) {
+		_limit: Option<u32>,
+	) -> bool {
 		panic!("`kill_child_storage`: should not be used in read only worker externalities!");
 	}
 
@@ -288,8 +289,6 @@ impl Externalities for AsyncExt {
 		);
 		crate::ext::StorageAppend::new(current_value).append(value);
 	}
-
-	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> Vec<u8> {
 		// TODO currently no storage_root function to avoid having to move the hasher trait

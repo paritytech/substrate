@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -329,7 +329,7 @@ impl<Block: BlockT, Client> BlockStatus<Block> for Arc<Client> where
 
 /// A trait that includes all the client functionalities grandpa requires.
 /// Ideally this would be a trait alias, we're not there yet.
-/// tracking issue https://github.com/rust-lang/rust/issues/41517
+/// tracking issue <https://github.com/rust-lang/rust/issues/41517>
 pub trait ClientForGrandpa<Block, BE>:
 	LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
 	+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>

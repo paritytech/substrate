@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -668,9 +668,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 				sink.clone()
 			} else {
 				// Notification silently discarded, as documented.
-				log::error!(
+				log::debug!(
 					target: "sub-libp2p",
-					"Attempted to send notification on unknown protocol: {:?}",
+					"Attempted to send notification on missing or closed substream: {:?}",
 					protocol,
 				);
 				return;
@@ -1380,10 +1380,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							}
 							Err(err) => {
 								let reason = match err {
-									ResponseFailure::Busy => "busy",
 									ResponseFailure::Network(InboundFailure::Timeout) => "timeout",
 									ResponseFailure::Network(InboundFailure::UnsupportedProtocols) =>
 										"unsupported",
+									ResponseFailure::Network(InboundFailure::ResponseOmission) =>
+										"busy-omitted",
 									ResponseFailure::Network(InboundFailure::ConnectionClosed) =>
 										"connection-closed",
 								};

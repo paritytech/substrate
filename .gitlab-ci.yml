@@ -24,9 +24,6 @@ stages:
   - check
   - test
   - build
-  - post-build-test
-  - chaos-env
-  - chaos
   - publish
   - deploy
   - flaming-fir
@@ -400,12 +397,11 @@ build-linux-substrate:             &build-binary
   <<:                              *collect-artifacts
   <<:                              *docker-env
   rules:
-    # .build-refs with manual on PRs and chaos
+    # .build-refs with manual on PRs
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
       when: manual
       allow_failure: true
@@ -491,136 +487,40 @@ build-rust-doc:
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
 
-#### stage:                        post-build-test
-
-trigger-contracts-ci:
-  stage:                           post-build-test
-  needs:
-    - job:                         build-linux-substrate
-      artifacts:                   false
-    - job:                         test-linux-stable
-      artifacts:                   false
-  trigger:
-    project:                       parity/srml-contracts-waterfall
-    branch:                        master
-    strategy:                      depend
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_COMMIT_REF_NAME == "master"
-
-#### stage:                        chaos-env
-
-build-chaos-docker:
-  stage:                           chaos-env
-  rules:
-    # .build-refs with chaos
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == "tags"
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
-  needs:
-    - job:                         build-linux-substrate
-  image:                           docker:stable
-  tags:
-    - kubernetes-parity-build
-  variables:
-    <<:                            *default-vars
-    DOCKER_HOST:                   tcp://localhost:2375
-    DOCKER_DRIVER:                 overlay2
-    PRODUCT:                       substrate
-    DOCKERFILE:                    $PRODUCT.Dockerfile
-    CONTAINER_IMAGE:               paritypr/$PRODUCT
-  environment:
-    name:                          parity-simnet
-  services:
-    - docker:dind
-  before_script:
-    - test "$DOCKER_CHAOS_USER" -a "$DOCKER_CHAOS_TOKEN"
-        || ( echo "no docker credentials provided"; exit 1 )
-    - docker login -u "$DOCKER_CHAOS_USER" -p "$DOCKER_CHAOS_TOKEN"
-    - docker info
-  script:
-    - cd ./artifacts/$PRODUCT/
-    - VERSION="ci-${CI_COMMIT_SHORT_SHA}"
-    - echo "${PRODUCT} version = ${VERSION}"
-    - test -z "${VERSION}" && exit 1
-    - docker build
-      --build-arg VCS_REF="${CI_COMMIT_SHA}"
-      --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-      --tag $CONTAINER_IMAGE:$VERSION
-      --file $DOCKERFILE .
-    - docker push $CONTAINER_IMAGE:$VERSION
-  after_script:
-    - docker logout
-
-#### stage:                        chaos
-
-chaos-test-singlenodeheight:
-  stage:                           chaos
-  rules:
-    # .build-refs with chaos
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == "tags"
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  # i.e add [chaos:basic] in commit message to trigger
-  image:                           paritypr/simnet:latest
-  needs:
-    - job:                         build-chaos-docker
-  tags:
-    - parity-simnet
-  variables:
-    <<:                            *default-vars
-    PRODUCT:                       substrate
-    DOCKERFILE:                    $PRODUCT.Dockerfile
-    CONTAINER_IMAGE:               paritypr/$PRODUCT
-    KEEP_NAMESPACE:                0
-    NAMESPACE:                     "substrate-ci-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}"
-    VERSION:                       "ci-${CI_COMMIT_SHORT_SHA}"
-  interruptible: true
-  environment:
-    name:                          parity-simnet
-  script:
-    - simnet spawn dev -i $CONTAINER_IMAGE:$VERSION
-    - simnet singlenodeheight -h 30
-  after_script:
-    - simnet clean
-
 #### stage:                        publish
 
 .build-push-docker-image:          &build-push-docker-image
   <<:                              *build-refs
   <<:                              *kubernetes-build
-  image:                           docker:stable
-  services:
-    - docker:dind
+  image:                           quay.io/buildah/stable
   variables:                       &docker-build-vars
     <<:                            *default-vars
-    DOCKER_HOST:                   tcp://localhost:2375
-    DOCKER_DRIVER:                 overlay2
     GIT_STRATEGY:                  none
     DOCKERFILE:                    $PRODUCT.Dockerfile
-    CONTAINER_IMAGE:               parity/$PRODUCT
+    IMAGE_NAME:                    docker.io/parity/$PRODUCT
   before_script:
-    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
-        || ( echo "no docker credentials provided"; exit 1 )
-    - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
-    - docker info
+    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity" ||
+        ( echo "no docker credentials provided"; exit 1 )
   script:
     - cd ./artifacts/$PRODUCT/
     - VERSION="$(cat ./VERSION)"
     - echo "${PRODUCT} version = ${VERSION}"
     - test -z "${VERSION}" && exit 1
-    - docker build
+    - buildah bud
+      --squash
+      --format=docker
       --build-arg VCS_REF="${CI_COMMIT_SHA}"
       --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-      --tag $CONTAINER_IMAGE:$VERSION
-      --tag $CONTAINER_IMAGE:latest
-      --file $DOCKERFILE .
-    - docker push $CONTAINER_IMAGE:$VERSION
-    - docker push $CONTAINER_IMAGE:latest
+      --tag "$IMAGE_NAME:$VERSION"
+      --tag "$IMAGE_NAME:latest"
+      --file "$DOCKERFILE" .
+    - echo "$Docker_Hub_Pass_Parity" |
+      buildah login --username "$Docker_Hub_User_Parity" --password-stdin docker.io
+    - buildah info
+    - buildah push
+      --format=v2s2
+      "$IMAGE_NAME:$VERSION"
+      "$IMAGE_NAME:latest"
 
 publish-docker-substrate:
   stage:                           publish
@@ -634,7 +534,7 @@ publish-docker-substrate:
     <<:                            *docker-build-vars
     PRODUCT:                       substrate
   after_script:
-    - docker logout
+    - buildah logout "$IMAGE_NAME"
     # only VERSION information is needed for the deployment
     - find ./artifacts/ -depth -not -name VERSION -type f -delete
 
@@ -648,7 +548,7 @@ publish-docker-subkey:
     <<:                            *docker-build-vars
     PRODUCT:                       subkey
   after_script:
-    - docker logout
+    - buildah logout "$IMAGE_NAME"
 
 publish-s3-release:
   stage:                           publish
