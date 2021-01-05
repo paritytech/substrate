@@ -86,6 +86,14 @@ pub(crate) const CURRENT_VERSION: u32 = 6;
 /// Lowest version we support
 pub(crate) const MIN_VERSION: u32 = 3;
 
+/// Identifier of the peerset for the block announces protocol.
+const HARDCODED_PEERSETS_SYNC: sc_peerset::SetId = sc_peerset::SetId::from(0);
+/// Identifier of the peerset for the transactions protocol.
+const HARDCODED_PEERSETS_TX: sc_peerset::SetId = sc_peerset::SetId::from(1);
+/// Number of hardcoded peersets (the constants right above). Any set whose identifier is equal or
+/// superior to this value corresponds to a user-defined protocol.
+const NUM_HARDCODED_PEERSETS: usize = 2;
+
 /// When light node connects to the full node and the full node is behind light node
 /// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it not useful
 /// and disconnect to free connection slot.
@@ -381,7 +389,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let mut known_addresses = Vec::new();
 
 		let (peerset, peerset_handle) = {
-			let mut sets = Vec::with_capacity(2 + network_config.extra_sets.len());
+			let mut sets = Vec::with_capacity(NUM_HARDCODED_PEERSETS + network_config.extra_sets.len());
 
 			let mut default_sets_reserved = HashSet::new();
 			match config_role {
@@ -538,7 +546,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Returns the list of all the peers that the peerset currently requests us to be connected
 	/// to on the default set.
 	pub fn requested_peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.behaviour.requested_peers(sc_peerset::SetId::from(0))
+		self.behaviour.requested_peers(HARDCODED_PEERSETS_SYNC)
 	}
 
 	/// Returns the number of discovered nodes that we keep in memory.
@@ -549,7 +557,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Disconnects the given peer if we are connected to it.
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId, protocol_name: &str) {
 		if let Some(position) = self.notification_protocols.iter().position(|p| *p == protocol_name) {
-			self.behaviour.disconnect_peer(peer_id, sc_peerset::SetId::from(position + 2));
+			self.behaviour.disconnect_peer(peer_id, sc_peerset::SetId::from(position + NUM_HARDCODED_PEERSETS));
 		} else {
 			log::warn!(target: "sub-libp2p", "disconnect_peer() with invalid protocol name")
 		}
@@ -614,7 +622,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			build_status_message::<B>(&self.config, number, hash, self.genesis_hash),
 		);
 		self.behaviour.set_notif_protocol_handshake(
-			sc_peerset::SetId::from(0),
+			HARDCODED_PEERSETS_SYNC,
 			BlockAnnouncesHandshake::<B>::build(
 				&self.config,
 				number,
@@ -692,7 +700,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					"Received no longer supported legacy request from {:?}",
 					who
 				);
-				self.behaviour.disconnect_peer(&who, sc_peerset::SetId::from(0));
+				self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(who, rep::BAD_PROTOCOL);
 			},
 		}
@@ -748,14 +756,14 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				}
 				None => {
 					trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer);
-					self.behaviour.disconnect_peer(&peer, sc_peerset::SetId::from(0));
+					self.behaviour.disconnect_peer(&peer, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(peer, rep::UNEXPECTED_RESPONSE);
 					return CustomMessageOutcome::None;
 				}
 			}
 		} else {
 			trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer);
-			self.behaviour.disconnect_peer(&peer, sc_peerset::SetId::from(0));
+			self.behaviour.disconnect_peer(&peer, HARDCODED_PEERSETS_SYNC);
 			self.peerset_handle.report_peer(peer, rep::UNEXPECTED_RESPONSE);
 			return CustomMessageOutcome::None;
 		};
@@ -781,7 +789,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				Ok(sync::OnBlockJustification::Import { peer, hash, number, justification }) =>
 					CustomMessageOutcome::JustificationImport(peer, hash, number, justification),
 				Err(sync::BadPeer(id, repu)) => {
-					self.behaviour.disconnect_peer(&id, sc_peerset::SetId::from(0));
+					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
 					CustomMessageOutcome::None
 				}
@@ -798,7 +806,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					}
 				}
 				Err(sync::BadPeer(id, repu)) => {
-					self.behaviour.disconnect_peer(&id, sc_peerset::SetId::from(0));
+					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
 					CustomMessageOutcome::None
 				}
@@ -812,7 +820,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		peer: &PeerId,
 	) {
 		self.peerset_handle.report_peer(peer.clone(), rep::TIMEOUT);
-		self.behaviour.disconnect_peer(peer, sc_peerset::SetId::from(0));
+		self.behaviour.disconnect_peer(peer, HARDCODED_PEERSETS_SYNC);
 	}
 
 	/// Perform time based maintenance.
@@ -847,7 +855,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		for p in aborting {
-			self.behaviour.disconnect_peer(&p, sc_peerset::SetId::from(0));
+			self.behaviour.disconnect_peer(&p, HARDCODED_PEERSETS_SYNC);
 			self.peerset_handle.report_peer(p, rep::TIMEOUT);
 		}
 	}
@@ -878,7 +886,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				self.genesis_hash, status.genesis_hash
 			);
 			self.peerset_handle.report_peer(who.clone(), rep::GENESIS_MISMATCH);
-			self.behaviour.disconnect_peer(&who, sc_peerset::SetId::from(0));
+			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 
 			if self.boot_node_ids.contains(&who) {
 				error!(
@@ -898,7 +906,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			if status.roles.is_light() {
 				debug!(target: "sync", "Peer {} is unable to serve light requests", who);
 				self.peerset_handle.report_peer(who.clone(), rep::BAD_ROLE);
-				self.behaviour.disconnect_peer(&who, sc_peerset::SetId::from(0));
+				self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 				return Err(());
 			}
 
@@ -915,7 +923,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
 				debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
 				self.peerset_handle.report_peer(who.clone(), rep::PEER_BEHIND_US_LIGHT);
-				self.behaviour.disconnect_peer(&who, sc_peerset::SetId::from(0));
+				self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 				return Err(());
 			}
 		}
@@ -939,7 +947,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			match self.sync.new_peer(who.clone(), peer.info.best_hash, peer.info.best_number) {
 				Ok(req) => req,
 				Err(sync::BadPeer(id, repu)) => {
-					self.behaviour.disconnect_peer(&id, sc_peerset::SetId::from(0));
+					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
 					return Err(())
 				}
@@ -973,7 +981,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		// sending transaction to light node is considered a bad behavior
 		if !self.config.roles.is_full() {
 			trace!(target: "sync", "Peer {} is trying to send transactions to the light node", who);
-			self.behaviour.disconnect_peer(&who, sc_peerset::SetId::from(1));
+			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_TX);
 			self.peerset_handle.report_peer(who, rep::UNEXPECTED_TRANSACTIONS);
 			return;
 		}
@@ -1055,7 +1063,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				continue;
 			}
 
-			if !self.behaviour.is_open(who, sc_peerset::SetId::from(1)) {
+			if !self.behaviour.is_open(who, HARDCODED_PEERSETS_TX) {
 				continue;
 			}
 
@@ -1077,7 +1085,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
 				self.behaviour.write_notification(
 					who,
-					sc_peerset::SetId::from(1),
+					HARDCODED_PEERSETS_TX,
 					to_send.encode()
 				);
 			}
@@ -1143,7 +1151,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 				self.behaviour.write_notification(
 					who,
-					sc_peerset::SetId::from(0),
+					HARDCODED_PEERSETS_SYNC,
 					message.encode()
 				);
 			}
@@ -1218,7 +1226,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			}
 			sync::PollBlockAnnounceValidation::Failure { who, disconnect } => {
 				if disconnect {
-					self.behaviour.disconnect_peer(&who, sc_peerset::SetId::from(0));
+					self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 				}
 
 				self.report_peer(who, rep::BAD_BLOCK_ANNOUNCEMENT);
@@ -1266,7 +1274,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				}
 			}
 			Err(sync::BadPeer(id, repu)) => {
-				self.behaviour.disconnect_peer(&id, sc_peerset::SetId::from(0));
+				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
 				CustomMessageOutcome::None
 			}
@@ -1318,7 +1326,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					});
 				}
 				Err(sync::BadPeer(id, repu)) => {
-					self.behaviour.disconnect_peer(&id, sc_peerset::SetId::from(0));
+					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu)
 				}
 			}
@@ -1331,7 +1339,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.on_justification_import(hash, number, success);
 		if !success {
 			log::info!("💔 Invalid justification provided by {} for #{}", who, hash);
-			self.behaviour.disconnect_peer(&who, sc_peerset::SetId::from(0));
+			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 			self.peerset_handle.report_peer(
 				who,
 				sc_peerset::ReputationChange::new_fatal("Invalid justification")
@@ -1341,32 +1349,32 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 	/// Set whether the syncing peers set is in reserved-only mode.
 	pub fn set_reserved_only(&self, reserved_only: bool) {
-		self.peerset_handle.set_reserved_only(sc_peerset::SetId::from(0), reserved_only);
-		self.peerset_handle.set_reserved_only(sc_peerset::SetId::from(1), reserved_only);
+		self.peerset_handle.set_reserved_only(HARDCODED_PEERSETS_SYNC, reserved_only);
+		self.peerset_handle.set_reserved_only(HARDCODED_PEERSETS_TX, reserved_only);
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers for syncing purposes.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(0), peer.clone());
-		self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(1), peer);
+		self.peerset_handle.remove_reserved_peer(HARDCODED_PEERSETS_SYNC, peer.clone());
+		self.peerset_handle.remove_reserved_peer(HARDCODED_PEERSETS_TX, peer);
 	}
 
 	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
 	pub fn add_reserved_peer(&self, peer: PeerId) {
-		self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(0), peer.clone());
-		self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(1), peer);
+		self.peerset_handle.add_reserved_peer(HARDCODED_PEERSETS_SYNC, peer.clone());
+		self.peerset_handle.add_reserved_peer(HARDCODED_PEERSETS_TX, peer);
 	}
 
 	/// Sets the list of reserved peers for syncing purposes.
 	pub fn set_reserved_peers(&self, peers: HashSet<PeerId>) {
-		self.peerset_handle.set_reserved_peers(sc_peerset::SetId::from(0), peers.clone());
-		self.peerset_handle.set_reserved_peers(sc_peerset::SetId::from(1), peers);
+		self.peerset_handle.set_reserved_peers(HARDCODED_PEERSETS_SYNC, peers.clone());
+		self.peerset_handle.set_reserved_peers(HARDCODED_PEERSETS_TX, peers);
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_set_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(index + 2), peer);
+			self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peer);
 		} else {
 			log::error!(
 				target: "sub-libp2p",
@@ -1379,7 +1387,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Adds a `PeerId` to the list of reserved peers.
 	pub fn add_set_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(index + 2), peer);
+			self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peer);
 		} else {
 			log::error!(
 				target: "sub-libp2p",
@@ -1394,14 +1402,14 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Can be called multiple times with the same `PeerId`s.
 	pub fn add_default_set_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		for peer_id in peer_ids {
-			self.peerset_handle.add_to_peers_set(sc_peerset::SetId::from(0), peer_id);
+			self.peerset_handle.add_to_peers_set(HARDCODED_PEERSETS_SYNC, peer_id);
 		}
 	}
 
 	/// Add a peer to a peers set.
 	pub fn add_to_peers_set(&self, protocol: Cow<'static, str>, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.add_to_peers_set(sc_peerset::SetId::from(index + 2), peer);
+			self.peerset_handle.add_to_peers_set(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peer);
 		} else {
 			log::error!(
 				target: "sub-libp2p",
@@ -1414,7 +1422,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Remove a peer from a peers set.
 	pub fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.remove_from_peers_set(sc_peerset::SetId::from(index + 2), peer);
+			self.peerset_handle.remove_from_peers_set(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peer);
 		} else {
 			log::error!(
 				target: "sub-libp2p",
@@ -1637,7 +1645,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		let outcome = match event {
 			GenericProtoOut::CustomProtocolOpen { peer_id, set_id, received_handshake, notifications_sink, .. } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
-				if set_id == sc_peerset::SetId::from(0) {
+				if set_id == HARDCODED_PEERSETS_SYNC {
 					// `received_handshake` can be either a `Status` message if received from the
 					// legacy substream ,or a `BlockAnnouncesHandshake` if received from the block
 					// announces substream.
@@ -1653,7 +1661,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 							if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
 								// Set 1 is kept in sync with the connected peers of set 0.
 								self.peerset_handle.add_to_peers_set(
-									sc_peerset::SetId::from(1),
+									HARDCODED_PEERSETS_TX,
 									peer_id.clone()
 								);
 								CustomMessageOutcome::SyncConnected(peer_id)
@@ -1677,7 +1685,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 									if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
 										// Set 1 is kept in sync with the connected peers of set 0.
 										self.peerset_handle.add_to_peers_set(
-											sc_peerset::SetId::from(1),
+											HARDCODED_PEERSETS_TX,
 											peer_id.clone()
 										);
 										CustomMessageOutcome::SyncConnected(peer_id)
@@ -1701,7 +1709,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						}
 					}
 
-				} else if set_id == sc_peerset::SetId::from(1) {
+				} else if set_id == HARDCODED_PEERSETS_TX {
 					// Nothing to do.
 					CustomMessageOutcome::None
 				} else {
@@ -1709,7 +1717,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						Ok(roles) =>
 							CustomMessageOutcome::NotificationStreamOpened {
 								remote: peer_id,
-								protocol: self.notification_protocols[usize::from(set_id) - 2].clone(),
+								protocol: self.notification_protocols[usize::from(set_id) - NUM_HARDCODED_PEERSETS].clone(),
 								roles,
 								notifications_sink,
 							},
@@ -1723,23 +1731,23 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				}
 			}
 			GenericProtoOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } => {
-				if set_id == sc_peerset::SetId::from(0) || set_id == sc_peerset::SetId::from(1) {
+				if set_id == HARDCODED_PEERSETS_SYNC || set_id == HARDCODED_PEERSETS_TX {
 					CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamReplaced {
 						remote: peer_id,
-						protocol: self.notification_protocols[usize::from(set_id) - 2].clone(),
+						protocol: self.notification_protocols[usize::from(set_id) - NUM_HARDCODED_PEERSETS].clone(),
 						notifications_sink,
 					}
 				}
 			},
 			GenericProtoOut::CustomProtocolClosed { peer_id, set_id } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
-				if set_id == sc_peerset::SetId::from(0) {
+				if set_id == HARDCODED_PEERSETS_SYNC {
 					if self.on_sync_peer_disconnected(peer_id.clone()).is_ok() {
 						// Set 1 is kept in sync with the connected peers of set 0.
 						self.peerset_handle.remove_reserved_peer(
-							sc_peerset::SetId::from(1),
+							HARDCODED_PEERSETS_TX,
 							peer_id.clone()
 						);
 						CustomMessageOutcome::SyncDisconnected(peer_id)
@@ -1751,12 +1759,12 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						);
 						CustomMessageOutcome::None
 					}
-				} else if set_id == sc_peerset::SetId::from(1) {
+				} else if set_id == HARDCODED_PEERSETS_TX {
 					CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamClosed {
 						remote: peer_id,
-						protocol: self.notification_protocols[usize::from(set_id) - 2].clone(),
+						protocol: self.notification_protocols[usize::from(set_id) - NUM_HARDCODED_PEERSETS].clone(),
 					}
 				}
 			},
@@ -1802,7 +1810,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						CustomMessageOutcome::None
 					}
 					_ => {
-						let protocol_name = self.notification_protocols[usize::from(set_id) - 2].clone();
+						let protocol_name = self.notification_protocols[usize::from(set_id) - NUM_HARDCODED_PEERSETS].clone();
 						CustomMessageOutcome::NotificationsReceived {
 							remote: peer_id,
 							messages: vec![(protocol_name, message.freeze())],

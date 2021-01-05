@@ -72,6 +72,12 @@ enum Action {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SetId(usize);
 
+impl SetId {
+	pub const fn from(id: usize) -> Self {
+		SetId(id)
+	}
+}
+
 impl From<usize> for SetId {
 	fn from(id: usize) -> Self {
 		SetId(id)
