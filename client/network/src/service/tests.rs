@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{config, Event, NetworkService, NetworkWorker};
+use crate::block_request_handler::BlockRequestHandler;
 
 use libp2p::PeerId;
 use futures::prelude::*;
@@ -91,6 +92,17 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		None,
 	));
 
+	let protocol_id = config::ProtocolId::from("/test-protocol-name");
+
+	let block_request_protocol_config = {
+		let (handler, protocol_config) = BlockRequestHandler::new(
+			protocol_id.clone(),
+			client.clone(),
+		);
+		async_std::task::spawn(handler.run().boxed());
+		protocol_config
+	};
+
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
@@ -98,12 +110,13 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		chain: client.clone(),
 		on_demand: None,
 		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
-		protocol_id: config::ProtocolId::from("/test-protocol-name"),
+		protocol_id,
 		import_queue,
 		block_announce_validator: Box::new(
 			sp_consensus::block_validation::DefaultBlockAnnounceValidator,
 		),
 		metrics_registry: None,
+		block_request_protocol_config,
 	})
 	.unwrap();
 
