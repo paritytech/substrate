@@ -511,7 +511,10 @@ impl<T: Config> Module<T> {
 	/// Produces information about the next epoch (which was already previously
 	/// announced).
 	pub fn next_epoch() -> Epoch {
-		let next_epoch_index = EpochIndex::get() + 1;
+		let next_epoch_index = EpochIndex::get().checked_add(1).expect(
+			"epoch index is u64; it is always only incremented by one; \
+			 if u64 is not enough we should crash for safety; qed.",
+		);
 
 		Epoch {
 			epoch_index: next_epoch_index,
@@ -523,7 +526,16 @@ impl<T: Config> Module<T> {
 	}
 
 	fn epoch_start(epoch_index: u64) -> SlotNumber {
-		(epoch_index * T::EpochDuration::get()) + GenesisSlot::get()
+		// (epoch_index * epoch_duration) + genesis_slot
+
+		const PROOF: &str = "slot number is u64; it should relate in some way to wall clock time; \
+							 if u64 is not enough we should crash for safety; qed.";
+
+		let epoch_start = epoch_index
+			.checked_mul(T::EpochDuration::get())
+			.expect(PROOF);
+
+		epoch_start.checked_add(GenesisSlot::get()).expect(PROOF)
 	}
 
 	fn deposit_consensus<U: Encode>(new: U) {
