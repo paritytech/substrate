@@ -497,7 +497,7 @@ pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
 				} else {
 					println!("should be unreachable");
 				}
-	
+
 				let inc = delay == Zero::zero() && block_number == index;
 				index = dest;
 				if inc {
@@ -605,7 +605,7 @@ pub(crate) fn check_finality_proof<Block: BlockT, B, J>(
 	Ok(effects)
 }
 
-/// Check GRANDPA authority change sequence to assert finality of a target block. 
+/// Check GRANDPA authority change sequence to assert finality of a target block.
 ///
 /// Returns the header of the target block.
 pub fn check_authority_proof<Block: BlockT, J>(
@@ -633,7 +633,7 @@ pub fn check_authority_proof<Block: BlockT, J>(
 			&result.2,
 			is_last,
 			&fragment,
-		)?; 
+		)?;
 
 		if is_last {
 			return Ok((fragment.header, result.0, result.1))
@@ -775,7 +775,6 @@ pub trait BlockJustification<Header: HeaderT> {
 }
 
 /// Justification used to prove block finality.
-/// TODO switch back to pub(crate)
 pub trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 	/// Verify justification with respect to authorities set and authorities set id.
 	fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()>;

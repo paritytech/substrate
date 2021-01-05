@@ -56,7 +56,7 @@ pub fn request_response_config_for_chain<TBlock: BlockT, TBackend: Backend<TBloc
 
 const LOG_TARGET: &str = "grandpa-warp-sync-request-handler";
 
-/// Generates a [`RequestResponseConfig`] for the block request protocol, refusing incoming requests.
+/// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing incoming requests.
 pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestResponseConfig {
 	RequestResponseConfig {
 		name: generate_protocol_name(protocol_id).into(),
@@ -67,7 +67,7 @@ pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestRespo
 	}
 }
 
-/// Generate the block protocol name from chain specific protocol identifier.
+/// Generate the grandpa warp sync protocol name from chain specific protocol identifier.
 fn generate_protocol_name(protocol_id: ProtocolId) -> String {
 	let mut s = String::new();
 	s.push_str("/");
@@ -81,7 +81,7 @@ struct Request<B: BlockT> {
 	begin: B::Hash
 }
 
-/// Handler for incoming block requests from a remote peer.
+/// Handler for incoming grandpa warp sync requests from a remote peer.
 pub struct GrandpaWarpSyncRequestHandler<TBackend, TBlock> {
 	backend: Arc<TBackend>,
 	request_receiver: mpsc::Receiver<IncomingRequest>,
@@ -89,7 +89,7 @@ pub struct GrandpaWarpSyncRequestHandler<TBackend, TBlock> {
 }
 
 impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TBackend, TBlock> {
-	/// Create a new [`BlockRequestHandler`].
+	/// Create a new [`GrandpaWarpSyncRequestHandler`].
 	pub fn new(protocol_id: ProtocolId, backend: Arc<TBackend>) -> (Self, RequestResponseConfig) {
 		let (tx, request_receiver) = mpsc::channel(20);
 
@@ -116,7 +116,7 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 			.map_err(|_| HandleRequestError::SendResponse)
 	}
 
-	/// Run [`BlockRequestHandler`].
+	/// Run [`GrandpaWarpSyncRequestHandler`].
 	pub async fn run(mut self)
 		where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
 	{
