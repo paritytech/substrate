@@ -295,7 +295,7 @@ pub fn start_era(era_index: EraIndex) {
 	assert_eq!(Staking::current_era(), Some(era_index));
 }
 
-pub fn make_pre_digest(
+pub fn make_primary_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
 	slot_number: sp_consensus_babe::SlotNumber,
 	vrf_output: VRFOutput,
