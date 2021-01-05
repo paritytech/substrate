@@ -1468,16 +1468,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 							}
 							RequestFailure::Network(OutboundFailure::ConnectionClosed)
 							| RequestFailure::NotConnected => {
-								// TODO: Log line likely not needed once stalling issue is fixed.
-								if self.sync.peer_info(id).is_some() {
-									debug!(
-										target: "sync",
-										"Block request to peer {:?} failed due to connection \
-										 closed or not connected while sync assumes peer is \
-										 connected.",
-										id
-									);
-								}
 								self.behaviour.disconnect_peer(id);
 							},
 							RequestFailure::UnknownProtocol => {
@@ -1494,12 +1484,12 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					},
 					Poll::Ready(Err(oneshot::Canceled)) => {
 						peer.block_request.take();
-						self.behaviour.disconnect_peer(id);
 						trace!(
 							target: "sync",
 							"Block request to peer {:?} failed due to oneshot being canceled.",
 							id,
 						);
+						self.behaviour.disconnect_peer(id);
 					},
 					Poll::Pending => {},
 				}
