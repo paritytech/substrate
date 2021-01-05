@@ -117,13 +117,7 @@ benchmarks! {
 
 	set_identity {
 		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
-		let x in 1 .. T::MaxAdditionalFields::get() => {
-			// Create their main identity with x additional fields
-			let info = create_identity_info::<T>(x);
-			let caller: T::AccountId = whitelisted_caller();
-			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
-		};
+		let x in 1 .. T::MaxAdditionalFields::get();
 		let caller = {
 			// The target user
 			let caller: T::AccountId = whitelisted_caller();
@@ -329,18 +323,8 @@ benchmarks! {
 
 	kill_identity {
 		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
-		let s in 1 .. T::MaxSubAccounts::get() => {
-			// Give them s many sub accounts
-			let caller: T::AccountId = whitelisted_caller();
-			let _ = add_sub_accounts::<T>(&caller, s)?;
-		};
-		let x in 1 .. T::MaxAdditionalFields::get() => {
-			// Create their main identity with x additional fields
-			let info = create_identity_info::<T>(x);
-			let caller: T::AccountId = whitelisted_caller();
-			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
-		};
+		let s in 1 .. T::MaxSubAccounts::get();
+		let x in 1 .. T::MaxAdditionalFields::get();
 
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_origin: <T as frame_system::Config>::Origin = RawOrigin::Signed(target.clone()).into();
