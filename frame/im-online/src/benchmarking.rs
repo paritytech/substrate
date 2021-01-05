@@ -63,8 +63,6 @@ pub fn create_heartbeat<T: Config>(k: u32, e: u32) ->
 }
 
 benchmarks! {
-	_{ }
-
 	#[extra]
 	heartbeat {
 		let k in 1 .. MAX_KEYS;

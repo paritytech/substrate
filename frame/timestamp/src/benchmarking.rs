@@ -30,8 +30,6 @@ use crate::Module as Timestamp;
 const MAX_TIME: u32 = 100;
 
 benchmarks! {
-	_ { }
-
 	set {
 		let t = MAX_TIME;
 		// Ignore write to `DidUpdate` since it transient.

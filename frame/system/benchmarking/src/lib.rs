@@ -38,8 +38,6 @@ pub struct Module<T: Config>(System<T>);
 pub trait Config: frame_system::Config {}
 
 benchmarks! {
-	_ { }
-
 	remark {
 		let b in 0 .. *T::BlockLength::get().max.get(DispatchClass::Normal) as u32;
 		let remark_message = vec![1; b as usize];

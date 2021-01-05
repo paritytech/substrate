@@ -48,8 +48,6 @@ fn setup_multi<T: Config>(s: u32, z: u32)
 }
 
 benchmarks! {
-	_ { }
-
 	as_multi_threshold_1 {
 		// Transaction Length
 		let z in 0 .. 10_000;

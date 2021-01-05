@@ -176,13 +176,11 @@ pub use sp_storage::TrackedStorageKey;
 #[macro_export]
 macro_rules! benchmarks {
 	(
-		$( where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? } )?
-		,
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter!(
 			{ }
-			{ $( $( $where_ty: $where_bound ),* )? }
+			{ }
 			( )
 			( )
 			$( $rest )*
@@ -194,12 +192,11 @@ macro_rules! benchmarks {
 #[macro_export]
 macro_rules! benchmarks_instance {
 	(
-		$( where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? } )?
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter!(
 			{ I }
-			{ $( $( $where_ty: $where_bound ),* )? }
+			{ }
 			( )
 			( )
 			$( $rest )*
@@ -210,6 +207,23 @@ macro_rules! benchmarks_instance {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! benchmarks_iter {
+	// detect and extract where clause:
+	(
+		{ $( $instance:ident )? }
+		{ $( $where_clause:tt )* }
+		( $( $names:tt )* )
+		( $( $names_extra:tt )* )
+		where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? }
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter! {
+			{ $( $instance)? }
+			{ $( $where_ty: $where_bound ),* }
+			( $( $names )* )
+			( $( $names_extra )* )
+			$( $rest )*
+		}
+	};
 	// detect and extract extra tag:
 	(
 		{ $( $instance:ident )? }

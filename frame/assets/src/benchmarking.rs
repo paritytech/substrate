@@ -74,8 +74,6 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 }
 
 benchmarks! {
-	,
-
 	create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());

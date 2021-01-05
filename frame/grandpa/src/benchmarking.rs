@@ -25,8 +25,6 @@ use frame_system::RawOrigin;
 use sp_core::H256;
 
 benchmarks! {
-	_ {	}
-
 	check_equivocation_proof {
 		let x in 0 .. 1;
 

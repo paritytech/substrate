@@ -89,8 +89,6 @@ const MAX_BYTES: u32 = 16384;
 const MAX_TIPPERS: u32 = 100;
 
 benchmarks! {
-	_ { }
-
 	report_awesome {
 		let r in 0 .. MAX_BYTES;
 		let (caller, reason, awesome_person) = setup_awesome::<T>(r);

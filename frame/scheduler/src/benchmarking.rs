@@ -52,8 +52,6 @@ fn fill_schedule<T: Config> (when: T::BlockNumber, n: u32) -> Result<(), &'stati
 }
 
 benchmarks! {
-	_ { }
-
 	schedule {
 		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();

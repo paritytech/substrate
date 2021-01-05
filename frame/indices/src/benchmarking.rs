@@ -29,8 +29,6 @@ use crate::Module as Indices;
 const SEED: u32 = 0;
 
 benchmarks! {
-	_ { }
-
 	claim {
 		let account_index = T::AccountIndex::from(SEED);
 		let caller: T::AccountId = whitelisted_caller();

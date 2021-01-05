@@ -110,7 +110,7 @@ fn new_test_ext() -> sp_io::TestExternalities {
 
 benchmarks!{
 	where_clause { where <T as OtherConfig>::OtherEvent: Into<<T as Config>::Event> }
-	,
+
 	set_value {
 		let b in 1 .. 1000;
 		let caller = account::<T::AccountId>("caller", 0, 0);
