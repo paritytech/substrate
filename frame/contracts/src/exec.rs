@@ -358,12 +358,15 @@ where
 					gas_meter,
 				).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
-			// We need each contract that exists to be above the subsistence threshold
+
+			// Collect the rent for the first block to prevent the creation of very large
+			// contracts that never intended to pay for even one block.
+			// This also makes sure that it is above the subsistence threshold
 			// in order to keep up the guarantuee that we always leave a tombstone behind
 			// with the exception of a contract that called `seal_terminate`.
-			if T::Currency::total_balance(&dest) < nested.config.subsistence_threshold() {
-				Err(Error::<T>::NewContractNotFunded)?
-			}
+			Rent::<T>::charge(&dest)?
+				.and_then(|c| c.get_alive())
+				.ok_or_else(|| Error::<T>::NewContractNotFunded)?;
 
 			// Deposit an instantiation event.
 			deposit_event::<T>(vec![], RawEvent::Instantiated(caller.clone(), dest.clone()));
