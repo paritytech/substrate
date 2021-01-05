@@ -97,6 +97,7 @@ pub use sp_storage::TrackedStorageKey;
 ///
 ///   // second dispatchable: bar; this is a root dispatchable and accepts a `u8` vector of size
 ///   // `l`.
+///   // In this case, we explicitly name the call using `bar` instead of `_`.
 ///   bar {
 ///     let l in 1 .. MAX_LENGTH => initialize_l(l);
 ///   }: bar(Origin::Root, vec![0u8; l])
