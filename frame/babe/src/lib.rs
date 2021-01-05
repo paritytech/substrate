@@ -504,7 +504,8 @@ impl<T: Config> Module<T> {
 		}
 	}
 
-	/// Produces information about the next epoch.
+	/// Produces information about the next epoch (which was already previously
+	/// announced).
 	pub fn next_epoch() -> Epoch {
 		let next_epoch_index = EpochIndex::get() + 1;
 
