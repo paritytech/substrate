@@ -953,6 +953,25 @@ impl pallet_mmr::Config for Runtime {
 }
 
 parameter_types! {
+	pub const LotteryModuleId: ModuleId = ModuleId(*b"py/lotto");
+	pub const MaxCalls: usize = 10;
+	pub const MaxGenerateRandom: u32 = 10;
+}
+
+impl pallet_lottery::Config for Runtime {
+	type ModuleId = LotteryModuleId;
+	type Call = Call;
+	type Event = Event;
+	type Currency = Balances;
+	type Randomness = RandomnessCollectiveFlip;
+	type ManagerOrigin = EnsureRoot<AccountId>;
+	type MaxCalls = MaxCalls;
+	type ValidateCall = Lottery;
+	type MaxGenerateRandom = MaxGenerateRandom;
+	type WeightInfo = pallet_lottery::weights::SubstrateWeight<Runtime>;
+}
+
+parameter_types! {
 	pub const AssetDepositBase: Balance = 100 * DOLLARS;
 	pub const AssetDepositPerZombie: Balance = 1 * DOLLARS;
 }
@@ -1009,6 +1028,7 @@ construct_runtime!(
 		Tips: pallet_tips::{Module, Call, Storage, Event<T>},
 		Assets: pallet_assets::{Module, Call, Storage, Event<T>},
 		Mmr: pallet_mmr::{Module, Storage},
+		Lottery: pallet_lottery::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -1291,6 +1311,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_identity, Identity);
 			add_benchmark!(params, batches, pallet_im_online, ImOnline);
 			add_benchmark!(params, batches, pallet_indices, Indices);
+			add_benchmark!(params, batches, pallet_lottery, Lottery);
 			add_benchmark!(params, batches, pallet_mmr, Mmr);
 			add_benchmark!(params, batches, pallet_multisig, Multisig);
 			add_benchmark!(params, batches, pallet_offences, OffencesBench::<Runtime>);

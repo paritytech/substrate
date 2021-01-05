@@ -81,6 +81,7 @@ members = [
 	"frame/identity",
 	"frame/im-online",
 	"frame/indices",
+	"frame/lottery",
 	"frame/membership",
 	"frame/merkle-mountain-range",
 	"frame/metadata",
