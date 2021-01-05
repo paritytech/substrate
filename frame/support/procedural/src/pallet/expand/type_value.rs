@@ -25,8 +25,10 @@ pub fn expand_type_values(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 
 	for type_value in &def.type_values {
+		let fn_name_str = &type_value.ident.to_string();
+		let fn_name_snakecase = inflector::cases::snakecase::to_snake_case(fn_name_str);
 		let fn_ident_renamed = syn::Ident::new(
-			&format!("__type_value_for_{}", type_value.ident),
+			&format!("__type_value_for_{}", fn_name_snakecase),
 			type_value.ident.span(),
 		);
 
@@ -41,7 +43,6 @@ pub fn expand_type_values(def: &mut Def) -> proc_macro2::TokenStream {
 
 		// Rename the type_value function name
 		type_value_item.sig.ident = fn_ident_renamed.clone();
-		type_value_item.attrs.push(syn::parse_quote!(#[allow(non_snake_case)]));
 
 		let vis = &type_value.vis;
 		let ident = &type_value.ident;

@@ -1658,6 +1658,7 @@ dependencies = [
 name = "frame-support-procedural"
 version = "2.0.0"
 dependencies = [
+ "Inflector",
  "frame-support-procedural-tools",
  "proc-macro2",
  "quote",
