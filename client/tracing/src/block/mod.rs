@@ -63,29 +63,34 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let id = BlockId::Hash(self.block);
 		let extrinsics = self.client.block_body(&id)
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
-			.ok_or("Block body not stored".to_string())?;
+			.ok_or("Block not found".to_string())?;
 		let mut header = self.client.header(id)
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
 			.ok_or("Block not found".to_string())?;
-		let parent_id = BlockId::Hash(*header.parent_hash());
+		let parent_hash = header.parent_hash().clone();
+		let parent_id = BlockId::Hash(parent_hash.clone());
 		// Pop digest else RuntimePanic due to: 'Number of digest items must match that calculated.'
 		header.digest_mut().pop();
 		let block = Block::new(header, extrinsics);
 
+		let targets = if let Some(t) = &self.targets { t } else { DEFAULT_TARGETS };
 		let traces = Arc::new(Mutex::new(Traces::default()));
-		let dispatch = create_dispatch(traces.clone(), &self.targets)?;
+		let dispatch = create_dispatch(traces.clone(), targets)?;
 
 		if let Err(e) = dispatcher::with_default(&dispatch, || {
 			let span = tracing::info_span!(
 				target: TRACE_TARGET,
 				"trace_block",
-				?self.targets
+				block_hash = ?self.block,
+				?parent_hash,
+				targets
 			);
 			let _enter = span.enter();
 			self.client.runtime_api().execute_block(&parent_id, block)
 		}) {
 			return Err(format!("Error executing block: {:?}", e));
 		}
+
 		drop(dispatch);
 		Ok(Arc::try_unwrap(traces).map_err(|_| "Unable to unwrap block traces".to_string())?.into_inner())
 	}
@@ -105,11 +110,10 @@ impl TraceHandler for StorageTracer {
 	}
 }
 
-fn create_dispatch(traces: Arc<Mutex<Traces>>, targets: &Option<String>) -> Result<Dispatch, String> {
+fn create_dispatch(traces: Arc<Mutex<Traces>>, targets: &str) -> Result<Dispatch, String> {
 	let tracer = StorageTracer {
 		traces,
 	};
-	let targets = if let Some(t) = targets { t } else { DEFAULT_TARGETS };
 	let filter = EnvFilter::try_new(targets)
 		.map_err(|e| format!("{:?}", e))?
 		.add_directive(
