@@ -158,6 +158,20 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Test where
 	type Extrinsic = Extrinsic;
 }
 
+pub struct MockElectionProvider;
+impl sp_election_providers::ElectionProvider<AccountId, BlockNumber> for MockElectionProvider {
+	type Error = ();
+	type DataProvider = pallet_staking::Module<Test>;
+
+	fn elect() -> Result<sp_npos_elections::Supports<AccountId>, Self::Error> {
+		Err(())
+	}
+
+	fn ongoing() -> bool {
+		false
+	}
+}
+
 impl pallet_staking::Config for Test {
 	type Currency = Balances;
 	type UnixTime = pallet_timestamp::Module<Self>;
@@ -181,4 +195,5 @@ impl pallet_staking::Config for Test {
 	type UnsignedPriority = ();
 	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();
+	type ElectionProvider = MockElectionProvider;
 }

@@ -22,6 +22,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 
+
 use sp_std::prelude::*;
 use frame_support::{
 	construct_runtime, parameter_types, debug, RuntimeDebug,
@@ -503,14 +504,25 @@ impl pallet_staking::Config for Runtime {
 }
 
 parameter_types! {
+	// phase durations
 	pub const SignedPhase: u32 = 25;
 	pub const UnsignedPhase: u32 = 25;
+
+	// signed configs
 	pub const MaxSignedSubmissions: u32 = 10;
 	pub const SignedRewardBase: Balance = 1 * DOLLARS;
 	pub const SignedDepositBase: Balance = 1 * DOLLARS;
-	pub const MaxUnsignedIterations: u32 = 10;
-}
+	pub const SignedDepositByte: Balance = 1 * CENTS;
 
+	// unsigned configs
+	pub const TwoPhaseUnsignedPriority: TransactionPriority = StakingUnsignedPriority::get() - 1u64;
+	pub const MaxUnsignedIterations: u32 = 10;
+	pub SolutionImprovementThreshold: Perbill = Perbill::from_rational_approximation(5u32, 10_000);
+	pub MinerMaxWeight: Weight = RuntimeBlockWeights::get()
+		.get(DispatchClass::Normal)
+		.max_extrinsic.expect("Normal extrinsics have a weight limit configured; qed")
+		.saturating_sub(BlockExecutionWeight::get());
+}
 
 impl pallet_two_phase_election_provider::Config for Runtime {
 	type Event = Event;
@@ -519,21 +531,21 @@ impl pallet_two_phase_election_provider::Config for Runtime {
 	type UnsignedPhase = UnsignedPhase;
 	type MaxSignedSubmissions = MaxSignedSubmissions;
 	type SignedRewardBase = SignedRewardBase;
-	type SignedRewardFactor = ();
-	type SignedRewardMax = ();
+	type SignedRewardFactor = (); // no score-based reward
+	type SignedRewardMax = SignedRewardBase;
 	type SignedDepositBase = SignedDepositBase;
-	type SignedDepositByte = ();
-	type SignedDepositWeight = ();
-	type SolutionImprovementThreshold = ();
-	type SlashHandler = ();
+	type SignedDepositByte = SignedDepositByte;
+	type SignedDepositWeight = (); // no weight-based deposit.
+	type SolutionImprovementThreshold = MinSolutionScoreBump;
+	type SlashHandler = (); // burn slashes
 	type RewardHandler = ();
 	type MinerMaxIterations = MaxUnsignedIterations;
-	type MinerMaxWeight = ();
-	type UnsignedPriority = ();
+	type MinerMaxWeight = MinerMaxWeight;
+	type UnsignedPriority = TwoPhaseUnsignedPriority;
 	type DataProvider = Staking;
 	type OnChainAccuracy = Perbill;
 	type CompactSolution = pallet_staking::CompactAssignments;
-	type WeightInfo = ();
+	type WeightInfo = pallet_two_phase_election_provider::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {

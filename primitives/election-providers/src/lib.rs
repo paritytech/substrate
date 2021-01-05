@@ -215,9 +215,27 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	fn put_npos_snapshot(
 		_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 		_targets: Vec<AccountId>,
-	) {
-	}
+	) {}
 }
+
+// TODO: only uncomment if needed, else better not to even provide this.
+// impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
+// 	fn targets() -> Vec<AccountId> {
+// 		Default::default()
+// 	}
+// 	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
+// 		Default::default()
+// 	}
+// 	fn desired_targets() -> u32 {
+// 		Default::default()
+// 	}
+// 	fn feasibility_check_assignment<P: PerThing>(_: &Assignment<AccountId, P>) -> Result<(), &'static str> {
+// 		Err("() as ElectionDataProvider cannot do anything.")
+// 	}
+// 	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
+// 		now
+// 	}
+// }
 
 /// Something that can compute the result of an election and pass it back to the caller.
 ///
@@ -243,3 +261,16 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	/// This can be used to dynamically check if a stateful election is still on-going or not.
 	fn ongoing() -> bool;
 }
+
+// impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
+// 	type Error = &'static str;
+// 	type DataProvider = ();
+
+// 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
+// 		Err("() as ElectionProvider cannot do anything.")
+// 	}
+
+// 	fn ongoing() -> bool {
+// 		false
+// 	}
+// }
