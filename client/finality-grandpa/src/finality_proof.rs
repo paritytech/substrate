@@ -448,12 +448,10 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 /// We only return proof for finalized blocks (with justification).
 ///
 /// It is assumed that the caller already have a proof-of-finality for the block 'begin'.
-pub fn prove_authority<Block: BlockT, B: BlockchainBackend<Block>, J>(
+pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 	blockchain: &B,
 	begin: Block::Hash,
 ) -> ::sp_blockchain::Result<Vec<u8>>
-	where
-		J: ProvableJustification<Block::Header>,
 {
 
   let begin = BlockId::Hash(begin);
@@ -602,7 +600,7 @@ pub(crate) fn check_finality_proof<Block: BlockT, B, J>(
 /// Check GRANDPA authority change sequence to assert finality of a target block. 
 ///
 /// Returns the header of the target block.
-pub fn check_authority_proof<Block: BlockT, J>(
+pub(crate) fn check_warp_sync_proof<Block: BlockT, J>(
 	current_set_id: u64,
 	current_authorities: AuthorityList,
 	remote_proof: Vec<u8>,
@@ -621,7 +619,7 @@ pub fn check_authority_proof<Block: BlockT, J>(
 
 	for (ix, fragment) in proof.into_iter().enumerate() {
 		let is_last = ix == last;
-		result = check_authority_proof_fragment::<Block, J>(
+		result = check_warp_sync_proof_fragment::<Block, J>(
 			result.0,
 			&result.1,
 			&result.2,
@@ -639,7 +637,7 @@ pub fn check_authority_proof<Block: BlockT, J>(
 }
 
 /// Check finality authority set sequence.
-fn check_authority_proof_fragment<Block: BlockT, J>(
+fn check_warp_sync_proof_fragment<Block: BlockT, J>(
 	current_set_id: u64,
 	current_authorities: &AuthorityList,
 	current_block: &NumberFor<Block>,
@@ -760,7 +758,7 @@ impl<Header: HeaderT> AuthoritiesOrEffects<Header> {
 }
 
 /// Block info extracted from the justification.
-pub trait BlockJustification<Header: HeaderT> {
+pub(crate) trait BlockJustification<Header: HeaderT> {
 	/// Block number justified.
 	fn number(&self) -> Header::Number;
 
@@ -769,7 +767,7 @@ pub trait BlockJustification<Header: HeaderT> {
 }
 
 /// Justification used to prove block finality.
-pub trait ProvableJustification<Header: HeaderT>: Encode + Decode {
+pub(crate) trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 	/// Verify justification with respect to authorities set and authorities set id.
 	fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()>;
 
