@@ -648,7 +648,7 @@ pub fn check_authority_proof<Block: BlockT, J>(
 fn check_authority_proof_fragment<Block: BlockT, J>(
 	current_set_id: u64,
 	current_authorities: &AuthorityList,
-	current_block: &NumberFor<Block>,
+	previous_checked_block: &NumberFor<Block>,
 	is_last: bool,
 	authorities_proof: &AuthoritySetProofFragment<Block::Header>,
 ) -> ClientResult<(u64, AuthorityList, NumberFor<Block>)>
@@ -666,7 +666,7 @@ fn check_authority_proof_fragment<Block: BlockT, J>(
 		return Err(ClientError::Backend("Invalid authority warp proof, justification do not match header".to_string()));
 	}
 
-	if authorities_proof.header.number() <= current_block {
+	if authorities_proof.header.number() <= previous_checked_block {
 		return Err(ClientError::Backend("Invalid authority warp proof".to_string()));
 	}
 	let current_block = authorities_proof.header.number();
@@ -686,7 +686,7 @@ fn check_authority_proof_fragment<Block: BlockT, J>(
 		at_block = Some((dest, next_authorities));
 	}
 
-	// only fragment with no change for target
+	// Fragment without change only allowed for proof last block.
 	if at_block.is_none() && !is_last {
 		return Err(ClientError::Backend("Invalid authority warp proof".to_string()));
 	}
