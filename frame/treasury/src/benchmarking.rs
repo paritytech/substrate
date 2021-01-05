@@ -66,8 +66,7 @@ fn setup_pot_account<T: Config<I>, I: Instance>() {
 }
 
 benchmarks_instance! {
-	_ { }
-
+	
 	propose_spend {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		// Whitelist caller account from further DB operations.

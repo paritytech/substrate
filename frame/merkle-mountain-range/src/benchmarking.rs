@@ -25,8 +25,6 @@ use frame_benchmarking::benchmarks;
 use sp_std::prelude::*;
 
 benchmarks! {
-	_ {	}
-
 	on_initialize {
 		let x in 1 .. 1_000;
 
