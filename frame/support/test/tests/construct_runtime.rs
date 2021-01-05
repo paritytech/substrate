@@ -511,7 +511,7 @@ fn test_metadata() {
 #[test]
 fn test_metadata_vnext() {
 	use frame_metadata::*;
-	use frame_support::scale_info::{form::MetaForm, IntoCompact, Registry};
+	use frame_support::scale_info::{form::MetaForm, IntoPortable, Registry};
 	// vnext modules defined with legacy macros have empty metadata
 	let expected_metadata: vnext::RuntimeMetadataLastVersion<MetaForm> = vnext::RuntimeMetadataLastVersion {
 		modules: vec![
@@ -578,7 +578,7 @@ fn test_metadata_vnext() {
 		// },
 	};
 	let mut registry = Registry::new();
-	let expected_metadata = expected_metadata.into_compact(&mut registry);
+	let expected_metadata = expected_metadata.into_portable(&mut registry);
 	pretty_assertions::assert_eq!(Runtime::metadata_vnext().1, vnext::RuntimeMetadata::V12(expected_metadata));
 }
 

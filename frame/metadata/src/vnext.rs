@@ -34,15 +34,15 @@ use sp_std::{
 
 use scale_info::{
 	form::{
-		CompactForm,
+		PortableForm,
 		Form,
 		FormString,
 		MetaForm,
 	},
 	meta_type,
-	IntoCompact,
+	IntoPortable,
 	Registry,
-	RegistryReadOnly,
+	PortableRegistry,
 	TypeInfo,
 };
 
@@ -56,14 +56,14 @@ where
 	S: FormString,
 {
 	pub prefix: u32,
-	pub types: RegistryReadOnly<S>,
-	pub metadata: RuntimeMetadata<CompactForm<S>>,
+	pub types: PortableRegistry<S>,
+	pub metadata: RuntimeMetadata<PortableForm<S>>,
 }
 
 impl From<RuntimeMetadataLastVersion<MetaForm>> for RuntimeMetadataPrefixed {
 	fn from(metadata: RuntimeMetadataLastVersion<MetaForm>) -> RuntimeMetadataPrefixed {
 		let mut registry = Registry::new();
-		let metadata = metadata.into_compact(&mut registry);
+		let metadata = metadata.into_portable(&mut registry);
 		RuntimeMetadataPrefixed {
 			prefix: super::META_RESERVED,
 			types: registry.into(),
@@ -98,13 +98,13 @@ pub struct RuntimeMetadataV12<T: Form = MetaForm> {
 	// pub extrinsic: ExtrinsicMetadata<F>,
 }
 
-impl IntoCompact for RuntimeMetadataV12 {
-	type Output = RuntimeMetadataV12<CompactForm>;
+impl IntoPortable for RuntimeMetadataV12 {
+	type Output = RuntimeMetadataV12<PortableForm>;
 
-	fn into_compact(self, registry: &mut Registry) -> Self::Output {
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
 		RuntimeMetadataV12 {
-			modules: registry.map_into_compact(self.modules),
-			// extrinsic: self.extrinsic.into_compact(registry),
+			modules: registry.map_into_portable(self.modules),
+			// extrinsic: self.extrinsic.into_portable(registry),
 		}
 	}
 }
@@ -119,10 +119,10 @@ pub struct ExtrinsicMetadata<T: Form = MetaForm> {
 	pub signed_extensions: Vec<T::Type>,
 }
 
-impl IntoCompact for ExtrinsicMetadata {
-	type Output = ExtrinsicMetadata<CompactForm>;
+impl IntoPortable for ExtrinsicMetadata {
+	type Output = ExtrinsicMetadata<PortableForm>;
 
-	fn into_compact(self, registry: &mut Registry) -> Self::Output {
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
 		ExtrinsicMetadata {
 			version: self.version,
 			signed_extensions: registry.register_types(self.signed_extensions),
@@ -142,14 +142,14 @@ pub struct ModuleMetadata<T: Form = MetaForm> {
 	// pub errors: DFnA<ErrorMetadata>,
 }
 
-impl IntoCompact for ModuleMetadata {
-	type Output = ModuleMetadata<CompactForm>;
+impl IntoPortable for ModuleMetadata {
+	type Output = ModuleMetadata<PortableForm>;
 
-	fn into_compact(self, registry: &mut Registry) -> Self::Output {
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
 		ModuleMetadata {
-			name: self.name.into_compact(registry),
-			calls: self.calls.map(|calls| registry.map_into_compact(calls)),
-			event: self.event.map(|event| registry.map_into_compact(event)),
+			name: self.name.into_portable(registry),
+			calls: self.calls.map(|calls| registry.map_into_portable(calls)),
+			event: self.event.map(|event| registry.map_into_portable(event)),
 		}
 	}
 }
@@ -163,14 +163,14 @@ pub struct FunctionMetadata<T: Form = MetaForm> {
 	pub documentation: Vec<T::String>,
 }
 
-impl IntoCompact for FunctionMetadata {
-	type Output = FunctionMetadata<CompactForm>;
+impl IntoPortable for FunctionMetadata {
+	type Output = FunctionMetadata<PortableForm>;
 
-	fn into_compact(self, registry: &mut Registry) -> Self::Output {
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
 		FunctionMetadata {
-			name: self.name.into_compact(registry),
-			arguments: registry.map_into_compact(self.arguments),
-			documentation: registry.map_into_compact(self.documentation),
+			name: self.name.into_portable(registry),
+			arguments: registry.map_into_portable(self.arguments),
+			documentation: registry.map_into_portable(self.documentation),
 		}
 	}
 }
@@ -184,12 +184,12 @@ pub struct FunctionArgumentMetadata<T: Form = MetaForm> {
 	pub is_compact: bool,
 }
 
-impl IntoCompact for FunctionArgumentMetadata {
-	type Output = FunctionArgumentMetadata<CompactForm>;
+impl IntoPortable for FunctionArgumentMetadata {
+	type Output = FunctionArgumentMetadata<PortableForm>;
 
-	fn into_compact(self, registry: &mut Registry) -> Self::Output {
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
 		FunctionArgumentMetadata {
-			name: self.name.into_compact(registry),
+			name: self.name.into_portable(registry),
 			ty: registry.register_type(&self.ty),
 			is_compact: self.is_compact,
 		}
@@ -204,13 +204,13 @@ pub struct OuterEventMetadata<T: Form = MetaForm> {
 	pub events: Vec<ModuleEventMetadata<T>>,
 }
 
-impl IntoCompact for OuterEventMetadata {
-	type Output = OuterEventMetadata<CompactForm>;
+impl IntoPortable for OuterEventMetadata {
+	type Output = OuterEventMetadata<PortableForm>;
 
-	fn into_compact(self, registry: &mut Registry) -> Self::Output {
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
 		OuterEventMetadata {
-			name: self.name.into_compact(registry),
-			events: registry.map_into_compact(self.events),
+			name: self.name.into_portable(registry),
+			events: registry.map_into_portable(self.events),
 		}
 	}
 }
@@ -223,13 +223,13 @@ pub struct ModuleEventMetadata<T: Form = MetaForm> {
 	pub events: Vec<EventMetadata<T>>,
 }
 
-impl IntoCompact for ModuleEventMetadata {
-	type Output = ModuleEventMetadata<CompactForm>;
+impl IntoPortable for ModuleEventMetadata {
+	type Output = ModuleEventMetadata<PortableForm>;
 
-	fn into_compact(self, registry: &mut Registry) -> Self::Output {
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
 		ModuleEventMetadata {
-			name: self.name.into_compact(registry),
-			events: registry.map_into_compact(self.events),
+			name: self.name.into_portable(registry),
+			events: registry.map_into_portable(self.events),
 		}
 	}
 }
@@ -243,14 +243,14 @@ pub struct EventMetadata<T: Form = MetaForm> {
 	pub documentation: Vec<T::String>,
 }
 
-impl IntoCompact for EventMetadata {
-	type Output = EventMetadata<CompactForm>;
+impl IntoPortable for EventMetadata {
+	type Output = EventMetadata<PortableForm>;
 
-	fn into_compact(self, registry: &mut Registry) -> Self::Output {
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
 		EventMetadata {
-			name: self.name.into_compact(registry),
-			arguments: registry.map_into_compact(self.arguments),
-			documentation: registry.map_into_compact(self.documentation),
+			name: self.name.into_portable(registry),
+			arguments: registry.map_into_portable(self.arguments),
+			documentation: registry.map_into_portable(self.documentation),
 		}
 	}
 }
@@ -281,13 +281,13 @@ pub struct TypeSpec<T: Form = MetaForm> {
 	name: T::String,
 }
 
-impl IntoCompact for TypeSpec {
-	type Output = TypeSpec<CompactForm>;
+impl IntoPortable for TypeSpec {
+	type Output = TypeSpec<PortableForm>;
 
-	fn into_compact(self, registry: &mut Registry) -> Self::Output {
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
 		TypeSpec {
 			ty: registry.register_type(&self.ty),
-			name: self.name.into_compact(registry),
+			name: self.name.into_portable(registry),
 		}
 	}
 }

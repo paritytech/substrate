@@ -771,7 +771,7 @@ fn metadata() {
 #[test]
 fn metadata_vnext() {
 	use frame_metadata::*;
-	use crate::scale_info::{meta_type, Registry, IntoCompact};
+	use crate::scale_info::{meta_type, Registry, IntoPortable};
 
 	let expected_pallet_metadata = vnext::ModuleMetadata {
 		// index: 1,
@@ -845,7 +845,7 @@ fn metadata_vnext() {
 	};
 
 	let mut registry = Registry::new();
-	let expected_pallet_metadata = expected_pallet_metadata.into_compact(&mut registry);
+	let expected_pallet_metadata = expected_pallet_metadata.into_portable(&mut registry);
 
 	pretty_assertions::assert_eq!(metadata.modules[1], expected_pallet_metadata);
 }
