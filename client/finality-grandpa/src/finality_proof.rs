@@ -489,7 +489,7 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 				} else {
 					println!("should be unreachable");
 				}
-	
+
 				let inc = delay == Zero::zero() && block_number == index;
 				index = dest;
 				if inc {
@@ -597,7 +597,7 @@ pub(crate) fn check_finality_proof<Block: BlockT, B, J>(
 	Ok(effects)
 }
 
-/// Check GRANDPA authority change sequence to assert finality of a target block. 
+/// Check GRANDPA authority change sequence to assert finality of a target block.
 ///
 /// Returns the header of the target block.
 pub(crate) fn check_warp_sync_proof<Block: BlockT, J>(
@@ -625,7 +625,7 @@ pub(crate) fn check_warp_sync_proof<Block: BlockT, J>(
 			&result.2,
 			is_last,
 			&fragment,
-		)?; 
+		)?;
 
 		if is_last {
 			return Ok((fragment.header, result.0, result.1))
@@ -640,7 +640,7 @@ pub(crate) fn check_warp_sync_proof<Block: BlockT, J>(
 fn check_warp_sync_proof_fragment<Block: BlockT, J>(
 	current_set_id: u64,
 	current_authorities: &AuthorityList,
-	current_block: &NumberFor<Block>,
+	previous_checked_block: &NumberFor<Block>,
 	is_last: bool,
 	authorities_proof: &AuthoritySetProofFragment<Block::Header>,
 ) -> ClientResult<(u64, AuthorityList, NumberFor<Block>)>
@@ -658,7 +658,7 @@ fn check_warp_sync_proof_fragment<Block: BlockT, J>(
 		return Err(ClientError::Backend("Invalid authority warp proof, justification do not match header".to_string()));
 	}
 
-	if authorities_proof.header.number() <= current_block {
+	if authorities_proof.header.number() <= previous_checked_block {
 		return Err(ClientError::Backend("Invalid authority warp proof".to_string()));
 	}
 	let current_block = authorities_proof.header.number();
@@ -678,7 +678,7 @@ fn check_warp_sync_proof_fragment<Block: BlockT, J>(
 		at_block = Some((dest, next_authorities));
 	}
 
-	// only fragment with no change for target
+	// Fragment without change only allowed for proof last block.
 	if at_block.is_none() && !is_last {
 		return Err(ClientError::Backend("Invalid authority warp proof".to_string()));
 	}

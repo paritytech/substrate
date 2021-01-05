@@ -113,8 +113,7 @@ mod authorities;
 mod aux_schema;
 mod communication;
 mod environment;
-// TODO remove pub
-pub mod finality_proof;
+mod finality_proof;
 mod import;
 mod justification;
 mod notification;
@@ -132,6 +131,7 @@ pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
 pub use finality_grandpa::voter::report;
+pub use finality_proof::prove_warp_sync;
 
 use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
