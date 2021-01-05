@@ -468,12 +468,11 @@ impl<T: Config> Module<T> {
 		Randomness::put(randomness);
 
 		// Update the next epoch authorities.
-		NextAuthorities::put(next_authorities);
+		NextAuthorities::put(&next_authorities);
 
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
 		let next_randomness = NextRandomness::get();
-		let next_authorities = NextAuthorities::get();
 
 		let next_epoch = NextEpochDescriptor {
 			authorities: next_authorities,
