@@ -123,11 +123,6 @@ pub enum Event {
 	/// A remote sent a request and either we have successfully answered it or an error happened.
 	///
 	/// This event is generated for statistics purposes.
-	///
-	/// Note: Multiple [`InboundRequest`] events can be emitted for the same inbound request. E.g.
-	/// when response building succeeds, but sending the response later on fails. In that case there
-	/// will be one [`InboundRequest`] with the time it took to build the response and one
-	/// [`InboundRequest`] with the reason why later on sending the response failed.
 	InboundRequest {
 		/// Peer which has emitted the request.
 		peer: PeerId,
