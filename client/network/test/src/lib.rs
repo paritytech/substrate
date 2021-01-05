@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -695,6 +695,8 @@ pub trait TestNetFactory: Sized {
 				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
 			metrics_registry: None,
 		}).unwrap();
+
+		trace!(target: "test_network", "Peer identifier: {}", network.service().local_peer_id());
 
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -107,7 +107,7 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, AtLeast32BitUnsigned
+		Dispatchable, AtLeast32BitUnsigned, Saturating,
 	},
 	offchain::storage_lock::BlockNumberProvider,
 };
@@ -164,6 +164,7 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 /// An object to track the currently used extrinsic weight in a block.
 pub type ConsumedWeight = PerDispatchClass<Weight>;
 
+/// System configuration trait. Implemented by runtime.
 pub trait Config: 'static + Eq + Clone {
 	/// The basic call filter to use in Origin. All origins are built with this filter as base,
 	/// except Root.
@@ -256,6 +257,13 @@ pub trait Config: 'static + Eq + Clone {
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
 
 	type SystemWeightInfo: WeightInfo;
+
+	/// The designated SS85 prefix of this chain.
+	///
+	/// This replaces the "ss58Format" property declared in the chain spec. Reason is
+	/// that the runtime should know about the prefix in order to make use of it as
+	/// an identifier of the chain.
+	type SS58Prefix: Get<u8>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Config>::Hash>;
@@ -405,9 +413,6 @@ decl_storage! {
 		/// Hash of the previous block.
 		ParentHash get(fn parent_hash) build(|_| hash69()): T::Hash;
 
-		/// Extrinsics root of the current block, also part of the block header.
-		ExtrinsicsRoot get(fn extrinsics_root): T::Hash;
-
 		/// Digest of the current block, also part of the block header.
 		Digest get(fn digest): DigestOf<T>;
 
@@ -500,6 +505,11 @@ decl_error! {
 	}
 }
 
+/// Pallet struct placeholder on which is implemented the pallet logic.
+///
+/// It is currently an alias for `Module` as old macros still generate/use old name.
+pub type Pallet<T> = Module<T>;
+
 decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 		type Error = Error<T>;
@@ -512,6 +522,13 @@ decl_module! {
 
 		/// The weight configuration (limits & base values) for each class of extrinsics and block.
 		const BlockWeights: limits::BlockWeights = T::BlockWeights::get();
+
+		/// The designated SS85 prefix of this chain.
+		///
+		/// This replaces the "ss58Format" property declared in the chain spec. Reason is
+		/// that the runtime should know about the prefix in order to make use of it as
+		/// an identifier of the chain.
+		const SS58Prefix: u8 = T::SS58Prefix::get();
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if !UpgradedToU32RefCount::get() {
@@ -989,7 +1006,6 @@ impl<T: Config> Module<T> {
 	pub fn initialize(
 		number: &T::BlockNumber,
 		parent_hash: &T::Hash,
-		txs_root: &T::Hash,
 		digest: &DigestOf<T>,
 		kind: InitKind,
 	) {
@@ -1000,7 +1016,6 @@ impl<T: Config> Module<T> {
 		<Digest<T>>::put(digest);
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
-		<ExtrinsicsRoot<T>>::put(txs_root);
 
 		// Remove previous block data from storage
 		BlockWeight::kill();
@@ -1017,7 +1032,6 @@ impl<T: Config> Module<T> {
 	/// resulting header for this block.
 	pub fn finalize() -> T::Header {
 		ExecutionPhase::kill();
-		ExtrinsicCount::kill();
 		AllExtrinsicsLen::kill();
 
 		// The following fields
@@ -1034,17 +1048,18 @@ impl<T: Config> Module<T> {
 		let parent_hash = <ParentHash<T>>::get();
 		let mut digest = <Digest<T>>::get();
 
-		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
+		let extrinsics = (0..ExtrinsicCount::take().unwrap_or_default())
+			.map(ExtrinsicData::take)
+			.collect();
+		let extrinsics_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 
 		// move block hash pruning window by one block
-		let block_hash_count = <T::BlockHashCount>::get();
-		if number > block_hash_count {
-			let to_remove = number - block_hash_count - One::one();
+		let block_hash_count = T::BlockHashCount::get();
+		let to_remove = number.saturating_sub(block_hash_count).saturating_sub(One::one());
 
-			// keep genesis hash
-			if to_remove != Zero::zero() {
-				<BlockHash<T>>::remove(to_remove);
-			}
+		// keep genesis hash
+		if !to_remove.is_zero() {
+			<BlockHash<T>>::remove(to_remove);
 		}
 
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
@@ -1138,12 +1153,10 @@ impl<T: Config> Module<T> {
 		Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
 	}
 
-	/// Note what the extrinsic data of the current extrinsic index is. If this
-	/// is called, then ensure `derive_extrinsics` is also called before
-	/// block-building is completed.
+	/// Note what the extrinsic data of the current extrinsic index is.
 	///
-	/// NOTE: This function is called only when the block is being constructed locally.
-	/// `execute_block` doesn't note any extrinsics.
+	/// This is required to be called before applying an extrinsic. The data will used
+	/// in [`Self::finalize`] to calculate the correct extrinsics root.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
 		ExtrinsicData::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
 	}
@@ -1180,14 +1193,6 @@ impl<T: Config> Module<T> {
 	/// (e.g., called `on_initialize` for all modules).
 	pub fn note_finished_initialize() {
 		ExecutionPhase::put(Phase::ApplyExtrinsic(0))
-	}
-
-	/// Remove all extrinsic data and save the extrinsics trie root.
-	pub fn derive_extrinsics() {
-		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default())
-			.map(ExtrinsicData::take).collect();
-		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
-		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
 
 	/// An account is being created.
@@ -1357,4 +1362,15 @@ impl<T: Config> Lookup for ChainContext<T> {
 	fn lookup(&self, s: Self::Source) -> Result<Self::Target, LookupError> {
 		<T::Lookup as StaticLookup>::lookup(s)
 	}
+}
+
+/// Prelude to be used alongside pallet macro, for ease of use.
+pub mod pallet_prelude {
+	pub use crate::{ensure_signed, ensure_none, ensure_root};
+
+	/// Type alias for the `Origin` associated type of system config.
+	pub type OriginFor<T> = <T as crate::Config>::Origin;
+
+	/// Type alias for the `BlockNumber` associated type of system config.
+	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;
 }

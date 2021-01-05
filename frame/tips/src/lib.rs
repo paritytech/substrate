@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,8 +58,6 @@ mod tests;
 mod benchmarking;
 pub mod weights;
 
-use sp_std::if_std;
-
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error, Parameter};
 use frame_support::traits::{
@@ -70,8 +68,7 @@ use frame_support::traits::{
 use sp_runtime::{ Percent, RuntimeDebug, traits::{
 	Zero, AccountIdConversion, Hash, BadOrigin
 }};
-
-use frame_support::traits::{Contains, ContainsLengthBound};
+use frame_support::traits::{Contains, ContainsLengthBound, OnUnbalanced, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
@@ -170,6 +167,8 @@ decl_event!(
 		TipClosed(Hash, AccountId, Balance),
 		/// A tip suggestion has been retracted. \[tip_hash\]
 		TipRetracted(Hash),
+		/// A tip suggestion has been slashed. \[tip_hash, finder, deposit\]
+		TipSlashed(Hash, AccountId, Balance),
 	}
 );
 
@@ -408,6 +407,32 @@ decl_module! {
 			Tips::<T>::remove(hash);
 			Self::payout_tip(hash, tip);
 		}
+
+		/// Remove and slash an already-open tip.
+		///
+		/// May only be called from `T::RejectOrigin`.
+		///
+		/// As a result, the finder is slashed and the deposits are lost.
+		///
+		/// Emits `TipSlashed` if successful.
+		///
+		/// # <weight>
+		///   `T` is charged as upper bound given by `ContainsLengthBound`.
+		///   The actual cost depends on the implementation of `T::Tippers`.
+		/// # </weight>
+		#[weight = <T as Config>::WeightInfo::slash_tip(T::Tippers::max_len() as u32)]
+		fn slash_tip(origin, hash: T::Hash) {
+			T::RejectOrigin::ensure_origin(origin)?;
+
+			let tip = Tips::<T>::take(hash).ok_or(Error::<T>::UnknownTip)?;
+
+			if !tip.deposit.is_zero() {
+				let imbalance = T::Currency::slash_reserved(&tip.finder, tip.deposit).0;
+				T::OnSlash::on_unbalanced(imbalance);
+			}
+			Reasons::<T>::remove(&tip.reason);
+			Self::deposit_event(RawEvent::TipSlashed(hash, tip.finder, tip.deposit));
+		}
 	}
 }
 
@@ -523,10 +548,6 @@ impl<T: Config> Module<T> {
 
 		use frame_support::{Twox64Concat, migration::StorageKeyIterator};
 
-		if_std! {
-			println!("Inside migrate_retract_tip_for_tip_new()!");
-		}
-
 		for (hash, old_tip) in StorageKeyIterator::<
 			T::Hash,
 			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
@@ -534,25 +555,11 @@ impl<T: Config> Module<T> {
 		>::new(b"Treasury", b"Tips").drain()
 		{
 
-			if_std! {
-				println!("Inside loop migrate_retract_tip_for_tip_new()!");
-			}
-
 			let (finder, deposit, finders_fee) = match old_tip.finder {
 				Some((finder, deposit)) => {
-					if_std! {
-						// This code is only being compiled and executed when the `std` feature is enabled.
-						println!("OK case!");
-						println!("value is: {:#?},{:#?}", finder, deposit);
-					}
 					(finder, deposit, true)
 				},
 				None => {
-					if_std! {
-						// This code is only being compiled and executed when the `std` feature is enabled.
-						println!("None case!");
-						// println!("value is: {:#?},{:#?}", T::AccountId::default(), Zero::zero());
-					}
 					(T::AccountId::default(), Zero::zero(), false)
 				},
 			};
@@ -567,10 +574,5 @@ impl<T: Config> Module<T> {
 			};
 			Tips::<T>::insert(hash, new_tip)
 		}
-
-		if_std! {
-			println!("Exit migrate_retract_tip_for_tip_new()!");
-		}
-
 	}
 }

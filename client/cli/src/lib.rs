@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -112,10 +112,7 @@ pub trait SubstrateCli: Sized {
 	///
 	/// Gets the struct from the command line arguments. Print the
 	/// error message and quit the program in case of failure.
-	fn from_args() -> Self
-	where
-		Self: StructOpt + Sized,
-	{
+	fn from_args() -> Self where Self: StructOpt + Sized {
 		<Self as SubstrateCli>::from_iter(&mut std::env::args_os())
 	}
 
@@ -240,30 +237,50 @@ pub trait SubstrateCli: Sized {
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }
 
+/// The parameters for [`init_logger`].
+#[derive(Default)]
+pub struct InitLoggerParams {
+	/// A comma seperated list of logging patterns.
+	///
+	/// E.g.: `test-crate=debug`
+	pub pattern: String,
+	/// The tracing receiver.
+	pub tracing_receiver: sc_tracing::TracingReceiver,
+	/// Optional comma seperated list of tracing targets.
+	pub tracing_targets: Option<String>,
+	/// Should log reloading be disabled?
+	pub disable_log_reloading: bool,
+	/// Should the log color output be disabled?
+	pub disable_log_color: bool,
+}
+
 /// Initialize the global logger
 ///
 /// This sets various global logging and tracing instances and thus may only be called once.
 pub fn init_logger(
-	pattern: &str,
-	tracing_receiver: sc_tracing::TracingReceiver,
-	profiling_targets: Option<String>,
-	disable_log_reloading: bool,
+	InitLoggerParams {
+		pattern,
+		tracing_receiver,
+		tracing_targets,
+		disable_log_reloading,
+		disable_log_color,
+	}: InitLoggerParams,
 ) -> std::result::Result<(), String> {
 	use sc_tracing::parse_default_directive;
 
 	// Accept all valid directives and print invalid ones
-	fn parse_user_directives(mut env_filter: EnvFilter, dirs: &str) -> std::result::Result<EnvFilter, String> {
+	fn parse_user_directives(
+		mut env_filter: EnvFilter,
+		dirs: &str,
+	) -> std::result::Result<EnvFilter, String> {
 		for dir in dirs.split(',') {
 			env_filter = env_filter.add_directive(parse_default_directive(&dir)?);
 		}
 		Ok(env_filter)
 	}
 
-	if let Err(e) = tracing_log::LogTracer::init() {
-		return Err(format!(
-			"Registering Substrate logger failed: {:}!", e
-		))
-	}
+	tracing_log::LogTracer::init()
+		.map_err(|e| format!("Registering Substrate logger failed: {:}!", e))?;
 
 	// Initialize filter - ensure to use `parse_default_directive` for any defaults to persist
 	// after log filter reloading by RPC
@@ -293,7 +310,7 @@ pub fn init_logger(
 	if pattern != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
 		// parse error.
-		env_filter = parse_user_directives(env_filter, pattern)?;
+		env_filter = parse_user_directives(env_filter, &pattern)?;
 	}
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
@@ -311,11 +328,11 @@ pub fn init_logger(
 	);
 
 	// Make sure to include profiling targets in the filter
-	if let Some(profiling_targets) = profiling_targets.clone() {
-		env_filter = parse_user_directives(env_filter, &profiling_targets)?;
+	if let Some(tracing_targets) = tracing_targets.clone() {
+		env_filter = parse_user_directives(env_filter, &tracing_targets)?;
 	}
 
-	let enable_color = atty::is(atty::Stream::Stderr);
+	let enable_color = atty::is(atty::Stream::Stderr) && !disable_log_color;
 	let timer = ChronoLocal::with_format(if simple {
 		"%Y-%m-%d %H:%M:%S".to_string()
 	} else {
@@ -336,7 +353,7 @@ pub fn init_logger(
 		let subscriber = subscriber_builder
 			.finish()
 			.with(logging::NodeNameLayer);
-		initialize_tracing(subscriber, tracing_receiver, profiling_targets)
+		initialize_tracing(subscriber, tracing_receiver, tracing_targets)
 	} else {
 		let subscriber_builder = subscriber_builder.with_filter_reloading();
 		let handle = subscriber_builder.reload_handle();
@@ -344,7 +361,7 @@ pub fn init_logger(
 		let subscriber = subscriber_builder
 			.finish()
 			.with(logging::NodeNameLayer);
-		initialize_tracing(subscriber, tracing_receiver, profiling_targets)
+		initialize_tracing(subscriber, tracing_receiver, tracing_targets)
 	}
 }
 
@@ -383,7 +400,9 @@ mod tests {
 	#[test]
 	fn test_logger_filters() {
 		let test_pattern = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
-		init_logger(&test_pattern, Default::default(), Default::default(), false).unwrap();
+		init_logger(
+			InitLoggerParams { pattern: test_pattern.into(), ..Default::default() },
+		).unwrap();
 
 		tracing::dispatcher::get_default(|dispatcher| {
 			let test_filter = |target, level| {
@@ -442,7 +461,9 @@ mod tests {
 	fn log_something_with_dash_target_name() {
 		if env::var("ENABLE_LOGGING").is_ok() {
 			let test_pattern = "test-target=info";
-			init_logger(&test_pattern, Default::default(), Default::default(), false).unwrap();
+			init_logger(
+				InitLoggerParams { pattern: test_pattern.into(), ..Default::default() },
+			).unwrap();
 
 			log::info!(target: "test-target", "{}", EXPECTED_LOG_MESSAGE);
 		}
@@ -478,7 +499,9 @@ mod tests {
 	fn prefix_in_log_lines_entrypoint() {
 		if env::var("ENABLE_LOGGING").is_ok() {
 			let test_pattern = "test-target=info";
-			init_logger(&test_pattern, Default::default(), Default::default(), false).unwrap();
+			init_logger(
+				InitLoggerParams { pattern: test_pattern.into(), ..Default::default() },
+			).unwrap();
 			prefix_in_log_lines_process();
 		}
 	}
@@ -494,7 +517,7 @@ mod tests {
 	#[test]
 	fn do_not_write_with_colors_on_tty_entrypoint() {
 		if env::var("ENABLE_LOGGING").is_ok() {
-			init_logger("", Default::default(), Default::default(), false).unwrap();
+			init_logger(InitLoggerParams::default()).unwrap();
 			log::info!("{}", ansi_term::Colour::Yellow.paint(EXPECTED_LOG_MESSAGE));
 		}
 	}

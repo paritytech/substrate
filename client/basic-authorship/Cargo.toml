@@ -31,6 +31,6 @@ sc-block-builder = { version = "0.8.0", path = "../block-builder" }
 sc-proposer-metrics = { version = "0.8.0", path = "../proposer-metrics" }
 
 [dev-dependencies]
-sc-transaction-pool = { version = "2.0.0", path = "../../client/transaction-pool" }
+sc-transaction-pool = { version = "2.0.0", path = "../transaction-pool" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 parking_lot = "0.10.0"

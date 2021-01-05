@@ -28,7 +28,7 @@ sp-arithmetic = { version = "2.0.0", path = "../../primitives/arithmetic" }
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-utils = { version = "2.0.0", path = "../../primitives/utils" }
 sp-consensus = { version = "0.8.0", path = "../../primitives/consensus/common" }
-sc-consensus = { version = "0.8.0", path = "../../client/consensus/common" }
+sc-consensus = { version = "0.8.0", path = "../consensus/common" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-keystore = { version = "0.8.0", path = "../../primitives/keystore" }
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
