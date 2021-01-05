@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -1373,14 +1373,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest { protocol, result, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						match result {
-							Ok(Some(serve_time)) => {
+							Ok(serve_time) => {
 								metrics.requests_in_success_total
 									.with_label_values(&[&protocol])
 									.observe(serve_time.as_secs_f64());
 							}
-							// Response time tracking is happening on a best-effort basis. Ignore
-							// the event in case response time could not be provided.
-							Ok(None) => {},
 							Err(err) => {
 								let reason = match err {
 									ResponseFailure::Network(InboundFailure::Timeout) => "timeout",
@@ -1388,6 +1385,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 										"unsupported",
 									ResponseFailure::Network(InboundFailure::ResponseOmission) =>
 										"busy-omitted",
+									ResponseFailure::Network(InboundFailure::ConnectionClosed) =>
+										"connection-closed",
 								};
 
 								metrics.requests_in_failure_total
