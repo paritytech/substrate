@@ -16,7 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, gossip::QueuedSender, Event, NetworkService, NetworkWorker};
+use crate::block_request_handler::BlockRequestHandler;
+use crate::gossip::QueuedSender;
+use crate::{config,  Event, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, Header as _};
@@ -33,7 +35,7 @@ type TestNetworkService = NetworkService<
 ///
 /// > **Note**: We return the events stream in order to not possibly lose events between the
 /// >			construction of the service and the moment the events stream is grabbed.
-fn build_test_full_node(config: config::NetworkConfiguration)
+fn build_test_full_node(network_config: config::NetworkConfiguration)
 	-> (Arc<TestNetworkService>, impl Stream<Item = Event>)
 {
 	let client = Arc::new(
@@ -90,19 +92,31 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		None,
 	));
 
+	let protocol_id = config::ProtocolId::from("/test-protocol-name");
+
+	let block_request_protocol_config = {
+		let (handler, protocol_config) = BlockRequestHandler::new(
+			protocol_id.clone(),
+			client.clone(),
+		);
+		async_std::task::spawn(handler.run().boxed());
+		protocol_config
+	};
+
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
-		network_config: config,
+		network_config,
 		chain: client.clone(),
 		on_demand: None,
 		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
-		protocol_id: config::ProtocolId::from("/test-protocol-name"),
+		protocol_id,
 		import_queue,
 		block_announce_validator: Box::new(
 			sp_consensus::block_validation::DefaultBlockAnnounceValidator,
 		),
 		metrics_registry: None,
+		block_request_protocol_config,
 	})
 	.unwrap();
 

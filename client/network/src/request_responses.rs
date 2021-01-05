@@ -137,11 +137,17 @@ pub enum Event {
 
 	/// A request initiated using [`RequestResponsesBehaviour::send_request`] has succeeded or
 	/// failed.
+	///
+	/// This event is generated for statistics purposes.
 	RequestFinished {
-		/// Request that has succeeded.
-		request_id: RequestId,
-		/// Response sent by the remote or reason for failure.
-		result: Result<Vec<u8>, RequestFailure>,
+		/// Peer that we send a request to.
+		peer: PeerId,
+		/// Name of the protocol in question.
+		protocol: Cow<'static, str>,
+		/// Duration the request took.
+		duration: Duration,
+		/// Result of the request.
+		result: Result<(), RequestFailure>
 	},
 }
 
@@ -155,8 +161,11 @@ pub struct RequestResponsesBehaviour {
 		(RequestResponse<GenericCodec>, Option<mpsc::Sender<IncomingRequest>>)
 	>,
 
+	/// Pending requests, passed down to a [`RequestResponse`] behaviour, awaiting a reply.
+	pending_requests: HashMap<RequestId, (Instant, oneshot::Sender<Result<Vec<u8>, RequestFailure>>)>,
+
 	/// Whenever an incoming request arrives, a `Future` is added to this list and will yield the
-	/// response to send back to the remote.
+	/// start time and the response to send back to the remote.
 	pending_responses: stream::FuturesUnordered<
 		Pin<Box<dyn Future<Output = Option<RequestProcessingOutcome>> + Send>>
 	>,
@@ -203,6 +212,7 @@ impl RequestResponsesBehaviour {
 
 		Ok(Self {
 			protocols,
+			pending_requests: Default::default(),
 			pending_responses: Default::default(),
 			pending_responses_arrival_time: Default::default(),
 		})
@@ -212,17 +222,36 @@ impl RequestResponsesBehaviour {
 	///
 	/// An error is returned if we are not connected to the target peer or if the protocol doesn't
 	/// match one that has been registered.
-	pub fn send_request(&mut self, target: &PeerId, protocol: &str, request: Vec<u8>)
-		-> Result<RequestId, SendRequestError>
-	{
+	pub fn send_request(
+		&mut self,
+		target: &PeerId,
+		protocol: &str,
+		request: Vec<u8>,
+		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+	) {
 		if let Some((protocol, _)) = self.protocols.get_mut(protocol) {
 			if protocol.is_connected(target) {
-				Ok(protocol.send_request(target, request))
+				let request_id = protocol.send_request(target, request);
+				self.pending_requests.insert(request_id, (Instant::now(), pending_response));
 			} else {
-				Err(SendRequestError::NotConnected)
+				if pending_response.send(Err(RequestFailure::NotConnected)).is_err() {
+					log::debug!(
+						target: "sub-libp2p",
+						"Not connected to peer {:?}. At the same time local \
+						 node is no longer interested in the result.",
+						target,
+					);
+				};
 			}
 		} else {
-			Err(SendRequestError::UnknownProtocol)
+			if pending_response.send(Err(RequestFailure::UnknownProtocol)).is_err() {
+				log::debug!(
+					target: "sub-libp2p",
+					"Unknown protocol {:?}. At the same time local \
+					 node is no longer interested in the result.",
+					protocol,
+				);
+			};
 		}
 	}
 }
@@ -440,6 +469,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 									payload: request,
 									pending_response: tx,
 								});
+							} else {
+								debug_assert!(false, "Received message on outbound-only protocol.");
 							}
 
 							let protocol = protocol.clone();
@@ -463,29 +494,80 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 
 						// Received a response from a remote to one of our requests.
 						RequestResponseEvent::Message {
+							peer,
 							message: RequestResponseMessage::Response {
 								request_id,
 								response,
 							},
 							..
 						} => {
-							let out = Event::RequestFinished {
-								request_id,
-								result: response.map_err(|()| RequestFailure::Refused),
+							let (started, delivered) = match self.pending_requests.remove(&request_id) {
+								Some((started, pending_response)) => {
+									let delivered = pending_response.send(
+										response.map_err(|()| RequestFailure::Refused),
+									).map_err(|_| RequestFailure::Obsolete);
+									(started, delivered)
+								}
+								None => {
+									log::warn!(
+										target: "sub-libp2p",
+										"Received `RequestResponseEvent::Message` with unexpected request id {:?}",
+										request_id,
+									);
+									debug_assert!(false);
+									continue;
+								}
 							};
+
+							let out = Event::RequestFinished {
+								peer,
+								protocol: protocol.clone(),
+								duration: started.elapsed(),
+								result: delivered,
+							};
+
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}
 
 						// One of our requests has failed.
 						RequestResponseEvent::OutboundFailure {
+							peer,
 							request_id,
 							error,
 							..
 						} => {
+							let started = match self.pending_requests.remove(&request_id) {
+								Some((started, pending_response)) => {
+									if pending_response.send(
+										Err(RequestFailure::Network(error.clone())),
+									).is_err() {
+										log::debug!(
+											target: "sub-libp2p",
+											"Request with id {:?} failed. At the same time local \
+											 node is no longer interested in the result.",
+											request_id,
+										);
+									}
+									started
+								}
+								None => {
+									log::warn!(
+										target: "sub-libp2p",
+										"Received `RequestResponseEvent::Message` with unexpected request id {:?}",
+										request_id,
+									);
+									debug_assert!(false);
+									continue;
+								}
+							};
+
 							let out = Event::RequestFinished {
-								request_id,
+								peer,
+								protocol: protocol.clone(),
+								duration: started.elapsed(),
 								result: Err(RequestFailure::Network(error)),
 							};
+
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}
 
@@ -529,21 +611,18 @@ pub enum RegisterError {
 	DuplicateProtocol(#[error(ignore)] Cow<'static, str>),
 }
 
-/// Error when sending a request.
+/// Error in a request.
 #[derive(Debug, derive_more::Display, derive_more::Error)]
-pub enum SendRequestError {
+pub enum RequestFailure {
 	/// We are not currently connected to the requested peer.
 	NotConnected,
 	/// Given protocol hasn't been registered.
 	UnknownProtocol,
-}
-
-/// Error in a request.
-#[derive(Debug, derive_more::Display, derive_more::Error)]
-pub enum RequestFailure {
 	/// Remote has closed the substream before answering, thereby signaling that it considers the
 	/// request as valid, but refused to answer it.
 	Refused,
+	/// The remote replied, but the local node is no longer interested in the response.
+	Obsolete,
 	/// Problem on the network.
 	#[display(fmt = "Problem on the network")]
 	Network(#[error(ignore)] OutboundFailure),
@@ -685,7 +764,7 @@ impl RequestResponseCodec for GenericCodec {
 
 #[cfg(test)]
 mod tests {
-	use futures::channel::mpsc;
+	use futures::channel::{mpsc, oneshot};
 	use futures::executor::LocalPool;
 	use futures::prelude::*;
 	use futures::task::Spawn;
@@ -771,31 +850,32 @@ mod tests {
 		// Remove and run the remaining swarm.
 		let (mut swarm, _) = swarms.remove(0);
 		pool.run_until(async move {
-			let mut sent_request_id = None;
+			let mut response_receiver = None;
 
 			loop {
 				match swarm.next_event().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-						let id = swarm.send_request(
+						let (sender, receiver) = oneshot::channel();
+						swarm.send_request(
 							&peer_id,
 							protocol_name,
-							b"this is a request".to_vec()
-						).unwrap();
-						assert!(sent_request_id.is_none());
-						sent_request_id = Some(id);
+							b"this is a request".to_vec(),
+							sender,
+						);
+						assert!(response_receiver.is_none());
+						response_receiver = Some(receiver);
 					}
 					SwarmEvent::Behaviour(super::Event::RequestFinished {
-						request_id,
-						result,
+						result, ..
 					}) => {
-						assert_eq!(Some(request_id), sent_request_id);
-						let result = result.unwrap();
-						assert_eq!(result, b"this is a response");
+						result.unwrap();
 						break;
 					}
 					_ => {}
 				}
 			}
+
+			assert_eq!(response_receiver.unwrap().await.unwrap().unwrap(), b"this is a response");
 		});
 	}
 
@@ -875,32 +955,34 @@ mod tests {
 		// Remove and run the remaining swarm.
 		let (mut swarm, _) = swarms.remove(0);
 		pool.run_until(async move {
-			let mut sent_request_id = None;
+			let mut response_receiver = None;
 
 			loop {
 				match swarm.next_event().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-						let id = swarm.send_request(
+						let (sender, receiver) = oneshot::channel();
+						swarm.send_request(
 							&peer_id,
 							protocol_name,
-							b"this is a request".to_vec()
-						).unwrap();
-						assert!(sent_request_id.is_none());
-						sent_request_id = Some(id);
+							b"this is a request".to_vec(),
+							sender,
+						);
+						assert!(response_receiver.is_none());
+						response_receiver = Some(receiver);
 					}
 					SwarmEvent::Behaviour(super::Event::RequestFinished {
-						request_id,
-						result,
+						result, ..
 					}) => {
-						assert_eq!(Some(request_id), sent_request_id);
-						match result {
-							Err(super::RequestFailure::Network(super::OutboundFailure::ConnectionClosed)) => {},
-							_ => panic!()
-						}
+						assert!(result.is_err());
 						break;
 					}
 					_ => {}
 				}
+			}
+
+			match response_receiver.unwrap().await.unwrap().unwrap_err() {
+				super::RequestFailure::Network(super::OutboundFailure::ConnectionClosed) => {},
+				_ => panic!()
 			}
 		});
 	}
