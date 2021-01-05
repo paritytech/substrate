@@ -640,7 +640,7 @@ impl Filters {
 			}
 		}
 		if let Some(key) = start_interval {
-			if key_end.map(|end| end.starts_with(key)).unwrap_or(false) {
+			if key_end.map(|end| end.starts_with(key)).unwrap_or(key.is_empty()) {
 				return true;
 			}
 		} else {
