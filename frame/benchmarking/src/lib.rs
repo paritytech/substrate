@@ -88,12 +88,6 @@ pub use sp_storage::TrackedStorageKey;
 /// benchmarks! {
 ///   where_clause {  where T::A: From<u32> } // Optional line to give additional bound on `T`.
 ///
-///   // common parameter; just one for this example.
-///   // will be `1`, `MAX_LENGTH` or any value inbetween
-///   _ {
-///     let l in 1 .. MAX_LENGTH => initialize_l(l);
-///   }
-///
 ///   // first dispatchable: foo; this is a user dispatchable and operates on a `u8` vector of
 ///   // size `l`, which we allow to be initialized as usual.
 ///   foo {
