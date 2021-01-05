@@ -45,9 +45,8 @@ use sc_network::config::{Role, OnDemand};
 use sc_network::NetworkService;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo, NumberFor,
+	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo,
 };
-use finality_grandpa::BlockNumberOps;
 use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
 use std::sync::Arc;
@@ -287,7 +286,6 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
-	NumberFor<TBl>: BlockNumberOps,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
 	new_full_parts(config).map(|parts| parts.0)
@@ -298,7 +296,6 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
 	TBl: BlockT,
-	NumberFor<TBl>: BlockNumberOps,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
@@ -437,7 +434,6 @@ pub fn new_client<E, Block, RA>(
 	where
 		Block: BlockT,
 		E: CodeExecutor + RuntimeInfo,
-		NumberFor<Block>: BlockNumberOps,
 {
 	const CANONICALIZATION_DELAY: u64 = 4096;
 
@@ -900,7 +896,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	} else {
 		Box::new(DefaultBlockAnnounceValidator)
 	};
-	
+
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {

@@ -18,8 +18,7 @@
 //! [`crate::request_responses::RequestResponsesBehaviour`].
 
 use codec::Decode;
-use sc_network::config::ProtocolId;
-use sc_network::request_responses::{IncomingRequest, ProtocolConfig};
+use sc_network::config::{ProtocolId, IncomingRequest, RequestResponseConfig};
 use sc_client_api::Backend;
 use sc_finality_grandpa::GrandpaJustification;
 use sp_runtime::traits::NumberFor;
@@ -31,41 +30,39 @@ use std::time::Duration;
 use std::sync::Arc;
 use sc_service::{SpawnTaskHandle, config::{Configuration, Role}};
 
-/// Generates the appropriate [`ProtocolConfig`] for a given chain configuration.
-pub fn protocol_config_for_chain<TBlock: BlockT, TBackend: Backend<TBlock> + 'static>(
+/// Generates the appropriate [`RequestResponseConfig`] for a given chain configuration.
+pub fn request_response_config_for_chain<TBlock: BlockT, TBackend: Backend<TBlock> + 'static>(
 	config: &Configuration,
 	spawn_handle: SpawnTaskHandle,
 	backend: Arc<TBackend>,
-) -> ProtocolConfig
+) -> RequestResponseConfig
 	where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
 {
 	let protocol_id = config.protocol_id();
 
 	if matches!(config.role, Role::Light) {
 		// Allow outgoing requests but deny incoming requests.
-		generate_protocol_config(protocol_id.clone())
+		generate_request_response_config(protocol_id.clone())
 	} else {
 		// Allow both outgoing and incoming requests.
-		let (handler, protocol_config) = GrandpaWarpSyncRequestHandler::new(
+		let (handler, request_response_config) = GrandpaWarpSyncRequestHandler::new(
 			protocol_id.clone(),
 			backend.clone(),
 		);
 		spawn_handle.spawn("grandpa_warp_sync_request_handler", handler.run());
-		protocol_config
+		request_response_config
 	}
 }
 
 const LOG_TARGET: &str = "grandpa-warp-sync-request-handler";
 
-/// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.
-pub fn generate_protocol_config(protocol_id: ProtocolId) -> ProtocolConfig {
-	ProtocolConfig {
+/// Generates a [`RequestResponseConfig`] for the block request protocol, refusing incoming requests.
+pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestResponseConfig {
+	RequestResponseConfig {
 		name: generate_protocol_name(protocol_id).into(),
-		// todo
-		max_request_size: 1024 * 1024,
-		// todo
+		max_request_size: 32,
 		max_response_size: 16 * 1024 * 1024,
-		request_timeout: Duration::from_secs(40),
+		request_timeout: Duration::from_secs(10),
 		inbound_queue: None,
 	}
 }
@@ -93,20 +90,13 @@ pub struct GrandpaWarpSyncRequestHandler<TBackend, TBlock> {
 
 impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TBackend, TBlock> {
 	/// Create a new [`BlockRequestHandler`].
-	pub fn new(protocol_id: ProtocolId, backend: Arc<TBackend>) -> (Self, ProtocolConfig) {
-		// Rate of arrival multiplied with the waiting time in the queue equals the queue length.
-		//
-		// An average Polkadot sentry node serves less than 5 requests per second. The 95th percentile
-		// serving a request is less than 2 second. Thus one would estimate the queue length to be
-		// below 10.
-		//
-		// Choosing 20 as the queue length to give some additional buffer.
+	pub fn new(protocol_id: ProtocolId, backend: Arc<TBackend>) -> (Self, RequestResponseConfig) {
 		let (tx, request_receiver) = mpsc::channel(20);
 
-		let mut protocol_config = generate_protocol_config(protocol_id);
-		protocol_config.inbound_queue = Some(tx);
+		let mut request_response_config = generate_request_response_config(protocol_id);
+		request_response_config.inbound_queue = Some(tx);
 
-		(Self { backend, request_receiver, _phantom: std::marker::PhantomData }, protocol_config)
+		(Self { backend, request_receiver, _phantom: std::marker::PhantomData }, request_response_config)
 	}
 
 	fn handle_request(
@@ -118,7 +108,7 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 	{
 		let request = Request::<TBlock>::decode(&mut &payload[..])?;
 
-		let response = sc_finality_grandpa::finality_proof::prove_authority::<_, _, GrandpaJustification<TBlock>>(
+		let response = sc_finality_grandpa::prove_authority::<_, _, GrandpaJustification<TBlock>>(
 			self.backend.blockchain(), request.begin,
 		)?;
 

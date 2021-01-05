@@ -53,7 +53,6 @@ use parking_lot::{Mutex, RwLock};
 use linked_hash_map::LinkedHashMap;
 use log::{trace, debug, warn};
 
-use sc_finality_grandpa::BlockNumberOps; // TODO remove (for test)
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
 	backend::{NewBlockState, PrunableStateChangesTrieStorage, ProvideChtRoots},
@@ -860,9 +859,7 @@ pub struct Backend<Block: BlockT> {
 	state_usage: Arc<StateUsageStats>,
 }
 
-impl<Block: BlockT> Backend<Block>
-	where NumberFor<Block>: BlockNumberOps,
-{
+impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
@@ -1443,9 +1440,7 @@ impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: Blo
 	}
 }
 
-impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block>
-	where NumberFor<Block>: BlockNumberOps,
-{
+impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = SyncingCachingState<RefTrackingState<Block>, Block>;
@@ -1769,9 +1764,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block>
 	}
 }
 
-impl<Block: BlockT> sc_client_api::backend::LocalBackend<Block> for Backend<Block>
-where NumberFor<Block>: BlockNumberOps,
-{}
+impl<Block: BlockT> sc_client_api::backend::LocalBackend<Block> for Backend<Block> {}
 
 #[cfg(test)]
 pub(crate) mod tests {

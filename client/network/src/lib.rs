@@ -253,7 +253,7 @@ mod discovery;
 mod light_client_handler;
 mod on_demand_layer;
 mod protocol;
-pub mod request_responses;
+mod request_responses;
 mod schema;
 mod service;
 mod transport;

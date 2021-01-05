@@ -34,7 +34,6 @@ pub use sp_keyring::{
 	sr25519::Keyring as Sr25519Keyring,
 };
 pub use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
-use finality_grandpa::BlockNumberOps;
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
 pub use sc_service::{RpcHandlers, RpcSession, client};
@@ -46,7 +45,7 @@ use std::collections::{HashSet, HashMap};
 use futures::{future::{Future, FutureExt}, stream::StreamExt};
 use serde::Deserialize;
 use sp_core::storage::ChildInfo;
-use sp_runtime::{OpaqueExtrinsic, codec::Encode, traits::{Block as BlockT, BlakeTwo256, NumberFor}};
+use sp_runtime::{OpaqueExtrinsic, codec::Encode, traits::{Block as BlockT, BlakeTwo256}};
 use sc_service::client::{LocalCallExecutor, ClientConfig};
 use sc_client_api::BlockchainEvents;
 
@@ -83,18 +82,13 @@ pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 }
 
 impl<Block: BlockT, Executor, G: GenesisInit> Default
-	for TestClientBuilder<Block, Executor, Backend<Block>, G> 
-
-where NumberFor<Block>: BlockNumberOps,
-{
+	for TestClientBuilder<Block, Executor, Backend<Block>, G> {
 	fn default() -> Self {
 		Self::with_default_backend()
 	}
 }
 
-impl<Block: BlockT, Executor, G: GenesisInit> TestClientBuilder<Block, Executor, Backend<Block>, G>
-where NumberFor<Block>: BlockNumberOps,
-{
+impl<Block: BlockT, Executor, G: GenesisInit> TestClientBuilder<Block, Executor, Backend<Block>, G> {
 	/// Create new `TestClientBuilder` with default backend.
 	pub fn with_default_backend() -> Self {
 		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
