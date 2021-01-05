@@ -265,9 +265,6 @@ benchmarks! {
 	where_clause { where
 		T::AccountId: UncheckedFrom<T::Hash>,
 		T::AccountId: AsRef<[u8]>,
-	},
-
-	_ {
 	}
 
 	// This extrinsic is pretty much constant as it is only a simple setter.
