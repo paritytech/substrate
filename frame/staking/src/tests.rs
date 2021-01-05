@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,7 +45,7 @@ fn force_unstake_works() {
 		// Force unstake requires root.
 		assert_noop!(Staking::force_unstake(Origin::signed(11), 11, 2), BadOrigin);
 		// Force unstake needs correct number of slashing spans (for weight calculation)
-		assert_noop!(Staking::force_unstake(Origin::signed(11), 11, 0), BadOrigin);
+		assert_noop!(Staking::force_unstake(Origin::root(), 11, 0), Error::<Test>::IncorrectSlashingSpans);
 		// We now force them to unstake
 		assert_ok!(Staking::force_unstake(Origin::root(), 11, 2));
 		// No longer bonded.

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -505,10 +505,6 @@ where
 			|| backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL).unwrap_or_default()
 		);
 		StorageAppend::new(current_value).append(value);
-	}
-
-	fn chain_id(&self) -> u64 {
-		42
 	}
 
 	fn storage_root(&mut self) -> Vec<u8> {

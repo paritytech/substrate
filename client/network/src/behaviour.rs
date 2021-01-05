@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
 	config::{ProtocolId, Role}, block_requests, light_client_handler,
@@ -88,7 +90,7 @@ pub enum BehaviourOut<B: BlockT> {
 		protocol: Cow<'static, str>,
 		/// If `Ok`, contains the time elapsed between when we received the request and when we
 		/// sent back the response. If `Err`, the error that happened.
-		result: Result<Option<Duration>, ResponseFailure>,
+		result: Result<Duration, ResponseFailure>,
 	},
 
 	/// A request initiated using [`Behaviour::send_request`] has succeeded or failed.
@@ -417,7 +419,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 				self.events.push_back(BehaviourOut::InboundRequest {
 					peer,
 					protocol: self.block_requests.protocol_name().to_owned().into(),
-					result: Ok(Some(total_handling_time)),
+					result: Ok(total_handling_time),
 				});
 			},
 			block_requests::Event::Response { peer, response, request_duration } => {

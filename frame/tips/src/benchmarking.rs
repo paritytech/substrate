@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -79,7 +79,7 @@ fn create_tips<T: Config>(t: u32, hash: T::Hash, value: BalanceOf<T>) ->
 	Ok(())
 }
 
-fn setup_pod_account<T: Config>() {
+fn setup_pot_account<T: Config>() {
 	let pot_account = TipsMod::<T>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
@@ -148,7 +148,7 @@ benchmarks! {
 		let t in 1 .. MAX_TIPPERS;
 
 		// Make sure pot is funded
-		setup_pod_account::<T>();
+		setup_pot_account::<T>();
 
 		// Set up a new tip proposal
 		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
@@ -164,6 +164,7 @@ benchmarks! {
 		let reason_hash = T::Hashing::hash(&reason[..]);
 		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
+
 		create_tips::<T>(t, hash.clone(), value)?;
 
 		let caller = account("caller", t, SEED);
@@ -172,6 +173,26 @@ benchmarks! {
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
 	}: _(RawOrigin::Signed(caller), hash)
 
+	slash_tip {
+		let t in 1 .. MAX_TIPPERS;
+
+		// Make sure pot is funded
+		setup_pot_account::<T>();
+
+		// Set up a new tip proposal
+		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
+		let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
+		TipsMod::<T>::tip_new(
+			RawOrigin::Signed(member).into(),
+			reason.clone(),
+			beneficiary.clone(),
+			value
+		)?;
+
+		let reason_hash = T::Hashing::hash(&reason[..]);
+		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
+		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
+	}: _(RawOrigin::Root, hash)
 }
 
 #[cfg(test)]
@@ -188,6 +209,7 @@ mod tests {
 			assert_ok!(test_benchmark_tip_new::<Test>());
 			assert_ok!(test_benchmark_tip::<Test>());
 			assert_ok!(test_benchmark_close_tip::<Test>());
+			assert_ok!(test_benchmark_slash_tip::<Test>());
 		});
 	}
 }
