@@ -45,10 +45,10 @@ use tracing_subscriber::{
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
-const ZERO_DURATION: Duration = Duration::from_nanos(0);
-
 #[doc(hidden)]
 pub use tracing;
+
+const ZERO_DURATION: Duration = Duration::from_nanos(0);
 
 /// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingLayer {
