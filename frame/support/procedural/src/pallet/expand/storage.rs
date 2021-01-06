@@ -32,8 +32,6 @@ fn prefix_ident(storage_ident: &syn::Ident) -> syn::Ident {
 pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
-	let type_impl_gen = &def.type_impl_generics();
-	let type_use_gen = &def.type_use_generics();
 	let pallet_ident = &def.pallet_struct.pallet;
 
 	// Replace first arg `_` by the generated prefix structure.
@@ -63,6 +61,11 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			unreachable!("Checked by def");
 		};
 
+		let type_use_gen = if def.config.has_instance {
+			quote::quote_spanned!(storage_def.attr_span => T, I)
+		} else {
+			quote::quote_spanned!(storage_def.attr_span => T)
+		};
 		let prefix_ident = prefix_ident(&storage_def.ident);
 		args.args[0] = syn::parse_quote!( #prefix_ident<#type_use_gen> );
 	}
@@ -72,22 +75,25 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			let docs = &storage.docs;
 
 			let ident = &storage.ident;
-			let gen = &def.type_use_generics();
-			let full_ident = quote::quote!( #ident<#gen> );
+			let gen = &def.type_use_generics(storage.attr_span);
+			let full_ident = quote::quote_spanned!(storage.attr_span => #ident<#gen> );
 
 			let metadata_trait = match &storage.metadata {
-				Metadata::Value { .. } =>
-					quote::quote!(#frame_support::storage::types::StorageValueMetadata),
-				Metadata::Map { .. } =>
-					quote::quote!(#frame_support::storage::types::StorageMapMetadata),
-				Metadata::DoubleMap { .. } =>
-					quote::quote!(#frame_support::storage::types::StorageDoubleMapMetadata),
+				Metadata::Value { .. } => quote::quote_spanned!(storage.attr_span =>
+					#frame_support::storage::types::StorageValueMetadata
+				),
+				Metadata::Map { .. } => quote::quote_spanned!(storage.attr_span =>
+					#frame_support::storage::types::StorageMapMetadata
+				),
+				Metadata::DoubleMap { .. } => quote::quote_spanned!(storage.attr_span =>
+					#frame_support::storage::types::StorageDoubleMapMetadata
+				),
 			};
 
 			let ty = match &storage.metadata {
 				Metadata::Value { value } => {
 					let value = clean_type_string(&quote::quote!(#value).to_string());
-					quote::quote!(
+					quote::quote_spanned!(storage.attr_span =>
 						#frame_support::metadata::StorageEntryType::Plain(
 							#frame_support::metadata::DecodeDifferent::Encode(#value)
 						)
@@ -96,7 +102,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				Metadata::Map { key, value } => {
 					let value = clean_type_string(&quote::quote!(#value).to_string());
 					let key = clean_type_string(&quote::quote!(#key).to_string());
-					quote::quote!(
+					quote::quote_spanned!(storage.attr_span =>
 						#frame_support::metadata::StorageEntryType::Map {
 							hasher: <#full_ident as #metadata_trait>::HASHER,
 							key: #frame_support::metadata::DecodeDifferent::Encode(#key),
@@ -109,7 +115,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 					let value = clean_type_string(&quote::quote!(#value).to_string());
 					let key1 = clean_type_string(&quote::quote!(#key1).to_string());
 					let key2 = clean_type_string(&quote::quote!(#key2).to_string());
-					quote::quote!(
+					quote::quote_spanned!(storage.attr_span =>
 						#frame_support::metadata::StorageEntryType::DoubleMap {
 							hasher: <#full_ident as #metadata_trait>::HASHER1,
 							key2_hasher: <#full_ident as #metadata_trait>::HASHER2,
@@ -121,7 +127,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				}
 			};
 
-			quote::quote_spanned!(storage.ident.span() =>
+			quote::quote_spanned!(storage.attr_span =>
 				#frame_support::metadata::StorageEntryMetadata {
 					name: #frame_support::metadata::DecodeDifferent::Encode(
 						<#full_ident as #metadata_trait>::NAME
@@ -144,19 +150,24 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				&storage.where_clause,
 				&def.config.where_clause,
 			]);
-			let docs = storage.docs.iter().map(|d| quote::quote!(#[doc = #d]));
+			let docs = storage.docs.iter()
+				.map(|d| quote::quote_spanned!(storage.attr_span => #[doc = #d]));
 
 			let ident = &storage.ident;
-			let gen = &def.type_use_generics();
-			let full_ident = quote::quote!( #ident<#gen> );
+			let gen = &def.type_use_generics(storage.attr_span);
+			let type_impl_gen = &def.type_impl_generics(storage.attr_span);
+			let type_use_gen = &def.type_use_generics(storage.attr_span);
+			let full_ident = quote::quote_spanned!(storage.attr_span => #ident<#gen> );
 
 			match &storage.metadata {
 				Metadata::Value { value } => {
 					let query = match storage.query_kind.as_ref().expect("Checked by def") {
-						QueryKind::OptionQuery => quote::quote!(Option<#value>),
+						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
+							Option<#value>
+						),
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
-					quote::quote_spanned!(getter.span() =>
+					quote::quote_spanned!(storage.attr_span =>
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
 							#( #docs )*
 							pub fn #getter() -> #query {
@@ -169,10 +180,12 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				},
 				Metadata::Map { key, value } => {
 					let query = match storage.query_kind.as_ref().expect("Checked by def") {
-						QueryKind::OptionQuery => quote::quote!(Option<#value>),
+						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
+							Option<#value>
+						),
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
-					quote::quote_spanned!(getter.span() =>
+					quote::quote_spanned!(storage.attr_span =>
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
 							#( #docs )*
 							pub fn #getter<KArg>(k: KArg) -> #query where
@@ -187,10 +200,12 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				},
 				Metadata::DoubleMap { key1, key2, value } => {
 					let query = match storage.query_kind.as_ref().expect("Checked by def") {
-						QueryKind::OptionQuery => quote::quote!(Option<#value>),
+						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
+							Option<#value>
+						),
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
-					quote::quote_spanned!(getter.span() =>
+					quote::quote_spanned!(storage.attr_span =>
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
 							#( #docs )*
 							pub fn #getter<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> #query where
@@ -211,12 +226,14 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		});
 
 	let prefix_structs = def.storages.iter().map(|storage_def| {
+		let type_impl_gen = &def.type_impl_generics(storage_def.attr_span);
+		let type_use_gen = &def.type_use_generics(storage_def.attr_span);
 		let prefix_struct_ident = prefix_ident(&storage_def.ident);
 		let prefix_struct_vis = &storage_def.vis;
 		let prefix_struct_const = storage_def.ident.to_string();
 		let config_where_clause = &def.config.where_clause;
 
-		quote::quote_spanned!(storage_def.ident.span() =>
+		quote::quote_spanned!(storage_def.attr_span =>
 			#prefix_struct_vis struct #prefix_struct_ident<#type_use_gen>(
 				core::marker::PhantomData<(#type_use_gen,)>
 			);
@@ -239,6 +256,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	let mut where_clauses = vec![&def.config.where_clause];
 	where_clauses.extend(def.storages.iter().map(|storage| &storage.where_clause));
 	let completed_where_clause = super::merge_where_clauses(&where_clauses);
+	let type_impl_gen = &def.type_impl_generics(proc_macro2::Span::call_site());
+	let type_use_gen = &def.type_use_generics(proc_macro2::Span::call_site());
 
 	quote::quote!(
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen>
