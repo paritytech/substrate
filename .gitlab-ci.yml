@@ -303,13 +303,8 @@ check-web-wasm:
   script:
     # WASM support is in progress. As more and more crates support WASM, we
     # should add entries here. See https://github.com/paritytech/substrate/issues/2416
-    - time cargo build --target=wasm32-unknown-unknown -p sp-io
-    - time cargo build --target=wasm32-unknown-unknown -p sp-runtime
-    - time cargo build --target=wasm32-unknown-unknown -p sp-std
-    - time cargo build --target=wasm32-unknown-unknown -p sc-consensus-aura
-    - time cargo build --target=wasm32-unknown-unknown -p sc-consensus-babe
-    - time cargo build --target=wasm32-unknown-unknown -p sp-consensus
-    - time cargo build --target=wasm32-unknown-unknown -p sc-telemetry
+    # Note: we don't need to test crates imported in `bin/node/cli`
+    - time cargo build --manifest-path=client/consensus/aura/Cargo.toml --target=wasm32-unknown-unknown --features getrandom
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
     - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features browser --target=wasm32-unknown-unknown -Z features=itarget
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
