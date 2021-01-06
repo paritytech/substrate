@@ -40,7 +40,7 @@ macro_rules! decl_tests {
 		use crate::*;
 		use sp_runtime::{FixedPointNumber, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
-			assert_noop, assert_ok, assert_err,
+			assert_noop, assert_storage_noop, assert_ok, assert_err,
 			traits::{
 				LockableCurrency, LockIdentifier, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath, StoredMap
@@ -808,18 +808,15 @@ macro_rules! decl_tests {
 					assert!(!<Test as Config>::AccountStore::is_explicit(&1337));
 
 					// Unreserve
-					assert_eq!(Balances::unreserve(&1337, 42), 42);
-					assert!(!<Test as Config>::AccountStore::is_explicit(&1337));
+					assert_storage_noop!(assert_eq!(Balances::unreserve(&1337, 42), 42));
 					// Reserve
 					assert_noop!(Balances::reserve(&1337, 42), Error::<Test, _>::InsufficientBalance);
 					// Slash Reserve
-					assert_eq!(Balances::slash_reserved(&1337, 42).1, 42);
-					assert!(!<Test as Config>::AccountStore::is_explicit(&1337));
+					assert_storage_noop!(assert_eq!(Balances::slash_reserved(&1337, 42).1, 42));
 					// Repatriate Reserve
 					assert_noop!(Balances::repatriate_reserved(&1337, &1338, 42, Status::Free), Error::<Test, _>::DeadAccount);
 					// Slash
-					assert_eq!(Balances::slash(&1337, 42).1, 42);
-					assert!(!<Test as Config>::AccountStore::is_explicit(&1337));
+					assert_storage_noop!(assert_eq!(Balances::slash(&1337, 42).1, 42));
 				});
 		}
 	}
