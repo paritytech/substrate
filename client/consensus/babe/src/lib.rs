@@ -498,7 +498,6 @@ async fn answer_requests<B: BlockT, C>(
 						.map_err(|e| Error::<B>::ForkTree(Box::new(e)))?
 						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
 
-
 					let viable_epoch = epoch_changes.viable_epoch(
 						&epoch_descriptor,
 						|slot| Epoch::genesis(&genesis_config, slot)
@@ -515,13 +514,12 @@ async fn answer_requests<B: BlockT, C>(
 
 				let _ = response.send(lookup());
 			}
-
-			BabeRequest::__Nonexhaustive => { }
 		}
 	}
 }
 
 /// Requests to the BABE service.
+#[non_exhaustive]
 pub enum BabeRequest<B: BlockT> {
 	/// Request the epoch that a child of the given block, with the given slot number would have.
 	///
@@ -532,9 +530,6 @@ pub enum BabeRequest<B: BlockT> {
 		SlotNumber,
 		oneshot::Sender<Result<sp_consensus_babe::Epoch, Error<B>>>,
 	),
-
-	#[doc(hidden)]
-	__Nonexhaustive,
 }
 
 /// A handle to the BABE worker for issuing requests.
