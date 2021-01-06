@@ -113,8 +113,6 @@ pub fn create_validator_with_nominators<T: Config>(
 const USER_SEED: u32 = 999666;
 
 benchmarks! {
-	_{}
-
 	bond {
 		let stash = create_funded_user::<T>("stash", USER_SEED, 100);
 		let controller = create_funded_user::<T>("controller", USER_SEED, 100);
