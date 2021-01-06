@@ -327,9 +327,10 @@ use frame_system::{
 };
 use sp_npos_elections::{
 	ExtendedBalance, Assignment, ElectionScore, ElectionResult as PrimitiveElectionResult,
-	to_support_map, EvaluateSupport, seq_phragmen, generate_solution_type,
-	is_score_better, SupportMap, VoteWeight, CompactSolution, PerThing128,
+	to_supports, EvaluateSupport, seq_phragmen, generate_solution_type, is_score_better, Supports,
+	VoteWeight, CompactSolution, PerThing128,
 };
+use sp_election_providers::ElectionProvider;
 pub use weights::WeightInfo;
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -792,7 +793,12 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 	/// Something that provides the election functionality.
-	type ElectionProvider: sp_election_providers::ElectionProvider<Self::AccountId, Self::BlockNumber, DataProvider = Module<Self>>;
+	type ElectionProvider: sp_election_providers::ElectionProvider<
+		Self::AccountId,
+		Self::BlockNumber,
+		// we only accept an election provider that has staking as data provider
+		DataProvider = Module<Self>,
+	>;
 
 	/// Tokens have been minted and are unused for validator-reward.
 	/// See [Era payout](./index.html#era-payout).
@@ -2129,7 +2135,7 @@ decl_module! {
 		#[weight = T::WeightInfo::submit_solution_better(
 			size.validators.into(),
 			size.nominators.into(),
-			compact.voters_count() as u32,
+			compact.voter_count() as u32,
 			winners.len() as u32,
 		)]
 		pub fn submit_election_solution(
@@ -2163,7 +2169,7 @@ decl_module! {
 		#[weight = T::WeightInfo::submit_solution_better(
 			size.validators.into(),
 			size.nominators.into(),
-			compact.voters_count() as u32,
+			compact.voter_count() as u32,
 			winners.len() as u32,
 		)]
 		pub fn submit_election_solution_unsigned(
@@ -2408,7 +2414,7 @@ impl<T: Config> Module<T> {
 		}
 	}
 
-	/// Plan a new session, potentially trigger a new era.
+	/// Plan a new session potentially trigger a new era.
 	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
@@ -2625,17 +2631,15 @@ impl<T: Config> Module<T> {
 		);
 
 		// build the support map thereof in order to evaluate.
-		let supports = to_support_map::<T::AccountId>(
-			&winners,
-			&staked_assignments,
-		).map_err(|_| Error::<T>::OffchainElectionBogusEdge)?;
+		let supports = to_supports(&winners, &staked_assignments)
+			.map_err(|_| Error::<T>::OffchainElectionBogusEdge)?;
 
 		// Check if the score is the same as the claimed one.
-		let submitted_score = supports.evaluate();
+		let submitted_score = (&supports).evaluate();
 		ensure!(submitted_score == claimed_score, Error::<T>::OffchainElectionBogusScore);
 
 		// At last, alles Ok. Exposures and store the result.
-		let exposures = Self::collect_exposure(supports);
+		let exposures = Self::collect_exposures(supports);
 		log!(
 			info,
 			"💸 A better solution (with compute {:?} and score {:?}) has been validated and stored on chain.",
@@ -2771,8 +2775,7 @@ impl<T: Config> Module<T> {
 
 		// Set staking information for new era.
 		let maybe_new_validators = Self::select_and_update_validators(current_era);
-		// TODO: TWO_PHASE:: later on, switch to enact_election which uses `T::ElectionProvider`.
-		// let maybe_new_validators = Self::enact_election(current_era);
+		let _unused_new_validators = Self::enact_election(current_era);
 
 		maybe_new_validators
 	}
@@ -2889,7 +2892,7 @@ impl<T: Config> Module<T> {
 				Self::slashable_balance_of_fn(),
 			);
 
-			let supports = to_support_map::<T::AccountId>(
+			let supports = to_supports(
 				&elected_stashes,
 				&staked_assignments,
 			)
@@ -2902,7 +2905,7 @@ impl<T: Config> Module<T> {
 			.ok()?;
 
 			// collect exposures
-			let exposures = Self::collect_exposure(supports);
+			let exposures = Self::collect_exposures(supports);
 
 			// In order to keep the property required by `on_session_ending` that we must return the
 			// new validator set even if it's the same as the old, as long as any underlying
@@ -2983,46 +2986,10 @@ impl<T: Config> Module<T> {
 		}
 	}
 
-	/// Consume a set of [`SupportMap`] from [`sp_npos_elections`] and collect them into a
-	/// [`Exposure`].
-	fn collect_exposure(
-		supports: SupportMap<T::AccountId>,
-	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
-		let total_issuance = T::Currency::total_issuance();
-		let to_currency = |e: ExtendedBalance| T::CurrencyToVote::to_currency(e, total_issuance);
-
-		supports.into_iter().map(|(validator, support)| {
-			// build `struct exposure` from `support`
-			let mut others = Vec::with_capacity(support.voters.len());
-			let mut own: BalanceOf<T> = Zero::zero();
-			let mut total: BalanceOf<T> = Zero::zero();
-			support.voters
-				.into_iter()
-				.map(|(nominator, weight)| (nominator, to_currency(weight)))
-				.for_each(|(nominator, stake)| {
-					if nominator == validator {
-						own = own.saturating_add(stake);
-					} else {
-						others.push(IndividualExposure { who: nominator, value: stake });
-					}
-					total = total.saturating_add(stake);
-				});
-
-			let exposure = Exposure {
-				own,
-				others,
-				total,
-			};
-
-			(validator, exposure)
-		}).collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
-	}
-
-
 	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
-	fn collect_exposure_flat(
-		supports: sp_npos_elections::Supports<T::AccountId>,
+	fn collect_exposures(
+		supports: Supports<T::AccountId>,
 	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: ExtendedBalance| T::CurrencyToVote::to_currency(e, total_issuance);
@@ -3062,11 +3029,12 @@ impl<T: Config> Module<T> {
 	///
 	/// Returns `Err(())` if less than [`MinimumValidatorCount`] validators have been elected, `Ok`
 	/// otherwise.
+	#[allow(dead_code)] // TODO: TWO_PHASE
 	pub fn process_election(
 		flat_supports: sp_npos_elections::Supports<T::AccountId>,
 		current_era: EraIndex,
 	) -> Result<Vec<T::AccountId>, ()> {
-		let exposures = Self::collect_exposure_flat(flat_supports);
+		let exposures = Self::collect_exposures(flat_supports);
 		let elected_stashes = exposures
 			.iter()
 			.cloned()
@@ -3125,21 +3093,11 @@ impl<T: Config> Module<T> {
 	/// Enact and process the election using the `ElectionProvider` type.
 	///
 	/// This will also process the election, as noted in [`process_election`].
-	#[allow(dead_code)] // TODO: TWO_PHASE
-	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
-		use sp_election_providers::ElectionProvider;
-		T::ElectionProvider::elect()
-			.map_err(|err| {
-				log!(
-					error,
-					"enacting new validator set at the end of era {} failed due to {:?}",
-					current_era,
-					err,
-				);
-				()
-			})
-			.and_then(|flat_supports| Self::process_election(flat_supports, current_era))
-			.ok()
+	fn enact_election(_current_era: EraIndex) -> Option<Vec<T::AccountId>> {
+		let outcome = T::ElectionProvider::elect().map(|_| ());
+		log!(debug, "Experimental election provider outputted {:?}", outcome);
+		// TODO: TWO_PHASE: This code path shall not return anything for now.
+		None
 	}
 
 	/// Remove all associated data of a stash account from the staking system.

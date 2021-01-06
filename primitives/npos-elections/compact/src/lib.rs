@@ -179,7 +179,7 @@ fn struct_def(
 			type Target = #target_type;
 			type Accuracy = #weight_type;
 
-			fn voters_count(&self) -> usize {
+			fn voter_count(&self) -> usize {
 				let mut all_len = 0usize;
 				#len_impl
 				all_len
@@ -192,6 +192,8 @@ fn struct_def(
 			}
 
 			fn unique_targets(&self) -> Vec<Self::Target> {
+				// NOTE: this implementation returns the targets sorted, but we don't use it yet per
+				// se, nor is the API enforcing it.
 				let mut all_targets: Vec<Self::Target> = Vec::with_capacity(self.average_edge_count());
 				let mut maybe_insert_target = |t: Self::Target| {
 					match all_targets.binary_search(&t) {

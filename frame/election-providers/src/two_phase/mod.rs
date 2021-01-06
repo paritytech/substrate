@@ -395,7 +395,7 @@ pub struct RoundSnapshotMetadata {
 ///
 /// Note that this is different from [`pallet::Error`].
 #[derive(RuntimeDebug, Eq, PartialEq)]
-pub enum InternalError {
+pub enum ElectionError {
 	/// A feasibility error.
 	Feasibility(FeasibilityError),
 	/// An error in the on-chain fallback.
@@ -410,21 +410,21 @@ pub enum InternalError {
 	PoolSubmissionFailed,
 }
 
-impl From<crate::onchain::Error> for InternalError {
+impl From<crate::onchain::Error> for ElectionError {
 	fn from(e: crate::onchain::Error) -> Self {
-		InternalError::OnChainFallback(e)
+		ElectionError::OnChainFallback(e)
 	}
 }
 
-impl From<sp_npos_elections::Error> for InternalError {
+impl From<sp_npos_elections::Error> for ElectionError {
 	fn from(e: sp_npos_elections::Error) -> Self {
-		InternalError::NposElections(e)
+		ElectionError::NposElections(e)
 	}
 }
 
-impl From<FeasibilityError> for InternalError {
+impl From<FeasibilityError> for ElectionError {
 	fn from(e: FeasibilityError) -> Self {
-		InternalError::Feasibility(e)
+		ElectionError::Feasibility(e)
 	}
 }
 
@@ -582,6 +582,8 @@ pub mod pallet {
 			{
 				let _ = Self::mine_and_submit().map_err(|e| {
 					log!(error, "error while submitting transaction in OCW: {:?}", e)
+				}).map(|_| {
+					log!(info, "successfully submitted a solution via OCW at block {}", n)
 				});
 			}
 		}
@@ -676,7 +678,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit_unsigned(
 			witness.voters,
 			witness.targets,
-			solution.compact.voters_count() as u32,
+			solution.compact.voter_count() as u32,
 			solution.compact.unique_targets().len() as u32
 		))]
 		pub fn submit_unsigned(
@@ -1048,7 +1050,7 @@ where
 			.map_err::<FeasibilityError, _>(Into::into)?;
 
 		// Finally, check that the claimed score was indeed correct.
-		let known_score = supports.evaluate();
+		let known_score = (&supports).evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
 		// let supports = supports.flatten();
@@ -1060,7 +1062,7 @@ where
 	}
 
 	/// On-chain fallback of election.
-	fn onchain_fallback() -> Result<Supports<T::AccountId>, InternalError>
+	fn onchain_fallback() -> Result<Supports<T::AccountId>, ElectionError>
 	where
 		ExtendedBalance: From<<T::OnChainAccuracy as PerThing>::Inner>,
 	{
@@ -1077,7 +1079,7 @@ where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
-	type Error = InternalError; // TODO: rename to ELectionError
+	type Error = ElectionError;
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {

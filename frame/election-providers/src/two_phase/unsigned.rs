@@ -40,10 +40,10 @@ where
 	/// Min a new npos solution.
 	pub fn mine_solution(
 		iters: usize,
-	) -> Result<(RawSolution<CompactOf<T>>, WitnessData), InternalError> {
+	) -> Result<(RawSolution<CompactOf<T>>, WitnessData), ElectionError> {
 		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(InternalError::SnapshotUnAvailable)?;
-		let desired_targets = Self::desired_targets().ok_or(InternalError::SnapshotUnAvailable)?;
+			Self::snapshot().ok_or(ElectionError::SnapshotUnAvailable)?;
+		let desired_targets = Self::desired_targets().ok_or(ElectionError::SnapshotUnAvailable)?;
 
 		seq_phragmen::<_, CompactAccuracyOf<T>>(
 			desired_targets as usize,
@@ -61,11 +61,11 @@ where
 	/// Will always reduce the solution as well.
 	pub fn prepare_election_result(
 		election_result: ElectionResult<T::AccountId, CompactAccuracyOf<T>>,
-	) -> Result<(RawSolution<CompactOf<T>>, WitnessData), InternalError> {
+	) -> Result<(RawSolution<CompactOf<T>>, WitnessData), ElectionError> {
 		// storage items. Note: we have already read this from storage, they must be in cache.
 		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(InternalError::SnapshotUnAvailable)?;
-		let desired_targets = Self::desired_targets().ok_or(InternalError::SnapshotUnAvailable)?;
+			Self::snapshot().ok_or(ElectionError::SnapshotUnAvailable)?;
+		let desired_targets = Self::desired_targets().ok_or(ElectionError::SnapshotUnAvailable)?;
 
 		// closures.
 		let voter_index = crate::voter_index_fn!(voters, T::AccountId, T);
@@ -82,7 +82,7 @@ where
 		// convert to staked and reduce.
 		let mut staked =
 			sp_npos_elections::assignment_ratio_to_staked_normalized(assignments, &stake_of)
-				.map_err::<InternalError, _>(Into::into)?;
+				.map_err::<ElectionError, _>(Into::into)?;
 		sp_npos_elections::reduce(&mut staked);
 
 		// convert back to ration and make compact.
@@ -137,7 +137,7 @@ where
 	/// struct.
 	///
 	/// Note that the solution is already computed, and the winners are elected based on the merit
-	/// of teh entire stake in the system. Nonetheless, some of the voters will be removed further
+	/// of the entire stake in the system. Nonetheless, some of the voters will be removed further
 	/// down the line.
 	///
 	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
@@ -146,14 +146,14 @@ where
 		maximum_allowed_voters: u32,
 		mut compact: CompactOf<T>,
 		nominator_index: FN,
-	) -> Result<CompactOf<T>, InternalError>
+	) -> Result<CompactOf<T>, ElectionError>
 	where
 		for<'r> FN: Fn(&'r T::AccountId) -> Option<CompactVoterIndexOf<T>>,
 	{
-		match compact.voters_count().checked_sub(maximum_allowed_voters as usize) {
+		match compact.voter_count().checked_sub(maximum_allowed_voters as usize) {
 			Some(to_remove) if to_remove > 0 => {
 				// grab all voters and sort them by least stake.
-				let RoundSnapshot { voters, .. } = Self::snapshot().ok_or(InternalError::SnapshotUnAvailable)?;
+				let RoundSnapshot { voters, .. } = Self::snapshot().ok_or(ElectionError::SnapshotUnAvailable)?;
 				let mut voters_sorted = voters
 					.into_iter()
 					.map(|(who, stake, _)| (who.clone(), stake))
@@ -167,7 +167,7 @@ where
 					.iter()
 					.map(|(who, stake)| (nominator_index(&who), stake))
 				{
-					let index = maybe_index.ok_or(InternalError::SnapshotUnAvailable)?;
+					let index = maybe_index.ok_or(ElectionError::SnapshotUnAvailable)?;
 					if compact.remove_voter(index) {
 						removed += 1
 					}
@@ -303,8 +303,8 @@ where
 		}
 	}
 
-	/// Mine a new solution, and submit it back to the chian as an unsigned transaction.
-	pub(crate) fn mine_and_submit() -> Result<(), InternalError> {
+	/// Mine a new solution, and submit it back to the chain as an unsigned transaction.
+	pub(crate) fn mine_and_submit() -> Result<(), ElectionError> {
 		let balancing = Self::get_balancing_iters();
 		let (raw_solution, witness) = Self::mine_solution(balancing)?;
 
@@ -312,7 +312,7 @@ where
 		let call = Call::submit_unsigned(raw_solution, witness).into();
 
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
-			.map_err(|_| InternalError::PoolSubmissionFailed)
+			.map_err(|_| ElectionError::PoolSubmissionFailed)
 	}
 
 	pub(crate) fn unsigned_pre_dispatch_checks(

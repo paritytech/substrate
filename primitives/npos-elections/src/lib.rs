@@ -147,6 +147,7 @@ pub trait CompactSolution: Sized {
 	/// The weight/accuracy type of each vote.
 	type Accuracy: PerThing128;
 
+	/// Build self from a `Vec<Assignment<A, Self::Accuracy>>`.
 	fn from_assignment<FV, FT, A>(
 		assignments: Vec<Assignment<A, Self::Accuracy>>,
 		voter_index: FV,
@@ -157,20 +158,21 @@ pub trait CompactSolution: Sized {
 		for<'r> FV: Fn(&'r A) -> Option<Self::Voter>,
 		for<'r> FT: Fn(&'r A) -> Option<Self::Target>;
 
+	/// Convert self into a `Vec<Assignment<A, Self::Accuracy>>`
 	fn into_assignment<A: IdentifierT>(
 		self,
 		voter_at: impl Fn(Self::Voter) -> Option<A>,
 		target_at: impl Fn(Self::Target) -> Option<A>,
 	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
 
-	/// Get the length of all the assignments that this type is encoding.
+	/// Get the length of all the voters that this type is encoding.
 	///
-	/// This is basically the same as the number of assignments, or the number of voters in total.
-	fn voters_count(&self) -> usize;
+	/// This is basically the same as the number of assignments.
+	fn voter_count(&self) -> usize;
 
 	/// Get the total count of edges.
 	///
-	/// This is effectively in the range of {[`Self::voters_count`], [`Self::voters_count`] *
+	/// This is effectively in the range of {[`Self::voter_count`], [`Self::voter_count`] *
 	/// [`Self::LIMIT`]}.
 	fn edge_count(&self) -> usize;
 
@@ -178,14 +180,12 @@ pub trait CompactSolution: Sized {
 	///
 	/// Once presented with a list of winners, this set and the set of winners must be
 	/// equal.
-	///
-	/// The resulting indices are sorted.
 	fn unique_targets(&self) -> Vec<Self::Target>;
 
 	/// Get the average edge count.
 	fn average_edge_count(&self) -> usize {
 		self.edge_count()
-			.checked_div(self.voters_count())
+			.checked_div(self.voter_count())
 			.unwrap_or(0)
 	}
 
@@ -201,8 +201,6 @@ pub trait CompactSolution: Sized {
 	/// Compute the score of this compact solution type.
 	fn score<A, FS>(
 		self,
-		// TODO: this param is just for error checking.. we can remove it if we make the error API
-		// better.
 		winners: &[A],
 		stake_of: FS,
 		voter_at: impl Fn(Self::Voter) -> Option<A>,
@@ -215,8 +213,8 @@ pub trait CompactSolution: Sized {
 	{
 		let ratio = self.into_assignment(voter_at, target_at)?;
 		let staked = helpers::assignment_ratio_to_staked_normalized(ratio, stake_of)?;
-		let support = to_supports(winners, &staked)?;
-		Ok(support.evaluate())
+		let supports = to_supports(winners, &staked)?;
+		Ok(supports.evaluate())
 	}
 }
 
@@ -498,11 +496,8 @@ pub struct StakedAssignment<AccountId> {
 impl<AccountId> StakedAssignment<AccountId> {
 	/// Converts self into the normal [`Assignment`] type.
 	///
-	/// If `fill` is set to true, it _tries_ to ensure that all the potential rounding errors are
-	/// compensated and the distribution's sum is exactly equal to 100%, by adding or subtracting
-	/// the remainder from the last distribution.
-	///
-	/// NOTE: it is quite critical that this attempt always works. The data type returned here will
+	/// NOTE: This will always round down, and thus the results might be less than a full 100% `P`.
+	/// Use a normalization post-processing to fix this. The data type returned here will
 	/// potentially get used to create a compact type; a compact type requires sum of ratios to be
 	/// less than 100% upon un-compacting.
 	///
@@ -578,12 +573,16 @@ pub struct Support<AccountId> {
 	pub voters: Vec<(AccountId, ExtendedBalance)>,
 }
 
-/// A flat variant of [`SupportMap`].
+/// A target-major representation of the the election outcome.
+///
+/// Essentially a flat variant of [`SupportMap`].
 ///
 /// The main advantage of this is that it is encodable.
 pub type Supports<A> = Vec<(A, Support<A>)>;
 
 /// Linkage from a winner to their [`Support`].
+///
+/// This is more helpful than a normal [`Supports`] as it allows faster error checking.
 pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 
 /// Helper trait to convert from a support map to a flat support vector.
@@ -594,14 +593,14 @@ pub trait FlattenSupportMap<A> {
 
 impl<A> FlattenSupportMap<A> for SupportMap<A> {
 	fn flatten(self) -> Supports<A> {
-		self.into_iter().map(|(k, v)| (k, v)).collect::<Vec<_>>()
+		self.into_iter().collect::<Vec<_>>()
 	}
 }
 
 /// Build the support map from the winners and assignments.
 ///
-/// The list of winners is basically a redundancy; It basically ensures that all the targets pointed
-/// to by the `assignments` are present in the `winners`.
+/// The list of winners is basically a redundancy for error checking only; It ensures that all the
+/// targets pointed to by the [`assignments`] are present in the `winners`.
 pub fn to_support_map<A: IdentifierT>(
 	winners: &[A],
 	assignments: &[StakedAssignment<A>],
@@ -628,6 +627,8 @@ pub fn to_support_map<A: IdentifierT>(
 
 /// Same as [`to_support_map`] except it calls `FlattenSupportMap` on top of the result to return a
 /// flat vector.
+///
+/// Similar to [`build_support_map`], `winners` is used for error checking.
 pub fn to_supports<A: IdentifierT>(
 	winners: &[A],
 	assignments: &[StakedAssignment<A>],
@@ -636,42 +637,55 @@ pub fn to_supports<A: IdentifierT>(
 }
 
 /// Extension trait for evaluating a support map or vector.
-pub trait EvaluateSupport {
+pub trait EvaluateSupport<K> {
 	/// Evaluate a support map. The returned tuple contains:
 	///
 	/// - Minimum support. This value must be **maximized**.
 	/// - Sum of all supports. This value must be **maximized**.
 	/// - Sum of all supports squared. This value must be **minimized**.
-	fn evaluate(&self) -> ElectionScore;
+	fn evaluate(self) -> ElectionScore;
 }
 
-impl<A> EvaluateSupport for SupportMap<A> {
-	fn evaluate(&self) -> ElectionScore {
-		let mut min_support = ExtendedBalance::max_value();
-		let mut sum: ExtendedBalance = Zero::zero();
-		// NOTE: The third element might saturate but fine for now since this will run on-chain and
-		// need to be fast.
-		let mut sum_squared: ExtendedBalance = Zero::zero();
-		for (_, ref support) in self.into_iter() {
-			sum = sum.saturating_add(support.total);
-			let squared = support.total.saturating_mul(support.total);
-			sum_squared = sum_squared.saturating_add(squared);
-			if support.total < min_support {
-				min_support = support.total;
-			}
-		}
-		[min_support, sum, sum_squared]
+/// A common wrapper trait for both (&A, &B) and &(A, B).
+///
+/// This allows us to implemented something for both `Vec<_>` and `BTreeMap<_>`, such as
+/// [`EvaluateSupport`].
+pub trait TupleRef<K, V> {
+	fn extract(&self) -> (&K, &V);
+}
+
+impl<K, V> TupleRef<K, V> for &(K, V) {
+	fn extract(&self) -> (&K, &V) {
+		(&self.0, &self.1)
 	}
 }
 
-impl<A> EvaluateSupport for Supports<A> {
-	fn evaluate(&self) -> ElectionScore {
+impl<K, V> TupleRef<K, V> for (K, V) {
+	fn extract(&self) -> (&K, &V) {
+		(&self.0, &self.1)
+	}
+}
+
+impl<K, V> TupleRef<K, V> for (&K, &V) {
+	fn extract(&self) -> (&K, &V) {
+		(self.0, self.1)
+	}
+}
+
+impl<A, C, I> EvaluateSupport<A> for C
+where
+	C: IntoIterator<Item = I>,
+	I: TupleRef<A, Support<A>>,
+	A: IdentifierT,
+{
+	fn evaluate(self) -> ElectionScore {
 		let mut min_support = ExtendedBalance::max_value();
 		let mut sum: ExtendedBalance = Zero::zero();
 		// NOTE: The third element might saturate but fine for now since this will run on-chain and
 		// need to be fast.
 		let mut sum_squared: ExtendedBalance = Zero::zero();
-		for (_, ref support) in self.into_iter() {
+		for item in self {
+			let (_, support) = item.extract();
 			sum = sum.saturating_add(support.total);
 			let squared = support.total.saturating_mul(support.total);
 			sum_squared = sum_squared.saturating_add(squared);

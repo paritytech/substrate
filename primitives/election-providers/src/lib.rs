@@ -22,7 +22,7 @@
 //!
 //! Something that will provide the functionality of election will implement [`ElectionProvider`],
 //! whilst needing an associated [`ElectionProvider::DataProvider`], which needs to be fulfilled by
-//! an entity implementing [`ElectionDataProvider`]. Most often, the data provider *is* the receiver
+//! an entity implementing [`ElectionDataProvider`]. Most often, *the data provider is* the receiver
 //! of the election, resulting in a diagram as below:
 //!
 //! ```ignore
@@ -68,9 +68,12 @@
 //! 3. A number of desired targets to be elected (i.e. _winners_)
 //!
 //! In addition to that, the [`ElectionDataProvider`] must also hint [`ElectionProvider`] at when
-//! the next election might happen ([`ElectionDataProvider::next_election_prediction`]).
+//! the next election might happen ([`ElectionDataProvider::next_election_prediction`]). A stateless
+//! election provider would probably ignore this. A stateful election provider can use this to
+//! prepare the election result in advance.
+//!
 //! Nonetheless, an [`ElectionProvider`] shan't rely on this and should preferably provide some
-//! means of fallback election as well.
+//! means of fallback election as well, in case the `elect` was called immaturely early.
 //!
 //! ## Example
 //!
@@ -167,13 +170,9 @@ use sp_std::prelude::*;
 
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
-pub use sp_npos_elections::{
-	Assignment, ExtendedBalance, PerThing128, Supports, VoteWeight,
-};
+pub use sp_npos_elections::{Assignment, ExtendedBalance, PerThing128, Supports, VoteWeight};
 
-/// Something that can provide the data to something else that implements [`ElectionProvider`].
-///
-/// The underlying purpose of this is to provide auxillary data to stateful election providers.
+/// Something that can provide the data to an [`ElectionProvider`].
 pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// All possible targets for the election, i.e. the candidates.
 	fn targets() -> Vec<AccountId>;
@@ -186,17 +185,16 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// The number of targets to elect.
 	fn desired_targets() -> u32;
 
-	/// Check the feasibility of a single assignment for the underlying [`ElectionProvider`].
-	///
-	/// This might be called by the [`ElectionProvider`] upon processing election solutions.
+	/// Check the feasibility of a single assignment for the underlying [`ElectionProvider`]. This
+	/// might be called by the [`ElectionProvider`] upon processing election solutions.
 	///
 	/// Note that each this must only contain checks that the [`ElectionProvider`] cannot know
-	/// about. Basics checks that can be known from [`Self::npos_voters`] and [`Self::npos_targets`]
-	/// should typically be done by [`ElectionProvider`].
+	/// about. Basics checks that can be known from [`Self::voters`] and [`Self::targets`] should
+	/// typically be done by [`ElectionProvider`].
 	///
 	/// For example, if a pallet contains some *private* knowledge that could potentially invalidate
 	/// an `assignment`, it should be checked here, as [`ElectionProvider`] has no way of knowing
-	/// about this.
+	/// about it.
 	fn feasibility_check_assignment<P: PerThing>(
 		assignment: &Assignment<AccountId, P>,
 	) -> Result<(), &'static str>;
@@ -218,24 +216,25 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	) {}
 }
 
-// TODO: only uncomment if needed, else better not to even provide this.
-// impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
-// 	fn targets() -> Vec<AccountId> {
-// 		Default::default()
-// 	}
-// 	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-// 		Default::default()
-// 	}
-// 	fn desired_targets() -> u32 {
-// 		Default::default()
-// 	}
-// 	fn feasibility_check_assignment<P: PerThing>(_: &Assignment<AccountId, P>) -> Result<(), &'static str> {
-// 		Err("() as ElectionDataProvider cannot do anything.")
-// 	}
-// 	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
-// 		now
-// 	}
-// }
+impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
+	fn targets() -> Vec<AccountId> {
+		Default::default()
+	}
+	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
+		Default::default()
+	}
+	fn desired_targets() -> u32 {
+		Default::default()
+	}
+	fn feasibility_check_assignment<P: PerThing>(
+		_: &Assignment<AccountId, P>,
+	) -> Result<(), &'static str> {
+		Err("() as ElectionDataProvider cannot do anything.")
+	}
+	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
+		now
+	}
+}
 
 /// Something that can compute the result of an election and pass it back to the caller.
 ///
@@ -253,8 +252,6 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	///
 	/// The result is returned in a target major format, namely as vector of  supports.
 	fn elect() -> Result<Supports<AccountId>, Self::Error>;
-	// where
-	// 	ExtendedBalance: From<<P as PerThing>::Inner>;
 
 	/// Returns true if an election is still ongoing.
 	///
@@ -262,15 +259,15 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	fn ongoing() -> bool;
 }
 
-// impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
-// 	type Error = &'static str;
-// 	type DataProvider = ();
+impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
+	type Error = &'static str;
+	type DataProvider = ();
 
-// 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-// 		Err("() as ElectionProvider cannot do anything.")
-// 	}
+	fn elect() -> Result<Supports<AccountId>, Self::Error> {
+		Err("() as ElectionProvider cannot do anything.")
+	}
 
-// 	fn ongoing() -> bool {
-// 		false
-// 	}
-// }
+	fn ongoing() -> bool {
+		false
+	}
+}

@@ -19,7 +19,8 @@
 
 use crate::{
 	balancing, helpers::*, is_score_better, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs,
-	to_support_map, Assignment, ElectionResult, ExtendedBalance, StakedAssignment, Support, Voter,
+	to_support_map, to_supports, Assignment, ElectionResult, ExtendedBalance, StakedAssignment,
+	Support, Voter, EvaluateSupport,
 };
 use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
 use substrate_test_utils::assert_eq_uvec;
@@ -841,6 +842,34 @@ fn duplicate_target_is_ignored_when_winner() {
 	);
 }
 
+#[test]
+fn support_map_and_vec_can_be_evaluated() {
+	let candidates = vec![1, 2, 3];
+	let voters = vec![(10, vec![1, 2]), (20, vec![1, 3]), (30, vec![2, 3])];
+
+	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
+	let ElectionResult {
+		winners,
+		assignments,
+	} = seq_phragmen::<_, Perbill>(
+		2,
+		candidates,
+		voters
+			.iter()
+			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.collect::<Vec<_>>(),
+		None,
+	)
+	.unwrap();
+
+	let staked = assignment_ratio_to_staked(assignments, &stake_of);
+	let winners = to_without_backing(winners);
+	let support_map = to_support_map::<AccountId>(&winners, &staked).unwrap();
+	let support_vec = to_supports(&winners, &staked).unwrap();
+
+	assert_eq!(support_map.evaluate(), support_vec.evaluate());
+}
+
 mod assignment_convert_normalize {
 	use super::*;
 	#[test]
@@ -1189,7 +1218,7 @@ mod solution_type {
 			compact,
 			Decode::decode(&mut &encoded[..]).unwrap(),
 		);
-		assert_eq!(compact.voters_count(), 4);
+		assert_eq!(compact.voter_count(), 4);
 		assert_eq!(compact.edge_count(), 2 + 4);
 		assert_eq!(compact.unique_targets(), vec![10, 11, 20, 40, 50, 51]);
 	}
@@ -1325,7 +1354,7 @@ mod solution_type {
 		).unwrap();
 
 		// basically number of assignments that it is encoding.
-		assert_eq!(compacted.voters_count(), assignments.len());
+		assert_eq!(compacted.voter_count(), assignments.len());
 		assert_eq!(
 			compacted.edge_count(),
 			assignments.iter().fold(0, |a, b| a + b.distribution.len()),
@@ -1409,9 +1438,12 @@ mod solution_type {
 			..Default::default()
 		};
 
-		assert_eq!(compact.unique_targets(), vec![1, 2, 3, 4, 7, 8, 11, 12, 13, 66, 67]);
+		assert_eq!(
+			compact.unique_targets(),
+			vec![1, 2, 3, 4, 7, 8, 11, 12, 13, 66, 67]
+		);
 		assert_eq!(compact.edge_count(), 2 + (2 * 2) + 3 + 16);
-		assert_eq!(compact.voters_count(), 6);
+		assert_eq!(compact.voter_count(), 6);
 
 		// this one has some duplicates.
 		let compact = TestSolutionCompact {
@@ -1428,7 +1460,7 @@ mod solution_type {
 
 		assert_eq!(compact.unique_targets(), vec![1, 3, 4, 7, 8, 11, 13]);
 		assert_eq!(compact.edge_count(), 2 + (2 * 2) + 3);
-		assert_eq!(compact.voters_count(), 5);
+		assert_eq!(compact.voter_count(), 5);
 	}
 
 	#[test]

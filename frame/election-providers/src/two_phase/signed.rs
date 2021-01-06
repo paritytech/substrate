@@ -49,7 +49,7 @@ where
 				deposit,
 				reward,
 			} = best;
-			let active_voters = solution.compact.voters_count() as u32;
+			let active_voters = solution.compact.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
 				let RoundSnapshotMetadata {
@@ -230,7 +230,7 @@ where
 		let feasibility_weight = T::WeightInfo::feasibility_check(
 			witness.voters,
 			witness.targets,
-			solution.compact.voters_count() as u32,
+			solution.compact.voter_count() as u32,
 			solution.compact.unique_targets().len() as u32,
 		);
 

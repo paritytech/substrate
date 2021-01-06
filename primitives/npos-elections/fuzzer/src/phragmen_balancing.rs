@@ -23,7 +23,7 @@ use common::*;
 use honggfuzz::fuzz;
 use rand::{self, SeedableRng};
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, is_score_better, seq_phragmen, to_support_map,
+	assignment_ratio_to_staked_normalized, is_score_better, seq_phragmen, to_supports,
 	to_without_backing, EvaluateSupport, VoteWeight,
 };
 use sp_runtime::Perbill;
@@ -72,7 +72,7 @@ fn main() {
 				)
 				.unwrap();
 				let winners = to_without_backing(unbalanced.winners.clone());
-				let score = to_support_map(winners.as_ref(), staked.as_ref())
+				let score = to_supports(winners.as_ref(), staked.as_ref())
 					.unwrap()
 					.evaluate();
 
@@ -94,7 +94,7 @@ fn main() {
 				let balanced_score = {
 					let staked = assignment_ratio_to_staked_normalized(balanced.assignments.clone(), &stake_of).unwrap();
 					let winners = to_without_backing(balanced.winners);
-					to_support_map(winners.as_ref(), staked.as_ref()).unwrap().evaluate()
+					to_supports(winners.as_ref(), staked.as_ref()).unwrap().evaluate()
 
 				};
 

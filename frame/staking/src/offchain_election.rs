@@ -25,7 +25,7 @@ use codec::Decode;
 use frame_support::{traits::Get, weights::Weight, IterableStorageMap};
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
-	to_support_map, EvaluateSupport, reduce, Assignment, ElectionResult, ElectionScore,
+	to_supports, EvaluateSupport, reduce, Assignment, ElectionResult, ElectionScore,
 	ExtendedBalance, CompactSolution,
 };
 use sp_runtime::{
@@ -265,7 +265,10 @@ pub fn trim_to_weight<T: Config, FN>(
 where
 	for<'r> FN: Fn(&'r T::AccountId) -> Option<NominatorIndex>,
 {
-	match compact.voters_count().checked_sub(maximum_allowed_voters as usize) {
+	match compact
+		.voter_count()
+		.checked_sub(maximum_allowed_voters as usize)
+	{
 		Some(to_remove) if to_remove > 0 => {
 			// grab all voters and sort them by least stake.
 			let balance_of = <Module<T>>::slashable_balance_of_fn();
@@ -300,7 +303,7 @@ where
 					warn,
 					"💸 {} nominators out of {} had to be removed from compact solution due to size limits.",
 					removed,
-					compact.voters_count() + removed,
+					compact.voter_count() + removed,
 				);
 			Ok(compact)
 		}
@@ -403,11 +406,11 @@ where
 		T::WeightInfo::submit_solution_better(
 				size.validators.into(),
 				size.nominators.into(),
-				compact.voters_count() as u32,
+				compact.voter_count() as u32,
 				winners.len() as u32,
 		),
 		maximum_allowed_voters,
-		compact.voters_count(),
+		compact.voter_count(),
 	);
 
 	let compact = trim_to_weight::<T, _>(maximum_allowed_voters, compact, &nominator_index)?;
@@ -423,7 +426,7 @@ where
 			<Module<T>>::slashable_balance_of_fn(),
 		);
 
-		let support_map = to_support_map::<T::AccountId>(&winners, &staked)
+		let support_map = to_supports::<T::AccountId>(&winners, &staked)
 			.map_err(|_| OffchainElectionError::ElectionFailed)?;
 		support_map.evaluate()
 	};

@@ -538,7 +538,7 @@ impl pallet_two_phase_election_provider::Config for Runtime {
 	type SignedDepositWeight = (); // no weight-based deposit.
 	type SolutionImprovementThreshold = MinSolutionScoreBump;
 	type SlashHandler = (); // burn slashes
-	type RewardHandler = ();
+	type RewardHandler = (); // nothing todo upon rewards/
 	type MinerMaxIterations = MaxUnsignedIterations;
 	type MinerMaxWeight = MinerMaxWeight;
 	type UnsignedPriority = TwoPhaseUnsignedPriority;

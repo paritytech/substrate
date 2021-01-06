@@ -46,10 +46,17 @@ where
 {
 	assert!(witness.targets >= winners_count, "must have enough targets");
 	assert!(
+		witness.targets >= (<CompactOf<T>>::LIMIT * 2) as u32,
+		"must have enough targets for unique votes."
+	);
+	assert!(
 		witness.voters >= active_voters_count,
 		"must have enough voters"
 	);
-	assert!((<CompactOf<T>>::LIMIT as u32) < winners_count, "must have enough winners to give them votes.");
+	assert!(
+		(<CompactOf<T>>::LIMIT as u32) < winners_count,
+		"must have enough winners to give them votes."
+	);
 
 	let stake: u64 = 1000_000;
 
@@ -67,7 +74,7 @@ where
 		.cloned()
 		.collect::<Vec<_>>();
 
-	// generate first active voters who must vote for a subset of winners.
+	// first generate active voters who must vote for a subset of winners.
 	let active_voters = (0..active_voters_count)
 		.map(|i| {
 			// chose a random subset of winners.
@@ -115,6 +122,7 @@ where
 		voters: all_voters.clone(),
 		targets: targets.clone(),
 	});
+	// write the snapshot to staking or whoever is the data provider.
 	T::DataProvider::put_npos_snapshot(all_voters.clone(), targets.clone());
 
 	let stake_of = crate::stake_of_fn!(all_voters, T::AccountId);
@@ -283,7 +291,7 @@ benchmarks! {
 		let v in 200 .. 300;
 		// number of targets in snapshot.
 		let t in 80 .. 140;
-		// number of assignments, i.e. compact.voters_count(). This means the active nominators,
+		// number of assignments, i.e. compact.voter_count(). This means the active nominators,
 		// thus must be a subset of `v` component.
 		let a in 80 .. 140;
 		// number of desired targets. Must be a subset of `t` component.
@@ -292,7 +300,7 @@ benchmarks! {
 		let witness = WitnessData { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(witness, a, d);
 
-		assert_eq!(raw_solution.compact.voters_count() as u32, a);
+		assert_eq!(raw_solution.compact.voter_count() as u32, a);
 		assert_eq!(raw_solution.compact.unique_targets().len() as u32, d);
 	}: {
 		assert_ok!(<TwoPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
