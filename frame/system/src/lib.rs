@@ -171,6 +171,9 @@ pub mod pallet {
 	use super::*;
 	use crate as frame_system;
 
+	/// An object to track the currently used extrinsic weight in a block.
+	pub type ConsumedWeight = PerDispatchClass<Weight>;
+
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
