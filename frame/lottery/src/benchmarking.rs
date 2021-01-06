@@ -47,8 +47,6 @@ fn setup_lottery<T: Config>(repeat: bool) -> Result<(), &'static str> {
 }
 
 benchmarks! {
-	_ { }
-
 	buy_ticket {
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
