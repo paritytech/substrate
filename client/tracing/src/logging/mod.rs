@@ -231,57 +231,53 @@ impl GlobalLoggerBuilder {
 	///
 	/// This sets various global logging and tracing instances and thus may only be called once.
 	pub fn init(self) -> Result<TelemetryWorker> {
-		Ok(
-			if let Some((tracing_receiver, profiling_targets)) = self.profiling {
-				if self.disable_log_reloading {
-					let (subscriber, telemetry_worker) = get_subscriber_internal(
-						&format!("{},{}", self.pattern, profiling_targets),
-						self.telemetry_external_transport,
-						|builder| builder,
-					)?;
-					let profiling =
-						crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+		if let Some((tracing_receiver, profiling_targets)) = self.profiling {
+			if self.disable_log_reloading {
+				let (subscriber, telemetry_worker) = get_subscriber_internal(
+					&format!("{},{}", self.pattern, profiling_targets),
+					self.telemetry_external_transport,
+					|builder| builder,
+				)?;
+				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
-					tracing::subscriber::set_global_default(subscriber.with(profiling))?;
+				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
-					telemetry_worker
-				} else {
-					let (subscriber, telemetry_worker) = get_subscriber_internal(
-						&format!("{},{}", self.pattern, profiling_targets),
-						self.telemetry_external_transport,
-						|builder| disable_log_reloading!(builder),
-					)?;
-					let profiling =
-						crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
-
-					tracing::subscriber::set_global_default(subscriber.with(profiling))?;
-
-					telemetry_worker
-				}
+				Ok(telemetry_worker)
 			} else {
-				if self.disable_log_reloading {
-					let (subscriber, telemetry_worker) = get_subscriber_internal(
-						&self.pattern,
-						self.telemetry_external_transport,
-						|builder| builder,
-					)?;
+				let (subscriber, telemetry_worker) = get_subscriber_internal(
+					&format!("{},{}", self.pattern, profiling_targets),
+					self.telemetry_external_transport,
+					|builder| disable_log_reloading!(builder),
+				)?;
+				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
-					tracing::subscriber::set_global_default(subscriber)?;
+				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
-					telemetry_worker
-				} else {
-					let (subscriber, telemetry_worker) = get_subscriber_internal(
-						&self.pattern,
-						self.telemetry_external_transport,
-						|builder| disable_log_reloading!(builder),
-					)?;
+				Ok(telemetry_worker)
+			}
+		} else {
+			if self.disable_log_reloading {
+				let (subscriber, telemetry_worker) = get_subscriber_internal(
+					&self.pattern,
+					self.telemetry_external_transport,
+					|builder| builder,
+				)?;
 
-					tracing::subscriber::set_global_default(subscriber)?;
+				tracing::subscriber::set_global_default(subscriber)?;
 
-					telemetry_worker
-				}
-			},
-		)
+				Ok(telemetry_worker)
+			} else {
+				let (subscriber, telemetry_worker) = get_subscriber_internal(
+					&self.pattern,
+					self.telemetry_external_transport,
+					|builder| disable_log_reloading!(builder),
+				)?;
+
+				tracing::subscriber::set_global_default(subscriber)?;
+
+				Ok(telemetry_worker)
+			}
+		}
 	}
 }
 
