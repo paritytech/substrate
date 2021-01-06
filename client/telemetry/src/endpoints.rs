@@ -35,12 +35,7 @@ where
 {
 	Vec::<(String, u8)>::deserialize(deserializer)?
 		.iter()
-		.map(|e| {
-			Ok((
-				url_to_multiaddr(&e.0).map_err(serde::de::Error::custom)?,
-				e.1,
-			))
-		})
+		.map(|e| url_to_multiaddr(&e.0).map_err(serde::de::Error::custom).map(|m| (m, e.1)))
 		.collect()
 }
 

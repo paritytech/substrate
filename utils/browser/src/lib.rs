@@ -41,9 +41,7 @@ pub fn init_logging_and_telemetry(
 	let transport = ExtTransport::new(ffi::websocket_transport());
 	let mut logger = GlobalLoggerBuilder::new(pattern);
 	logger.with_transport(transport);
-	let telemetry_worker = logger.init()?;
-
-	Ok(telemetry_worker)
+	logger.init()
 }
 
 /// Create a service configuration from a chain spec.

@@ -569,7 +569,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 	)?;
 
-	let telemetry_telemetry_connection_notifier = init_telemetry(
+	let telemetry_connection_notifier = init_telemetry(
 		&mut config,
 		network.clone(),
 		client.clone(),
@@ -649,7 +649,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
 
-	Ok((rpc_handlers, telemetry_telemetry_connection_notifier))
+	Ok((rpc_handlers, telemetry_connection_notifier))
 }
 
 async fn transaction_notifications<TBl, TExPool>(
@@ -679,11 +679,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
 ) -> Option<sc_telemetry::TelemetryConnectionNotifier> {
-	let telemetry_handle = if let Some(handle) = config.telemetry_handle.as_mut() {
-		handle
-	} else {
-		return None;
-	};
+	let telemetry_handle = config.telemetry_handle.as_mut()?;
 
 	let endpoints = match config.telemetry_endpoints.clone() {
 		// Don't initialise telemetry if `telemetry_endpoints` == Some([])
@@ -691,10 +687,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 		_ => return None,
 	};
 
-	let genesis_hash = match client.block_hash(Zero::zero()) {
-		Ok(Some(hash)) => hash,
-		_ => Default::default(),
-	};
+	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 
 	let is_authority = config.role.is_authority();
 	let network_id = network.local_peer_id().to_base58();
