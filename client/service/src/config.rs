@@ -90,6 +90,9 @@ pub struct Configuration {
 	/// endpoint, this transport will be tried in priority before all others.
 	pub telemetry_external_transport: Option<ExtTransport>,
 	/// Telemetry handle.
+	///
+	/// This is a handle to a `TelemetryWorker` instance. It is used to initialize the telemetry for
+	/// a substrate node.
 	pub telemetry_handle: Option<sc_telemetry::TelemetryHandle>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
