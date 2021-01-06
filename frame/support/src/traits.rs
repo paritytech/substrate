@@ -26,6 +26,7 @@ use sp_runtime::{
 	traits::{
 		AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
 		BadOrigin, UniqueSaturatedFrom, UniqueSaturatedInto, SaturatedConversion,
+		MaybeSerializeDeserialize,
 	},
 };
 use crate::dispatch::Parameter;
