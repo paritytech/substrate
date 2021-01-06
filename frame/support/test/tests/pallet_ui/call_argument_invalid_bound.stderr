@@ -6,8 +6,8 @@ error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Co
    |
 help: consider further restricting this bound
    |
-1  | #[frame_support::pallet] + std::cmp::PartialEq
-   |                          ^^^^^^^^^^^^^^^^^^^^^
+17 |     #[pallet::call + std::cmp::PartialEq]
+   |                    ^^^^^^^^^^^^^^^^^^^^^
 
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: Clone` is not satisfied
   --> $DIR/call_argument_invalid_bound.rs:20:37

@@ -16,21 +16,17 @@
 // limitations under the License.
 
 use crate::pallet::Def;
-use syn::spanned::Spanned;
 
 /// * implement the individual traits using the Hooks trait
 pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
-	let type_impl_gen = &def.type_impl_generics();
-	let type_use_gen = &def.type_use_generics();
+	let type_impl_gen = &def.type_impl_generics(def.hooks.attr_span);
+	let type_use_gen = &def.type_use_generics(def.hooks.attr_span);
 	let pallet_ident = &def.pallet_struct.pallet;
 	let where_clause = &def.hooks.where_clause;
 	let frame_system = &def.frame_system;
 
-	let hooks_item_span = def.item.content.as_mut()
-		.expect("Checked by def parser").1[def.hooks.index].span();
-
-	quote::quote_spanned!(hooks_item_span =>
+	quote::quote_spanned!(def.hooks.attr_span =>
 		impl<#type_impl_gen>
 			#frame_support::traits::OnFinalize<<T as #frame_system::Config>::BlockNumber>
 			for #pallet_ident<#type_use_gen> #where_clause

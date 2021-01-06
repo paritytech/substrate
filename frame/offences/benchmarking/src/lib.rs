@@ -203,8 +203,6 @@ fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expec
 }
 
 benchmarks! {
-	_ { }
-
 	report_offence_im_online {
 		let r in 1 .. MAX_REPORTERS;
 		// we skip 1 offender, because in such case there is no slashing

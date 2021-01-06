@@ -1652,6 +1652,7 @@ dependencies = [
 name = "frame-support-procedural"
 version = "2.0.0"
 dependencies = [
+ "Inflector",
  "frame-support-procedural-tools",
  "proc-macro2",
  "quote",
@@ -7225,6 +7226,7 @@ dependencies = [
 name = "sc-network-test"
 version = "0.8.0"
 dependencies = [
+ "async-std",
  "futures 0.3.8",
  "futures-timer 3.0.2",
  "libp2p",
