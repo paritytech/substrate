@@ -72,7 +72,7 @@ macro_rules! disable_log_reloading {
 		let handle = builder.reload_handle();
 		set_reload_handle(handle);
 		builder
-		}};
+	}};
 }
 
 /// Common implementation to get the subscriber.
