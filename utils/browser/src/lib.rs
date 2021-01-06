@@ -37,7 +37,7 @@ pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 /// Initialize the logger and return a `TelemetryWorker` and a wasm `ExtTransport`.
 pub fn init_logging_and_telemetry(
 	pattern: &str,
-) -> Result<sc_telemetry::TelemetryWorker, Box<dyn std::error::Error>> {
+) -> Result<sc_telemetry::TelemetryWorker, sc_tracing::logging::Error> {
 	let transport = ExtTransport::new(ffi::websocket_transport());
 	let mut logger = GlobalLoggerBuilder::new(pattern);
 	logger.with_transport(transport);

@@ -7301,9 +7301,7 @@ dependencies = [
 name = "sc-service"
 version = "0.8.0"
 dependencies = [
- "ansi_term 0.12.1",
  "async-std",
- "atty",
  "directories 3.0.1",
  "exit-future",
  "futures 0.1.30",
@@ -7365,8 +7363,6 @@ dependencies = [
  "tokio 0.2.23",
  "tracing",
  "tracing-futures",
- "tracing-log",
- "tracing-subscriber",
  "wasm-timer",
 ]
 
@@ -7388,7 +7384,6 @@ dependencies = [
  "sc-light",
  "sc-network",
  "sc-service",
- "sc-telemetry",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
