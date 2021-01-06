@@ -507,10 +507,6 @@ where
 		StorageAppend::new(current_value).append(value);
 	}
 
-	fn chain_id(&self) -> u64 {
-		42
-	}
-
 	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {

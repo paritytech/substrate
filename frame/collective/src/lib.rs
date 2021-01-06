@@ -996,6 +996,7 @@ mod tests {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 	impl Config<Instance1> for Test {
 		type Origin = Origin;
