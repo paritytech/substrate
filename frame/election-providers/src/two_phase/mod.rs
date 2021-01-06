@@ -575,7 +575,7 @@ pub mod pallet {
 		}
 
 		fn offchain_worker(n: T::BlockNumber) {
-			// We only run the OCW in the fist block of the unsigned phase.
+			// We only run the OCW in the first block of the unsigned phase.
 			if
 				Self::set_check_offchain_execution_status(n).is_ok() &&
 				Self::current_phase().is_unsigned_open_at(n)
