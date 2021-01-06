@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -95,6 +95,18 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
+
+	/// Request response configuration for the block request protocol.
+	///
+	/// [`RequestResponseConfig`] [`name`] is used to tag outgoing block requests with the correct
+	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming block
+	/// requests, if enabled.
+	///
+	/// Can be constructed either via [`block_request_handler::generate_protocol_config`] allowing
+	/// outgoing but not incoming requests, or constructed via
+	/// [`block_request_handler::BlockRequestHandler::new`] allowing both outgoing and incoming
+	/// requests.
+	pub block_request_protocol_config: RequestResponseConfig,
 }
 
 /// Role of the local node.

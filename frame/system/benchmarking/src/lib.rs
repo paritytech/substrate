@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,8 +38,6 @@ pub struct Module<T: Config>(System<T>);
 pub trait Config: frame_system::Config {}
 
 benchmarks! {
-	_ { }
-
 	remark {
 		let b in 0 .. *T::BlockLength::get().max.get(DispatchClass::Normal) as u32;
 		let remark_message = vec![1; b as usize];

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	on_demand_layer::AlwaysBadChecker,
-	light_client_handler, block_requests,
+	light_client_handler,
 	protocol::{
 		self,
 		NotifsHandlerError,
@@ -94,7 +94,6 @@ use std::{
 	},
 	task::Poll,
 };
-use wasm_timer::Instant;
 
 pub use behaviour::{ResponseFailure, InboundFailure, RequestFailure, OutboundFailure};
 
@@ -252,10 +251,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				params.network_config.client_version,
 				params.network_config.node_name
 			);
-			let block_requests = {
-				let config = block_requests::Config::new(&params.protocol_id);
-				block_requests::BlockRequests::new(config, params.chain.clone())
-			};
 			let light_client_handler = {
 				let config = light_client_handler::Config::new(&params.protocol_id);
 				light_client_handler::LightClientHandler::new(
@@ -294,9 +289,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					params.role,
 					user_agent,
 					local_public,
-					block_requests,
 					light_client_handler,
 					discovery_config,
+					params.block_request_protocol_config,
 					params.network_config.request_response_protocols,
 				);
 
@@ -392,7 +387,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
-			pending_requests: HashMap::with_capacity(128),
 		})
 	}
 
@@ -1253,13 +1247,6 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: Arc<HashSet<PeerId>>,
-	/// Requests started using [`NetworkService::request`]. Includes the channel to send back the
-	/// response, when the request has started, and the name of the protocol for diagnostic
-	/// purposes.
-	pending_requests: HashMap<
-		behaviour::RequestId,
-		(oneshot::Sender<Result<Vec<u8>, RequestFailure>>, Instant, String)
-	>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, Cow<'static, str>), NotificationsSink>>>,
@@ -1348,29 +1335,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				ServiceToWorkerMsg::EventStream(sender) =>
 					this.event_streams.push(sender),
 				ServiceToWorkerMsg::Request { target, protocol, request, pending_response } => {
-					// Calling `send_request` can fail immediately in some circumstances.
-					// This is handled by sending back an error on the channel.
-					match this.network_service.send_request(&target, &protocol, request) {
-						Ok(request_id) => {
-							if let Some(metrics) = this.metrics.as_ref() {
-								metrics.requests_out_started_total
-									.with_label_values(&[&protocol])
-									.inc();
-							}
-							this.pending_requests.insert(
-								request_id,
-								(pending_response, Instant::now(), protocol.to_string())
-							);
-						},
-						Err(behaviour::SendRequestError::NotConnected) => {
-							let err = RequestFailure::Network(OutboundFailure::ConnectionClosed);
-							let _ = pending_response.send(Err(err));
-						},
-						Err(behaviour::SendRequestError::UnknownProtocol) => {
-							let err = RequestFailure::Network(OutboundFailure::UnsupportedProtocols);
-							let _ = pending_response.send(Err(err));
-						},
-					}
+					this.network_service.send_request(&target, &protocol, request, pending_response);
 				},
 				ServiceToWorkerMsg::DisconnectPeer(who, protocol_name) =>
 					this.network_service.user_protocol_mut().disconnect_peer(&who, &protocol_name),
@@ -1411,14 +1376,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest { protocol, result, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						match result {
-							Ok(Some(serve_time)) => {
+							Ok(serve_time) => {
 								metrics.requests_in_success_total
 									.with_label_values(&[&protocol])
 									.observe(serve_time.as_secs_f64());
 							}
-							// Response time tracking is happening on a best-effort basis. Ignore
-							// the event in case response time could not be provided.
-							Ok(None) => {},
 							Err(err) => {
 								let reason = match err {
 									ResponseFailure::Network(InboundFailure::Timeout) => "timeout",
@@ -1426,6 +1388,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 										"unsupported",
 									ResponseFailure::Network(InboundFailure::ResponseOmission) =>
 										"busy-omitted",
+									ResponseFailure::Network(InboundFailure::ConnectionClosed) =>
+										"connection-closed",
 								};
 
 								metrics.requests_in_failure_total
@@ -1435,51 +1399,37 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						}
 					}
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { request_id, result })) => {
-					if let Some((send_back, started, protocol)) = this.pending_requests.remove(&request_id) {
-						if let Some(metrics) = this.metrics.as_ref() {
-							match &result {
-								Ok(_) => {
-									metrics.requests_out_success_total
-										.with_label_values(&[&protocol])
-										.observe(started.elapsed().as_secs_f64());
-								}
-								Err(err) => {
-									let reason = match err {
-										RequestFailure::Refused => "refused",
-										RequestFailure::Network(OutboundFailure::DialFailure) =>
-											"dial-failure",
-										RequestFailure::Network(OutboundFailure::Timeout) =>
-											"timeout",
-										RequestFailure::Network(OutboundFailure::ConnectionClosed) =>
-											"connection-closed",
-										RequestFailure::Network(OutboundFailure::UnsupportedProtocols) =>
-											"unsupported",
-									};
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished {
+					protocol, duration, result, ..
+				})) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						match result {
+							Ok(_) => {
+								metrics.requests_out_success_total
+									.with_label_values(&[&protocol])
+									.observe(duration.as_secs_f64());
+							}
+							Err(err) => {
+								let reason = match err {
+									RequestFailure::NotConnected => "not-connected",
+									RequestFailure::UnknownProtocol => "unknown-protocol",
+									RequestFailure::Refused => "refused",
+									RequestFailure::Obsolete => "obsolete",
+									RequestFailure::Network(OutboundFailure::DialFailure) =>
+										"dial-failure",
+									RequestFailure::Network(OutboundFailure::Timeout) =>
+										"timeout",
+									RequestFailure::Network(OutboundFailure::ConnectionClosed) =>
+										"connection-closed",
+									RequestFailure::Network(OutboundFailure::UnsupportedProtocols) =>
+										"unsupported",
+								};
 
-									metrics.requests_out_failure_total
-										.with_label_values(&[&protocol, reason])
-										.inc();
-								}
+								metrics.requests_out_failure_total
+									.with_label_values(&[&protocol, reason])
+									.inc();
 							}
 						}
-						let _ = send_back.send(result);
-					} else {
-						error!("Request not in pending_requests");
-					}
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestStarted { protocol, .. })) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.requests_out_started_total
-							.with_label_values(&[&protocol])
-							.inc();
-					}
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestFinished { protocol, request_duration, .. })) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.requests_out_success_total
-							.with_label_values(&[&protocol])
-							.observe(request_duration.as_secs_f64());
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(protocol))) => {
@@ -1612,11 +1562,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::B(
-								EitherError::A(PingFailure::Timeout))))))))) => "ping-timeout",
+								EitherError::A(EitherError::B(EitherError::A(
+								PingFailure::Timeout)))))))) => "ping-timeout",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged)))))))) => "sync-notifications-clogged",
+								EitherError::A(EitherError::A(
+								NotifsHandlerError::SyncNotificationsClogged))))))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) => "protocol-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout)) => "keep-alive-timeout",
 							None => "actively-closed",

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1256,6 +1256,8 @@ pub mod pallet_prelude {
 /// }
 /// ```
 /// I.e. a regular rust enum named `Error`, with generic `T` and fieldless variants.
+/// The generic `T` mustn't bound anything and where clause is not allowed. But bounds and where
+/// clause shouldn't be needed for any usecase.
 ///
 /// ### Macro expansion
 ///

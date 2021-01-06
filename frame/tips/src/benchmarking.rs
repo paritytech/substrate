@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -89,8 +89,6 @@ const MAX_BYTES: u32 = 16384;
 const MAX_TIPPERS: u32 = 100;
 
 benchmarks! {
-	_ { }
-
 	report_awesome {
 		let r in 0 .. MAX_BYTES;
 		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
