@@ -53,6 +53,15 @@ macro_rules! test_wasm_execution {
 			}
 		}
 	};
+
+	(interpreted_only $method_name:ident) => {
+		paste::item! {
+			#[test]
+			fn [<$method_name _interpreted>]() {
+				$method_name(WasmExecutionMethod::Interpreted);
+			}
+		}
+	};
 }
 
 fn call_in_wasm<E: Externalities>(
@@ -596,7 +605,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	assert!(res.is_ok());
 }
 
-test_wasm_execution!(heap_is_reset_between_calls);
+test_wasm_execution!(interpreted_only heap_is_reset_between_calls);
 fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
