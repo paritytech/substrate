@@ -36,7 +36,9 @@ pub struct PalletStructDef {
 	/// The keyword Pallet used (contains span).
 	pub pallet: keyword::Pallet,
 	/// Whether the trait `Store` must be generated.
-	pub store: Option<(syn::Visibility, keyword::Store)>
+	pub store: Option<(syn::Visibility, keyword::Store)>,
+	/// The span of the pallet::pallet attribute.
+	pub attr_span: proc_macro2::Span,
 }
 
 /// Parse for `#[pallet::generate_store($vis trait Store)]`
@@ -64,7 +66,11 @@ impl syn::parse::Parse for PalletStructAttr {
 }
 
 impl PalletStructDef {
-	pub fn try_from(index: usize, item: &mut syn::Item) -> syn::Result<Self> {
+	pub fn try_from(
+		attr_span: proc_macro2::Span,
+		index: usize,
+		item: &mut syn::Item,
+	) -> syn::Result<Self> {
 		let item = if let syn::Item::Struct(item) = item {
 			item
 		} else {
@@ -94,6 +100,6 @@ impl PalletStructDef {
 		let mut instances = vec![];
 		instances.push(helper::check_type_def_gen_no_bounds(&item.generics, item.ident.span())?);
 
-		Ok(Self { index, instances, pallet, store })
+		Ok(Self { index, instances, pallet, store, attr_span })
 	}
 }
