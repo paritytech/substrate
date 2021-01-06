@@ -1,0 +1,15 @@
+[package]
+name = "activate-wasm-bindgen-features"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+publish = false
+
+[dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+rand = { version = "0.7", features = ["wasm-bindgen"] }
+futures-timer = { version = "3.0.1", features = ["wasm-bindgen"] }
+chrono = { version = "0.4", features = ["wasmbind"] }
