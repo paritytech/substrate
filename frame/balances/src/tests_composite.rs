@@ -96,6 +96,7 @@ impl Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = system::Module<Test>;
 	type MaxLocks = ();
+	type MaxReserves = ();
 	type WeightInfo = ();
 }
 

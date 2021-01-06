@@ -197,6 +197,9 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Config {
 	/// The maximum number of locks that should exist on an account.
 	/// Not strictly enforced, but used for weight estimation.
 	type MaxLocks: Get<u32>;
+
+	/// The maximum number of named reserves that can exist on an account.
+	type MaxReserves: Get<u32>;
 }
 
 pub trait Config<I: Instance = DefaultInstance>: frame_system::Config {
@@ -222,6 +225,9 @@ pub trait Config<I: Instance = DefaultInstance>: frame_system::Config {
 	/// The maximum number of locks that should exist on an account.
 	/// Not strictly enforced, but used for weight estimation.
 	type MaxLocks: Get<u32>;
+
+	/// The maximum number of named reserves that can exist on an account.
+	type MaxReserves: Get<u32>;
 }
 
 impl<T: Config<I>, I: Instance> Subtrait<I> for T {
@@ -230,6 +236,7 @@ impl<T: Config<I>, I: Instance> Subtrait<I> for T {
 	type AccountStore = T::AccountStore;
 	type WeightInfo = <T as Config<I>>::WeightInfo;
 	type MaxLocks = T::MaxLocks;
+	type MaxReserves = T::MaxReserves;
 }
 
 decl_event!(
@@ -277,6 +284,8 @@ decl_error! {
 		ExistingVestingSchedule,
 		/// Beneficiary account must pre-exist
 		DeadAccount,
+		/// Number of named reserves exceed MaxReserves
+		TooManyReserves,
 	}
 }
 
@@ -1244,21 +1253,22 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 	/// Is a no-op if value to be reserved is zero.
 	fn reserve_named(id: &ReserveIdentifier, who: &T::AccountId, value: Self::Balance) -> DispatchResult {
 		<Self as ReservableCurrency<_>>::reserve(who, value)?;
-		Reserves::<T, I>::mutate(who, |reserves| {
+		Reserves::<T, I>::try_mutate(who, |reserves| -> DispatchResult {
 			match reserves.binary_search_by_key(id, |data| data.id) {
 				Ok(idx) => {
 					// this add can't overflow but just to be defensive.
 					reserves[idx].amount = reserves[idx].amount.saturating_add(value)
 				},
 				Err(idx) => {
+					ensure!((reserves.len() as u32) < T::MaxReserves::get(), Error::<T, I>::TooManyReserves);
 					reserves.insert(idx, ReserveData {
 						id: id.clone(),
 						amount: value
 					})
 				},
-			}
-		});
-		Ok(())
+			};
+			Ok(())
+		})
 	}
 
 	/// Unreserve some funds, returning any amount that was unable to be unreserved.

@@ -26,13 +26,15 @@ use sp_runtime::{
 	traits::{
 		AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
 		BadOrigin, UniqueSaturatedFrom, UniqueSaturatedInto, SaturatedConversion,
-		MaybeSerializeDeserialize,
 	},
 };
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
 use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
+
+#[cfg(feature = "std")]
+use sp_runtime::traits::MaybeSerializeDeserialize;
 
 /// Re-export for backward compatibility
 pub use crate::currency::*;

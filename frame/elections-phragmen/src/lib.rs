@@ -1113,6 +1113,7 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = frame_system::Module<Test>;
 		type MaxLocks = ();
+		type MaxReserves = ();
 		type WeightInfo = ();
 	}
 
