@@ -225,10 +225,11 @@ impl TelemetryWorker {
 					for (node_max_verbosity, addr) in nodes {
 						if verbosity > *node_max_verbosity {
 							log::trace!(
-							target: "telemetry",
-							"Skipping {} for log entry with verbosity {:?}",
-							addr,
-							verbosity);
+								target: "telemetry",
+								"Skipping {} for log entry with verbosity {:?}",
+								addr,
+								verbosity,
+							);
 							continue;
 						}
 
