@@ -66,7 +66,7 @@ fn first_block_epoch_zero_start() {
 		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
 
 		let first_vrf = vrf_output;
-		let pre_digest = make_pre_digest(
+		let pre_digest = make_primary_pre_digest(
 			0,
 			genesis_slot,
 			first_vrf.clone(),
@@ -122,7 +122,7 @@ fn author_vrf_output_for_primary() {
 	ext.execute_with(|| {
 		let genesis_slot = 10;
 		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
-		let primary_pre_digest = make_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
+		let primary_pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
 
 		System::initialize(
 			&1,
@@ -249,6 +249,33 @@ fn can_enact_next_config() {
 		let consensus_digest = DigestItem::Consensus(BABE_ENGINE_ID, consensus_log.encode());
 
 		assert_eq!(header.digest.logs[2], consensus_digest.clone())
+	});
+}
+
+#[test]
+fn can_fetch_current_and_next_epoch_data() {
+	new_test_ext(5).execute_with(|| {
+		// 1 era = 3 epochs
+		// 1 epoch = 3 slots
+		// Eras start from 0.
+		// Therefore at era 1 we should be starting epoch 3 with slot 10.
+		start_era(1);
+
+		let current_epoch = Babe::current_epoch();
+		assert_eq!(current_epoch.epoch_index, 3);
+		assert_eq!(current_epoch.start_slot, 10);
+		assert_eq!(current_epoch.authorities.len(), 5);
+
+		let next_epoch = Babe::next_epoch();
+		assert_eq!(next_epoch.epoch_index, 4);
+		assert_eq!(next_epoch.start_slot, 13);
+		assert_eq!(next_epoch.authorities.len(), 5);
+
+		// the on-chain randomness should always change across epochs
+		assert!(current_epoch.randomness != next_epoch.randomness);
+
+		// but in this case the authorities stay the same
+		assert!(current_epoch.authorities == next_epoch.authorities);
 	});
 }
 
