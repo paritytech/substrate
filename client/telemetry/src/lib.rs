@@ -38,6 +38,7 @@ use log::{error, warn};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use std::{
 	collections::{HashMap, HashSet},
+	io,
 	time::Duration,
 };
 use tracing::Id;
@@ -95,18 +96,6 @@ pub struct TelemetryWorker {
 	transport: WsTrans,
 }
 
-/// Telemetry Result typedef.
-pub type Result<T> = std::result::Result<T, Error>;
-
-/// Telemetry errors.
-#[derive(Debug, thiserror::Error)]
-#[allow(missing_docs)]
-#[non_exhaustive]
-pub enum Error {
-	#[error(transparent)]
-	Io(#[from] std::io::Error),
-}
-
 impl TelemetryWorker {
 	/// Create a [`TelemetryWorker`] instance using an [`ExtTransport`].
 	///
@@ -116,7 +105,7 @@ impl TelemetryWorker {
 	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
 	/// >                internal buffering going on. In the context of WebSockets, each `write`
 	/// >                must be one individual WebSockets frame.
-	pub(crate) fn new(wasm_external_transport: Option<wasm_ext::ExtTransport>) -> Result<Self> {
+	pub(crate) fn new(wasm_external_transport: Option<wasm_ext::ExtTransport>) -> io::Result<Self> {
 		let (sender, receiver) = mpsc::channel(16);
 		let (init_sender, init_receiver) = mpsc::unbounded();
 

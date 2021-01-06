@@ -21,6 +21,7 @@ use futures::channel::mpsc;
 use libp2p::wasm_ext::ExtTransport;
 use parking_lot::Mutex;
 use std::convert::TryInto;
+use std::io;
 use tracing::{Event, Id, Subscriber};
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
@@ -35,7 +36,7 @@ impl TelemetryLayer {
 	/// Create a new [`TelemetryLayer`] and [`TelemetryWorker`].
 	pub fn new(
 		telemetry_external_transport: Option<ExtTransport>,
-	) -> super::Result<(Self, TelemetryWorker)> {
+	) -> io::Result<(Self, TelemetryWorker)> {
 		let worker = TelemetryWorker::new(telemetry_external_transport)?;
 		let sender = worker.sender();
 		Ok((Self(Mutex::new(sender)), worker))

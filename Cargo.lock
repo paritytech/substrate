@@ -7451,7 +7451,6 @@ dependencies = [
  "serde_json",
  "sp-utils",
  "take_mut",
- "thiserror",
  "tracing",
  "tracing-subscriber",
  "void",

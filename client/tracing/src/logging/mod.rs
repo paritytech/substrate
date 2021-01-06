@@ -30,6 +30,7 @@ pub use directives::*;
 pub use sc_tracing_proc_macro::*;
 
 use sc_telemetry::{ExtTransport, TelemetryWorker};
+use std::io;
 use tracing::Subscriber;
 use tracing_subscriber::{
 	fmt::time::ChronoLocal,
@@ -54,7 +55,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[non_exhaustive]
 pub enum Error {
 	#[error(transparent)]
-	TelemetryError(#[from] sc_telemetry::Error),
+	IoError(#[from] io::Error),
 
 	#[error(transparent)]
 	SetGlobalDefaultError(#[from] tracing::subscriber::SetGlobalDefaultError),
