@@ -699,19 +699,16 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 		.map(|dur| dur.as_millis())
 		.unwrap_or(0);
 
-	let json = serde_json::json! {{
-		"name": name.clone(),
-		"implementation": impl_name.clone(),
-		"version": impl_version.clone(),
-		"config": "",
-		"chain": chain_name.clone(),
-		"genesis_hash": format!("{:?}", genesis_hash),
-		"authority": is_authority,
-		"startup_time": startup_time.to_string(),
-		"network_id": network_id.clone()
-	}};
-
-	let obj = serde_json::from_value(json).expect("it's an object; qed");
+	let mut obj = serde_json::Map::new();
+	obj.insert("name".to_string(), name.clone().into());
+	obj.insert("implementation".to_string(), impl_name.clone().into());
+	obj.insert("version".to_string(), impl_version.clone().into());
+	obj.insert("config".to_string(), "".into());
+	obj.insert("chain".to_string(), chain_name.clone().into());
+	obj.insert("genesis_hash".to_string(), format!("{:?}", genesis_hash).into());
+	obj.insert("authority".to_string(), is_authority.into());
+	obj.insert("startup_time".to_string(), startup_time.to_string().into());
+	obj.insert("network_id".to_string(), network_id.clone().into());
 
 	Some(telemetry_handle.start_telemetry(endpoints, obj))
 }
