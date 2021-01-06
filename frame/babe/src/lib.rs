@@ -64,6 +64,8 @@ pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquiv
 
 pub trait Config: pallet_timestamp::Config {
 	/// The amount of time, in slots, that each epoch should last.
+	/// NOTE: Currently it is not possible to change the epoch duration after
+	/// the chain has started. Attempting to do so will brick block production.
 	type EpochDuration: Get<SlotNumber>;
 
 	/// The expected average block time at which BABE should be creating
@@ -192,6 +194,9 @@ decl_storage! {
 		/// Next epoch randomness.
 		NextRandomness: schnorrkel::Randomness;
 
+		/// Next epoch authorities.
+		NextAuthorities: Vec<(AuthorityId, BabeAuthorityWeight)>;
+
 		/// Randomness under construction.
 		///
 		/// We make a tradeoff between storage accesses and list length.
@@ -233,6 +238,9 @@ decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		/// The number of **slots** that an epoch takes. We couple sessions to
 		/// epochs, i.e. we start a new session once the new epoch begins.
+		/// NOTE: Currently it is not possible to change the epoch duration
+		/// after the chain has started. Attempting to do so will brick block
+		/// production.
 		const EpochDuration: u64 = T::EpochDuration::get();
 
 		/// The expected average block time at which BABE should be creating
@@ -464,6 +472,9 @@ impl<T: Config> Module<T> {
 		let randomness = Self::randomness_change_epoch(next_epoch_index);
 		Randomness::put(randomness);
 
+		// Update the next epoch authorities.
+		NextAuthorities::put(&next_authorities);
+
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
 		let next_randomness = NextRandomness::get();
@@ -483,7 +494,7 @@ impl<T: Config> Module<T> {
 	// give correct results after `do_initialize` of the first block
 	// in the chain (as its result is based off of `GenesisSlot`).
 	pub fn current_epoch_start() -> SlotNumber {
-		(EpochIndex::get() * T::EpochDuration::get()) + GenesisSlot::get()
+		Self::epoch_start(EpochIndex::get())
 	}
 
 	/// Produces information about the current epoch.
@@ -495,6 +506,36 @@ impl<T: Config> Module<T> {
 			authorities: Self::authorities(),
 			randomness: Self::randomness(),
 		}
+	}
+
+	/// Produces information about the next epoch (which was already previously
+	/// announced).
+	pub fn next_epoch() -> Epoch {
+		let next_epoch_index = EpochIndex::get().checked_add(1).expect(
+			"epoch index is u64; it is always only incremented by one; \
+			 if u64 is not enough we should crash for safety; qed.",
+		);
+
+		Epoch {
+			epoch_index: next_epoch_index,
+			start_slot: Self::epoch_start(next_epoch_index),
+			duration: T::EpochDuration::get(),
+			authorities: NextAuthorities::get(),
+			randomness: NextRandomness::get(),
+		}
+	}
+
+	fn epoch_start(epoch_index: u64) -> SlotNumber {
+		// (epoch_index * epoch_duration) + genesis_slot
+
+		const PROOF: &str = "slot number is u64; it should relate in some way to wall clock time; \
+							 if u64 is not enough we should crash for safety; qed.";
+
+		let epoch_start = epoch_index
+			.checked_mul(T::EpochDuration::get())
+			.expect(PROOF);
+
+		epoch_start.checked_add(GenesisSlot::get()).expect(PROOF)
 	}
 
 	fn deposit_consensus<U: Encode>(new: U) {
