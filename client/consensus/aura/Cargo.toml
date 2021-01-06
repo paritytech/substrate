@@ -37,6 +37,9 @@ sp-timestamp = { version = "2.0.0", path = "../../../primitives/timestamp" }
 sp-keystore = { version = "0.8.0", path = "../../../primitives/keystore" }
 sc-telemetry = { version = "2.0.0", path = "../../telemetry" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0"}
+# We enable it only for web-wasm check
+# See https://docs.rs/getrandom/0.2.1/getrandom/#webassembly-support
+getrandom = { version = "0.2", features = ["js"], optional = true }
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
