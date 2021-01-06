@@ -79,6 +79,7 @@ macro_rules! disable_log_reloading {
 /// Common implementation to get the subscriber.
 fn get_subscriber_internal<N, E, F, W>(
 	pattern: &str,
+	force_colors: Option<bool>,
 	telemetry_external_transport: Option<ExtTransport>,
 	builder_hook: impl Fn(
 		SubscriberBuilder<
@@ -149,7 +150,7 @@ where
 		parse_default_directive("sc_tracing=trace").expect("provided directive is valid"),
 	);
 
-	let enable_color = atty::is(atty::Stream::Stderr);
+	let enable_color = force_colors.unwrap_or_else(|| atty::is(atty::Stream::Stderr));
 	let timer = ChronoLocal::with_format(if simple {
 		"%Y-%m-%d %H:%M:%S".to_string()
 	} else {
@@ -193,6 +194,7 @@ pub struct GlobalLoggerBuilder {
 	profiling: Option<(crate::TracingReceiver, String)>,
 	telemetry_external_transport: Option<ExtTransport>,
 	disable_log_reloading: bool,
+	force_colors: Option<bool>,
 }
 
 impl GlobalLoggerBuilder {
@@ -203,6 +205,7 @@ impl GlobalLoggerBuilder {
 			profiling: None,
 			telemetry_external_transport: None,
 			disable_log_reloading: false,
+			force_colors: None,
 		}
 	}
 
@@ -228,6 +231,12 @@ impl GlobalLoggerBuilder {
 		self
 	}
 
+	/// Force enable/disable colors.
+	pub fn with_colors(&mut self, enable: bool) -> &mut Self {
+		self.force_colors = Some(enable);
+		self
+	}
+
 	/// Initialize the global logger
 	///
 	/// This sets various global logging and tracing instances and thus may only be called once.
@@ -236,6 +245,7 @@ impl GlobalLoggerBuilder {
 			if self.disable_log_reloading {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
 					&format!("{},{}", self.pattern, profiling_targets),
+					self.force_colors,
 					self.telemetry_external_transport,
 					|builder| builder,
 				)?;
@@ -247,6 +257,7 @@ impl GlobalLoggerBuilder {
 			} else {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
 					&format!("{},{}", self.pattern, profiling_targets),
+					self.force_colors,
 					self.telemetry_external_transport,
 					|builder| disable_log_reloading!(builder),
 				)?;
@@ -260,6 +271,7 @@ impl GlobalLoggerBuilder {
 			if self.disable_log_reloading {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
 					&self.pattern,
+					self.force_colors,
 					self.telemetry_external_transport,
 					|builder| builder,
 				)?;
@@ -270,6 +282,7 @@ impl GlobalLoggerBuilder {
 			} else {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
 					&self.pattern,
+					self.force_colors,
 					self.telemetry_external_transport,
 					|builder| disable_log_reloading!(builder),
 				)?;

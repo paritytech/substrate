@@ -541,6 +541,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.shared_params().is_log_filter_reloading_disabled())
 	}
 
+	/// Should the log color output be disabled?
+	fn disable_log_color(&self) -> Result<bool> {
+		Ok(self.shared_params().disable_log_color())
+	}
+
 	/// Initialize substrate. This must be done only once per process.
 	///
 	/// This method:
@@ -561,6 +566,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		if let Some(tracing_targets) = self.tracing_targets()? {
 			let tracing_receiver = self.tracing_receiver()?;
 			logger.with_profiling(tracing_receiver, tracing_targets);
+		}
+
+		if self.disable_log_color()? {
+			logger.with_colors(false);
 		}
 
 		let telemetry_worker = logger.init()?;
