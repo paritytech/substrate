@@ -1399,8 +1399,9 @@ pub mod pallet_prelude {
 ///
 /// ### Macro expansion
 ///
-/// Macro generate struct with the name of the function and its generic, and implement
-/// `Get<$ReturnType>` on it using the provided function block.
+/// Macro renames the function to some internal name, generate a struct with the original name of
+/// the function and its generic, and implement `Get<$ReturnType>` by calling the user defined
+/// function.
 ///
 /// # Genesis config: `#[pallet::genesis_config]` optional
 ///

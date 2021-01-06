@@ -34,11 +34,17 @@ pub struct ErrorDef {
 	/// A set of usage of instance, must be check for consistency with trait.
 	pub instances: Vec<helper::InstanceUsage>,
 	/// The keyword error used (contains span).
-	pub error: keyword::Error
+	pub error: keyword::Error,
+	/// The span of the pallet::error attribute.
+	pub attr_span: proc_macro2::Span,
 }
 
 impl ErrorDef {
-	pub fn try_from(index: usize, item: &mut syn::Item) -> syn::Result<Self> {
+	pub fn try_from(
+		attr_span: proc_macro2::Span,
+		index: usize,
+		item: &mut syn::Item,
+	) -> syn::Result<Self> {
 		let item = if let syn::Item::Enum(item) = item {
 			item
 		} else {
@@ -77,6 +83,7 @@ impl ErrorDef {
 			.collect::<Result<_, _>>()?;
 
 		Ok(ErrorDef {
+			attr_span,
 			index,
 			variants,
 			instances,

@@ -24,9 +24,9 @@ use syn::spanned::Spanned;
 pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
-	let type_impl_gen = &def.type_impl_generics();
-	let type_decl_bounded_gen = &def.type_decl_bounded_generics();
-	let type_use_gen = &def.type_use_generics();
+	let type_impl_gen = &def.type_impl_generics(def.call.attr_span);
+	let type_decl_bounded_gen = &def.type_decl_bounded_generics(def.call.attr_span);
+	let type_use_gen = &def.type_use_generics(def.call.attr_span);
 	let call_ident = syn::Ident::new("Call", def.call.attr_span.clone());
 	let pallet_ident = &def.pallet_struct.pallet;
 	let where_clause = &def.call.where_clause;
@@ -61,7 +61,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		method.args.iter()
 			.map(|(is_compact, _, type_)| {
 				let final_type = if *is_compact {
-					quote::quote!(Compact<#type_>)
+					quote::quote_spanned!(type_.span() => Compact<#type_>)
 				} else {
 					quote::quote!(#type_)
 				};
