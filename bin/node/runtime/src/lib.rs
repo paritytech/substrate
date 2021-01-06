@@ -1180,6 +1180,10 @@ impl_runtime_apis! {
 			Babe::current_epoch()
 		}
 
+		fn next_epoch() -> sp_consensus_babe::Epoch {
+			Babe::next_epoch()
+		}
+
 		fn generate_key_ownership_proof(
 			_slot_number: sp_consensus_babe::SlotNumber,
 			authority_id: sp_consensus_babe::AuthorityId,
