@@ -154,9 +154,10 @@ impl TelemetryWorker {
 		} = self;
 
 		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
-		let mut connection_messages: HashMap<Multiaddr, Vec<ConnectionMessage>> = HashMap::new();
-		let mut connection_notifiers: HashMap<Multiaddr, Vec<ConnectionNotifierSender>> =
-			HashMap::new();
+		let mut node_args: HashMap<
+			Multiaddr,
+			(Vec<ConnectionMessage>, Vec<ConnectionNotifierSender>),
+		> = HashMap::new();
 		let mut existing_nodes: HashSet<Multiaddr> = HashSet::new();
 
 		// initialize the telemetry nodes
@@ -178,26 +179,20 @@ impl TelemetryWorker {
 				let mut obj = connection_message.clone();
 				obj.insert("msg".into(), "system.connected".into());
 				obj.insert("id".into(), id.into_u64().into());
-				connection_messages
+				let (connection_messages, connection_notifiers) = node_args
 					.entry(addr.clone())
-					.or_insert_with(Vec::new)
-					.push(obj);
-				connection_notifiers
-					.entry(addr.clone())
-					.or_insert_with(Vec::new)
-					.extend(connection_notifier_senders.clone());
+					.or_insert_with(|| (Vec::new(), Vec::new()));
+				connection_messages.push(obj);
+				connection_notifiers.extend(connection_notifier_senders.clone());
 			}
 		}
 
 		let mut node_pool: Dispatcher = existing_nodes
 			.iter()
 			.map(|addr| {
-				let connection_messages = connection_messages
+				let (connection_messages, connection_notifiers) = node_args
 					.remove(addr)
 					.expect("there is a node for every connection message; qed");
-				let connection_notifiers = connection_notifiers
-					.remove(addr)
-					.expect("there is a node for every connection notifier; qed");
 				let node = Node::new(
 					transport.clone(),
 					addr.clone(),
