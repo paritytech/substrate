@@ -59,9 +59,6 @@ pub enum Error {
 		expected: usize,
 	},
 
-	#[error("The base path is missing, please provide one")]
-	MissingBasePath,
-
 	#[error("Unknown key type, must be a known 4-character sequence")]
 	KeyTypeInvalid,
 

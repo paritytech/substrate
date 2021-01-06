@@ -205,7 +205,6 @@ mod tests {
 				&i,
 				&parent_hash,
 				&Default::default(),
-				&Default::default(),
 				frame_system::InitKind::Full,
 			);
 			CollectiveFlip::on_initialize(i);

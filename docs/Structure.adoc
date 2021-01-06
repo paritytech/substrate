@@ -33,7 +33,7 @@ In the lowest level, Substrate defines primitives, interfaces and traits to impl
 === Client
 
 * _found in_: `/client`
-* _crates prefix_: `substrate-`
+* _crates prefix_: `sc-`
 * _constraints_:
 ** crates may not (dev-)depend on any `frame-`-crates
 
