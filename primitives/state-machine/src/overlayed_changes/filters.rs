@@ -1030,6 +1030,5 @@ mod test {
 			&b"kex"[..],
 			Some(&b"kez"[..]),
 		));
-
 	}
 }
