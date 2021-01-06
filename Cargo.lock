@@ -11,16 +11,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "activate-wasm-bindgen-features"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "futures-timer 3.0.2",
- "getrandom 0.2.1",
- "rand 0.7.3",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6706,7 +6696,6 @@ dependencies = [
 name = "sc-consensus-aura"
 version = "0.8.0"
 dependencies = [
- "activate-wasm-bindgen-features",
  "derive_more",
  "futures 0.3.8",
  "futures-timer 3.0.2",
@@ -8947,15 +8936,18 @@ dependencies = [
 name = "substrate-browser-utils"
 version = "0.8.0"
 dependencies = [
- "activate-wasm-bindgen-features",
+ "chrono",
  "console_error_panic_hook",
  "console_log",
  "futures 0.1.30",
  "futures 0.3.8",
+ "futures-timer 3.0.2",
+ "getrandom 0.2.1",
  "js-sys",
  "kvdb-web",
  "libp2p-wasm-ext",
  "log",
+ "rand 0.7.3",
  "sc-chain-spec",
  "sc-informant",
  "sc-network",

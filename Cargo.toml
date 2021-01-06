@@ -178,7 +178,6 @@ members = [
 	"test-utils/runtime/client",
 	"test-utils/runtime/transaction-pool",
 	"test-utils/test-crate",
-	"utils/activate-wasm-bindgen-features",
 	"utils/browser",
 	"utils/build-script-utils",
 	"utils/fork-tree",
