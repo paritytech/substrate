@@ -101,21 +101,15 @@ where
 		free_balance: &BalanceOf<T>,
 		contract: &AliveContractInfo<T>
 	) -> BalanceOf<T> {
-		let free_storage = free_balance
-			.checked_div(&T::RentDepositOffset::get())
-			.unwrap_or_else(Zero::zero);
-
-		// For now, we treat every empty KV pair as if it was one byte long.
-		let empty_pairs_equivalent = contract.empty_pair_count;
-
-		let effective_storage_size = <BalanceOf<T>>::from(
-			contract.storage_size + T::StorageSizeOffset::get() + empty_pairs_equivalent,
-		)
-		.saturating_sub(free_storage);
-
-		effective_storage_size
-			.checked_mul(&T::RentByteFee::get())
-			.unwrap_or_else(|| <BalanceOf<T>>::max_value())
+		let uncovered_by_balance = T::DepositPerStorageByte::get()
+			.saturating_mul(contract.storage_size.into())
+			.saturating_add(
+				T::DepositPerStorageItem::get()
+					.saturating_mul(contract.pair_count.into())
+			)
+			.saturating_add(T::DepositPerContract::get())
+			.saturating_sub(*free_balance);
+		T::RentFraction::get().mul_ceil(uncovered_by_balance)
 	}
 
 	/// Returns amount of funds available to consume by rent mechanism.
@@ -484,8 +478,7 @@ where
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
 			trie_id: origin_contract.trie_id,
 			storage_size: origin_contract.storage_size,
-			empty_pair_count: origin_contract.empty_pair_count,
-			total_pair_count: origin_contract.total_pair_count,
+			pair_count: origin_contract.pair_count,
 			code_hash,
 			rent_allowance,
 			deduct_block: current_block,
