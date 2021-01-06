@@ -6898,6 +6898,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "parking_lot 0.10.2",
+ "paste 0.1.18",
  "sc-executor-common",
  "sc-executor-wasmi",
  "sc-executor-wasmtime",
@@ -6918,7 +6919,6 @@ dependencies = [
  "sp-version",
  "sp-wasm-interface",
  "substrate-test-runtime",
- "test-case",
  "tracing",
  "tracing-subscriber",
  "wasmi",
@@ -9206,19 +9206,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf11676eb135389f21fcda654382c4859bbfc1d2f36e4425a2f829bb41b1e20e"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "test-case"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a605baa797821796a751f4a959e1206079b24a4b7e1ed302b7d785d81a9276c9"
-dependencies = [
- "lazy_static",
- "proc-macro2",
- "quote",
- "syn",
- "version_check",
 ]
 
 [[package]]
