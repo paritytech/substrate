@@ -107,11 +107,6 @@ impl NotificationsIn {
 			protocol_name: protocol_name.into(),
 		}
 	}
-
-	/// Returns the name of the protocol that we accept.
-	pub fn protocol_name(&self) -> &Cow<'static, str> {
-		&self.protocol_name
-	}
 }
 
 impl UpgradeInfo for NotificationsIn {

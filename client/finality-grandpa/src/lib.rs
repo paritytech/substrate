@@ -122,7 +122,6 @@ mod until_imported;
 mod voting_rule;
 
 pub use authorities::{SharedAuthoritySet, AuthoritySet};
-pub use communication::GRANDPA_PROTOCOL_NAME;
 pub use finality_proof::{FinalityProofFragment, FinalityProofProvider, StorageAndProofProvider};
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::GrandpaBlockImport;
@@ -656,7 +655,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	///
 	/// It is assumed that this network will feed us Grandpa notifications. When using the
 	/// `sc_network` crate, it is assumed that the Grandpa notifications protocol has been passed
-	/// to the configuration of the networking.
+	/// to the configuration of the networking. See [`grandpa_peers_set_config`].
 	pub network: N,
 	/// If supplied, can be used to hook on telemetry connection established events.
 	pub telemetry_on_connect: Option<TracingUnboundedReceiver<()>>,
@@ -666,6 +665,20 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 	/// The voter state is exposed at an RPC endpoint.
 	pub shared_voter_state: SharedVoterState,
+}
+
+/// Returns the configuration value to put in
+/// [`sc_network::config::NetworkConfiguration::extra_sets`].
+pub fn grandpa_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
+	sc_network::config::NonDefaultSetConfig {
+		notifications_protocol: communication::GRANDPA_PROTOCOL_NAME.into(),
+		set_config: sc_network::config::SetConfig {
+			in_peers: 25,
+			out_peers: 25,
+			reserved_nodes: Vec::new(),
+			non_reserved_mode: sc_network::config::NonReservedPeerMode::Accept,
+		},
+	}
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
