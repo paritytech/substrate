@@ -1,0 +1,5 @@
+error: expected `Error`
+  --> $DIR/error_wrong_item_name.rs:19:11
+   |
+19 |     pub enum Foo<T> {}
+   |              ^^^

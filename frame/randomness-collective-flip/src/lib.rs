@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -135,12 +135,12 @@ mod tests {
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill,
 		testing::Header,
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
 	};
+	use frame_system::limits;
 	use frame_support::{
-		impl_outer_origin, parameter_types, weights::Weight, traits::{Randomness, OnInitialize},
+		impl_outer_origin, parameter_types, traits::{Randomness, OnInitialize},
 	};
 
 	#[derive(Clone, PartialEq, Eq)]
@@ -152,13 +152,17 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: limits::BlockWeights = limits::BlockWeights
+			::simple_max(1024);
+		pub BlockLength: limits::BlockLength = limits::BlockLength
+			::max(2 * 1024);
 	}
 
 	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = BlockLength;
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -170,19 +174,13 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 
 	type System = frame_system::Module<Test>;
@@ -207,7 +205,6 @@ mod tests {
 			System::initialize(
 				&i,
 				&parent_hash,
-				&Default::default(),
 				&Default::default(),
 				frame_system::InitKind::Full,
 			);

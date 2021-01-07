@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,9 +20,11 @@
 use codec::Encode;
 use merlin::Transcript;
 use schnorrkel::vrf::{VRFOutput, VRFProof};
+
 /// An enum whose variants represent possible
 /// accepted values to construct the VRF transcript
 #[derive(Clone, Encode)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum VRFTranscriptValue {
 	/// Value is an array of bytes
 	Bytes(Vec<u8>),
@@ -38,6 +40,7 @@ pub struct VRFTranscriptData {
 	pub items: Vec<(&'static str, VRFTranscriptValue)>,
 }
 /// VRF signature data
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct VRFSignature {
 	/// The VRFOutput serialized
 	pub output: VRFOutput,
@@ -67,7 +70,6 @@ pub fn make_transcript(data: VRFTranscriptData) -> Transcript {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::vrf::VRFTranscriptValue;
 	use rand::RngCore;
 	use rand_chacha::{
 		rand_core::SeedableRng,

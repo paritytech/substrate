@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -521,7 +521,12 @@ benchmarks! {
 			compact,
 			score,
 			size
-		) = offchain_election::prepare_submission::<T>(assignments, winners, false, T::MaximumBlockWeight::get()).unwrap();
+		) = offchain_election::prepare_submission::<T>(
+			assignments,
+			winners,
+			false,
+			T::BlockWeights::get().max_block,
+		).unwrap();
 
 		assert_eq!(
 			winners.len(), compact.unique_targets().len(),
@@ -589,7 +594,12 @@ benchmarks! {
 			compact,
 			score,
 			size
-		) = offchain_election::prepare_submission::<T>(assignments, winners, false, T::MaximumBlockWeight::get()).unwrap();
+		) = offchain_election::prepare_submission::<T>(
+			assignments,
+			winners,
+			false,
+			T::BlockWeights::get().max_block,
+		).unwrap();
 
 		assert_eq!(
 			winners.len(), compact.unique_targets().len(),

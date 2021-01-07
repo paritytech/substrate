@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ use crate::arg_enums::Database;
 use crate::error::Result;
 use crate::{
 	init_logger, DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
-	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
+	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli, InitLoggerParams,
 };
 use log::warn;
 use names::{Generator, Name};
@@ -47,7 +47,7 @@ const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
 
 /// Default configuration values used by Substrate
 ///
-/// These values will be used by [`CliConfiguritation`] to set
+/// These values will be used by [`CliConfiguration`] to set
 /// default values for e.g. the listen port or the RPC port.
 pub trait DefaultConfigurationValues {
 	/// The port Substrate should listen on for p2p connections.
@@ -186,12 +186,12 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 	/// Get the keystore configuration.
 	///
-	/// Bu default this is retrieved from `KeystoreParams` if it is available. Otherwise it uses
+	/// By default this is retrieved from `KeystoreParams` if it is available. Otherwise it uses
 	/// `KeystoreConfig::InMemory`.
-	fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
+	fn keystore_config(&self, config_dir: &PathBuf) -> Result<(Option<String>, KeystoreConfig)> {
 		self.keystore_params()
-			.map(|x| x.keystore_config(base_path))
-			.unwrap_or(Ok(KeystoreConfig::InMemory))
+			.map(|x| x.keystore_config(config_dir))
+			.unwrap_or_else(|| Ok((None, KeystoreConfig::InMemory)))
 	}
 
 	/// Get the database cache size.
@@ -454,15 +454,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
-		let chain_spec = cli.load_spec(chain_id.as_str())?;
+		let chain_spec = cli.load_spec(&chain_id)?;
 		let base_path = self
 			.base_path()?
 			.unwrap_or_else(|| BasePath::from_project("", "", &C::executable_name()));
-		let config_dir = base_path
-			.path()
-			.to_path_buf()
-			.join("chains")
-			.join(chain_spec.id());
+		let config_dir = base_path.config_dir(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		let database_cache_size = self.database_cache_size()?.unwrap_or(128);
@@ -471,6 +467,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 		let is_validator = role.is_network_authority();
+		let (keystore_remote, keystore) = self.keystore_config(&config_dir)?;
 
 		let unsafe_pruning = self
 			.import_params()
@@ -491,7 +488,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 				node_key,
 				DCV::p2p_listen_port(),
 			)?,
-			keystore: self.keystore_config(&config_dir)?,
+			keystore_remote,
+			keystore,
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
@@ -540,6 +538,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.shared_params().is_log_filter_reloading_disabled())
 	}
 
+	/// Should the log color output be disabled?
+	fn disable_log_color(&self) -> Result<bool> {
+		Ok(self.shared_params().disable_log_color())
+	}
+
 	/// Initialize substrate. This must be done only once per process.
 	///
 	/// This method:
@@ -552,15 +555,17 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let tracing_receiver = self.tracing_receiver()?;
 		let tracing_targets = self.tracing_targets()?;
 		let disable_log_reloading = self.is_log_filter_reloading_disabled()?;
+		let disable_log_color = self.disable_log_color()?;
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		init_logger(
-			&logger_pattern,
+		init_logger(InitLoggerParams {
+			pattern: logger_pattern,
 			tracing_receiver,
 			tracing_targets,
 			disable_log_reloading,
-		)?;
+			disable_log_color,
+		})?;
 
 		if let Some(new_limit) = fdlimit::raise_fd_limit() {
 			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {

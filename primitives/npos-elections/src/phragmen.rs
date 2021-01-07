@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -108,9 +108,8 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing>(
 /// `seq_phragmen` for more information. This function is left public in case a crate needs to use
 /// the implementation in a custom way.
 ///
-/// To create th inputs needed for this function, see [`crate::setup_inputs`].
-///
 /// This can only fail if the normalization fails.
+// To create the inputs needed for this function, see [`crate::setup_inputs`].
 pub fn seq_phragmen_core<AccountId: IdentifierT>(
 	rounds: usize,
 	candidates: Vec<CandidatePtr<AccountId>>,
