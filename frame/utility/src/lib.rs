@@ -191,13 +191,14 @@ decl_module! {
 		/// NOTE: Prior to version *12, this was called `as_limited_sub`.
 		///
 		/// The dispatch origin for this call must be _Signed_.
-		#[weight = (
-			T::WeightInfo::as_derivative()
-				.saturating_add(call.get_dispatch_info().weight)
+		#[weight = {
+			let dispatch_info = call.get_dispatch_info();
+			(T::WeightInfo::as_derivative()
+				.saturating_add(dispatch_info.weight)
 				 // AccountData for inner call origin accountdata.
 				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
-			call.get_dispatch_info().class,
-		)]
+			dispatch_info.class,
+		)}]
 		fn as_derivative(origin, index: u16, call: Box<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let mut origin = origin;
 			let who = ensure_signed(origin.clone())?;
