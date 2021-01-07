@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -169,9 +169,6 @@ pub trait Externalities: ExtensionStore {
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
 	);
-
-	/// Get the identity of the chain.
-	fn chain_id(&self) -> u64;
 
 	/// Get the trie root of the current storage map.
 	///

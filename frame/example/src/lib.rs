@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -655,20 +655,15 @@ mod benchmarking {
 	use frame_system::RawOrigin;
 
 	benchmarks!{
-		_ {
-			// Define a common range for `b`.
-			let b in 1 .. 1000 => ();
-		}
-
 		// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
 		accumulate_dummy {
-			let b in ...;
+			let b in 1 .. 1000;
 			let caller = account("caller", 0, 0);
 		}: _ (RawOrigin::Signed(caller), b.into())
 
 		// This will measure the execution time of `set_dummy` for b in [1..1000] range.
 		set_dummy {
-			let b in ...;
+			let b in 1 .. 1000;
 		}: set_dummy (RawOrigin::Root, b.into())
 
 		// This will measure the execution time of `set_dummy` for b in [1..10] range.
@@ -764,6 +759,7 @@ mod tests {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;

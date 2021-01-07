@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 use criterion::{Criterion, criterion_group, criterion_main, black_box};
 use frame_system as system;
-use frame_support::{decl_module, decl_event, impl_outer_origin, impl_outer_event, weights::Weight};
+use frame_support::{decl_module, decl_event, impl_outer_origin, impl_outer_event};
 use sp_core::H256;
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
@@ -87,6 +87,7 @@ impl system::Config for Runtime {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 impl module::Config for Runtime {
