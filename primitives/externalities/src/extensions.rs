@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -79,6 +79,12 @@ macro_rules! decl_extension {
 				&mut self.0
 			}
 		}
+
+		impl From<$inner> for $ext_name {
+			fn from(inner: $inner) -> Self {
+				Self(inner)
+			}
+ 		}
 	}
 }
 
@@ -92,7 +98,7 @@ pub trait ExtensionStore {
 	/// instead of this function to get type system support and automatic type downcasting.
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any>;
 
-	/// Register extension `extension` with speciifed `type_id`.
+	/// Register extension `extension` with specified `type_id`.
 	///
 	/// It should return error if extension is already registered.
 	fn register_extension_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) -> Result<(), Error>;
@@ -123,14 +129,25 @@ impl Extensions {
 	}
 
 	/// Register the given extension.
-	pub fn register<E: Extension>(&mut self, ext: E) {
-		self.extensions.insert(ext.type_id(), Box::new(ext));
+	pub fn register<E: Extension>(
+		&mut self,
+		ext: E,
+	) {
+		let type_id = ext.type_id();
+		self.extensions.insert(type_id, Box::new(ext));
 	}
 
-	/// Register extension `ext`.
-	pub fn register_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) -> Result<(), Error> {
+	/// Register extension `extension` using the given `type_id`.
+	pub fn register_with_type_id(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn Extension>,
+	) -> Result<(), Error> {
 		match self.extensions.entry(type_id) {
-			Entry::Vacant(vacant) => { vacant.insert(extension); Ok(()) },
+			Entry::Vacant(vacant) => {
+				vacant.insert(extension);
+				Ok(())
+			},
 			Entry::Occupied(_) => Err(Error::ExtensionAlreadyRegistered),
 		}
 	}
@@ -140,9 +157,16 @@ impl Extensions {
 		self.extensions.get_mut(&ext_type_id).map(DerefMut::deref_mut).map(Extension::as_mut_any)
 	}
 
-	/// Deregister extension of type `E`.
-	pub fn deregister(&mut self, type_id: TypeId) -> Option<Box<dyn Extension>> {
-		self.extensions.remove(&type_id)
+	/// Deregister extension for the given `type_id`.
+	///
+	/// Returns `true` when the extension was registered.
+	pub fn deregister(&mut self, type_id: TypeId) -> bool {
+		self.extensions.remove(&type_id).is_some()
+	}
+
+	/// Returns a mutable iterator over all extensions.
+	pub fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = (&'a TypeId, &'a mut Box<dyn Extension>)> {
+		self.extensions.iter_mut()
 	}
 }
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +17,6 @@
 
 //! Some configurable implementations as associated type for the substrate runtime.
 
-use node_primitives::Balance;
-use sp_runtime::traits::Convert;
 use frame_support::traits::{OnUnbalanced, Currency};
 use crate::{Balances, Authorship, NegativeImbalance};
 
@@ -29,37 +27,22 @@ impl OnUnbalanced<NegativeImbalance> for Author {
 	}
 }
 
-/// Struct that handles the conversion of Balance -> `u64`. This is used for staking's election
-/// calculation.
-pub struct CurrencyToVoteHandler;
-
-impl CurrencyToVoteHandler {
-	fn factor() -> Balance { (Balances::total_issuance() / u64::max_value() as Balance).max(1) }
-}
-
-impl Convert<Balance, u64> for CurrencyToVoteHandler {
-	fn convert(x: Balance) -> u64 { (x / Self::factor()) as u64 }
-}
-
-impl Convert<u128, Balance> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> Balance { x * Self::factor() }
-}
-
 #[cfg(test)]
 mod multiplier_tests {
-	use super::*;
-	use sp_runtime::{assert_eq_error_rate, FixedPointNumber};
+	use sp_runtime::{assert_eq_error_rate, FixedPointNumber, traits::Convert};
 	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
 
 	use crate::{
 		constants::{currency::*, time::*},
-		TransactionPayment, MaximumBlockWeight, AvailableBlockRatio, Runtime, TargetBlockFullness,
+		TransactionPayment, Runtime, TargetBlockFullness,
 		AdjustmentVariable, System, MinimumMultiplier,
+		RuntimeBlockWeights as BlockWeights,
 	};
-	use frame_support::weights::{Weight, WeightToFeePolynomial};
+	use frame_support::weights::{Weight, WeightToFeePolynomial, DispatchClass};
 
-	fn max() -> Weight {
-		AvailableBlockRatio::get() * MaximumBlockWeight::get()
+	fn max_normal() -> Weight {
+		BlockWeights::get().get(DispatchClass::Normal).max_total
+			.unwrap_or_else(|| BlockWeights::get().max_block)
 	}
 
 	fn min_multiplier() -> Multiplier {
@@ -67,7 +50,7 @@ mod multiplier_tests {
 	}
 
 	fn target() -> Weight {
-		TargetBlockFullness::get() * max()
+		TargetBlockFullness::get() * max_normal()
 	}
 
 	// update based on runtime impl.
@@ -88,7 +71,7 @@ mod multiplier_tests {
 		let previous_float = previous_float.max(min_multiplier().into_inner() as f64 / accuracy);
 
 		// maximum tx weight
-		let m = max() as f64;
+		let m = max_normal() as f64;
 		// block weight always truncated to max weight
 		let block_weight = (block_weight as f64).min(m);
 		let v: f64 = AdjustmentVariable::get().to_fraction();
@@ -108,7 +91,7 @@ mod multiplier_tests {
 		let mut t: sp_io::TestExternalities =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into();
 		t.execute_with(|| {
-			System::set_block_limits(w, 0);
+			System::set_block_consumed_resources(w, 0);
 			assertions()
 		});
 	}
@@ -121,8 +104,8 @@ mod multiplier_tests {
 			(100, fm.clone()),
 			(1000, fm.clone()),
 			(target(), fm.clone()),
-			(max() / 2, fm.clone()),
-			(max(), fm.clone()),
+			(max_normal() / 2, fm.clone()),
+			(max_normal(), fm.clone()),
 		];
 		test_set.into_iter().for_each(|(w, fm)| {
 			run_with_system_weight(w, || {
@@ -183,7 +166,7 @@ mod multiplier_tests {
 
 	#[test]
 	fn min_change_per_day() {
-		run_with_system_weight(max(), || {
+		run_with_system_weight(max_normal(), || {
 			let mut fm = Multiplier::one();
 			// See the example in the doc of `TargetedFeeAdjustment`. are at least 0.234, hence
 			// `fm > 1.234`.
@@ -201,7 +184,7 @@ mod multiplier_tests {
 		// `cargo test congested_chain_simulation -- --nocapture` to get some insight.
 
 		// almost full. The entire quota of normal transactions is taken.
-		let block_weight = AvailableBlockRatio::get() * max() - 100;
+		let block_weight = BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap() - 100;
 
 		// Default substrate weight.
 		let tx_weight = frame_support::weights::constants::ExtrinsicBaseWeight::get();
@@ -219,7 +202,7 @@ mod multiplier_tests {
 				fm = next;
 				iterations += 1;
 				let fee =
-					<Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&tx_weight);
+					<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&tx_weight);
 				let adjusted_fee = fm.saturating_mul_acc_int(fee);
 				println!(
 					"iteration {}, new fm = {:?}. Fee at this point is: {} units / {} millicents, \
@@ -339,15 +322,19 @@ mod multiplier_tests {
 			10 * mb,
 			2147483647,
 			4294967295,
-			MaximumBlockWeight::get() / 2,
-			MaximumBlockWeight::get(),
+			BlockWeights::get().max_block / 2,
+			BlockWeights::get().max_block,
 			Weight::max_value() / 2,
 			Weight::max_value(),
 		].into_iter().for_each(|i| {
 			run_with_system_weight(i, || {
 				let next = runtime_multiplier_update(Multiplier::one());
 				let truth = truth_value_update(i, Multiplier::one());
-				assert_eq_error_rate!(truth, next, Multiplier::from_inner(50_000_000));
+				assert_eq_error_rate!(
+					truth,
+					next,
+					Multiplier::from_inner(50_000_000)
+				);
 			});
 		});
 

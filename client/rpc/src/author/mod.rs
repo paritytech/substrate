@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -35,7 +35,8 @@ use futures::future::{ready, FutureExt, TryFutureExt};
 use sc_rpc_api::DenyUnsafe;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use codec::{Encode, Decode};
-use sp_core::{Bytes, traits::BareCryptoStorePtr};
+use sp_core::Bytes;
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::generic;
 use sp_transaction_pool::{
@@ -57,7 +58,7 @@ pub struct Author<P, Client> {
 	/// Subscriptions manager
 	subscriptions: SubscriptionManager,
 	/// The key store.
-	keystore: BareCryptoStorePtr,
+	keystore: SyncCryptoStorePtr,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 }
@@ -68,7 +69,7 @@ impl<P, Client> Author<P, Client> {
 		client: Arc<Client>,
 		pool: Arc<P>,
 		subscriptions: SubscriptionManager,
-		keystore: BareCryptoStorePtr,
+		keystore: SyncCryptoStorePtr,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
 		Author {
@@ -105,8 +106,7 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-		let mut keystore = self.keystore.write();
-		keystore.insert_unknown(key_type, &suri, &public[..])
+		SyncCryptoStore::insert_unknown(&*self.keystore, key_type, &suri, &public[..])
 			.map_err(|_| Error::KeyStoreUnavailable)?;
 		Ok(())
 	}
@@ -131,14 +131,14 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 		).map_err(|e| Error::Client(Box::new(e)))?
 			.ok_or_else(|| Error::InvalidSessionKeys)?;
 
-		Ok(self.keystore.read().has_keys(&keys))
+		Ok(SyncCryptoStore::has_keys(&*self.keystore, &keys))
 	}
 
 	fn has_key(&self, public_key: Bytes, key_type: String) -> Result<bool> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-		Ok(self.keystore.read().has_keys(&[(public_key.to_vec(), key_type)]))
+		Ok(SyncCryptoStore::has_keys(&*self.keystore, &[(public_key.to_vec(), key_type)]))
 	}
 
 	fn submit_extrinsic(&self, ext: Bytes) -> FutureResult<TxHash<P>> {
@@ -215,7 +215,7 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 				Ok(watcher) => {
 					subscriptions.add(subscriber, move |sink| {
 						sink
-							.sink_map_err(|_| unimplemented!())
+							.sink_map_err(|e| log::debug!("Subscription sink failed: {:?}", e))
 							.send_all(Compat::new(watcher))
 							.map(|_| ())
 					});

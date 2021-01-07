@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 mod build_spec_cmd;
-mod build_sync_spec_cmd;
 mod check_block_cmd;
 mod export_blocks_cmd;
 mod export_state_cmd;
@@ -29,15 +28,14 @@ mod revert_cmd;
 mod run_cmd;
 mod generate_node_key;
 mod generate;
-mod insert;
+mod insert_key;
 mod inspect_node_key;
-mod inspect;
+mod inspect_key;
 mod key;
 pub mod utils;
 
 pub use self::{
 	build_spec_cmd::BuildSpecCmd,
-	build_sync_spec_cmd::BuildSyncSpecCmd,
 	check_block_cmd::CheckBlockCmd,
 	export_blocks_cmd::ExportBlocksCmd,
 	export_state_cmd::ExportStateCmd,
@@ -45,8 +43,8 @@ pub use self::{
 	purge_chain_cmd::PurgeChainCmd,
 	sign::SignCmd,
 	generate::GenerateCmd,
-	insert::InsertCmd,
-	inspect::InspectKeyCmd,
+	insert_key::InsertKeyCmd,
+	inspect_key::InspectKeyCmd,
 	generate_node_key::GenerateNodeKeyCmd,
 	inspect_node_key::InspectNodeKeyCmd,
 	key::KeySubcommand,

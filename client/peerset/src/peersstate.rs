@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Reputation and slots allocation system behind the peerset.
 //!
@@ -42,8 +44,8 @@ pub struct PeersState {
 	/// List of nodes that we know about.
 	///
 	/// > **Note**: This list should really be ordered by decreasing reputation, so that we can
-	/// 			easily select the best node to connect to. As a first draft, however, we don't
-	/// 			sort, to make the logic easier.
+	///           easily select the best node to connect to. As a first draft, however, we don't
+	///           sort, to make the logic easier.
 	nodes: HashMap<PeerId, Node>,
 
 	/// Number of slot-occupying nodes for which the `ConnectionState` is `In`.
@@ -130,7 +132,7 @@ impl PeersState {
 	/// Returns an object that grants access to the state of a peer.
 	pub fn peer<'a>(&'a mut self, peer_id: &'a PeerId) -> Peer<'a> {
 		match self.nodes.get_mut(peer_id) {
-			None => return Peer::Unknown(UnknownPeer {
+			None => Peer::Unknown(UnknownPeer {
 				parent: self,
 				peer_id: Cow::Borrowed(peer_id),
 			}),
@@ -585,7 +587,7 @@ mod tests {
 		peers_state.peer(&id2).into_connected().unwrap().disconnect();
 		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id1.clone()));
 		peers_state.peer(&id1).into_not_connected().unwrap().set_reputation(-100);
-		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id2.clone()));
+		assert_eq!(peers_state.highest_not_connected_peer().map(|p| p.into_peer_id()), Some(id2));
 	}
 
 	#[test]

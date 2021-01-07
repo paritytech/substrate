@@ -3,12 +3,12 @@
 The System module provides low-level access to core types and cross-cutting utilities.
 It acts as the base layer for other pallets to interact with the Substrate framework components.
 
-- [`system::Trait`](./trait.Trait.html)
+- [`system::Trait`](https://docs.rs/frame-system/latest/frame_system/trait.Trait.html)
 
 ## Overview
 
 The System module defines the core data types used in a Substrate runtime.
-It also provides several utility functions (see [`Module`](./struct.Module.html)) for other FRAME pallets.
+It also provides several utility functions (see [`Module`](https://docs.rs/frame-system/latest/frame_system/struct.Module.html)) for other FRAME pallets.
 
 In addition, it manages the storage items for extrinsics data, indexes, event records, and digest items,
 among other things that support the execution of the current block.
@@ -24,7 +24,7 @@ The System module does not implement any dispatchable functions.
 
 ### Public Functions
 
-See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
+See the [`Module`](https://docs.rs/frame-system/latest/frame_system/struct.Module.html) struct for details of publicly available functions.
 
 ### Signed Extensions
 
@@ -57,10 +57,10 @@ Import the System module and derive your module's configuration trait from the s
 use frame_support::{decl_module, dispatch};
 use frame_system::{self as system, ensure_signed};
 
-pub trait Trait: system::Trait {}
+pub trait Config: system::Config {}
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		#[weight = 0]
 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 			let _sender = ensure_signed(origin)?;

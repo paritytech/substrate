@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -294,7 +294,7 @@ mod tests {
 
 	#[test]
 	fn should_return_next_nonce_for_some_account() {
-		let _ = env_logger::try_init();
+		sp_tracing::try_init_simple();
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
@@ -333,7 +333,7 @@ mod tests {
 
 	#[test]
 	fn dry_run_should_deny_unsafe() {
-		let _ = env_logger::try_init();
+		sp_tracing::try_init_simple();
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
@@ -356,7 +356,7 @@ mod tests {
 
 	#[test]
 	fn dry_run_should_work() {
-		let _ = env_logger::try_init();
+		sp_tracing::try_init_simple();
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
@@ -388,7 +388,7 @@ mod tests {
 
 	#[test]
 	fn dry_run_should_indicate_error() {
-		let _ = env_logger::try_init();
+		sp_tracing::try_init_simple();
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());

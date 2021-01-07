@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,11 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tools for analysing the benchmark results.
+//! Tools for analyzing the benchmark results.
 
 use std::collections::BTreeMap;
-use linregress::{FormulaRegressionBuilder, RegressionDataBuilder, RegressionModel};
+use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use crate::BenchmarkResults;
+
+pub use linregress::RegressionModel;
 
 pub struct Analysis {
 	pub base: u128,

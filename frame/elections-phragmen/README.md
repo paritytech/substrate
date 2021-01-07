@@ -60,8 +60,8 @@ being re-elected at the end of each round.
 
 ### Module Information
 
-- [`election_sp_phragmen::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
-- [`Module`](./struct.Module.html)
+- [`election_sp_phragmen::Trait`](https://docs.rs/pallet-elections-phragmen/latest/pallet_elections_phragmen/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-elections-phragmen/latest/pallet_elections_phragmen/enum.Call.html)
+- [`Module`](https://docs.rs/pallet-elections-phragmen/latest/pallet_elections_phragmen/struct.Module.html)
 
 License: Apache-2.0

@@ -1,8 +1,8 @@
 # Multisig Module
 A module for doing multisig dispatch.
 
-- [`multisig::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
+- [`multisig::Trait`](https://docs.rs/pallet-multisig/latest/pallet_multisig/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-multisig/latest/pallet_multisig/enum.Call.html)
 
 ## Overview
 
@@ -24,6 +24,6 @@ not available or desired.
 * `cancel_as_multi` - Cancel a call from a composite origin.
 
 [`Call`]: ./enum.Call.html
-[`Trait`]: ./trait.Trait.html
+[`Config`]: ./trait.Config.html
 
 License: Apache-2.0

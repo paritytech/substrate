@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,12 +29,8 @@ use crate::Module as Indices;
 const SEED: u32 = 0;
 
 benchmarks! {
-	_ { }
-
 	claim {
-		// Index being claimed
-		let i in 0 .. 1000;
-		let account_index = T::AccountIndex::from(i);
+		let account_index = T::AccountIndex::from(SEED);
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(RawOrigin::Signed(caller.clone()), account_index)
@@ -43,13 +39,11 @@ benchmarks! {
 	}
 
 	transfer {
-		// Index being claimed
-		let i in 0 .. 1000;
-		let account_index = T::AccountIndex::from(i);
+		let account_index = T::AccountIndex::from(SEED);
 		// Setup accounts
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		let recipient: T::AccountId = account("recipient", i, SEED);
+		let recipient: T::AccountId = account("recipient", 0, SEED);
 		T::Currency::make_free_balance_be(&recipient, BalanceOf::<T>::max_value());
 		// Claim the index
 		Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index)?;
@@ -59,9 +53,7 @@ benchmarks! {
 	}
 
 	free {
-		// Index being claimed
-		let i in 0 .. 1000;
-		let account_index = T::AccountIndex::from(i);
+		let account_index = T::AccountIndex::from(SEED);
 		// Setup accounts
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -73,13 +65,11 @@ benchmarks! {
 	}
 
 	force_transfer {
-		// Index being claimed
-		let i in 0 .. 1000;
-		let account_index = T::AccountIndex::from(i);
+		let account_index = T::AccountIndex::from(SEED);
 		// Setup accounts
 		let original: T::AccountId = account("original", 0, SEED);
 		T::Currency::make_free_balance_be(&original, BalanceOf::<T>::max_value());
-		let recipient: T::AccountId = account("recipient", i, SEED);
+		let recipient: T::AccountId = account("recipient", 0, SEED);
 		T::Currency::make_free_balance_be(&recipient, BalanceOf::<T>::max_value());
 		// Claim the index
 		Indices::<T>::claim(RawOrigin::Signed(original).into(), account_index)?;
@@ -89,9 +79,7 @@ benchmarks! {
 	}
 
 	freeze {
-		// Index being claimed
-		let i in 0 .. 1000;
-		let account_index = T::AccountIndex::from(i);
+		let account_index = T::AccountIndex::from(SEED);
 		// Setup accounts
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());

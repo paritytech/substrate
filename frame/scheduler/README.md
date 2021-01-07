@@ -1,9 +1,9 @@
 # Scheduler
 A module for scheduling dispatches.
 
-- [`scheduler::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
-- [`Module`](./struct.Module.html)
+- [`scheduler::Trait`](https://docs.rs/pallet-scheduler/latest/pallet_scheduler/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-scheduler/latest/pallet_scheduler/enum.Call.html)
+- [`Module`](https://docs.rs/pallet-scheduler/latest/pallet_scheduler/struct.Module.html)
 
 ## Overview
 
@@ -12,7 +12,7 @@ specified block number or at a specified period. These scheduled dispatches
 may be named or anonymous and may be canceled.
 
 **NOTE:** The scheduled calls will be dispatched with the default filter
-for the origin: namely `frame_system::Trait::BaseCallFilter` for all origin
+for the origin: namely `frame_system::Config::BaseCallFilter` for all origin
 except root which will get no filter. And not the filter contained in origin
 use to call `fn schedule`.
 

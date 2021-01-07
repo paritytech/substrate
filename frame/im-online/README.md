@@ -10,12 +10,12 @@ in the current era or session.
 
 The heartbeat is a signed transaction, which was signed using the session key
 and includes the recent best block number of the local validators chain as well
-as the [NetworkState](../../client/offchain/struct.NetworkState.html).
+as the `NetworkState`.
 It is submitted as an Unsigned Transaction via off-chain workers.
 
-- [`im_online::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
-- [`Module`](./struct.Module.html)
+- [`im_online::Trait`](https://docs.rs/pallet-im-online/latest/pallet_im_online/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-im-online/latest/pallet_im_online/enum.Call.html)
+- [`Module`](https://docs.rs/pallet-im-online/latest/pallet_im_online/struct.Module.html)
 
 ## Interface
 
@@ -30,10 +30,10 @@ use frame_support::{decl_module, dispatch};
 use frame_system::ensure_signed;
 use pallet_im_online::{self as im_online};
 
-pub trait Trait: im_online::Trait {}
+pub trait Config: im_online::Config {}
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		#[weight = 0]
 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 			let _sender = ensure_signed(origin)?;
@@ -46,6 +46,6 @@ decl_module! {
 
 ## Dependencies
 
-This module depends on the [Session module](../pallet_session/index.html).
+This module depends on the [Session module](https://docs.rs/pallet-session/latest/pallet_session/).
 
 License: Apache-2.0

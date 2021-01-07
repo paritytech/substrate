@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,7 +37,7 @@
 //! from the `Pool` and `Members`; the entity is immediately replaced
 //! by the next highest scoring candidate in the pool, if available.
 //!
-//! - [`scored_pool::Trait`](./trait.Trait.html)
+//! - [`scored_pool::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 //!
@@ -58,10 +58,10 @@
 //! use frame_system::ensure_signed;
 //! use pallet_scored_pool::{self as scored_pool};
 //!
-//! pub trait Trait: scored_pool::Trait {}
+//! pub trait Config: scored_pool::Config {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //! 		#[weight = 0]
 //! 		pub fn candidate(origin) -> dispatch::DispatchResult {
 //! 			let who = ensure_signed(origin)?;
@@ -103,8 +103,8 @@ use frame_support::{
 use frame_system::{ensure_root, ensure_signed};
 use sp_runtime::traits::{AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup};
 
-type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-type PoolT<T, I> = Vec<(<T as frame_system::Trait>::AccountId, Option<<T as Trait<I>>::Score>)>;
+type BalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type PoolT<T, I> = Vec<(<T as frame_system::Config>::AccountId, Option<<T as Config<I>>::Score>)>;
 
 /// The enum is supplied when refreshing the members set.
 /// Depending on the enum variant the corresponding associated
@@ -116,7 +116,7 @@ enum ChangeReceiver {
 	MembershipChanged,
 }
 
-pub trait Trait<I=DefaultInstance>: frame_system::Trait {
+pub trait Config<I=DefaultInstance>: frame_system::Config {
 	/// The currency used for deposits.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
@@ -125,7 +125,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 		AtLeast32Bit + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
 
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 
 	// The deposit which is reserved from candidates if they want to
 	// start a candidacy. The deposit gets returned when the candidacy is
@@ -156,7 +156,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as ScoredPool {
+	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as ScoredPool {
 		/// The current pool of candidates, stored as an ordered Vec
 		/// (ordered descending by score, `None` last, highest first).
 		Pool get(fn pool) config(): PoolT<T, I>;
@@ -204,7 +204,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::AccountId,
 	{
 		/// The given member was removed. See the transaction for who.
 		MemberRemoved,
@@ -225,7 +225,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the scored-pool module.
-	pub enum Error for Module<T: Trait<I>, I: Instance> {
+	pub enum Error for Module<T: Config<I>, I: Instance> {
 		/// Already a member.
 		AlreadyInPool,
 		/// Index out of bounds.
@@ -236,7 +236,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance>
+	pub struct Module<T: Config<I>, I: Instance=DefaultInstance>
 		for enum Call
 		where origin: T::Origin
 	{
@@ -275,7 +275,7 @@ decl_module! {
 
 			// can be inserted as last element in pool, since entities with
 			// `None` are always sorted to the end.
-			<Pool<T, I>>::append((who.clone(), Option::<<T as Trait<I>>::Score>::None));
+			<Pool<T, I>>::append((who.clone(), Option::<<T as Config<I>>::Score>::None));
 
 			<CandidateExists<T, I>>::insert(&who, true);
 
@@ -382,7 +382,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> Module<T, I> {
+impl<T: Config<I>, I: Instance> Module<T, I> {
 
 	/// Fetches the `MemberCount` highest scoring members from
 	/// `Pool` and puts them into `Members`.

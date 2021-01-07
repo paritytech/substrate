@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,14 +46,14 @@ fn params_should_work() {
 
 		assert_eq!(Elections::voters(0), Vec::<Option<u64>>::new());
 		assert_eq!(Elections::voter_info(1), None);
-		assert_eq!(Elections::all_approvals_of(&1), vec![]);
+		assert!(Elections::all_approvals_of(&1).is_empty());
 	});
 }
 
 #[test]
 fn chunking_bool_to_flag_should_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		assert_eq!(Elections::bool_to_flag(vec![]), vec![]);
+		assert!(Elections::bool_to_flag(vec![]).is_empty());
 		assert_eq!(Elections::bool_to_flag(vec![false]), vec![0]);
 		assert_eq!(Elections::bool_to_flag(vec![true]), vec![1]);
 		assert_eq!(Elections::bool_to_flag(vec![true, true, true, true]), vec![15]);
@@ -274,11 +274,11 @@ fn chunking_approval_storage_should_work() {
 
 		assert_eq!(Elections::all_approvals_of(&2), vec![true]);
 		// NOTE: these two are stored in mem differently though.
-		assert_eq!(Elections::all_approvals_of(&3), vec![]);
-		assert_eq!(Elections::all_approvals_of(&4), vec![]);
+		assert!(Elections::all_approvals_of(&3).is_empty());
+		assert!(Elections::all_approvals_of(&4).is_empty());
 
 		assert_eq!(Elections::approvals_of((3, 0)), vec![0]);
-		assert_eq!(Elections::approvals_of((4, 0)), vec![]);
+		assert!(Elections::approvals_of((4, 0)).is_empty());
 	});
 }
 
@@ -298,7 +298,7 @@ fn voting_initial_set_approvals_ignores_voter_index() {
 }
 #[test]
 fn voting_bad_approval_index_slashes_voters_and_bond_reduces_stake() {
-	ExtBuilder::default().voting_fee(5).voter_bond(2).build().execute_with(|| {
+	ExtBuilder::default().voting_fee(5).voting_bond(2).build().execute_with(|| {
 		assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
 
 		(1..=63).for_each(|i| vote(i, 0));
@@ -365,7 +365,7 @@ fn voting_cannot_lock_less_than_limit() {
 
 #[test]
 fn voting_locking_more_than_total_balance_is_moot() {
-	ExtBuilder::default().voter_bond(2).build().execute_with(|| {
+	ExtBuilder::default().voting_bond(2).build().execute_with(|| {
 		assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
 
 		assert_eq!(balances(&3), (30, 0));
@@ -381,11 +381,11 @@ fn voting_locking_more_than_total_balance_is_moot() {
 
 #[test]
 fn voting_locking_stake_and_reserving_bond_works() {
-	ExtBuilder::default().voter_bond(2).build().execute_with(|| {
+	ExtBuilder::default().voting_bond(2).build().execute_with(|| {
 		assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
 
 		assert_eq!(balances(&2), (20, 0));
-		assert_eq!(locks(&2), vec![]);
+		assert!(locks(&2).is_empty());
 		assert_ok!(Elections::set_approvals(Origin::signed(2), vec![], 0, 0, 15));
 		assert_eq!(balances(&2), (18, 2));
 		assert_eq!(locks(&2), vec![15]);
@@ -401,7 +401,7 @@ fn voting_locking_stake_and_reserving_bond_works() {
 		assert_ok!(Elections::retract_voter(Origin::signed(2), 0));
 
 		assert_eq!(balances(&2), (102, 0));
-		assert_eq!(locks(&2), vec![]);
+		assert!(locks(&2).is_empty());
 	});
 }
 
@@ -558,7 +558,7 @@ fn retracting_inactive_voter_should_work() {
 
 #[test]
 fn retracting_inactive_voter_with_other_candidates_in_slots_should_work() {
-	ExtBuilder::default().voter_bond(2).build().execute_with(|| {
+	ExtBuilder::default().voting_bond(2).build().execute_with(|| {
 		System::set_block_number(4);
 		assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
 		assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0, 20));
@@ -680,8 +680,8 @@ fn retracting_active_voter_should_slash_reporter() {
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		assert_eq!(Elections::vote_index(), 2);
-		assert_eq!(<Test as Trait>::InactiveGracePeriod::get(), 1);
-		assert_eq!(<Test as Trait>::VotingPeriod::get(), 4);
+		assert_eq!(<Test as Config>::InactiveGracePeriod::get(), 1);
+		assert_eq!(<Test as Config>::VotingPeriod::get(), 4);
 		assert_eq!(Elections::voter_info(4), Some(VoterInfo { last_win: 1, last_active: 0, stake: 40, pot: 0 }));
 
 		assert_ok!(Elections::reap_inactive_voter(Origin::signed(4),
@@ -1107,7 +1107,7 @@ fn election_present_when_presenter_is_poor_should_not_work() {
 	let test_present = |p| {
 		ExtBuilder::default()
 			.voting_fee(5)
-			.voter_bond(2)
+			.voting_bond(2)
 			.bad_presentation_punishment(p)
 			.build()
 			.execute_with(|| {
@@ -1507,7 +1507,7 @@ fn pot_winning_resets_accumulated_pot() {
 #[test]
 fn pot_resubmitting_approvals_stores_pot() {
 	ExtBuilder::default()
-		.voter_bond(0)
+		.voting_bond(0)
 		.voting_fee(0)
 		.balance_factor(10)
 		.build()

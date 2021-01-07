@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,7 +53,7 @@ type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
 #[derive(Clone, Encode, Decode, PassByInner)]
-pub struct Public([u8; 33]);
+pub struct Public(pub [u8; 33]);
 
 impl PartialOrd for Public {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -228,7 +228,7 @@ impl sp_std::hash::Hash for Public {
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
 #[derive(Encode, Decode, PassByInner)]
-pub struct Signature([u8; 65]);
+pub struct Signature(pub [u8; 65]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
 	type Error = ();
@@ -678,18 +678,34 @@ mod test {
 
 	#[test]
 	fn ss58check_custom_format_works() {
-		use crate::crypto::Ss58AddressFormat;
-		// temp save default format version
-		let default_format = Ss58AddressFormat::default();
-		// set current ss58 version is custom "200" `Ss58AddressFormat::Custom(200)`
-		set_default_ss58_version(Ss58AddressFormat::Custom(200));
-		// custom addr encoded by version 200
-		let addr = "2X64kMNEWAW5KLZMSKcGKEc96MyuaRsRUku7vomuYxKgqjVCRj";
-		Public::from_ss58check(&addr).unwrap();
-		set_default_ss58_version(default_format);
-		// set  current ss58 version to default version
-		let addr = "KWAfgC2aRG5UVD6CpbPQXCx4YZZUhvWqqAJE6qcYc9Rtr6g5C";
-		Public::from_ss58check(&addr).unwrap();
+		// We need to run this test in its own process to not interfere with other tests running in
+		// parallel and also relying on the ss58 version.
+		if std::env::var("RUN_CUSTOM_FORMAT_TEST") == Ok("1".into()) {
+			use crate::crypto::Ss58AddressFormat;
+			// temp save default format version
+			let default_format = Ss58AddressFormat::default();
+			// set current ss58 version is custom "200" `Ss58AddressFormat::Custom(200)`
+			set_default_ss58_version(Ss58AddressFormat::Custom(200));
+			// custom addr encoded by version 200
+			let addr = "2X64kMNEWAW5KLZMSKcGKEc96MyuaRsRUku7vomuYxKgqjVCRj";
+			Public::from_ss58check(&addr).unwrap();
+			set_default_ss58_version(default_format);
+			// set current ss58 version to default version
+			let addr = "KWAfgC2aRG5UVD6CpbPQXCx4YZZUhvWqqAJE6qcYc9Rtr6g5C";
+			Public::from_ss58check(&addr).unwrap();
+
+			println!("CUSTOM_FORMAT_SUCCESSFUL");
+		} else {
+			let executable = std::env::current_exe().unwrap();
+			let output = std::process::Command::new(executable)
+				.env("RUN_CUSTOM_FORMAT_TEST", "1")
+				.args(&["--nocapture", "ss58check_custom_format_works"])
+				.output()
+				.unwrap();
+
+			let output = String::from_utf8(output.stdout).unwrap();
+			assert!(output.contains("CUSTOM_FORMAT_SUCCESSFUL"));
+		}
 	}
 
 	#[test]

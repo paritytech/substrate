@@ -1,7 +1,7 @@
 # Vesting Module
 
-- [`vesting::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
+- [`vesting::Trait`](https://docs.rs/pallet-vesting/latest/pallet_vesting/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-vesting/latest/pallet_vesting/enum.Call.html)
 
 ## Overview
 
@@ -26,6 +26,6 @@ This module implements the `VestingSchedule` trait.
   "vested" so far.
 
 [`Call`]: ./enum.Call.html
-[`Trait`]: ./trait.Trait.html
+[`Config`]: ./trait.Config.html
 
 License: Apache-2.0

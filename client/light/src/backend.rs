@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -441,14 +441,14 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(
+	fn apply_to_child_keys_while<A: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
 		action: A,
 	) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				state.for_keys_in_child_storage(child_info, action),
+				state.apply_to_child_keys_while(child_info, action),
 			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -227,7 +227,6 @@ fn generate_host_function_implementation(
 						__function_context__: &mut dyn #crate_::sp_wasm_interface::FunctionContext,
 						args: &mut dyn Iterator<Item = #crate_::sp_wasm_interface::Value>,
 					) -> std::result::Result<Option<#crate_::sp_wasm_interface::Value>, String> {
-						#crate_::sp_tracing::enter_span!(#name);
 						#( #wasm_to_ffi_values )*
 						#( #ffi_to_host_values )*
 						#host_function_call

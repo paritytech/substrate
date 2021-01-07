@@ -2,9 +2,9 @@
 
 The Balances module provides functionality for handling accounts and balances.
 
-- [`balances::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
-- [`Module`](./struct.Module.html)
+- [`balances::Trait`](https://docs.rs/pallet-balances/latest/pallet_balances/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-balances/latest/pallet_balances/enum.Call.html)
+- [`Module`](https://docs.rs/pallet-balances/latest/pallet_balances/struct.Module.html)
 
 ## Overview
 
@@ -53,16 +53,16 @@ locks always operate over the same funds, so they "overlay" rather than "stack".
 The Balances module provides implementations for the following traits. If these traits provide the functionality
 that you need, then you can avoid coupling with the Balances module.
 
-- [`Currency`](../frame_support/traits/trait.Currency.html): Functions for dealing with a
+- [`Currency`](https://docs.rs/frame-support/latest/frame_support/traits/trait.Currency.html): Functions for dealing with a
 fungible assets system.
-- [`ReservableCurrency`](../frame_support/traits/trait.ReservableCurrency.html):
+- [`ReservableCurrency`](https://docs.rs/frame-support/latest/frame_support/traits/trait.ReservableCurrency.html):
 Functions for dealing with assets that can be reserved from an account.
-- [`LockableCurrency`](../frame_support/traits/trait.LockableCurrency.html): Functions for
+- [`LockableCurrency`](https://docs.rs/frame-support/latest/frame_support/traits/trait.LockableCurrency.html): Functions for
 dealing with accounts that allow liquidity restrictions.
-- [`Imbalance`](../frame_support/traits/trait.Imbalance.html): Functions for handling
+- [`Imbalance`](https://docs.rs/frame-support/latest/frame_support/traits/trait.Imbalance.html): Functions for handling
 imbalances between total issuance in the system and account balances. Must be used when a function
 creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-- [`IsDeadAccount`](../frame_system/trait.IsDeadAccount.html): Determiner to say whether a
+- [`IsDeadAccount`](https://docs.rs/frame-support/latest/frame_support/traits/trait.IsDeadAccount.html): Determiner to say whether a
 given account is unused.
 
 ## Interface
@@ -83,8 +83,8 @@ The Contract module uses the `Currency` trait to handle gas payment, and its typ
 ```rust
 use frame_support::traits::Currency;
 
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 ```
 
@@ -93,11 +93,11 @@ The Staking module uses the `LockableCurrency` trait to lock a stash account's f
 ```rust
 use frame_support::traits::{WithdrawReasons, LockableCurrency};
 use sp_runtime::traits::Bounded;
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 }
 
-fn update_ledger<T: Trait>(
+fn update_ledger<T: Config>(
 	controller: &T::AccountId,
 	ledger: &StakingLedger<T>
 ) {
@@ -113,10 +113,10 @@ fn update_ledger<T: Trait>(
 
 ## Genesis config
 
-The Balances module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+The Balances module depends on the [`GenesisConfig`](https://docs.rs/pallet-balances/latest/pallet_balances/struct.GenesisConfig.html).
 
 ## Assumptions
 
-* Total issued balanced of all accounts should be less than `Trait::Balance::max_value()`.
+* Total issued balanced of all accounts should be less than `Config::Balance::max_value()`.
 
 License: Apache-2.0

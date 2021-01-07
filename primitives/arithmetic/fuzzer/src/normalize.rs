@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,12 +28,14 @@ use honggfuzz::fuzz;
 use sp_arithmetic::Normalizable;
 use std::convert::TryInto;
 
+type Ty = u64;
+
 fn main() {
-	let sum_limit = u32::max_value() as u128;
-	let len_limit: usize = u32::max_value().try_into().unwrap();
+	let sum_limit = Ty::max_value() as u128;
+	let len_limit: usize = Ty::max_value().try_into().unwrap();
 
 	loop {
-		fuzz!(|data: (Vec<u32>, u32)| {
+		fuzz!(|data: (Vec<Ty>, Ty)| {
 			let (data, norm) = data;
 			if data.len() == 0 { return; }
 			let pre_sum: u128 = data.iter().map(|x| *x as u128).sum();
@@ -55,6 +57,8 @@ fn main() {
 						normalized,
 						norm,
 					);
+				} else {
+					panic!("Should have returned Ok for input = {:?}, target = {:?}", data, norm);
 				}
 			}
 		})

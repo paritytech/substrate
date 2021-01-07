@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -15,6 +15,9 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+// NOTE: should be removed with: https://github.com/paritytech/substrate/pull/7339
+#![allow(dead_code)]
 
 //! GRANDPA block finality proof generation and check.
 //!
@@ -37,7 +40,7 @@
 //! of the U) could be returned.
 
 use std::sync::Arc;
-use log::{trace, warn};
+use log::trace;
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use sc_client_api::{
@@ -180,34 +183,29 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	) -> Arc<Self> {
 		Arc::new(Self::new(backend, storage_and_proof_provider))
 	}
-
 }
 
-impl<B, Block> sc_network::config::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
+impl<B, Block> FinalityProofProvider<B, Block>
 	where
 		Block: BlockT,
 		NumberFor<Block>: BlockNumberOps,
 		B: Backend<Block> + Send + Sync + 'static,
 {
-	fn prove_finality(
+	/// Prove finality for the range (begin; end] hash. Returns None if there are no finalized blocks
+	/// unknown in the range.
+	pub fn prove_finality(
 		&self,
-		for_block: Block::Hash,
-		request: &[u8],
+		begin: Block::Hash,
+		end: Block::Hash,
+		authorities_set_id: u64,
 	) -> Result<Option<Vec<u8>>, ClientError> {
-		let request: FinalityProofRequest<Block::Hash> = Decode::decode(&mut &request[..])
-			.map_err(|e| {
-				warn!(target: "afg", "Unable to decode finality proof request: {}", e.what());
-				ClientError::Backend("Invalid finality proof request".to_string())
-			})?;
-		match request {
-			FinalityProofRequest::Original(request) => prove_finality::<_, _, GrandpaJustification<Block>>(
-				&*self.backend.blockchain(),
-				&*self.authority_provider,
-				request.authorities_set_id,
-				request.last_finalized,
-				for_block,
-			),
-		}
+		prove_finality::<_, _, GrandpaJustification<Block>>(
+			&*self.backend.blockchain(),
+			&*self.authority_provider,
+			authorities_set_id,
+			begin,
+			end,
+		)
 	}
 }
 
@@ -232,8 +230,8 @@ pub struct FinalityEffects<Header: HeaderT> {
 /// 1) the justification for the descendant block F;
 /// 2) headers sub-chain (B; F] if B != F;
 /// 3) proof of GRANDPA::authorities() if the set changes at block F.
-#[derive(Debug, PartialEq, Encode, Decode)]
-pub(crate) struct FinalityProofFragment<Header: HeaderT> {
+#[derive(Debug, PartialEq, Encode, Decode, Clone)]
+pub struct FinalityProofFragment<Header: HeaderT> {
 	/// The hash of block F for which justification is provided.
 	pub block: Header::Hash,
 	/// Justification of the block F.
@@ -265,14 +263,6 @@ struct OriginalFinalityProofRequest<H: Encode + Decode> {
 	pub authorities_set_id: u64,
 	/// Hash of the last known finalized block.
 	pub last_finalized: H,
-}
-
-/// Prepare data blob associated with finality proof request.
-pub(crate) fn make_finality_proof_request<H: Encode + Decode>(last_finalized: H, authorities_set_id: u64) -> Vec<u8> {
-	FinalityProofRequest::Original(OriginalFinalityProofRequest {
-		authorities_set_id,
-		last_finalized,
-	}).encode()
 }
 
 /// Prepare proof-of-finality for the best possible block in the range: (begin; end].

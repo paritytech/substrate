@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -153,7 +153,7 @@ fn unscored_entities_must_not_be_used_for_filling_members() {
 
 		// then
 		// the `None` candidates should not have been filled in
-		assert_eq!(ScoredPool::members(), vec![]);
+		assert!(ScoredPool::members().is_empty());
 		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), ScoredPool::members());
 	});
 }

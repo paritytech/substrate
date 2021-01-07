@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! A module that implements instrumented code cache.
 //!
@@ -27,20 +28,39 @@
 //! Thus, before executing a contract it should be reinstrument with new schedule.
 
 use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
-use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Trait};
+use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Config};
 use sp_std::prelude::*;
 use sp_runtime::traits::Hash;
+use sp_core::crypto::UncheckedFrom;
 use frame_support::StorageMap;
 
 /// Put code in the storage. The hash of code is used as a key and is returned
 /// as a result of this function.
 ///
 /// This function instruments the given code and caches it in the storage.
-pub fn save<T: Trait>(
+pub fn save<T: Config>(
 	original_code: Vec<u8>,
-	schedule: &Schedule,
-) -> Result<CodeHash<T>, &'static str> {
-	let prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
+	schedule: &Schedule<T>,
+) -> Result<CodeHash<T>, &'static str> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
+	let prefab_module = prepare::prepare_contract::<Env, T>(&original_code, schedule)?;
+	let code_hash = T::Hashing::hash(&original_code);
+
+	<CodeStorage<T>>::insert(code_hash, prefab_module);
+	<PristineCode<T>>::insert(code_hash, original_code);
+
+	Ok(code_hash)
+}
+
+/// Version of `save` to be used in runtime benchmarks.
+//
+/// This version neither checks nor instruments the passed in code. This is useful
+/// when code needs to be benchmarked without the injected instrumentation.
+#[cfg(feature = "runtime-benchmarks")]
+pub fn save_raw<T: Config>(
+	original_code: Vec<u8>,
+	schedule: &Schedule<T>,
+) -> Result<CodeHash<T>, &'static str> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
+	let prefab_module = prepare::benchmarking::prepare_contract::<T>(&original_code, schedule)?;
 	let code_hash = T::Hashing::hash(&original_code);
 
 	<CodeStorage<T>>::insert(code_hash, prefab_module);
@@ -54,10 +74,10 @@ pub fn save<T: Trait>(
 /// If the module was instrumented with a lower version of schedule than
 /// the current one given as an argument, then this function will perform
 /// re-instrumentation and update the cache in the storage.
-pub fn load<T: Trait>(
+pub fn load<T: Config>(
 	code_hash: &CodeHash<T>,
-	schedule: &Schedule,
-) -> Result<PrefabWasmModule, &'static str> {
+	schedule: &Schedule<T>,
+) -> Result<PrefabWasmModule, &'static str> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
 	let mut prefab_module =
 		<CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
 
@@ -68,7 +88,7 @@ pub fn load<T: Trait>(
 		// We need to re-instrument the code with the latest schedule here.
 		let original_code =
 			<PristineCode<T>>::get(code_hash).ok_or_else(|| "pristine code is not found")?;
-		prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
+		prefab_module = prepare::prepare_contract::<Env, T>(&original_code, schedule)?;
 		<CodeStorage<T>>::insert(&code_hash, &prefab_module);
 	}
 	Ok(prefab_module)

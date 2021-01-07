@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,31 +23,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Codec, Decode, Encode};
-use pallet_contracts_primitives::{GetStorageResult, RentProjectionResult};
-use sp_runtime::RuntimeDebug;
+use codec::Codec;
 use sp_std::vec::Vec;
-
-/// A result of execution of a contract.
-#[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-pub enum ContractExecResult {
-	/// The contract returned successfully.
-	///
-	/// There is a status code and, optionally, some data returned by the contract.
-	Success {
-		/// Flags that the contract passed along on returning to alter its exit behaviour.
-		/// Described in `pallet_contracts::exec::ReturnFlags`.
-		flags: u32,
-		/// Output data returned by the contract.
-		///
-		/// Can be empty.
-		data: Vec<u8>,
-		/// How much gas was consumed by the call.
-		gas_consumed: u64,
-	},
-	/// The contract execution either trapped or returned an error.
-	Error,
-}
+use pallet_contracts_primitives::{ContractExecResult, GetStorageResult, RentProjectionResult};
 
 sp_api::decl_runtime_apis! {
 	/// The API to interact with contracts without using executive.

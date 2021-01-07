@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -79,7 +79,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	}
 
 	fn genesis_hash(&self) -> <Block as BlockT>::Hash {
-		self.block_hash(0.into()).unwrap().unwrap()
+		self.block_hash(0u32.into()).unwrap().unwrap()
 	}
 }
 

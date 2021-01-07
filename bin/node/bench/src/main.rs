@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -79,7 +79,7 @@ fn main() {
 	let opt = Opt::from_args();
 
 	if !opt.json {
-		sc_cli::init_logger("");
+		sp_tracing::try_init_simple();
 	}
 
 	let mut import_benchmarks = Vec::new();

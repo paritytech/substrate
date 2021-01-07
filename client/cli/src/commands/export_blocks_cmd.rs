@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -85,7 +85,7 @@ impl ExportBlocksCmd {
 			info!("DB path: {}", path.display());
 		}
 
-		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
+		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1u32);
 		let to = self.to.as_ref().and_then(|t| t.parse().ok());
 
 		let binary = self.binary;

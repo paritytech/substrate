@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +31,7 @@ mod ext;
 mod testing;
 #[cfg(feature = "std")]
 mod basic;
-mod overlayed_changes;
+pub(crate) mod overlayed_changes;
 #[cfg(feature = "std")]
 mod proving_backend;
 mod trie_backend;
@@ -907,7 +907,7 @@ mod tests {
 			_method: &str,
 			_data: &[u8],
 			use_native: bool,
-			_native_call: Option<NC>,
+			native_call: Option<NC>,
 		) -> (CallResult<R, Self::Error>, bool) {
 			if self.change_changes_trie_config {
 				ext.place_storage(
@@ -922,8 +922,15 @@ mod tests {
 			}
 
 			let using_native = use_native && self.native_available;
-			match (using_native, self.native_succeeds, self.fallback_succeeds) {
-				(true, true, _) | (false, _, true) => {
+			match (using_native, self.native_succeeds, self.fallback_succeeds, native_call) {
+				(true, true, _, Some(call)) => {
+					let res = sp_externalities::set_and_run_with_externalities(ext, || call());
+					(
+						res.map(NativeOrEncoded::Native).map_err(|_| 0),
+						true
+					)
+				},
+				(true, true, _, None) | (false, _, true, None) => {
 					(
 						Ok(
 							NativeOrEncoded::Encoded(
@@ -1141,6 +1148,86 @@ mod tests {
 	}
 
 	#[test]
+	fn limited_child_kill_works() {
+		let child_info = ChildInfo::new_default(b"sub1");
+		let initial: HashMap<_, BTreeMap<_, _>> = map![
+			Some(child_info.clone()) => map![
+				b"a".to_vec() => b"0".to_vec(),
+				b"b".to_vec() => b"1".to_vec(),
+				b"c".to_vec() => b"2".to_vec(),
+				b"d".to_vec() => b"3".to_vec()
+			],
+		];
+		let backend = InMemoryBackend::<BlakeTwo256>::from(initial);
+
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_child_storage(&child_info, b"1".to_vec(), Some(b"1312".to_vec()));
+		overlay.set_child_storage(&child_info, b"2".to_vec(), Some(b"1312".to_vec()));
+		overlay.set_child_storage(&child_info, b"3".to_vec(), Some(b"1312".to_vec()));
+		overlay.set_child_storage(&child_info, b"4".to_vec(), Some(b"1312".to_vec()));
+
+		{
+			let mut offchain_overlay = Default::default();
+			let mut cache = StorageTransactionCache::default();
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				&backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			assert_eq!(ext.kill_child_storage(&child_info, Some(2)), false);
+		}
+
+		assert_eq!(
+			overlay.children()
+				.flat_map(|(iter, _child_info)| iter)
+				.map(|(k, v)| (k.clone(), v.value().clone()))
+				.collect::<BTreeMap<_, _>>(),
+			map![
+				b"1".to_vec() => None.into(),
+				b"2".to_vec() => None.into(),
+				b"3".to_vec() => None.into(),
+				b"4".to_vec() => None.into(),
+				b"a".to_vec() => None.into(),
+				b"b".to_vec() => None.into(),
+			],
+		);
+	}
+
+	#[test]
+	fn limited_child_kill_off_by_one_works() {
+		let child_info = ChildInfo::new_default(b"sub1");
+		let initial: HashMap<_, BTreeMap<_, _>> = map![
+			Some(child_info.clone()) => map![
+				b"a".to_vec() => b"0".to_vec(),
+				b"b".to_vec() => b"1".to_vec(),
+				b"c".to_vec() => b"2".to_vec(),
+				b"d".to_vec() => b"3".to_vec()
+			],
+		];
+		let backend = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let mut overlay = OverlayedChanges::default();
+		let mut offchain_overlay = Default::default();
+		let mut cache = StorageTransactionCache::default();
+		let mut ext = Ext::new(
+			&mut overlay,
+			&mut offchain_overlay,
+			&mut cache,
+			&backend,
+			changes_trie::disabled_state::<_, u64>(),
+			None,
+		);
+		assert_eq!(ext.kill_child_storage(&child_info, Some(0)), false);
+		assert_eq!(ext.kill_child_storage(&child_info, Some(1)), false);
+		assert_eq!(ext.kill_child_storage(&child_info, Some(2)), false);
+		assert_eq!(ext.kill_child_storage(&child_info, Some(3)), false);
+		assert_eq!(ext.kill_child_storage(&child_info, Some(4)), true);
+		assert_eq!(ext.kill_child_storage(&child_info, Some(5)), true);
+	}
+
+	#[test]
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
@@ -1172,6 +1259,7 @@ mod tests {
 		);
 		ext.kill_child_storage(
 			child_info,
+			None,
 		);
 		assert_eq!(
 			ext.child_storage(
@@ -1472,5 +1560,52 @@ mod tests {
 		}
 		overlay.commit_transaction().unwrap();
 		assert_eq!(overlay.storage(b"ccc"), Some(None));
+	}
+
+	#[test]
+	fn runtime_registered_extensions_are_removed_after_execution() {
+		use sp_externalities::ExternalitiesExt;
+		sp_externalities::decl_extension! {
+			struct DummyExt(u32);
+		}
+
+		let backend = trie_backend::tests::test_trie();
+		let mut overlayed_changes = Default::default();
+		let mut offchain_overlayed_changes = Default::default();
+		let wasm_code = RuntimeCode::empty();
+
+		let mut state_machine = StateMachine::new(
+			&backend,
+			changes_trie::disabled_state::<_, u64>(),
+			&mut overlayed_changes,
+			&mut offchain_overlayed_changes,
+			&DummyCodeExecutor {
+				change_changes_trie_config: false,
+				native_available: true,
+				native_succeeds: true,
+				fallback_succeeds: false,
+			},
+			"test",
+			&[],
+			Default::default(),
+			&wasm_code,
+			TaskExecutor::new(),
+		);
+
+		let run_state_machine = |state_machine: &mut StateMachine<_, _, _, _>| {
+			state_machine.execute_using_consensus_failure_handler::<fn(_, _) -> _, _, _>(
+				ExecutionManager::NativeWhenPossible,
+				Some(|| {
+					sp_externalities::with_externalities(|mut ext| {
+						ext.register_extension(DummyExt(2)).unwrap();
+					}).unwrap();
+
+					Ok(())
+				}),
+			).unwrap();
+		};
+
+		run_state_machine(&mut state_machine);
+		run_state_machine(&mut state_machine);
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,7 +53,7 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Convert an arbitrary block ID into a block hash.
 	fn block_number_from_id(&self, id: &BlockId<Block>) -> Result<Option<NumberFor<Block>>> {
 		match *id {
-			BlockId::Hash(_) => Ok(self.header(*id)?.map(|h| h.number().clone())),
+			BlockId::Hash(h) => self.number(h),
 			BlockId::Number(n) => Ok(Some(n)),
 		}
 	}
@@ -172,7 +172,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 			if let Some(max_number) = maybe_max_number {
 				loop {
 					let current_header = self.header(BlockId::Hash(current_hash.clone()))?
-						.ok_or_else(|| Error::from(format!("failed to get header for hash {}", current_hash)))?;
+						.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 					if current_header.number() <= &max_number {
 						best_hash = current_header.hash();
@@ -191,7 +191,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 				}
 
 				let current_header = self.header(BlockId::Hash(current_hash.clone()))?
-					.ok_or_else(|| Error::from(format!("failed to get header for hash {}", current_hash)))?;
+					.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 				// stop search in this chain once we go below the target's block number
 				if current_header.number() < target_header.number() {

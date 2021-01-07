@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,7 +46,8 @@ use std::{sync::Arc, format};
 
 /// An error that can occur within the inherent data system.
 #[cfg(feature = "std")]
-#[derive(Debug, Encode, Decode, derive_more::Display)]
+#[derive(Debug, Encode, Decode, thiserror::Error)]
+#[error("Inherents: {0}")]
 pub struct Error(String);
 
 #[cfg(feature = "std")]

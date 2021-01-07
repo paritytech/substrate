@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,6 @@
 //! or client/alloc to be used with any code that depends on the runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-
 
 #![cfg_attr(feature = "std",
    doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
@@ -64,6 +63,30 @@ include!("../with_std.rs");
 
 #[cfg(not(feature = "std"))]
 include!("../without_std.rs");
+
+
+/// A target for `core::write!` macro - constructs a string in memory.
+#[derive(Default)]
+pub struct Writer(vec::Vec<u8>);
+
+impl fmt::Write for Writer {
+	fn write_str(&mut self, s: &str) -> fmt::Result {
+		self.0.extend(s.as_bytes());
+		Ok(())
+	}
+}
+
+impl Writer {
+	/// Access the content of this `Writer` e.g. for printout
+	pub fn inner(&self) -> &vec::Vec<u8> {
+		&self.0
+	}
+
+	/// Convert into the content of this `Writer`
+	pub fn into_inner(self) -> vec::Vec<u8> {
+		self.0
+	}
+}
 
 /// Prelude of common useful imports.
 ///

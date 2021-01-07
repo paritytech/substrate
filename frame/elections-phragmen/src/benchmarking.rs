@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Elections-Phragmen pallet benchmarking.
 
@@ -28,44 +29,53 @@ use crate::Module as Elections;
 
 const BALANCE_FACTOR: u32 = 250;
 const MAX_VOTERS: u32 = 500;
-const MAX_CANDIDATES: u32 = 100;
+const MAX_CANDIDATES: u32 = 200;
 
-type Lookup<T> = <<T as frame_system::Trait>::Lookup as StaticLookup>::Source;
+type Lookup<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
+macro_rules! whitelist {
+	($acc:ident) => {
+		frame_benchmarking::benchmarking::add_to_whitelist(
+			frame_system::Account::<T>::hashed_key_for(&$acc).into()
+		);
+	};
+}
 
 /// grab new account with infinite balance.
-fn endowed_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
+fn endowed_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let account: T::AccountId = account(name, index, 0);
 	let amount = default_stake::<T>(BALANCE_FACTOR);
 	let _ = T::Currency::make_free_balance_be(&account, amount);
 	// important to increase the total issuance since T::CurrencyToVote will need it to be sane for
 	// phragmen to work.
 	T::Currency::issue(amount);
+
 	account
 }
 
 /// Account to lookup type of system trait.
-fn as_lookup<T: Trait>(account: T::AccountId) -> Lookup<T> {
+fn as_lookup<T: Config>(account: T::AccountId) -> Lookup<T> {
 	T::Lookup::unlookup(account)
 }
 
 /// Get a reasonable amount of stake based on the execution trait's configuration
-fn default_stake<T: Trait>(factor: u32) -> BalanceOf<T> {
+fn default_stake<T: Config>(factor: u32) -> BalanceOf<T> {
 	let factor = BalanceOf::<T>::from(factor);
 	T::Currency::minimum_balance() * factor
 }
 
 /// Get the current number of candidates.
-fn candidate_count<T: Trait>() -> u32 {
+fn candidate_count<T: Config>() -> u32 {
 	<Candidates<T>>::decode_len().unwrap_or(0usize) as u32
 }
 
 /// Get the number of votes of a voter.
-fn vote_count_of<T: Trait>(who: &T::AccountId) -> u32 {
+fn vote_count_of<T: Config>(who: &T::AccountId) -> u32 {
 	<Voting<T>>::get(who).1.len() as u32
 }
 
 /// A `DefunctVoter` struct with correct value
-fn defunct_for<T: Trait>(who: T::AccountId) -> DefunctVoter<Lookup<T>> {
+fn defunct_for<T: Config>(who: T::AccountId) -> DefunctVoter<Lookup<T>> {
 	DefunctVoter {
 		who: as_lookup::<T>(who.clone()),
 		candidate_count: candidate_count::<T>(),
@@ -74,7 +84,7 @@ fn defunct_for<T: Trait>(who: T::AccountId) -> DefunctVoter<Lookup<T>> {
 }
 
 /// Add `c` new candidates.
-fn submit_candidates<T: Trait>(c: u32, prefix: &'static str)
+fn submit_candidates<T: Config>(c: u32, prefix: &'static str)
 	-> Result<Vec<T::AccountId>, &'static str>
 {
 	(0..c).map(|i| {
@@ -88,7 +98,7 @@ fn submit_candidates<T: Trait>(c: u32, prefix: &'static str)
 }
 
 /// Add `c` new candidates with self vote.
-fn submit_candidates_with_self_vote<T: Trait>(c: u32, prefix: &'static str)
+fn submit_candidates_with_self_vote<T: Config>(c: u32, prefix: &'static str)
 	-> Result<Vec<T::AccountId>, &'static str>
 {
 	let candidates = submit_candidates::<T>(c, prefix)?;
@@ -101,16 +111,15 @@ fn submit_candidates_with_self_vote<T: Trait>(c: u32, prefix: &'static str)
 
 
 /// Submit one voter.
-fn submit_voter<T: Trait>(caller: T::AccountId, votes: Vec<T::AccountId>, stake: BalanceOf<T>)
-	-> Result<(), &'static str>
+fn submit_voter<T: Config>(caller: T::AccountId, votes: Vec<T::AccountId>, stake: BalanceOf<T>)
+	-> Result<(), sp_runtime::DispatchError>
 {
 	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
-		.map_err(|_| "failed to submit vote")
 }
 
 /// create `num_voter` voters who randomly vote for at most `votes` of `all_candidates` if
 /// available.
-fn distribute_voters<T: Trait>(mut all_candidates: Vec<T::AccountId>, num_voters: u32, votes: usize)
+fn distribute_voters<T: Config>(mut all_candidates: Vec<T::AccountId>, num_voters: u32, votes: usize)
 	-> Result<(), &'static str>
 {
 	let stake = default_stake::<T>(BALANCE_FACTOR);
@@ -130,8 +139,8 @@ fn distribute_voters<T: Trait>(mut all_candidates: Vec<T::AccountId>, num_voters
 
 /// Fill the seats of members and runners-up up until `m`. Note that this might include either only
 /// members, or members and runners-up.
-fn fill_seats_up_to<T: Trait>(m: u32) -> Result<Vec<T::AccountId>, &'static str> {
-	let candidates = submit_candidates_with_self_vote::<T>(m, "fill_seats_up_to")?;
+fn fill_seats_up_to<T: Config>(m: u32) -> Result<Vec<T::AccountId>, &'static str> {
+	let _ = submit_candidates_with_self_vote::<T>(m, "fill_seats_up_to")?;
 	assert_eq!(<Elections<T>>::candidates().len() as u32, m, "wrong number of candidates.");
 	<Elections<T>>::do_phragmen();
 	assert_eq!(<Elections<T>>::candidates().len(), 0, "some candidates remaining.");
@@ -140,11 +149,17 @@ fn fill_seats_up_to<T: Trait>(m: u32) -> Result<Vec<T::AccountId>, &'static str>
 		m as usize,
 		"wrong number of members and runners-up",
 	);
-	Ok(candidates)
+	Ok(
+		<Elections<T>>::members()
+			.into_iter()
+			.map(|(x, _)| x)
+			.chain(<Elections<T>>::runners_up().into_iter().map(|(x, _)| x))
+			.collect()
+	)
 }
 
 /// removes all the storage items to reverse any genesis state.
-fn clean<T: Trait>() {
+fn clean<T: Config>() {
 	<Members<T>>::kill();
 	<Candidates<T>>::kill();
 	<RunnersUp<T>>::kill();
@@ -152,50 +167,44 @@ fn clean<T: Trait>() {
 }
 
 benchmarks! {
-	_ {
-		// User account seed
-		let u in 0 .. 1000 => ();
-	}
-
 	// -- Signed ones
 	vote {
-		let u in ...;
-		// we fix the number of voted candidates to max
-		let v = MAXIMUM_VOTE;
+		let v in 1 .. (MAXIMUM_VOTE as u32);
 		clean::<T>();
 
 		// create a bunch of candidates.
-		let all_candidates = submit_candidates::<T>(MAXIMUM_VOTE as u32, "candidates")?;
+		let all_candidates = submit_candidates::<T>(v, "candidates")?;
 
-		let caller = endowed_account::<T>("caller", u);
+		let caller = endowed_account::<T>("caller", 0);
 		let stake = default_stake::<T>(BALANCE_FACTOR);
 
 		// vote for all of them.
-		let votes = all_candidates.into_iter().take(v).collect();
+		let votes = all_candidates;
 
+		whitelist!(caller);
 	}: _(RawOrigin::Signed(caller), votes, stake)
 
 	vote_update {
-		let u in ...;
-		// we fix the number of voted candidates to max
-		let v = MAXIMUM_VOTE;
+		let v in 1 .. (MAXIMUM_VOTE as u32);
 		clean::<T>();
 
 		// create a bunch of candidates.
-		let all_candidates = submit_candidates::<T>(MAXIMUM_VOTE as u32, "candidates")?;
+		let all_candidates = submit_candidates::<T>(v, "candidates")?;
 
-		let caller = endowed_account::<T>("caller", u);
+		let caller = endowed_account::<T>("caller", 0);
 		let stake = default_stake::<T>(BALANCE_FACTOR);
 
 		// original votes.
-		let mut votes = all_candidates.into_iter().take(v).collect::<Vec<T::AccountId>>();
+		let mut votes = all_candidates;
 		submit_voter::<T>(caller.clone(), votes.clone(), stake)?;
+
 		// new votes.
 		votes.rotate_left(1);
+
+		whitelist!(caller);
 	}: vote(RawOrigin::Signed(caller), votes, stake)
 
 	remove_voter {
-		let u in ...;
 		// we fix the number of voted candidates to max
 		let v = MAXIMUM_VOTE as u32;
 		clean::<T>();
@@ -203,11 +212,12 @@ benchmarks! {
 		// create a bunch of candidates.
 		let all_candidates = submit_candidates::<T>(v, "candidates")?;
 
-		let caller = endowed_account::<T>("caller", u);
+		let caller = endowed_account::<T>("caller", 0);
 
 		let stake = default_stake::<T>(BALANCE_FACTOR);
 		submit_voter::<T>(caller.clone(), all_candidates, stake)?;
 
+		whitelist!(caller);
 	}: _(RawOrigin::Signed(caller))
 
 	report_defunct_voter_correct {
@@ -217,11 +227,11 @@ benchmarks! {
 		// number of candidates that the reported voter voted for. The worse case of search here is
 		// basically `c * v`.
 		let v in 1 .. (MAXIMUM_VOTE as u32);
-		// we fix the number of members to when members and runners-up to the desired. We'll be in
+		// we fix the number of members to the number of desired members and runners-up. We'll be in
 		// this state almost always.
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
-		clean::<T>();
 
+		clean::<T>();
 		let stake = default_stake::<T>(BALANCE_FACTOR);
 
 		// create m members and runners combined.
@@ -231,8 +241,7 @@ benchmarks! {
 		let bailing_candidates = submit_candidates::<T>(v, "bailing_candidates")?;
 		let all_candidates = submit_candidates::<T>(c, "all_candidates")?;
 
-		// account 1 is the reporter and it doesn't matter how many it votes. But it has to be a
-		// voter.
+		// account 1 is the reporter and must be whitelisted, and a voter.
 		let account_1 = endowed_account::<T>("caller", 0);
 		submit_voter::<T>(
 			account_1.clone(),
@@ -248,7 +257,9 @@ benchmarks! {
 			stake,
 		)?;
 
-		// all the bailers go away.
+		// all the bailers go away. NOTE: we can simplify this. There's no need to create all these
+		// candidates and remove them. The defunct voter can just vote for random accounts as long
+		// as there are enough members (potential candidates).
 		bailing_candidates.into_iter().for_each(|b| {
 			let count = candidate_count::<T>();
 			assert!(<Elections<T>>::renounce_candidacy(
@@ -256,10 +267,13 @@ benchmarks! {
 				Renouncing::Candidate(count),
 			).is_ok());
 		});
-		let defunct = defunct_for::<T>(account_2.clone());
-	}: report_defunct_voter(RawOrigin::Signed(account_1.clone()), defunct)
+
+		let defunct_info = defunct_for::<T>(account_2.clone());
+		whitelist!(account_1);
+
+		assert!(<Elections<T>>::is_voter(&account_2));
+	}: report_defunct_voter(RawOrigin::Signed(account_1.clone()), defunct_info)
 	verify {
-		assert!(<Elections<T>>::is_voter(&account_1));
 		assert!(!<Elections<T>>::is_voter(&account_2));
 		#[cfg(test)]
 		{
@@ -276,7 +290,7 @@ benchmarks! {
 		// number of candidates that the reported voter voted for. The worse case of search here is
 		// basically `c * v`.
 		let v in 1 .. (MAXIMUM_VOTE as u32);
-		// we fix the number of members to when members and runners-up to the desired. We'll be in
+		// we fix the number of members to the number of desired members and runners-up. We'll be in
 		// this state almost always.
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 
@@ -289,7 +303,7 @@ benchmarks! {
 		// create a bunch of candidates as well.
 		let all_candidates = submit_candidates::<T>(c, "candidates")?;
 
-		// account 1 is the reporter and it doesn't matter how many it votes.
+		// account 1 is the reporter and need to be whitelisted, and a voter.
 		let account_1 = endowed_account::<T>("caller", 0);
 		submit_voter::<T>(
 			account_1.clone(),
@@ -299,8 +313,9 @@ benchmarks! {
 
 		// account 2 votes for a bunch of crap, and finally a correct candidate.
 		let account_2 = endowed_account::<T>("caller_2", 1);
-		let mut invalid: Vec<T::AccountId> =
-			(0..(v-1)).map(|seed| account::<T::AccountId>("invalid", 0, seed).clone()).collect();
+		let mut invalid: Vec<T::AccountId> = (0..(v-1))
+			.map(|seed| account::<T::AccountId>("invalid", 0, seed).clone())
+			.collect();
 		invalid.push(all_candidates.last().unwrap().clone());
 		submit_voter::<T>(
 			account_2.clone(),
@@ -308,11 +323,11 @@ benchmarks! {
 			stake,
 		)?;
 
-		let defunct = defunct_for::<T>(account_2.clone());
-		// no one bails out. account_1 is slashed and removed as voter now.
-	}: report_defunct_voter(RawOrigin::Signed(account_1.clone()), defunct)
+		let defunct_info = defunct_for::<T>(account_2.clone());
+		whitelist!(account_1);
+	}: report_defunct_voter(RawOrigin::Signed(account_1.clone()), defunct_info)
 	verify {
-		assert!(!<Elections<T>>::is_voter(&account_1));
+		// account 2 is still a voter.
 		assert!(<Elections<T>>::is_voter(&account_2));
 		#[cfg(test)]
 		{
@@ -325,7 +340,7 @@ benchmarks! {
 	submit_candidacy {
 		// number of already existing candidates.
 		let c in 1 .. MAX_CANDIDATES;
-		// we fix the number of members to when members and runners-up to the desired. We'll be in
+		// we fix the number of members to the number of desired members and runners-up. We'll be in
 		// this state almost always.
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 
@@ -340,6 +355,7 @@ benchmarks! {
 
 		// we assume worse case that: extrinsic is successful and candidate is not duplicate.
 		let candidate_account = endowed_account::<T>("caller", 0);
+		whitelist!(candidate_account);
 	}: _(RawOrigin::Signed(candidate_account.clone()), candidate_count::<T>())
 	verify {
 		#[cfg(test)]
@@ -355,7 +371,7 @@ benchmarks! {
 		// limited by the runtime bound, nonetheless we fill them by `m`.
 		// number of already existing candidates.
 		let c in 1 .. MAX_CANDIDATES;
-		// we fix the number of members to when members and runners-up to the desired. We'll be in
+		// we fix the number of members to the number of desired members and runners-up. We'll be in
 		// this state almost always.
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 
@@ -367,6 +383,7 @@ benchmarks! {
 
 		let bailing = all_candidates[0].clone(); // Should be ("caller", 0)
 		let count = candidate_count::<T>();
+		whitelist!(bailing);
 	}: renounce_candidacy(RawOrigin::Signed(bailing), Renouncing::Candidate(count))
 	verify {
 		#[cfg(test)]
@@ -377,11 +394,10 @@ benchmarks! {
 		}
 	}
 
-	renounce_candidacy_member_runner_up {
+	renounce_candidacy_members {
 		// removing members and runners will be cheaper than a candidate.
 		// we fix the number of members to when members and runners-up to the desired. We'll be in
 		// this state almost always.
-		let u in ...;
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		clean::<T>();
 
@@ -389,14 +405,34 @@ benchmarks! {
 		let members_and_runners_up = fill_seats_up_to::<T>(m)?;
 
 		let bailing = members_and_runners_up[0].clone();
-		let renouncing = if <Elections<T>>::is_member(&bailing) {
-			Renouncing::Member
-		} else if <Elections<T>>::is_runner_up(&bailing) {
-			Renouncing::RunnerUp
-		} else {
-			panic!("Bailing must be a member or runner-up for this bench to be sane.");
-		};
-	}: renounce_candidacy(RawOrigin::Signed(bailing.clone()), renouncing)
+		assert!(<Elections<T>>::is_member(&bailing));
+
+		whitelist!(bailing);
+	}: renounce_candidacy(RawOrigin::Signed(bailing.clone()), Renouncing::Member)
+	verify {
+		#[cfg(test)]
+		{
+			// reset members in between benchmark tests.
+			use crate::tests::MEMBERS;
+			MEMBERS.with(|m| *m.borrow_mut() = vec![]);
+		}
+	}
+
+	renounce_candidacy_runners_up {
+		// removing members and runners will be cheaper than a candidate.
+		// we fix the number of members to when members and runners-up to the desired. We'll be in
+		// this state almost always.
+		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
+		clean::<T>();
+
+		// create m members and runners combined.
+		let members_and_runners_up = fill_seats_up_to::<T>(m)?;
+
+		let bailing = members_and_runners_up[T::DesiredMembers::get() as usize + 1].clone();
+		assert!(<Elections<T>>::is_runner_up(&bailing));
+
+		whitelist!(bailing);
+	}: renounce_candidacy(RawOrigin::Signed(bailing.clone()), Renouncing::RunnerUp)
 	verify {
 		#[cfg(test)]
 		{
@@ -407,6 +443,7 @@ benchmarks! {
 	}
 
 	// -- Root ones
+	#[extra] // this calls into phragmen and consumes a full block for now.
 	remove_member_without_replacement {
 		// worse case is when we remove a member and we have no runner as a replacement. This
 		// triggers phragmen again. The only parameter is how many candidates will compete for the
@@ -440,7 +477,6 @@ benchmarks! {
 	remove_member_with_replacement {
 		// easy case. We have a runner up. Nothing will have that much of an impact. m will be
 		// number of members and runners. There is always at least one runner.
-		let u in ...;
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		clean::<T>();
 
@@ -461,7 +497,6 @@ benchmarks! {
 	remove_member_wrong_refund {
 		// The root call by mistake indicated that this will have no replacement, while it has!
 		// this has now consumed a lot of weight and need to refund.
-		let u in ...;
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		clean::<T>();
 
@@ -484,6 +519,7 @@ benchmarks! {
 		}
 	}
 
+	#[extra]
 	on_initialize {
 		// if n % TermDuration is zero, then we run phragmen. The weight function must and should
 		// check this as it is cheap to do so. TermDuration is not a storage item, it is a constant
@@ -514,6 +550,7 @@ benchmarks! {
 		}
 	}
 
+	#[extra]
 	phragmen {
 		// This is just to focus on phragmen in the context of this module. We always select 20
 		// members, this is hard-coded in the runtime and cannot be trivially changed at this stage.
@@ -578,7 +615,11 @@ mod tests {
 		});
 
 		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
-			assert_ok!(test_benchmark_renounce_candidacy_member_runner_up::<Test>());
+			assert_ok!(test_benchmark_renounce_candidacy_runners_up::<Test>());
+		});
+
+		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {
+			assert_ok!(test_benchmark_renounce_candidacy_members::<Test>());
 		});
 
 		ExtBuilder::default().desired_members(13).desired_runners_up(7).build_and_execute(|| {

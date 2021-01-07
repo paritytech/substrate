@@ -9,7 +9,7 @@ jobs:
     steps:
       - name: Notify devops
         if: github.event.label.name == 'A1-needsburnin'
-        uses: s3krit/matrix-message-action@v0.0.2
+        uses: s3krit/matrix-message-action@v0.0.3
         with:
           room_id: ${{ secrets.POLKADOT_DEVOPS_MATRIX_ROOM_ID }}
           access_token: ${{ secrets.POLKADOT_DEVOPS_MATRIX_ACCESS_TOKEN }}

@@ -1,7 +1,7 @@
 # Sudo Module
 
-- [`sudo::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
+- [`sudo::Trait`](https://docs.rs/pallet-sudo/latest/pallet_sudo/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-sudo/latest/pallet_sudo/enum.Call.html)
 
 ## Overview
 
@@ -38,10 +38,10 @@ This is an example of a module that exposes a privileged function:
 use frame_support::{decl_module, dispatch};
 use frame_system::ensure_root;
 
-pub trait Trait: frame_system::Trait {}
+pub trait Config: frame_system::Config {}
 
 decl_module! {
-    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+    pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		#[weight = 0]
         pub fn privileged_function(origin) -> dispatch::DispatchResult {
             ensure_root(origin)?;
@@ -56,15 +56,15 @@ decl_module! {
 
 ## Genesis Config
 
-The Sudo module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+The Sudo module depends on the [`GenesisConfig`](https://docs.rs/pallet-sudo/latest/pallet_sudo/struct.GenesisConfig.html).
 You need to set an initial superuser account as the sudo `key`.
 
 ## Related Modules
 
-* [Democracy](../pallet_democracy/index.html)
+* [Democracy](https://docs.rs/pallet-democracy/latest/pallet_democracy/)
 
 [`Call`]: ./enum.Call.html
-[`Trait`]: ./trait.Trait.html
+[`Config`]: ./trait.Config.html
 [`Origin`]: https://docs.substrate.dev/docs/substrate-types
 
 License: Apache-2.0

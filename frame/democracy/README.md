@@ -1,7 +1,7 @@
 # Democracy Pallet
 
-- [`democracy::Trait`](./trait.Trait.html)
-- [`Call`](./enum.Call.html)
+- [`democracy::Trait`](https://docs.rs/pallet-democracy/latest/pallet_democracy/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-democracy/latest/pallet_democracy/enum.Call.html)
 
 ## Overview
 

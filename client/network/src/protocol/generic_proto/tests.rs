@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #![cfg(test)]
 
@@ -23,7 +25,6 @@ use libp2p::{PeerId, Multiaddr, Transport};
 use libp2p::core::{
 	connection::{ConnectionId, ListenerId},
 	ConnectedPoint,
-	muxing,
 	transport::MemoryTransport,
 	upgrade
 };
@@ -55,10 +56,8 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		let transport = MemoryTransport
 			.upgrade(upgrade::Version::V1)
 			.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-			.multiplex(yamux::Config::default())
-			.map(|(peer, muxer), _| (peer, muxing::StreamMuxerBox::new(muxer)))
+			.multiplex(yamux::YamuxConfig::default())
 			.timeout(Duration::from_secs(20))
-			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 			.boxed();
 
 		let (peerset, _) = sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,19 +17,20 @@
 
 //! Helpers for offchain worker election.
 
-use codec::Decode;
 use crate::{
-	Call, CompactAssignments, Module, NominatorIndex, OffchainAccuracy, Trait, ValidatorIndex,
-	ElectionSize,
+	Call, CompactAssignments, ElectionSize, Module, NominatorIndex, Nominators, OffchainAccuracy,
+	Config, ValidatorIndex, WeightInfo,
 };
+use codec::Decode;
+use frame_support::{traits::Get, weights::Weight, IterableStorageMap};
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
-	build_support_map, evaluate_support, reduce, Assignment, ExtendedBalance, ElectionResult,
-	ElectionScore, balance_solution,
+	build_support_map, evaluate_support, reduce, Assignment, ElectionResult, ElectionScore,
+	ExtendedBalance,
 };
-use sp_runtime::offchain::storage::StorageValueRef;
-use sp_runtime::{PerThing, RuntimeDebug, traits::{TrailingZeroInput, Zero}};
-use frame_support::traits::Get;
+use sp_runtime::{
+	offchain::storage::StorageValueRef, traits::TrailingZeroInput, PerThing, RuntimeDebug,
+};
 use sp_std::{convert::TryInto, prelude::*};
 
 /// Error types related to the offchain election machinery.
@@ -46,6 +47,8 @@ pub enum OffchainElectionError {
 	InternalElectionError(sp_npos_elections::Error),
 	/// One of the computed winners is invalid.
 	InvalidWinner,
+	/// A nominator is not available in the snapshot.
+	NominatorSnapshotCorrupt,
 }
 
 impl From<sp_npos_elections::Error> for OffchainElectionError {
@@ -68,7 +71,7 @@ pub(crate) const DEFAULT_LONGEVITY: u64 = 25;
 /// don't run twice within a window of length [`OFFCHAIN_REPEAT`].
 ///
 /// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
-pub(crate) fn set_check_offchain_execution_status<T: Trait>(
+pub(crate) fn set_check_offchain_execution_status<T: Config>(
 	now: T::BlockNumber,
 ) -> Result<(), &'static str> {
 	let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
@@ -105,16 +108,29 @@ pub(crate) fn set_check_offchain_execution_status<T: Trait>(
 /// The internal logic of the offchain worker of this module. This runs the phragmen election,
 /// compacts and reduces the solution, computes the score and submits it back to the chain as an
 /// unsigned transaction, without any signature.
-pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElectionError> {
+pub(crate) fn compute_offchain_election<T: Config>() -> Result<(), OffchainElectionError> {
+	let iters = get_balancing_iters::<T>();
 	// compute raw solution. Note that we use `OffchainAccuracy`.
 	let ElectionResult {
 		winners,
 		assignments,
-	} = <Module<T>>::do_phragmen::<OffchainAccuracy>()
+	} = <Module<T>>::do_phragmen::<OffchainAccuracy>(iters)
 		.ok_or(OffchainElectionError::ElectionFailed)?;
 
 	// process and prepare it for submission.
-	let (winners, compact, score, size) = prepare_submission::<T>(assignments, winners, true)?;
+	let (winners, compact, score, size) = prepare_submission::<T>(
+		assignments,
+		winners,
+		true,
+		T::OffchainSolutionWeightLimit::get(),
+	)?;
+
+	crate::log!(
+		info,
+		"💸 prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
+		iters,
+		score,
+	);
 
 	// defensive-only: current era can never be none except genesis.
 	let current_era = <Module<T>>::current_era().unwrap_or_default();
@@ -132,20 +148,191 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
+/// Get a random number of iterations to run the balancing.
+///
+/// Uses the offchain seed to generate a random number.
+pub fn get_balancing_iters<T: Config>() -> usize {
+	match T::MaxIterations::get() {
+		0 => 0,
+		max @ _ => {
+			let seed = sp_io::offchain::random_seed();
+			let random = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
+				.expect("input is padded with zeroes; qed") % max.saturating_add(1);
+			random as usize
+		}
+	}
+}
+
+/// Find the maximum `len` that a compact can have in order to fit into the block weight.
+///
+/// This only returns a value between zero and `size.nominators`.
+pub fn maximum_compact_len<W: crate::WeightInfo>(
+	winners_len: u32,
+	size: ElectionSize,
+	max_weight: Weight,
+) -> u32 {
+	use sp_std::cmp::Ordering;
+
+	if size.nominators < 1 {
+		return size.nominators;
+	}
+
+	let max_voters = size.nominators.max(1);
+	let mut voters = max_voters;
+
+	// helper closures.
+	let weight_with = |voters: u32| -> Weight {
+		W::submit_solution_better(
+			size.validators.into(),
+			size.nominators.into(),
+			voters,
+			winners_len,
+		)
+	};
+
+	let next_voters = |current_weight: Weight, voters: u32, step: u32| -> Result<u32, ()> {
+		match current_weight.cmp(&max_weight) {
+			Ordering::Less => {
+				let next_voters = voters.checked_add(step);
+				match next_voters {
+					Some(voters) if voters < max_voters => Ok(voters),
+					_ => Err(()),
+				}
+			},
+			Ordering::Greater => voters.checked_sub(step).ok_or(()),
+			Ordering::Equal => Ok(voters),
+		}
+	};
+
+	// First binary-search the right amount of voters
+	let mut step = voters / 2;
+	let mut current_weight = weight_with(voters);
+	while step > 0 {
+		match next_voters(current_weight, voters, step) {
+			// proceed with the binary search
+			Ok(next) if next != voters => {
+				voters = next;
+			},
+			// we are out of bounds, break out of the loop.
+			Err(()) => {
+				break;
+			},
+			// we found the right value - early exit the function.
+			Ok(next) => return next
+		}
+		step = step / 2;
+		current_weight = weight_with(voters);
+	}
+
+
+	// Time to finish.
+	// We might have reduced less than expected due to rounding error. Increase one last time if we
+	// have any room left, the reduce until we are sure we are below limit.
+	while voters + 1 <= max_voters && weight_with(voters + 1) < max_weight {
+		voters += 1;
+	}
+	while voters.checked_sub(1).is_some() && weight_with(voters) > max_weight {
+		voters -= 1;
+	}
+
+	debug_assert!(
+		weight_with(voters.min(size.nominators)) <= max_weight,
+		"weight_with({}) <= {}", voters.min(size.nominators), max_weight,
+	);
+	voters.min(size.nominators)
+}
+
+/// Greedily reduce the size of the a solution to fit into the block, w.r.t. weight.
+///
+/// The weight of the solution is foremost a function of the number of voters (i.e.
+/// `compact.len()`). Aside from this, the other components of the weight are invariant. The number
+/// of winners shall not be changed (otherwise the solution is invalid) and the `ElectionSize` is
+/// merely a representation of the total number of stakers.
+///
+/// Thus, we reside to stripping away some voters. This means only changing the `compact` struct.
+///
+/// Note that the solution is already computed, and the winners are elected based on the merit of
+/// teh entire stake in the system. Nonetheless, some of the voters will be removed further down the
+/// line.
+///
+/// Indeed, the score must be computed **after** this step. If this step reduces the score too much,
+/// then the solution will be discarded.
+pub fn trim_to_weight<T: Config, FN>(
+	maximum_allowed_voters: u32,
+	mut compact: CompactAssignments,
+	nominator_index: FN,
+) -> Result<CompactAssignments, OffchainElectionError>
+where
+	for<'r> FN: Fn(&'r T::AccountId) -> Option<NominatorIndex>,
+{
+	match compact.len().checked_sub(maximum_allowed_voters as usize) {
+		Some(to_remove) if to_remove > 0 => {
+			// grab all voters and sort them by least stake.
+			let balance_of = <Module<T>>::slashable_balance_of_fn();
+			let mut voters_sorted = <Nominators<T>>::iter()
+				.map(|(who, _)| (who.clone(), balance_of(&who)))
+				.collect::<Vec<_>>();
+			voters_sorted.sort_by_key(|(_, y)| *y);
+
+			// start removing from the least stake. Iterate until we know enough have been removed.
+			let mut removed = 0;
+			for (maybe_index, _stake) in voters_sorted
+				.iter()
+				.map(|(who, stake)| (nominator_index(&who), stake))
+			{
+				let index = maybe_index.ok_or(OffchainElectionError::NominatorSnapshotCorrupt)?;
+				if compact.remove_voter(index) {
+					crate::log!(
+						trace,
+						"💸 removed a voter at index {} with stake {:?} from compact to reduce the size",
+						index,
+						_stake,
+					);
+					removed += 1
+				}
+
+				if removed >= to_remove {
+					break;
+				}
+			}
+
+			crate::log!(
+					warn,
+					"💸 {} nominators out of {} had to be removed from compact solution due to size limits.",
+					removed,
+					compact.len() + removed,
+				);
+			Ok(compact)
+		}
+		_ => {
+			// nada, return as-is
+			crate::log!(
+				info,
+				"💸 Compact solution did not get trimmed due to block weight limits.",
+			);
+			Ok(compact)
+		}
+	}
+}
 
 /// Takes an election result and spits out some data that can be submitted to the chain.
 ///
 /// This does a lot of stuff; read the inline comments.
-pub fn prepare_submission<T: Trait>(
+pub fn prepare_submission<T: Config>(
 	assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>>,
 	winners: Vec<(T::AccountId, ExtendedBalance)>,
 	do_reduce: bool,
-) -> Result<(
-	Vec<ValidatorIndex>,
-	CompactAssignments,
-	ElectionScore,
-	ElectionSize,
-), OffchainElectionError> where
+	maximum_weight: Weight,
+) -> Result<
+	(
+		Vec<ValidatorIndex>,
+		CompactAssignments,
+		ElectionScore,
+		ElectionSize,
+	),
+	OffchainElectionError,
+>
+where
 	ExtendedBalance: From<<OffchainAccuracy as PerThing>::Inner>,
 {
 	// make sure that the snapshot is available.
@@ -154,7 +341,7 @@ pub fn prepare_submission<T: Trait>(
 	let snapshot_nominators =
 		<Module<T>>::snapshot_nominators().ok_or(OffchainElectionError::SnapshotUnavailable)?;
 
-	// all helper closures
+	// all helper closures that we'd ever need.
 	let nominator_index = |a: &T::AccountId| -> Option<NominatorIndex> {
 		snapshot_nominators
 			.iter()
@@ -167,6 +354,19 @@ pub fn prepare_submission<T: Trait>(
 			.position(|x| x == a)
 			.and_then(|i| <usize as TryInto<ValidatorIndex>>::try_into(i).ok())
 	};
+	let nominator_at = |i: NominatorIndex| -> Option<T::AccountId> {
+		snapshot_nominators.get(i as usize).cloned()
+	};
+
+	let validator_at = |i: ValidatorIndex| -> Option<T::AccountId> {
+		snapshot_validators.get(i as usize).cloned()
+	};
+
+	// both conversions are safe; snapshots are not created if they exceed.
+	let size = ElectionSize {
+		validators: snapshot_validators.len() as ValidatorIndex,
+		nominators: snapshot_nominators.len() as NominatorIndex,
+	};
 
 	// Clean winners.
 	let winners = sp_npos_elections::to_without_backing(winners);
@@ -174,28 +374,8 @@ pub fn prepare_submission<T: Trait>(
 	// convert into absolute value and to obtain the reduced version.
 	let mut staked = sp_npos_elections::assignment_ratio_to_staked(
 		assignments,
-		<Module<T>>::slashable_balance_of_vote_weight,
+		<Module<T>>::slashable_balance_of_fn(),
 	);
-
-	let (mut support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
-	// balance a random number of times.
-	let iterations_executed = match T::MaxIterations::get() {
-		0 => {
-			// Don't run balance_solution at all
-			0
-		}
-		iterations @ _ => {
-			let seed = sp_io::offchain::random_seed();
-			let iterations = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
-				.expect("input is padded with zeroes; qed") % iterations.saturating_add(1);
-			balance_solution(
-				&mut staked,
-				&mut support_map,
-				Zero::zero(),
-				iterations as usize,
-			)
-		}
-	};
 
 	// reduce
 	if do_reduce {
@@ -206,30 +386,47 @@ pub fn prepare_submission<T: Trait>(
 	let low_accuracy_assignment = sp_npos_elections::assignment_staked_to_ratio_normalized(staked)
 		.map_err(|e| OffchainElectionError::from(e))?;
 
-	// convert back to staked to compute the score in the receiver's accuracy. This can be done
-	// nicer, for now we do it as such since this code is not time-critical. This ensure that the
-	// score _predicted_ here is the same as the one computed on chain and you will not get a
-	// `PhragmenBogusScore` error. This is totally NOT needed if we don't do reduce. This whole
-	// _accuracy glitch_ happens because reduce breaks that assumption of rounding and **scale**.
-	// The initial phragmen results are computed in `OffchainAccuracy` and the initial `staked`
-	// assignment set is also all multiples of this value. After reduce, this no longer holds. Hence
-	// converting to ratio thereafter is not trivially reversible.
-	let score = {
-		let staked = sp_npos_elections::assignment_ratio_to_staked(
-			low_accuracy_assignment.clone(),
-			<Module<T>>::slashable_balance_of_vote_weight,
-		);
-
-		let (support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
-		evaluate_support::<T::AccountId>(&support_map)
-	};
-
 	// compact encode the assignment.
 	let compact = CompactAssignments::from_assignment(
 		low_accuracy_assignment,
 		nominator_index,
 		validator_index,
-	).map_err(|e| OffchainElectionError::from(e))?;
+	)
+	.map_err(|e| OffchainElectionError::from(e))?;
+
+	// potentially reduce the size of the compact to fit weight.
+	let maximum_allowed_voters =
+		maximum_compact_len::<T::WeightInfo>(winners.len() as u32, size, maximum_weight);
+
+	crate::log!(debug, "💸 Maximum weight = {:?} // current weight = {:?} // maximum voters = {:?} // current votes = {:?}",
+		maximum_weight,
+		T::WeightInfo::submit_solution_better(
+				size.validators.into(),
+				size.nominators.into(),
+				compact.len() as u32,
+				winners.len() as u32,
+		),
+		maximum_allowed_voters,
+		compact.len(),
+	);
+
+	let compact = trim_to_weight::<T, _>(maximum_allowed_voters, compact, &nominator_index)?;
+
+	// re-compute the score. We re-create what the chain will do. This is a bit verbose and wastes
+	// CPU time, but it is necessary to ensure that the score that we claim is the same as the one
+	// calculated by the chain.
+	let score = {
+		let compact = compact.clone();
+		let assignments = compact.into_assignment(nominator_at, validator_at).unwrap();
+		let staked = sp_npos_elections::assignment_ratio_to_staked(
+			assignments.clone(),
+			<Module<T>>::slashable_balance_of_fn(),
+		);
+
+		let support_map = build_support_map::<T::AccountId>(&winners, &staked)
+			.map_err(|_| OffchainElectionError::ElectionFailed)?;
+		evaluate_support::<T::AccountId>(&support_map)
+	};
 
 	// winners to index. Use a simple for loop for a more expressive early exit in case of error.
 	let mut winners_indexed: Vec<ValidatorIndex> = Vec::with_capacity(winners.len());
@@ -244,18 +441,152 @@ pub fn prepare_submission<T: Trait>(
 		}
 	}
 
-	// both conversions are safe; snapshots are not created if they exceed.
-	let size = ElectionSize {
-		validators: snapshot_validators.len() as ValidatorIndex,
-		nominators: snapshot_nominators.len() as NominatorIndex,
-	};
-
-	crate::log!(
-		info,
-		"prepared solution after {} equalization iterations with score {:?}",
-		iterations_executed,
-		score,
-	);
-
 	Ok((winners_indexed, compact, score, size))
+}
+
+#[cfg(test)]
+mod test {
+	#![allow(unused_variables)]
+	use super::*;
+	use crate::ElectionSize;
+
+	struct Staking;
+
+	impl crate::WeightInfo for Staking {
+		fn bond() -> Weight {
+			unimplemented!()
+		}
+		fn bond_extra() -> Weight {
+			unimplemented!()
+		}
+		fn unbond() -> Weight {
+			unimplemented!()
+		}
+		fn withdraw_unbonded_update(s: u32) -> Weight {
+			unimplemented!()
+		}
+		fn withdraw_unbonded_kill(s: u32) -> Weight {
+			unimplemented!()
+		}
+		fn validate() -> Weight {
+			unimplemented!()
+		}
+		fn nominate(n: u32) -> Weight {
+			unimplemented!()
+		}
+		fn chill() -> Weight {
+			unimplemented!()
+		}
+		fn set_payee() -> Weight {
+			unimplemented!()
+		}
+		fn set_controller() -> Weight {
+			unimplemented!()
+		}
+		fn set_validator_count() -> Weight {
+			unimplemented!()
+		}
+		fn force_no_eras() -> Weight {
+			unimplemented!()
+		}
+		fn force_new_era() -> Weight {
+			unimplemented!()
+		}
+		fn force_new_era_always() -> Weight {
+			unimplemented!()
+		}
+		fn set_invulnerables(v: u32) -> Weight {
+			unimplemented!()
+		}
+		fn force_unstake(s: u32) -> Weight {
+			unimplemented!()
+		}
+		fn cancel_deferred_slash(s: u32) -> Weight {
+			unimplemented!()
+		}
+		fn payout_stakers_dead_controller(n: u32) -> Weight {
+			unimplemented!()
+		}
+		fn payout_stakers_alive_staked(n: u32) -> Weight {
+			unimplemented!()
+		}
+		fn rebond(l: u32) -> Weight {
+			unimplemented!()
+		}
+		fn set_history_depth(e: u32) -> Weight {
+			unimplemented!()
+		}
+		fn reap_stash(s: u32) -> Weight {
+			unimplemented!()
+		}
+		fn new_era(v: u32, n: u32) -> Weight {
+			unimplemented!()
+		}
+		fn submit_solution_better(v: u32, n: u32, a: u32, w: u32) -> Weight {
+			(0 * v + 0 * n + 1000 * a + 0 * w) as Weight
+		}
+	}
+
+	#[test]
+	fn find_max_voter_binary_search_works() {
+		let size = ElectionSize {
+			validators: 0,
+			nominators: 10,
+		};
+
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 0), 0);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1), 0);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 999), 0);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1000), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1001), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1990), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1999), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2000), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2001), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2010), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2990), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2999), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 3000), 3);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 3333), 3);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 5500), 5);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 7777), 7);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 9999), 9);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 10_000), 10);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 10_999), 10);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 11_000), 10);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 22_000), 10);
+
+		let size = ElectionSize {
+			validators: 0,
+			nominators: 1,
+		};
+
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 0), 0);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1), 0);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 999), 0);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1000), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1001), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1990), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1999), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2000), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2001), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2010), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 3333), 1);
+
+		let size = ElectionSize {
+			validators: 0,
+			nominators: 2,
+		};
+
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 0), 0);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1), 0);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 999), 0);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1000), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1001), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 1999), 1);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2000), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2001), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 2010), 2);
+		assert_eq!(maximum_compact_len::<Staking>(0, size, 3333), 2);
+	}
 }

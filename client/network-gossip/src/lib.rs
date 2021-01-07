@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Polite gossiping.
 //!
@@ -33,7 +35,7 @@
 //! - Implement the `Network` trait, representing the low-level networking primitives. It is
 //!   already implemented on `sc_network::NetworkService`.
 //! - Implement the `Validator` trait. See the section below.
-//! - Decide on a `ConsensusEngineId`. Each gossiping protocol should have a different one.
+//! - Decide on a protocol name. Each gossiping protocol should have a different one.
 //! - Build a `GossipEngine` using these three elements.
 //! - Use the methods of the `GossipEngine` in order to send out messages and receive incoming
 //!   messages.
@@ -60,7 +62,7 @@ pub use self::validator::{DiscardAll, MessageIntent, Validator, ValidatorContext
 
 use futures::prelude::*;
 use sc_network::{Event, ExHashT, NetworkService, PeerId, ReputationChange};
-use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
+use sp_runtime::{traits::Block as BlockT};
 use std::{borrow::Cow, pin::Pin, sync::Arc};
 
 mod bridge;
@@ -79,16 +81,7 @@ pub trait Network<B: BlockT> {
 	fn disconnect_peer(&self, who: PeerId);
 
 	/// Send a notification to a peer.
-	fn write_notification(&self, who: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>);
-
-	/// Registers a notifications protocol.
-	///
-	/// See the documentation of [`NetworkService:register_notifications_protocol`] for more information.
-	fn register_notifications_protocol(
-		&self,
-		engine_id: ConsensusEngineId,
-		protocol_name: Cow<'static, str>,
-	);
+	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>);
 
 	/// Notify everyone we're connected to that we have the given block.
 	///
@@ -110,16 +103,8 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 		NetworkService::disconnect_peer(self, who)
 	}
 
-	fn write_notification(&self, who: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>) {
-		NetworkService::write_notification(self, who, engine_id, message)
-	}
-
-	fn register_notifications_protocol(
-		&self,
-		engine_id: ConsensusEngineId,
-		protocol_name: Cow<'static, str>,
-	) {
-		NetworkService::register_notifications_protocol(self, engine_id, protocol_name)
+	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
+		NetworkService::write_notification(self, who, protocol, message)
 	}
 
 	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
