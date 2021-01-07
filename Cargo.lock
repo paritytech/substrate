@@ -1604,7 +1604,7 @@ dependencies = [
 
 [[package]]
 name = "frame-support-procedural"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "frame-support-procedural-tools",
  "proc-macro2",
@@ -5547,9 +5547,9 @@ checksum = "eba180dafb9038b050a4c280019bbedf9f2467b61e5d892dcad585bb57aadc5a"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.19"
+version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04f5f085b5d71e2188cb8271e5da0161ad52c3f227a661a3c135fdf28e258b12"
+checksum = "1e0704ee1a7e00d7bb417d0770ea303c1bccbabf0ef1667dae92b5967f5f8a71"
 dependencies = [
  "unicode-xid",
 ]
@@ -6668,7 +6668,7 @@ dependencies = [
 
 [[package]]
 name = "sc-executor"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "assert_matches",
  "derive_more",
@@ -6679,6 +6679,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "parking_lot 0.10.2",
+ "paste",
  "sc-executor-common",
  "sc-executor-wasmi",
  "sc-executor-wasmtime",
@@ -6698,7 +6699,6 @@ dependencies = [
  "sp-version",
  "sp-wasm-interface",
  "substrate-test-runtime",
- "test-case",
  "tracing",
  "tracing-subscriber",
  "wasmi",
@@ -8879,9 +8879,9 @@ checksum = "502d53007c02d7605a05df1c1a73ee436952781653da5d0bf57ad608f66932c1"
 
 [[package]]
 name = "syn"
-version = "1.0.35"
+version = "1.0.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb7f4c519df8c117855e19dd8cc851e89eb746fe7a73f0157e0d95fdec5369b0"
+checksum = "cc60a3d73ea6594cd712d830cc1f0390fd71542d8c8cd24e70cc54cdfd5e05d5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8944,19 +8944,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb6bfa289a4d7c5766392812c0a1f4c1ba45afa1ad47803c11e1f407d846d75f"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "test-case"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a605baa797821796a751f4a959e1206079b24a4b7e1ed302b7d785d81a9276c9"
-dependencies = [
- "lazy_static",
- "proc-macro2",
- "quote",
- "syn",
- "version_check",
 ]
 
 [[package]]
