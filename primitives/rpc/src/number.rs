@@ -50,7 +50,9 @@ impl NumberOrHex {
 }
 
 impl From<u32> for NumberOrHex {
-	fn from(n: u32) -> Self { NumberOrHex::Number(n.into()) }
+	fn from(n: u32) -> Self {
+		NumberOrHex::Number(n.into())
+	}
 }
 
 impl From<u64> for NumberOrHex {
@@ -60,7 +62,9 @@ impl From<u64> for NumberOrHex {
 }
 
 impl From<u128> for NumberOrHex {
-	fn from(n: u128) -> Self { NumberOrHex::Hex(n.into()) }
+	fn from(n: u128) -> Self {
+		NumberOrHex::Hex(n.into())
+	}
 }
 
 impl From<U256> for NumberOrHex {
