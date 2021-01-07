@@ -15,20 +15,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Markers associated with workers start, and attaching
-//! the a worker execution to the current state machine transaction.
+//! Markers associated with workers transactional states.
+//!
+//! This could be implemented directly into the OverlayChange, but
+//! is kept out separate worker management codebase and transaction
+//! management code base as much as possible.
 //!
 //! The purpose of these markers is to ensure the state on worker `join`
 //! is not in a overlay transaction that is no longer correct (in this case
 //! we join to an invalid state).
-
-/// Keep trace of state markers.
-///
-/// State markers ensure a minimal
-/// set rules regarding worker usage:
-///	- Worker with read access cannot
-///	report result to the main thread
-///	for a rollbacked the spawning transaction.
+//!
+//! It also enforce that child workers transaction behave as non worker
+//! transaction (panic if there is an unclosed transaction that is not
+//! from the worker, panic if trying to close or commit a transaction
+//! that is not from the worker).
 
 use sp_std::collections::btree_map::BTreeMap;
 use sp_externalities::{WorkerResult, TaskId};

@@ -705,7 +705,7 @@ where
 		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
 		let backend = self.backend.async_backend();
-		Box::new(crate::async_ext::spawn_call_ext(
+		Box::new(crate::async_ext::new_child_worker_async_ext(
 			worker_id,
 			declaration,
 			backend,

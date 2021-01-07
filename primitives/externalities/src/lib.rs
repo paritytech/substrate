@@ -731,61 +731,6 @@ impl WorkerType {
 		}
 	}
 }
-/*
-impl WorkerType {
-	/// Assert a right declaration is use with worker type.
-	/// TODO this is looking like bad design, consider merging WorkerDeclaration
-	/// with WorkerType.
-	pub fn guard_declaration(&self, declaration: &WorkerDeclaration) {
-		match self {
-			WorkerType::WriteAtJoinDeclarative => match &declaration {
-				WorkerDeclaration::ChildWriteRead(..) => (),
-				_ => {
-					panic!("Incorrect declaration with declarative worker");
-				},
-			},
-			WorkerType::WriteDeclarative => match &declaration {
-				WorkerDeclaration::ChildWrite(..) => (),
-				_ => {
-					panic!("Incorrect declaration with declarative worker");
-				},
-			},
-			WorkerType::ReadAtJoinDeclarative => match &declaration {
-				WorkerDeclaration::ChildRead(..) => (),
-				_ => {
-					panic!("Incorrect declaration with declarative worker");
-				},
-			},
-			WorkerType::ReadAtJoinOptimistic => match &declaration {
-				WorkerDeclaration::OptimisticRead => (),
-				_ => {
-					panic!("Incorrect declaration for optimistic worker");
-				},
-			},
-			WorkerType::WriteAtJoinOptimistic => match &declaration {
-				WorkerDeclaration::OptimisticWriteRead => (),
-				_ => {
-					panic!("Incorrect declaration for optimistic worker");
-				},
-			},
-			WorkerType::WriteOptimistic => match &declaration {
-				WorkerDeclaration::OptimisticWrite => (),
-				_ => {
-					panic!("Incorrect declaration for optimistic worker");
-				},
-			},
-			WorkerType::Stateless
-			| WorkerType::ReadLastBlock
-			| WorkerType::ReadAtSpawn
-			| WorkerType::WriteAtSpawn => match &declaration {
-				WorkerDeclaration::None => (),
-				_ => {
-					panic!("No declaration needed for worker");
-				},
-			},
-		}
-	}
-}*/
 
 /// Access filter on storage when spawning worker.
 #[derive(Debug, Clone, codec::Encode, codec::Decode)]

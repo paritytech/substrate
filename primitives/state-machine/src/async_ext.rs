@@ -52,12 +52,8 @@ impl std::fmt::Debug for AsyncExt
 	}
 }
 
-/// Obtain externality and get id for worker.
-/// TODO consider having declaration param only for kind declarative and uses default when not
-/// here.
-/// TODO consider moving it
-/// TODO renma
-pub fn spawn_call_ext(
+/// Obtain externality and for a child worker.
+pub fn new_child_worker_async_ext(
 	worker_id: u64,
 	declaration: WorkerDeclaration,
 	backend: Box<dyn AsyncBackend>,
@@ -351,7 +347,7 @@ impl Externalities for AsyncExt {
 	) -> Box<dyn AsyncExternalities> {
 		let backend = self.backend.async_backend();
 		self.kind.guard_compatible_child_workers(declaration.get_type());
-		Box::new(crate::async_ext::spawn_call_ext(
+		Box::new(crate::async_ext::new_child_worker_async_ext(
 			worker_id,
 			declaration,
 			backend,

@@ -17,26 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Async externalities.
-//!
-//!
-//!
-//! Allowed ext function, cummulative (kind bellow got access to parent capability):
-//!
-//! - WorkerType::Stateless: None
-//!		- extension (only thread extension if not inline) so purely technical
-//!		(also true for all other kind).
-//!		- resolve_worker_result
-//! - WorkerType::ReadLastBlock
-//!		- storage
-//!		- child_storage
-//!		- next_storage_key
-//!		- next_child_storage_key
-//!		- get_past_async_backend (warning this is only for this type, not inherited)
-//! - WorkerType::ReadAtSpawn
-//!		- get_async_backend
-// TODO consider moving part of it to state machine (removing the current
-// dep on state machine).
-// TODO update and move doc to state-machine.
 
 use sp_std::{
 	boxed::Box,

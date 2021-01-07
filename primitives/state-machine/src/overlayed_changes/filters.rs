@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! Filters associated to externalities access.
-//! These are used to ensure declarative workers access are correct.
+//! These are used to ensure declarative workers accesses are correct.
 //! It is plugged in the overlay by commodity, but could be at a higher level.
 
 use sp_std::{vec, vec::Vec, fmt::Debug};

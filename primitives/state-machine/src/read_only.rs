@@ -210,7 +210,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
 		let backend = self.backend.async_backend();
-		Box::new(crate::async_ext::spawn_call_ext(
+		Box::new(crate::async_ext::new_child_worker_async_ext(
 			worker_id,
 			declaration,
 			backend,
@@ -223,7 +223,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 	}
 
 	fn dismiss_worker(&mut self, _id: TaskId) {
-		unimplemented!("TODO needs filter from declaration to get deterministic failure of access parent writable");
+		unimplemented!("TODO needs filter/loggers from declaration to get deterministic failure of access parent writable, would need nothing if ReadOnly never spawn from non read only TODO check that");
 	}
 }
 

@@ -22,7 +22,7 @@
 //!
 //! It is plugged in the overlay by commodity, but could be at a higher level.
 //!
-//! TODO checks method could be rewrite by iterating on all component in order
+//! TODO checks method should be rewrite by zip iterating on all sorted components, 
 //! and maintaining a streaming state machine,
 //! this would also require a 'jump_to' instruction on tree iterator.
 
@@ -46,25 +46,28 @@ pub(crate) type OriginLog = BTreeSet<TaskId>;
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct AccessLogger {
-	/// True when logging read is needed.
-	/// for this optimistic mode.
-	/// This read is always compared with parent
-	/// writes.
+	/// True when logging read is needed in order
+	/// to send and compare the log to the parent worker.
 	parent_log_read: bool,
-	/// True when logging write is needed.
-	/// We do not use the child delta here to be able to
-	/// keep trace of dropped transactional accesses.
-	/// This read is always compared with parent
-	/// writes and read when enabled.
+	/// True when logging write is needed in order
+	/// to send and compare the log to the parent worker.
 	parent_log_write: bool,
+	/// Keep trace of read logging required to compare with children
+	/// logged access.
 	log_read: OriginLog,
+	/// Keep trace of read logging required to compare with children
+	/// logged access.
 	log_write: OriginLog,
-	// this is roughly storage root call.
+	/// Log that we access all key in read mode (usually by calling storage root).
 	parent_read_all: Cell<bool>,
+	/// Log that we access all key in read mode (usually by calling storage root),
+	/// with some child workers running.
 	children_read_all: RefCell<OriginLog>,
+	/// Access logger for top trie.
 	top_logger: StateLogger,
+	/// Access logger for children trie.
 	children_logger: RefCell<Map<StorageKey, StateLogger>>,
-	// TODO unused.
+	// TODO unused except in test.
 	eager_clean: bool,
 }
 
@@ -155,7 +158,6 @@ impl StateLogger {
 		true
 	}
 
-	// TODO rename
 	// compare write from parent (`self`) against read from child (`access`).
 	fn check_write_read(&self, access: &StateLog, marker: TaskId) -> bool {
 		for key in access.read_keys.iter() {
@@ -201,20 +203,7 @@ impl StateLogger {
 		}
 		true
 	}
-/*
-	// Note that if we ensure marker are in sync, we do not need to check
-	// that.
-	// TODO rename intersect workrers and look for native defs (also OriginLog could be different
-	// type)..
-	fn check_any_write_marker(marker_set: &OriginLog, filter_set: &OriginLog) -> bool {
-		for task_id in filter_set.iter() {
-			if marker_set.contains(task_id) {
-				return true;
-			}
-		}
-		false
-	}
-*/
+
 	fn check_key_against_write(&self, read_key: &Vec<u8>, marker: TaskId) -> bool {
 		if let Some(ids) = self.children_write_key.get(read_key) {
 			if ids.contains(&marker) {
@@ -324,10 +313,7 @@ impl StateLogger {
 				return false;
 			}
 		}
-		// TODO there is probably a good way to merge redundant/contigus intervals here.
-		// Also have it ordered for single iteration check.
-		// (in fact since most of the time they are one step of iteration this is mandatory
-		// but could be do more when we register new read interval.
+		// TODO here we really should merge redundant/contigus intervals on insert.
 		for (key, ids) in iter.node_iter().iter().value_iter() {
 			if interval.1.as_ref().map(|end| &key > end).unwrap_or(false) {
 				break;
@@ -701,7 +687,7 @@ impl AccessLogger {
 		}
 		if !self.log_write.is_empty() {
 			let logger = Self::logger_mut(&mut self.top_logger, &mut self.children_logger, storage_key);
-			// TODO an entry api in radix_tree would be nice.
+			// TODO a 'entry' api in radix_tree would be nice.
 			if let Some(entry) = logger.children_write_prefix.get_mut(key) {
 				entry.extend(self.log_write.iter());
 			} else {
