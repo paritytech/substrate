@@ -2129,7 +2129,7 @@ macro_rules! __dispatch_impl_metadata {
 			/// Returns empty vec for now to allow mixing of old style and new style pallets.
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn call_functions_vnext() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::vnext::FunctionMetadata> {
+			pub fn call_functions_vnext() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::v13::FunctionMetadata> {
 				$crate::scale_info::prelude::vec![]
 			}
 		}

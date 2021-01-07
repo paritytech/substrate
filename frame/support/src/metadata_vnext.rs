@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use frame_metadata::vnext;
+pub use frame_metadata2;
 
 #[macro_export]
 macro_rules! impl_runtime_metadata_vnext {
@@ -24,8 +24,8 @@ macro_rules! impl_runtime_metadata_vnext {
 			$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn metadata_vnext() -> $crate::metadata::vnext::RuntimeMetadataPrefixed {
-				$crate::metadata::vnext::RuntimeMetadataLastVersion {
+			pub fn metadata_vnext() -> $crate::metadata::v13::RuntimeMetadataPrefixed {
+				$crate::metadata::v13::RuntimeMetadataLastVersion {
 						modules: $crate::__runtime_modules_to_metadata_vnext!($runtime;; $( $rest )*),
 						// extrinsic: $crate::metadata::ExtrinsicMetadata {
 						// 	version: <$ext as $crate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
@@ -58,7 +58,7 @@ macro_rules! __runtime_modules_to_metadata_vnext {
 	) => {
 		$crate::__runtime_modules_to_metadata_vnext!(
 			$runtime;
-			$( $metadata, )* $crate::metadata::vnext::ModuleMetadata {
+			$( $metadata, )* $crate::metadata::v13::ModuleMetadata {
 				name: stringify!($name),
 				// index: $index,
 				// storage: $crate::__runtime_modules_to_metadata_calls_storage!(

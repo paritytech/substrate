@@ -18,7 +18,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
 integer-sqrt = "0.1.2"
 num-traits = { version = "0.2.8", default-features = false }
-scale-info = { path = "../../../scale-info", package = "scale-info", default-features = false, features = ["derive"] }
+scale-info = { git = "https://github.com/paritytech/scale-info", package = "scale-info", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0", default-features = false, path = "../std" }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-debug-derive = { version = "2.0.0", default-features = false, path = "../debug-derive" }

@@ -22,7 +22,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
-pub use frame_metadata::vnext;
 
 /// Implement the `Event` for a module.
 ///
@@ -153,7 +152,7 @@ macro_rules! decl_event {
 			/// Metadata vnext only supported by new frame support macros
 			#[allow(dead_code)]
 			#[doc(hidden)]
-			pub fn metadata_vnext() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::vnext::EventMetadata> {
+			pub fn metadata_vnext() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::v13::EventMetadata> {
 				$crate::scale_info::prelude::vec![]
 			}
 		}
@@ -308,7 +307,7 @@ macro_rules! __decl_generic_event {
 			/// Metadata vnext only supported by new frame support macros
 			#[allow(dead_code)]
 			#[doc(hidden)]
-			pub fn metadata_vnext() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::vnext::EventMetadata> {
+			pub fn metadata_vnext() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::v13::EventMetadata> {
 				$crate::scale_info::prelude::vec![]
 			}
 		}
@@ -586,7 +585,7 @@ macro_rules! __impl_outer_event_json_metadata_vnext {
 					name: stringify!($event_name),
 					events: $crate::scale_info::prelude::vec![
 						$(
-							$crate::metadata::vnext::ModuleEventMetadata {
+							$crate::metadata::v13::ModuleEventMetadata {
 								name: stringify!($module_name),
 								events: $module_name::Event ::< $( $generic_params ),* > ::metadata_vnext()
 							}
