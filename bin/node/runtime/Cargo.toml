@@ -61,6 +61,7 @@ pallet-grandpa = { version = "2.0.0", default-features = false, path = "../../..
 pallet-im-online = { version = "2.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-indices = { version = "2.0.0", default-features = false, path = "../../../frame/indices" }
 pallet-identity = { version = "2.0.0", default-features = false, path = "../../../frame/identity" }
+pallet-lottery = { version = "2.0.0", default-features = false, path = "../../../frame/lottery" }
 pallet-membership = { version = "2.0.0", default-features = false, path = "../../../frame/membership" }
 pallet-mmr = { version = "2.0.0", default-features = false, path = "../../../frame/merkle-mountain-range" }
 pallet-multisig = { version = "2.0.0", default-features = false, path = "../../../frame/multisig" }
@@ -116,6 +117,7 @@ std = [
 	"pallet-indices/std",
 	"sp-inherents/std",
 	"sp-npos-elections/std",
+	"pallet-lottery/std",
 	"pallet-membership/std",
 	"pallet-mmr/std",
 	"pallet-multisig/std",
@@ -172,6 +174,7 @@ runtime-benchmarks = [
 	"pallet-identity/runtime-benchmarks",
 	"pallet-im-online/runtime-benchmarks",
 	"pallet-indices/runtime-benchmarks",
+	"pallet-lottery/runtime-benchmarks",
 	"pallet-mmr/runtime-benchmarks",
 	"pallet-multisig/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",

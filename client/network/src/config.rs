@@ -95,6 +95,18 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
+
+	/// Request response configuration for the block request protocol.
+	///
+	/// [`RequestResponseConfig`] [`name`] is used to tag outgoing block requests with the correct
+	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming block
+	/// requests, if enabled.
+	///
+	/// Can be constructed either via [`block_request_handler::generate_protocol_config`] allowing
+	/// outgoing but not incoming requests, or constructed via
+	/// [`block_request_handler::BlockRequestHandler::new`] allowing both outgoing and incoming
+	/// requests.
+	pub block_request_protocol_config: RequestResponseConfig,
 }
 
 /// Role of the local node.
@@ -370,18 +382,12 @@ pub struct NetworkConfiguration {
 	pub boot_nodes: Vec<MultiaddrWithPeerId>,
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
-	/// List of names of notifications protocols that the node supports.
-	pub notifications_protocols: Vec<Cow<'static, str>>,
 	/// List of request-response protocols that the node supports.
 	pub request_response_protocols: Vec<RequestResponseConfig>,
-	/// Maximum allowed number of incoming connections.
-	pub in_peers: u32,
-	/// Number of outgoing connections we're trying to maintain.
-	pub out_peers: u32,
-	/// List of reserved node addresses.
-	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
-	/// The non-reserved peer mode.
-	pub non_reserved_mode: NonReservedPeerMode,
+	/// Configuration for the default set of nodes used for block syncing and transactions.
+	pub default_peers_set: SetConfig,
+	/// Configuration for extra sets of nodes.
+	pub extra_sets: Vec<NonDefaultSetConfig>,
 	/// Client identifier. Sent over the wire for debugging purposes.
 	pub client_version: String,
 	/// Name of the node. Sent over the wire for debugging purposes.
@@ -411,12 +417,9 @@ impl NetworkConfiguration {
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			node_key,
-			notifications_protocols: Vec::new(),
 			request_response_protocols: Vec::new(),
-			in_peers: 25,
-			out_peers: 75,
-			reserved_nodes: Vec::new(),
-			non_reserved_mode: NonReservedPeerMode::Accept,
+			default_peers_set: Default::default(),
+			extra_sets: Vec::new(),
 			client_version: client_version.into(),
 			node_name: node_name.into(),
 			transport: TransportConfig::Normal {
@@ -467,6 +470,44 @@ impl NetworkConfiguration {
 		config.allow_non_globals_in_dht = true;
 		config
 	}
+}
+
+/// Configuration for a set of nodes.
+#[derive(Clone, Debug)]
+pub struct SetConfig {
+	/// Maximum allowed number of incoming substreams related to this set.
+	pub in_peers: u32,
+	/// Number of outgoing substreams related to this set that we're trying to maintain.
+	pub out_peers: u32,
+	/// List of reserved node addresses.
+	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
+	/// Whether nodes that aren't in [`SetConfig::reserved_nodes`] are accepted or automatically
+	/// refused.
+	pub non_reserved_mode: NonReservedPeerMode,
+}
+
+impl Default for SetConfig {
+	fn default() -> Self {
+		SetConfig {
+			in_peers: 25,
+			out_peers: 75,
+			reserved_nodes: Vec::new(),
+			non_reserved_mode: NonReservedPeerMode::Accept,
+		}
+	}
+}
+
+/// Extension to [`SetConfig`] for sets that aren't the default set.
+#[derive(Clone, Debug)]
+pub struct NonDefaultSetConfig {
+	/// Name of the notifications protocols of this set. A substream on this set will be
+	/// considered established once this protocol is open.
+	///
+	/// > **Note**: This field isn't present for the default set, as this is handled internally
+	/// >           by the networking code.
+	pub notifications_protocol: Cow<'static, str>,
+	/// Base configuration.
+	pub set_config: SetConfig,
 }
 
 /// Configuration for the transport layer.

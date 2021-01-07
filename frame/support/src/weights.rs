@@ -24,7 +24,7 @@
 //! - [`ClassifyDispatch`]: class of the dispatch.
 //! - [`PaysFee`]: weather this weight should be translated to fee and deducted upon dispatch.
 //!
-//! Substrate then bundles then output information of the two traits into [`DispatchInfo`] struct
+//! Substrate then bundles the output information of the three traits into [`DispatchInfo`] struct
 //! and provides it by implementing the [`GetDispatchInfo`] for all `Call` both inner and outer call
 //! types.
 //!
@@ -91,10 +91,11 @@
 //! # fn main() {}
 //! ```
 //!
-//! ### 2. Define weights as a function of input arguments using `FunctionOf` tuple struct. This struct works
-//! in a similar manner as above. 3 items must be provided and each can be either a fixed value or a
-//! function/closure with the same parameters list as the dispatchable function itself, wrapper in a
-//! tuple.
+//! ### 2. Define weights as a function of input arguments using `FunctionOf` tuple struct.
+//!
+//! This struct works in a similar manner as above. 3 items must be provided and each can be either
+//! a fixed value or a function/closure with the same parameters list as the dispatchable function
+//! itself, wrapper in a tuple.
 //!
 //! Using this only makes sense if you want to use a function for at least one of the elements. If
 //! all 3 are static values, providing a raw tuple is easier.

@@ -36,10 +36,16 @@ pub struct TypeValueDef {
 	pub instances: Vec<helper::InstanceUsage>,
 	/// The where clause of the function.
 	pub where_clause: Option<syn::WhereClause>,
+	/// The span of the pallet::type_value attribute.
+	pub attr_span: proc_macro2::Span,
 }
 
 impl TypeValueDef {
-	pub fn try_from(index: usize, item: &mut syn::Item) -> syn::Result<Self> {
+	pub fn try_from(
+		attr_span: proc_macro2::Span,
+		index: usize,
+		item: &mut syn::Item,
+	) -> syn::Result<Self> {
 		let item = if let syn::Item::Fn(item) = item {
 			item
 		} else {
@@ -88,6 +94,7 @@ impl TypeValueDef {
 		let where_clause = item.sig.generics.where_clause.clone();
 
 		Ok(TypeValueDef {
+			attr_span,
 			index,
 			is_generic,
 			vis,

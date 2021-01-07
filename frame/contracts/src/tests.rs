@@ -30,7 +30,7 @@ use codec::Encode;
 use sp_runtime::{
 	traits::{BlakeTwo256, Hash, IdentityLookup, Convert},
 	testing::{Header, H256},
-	AccountId32,
+	AccountId32, Perbill,
 };
 use sp_io::hashing::blake2_256;
 use frame_support::{
@@ -239,9 +239,10 @@ impl pallet_timestamp::Config for Test {
 parameter_types! {
 	pub const SignedClaimHandicap: u64 = 2;
 	pub const TombstoneDeposit: u64 = 16;
-	pub const StorageSizeOffset: u32 = 8;
-	pub const RentByteFee: u64 = 4;
-	pub const RentDepositOffset: u64 = 10_000;
+	pub const DepositPerContract: u64 = 8 * DepositPerStorageByte::get();
+	pub const DepositPerStorageByte: u64 = 10_000;
+	pub const DepositPerStorageItem: u64 = 10_000;
+	pub RentFraction: Perbill = Perbill::from_rational_approximation(4u32, 10_000u32);
 	pub const SurchargeReward: u64 = 150;
 	pub const MaxDepth: u32 = 100;
 	pub const MaxValueSize: u32 = 16_384;
@@ -267,9 +268,10 @@ impl Config for Test {
 	type RentPayment = ();
 	type SignedClaimHandicap = SignedClaimHandicap;
 	type TombstoneDeposit = TombstoneDeposit;
-	type StorageSizeOffset = StorageSizeOffset;
-	type RentByteFee = RentByteFee;
-	type RentDepositOffset = RentDepositOffset;
+	type DepositPerContract = DepositPerContract;
+	type DepositPerStorageByte = DepositPerStorageByte;
+	type DepositPerStorageItem = DepositPerStorageItem;
+	type RentFraction = RentFraction;
 	type SurchargeReward = SurchargeReward;
 	type MaxDepth = MaxDepth;
 	type MaxValueSize = MaxValueSize;
@@ -384,8 +386,7 @@ fn account_removal_does_not_remove_storage() {
 			let alice_contract_info = ContractInfo::Alive(RawAliveContractInfo {
 				trie_id: trie_id1.clone(),
 				storage_size: 0,
-				empty_pair_count: 0,
-				total_pair_count: 0,
+				pair_count: 0,
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(1),
 				rent_allowance: 40,
@@ -399,8 +400,7 @@ fn account_removal_does_not_remove_storage() {
 			let bob_contract_info = ContractInfo::Alive(RawAliveContractInfo {
 				trie_id: trie_id2.clone(),
 				storage_size: 0,
-				empty_pair_count: 0,
-				total_pair_count: 0,
+				pair_count: 0,
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(2),
 				rent_allowance: 40,
@@ -690,12 +690,8 @@ fn storage_size() {
 				4
 			);
 			assert_eq!(
-				bob_contract.total_pair_count,
+				bob_contract.pair_count,
 				1,
-			);
-			assert_eq!(
-				bob_contract.empty_pair_count,
-				0,
 			);
 
 			assert_ok!(Contracts::call(
@@ -714,12 +710,8 @@ fn storage_size() {
 				4 + 4
 			);
 			assert_eq!(
-				bob_contract.total_pair_count,
+				bob_contract.pair_count,
 				2,
-			);
-			assert_eq!(
-				bob_contract.empty_pair_count,
-				0,
 			);
 
 			assert_ok!(Contracts::call(
@@ -738,12 +730,8 @@ fn storage_size() {
 				4
 			);
 			assert_eq!(
-				bob_contract.total_pair_count,
+				bob_contract.pair_count,
 				1,
-			);
-			assert_eq!(
-				bob_contract.empty_pair_count,
-				0,
 			);
 		});
 }
@@ -776,11 +764,7 @@ fn empty_kv_pairs() {
 				0,
 			);
 			assert_eq!(
-				bob_contract.total_pair_count,
-				1,
-			);
-			assert_eq!(
-				bob_contract.empty_pair_count,
+				bob_contract.pair_count,
 				1,
 			);
 		});
@@ -828,9 +812,11 @@ fn deduct_blocks() {
 			);
 
 			// Check result
-			let rent = (8 + 4 - 3) // storage size = size_offset + deploy_set_storage - deposit_offset
-				* 4 // rent byte price
-				* 4; // blocks to rent
+			let rent = <Test as Config>::RentFraction::get()
+				// base_deposit + deploy_set_storage (4 bytes in 1 item) - free_balance
+				.mul_ceil(80_000 + 40_000 + 10_000 - 30_000)
+				// blocks to rent
+				* 4;
 			let bob_contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
 			assert_eq!(bob_contract.rent_allowance, 1_000 - rent);
 			assert_eq!(bob_contract.deduct_block, 5);
@@ -845,9 +831,11 @@ fn deduct_blocks() {
 			);
 
 			// Check result
-			let rent_2 = (8 + 4 - 2) // storage size = size_offset + deploy_set_storage - deposit_offset
-				* 4 // rent byte price
-				* 7; // blocks to rent
+			let rent_2 = <Test as Config>::RentFraction::get()
+				// base_deposit + deploy_set_storage (4 bytes in 1 item) - free_balance
+				.mul_ceil(80_000 + 40_000 + 10_000 - (30_000 - rent))
+				// blocks to rent
+				* 7;
 			let bob_contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
 			assert_eq!(bob_contract.rent_allowance, 1_000 - rent - rent_2);
 			assert_eq!(bob_contract.deduct_block, 12);

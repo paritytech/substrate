@@ -29,6 +29,7 @@ use std::{
 
 use libp2p::build_multiaddr;
 use log::trace;
+use sc_network::block_request_handler::{self, BlockRequestHandler};
 use sp_blockchain::{
 	HeaderBackend, Result as ClientResult,
 	well_known_cache_keys::{self, Id as CacheKeyId},
@@ -49,8 +50,9 @@ use sp_consensus::block_import::{BlockImport, ImportResult};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
+use futures::future::BoxFuture;
 use sc_network::{NetworkWorker, NetworkService, config::ProtocolId};
-use sc_network::config::{NetworkConfiguration, TransportConfig};
+use sc_network::config::{NetworkConfiguration, NonDefaultSetConfig, TransportConfig};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
@@ -680,7 +682,20 @@ pub trait TestNetFactory: Sized {
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
-		network_config.notifications_protocols = config.notifications_protocols;
+		network_config.extra_sets = config.notifications_protocols.into_iter().map(|p| {
+			NonDefaultSetConfig {
+				notifications_protocol: p,
+				set_config: Default::default()
+			}
+		}).collect();
+
+		let protocol_id = ProtocolId::from("test-protocol-name");
+
+		let block_request_protocol_config = {
+			let (handler, protocol_config) = BlockRequestHandler::new(protocol_id.clone(), client.clone());
+			self.spawn_task(handler.run().boxed());
+			protocol_config
+		};
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Full,
@@ -689,11 +704,12 @@ pub trait TestNetFactory: Sized {
 			chain: client.clone(),
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
-			protocol_id: ProtocolId::from("test-protocol-name"),
+			protocol_id,
 			import_queue,
 			block_announce_validator: config.block_announce_validator
 				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
 			metrics_registry: None,
+			block_request_protocol_config,
 		}).unwrap();
 
 		trace!(target: "test_network", "Peer identifier: {}", network.service().local_peer_id());
@@ -757,6 +773,13 @@ pub trait TestNetFactory: Sized {
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
 
+		let protocol_id = ProtocolId::from("test-protocol-name");
+
+		// Add block request handler.
+		let block_request_protocol_config = block_request_handler::generate_protocol_config(
+			protocol_id.clone(),
+		);
+
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
 			executor: None,
@@ -764,10 +787,11 @@ pub trait TestNetFactory: Sized {
 			chain: client.clone(),
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
-			protocol_id: ProtocolId::from("test-protocol-name"),
+			protocol_id,
 			import_queue,
 			block_announce_validator: Box::new(DefaultBlockAnnounceValidator),
 			metrics_registry: None,
+			block_request_protocol_config,
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -790,6 +814,11 @@ pub trait TestNetFactory: Sized {
 				network,
 			});
 		});
+	}
+
+	/// Used to spawn background tasks, e.g. the block request protocol handler.
+	fn spawn_task(&self, f: BoxFuture<'static, ()>) {
+		async_std::task::spawn(f);
 	}
 
 	/// Polls the testnet until all nodes are in sync.
