@@ -162,7 +162,6 @@ benchmarks! {
 		<InnerOf<CompactAccuracyOf<T>> as sp_std::convert::TryFrom<usize>>::Error: sp_std::fmt::Debug,
 		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 	}
-	_{}
 
 	on_initialize_nothing {
 		assert!(<TwoPhase<T>>::current_phase().is_off());
