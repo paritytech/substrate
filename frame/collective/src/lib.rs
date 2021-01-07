@@ -144,7 +144,9 @@ pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {
 	/// The outer event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 
-	/// Event hanlder when a member missing motion voting.
+	/// Event hanlder when a member missing motion voting. Note that the default weighting logic
+	/// does not account for additional OnAbsentation code cost. Defining a custom OnAbsentation
+	/// will require a custom benchmark.
 	type OnAbsentation: OnAbsentation<Self::AccountId>;
 
 	/// The time-out for council motions.
