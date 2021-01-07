@@ -21,6 +21,10 @@
 //! to resolve if the assumptions are correct on `join`.
 //!
 //! It is plugged in the overlay by commodity, but could be at a higher level.
+//!
+//! TODO checks method could be rewrite by iterating on all component in order
+//! and maintaining a streaming state machine,
+//! this would also require a 'jump_to' instruction on tree iterator.
 
 use sp_externalities::{WorkerResult, TaskId, StateLog};
 use sp_std::collections::btree_set::BTreeSet;
@@ -225,15 +229,15 @@ impl StateLogger {
 		true
 	}
 
-	fn check_key_against_read(&self, read_key: &Vec<u8>, marker: TaskId) -> bool {
-		if let Some(ids) = self.children_read_key.borrow().get(read_key) {
+	fn check_key_against_read(&self, write_key: &Vec<u8>, marker: TaskId) -> bool {
+		if let Some(ids) = self.children_read_key.borrow().get(write_key) {
 			if ids.contains(&marker) {
 				return false;
 			}
 		}
 		// TODO this needs proper children_read_intervals structure.
 		for ((start, end), ids) in self.children_read_intervals.borrow().iter() {
-			if read_key >= start && end.as_ref().map(|end| read_key <= end).unwrap_or(true) {
+			if write_key >= start && end.as_ref().map(|end| write_key <= end).unwrap_or(true) {
 				if ids.contains(&marker) {
 					return false;
 				}
@@ -289,7 +293,7 @@ impl StateLogger {
 			if prefix.len() == 0
 				|| start.starts_with(prefix)
 				|| end.as_ref().map(|end| end.starts_with(prefix)).unwrap_or(false)
-				|| (start >= start && end.as_ref().map(|end| prefix <= end).unwrap_or(true)) {
+				|| (prefix >= start && end.as_ref().map(|end| prefix <= end).unwrap_or(true)) {
 				if ids.contains(&marker) {
 					return false;
 				}
@@ -860,10 +864,85 @@ mod test {
 		// (we rely on the fact that check_write_read is only for read only.
 		assert!(parent_access.top_logger.check_write_read(&child_access, task1));
 
-		// TODO actual conflict tests
+		parent_access.log_write(None, &b"keyr"[..]);
+		assert!(!parent_access.top_logger.check_write_read(&child_access, task1));
+
+		let mut parent_access = parent_access_base.clone();
+		parent_access.log_write(None, &b"t_in_interval"[..]);
+		assert!(!parent_access.top_logger.check_write_read(&child_access, task1));
+
+		let mut parent_access = parent_access_base.clone();
+		parent_access.log_write(None, &b"{_in_end_interval"[..]);
+		assert!(!parent_access.top_logger.check_write_read(&child_access, task1));
+	
+		let mut parent_access = parent_access_base.clone();
+		parent_access.log_write_prefix(None, &b""[..]);
+		assert!(!parent_access.top_logger.check_write_read(&child_access, task1));
+
+		let mut parent_access = parent_access_base.clone();
+		parent_access.log_write_prefix(None, &b"t_in_interval"[..]);
+		assert!(!parent_access.top_logger.check_write_read(&child_access, task1));
+
+		let mut parent_access = parent_access_base.clone();
+		parent_access.log_write_prefix(None, &b"key"[..]);
+		assert!(!parent_access.top_logger.check_write_read(&child_access, task1));
+
+		let mut parent_access = parent_access_base.clone();
+		parent_access.log_write_prefix(None, &b"t"[..]);
+		assert!(!parent_access.top_logger.check_write_read(&child_access, task1));
 	}
 
 	#[test]
 	fn test_check_read_write() {
+		let mut parent_access_base = AccessLogger::default();
+		let task1 = 1u64;
+		parent_access_base.log_writes(Some(task1));
+		// log read in parent should not interfere
+		parent_access_base.log_reads(Some(task1));
+		let mut child_access = StateLog::default();
+		child_access.write_keys.push(b"keyw".to_vec());
+		child_access.write_prefix.push(b"prefixw".to_vec());
+		child_access.write_prefix.push(b"prefixx".to_vec());
+		child_access.write_prefix.push(b"prefixz".to_vec());
+		child_access.read_keys.push(b"keyr".to_vec());
+		child_access.read_intervals.push((b"st_int".to_vec(), Some(b"w".to_vec())));
+		child_access.read_intervals.push((b"z_int".to_vec(), Some(b"z_inter".to_vec())));
+		child_access.read_intervals.push((b"z_z".to_vec(), None));
+		assert!(parent_access_base.top_logger.check_read_write(&child_access, task1));
+
+		let mut parent_access = parent_access_base.clone();
+		parent_access.log_read(None, &b"st_int"[..]);
+		parent_access.log_read(None, &b"keyr"[..]);
+		parent_access.log_read(None, &b"prefix"[..]);
+		parent_access.log_read(None, &b"prefixy"[..]);
+		parent_access.log_read(None, &b"keywa"[..]);
+		parent_access.log_read_interval(None, &b"z_i"[..], Some(&b"z_inta"[..]));
+		parent_access.log_read_interval(None, &b"z_i"[..], Some(&b"z_j"[..]));
+		parent_access.log_read_interval(None, &b"z_int"[..], None);
+		parent_access.log_read_interval(None, &b"pre"[..], Some(&b"prefix"[..]));
+		parent_access.log_write_prefix(None, &b""[..]);
+		parent_access.log_write_prefix(None, &b"z_inti"[..]);
+		parent_access.log_write(None, &b"keyw"[..]);
+		parent_access.log_write(None, &b"prefixx"[..]);
+		assert!(parent_access.top_logger.check_read_write(&child_access, task1));
+
+		parent_access.log_read(None, &b"keyw"[..]);
+		assert!(!parent_access.top_logger.check_read_write(&child_access, task1));
+
+		let parent_access = parent_access_base.clone();
+		parent_access.log_read(None, &b"prefixx"[..]);
+		assert!(!parent_access.top_logger.check_read_write(&child_access, task1));
+
+		let parent_access = parent_access_base.clone();
+		parent_access.log_read(None, &b"prefixxa"[..]);
+		assert!(!parent_access.top_logger.check_read_write(&child_access, task1));
+
+		let parent_access = parent_access_base.clone();
+		parent_access.log_read_interval(None, &b"pre"[..], Some(&b"prefixx"[..]));
+		assert!(!parent_access.top_logger.check_read_write(&child_access, task1));
+
+		let parent_access = parent_access_base.clone();
+		parent_access.log_read_interval(None, &b"pre"[..], None);
+		assert!(!parent_access.top_logger.check_read_write(&child_access, task1));
 	}
 }
