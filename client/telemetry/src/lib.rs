@@ -48,13 +48,11 @@ pub use libp2p::wasm_ext::ExtTransport;
 pub use serde_json;
 pub use tracing;
 
-mod dispatcher;
 mod endpoints;
 mod layer;
 mod node;
 mod transport;
 
-use dispatcher::*;
 pub use endpoints::*;
 pub use layer::*;
 use node::*;
@@ -177,7 +175,7 @@ impl TelemetryWorker {
 			}
 		}
 
-		let mut node_pool: Dispatcher = existing_nodes
+		let mut node_pool: HashMap<Multiaddr, _> = existing_nodes
 			.iter()
 			.map(|addr| {
 				let (connection_messages, connection_notifiers) = node_args
@@ -193,7 +191,7 @@ impl TelemetryWorker {
 			})
 			.collect();
 
-		let _ = receiver
+		let mut stream = receiver
 			.filter_map(|(id, verbosity, message): (Id, u8, String)| {
 				if let Some(nodes) = node_map.get(&id) {
 					future::ready(Some((verbosity, message, nodes)))
@@ -235,11 +233,20 @@ impl TelemetryWorker {
 
 					stream::iter(to_send)
 				},
-			)
-			.map(|x| Ok(x))
-			.boxed()
-			.forward(&mut node_pool)
-			.await;
+			);
+
+		while let Some((addr, message)) = stream.next().await {
+			if let Some(node) = node_pool.get_mut(&addr) {
+				let _ = node.send(message).await;
+			} else {
+				log::error!(
+					target: "telemetry",
+					"Received message for unknown node ({}). This is a bug. Message sent: {}",
+					addr,
+					message,
+				);
+			}
+		}
 
 		log::error!(
 			target: "telemetry",
