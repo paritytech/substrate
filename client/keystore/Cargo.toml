@@ -24,7 +24,7 @@ sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-keystore = { version = "0.8.0", path = "../../primitives/keystore" }
 hex = "0.4.0"
 merlin = { version = "2.0", default-features = false }
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 rand = "0.7.2"
 serde_json = "1.0.41"
 subtle = "2.1.1"
