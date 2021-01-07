@@ -150,9 +150,6 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	/// Deprecated old pallet name
-	pub type Module<T> = Pallet<T>;
-
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// dummy `on_initialize` to return the weight used in `on_finalize`.

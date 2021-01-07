@@ -129,8 +129,6 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
-#[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
 
 pub mod offchain;
 pub mod limits;
@@ -162,6 +160,9 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::ordered_trie_root(xts)
 }
 
+/// An object to track the currently used extrinsic weight in a block.
+pub type ConsumedWeight = PerDispatchClass<Weight>;
+
 pub use pallet::*;
 
 #[frame_support::pallet]
@@ -171,9 +172,6 @@ pub mod pallet {
 	use super::*;
 	use crate as frame_system;
 
-	/// An object to track the currently used extrinsic weight in a block.
-	pub type ConsumedWeight = PerDispatchClass<Weight>;
-
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -181,6 +179,13 @@ pub mod pallet {
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
 		type BaseCallFilter: Filter<Self::Call>;
+
+		/// Block & extrinsics weights: base values and limits.
+		#[pallet::constant]
+		type BlockWeights: Get<limits::BlockWeights>;
+
+		/// The maximum length of a block (in bytes).
+		type BlockLength: Get<limits::BlockLength>;
 
 		/// The `Origin` type used by dispatchable calls.
 		type Origin:
@@ -192,11 +197,11 @@ pub mod pallet {
 		/// The aggregated `Call` type.
 		type Call: Dispatchable + Debug;
 
-		/// Account index (aka nonce) type. This stores the number of previous transactions
-		/// associated with a sender account.
+		/// Account index (aka nonce) type. This stores the number of previous transactions associated
+		/// with a sender account.
 		type Index:
 			Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + AtLeast32Bit
-				+ Copy;
+			+ Copy;
 
 		/// The block number type used by the runtime.
 		type BlockNumber:
@@ -206,9 +211,8 @@ pub mod pallet {
 
 		/// The output of the `Hashing` function.
 		type Hash:
-			Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps +
-			Ord + Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> +
-			MaybeMallocSizeOf;
+			Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
+			+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf;
 
 		/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 		type Hashing: Hash<Output = Self::Hash>;
@@ -219,11 +223,10 @@ pub mod pallet {
 
 		/// Converting trait to take a source type and convert to `AccountId`.
 		///
-		/// Used to define the type and conversion mechanism for referencing accounts in
-		/// transactions.
-		/// It's perfectly reasonable for this to be an identity conversion (with the source type
-		/// being `AccountId`), but other modules (e.g. Indices module) may provide more
-		/// functional/efficient alternatives.
+		/// Used to define the type and conversion mechanism for referencing accounts in transactions.
+		/// It's perfectly reasonable for this to be an identity conversion (with the source type being
+		/// `AccountId`), but other modules (e.g. Indices module) may provide more functional/efficient
+		/// alternatives.
 		type Lookup: StaticLookup<Target = Self::AccountId>;
 
 		/// The block header.
@@ -240,36 +243,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type BlockHashCount: Get<Self::BlockNumber>;
 
-		/// The maximum weight of a block.
-		#[pallet::constant]
-		type MaximumBlockWeight: Get<Weight>;
-
 		/// The weight of runtime database operations the runtime can invoke.
 		#[pallet::constant]
 		type DbWeight: Get<RuntimeDbWeight>;
 
-		/// The base weight of executing a block, independent of the transactions in the block.
-		#[pallet::constant]
-		type BlockExecutionWeight: Get<Weight>;
-
-		/// The base weight of an Extrinsic in the block, independent of the of extrinsic being
-		/// executed.
-		#[pallet::constant]
-		type ExtrinsicBaseWeight: Get<Weight>;
-
-		/// The maximal weight of a single Extrinsic. This should be set to at most
-		/// `MaximumBlockWeight - AverageOnInitializeWeight`. The limit only applies to extrinsics
-		/// containing `Normal` dispatch class calls.
-		type MaximumExtrinsicWeight: Get<Weight>;
-
-		/// The maximum length of a block (in bytes).
-		#[pallet::constant]
-		type MaximumBlockLength: Get<u32>;
-
-		/// The portion of the block that is available to normal transaction. The rest can only be
-		/// used by operational transactions. This can be applied to any resource limit managed by
-		/// the system module, including weight and length.
-		type AvailableBlockRatio: Get<Perbill>;
 
 		/// Get the chain's current version.
 		type Version: Get<RuntimeVersion>;
@@ -301,9 +278,9 @@ pub mod pallet {
 		/// This replaces the "ss58Format" property declared in the chain spec. Reason is
 		/// that the runtime should know about the prefix in order to make use of it as
 		/// an identifier of the chain.
+		#[pallet::constant]
 		type SS58Prefix: Get<u8>;
-}
-
+	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -317,10 +294,16 @@ pub mod pallet {
 					Some(AccountInfo { nonce, refcount: rc as RefCount, data })
 				);
 				<UpgradedToU32RefCount<T>>::put(true);
-				T::MaximumBlockWeight::get()
+				T::BlockWeights::get().max_block
 			} else {
 				0
 			}
+		}
+
+		fn integrity_test() {
+			T::BlockWeights::get()
+				.validate()
+				.expect("The weights are invalid.");
 		}
 	}
 
@@ -328,8 +311,8 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
-		// that's not possible at present (since it's within the pallet macro).
-		#[pallet::weight(*_ratio * T::MaximumBlockWeight::get())]
+		// that's not possible at present (since it's within the decl_module macro).
+		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
 		pub(super) fn fill_block(
 			origin: OriginFor<T>,
 			_ratio: Perbill
@@ -382,8 +365,11 @@ pub mod pallet {
 		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
 		/// We will treat this as a full block.
 		/// # </weight>
-		#[pallet::weight((T::MaximumBlockWeight::get(), DispatchClass::Operational))]
-		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
+		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		pub fn set_code(
+			origin: OriginFor<T>,
+			code: Vec<u8>
+		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
 
@@ -400,8 +386,11 @@ pub mod pallet {
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
 		/// # </weight>
-		#[pallet::weight((T::MaximumBlockWeight::get(), DispatchClass::Operational))]
-		pub fn set_code_without_checks(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
+		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		pub fn set_code_without_checks(
+			origin: OriginFor<T>,
+			code: Vec<u8>
+		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 			Self::deposit_event(Event::CodeUpdated);
@@ -448,8 +437,8 @@ pub mod pallet {
 		/// - Writes: Number of items
 		/// # </weight>
 		#[pallet::weight((
-		T::SystemWeightInfo::set_storage(items.len() as u32),
-		DispatchClass::Operational,
+			T::SystemWeightInfo::set_storage(items.len() as u32),
+			DispatchClass::Operational,
 		))]
 		pub(super) fn set_storage(
 			origin: OriginFor<T>,
@@ -583,7 +572,8 @@ pub mod pallet {
 	/// The current weight for the block.
 	#[pallet::storage]
 	#[pallet::getter(fn block_weight)]
-	pub(super) type BlockWeight<T: Config> = StorageValue<_, weight::ExtrinsicsWeight, ValueQuery>;
+	pub(super) type BlockWeight<T: Config> = StorageValue<_, ConsumedWeight, ValueQuery>;
+
 
 	/// Total length (in bytes) for all extrinsics put together, for the current block.
 	#[pallet::storage]
@@ -612,11 +602,6 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn parent_hash)]
 	pub(super) type ParentHash<T: Config> = StorageValue<_, T::Hash, ValueQuery>;
-
-	/// Extrinsics root of the current block, also part of the block header.
-	#[pallet::storage]
-	#[pallet::getter(fn extrinsics_root)]
-	pub(super) type ExtrinsicsRoot<T: Config> = StorageValue<_, T::Hash, ValueQuery>;
 
 	/// Digest of the current block, also part of the block header.
 	#[pallet::storage]
@@ -699,34 +684,6 @@ pub mod pallet {
 				sp_io::storage::set(well_known_keys::CHANGES_TRIE_CONFIG, &changes_trie_config.encode());
 			}
 		}
-	}
-}
-
-/// Pallet struct placeholder on which is implemented the pallet logic.
-///
-/// It is currently an alias for `Module` as old macros still generate/use old name.
-pub type Module<T> = Pallet<T>;
-
-/// Alias to Event to prevent breaking code. Soon to be deprecated.
-pub type RawEvent<T> = Event<T>;
-
-#[cfg(feature = "std")]
-impl GenesisConfig {
-	/// Direct implementation of `GenesisBuild::build_storage`.
-	///
-	/// Kept in order not to break dependency.
-	pub fn build_storage<T: Config>(&self) -> Result<sp_runtime::Storage, String> {
-		<Self as GenesisBuild<T>>::build_storage(self)
-	}
-
-	/// Direct implementation of `GenesisBuild::assimilate_storage`.
-	///
-	/// Kept in order not to break dependency.
-	pub fn assimilate_storage<T: Config>(
-		&self,
-		storage: &mut sp_runtime::Storage
-	) -> Result<(), String> {
-		<Self as GenesisBuild<T>>::assimilate_storage(self, storage)
 	}
 }
 
@@ -845,6 +802,14 @@ impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
 		}
 	}
 }
+
+/// Pallet struct placeholder on which is implemented the pallet logic.
+///
+/// It is currently an alias for `Module` as old macros still generate/use old name.
+pub type Module<T> = Pallet<T>;
+
+/// Alias to Event to prevent breaking code. Soon to be deprecated.
+pub type RawEvent<T> = Event<T>;
 
 pub struct EnsureRoot<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<
@@ -1161,7 +1126,7 @@ impl<T: Config> Module<T> {
 		// The following fields
 		//
 		// - <Events<T>>
-		// - <EventCount<T>>
+		// - <EventCount::<T>::<T>>
 		// - <EventTopics<T>>
 		// - <Number<T>>
 		// - <ParentHash<T>>
@@ -1172,8 +1137,8 @@ impl<T: Config> Module<T> {
 		let parent_hash = <ParentHash<T>>::get();
 		let mut digest = <Digest<T>>::get();
 
-		let extrinsics = (0..ExtrinsicCount::take().unwrap_or_default())
-			.map(ExtrinsicData::take)
+		let extrinsics = (0..ExtrinsicCount::<T>::take().unwrap_or_default())
+			.map(ExtrinsicData::<T>::take)
 			.collect();
 		let extrinsics_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 
@@ -1248,9 +1213,9 @@ impl<T: Config> Module<T> {
 
 	/// Set the current block weight. This should only be used in some integration tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn set_block_limits(weight: Weight, len: usize) {
+	pub fn set_block_consumed_resources(weight: Weight, len: usize) {
 		BlockWeight::<T>::mutate(|current_weight| {
-			current_weight.put(weight, DispatchClass::Normal)
+			current_weight.set(weight, DispatchClass::Normal)
 		});
 		AllExtrinsicsLen::<T>::put(len as u32);
 	}
@@ -1317,14 +1282,6 @@ impl<T: Config> Module<T> {
 	/// (e.g., called `on_initialize` for all modules).
 	pub fn note_finished_initialize() {
 		ExecutionPhase::<T>::put(Phase::ApplyExtrinsic(0))
-	}
-
-	/// Remove all extrinsic data and save the extrinsics trie root.
-	pub fn derive_extrinsics() {
-		let extrinsics = (0..ExtrinsicCount::<T>::get().unwrap_or_default())
-			.map(ExtrinsicData::<T>::take).collect();
-		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
-		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
 
 	/// An account is being created.
@@ -1463,7 +1420,7 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 
 /// Split an `option` into two constituent options, as defined by a `splitter` function.
 pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S))
-							-> (Option<R>, Option<S>)
+	-> (Option<R>, Option<S>)
 {
 	match option {
 		Some(inner) => {
