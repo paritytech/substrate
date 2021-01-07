@@ -167,8 +167,6 @@ fn clean<T: Config>() {
 }
 
 benchmarks! {
-	_ {}
-
 	// -- Signed ones
 	vote {
 		let v in 1 .. (MAXIMUM_VOTE as u32);

@@ -25,7 +25,7 @@ futures = "0.3.4"
 futures-timer = "3.0.1"
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
 log = "0.4.8"
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 sp-io = { version = "2.0.0", path = "../../../primitives/io" }
@@ -37,6 +37,9 @@ sp-timestamp = { version = "2.0.0", path = "../../../primitives/timestamp" }
 sp-keystore = { version = "0.8.0", path = "../../../primitives/keystore" }
 sc-telemetry = { version = "2.0.0", path = "../../telemetry" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0"}
+# We enable it only for web-wasm check
+# See https://docs.rs/getrandom/0.2.1/getrandom/#webassembly-support
+getrandom = { version = "0.2", features = ["js"], optional = true }
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }

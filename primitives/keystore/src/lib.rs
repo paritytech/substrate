@@ -96,9 +96,9 @@ pub trait CryptoStore: Send + Sync {
 	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
 	async fn insert_unknown(
 		&self,
-		_key_type: KeyTypeId,
-		_suri: &str,
-		_public: &[u8]
+		id: KeyTypeId,
+		suri: &str,
+		public: &[u8]
 	) -> Result<(), ()>;
 
 	/// Find intersection between provided keys and supported keys
