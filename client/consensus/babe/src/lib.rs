@@ -536,6 +536,15 @@ pub enum BabeRequest<B: BlockT> {
 #[derive(Clone)]
 pub struct BabeWorkerHandle<B: BlockT>(Sender<BabeRequest<B>>);
 
+impl<B: BlockT> BabeWorkerHandle<B> {
+	/// Send a request to the BABE service.
+	pub async fn send(&mut self, request: BabeRequest<B>) {
+		// Failure to send means that the service is down.
+		// This will manifest as the receiver of the request being dropped.
+		let _ = self.0.send(request).await;
+	}
+}
+
 /// Worker for Babe which implements `Future<Output=()>`. This must be polled.
 #[must_use]
 pub struct BabeWorker<B: BlockT> {
