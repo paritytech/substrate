@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -636,6 +636,15 @@ macro_rules! decl_tests {
 			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>().unwrap();
 			let _ = GenesisConfig::<$test> {
 				balances: vec![(1, 10)],
+			}.assimilate_storage(&mut t).unwrap();
+		}
+
+		#[test]
+		#[should_panic = "duplicate balances in genesis."]
+		fn cannot_set_genesis_value_twice() {
+			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>().unwrap();
+			let _ = GenesisConfig::<$test> {
+				balances: vec![(1, 10), (2, 20), (1, 15)],
 			}.assimilate_storage(&mut t).unwrap();
 		}
 

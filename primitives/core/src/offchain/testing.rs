@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -70,6 +70,8 @@ pub struct TestPersistentOffchainDB {
 }
 
 impl TestPersistentOffchainDB {
+	const PREFIX: &'static [u8] = b"";
+
 	/// Create a new and empty offchain storage db for persistent items
 	pub fn new() -> Self {
 		Self {
@@ -82,10 +84,15 @@ impl TestPersistentOffchainDB {
 		let mut me = self.persistent.write();
 		for ((_prefix, key), value_operation) in changes.drain() {
 			match value_operation {
-				OffchainOverlayedChange::SetValue(val) => me.set(b"", key.as_slice(), val.as_slice()),
-				OffchainOverlayedChange::Remove => me.remove(b"", key.as_slice()),
+				OffchainOverlayedChange::SetValue(val) => me.set(Self::PREFIX, key.as_slice(), val.as_slice()),
+				OffchainOverlayedChange::Remove => me.remove(Self::PREFIX, key.as_slice()),
 			}
 		}
+	}
+
+	/// Retrieve a key from the test backend.
+	pub fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+		OffchainStorage::get(self, Self::PREFIX, key)
 	}
 }
 
@@ -266,8 +273,8 @@ impl offchain::Externalities for TestOffchainExt {
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
 		let state = self.0.read();
 		match kind {
-			StorageKind::LOCAL => state.local_storage.get(b"", key),
-			StorageKind::PERSISTENT => state.persistent_storage.get(b"", key),
+			StorageKind::LOCAL => state.local_storage.get(TestPersistentOffchainDB::PREFIX, key),
+			StorageKind::PERSISTENT => state.persistent_storage.get(key),
 		}
 	}
 

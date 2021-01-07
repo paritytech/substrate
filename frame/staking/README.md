@@ -176,7 +176,7 @@ Validators and nominators are rewarded at the end of each era. The total reward 
 calculated using the era duration and the staking rate (the total amount of tokens staked by
 nominators and validators, divided by the total token supply). It aims to incentivize toward a
 defined staking rate. The full specification can be found
-[here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics.html#inflation-model).
+[here](https://research.web3.foundation/en/latest/polkadot/economics/1-token-economics.html#inflation-model).
 
 Total reward is split among validators and their nominators depending on the number of points
 they received during the era. Points are added to a validator using

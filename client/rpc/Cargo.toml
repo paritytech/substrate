@@ -33,13 +33,13 @@ sp-keystore = { version = "0.8.0", path = "../../primitives/keystore" }
 sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" }
 sp-chain-spec = { version = "2.0.0", path = "../../primitives/chain-spec" }
 sc-executor = { version = "0.8.0", path = "../executor" }
-sc-block-builder = { version = "0.8.0", path = "../../client/block-builder" }
+sc-block-builder = { version = "0.8.0", path = "../block-builder" }
 sc-keystore = { version = "2.0.0", path = "../keystore" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
-sc-tracing = { version = "2.0.0", path = "../../client/tracing" }
+sc-tracing = { version = "2.0.0", path = "../tracing" }
 hash-db = { version = "0.15.2", default-features = false }
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 lazy_static = { version = "1.4.0", optional = true }
 
 [dev-dependencies]

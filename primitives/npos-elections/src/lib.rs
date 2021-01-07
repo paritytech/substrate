@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd. SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd. SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License. You may obtain a copy of the License at
@@ -18,10 +18,10 @@
 //! - [`seq_phragmen`]: Implements the Phragmén Sequential Method. An un-ranked, relatively fast
 //!   election method that ensures PJR, but does not provide a constant factor approximation of the
 //!   maximin problem.
-//! - [`phragmms`]: Implements a hybrid approach inspired by Phragmén which is executed faster but
+//! - [`phragmms()`]: Implements a hybrid approach inspired by Phragmén which is executed faster but
 //!   it can achieve a constant factor approximation of the maximin problem, similar to that of the
 //!   MMS algorithm.
-//! - [`balance_solution`]: Implements the star balancing algorithm. This iterative process can push
+//! - [`balance`]: Implements the star balancing algorithm. This iterative process can push
 //!   a solution toward being more `balances`, which in turn can increase its score.
 //!
 //! ### Terminology
@@ -70,7 +70,7 @@
 //! `StakedAssignment`.
 //!
 //!
-//! More information can be found at: https://arxiv.org/abs/2004.12990
+//! More information can be found at: <https://arxiv.org/abs/2004.12990>
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -283,7 +283,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 		})
 	}
 
-	/// Same as [`try_normalize`] but the normalization is only limited between elected edges.
+	/// Same as [`Self::try_normalize`] but the normalization is only limited between elected edges.
 	pub fn try_normalize_elected(&mut self) -> Result<(), &'static str> {
 		let elected_edge_weights = self
 			.edges

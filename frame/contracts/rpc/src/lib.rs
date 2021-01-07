@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,7 +33,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
 	DispatchError,
 };
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use pallet_contracts_primitives::ContractExecResult;
 
 pub use pallet_contracts_rpc_runtime_api::ContractsApi as ContractsRuntimeApi;
@@ -76,10 +76,10 @@ impl From<ContractAccessError> for Error {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub struct CallRequest<AccountId, Balance> {
+pub struct CallRequest<AccountId> {
 	origin: AccountId,
 	dest: AccountId,
-	value: Balance,
+	value: number::NumberOrHex,
 	gas_limit: number::NumberOrHex,
 	input_data: Bytes,
 }
@@ -141,7 +141,7 @@ pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance> {
 	#[rpc(name = "contracts_call")]
 	fn call(
 		&self,
-		call_request: CallRequest<AccountId, Balance>,
+		call_request: CallRequest<AccountId>,
 		at: Option<BlockHash>,
 	) -> Result<RpcContractExecResult>;
 
@@ -201,11 +201,11 @@ where
 		<<Block as BlockT>::Header as HeaderT>::Number,
 	>,
 	AccountId: Codec,
-	Balance: Codec,
+	Balance: Codec + TryFrom<number::NumberOrHex>,
 {
 	fn call(
 		&self,
-		call_request: CallRequest<AccountId, Balance>,
+		call_request: CallRequest<AccountId>,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> Result<RpcContractExecResult> {
 		let api = self.client.runtime_api();
@@ -220,6 +220,13 @@ where
 			gas_limit,
 			input_data,
 		} = call_request;
+
+		// Make sure that value fits into the balance type.
+		let value: Balance = value.try_into().map_err(|_| Error {
+			code: ErrorCode::InvalidParams,
+			message: format!("{:?} doesn't fit into the balance type", value),
+			data: None,
+		})?;
 
 		// Make sure that gas_limit fits into 64 bits.
 		let gas_limit: u64 = gas_limit.try_into().map_err(|_| Error {
@@ -305,17 +312,18 @@ mod tests {
 
 	#[test]
 	fn call_request_should_serialize_deserialize_properly() {
-		type Req = CallRequest<String, u128>;
+		type Req = CallRequest<String>;
 		let req: Req = serde_json::from_str(r#"
 		{
 			"origin": "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL",
 			"dest": "5DRakbLVnjVrW6niwLfHGW24EeCEvDAFGEXrtaYS5M4ynoom",
-			"value": 0,
+			"value": "0x112210f4B16c1cb1",
 			"gasLimit": 1000000000000,
 			"inputData": "0x8c97db39"
 		}
 		"#).unwrap();
 		assert_eq!(req.gas_limit.into_u256(), U256::from(0xe8d4a51000u64));
+		assert_eq!(req.value.into_u256(), U256::from(1234567890987654321u128));
 	}
 
 	#[test]
