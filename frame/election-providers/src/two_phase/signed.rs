@@ -16,8 +16,6 @@
 // limitations under the License.
 
 //! The signed phase implementation.
-//!
-//! THis is asda  asdasda asd asdasdasd
 
 use crate::two_phase::*;
 use codec::Encode;
@@ -31,7 +29,7 @@ where
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
 	/// Finish the singed phase. Process the signed submissions from best to worse until a valid one
-	/// is found, rewarding the best oen and slashing the invalid ones along the way.
+	/// is found, rewarding the best one and slashing the invalid ones along the way.
 	///
 	/// Returns true if we have a good solution in the signed phase.
 	///
@@ -79,7 +77,7 @@ where
 					break;
 				}
 				Err(_) => {
-					// we assume a worse ase feasibility check happened anyhow.
+					// we assume a worse case feasibility check happened anyhow.
 					weight = weight.saturating_add(feasibility_weight);
 					Self::finalize_signed_phase_reject_solution(&who, deposit);
 					weight = weight
@@ -207,7 +205,9 @@ where
 	}
 
 	/// Removes the weakest element of the queue, namely the first one, should the length of the
-	/// queue be enough. noop if the queue is empty. Bond of the removed solution is returned.
+	/// queue be enough.
+	///
+	/// noop if the queue is empty. Bond of the removed solution is returned.
 	pub fn remove_weakest(
 		queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
 	) {
@@ -290,7 +290,23 @@ mod tests {
 	}
 
 	#[test]
-	fn wrong_witness_fails() {}
+	fn wrong_witness_fails() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
+
+			let solution = raw_solution();
+			// submit this once correctly
+			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
+			assert_eq!(TwoPhase::signed_submissions().len(), 1);
+
+			// now try and cheat by passing a lower queue length
+			assert_noop!(
+				TwoPhase::submit(Origin::signed(99), solution, 0,),
+				Error::<Runtime>::InvalidWitness,
+			);
+		})
+	}
 
 	#[test]
 	fn should_pay_deposit() {
@@ -565,7 +581,7 @@ mod tests {
 	}
 
 	#[test]
-	fn equally_good_is_not_accepted() {
+	fn equally_good_solution_is_not_accepted() {
 		ExtBuilder::default()
 			.max_signed_submission(3)
 			.build_and_execute(|| {
@@ -708,7 +724,4 @@ mod tests {
 			assert_eq!(balances(&9999), (100, 0));
 		})
 	}
-
-	#[test]
-	fn invalid_round_fails() {}
 }

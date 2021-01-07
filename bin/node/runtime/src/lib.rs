@@ -147,7 +147,7 @@ impl OnUnbalanced<NegativeImbalance> for DealWithFees {
 	}
 }
 
-/// We assume that ~10% of the block weight is consumed by `on_initalize` handlers.
+/// We assume that ~10% of the block weight is consumed by `on_initialize` handlers.
 /// This is used to limit the maximal weight of a single extrinsic.
 const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
 /// We allow `Normal` extrinsics to fill up the block up to 75%, the rest can be used
@@ -455,12 +455,12 @@ pallet_staking_reward_curve::build! {
 }
 
 parameter_types! {
-	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
+	pub const SessionsPerEra: sp_staking::SessionIndex = 2;
 	pub const BondingDuration: pallet_staking::EraIndex = 24 * 28;
 	pub const SlashDeferDuration: pallet_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
-	pub const ElectionLookahead: BlockNumber = EPOCH_DURATION_IN_BLOCKS / 4;
+	pub const ElectionLookahead: BlockNumber = 10;
 	pub const MaxIterations: u32 = 10;
 	// 0.05%. The higher the value, the more strict solution acceptance becomes.
 	pub MinSolutionScoreBump: Perbill = Perbill::from_rational_approximation(5u32, 10_000);
@@ -505,14 +505,17 @@ impl pallet_staking::Config for Runtime {
 
 parameter_types! {
 	// phase durations
-	pub const SignedPhase: u32 = 25;
-	pub const UnsignedPhase: u32 = 25;
+	pub const SignedPhase: u32 = 5;
+	pub const UnsignedPhase: u32 = 5;
 
 	// signed configs
 	pub const MaxSignedSubmissions: u32 = 10;
 	pub const SignedRewardBase: Balance = 1 * DOLLARS;
 	pub const SignedDepositBase: Balance = 1 * DOLLARS;
 	pub const SignedDepositByte: Balance = 1 * CENTS;
+
+	// fallback: no need to do on-chain phragmen initially.
+	pub const Fallback: pallet_two_phase_election_provider::FallbackStrategy = pallet_two_phase_election_provider::FallbackStrategy::Nothing;
 
 	// unsigned configs
 	pub const TwoPhaseUnsignedPriority: TransactionPriority = StakingUnsignedPriority::get() - 1u64;
@@ -545,6 +548,7 @@ impl pallet_two_phase_election_provider::Config for Runtime {
 	type DataProvider = Staking;
 	type OnChainAccuracy = Perbill;
 	type CompactSolution = pallet_staking::CompactAssignments;
+	type Fallback = Fallback;
 	type WeightInfo = pallet_two_phase_election_provider::weights::SubstrateWeight<Runtime>;
 }
 
@@ -594,7 +598,7 @@ impl pallet_democracy::Config for Runtime {
 	>;
 	type BlacklistOrigin = EnsureRoot<AccountId>;
 	// Any single technical committee member may veto a coming council proposal, however they can
-	// only do it once and it lasts only for the cooloff period.
+	// only do it once and it lasts only for the cool-off period.
 	type VetoOrigin = pallet_collective::EnsureMember<AccountId, TechnicalCollective>;
 	type CooloffPeriod = CooloffPeriod;
 	type PreimageByteDeposit = PreimageByteDeposit;

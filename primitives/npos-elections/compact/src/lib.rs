@@ -117,29 +117,32 @@ fn struct_def(
 
 	let singles = {
 		let name = field_name_for(1);
+		// NOTE: we use the visibility of the struct for the fields as well.. could be made better.
 		quote!(
-			#name: Vec<(#voter_type, #target_type)>,
+			#vis #name: Vec<(#voter_type, #target_type)>,
 		)
 	};
 
 	let doubles = {
 		let name = field_name_for(2);
 		quote!(
-			#name: Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,
+			#vis #name: Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,
 		)
 	};
 
-	let rest = (3..=count).map(|c| {
-		let field_name = field_name_for(c);
-		let array_len = c - 1;
-		quote!(
-			#field_name: Vec<(
-				#voter_type,
-				[(#target_type, #weight_type); #array_len],
-				#target_type
-			)>,
-		)
-	}).collect::<TokenStream2>();
+	let rest = (3..=count)
+		.map(|c| {
+			let field_name = field_name_for(c);
+			let array_len = c - 1;
+			quote!(
+				#vis #field_name: Vec<(
+					#voter_type,
+					[(#target_type, #weight_type); #array_len],
+					#target_type
+				)>,
+			)
+		})
+		.collect::<TokenStream2>();
 
 	let len_impl = len_impl(count);
 	let edge_count_impl = edge_count_impl(count);

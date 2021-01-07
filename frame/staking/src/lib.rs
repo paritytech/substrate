@@ -343,7 +343,7 @@ macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		frame_support::debug::$level!(
 			target: crate::LOG_TARGET,
-			$patter $(, $values)*
+			concat!("💸 ", $patter) $(, $values)*
 		)
 	};
 }
@@ -1331,14 +1331,14 @@ decl_module! {
 									ElectionStatus::<T::BlockNumber>::Open(now)
 								);
 								add_weight(0, 1, 0);
-								log!(info, "💸 Election window is Open({:?}). Snapshot created", now);
+								log!(info, "Election window is Open({:?}). Snapshot created", now);
 							} else {
-								log!(warn, "💸 Failed to create snapshot at {:?}.", now);
+								log!(warn, "Failed to create snapshot at {:?}.", now);
 							}
 						}
 					}
 				} else {
-					log!(warn, "💸 Estimating next session change failed.");
+					log!(warn, "Estimating next session change failed.");
 				}
 				add_weight(0, 0, T::NextNewSession::weight(now))
 			}
@@ -1353,16 +1353,15 @@ decl_module! {
 		/// to open. If so, it runs the offchain worker code.
 		fn offchain_worker(now: T::BlockNumber) {
 			use offchain_election::{set_check_offchain_execution_status, compute_offchain_election};
-
 			if Self::era_election_status().is_open_at(now) {
 				let offchain_status = set_check_offchain_execution_status::<T>(now);
 				if let Err(why) = offchain_status {
-					log!(warn, "💸 skipping offchain worker in open election window due to [{}]", why);
+					log!(warn, "skipping offchain worker in open election window due to [{}]", why);
 				} else {
 					if let Err(e) = compute_offchain_election::<T>() {
-						log!(error, "💸 Error in election offchain worker: {:?}", e);
+						log!(error, "Error in election offchain worker: {:?}", e);
 					} else {
-						log!(debug, "💸 Executed offchain worker thread without errors.");
+						log!(debug, "Executed offchain worker thread without errors.");
 					}
 				}
 			}
@@ -2250,7 +2249,7 @@ impl<T: Config> Module<T> {
 		{
 			log!(
 				warn,
-				"💸 Snapshot size too big [{} <> {}][{} <> {}].",
+				"Snapshot size too big [{} <> {}][{} <> {}].",
 				num_validators,
 				MAX_VALIDATORS,
 				num_nominators,
@@ -2567,7 +2566,7 @@ impl<T: Config> Module<T> {
 			validator_at,
 		).map_err(|e| {
 			// log the error since it is not propagated into the runtime error.
-			log!(warn, "💸 un-compacting solution failed due to {:?}", e);
+			log!(warn, "un-compacting solution failed due to {:?}", e);
 			Error::<T>::OffchainElectionBogusCompact
 		})?;
 
@@ -2582,7 +2581,7 @@ impl<T: Config> Module<T> {
 				// all of the indices must map to either a validator or a nominator. If this is ever
 				// not the case, then the locking system of staking is most likely faulty, or we
 				// have bigger problems.
-				log!(error, "💸 detected an error in the staking locking and snapshot.");
+				log!(error, "detected an error in the staking locking and snapshot.");
 				// abort.
 				return Err(Error::<T>::OffchainElectionBogusNominator.into());
 			}
@@ -2642,7 +2641,7 @@ impl<T: Config> Module<T> {
 		let exposures = Self::collect_exposures(supports);
 		log!(
 			info,
-			"💸 A better solution (with compute {:?} and score {:?}) has been validated and stored on chain.",
+			"A better solution (with compute {:?} and score {:?}) has been validated and stored on chain.",
 			compute,
 			submitted_score,
 		);
@@ -2843,7 +2842,7 @@ impl<T: Config> Module<T> {
 
 			log!(
 				info,
-				"💸 new validator set of size {:?} has been elected via {:?} for era {:?}",
+				"new validator set of size {:?} has been elected via {:?} for staring era {:?}",
 				elected_stashes.len(),
 				compute,
 				current_era,
@@ -2899,7 +2898,7 @@ impl<T: Config> Module<T> {
 			.map_err(|_|
 				log!(
 					error,
-					"💸 on-chain phragmen is failing due to a problem in the result. This must be a bug."
+					"on-chain phragmen is failing due to a problem in the result. This must be a bug."
 				)
 			)
 			.ok()?;
@@ -2970,7 +2969,7 @@ impl<T: Config> Module<T> {
 			// If we don't have enough candidates, nothing to do.
 			log!(
 				warn,
-				"💸 Chain does not have enough staking candidates to operate. Era {:?}.",
+				"chain does not have enough staking candidates to operate. Era {:?}.",
 				Self::current_era()
 			);
 			None
@@ -3044,7 +3043,7 @@ impl<T: Config> Module<T> {
 		if (elected_stashes.len() as u32) <= Self::minimum_validator_count() {
 			log!(
 				warn,
-				"💸  Chain does not have enough staking candidates to operate for era {:?}",
+				"chain does not have enough staking candidates to operate for era {:?}",
 				current_era,
 			);
 			return Err(());
@@ -3082,7 +3081,7 @@ impl<T: Config> Module<T> {
 
 		log!(
 			info,
-			"💸 new validator set of size {:?} has been processed for era {:?}",
+			"new validator set of size {:?} has been processed for era {:?}",
 			elected_stashes.len(),
 			current_era,
 		);
@@ -3095,8 +3094,13 @@ impl<T: Config> Module<T> {
 	/// This will also process the election, as noted in [`process_election`].
 	fn enact_election(_current_era: EraIndex) -> Option<Vec<T::AccountId>> {
 		let outcome = T::ElectionProvider::elect().map(|_| ());
-		log!(debug, "Experimental election provider outputted {:?}", outcome);
-		// TODO: TWO_PHASE: This code path shall not return anything for now.
+		log!(
+			debug,
+			"Experimental election provider outputted {:?}",
+			outcome
+		);
+		// TODO: TWO_PHASE: This code path shall not return anything for now. Later on, redirect the
+		// results to `process_election`.
 		None
 	}
 
@@ -3260,7 +3264,9 @@ impl<T: Config> Module<T> {
 	}
 }
 
-impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::BlockNumber> for Module<T> {
+impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::BlockNumber>
+	for Module<T>
+{
 	fn desired_targets() -> u32 {
 		Self::validator_count()
 	}
@@ -3663,7 +3669,7 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				return invalid.into();
 			}
 
-			log!(debug, "💸 validateUnsigned succeeded for a solution at era {}.", era);
+			log!(debug, "validateUnsigned succeeded for a solution at era {}.", era);
 
 			ValidTransaction::with_tag_prefix("StakingOffchain")
 				// The higher the score[0], the better a solution is.

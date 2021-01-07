@@ -1,7 +1,11 @@
 use super::*;
 use crate::two_phase;
 pub use frame_support::{assert_noop, assert_ok};
-use frame_support::{parameter_types, traits::OnInitialize, weights::Weight};
+use frame_support::{
+	parameter_types,
+	traits::{Hooks},
+	weights::Weight,
+};
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -66,6 +70,15 @@ pub fn roll_to(n: u64) {
 	for i in now + 1..=n {
 		System::set_block_number(i);
 		TwoPhase::on_initialize(i);
+	}
+}
+
+pub fn roll_to_with_ocw(n: u64) {
+	let now = System::block_number();
+	for i in now + 1..=n {
+		System::set_block_number(i);
+		TwoPhase::on_initialize(i);
+		TwoPhase::offchain_worker(i);
 	}
 }
 
@@ -180,6 +193,7 @@ parameter_types! {
 		(30, 30, vec![30]),
 		(40, 40, vec![40]),
 	];
+	pub static BlacklistedVoters: Vec<AccountId> = vec![];
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedDepositBase: Balance = 5;
 	pub static SignedDepositByte: Balance = 0;
@@ -192,6 +206,71 @@ parameter_types! {
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static EpochLength: u64 = 30;
+	pub static Fallback: FallbackStrategy = FallbackStrategy::OnChain;
+	pub static MockWeightInfo: bool = false;
+}
+
+// Hopefully this won't be too much of a hassle to maintain.
+pub struct DualMockWeightInfo;
+impl two_phase::weights::WeightInfo for DualMockWeightInfo {
+	fn on_initialize_nothing() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as two_phase::weights::WeightInfo>::on_initialize_nothing()
+		}
+	}
+	fn on_initialize_open_signed() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as two_phase::weights::WeightInfo>::on_initialize_open_signed()
+		}
+	}
+	fn on_initialize_open_unsigned() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as two_phase::weights::WeightInfo>::on_initialize_open_unsigned()
+		}
+	}
+	fn finalize_signed_phase_accept_solution() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as two_phase::weights::WeightInfo>::finalize_signed_phase_accept_solution()
+		}
+	}
+	fn finalize_signed_phase_reject_solution() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as two_phase::weights::WeightInfo>::finalize_signed_phase_reject_solution()
+		}
+	}
+	fn submit(c: u32) -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as two_phase::weights::WeightInfo>::submit(c)
+		}
+	}
+	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
+		if MockWeightInfo::get() {
+			// 10 base
+			// 5 per edge.
+			(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight))
+		} else {
+			<() as two_phase::weights::WeightInfo>::submit_unsigned(v, t, a, d)
+		}
+	}
+	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as two_phase::weights::WeightInfo>::feasibility_check(v, t, a, d)
+		}
+	}
 }
 
 impl crate::two_phase::Config for Runtime {
@@ -213,8 +292,9 @@ impl crate::two_phase::Config for Runtime {
 	type MinerMaxWeight = MinerMaxWeight;
 	type UnsignedPriority = UnsignedPriority;
 	type DataProvider = StakingMock;
-	type WeightInfo = ();
+	type WeightInfo = DualMockWeightInfo;
 	type OnChainAccuracy = Perbill;
+	type Fallback = Fallback;
 	type CompactSolution = TestCompact;
 }
 
@@ -243,9 +323,17 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 		DesiredTargets::get()
 	}
 	fn feasibility_check_assignment<P: PerThing>(
-		_: &Assignment<AccountId, P>,
+		assignment: &Assignment<AccountId, P>,
 	) -> Result<(), &'static str> {
-		Ok(())
+		if <BlacklistedVoters>::get()
+			.into_iter()
+			.find(|x| *x == assignment.who)
+			.is_some()
+		{
+			Err("blacklisted")
+		} else {
+			Ok(())
+		}
 	}
 	fn next_election_prediction(now: u64) -> u64 {
 		now + EpochLength::get() - now % EpochLength::get()
@@ -282,12 +370,28 @@ impl ExtBuilder {
 		<SignedRewardMax>::set(max);
 		self
 	}
+	pub fn fallabck(self, fallback: FallbackStrategy) -> Self {
+		<Fallback>::set(fallback);
+		self
+	}
+	pub fn miner_weight(self, weight: Weight) -> Self {
+		<MinerMaxWeight>::set(weight);
+		self
+	}
+	pub fn mock_weight_info(self, mock: bool) -> Self {
+		<MockWeightInfo>::set(mock);
+		self
+	}
 	pub fn desired_targets(self, t: u32) -> Self {
 		<DesiredTargets>::set(t);
 		self
 	}
 	pub fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
 		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
+		self
+	}
+	pub fn blacklist_voter(self, who: AccountId) -> Self {
+		BLACKLISTED_VOTERS.with(|v| v.borrow_mut().push(who));
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {

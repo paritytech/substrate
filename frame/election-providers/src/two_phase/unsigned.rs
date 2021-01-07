@@ -25,7 +25,7 @@ use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
 use sp_std::cmp::Ordering;
 
 /// Storage key used to store the persistent offchain worker status.
-pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/unsigned-election/";
+pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/two-phase-unsigned-election/";
 /// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
 /// within a window of 5 blocks.
 pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
@@ -52,6 +52,13 @@ where
 			Some((iters, 0)),
 		)
 		.map_err(Into::into)
+		.and_then(|election_result| {
+			if election_result.winners.len() as u32 == desired_targets {
+				Ok(election_result)
+			} else {
+				Err(ElectionError::Feasibility(FeasibilityError::WrongWinnerCount))
+			}
+		})
 		.and_then(Self::prepare_election_result)
 	}
 
@@ -97,6 +104,12 @@ where
 			desired_targets,
 			witness,
 			T::MinerMaxWeight::get(),
+		);
+		log!(
+			debug,
+			"miner: current compact solution voters = {}, maximum_allowed = {}",
+			compact.voter_count(),
+			maximum_allowed_voters,
 		);
 		let compact = Self::trim_compact(maximum_allowed_voters, compact, &voter_index)?;
 
@@ -565,28 +578,28 @@ mod tests {
 
 			// initial
 			assert_eq!(TwoPhase::current_phase(), Phase::Off);
-			matches!(
+			assert!(matches!(
 				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
 					.unwrap_err(),
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(99))
-			);
-			matches!(
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
+			));
+			assert!(matches!(
 				<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(99))
-			);
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
+			));
 
 			// signed
 			roll_to(15);
 			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
-			matches!(
+			assert!(matches!(
 				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
 					.unwrap_err(),
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(99))
-			);
-			matches!(
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
+			));
+			assert!(matches!(
 				<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(99))
-			);
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
+			));
 
 			// unsigned
 			roll_to(25);
@@ -629,15 +642,15 @@ mod tests {
 			<QueuedSolution<Runtime>>::put(ready);
 
 			// won't work anymore.
-			matches!(
+			assert!(matches!(
 				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
 					.unwrap_err(),
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(99))
-			);
-			matches!(
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(1))
+			));
+			assert!(matches!(
 				<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(99))
-			);
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(1))
+			));
 		})
 	}
 
@@ -673,17 +686,41 @@ mod tests {
 		expected = "Invalid unsigned submission must produce invalid block and deprive \
 		validator from their authoring reward.: FeasibilityError::WrongWinnerCount"
 	)]
-	fn invalid_solution_panics() {
+	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
 			assert!(TwoPhase::current_phase().is_unsigned());
 
-			// This is in itself an invalid BS solution..
+			// This is in itself an invalid BS solution.
 			let solution = RawSolution::<TestCompact> {
 				score: [5, 0, 0],
 				..Default::default()
 			};
 			let call = Call::submit_unsigned(solution.clone(), witness());
+			let outer_call: OuterCall = call.into();
+			let _ = outer_call.dispatch(Origin::none());
+		})
+	}
+
+	#[test]
+	#[should_panic(
+		expected = "Invalid unsigned submission must produce invalid block and deprive validator from their authoring reward."
+	)]
+	fn wrong_witness_panics() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(25);
+			assert!(TwoPhase::current_phase().is_unsigned());
+
+			// This solution is unfeasible as well, but we won't even get there.
+			let solution = RawSolution::<TestCompact> {
+				score: [5, 0, 0],
+				..Default::default()
+			};
+
+			let mut correct_witness = witness();
+			correct_witness.voters += 1;
+			correct_witness.targets -= 1;
+			let call = Call::submit_unsigned(solution.clone(), correct_witness);
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -711,16 +748,58 @@ mod tests {
 
 	#[test]
 	fn miner_trims_weight() {
-		// set a proper max weight and mock weighInfo, test weight being trimmed.
+		ExtBuilder::default()
+			.miner_weight(100)
+			.mock_weight_info(true)
+			.build_and_execute(|| {
+				roll_to(25);
+				assert!(TwoPhase::current_phase().is_unsigned());
+
+				let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
+				let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
+					witness.voters,
+					witness.targets,
+					solution.compact.voter_count() as u32,
+					solution.compact.unique_targets().len() as u32,
+				);
+				// default solution will have 5 edges (5 * 5 + 10)
+				assert_eq!(solution_weight, 35);
+				assert_eq!(solution.compact.voter_count(), 5);
+
+				// now reduce the max weight
+				<MinerMaxWeight>::set(25);
+
+				let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
+				let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
+					witness.voters,
+					witness.targets,
+					solution.compact.voter_count() as u32,
+					solution.compact.unique_targets().len() as u32,
+				);
+				// default solution will have 5 edges (5 * 5 + 10)
+				assert_eq!(solution_weight, 25);
+				assert_eq!(solution.compact.voter_count(), 3);
+			})
 	}
 
 	#[test]
-	fn ocw_will_only_submit_if_feasible() {
-		// the ocw should only submit a solution if it is sure that it is valid.
+	fn miner_will_not_submit_if_not_enough_winners() {
+		ExtBuilder::default()
+			.desired_targets(8)
+			.build_and_execute(|| {
+				roll_to(25);
+				assert!(TwoPhase::current_phase().is_unsigned());
+
+				// mine seq_phragmen solution with 2 iters.
+				assert_eq!(
+					TwoPhase::mine_solution(2).unwrap_err(),
+					ElectionError::Feasibility(FeasibilityError::WrongWinnerCount),
+				);
+			})
 	}
 
 	#[test]
-	fn can_only_submit_threshold_better() {
+	fn unsigned_per_dispatch_checks_can_only_submit_threshold_better() {
 		ExtBuilder::default()
 			.desired_targets(1)
 			.add_voter(7, 2, vec![10])
@@ -741,8 +820,9 @@ mod tests {
 						distribution: vec![(10, PerU16::one())],
 					}],
 				};
-				let (compact, witness) = TwoPhase::prepare_election_result(result).unwrap();
-				assert_ok!(TwoPhase::submit_unsigned(Origin::none(), compact, witness));
+				let (solution, witness) = TwoPhase::prepare_election_result(result).unwrap();
+				assert_ok!(TwoPhase::unsigned_pre_dispatch_checks(&solution));
+				assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution, witness));
 				assert_eq!(TwoPhase::queued_solution().unwrap().score[0], 10);
 
 				// trial 1: a solution who's score is only 2, i.e. 20% better in the first element.
@@ -760,14 +840,14 @@ mod tests {
 						},
 					],
 				};
-				let (solution, witness) = TwoPhase::prepare_election_result(result).unwrap();
+				let (solution, _) = TwoPhase::prepare_election_result(result).unwrap();
 				// 12 is not 50% more than 10
 				assert_eq!(solution.score[0], 12);
-
 				assert_noop!(
-					TwoPhase::submit_unsigned(Origin::none(), solution, witness),
+					TwoPhase::unsigned_pre_dispatch_checks(&solution),
 					Error::<Runtime>::WeakSubmission,
 				);
+				// submitting this will actually panic.
 
 				// trial 2: a solution who's score is only 7, i.e. 70% better in the first element.
 				let result = ElectionResult {
@@ -792,6 +872,7 @@ mod tests {
 				assert_eq!(solution.score[0], 17);
 
 				// and it is fine
+				assert_ok!(TwoPhase::unsigned_pre_dispatch_checks(&solution));
 				assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution, witness));
 			})
 	}
@@ -860,20 +941,17 @@ mod tests {
 	fn ocw_can_submit_to_pool() {
 		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
-			roll_to(25);
+			roll_to_with_ocw(25);
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
-			TwoPhase::offchain_worker(25);
+			// OCW must have submitted now
 
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
 			let call = extrinsic.call;
-			matches!(call, OuterCall::TwoPhase(Call::submit_unsigned(_, _)));
+			assert!(matches!(
+				call,
+				OuterCall::TwoPhase(Call::submit_unsigned(_, _))
+			));
 		})
 	}
-
-	#[test]
-	fn wrong_witness_fails() {}
-
-	#[test]
-	fn invalid_round_fails() {}
 }
