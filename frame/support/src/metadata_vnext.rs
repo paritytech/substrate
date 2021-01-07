@@ -25,8 +25,12 @@ macro_rules! impl_runtime_metadata_vnext {
 	) => {
 		impl $runtime {
 			pub fn metadata_vnext() -> $crate::metadata::v13::RuntimeMetadataPrefixed {
-				$crate::metadata::v13::RuntimeMetadataLastVersion {
-						modules: $crate::__runtime_modules_to_metadata_vnext!($runtime;; $( $rest )*),
+				$crate::metadata::v13::RuntimeMetadataLastVersion::new(
+						$crate::__runtime_modules_to_metadata_vnext!($runtime;; $( $rest )*),
+						$crate::metadata::v13::ExtrinsicMetadata {
+							version: <$ext as $crate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
+							signed_extensions: vec![] // todo: init extensions (see below)
+						}
 						// extrinsic: $crate::metadata::ExtrinsicMetadata {
 						// 	version: <$ext as $crate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
 						// 	signed_extensions: <
@@ -38,7 +42,7 @@ macro_rules! impl_runtime_metadata_vnext {
 						// 			.map($crate::metadata::DecodeDifferent::Encode)
 						// 			.collect(),
 						// },
-				}.into()
+				).into()
 			}
 		}
 	}

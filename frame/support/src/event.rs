@@ -580,8 +580,8 @@ macro_rules! __impl_outer_event_json_metadata_vnext {
 	) => {
 		impl $runtime {
 			#[allow(dead_code)]
-			pub fn outer_event_metadata_vnext() -> $crate::event::vnext::OuterEventMetadata {
-				$crate::event::vnext::OuterEventMetadata {
+			pub fn outer_event_metadata_vnext() -> $crate::metadata::v13::OuterEventMetadata {
+				$crate::metadata::v13::OuterEventMetadata {
 					name: stringify!($event_name),
 					events: $crate::scale_info::prelude::vec![
 						$(
@@ -610,7 +610,7 @@ macro_rules! __impl_outer_event_json_metadata_vnext {
 			$(
 				#[allow(dead_code)]
 				pub fn [< __module_events_vnext_ $module_name $( _ $instance )? >] () ->
-					Vec<$crate::event::vnext::EventMetadata>
+					Vec<$crate::metadata::v13::EventMetadata>
 				{
 					$module_name::Event ::< $( $generic_params ),* > ::metadata_vnext()
 				}

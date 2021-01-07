@@ -1053,7 +1053,7 @@ impl_runtime_apis! {
 		}
 
 		fn metadata_vnext() -> OpaqueMetadata {
-			Runtime::metadata_vnext().into()
+			OpaqueMetadata::new(Runtime::metadata_vnext().encode())
 		}
 	}
 
