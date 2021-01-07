@@ -133,14 +133,15 @@ decl_module! {
 		/// `BatchInterrupted` event is deposited, along with the number of successful calls made
 		/// and the error of the failed call. If all were successful, then the `BatchCompleted`
 		/// event is deposited.
-		#[weight = (
-			calls.iter()
-				.map(|call| call.get_dispatch_info().weight)
+		#[weight = {
+			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
+			(dispatch_infos.iter()
+				.map(|di| di.weight)
 				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
 				.saturating_add(T::WeightInfo::batch(calls.len() as u32)),
 			{
-				let all_operational = calls.iter()
-					.map(|call| call.get_dispatch_info().class)
+				let all_operational = dispatch_infos.iter()
+					.map(|di| di.class)
 					.all(|class| class == DispatchClass::Operational);
 				if all_operational {
 					DispatchClass::Operational
@@ -148,7 +149,7 @@ decl_module! {
 					DispatchClass::Normal
 				}
 			},
-		)]
+		)}]
 		fn batch(origin, calls: Vec<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
@@ -227,14 +228,15 @@ decl_module! {
 		/// # <weight>
 		/// - Complexity: O(C) where C is the number of calls to be batched.
 		/// # </weight>
-		#[weight = (
-			calls.iter()
-				.map(|call| call.get_dispatch_info().weight)
+		#[weight = {
+			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
+			(dispatch_infos.iter()
+				.map(|di| di.weight)
 				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
 				.saturating_add(T::WeightInfo::batch_all(calls.len() as u32)),
 			{
-				let all_operational = calls.iter()
-					.map(|call| call.get_dispatch_info().class)
+				let all_operational = dispatch_infos.iter()
+					.map(|di| di.class)
 					.all(|class| class == DispatchClass::Operational);
 				if all_operational {
 					DispatchClass::Operational
@@ -242,7 +244,7 @@ decl_module! {
 					DispatchClass::Normal
 				}
 			},
-		)]
+		)}]
 		#[transactional]
 		fn batch_all(origin, calls: Vec<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
