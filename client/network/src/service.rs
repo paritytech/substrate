@@ -928,7 +928,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// Returns an `Err` if one of the given addresses is invalid or contains an
 	/// invalid peer ID (which includes the local peer ID).
-	pub fn add_peers_set_reserved(&self, protocol: Cow<'static, str>, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	pub fn add_peers_to_reserved_set(&self, protocol: Cow<'static, str>, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		for (peer_id, addr) in peers.into_iter() {
@@ -958,7 +958,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// invalid peer ID (which includes the local peer ID).
 	//
 	// NOTE: technically, this function only needs `Vec<PeerId>`, but we use `Multiaddr` here for convenience.
-	pub fn remove_peers_set_reserved(&self, protocol: Cow<'static, str>, peers: HashSet<Multiaddr>) -> Result<(), String> {
+	pub fn remove_peers_from_reserved_set(&self, protocol: Cow<'static, str>, peers: HashSet<Multiaddr>) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 		for (peer_id, _) in peers.into_iter() {
 			let _ = self
