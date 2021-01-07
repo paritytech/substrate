@@ -28,7 +28,7 @@ use sp_std::{
 	vec::Vec,
 };
 
-pub use sp_externalities::{Externalities, ExternalitiesExt, WorkerResult};
+pub use sp_externalities::{Externalities, ExternalitiesExt, AsyncExternalities, WorkerResult, WorkerDeclaration};
 
 /// Code execution engine.
 #[cfg(feature = "std")]
@@ -206,7 +206,7 @@ pub trait RuntimeSpawn: Send {
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: u8,
+		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64;
 
@@ -219,7 +219,7 @@ pub trait RuntimeSpawn: Send {
 		dispatcher_ref: u32,
 		func: u32,
 		payload: Vec<u8>,
-		kind: u8,
+		declaration: WorkerDeclaration,
 		ext: &mut dyn Externalities,
 	) -> u64;
 	
@@ -233,7 +233,7 @@ pub trait RuntimeSpawn: Send {
 	/// Note that `dismiss` can be more expensive than `join`, as
 	/// it can involve spawning again the worker, when `join` just
 	/// release it.
-	fn dismiss(&self, handle: u64);
+	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities);
 
 	/// Change the number of runtime runing in the pool.
 	/// Note that this should only increase capacity (default value

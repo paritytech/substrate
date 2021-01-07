@@ -28,8 +28,8 @@ use sp_core::{
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{
-	Externalities, Extensions, Extension, ExtensionStore, AsyncBackend, TaskId,
-	WorkerResult,
+	Externalities, Extensions, Extension, ExtensionStore, TaskId,
+	WorkerResult, WorkerDeclaration, AsyncExternalities,
 };
 use codec::{Decode, Encode, EncodeAppend};
 
@@ -340,7 +340,7 @@ where
 		let next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
 
-		match (next_backend_key, next_overlay_key_change) {
+		let res = match (next_backend_key, next_overlay_key_change) {
 			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
 			(backend_key, None) => backend_key,
 			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
@@ -348,7 +348,10 @@ where
 			} else {
 				self.next_storage_key(&overlay_key.0[..])
 			},
-		}
+		};
+		self.overlay.guard_read_interval(None, key, res.as_ref().map(Vec::as_slice));
+		self.overlay.log_read_interval(None, key, res.as_ref().map(Vec::as_slice));
+		res
 	}
 
 	fn next_child_storage_key(
@@ -364,7 +367,7 @@ where
 			key
 		);
 
-		match (next_backend_key, next_overlay_key_change) {
+		let res = match (next_backend_key, next_overlay_key_change) {
 			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
 			(backend_key, None) => backend_key,
 			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
@@ -375,7 +378,10 @@ where
 					&overlay_key.0[..],
 				)
 			},
-		}
+		};
+		self.overlay.guard_read_interval(Some(child_info), key, res.as_ref().map(Vec::as_slice));
+		self.overlay.log_read_interval(Some(child_info), key, res.as_ref().map(Vec::as_slice));
+		res
 	}
 
 	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
@@ -458,8 +464,9 @@ where
 			HexDisplay::from(&prefix),
 		);
 		let _guard = guard();
-		if is_child_storage_key(prefix) {
-			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
+
+		if sp_core::storage::well_known_keys::contains_child_storage_key(prefix) {
+			warn!(target: "trie", "Refuse to directly clear prefix that is part or contains of child storage key");
 			return;
 		}
 
@@ -692,22 +699,26 @@ where
 		self.backend.set_whitelist(new)
 	}
 
-	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
-		self.backend.async_backend()
-	}
-
-	fn get_async_backend(&mut self, marker: TaskId) -> Box<dyn AsyncBackend> {
-		let backend = self.get_past_async_backend();
-		self.overlay.set_marker(marker);
-		let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
+	fn get_worker_externalities(
+		&mut self,
+		worker_id: u64,
+		declaration: WorkerDeclaration,
+	) -> Box<dyn AsyncExternalities> {
+		let backend = self.backend.async_backend();
+		Box::new(crate::async_ext::new_child_worker_async_ext(
+			worker_id,
+			declaration,
 			backend,
-			self.overlay,
-		));
-		backend
+			Some(&mut self.overlay),
+		))
 	}
-
+	
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		self.overlay.resolve_worker_result(state_update)
+	}
+
+	fn dismiss_worker(&mut self, id: TaskId) {
+		self.overlay.dismiss_worker(id);
 	}
 }
 

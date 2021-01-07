@@ -35,6 +35,8 @@ pub use extensions::{Extension, Extensions, ExtensionStore};
 mod extensions;
 mod scope_limited;
 
+const INCOMPATIBLE_CHILD_WORKER_TYPE: &str = "Incompatible child worker type";
+
 /// Externalities error.
 #[derive(Debug)]
 pub enum Error {
@@ -277,16 +279,12 @@ pub trait Externalities: ExtensionStore {
 	/// Adds new storage keys to the DB tracking whitelist.
 	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>);
 
-	/// Get async backend that do not contains current changes.
-	/// (state for previous block).
-	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend>;
-
-	/// Get current async backend, and set a marker on the current state
-	/// to be able to identify changes.
-	/// Adding this checkpoint state allows externalities to kill all tasks
-	/// associated with this state if it gets dropped (by transactional
-	/// rollback).
-	fn get_async_backend(&mut self, marker: TaskId) -> Box<dyn AsyncBackend>;
+	/// Get externalities to use with a future worker.
+	fn get_worker_externalities(
+		&mut self,
+		worker_id: u64,
+		declaration: WorkerDeclaration,
+	) -> Box<dyn AsyncExternalities>;
 
 	/// Resolve worker result does update externality state
 	/// and also apply rules relative to the exernality state.
@@ -296,6 +294,45 @@ pub trait Externalities: ExtensionStore {
 	/// but after checking against parent externalities, it may change
 	/// to invalid (`None`).
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>>;
+
+	/// Worker result have been dissmiss, inner externality state and constraint
+	/// needs to be lifted.
+	/// TODO consider making it a worker result varian and only have 'resolve_worker_result'.
+	fn dismiss_worker(&mut self, id: TaskId);
+}
+
+/// Substrate externalities that can be use within a worker context.
+pub trait AsyncExternalities: Externalities + Send {
+	/// Extract changes made to state for this worker.
+	fn extract_delta(&mut self) -> Option<StateDelta>;
+
+	/// After execution, we call back async externalities to check
+	/// produce worker result.
+	fn extract_state(&mut self) -> AsyncExternalitiesPostExecution;
+}
+
+/// State of async externality of a child workre after 'join' is called.
+pub enum AsyncExternalitiesPostExecution {
+	/// Some condition fails and the state is invalid.
+	/// With an invalid state we consider that worker
+	/// execution, even if it did finish is invalid.
+	/// Therefore 'join' implementation should never
+	/// return result when externality is in this state.
+	Invalid,
+
+	/// Assuming that child worker state is valid, we can
+	/// return the result to the parent worker on 'join'.
+	Valid,
+
+	/// This requires to check the result against
+	/// parent worker externalities with `resolve_worker_result`.
+	NeedResolve,
+
+	/// Optimistic worker state accesses to be checked
+	/// against other worker results.
+	/// This can result in 'join' returning an invalid
+	/// result.
+	Optimistic(AccessLog),
 }
 
 /// Result from worker execution.
@@ -305,37 +342,145 @@ pub trait Externalities: ExtensionStore {
 #[derive(codec::Encode, codec::Decode)]
 pub enum WorkerResult {
 	/// Payload resulting from a successfull
-	/// stateless call, or a call that
-	/// is guaranted to be valid at this point.
-	Valid(Vec<u8>),
+	/// call that is guaranted to be valid
+	/// at this point.
+	/// eg. a stateless worker.
+	Valid(Vec<u8>, Option<StateDelta>),
 	/// Result that require to be checked against
 	/// its parent externality state.
-	CallAt(Vec<u8>, TaskId),
+	CallAt(Vec<u8>, Option<StateDelta>, TaskId),
+	/// Optimistic strategy call reply, it contains
+	/// a log of accessed keys during child execution.
+	Optimistic(Vec<u8>, Option<StateDelta>, TaskId, AccessLog),
 	/// A worker execution that is not valid.
 	/// For instance when asumption on state
 	/// are required.
 	Invalid,
 	/// Internal panic when runing the worker.
-	/// This should propagate panic in caller.
-	Panic,
+	/// This propagate panic in caller.
+	RuntimePanic,
 	/// Technical panic when runing the worker.
-	/// This always propagate panic in caller.
+	/// This propagate panic in caller, and also
+	/// indicate the process should be stop. 
 	HardPanic,
+}
+
+/// Changes to state made by a worker.
+#[derive(codec::Encode, codec::Decode)]
+pub struct StateDelta {
+	pub top: TrieDelta,
+	pub children: Vec<(ChildInfo, TrieDelta)>,
+}
+
+impl Default for StateDelta {
+	fn default() -> Self {
+		StateDelta {
+			top: TrieDelta {
+				added: Vec::new(),
+				deleted: Vec::new(),
+			},
+			children: Vec::new(),
+		}
+	}
+}
+
+#[derive(codec::Encode, codec::Decode)]
+pub struct TrieDelta {
+	/// Key values added.
+	pub added: Vec<(Vec<u8>, Vec<u8>)>,
+	/// Keys deleted.
+	pub deleted: Vec<Vec<u8>>,
+}
+
+/// Log of a given worker call.
+#[derive(codec::Encode, codec::Decode, Default)]
+pub struct AccessLog {
+	/// Worker did iterate over the full state.
+	/// (in practice it did not iterate but uses
+	/// merkle hash over the full state when calculating
+	/// a storage root).
+	pub read_all: bool,
+	/// Log of access for main state.
+	pub top_logger: StateLog,
+	/// Log of access for individual child state.
+	/// Note that the child root isn't logged in top_logger
+	/// because it is always written with its right state
+	/// at the end (actually triggers read_all that supersed
+	/// the other fields).
+	pub children_logger: Vec<(Vec<u8>, StateLog)>,
+}
+
+impl AccessLog {
+	/// Return true if a read related information was logged.
+	pub fn has_read(&self) -> bool {
+		if self.read_all {
+			return true;
+		}
+		if self.top_logger.has_read() {
+			return true;
+		}
+		for (_key, logger) in self.children_logger.iter() {
+			if logger.has_read() {
+				return true;
+			}
+		}
+		false
+	}
+	/// Return true if a write related information was logged.
+	pub fn has_write(&self) -> bool {
+		if self.top_logger.has_write() {
+			return true;
+		}
+		for (_key, logger) in self.children_logger.iter() {
+			if logger.has_write() {
+				return true;
+			}
+		}
+		false
+	}
+}
+
+/// Log of a given trie state.
+#[derive(codec::Encode, codec::Decode, Default)]
+pub struct StateLog {
+	/// Read access to a key.
+	pub read_keys: Vec<Vec<u8>>,
+	/// Write access to a key.
+	pub write_keys: Vec<Vec<u8>>,
+	/// Write access to a whole prefix (eg key removal
+	/// by prefix).
+	pub write_prefix: Vec<Vec<u8>>,
+	/// Worker did iterate over a given interval.
+	/// Interval is a pair of inclusive start and end key.
+	pub read_intervals: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+}
+
+impl StateLog {
+	/// Return true if a read related information was logged.
+	pub fn has_read(&self) -> bool {
+		!self.read_keys.is_empty() || !self.read_intervals.is_empty()
+	}
+	/// Return true if a write related information was logged.
+	pub fn has_write(&self) -> bool {
+		!self.write_keys.is_empty() || !self.write_prefix.is_empty()
+	}
 }
 
 impl WorkerResult {
 	/// Resolve state default implementation for
-	/// Externalities that do not register changes.
+	/// Read only Externalities that do not register changes.
+	/// TODO this function is bad: remove and use explicitely.
 	pub fn read_resolve(self) -> Option<Vec<u8>> {
 		match self {
 			WorkerResult::CallAt(result, ..) => Some(result),
-			WorkerResult::Valid(result) => Some(result),
+			WorkerResult::Optimistic(result, ..) => Some(result),
+			WorkerResult::Valid(result, ..) => Some(result),
 			WorkerResult::Invalid => None,
-			WorkerResult::Panic => {
-				panic!("Panic in worker")
+			WorkerResult::RuntimePanic => {
+				panic!("Runtime panic from a worker.")
 			},
 			WorkerResult::HardPanic => {
-				panic!("Hard panic in worker")
+				panic!("Hard panic runing a worker.")
 			},
 		}
 	}
@@ -347,6 +492,8 @@ pub type TaskId = u64;
 /// Backend to use with workers.
 /// This trait must be usable as `dyn AsyncBackend`,
 /// which is not the case for Backend trait.
+/// TODO try removal or update doc (dyn asyncbackend is
+/// not needed anymore).
 pub trait AsyncBackend: Send {
 	/// Read runtime storage.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
@@ -403,6 +550,264 @@ impl AsyncBackend for () {
 
 	fn async_backend(&self) -> Box<dyn AsyncBackend> {
 		Box::new(())
+	}
+}
+
+/// How declaration error is handled.
+#[derive(Debug, Clone, Copy, codec::Encode, codec::Decode)]
+pub enum DeclarationFailureHandling {
+	/// Do panic on conflict, this is a strict mode where
+	/// we cut useless computation, and need some strong
+	/// assertion over our declaration.
+	Panic,
+	/// On conflict return `None` at join.
+	/// This is very similar to optimistic `WorkerType` because
+	/// we run the whole computation and can have a no result at
+	/// the end.
+	InvalidAtJoin,
+}
+
+impl Default for DeclarationFailureHandling {
+	fn default() -> Self {
+		DeclarationFailureHandling::Panic
+	}
+}
+
+/// Differents workers execution mode `AsyncState`, it results
+/// in differents `AsyncExt externality.
+#[derive(Debug)]
+#[repr(u8)]
+pub enum WorkerType {
+	/// Worker panic on state access from externalities.
+	Stateless = 0,
+
+	/// Worker access state read only on the backend unmodified state,
+	/// it does not see change made during previous processing
+	/// (same state at the one resulting from last state transition:
+	/// last block state).
+	ReadLastBlock = 1,
+
+	/// Externalities access read only the backend unmodified state,
+	/// and the change at the time of spawn.
+	/// In this case when joining we ensure the transaction at launch
+	/// is still valid.
+	ReadAtSpawn = 2,
+
+	/// Same as `ReadAtSpawn`, but we also check that the between parent and child worker
+	/// is the same for the whole worker execution.
+	/// So read access on a child worker is not compatible with write access on
+	/// the parent.
+	///
+	/// This can only be usefull when we want the state use by child to be the one use on
+	/// join (usually we can do with it being the state use at spawn).
+	///
+	/// We return `None` on join if some state access break this asumption.
+	ReadAtJoinOptimistic = 3,
+
+	/// Same as `ReadAtJoinOptimistic`, but we do not check conflict on join.
+	/// Instead we declare child workre read accesses and check during processing
+	/// that there is no invalid access.
+	///
+	/// As for all declarative types, depending on failure access declaration
+	/// an illegal access can either result in panic or returning `None`
+	/// on join (as in optimistic mode).
+	ReadAtJoinDeclarative = 4,
+
+	/// `ReadAtSpawn` with allowed write.
+	/// Write from child workers always overwrite write from parent workers
+	/// at `join`.
+	WriteAtSpawn = 5,
+
+	/// Write on parent and child workers are mutually exclusives.
+	/// When conflict happens, child worker returns `None` on join.
+	///
+	/// As for all optimistic type, the workers need to log access and resolve
+	/// error on result access only.
+	WriteOptimistic = 6,
+
+	/// Same as `WriteOptimistic`, but conflict are detected depending on access
+	/// declaration.
+	/// We declare allowed write access for child worker (which is forbidden access
+	/// in the parent worker).
+	WriteDeclarative = 7,
+
+	/// Same as `WriteOptimistic`, with the additional constraint that we connot read data
+	/// when it is writable in a parent or a child worker.
+	///
+	/// So write from child exclude read from parent and write from parent exclude read
+	/// from child.
+	WriteAtJoinOptimistic = 8,
+
+	/// Same as `WriteAtJoinOptimistic`, but conflict are detected depending on access
+	/// declaration.
+	/// We declare allowed write access for child worker and allowed read only access
+	/// (no need to declare read access for already declared write access).
+	WriteAtJoinDeclarative = 9,
+}
+
+impl Default for WorkerType {
+	fn default() -> Self {
+		WorkerType::Stateless
+	}
+}
+
+impl WorkerType {
+	/// Similar purpose as `TryFrom<u8>`.
+	pub fn from_u8(kind: u8) -> Option<WorkerType> {
+		Some(match kind {
+			0 => WorkerType::Stateless,
+			1 => WorkerType::ReadLastBlock,
+			2 => WorkerType::ReadAtSpawn,
+			3 => WorkerType::ReadAtJoinOptimistic,
+			4 => WorkerType::ReadAtJoinDeclarative,
+			5 => WorkerType::WriteAtSpawn,
+			6 => WorkerType::WriteOptimistic,
+			7 => WorkerType::WriteDeclarative,
+			8 => WorkerType::WriteAtJoinOptimistic,
+			9 => WorkerType::WriteAtJoinDeclarative,
+			_ => return None,
+		})
+	}
+
+	/// Depending on concurrency management strategy
+	/// we may need to resolve the result against
+	/// parent externalities.
+	pub fn need_resolve(&self) -> bool {
+		match *self {
+			WorkerType::Stateless => false,
+			WorkerType::ReadLastBlock => false,
+			_ => true,
+		}
+	}
+
+	/// Panic if spawning a child worker of a given type is not possible.
+	/// TODO there is way to have more compatibility
+	/// eg : - declarative from a optimistic by logging declarative accesses
+	/// on join.
+	/// - optimistic from declarative by runing accesses on join.
+	pub fn guard_compatible_child_workers(&self, kind: WorkerType) {
+		match kind {
+			WorkerType::Stateless => (),
+			WorkerType::ReadLastBlock => match kind {
+				WorkerType::ReadLastBlock => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::ReadAtSpawn => match kind {
+				WorkerType::Stateless => (),
+				WorkerType::ReadAtSpawn => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::ReadAtJoinOptimistic => match kind {
+				WorkerType::Stateless => (),
+				WorkerType::ReadAtSpawn => (),
+				WorkerType::ReadAtJoinOptimistic => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::ReadAtJoinDeclarative => match kind {
+				WorkerType::ReadAtSpawn => (),
+				WorkerType::ReadAtJoinDeclarative => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::WriteAtSpawn => match kind {
+				WorkerType::WriteAtSpawn => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::WriteOptimistic => match kind {
+				WorkerType::WriteOptimistic => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::WriteDeclarative => match kind {
+				WorkerType::WriteDeclarative => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::WriteAtJoinOptimistic => match kind {
+				WorkerType::WriteAtJoinOptimistic => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::WriteAtJoinDeclarative => match kind {
+				WorkerType::WriteAtJoinDeclarative => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+		}
+	}
+}
+
+/// Access filter on storage when spawning worker.
+#[derive(Debug, Clone, codec::Encode, codec::Decode)]
+pub enum WorkerDeclaration {
+	/// Declaration for `WorkerType::Stateless`, no content.
+	Stateless,
+
+	/// Declaration for `WorkerType::ReadLastBlock`, no content.
+	ReadLastBlock,
+
+	/// Declaration for `WorkerType::ReadAtSpawn`, no content.
+	ReadAtSpawn,
+
+	/// Declaration for `WorkerType::ReadAtJoinOptimistic`, no content.
+	ReadAtJoinOptimistic,
+
+	/// Declaration for `WorkerType::ReadAtJoinDeclarative`.
+	/// Declaration is child worker allowed read access.
+	ReadAtJoinDeclarative(AccessDeclaration, DeclarationFailureHandling),
+
+	/// Declaration for `WorkerType::ReadAtSpawn`, no content.
+	WriteAtSpawn,
+
+	/// Declaration for `WorkerType::WriteOptimistic`, no content.
+	WriteOptimistic,
+
+	/// Declaration for `WorkerType::WriteDeclarative`.
+	/// Declaration is child worker allowed write access, read access
+	/// is not filtered.
+	WriteDeclarative(AccessDeclaration, DeclarationFailureHandling),
+
+	/// Declaration for `WorkerType::WriteAtJoinOptimistic`, no content.
+	WriteAtJoinOptimistic,
+
+	/// Declaration for `WorkerType::WriteAtJoinDeclarative`.
+	/// First declaration is child write allowed access, second declaration
+	/// is child read only allowed access (only needed if not declared in write access).
+	WriteAtJoinDeclarative(AccessDeclaration, AccessDeclaration, DeclarationFailureHandling),
+}
+
+impl WorkerDeclaration {
+	/// Extract type from declaration.
+	pub fn get_type(&self) -> WorkerType {
+		match self {
+			WorkerDeclaration::Stateless => WorkerType::Stateless,
+			WorkerDeclaration::ReadLastBlock => WorkerType::ReadLastBlock,
+			WorkerDeclaration::ReadAtSpawn => WorkerType::ReadAtSpawn,
+			WorkerDeclaration::ReadAtJoinOptimistic => WorkerType::ReadAtJoinOptimistic,
+			WorkerDeclaration::ReadAtJoinDeclarative(..) => WorkerType::ReadAtJoinDeclarative,
+			WorkerDeclaration::WriteAtSpawn => WorkerType::WriteAtSpawn,
+			WorkerDeclaration::WriteOptimistic => WorkerType::WriteOptimistic,
+			WorkerDeclaration::WriteDeclarative(..) => WorkerType::WriteDeclarative,
+			WorkerDeclaration::WriteAtJoinOptimistic => WorkerType::WriteAtJoinOptimistic,
+			WorkerDeclaration::WriteAtJoinDeclarative(..) => WorkerType::WriteAtJoinDeclarative,
+		}
+	}
+}
+
+/// Access filter on storage.
+#[derive(Debug, Clone, codec::Encode, codec::Decode)]
+pub struct AccessDeclaration {
+	/// Lock over a full prefix.
+	///
+	/// Gives access to all key starting with any of the declared prefixes.
+	pub prefixes_lock: Vec<Vec<u8>>,
+
+	/// Lock only over a given key.
+	pub keys_lock: Vec<Vec<u8>>,
+}
+
+impl AccessDeclaration {
+	/// Declaration for top prefix only.
+	pub fn top_prefix() -> Self {
+		AccessDeclaration {
+			prefixes_lock: sp_std::vec![Vec::new()],
+			keys_lock: Vec::new(),
+		}
 	}
 }
 

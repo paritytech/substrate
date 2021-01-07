@@ -61,7 +61,7 @@ use sp_runtime_interface::pass_by::PassBy;
 
 use codec::{Encode, Decode};
 
-use sp_externalities::{ExternalitiesExt, Externalities};
+use sp_externalities::{ExternalitiesExt, Externalities, WorkerDeclaration};
 
 #[cfg(feature = "std")]
 mod batch_verifier;
@@ -188,10 +188,15 @@ pub trait Storage {
 		let to_drop_tasks = self.storage_rollback_transaction()
 			.expect("No open transaction that can be rolled back.");
 		if to_drop_tasks.len() > 0 {
+			let ext_unsafe = *self as *mut dyn Externalities;
 			if let Some(runtime_spawn) = self.extension::<RuntimeSpawnExt>() {
+				// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+				// a given id, to make this safer.
+				let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
 				for task in to_drop_tasks.into_iter() {
-					runtime_spawn.dismiss(task)
+					runtime_spawn.dismiss(task, ext_unsafe)
 				}
+				core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
 			}
 		}
 	}
@@ -207,10 +212,15 @@ pub trait Storage {
 		let to_drop_tasks = self.storage_commit_transaction()
 			.expect("No open transaction that can be committed.");
 		if to_drop_tasks.len() > 0 {
+			let ext_unsafe = *self as *mut dyn Externalities;
 			if let Some(runtime_spawn) = self.extension::<RuntimeSpawnExt>() {
+				// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+				// a given id, to make this safer.
+				let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
 				for task in to_drop_tasks.into_iter() {
-					runtime_spawn.dismiss(task)
+					runtime_spawn.dismiss(task, ext_unsafe)
 				}
+				core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
 			}
 		}
 	}
@@ -1279,6 +1289,11 @@ pub trait Sandbox {
 	}
 }
 
+/// Cast declaration to sp_io crossing.
+pub fn task_declaration(declaration: WorkerDeclaration) -> Crossing<WorkerDeclaration> {
+	Crossing(declaration)
+}
+
 /// Wasm host functions for managing tasks.
 ///
 /// This should not be used directly. Use `sp_tasks` for running parallel tasks instead.
@@ -1300,7 +1315,13 @@ pub trait RuntimeTasks {
 	/// ost function for spawning task.
 	///
 	/// This should not be used directly. Use `sp_tasks::spawn` instead.
-	fn spawn(&mut self, dispatcher_ref: u32, entry: u32, payload: Vec<u8>, kind: u8) -> u64 {
+	fn spawn(
+		&mut self,
+		dispatcher_ref: u32,
+		entry: u32,
+		payload: Vec<u8>,
+		declaration: Crossing<WorkerDeclaration>,
+	) -> u64 {
 		let ext_unsafe = *self as *mut dyn Externalities;
 		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
 			.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
@@ -1309,7 +1330,7 @@ pub trait RuntimeTasks {
 		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
 		// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
 		// a given id, to make this safer.
-		let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, kind, ext_unsafe);
+		let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, declaration.into_inner(), ext_unsafe);
 		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 		result
 	}
@@ -1335,9 +1356,14 @@ pub trait RuntimeTasks {
 	///
 	/// This should not be used directly. Use `kill` of `sp_tasks::spawn` result instead.
 	fn dismiss(&mut self, handle: u64) {
+		let ext_unsafe = *self as *mut dyn Externalities;
 		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
 			.expect("Cannot kill without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		runtime_spawn.dismiss(handle);
+		// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+		// a given id, to make this safer.
+		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+	
+		runtime_spawn.dismiss(handle, ext_unsafe);
 		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 	}
 }

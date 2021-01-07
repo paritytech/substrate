@@ -170,7 +170,11 @@ fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParti
 	event_id.encode_to(&mut async_payload);
 	participants[..participants.len() / 2].encode_to(&mut async_payload);
 
-	let handle = sp_tasks::spawn(spawn_verify, async_payload, sp_tasks::WorkerType::Stateless);
+	let handle = sp_tasks::spawn(
+		spawn_verify,
+		async_payload,
+		sp_tasks::WorkerDeclaration::Stateless,
+	);
 	let mut result = true;
 
 	for participant in &participants[participants.len()/2..] {
@@ -215,7 +219,11 @@ fn validate_pending_participants_parallel(number: usize) {
 	// We should really skip spawn when split is 0, but this is just an example.
 	(split as u32).encode_to(&mut async_payload);
 
-	let handle = sp_tasks::spawn(spawn_verify, async_payload, sp_tasks::WorkerType::ReadAtSpawn);
+	let handle = sp_tasks::spawn(
+		spawn_verify,
+		async_payload,
+		sp_tasks::WorkerDeclaration::ReadAtSpawn,
+	);
 
 	for participant in &participants[split..number] {
 		if participant.verify(&event_id) {

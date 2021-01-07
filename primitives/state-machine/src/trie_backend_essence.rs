@@ -375,8 +375,7 @@ pub trait TrieBackendStorage<H: Hasher>: Send + Sync + Clone {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 
 	/// Most of `TrieBackendStorage` are 'static, still some are
-	/// not, in this case we cannot use async storage and will return
-	/// None or a different type.
+	/// not, for this case we use an associated backend type.
 	fn async_storage(&self) -> Self::AsyncStorage;
 }
 

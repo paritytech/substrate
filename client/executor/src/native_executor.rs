@@ -33,7 +33,7 @@ use codec::{Decode, Encode};
 use sp_core::{
 	NativeOrEncoded,
 	traits::{
-		CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions,
+		CodeExecutor, Externalities, AsyncExternalities, RuntimeCode, MissingHostFunctions,
 		RuntimeSpawnExt, RuntimeSpawn, RemoteHandle, BoxFuture,
 	},
 };
@@ -41,8 +41,8 @@ use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule};
 use sp_externalities::{ExternalitiesExt as _, WorkerResult};
-use sp_tasks::{new_async_externalities, AsyncExt};
-use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task, PendingTask as InlineTask, spawn_call_ext};
+use sp_tasks::{new_async_externalities, WorkerDeclaration};
+use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task, PendingTask as InlineTask};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -431,7 +431,7 @@ enum PendingTask {
 struct RemoteTask {
 	handle: u64,
 	task: Task,
-	ext: AsyncExt,
+	ext: Box<dyn AsyncExternalities>,
 	result_sender: mpsc::Sender<Option<WorkerResult>>,
 }
 
@@ -499,7 +499,7 @@ impl RuntimeInstanceSpawn {
 		&self,
 		handle: u64,
 		task: Task,
-		ext: AsyncExt,
+		ext: Box<dyn AsyncExternalities>,
 	) {
 		let mut infos = self.infos.lock();
 		match infos.start(self.recursive_level) {
@@ -590,7 +590,7 @@ impl RuntimeInstanceSpawn {
 				};
 
 				let mut end = false;
-				if let &WorkerResult::Panic = &result {
+				if let &WorkerResult::RuntimePanic = &result {
 					log::error!("Panic error in spawned task, dropping instance");
 					// Here we don't just shut all because panic will only transmit to parent
 					// if 'join' is call, if 'dismiss' is call then it is fine to ignore a panic.
@@ -645,11 +645,11 @@ impl RuntimeInstanceSpawn {
 	fn spawn_call_inner(
 		&self,
 		task: Task,
-		kind: u8,
+		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let handle = self.counter.fetch_add(1, Ordering::Relaxed);
-		let ext = spawn_call_ext(handle, kind, calling_ext);
+		let ext = calling_ext.get_worker_externalities(handle, declaration);
 
 		self.insert(handle, task, ext);
 
@@ -662,11 +662,11 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: u8,
+		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let task = Task::Native(NativeTask { func, data });
-		self.spawn_call_inner(task, kind, calling_ext)
+		self.spawn_call_inner(task, declaration, calling_ext)
 	}
 
 	fn spawn_call(
@@ -674,11 +674,11 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		kind: u8,
+		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let task = Task::Wasm(WasmTask { dispatcher_ref, func, data });
-		self.spawn_call_inner(task, kind, calling_ext)
+		self.spawn_call_inner(task, declaration, calling_ext)
 	}
 
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
@@ -689,7 +689,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 				Ok(None)
 				| Err(_) => {
 					// spawned task did end with no result, so panic
-					WorkerResult::Panic
+					WorkerResult::RuntimePanic
 				},
 			},
 			Some(PendingTask::Inline(task)) => {
@@ -716,7 +716,8 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		calling_ext.resolve_worker_result(worker_result)
 	}
 
-	fn dismiss(&self, handle: u64) {
+	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
+		calling_ext.dismiss_worker(handle);
 		self.dismiss_handles.dismiss_thread(handle);
 		self.tasks.lock().remove(&handle);
 	}

@@ -17,25 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Async externalities.
-//!
-//!
-//!
-//! Allowed ext function, cummulative (kind bellow got access to parent capability):
-//!
-//! - WorkerType::Stateless: None
-//!		- extension (only thread extension if not inline) so purely technical
-//!		(also true for all other kind).
-//!		- resolve_worker_result
-//! - WorkerType::ReadLastBlock
-//!		- storage
-//!		- child_storage
-//!		- next_storage_key
-//!		- next_child_storage_key
-//!		- get_past_async_backend (warning this is only for this type, not inherited)
-//! - WorkerType::ReadAtSpawn
-//!		- get_async_backend
-// TODO consider moving part of it to state machine (removing the current
-// dep on state machine).
 
 use sp_std::{
 	boxed::Box,
@@ -46,107 +27,25 @@ use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	traits::{SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
-use sp_externalities::{Externalities, Extensions, ExternalitiesExt as _, TaskId, AsyncBackend, WorkerResult};
-use crate::WorkerType;
-use sp_state_machine::ext_guard as guard;
-use sp_state_machine::trace;
-use sp_core::hexdisplay::HexDisplay;
-
-/// Async view on state machine Ext.
-/// It contains its own set of state and rules,
-/// and returns its changes on `join`.
-pub struct AsyncExt {
-	kind: WorkerType,
-	// Actually unused at this point, is for write variant.
-	overlay: sp_state_machine::OverlayedChanges,
-	spawn_id: Option<TaskId>,
-	backend: Box<dyn AsyncBackend>,
-}
-
-impl AsyncExt {
-	/// Spawn a thread with no state access.
-	///
-	/// No impact on master thread, no need to
-	/// assert the thread did join.
-	///
-	/// (But there is no sense in runing if we do not join or dismiss).
-	/// TODO remember that when inline we run at join or not at all
-	/// for dismiss so using no panic handler is the same as transmitting
-	/// panic to parent on join.
-	pub fn stateless_ext() -> Self {
-		AsyncExt {
-			kind: WorkerType::Stateless,
-			overlay: Default::default(),
-			spawn_id: None,
-			backend: Box::new(()),
-		}
-	}
-
-	/// Spawn a thread with access to previous
-	/// block state only.
-	///
-	/// No impact on master thread, no need to
-	/// assert the thread did join.
-	pub fn previous_block_read(backend: Box<dyn AsyncBackend>) -> Self {
-		AsyncExt {
-			kind: WorkerType::ReadLastBlock,
-			overlay: Default::default(),
-			spawn_id: None,
-			backend,
-		}
-	}
-
-	/// Spawn a thread with access to state at
-	/// the time the thread did spawn.
-	/// This contains a copy of the overlay at the time of spawn.
-	///
-	/// A spawn id transaction is inserted before copy in the overlay and the parent
-	/// thread will be able to know on join if it is on a the same transaction level.
-	///
-	/// Still there is no strong failure case, the master thread should choose behavior
-	/// to adopt when receiving data that is not in synch with the original spawn_id.
-	pub fn state_at_spawn_read(
-		backend: Box<dyn AsyncBackend>,
-		spawn_id: TaskId,
-	) -> Self {
-		AsyncExt {
-			kind: WorkerType::ReadAtSpawn,
-			overlay: Default::default(),
-			spawn_id: Some(spawn_id),
-			backend: backend,
-		}
-	}
-
-	/// Depending on kind the result may be already
-	/// valid, in this case we do not need to resolve
-	/// it.
-	pub fn need_resolve(&self) -> bool {
-		self.kind.need_resolve()
-	}
-}
+use sp_externalities::{
+	Externalities, Extensions, ExternalitiesExt as _, TaskId, WorkerResult,
+	WorkerDeclaration, AsyncExternalities as AsyncExternalitiesTrait,
+	AsyncExternalitiesPostExecution,
+};
 
 /// Simple state-less externalities for use in async context.
 ///
 /// Will panic if anything is accessing the storage.
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct AsyncExternalities {
 	extensions: Extensions,
-	state: AsyncExt,
-}
-
-#[cfg(feature = "std")]
-impl std::fmt::Debug for AsyncExt
-{
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "AsyncExt {:?} at {:?}", self.kind, self.spawn_id)
-	}
+	state: Box<dyn AsyncExternalitiesTrait>,
 }
 
 /// New Async externalities.
 #[cfg(feature = "std")]
 pub fn new_async_externalities(
 	scheduler: Box<dyn SpawnNamed>,
-	async_ext: AsyncExt,
+	async_ext: Box<dyn AsyncExternalitiesTrait>,
 ) -> Result<AsyncExternalities, &'static str> {
 	let mut res = AsyncExternalities {
 		extensions: Default::default(),
@@ -160,7 +59,7 @@ pub fn new_async_externalities(
 }
 
 pub fn new_inline_only_externalities(
-	async_ext: AsyncExt,
+	async_ext: Box<dyn AsyncExternalitiesTrait>,
 ) -> Result<AsyncExternalities, &'static str> {
 	Ok(AsyncExternalities {
 		extensions: Default::default(),
@@ -186,47 +85,17 @@ type StorageKey = Vec<u8>;
 
 type StorageValue = Vec<u8>;
 
-impl AsyncExternalities {
-	fn guard_stateless(&self, panic: &'static str) {
-		match self.state.kind {
-			WorkerType::Stateless => {
-				panic!(panic)
-			},
-			WorkerType::ReadLastBlock
-			| WorkerType::ReadAtSpawn => (),
-		}
-	}
-
-	/// Depending on kind the result may be already
-	/// valid, in this case we do not need to resolve
-	/// it.
-	pub fn need_resolve(&self) -> bool {
-		self.state.kind.need_resolve()
-	}
-}
-
 impl Externalities for AsyncExternalities {
-	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {
-		panic!("`set_offchain_storage`: should not be used in async externalities!")
+	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
+		self.state.set_offchain_storage(key, value)
 	}
 
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
-		self.guard_stateless("`storage`: should not be used in async externalities!");
-		let _guard = guard();
-		let result = self.state.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.state.backend.storage(key));
-		trace!(target: "state", "{:?}: Th Get {}={:?}",
-			self.state.spawn_id,
-			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from)
-		);
-		result
+		self.state.storage(key)
 	}
 
-	fn storage_hash(&self, _key: &[u8]) -> Option<Vec<u8>> {
-		// TODO currently no hash function to avoid having to move the hasher trait
-		// in AsyncExternalities extension.
-		panic!("`storage_hash`: should not be used in async externalities!")
+	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.state.storage_hash(key)
 	}
 
 	fn child_storage(
@@ -234,46 +103,19 @@ impl Externalities for AsyncExternalities {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageValue> {
-		self.guard_stateless("`child_storage`: should not be used in async externalities!");
-		let _guard = guard();
-		let result = self.state.overlay
-			.child_storage(child_info, key)
-			.map(|x| x.map(|x| x.to_vec()))
-			.unwrap_or_else(||
-				self.state.backend.child_storage(child_info, key));
-
-		trace!(target: "state", "{:?}: Th GetChild({}) {}={:?}",
-			self.state.spawn_id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from)
-		);
-
-		result
+		self.state.child_storage(child_info, key)
 	}
 
 	fn child_storage_hash(
 		&self,
-		_child_info: &ChildInfo,
-		_key: &[u8],
+		child_info: &ChildInfo,
+		key: &[u8],
 	) -> Option<Vec<u8>> {
-		panic!("`child_storage_hash`: should not be used in async externalities!")
+		self.state.child_storage_hash(child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		self.guard_stateless("`next_storage_key`: should not be used in async externalities!");
-		let next_backend_key = self.state.backend.next_storage_key(key);
-		let next_overlay_key_change = self.state.overlay.next_storage_key_change(key);
-
-		match (next_backend_key, next_overlay_key_change) {
-			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
-			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
-				Some(overlay_key.0.to_vec())
-			} else {
-				self.next_storage_key(&overlay_key.0[..])
-			},
-		}
+		self.state.next_storage_key(key)
 	}
 
 	fn next_child_storage_key(
@@ -281,97 +123,75 @@ impl Externalities for AsyncExternalities {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageKey> {
-		self.guard_stateless("`next_child_storage_key`: should not be used in async externalities!");
-		let next_backend_key = self.state.backend.next_child_storage_key(child_info, key);
-		let next_overlay_key_change = self.state.overlay.next_child_storage_key_change(
-			child_info.storage_key(),
-			key
-		);
-
-		match (next_backend_key, next_overlay_key_change) {
-			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
-			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
-				Some(overlay_key.0.to_vec())
-			} else {
-				self.next_child_storage_key(
-					child_info,
-					&overlay_key.0[..],
-				)
-			},
-		}
+		self.state.next_child_storage_key(child_info, key)
 	}
 
-	fn place_storage(&mut self, _key: StorageKey, _maybe_value: Option<StorageValue>) {
-		panic!("`place_storage`: should not be used in async externalities!")
+	fn place_storage(&mut self, key: StorageKey, maybe_value: Option<StorageValue>) {
+		self.state.place_storage(key, maybe_value)
 	}
 
 	fn place_child_storage(
 		&mut self,
-		_child_info: &ChildInfo,
-		_key: StorageKey,
-		_value: Option<StorageValue>,
+		child_info: &ChildInfo,
+		key: StorageKey,
+		value: Option<StorageValue>,
 	) {
-		panic!("`place_child_storage`: should not be used in async externalities!")
+		self.state.place_child_storage(child_info, key, value)
 	}
 
 	fn kill_child_storage(
 		&mut self,
-		_child_info: &ChildInfo,
-		_limit: Option<u32>,
+		child_info: &ChildInfo,
+		limit: Option<u32>,
 	) -> bool {
-		panic!("`kill_child_storage`: should not be used in async externalities!")
+		self.state.kill_child_storage(child_info, limit)
 	}
 
-	fn clear_prefix(&mut self, _prefix: &[u8]) {
-		panic!("`clear_prefix`: should not be used in async externalities!")
+	fn clear_prefix(&mut self, prefix: &[u8]) {
+		self.state.clear_prefix(prefix)
 	}
 
 	fn clear_child_prefix(
 		&mut self,
-		_child_info: &ChildInfo,
-		_prefix: &[u8],
+		child_info: &ChildInfo,
+		prefix: &[u8],
 	) {
-		panic!("`clear_child_prefix`: should not be used in async externalities!")
+		self.state.clear_child_prefix(child_info, prefix)
 	}
 
 	fn storage_append(
 		&mut self,
-		_key: Vec<u8>,
-		_value: Vec<u8>,
+		key: Vec<u8>,
+		value: Vec<u8>,
 	) {
-		panic!("`storage_append`: should not be used in async externalities!")
+		self.state.storage_append(key, value)
 	}
 
 	fn storage_root(&mut self) -> Vec<u8> {
-		// TODO currently no storage_root function to avoid having to move the hasher trait
-		// in AsyncExternalities extension.
-		panic!("`storage_root`: should not be used in async externalities!")
+		self.state.storage_root()
 	}
 
 	fn child_storage_root(
 		&mut self,
-		_child_info: &ChildInfo,
+		child_info: &ChildInfo,
 	) -> Vec<u8> {
-		// TODO currently no storage_root function to avoid having to move the hasher trait
-		// in AsyncExternalities extension.
-		panic!("`child_storage_root`: should not be used in async externalities!")
+		self.state.child_storage_root(child_info)
 	}
 
-	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		panic!("`storage_changes_root`: should not be used in async externalities!")
+	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
+		self.state.storage_changes_root(parent)
 	}
 
 	fn storage_start_transaction(&mut self) {
-		unimplemented!("Transactions are not supported by AsyncExternalities");
+		self.state.storage_start_transaction()
 	}
 
 	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
-		unimplemented!("Transactions are not supported by AsyncExternalities");
+		self.state.storage_rollback_transaction()
 	}
 
 	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
-		unimplemented!("Transactions are not supported by AsyncExternalities");
+		self.state.storage_commit_transaction()
 	}
 
 	fn wipe(&mut self) {}
@@ -394,34 +214,20 @@ impl Externalities for AsyncExternalities {
 		unimplemented!("set_whitelist is not supported in AsyncExternalities")
 	}
 
-	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
-		match self.state.kind {
-			WorkerType::Stateless
-			| WorkerType::ReadAtSpawn => {
-				panic!("Spawning a ReadLastBlock worker is only possible from a ReadLastBlock worker");
-			},
-			WorkerType::ReadLastBlock => (),
-		}
-
-		self.state.backend.async_backend()
+	fn get_worker_externalities(
+		&mut self,
+		worker_id: u64,
+		declaration: WorkerDeclaration,
+	) -> Box<dyn AsyncExternalitiesTrait> {
+		self.state.get_worker_externalities(worker_id, declaration)
 	}
-
-	fn get_async_backend(&mut self, marker: TaskId) -> Box<dyn AsyncBackend> {
-		match self.state.kind {
-			WorkerType::Stateless
-			| WorkerType::ReadLastBlock => {
-				panic!("Spawning a ReadAtSpawn worker is only possible from a ReadAtSpawn worker");
-			},
-			WorkerType::ReadAtSpawn => (),
-		}
-
-		self.state.overlay.set_marker(marker);
-
-		self.state.backend.async_backend()
-	}
-
+	
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
-		self.state.overlay.resolve_worker_result(state_update)
+		self.state.resolve_worker_result(state_update)
+	}
+
+	fn dismiss_worker(&mut self, id: TaskId) {
+		self.state.dismiss_worker(id)
 	}
 }
 
@@ -444,5 +250,15 @@ impl sp_externalities::ExtensionStore for AsyncExternalities {
 		} else {
 			Err(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
 		}
+	}
+}
+
+impl AsyncExternalitiesTrait for AsyncExternalities {
+	fn extract_delta(&mut self) -> Option<sp_externalities::StateDelta> {
+		self.state.extract_delta()
+	}
+
+	fn extract_state(&mut self) -> AsyncExternalitiesPostExecution {
+		self.state.extract_state()
 	}
 }

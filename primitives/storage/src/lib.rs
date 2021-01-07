@@ -180,10 +180,20 @@ pub mod well_known_keys {
 		// Other code might depend on this, so be careful changing this.
 		key.starts_with(CHILD_STORAGE_KEY_PREFIX)
 	}
+
+	/// Whether a prefix potentially contains child storage keys.
+	pub fn contains_child_storage_key(prefix: &[u8]) -> bool {
+		if prefix.len() > CHILD_STORAGE_KEY_PREFIX.len() {
+			prefix.starts_with(CHILD_STORAGE_KEY_PREFIX)
+		} else {
+			CHILD_STORAGE_KEY_PREFIX.starts_with(prefix)
+		}
+	}
+
 }
 
 /// Information related to a child state.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub enum ChildInfo {
 	/// This is the one used by default.
@@ -338,7 +348,7 @@ impl ChildType {
 /// that will be use only once.
 /// Those unique id also required to be long enough to avoid any
 /// unique id to be prefixed by an other unique id.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Hash, PartialOrd, Ord))]
 pub struct ChildTrieParentKeyId {
 	/// Data is the storage key without prefix.

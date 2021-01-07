@@ -22,9 +22,10 @@
 //! As a minimal implementation it can run in no_std (with alloc), but do not
 //! actually spawn threads, all execution is done inline in the parent thread.
 
-use sp_tasks::{new_inline_only_externalities, AsyncExt, WorkerType};
+use sp_tasks::{new_inline_only_externalities, Crossing};
 use sp_core::traits::RuntimeSpawn;
-use sp_externalities::{WorkerResult, Externalities};
+use sp_externalities::{WorkerResult, WorkerDeclaration, Externalities, AsyncExternalities,
+	AsyncExternalitiesPostExecution};
 use sp_std::rc::Rc;
 use sp_std::cell::RefCell;
 use sp_std::collections::btree_map::BTreeMap;
@@ -174,7 +175,7 @@ pub struct PendingTask {
 	pub task: Task,
 	/// The associated `Externalities`
 	/// this task will get access to.
-	pub ext: AsyncExt,
+	pub ext: Box<dyn AsyncExternalities>,
 }
 
 #[cfg(feature = "std")]
@@ -199,28 +200,6 @@ pub fn instantiate(
 			return None;
 		},
 	})
-}
-
-/// Obtain externality and get id for worker.
-pub fn spawn_call_ext(
-	handle: u64,
-	kind: u8,
-	calling_ext: &mut dyn Externalities,
-) -> AsyncExt {
-	match WorkerType::from_u8(kind)
-		.expect("Unsupported worker type.") {
-		WorkerType::Stateless => {
-			AsyncExt::stateless_ext()
-		},
-		WorkerType::ReadLastBlock => {
-			let backend = calling_ext.get_past_async_backend();
-			AsyncExt::previous_block_read(backend)
-		},
-		WorkerType::ReadAtSpawn => {
-			let backend = calling_ext.get_async_backend(handle);
-			AsyncExt::state_at_spawn_read(backend, handle)
-		},
-	}
 }
 
 /// Technical trait to factor code.
@@ -265,7 +244,7 @@ pub fn process_task_inline<
 	I: LazyInstanciate<'a> + 'a,
 >(
 	task: Task,
-	ext: AsyncExt,
+	ext: Box<dyn AsyncExternalities>,
 	handle: u64,
 	runtime_ext: Box<dyn RuntimeSpawn>,
 	#[cfg(feature = "std")]
@@ -290,7 +269,6 @@ pub fn process_task_inline<
 				"Failed to setup runtime extension for async externalities: {}",
 				e,
 			);
-
 			return WorkerResult::HardPanic;
 		}
 	};
@@ -319,13 +297,12 @@ pub fn process_task<
 	#[cfg(feature = "std")]
 	instance_ref: I,
 ) -> WorkerResult {
-	let need_resolve = async_ext.need_resolve();
 
-	match task {
+	let result = match task {
 		Task::Wasm(WasmTask { dispatcher_ref, func, data }) => {
 
 			#[cfg(feature = "std")]
-			let result = if HostLocal::HOST_LOCAL {
+			if HostLocal::HOST_LOCAL {
 				panic!("HOST_LOCAL is only expected for a wasm call");
 			} else {
 				let instance = if let Some(instance) = instance_ref.instantiate() {
@@ -340,32 +317,18 @@ pub fn process_task<
 						&data[..],
 					)
 				)
-			};
+			}
 			#[cfg(not(feature = "std"))]
-			let result: Result<Result<_, ()>, _> = if HostLocal::HOST_LOCAL {
+			if HostLocal::HOST_LOCAL {
 				let f: fn(Vec<u8>) -> Vec<u8> = unsafe { sp_std::mem::transmute(func) };
 				with_externalities_safe(
 					&mut async_ext,
-					|| Ok(f(data)),
+					|| -> Result<_, ()> {
+						Ok(f(data))
+					},
 				)
 			} else {
 				panic!("No no_std wasm runner");
-			};
-
-			match result {
-				Ok(Ok(result)) => if need_resolve {
-					WorkerResult::CallAt(result, handle)
-				} else {
-					WorkerResult::Valid(result)
-				},
-				Ok(Err(error)) => {
-					log_error!("Wasm instance error in : {:?}", error);
-					WorkerResult::HardPanic
-				},
-				Err(error) => {
-					log_error!("Panic error in sinlined task: {:?}", error);
-					WorkerResult::Panic
-				}
 			}
 		},
 		Task::Native(NativeTask { func, data }) => {
@@ -373,17 +336,34 @@ pub fn process_task<
 				&mut async_ext,
 				|| func(data),
 			) {
-				Ok(result) => if need_resolve {
-					WorkerResult::CallAt(result, handle)
-				} else {
-					WorkerResult::Valid(result)
-				},
-				Err(error) => {
-					log_error!("Panic error in sinlined task: {:?}", error);
-					WorkerResult::Panic
-				}
+				Ok(result) => Ok(Ok(result)),
+				Err(error) => Err(error),
 			}
 		},
+	};
+	match result {
+		Ok(Ok(result)) =>	match async_ext.extract_state() {
+			AsyncExternalitiesPostExecution::Invalid => {
+				WorkerResult::Invalid
+			},
+			AsyncExternalitiesPostExecution::NeedResolve => {
+				WorkerResult::CallAt(result, async_ext.extract_delta(), handle)
+			},
+			AsyncExternalitiesPostExecution::Valid => {
+				WorkerResult::Valid(result, async_ext.extract_delta())
+			},
+			AsyncExternalitiesPostExecution::Optimistic(access) => {
+				WorkerResult::Optimistic(result, async_ext.extract_delta(), handle, access)
+			},
+		},
+		Ok(Err(error)) => {
+			log_error!("Wasm instance error in : {:?}", error);
+			WorkerResult::HardPanic
+		},
+		Err(error) => {
+			log_error!("Runtime panic error in inlined task: {:?}", error);
+			WorkerResult::RuntimePanic
+		}
 	}
 }
 
@@ -420,12 +400,12 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 	fn spawn_call_inner(
 		&mut self,
 		task: Task,
-		kind: u8,
+		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let handle = self.counter;
 		self.counter += 1;
-		let ext = spawn_call_ext(handle, kind, calling_ext);
+		let ext = calling_ext.get_worker_externalities(handle, declaration);
 
 		self.tasks.insert(handle, PendingTask {task, ext});
 
@@ -437,11 +417,11 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 		&mut self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: u8,
+		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let task = Task::Native(NativeTask { func, data });
-		self.spawn_call_inner(task, kind, calling_ext)
+		self.spawn_call_inner(task, declaration, calling_ext)
 	}
 
 	/// Base implementation for `RuntimeSpawn` method.
@@ -450,11 +430,11 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		kind: u8,
+		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let task = Task::Wasm(WasmTask { dispatcher_ref, func, data });
-		self.spawn_call_inner(task, kind, calling_ext)
+		self.spawn_call_inner(task, declaration, calling_ext)
 	}
 }
 
@@ -485,10 +465,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: u8,
+		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		self.0.lock().spawn_call_native(func, data, kind, calling_ext)
+		self.0.lock().spawn_call_native(func, data, declaration, calling_ext)
 	}
 
 	fn spawn_call(
@@ -496,10 +476,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		kind: u8,
+		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		self.0.lock().spawn_call(dispatcher_ref, func, data, kind, calling_ext)
+		self.0.lock().spawn_call(dispatcher_ref, func, data, declaration, calling_ext)
 	}
 
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
@@ -524,7 +504,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		calling_ext.resolve_worker_result(worker_result)
 	}
 
-	fn dismiss(&self, handle: u64) {
+	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
+		// TODO consider Dismiss(handle) as variant of worker result?
+		calling_ext.dismiss_worker(handle);
+
 		self.0.lock().dismiss(handle)
 	}
 
@@ -565,10 +548,10 @@ impl<HostLocal: HostLocalFunction> RuntimeSpawn for RuntimeInstanceSpawnForceSen
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		kind: u8,
+		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		self.0.borrow_mut().spawn_call_native(func, data, kind, calling_ext)
+		self.0.borrow_mut().spawn_call_native(func, data, declaration, calling_ext)
 	}
 
 	fn spawn_call(
@@ -576,10 +559,10 @@ impl<HostLocal: HostLocalFunction> RuntimeSpawn for RuntimeInstanceSpawnForceSen
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		kind: u8,
+		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		self.0.borrow_mut().spawn_call(dispatcher_ref, func, data, kind, calling_ext)
+		self.0.borrow_mut().spawn_call(dispatcher_ref, func, data, declaration, calling_ext)
 	}
 
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
@@ -607,7 +590,8 @@ impl<HostLocal: HostLocalFunction> RuntimeSpawn for RuntimeInstanceSpawnForceSen
 		calling_ext.resolve_worker_result(worker_result)
 	}
 
-	fn dismiss(&self, handle: u64) {
+	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
+		calling_ext.dismiss_worker(handle);
 		self.0.borrow_mut().dismiss(handle)
 	}
 
@@ -659,7 +643,7 @@ pub mod hosted_runtime {
 		dispatcher_ref: u32,
 		entry: u32,
 		payload: Vec<u8>,
-		kind: u8,
+		declaration: Crossing<WorkerDeclaration>,
 	) -> u64 {
 		sp_externalities::with_externalities(|mut ext| {
 			let ext_unsafe = ext as *mut dyn Externalities;
@@ -668,7 +652,7 @@ pub mod hosted_runtime {
 			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
 			// a given id, to make this safer.
 			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-			let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, kind, ext_unsafe);
+			let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, declaration.into_inner(), ext_unsafe);
 			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
 			result
 		}).unwrap()
@@ -692,9 +676,14 @@ pub mod hosted_runtime {
 	/// Hosted runtime variant of sp_io `RuntimeTasks` `spawn`.
 	pub fn host_runtime_tasks_dismiss(handle: u64) {
 		sp_externalities::with_externalities(|mut ext| {
+			let ext_unsafe = ext as *mut dyn Externalities;
 			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
 				.expect("Inline runtime extension improperly set.");
-			runtime_spawn.dismiss(handle)
+			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
+			// a given id, to make this safer.
+			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
+			runtime_spawn.dismiss(handle, ext_unsafe);
+			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
 		}).unwrap()
 	}
 }

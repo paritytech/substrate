@@ -27,6 +27,7 @@ mod in_memory_backend;
 mod changes_trie;
 mod error;
 mod ext;
+pub mod async_ext;
 #[cfg(feature = "std")]
 mod testing;
 #[cfg(feature = "std")]
@@ -50,7 +51,6 @@ pub use log::{debug, warn, trace, error as log_error};
 pub use sp_externalities::AsyncBackend;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
-pub use crate::ext::guard as ext_guard;
 
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.

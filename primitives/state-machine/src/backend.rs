@@ -114,7 +114,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// call `f` for each of those keys.
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F);
 
-
 	/// Retrieve all child entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
@@ -290,87 +289,6 @@ impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackendAdapter<H, B> {
 	/// Get an async backend from an existing backend.
 	pub fn new(backend: B) -> Self {
 		AsyncBackendAdapter(backend, sp_std::marker::PhantomData)
-	}
-}
-
-/// Async Backend implemented at a given state machine current state.
-/// This involves a costy overlay change clone.
-pub struct AsyncBackendAt {
-	backend: Box<dyn AsyncBackend>,
-	// TODO could also extract current value to reduce size.
-	overlay: crate::OverlayedChanges,
-}
-
-impl AsyncBackend for AsyncBackendAt {
-	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec()))
-			.unwrap_or_else(|| self.backend.storage(key))
-	}
-
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
-		self.overlay.child_storage(child_info, key).map(|x| x.map(|x| x.to_vec()))
-			.unwrap_or_else(|| self.backend.child_storage(child_info, key))
-	}
-
-	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let next_backend_key = self.backend.next_storage_key(key);
-		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
-
-		match (next_backend_key, next_overlay_key_change) {
-			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
-			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
-				Some(overlay_key.0.to_vec())
-			} else {
-				self.next_storage_key(&overlay_key.0[..])
-			},
-		}
-	}
-
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8]
-	) -> Option<Vec<u8>> {
-		let next_backend_key = self.backend.next_child_storage_key(child_info, key);
-		let next_overlay_key_change = self.overlay.next_child_storage_key_change(child_info.storage_key(), key);
-
-		match (next_backend_key, next_overlay_key_change) {
-			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
-			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
-				Some(overlay_key.0.to_vec())
-			} else {
-				self.next_child_storage_key(child_info, &overlay_key.0[..])
-			},
-		}
-	}
-
-	fn async_backend(&self) -> Box<dyn AsyncBackend> {
-		let backend = self.backend.async_backend();
-		let backend: Box<dyn AsyncBackend> = Box::new(crate::backend::AsyncBackendAt::new(
-			backend,
-			&self.overlay,
-		));
-		backend
-	}
-}
-
-impl AsyncBackendAt {
-	/// Instantiate new backend from existing backend and the parent worker current change.
-	/// 
-	/// This is cloning the current changes from the parent worker. That is not a light
-	/// operation, but at this state of the implementation this is the easiest and
-	/// safest way to proceed.
-	pub fn new(backend: Box<dyn AsyncBackend>, overlay: &crate::OverlayedChanges) -> Self {
-		AsyncBackendAt {
-			backend,
-			overlay: overlay.clone(),
-		}
 	}
 }
 

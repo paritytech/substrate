@@ -28,7 +28,7 @@ use sp_core::{
 	traits::Externalities, Blake2Hasher,
 };
 use codec::Encode;
-use sp_externalities::{TaskId, AsyncBackend, WorkerResult};
+use sp_externalities::{TaskId, WorkerResult, WorkerDeclaration, AsyncExternalities};
 
 /// Trait for inspecting state in any backend.
 ///
@@ -204,16 +204,26 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
 	}
 
-	fn get_past_async_backend(&self) -> Box<dyn AsyncBackend> {
-		self.backend.async_backend()
+	fn get_worker_externalities(
+		&mut self,
+		worker_id: u64,
+		declaration: WorkerDeclaration,
+	) -> Box<dyn AsyncExternalities> {
+		let backend = self.backend.async_backend();
+		Box::new(crate::async_ext::new_child_worker_async_ext(
+			worker_id,
+			declaration,
+			backend,
+			None
+		))
 	}
-
-	fn get_async_backend(&mut self, _marker: TaskId) -> Box<dyn AsyncBackend> {
-		self.get_past_async_backend()
-	}
-
+	
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		state_update.read_resolve()
+	}
+
+	fn dismiss_worker(&mut self, _id: TaskId) {
+		unimplemented!("TODO needs filter/loggers from declaration to get deterministic failure of access parent writable, would need nothing if ReadOnly never spawn from non read only TODO check that");
 	}
 }
 

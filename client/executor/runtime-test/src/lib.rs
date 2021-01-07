@@ -25,6 +25,8 @@ use sp_runtime::{print, traits::{BlakeTwo256, Hash}};
 use sp_core::{ed25519, sr25519};
 #[cfg(not(feature = "std"))]
 use sp_sandbox::Value;
+#[cfg(not(feature = "std"))]
+use sp_tasks::{WorkerDeclaration, AccessDeclaration, DeclarationFailureHandling};
 
 extern "C" {
 	#[allow(dead_code)]
@@ -323,7 +325,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_inline() {
 		let data = vec![1u8, 2u8];
-		let data_new = sp_tasks::spawn(tasks::incrementer, data, sp_tasks::WorkerType::Stateless).join();
+		let data_new = sp_tasks::spawn(tasks::incrementer, data, WorkerDeclaration::Stateless).join();
 
 		assert_eq!(data_new, Some(vec![2u8, 3u8]));
 	}
@@ -331,33 +333,247 @@ sp_core::wasm_export_functions! {
 	fn test_spawn() {
 		sp_tasks::set_capacity(1);
 		let data = vec![1u8, 2u8];
-		let data_new = sp_tasks::spawn(tasks::incrementer, data, sp_tasks::WorkerType::Stateless).join();
+		let data_new = sp_tasks::spawn(tasks::incrementer, data, WorkerDeclaration::Stateless).join();
 
 		assert_eq!(data_new, Some(vec![2u8, 3u8]));
 	}
 
 	fn test_nested_spawn() {
 		let data = vec![7u8, 13u8];
-		let data_new = sp_tasks::spawn(tasks::parallel_incrementer, data, sp_tasks::WorkerType::Stateless).join();
+		let data_new = sp_tasks::spawn(tasks::parallel_incrementer, data, WorkerDeclaration::Stateless).join();
 
 		assert_eq!(data_new, Some(vec![10u8, 16u8]));
 
 		sp_tasks::set_capacity(2);
 		let data = vec![7u8, 13u8];
-		let data_new = sp_tasks::spawn(tasks::parallel_incrementer, data, sp_tasks::WorkerType::Stateless).join();
+		let data_new = sp_tasks::spawn(tasks::parallel_incrementer, data, WorkerDeclaration::Stateless).join();
 
 		assert_eq!(data_new, Some(vec![10u8, 16u8]));
 	}
 
 	fn test_panic_in_spawned() {
 		sp_tasks::set_capacity(1);
-		sp_tasks::spawn(tasks::panicker, vec![], sp_tasks::WorkerType::Stateless).join();
+		sp_tasks::spawn(tasks::panicker, vec![], WorkerDeclaration::Stateless).join();
 	}
- }
 
- #[cfg(not(feature = "std"))]
- mod tasks {
+	fn test_optimistic_read_no_conflict() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		sp_io::storage::set(b"key2", b"val");
+		if handle.join().is_some() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_optimistic_read_conflict() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		sp_io::storage::set(b"key", b"val");
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_optimistic_read_conflict_2() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
+		sp_io::storage::set(b"key", b"val");
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_optimistic_read_conflict_nested() {
+		sp_tasks::set_capacity(2);
+		let handle = sp_tasks::spawn(tasks::read_key_nested, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		sp_io::storage::set(b"key", b"val");
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_declarative_read_no_conflict() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
+			AccessDeclaration {
+				prefixes_lock: vec![b"key".to_vec()],
+				keys_lock: Default::default(),
+			},
+			DeclarationFailureHandling::Panic,
+		));
+		sp_io::storage::set(b"kfy", b"val");
+		if handle.join().is_some() {
+			sp_io::storage::set(b"key", b"bar");
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_declarative_read_conflict() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
+			AccessDeclaration {
+				prefixes_lock: vec![b"key".to_vec()],
+				keys_lock: Default::default(),
+			},
+			DeclarationFailureHandling::InvalidAtJoin,
+		));
+		sp_io::storage::set(b"key", b"val");
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_declarative_read_conflict_2() {
+		sp_tasks::set_capacity(1);
+		// read key reading at undeclared location
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
+			AccessDeclaration {
+				prefixes_lock: vec![b"aey".to_vec()],
+				keys_lock: Default::default(),
+			},
+			DeclarationFailureHandling::InvalidAtJoin,
+		));
+		sp_io::storage::set(b"key", b"val");
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_declarative_read_conflict_nested() {
+		sp_tasks::set_capacity(2);
+		let handle = sp_tasks::spawn(tasks::read_key_nested, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
+			AccessDeclaration {
+				prefixes_lock: vec![b"key".to_vec()],
+				keys_lock: Default::default(),
+			},
+			DeclarationFailureHandling::Panic,
+		));
+		sp_io::storage::set(b"key2", b"val");
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_optimistic_write_success() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
+		assert!(sp_io::storage::get(b"key").is_none());
+		if handle.join().is_some() {
+			if sp_io::storage::get(b"key") == Some(b"foo".to_vec()) {
+				sp_io::storage::set(b"foo", b"bar");
+			}
+		}
+	}
+
+	fn test_close_parent_transaction() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::start_transaction();
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		sp_io::storage::commit_transaction();
+		// even if no conflict we do not validate a result when transaction context is lower.
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_close_parent_transaction_2() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::start_transaction();
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		sp_io::storage::commit_transaction();
+		sp_io::storage::start_transaction();
+		// even if no conflict we do not validate a result when transaction context is lower.
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+		sp_io::storage::commit_transaction();
+	}
+	
+	fn test_unclose_parent_transaction() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::start_transaction();
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
+		sp_io::storage::start_transaction();
+		assert!(sp_io::storage::get(b"key").is_none());
+		// we allow to get content in a different transaction if it is a child of the starting
+		// transaciton.
+		if handle.join().is_some() {
+			if sp_io::storage::get(b"key") == Some(b"foo".to_vec()) {
+				sp_io::storage::set(b"foo", b"bar");
+			}
+		}
+		sp_io::storage::commit_transaction();
+		sp_io::storage::commit_transaction();
+	}
+
+	fn test_unclose_child_transaction() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::unclose_child_transaction, vec![], WorkerDeclaration::WriteOptimistic);
+		// unclose tx in child is a panic case as unclose tx in result, so we expect panic, code
+		// is hear to make it explicit join is called.
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_read_write_conflict_1() {
+		sp_tasks::set_capacity(1);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		assert!(sp_io::storage::get(b"key").is_none());
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_read_write_conflict_2() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::set(b"aaaa", b"dummy");
+		sp_io::storage::set(b"z", b"dummy");
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		assert_eq!(sp_io::storage::next_key(b"aaaaaaaa"), Some(b"z".to_vec()));
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_read_write_conflict_3() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::set(b"k", b"dummy");
+		sp_io::storage::set(b"z", b"dummy");
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		assert_eq!(sp_io::storage::next_key(b"k"), Some(b"z".to_vec()));
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_read_write_conflict_4() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::set(b"k", b"dummy");
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		assert_eq!(sp_io::storage::next_key(b"k"), None);
+		if handle.join().is_none() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+
+	fn test_read_write_conflict_5() {
+		sp_tasks::set_capacity(1);
+		sp_io::storage::set(b"k", b"dummy");
+//		sp_io::storage::set(b"z", b"dummy");
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		assert_eq!(sp_io::storage::next_key(b"key2"), None);
+//		assert_eq!(sp_io::storage::next_key(b"key2"), Some(b"z".to_vec()));
+		if handle.join().is_some() {
+			sp_io::storage::set(b"foo", b"bar");
+		}
+	}
+}
+
+#[cfg(not(feature = "std"))]
+mod tasks {
 	use sp_std::prelude::*;
+	use super::WorkerDeclaration;
 
 	pub fn incrementer(data: Vec<u8>) -> Vec<u8> {
 	   data.into_iter().map(|v| v + 1).collect()
@@ -369,10 +585,31 @@ sp_core::wasm_export_functions! {
 
 	pub fn parallel_incrementer(data: Vec<u8>) -> Vec<u8> {
 	   let first = data.into_iter().map(|v| v + 2).collect::<Vec<_>>();
-	   let second = sp_tasks::spawn(incrementer, first, sp_tasks::WorkerType::Stateless).join();
+	   let second = sp_tasks::spawn(incrementer, first, WorkerDeclaration::Stateless).join();
 	   second.unwrap()
 	}
- }
+
+	pub fn read_key(_data: Vec<u8>) -> Vec<u8> {
+		let _foo = sp_io::storage::get(b"key");
+		Default::default()
+	}
+
+	pub fn write_key(_data: Vec<u8>) -> Vec<u8> {
+		let _foo = sp_io::storage::set(b"key", b"foo");
+		Default::default()
+	}
+
+	pub fn unclose_child_transaction(_data: Vec<u8>) -> Vec<u8> {
+		sp_io::storage::start_transaction();
+		Default::default()
+	}
+
+	pub fn read_key_nested(_data: Vec<u8>) -> Vec<u8> {
+		let handle = sp_tasks::spawn(read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		handle.join().unwrap();
+		Default::default()
+	}
+}
 
 #[cfg(not(feature = "std"))]
 fn execute_sandboxed(
