@@ -44,7 +44,7 @@ fork-tree = { version = "2.0.0", path = "../../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0"}
 futures = "0.3.4"
 futures-timer = "3.0.1"
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 log = "0.4.8"
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
 rand = "0.7.2"

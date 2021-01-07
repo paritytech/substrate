@@ -115,7 +115,7 @@ use sp_runtime::{
 	traits::{
 		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, Convert, Saturating,
 	},
-	RuntimeDebug,
+	RuntimeDebug, Perbill,
 };
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
@@ -205,11 +205,8 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	///
 	/// It is a sum of each key-value pair stored by this contract.
 	pub storage_size: u32,
-	/// The number of key-value pairs that have values of zero length.
-	/// The condition `empty_pair_count ≤ total_pair_count` always holds.
-	pub empty_pair_count: u32,
 	/// The total number of key-value pairs in storage of this contract.
-	pub total_pair_count: u32,
+	pub pair_count: u32,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash,
 	/// Pay rent at most up to this value.
@@ -286,24 +283,35 @@ pub trait Config: frame_system::Config {
 	/// The minimum amount required to generate a tombstone.
 	type TombstoneDeposit: Get<BalanceOf<Self>>;
 
-	/// A size offset for an contract. A just created account with untouched storage will have that
-	/// much of storage from the perspective of the state rent.
+	/// The balance every contract needs to deposit to stay alive indefinitely.
+	///
+	/// This is different from the [`Self::TombstoneDeposit`] because this only needs to be
+	/// deposited while the contract is alive. Costs for additional storage are added to
+	/// this base cost.
 	///
 	/// This is a simple way to ensure that contracts with empty storage eventually get deleted by
 	/// making them pay rent. This creates an incentive to remove them early in order to save rent.
-	type StorageSizeOffset: Get<u32>;
+	type DepositPerContract: Get<BalanceOf<Self>>;
 
-	/// Price of a byte of storage per one block interval. Should be greater than 0.
-	type RentByteFee: Get<BalanceOf<Self>>;
-
-	/// The amount of funds a contract should deposit in order to offset
-	/// the cost of one byte.
+	/// The balance a contract needs to deposit per storage byte to stay alive indefinitely.
 	///
 	/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1 BU/byte/day,
 	/// then a contract with 1,000,000 BU that uses 1,000 bytes of storage would pay no rent.
 	/// But if the balance reduced to 500,000 BU and the storage stayed the same at 1,000,
 	/// then it would pay 500 BU/day.
-	type RentDepositOffset: Get<BalanceOf<Self>>;
+	type DepositPerStorageByte: Get<BalanceOf<Self>>;
+
+	/// The balance a contract needs to deposit per storage item to stay alive indefinitely.
+	///
+	/// It works the same as [`Self::DepositPerStorageByte`] but for storage items.
+	type DepositPerStorageItem: Get<BalanceOf<Self>>;
+
+	/// The fraction of the deposit that should be used as rent per block.
+	///
+	/// When a contract hasn't enough balance deposited to stay alive indefinitely it needs
+	/// to pay per block for the storage it consumes that is not covered by the deposit.
+	/// This determines how high this rent payment is per block as a fraction of the deposit.
+	type RentFraction: Get<Perbill>;
 
 	/// Reward that is received by the party whose touch has led
 	/// to removal of a contract.
@@ -435,25 +443,35 @@ decl_module! {
 		/// The minimum amount required to generate a tombstone.
 		const TombstoneDeposit: BalanceOf<T> = T::TombstoneDeposit::get();
 
-		/// A size offset for an contract. A just created account with untouched storage will have that
-		/// much of storage from the perspective of the state rent.
+		/// The balance every contract needs to deposit to stay alive indefinitely.
 		///
-		/// This is a simple way to ensure that contracts with empty storage eventually get deleted
-		/// by making them pay rent. This creates an incentive to remove them early in order to save
-		/// rent.
-		const StorageSizeOffset: u32 = T::StorageSizeOffset::get();
+		/// This is different from the [`Self::TombstoneDeposit`] because this only needs to be
+		/// deposited while the contract is alive. Costs for additional storage are added to
+		/// this base cost.
+		///
+		/// This is a simple way to ensure that contracts with empty storage eventually get deleted by
+		/// making them pay rent. This creates an incentive to remove them early in order to save rent.
+		const DepositPerContract: BalanceOf<T> = T::DepositPerContract::get();
 
-		/// Price of a byte of storage per one block interval. Should be greater than 0.
-		const RentByteFee: BalanceOf<T> = T::RentByteFee::get();
-
-		/// The amount of funds a contract should deposit in order to offset
-		/// the cost of one byte.
+		/// The balance a contract needs to deposit per storage byte to stay alive indefinitely.
 		///
 		/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1 BU/byte/day,
 		/// then a contract with 1,000,000 BU that uses 1,000 bytes of storage would pay no rent.
 		/// But if the balance reduced to 500,000 BU and the storage stayed the same at 1,000,
 		/// then it would pay 500 BU/day.
-		const RentDepositOffset: BalanceOf<T> = T::RentDepositOffset::get();
+		const DepositPerStorageByte: BalanceOf<T> = T::DepositPerStorageByte::get();
+
+		/// The balance a contract needs to deposit per storage item to stay alive indefinitely.
+		///
+		/// It works the same as [`Self::DepositPerStorageByte`] but for storage items.
+		const DepositPerStorageItem: BalanceOf<T> = T::DepositPerStorageItem::get();
+
+		/// The fraction of the deposit that should be used as rent per block.
+		///
+		/// When a contract hasn't enough balance deposited to stay alive indefinitely it needs
+		/// to pay per block for the storage it consumes that is not covered by the deposit.
+		/// This determines how high this rent payment is per block as a fraction of the deposit.
+		const RentFraction: Perbill = T::RentFraction::get();
 
 		/// Reward that is received by the party whose touch has led
 		/// to removal of a contract.

@@ -11,7 +11,7 @@ documentation = "https://docs.rs/sc-light"
 readme = "README.md"
 
 [dependencies]
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 lazy_static = "1.4.0"
 hash-db = "0.15.2"
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
