@@ -8913,13 +8913,8 @@ dependencies = [
 name = "subkey"
 version = "2.0.0"
 dependencies = [
- "frame-system",
- "node-primitives",
- "node-runtime",
  "sc-cli",
- "sp-core",
  "structopt",
- "substrate-frame-cli",
 ]
 
 [[package]]
