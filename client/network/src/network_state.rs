@@ -57,12 +57,6 @@ pub struct Peer {
 	pub version_string: Option<String>,
 	/// Latest ping duration with this node.
 	pub latest_ping_time: Option<Duration>,
-	/// If true, the peer is "enabled", which means that we try to open Substrate-related protocols
-	/// with this peer. If false, we stick to Kademlia and/or other network-only protocols.
-	pub enabled: bool,
-	/// If true, the peer is "open", which means that we have a Substrate-related protocol
-	/// with this peer.
-	pub open: bool,
 	/// List of addresses known for this node.
 	pub known_addresses: HashSet<Multiaddr>,
 }
