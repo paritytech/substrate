@@ -44,7 +44,6 @@ use std::{
 use tracing::Id;
 use wasm_timer::Instant;
 
-pub use chrono;
 pub use libp2p::wasm_ext::ExtTransport;
 pub use serde_json;
 pub use tracing;
@@ -151,7 +150,7 @@ impl TelemetryWorker {
 
 		// initialize the telemetry nodes
 		init_receiver.close();
-		while let Some((id, endpoints, connection_message, mut connection_notifiers_rx)) =
+		while let Some((id, endpoints, mut connection_message, mut connection_notifiers_rx)) =
 			init_receiver.next().await
 		{
 			let endpoints = endpoints.0;
@@ -159,15 +158,17 @@ impl TelemetryWorker {
 			connection_notifiers_rx.close();
 			let connection_notifier_senders: Vec<_> = connection_notifiers_rx.collect().await;
 
+			connection_message.insert("msg".into(), "system.connected".into());
+
 			for (addr, verbosity) in endpoints {
 				node_map
 					.entry(id.clone())
 					.or_insert_with(Vec::new)
 					.push((verbosity, addr.clone()));
 				existing_nodes.insert(addr.clone());
-				let mut obj = connection_message.clone();
-				obj.insert("msg".into(), "system.connected".into());
-				obj.insert("id".into(), id.into_u64().into());
+				let mut obj = serde_json::Map::new();
+				obj.insert("id".to_string(), id.into_u64().into());
+				obj.insert("payload".to_string(), connection_message.clone().into());
 				let (connection_messages, connection_notifiers) = node_args
 					.entry(addr.clone())
 					.or_insert_with(|| (Vec::new(), Vec::new()));
@@ -351,7 +352,6 @@ macro_rules! telemetry {
 			Ok(mut json) => {
 				// NOTE: the span id will be added later in the JSON for the greater good
 				json.insert("msg".into(), $msg.into());
-				json.insert("ts".into(), $crate::chrono::Local::now().to_rfc3339().into());
 				let serialized_json = $crate::serde_json::to_string(&json)
 					.expect("contains only string keys; qed");
 				$crate::tracing::info!(target: $crate::TELEMETRY_LOG_SPAN,

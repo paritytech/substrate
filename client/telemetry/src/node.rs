@@ -172,17 +172,11 @@ where
 							let _ = sender.send(());
 						}
 
-						fn generate_message(mut obj: ConnectionMessage) -> Result<Vec<u8>, String> {
-							obj.insert("ts".into(), chrono::Local::now().to_rfc3339().into());
-							serde_json::to_vec(&obj)
-								.map_err(|err| format!("Could not serialize JSON message: {}", err))
-						}
-
 						let buf = self
 							.connection_messages
 							.iter()
 							.cloned()
-							.filter_map(|json| match generate_message(json) {
+							.filter_map(|json| match serde_json::to_vec(&json) {
 								Ok(message) => Some(message),
 								Err(err) => {
 									log::error!(

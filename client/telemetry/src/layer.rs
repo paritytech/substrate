@@ -70,19 +70,15 @@ where
 					..
 				} = attrs
 				{
-					if self
-						.0
-						.lock()
-						.try_send((
-							id,
-							verbosity
-								.try_into()
-								.expect("telemetry log message verbosity are u8; qed"),
-							json,
-						))
-						.is_err()
-					{
-						eprintln!("Telemetry buffer overflowed!");
+					match self.0.lock().try_send((
+						id,
+						verbosity
+							.try_into()
+							.expect("telemetry log message verbosity are u8; qed"),
+						json,
+					)) {
+						Err(err) if err.is_full() => eprintln!("Telemetry buffer overflowed!"),
+						_ => {}
 					}
 				} else {
 					// NOTE: logging in this function doesn't work
@@ -125,22 +121,17 @@ impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
 
 	fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
 		if field.name() == "verbosity" {
-			(*self.0).verbosity = Some(value)
+			(*self.0).verbosity = Some(value);
 		}
 	}
 
 	fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
 		if field.name() == "json" {
-			if value.chars().next() != Some('{') {
-				eprintln!(
-					"Invalid value for JSON in telemetry logging: \
-					the attribute's value `json` doesn't start with the character `{{`",
-				);
-			}
-			// NOTE: this is a hack to inject the span id into the json
-			let mut message = format!(r#"{{"id":{},"#, (*self.0).id.into_u64());
-			message.push_str(&value[1..]);
-			(*self.0).json = Some(message)
+			(*self.0).json = Some(format!(
+				r#"{{"id":{},"payload":{}}}"#,
+				self.0.id.into_u64(),
+				value,
+			));
 		}
 	}
 }
