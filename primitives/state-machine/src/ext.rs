@@ -454,8 +454,9 @@ where
 			HexDisplay::from(&prefix),
 		);
 		let _guard = guard();
-		if is_child_storage_key(prefix) {
-			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
+
+		if sp_core::storage::well_known_keys::contains_child_storage_key(prefix) {
+			warn!(target: "trie", "Refuse to directly clear prefix that is part or contains of child storage key");
 			return;
 		}
 
