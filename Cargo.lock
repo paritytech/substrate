@@ -1611,7 +1611,6 @@ name = "frame-metadata"
 version = "12.0.0"
 dependencies = [
  "parity-scale-codec",
- "scale-info",
  "serde",
  "sp-core",
  "sp-std",
