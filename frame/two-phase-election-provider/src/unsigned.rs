@@ -38,7 +38,7 @@ where
 	/// Min a new npos solution.
 	pub fn mine_solution(
 		iters: usize,
-	) -> Result<(RawSolution<CompactOf<T>>, WitnessData), ElectionError> {
+	) -> Result<(RawSolution<CompactOf<T>>, SolutionSize), ElectionError> {
 		let RoundSnapshot { voters, targets } =
 			Self::snapshot().ok_or(ElectionError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(ElectionError::SnapshotUnAvailable)?;
@@ -66,7 +66,7 @@ where
 	/// Will always reduce the solution as well.
 	pub fn prepare_election_result(
 		election_result: ElectionResult<T::AccountId, CompactAccuracyOf<T>>,
-	) -> Result<(RawSolution<CompactOf<T>>, WitnessData), ElectionError> {
+	) -> Result<(RawSolution<CompactOf<T>>, SolutionSize), ElectionError> {
 		// storage items. Note: we have already read this from storage, they must be in cache.
 		let RoundSnapshot { voters, targets } =
 			Self::snapshot().ok_or(ElectionError::SnapshotUnAvailable)?;
@@ -94,13 +94,13 @@ where
 		let ratio = sp_npos_elections::assignment_staked_to_ratio_normalized(staked)?;
 		let compact = <CompactOf<T>>::from_assignment(ratio, &voter_index, &target_index)?;
 
-		let witness = WitnessData {
+		let size = SolutionSize {
 			voters: voters.len() as u32,
 			targets: targets.len() as u32,
 		};
 		let maximum_allowed_voters = Self::maximum_voter_for_weight::<T::WeightInfo>(
 			desired_targets,
-			witness,
+			size,
 			T::MinerMaxWeight::get(),
 		);
 		log!(
@@ -118,7 +118,7 @@ where
 			.score(&winners, stake_of, voter_at, target_at)?;
 
 		let round = Self::round();
-		Ok((RawSolution { compact, score, round }, witness))
+		Ok((RawSolution { compact, score, round }, size))
 	}
 
 	/// Get a random number of iterations to run the balancing in the OCW.
@@ -202,21 +202,21 @@ where
 	/// This only returns a value between zero and `size.nominators`.
 	pub fn maximum_voter_for_weight<W: WeightInfo>(
 		desired_winners: u32,
-		witness: WitnessData,
+		size: SolutionSize,
 		max_weight: Weight,
 	) -> u32 {
-		if witness.voters < 1 {
-			return witness.voters;
+		if size.voters < 1 {
+			return size.voters;
 		}
 
-		let max_voters = witness.voters.max(1);
+		let max_voters = size.voters.max(1);
 		let mut voters = max_voters;
 
 		// helper closures.
 		let weight_with = |active_voters: u32| -> Weight {
 			W::submit_unsigned(
-				witness.voters,
-				witness.targets,
+				size.voters,
+				size.targets,
 				active_voters,
 				desired_winners,
 			)
@@ -266,12 +266,12 @@ where
 		}
 
 		debug_assert!(
-			weight_with(voters.min(witness.voters)) <= max_weight,
+			weight_with(voters.min(size.voters)) <= max_weight,
 			"weight_with({}) <= {}",
-			voters.min(witness.voters),
+			voters.min(size.voters),
 			max_weight,
 		);
-		voters.min(witness.voters)
+		voters.min(size.voters)
 	}
 
 	/// Checks if an execution of the offchain worker is permitted at the given block number, or not.
@@ -384,7 +384,7 @@ mod max_weight {
 
 	#[test]
 	fn find_max_voter_binary_search_works() {
-		let w = WitnessData {
+		let w = SolutionSize {
 			voters: 10,
 			targets: 0,
 		};
@@ -468,7 +468,7 @@ mod max_weight {
 			10
 		);
 
-		let w = WitnessData {
+		let w = SolutionSize {
 			voters: 1,
 			targets: 0,
 		};
@@ -512,7 +512,7 @@ mod max_weight {
 			1
 		);
 
-		let w = WitnessData {
+		let w = SolutionSize {
 			voters: 2,
 			targets: 0,
 		};

@@ -384,11 +384,11 @@ pub struct ReadySolution<A> {
 	compute: ElectionCompute,
 }
 
-/// Witness data about the size of the election.
+/// Solution size of the election.
 ///
 /// This is needed for proper weight calculation.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
-pub struct WitnessData {
+pub struct SolutionSize {
 	/// Number of all voters.
 	///
 	/// This must match the on-chain snapshot.
@@ -697,14 +697,14 @@ pub mod pallet {
 			// NOTE: this is the only case where having separate snapshot would have been better
 			// because could do just decode_len. But we can create abstractions to do this.
 
-			// build witness. Note: this is not needed for weight calc, thus not input.
+			// build size. Note: this is not needed for weight calc, thus not input.
 			// defensive-only: if phase is signed, snapshot will exist.
-			let witness = Self::build_witness().unwrap_or_default();
+			let size = Self::build_solution_size().unwrap_or_default();
 
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
 			let maybe_index =
-				Self::insert_submission(&who, &mut signed_submissions, solution, witness);
+				Self::insert_submission(&who, &mut signed_submissions, solution, size);
 			ensure!(maybe_index.is_some(), Error::<T>::QueueFull);
 			let index = maybe_index.expect("Option checked to be `Some`; qed.");
 
@@ -755,7 +755,7 @@ pub mod pallet {
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
 			solution: RawSolution<CompactOf<T>>,
-			witness: WitnessData,
+			witness: SolutionSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			let error_message = "Invalid unsigned submission must produce invalid block and \
@@ -827,7 +827,7 @@ pub mod pallet {
 		QueueFull,
 		/// The origin failed to pay the deposit.
 		CannotPayDeposit,
-		/// WitnessData is invalid.
+		/// witness data to dispathable is invalid.
 		InvalidWitness,
 	}
 
@@ -1014,10 +1014,10 @@ where
 		<Snapshot<T>>::put(RoundSnapshot { voters, targets });
 	}
 
-	/// Build the witness data from the snapshot metadata, if it exists. Else, returns `None`.
-	fn build_witness() -> Option<WitnessData> {
+	/// Build the solution size from the snapshot metadata, if it exists. Else, returns `None`.
+	fn build_solution_size() -> Option<SolutionSize> {
 		let metadata = Self::snapshot_metadata()?;
-		Some(WitnessData {
+		Some(SolutionSize {
 			voters: metadata.voters_len as u32,
 			targets: metadata.targets_len as u32,
 		})

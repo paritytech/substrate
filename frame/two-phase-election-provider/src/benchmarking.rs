@@ -36,7 +36,7 @@ const SEED: u32 = 0;
 ///
 /// The snapshot is also created internally.
 fn solution_with_size<T: Config>(
-	witness: WitnessData,
+	size: SolutionSize,
 	active_voters_count: u32,
 	winners_count: u32,
 ) -> RawSolution<CompactOf<T>>
@@ -45,13 +45,13 @@ where
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 	<InnerOf<CompactAccuracyOf<T>> as sp_std::convert::TryFrom<usize>>::Error: sp_std::fmt::Debug,
 {
-	assert!(witness.targets >= winners_count, "must have enough targets");
+	assert!(size.targets >= winners_count, "must have enough targets");
 	assert!(
-		witness.targets >= (<CompactOf<T>>::LIMIT * 2) as u32,
+		size.targets >= (<CompactOf<T>>::LIMIT * 2) as u32,
 		"must have enough targets for unique votes."
 	);
 	assert!(
-		witness.voters >= active_voters_count,
+		size.voters >= active_voters_count,
 		"must have enough voters"
 	);
 	assert!(
@@ -63,7 +63,7 @@ where
 	let stake: VoteWeight = ed.max(One::one()).saturating_mul(100);
 
 	// first generates random targets.
-	let targets: Vec<T::AccountId> = (0..witness.targets)
+	let targets: Vec<T::AccountId> = (0..size.targets)
 		.map(|i| account("Targets", i, SEED))
 		.collect();
 
@@ -96,7 +96,7 @@ where
 		.filter(|t| !winners.contains(t))
 		.cloned()
 		.collect::<Vec<T::AccountId>>();
-	let rest_voters = (active_voters_count..witness.voters)
+	let rest_voters = (active_voters_count..size.voters)
 		.map(|i| {
 			let votes = (&non_winners)
 				.choose_multiple(&mut rng, <CompactOf<T>>::LIMIT)
@@ -112,7 +112,7 @@ where
 	all_voters.shuffle(&mut rng);
 
 	assert_eq!(active_voters.len() as u32, active_voters_count);
-	assert_eq!(all_voters.len() as u32, witness.voters);
+	assert_eq!(all_voters.len() as u32, size.voters);
 	assert_eq!(winners.len() as u32, winners_count);
 
 	<SnapshotMetadata<T>>::put(RoundSnapshotMetadata {
@@ -276,7 +276,7 @@ benchmarks! {
 		// number of desired targets. Must be a subset of `t` component.
 		let d in 200 .. 400;
 
-		let witness = WitnessData { voters: v, targets: t };
+		let witness = SolutionSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(witness, a, d);
 
 		assert!(<TwoPhase<T>>::queued_solution().is_none());
@@ -298,8 +298,8 @@ benchmarks! {
 		// number of desired targets. Must be a subset of `t` component.
 		let d in 30 .. 60;
 
-		let witness = WitnessData { voters: v, targets: t };
-		let raw_solution = solution_with_size::<T>(witness, a, d);
+		let size = SolutionSize { voters: v, targets: t };
+		let raw_solution = solution_with_size::<T>(size, a, d);
 
 		assert_eq!(raw_solution.compact.voter_count() as u32, a);
 		assert_eq!(raw_solution.compact.unique_targets().len() as u32, d);
