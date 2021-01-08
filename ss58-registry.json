@@ -373,7 +373,7 @@
 		{
 			"prefix": 45,
 			"displayName": "UniArts Network",
-			"symbols": ["UART","UINK"],
+			"symbols": ["UART", "UINK"],
 			"decimals": [12, 12],
 			"standardAccount": "*25519",
 			"website": "https://uniarts.me"
