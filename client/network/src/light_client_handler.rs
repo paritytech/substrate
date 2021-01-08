@@ -1301,8 +1301,7 @@ fn fmt_keys(first: Option<&Vec<u8>>, last: Option<&Vec<u8>>) -> String {
 	}
 }
 
-// TODO:
-/*#[cfg(test)]
+#[cfg(test)]
 mod tests {
 	use super::*;
 	use async_std::task;
@@ -1489,14 +1488,14 @@ mod tests {
 	}
 
 	fn peerset() -> (sc_peerset::Peerset, sc_peerset::PeersetHandle) {
-		let cfg = sc_peerset::PeersetConfig {
+		let cfg = sc_peerset::SetConfig {
 			in_peers: 128,
 			out_peers: 128,
-			bootnodes: Vec::new(),
+			bootnodes: Default::default(),
 			reserved_only: false,
-			priority_groups: Vec::new(),
+			reserved_nodes: Default::default(),
 		};
-		sc_peerset::Peerset::from_config(cfg)
+		sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig{ sets: vec![cfg] })
 	}
 
 	fn make_behaviour
@@ -2059,4 +2058,4 @@ mod tests {
 				.contains(BlockAttributes::BODY)
 		);
 	}
-}*/
+}
