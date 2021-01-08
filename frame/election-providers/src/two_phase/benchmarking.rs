@@ -27,6 +27,7 @@ use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_election_providers::Assignment;
 use sp_npos_elections::ExtendedBalance;
 use sp_runtime::InnerOf;
+use sp_arithmetic::traits::One;
 use sp_std::convert::TryInto;
 
 const SEED: u32 = 0;
@@ -58,7 +59,8 @@ where
 		"must have enough winners to give them votes."
 	);
 
-	let stake: u64 = 1000_000;
+	let ed: VoteWeight = T::Currency::minimum_balance().saturated_into::<u64>();
+	let stake: VoteWeight = ed.max(One::one()).saturating_mul(100);
 
 	// first generates random targets.
 	let targets: Vec<T::AccountId> = (0..witness.targets)
@@ -123,7 +125,7 @@ where
 		targets: targets.clone(),
 	});
 	// write the snapshot to staking or whoever is the data provider.
-	T::DataProvider::put_npos_snapshot(all_voters.clone(), targets.clone());
+	T::DataProvider::put_snapshot(all_voters.clone(), targets.clone());
 
 	let stake_of = crate::stake_of_fn!(all_voters, T::AccountId);
 	let voter_index = crate::voter_index_fn!(all_voters, T::AccountId, T);
@@ -162,7 +164,6 @@ benchmarks! {
 		<InnerOf<CompactAccuracyOf<T>> as sp_std::convert::TryFrom<usize>>::Error: sp_std::fmt::Debug,
 		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 	}
-	_{}
 
 	on_initialize_nothing {
 		assert!(<TwoPhase<T>>::current_phase().is_off());

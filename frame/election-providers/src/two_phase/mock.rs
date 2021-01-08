@@ -14,7 +14,7 @@ use sp_core::{
 	},
 	H256,
 };
-use sp_election_providers::{Assignment, ElectionDataProvider};
+use sp_election_providers::ElectionDataProvider;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
 	CompactSolution, ElectionResult, EvaluateSupport,
@@ -193,7 +193,6 @@ parameter_types! {
 		(30, 30, vec![30]),
 		(40, 40, vec![40]),
 	];
-	pub static BlacklistedVoters: Vec<AccountId> = vec![];
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedDepositBase: Balance = 5;
 	pub static SignedDepositByte: Balance = 0;
@@ -322,19 +321,6 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	fn desired_targets() -> u32 {
 		DesiredTargets::get()
 	}
-	fn feasibility_check_assignment<P: PerThing>(
-		assignment: &Assignment<AccountId, P>,
-	) -> Result<(), &'static str> {
-		if <BlacklistedVoters>::get()
-			.into_iter()
-			.find(|x| *x == assignment.who)
-			.is_some()
-		{
-			Err("blacklisted")
-		} else {
-			Ok(())
-		}
-	}
 	fn next_election_prediction(now: u64) -> u64 {
 		now + EpochLength::get() - now % EpochLength::get()
 	}
@@ -388,10 +374,6 @@ impl ExtBuilder {
 	}
 	pub fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
 		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
-		self
-	}
-	pub fn blacklist_voter(self, who: AccountId) -> Self {
-		BLACKLISTED_VOTERS.with(|v| v.borrow_mut().push(who));
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {

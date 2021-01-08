@@ -304,7 +304,7 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Percent, Perbill, PerU16, PerThing, InnerOf, RuntimeDebug, DispatchError,
+	Percent, Perbill, PerU16, InnerOf, RuntimeDebug, DispatchError,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
@@ -3305,30 +3305,8 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 		)
 	}
 
-	fn feasibility_check_assignment<P: PerThing>(
-		assignment: &Assignment<T::AccountId, P>,
-	) -> Result<(), &'static str> {
-		if let Some(nomination) = Self::nominators(&assignment.who) {
-			if assignment.distribution.iter().all(|(t, _)| {
-				Self::slashing_spans(t).map_or(true, |spans| {
-					nomination.submitted_in >= spans.last_nonzero_slash()
-				})
-			}) {
-				Ok(())
-			} else {
-				Err("Slashed distribution.")
-			}
-		} else if <Validators<T>>::contains_key(&assignment.who) {
-			// validators can self-vote in any case if they want to. NOTE: self vote itself is
-			// checked by the election provider module, because we inject the self vote.
-			Ok(())
-		} else {
-			Err("Unknown assignment")
-		}
-	}
-
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn put_npos_snapshot(
+	fn put_snapshot(
 		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 		targets: Vec<T::AccountId>,
 	) {

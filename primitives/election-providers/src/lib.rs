@@ -108,11 +108,6 @@
 //!         fn targets() -> Vec<AccountId> {
 //!             vec![10, 20, 30]
 //!         }
-//!         fn feasibility_check_assignment<P: PerThing>(
-//!             _: &Assignment<AccountId, P>,
-//!         ) -> Result<(), &'static str> {
-//!             Ok(())
-//!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
 //!             0
 //!         }
@@ -185,20 +180,6 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// The number of targets to elect.
 	fn desired_targets() -> u32;
 
-	/// Check the feasibility of a single assignment for the underlying [`ElectionProvider`]. This
-	/// might be called by the [`ElectionProvider`] upon processing election solutions.
-	///
-	/// Note that each this must only contain checks that the [`ElectionProvider`] cannot know
-	/// about. Basics checks that can be known from [`Self::voters`] and [`Self::targets`] should
-	/// typically be done by [`ElectionProvider`].
-	///
-	/// For example, if a pallet contains some *private* knowledge that could potentially invalidate
-	/// an `assignment`, it should be checked here, as [`ElectionProvider`] has no way of knowing
-	/// about it.
-	fn feasibility_check_assignment<P: PerThing>(
-		assignment: &Assignment<AccountId, P>,
-	) -> Result<(), &'static str>;
-
 	/// Provide a best effort prediction about when the next election is about to happen.
 	///
 	/// In essence, the implementor should predict with this function when it will trigger the
@@ -210,10 +191,11 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn put_npos_snapshot(
+	fn put_snapshot(
 		_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 		_targets: Vec<AccountId>,
-	) {}
+	) {
+	}
 }
 
 impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
@@ -225,11 +207,6 @@ impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for ()
 	}
 	fn desired_targets() -> u32 {
 		Default::default()
-	}
-	fn feasibility_check_assignment<P: PerThing>(
-		_: &Assignment<AccountId, P>,
-	) -> Result<(), &'static str> {
-		Err("() as ElectionDataProvider cannot do anything.")
 	}
 	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
 		now

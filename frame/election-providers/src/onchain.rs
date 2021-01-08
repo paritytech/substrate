@@ -31,8 +31,6 @@ use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 pub enum Error {
 	/// An internal error in the NPoS elections crate.
 	NposElections(sp_npos_elections::Error),
-	/// An assignment failed to pass the feasibility check
-	Feasibility(&'static str),
 }
 
 impl From<sp_npos_elections::Error> for Error {
@@ -41,7 +39,7 @@ impl From<sp_npos_elections::Error> for Error {
 	}
 }
 
-/// A simple on-chian implementation of the election provider trait.
+/// A simple on-chain implementation of the election provider trait.
 ///
 /// This will accept voting data on the fly and produce the results immediately.
 ///
@@ -92,13 +90,6 @@ where
 		} = sp_npos_elections::seq_phragmen::<_, T::Accuracy>(desired_targets, targets, voters, None)
 			.map_err(Error::from)?;
 
-		// check all assignments for feasibility, based on election data provider.
-		assignments
-			.iter()
-			.map(Self::DataProvider::feasibility_check_assignment)
-			.collect::<Result<_, _>>()
-			.map_err(|e| Error::Feasibility(e))?;
-
 		let staked =
 			sp_npos_elections::assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 		let winners = sp_npos_elections::to_without_backing(winners);
@@ -114,7 +105,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_election_providers::{Assignment, VoteWeight};
+	use sp_election_providers::VoteWeight;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
 
@@ -151,12 +142,6 @@ mod tests {
 
 			fn desired_targets() -> u32 {
 				2
-			}
-
-			fn feasibility_check_assignment<P: PerThing>(
-				_: &Assignment<AccountId, P>,
-			) -> Result<(), &'static str> {
-				Ok(())
 			}
 
 			fn next_election_prediction(_: BlockNumber) -> BlockNumber {

@@ -118,9 +118,7 @@
 //! 0. **all** of the used indices must be correct.
 //! 1. present correct number of winners.
 //! 2. any assignment is checked to match with [`Snapshot::voters`].
-//! 3. for each assignment, the check of ``ElectionDataProvider::feasibility_check_assignment`` is
-//!    also examined and must be correct.
-//! 4. the claimed score is valid.
+//! 3. the claimed score is valid.
 //!
 //! ## Accuracy
 //!
@@ -475,8 +473,6 @@ pub enum FeasibilityError {
 	InvalidWinner,
 	/// The given score was invalid.
 	InvalidScore,
-	/// An error from the data provider's feasibility check
-	DataProvider(&'static str),
 	/// The provided round is incorrect.
 	InvalidRound,
 }
@@ -1088,16 +1084,13 @@ where
 					.find(|(v, _, _)| v == &assignment.who)
 					.ok_or(FeasibilityError::InvalidVoter)?;
 				// check that all of the targets are valid based on the snapshot.
-				if !assignment
+				if assignment
 					.distribution
 					.iter()
-					.all(|(d, _)| targets.contains(d))
+					.any(|(d, _)| !targets.contains(d))
 				{
 					return Err(FeasibilityError::InvalidVote);
 				}
-				// check the feasibility based on the data provider
-				T::DataProvider::feasibility_check_assignment::<CompactAccuracyOf<T>>(assignment)
-					.map_err(|r| FeasibilityError::DataProvider(r))?;
 				Ok(())
 			})
 			.collect::<Result<(), FeasibilityError>>()?;
@@ -1394,25 +1387,6 @@ mod feasibility_check {
 				assert_noop!(
 					TwoPhase::feasibility_check(solution, COMPUTE),
 					FeasibilityError::InvalidScore,
-				);
-			})
-	}
-
-	#[test]
-	fn data_provider_feasibility_chec() {
-		ExtBuilder::default()
-			.blacklist_voter(4)
-			.build_and_execute(|| {
-				roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-				assert!(TwoPhase::current_phase().is_signed());
-
-				let solution = raw_solution();
-				assert_eq!(TwoPhase::snapshot().unwrap().voters.len(), 8);
-
-				// solution already contains a vote from 4, nothing to do.
-				assert_noop!(
-					TwoPhase::feasibility_check(solution, COMPUTE),
-					FeasibilityError::DataProvider("blacklisted"),
 				);
 			})
 	}
