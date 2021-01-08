@@ -183,7 +183,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// Provide a best effort prediction about when the next election is about to happen.
 	///
 	/// In essence, the implementor should predict with this function when it will trigger the
-	/// [`ElectionDataProvider::elect`].
+	/// [`ElectionProvider::elect`].
 	///
 	/// This is only useful for stateful election providers.
 	fn next_election_prediction(now: BlockNumber) -> BlockNumber;

@@ -133,7 +133,7 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 
 /// A common interface for all compact solutions.
 ///
-/// See [`compact`] for more info.
+/// See [`sp-npos-elections-compact`] for more info.
 pub trait CompactSolution: Sized {
 	/// The maximum number of votes that are allowed.
 	const LIMIT: usize;
@@ -253,7 +253,8 @@ pub type VoteWeight = u64;
 /// A type in which performing operations on vote weights are safe.
 pub type ExtendedBalance = u128;
 
-/// The score of an assignment. This can be computed from the support map via [`evaluate_support`].
+/// The score of an assignment. This can be computed from the support map via
+/// [`EvaluateSupport::evaluate`].
 pub type ElectionScore = [ExtendedBalance; 3];
 
 /// A winner, with their respective approval stake.
@@ -600,7 +601,7 @@ impl<A> FlattenSupportMap<A> for SupportMap<A> {
 /// Build the support map from the winners and assignments.
 ///
 /// The list of winners is basically a redundancy for error checking only; It ensures that all the
-/// targets pointed to by the [`assignments`] are present in the `winners`.
+/// targets pointed to by the [`Assignment`] are present in the `winners`.
 pub fn to_support_map<A: IdentifierT>(
 	winners: &[A],
 	assignments: &[StakedAssignment<A>],
@@ -628,7 +629,7 @@ pub fn to_support_map<A: IdentifierT>(
 /// Same as [`to_support_map`] except it calls `FlattenSupportMap` on top of the result to return a
 /// flat vector.
 ///
-/// Similar to [`build_support_map`], `winners` is used for error checking.
+/// Similar to [`to_support_map`], `winners` is used for error checking.
 pub fn to_supports<A: IdentifierT>(
 	winners: &[A],
 	assignments: &[StakedAssignment<A>],

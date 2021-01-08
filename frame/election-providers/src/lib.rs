@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Various implementation for `ElectionProvider`.
+//! Various implementation for [`sp_election_providers::ElectionProvider`].
 //!
 //! Two main election providers are implemented in this crate.
 //!
@@ -31,6 +31,12 @@
 pub mod onchain;
 /// The two-phase module.
 pub mod two_phase;
+
+// re-export only for docs, as it help with intra-crate link resolution.
+#[cfg(doc)]
+pub use two_phase::*;
+#[cfg(doc)]
+pub use onchain::*;
 
 const LOG_TARGET: &'static str = "election-provider";
 

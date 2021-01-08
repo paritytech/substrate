@@ -23,9 +23,9 @@
 //! ## Phases
 //!
 //! The timeline of pallet is as follows. At each block,
-//! [`ElectionDataProvider::next_election_prediction`] is used to estimate the time remaining to the
-//! next call to [`ElectionProvider::elect`]. Based on this, a phase is chosen. The timeline is as
-//! follows.
+//! [`sp_election_providers::ElectionDataProvider::next_election_prediction`] is used to estimate
+//! the time remaining to the next call to [`sp_election_providers::ElectionProvider::elect`]. Based
+//! on this, a phase is chosen. The timeline is as follows.
 //!
 //! ```ignore
 //!                                                                    elect()
@@ -35,9 +35,12 @@
 //!
 //! ```
 //!
-//! Note that the unsigned phase starts [`Config::UnsignedPhase`] blocks before the
-//! `next_election_prediction`, but only ends when a call to [`Config::ElectionProvider::elect`]
-//! happens.
+//! Note that the unsigned phase starts [`pallet::Config::UnsignedPhase`] blocks before the
+//! `next_election_prediction`, but only ends when a call to
+//! [`pallet::Config::ElectionProvider::elect`] happens.
+//!
+//! > Given this, it is rather important for the user of this pallet to ensure it alwasy terminates
+//! election via `elect` before requesting a new one.
 //!
 //! Each of the phases can be disabled by essentially setting their length to zero. If both phases
 //! have length zero, then the pallet essentially runs only the on-chain backup.
@@ -47,8 +50,8 @@
 //!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
 //! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
 //! on-chain for a number of blocks, and the potential weight of the solution upon being checked. A
-//! maximum of [`Config::MaxSignedSubmissions`] solutions are stored. The queue is always sorted
-//! based on score (worse to best).
+//! maximum of [`pallet::Config::MaxSignedSubmissions`] solutions are stored. The queue is always
+//! sorted based on score (worse to best).
 //!
 //! Upon arrival of a new solution:
 //!
@@ -63,7 +66,7 @@
 //! origin can not bail out in any way, if their solution is queued.
 //!
 //! Upon the end of the signed phase, the solutions are examined from best to worse (i.e. `pop()`ed
-//! until drained). Each solution undergoes an expensive [`Module::feasibility_check`], which
+//! until drained). Each solution undergoes an expensive [`Pallet::feasibility_check`], which
 //! ensures the score claimed by this score was correct, and it is valid based on the election data
 //! (i.e. votes and candidates). At each step, if the current best solution passes the feasibility
 //! check, it is considered to be the best one. The sender of the origin is rewarded, and the rest
@@ -98,16 +101,16 @@
 //! valid if propagated, and it acts similar to an inherent.
 //!
 //! Validators will only submit solutions if the one that they have computed is sufficiently better
-//! than the best queued one (see [`SolutionImprovementThreshold`]) and will limit the weigh of the
-//! solution to [`MinerMaxWeight`].
+//! than the best queued one (see [`pallet::Config::SolutionImprovementThreshold`]) and will limit
+//! the weigh of the solution to [`pallet::Config::MinerMaxWeight`].
 //!
 //! ### Fallback
 //!
 //! If we reach the end of both phases (i.e. call to [`ElectionProvider::elect`] happens) and no
-//! good solution is queued, then the fallback strategy [`Config::Fallback`] is used to determine
-//! what needs to be done. The on-chain election is slow, and contains no balancing or reduction
-//! post-processing. See [`onchain::OnChainSequentialPhragmen`]. The [`FallbackStrategy::Nothing`]
-//! should probably only be used for testing.
+//! good solution is queued, then the fallback strategy [`pallet::Config::Fallback`] is used to
+//! determine what needs to be done. The on-chain election is slow, and contains no balancing or
+//! reduction post-processing. See [`onchain::OnChainSequentialPhragmen`]. The
+//! [`FallbackStrategy::Nothing`] should probably only be used for testing, and returns an error.
 //!
 //! ## Feasible Solution (correct solution)
 //!
@@ -116,16 +119,15 @@
 //! is as follows:
 //!
 //! 0. **all** of the used indices must be correct.
-//! 1. present correct number of winners.
+//! 1. present *exactly* correct number of winners.
 //! 2. any assignment is checked to match with [`Snapshot::voters`].
-//! 3. the claimed score is valid.
+//! 3. the claimed score is valid, based on the fixed point arithmetic accuracy.
 //!
 //! ## Accuracy
 //!
 //! The accuracy of the election is configured via two trait parameters. namely,
-//! [`Config::OnChainAccuracy`] dictates the accuracy used to compute the on-chain fallback election
-//! (see [`OnChainAccuracyOf`]) and `[Config::DataProvider::CompactSolution::Accuracy]` is the
-//! accuracy that the submitted solutions must adhere to.
+//! [`OnChainAccuracyOf`] dictates the accuracy used to compute the on-chain fallback election and
+//! [`CompactAccuracyOf`] is the accuracy that the submitted solutions must adhere to.
 //!
 //! Note that both accuracies are of great importance. The offchain solution should be as small as
 //! possible, reducing solutions size/weight. The on-chain solution can use more space for accuracy,
@@ -148,7 +150,7 @@
 //! afterwards, and remove their solution (for a small cost of probably just transaction fees, or a
 //! portion of the bond).
 //!
-//! ** Conditionally open unsigned phase: Currently, the unsigned phase is always opened. This is
+//! **Conditionally open unsigned phase**: Currently, the unsigned phase is always opened. This is
 //! useful because an honest validation will run our OCW code, which should be good enough to trump
 //! a mediocre or malicious signed submission (assuming in the absence of honest signed bots). If an
 //! when the signed submissions are checked against an absolute measure (e.g. PJR), then we can only
@@ -160,9 +162,13 @@
 //! solution within this range is acceptable, where bigger solutions are prioritized.
 //!
 //! **Recursive Fallback**: Currently, the fallback is a separate enum. A different and fancier way
-//! of doing this would be to have the fallback be another [`ElectionProvider`]. In this case, this
-//! pallet can even have the on-chain election provider as fallback, or special _noop_ fallback that
-//! simply returns an error, thus replicating `Fallback::Nothing`.
+//! of doing this would be to have the fallback be another
+//! [`sp_election_provider::ElectionProvider`]. In this case, this pallet can even have the on-chain
+//! election provider as fallback, or special _noop_ fallback that simply returns an error, thus
+//! replicating [`FallbackStrategy::Nothing`].
+//!
+//! **Score based on size**: We should always prioritize small solutions over bigger ones, if there
+//! is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
 
 use crate::onchain::OnChainSequentialPhragmen;
 use codec::{Decode, Encode, HasCompact};
@@ -213,7 +219,7 @@ pub type CompactVoterIndexOf<T> = <CompactOf<T> as CompactSolution>::Voter;
 pub type CompactTargetIndexOf<T> = <CompactOf<T> as CompactSolution>::Target;
 /// The accuracy of the election, when submitted from offchain. Derived from [`CompactOf`].
 pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::Accuracy;
-/// The accuracy of the election, when computed on-chain. Equal to [`T::OnChainAccuracy`].
+/// The accuracy of the election, when computed on-chain. Equal to [`Config::OnChainAccuracy`].
 pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
 
 type BalanceOf<T> =
@@ -321,7 +327,7 @@ impl Default for ElectionCompute {
 /// This is what will get submitted to the chain.
 ///
 /// Such a solution should never become effective in anyway before being checked by the
-/// [`Module::feasibility_check`]
+/// [`Pallet::feasibility_check`]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct RawSolution<C> {
 	/// Compact election edges.
@@ -943,7 +949,7 @@ where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
-	/// Logic for [`Module::on_initialize`] when signed phase is being opened.
+	/// Logic for [`Pallet::on_initialize`] when signed phase is being opened.
 	///
 	/// This is decoupled for easy weight calculation.
 	pub fn on_initialize_open_signed() {
@@ -952,7 +958,7 @@ where
 		Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
 	}
 
-	/// Logic for [`Module::on_initialize`] when unsigned phase is being opened.
+	/// Logic for [`Pallet::on_initialize`] when unsigned phase is being opened.
 	///
 	/// This is decoupled for easy weight calculation. Note that the default weight benchmark of
 	/// this function will assume an empty signed queue for `finalize_signed_phase`.
