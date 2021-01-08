@@ -224,7 +224,7 @@ where
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
 		trace!(target: "state",
 			method = "Get",
-			id = ?self.id,
+			ext_id = self.id,
 			key = %HexDisplay::from(&key),
 			result = ?result.as_ref().map(HexDisplay::from)
 		);
@@ -240,7 +240,7 @@ where
 
 		trace!(target: "state",
 			method = "Hash",
-			id = ?self.id,
+			ext_id = self.id,
 			key = %HexDisplay::from(&key),
 			result = ?result
 		);
@@ -263,7 +263,7 @@ where
 
 		trace!(target: "state",
 			method = "GetChild",
-			id = ?self.id,
+			ext_id = self.id,
 			child_key = %HexDisplay::from(&child_info.storage_key()),
 			key = %HexDisplay::from(&key),
 			result = ?result.as_ref().map(HexDisplay::from)
@@ -288,7 +288,7 @@ where
 
 		trace!(target: "state",
 			method = "ChildHash",
-			id = ?self.id,
+			ext_id = self.id,
 			child_key = %HexDisplay::from(&child_info.storage_key()),
 			key = %HexDisplay::from(&key),
 			result = ?result
@@ -306,7 +306,7 @@ where
 
 		trace!(target: "state",
 			method = "Exists",
-			id = ?self.id,
+			ext_id = self.id,
 			key = %HexDisplay::from(&key),
 			result = ?result
 		);
@@ -330,7 +330,7 @@ where
 
 		trace!(target: "state",
 			method = "ChildExists",
-			id = ?self.id,
+			ext_id = self.id,
 			child_key = %HexDisplay::from(&child_info.storage_key()),
 			key = %HexDisplay::from(&key),
 			result = ?result
@@ -383,7 +383,7 @@ where
 	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
 		trace!(target: "state",
 			method = "Put",
-			id = ?self.id,
+			ext_id = self.id,
 			key = %HexDisplay::from(&key),
 			value = ?value.as_ref().map(HexDisplay::from)
 		);
@@ -405,7 +405,7 @@ where
 	) {
 		trace!(target: "state",
 			method = "PutChild",
-			id = ?self.id,
+			ext_id = self.id,
 			child_key = %HexDisplay::from(&child_info.storage_key()),
 			key = %HexDisplay::from(&key),
 			value = ?value.as_ref().map(HexDisplay::from)
@@ -423,7 +423,7 @@ where
 	) -> bool {
 		trace!(target: "state",
 			method = "KillChild",
-			id = ?self.id,
+			ext_id = self.id,
 			child_key = %HexDisplay::from(&child_info.storage_key())
 		);
 		let _guard = guard();
@@ -460,7 +460,7 @@ where
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		trace!(target: "state",
 			method = "ClearPrefix",
-			id = ?self.id,
+			ext_id = self.id,
 			prefix = %HexDisplay::from(&prefix)
 		);
 		let _guard = guard();
@@ -483,7 +483,7 @@ where
 	) {
 		trace!(target: "state",
 			method = "ClearChildPrefix",
-			id = ?self.id,
+			ext_id = self.id,
 			child_key = %HexDisplay::from(&child_info.storage_key()),
 			prefix = %HexDisplay::from(&prefix)
 		);
@@ -503,7 +503,7 @@ where
 	) {
 		trace!(target: "state",
 			method = "Append",
-			id = ?self.id,
+			ext_id = self.id,
 			key = %HexDisplay::from(&key),
 			value = %HexDisplay::from(&value),
 		);
@@ -524,7 +524,7 @@ where
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
 			trace!(target: "state",
 				method = "Root(cached)",
-				id = ?self.id,
+				ext_id = self.id,
 				root = %HexDisplay::from(&root.as_ref())
 			);
 			return root.encode();
@@ -533,7 +533,7 @@ where
 		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
 		trace!(target: "state",
 			   method = "Root",
-			   id = self.id,
+			   ext_id = self.id,
 			   root = %HexDisplay::from(&root.as_ref())
 		);
 		root.encode()
@@ -555,7 +555,7 @@ where
 				);
 			trace!(target: "state",
 				method = "ChildRoot(cached)",
-				id = ?self.id,
+				ext_id = self.id,
 				storage_key = %HexDisplay::from(&storage_key),
 				root = %HexDisplay::from(&root.as_ref()),
 			);
@@ -583,7 +583,7 @@ where
 
 				trace!(target: "state",
 					method = "ChildRoot",
-					id = ?self.id,
+					ext_id = self.id,
 					storage_key = %HexDisplay::from(&storage_key.as_ref()),
 					root = %HexDisplay::from(&root.as_ref()),
 				);
@@ -598,7 +598,7 @@ where
 					);
 				trace!(target: "state",
 					method = "ChildRoot(no_change)",
-					id = ?self.id,
+					ext_id = self.id,
 					storage_key = %HexDisplay::from(&storage_key.as_ref()),
 					root = %HexDisplay::from(&root.as_ref()),
 				);
@@ -631,7 +631,7 @@ where
 
 		trace!(target: "state",
 			method = "ChangesRoot",
-			id = ?self.id,
+			ext_id = self.id,
 			parent_hash = %HexDisplay::from(&parent_hash),
 			?root,
 		);
