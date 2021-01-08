@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,10 +36,9 @@
 //! ```
 //!
 //! Note that the unsigned phase starts [`pallet::Config::UnsignedPhase`] blocks before the
-//! `next_election_prediction`, but only ends when a call to
-//! [`pallet::Config::ElectionProvider::elect`] happens.
+//! `next_election_prediction`, but only ends when a call to [`ElectionProvider::elect`] happens.
 //!
-//! > Given this, it is rather important for the user of this pallet to ensure it alwasy terminates
+//! > Given this, it is rather important for the user of this pallet to ensure it always terminates
 //! election via `elect` before requesting a new one.
 //!
 //! Each of the phases can be disabled by essentially setting their length to zero. If both phases
@@ -120,7 +119,7 @@
 //!
 //! 0. **all** of the used indices must be correct.
 //! 1. present *exactly* correct number of winners.
-//! 2. any assignment is checked to match with [`Snapshot::voters`].
+//! 2. any assignment is checked to match with [`RoundSnapshot::voters`].
 //! 3. the claimed score is valid, based on the fixed point arithmetic accuracy.
 //!
 //! ## Accuracy
@@ -163,14 +162,15 @@
 //!
 //! **Recursive Fallback**: Currently, the fallback is a separate enum. A different and fancier way
 //! of doing this would be to have the fallback be another
-//! [`sp_election_provider::ElectionProvider`]. In this case, this pallet can even have the on-chain
+//! [`sp_election_providers::ElectionProvider`]. In this case, this pallet can even have the on-chain
 //! election provider as fallback, or special _noop_ fallback that simply returns an error, thus
 //! replicating [`FallbackStrategy::Nothing`].
 //!
 //! **Score based on size**: We should always prioritize small solutions over bigger ones, if there
 //! is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
 
-use crate::onchain::OnChainSequentialPhragmen;
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -179,7 +179,7 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::{ensure_none, ensure_signed, offchain::SendTransactionTypes};
-use sp_election_providers::{ElectionDataProvider, ElectionProvider};
+use sp_election_providers::{ElectionDataProvider, ElectionProvider, onchain};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, is_score_better, CompactSolution, ElectionScore,
 	EvaluateSupport, ExtendedBalance, PerThing128, Supports, VoteWeight,
@@ -191,7 +191,7 @@ use sp_runtime::{
 	},
 	DispatchError, InnerOf, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
-use sp_std::{convert::TryInto, prelude::*};
+use sp_std::prelude::*;
 use sp_arithmetic::{
 	UpperOf,
 	traits::{Zero, CheckedAdd},
@@ -203,6 +203,14 @@ mod benchmarking;
 mod mock;
 #[macro_use]
 pub(crate) mod macros;
+
+const LOG_TARGET: &'static str = "election-provider";
+
+// for the helper macros
+#[doc(hidden)]
+pub use sp_runtime::traits::UniqueSaturatedInto;
+#[doc(hidden)]
+pub use sp_std::convert::TryInto;
 
 pub mod signed;
 pub mod unsigned;
@@ -236,7 +244,7 @@ struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>)
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>;
-impl<T: Config> crate::onchain::Config for OnChainConfig<T>
+impl<T: Config> onchain::Config for OnChainConfig<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
@@ -429,7 +437,7 @@ pub enum ElectionError {
 	/// A feasibility error.
 	Feasibility(FeasibilityError),
 	/// An error in the on-chain fallback.
-	OnChainFallback(crate::onchain::Error),
+	OnChainFallback(onchain::Error),
 	/// No fallback is configured
 	NoFallbackConfigured,
 	/// An internal error in the NPoS elections crate.
@@ -442,8 +450,8 @@ pub enum ElectionError {
 	PoolSubmissionFailed,
 }
 
-impl From<crate::onchain::Error> for ElectionError {
-	fn from(e: crate::onchain::Error) -> Self {
+impl From<onchain::Error> for ElectionError {
+	fn from(e: onchain::Error) -> Self {
 		ElectionError::OnChainFallback(e)
 	}
 }
@@ -726,7 +734,7 @@ pub mod pallet {
 
 		/// Submit a solution for the unsigned phase.
 		///
-		/// The dispatch origin fo this call must be __signed__.
+		/// The dispatch origin fo this call must be __none__.
 		///
 		/// This submission is checked on the fly, thus it is likely yo be more limited and smaller.
 		/// Moreover, this unsigned solution is only validated when submitted to the pool from the
@@ -848,23 +856,18 @@ pub mod pallet {
 						log!(error, "unsigned transaction validation failed due to {:?}", err);
 						err
 					})
-					.map_err(dispatch_error_to_invalid)
-					.map(Into::into)?;
+					.map_err(dispatch_error_to_invalid)?;
 
 				ValidTransaction::with_tag_prefix("OffchainElection")
 					// The higher the score[0], the better a solution is.
 					.priority(
-						T::UnsignedPriority::get()
-							.saturating_add(solution.score[0].saturated_into()),
+						T::UnsignedPriority::get().saturating_add(solution.score[0].saturated_into()),
 					)
 					// used to deduplicate unsigned solutions: each validator should produce one
 					// solution per round at most, and solutions are not propagate.
 					.and_provides(solution.round)
 					// transaction should stay in the pool for the duration of the unsigned phase.
-					.longevity(
-						TryInto::<u64>::try_into(T::UnsignedPhase::get())
-							.unwrap_or(crate::two_phase::unsigned::DEFAULT_LONGEVITY),
-					)
+					.longevity(T::UnsignedPhase::get().saturated_into::<u64>())
 					// We don't propagate this. This can never the validated at a remote node.
 					.propagate(false)
 					.build()
@@ -949,7 +952,7 @@ where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
-	/// Logic for [`Pallet::on_initialize`] when signed phase is being opened.
+	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
 	///
 	/// This is decoupled for easy weight calculation.
 	pub fn on_initialize_open_signed() {
@@ -958,7 +961,7 @@ where
 		Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
 	}
 
-	/// Logic for [`Pallet::on_initialize`] when unsigned phase is being opened.
+	/// Logic for `<Pallet as Hooks<T>>::on_initialize` when unsigned phase is being opened.
 	///
 	/// This is decoupled for easy weight calculation. Note that the default weight benchmark of
 	/// this function will assume an empty signed queue for `finalize_signed_phase`.
@@ -1147,7 +1150,7 @@ where
 	where
 		ExtendedBalance: From<<T::OnChainAccuracy as PerThing>::Inner>,
 	{
-		<OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<
+		<onchain::OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<
 			T::AccountId,
 			T::BlockNumber,
 		>>::elect()

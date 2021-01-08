@@ -36,7 +36,7 @@ use sp_runtime::{
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use std::{cell::RefCell, collections::HashSet};
-use frame_election_providers::onchain;
+use sp_election_providers::onchain;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;

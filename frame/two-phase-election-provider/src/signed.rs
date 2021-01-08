@@ -17,7 +17,7 @@
 
 //! The signed phase implementation.
 
-use crate::two_phase::*;
+use super::*;
 use codec::Encode;
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, CompactSolution};

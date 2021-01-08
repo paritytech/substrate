@@ -39,7 +39,6 @@ sp-storage = { version = "2.0.0", path = "../../primitives/storage" }
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
 pallet-balances = { version = "2.0.0", path = "../balances" }
 pallet-timestamp = { version = "2.0.0", path = "../timestamp" }
-frame-election-providers = { version = "2.0.0", path = "../election-providers" }
 pallet-staking-reward-curve = { version = "2.0.0",  path = "../staking/reward-curve" }
 substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
 frame-benchmarking = { version = "2.0.0", path = "../benchmarking" }

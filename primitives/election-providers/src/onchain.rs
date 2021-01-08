@@ -15,19 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! An implementation of [`sp_election_providers::ElectionProvider`] that does an on-chain
-//! sequential phragmen.
+//! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
 use sp_arithmetic::PerThing;
-use sp_election_providers::{ElectionDataProvider, ElectionProvider};
+use crate::{ElectionDataProvider, ElectionProvider};
 use sp_npos_elections::{
 	ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Supports, VoteWeight,
 };
-use sp_runtime::RuntimeDebug;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
 /// Errors of the on-chain election.
-#[derive(RuntimeDebug, Eq, PartialEq)]
+#[derive(Eq, PartialEq, Debug)]
 pub enum Error {
 	/// An internal error in the NPoS elections crate.
 	NposElections(sp_npos_elections::Error),
@@ -105,7 +103,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_election_providers::VoteWeight;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
 

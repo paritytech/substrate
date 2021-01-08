@@ -161,6 +161,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod onchain;
 use sp_std::prelude::*;
 
 /// Re-export some type as they are used in the interface.

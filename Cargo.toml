@@ -100,7 +100,7 @@ members = [
 	"frame/staking",
 	"frame/staking/fuzzer",
 	"frame/staking/reward-curve",
-	"frame/election-providers",
+	"frame/two-phase-election-provider",
 	"frame/sudo",
 	"frame/support",
 	"frame/support/procedural",

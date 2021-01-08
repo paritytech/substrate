@@ -1,12 +1,12 @@
 [package]
-name = "frame-election-providers"
+name = "pallet-two-phase-election-provider"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "FRAME election providers"
+description = "PALLET two phase election providers"
 readme = "README.md"
 
 [package.metadata.docs.rs]

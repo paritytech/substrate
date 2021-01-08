@@ -42,7 +42,6 @@ frame-executive = { version = "2.0.0", default-features = false, path = "../../.
 frame-benchmarking = { version = "2.0.0", default-features = false, path = "../../../frame/benchmarking", optional = true }
 frame-support = { version = "2.0.0", default-features = false, path = "../../../frame/support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../../../frame/system" }
-frame-election-providers = { version = "2.0.0", default-features = false, path = "../../../frame/election-providers/" }
 frame-system-benchmarking = { version = "2.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 frame-system-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 pallet-assets = { version = "2.0.0", default-features = false, path = "../../../frame/assets" }
@@ -73,6 +72,7 @@ pallet-recovery = { version = "2.0.0", default-features = false, path = "../../.
 pallet-session = { version = "2.0.0", features = ["historical"], path = "../../../frame/session", default-features = false }
 pallet-session-benchmarking = { version = "2.0.0", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
 pallet-staking = { version = "2.0.0", default-features = false, path = "../../../frame/staking" }
+pallet-two-phase-election-provider = { version = "2.0.0", default-features = false, path = "../../../frame/two-phase-election-provider/" }
 pallet-staking-reward-curve = { version = "2.0.0", default-features = false, path = "../../../frame/staking/reward-curve" }
 pallet-scheduler = { version = "2.0.0", default-features = false, path = "../../../frame/scheduler" }
 pallet-society = { version = "2.0.0", default-features = false, path = "../../../frame/society" }
@@ -143,7 +143,7 @@ std = [
 	"frame-benchmarking/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
-	"frame-election-providers/std",
+	"pallet-two-phase-election-provider/std",
 	"pallet-timestamp/std",
 	"pallet-tips/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
@@ -160,7 +160,7 @@ runtime-benchmarks = [
 	"frame-benchmarking",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
-	"frame-election-providers/runtime-benchmarks",
+	"pallet-two-phase-election-provider/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"pallet-assets/runtime-benchmarks",
 	"pallet-babe/runtime-benchmarks",

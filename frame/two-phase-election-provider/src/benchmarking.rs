@@ -18,7 +18,7 @@
 //! Two phase election pallet benchmarking.
 
 use super::*;
-use crate::two_phase::{Module as TwoPhase};
+use crate::Module as TwoPhase;
 
 pub use frame_benchmarking::{account, benchmarks, whitelist_account, whitelisted_caller};
 use frame_support::{assert_ok, traits::OnInitialize};
@@ -311,7 +311,7 @@ benchmarks! {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::two_phase::mock::*;
+	use crate::mock::*;
 
 	#[test]
 	fn test_benchmarks() {

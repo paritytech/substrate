@@ -17,7 +17,7 @@
 
 //! The unsigned phase implementation.
 
-use crate::two_phase::*;
+use crate::*;
 use frame_support::dispatch::DispatchResult;
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{seq_phragmen, CompactSolution, ElectionResult};
@@ -29,8 +29,6 @@ pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/two-phase-unsigned-election/
 /// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
 /// within a window of 5 blocks.
 pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
-/// Default number of blocks for which the unsigned transaction should stay in the pool
-pub(crate) const DEFAULT_LONGEVITY: u64 = 25;
 
 impl<T: Config> Pallet<T>
 where
@@ -357,7 +355,7 @@ mod max_weight {
 	use super::{mock::*, *};
 
 	struct TestWeight;
-	impl crate::two_phase::weights::WeightInfo for TestWeight {
+	impl crate::weights::WeightInfo for TestWeight {
 		fn on_initialize_nothing() -> Weight {
 			unreachable!()
 		}
