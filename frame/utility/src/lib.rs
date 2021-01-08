@@ -135,11 +135,11 @@ decl_module! {
 		/// event is deposited.
 		#[weight = {
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
-			(dispatch_infos.iter()
+			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
 				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
-				.saturating_add(T::WeightInfo::batch(calls.len() as u32)),
-			{
+				.saturating_add(T::WeightInfo::batch(calls.len() as u32));
+			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
 					.map(|di| di.class)
 					.all(|class| class == DispatchClass::Operational);
@@ -148,8 +148,9 @@ decl_module! {
 				} else {
 					DispatchClass::Normal
 				}
-			},
-		)}]
+			};
+			(dispatch_weight, dispatch_class)
+		}]
 		fn batch(origin, calls: Vec<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
@@ -193,12 +194,14 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		#[weight = {
 			let dispatch_info = call.get_dispatch_info();
-			(T::WeightInfo::as_derivative()
-				.saturating_add(dispatch_info.weight)
-				 // AccountData for inner call origin accountdata.
-				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
-			dispatch_info.class,
-		)}]
+			(
+				T::WeightInfo::as_derivative()
+					.saturating_add(dispatch_info.weight)
+					// AccountData for inner call origin accountdata.
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+				dispatch_info.class,
+			)
+		}]
 		fn as_derivative(origin, index: u16, call: Box<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let mut origin = origin;
 			let who = ensure_signed(origin.clone())?;
@@ -231,11 +234,11 @@ decl_module! {
 		/// # </weight>
 		#[weight = {
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
-			(dispatch_infos.iter()
+			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
 				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
-				.saturating_add(T::WeightInfo::batch_all(calls.len() as u32)),
-			{
+				.saturating_add(T::WeightInfo::batch_all(calls.len() as u32));
+			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
 					.map(|di| di.class)
 					.all(|class| class == DispatchClass::Operational);
@@ -244,8 +247,9 @@ decl_module! {
 				} else {
 					DispatchClass::Normal
 				}
-			},
-		)}]
+			};
+			(dispatch_weight, dispatch_class)
+		}]
 		#[transactional]
 		fn batch_all(origin, calls: Vec<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
