@@ -52,7 +52,7 @@ use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockChec
 use futures::prelude::*;
 use futures::future::BoxFuture;
 use sc_network::{NetworkWorker, NetworkService, config::ProtocolId};
-use sc_network::config::{NetworkConfiguration, TransportConfig};
+use sc_network::config::{NetworkConfiguration, NonDefaultSetConfig, TransportConfig};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
@@ -682,7 +682,12 @@ pub trait TestNetFactory: Sized {
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
-		network_config.notifications_protocols = config.notifications_protocols;
+		network_config.extra_sets = config.notifications_protocols.into_iter().map(|p| {
+			NonDefaultSetConfig {
+				notifications_protocol: p,
+				set_config: Default::default()
+			}
+		}).collect();
 
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
