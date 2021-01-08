@@ -21,6 +21,7 @@
 
 pub mod number;
 pub mod list;
+pub mod tracing;
 
 /// A util function to assert the result of serialization and deserialization is the same.
 #[cfg(test)]

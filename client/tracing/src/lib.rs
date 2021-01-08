@@ -211,9 +211,9 @@ pub struct SpanDatum {
 	pub values: Values,
 }
 
-impl From<SpanDatum> for sp_tracing::std_types::Span {
+impl From<SpanDatum> for sp_rpc::tracing::Span {
 	fn from(s: SpanDatum) -> Self {
-		sp_tracing::std_types::Span {
+		sp_rpc::tracing::Span {
 			id: s.id.into_u64(),
 			parent_id: s.parent_id.map(|id| id.into_u64()),
 			name: s.name,
@@ -225,9 +225,9 @@ impl From<SpanDatum> for sp_tracing::std_types::Span {
 	}
 }
 
-impl From<TraceEvent> for sp_tracing::std_types::Event {
+impl From<TraceEvent> for sp_rpc::tracing::Event {
 	fn from(e: TraceEvent) -> Self {
-		sp_tracing::std_types::Event {
+		sp_rpc::tracing::Event {
 			name: e.name.to_owned(),
 			target: e.target,
 			values: e.values.into(),
@@ -236,9 +236,9 @@ impl From<TraceEvent> for sp_tracing::std_types::Event {
 	}
 }
 
-impl From<Values> for sp_tracing::std_types::Values {
+impl From<Values> for sp_rpc::tracing::Values {
 	fn from(v: Values) -> Self {
-		sp_tracing::std_types::Values {
+		sp_rpc::tracing::Values {
 			bool_values: v.bool_values,
 			i64_values: v.i64_values,
 			u64_values: v.u64_values,
@@ -463,7 +463,7 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 		};
 
 		if let Some(mut span_datum) = span_datum {
-			self.current_span.exit();
+																																																																																																																															self.current_span.exit();
 			span_datum.overall_time += end_time - span_datum.start_time;
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
 				span_datum.values.bool_values.insert("wasm".to_owned(), true);

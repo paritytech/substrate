@@ -29,7 +29,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header},
 };
-use sp_tracing::std_types::Traces;
+use sp_rpc::tracing::BlockTrace;
 
 use crate::{TraceHandler, ProfilingLayer};
 
@@ -58,7 +58,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 	}
 
 	/// Execute block, recording all spans and events belonging to `Self::targets`
-	pub fn trace_block(&self) -> Result<Traces, String> {
+	pub fn trace_block(&self) -> Result<BlockTrace, String> {
 		// Prepare block
 		let id = BlockId::Hash(self.block);
 		let extrinsics = self.client.block_body(&id)
@@ -74,16 +74,19 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let block = Block::new(header, extrinsics);
 
 		let targets = if let Some(t) = &self.targets { t } else { DEFAULT_TARGETS };
-		let traces = Arc::new(Mutex::new(Traces::default()));
+		let block_traces = BlockTrace {
+			block_hash: id.to_string(),
+			parent_hash: parent_id.to_string(),
+			tracing_targets: targets.to_string(),
+			..Default::default()
+		};
+		let traces = Arc::new(Mutex::new(block_traces));
 		let dispatch = create_dispatch(traces.clone(), targets)?;
 
 		if let Err(e) = dispatcher::with_default(&dispatch, || {
 			let span = tracing::info_span!(
 				target: TRACE_TARGET,
-				"trace_block",
-				block_hash = ?self.block,
-				?parent_hash,
-				targets
+				"trace_block"
 			);
 			let _enter = span.enter();
 			self.client.runtime_api().execute_block(&parent_id, block)
@@ -97,7 +100,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 }
 
 struct StorageTracer {
-	traces: Arc<Mutex<Traces>>,
+	traces: Arc<Mutex<BlockTrace>>,
 }
 
 impl TraceHandler for StorageTracer {
@@ -110,7 +113,7 @@ impl TraceHandler for StorageTracer {
 	}
 }
 
-fn create_dispatch(traces: Arc<Mutex<Traces>>, targets: &str) -> Result<Dispatch, String> {
+fn create_dispatch(traces: Arc<Mutex<BlockTrace>>, targets: &str) -> Result<Dispatch, String> {
 	let tracer = StorageTracer {
 		traces,
 	};

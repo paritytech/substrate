@@ -31,6 +31,21 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+use tracing;
+pub use tracing::{
+    debug, debug_span, error, error_span, event, info, info_span, Level, span, Span,
+    trace, trace_span, warn, warn_span,
+};
+
+pub use crate::types::{
+    WasmEntryAttributes, WasmFieldName, WasmFields, WasmLevel, WasmMetadata, WasmValue, WasmValuesSet
+};
+#[cfg(feature = "std")]
+pub use crate::types::{
+    WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER
+};
+
 /// Tracing facilities and helpers.
 ///
 /// This is modeled after the `tracing`/`tracing-core` interface and uses that more or
@@ -89,20 +104,6 @@
 ///
 
 mod types;
-pub mod std_types;
-
-#[cfg(feature = "std")]
-use tracing;
-
-pub use tracing::{
-	debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
-	span, event, Level, Span,
-};
-
-pub use crate::types::{
-	WasmMetadata, WasmEntryAttributes, WasmValuesSet, WasmValue, WasmFields, WasmLevel, WasmFieldName
-};
-
 
 /// Try to init a simple tracing subscriber with log compatibility layer.
 /// Ignores any error. Useful for testing.
@@ -112,12 +113,6 @@ pub fn try_init_simple() {
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.with_writer(std::io::stderr).try_init();
 }
-
-#[cfg(feature = "std")]
-pub use crate::types::{
-	WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER
-};
-
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///

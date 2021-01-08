@@ -15,15 +15,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![cfg(feature = "std")]
+//! Types for working with tracing data
 
-/// Types for working with tracing data
+use serde::{Serialize, Deserialize};
 
 use std::collections::HashMap;
 use std::time::Duration;
 
+/// Container for all related spans and events for the block being traced.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct BlockTrace {
+	/// Hash of the block being traced
+	pub block_hash: String,
+	/// Parent hash
+	pub parent_hash: String,
+	/// Module targets that were recorded by the tracing subscriber
+	pub tracing_targets: String,
+	/// Vec of tracing spans
+	pub spans: Vec<Span>,
+	/// Vec of tracing events
+	pub events: Vec<Event>,
+}
+
 /// Represents a tracing event, complete with values
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Event {
 	/// Event name
 	pub name: String,
@@ -36,7 +51,7 @@ pub struct Event {
 }
 
 /// Represents a single instance of a tracing span
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Span {
 	/// id for this span
 	pub id: u64,
@@ -55,7 +70,7 @@ pub struct Span {
 }
 
 /// Holds associated values for a tracing span
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct Values {
 	/// HashMap of `bool` values
 	pub bool_values: HashMap<String, bool>,
@@ -65,11 +80,4 @@ pub struct Values {
 	pub u64_values: HashMap<String, u64>,
 	/// HashMap of `String` values
 	pub string_values: HashMap<String, String>,
-}
-
-/// Container for all related spans and events
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
-pub struct Traces {
-	pub spans: Vec<Span>,
-	pub events: Vec<Event>,
 }

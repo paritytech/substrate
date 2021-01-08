@@ -7520,6 +7520,7 @@ dependencies = [
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
+ "sp-rpc",
  "sp-runtime",
  "sp-storage",
  "sp-tracing",
