@@ -337,6 +337,7 @@ impl_runtime_apis! {
 		}
 
 		fn metadata_vnext() -> OpaqueMetadata {
+			use codec::Encode as _;
 			OpaqueMetadata::new(Runtime::metadata_vnext().encode())
 		}
 	}
