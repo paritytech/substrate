@@ -211,6 +211,10 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	pub code_hash: CodeHash,
 	/// Pay rent at most up to this value.
 	pub rent_allowance: Balance,
+	/// The amount of rent that was payed by the contract over its whole lifetime.
+	///
+	/// A restored contract starts with a value of zero just like a new contract.
+	pub rent_payed: Balance,
 	/// Last block rent has been payed.
 	pub deduct_block: BlockNumber,
 	/// Last block child storage has been written.

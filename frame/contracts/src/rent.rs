@@ -268,6 +268,7 @@ where
 				let contract_info = ContractInfo::Alive(AliveContractInfo::<T> {
 					rent_allowance: alive_contract_info.rent_allowance - amount.peek(),
 					deduct_block: current_block_number,
+					rent_payed: alive_contract_info.rent_payed.saturating_add(amount.peek()),
 					..alive_contract_info
 				});
 				<ContractInfoOf<T>>::insert(account, &contract_info);
@@ -481,6 +482,7 @@ where
 			pair_count: origin_contract.pair_count,
 			code_hash,
 			rent_allowance,
+			rent_payed: <BalanceOf<T>>::zero(),
 			deduct_block: current_block,
 			last_write,
 		}));

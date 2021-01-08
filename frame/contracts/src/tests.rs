@@ -392,6 +392,7 @@ fn account_removal_does_not_remove_storage() {
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(1),
 				rent_allowance: 40,
+				rent_payed: 0,
 				last_write: None,
 			});
 			let _ = Balances::deposit_creating(&ALICE, 110);
@@ -406,6 +407,7 @@ fn account_removal_does_not_remove_storage() {
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(2),
 				rent_allowance: 40,
+				rent_payed: 0,
 				last_write: None,
 			});
 			let _ = Balances::deposit_creating(&BOB, 110);
