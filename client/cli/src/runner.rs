@@ -25,6 +25,7 @@ use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
 use sc_service::{Configuration, TaskType, TaskManager};
+use sc_telemetry::{TelemetryHandle, TelemetrySpan, TelemetryWorker};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::marker::PhantomData;
 
@@ -112,7 +113,7 @@ where
 pub struct Runner<C: SubstrateCli> {
 	config: Configuration,
 	tokio_runtime: tokio::runtime::Runtime,
-	telemetry_worker: sc_telemetry::TelemetryWorker,
+	telemetry_worker: TelemetryWorker,
 	phantom: PhantomData<C>,
 }
 
@@ -121,7 +122,7 @@ impl<C: SubstrateCli> Runner<C> {
 	pub fn new<T: CliConfiguration>(
 		cli: &C,
 		command: &T,
-		telemetry_worker: sc_telemetry::TelemetryWorker,
+		telemetry_worker: TelemetryWorker,
 	) -> Result<Runner<C>> {
 		let tokio_runtime = build_runtime()?;
 		let runtime_handle = tokio_runtime.handle().clone();
@@ -222,5 +223,12 @@ impl<C: SubstrateCli> Runner<C> {
 	/// Get a mutable reference to the node Configuration
 	pub fn config_mut(&mut self) -> &mut Configuration {
 		&mut self.config
+	}
+
+	/// Get a new [`TelemetryHandle`] and its associated [`TelemetrySpan`].
+	///
+	/// This is used when you want to register a new telemetry for a Substrate node.
+	pub fn telemetry_handle(&self) -> (TelemetryHandle, TelemetrySpan) {
+		self.telemetry_worker.handle()
 	}
 }

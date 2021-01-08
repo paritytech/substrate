@@ -118,7 +118,7 @@ impl TelemetryWorker {
 		})
 	}
 
-	/// Get a handle to this [`TelemetryWorker`].
+	/// Get a new [`TelemetryHandle`] and its associated [`TelemetrySpan`].
 	///
 	/// This is used when you want to register a new telemetry for a Substrate node.
 	pub fn handle(&self) -> (TelemetryHandle, TelemetrySpan) {
