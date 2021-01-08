@@ -41,7 +41,12 @@ async fn start_inner(chain_spec: Option<String>, log_directives: String) -> Resu
 		None => crate::chain_spec::development_config(),
 	};
 
-	let mut config = browser_configuration(chain_spec, Some(telemetry_worker.handle())).await?;
+	let (telemetry_handle, telemetry_span) = telemetry_worker.handle();
+	let mut config = browser_configuration(
+		chain_spec,
+		Some(telemetry_handle),
+		Some(telemetry_span),
+	).await?;
 	config.telemetry_endpoints = Some(sc_telemetry::TelemetryEndpoints::new(vec![("ws://127.0.0.1:8000/submit".to_owned(), 10)]).unwrap());
 
 	info!("Substrate browser node");

@@ -79,6 +79,9 @@ pub(crate) type InitPayload = (
 	mpsc::UnboundedReceiver<ConnectionNotifierSender>,
 );
 
+/// A handle representing a telemetry span, with the capability to enter the span if it exists.
+pub type TelemetrySpan = tracing::Span;
+
 /// Telemetry worker.
 ///
 /// It should be ran as a background task using the [`TelemetryWorker::run`] method. This method
@@ -118,8 +121,15 @@ impl TelemetryWorker {
 	/// Get a handle to this [`TelemetryWorker`].
 	///
 	/// This is used when you want to register a new telemetry for a Substrate node.
-	pub fn handle(&self) -> TelemetryHandle {
-		TelemetryHandle(self.init_sender.clone())
+	pub fn handle(&self) -> (TelemetryHandle, TelemetrySpan) {
+		let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
+		(
+			TelemetryHandle {
+				span: span.clone(),
+				sender: self.init_sender.clone(),
+			},
+			span,
+		)
 	}
 
 	/// Get a clone of the channel's `Sender` used to send telemetry events.
@@ -256,8 +266,11 @@ impl TelemetryWorker {
 }
 
 /// Handle to the [`TelemetryWorker`] thats allows initializing the telemetry for a Substrate node.
-#[derive(Clone, Debug)]
-pub struct TelemetryHandle(mpsc::UnboundedSender<InitPayload>);
+#[derive(Debug)]
+pub struct TelemetryHandle {
+	span: tracing::Span,
+	sender: mpsc::UnboundedSender<InitPayload>,
+}
 
 impl TelemetryHandle {
 	/// Initialize the telemetry with the endpoints provided in argument for the current substrate
@@ -271,21 +284,21 @@ impl TelemetryHandle {
 	/// The `connection_message` argument is a JSON object that is sent every time the connection
 	/// (re-)establishes.
 	pub fn start_telemetry(
-		&mut self,
+		self,
 		endpoints: TelemetryEndpoints,
 		connection_message: ConnectionMessage,
 	) -> TelemetryConnectionNotifier {
-		let span = tracing::info_span!(TELEMETRY_LOG_SPAN);
-		let (sender, receiver) = mpsc::unbounded();
-		let connection_notifier = TelemetryConnectionNotifier(sender);
+		let Self { span, sender } = self;
+
+		let (connection_notifier, receiver) = {
+			let (sender, receiver) = mpsc::unbounded();
+			(TelemetryConnectionNotifier(sender), receiver)
+		};
 
 		match span.id() {
 			Some(id) => {
-				match self
-					.0
-					.unbounded_send((id.clone(), endpoints, connection_message, receiver))
-				{
-					Ok(()) => tracing::dispatcher::get_default(move |dispatch| dispatch.enter(&id)),
+				match sender.unbounded_send((id.clone(), endpoints, connection_message, receiver)) {
+					Ok(()) => {}
 					Err(err) => error!(
 						target: "telemetry",
 						"Could not initialize telemetry: \

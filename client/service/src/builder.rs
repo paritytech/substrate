@@ -302,7 +302,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.task_executor.clone(), registry, config.telemetry_span.clone())?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -369,7 +369,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.task_executor.clone(), registry, config.telemetry_span.clone())?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -680,7 +680,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
 ) -> Option<sc_telemetry::TelemetryConnectionNotifier> {
-	let telemetry_handle = config.telemetry_handle.as_mut()?;
+	let telemetry_handle = config.telemetry_handle.take()?;
 
 	let endpoints = match config.telemetry_endpoints.clone() {
 		// Don't initialise telemetry if `telemetry_endpoints` == Some([])

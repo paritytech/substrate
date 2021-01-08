@@ -23,6 +23,7 @@ use sc_service::{
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
 	GenericChainSpec, RuntimeGenesis
 };
+use sc_telemetry::{TelemetryHandle, TelemetrySpan};
 use sc_tracing::logging::GlobalLoggerBuilder;
 use wasm_bindgen::prelude::*;
 use futures::{
@@ -49,7 +50,8 @@ pub fn init_logging_and_telemetry(
 /// This configuration contains good defaults for a browser light client.
 pub async fn browser_configuration<G, E>(
 	chain_spec: GenericChainSpec<G, E>,
-	telemetry_handle: Option<sc_telemetry::TelemetryHandle>,
+	telemetry_handle: Option<TelemetryHandle>,
+	telemetry_span: Option<TelemetrySpan>,
 ) -> Result<Configuration, Box<dyn std::error::Error>>
 where
 	G: RuntimeGenesis + 'static,
@@ -81,6 +83,7 @@ where
 		}).into(),
 		telemetry_external_transport: Some(transport),
 		telemetry_handle,
+		telemetry_span,
 		role: Role::Light,
 		database: {
 			info!("Opening Indexed DB database '{}'...", name);

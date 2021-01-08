@@ -135,11 +135,14 @@ impl<C: SubstrateCli> Runner<C> {
 			}
 		};
 
+		let (telemetry_handle, telemetry_span) = telemetry_worker.handle();
+
 		Ok(Runner {
 			config: command.create_configuration(
 				cli,
 				task_executor.into(),
-				Some(telemetry_worker.handle()),
+				Some(telemetry_handle),
+				Some(telemetry_span),
 			)?,
 			tokio_runtime,
 			telemetry_worker,
