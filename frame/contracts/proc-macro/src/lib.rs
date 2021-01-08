@@ -64,7 +64,6 @@ fn derive_debug(
 	#[cfg(not(feature = "full"))]
 	let fields = {
 		drop(fmt);
-		drop(data);
 		TokenStream::new()
 	};
 
