@@ -1619,7 +1619,7 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "12.0.0"
-source = "git+https://github.com/paritytech/frame-metadata?branch=main#1ac42f815304186769cc1bce52f84d46508ca225"
+source = "git+https://github.com/paritytech/frame-metadata?branch=aj-chameleon#f3cec248a9a85c265e733b128ba368224aca7175"
 dependencies = [
  "cfg-if 1.0.0",
  "parity-scale-codec",
@@ -1632,7 +1632,7 @@ version = "2.0.0"
 dependencies = [
  "bitflags",
  "frame-metadata 12.0.0",
- "frame-metadata 12.0.0 (git+https://github.com/paritytech/frame-metadata?branch=main)",
+ "frame-metadata 12.0.0 (git+https://github.com/paritytech/frame-metadata?branch=aj-chameleon)",
  "frame-support-procedural",
  "frame-system",
  "impl-trait-for-tuples",
