@@ -633,8 +633,12 @@ decl_module! {
 			};
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
-			if Rent::<T>::snitch_contract_should_be_evicted(&dest, handicap)? {
-				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get()).map(|_| ())
+			if let Some(rent_payed) = Rent::<T>::try_eviction(&dest, handicap)? {
+				T::Currency::deposit_into_existing(
+					&rewarded,
+					T::SurchargeReward::get().min(rent_payed),
+				)
+				.map(|_| ())
 			} else {
 				Err(Error::<T>::ContractNotEvictable.into())
 			}
