@@ -72,9 +72,10 @@ pub fn run() -> Result<()> {
 	match &cli.subcommand {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
+			let (telemetry_handle, telemetry_span) = runner.telemetry_handle();
 			runner.run_node_until_exit(|config| async move {
 				// TODO revert after test
-				let config2 = cli.create_configuration(&cli.run, config.task_executor.clone(), config.telemetries.clone()).unwrap();
+				let config2 = cli.create_configuration(&cli.run, config.task_executor.clone(), Some(telemetry_handle), Some(telemetry_span)).unwrap();
 				let mut task_manager = match config.role {
 					Role::Light => service::new_light(config).unwrap(),
 					_ => service::new_full(config).unwrap(),
