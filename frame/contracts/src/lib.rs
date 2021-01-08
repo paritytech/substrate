@@ -122,6 +122,7 @@ use frame_support::{
 	storage::child::ChildInfo,
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
+	weights::Pays,
 };
 use frame_system::{ensure_signed, ensure_root, Module as System};
 use pallet_contracts_primitives::{
@@ -601,8 +602,12 @@ decl_module! {
 			gas_meter.into_dispatch_result(result)
 		}
 
-		/// Allows block producers to claim a small reward for evicting a contract. If a block producer
-		/// fails to do so, a regular users will be allowed to claim the reward.
+		/// Allows block producers to claim a small reward for evicting a contract. If a block
+		/// producer fails to do so, a regular users will be allowed to claim the reward.
+		///
+		/// In case of a successful eviction no fees are charged from the sender. However, the
+		/// reward is capped by the total amount of rent that was payed by the contract while
+		/// it was alive.
 		///
 		/// If contract is not evicted as a result of this call, [`Error::ContractNotEvictable`]
 		/// is returned and the sender is not eligible for the reward.
@@ -611,7 +616,7 @@ decl_module! {
 			origin,
 			dest: T::AccountId,
 			aux_sender: Option<T::AccountId>
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
 				(Ok(frame_system::RawOrigin::Signed(account)), None) => {
@@ -638,7 +643,8 @@ decl_module! {
 					&rewarded,
 					T::SurchargeReward::get().min(rent_payed),
 				)
-				.map(|_| ())
+				.map(|_| Pays::No.into())
+				.map_err(Into::into)
 			} else {
 				Err(Error::<T>::ContractNotEvictable.into())
 			}
