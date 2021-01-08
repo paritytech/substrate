@@ -172,11 +172,17 @@ where
 							let _ = sender.send(());
 						}
 
+						fn with_ts(json: &ConnectionMessage) -> ConnectionMessage {
+							let mut json = json.clone();
+							json.insert("ts".to_string(), chrono::Local::now().to_rfc3339().into());
+							json
+						}
+
 						let buf = self
 							.connection_messages
 							.iter()
 							.cloned()
-							.filter_map(|json| match serde_json::to_vec(&json) {
+							.filter_map(|json| match serde_json::to_vec(&with_ts(&json)) {
 								Ok(message) => Some(message),
 								Err(err) => {
 									log::error!(

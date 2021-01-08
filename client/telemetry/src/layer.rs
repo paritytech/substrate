@@ -128,8 +128,9 @@ impl<'a> tracing::field::Visit for TelemetryAttrsVisitor<'a> {
 	fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
 		if field.name() == "json" {
 			(*self.0).json = Some(format!(
-				r#"{{"id":{},"payload":{}}}"#,
+				r#"{{"id":{},"ts":{:?},"payload":{}}}"#,
 				self.0.id.into_u64(),
+				chrono::Local::now().to_rfc3339().to_string(),
 				value,
 			));
 		}
