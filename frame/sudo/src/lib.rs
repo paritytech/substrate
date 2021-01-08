@@ -130,7 +130,10 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
+		#[weight = {
+			let dispatch_info = call.get_dispatch_info();
+			(dispatch_info.weight.saturating_add(10_000), dispatch_info.class)
+		}]
 		fn sudo(origin, call: Box<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -197,13 +200,16 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = (
-			call.get_dispatch_info().weight
-				.saturating_add(10_000)
-				 // AccountData for inner call origin accountdata.
-				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
-			call.get_dispatch_info().class
-		)]
+		#[weight = {
+			let dispatch_info = call.get_dispatch_info();
+			(
+				dispatch_info.weight
+					.saturating_add(10_000)
+					// AccountData for inner call origin accountdata.
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+				dispatch_info.class,
+			)
+		}]
 		fn sudo_as(origin,
 			who: <T::Lookup as StaticLookup>::Source,
 			call: Box<<T as Config>::Call>
