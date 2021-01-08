@@ -8,15 +8,16 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Node-specific RPC methods for interaction with contracts."
 readme = "README.md"
+publish = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.3.4" }
-jsonrpc-core = "15.0.0"
-jsonrpc-core-client = "15.0.0"
-jsonrpc-derive = "15.0.0"
+jsonrpc-core = "15.1.0"
+jsonrpc-core-client = "15.1.0"
+jsonrpc-derive = "15.1.0"
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-rpc = { version = "2.0.0", path = "../../../primitives/rpc" }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -107,7 +107,9 @@ pub use crate::types::{
 /// Ignores any error. Useful for testing.
 #[cfg(feature = "std")]
 pub fn try_init_simple() {
-	let _ = tracing_subscriber::fmt().with_writer(std::io::stderr).try_init();
+	let _ = tracing_subscriber::fmt()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.with_writer(std::io::stderr).try_init();
 }
 
 #[cfg(feature = "std")]
@@ -162,7 +164,7 @@ macro_rules! within_span {
 		$( $code:tt )*
 	) => {
 		{
-			$crate::within_span!($crate::span!($crate::Level::TRACE, $name); $( $code )*)
+			$crate::within_span!($crate::span!($lvl, $name); $( $code )*)
 		}
 	};
 }
@@ -231,6 +233,6 @@ macro_rules! enter_span {
 		let __tracing_guard__ = __within_span__.enter();
 	};
 	( $lvl:expr, $name:expr ) => {
-		$crate::enter_span!($crate::span!($crate::Level::TRACE, $name))
+		$crate::enter_span!($crate::span!($lvl, $name))
 	};
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +30,7 @@
 //! as the [NetworkState](../../client/offchain/struct.NetworkState.html).
 //! It is submitted as an Unsigned Transaction via off-chain workers.
 //!
-//! - [`im_online::Trait`](./trait.Trait.html)
+//! - [`im_online::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 //!
@@ -47,10 +47,10 @@
 //! use frame_system::ensure_signed;
 //! use pallet_im_online::{self as im_online};
 //!
-//! pub trait Trait: im_online::Trait {}
+//! pub trait Config: im_online::Config {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //! 		#[weight = 0]
 //! 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
@@ -72,7 +72,7 @@
 mod mock;
 mod tests;
 mod benchmarking;
-mod default_weight;
+pub mod weights;
 
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
@@ -96,13 +96,13 @@ use sp_staking::{
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
 	traits::Get,
-	weights::Weight,
 };
 use frame_system::ensure_none;
 use frame_system::offchain::{
 	SendTransactionTypes,
 	SubmitTransaction,
 };
+pub use weights::WeightInfo;
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -227,16 +227,12 @@ pub struct Heartbeat<BlockNumber>
 	pub validators_len: u32,
 }
 
-pub trait WeightInfo {
-	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
-}
-
-pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
+pub trait Config: SendTransactionTypes<Call<Self>> + pallet_session::historical::Config {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// An expected duration of the session.
 	///
@@ -266,7 +262,7 @@ pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::
 
 decl_event!(
 	pub enum Event<T> where
-		<T as Trait>::AuthorityId,
+		<T as Config>::AuthorityId,
 		IdentificationTuple = IdentificationTuple<T>,
 	{
 		/// A new heartbeat was received from `AuthorityId` \[authority_id\]
@@ -279,7 +275,7 @@ decl_event!(
 );
 
 decl_storage! {
-	trait Store for Module<T: Trait> as ImOnline {
+	trait Store for Module<T: Config> as ImOnline {
 		/// The block number after which it's ok to send heartbeats in current session.
 		///
 		/// At the beginning of each session we set this to a value that should
@@ -311,7 +307,7 @@ decl_storage! {
 
 decl_error! {
 	/// Error for the im-online module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Non existent public key.
 		InvalidKey,
 		/// Duplicated heartbeat.
@@ -320,7 +316,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -336,7 +332,7 @@ decl_module! {
 		/// # </weight>
 		// NOTE: the weight includes the cost of validate_unsigned as it is part of the cost to
 		// import block with such an extrinsic.
-		#[weight = <T as Trait>::WeightInfo::validate_unsigned_and_then_heartbeat(
+		#[weight = <T as Config>::WeightInfo::validate_unsigned_and_then_heartbeat(
 			heartbeat.validators_len as u32,
 			heartbeat.network_state.external_addresses.len() as u32,
 		)]
@@ -397,11 +393,11 @@ decl_module! {
 	}
 }
 
-type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Trait>::BlockNumber>>;
+type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Config>::BlockNumber>>;
 
 /// Keep track of number of authored blocks per authority, uncles are counted as
 /// well since they're a valid proof of being online.
-impl<T: Trait + pallet_authorship::Trait> pallet_authorship::EventHandler<T::ValidatorId, T::BlockNumber> for Module<T> {
+impl<T: Config + pallet_authorship::Config> pallet_authorship::EventHandler<T::ValidatorId, T::BlockNumber> for Module<T> {
 	fn note_author(author: T::ValidatorId) {
 		Self::note_authorship(author);
 	}
@@ -411,7 +407,7 @@ impl<T: Trait + pallet_authorship::Trait> pallet_authorship::EventHandler<T::Val
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Returns `true` if a heartbeat has been received for the authority at
 	/// `authority_index` in the authorities series or if the authority has
 	/// authored at least one block, during the current session. Otherwise
@@ -614,11 +610,11 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -681,7 +677,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 /// Invalid transaction custom error. Returned when validators_len field in heartbeat is incorrect.
 const INVALID_VALIDATORS_LEN: u8 = 10;
 
-impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
+impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
 	fn validate_unsigned(

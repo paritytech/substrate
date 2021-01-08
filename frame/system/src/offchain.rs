@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -376,9 +376,6 @@ impl<T: SigningTypes> Clone for Account<T> where
 /// The point of this trait is to be able to easily convert between `RuntimeAppPublic`, the wrapped
 /// (generic = non application-specific) crypto types and the `Public` type required by the runtime.
 ///
-/// TODO [#5662] Potentially use `IsWrappedBy` types, or find some other way to make it easy to
-/// obtain unwrapped crypto (and wrap it back).
-///
 ///	Example (pseudo-)implementation:
 /// ```ignore
 ///	// im-online specific crypto
@@ -392,6 +389,8 @@ impl<T: SigningTypes> Clone for Account<T> where
 /// type Public = MultiSigner: From<sr25519::Public>;
 /// type Signature = MulitSignature: From<sr25519::Signature>;
 /// ```
+// TODO [#5662] Potentially use `IsWrappedBy` types, or find some other way to make it easy to
+// obtain unwrapped crypto (and wrap it back).
 pub trait AppCrypto<Public, Signature> {
 	/// A application-specific crypto.
 	type RuntimeAppPublic: RuntimeAppPublic;
@@ -446,9 +445,9 @@ pub trait AppCrypto<Public, Signature> {
 /// This trait adds extra bounds to `Public` and `Signature` types of the runtime
 /// that are necessary to use these types for signing.
 ///
-///	TODO [#5663] Could this be just `T::Signature as traits::Verify>::Signer`?
-/// Seems that this may cause issues with bounds resolution.
-pub trait SigningTypes: crate::Trait {
+// TODO [#5663] Could this be just `T::Signature as traits::Verify>::Signer`?
+// Seems that this may cause issues with bounds resolution.
+pub trait SigningTypes: crate::Config {
 	/// A public key that is capable of identifing `AccountId`s.
 	///
 	/// Usually that's either a raw crypto public key (e.g. `sr25519::Public`) or

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -169,6 +169,12 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let res = quote!(
 		#scrate_decl
 
+		// Prevent UncheckedExtrinsic to print unused warning.
+		const _: () = {
+			#[allow(unused)]
+			type __hidden_use_of_unchecked_extrinsic = #unchecked_extrinsic;
+		};
+
 		#[derive(Clone, Copy, PartialEq, Eq, #scrate::sp_runtime::RuntimeDebug)]
 		pub struct #name;
 		impl #scrate::sp_runtime::traits::GetNodeBlockType for #name {
@@ -274,8 +280,8 @@ fn decl_outer_config<'a>(
 			)
 		});
 	quote!(
-		#scrate::sp_runtime::impl_outer_config! {
-			pub struct GenesisConfig for #runtime {
+		#scrate::impl_outer_config! {
+			pub struct GenesisConfig for #runtime where AllModulesWithSystem = AllModulesWithSystem {
 				#(#modules_tokens)*
 			}
 		}
@@ -456,9 +462,13 @@ fn decl_all_modules<'a>(
 		.filter(|n| **n != SYSTEM_MODULE_NAME)
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
+	let all_modules_with_system = names.iter()
+		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
+
 	quote!(
 		#types
 		type AllModules = ( #all_modules );
+		type AllModulesWithSystem = ( #all_modules_with_system );
 	)
 }
 

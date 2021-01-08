@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -110,8 +110,8 @@ fn assert_assignments_equal(
 	ass2: &Vec<StakedAssignment<AccountId>>,
 ) {
 
-	let (support_1, _) = build_support_map::<AccountId>(winners, ass1);
-	let (support_2, _) = build_support_map::<AccountId>(winners, ass2);
+	let support_1 = build_support_map::<AccountId>(winners, ass1).unwrap();
+	let support_2 = build_support_map::<AccountId>(winners, ass2).unwrap();
 
 	for (who, support) in support_1.iter() {
 		assert_eq!(support.total, support_2.get(who).unwrap().total);

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,7 +29,12 @@
 //!
 
 use futures::{prelude::*, ready};
-use libp2p::{core::transport::OptionalTransport, Multiaddr, Transport, wasm_ext};
+use libp2p::{
+	core::transport::{OptionalTransport, timeout::TransportTimeout},
+	Multiaddr,
+	Transport,
+	wasm_ext
+};
 use log::{trace, warn, error};
 use slog::Drain;
 use std::{io, pin::Pin, task::Context, task::Poll, time};
@@ -58,13 +63,12 @@ pub struct TelemetryWorker {
 trait StreamAndSink<I>: Stream + Sink<I> {}
 impl<T: ?Sized + Stream + Sink<I>, I> StreamAndSink<I> for T {}
 
-type WsTrans = libp2p::core::transport::boxed::Boxed<
+type WsTrans = libp2p::core::transport::Boxed<
 	Pin<Box<dyn StreamAndSink<
 		Vec<u8>,
 		Item = Result<Vec<u8>, io::Error>,
 		Error = io::Error
-	> + Send>>,
-	io::Error
+	> + Send>>
 >;
 
 impl TelemetryWorker {
@@ -101,16 +105,15 @@ impl TelemetryWorker {
 				})
 		});
 
-		let transport = transport
-			.timeout(CONNECT_TIMEOUT)
-			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-			.map(|out, _| {
+		let transport = TransportTimeout::new(
+			transport.map(|out, _| {
 				let out = out
 					.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 					.sink_map_err(|err| io::Error::new(io::ErrorKind::Other, err));
 				Box::pin(out) as Pin<Box<_>>
-			})
-			.boxed();
+			}),
+			CONNECT_TIMEOUT
+		).boxed();
 
 		Ok(TelemetryWorker {
 			nodes: endpoints.into_iter().map(|(addr, verbosity)| {

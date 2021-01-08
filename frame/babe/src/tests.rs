@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,8 +26,7 @@ use frame_support::{
 use mock::*;
 use pallet_session::ShouldEndSession;
 use sp_consensus_babe::AllowedSlots;
-use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::crypto::{IsWrappedBy, Pair};
+use sp_core::crypto::Pair;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
 	74, 25, 49, 128, 53, 97, 244, 49,
@@ -64,21 +63,10 @@ fn first_block_epoch_zero_start() {
 
 	ext.execute_with(|| {
 		let genesis_slot = 100;
-
-		let pair = sp_core::sr25519::Pair::from_ref(&pairs[0]).as_ref();
-		let transcript = sp_consensus_babe::make_transcript(
-			&Babe::randomness(),
-			genesis_slot,
-			0,
-		);
-		let vrf_inout = pair.vrf_sign(transcript);
-		let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness = vrf_inout.0
-			.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
-		let vrf_output = VRFOutput(vrf_inout.0.to_output());
-		let vrf_proof = VRFProof(vrf_inout.1);
+		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
 
 		let first_vrf = vrf_output;
-		let pre_digest = make_pre_digest(
+		let pre_digest = make_primary_pre_digest(
 			0,
 			genesis_slot,
 			first_vrf.clone(),
@@ -88,7 +76,6 @@ fn first_block_epoch_zero_start() {
 		assert_eq!(Babe::genesis_slot(), 0);
 		System::initialize(
 			&1,
-			&Default::default(),
 			&Default::default(),
 			&pre_digest,
 			Default::default(),
@@ -100,6 +87,7 @@ fn first_block_epoch_zero_start() {
 		assert_eq!(Babe::genesis_slot(), genesis_slot);
 		assert_eq!(Babe::current_slot(), genesis_slot);
 		assert_eq!(Babe::epoch_index(), 0);
+		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
 
 		Babe::on_finalize(1);
 		let header = System::finalize();
@@ -107,6 +95,7 @@ fn first_block_epoch_zero_start() {
 		assert_eq!(SegmentIndex::get(), 0);
 		assert_eq!(UnderConstruction::get(0), vec![vrf_randomness]);
 		assert_eq!(Babe::randomness(), [0; 32]);
+		assert_eq!(Babe::author_vrf_randomness(), None);
 		assert_eq!(NextRandomness::get(), [0; 32]);
 
 		assert_eq!(header.digest.logs.len(), 2);
@@ -127,6 +116,81 @@ fn first_block_epoch_zero_start() {
 }
 
 #[test]
+fn author_vrf_output_for_primary() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(1);
+
+	ext.execute_with(|| {
+		let genesis_slot = 10;
+		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let primary_pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
+
+		System::initialize(
+			&1,
+			&Default::default(),
+			&primary_pre_digest,
+			Default::default(),
+		);
+		assert_eq!(Babe::author_vrf_randomness(), None);
+
+		Babe::do_initialize(1);
+		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
+
+		Babe::on_finalize(1);
+		System::finalize();
+		assert_eq!(Babe::author_vrf_randomness(), None);
+	})
+}
+
+#[test]
+fn author_vrf_output_for_secondary_vrf() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(1);
+
+	ext.execute_with(|| {
+		let genesis_slot = 10;
+		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let secondary_vrf_pre_digest = make_secondary_vrf_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
+
+		System::initialize(
+			&1,
+			&Default::default(),
+			&secondary_vrf_pre_digest,
+			Default::default(),
+		);
+		assert_eq!(Babe::author_vrf_randomness(), None);
+
+		Babe::do_initialize(1);
+		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
+
+		Babe::on_finalize(1);
+		System::finalize();
+		assert_eq!(Babe::author_vrf_randomness(), None);
+	})
+}
+
+#[test]
+fn no_author_vrf_output_for_secondary_plain() {
+	new_test_ext(1).execute_with(|| {
+		let genesis_slot = 10;
+		let secondary_plain_pre_digest = make_secondary_plain_pre_digest(0, genesis_slot);
+
+		System::initialize(
+			&1,
+			&Default::default(),
+			&secondary_plain_pre_digest,
+			Default::default(),
+		);
+		assert_eq!(Babe::author_vrf_randomness(), None);
+
+		Babe::do_initialize(1);
+		assert_eq!(Babe::author_vrf_randomness(), None);
+
+		Babe::on_finalize(1);
+		System::finalize();
+		assert_eq!(Babe::author_vrf_randomness(), None);
+	})
+}
+
+#[test]
 fn authority_index() {
 	new_test_ext(4).execute_with(|| {
 		assert_eq!(
@@ -138,7 +202,7 @@ fn authority_index() {
 #[test]
 fn can_predict_next_epoch_change() {
 	new_test_ext(1).execute_with(|| {
-		assert_eq!(<Test as Trait>::EpochDuration::get(), 3);
+		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
 		// this sets the genesis slot to 6;
 		go_to_block(1, 6);
 		assert_eq!(Babe::genesis_slot(), 6);
@@ -159,7 +223,7 @@ fn can_predict_next_epoch_change() {
 #[test]
 fn can_enact_next_config() {
 	new_test_ext(1).execute_with(|| {
-		assert_eq!(<Test as Trait>::EpochDuration::get(), 3);
+		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
 		// this sets the genesis slot to 6;
 		go_to_block(1, 6);
 		assert_eq!(Babe::genesis_slot(), 6);
@@ -185,6 +249,33 @@ fn can_enact_next_config() {
 		let consensus_digest = DigestItem::Consensus(BABE_ENGINE_ID, consensus_log.encode());
 
 		assert_eq!(header.digest.logs[2], consensus_digest.clone())
+	});
+}
+
+#[test]
+fn can_fetch_current_and_next_epoch_data() {
+	new_test_ext(5).execute_with(|| {
+		// 1 era = 3 epochs
+		// 1 epoch = 3 slots
+		// Eras start from 0.
+		// Therefore at era 1 we should be starting epoch 3 with slot 10.
+		start_era(1);
+
+		let current_epoch = Babe::current_epoch();
+		assert_eq!(current_epoch.epoch_index, 3);
+		assert_eq!(current_epoch.start_slot, 10);
+		assert_eq!(current_epoch.authorities.len(), 5);
+
+		let next_epoch = Babe::next_epoch();
+		assert_eq!(next_epoch.epoch_index, 4);
+		assert_eq!(next_epoch.start_slot, 13);
+		assert_eq!(next_epoch.authorities.len(), 5);
+
+		// the on-chain randomness should always change across epochs
+		assert!(current_epoch.randomness != next_epoch.randomness);
+
+		// but in this case the authorities stay the same
+		assert!(current_epoch.authorities == next_epoch.authorities);
 	});
 }
 
@@ -593,7 +684,7 @@ fn report_equivocation_has_valid_weight() {
 	// but there's a lower bound of 100 validators.
 	assert!(
 		(1..=100)
-			.map(<Test as Trait>::WeightInfo::report_equivocation)
+			.map(<Test as Config>::WeightInfo::report_equivocation)
 			.collect::<Vec<_>>()
 			.windows(2)
 			.all(|w| w[0] == w[1])
@@ -603,7 +694,7 @@ fn report_equivocation_has_valid_weight() {
 	// with every extra validator.
 	assert!(
 		(100..=1000)
-			.map(<Test as Trait>::WeightInfo::report_equivocation)
+			.map(<Test as Config>::WeightInfo::report_equivocation)
 			.collect::<Vec<_>>()
 			.windows(2)
 			.all(|w| w[0] < w[1])

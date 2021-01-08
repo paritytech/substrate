@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -63,7 +63,7 @@ mod inner {
 	/// `UNBOUNDED_CHANNELS_COUNTER`
 	pub fn tracing_unbounded<T>(key: &'static str) ->(TracingUnboundedSender<T>, TracingUnboundedReceiver<T>) {
 		let (s, r) = mpsc::unbounded();
-		(TracingUnboundedSender(key.clone(), s), TracingUnboundedReceiver(key,r))
+		(TracingUnboundedSender(key, s), TracingUnboundedReceiver(key,r))
 	}
 
 	impl<T> TracingUnboundedSender<T> {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -1737,7 +1737,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 			_,
 			substrate_test_runtime_client::runtime::Block,
 			_,
-			substrate_test_runtime_client::runtime::RuntimeApi
+			substrate_test_runtime_client::runtime::RuntimeApi,
 		>(
 			substrate_test_runtime_client::new_native_executor(),
 			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),

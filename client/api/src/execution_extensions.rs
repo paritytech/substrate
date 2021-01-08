@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Execution extensions for runtime calls.
 //!
@@ -25,8 +27,8 @@ use codec::Decode;
 use sp_core::{
 	ExecutionContext,
 	offchain::{self, OffchainExt, TransactionPoolExt},
-	traits::{BareCryptoStorePtr, KeystoreExt},
 };
+use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
 	traits,
@@ -81,7 +83,7 @@ impl ExtensionsFactory for () {
 /// for each call, based on required `Capabilities`.
 pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
-	keystore: Option<BareCryptoStorePtr>,
+	keystore: Option<SyncCryptoStorePtr>,
 	// FIXME: these two are only RwLock because of https://github.com/paritytech/substrate/issues/4587
 	//        remove when fixed.
 	// To break retain cycle between `Client` and `TransactionPool` we require this
@@ -107,11 +109,16 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	/// Create new `ExecutionExtensions` given a `keystore` and `ExecutionStrategies`.
 	pub fn new(
 		strategies: ExecutionStrategies,
-		keystore: Option<BareCryptoStorePtr>,
+		keystore: Option<SyncCryptoStorePtr>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
 		let extensions_factory = Box::new(());
-		Self { strategies, keystore, extensions_factory: RwLock::new(extensions_factory), transaction_pool }
+		Self {
+			strategies,
+			keystore,
+			extensions_factory: RwLock::new(extensions_factory),
+			transaction_pool,
+		}
 	}
 
 	/// Get a reference to the execution strategies.
@@ -129,6 +136,41 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		where T: sp_transaction_pool::OffchainSubmitTransaction<Block> + 'static
 	{
 		*self.transaction_pool.write() = Some(Arc::downgrade(&pool) as _);
+	}
+
+	/// Based on the execution context and capabilities it produces
+	/// the extensions object to support desired set of APIs.
+	pub fn extensions(&self, at: &BlockId<Block>, context: ExecutionContext) -> Extensions {
+		let capabilities = context.capabilities();
+
+		let mut extensions = self.extensions_factory.read().extensions_for(capabilities);
+
+		if capabilities.has(offchain::Capability::Keystore) {
+			if let Some(ref keystore) = self.keystore {
+				extensions.register(KeystoreExt(keystore.clone()));
+			}
+		}
+
+		if capabilities.has(offchain::Capability::TransactionPool) {
+			if let Some(pool) = self.transaction_pool.read().as_ref().and_then(|x| x.upgrade()) {
+				extensions.register(
+					TransactionPoolExt(
+						Box::new(TransactionPoolAdapter {
+							at: *at,
+							pool,
+						}) as _
+					),
+				);
+			}
+		}
+
+		if let ExecutionContext::OffchainCall(Some(ext)) = context {
+			extensions.register(
+				OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0)),
+			);
+		}
+
+		extensions
 	}
 
 	/// Create `ExecutionManager` and `Extensions` for given offchain call.
@@ -156,32 +198,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 				self.strategies.other.get_manager(),
 		};
 
-		let capabilities = context.capabilities();
-
-		let mut extensions = self.extensions_factory.read().extensions_for(capabilities);
-
-		if capabilities.has(offchain::Capability::Keystore) {
-			if let Some(keystore) = self.keystore.as_ref() {
-				extensions.register(KeystoreExt(keystore.clone()));
-			}
-		}
-
-		if capabilities.has(offchain::Capability::TransactionPool) {
-			if let Some(pool) = self.transaction_pool.read().as_ref().and_then(|x| x.upgrade()) {
-				extensions.register(TransactionPoolExt(Box::new(TransactionPoolAdapter {
-					at: *at,
-					pool,
-				}) as _));
-			}
-		}
-
-		if let ExecutionContext::OffchainCall(Some(ext)) = context {
-			extensions.register(
-				OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0))
-			);
-		}
-
-		(manager, extensions)
+		(manager, self.extensions(at, context))
 	}
 }
 

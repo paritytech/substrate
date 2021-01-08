@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -470,12 +470,18 @@ ss58_address_format!(
 		(12, "polymath", "Polymath network, standard account (*25519).")
 	SubstraTeeAccount =>
 		(13, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
+	TotemAccount =>
+		(14, "totem", "Any Totem Live Accounting network standard account (*25519).")
+	SynesthesiaAccount =>
+		(15, "synesthesia", "Synesthesia mainnet, standard account (*25519).")
 	KulupuAccount =>
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
 	DarkAccount =>
 		(17, "dark", "Dark mainnet, standard account (*25519).")
 	DarwiniaAccount =>
 		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
+	GeekAccount =>
+		(19, "geek", "GeekCash mainnet, standard account (*25519).")
 	StafiAccount =>
 		(20, "stafi", "Stafi mainnet, standard account (*25519).")
 	DockTestAccount =>
@@ -484,6 +490,10 @@ ss58_address_format!(
 		(22, "dock-mainnet", "Dock mainnet, standard account (*25519).")
 	ShiftNrg =>
 		(23, "shift", "ShiftNrg mainnet, standard account (*25519).")
+	ZeroAccount =>
+		(24, "zero", "ZERO mainnet, standard account (*25519).")
+	AlphavilleAccount =>
+		(25, "alphaville", "ZERO testnet, standard account (*25519).")
 	SubsocialAccount =>
 		(28, "subsocial", "Subsocial network, standard account (*25519).")
 	PhalaAccount =>
@@ -492,14 +502,24 @@ ss58_address_format!(
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>
 		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
+	ValiuAccount =>
+		(35, "vln", "Valiu Liquidity Network mainnet, standard account (*25519).")
 	CentrifugeAccount =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
+	NodleAccount =>
+		(37, "nodle", "Nodle Chain mainnet, standard account (*25519).")
+	KiltAccount =>
+		(38, "kilt", "KILT Chain mainnet, standard account (*25519).")
+	PolimecAccount =>
+		(41, "poli", "Polimec Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
 	Reserved43 =>
 		(43, "reserved43", "Reserved for future use (43).")
 	ChainXAccount =>
 		(44, "chainx", "ChainX mainnet, standard account (*25519).")
+	UniartsAccount =>
+		(45, "uniarts", "UniArts Chain mainnet, standard account (*25519).")
 	Reserved46 =>
 		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>
@@ -575,7 +595,17 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 
 /// Trait suitable for typical cryptographic PKI key public type.
 pub trait Public:
-	AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync
+	AsRef<[u8]>
+	+ AsMut<[u8]>
+	+ Default
+	+ Derive
+	+ CryptoType
+	+ PartialEq
+	+ Eq
+	+ Clone
+	+ Send
+	+ Sync
+	+ for<'a> TryFrom<&'a [u8]>
 {
 	/// A new instance from the given slice.
 	///
@@ -596,6 +626,16 @@ pub trait Public:
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
+
+impl AccountId32 {
+	/// Create a new instance from its raw inner byte value.
+	///
+	/// Equivalent to this types `From<[u8; 32]>` implementation. For the lack of const
+	/// support in traits we have this constructor.
+	pub const fn new(inner: [u8; 32]) -> Self {
+		Self(inner)
+	}
+}
 
 impl UncheckedFrom<crate::hash::H256> for AccountId32 {
 	fn unchecked_from(h: crate::hash::H256) -> Self {
@@ -631,8 +671,8 @@ impl AsMut<[u8; 32]> for AccountId32 {
 }
 
 impl From<[u8; 32]> for AccountId32 {
-	fn from(x: [u8; 32]) -> AccountId32 {
-		AccountId32(x)
+	fn from(x: [u8; 32]) -> Self {
+		Self::new(x)
 	}
 }
 
@@ -740,6 +780,14 @@ mod dummy {
 				#[allow(mutable_transmutes)]
 				sp_std::mem::transmute::<_, &'static mut [u8]>(&b""[..])
 			}
+		}
+	}
+
+	impl<'a> TryFrom<&'a [u8]> for Dummy {
+		type Error = ();
+
+		fn try_from(_: &'a [u8]) -> Result<Self, ()> {
+			Ok(Self)
 		}
 	}
 
@@ -989,6 +1037,7 @@ pub trait CryptoType {
 	Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode, PassByInner,
 	crate::RuntimeDebug
 )]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyTypeId(pub [u8; 4]);
 
 impl From<u32> for KeyTypeId {
@@ -1005,6 +1054,7 @@ impl From<KeyTypeId> for u32 {
 
 impl<'a> TryFrom<&'a str> for KeyTypeId {
 	type Error = ();
+
 	fn try_from(x: &'a str) -> Result<Self, ()> {
 		let b = x.as_bytes();
 		if b.len() != 4 {
@@ -1018,10 +1068,12 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 
 /// An identifier for a specific cryptographic algorithm used by a key pair
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct CryptoTypeId(pub [u8; 4]);
 
 /// A type alias of CryptoTypeId & a public key
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
 
 #[cfg(feature = "std")]
@@ -1098,6 +1150,13 @@ mod tests {
 	impl AsMut<[u8]> for TestPublic {
 		fn as_mut(&mut self) -> &mut [u8] {
 			&mut []
+		}
+	}
+	impl<'a> TryFrom<&'a [u8]> for TestPublic {
+		type Error = ();
+
+		fn try_from(_: &'a [u8]) -> Result<Self, ()> {
+			Ok(Self)
 		}
 	}
 	impl CryptoType for TestPublic {

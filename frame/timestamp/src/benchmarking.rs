@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,10 +30,8 @@ use crate::Module as Timestamp;
 const MAX_TIME: u32 = 100;
 
 benchmarks! {
-	_ { }
-
 	set {
-		let t in 1 .. MAX_TIME;
+		let t = MAX_TIME;
 		// Ignore write to `DidUpdate` since it transient.
 		let did_update_key = crate::DidUpdate::hashed_key().to_vec();
 		frame_benchmarking::benchmarking::add_to_whitelist(TrackedStorageKey {
@@ -47,7 +45,7 @@ benchmarks! {
 	}
 
 	on_finalize {
-		let t in 1 .. MAX_TIME;
+		let t = MAX_TIME;
 		Timestamp::<T>::set(RawOrigin::None.into(), t.into())?;
 		ensure!(DidUpdate::exists(), "Time was not set.");
 		// Ignore read/write to `DidUpdate` since it is transient.

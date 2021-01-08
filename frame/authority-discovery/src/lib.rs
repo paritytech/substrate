@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,10 +28,10 @@ use frame_support::{decl_module, decl_storage};
 use sp_authority_discovery::AuthorityId;
 
 /// The module's config trait.
-pub trait Trait: frame_system::Trait + pallet_session::Trait {}
+pub trait Config: frame_system::Config + pallet_session::Config {}
 
 decl_storage! {
-	trait Store for Module<T: Trait> as AuthorityDiscovery {
+	trait Store for Module<T: Config> as AuthorityDiscovery {
 		/// Keys of the current and next authority set.
 		Keys get(fn keys): Vec<AuthorityId>;
 	}
@@ -42,11 +42,11 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Retrieve authority identifiers of the current and next authority set.
 	pub fn authorities() -> Vec<AuthorityId> {
 		Keys::get()
@@ -60,11 +60,11 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(authorities: I)
@@ -93,7 +93,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_authority_discovery::{AuthorityPair};
+	use sp_authority_discovery::AuthorityPair;
 	use sp_application_crypto::Pair;
 	use sp_core::{crypto::key_types, H256};
 	use sp_io::TestExternalities;
@@ -101,19 +101,19 @@ mod tests {
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
 		Perbill, KeyTypeId,
 	};
-	use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{impl_outer_origin, parameter_types};
 
 	type AuthorityDiscovery = Module<Test>;
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
-	impl Trait for Test {}
+	impl Config for Test {}
 
 	parameter_types! {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 	}
 
-	impl pallet_session::Trait for Test {
+	impl pallet_session::Config for Test {
 		type SessionManager = ();
 		type Keys = UintAuthorityId;
 		type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
@@ -126,7 +126,7 @@ mod tests {
 		type WeightInfo = ();
 	}
 
-	impl pallet_session::historical::Trait for Test {
+	impl pallet_session::historical::Config for Test {
 		type FullIdentification = ();
 		type FullIdentificationOf = ();
 	}
@@ -138,13 +138,15 @@ mod tests {
 		pub const Offset: BlockNumber = 0;
 		pub const UncleGenerations: u64 = 0;
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
 
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = BlockNumber;
@@ -156,19 +158,13 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 
 	impl_outer_origin! {

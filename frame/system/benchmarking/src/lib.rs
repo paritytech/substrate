@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,20 +25,21 @@ use sp_std::prelude::*;
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use sp_runtime::traits::Hash;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::traits::Get;
-use frame_support::storage::{self, StorageMap};
+use frame_support::{
+	storage::{self, StorageMap},
+	traits::Get,
+	weights::DispatchClass,
+};
 use frame_system::{Module as System, Call, RawOrigin, DigestItemOf, AccountInfo};
 
 mod mock;
 
-pub struct Module<T: Trait>(System<T>);
-pub trait Trait: frame_system::Trait {}
+pub struct Module<T: Config>(System<T>);
+pub trait Config: frame_system::Config {}
 
 benchmarks! {
-	_ { }
-
 	remark {
-		let b in 0 .. T::MaximumBlockLength::get();
+		let b in 0 .. *T::BlockLength::get().max.get(DispatchClass::Normal) as u32;
 		let remark_message = vec![1; b as usize];
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), remark_message)
@@ -61,7 +62,7 @@ benchmarks! {
 	}
 
 	set_changes_trie_config {
-		let d in 0 .. 1000;
+		let d = 1000;
 
 		let digest_item = DigestItemOf::<T>::Other(vec![]);
 

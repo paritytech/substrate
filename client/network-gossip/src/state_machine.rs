@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@
 
 use crate::{Network, MessageIntent, Validator, ValidatorContext, ValidationResult};
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::iter;
@@ -26,7 +27,6 @@ use log::{error, trace};
 use lru::LruCache;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
-use sp_runtime::ConsensusEngineId;
 use sc_network::ObservedRole;
 use wasm_timer::Instant;
 
@@ -89,7 +89,7 @@ impl<'g, 'p, B: BlockT> ValidatorContext<B> for NetworkContext<'g, 'p, B> {
 
 	/// Send addressed message to a peer.
 	fn send_message(&mut self, who: &PeerId, message: Vec<u8>) {
-		self.network.write_notification(who.clone(), self.gossip.engine_id, message);
+		self.network.write_notification(who.clone(), self.gossip.protocol.clone(), message);
 	}
 
 	/// Send all messages with given topic to a peer.
@@ -100,7 +100,7 @@ impl<'g, 'p, B: BlockT> ValidatorContext<B> for NetworkContext<'g, 'p, B> {
 
 fn propagate<'a, B: BlockT, I>(
 	network: &mut dyn Network<B>,
-	engine_id: ConsensusEngineId,
+	protocol: Cow<'static, str>,
 	messages: I,
 	intent: MessageIntent,
 	peers: &mut HashMap<PeerId, PeerConsensus<B::Hash>>,
@@ -138,7 +138,7 @@ fn propagate<'a, B: BlockT, I>(
 			peer.known_messages.insert(message_hash.clone());
 
 			trace!(target: "gossip", "Propagating to {}: {:?}", id, message);
-			network.write_notification(id.clone(), engine_id, message.clone());
+			network.write_notification(id.clone(), protocol.clone(), message.clone());
 		}
 	}
 }
@@ -148,19 +148,19 @@ pub struct ConsensusGossip<B: BlockT> {
 	peers: HashMap<PeerId, PeerConsensus<B::Hash>>,
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
-	engine_id: ConsensusEngineId,
+	protocol: Cow<'static, str>,
 	validator: Arc<dyn Validator<B>>,
 	next_broadcast: Instant,
 }
 
 impl<B: BlockT> ConsensusGossip<B> {
 	/// Create a new instance using the given validator.
-	pub fn new(validator: Arc<dyn Validator<B>>, engine_id: ConsensusEngineId) -> Self {
+	pub fn new(validator: Arc<dyn Validator<B>>, protocol: Cow<'static, str>) -> Self {
 		ConsensusGossip {
 			peers: HashMap::new(),
 			messages: Default::default(),
 			known_messages: LruCache::new(KNOWN_MESSAGES_CACHE_SIZE),
-			engine_id,
+			protocol,
 			validator,
 			next_broadcast: Instant::now() + REBROADCAST_INTERVAL,
 		}
@@ -235,7 +235,14 @@ impl<B: BlockT> ConsensusGossip<B> {
 	fn rebroadcast(&mut self, network: &mut dyn Network<B>) {
 		let messages = self.messages.iter()
 			.map(|entry| (&entry.message_hash, &entry.topic, &entry.message));
-		propagate(network, self.engine_id, messages, MessageIntent::PeriodicRebroadcast, &mut self.peers, &self.validator);
+		propagate(
+			network,
+			self.protocol.clone(),
+			messages,
+			MessageIntent::PeriodicRebroadcast,
+			&mut self.peers,
+			&self.validator
+		);
 	}
 
 	/// Broadcast all messages with given topic.
@@ -247,7 +254,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 				} else { None }
 			);
 		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
-		propagate(network, self.engine_id, messages, intent, &mut self.peers, &self.validator);
+		propagate(network, self.protocol.clone(), messages, intent, &mut self.peers, &self.validator);
 	}
 
 	/// Prune old or no longer relevant consensus messages. Provide a predicate
@@ -374,7 +381,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 				peer.known_messages.insert(entry.message_hash.clone());
 
 				trace!(target: "gossip", "Sending topic message to {}: {:?}", who, entry.message);
-				network.write_notification(who.clone(), self.engine_id, entry.message.clone());
+				network.write_notification(who.clone(), self.protocol.clone(), entry.message.clone());
 			}
 		}
 	}
@@ -390,7 +397,14 @@ impl<B: BlockT> ConsensusGossip<B> {
 		let message_hash = HashFor::<B>::hash(&message);
 		self.register_message_hashed(message_hash, topic, message.clone(), None);
 		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
-		propagate(network, self.engine_id, iter::once((&message_hash, &topic, &message)), intent, &mut self.peers, &self.validator);
+		propagate(
+			network,
+			self.protocol.clone(),
+			iter::once((&message_hash, &topic, &message)),
+			intent,
+			&mut self.peers,
+			&self.validator
+		);
 	}
 
 	/// Send addressed message to a peer. The message is not kept or multicast
@@ -411,7 +425,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		trace!(target: "gossip", "Sending direct to {}: {:?}", who, message);
 
 		peer.known_messages.insert(message_hash);
-		network.write_notification(who.clone(), self.engine_id, message);
+		network.write_notification(who.clone(), self.protocol.clone(), message);
 	}
 }
 
@@ -481,15 +495,19 @@ mod tests {
 			self.inner.lock().unwrap().peer_reports.push((peer_id, reputation_change));
 		}
 
-		fn disconnect_peer(&self, _: PeerId) {
+		fn disconnect_peer(&self, _: PeerId, _: Cow<'static, str>) {
 			unimplemented!();
 		}
 
-		fn write_notification(&self, _: PeerId, _: ConsensusEngineId, _: Vec<u8>) {
-			unimplemented!();
+		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
 		}
 
-		fn register_notifications_protocol(&self, _: ConsensusEngineId, _: Cow<'static, str>) {}
+		fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
+		}
+
+		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {
+			unimplemented!();
+		}
 
 		fn announce(&self, _: B::Hash, _: Vec<u8>) {
 			unimplemented!();
@@ -520,7 +538,7 @@ mod tests {
 
 		let prev_hash = H256::random();
 		let best_hash = H256::random();
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), [0, 0, 0, 0]);
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into());
 		let m1_hash = H256::random();
 		let m2_hash = H256::random();
 		let m1 = vec![1, 2, 3];
@@ -547,7 +565,7 @@ mod tests {
 
 	#[test]
 	fn message_stream_include_those_sent_before_asking() {
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), [0, 0, 0, 0]);
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into());
 
 		// Register message.
 		let message = vec![4, 5, 6];
@@ -562,7 +580,7 @@ mod tests {
 
 	#[test]
 	fn can_keep_multiple_messages_per_topic() {
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), [0, 0, 0, 0]);
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into());
 
 		let topic = [1; 32].into();
 		let msg_a = vec![1, 2, 3];
@@ -576,7 +594,7 @@ mod tests {
 
 	#[test]
 	fn peer_is_removed_on_disconnect() {
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), [0, 0, 0, 0]);
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into());
 
 		let mut network = NoOpNetwork::default();
 
@@ -592,7 +610,7 @@ mod tests {
 	fn on_incoming_ignores_discarded_messages() {
 		let to_forward = ConsensusGossip::<Block>::new(
 			Arc::new(DiscardAll),
-			[0, 0, 0, 0],
+			"/foo".into(),
 		).on_incoming(
 			&mut NoOpNetwork::default(),
 			PeerId::random(),
@@ -612,7 +630,7 @@ mod tests {
 
 		let to_forward = ConsensusGossip::<Block>::new(
 			Arc::new(AllowAll),
-			[0, 0, 0, 0],
+			"/foo".into(),
 		).on_incoming(
 			&mut network,
 			// Unregistered peer.

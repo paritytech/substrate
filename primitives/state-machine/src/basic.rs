@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 //! Basic implementation for Externalities.
 
 use std::{
-	collections::BTreeMap, any::{TypeId, Any}, iter::FromIterator, ops::Bound
+	collections::BTreeMap, any::{TypeId, Any}, iter::FromIterator, ops::Bound,
 };
 use crate::{Backend, StorageKey, StorageValue};
 use hash_db::Hasher;
@@ -210,8 +210,10 @@ impl Externalities for BasicExternalities {
 	fn kill_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
-	) {
+		_limit: Option<u32>,
+	) -> bool {
 		self.inner.children_default.remove(child_info.storage_key());
+		true
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -260,8 +262,6 @@ impl Externalities for BasicExternalities {
 		let current = self.inner.top.entry(key).or_default();
 		crate::ext::StorageAppend::new(current).append(value);
 	}
-
-	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> Vec<u8> {
 		let mut top = self.inner.top.clone();
@@ -348,10 +348,11 @@ impl sp_externalities::ExtensionStore for BasicExternalities {
 	}
 
 	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
-		self.extensions
-			.deregister(type_id)
-			.ok_or(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
-			.map(drop)
+		if self.extensions.deregister(type_id) {
+			Ok(())
+		} else {
+			Err(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
+		}
 	}
 }
 
@@ -406,7 +407,7 @@ mod tests {
 		ext.clear_child_storage(child_info, b"dog");
 		assert_eq!(ext.child_storage(child_info, b"dog"), None);
 
-		ext.kill_child_storage(child_info);
+		ext.kill_child_storage(child_info, None);
 		assert_eq!(ext.child_storage(child_info, b"doe"), None);
 	}
 

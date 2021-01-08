@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -108,6 +108,15 @@ impl PreDigest {
 		match self {
 			PreDigest::Primary(_) => 1,
 			PreDigest::SecondaryPlain(_) | PreDigest::SecondaryVRF(_) => 0,
+		}
+	}
+
+	/// Returns the VRF output, if it exists.
+	pub fn vrf_output(&self) -> Option<&VRFOutput> {
+		match self {
+			PreDigest::Primary(primary) => Some(&primary.vrf_output),
+			PreDigest::SecondaryVRF(secondary) => Some(&secondary.vrf_output),
+			PreDigest::SecondaryPlain(_) => None,
 		}
 	}
 }

@@ -1,18 +1,19 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Parity is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2015-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Parity is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Parity.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ("trie").
 
@@ -184,7 +185,7 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>,
 {
 	{
-		let mut trie = TrieDBMut::<L>::from_existing(&mut *db, &mut root)?;
+		let mut trie = TrieDBMut::<L>::from_existing(db, &mut root)?;
 
 		let mut delta = delta.into_iter().collect::<Vec<_>>();
 		delta.sort_by(|l, r| l.0.borrow().cmp(r.0.borrow()));
@@ -223,9 +224,13 @@ pub fn read_trie_value_with<
 	Ok(TrieDB::<L>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
+/// Determine the empty trie root.
+pub fn empty_trie_root<L: TrieConfiguration>() -> <L::Hash as Hasher>::Out {
+	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
+}
+
 /// Determine the empty child trie root.
-pub fn empty_child_trie_root<L: TrieConfiguration>(
-) -> <L::Hash as Hasher>::Out {
+pub fn empty_child_trie_root<L: TrieConfiguration>() -> <L::Hash as Hasher>::Out {
 	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
 }
 
@@ -271,7 +276,8 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 }
 
 /// Call `f` for all keys in a child trie.
-pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
+/// Aborts as soon as `f` returns false.
+pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]) -> bool, DB>(
 	keyspace: &[u8],
 	db: &DB,
 	root_slice: &[u8],
@@ -290,7 +296,9 @@ pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
 
 	for x in iter {
 		let (key, _) = x?;
-		f(&key);
+		if !f(&key) {
+			break;
+		}
 	}
 
 	Ok(())

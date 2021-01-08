@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -850,7 +850,7 @@ fn report_equivocation_has_valid_weight() {
 	// but there's a lower bound of 100 validators.
 	assert!(
 		(1..=100)
-			.map(<Test as Trait>::WeightInfo::report_equivocation)
+			.map(<Test as Config>::WeightInfo::report_equivocation)
 			.collect::<Vec<_>>()
 			.windows(2)
 			.all(|w| w[0] == w[1])
@@ -860,7 +860,7 @@ fn report_equivocation_has_valid_weight() {
 	// with every extra validator.
 	assert!(
 		(100..=1000)
-			.map(<Test as Trait>::WeightInfo::report_equivocation)
+			.map(<Test as Config>::WeightInfo::report_equivocation)
 			.collect::<Vec<_>>()
 			.windows(2)
 			.all(|w| w[0] < w[1])

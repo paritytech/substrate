@@ -41,7 +41,7 @@ pallet-staking-reward-curve = { version = "2.0.0",  path = "../staking/reward-cu
 substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
 frame-benchmarking = { version = "2.0.0", path = "../benchmarking" }
 rand_chacha = { version = "0.2" }
-parking_lot = "0.10.2"
+parking_lot = "0.11.1"
 hex = "0.4"
 
 [features]

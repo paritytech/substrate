@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -178,6 +178,7 @@ impl sp_state_machine::Storage<sp_core::Blake2Hasher> for Storage {
 impl core::Benchmark for TrieReadBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
 		let mut db = self.database.clone();
+
 		let storage: Arc<dyn sp_state_machine::Storage<sp_core::Blake2Hasher>> =
 			Arc::new(Storage(db.open(self.database_type)));
 

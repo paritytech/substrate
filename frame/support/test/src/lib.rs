@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,15 +22,22 @@
 #![warn(missing_docs)]
 #![deny(warnings)]
 
+#[cfg(test)]
+mod pallet_version;
+
 /// The configuration trait
-pub trait Trait {
+pub trait Config: 'static {
 	/// The runtime origin type.
-	type Origin;
+	type Origin: codec::Codec + codec::EncodeLike + Default;
 	/// The block number type.
-	type BlockNumber;
+	type BlockNumber: codec::Codec + codec::EncodeLike + Default;
+	/// The information about the pallet setup in the runtime.
+	type PalletInfo: frame_support::traits::PalletInfo;
+	/// The db weights.
+	type DbWeight: frame_support::traits::Get<frame_support::weights::RuntimeDbWeight>;
 }
 
 frame_support::decl_module! {
 	/// Some test module
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
 }

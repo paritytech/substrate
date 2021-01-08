@@ -26,8 +26,12 @@ name = "reduce"
 path = "src/reduce.rs"
 
 [[bin]]
-name = "balance_solution"
-path = "src/balance_solution.rs"
+name = "phragmen_balancing"
+path = "src/phragmen_balancing.rs"
+
+[[bin]]
+name = "phragmms_balancing"
+path = "src/phragmms_balancing.rs"
 
 [[bin]]
 name = "compact"

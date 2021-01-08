@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,9 +20,9 @@
 use codec::Encode;
 use sp_runtime::traits::Convert;
 
-use super::super::Trait as SessionTrait;
+use super::super::Config as SessionConfig;
 use super::super::{Module as SessionModule, SessionIndex};
-use super::Trait as HistoricalTrait;
+use super::Config as HistoricalConfig;
 
 use super::shared;
 use sp_std::prelude::*;
@@ -35,14 +35,14 @@ use sp_std::prelude::*;
 /// `on_initialize(..)` or `on_finalization(..)`.
 /// **Must** be called during the session, which validator-set is to be stored for further
 /// off-chain processing. Otherwise the `FullIdentification` might not be available.
-pub fn store_session_validator_set_to_offchain<T: HistoricalTrait + SessionTrait>(
+pub fn store_session_validator_set_to_offchain<T: HistoricalConfig + SessionConfig>(
 	session_index: SessionIndex,
 ) {
 	let encoded_validator_list = <SessionModule<T>>::validators()
 		.into_iter()
-		.filter_map(|validator_id: <T as SessionTrait>::ValidatorId| {
+		.filter_map(|validator_id: <T as SessionConfig>::ValidatorId| {
 			let full_identification =
-				<<T as HistoricalTrait>::FullIdentificationOf>::convert(validator_id.clone());
+				<<T as HistoricalConfig>::FullIdentificationOf>::convert(validator_id.clone());
 			full_identification.map(|full_identification| (validator_id, full_identification))
 		})
 		.collect::<Vec<_>>();
@@ -55,8 +55,8 @@ pub fn store_session_validator_set_to_offchain<T: HistoricalTrait + SessionTrait
 
 /// Store the validator set associated to the _current_ session index to the off-chain database.
 ///
-/// See [`fn store_session_validator_set_...(..)`](Self::store_session_validator_set_to_offchain)
+/// See [`store_session_validator_set_to_offchain`]
 /// for further information and restrictions.
-pub fn store_current_session_validator_set_to_offchain<T: HistoricalTrait + SessionTrait>() {
+pub fn store_current_session_validator_set_to_offchain<T: HistoricalConfig + SessionConfig>() {
 	store_session_validator_set_to_offchain::<T>(<SessionModule<T>>::current_index());
 }

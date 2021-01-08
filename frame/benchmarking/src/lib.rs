@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@ mod analysis;
 
 pub use utils::*;
 #[cfg(feature = "std")]
-pub use analysis::{Analysis, BenchmarkSelector};
+pub use analysis::{Analysis, BenchmarkSelector, RegressionModel};
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 pub use sp_runtime::traits::Zero;
@@ -88,24 +88,18 @@ pub use sp_storage::TrackedStorageKey;
 /// benchmarks! {
 ///   where_clause {  where T::A: From<u32> } // Optional line to give additional bound on `T`.
 ///
-///   // common parameter; just one for this example.
-///   // will be `1`, `MAX_LENGTH` or any value inbetween
-///   _ {
-///     let l in 1 .. MAX_LENGTH => initialize_l(l);
-///   }
-///
 ///   // first dispatchable: foo; this is a user dispatchable and operates on a `u8` vector of
-///   // size `l`, which we allow to be initialized as usual.
+///   // size `l`
 ///   foo {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
-///     let l = ...;
+///     let l in 1 .. MAX_LENGTH => initialize_l(l);
 ///   }: _(Origin::Signed(caller), vec![0u8; l])
 ///
 ///   // second dispatchable: bar; this is a root dispatchable and accepts a `u8` vector of size
-///   // `l`. We don't want it pre-initialized like before so we override using the `=> ()` notation.
+///   // `l`.
 ///   // In this case, we explicitly name the call using `bar` instead of `_`.
 ///   bar {
-///     let l = _ .. _ => ();
+///     let l in 1 .. MAX_LENGTH => initialize_l(l);
 ///   }: bar(Origin::Root, vec![0u8; l])
 ///
 ///   // third dispatchable: baz; this is a user dispatchable. It isn't dependent on length like the
@@ -137,7 +131,7 @@ pub use sp_storage::TrackedStorageKey;
 ///
 /// Test functions are automatically generated for each benchmark and are accessible to you when you
 /// run `cargo test`. All tests are named `test_benchmark_<benchmark_name>`, expect you to pass them
-/// the Runtime Trait, and run them in a test externalities environment. The test function runs your
+/// the Runtime Config, and run them in a test externalities environment. The test function runs your
 /// benchmark just like a regular benchmark, but only testing at the lowest and highest values for
 /// each component. The function will return `Ok(())` if the benchmarks return no errors.
 ///
@@ -176,18 +170,11 @@ pub use sp_storage::TrackedStorageKey;
 #[macro_export]
 macro_rules! benchmarks {
 	(
-		$( where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? } )?
-		_ {
-			$(
-				let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
-			)*
-		}
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter!(
 			{ }
-			{ $( $( $where_ty: $where_bound ),* )? }
-			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
+			{ }
 			( )
 			( )
 			$( $rest )*
@@ -199,18 +186,11 @@ macro_rules! benchmarks {
 #[macro_export]
 macro_rules! benchmarks_instance {
 	(
-		$( where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? } )?
-		_ {
-			$(
-				let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
-			)*
-		}
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter!(
 			{ I }
-			{ $( $( $where_ty: $where_bound ),* )? }
-			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
+			{ }
 			( )
 			( )
 			$( $rest )*
@@ -221,11 +201,27 @@ macro_rules! benchmarks_instance {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! benchmarks_iter {
+	// detect and extract where clause:
+	(
+		{ $( $instance:ident )? }
+		{ $( $where_clause:tt )* }
+		( $( $names:tt )* )
+		( $( $names_extra:tt )* )
+		where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? }
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter! {
+			{ $( $instance)? }
+			{ $( $where_ty: $where_bound ),* }
+			( $( $names )* )
+			( $( $names_extra )* )
+			$( $rest )*
+		}
+	};
 	// detect and extract extra tag:
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		#[extra]
@@ -235,7 +231,6 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			( $( $names )* )
 			( $( $names_extra )* $name )
 			$name
@@ -246,7 +241,6 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		( $( $names:tt )* ) // This contains $( $( { $instance } )? $name:ident )*
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
@@ -256,7 +250,6 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$name { $( $code )* }: $name ( $origin $( , $arg )* )
@@ -268,7 +261,6 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
@@ -278,7 +270,6 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$name { $( $code )* }: {
@@ -296,7 +287,6 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $eval:block
@@ -307,7 +297,6 @@ macro_rules! benchmarks_iter {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			{ }
 			{ $eval }
 			{ $( $code )* }
@@ -324,7 +313,6 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter!(
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			( $( $names )* { $( $instance )? } $name )
 			( $( $names_extra )* )
 			$( $rest )*
@@ -334,7 +322,6 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 	) => {
@@ -354,7 +341,6 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
@@ -363,7 +349,6 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$name { $( $code )* }: _ ( $origin $( , $arg )* )
@@ -375,7 +360,6 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
@@ -384,7 +368,6 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$name { $( $code )* }: $dispatch ( $origin $( , $arg )* )
@@ -396,7 +379,6 @@ macro_rules! benchmarks_iter {
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $eval:block
@@ -405,7 +387,6 @@ macro_rules! benchmarks_iter {
 		$crate::benchmarks_iter!(
 			{ $( $instance)? }
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$name { $( $code )* }: $eval
@@ -423,7 +404,6 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		{ $( PRE { $( $pre_parsed:tt )* } )* }
 		{ $eval:block }
 		{
@@ -436,7 +416,6 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			{
 				$( PRE { $( $pre_parsed )* } )*
 				PRE { $pre_id , $pre_ty , $pre_ex }
@@ -450,7 +429,6 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		{ $( $parsed:tt )* }
 		{ $eval:block }
 		{
@@ -463,7 +441,6 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			{
 				$( $parsed )*
 				PARAM { $param , $param_from , $param_to , $param_instancer }
@@ -478,7 +455,6 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )* }
 		{ $( $parsed:tt )* }
 		{ $eval:block }
 		{
@@ -491,16 +467,8 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
 			{ $( $parsed )* }
 			{ $eval }
-			{
-				let $param
-					in ({ $( let $common = $common_from; )* $param })
-					.. ({ $( let $common = $common_to; )* $param })
-					=> ({ $( let $common = || -> Result<(), &'static str> { $common_instancer ; Ok(()) }; )* $param()? });
-				$( $rest )*
-			}
 			$postcode
 		}
 	};
@@ -509,7 +477,6 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )* }
 		{ $( $parsed:tt )* }
 		{ $eval:block }
 		{
@@ -522,16 +489,8 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
 			{ $( $parsed )* }
 			{ $eval }
-			{
-				let $param
-					in ({ $( let $common = $common_from; )* $param })
-					.. ({ $( let $common = $common_to; )* $param })
-					=> $param_instancer ;
-				$( $rest )*
-			}
 			$postcode
 		}
 	};
@@ -540,7 +499,6 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		{ $( $parsed:tt )* }
 		{ $eval:block }
 		{
@@ -553,7 +511,6 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			{ $( $parsed )* }
 			{ $eval }
 			{
@@ -568,7 +525,6 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		{ $( $parsed:tt )* }
 		{ $eval:block }
 		{
@@ -581,7 +537,6 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			{ $( $parsed )* }
 			{ $eval }
 			{
@@ -596,7 +551,6 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( $common:tt )* }
 		{ $( $parsed:tt )* }
 		{ $eval:block }
 		{
@@ -609,7 +563,6 @@ macro_rules! benchmark_backend {
 			{ $( $instance)? }
 			$name
 			{ $( $where_clause )* }
-			{ $( $common )* }
 			{ $( $parsed )* }
 			{ $eval }
 			{
@@ -624,7 +577,6 @@ macro_rules! benchmark_backend {
 		{ $( $instance:ident )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
-		{ $( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )* }
 		{
 			$( PRE { $pre_id:tt , $pre_ty:ty , $pre_ex:expr } )*
 			$( PARAM { $param:ident , $param_from:expr , $param_to:expr , $param_instancer:expr } )*
@@ -636,7 +588,7 @@ macro_rules! benchmark_backend {
 		#[allow(non_camel_case_types)]
 		struct $name;
 		#[allow(unused_variables)]
-		impl<T: Trait $( <$instance>, I: Instance)? >
+		impl<T: Config $( <$instance>, I: Instance)? >
 			$crate::BenchmarkingSetup<T $(, $instance)? > for $name
 			where $( $where_clause )*
 		{
@@ -653,9 +605,6 @@ macro_rules! benchmark_backend {
 				components: &[($crate::BenchmarkParameter, u32)],
 				verify: bool
 			) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str> {
-				$(
-					let $common = $common_from;
-				)*
 				$(
 					// Prepare instance
 					let $param = components.iter()
@@ -710,7 +659,7 @@ macro_rules! selected_benchmark {
 		}
 
 		// Allow us to select a benchmark from the list of available benchmarks.
-		impl<T: Trait $( <$instance>, I: Instance )? >
+		impl<T: Config $( <$instance>, I: Instance )? >
 			$crate::BenchmarkingSetup<T $(, $instance )? > for SelectedBenchmark
 			where $( $where_clause )*
 		{
@@ -750,9 +699,9 @@ macro_rules! impl_benchmark {
 		( $( { $( $name_inst:ident )? } $name:ident )* )
 		( $( $name_extra:ident ),* )
 	) => {
-		impl<T: Trait $(<$instance>, I: Instance)? >
+		impl<T: Config $(<$instance>, I: Instance)? >
 			$crate::Benchmarking<$crate::BenchmarkResults> for Module<T $(, $instance)? >
-			where T: frame_system::Trait, $( $where_clause )*
+			where T: frame_system::Config, $( $where_clause )*
 		{
 			fn benchmarks(extra: bool) -> Vec<&'static [u8]> {
 				let mut all = vec![ $( stringify!($name).as_ref() ),* ];
@@ -948,8 +897,8 @@ macro_rules! impl_benchmark_test {
 		$name:ident
 	) => {
 		$crate::paste::item! {
-			fn [<test_benchmark_ $name>] <T: Trait > () -> Result<(), &'static str>
-				where T: frame_system::Trait, $( $where_clause )*
+			fn [<test_benchmark_ $name>] <T: Config > () -> Result<(), &'static str>
+				where T: frame_system::Config, $( $where_clause )*
 			{
 				let selected_benchmark = SelectedBenchmark::$name;
 				let components = <
@@ -1052,10 +1001,29 @@ macro_rules! impl_benchmark_test {
 /// ```
 ///
 /// At the end of `dispatch_benchmark`, you should return this batches object.
+///
+/// In the case where you have multiple instances of a pallet that you need to separately benchmark,
+/// the name of your module struct will be used as a suffix to your outputted weight file. For
+/// example:
+///
+/// ```ignore
+/// add_benchmark!(params, batches, pallet_balances, Balances); // pallet_balances.rs
+/// add_benchmark!(params, batches, pallet_collective, Council); // pallet_collective_council.rs
+/// add_benchmark!(params, batches, pallet_collective, TechnicalCommittee); // pallet_collective_technical_committee.rs
+/// ```
+///
+/// You can manipulate this suffixed string by using a type alias if needed. For example:
+///
+/// ```ignore
+/// type Council2 = TechnicalCommittee;
+/// add_benchmark!(params, batches, pallet_collective, Council2); // pallet_collective_council_2.rs
+/// ```
+
 #[macro_export]
 macro_rules! add_benchmark {
-	( $params:ident, $batches:ident, $name:ident, $( $location:tt )* ) => (
+	( $params:ident, $batches:ident, $name:path, $( $location:tt )* ) => (
 		let name_string = stringify!($name).as_bytes();
+		let instance_string = stringify!( $( $location )* ).as_bytes();
 		let (config, whitelist) = $params;
 		let $crate::BenchmarkConfig {
 			pallet,
@@ -1071,6 +1039,9 @@ macro_rules! add_benchmark {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
 				for benchmark in $( $location )*::benchmarks(*extra).into_iter() {
 					$batches.push($crate::BenchmarkBatch {
+						pallet: name_string.to_vec(),
+						instance: instance_string.to_vec(),
+						benchmark: benchmark.to_vec(),
 						results: $( $location )*::run_benchmark(
 							benchmark,
 							&lowest_range_values[..],
@@ -1080,12 +1051,13 @@ macro_rules! add_benchmark {
 							whitelist,
 							*verify,
 						)?,
-						pallet: name_string.to_vec(),
-						benchmark: benchmark.to_vec(),
 					});
 				}
 			} else {
 				$batches.push($crate::BenchmarkBatch {
+					pallet: name_string.to_vec(),
+					instance: instance_string.to_vec(),
+					benchmark: benchmark.clone(),
 					results: $( $location )*::run_benchmark(
 						&benchmark[..],
 						&lowest_range_values[..],
@@ -1095,8 +1067,6 @@ macro_rules! add_benchmark {
 						whitelist,
 						*verify,
 					)?,
-					pallet: name_string.to_vec(),
-					benchmark: benchmark.clone(),
 				});
 			}
 		}

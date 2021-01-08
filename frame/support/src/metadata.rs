@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,23 +27,27 @@ pub use frame_metadata::{
 /// Example:
 /// ```
 ///# mod module0 {
-///#    pub trait Trait {
+///#    pub trait Config: 'static {
 ///#        type Origin;
 ///#        type BlockNumber;
+///#        type PalletInfo: frame_support::traits::PalletInfo;
+///#        type DbWeight: frame_support::traits::Get<frame_support::weights::RuntimeDbWeight>;
 ///#    }
 ///#    frame_support::decl_module! {
-///#        pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+///#        pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
 ///#    }
 ///#
 ///#    frame_support::decl_storage! {
-///#        trait Store for Module<T: Trait> as TestStorage {}
+///#        trait Store for Module<T: Config> as TestStorage {}
 ///#    }
 ///# }
 ///# use module0 as module1;
 ///# use module0 as module2;
-///# impl module0::Trait for Runtime {
+///# impl module0::Config for Runtime {
 ///#     type Origin = u32;
 ///#     type BlockNumber = u32;
+///#     type PalletInfo = ();
+///#     type DbWeight = ();
 ///# }
 ///#
 ///# type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<(), (), (), ()>;
@@ -293,7 +297,7 @@ mod tests {
 	mod system {
 		use super::*;
 
-		pub trait Trait: 'static {
+		pub trait Config: 'static {
 			type BaseCallFilter;
 			const ASSOCIATED_CONST: u64 = 500;
 			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
@@ -302,11 +306,12 @@ mod tests {
 			type BlockNumber: From<u32> + Encode;
 			type SomeValue: Get<u32>;
 			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 			type Call;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 				/// Hi, I am a comment.
 				const BlockNumber: T::BlockNumber = 100.into();
 				const GetType: T::AccountId = T::SomeValue::get().into();
@@ -336,18 +341,19 @@ mod tests {
 			}
 		}
 
-		pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
+		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 	}
 
 	mod event_module {
 		use crate::dispatch::DispatchResult;
+		use super::system;
 
-		pub trait Trait: super::system::Trait {
+		pub trait Config: system::Config {
 			type Balance;
 		}
 
 		decl_event!(
-			pub enum Event<T> where <T as Trait>::Balance
+			pub enum Event<T> where <T as Config>::Balance
 			{
 				/// Hi, I am a comment.
 				TestEvent(Balance),
@@ -355,7 +361,7 @@ mod tests {
 		);
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {
 				type Error = Error<T>;
 
 				#[weight = 0]
@@ -364,7 +370,7 @@ mod tests {
 		}
 
 		crate::decl_error! {
-			pub enum Error for Module<T: Trait> {
+			pub enum Error for Module<T: Config> {
 				/// Some user input error
 				UserInputError,
 				/// Something bad happened
@@ -375,25 +381,25 @@ mod tests {
 	}
 
 	mod event_module2 {
-		pub trait Trait {
-			type Origin;
+		use super::system;
+
+		pub trait Config: system::Config {
 			type Balance;
-			type BlockNumber;
 		}
 
 		decl_event!(
-			pub enum Event<T> where <T as Trait>::Balance
+			pub enum Event<T> where <T as Config>::Balance
 			{
 				TestEvent(Balance),
 			}
 		);
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}
 		}
 
 		crate::decl_storage! {
-			trait Store for Module<T: Trait> as TestStorage {
+			trait Store for Module<T: Config> as TestStorage {
 				StorageMethod : Option<u32>;
 			}
 			add_extra_genesis {
@@ -427,27 +433,26 @@ mod tests {
 		}
 	}
 
-	impl event_module::Trait for TestRuntime {
+	impl event_module::Config for TestRuntime {
 		type Balance = u32;
 	}
 
-	impl event_module2::Trait for TestRuntime {
-		type Origin = Origin;
+	impl event_module2::Config for TestRuntime {
 		type Balance = u32;
-		type BlockNumber = u32;
 	}
 
 	crate::parameter_types! {
 		pub const SystemValue: u32 = 600;
 	}
 
-	impl system::Trait for TestRuntime {
+	impl system::Config for TestRuntime {
 		type BaseCallFilter = ();
 		type Origin = Origin;
 		type AccountId = u32;
 		type BlockNumber = u32;
 		type SomeValue = SystemValue;
 		type PalletInfo = ();
+		type DbWeight = ();
 		type Call = Call;
 	}
 
@@ -475,7 +480,7 @@ mod tests {
 	struct ConstantAssociatedConstByteGetter;
 	impl DefaultByte for ConstantAssociatedConstByteGetter {
 		fn default_byte(&self) -> Vec<u8> {
-			<TestRuntime as system::Trait>::ASSOCIATED_CONST.encode()
+			<TestRuntime as system::Config>::ASSOCIATED_CONST.encode()
 		}
 	}
 

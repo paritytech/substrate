@@ -20,6 +20,7 @@ sp-runtime = { version = "2.0.0", default-features = false, path = "../../primit
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 pallet-balances = { version = "2.0.0", default-features = false, path = "../balances" }
+impl-trait-for-tuples = "0.2.0"
 
 frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
 

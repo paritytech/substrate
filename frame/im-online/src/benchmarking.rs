@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +34,7 @@ use crate::Module as ImOnline;
 const MAX_KEYS: u32 = 1000;
 const MAX_EXTERNAL_ADDRESSES: u32 = 100;
 
-pub fn create_heartbeat<T: Trait>(k: u32, e: u32) ->
+pub fn create_heartbeat<T: Config>(k: u32, e: u32) ->
 	Result<(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature), &'static str>
 {
 	let mut keys = Vec::new();
@@ -63,8 +63,6 @@ pub fn create_heartbeat<T: Trait>(k: u32, e: u32) ->
 }
 
 benchmarks! {
-	_{ }
-
 	#[extra]
 	heartbeat {
 		let k in 1 .. MAX_KEYS;

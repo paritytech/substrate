@@ -21,15 +21,14 @@ serde = "1.0.101"
 serde_json = "1.0.41"
 structopt = "0.3"
 derive_more = "0.99.2"
-kvdb = "0.7"
-kvdb-rocksdb = "0.9.1"
+kvdb = "0.8.0"
+kvdb-rocksdb = "0.10.0"
 sp-trie = { version = "2.0.0", path = "../../../primitives/trie" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
 sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
 sc-basic-authorship = { version = "0.8.0", path = "../../../client/basic-authorship" }
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
-sp-finality-tracker = { version = "2.0.0", default-features = false, path = "../../../primitives/finality-tracker" }
 sp-timestamp = { version = "2.0.0", default-features = false, path = "../../../primitives/timestamp" }
 sp-tracing = { version = "2.0.0", path = "../../../primitives/tracing" }
 hash-db = "0.15.2"
@@ -38,7 +37,7 @@ fs_extra = "1"
 hex = "0.4.0"
 rand = { version = "0.7.2", features = ["small_rng"] }
 lazy_static = "1.4.0"
-parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.8.0", default-features = false, features = ["primitive-types"] }
 parity-db = { version = "0.1.2" }
 sc-transaction-pool = { version = "2.0.0", path = "../../../client/transaction-pool" }
 futures = { version = "0.3.4", features = ["thread-pool"] }

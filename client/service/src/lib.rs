@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -53,9 +53,9 @@ use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,
 pub use self::error::Error;
 pub use self::builder::{
 	new_full_client, new_client, new_full_parts, new_light_parts,
-	spawn_tasks, build_network, BuildNetworkParams, NetworkStarter, build_offchain_workers,
-	SpawnTasksParams, TFullClient, TLightClient, TFullBackend, TLightBackend,
-	TLightBackendWithHash, TLightClientWithBackend,
+	spawn_tasks, build_network, build_offchain_workers,
+	BuildNetworkParams, KeystoreContainer, NetworkStarter, SpawnTasksParams, TFullClient, TLightClient,
+	TFullBackend, TLightBackend, TLightBackendWithHash, TLightClientWithBackend,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
 };
 pub use config::{
@@ -73,15 +73,15 @@ pub use sc_executor::NativeExecutionDispatch;
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use sc_network::config::{
-	FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder, TransactionImport,
+	OnDemand, TransactionImport,
 	TransactionImportFuture,
 };
 pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
-use sc_client_api::BlockchainEvents;
-pub use sc_keystore::KeyStorePtr as KeyStore;
+pub use self::client::{LocalCallExecutor, ClientConfig};
+use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -181,8 +181,8 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	pub backend: Arc<Backend>,
 	/// The chain task manager.
 	pub task_manager: TaskManager,
-	/// A shared keystore instance.
-	pub keystore: KeyStore,
+	/// A keystore container instance..
+	pub keystore_container: KeystoreContainer,
 	/// A chain selection algorithm instance.
 	pub select_chain: SelectChain,
 	/// An import queue.
@@ -200,7 +200,7 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 async fn build_network_future<
 	B: BlockT,
-	C: BlockchainEvents<B>,
+	C: BlockchainEvents<B> + HeaderBackend<B>,
 	H: sc_network::ExHashT
 > (
 	role: Role,
@@ -212,6 +212,9 @@ async fn build_network_future<
 	announce_imported_blocks: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
+
+	// Current best block at initialization, to report to the RPC layer.
+	let starting_block = client.info().best_number;
 
 	// Stream of finalized blocks reported by the client.
 	let mut finality_notification_stream = {
@@ -247,8 +250,8 @@ async fn build_network_future<
 					network.service().announce_block(notification.hash, Vec::new());
 				}
 
-				if let sp_consensus::BlockOrigin::Own = notification.origin {
-					network.service().own_block_imported(
+				if notification.is_new_best {
+					network.service().new_best_block_imported(
 						notification.hash,
 						notification.header.number().clone(),
 					);
@@ -324,6 +327,15 @@ async fn build_network_future<
 
 						let _ = sender.send(vec![node_role]);
 					}
+					sc_rpc::system::Request::SyncState(sender) => {
+						use sc_rpc::system::SyncState;
+
+						let _ = sender.send(SyncState {
+							starting_block: starting_block,
+							current_block: client.info().best_number,
+							highest_block: network.best_seen_block(),
+						});
+					}
 				}
 			}
 
@@ -389,7 +401,7 @@ fn start_rpc_servers<
 >(
 	config: &Configuration,
 	mut gen_handler: H,
-	rpc_metrics: Option<&sc_rpc_server::RpcMetrics>
+	rpc_metrics: sc_rpc_server::RpcMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
 		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
@@ -422,7 +434,7 @@ fn start_rpc_servers<
 		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(
 			&*path, gen_handler(
 				sc_rpc::DenyUnsafe::No,
-				sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "ipc")
+				sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc")
 			)
 		)),
 		maybe_start_server(
@@ -432,7 +444,7 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "http")
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http")
 				),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
@@ -444,7 +456,7 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.cloned(), "ws")
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws")
 				),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
@@ -459,7 +471,7 @@ fn start_rpc_servers<
 >(
 	_: &Configuration,
 	_: H,
-	_: Option<&sc_rpc_server::RpcMetrics>
+	_: sc_rpc_server::RpcMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }

@@ -23,28 +23,27 @@ fnv = "1.0.6"
 futures = "0.3.1"
 hash-db = { version = "0.15.2", default-features = false }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
-hex-literal = "0.3.1"
 sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
-sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
-kvdb = "0.7.0"
+kvdb = "0.8.0"
 log = "0.4.8"
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 lazy_static =  "1.4.0"
 sp-database = { version = "2.0.0", path = "../../primitives/database" }
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
+sp-keystore = { version = "0.8.0", default-features = false, path = "../../primitives/keystore" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 sp-version = { version = "2.0.0", default-features = false, path = "../../primitives/version" }
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
 sp-utils = { version = "2.0.0", path = "../../primitives/utils" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" }
-sc-telemetry = { version = "2.0.0", path = "../telemetry" }
 sp-trie = { version = "2.0.0", path = "../../primitives/trie" }
 sp-storage = { version = "2.0.0", path = "../../primitives/storage" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0", path = "../../utils/prometheus" }
 
 [dev-dependencies]
-kvdb-memorydb = "0.7.0"
+kvdb-memorydb = "0.8.0"
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime"  }
+thiserror = "1.0.21"

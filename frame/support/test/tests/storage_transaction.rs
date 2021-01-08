@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,21 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode, EncodeLike};
 use frame_support::{
-	assert_ok, assert_noop, dispatch::{DispatchError, DispatchResult}, transactional, StorageMap, StorageValue,
-	storage::{with_transaction, TransactionOutcome::*},
+	assert_ok, assert_noop, transactional, StorageMap, StorageValue,
+	dispatch::{DispatchError, DispatchResult}, storage::{with_transaction, TransactionOutcome::*},
 };
 use sp_io::TestExternalities;
 use sp_std::result;
 
-pub trait Trait {
-	type Origin;
-	type BlockNumber: Encode + Decode + EncodeLike + Default + Clone;
-}
+pub trait Config: frame_support_test::Config {}
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {
 		#[weight = 0]
 		#[transactional]
 		fn value_commits(_origin, v: u32) {
@@ -46,17 +42,22 @@ frame_support::decl_module! {
 }
 
 frame_support::decl_storage!{
-	trait Store for Module<T: Trait> as StorageTransactions {
+	trait Store for Module<T: Config> as StorageTransactions {
 		pub Value: u32;
 		pub Map: map hasher(twox_64_concat) String => u32;
 	}
 }
 
 struct Runtime;
-impl Trait for Runtime {
+
+impl frame_support_test::Config for Runtime {
 	type Origin = u32;
 	type BlockNumber = u32;
+	type PalletInfo = ();
+	type DbWeight = ();
 }
+
+impl Config for Runtime {}
 
 #[test]
 fn storage_transaction_basic_commit() {
@@ -180,15 +181,20 @@ fn storage_transaction_commit_then_rollback() {
 
 #[test]
 fn transactional_annotation() {
+	fn set_value(v: u32) -> DispatchResult {
+		Value::set(v);
+		Ok(())
+	}
+
 	#[transactional]
 	fn value_commits(v: u32) -> result::Result<u32, &'static str> {
-		Value::set(v);
+		set_value(v)?;
 		Ok(v)
 	}
 
 	#[transactional]
 	fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
-		Value::set(v);
+		set_value(v)?;
 		Err("nah")
 	}
 

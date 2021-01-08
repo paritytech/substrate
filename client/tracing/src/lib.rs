@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Instrumentation implementation for substrate.
 //!
@@ -23,6 +25,8 @@
 //! See `sp-tracing` for examples on how to use tracing.
 //!
 //! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
+
+pub mod logging;
 
 use rustc_hash::FxHashMap;
 use std::fmt;
@@ -37,11 +41,108 @@ use tracing::{
 	span::{Attributes, Id, Record},
 	subscriber::Subscriber,
 };
-use tracing_subscriber::{CurrentSpan, layer::{Layer, Context}};
+use tracing_subscriber::{
+	fmt::time::ChronoLocal,
+	CurrentSpan,
+	EnvFilter,
+	layer::{self, Layer, Context},
+	fmt as tracing_fmt,
+	Registry,
+};
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
+use tracing_subscriber::reload::Handle;
+use once_cell::sync::OnceCell;
+use tracing_subscriber::filter::Directive;
+
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
+
+// The layered Subscriber as built up in `init_logger()`.
+// Used in the reload `Handle`.
+type SCSubscriber<
+	N = tracing_fmt::format::DefaultFields,
+	E = logging::EventFormat<ChronoLocal>,
+	W = fn() -> std::io::Stderr
+> = layer::Layered<tracing_fmt::Layer<Registry, N, E, W>, Registry>;
+
+// Handle to reload the tracing log filter
+static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, SCSubscriber>> = OnceCell::new();
+// Directives that are defaulted to when resetting the log filter
+static DEFAULT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
+// Current state of log filter
+static CURRENT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
+
+/// Initialize FILTER_RELOAD_HANDLE, only possible once
+pub fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
+	let _ = FILTER_RELOAD_HANDLE.set(handle);
+}
+
+/// Add log filter directive(s) to the defaults
+///
+/// The syntax is identical to the CLI `<target>=<level>`:
+///
+/// `sync=debug,state=trace`
+pub fn add_default_directives(directives: &str) {
+	DEFAULT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directives.to_owned());
+	add_directives(directives);
+}
+
+/// Add directives to current directives
+pub fn add_directives(directives: &str) {
+	CURRENT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directives.to_owned());
+}
+
+/// Reload the logging filter with the supplied directives added to the existing directives
+pub fn reload_filter() -> Result<(), String> {
+	let mut env_filter = EnvFilter::default();
+	if let Some(current_directives) = CURRENT_DIRECTIVES.get() {
+		// Use join and then split in case any directives added together
+		for directive in current_directives.lock().join(",").split(',').map(|d| d.parse()) {
+			match directive {
+				Ok(dir) => env_filter = env_filter.add_directive(dir),
+				Err(invalid_directive) => {
+					log::warn!(
+						target: "tracing",
+						"Unable to parse directive while setting log filter: {:?}",
+						invalid_directive,
+					);
+				}
+			}
+		}
+	}
+	env_filter = env_filter.add_directive(
+		"sc_tracing=trace"
+			.parse()
+			.expect("provided directive is valid"),
+	);
+	log::debug!(target: "tracing", "Reloading log filter with: {}", env_filter);
+	FILTER_RELOAD_HANDLE.get()
+		.ok_or("No reload handle present".to_string())?
+		.reload(env_filter)
+		.map_err(|e| format!("{}", e))
+}
+
+/// Resets the log filter back to the original state when the node was started.
+///
+/// Includes substrate defaults and CLI supplied directives.
+pub fn reset_log_filter() -> Result<(), String> {
+	*CURRENT_DIRECTIVES
+		.get_or_init(|| Mutex::new(Vec::new())).lock() =
+		DEFAULT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().clone();
+	reload_filter()
+}
+
+/// Parse `Directive` and add to default directives if successful. 
+///
+/// Ensures the supplied directive will be restored when resetting the log filter.
+pub fn parse_default_directive(directive: &str) -> Result<Directive, String> {
+	let dir = directive
+		.parse()
+		.map_err(|_| format!("Unable to parse directive: {}", directive))?;
+	add_default_directives(directive);
+	Ok(dir)
+}
 
 /// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingLayer {
@@ -231,15 +332,13 @@ impl ProfilingLayer {
 	/// either with a level, eg: "pallet=trace"
 	/// or without: "pallet" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
-	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str)
-		-> Self
-	{
+	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str) -> Self {
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		Self {
 			targets,
 			trace_handler,
 			span_data: Mutex::new(FxHashMap::default()),
-			current_span: Default::default()
+			current_span: Default::default(),
 		}
 	}
 
@@ -461,7 +560,7 @@ mod tests {
 		};
 		let layer = ProfilingLayer::new_with_handler(
 			Box::new(handler),
-			"test_target"
+			"test_target",
 		);
 		let subscriber = tracing_subscriber::fmt().finish().with(layer);
 		(subscriber, spans, events)

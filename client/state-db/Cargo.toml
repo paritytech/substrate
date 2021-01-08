@@ -13,10 +13,11 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-parking_lot = "0.10.0"
-log = "0.4.8"
+thiserror = "1.0.21"
+parking_lot = "0.11.1"
+log = "0.4.11"
 sc-client-api = { version = "2.0.0", path = "../api" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 codec = { package = "parity-scale-codec", version = "1.3.4", features = ["derive"] }
-parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.8.0", default-features = false, features = ["primitive-types"] }
 parity-util-mem-derive = "0.1.0"

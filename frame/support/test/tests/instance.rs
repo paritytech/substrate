@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,17 +39,18 @@ pub trait Currency {}
 // * Origin, Inherent, Event
 mod module1 {
 	use super::*;
+	use sp_std::ops::Add;
 
-	pub trait Trait<I>: system::Trait where <Self as system::Trait>::BlockNumber: From<u32> {
-		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+	pub trait Config<I>: system::Config where <Self as system::Config>::BlockNumber: From<u32> {
+		type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
 		type GenericType: Default + Clone + Codec + EncodeLike;
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait<I>, I: Instance> for enum Call where
-			origin: <T as system::Trait>::Origin,
+		pub struct Module<T: Config<I>, I: Instance> for enum Call where
+			origin: <T as system::Config>::Origin,
 			system = system,
 			T::BlockNumber: From<u32>
 		{
@@ -66,7 +67,7 @@ mod module1 {
 	}
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait<I>, I: Instance> as Module1 where
+		trait Store for Module<T: Config<I>, I: Instance> as Module1 where
 			T::BlockNumber: From<u32> + std::fmt::Display
 		{
 			pub Value config(value): T::GenericType;
@@ -81,6 +82,17 @@ mod module1 {
 		}
 	}
 
+	frame_support::decl_error! {
+		pub enum Error for Module<T: Config<I>, I: Instance> where
+			T::BlockNumber: From<u32>,
+			T::BlockNumber: Add,
+			T::AccountId: AsRef<[u8]>,
+		{
+			/// Test
+			Test,
+		}
+	}
+
 	frame_support::decl_event! {
 		pub enum Event<T, I> where Phantom = std::marker::PhantomData<T> {
 			_Phantom(Phantom),
@@ -89,14 +101,14 @@ mod module1 {
 	}
 
 	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode)]
-	pub enum Origin<T: Trait<I>, I> where T::BlockNumber: From<u32> {
+	pub enum Origin<T: Config<I>, I> where T::BlockNumber: From<u32> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
 	}
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
 
-	impl<T: Trait<I>, I: Instance> ProvideInherent for Module<T, I> where
+	impl<T: Config<I>, I: Instance> ProvideInherent for Module<T, I> where
 		T::BlockNumber: From<u32>
 	{
 		type Call = Call<T, I>;
@@ -119,17 +131,17 @@ mod module1 {
 mod module2 {
 	use super::*;
 
-	pub trait Trait<I=DefaultInstance>: system::Trait {
+	pub trait Config<I=DefaultInstance>: system::Config {
 		type Amount: Parameter + Default;
-		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+		type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 		type Origin: From<Origin<Self, I>>;
 	}
 
-	impl<T: Trait<I>, I: Instance> Currency for Module<T, I> {}
+	impl<T: Config<I>, I: Instance> Currency for Module<T, I> {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
-			origin: <T as system::Trait>::Origin,
+		pub struct Module<T: Config<I>, I: Instance=DefaultInstance> for enum Call where
+			origin: <T as system::Config>::Origin,
 			system = system
 		{
 			fn deposit_event() = default;
@@ -137,7 +149,7 @@ mod module2 {
 	}
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {
+		trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Module2 {
 			pub Value config(value): T::Amount;
 			pub Map config(map): map hasher(identity) u64 => u64;
 			pub DoubleMap config(double_map): double_map hasher(identity) u64, hasher(identity) u64 => u64;
@@ -145,20 +157,20 @@ mod module2 {
 	}
 
 	frame_support::decl_event! {
-		pub enum Event<T, I=DefaultInstance> where Amount = <T as Trait<I>>::Amount {
+		pub enum Event<T, I=DefaultInstance> where Amount = <T as Config<I>>::Amount {
 			Variant(Amount),
 		}
 	}
 
 	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode)]
-	pub enum Origin<T: Trait<I>, I=DefaultInstance> {
+	pub enum Origin<T: Config<I>, I=DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
 	}
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
 
-	impl<T: Trait<I>, I: Instance> ProvideInherent for Module<T, I> {
+	impl<T: Config<I>, I: Instance> ProvideInherent for Module<T, I> {
 		type Call = Call<T, I>;
 		type Error = MakeFatalError<sp_inherents::Error>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
@@ -178,13 +190,13 @@ mod module2 {
 mod module3 {
 	use super::*;
 
-	pub trait Trait: module2::Trait + module2::Trait<module2::Instance1> + system::Trait {
+	pub trait Config: module2::Config + module2::Config<module2::Instance1> + system::Config {
 		type Currency: Currency;
 		type Currency2: Currency;
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin, system=system {}
+		pub struct Module<T: Config> for enum Call where origin: <T as system::Config>::Origin, system=system {}
 	}
 }
 
@@ -192,39 +204,39 @@ parameter_types! {
 	pub const SomeValue: u32 = 100;
 }
 
-impl module1::Trait<module1::Instance1> for Runtime {
+impl module1::Config<module1::Instance1> for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type SomeParameter = SomeValue;
 	type GenericType = u32;
 }
-impl module1::Trait<module1::Instance2> for Runtime {
+impl module1::Config<module1::Instance2> for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type SomeParameter = SomeValue;
 	type GenericType = u32;
 }
-impl module2::Trait for Runtime {
+impl module2::Config for Runtime {
 	type Amount = u16;
 	type Event = Event;
 	type Origin = Origin;
 }
-impl module2::Trait<module2::Instance1> for Runtime {
+impl module2::Config<module2::Instance1> for Runtime {
 	type Amount = u32;
 	type Event = Event;
 	type Origin = Origin;
 }
-impl module2::Trait<module2::Instance2> for Runtime {
+impl module2::Config<module2::Instance2> for Runtime {
 	type Amount = u32;
 	type Event = Event;
 	type Origin = Origin;
 }
-impl module2::Trait<module2::Instance3> for Runtime {
+impl module2::Config<module2::Instance3> for Runtime {
 	type Amount = u64;
 	type Event = Event;
 	type Origin = Origin;
 }
-impl module3::Trait for Runtime {
+impl module3::Config for Runtime {
 	type Currency = Module2_2;
 	type Currency2 = Module2_3;
 }
@@ -234,7 +246,7 @@ pub type AccountId = <Signature as Verify>::Signer;
 pub type BlockNumber = u64;
 pub type Index = u64;
 
-impl system::Trait for Runtime {
+impl system::Config for Runtime {
 	type BaseCallFilter= ();
 	type Hash = H256;
 	type Origin = Origin;
@@ -243,6 +255,7 @@ impl system::Trait for Runtime {
 	type Event = Event;
 	type PalletInfo = ();
 	type Call = Call;
+	type DbWeight = ();
 }
 
 frame_support::construct_runtime!(

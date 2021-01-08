@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,9 @@
 
 //! Helper methods for npos-elections.
 
-use crate::{Assignment, ExtendedBalance, VoteWeight, IdentifierT, StakedAssignment, WithApprovalOf, Error};
+use crate::{
+	Assignment, ExtendedBalance, VoteWeight, IdentifierT, StakedAssignment, WithApprovalOf, Error,
+};
 use sp_arithmetic::{PerThing, InnerOf};
 use sp_std::prelude::*;
 
@@ -25,7 +27,7 @@ use sp_std::prelude::*;
 ///
 /// Note that this will NOT attempt at normalizing the result.
 pub fn assignment_ratio_to_staked<A: IdentifierT, P: PerThing, FS>(
-	ratio: Vec<Assignment<A, P>>,
+	ratios: Vec<Assignment<A, P>>,
 	stake_of: FS,
 ) -> Vec<StakedAssignment<A>>
 where
@@ -33,7 +35,7 @@ where
 	P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 	ExtendedBalance: From<InnerOf<P>>,
 {
-	ratio
+	ratios
 		.into_iter()
 		.map(|a| {
 			let stake = stake_of(&a.who);

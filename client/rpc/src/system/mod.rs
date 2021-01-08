@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ use sp_runtime::traits::{self, Header as HeaderT};
 use self::error::Result;
 
 pub use sc_rpc_api::system::*;
-pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole};
+pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole, SyncState};
 pub use self::gen_client::Client as SystemClient;
 
 macro_rules! bail_if_unsafe {
@@ -66,7 +66,9 @@ pub enum Request<B: traits::Block> {
 	/// Must return any potential parse error.
 	NetworkRemoveReservedPeer(String, oneshot::Sender<Result<()>>),
 	/// Must return the node role.
-	NodeRoles(oneshot::Sender<Vec<NodeRole>>)
+	NodeRoles(oneshot::Sender<Vec<NodeRole>>),
+	/// Must return the state of the node syncing.
+	SyncState(oneshot::Sender<SyncState<<B::Header as HeaderT>::Number>>),
 }
 
 impl<B: traits::Block> System<B> {
@@ -188,5 +190,22 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NodeRoles(tx));
 		Receiver(Compat::new(rx))
+	}
+
+	fn system_sync_state(&self) -> Receiver<SyncState<<B::Header as HeaderT>::Number>> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::SyncState(tx));
+		Receiver(Compat::new(rx))
+	}
+
+	fn system_add_log_filter(&self, directives: String) -> std::result::Result<(), rpc::Error> {
+		self.deny_unsafe.check_if_safe()?;
+		sc_tracing::add_directives(&directives);
+		sc_tracing::reload_filter().map_err(|_e| rpc::Error::internal_error())
+	}
+
+	fn system_reset_log_filter(&self)-> std::result::Result<(), rpc::Error> {
+		self.deny_unsafe.check_if_safe()?;
+		sc_tracing::reset_log_filter().map_err(|_e| rpc::Error::internal_error())
 	}
 }

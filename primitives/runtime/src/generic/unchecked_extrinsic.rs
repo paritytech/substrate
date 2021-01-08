@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +30,8 @@ use crate::{
 	OpaqueExtrinsic,
 };
 
-const TRANSACTION_VERSION: u8 = 4;
+/// Current version of the [`UncheckedExtrinsic`] format.
+const EXTRINSIC_VERSION: u8 = 4;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
@@ -151,7 +152,7 @@ impl<Address, Call, Signature, Extra> ExtrinsicMetadata
 		where
 			Extra: SignedExtension,
 {
-	const VERSION: u8 = TRANSACTION_VERSION;
+	const VERSION: u8 = EXTRINSIC_VERSION;
 	type SignedExtensions = Extra;
 }
 
@@ -233,7 +234,7 @@ where
 
 		let is_signed = version & 0b1000_0000 != 0;
 		let version = version & 0b0111_1111;
-		if version != TRANSACTION_VERSION {
+		if version != EXTRINSIC_VERSION {
 			return Err("Invalid transaction version".into());
 		}
 
@@ -257,11 +258,11 @@ where
 			// 1 byte version id.
 			match self.signature.as_ref() {
 				Some(s) => {
-					v.push(TRANSACTION_VERSION | 0b1000_0000);
+					v.push(EXTRINSIC_VERSION | 0b1000_0000);
 					s.encode_to(v);
 				}
 				None => {
-					v.push(TRANSACTION_VERSION & 0b0111_1111);
+					v.push(EXTRINSIC_VERSION & 0b0111_1111);
 				}
 			}
 			self.function.encode_to(v);

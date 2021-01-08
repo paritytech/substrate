@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 
 use super::*;
 use std::cell::RefCell;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{impl_outer_origin, parameter_types};
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
 	Perbill, impl_opaque_keys,
@@ -37,6 +37,31 @@ impl_opaque_keys! {
 impl From<UintAuthorityId> for MockSessionKeys {
 	fn from(dummy: UintAuthorityId) -> Self {
 		Self { dummy }
+	}
+}
+
+pub const KEY_ID_A: KeyTypeId = KeyTypeId([4; 4]);
+pub const KEY_ID_B: KeyTypeId = KeyTypeId([9; 4]);
+
+#[derive(Debug, Clone, codec::Encode, codec::Decode, PartialEq, Eq)]
+pub struct PreUpgradeMockSessionKeys {
+	pub a: [u8; 32],
+	pub b: [u8; 64],
+}
+
+impl OpaqueKeys for PreUpgradeMockSessionKeys {
+	type KeyTypeIdProviders = ();
+
+	fn key_ids() -> &'static [KeyTypeId] {
+		&[KEY_ID_A, KEY_ID_B]
+	}
+
+	fn get_raw(&self, i: KeyTypeId) -> &[u8] {
+		match i {
+			i if i == KEY_ID_A => &self.a[..],
+			i if i == KEY_ID_B => &self.b[..],
+			_ => &[],
+		}
 	}
 }
 
@@ -165,15 +190,17 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 pub struct Test;
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const MinimumPeriod: u64 = 5;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub const BlockHashCount: u64 = 250;
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -185,22 +212,16 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
-impl pallet_timestamp::Trait for Test {
+impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -211,7 +232,7 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type ShouldEndSession = TestShouldEndSession;
 	#[cfg(feature = "historical")]
 	type SessionManager = crate::historical::NoteHistoricalRoot<Test, TestSessionManager>;
@@ -228,7 +249,7 @@ impl Trait for Test {
 }
 
 #[cfg(feature = "historical")]
-impl crate::historical::Trait for Test {
+impl crate::historical::Config for Test {
 	type FullIdentification = u64;
 	type FullIdentificationOf = sp_runtime::traits::ConvertInto;
 }

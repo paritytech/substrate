@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,8 +20,8 @@ use futures::prelude::*;
 use libp2p::PeerId;
 use rand::distributions::{Distribution, Uniform, WeightedIndex};
 use rand::seq::IteratorRandom;
-use std::{collections::HashMap, collections::HashSet, iter, pin::Pin, task::Poll};
-use sc_peerset::{IncomingIndex, Message, PeersetConfig, Peerset, ReputationChange};
+use sc_peerset::{IncomingIndex, Message, Peerset, PeersetConfig, ReputationChange, SetConfig, SetId};
+use std::{collections::HashMap, collections::HashSet, pin::Pin, task::Poll};
 
 #[test]
 fn run() {
@@ -40,23 +40,30 @@ fn test_once() {
 	let mut reserved_nodes = HashSet::<PeerId>::new();
 
 	let (mut peerset, peerset_handle) = Peerset::from_config(PeersetConfig {
-		bootnodes: (0 .. Uniform::new_inclusive(0, 4).sample(&mut rng)).map(|_| {
-			let id = PeerId::random();
-			known_nodes.insert(id.clone());
-			id
-		}).collect(),
-		priority_groups: {
-			let nodes = (0 .. Uniform::new_inclusive(0, 2).sample(&mut rng)).map(|_| {
-				let id = PeerId::random();
-				known_nodes.insert(id.clone());
-				reserved_nodes.insert(id.clone());
-				id
-			}).collect();
-			vec![("foo".to_string(), nodes)]
-		},
-		reserved_only: Uniform::new_inclusive(0, 10).sample(&mut rng) == 0,
-		in_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
-		out_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
+		sets: vec![
+			SetConfig {
+				bootnodes: (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
+					.map(|_| {
+						let id = PeerId::random();
+						known_nodes.insert(id.clone());
+						id
+					})
+					.collect(),
+				reserved_nodes: {
+					(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
+						.map(|_| {
+							let id = PeerId::random();
+							known_nodes.insert(id.clone());
+							reserved_nodes.insert(id.clone());
+							id
+						})
+						.collect()
+				},
+				in_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
+				out_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
+				reserved_only: Uniform::new_inclusive(0, 10).sample(&mut rng) == 0,
+			},
+		],
 	});
 
 	futures::executor::block_on(futures::future::poll_fn(move |cx| {
@@ -71,70 +78,101 @@ fn test_once() {
 
 		// Perform a certain number of actions while checking that the state is consistent. If we
 		// reach the end of the loop, the run has succeeded.
-		for _ in 0 .. 2500 {
+		for _ in 0..2500 {
 			// Each of these weights corresponds to an action that we may perform.
 			let action_weights = [150, 90, 90, 30, 30, 1, 1, 4, 4];
-			match WeightedIndex::new(&action_weights).unwrap().sample(&mut rng) {
+			match WeightedIndex::new(&action_weights)
+				.unwrap()
+				.sample(&mut rng)
+			{
 				// If we generate 0, poll the peerset.
 				0 => match Stream::poll_next(Pin::new(&mut peerset), cx) {
-					Poll::Ready(Some(Message::Connect(id))) => {
-						if let Some(id) = incoming_nodes.iter().find(|(_, v)| **v == id).map(|(&id, _)| id) {
+					Poll::Ready(Some(Message::Connect { peer_id, .. })) => {
+						if let Some(id) = incoming_nodes
+							.iter()
+							.find(|(_, v)| **v == peer_id)
+							.map(|(&id, _)| id)
+						{
 							incoming_nodes.remove(&id);
 						}
-						assert!(connected_nodes.insert(id));
+						assert!(connected_nodes.insert(peer_id));
 					}
-					Poll::Ready(Some(Message::Drop(id))) => { connected_nodes.remove(&id); }
-					Poll::Ready(Some(Message::Accept(n))) =>
-						assert!(connected_nodes.insert(incoming_nodes.remove(&n).unwrap())),
-					Poll::Ready(Some(Message::Reject(n))) =>
-						assert!(!connected_nodes.contains(&incoming_nodes.remove(&n).unwrap())),
+					Poll::Ready(Some(Message::Drop { peer_id, .. })) => {
+						connected_nodes.remove(&peer_id);
+					}
+					Poll::Ready(Some(Message::Accept(n))) => {
+						assert!(connected_nodes.insert(incoming_nodes.remove(&n).unwrap()))
+					}
+					Poll::Ready(Some(Message::Reject(n))) => {
+						assert!(!connected_nodes.contains(&incoming_nodes.remove(&n).unwrap()))
+					}
 					Poll::Ready(None) => panic!(),
 					Poll::Pending => {}
-				}
+				},
 
 				// If we generate 1, discover a new node.
 				1 => {
 					let new_id = PeerId::random();
 					known_nodes.insert(new_id.clone());
-					peerset.discovered(iter::once(new_id));
+					peerset.add_to_peers_set(SetId::from(0), new_id);
 				}
 
 				// If we generate 2, adjust a random reputation.
-				2 => if let Some(id) = known_nodes.iter().choose(&mut rng) {
-					let val = Uniform::new_inclusive(i32::min_value(), i32::max_value()).sample(&mut rng);
-					peerset_handle.report_peer(id.clone(), ReputationChange::new(val, ""));
+				2 => {
+					if let Some(id) = known_nodes.iter().choose(&mut rng) {
+						let val = Uniform::new_inclusive(i32::min_value(), i32::max_value())
+							.sample(&mut rng);
+						peerset_handle.report_peer(id.clone(), ReputationChange::new(val, ""));
+					}
 				}
 
 				// If we generate 3, disconnect from a random node.
-				3 => if let Some(id) = connected_nodes.iter().choose(&mut rng).cloned() {
-					connected_nodes.remove(&id);
-					peerset.dropped(id);
+				3 => {
+					if let Some(id) = connected_nodes.iter().choose(&mut rng).cloned() {
+						connected_nodes.remove(&id);
+						peerset.dropped(SetId::from(0), id);
+					}
 				}
 
 				// If we generate 4, connect to a random node.
-				4 => if let Some(id) = known_nodes.iter()
-					.filter(|n| incoming_nodes.values().all(|m| m != *n) && !connected_nodes.contains(*n))
-					.choose(&mut rng) {
-					peerset.incoming(id.clone(), next_incoming_id.clone());
-					incoming_nodes.insert(next_incoming_id.clone(), id.clone());
-					next_incoming_id.0 += 1;
+				4 => {
+					if let Some(id) = known_nodes
+						.iter()
+						.filter(|n| {
+							incoming_nodes.values().all(|m| m != *n)
+								&& !connected_nodes.contains(*n)
+						})
+						.choose(&mut rng)
+					{
+						peerset.incoming(SetId::from(0), id.clone(), next_incoming_id.clone());
+						incoming_nodes.insert(next_incoming_id.clone(), id.clone());
+						next_incoming_id.0 += 1;
+					}
 				}
 
 				// 5 and 6 are the reserved-only mode.
-				5 => peerset_handle.set_reserved_only(true),
-				6 => peerset_handle.set_reserved_only(false),
+				5 => peerset_handle.set_reserved_only(SetId::from(0), true),
+				6 => peerset_handle.set_reserved_only(SetId::from(0), false),
 
 				// 7 and 8 are about switching a random node in or out of reserved mode.
-				7 => if let Some(id) = known_nodes.iter().filter(|n| !reserved_nodes.contains(*n)).choose(&mut rng) {
-					peerset_handle.add_reserved_peer(id.clone());
-					reserved_nodes.insert(id.clone());
+				7 => {
+					if let Some(id) = known_nodes
+						.iter()
+						.filter(|n| !reserved_nodes.contains(*n))
+						.choose(&mut rng)
+					{
+						peerset_handle.add_reserved_peer(SetId::from(0), id.clone());
+						reserved_nodes.insert(id.clone());
+					}
 				}
-				8 => if let Some(id) = reserved_nodes.iter().choose(&mut rng).cloned() {
-					reserved_nodes.remove(&id);
-					peerset_handle.remove_reserved_peer(id);
+				8 => {
+					if let Some(id) = reserved_nodes.iter().choose(&mut rng).cloned() {
+						reserved_nodes.remove(&id);
+						peerset_handle.remove_reserved_peer(SetId::from(0), id);
+					}
 				}
 
-				_ => unreachable!()
+				_ => unreachable!(),
 			}
 		}
 

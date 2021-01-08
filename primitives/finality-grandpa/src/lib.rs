@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +30,7 @@ use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
 use sp_std::borrow::Cow;
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
-use sp_core::traits::BareCryptoStorePtr;
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 
 #[cfg(feature = "std")]
 use log::debug;
@@ -252,6 +252,14 @@ impl<H, N> Equivocation<H, N> {
 			Equivocation::Precommit(ref equivocation) => &equivocation.identity,
 		}
 	}
+
+	/// Returns the round number when the equivocation happened.
+	pub fn round_number(&self) -> RoundNumber {
+		match self {
+			Equivocation::Prevote(ref equivocation) => equivocation.round_number,
+			Equivocation::Precommit(ref equivocation) => equivocation.round_number,
+		}
+	}
 }
 
 /// Verifies the equivocation proof by making sure that both votes target
@@ -372,7 +380,7 @@ where
 /// Localizes the message to the given set and round and signs the payload.
 #[cfg(feature = "std")]
 pub fn sign_message<H, N>(
-	keystore: &BareCryptoStorePtr,
+	keystore: SyncCryptoStorePtr,
 	message: grandpa::Message<H, N>,
 	public: AuthorityId,
 	round: RoundNumber,
@@ -387,11 +395,12 @@ where
 	use sp_std::convert::TryInto;
 
 	let encoded = localized_payload(round, set_id, &message);
-	let signature = keystore.read()
-		.sign_with(AuthorityId::ID, &public.to_public_crypto_pair(), &encoded[..])
-		.ok()?
-		.try_into()
-		.ok()?;
+	let signature = SyncCryptoStore::sign_with(
+		&*keystore,
+		AuthorityId::ID,
+		&public.to_public_crypto_pair(),
+		&encoded[..],
+	).ok()?.try_into().ok()?;
 
 	Some(grandpa::SignedMessage {
 		message,

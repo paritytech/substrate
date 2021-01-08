@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -708,13 +708,7 @@ impl<'a> ToClientSideDecl<'a> {
 							},
 							#crate_::NativeOrEncoded::Encoded(r) => {
 								<#ret_type as #crate_::Decode>::decode(&mut &r[..])
-									.map_err(|err|
-										format!(
-											"Failed to decode result of `{}`: {}",
-											#function_name,
-											err.what(),
-										).into()
-									)
+									.map_err(|err| { #crate_::ApiError::new(#function_name, err).into() })
 							}
 						}
 					)
@@ -912,6 +906,13 @@ impl CheckTraitDecl {
 				.entry(method.sig.ident.clone())
 				.or_default()
 				.push(changed_in);
+
+			if method.default.is_some() {
+				self.errors.push(Error::new(
+					method.default.span(),
+					"A runtime API function cannot have a default implementation!",
+				));
+			}
 		});
 
 		method_to_signature_changed.into_iter().for_each(|(f, changed)| {

@@ -1,44 +1,42 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{error::{Error, Result}, ServicetoWorkerMsg};
+use crate::{error::{Error, Result}, interval::ExpIncInterval, ServicetoWorkerMsg};
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::marker::PhantomData;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use futures::channel::mpsc;
-use futures::task::{Context, Poll};
-use futures::{Future, FutureExt, ready, Stream, StreamExt, stream::Fuse};
-use futures_timer::Delay;
+use futures::{FutureExt, Stream, StreamExt, stream::Fuse};
 
 use addr_cache::AddrCache;
+use async_trait::async_trait;
 use codec::Decode;
-use either::Either;
-use libp2p::{core::multiaddr, multihash::Multihash};
+use libp2p::{core::multiaddr, multihash::{Multihash, Hasher}};
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network::{
-	config::MultiaddrWithPeerId,
 	DhtEvent,
 	ExHashT,
 	Multiaddr,
@@ -47,7 +45,7 @@ use sc_network::{
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, Pair};
-use sp_core::traits::BareCryptoStorePtr;
+use sp_keystore::CryptoStore;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
 
@@ -57,16 +55,7 @@ mod schema { include!(concat!(env!("OUT_DIR"), "/authority_discovery.rs")); }
 #[cfg(test)]
 pub mod tests;
 
-type Interval = Box<dyn Stream<Item = ()> + Unpin + Send + Sync>;
-
 const LOG_TARGET: &'static str = "sub-authority-discovery";
-
-/// Upper bound estimation on how long one should wait before accessing the Kademlia DHT.
-const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
-
-/// Name of the Substrate peerset priority group for authorities discovered through the authority
-/// discovery module.
-const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
 
 /// Maximum number of addresses cached per authority. Additional addresses are discarded.
 const MAX_ADDRESSES_PER_AUTHORITY: usize = 10;
@@ -74,78 +63,54 @@ const MAX_ADDRESSES_PER_AUTHORITY: usize = 10;
 /// Maximum number of in-flight DHT lookups at any given point in time.
 const MAX_IN_FLIGHT_LOOKUPS: usize = 8;
 
-/// Role an authority discovery module can run as.
+/// Role an authority discovery [`Worker`] can run as.
 pub enum Role {
-	/// Actual authority as well as a reference to its key store.
-	Authority(BareCryptoStorePtr),
-	/// Sentry node that guards an authority.
-	///
-	/// No reference to its key store needed, as sentry nodes don't have an identity to sign
-	/// addresses with in the first place.
-	Sentry,
+	/// Publish own addresses and discover addresses of others.
+	PublishAndDiscover(Arc<dyn CryptoStore>),
+	/// Discover addresses of others.
+	Discover,
 }
 
-/// A [`Worker`] makes a given authority discoverable and discovers other
-/// authorities.
+
+/// An authority discovery [`Worker`] can publish the local node's addresses as well as discover
+/// those of other nodes via a Kademlia DHT.
 ///
-/// The [`Worker`] implements the Future trait. By
-/// polling [`Worker`] an authority:
+/// When constructed with [`Role::PublishAndDiscover`] a [`Worker`] will
 ///
-/// 1. **Makes itself discoverable**
+///    1. Retrieve its external addresses (including peer id).
 ///
-///    1. Retrieves its external addresses (including peer id) or the ones of
-///    its sentry nodes.
+///    2. Get the list of keys owned by the local node participating in the current authority set.
 ///
-///    2. Signs the above.
+///    3. Sign the addresses with the keys.
 ///
-///    3. Puts the signature and the addresses on the libp2p Kademlia DHT.
+///    4. Put addresses and signature as a record with the authority id as a key on a Kademlia DHT.
 ///
+/// When constructed with either [`Role::PublishAndDiscover`] or [`Role::Publish`] a [`Worker`] will
 ///
-/// 2. **Discovers other authorities**
+///    1. Retrieve the current and next set of authorities.
 ///
-///    1. Retrieves the current and next set of authorities.
+///    2. Start DHT queries for the ids of the authorities.
 ///
-///    2. Starts DHT queries for the ids of the authorities.
+///    3. Validate the signatures of the retrieved key value pairs.
 ///
-///    3. Validates the signatures of the retrieved key value pairs.
+///    4. Add the retrieved external addresses as priority nodes to the
+///    network peerset.
 ///
-///    4. Adds the retrieved external addresses as priority nodes to the
-///    peerset.
-///
-/// When run as a sentry node, the [`Worker`] does not publish
-/// any addresses to the DHT but still discovers validators and sentry nodes of
-/// validators, i.e. only step 2 (Discovers other authorities) is executed.
-pub struct Worker<Client, Network, Block>
-where
-	Block: BlockT + 'static,
-	Network: NetworkProvider,
-	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
-{
-	/// Channel receiver for messages send by an [`Service`].
+///    5. Allow querying of the collected addresses via the [`crate::Service`].
+pub struct Worker<Client, Network, Block, DhtEventStream> {
+	/// Channel receiver for messages send by a [`crate::Service`].
 	from_service: Fuse<mpsc::Receiver<ServicetoWorkerMsg>>,
 
 	client: Arc<Client>,
 
 	network: Arc<Network>,
-	/// List of sentry node public addresses.
-	//
-	// There are 3 states:
-	//   - None: No addresses were specified.
-	//   - Some(vec![]): Addresses were specified, but none could be parsed as proper
-	//     Multiaddresses.
-	//   - Some(vec![a, b, c, ...]): Valid addresses were specified.
-	sentry_nodes: Option<Vec<Multiaddr>>,
 	/// Channel we receive Dht events on.
-	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+	dht_event_rx: DhtEventStream,
 
 	/// Interval to be proactive, publishing own addresses.
-	publish_interval: Interval,
+	publish_interval: ExpIncInterval,
 	/// Interval at which to request addresses of authorities, refilling the pending lookups queue.
-	query_interval: Interval,
-	/// Interval on which to set the peerset priority group to a new random
-	/// set of addresses.
-	priority_group_set_interval: Interval,
+	query_interval: ExpIncInterval,
 
 	/// Queue of throttled lookups pending to be passed to the network.
 	pending_lookups: Vec<AuthorityId>,
@@ -161,58 +126,39 @@ where
 	phantom: PhantomData<Block>,
 }
 
-impl<Client, Network, Block> Worker<Client, Network, Block>
+impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api:
 		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
-	Self: Future<Output = ()>,
+	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
-	/// Return a new [`Worker`].
-	///
-	/// Note: When specifying `sentry_nodes` this module will not advertise the public addresses of
-	/// the node itself but only the public addresses of its sentry nodes.
+	/// Construct a [`Worker`].
 	pub(crate) fn new(
 		from_service: mpsc::Receiver<ServicetoWorkerMsg>,
 		client: Arc<Client>,
 		network: Arc<Network>,
-		sentry_nodes: Vec<MultiaddrWithPeerId>,
-		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+		dht_event_rx: DhtEventStream,
 		role: Role,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
+		config: crate::WorkerConfig,
 	) -> Self {
-		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h.
-		// Given that a node could restart at any point in time, one can not depend on the
-		// republishing process, thus publishing own external addresses should happen on an interval
-		// < 36h.
-		let publish_interval = interval_at(
-			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
-			Duration::from_secs(12 * 60 * 60),
+		// When a node starts up publishing and querying might fail due to various reasons, for
+		// example due to being not yet fully bootstrapped on the DHT. Thus one should retry rather
+		// sooner than later. On the other hand, a long running node is likely well connected and
+		// thus timely retries are not needed. For this reasoning use an exponentially increasing
+		// interval for `publish_interval`, `query_interval` and `priority_group_set_interval`
+		// instead of a constant interval.
+		let publish_interval = ExpIncInterval::new(
+			Duration::from_secs(2),
+			config.max_publish_interval,
 		);
-
-		// External addresses of remote authorities can change at any given point in time. The
-		// interval on which to trigger new queries for the current authorities is a trade off
-		// between efficiency and performance.
-		let query_interval_start = Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME;
-		let query_interval_duration = Duration::from_secs(10 * 60);
-		let query_interval = interval_at(query_interval_start, query_interval_duration);
-
-		// Querying 500 [`AuthorityId`]s takes ~1m on the Kusama DHT (10th of August 2020) when
-		// comparing `authority_discovery_authority_addresses_requested_total` and
-		// `authority_discovery_dht_event_received`. With that in mind set the peerset priority
-		// group on the same interval as the [`query_interval`] above, just delayed by 5 minutes.
-		let priority_group_set_interval = interval_at(
-			query_interval_start + Duration::from_secs(5 * 60),
-			query_interval_duration,
+		let query_interval = ExpIncInterval::new(
+			Duration::from_secs(2),
+			config.max_query_interval,
 		);
-
-		let sentry_nodes = if !sentry_nodes.is_empty() {
-			Some(sentry_nodes.into_iter().map(|ma| ma.concat()).collect::<Vec<_>>())
-		} else {
-			None
-		};
 
 		let addr_cache = AddrCache::new();
 
@@ -233,11 +179,9 @@ where
 			from_service: from_service.fuse(),
 			client,
 			network,
-			sentry_nodes,
 			dht_event_rx,
 			publish_interval,
 			query_interval,
-			priority_group_set_interval,
 			pending_lookups: Vec::new(),
 			in_flight_lookups: HashMap::new(),
 			addr_cache,
@@ -247,34 +191,81 @@ where
 		}
 	}
 
-	fn addresses_to_publish(&self) -> impl ExactSizeIterator<Item = Multiaddr> {
-		match &self.sentry_nodes {
-			Some(addrs) => Either::Left(addrs.clone().into_iter()),
-			None => {
-				let peer_id: Multihash = self.network.local_peer_id().into();
-				Either::Right(
-					self.network.external_addresses()
-						.into_iter()
-						.map(move |a| {
-							if a.iter().any(|p| matches!(p, multiaddr::Protocol::P2p(_))) {
-								a
-							} else {
-								a.with(multiaddr::Protocol::P2p(peer_id.clone()))
-							}
-						}),
-				)
+	/// Start the worker
+	pub async fn run(mut self) {
+		loop {
+			self.start_new_lookups();
+
+			futures::select! {
+				// Process incoming events.
+				event = self.dht_event_rx.next().fuse() => {
+					if let Some(event) = event {
+						self.handle_dht_event(event).await;
+					} else {
+						// This point is reached if the network has shut down, at which point there is not
+						// much else to do than to shut down the authority discovery as well.
+						return;
+					}
+				},
+				// Handle messages from [`Service`]. Ignore if sender side is closed.
+				msg = self.from_service.select_next_some() => {
+					self.process_message_from_service(msg);
+				},
+				// Publish own addresses.
+				_ = self.publish_interval.next().fuse() => {
+					if let Err(e) = self.publish_ext_addresses().await {
+						error!(
+							target: LOG_TARGET,
+							"Failed to publish external addresses: {:?}", e,
+						);
+					}
+				},
+				// Request addresses of authorities.
+				_ = self.query_interval.next().fuse() => {
+					if let Err(e) = self.refill_pending_lookups_queue().await {
+						error!(
+							target: LOG_TARGET,
+							"Failed to request addresses of authorities: {:?}", e,
+						);
+					}
+				},
 			}
 		}
 	}
 
-	/// Publish either our own or if specified the public addresses of our sentry nodes.
-	fn publish_ext_addresses(&mut self) -> Result<()> {
+	fn process_message_from_service(&self, msg: ServicetoWorkerMsg) {
+		match msg {
+			ServicetoWorkerMsg::GetAddressesByAuthorityId(authority, sender) => {
+				let _ = sender.send(
+					self.addr_cache.get_addresses_by_authority_id(&authority).map(Clone::clone),
+				);
+			}
+			ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, sender) => {
+				let _ = sender.send(
+					self.addr_cache.get_authority_id_by_peer_id(&peer_id).map(Clone::clone),
+				);
+			}
+		}
+	}
+
+	fn addresses_to_publish(&self) -> impl ExactSizeIterator<Item = Multiaddr> {
+		let peer_id: Multihash = self.network.local_peer_id().into();
+		self.network.external_addresses()
+			.into_iter()
+			.map(move |a| {
+				if a.iter().any(|p| matches!(p, multiaddr::Protocol::P2p(_))) {
+					a
+				} else {
+					a.with(multiaddr::Protocol::P2p(peer_id.clone()))
+				}
+			})
+	}
+
+	/// Publish own public addresses.
+	async fn publish_ext_addresses(&mut self) -> Result<()> {
 		let key_store = match &self.role {
-			Role::Authority(key_store) => key_store,
-			// Only authority nodes can put addresses (their own or the ones of their sentry nodes)
-			// on the Dht. Sentry nodes don't have a known identity to authenticate such addresses,
-			// thus `publish_ext_addresses` becomes a no-op.
-			Role::Sentry => return Ok(()),
+			Role::PublishAndDiscover(key_store) => key_store,
+			Role::Discover => return Ok(()),
 		};
 
 		let addresses = self.addresses_to_publish();
@@ -291,18 +282,16 @@ where
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		let keys = Worker::get_own_public_keys_within_authority_set(
-			&key_store,
-			&self.client,
-		)?.into_iter().map(Into::into).collect::<Vec<_>>();
+		let keys = Worker::<Client, Network, Block, DhtEventStream>::get_own_public_keys_within_authority_set(
+			key_store.clone(),
+			self.client.as_ref(),
+		).await?.into_iter().map(Into::into).collect::<Vec<_>>();
 
-		let signatures = key_store.read()
-			.sign_with_all(
-				key_types::AUTHORITY_DISCOVERY,
-				keys.clone(),
-				serialized_addresses.as_slice(),
-			)
-			.map_err(|_| Error::Signing)?;
+		let signatures = key_store.sign_with_all(
+			key_types::AUTHORITY_DISCOVERY,
+			keys.clone(),
+			serialized_addresses.as_slice(),
+		).await.map_err(|_| Error::Signing)?;
 
 		for (sign_result, key) in signatures.into_iter().zip(keys) {
 			let mut signed_addresses = vec![];
@@ -327,17 +316,16 @@ where
 		Ok(())
 	}
 
-	fn refill_pending_lookups_queue(&mut self) -> Result<()> {
+	async fn refill_pending_lookups_queue(&mut self) -> Result<()> {
 		let id = BlockId::hash(self.client.info().best_hash);
 
 		let local_keys = match &self.role {
-			Role::Authority(key_store) => {
-				key_store.read()
-					.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
-					.into_iter()
-					.collect::<HashSet<_>>()
+			Role::PublishAndDiscover(key_store) => {
+				key_store.sr25519_public_keys(
+					key_types::AUTHORITY_DISCOVERY
+				).await.into_iter().collect::<HashSet<_>>()
 			},
-			Role::Sentry => HashSet::new(),
+			Role::Discover => HashSet::new(),
 		};
 
 		let mut authorities = self
@@ -387,78 +375,73 @@ where
 	}
 
 	/// Handle incoming Dht events.
-	///
-	/// Returns either:
-	///   - Poll::Pending when there are no more events to handle or
-	///   - Poll::Ready(()) when the dht event stream terminated.
-	fn handle_dht_events(&mut self, cx: &mut Context) -> Poll<()>{
-		loop {
-			match ready!(self.dht_event_rx.poll_next_unpin(cx)) {
-				Some(DhtEvent::ValueFound(v)) => {
-					if let Some(metrics) = &self.metrics {
-						metrics.dht_event_received.with_label_values(&["value_found"]).inc();
-					}
-
-					if log_enabled!(log::Level::Debug) {
-						let hashes = v.iter().map(|(hash, _value)| hash.clone());
-						debug!(
-							target: LOG_TARGET,
-							"Value for hash '{:?}' found on Dht.", hashes,
-						);
-					}
-
-					if let Err(e) = self.handle_dht_value_found_event(v) {
-						if let Some(metrics) = &self.metrics {
-							metrics.handle_value_found_event_failure.inc();
-						}
-
-						debug!(
-							target: LOG_TARGET,
-							"Failed to handle Dht value found event: {:?}", e,
-						);
-					}
+	async fn handle_dht_event(&mut self, event: DhtEvent) {
+		match event {
+			DhtEvent::ValueFound(v) => {
+				if let Some(metrics) = &self.metrics {
+					metrics.dht_event_received.with_label_values(&["value_found"]).inc();
 				}
-				Some(DhtEvent::ValueNotFound(hash)) => {
-					if let Some(metrics) = &self.metrics {
-						metrics.dht_event_received.with_label_values(&["value_not_found"]).inc();
-					}
 
-					if self.in_flight_lookups.remove(&hash).is_some() {
-						debug!(
-							target: LOG_TARGET,
-							"Value for hash '{:?}' not found on Dht.", hash
-						)
-					} else {
-						debug!(
-							target: LOG_TARGET,
-							"Received 'ValueNotFound' for unexpected hash '{:?}'.", hash
-						)
-					}
-				},
-				Some(DhtEvent::ValuePut(hash)) => {
+				if log_enabled!(log::Level::Debug) {
+					let hashes: Vec<_> = v.iter().map(|(hash, _value)| hash.clone()).collect();
+					debug!(
+						target: LOG_TARGET,
+						"Value for hash '{:?}' found on Dht.", hashes,
+					);
+				}
+
+				if let Err(e) = self.handle_dht_value_found_event(v) {
 					if let Some(metrics) = &self.metrics {
-						metrics.dht_event_received.with_label_values(&["value_put"]).inc();
+						metrics.handle_value_found_event_failure.inc();
 					}
 
 					debug!(
 						target: LOG_TARGET,
-						"Successfully put hash '{:?}' on Dht.", hash,
-					)
-				},
-				Some(DhtEvent::ValuePutFailed(hash)) => {
-					if let Some(metrics) = &self.metrics {
-						metrics.dht_event_received.with_label_values(&["value_put_failed"]).inc();
-					}
+						"Failed to handle Dht value found event: {:?}", e,
+					);
+				}
+			}
+			DhtEvent::ValueNotFound(hash) => {
+				if let Some(metrics) = &self.metrics {
+					metrics.dht_event_received.with_label_values(&["value_not_found"]).inc();
+				}
 
+				if self.in_flight_lookups.remove(&hash).is_some() {
 					debug!(
 						target: LOG_TARGET,
-						"Failed to put hash '{:?}' on Dht.", hash
+						"Value for hash '{:?}' not found on Dht.", hash
 					)
-				},
-				None => {
-					debug!(target: LOG_TARGET, "Dht event stream terminated.");
-					return Poll::Ready(());
-				},
+				} else {
+					debug!(
+						target: LOG_TARGET,
+						"Received 'ValueNotFound' for unexpected hash '{:?}'.", hash
+					)
+				}
+			},
+			DhtEvent::ValuePut(hash) => {
+				// Fast forward the exponentially increasing interval to the configured maximum. In
+				// case this was the first successful address publishing there is no need for a
+				// timely retry.
+				self.publish_interval.set_to_max();
+
+				if let Some(metrics) = &self.metrics {
+					metrics.dht_event_received.with_label_values(&["value_put"]).inc();
+				}
+
+				debug!(
+					target: LOG_TARGET,
+					"Successfully put hash '{:?}' on Dht.", hash,
+				)
+			},
+			DhtEvent::ValuePutFailed(hash) => {
+				if let Some(metrics) = &self.metrics {
+					metrics.dht_event_received.with_label_values(&["value_put_failed"]).inc();
+				}
+
+				debug!(
+					target: LOG_TARGET,
+					"Failed to put hash '{:?}' on Dht.", hash
+				)
 			}
 		}
 	}
@@ -541,7 +524,6 @@ where
 				);
 			}
 		}
-
 		Ok(())
 	}
 
@@ -551,12 +533,13 @@ where
 	// one for the upcoming session. In addition it could be participating in the current and (/ or)
 	// next authority set with two keys. The function does not return all of the local authority
 	// discovery public keys, but only the ones intersecting with the current or next authority set.
-	fn get_own_public_keys_within_authority_set(
-		key_store: &BareCryptoStorePtr,
+	async fn get_own_public_keys_within_authority_set(
+		key_store: Arc<dyn CryptoStore>,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
-		let local_pub_keys = key_store.read()
+		let local_pub_keys = key_store
 			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
+			.await
 			.into_iter()
 			.collect::<HashSet<_>>();
 
@@ -575,131 +558,13 @@ where
 
 		Ok(intersection)
 	}
-
-	/// Set the peer set 'authority' priority group to a new random set of
-	/// [`Multiaddr`]s.
-	fn set_priority_group(&self) -> Result<()> {
-		let addresses = self.addr_cache.get_random_subset();
-
-		if addresses.is_empty() {
-			debug!(
-				target: LOG_TARGET,
-				"Got no addresses in cache for peerset priority group.",
-			);
-			return Ok(());
-		}
-
-		if let Some(metrics) = &self.metrics {
-			metrics.priority_group_size.set(addresses.len().try_into().unwrap_or(std::u64::MAX));
-		}
-
-		debug!(
-			target: LOG_TARGET,
-			"Applying priority group {:?} to peerset.", addresses,
-		);
-
-		self.network
-			.set_priority_group(
-				AUTHORITIES_PRIORITY_GROUP_NAME.to_string(),
-				addresses.into_iter().collect(),
-			)
-			.map_err(Error::SettingPeersetPriorityGroup)?;
-
-		Ok(())
-	}
-}
-
-impl<Client, Network, Block> Future for Worker<Client, Network, Block>
-where
-	Block: BlockT + Unpin + 'static,
-	Network: NetworkProvider,
-	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api:
-		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
-{
-	type Output = ();
-
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		// Process incoming events.
-		if let Poll::Ready(()) = self.handle_dht_events(cx) {
-			// `handle_dht_events` returns `Poll::Ready(())` when the Dht event stream terminated.
-			// Termination of the Dht event stream implies that the underlying network terminated,
-			// thus authority discovery should terminate as well.
-			return Poll::Ready(());
-		}
-
-		// Publish own addresses.
-		if let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {
-			// Register waker of underlying task for next interval.
-			while let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {}
-
-			if let Err(e) = self.publish_ext_addresses() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to publish external addresses: {:?}", e,
-				);
-			}
-		}
-
-		// Request addresses of authorities, refilling the pending lookups queue.
-		if let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {
-			// Register waker of underlying task for next interval.
-			while let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {}
-
-			if let Err(e) = self.refill_pending_lookups_queue() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to refill pending lookups queue: {:?}", e,
-				);
-			}
-		}
-
-		// Set peerset priority group to a new random set of addresses.
-		if let Poll::Ready(_) = self.priority_group_set_interval.poll_next_unpin(cx) {
-			// Register waker of underlying task for next interval.
-			while let Poll::Ready(_) = self.priority_group_set_interval.poll_next_unpin(cx) {}
-
-			if let Err(e) = self.set_priority_group() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to set priority group: {:?}", e,
-				);
-			}
-		}
-
-		// Handle messages from [`Service`].
-		while let Poll::Ready(Some(msg)) = self.from_service.poll_next_unpin(cx) {
-			match msg {
-				ServicetoWorkerMsg::GetAddressesByAuthorityId(authority, sender) => {
-					let _ = sender.send(
-						self.addr_cache.get_addresses_by_authority_id(&authority).map(Clone::clone),
-					);
-				}
-				ServicetoWorkerMsg::GetAuthorityIdByPeerId(peer_id, sender) => {
-					let _ = sender.send(
-						self.addr_cache.get_authority_id_by_peer_id(&peer_id).map(Clone::clone),
-					);
-				}
-			}
-		}
-
-		self.start_new_lookups();
-
-		Poll::Pending
-	}
 }
 
 /// NetworkProvider provides [`Worker`] with all necessary hooks into the
-/// underlying Substrate networking. Using this trait abstraction instead of [`NetworkService`]
-/// directly is necessary to unit test [`Worker`].
+/// underlying Substrate networking. Using this trait abstraction instead of
+/// [`sc_network::NetworkService`] directly is necessary to unit test [`Worker`].
+#[async_trait]
 pub trait NetworkProvider: NetworkStateInfo {
-	/// Modify a peerset priority group.
-	fn set_priority_group(
-		&self,
-		group_id: String,
-		peers: HashSet<libp2p::Multiaddr>,
-	) -> std::result::Result<(), String>;
-
 	/// Start putting a value in the Dht.
 	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>);
 
@@ -707,18 +572,12 @@ pub trait NetworkProvider: NetworkStateInfo {
 	fn get_value(&self, key: &libp2p::kad::record::Key);
 }
 
+#[async_trait::async_trait]
 impl<B, H> NetworkProvider for sc_network::NetworkService<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
 {
-	fn set_priority_group(
-		&self,
-		group_id: String,
-		peers: HashSet<libp2p::Multiaddr>,
-	) -> std::result::Result<(), String> {
-		self.set_priority_group(group_id, peers)
-	}
 	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>) {
 		self.put_value(key, value)
 	}
@@ -731,16 +590,6 @@ fn hash_authority_id(id: &[u8]) -> libp2p::kad::record::Key {
 	libp2p::kad::record::Key::new(&libp2p::multihash::Sha2_256::digest(id))
 }
 
-fn interval_at(start: Instant, duration: Duration) -> Interval {
-	let stream = futures::stream::unfold(start, move |next| {
-		let time_until_next =  next.saturating_duration_since(Instant::now());
-
-		Delay::new(time_until_next).map(move |_| Some(((), next + duration)))
-	});
-
-	Box::new(stream)
-}
-
 /// Prometheus metrics for a [`Worker`].
 #[derive(Clone)]
 pub(crate) struct Metrics {
@@ -751,7 +600,6 @@ pub(crate) struct Metrics {
 	dht_event_received: CounterVec<U64>,
 	handle_value_found_event_failure: Counter<U64>,
 	known_authorities_count: Gauge<U64>,
-	priority_group_size: Gauge<U64>,
 }
 
 impl Metrics {
@@ -811,26 +659,13 @@ impl Metrics {
 				)?,
 				registry,
 			)?,
-			priority_group_size: register(
-				Gauge::new(
-					"authority_discovery_priority_group_size",
-					"Number of addresses passed to the peer set as a priority group."
-				)?,
-				registry,
-			)?,
 		})
 	}
 }
 
 // Helper functions for unit testing.
 #[cfg(test)]
-impl<Client, Network, Block> Worker<Client, Network, Block>
-where
-	Block: BlockT + 'static,
-	Network: NetworkProvider,
-	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
-{
+impl<Block, Client, Network, DhtEventStream> Worker<Client, Network, Block, DhtEventStream> {
 	pub(crate) fn inject_addresses(&mut self, authority: AuthorityId, addresses: Vec<Multiaddr>) {
 		self.addr_cache.insert(authority, addresses);
 	}

@@ -22,7 +22,7 @@ sp-arithmetic = { version = "2.0.0", default-features = false, path = "../arithm
 [dev-dependencies]
 substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
 rand = "0.7.3"
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "2.0.0", path = "../runtime" }
 
 [features]
 default = ["std"]

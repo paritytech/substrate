@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,8 +58,8 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///
 /// The given struct provides function to convert from/to Assignment:
 ///
-/// - [`from_assignment()`].
-/// - [`fn into_assignment()`].
+/// - `fn from_assignment<..>(..)`
+/// - `fn into_assignment<..>(..)`
 ///
 /// The generated struct is by default deriving both `Encode` and `Decode`. This is okay but could
 /// lead to many 0s in the solution. If prefixed with `#[compact]`, then a custom compact encoding
@@ -152,6 +152,7 @@ fn struct_def(
 	let len_impl = len_impl(count);
 	let edge_count_impl = edge_count_impl(count);
 	let unique_targets_impl = unique_targets_impl(count);
+	let remove_voter_impl = remove_voter_impl(count);
 
 	let derives_and_maybe_compact_encoding = if compact_encoding {
 		// custom compact encoding.
@@ -220,8 +221,56 @@ fn struct_def(
 			pub fn average_edge_count(&self) -> usize {
 				self.edge_count().checked_div(self.len()).unwrap_or(0)
 			}
+
+			/// Remove a certain voter.
+			///
+			/// This will only search until the first instance of `to_remove`, and return true. If
+			/// no instance is found (no-op), then it returns false.
+			///
+			/// In other words, if this return true, exactly one element must have been removed from
+			/// `self.len()`.
+			pub fn remove_voter(&mut self, to_remove: #voter_type) -> bool {
+				#remove_voter_impl
+				return false
+			}
 		}
 	))
+}
+
+fn remove_voter_impl(count: usize) -> TokenStream2 {
+	let field_name = field_name_for(1);
+	let single = quote! {
+		if let Some(idx) = self.#field_name.iter().position(|(x, _)| *x == to_remove) {
+			self.#field_name.remove(idx);
+			return true
+		}
+	};
+
+	let field_name = field_name_for(2);
+	let double = quote! {
+		if let Some(idx) = self.#field_name.iter().position(|(x, _, _)| *x == to_remove) {
+			self.#field_name.remove(idx);
+			return true
+		}
+	};
+
+	let rest = (3..=count)
+		.map(|c| {
+			let field_name = field_name_for(c);
+			quote! {
+				if let Some(idx) = self.#field_name.iter().position(|(x, _, _)| *x == to_remove) {
+					self.#field_name.remove(idx);
+					return true
+				}
+			}
+		})
+		.collect::<TokenStream2>();
+
+	quote! {
+		#single
+		#double
+		#rest
+	}
 }
 
 fn len_impl(count: usize) -> TokenStream2 {

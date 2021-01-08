@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,7 +41,7 @@ pub async fn browser_configuration<G, E>(chain_spec: GenericChainSpec<G, E>)
 	-> Result<Configuration, Box<dyn std::error::Error>>
 where
 	G: RuntimeGenesis + 'static,
-	E: Extension + 'static + Send,
+	E: Extension + 'static + Send + Sync,
 {
 	let name = chain_spec.name().to_string();
 
@@ -57,7 +57,6 @@ where
 		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
 		enable_mdns: false,
-		use_yamux_flow_control: true,
 	};
 
 	let config = Configuration {
@@ -76,6 +75,7 @@ where
 
 			DatabaseConfig::Custom(sp_database::as_database(db))
 		},
+		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::InMemory,
 		default_heap_pages: Default::default(),
 		dev_key_seed: Default::default(),
@@ -99,13 +99,14 @@ where
 		tracing_targets: Default::default(),
 		transaction_pool: Default::default(),
 		wasm_method: Default::default(),
+		wasm_runtime_overrides: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
 		base_path: None,
 		informant_output_format: sc_informant::OutputFormat {
 			enable_color: false,
-			prefix: String::new(),
 		},
+		disable_log_reloading: false,
 	};
 
 	Ok(config)

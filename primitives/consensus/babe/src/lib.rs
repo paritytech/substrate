@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +30,7 @@ pub use sp_consensus_vrf::schnorrkel::{
 
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use sp_core::vrf::{VRFTranscriptData, VRFTranscriptValue};
+use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
 use sp_runtime::{traits::Header, ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
@@ -115,7 +115,7 @@ pub fn make_transcript_data(
 		items: vec![
 			("slot number", VRFTranscriptValue::U64(slot_number)),
 			("current epoch", VRFTranscriptValue::U64(epoch)),
-			("chain randomness", VRFTranscriptValue::Bytes(&randomness[..])),
+			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
 		]
 	}
 }
@@ -350,6 +350,21 @@ impl OpaqueKeyOwnershipProof {
 	}
 }
 
+/// BABE epoch information
+#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
+pub struct Epoch {
+	/// The epoch index.
+	pub epoch_index: u64,
+	/// The starting slot of the epoch.
+	pub start_slot: SlotNumber,
+	/// The duration of this epoch.
+	pub duration: SlotNumber,
+	/// The authorities and their weights.
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	/// Randomness for this epoch.
+	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+}
+
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	#[api_version(2)]
@@ -363,6 +378,13 @@ sp_api::decl_runtime_apis! {
 
 		/// Returns the slot number that started the current epoch.
 		fn current_epoch_start() -> SlotNumber;
+
+		/// Returns information regarding the current epoch.
+		fn current_epoch() -> Epoch;
+
+		/// Returns information regarding the next epoch (which was already
+		/// previously announced).
+		fn next_epoch() -> Epoch;
 
 		/// Generates a proof of key ownership for the given authority in the
 		/// current epoch. An example usage of this module is coupled with the

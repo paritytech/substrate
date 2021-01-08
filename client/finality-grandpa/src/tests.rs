@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,8 +25,8 @@ use sc_network_test::{
 	Block, BlockImportAdapter, Hash, PassThroughVerifier, Peer, PeersClient, PeersFullClient,
 	TestClient, TestNetFactory, FullPeerConfig,
 };
-use sc_network::config::{ProtocolConfig, BoxFinalityProofRequestBuilder};
-use parking_lot::Mutex;
+use sc_network::config::ProtocolConfig;
+use parking_lot::{RwLock, Mutex};
 use futures_timer::Delay;
 use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
@@ -36,23 +36,25 @@ use sp_api::{ApiRef, StorageProof, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
-	import_queue::{BoxJustificationImport, BoxFinalityProofImport},
+	import_queue::BoxJustificationImport,
 };
 use std::{collections::{HashMap, HashSet}, pin::Pin};
 use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
-use sp_core::{H256, crypto::Public};
+use sp_core::H256;
+use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
 use finality_proof::{
-	FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker,
+	AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker,
 };
-use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
+use sc_keystore::LocalKeystore;
+use sp_application_crypto::key_types::GRANDPA;
 
 type TestLinkHalf =
 	LinkHalf<Block, PeersFullClient, LongestChain<substrate_test_runtime_client::Backend, Block>>;
@@ -96,9 +98,7 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn add_full_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![
-				(communication::GRANDPA_ENGINE_ID, communication::GRANDPA_PROTOCOL_NAME.into())
-			],
+			notifications_protocols: vec![communication::GRANDPA_PROTOCOL_NAME.into()],
 			..Default::default()
 		})
 	}
@@ -116,8 +116,6 @@ impl TestNetFactory for GrandpaTestNet {
 		-> (
 			BlockImportAdapter<Transaction>,
 			Option<BoxJustificationImport<Block>>,
-			Option<BoxFinalityProofImport<Block>>,
-			Option<BoxFinalityProofRequestBuilder<Block>>,
 			PeerData,
 		)
 	{
@@ -132,45 +130,12 @@ impl TestNetFactory for GrandpaTestNet {
 				(
 					BlockImportAdapter::new_full(import),
 					Some(justification_import),
-					None,
-					None,
 					Mutex::new(Some(link)),
 				)
 			},
-			PeersClient::Light(ref client, ref backend) => {
-				use crate::light_import::tests::light_block_import_without_justifications;
-
-				let authorities_provider = Arc::new(self.test_config.clone());
-				// forbid direct finalization using justification that came with the block
-				// => light clients will try to fetch finality proofs
-				let import = light_block_import_without_justifications(
-					client.clone(),
-					backend.clone(),
-					&self.test_config,
-					authorities_provider,
-				).expect("Could not create block import for fresh peer.");
-				let finality_proof_req_builder = import.0.create_finality_proof_request_builder();
-				let proof_import = Box::new(import.clone());
-				(
-					BlockImportAdapter::new_light(import),
-					None,
-					Some(proof_import),
-					Some(finality_proof_req_builder),
-					Mutex::new(None),
-				)
+			PeersClient::Light(..) => {
+				panic!("Light client is not used in tests.");
 			},
-		}
-	}
-
-	fn make_finality_proof_provider(
-		&self,
-		client: PeersClient
-	) -> Option<Arc<dyn sc_network::config::FinalityProofProvider<Block>>> {
-		match client {
-			PeersClient::Full(_, ref backend)  => {
-				Some(Arc::new(FinalityProofProvider::new(backend.clone(), self.test_config.clone())))
-			},
-			PeersClient::Light(_, _) => None,
 		}
 	}
 
@@ -285,10 +250,11 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 
-fn create_keystore(authority: Ed25519Keyring) -> (BareCryptoStorePtr, tempfile::TempDir) {
+fn create_keystore(authority: Ed25519Keyring) -> (SyncCryptoStorePtr, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-	keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(&authority.to_seed())
+	let keystore = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+		.expect("Creates keystore"));
+	SyncCryptoStore::ed25519_generate_new(&*keystore, GRANDPA, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 
 	(keystore, keystore_path)
@@ -301,6 +267,52 @@ fn block_until_complete(future: impl Future + Unpin, net: &Arc<Mutex<GrandpaTest
 	runtime.block_on(
 		future::select(future, drive_to_completion)
 	);
+}
+
+// Spawns grandpa voters. Returns a future to spawn on the runtime.
+fn initialize_grandpa(
+	net: &mut GrandpaTestNet,
+	peers: &[Ed25519Keyring],
+) -> impl Future<Output = ()> {
+	let voters = stream::FuturesUnordered::new();
+
+	for (peer_id, key) in peers.iter().enumerate() {
+		let (keystore, _) = create_keystore(*key);
+
+		let (net_service, link) = {
+			// temporary needed for some reason
+			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
+			(
+				net.peers[peer_id].network_service().clone(),
+				link,
+			)
+		};
+
+		let grandpa_params = GrandpaParams {
+			config: Config {
+				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
+				keystore: Some(keystore),
+				name: Some(format!("peer#{}", peer_id)),
+				is_authority: true,
+				observer_enabled: true,
+			},
+			link,
+			network: net_service,
+			telemetry_on_connect: None,
+			voting_rule: (),
+			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
+		};
+		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
+
+		fn assert_send<T: Send>(_: &T) { }
+		assert_send(&voter);
+
+		voters.push(voter);
+	}
+
+	voters.for_each(|_| async move {})
 }
 
 // run the voters to completion. provide a closure to be invoked after
@@ -322,22 +334,9 @@ fn run_to_completion_with<F>(
 		wait_for.push(f);
 	};
 
-	let mut keystore_paths = Vec::new();
-	for (peer_id, key) in peers.iter().enumerate() {
-		let (keystore, keystore_path) = create_keystore(*key);
-		keystore_paths.push(keystore_path);
-
+	for (peer_id, _) in peers.iter().enumerate() {
 		let highest_finalized = highest_finalized.clone();
-		let (client, net_service, link) = {
-			let net = net.lock();
-			// temporary needed for some reason
-			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
-			(
-				net.peers[peer_id].client().clone(),
-				net.peers[peer_id].network_service().clone(),
-				link,
-			)
-		};
+		let client = net.lock().peers[peer_id].client().clone();
 
 		wait_for.push(
 			Box::pin(
@@ -353,31 +352,6 @@ fn run_to_completion_with<F>(
 					.map(|_| ())
 			)
 		);
-
-		fn assert_send<T: Send>(_: &T) { }
-
-		let grandpa_params = GrandpaParams {
-			config: Config {
-				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
-				keystore: Some(keystore),
-				name: Some(format!("peer#{}", peer_id)),
-				is_authority: true,
-				observer_enabled: true,
-			},
-			link: link,
-			network: net_service,
-			inherent_data_providers: InherentDataProviders::new(),
-			telemetry_on_connect: None,
-			voting_rule: (),
-			prometheus_registry: None,
-			shared_voter_state: SharedVoterState::empty(),
-		};
-		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
-
-		assert_send(&voter);
-
-		runtime.spawn(voter);
 	}
 
 	// wait for all finalized on each.
@@ -423,6 +397,7 @@ fn finalize_3_voters_no_observers() {
 	let voters = make_ids(peers);
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
+	runtime.spawn(initialize_grandpa(&mut net, peers));
 	net.peer(0).push_blocks(20, false);
 	net.block_until_sync();
 
@@ -449,68 +424,45 @@ fn finalize_3_voters_1_full_observer() {
 	let voters = make_ids(peers);
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
-	net.peer(0).push_blocks(20, false);
-	net.block_until_sync();
+	runtime.spawn(initialize_grandpa(&mut net, peers));
 
-	let net = Arc::new(Mutex::new(net));
-	let mut finality_notifications = Vec::new();
-
-	let all_peers = peers.iter()
-		.cloned()
-		.map(Some)
-		.chain(std::iter::once(None));
-
-	let mut keystore_paths = Vec::new();
-
-	let mut voters = Vec::new();
-
-	for (peer_id, local_key) in all_peers.enumerate() {
-		let (client, net_service, link) = {
-			let net = net.lock();
-			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
-			(
-				net.peers[peer_id].client().clone(),
-				net.peers[peer_id].network_service().clone(),
-				link,
-			)
-		};
-		finality_notifications.push(
-			client.finality_notification_stream()
-				.take_while(|n| future::ready(n.header.number() < &20))
-				.for_each(move |_| future::ready(()))
-		);
-
-		let keystore = if let Some(local_key) = local_key {
-			let (keystore, keystore_path) = create_keystore(local_key);
-			keystore_paths.push(keystore_path);
-			Some(keystore)
-		} else {
-			None
-		};
+	runtime.spawn({
+		let peer_id = 3;
+		let net_service = net.peers[peer_id].network_service().clone();
+		let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
 
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
-				keystore,
+				keystore: None,
 				name: Some(format!("peer#{}", peer_id)),
 				is_authority: true,
 				observer_enabled: true,
 			},
 			link: link,
 			network: net_service,
-			inherent_data_providers: InherentDataProviders::new(),
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 		};
 
-		voters.push(run_grandpa_voter(grandpa_params).expect("all in order with client and network"));
-	}
+		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
+	});
 
-	for voter in voters {
-		runtime.spawn(voter);
+	net.peer(0).push_blocks(20, false);
+
+	let net = Arc::new(Mutex::new(net));
+	let mut finality_notifications = Vec::new();
+
+	for peer_id in 0..4 {
+		let client = net.lock().peers[peer_id].client().clone();
+		finality_notifications.push(
+			client.finality_notification_stream()
+				.take_while(|n| future::ready(n.header.number() < &20))
+				.for_each(move |_| future::ready(()))
+		);
 	}
 
 	// wait for all finalized on each.
@@ -543,12 +495,54 @@ fn transition_3_voters_twice_1_full_observer() {
 
 	let observer = &[Ed25519Keyring::One];
 
+	let all_peers = peers_a.iter()
+		.chain(peers_b)
+		.chain(peers_c)
+		.chain(observer)
+		.cloned()
+		.collect::<HashSet<_>>(); // deduplicate
+
 	let genesis_voters = make_ids(peers_a);
 
 	let api = TestApi::new(genesis_voters);
 	let net = Arc::new(Mutex::new(GrandpaTestNet::new(api, 8)));
 
 	let mut runtime = Runtime::new().unwrap();
+
+	let mut keystore_paths = Vec::new();
+	let mut voters = Vec::new();
+	for (peer_id, local_key) in all_peers.clone().into_iter().enumerate() {
+		let (keystore, keystore_path) = create_keystore(local_key);
+		keystore_paths.push(keystore_path);
+
+		let (net_service, link) = {
+			let net = net.lock();
+			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
+			(
+				net.peers[peer_id].network_service().clone(),
+				link,
+			)
+		};
+
+		let grandpa_params = GrandpaParams {
+			config: Config {
+				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
+				keystore: Some(keystore),
+				name: Some(format!("peer#{}", peer_id)),
+				is_authority: true,
+				observer_enabled: true,
+			},
+			link,
+			network: net_service,
+			telemetry_on_connect: None,
+			voting_rule: (),
+			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
+		};
+
+		voters.push(run_grandpa_voter(grandpa_params).expect("all in order with client and network"));
+	}
 
 	net.lock().peer(0).push_blocks(1, false);
 	net.lock().block_until_sync();
@@ -615,30 +609,13 @@ fn transition_3_voters_twice_1_full_observer() {
 	}
 
 	let mut finality_notifications = Vec::new();
-	let all_peers = peers_a.iter()
-		.chain(peers_b)
-		.chain(peers_c)
-		.chain(observer)
-		.cloned()
-		.collect::<HashSet<_>>() // deduplicate
-		.into_iter()
-		.enumerate();
 
-	let mut keystore_paths = Vec::new();
-	for (peer_id, local_key) in all_peers {
-		let (keystore, keystore_path) = create_keystore(local_key);
-		keystore_paths.push(keystore_path);
+	for voter in voters {
+		runtime.spawn(voter);
+	}
 
-		let (client, net_service, link) = {
-			let net = net.lock();
-			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
-			(
-				net.peers[peer_id].client().clone(),
-				net.peers[peer_id].network_service().clone(),
-				link,
-			)
-		};
-
+	for (peer_id, _) in all_peers.into_iter().enumerate() {
+		let client = net.lock().peers[peer_id].client().clone();
 		finality_notifications.push(
 			client.finality_notification_stream()
 				.take_while(|n| future::ready(n.header.number() < &30))
@@ -651,27 +628,6 @@ fn transition_3_voters_twice_1_full_observer() {
 					assert_eq!(set.pending_changes().count(), 0);
 				})
 		);
-
-		let grandpa_params = GrandpaParams {
-			config: Config {
-				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
-				keystore: Some(keystore),
-				name: Some(format!("peer#{}", peer_id)),
-				is_authority: true,
-				observer_enabled: true,
-			},
-			link: link,
-			network: net_service,
-			inherent_data_providers: InherentDataProviders::new(),
-			telemetry_on_connect: None,
-			voting_rule: (),
-			prometheus_registry: None,
-			shared_voter_state: SharedVoterState::empty(),
-		};
-		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
-
-		runtime.spawn(voter);
 	}
 
 	// wait for all finalized on each.
@@ -681,30 +637,13 @@ fn transition_3_voters_twice_1_full_observer() {
 }
 
 #[test]
-fn justification_is_emitted_when_consensus_data_changes() {
-	let mut runtime = Runtime::new().unwrap();
-	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
-	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 3);
-
-	// import block#1 WITH consensus data change
-	let new_authorities = vec![sp_consensus_babe::AuthorityId::from_slice(&[42; 32])];
-	net.peer(0).push_authorities_change_block(new_authorities);
-	net.block_until_sync();
-	let net = Arc::new(Mutex::new(net));
-	run_to_completion(&mut runtime, 1, net.clone(), peers);
-
-	// ... and check that there's justification for block#1
-	assert!(net.lock().peer(0).client().justification(&BlockId::Number(1)).unwrap().is_some(),
-		"Missing justification for block#1");
-}
-
-#[test]
 fn justification_is_generated_periodically() {
 	let mut runtime = Runtime::new().unwrap();
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
+	runtime.spawn(initialize_grandpa(&mut net, peers));
 	net.peer(0).push_blocks(32, false);
 	net.block_until_sync();
 
@@ -719,25 +658,6 @@ fn justification_is_generated_periodically() {
 }
 
 #[test]
-fn consensus_changes_works() {
-	let mut changes = ConsensusChanges::<H256, u64>::empty();
-
-	// pending changes are not finalized
-	changes.note_change((10, H256::from_low_u64_be(1)));
-	assert_eq!(changes.finalize((5, H256::from_low_u64_be(5)), |_| Ok(None)).unwrap(), (false, false));
-
-	// no change is selected from competing pending changes
-	changes.note_change((1, H256::from_low_u64_be(1)));
-	changes.note_change((1, H256::from_low_u64_be(101)));
-	assert_eq!(changes.finalize((10, H256::from_low_u64_be(10)), |_| Ok(Some(H256::from_low_u64_be(1001)))).unwrap(), (true, false));
-
-	// change is selected from competing pending changes
-	changes.note_change((1, H256::from_low_u64_be(1)));
-	changes.note_change((1, H256::from_low_u64_be(101)));
-	assert_eq!(changes.finalize((10, H256::from_low_u64_be(10)), |_| Ok(Some(H256::from_low_u64_be(1)))).unwrap(), (true, true));
-}
-
-#[test]
 fn sync_justifications_on_change_blocks() {
 	let mut runtime = Runtime::new().unwrap();
 	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
@@ -747,6 +667,7 @@ fn sync_justifications_on_change_blocks() {
 	// 4 peers, 3 of them are authorities and participate in grandpa
 	let api = TestApi::new(voters);
 	let mut net = GrandpaTestNet::new(api, 4);
+	let voters = initialize_grandpa(&mut net, peers_a);
 
 	// add 20 blocks
 	net.peer(0).push_blocks(20, false);
@@ -771,6 +692,7 @@ fn sync_justifications_on_change_blocks() {
 	}
 
 	let net = Arc::new(Mutex::new(net));
+	runtime.spawn(voters);
 	run_to_completion(&mut runtime, 25, net.clone(), peers_a);
 
 	// the first 3 peers are grandpa voters and therefore have already finalized
@@ -808,6 +730,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 	// 6 peers, 3 of them are authorities and participate in grandpa from genesis
 	let api = TestApi::new(genesis_voters);
 	let mut net = GrandpaTestNet::new(api, 6);
+	runtime.spawn(initialize_grandpa(&mut net, all_peers));
 
 	// add 20 blocks
 	net.peer(0).push_blocks(20, false);
@@ -866,7 +789,8 @@ fn force_change_to_new_set() {
 	let api = TestApi::new(make_ids(genesis_authorities));
 
 	let voters = make_ids(peers_a);
-	let net = GrandpaTestNet::new(api, 3);
+	let mut net = GrandpaTestNet::new(api, 3);
+	let voters_future = initialize_grandpa(&mut net, peers_a);
 	let net = Arc::new(Mutex::new(net));
 
 	net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
@@ -904,6 +828,7 @@ fn force_change_to_new_set() {
 	// it will only finalize if the forced transition happens.
 	// we add_blocks after the voters are spawned because otherwise
 	// the link-halves have the wrong AuthoritySet
+	runtime.spawn(voters_future);
 	run_to_completion(&mut runtime, 25, net, peers_a);
 }
 
@@ -945,7 +870,6 @@ fn allows_reimporting_change_blocks() {
 			needs_justification: true,
 			clear_justification_requests: false,
 			bad_justification: false,
-			needs_finality_proof: false,
 			is_new_best: true,
 			header_only: false,
 		}),
@@ -1012,10 +936,10 @@ fn test_bad_justification() {
 fn voter_persists_its_votes() {
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use futures::future;
-	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 
 	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
+	let mut keystore_paths = Vec::new();
 
 	// we have two authorities but we'll only be running the voter for alice
 	// we are going to be listening for the prevotes it casts
@@ -1024,153 +948,150 @@ fn voter_persists_its_votes() {
 
 	// alice has a chain with 20 blocks
 	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 2);
-	net.peer(0).push_blocks(20, false);
-	net.block_until_sync();
-
-	assert_eq!(net.peer(0).client().info().best_number, 20,
-			   "Peer #{} failed to sync", 0);
-
-
-	let peer = net.peer(0);
-	let client = peer.client().clone();
-	let net = Arc::new(Mutex::new(net));
-
-	// channel between the voter and the main controller.
-	// sending a message on the `voter_tx` restarts the voter.
-	let (voter_tx, voter_rx) = tracing_unbounded::<()>("");
-
-	let mut keystore_paths = Vec::new();
-
-	// startup a grandpa voter for alice but also listen for messages on a
-	// channel. whenever a message is received the voter is restarted. when the
-	// sender is dropped the voter is stopped.
-	{
-		let (keystore, keystore_path) = create_keystore(peers[0]);
-		keystore_paths.push(keystore_path);
-
-		struct ResettableVoter {
-			voter: Pin<Box<dyn Future<Output = ()> + Send + Unpin>>,
-			voter_rx: TracingUnboundedReceiver<()>,
-			net: Arc<Mutex<GrandpaTestNet>>,
-			client: PeersClient,
-			keystore: BareCryptoStorePtr,
-		}
-
-		impl Future for ResettableVoter {
-			type Output = ();
-
-			fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-				let this = Pin::into_inner(self);
-
-				if let Poll::Ready(()) = Pin::new(&mut this.voter).poll(cx) {
-					panic!("error in the voter");
-				}
-
-				match  Pin::new(&mut this.voter_rx).poll_next(cx) {
-					Poll::Pending => return Poll::Pending,
-					Poll::Ready(None) => return Poll::Ready(()),
-					Poll::Ready(Some(())) => {
-						let (_block_import, _, _, _, link) =
-							this.net.lock()
-									.make_block_import::<
-										TransactionFor<substrate_test_runtime_client::Backend, Block>
-									>(this.client.clone());
-						let link = link.lock().take().unwrap();
-
-						let grandpa_params = GrandpaParams {
-							config: Config {
-								gossip_duration: TEST_GOSSIP_DURATION,
-								justification_period: 32,
-								keystore: Some(this.keystore.clone()),
-								name: Some(format!("peer#{}", 0)),
-								is_authority: true,
-								observer_enabled: true,
-							},
-							link,
-							network: this.net.lock().peers[0].network_service().clone(),
-							inherent_data_providers: InherentDataProviders::new(),
-							telemetry_on_connect: None,
-							voting_rule: VotingRulesBuilder::default().build(),
-							prometheus_registry: None,
-							shared_voter_state: SharedVoterState::empty(),
-						};
-
-						let voter = run_grandpa_voter(grandpa_params)
-							.expect("all in order with client and network")
-							.map(move |r| {
-								// we need to keep the block_import alive since it owns the
-								// sender for the voter commands channel, if that gets dropped
-								// then the voter will stop
-								drop(_block_import);
-								r
-							});
-
-						this.voter = Box::pin(voter);
-						// notify current task in order to poll the voter
-						cx.waker().wake_by_ref();
-					}
-				};
-
-				Poll::Pending
-			}
-		}
-
-		// we create a "dummy" voter by setting it to `pending` and triggering the `tx`.
-		// this way, the `ResettableVoter` will reset its `voter` field to a value ASAP.
-		voter_tx.unbounded_send(()).unwrap();
-		runtime.spawn(ResettableVoter {
-			voter: Box::pin(futures::future::pending()),
-			voter_rx,
-			net: net.clone(),
-			client: client.clone(),
-			keystore,
-		});
-	}
-
-	let (exit_tx, exit_rx) = futures::channel::oneshot::channel::<()>();
 
 	// create the communication layer for bob, but don't start any
 	// voter. instead we'll listen for the prevote that alice casts
 	// and cast our own manually
-	{
+	let bob_keystore = {
 		let (keystore, keystore_path) = create_keystore(peers[1]);
 		keystore_paths.push(keystore_path);
-
+		keystore
+	};
+	let bob_network = {
 		let config = Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
 			justification_period: 32,
-			keystore: Some(keystore.clone()),
+			keystore: Some(bob_keystore.clone()),
 			name: Some(format!("peer#{}", 1)),
 			is_authority: true,
 			observer_enabled: true,
 		};
 
 		let set_state = {
-			let (_, _, _, _, link) = net.lock()
+			let bob_client = net.peer(1).client().clone();
+			let (_, _, link) = net
 				.make_block_import::<
 					TransactionFor<substrate_test_runtime_client::Backend, Block>
-				>(client);
+				>(bob_client);
 			let LinkHalf { persistent_data, .. } = link.lock().take().unwrap();
 			let PersistentData { set_state, .. } = persistent_data;
 			set_state
 		};
 
-		let network = communication::NetworkBridge::new(
-			net.lock().peers[1].network_service().clone(),
+		communication::NetworkBridge::new(
+			net.peers[1].network_service().clone(),
 			config.clone(),
 			set_state,
 			None,
-		);
+		)
+	};
 
-		let (round_rx, round_tx) = network.round_communication(
-			Some((peers[1].public().into(), keystore).into()),
+	// spawn two voters for alice.
+	// half-way through the test, we stop one and start the other.
+	let (alice_voter1, abort) = future::abortable({
+		let (keystore, _) = create_keystore(peers[0]);
+
+		let (net_service, link) = {
+			// temporary needed for some reason
+			let link = net.peers[0].data.lock().take().expect("link initialized at startup; qed");
+			(
+				net.peers[0].network_service().clone(),
+				link,
+			)
+		};
+
+		let grandpa_params = GrandpaParams {
+			config: Config {
+				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
+				keystore: Some(keystore),
+				name: Some(format!("peer#{}", 0)),
+				is_authority: true,
+				observer_enabled: true,
+			},
+			link,
+			network: net_service,
+			telemetry_on_connect: None,
+			voting_rule: VotingRulesBuilder::default().build(),
+			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
+		};
+
+		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
+	});
+
+	fn alice_voter2(
+		peers: &[Ed25519Keyring],
+		net: Arc<Mutex<GrandpaTestNet>>,
+	) -> impl Future<Output = ()> + Unpin + Send + 'static {
+		let (keystore, _) = create_keystore(peers[0]);
+		let mut net = net.lock();
+
+		// we add a new peer to the test network and we'll use
+		// the network service of this new peer
+		net.add_full_peer();
+		let net_service = net.peers[2].network_service().clone();
+		// but we'll reuse the client from the first peer (alice_voter1)
+		// since we want to share the same database, so that we can
+		// read the persisted state after aborting alice_voter1.
+		let alice_client = net.peer(0).client().clone();
+
+		let (_block_import, _, link) = net
+			.make_block_import::<
+				TransactionFor<substrate_test_runtime_client::Backend, Block>
+			>(alice_client);
+		let link = link.lock().take().unwrap();
+
+		let grandpa_params = GrandpaParams {
+			config: Config {
+				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
+				keystore: Some(keystore),
+				name: Some(format!("peer#{}", 0)),
+				is_authority: true,
+				observer_enabled: true,
+			},
+			link,
+			network: net_service,
+			telemetry_on_connect: None,
+			voting_rule: VotingRulesBuilder::default().build(),
+			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
+		};
+
+		run_grandpa_voter(grandpa_params)
+			.expect("all in order with client and network")
+			.map(move |r| {
+				// we need to keep the block_import alive since it owns the
+				// sender for the voter commands channel, if that gets dropped
+				// then the voter will stop
+				drop(_block_import);
+				r
+			})
+	}
+
+	runtime.spawn(alice_voter1);
+
+	net.peer(0).push_blocks(20, false);
+	net.block_until_sync();
+
+	assert_eq!(net.peer(0).client().info().best_number, 20,
+			   "Peer #{} failed to sync", 0);
+
+	let net = Arc::new(Mutex::new(net));
+
+	let (exit_tx, exit_rx) = futures::channel::oneshot::channel::<()>();
+
+	{
+		let (round_rx, round_tx) = bob_network.round_communication(
+			Some((peers[1].public().into(), bob_keystore).into()),
 			communication::Round(1),
 			communication::SetId(0),
 			Arc::new(VoterSet::new(voters).unwrap()),
 			HasVoted::No,
 		);
 
-		runtime.spawn(network);
+		runtime.spawn(bob_network);
 
 		let round_tx = Arc::new(Mutex::new(round_tx));
 		let exit_tx = Arc::new(Mutex::new(Some(exit_tx)));
@@ -1178,16 +1099,18 @@ fn voter_persists_its_votes() {
 		let net = net.clone();
 		let state = Arc::new(AtomicUsize::new(0));
 
+		let runtime_handle = runtime.handle().clone();
 		runtime.spawn(round_rx.for_each(move |signed| {
 			let net2 = net.clone();
 			let net = net.clone();
-			let voter_tx = voter_tx.clone();
+			let abort = abort.clone();
 			let round_tx = round_tx.clone();
 			let state = state.clone();
 			let exit_tx = exit_tx.clone();
+			let runtime_handle = runtime_handle.clone();
 
 			async move {
-				if state.compare_and_swap(0, 1, Ordering::SeqCst) == 0 {
+				if state.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst).unwrap() == 0 {
 					// the first message we receive should be a prevote from alice.
 					let prevote = match signed.message {
 						finality_grandpa::Message::Prevote(prevote) => prevote,
@@ -1196,7 +1119,7 @@ fn voter_persists_its_votes() {
 
 					// its chain has 20 blocks and the voter targets 3/4 of the
 					// unfinalized chain, so the vote should be for block 15
-					assert!(prevote.target_number == 15);
+					assert_eq!(prevote.target_number, 15);
 
 					// we push 20 more blocks to alice's chain
 					net.lock().peer(0).push_blocks(20, false);
@@ -1219,7 +1142,8 @@ fn voter_persists_its_votes() {
 						net.lock().peer(0).client().as_full().unwrap().hash(30).unwrap().unwrap();
 
 					// we restart alice's voter
-					voter_tx.unbounded_send(()).unwrap();
+					abort.abort();
+					runtime_handle.spawn(alice_voter2(peers, net.clone()));
 
 					// and we push our own prevote for block 30
 					let prevote = finality_grandpa::Prevote {
@@ -1232,7 +1156,7 @@ fn voter_persists_its_votes() {
 					// we send in a loop including a delay until items are received, this can be
 					// ignored for the sake of reduced complexity.
 					Pin::new(&mut *round_tx.lock()).start_send(finality_grandpa::Message::Prevote(prevote)).unwrap();
-				} else if state.compare_and_swap(1, 2, Ordering::SeqCst) == 1 {
+				} else if state.compare_exchange(1, 2, Ordering::SeqCst, Ordering::SeqCst).unwrap() == 1 {
 					// the next message we receive should be our own prevote
 					let prevote = match signed.message {
 						finality_grandpa::Message::Prevote(prevote) => prevote,
@@ -1246,7 +1170,7 @@ fn voter_persists_its_votes() {
 					// therefore we won't ever receive it again since it will be a
 					// known message on the gossip layer
 
-				} else if state.compare_and_swap(2, 3, Ordering::SeqCst) == 2 {
+				} else if state.compare_exchange(2, 3, Ordering::SeqCst, Ordering::SeqCst).unwrap() == 2 {
 					// we then receive a precommit from alice for block 15
 					// even though we casted a prevote for block 30
 					let precommit = match signed.message {
@@ -1276,6 +1200,19 @@ fn finalize_3_voters_1_light_observer() {
 	let voters = make_ids(authorities);
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
+	let voters = initialize_grandpa(&mut net, authorities);
+	let observer = observer::run_grandpa_observer(
+		Config {
+			gossip_duration: TEST_GOSSIP_DURATION,
+			justification_period: 32,
+			keystore: None,
+			name: Some("observer".to_string()),
+			is_authority: false,
+			observer_enabled: true,
+		},
+		net.peers[3].data.lock().take().expect("link initialized at startup; qed"),
+		net.peers[3].network_service().clone(),
+	).unwrap();
 	net.peer(0).push_blocks(20, false);
 	net.block_until_sync();
 
@@ -1285,126 +1222,10 @@ fn finalize_3_voters_1_light_observer() {
 	}
 
 	let net = Arc::new(Mutex::new(net));
-	let link = net.lock().peer(3).data.lock().take().expect("link initialized on startup; qed");
 
-	let finality_notifications = net.lock().peer(3).client().finality_notification_stream()
-		.take_while(|n| {
-			future::ready(n.header.number() < &20)
-		})
-		.collect::<Vec<_>>();
-
-	run_to_completion_with(&mut runtime, 20, net.clone(), authorities, |executor| {
-		executor.spawn(
-			observer::run_grandpa_observer(
-				Config {
-					gossip_duration: TEST_GOSSIP_DURATION,
-					justification_period: 32,
-					keystore: None,
-					name: Some("observer".to_string()),
-					is_authority: false,
-					observer_enabled: true,
-				},
-				link,
-				net.lock().peers[3].network_service().clone(),
-			).unwrap()
-		);
-
-		Some(Box::pin(finality_notifications.map(|_| ())))
-	});
-}
-
-#[test]
-fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
-	sp_tracing::try_init_simple();
-	let mut runtime = Runtime::new().unwrap();
-
-	let peers = &[Ed25519Keyring::Alice];
-	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
-	net.add_light_peer();
-
-	// import block#1 WITH consensus data change. Light client ignores justification
-	// && instead fetches finality proof for block #1
-	net.peer(0).push_authorities_change_block(vec![sp_consensus_babe::AuthorityId::from_slice(&[42; 32])]);
-	let net = Arc::new(Mutex::new(net));
-	run_to_completion(&mut runtime, 1, net.clone(), peers);
-	net.lock().block_until_sync();
-
-	// check that the block#1 is finalized on light client
-	runtime.block_on(futures::future::poll_fn(move |cx| {
-		if net.lock().peer(1).client().info().finalized_number == 1 {
-			Poll::Ready(())
-		} else {
-			net.lock().poll(cx);
-			Poll::Pending
-		}
-	}));
-}
-
-#[test]
-fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_different() {
-	// for debug: to ensure that without forced change light client will sync finality proof
-	const FORCE_CHANGE: bool = true;
-
-	sp_tracing::try_init_simple();
-	let mut runtime = Runtime::new().unwrap();
-
-	// two of these guys are offline.
-	let genesis_authorities = if FORCE_CHANGE {
-		vec![
-			Ed25519Keyring::Alice,
-			Ed25519Keyring::Bob,
-			Ed25519Keyring::Charlie,
-			Ed25519Keyring::One,
-			Ed25519Keyring::Two,
-		]
-	} else {
-		vec![
-			Ed25519Keyring::Alice,
-			Ed25519Keyring::Bob,
-			Ed25519Keyring::Charlie,
-		]
-	};
-	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
-	let api = TestApi::new(make_ids(&genesis_authorities));
-
-	let voters = make_ids(peers_a);
-	let net = GrandpaTestNet::new(api, 3);
-	let net = Arc::new(Mutex::new(net));
-
-	// best is #1
-	net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-		// add a forced transition at block 5.
-		let mut block = builder.build().unwrap().block;
-		if FORCE_CHANGE {
-			add_forced_change(&mut block, 0, ScheduledChange {
-				next_authorities: voters.clone(),
-				delay: 3,
-			});
-		}
-		block
-	});
-
-	// ensure block#10 enacts authorities set change => justification is generated
-	// normally it will reach light client, but because of the forced change, it will not
-	net.lock().peer(0).push_blocks(8, false); // best is #9
-	net.lock().peer(0).push_authorities_change_block(
-		vec![sp_consensus_babe::AuthorityId::from_slice(&[42; 32])]
-	); // #10
-	net.lock().peer(0).push_blocks(1, false); // best is #11
-	net.lock().block_until_sync();
-
-	// finalize block #11 on full clients
-	run_to_completion(&mut runtime, 11, net.clone(), peers_a);
-
-	// request finalization by light client
-	net.lock().add_light_peer();
-	net.lock().block_until_sync();
-
-	// check block, finalized on light client
-	assert_eq!(
-		net.lock().peer(3).client().info().finalized_number,
-		if FORCE_CHANGE { 0 } else { 10 },
-	);
+	runtime.spawn(voters);
+	runtime.spawn(observer);
+	run_to_completion(&mut runtime, 20, net.clone(), authorities);
 }
 
 #[test]
@@ -1415,9 +1236,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers);
 
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
-	net.peer(0).push_blocks(50, false);
-	net.block_until_sync();
+	let net = GrandpaTestNet::new(TestApi::new(voters), 2);
 
 	let net = Arc::new(Mutex::new(net));
 	let mut finality_notifications = Vec::new();
@@ -1434,7 +1253,6 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			},
 			link,
 			network: net.lock().peer(peer_id).network_service().clone(),
-			inherent_data_providers: InherentDataProviders::new(),
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
@@ -1471,6 +1289,9 @@ fn voter_catches_up_to_latest_round_when_behind() {
 		runtime.spawn(voter);
 	}
 
+	net.lock().peer(0).push_blocks(50, false);
+	net.lock().block_until_sync();
+
 	// wait for them to finalize block 50. since they'll vote on 3/4 of the
 	// unfinalized chain it will take at least 4 rounds to do it.
 	let wait_for_finality = ::futures::future::join_all(finality_notifications);
@@ -1482,18 +1303,15 @@ fn voter_catches_up_to_latest_round_when_behind() {
 		let runtime = runtime.handle().clone();
 
 		wait_for_finality.then(move |_| {
-			let peer_id = 2;
+			net.lock().add_full_peer();
+
 			let link = {
 				let net = net.lock();
-				let mut link = net.peers[peer_id].data.lock();
+				let mut link = net.peers[2].data.lock();
 				link.take().expect("link initialized at startup; qed")
 			};
-
 			let set_state = link.persistent_data.set_state.clone();
-
-			let voter = voter(None, peer_id, link, net);
-
-			runtime.spawn(voter);
+			runtime.spawn(voter(None, 2, link, net.clone()));
 
 			let start_time = std::time::Instant::now();
 			let timeout = Duration::from_secs(5 * 60);
@@ -1533,7 +1351,7 @@ type TestEnvironment<N, VR> = Environment<
 
 fn test_environment<N, VR>(
 	link: &TestLinkHalf,
-	keystore: Option<BareCryptoStorePtr>,
+	keystore: Option<SyncCryptoStorePtr>,
 	network_service: N,
 	voting_rule: VR,
 ) -> TestEnvironment<N, VR>
@@ -1543,7 +1361,6 @@ where
 {
 	let PersistentData {
 		ref authority_set,
-		ref consensus_changes,
 		ref set_state,
 		..
 	} = link.persistent_data;
@@ -1567,7 +1384,6 @@ where
 	Environment {
 		authority_set: authority_set.clone(),
 		config: config.clone(),
-		consensus_changes: consensus_changes.clone(),
 		client: link.client.clone(),
 		select_chain: link.select_chain.clone(),
 		set_id: authority_set.set_id(),
@@ -1714,6 +1530,10 @@ fn grandpa_environment_never_overwrites_round_voter_state() {
 
 	assert_eq!(get_current_round(2).unwrap(), HasVoted::No);
 
+	// we need to call `round_data` for the next round to pick up
+	// from the keystore which authority id we'll be using to vote
+	environment.round_data(2);
+
 	let info = peer.client().info();
 
 	let prevote = finality_grandpa::Prevote {
@@ -1813,4 +1633,56 @@ fn imports_justification_for_regular_blocks_on_import() {
 	assert!(
 		client.justification(&BlockId::Hash(block_hash)).unwrap().is_some(),
 	);
+}
+
+#[test]
+fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
+	use finality_grandpa::voter::Environment;
+
+	let alice = Ed25519Keyring::Alice;
+	let voters = make_ids(&[alice]);
+
+	let environment = {
+		let mut net = GrandpaTestNet::new(TestApi::new(voters), 1);
+		let peer = net.peer(0);
+		let network_service = peer.network_service().clone();
+		let link = peer.data.lock().take().unwrap();
+		let (keystore, _keystore_path) = create_keystore(alice);
+		test_environment(&link, Some(keystore), network_service.clone(), ())
+	};
+
+	let signed_prevote = {
+		let prevote = finality_grandpa::Prevote {
+			target_hash: H256::random(),
+			target_number: 1,
+		};
+
+		let signed = alice.sign(&[]).into();
+		(prevote, signed)
+	};
+
+	let mut equivocation = finality_grandpa::Equivocation {
+		round_number: 1,
+		identity: alice.public().into(),
+		first: signed_prevote.clone(),
+		second: signed_prevote.clone(),
+	};
+
+	// we need to call `round_data` to pick up from the keystore which
+	// authority id we'll be using to vote
+	environment.round_data(1);
+
+	// reporting the equivocation should fail since the offender is a local
+	// authority (i.e. we have keys in our keystore for the given id)
+	let equivocation_proof = sp_finality_grandpa::Equivocation::Prevote(equivocation.clone());
+	assert!(matches!(
+		environment.report_equivocation(equivocation_proof),
+		Err(Error::Safety(_))
+	));
+
+	// if we set the equivocation offender to another id for which we don't have
+	// keys it should work
+	equivocation.identity = Default::default();
+	let equivocation_proof = sp_finality_grandpa::Equivocation::Prevote(equivocation);
+	assert!(environment.report_equivocation(equivocation_proof).is_ok());
 }

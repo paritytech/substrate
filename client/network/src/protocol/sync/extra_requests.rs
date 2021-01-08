@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -528,13 +528,12 @@ mod tests {
 
 	impl Arbitrary for ArbitraryPeerSyncState {
 		fn arbitrary<G: Gen>(g: &mut G) -> Self {
-			let s = match g.gen::<u8>() % 5 {
+			let s = match g.gen::<u8>() % 4 {
 				0 => PeerSyncState::Available,
 				// TODO: 1 => PeerSyncState::AncestorSearch(g.gen(), AncestorSearchState<B>),
 				1 => PeerSyncState::DownloadingNew(g.gen::<BlockNumber>()),
 				2 => PeerSyncState::DownloadingStale(Hash::random()),
-				3 => PeerSyncState::DownloadingJustification(Hash::random()),
-				_ => PeerSyncState::DownloadingFinalityProof(Hash::random())
+				_ => PeerSyncState::DownloadingJustification(Hash::random()),
 			};
 			ArbitraryPeerSyncState(s)
 		}
@@ -546,11 +545,11 @@ mod tests {
 	impl Arbitrary for ArbitraryPeerSync {
 		fn arbitrary<G: Gen>(g: &mut G) -> Self {
 			let ps = PeerSync {
+				peer_id: PeerId::random(),
 				common_number: g.gen(),
 				best_hash: Hash::random(),
 				best_number: g.gen(),
 				state: ArbitraryPeerSyncState::arbitrary(g).0,
-				recently_announced: Default::default()
 			};
 			ArbitraryPeerSync(ps)
 		}
@@ -563,10 +562,10 @@ mod tests {
 		fn arbitrary<G: Gen>(g: &mut G) -> Self {
 			let mut peers = HashMap::with_capacity(g.size());
 			for _ in 0 .. g.size() {
-				peers.insert(PeerId::random(), ArbitraryPeerSync::arbitrary(g).0);
+				let ps = ArbitraryPeerSync::arbitrary(g).0;
+				peers.insert(ps.peer_id.clone(), ps);
 			}
 			ArbitraryPeers(peers)
 		}
 	}
-
 }

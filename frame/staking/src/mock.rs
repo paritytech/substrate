@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,27 +17,28 @@
 
 //! Test utilities
 
-use std::{collections::HashSet, cell::RefCell};
-use sp_runtime::Perbill;
-use sp_runtime::curve::PiecewiseLinear;
-use sp_runtime::traits::{IdentityLookup, Convert, SaturatedConversion, Zero};
-use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
-use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
-use sp_core::H256;
+use crate::*;
 use frame_support::{
-	assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch, impl_outer_event,
-	StorageValue, StorageMap, StorageDoubleMap, IterableStorageMap,
-	traits::{Currency, Get, FindAuthor, OnFinalize, OnInitialize},
-	weights::{Weight, constants::RocksDbWeight},
+	assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
+	traits::{Currency, FindAuthor, Get, OnFinalize, OnInitialize},
+	weights::{constants::RocksDbWeight, Weight},
+	IterableStorageMap, StorageDoubleMap, StorageMap, StorageValue,
 };
+use sp_core::H256;
 use sp_io;
 use sp_npos_elections::{
 	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
-	VoteWeight,
 };
-use crate::*;
+use sp_runtime::{
+	curve::PiecewiseLinear,
+	testing::{Header, TestXt, UintAuthorityId},
+	traits::{IdentityLookup, Zero},
+};
+use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
+use std::{cell::RefCell, collections::HashSet};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
+pub const BLOCK_TIME: u64 = 1000;
 
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
@@ -45,27 +46,8 @@ pub(crate) type AccountIndex = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
 
-/// Simple structure that exposes how u64 currency can be represented as... u64.
-pub struct CurrencyToVoteHandler;
-impl Convert<Balance, u64> for CurrencyToVoteHandler {
-	fn convert(x: Balance) -> u64 {
-		x.saturated_into()
-	}
-}
-impl Convert<u128, Balance> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> Balance {
-		x
-	}
-}
-
 thread_local! {
 	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
-	static SESSION_PER_ERA: RefCell<SessionIndex> = RefCell::new(3);
-	static EXISTENTIAL_DEPOSIT: RefCell<Balance> = RefCell::new(0);
-	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
-	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
-	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
-	static MAX_ITERATIONS: RefCell<u32> = RefCell::new(0);
 }
 
 /// Another session handler struct to test on_disabled.
@@ -103,53 +85,6 @@ impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
 pub fn is_disabled(controller: AccountId) -> bool {
 	let stash = Staking::ledger(&controller).unwrap().stash;
 	SESSION.with(|d| d.borrow().1.contains(&stash))
-}
-
-pub struct ExistentialDeposit;
-impl Get<Balance> for ExistentialDeposit {
-	fn get() -> Balance {
-		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow())
-	}
-}
-
-pub struct SessionsPerEra;
-impl Get<SessionIndex> for SessionsPerEra {
-	fn get() -> SessionIndex {
-		SESSION_PER_ERA.with(|v| *v.borrow())
-	}
-}
-impl Get<BlockNumber> for SessionsPerEra {
-	fn get() -> BlockNumber {
-		SESSION_PER_ERA.with(|v| *v.borrow() as BlockNumber)
-	}
-}
-
-pub struct ElectionLookahead;
-impl Get<BlockNumber> for ElectionLookahead {
-	fn get() -> BlockNumber {
-		ELECTION_LOOKAHEAD.with(|v| *v.borrow())
-	}
-}
-
-pub struct Period;
-impl Get<BlockNumber> for Period {
-	fn get() -> BlockNumber {
-		PERIOD.with(|v| *v.borrow())
-	}
-}
-
-pub struct SlashDeferDuration;
-impl Get<EraIndex> for SlashDeferDuration {
-	fn get() -> EraIndex {
-		SLASH_DEFER_DURATION.with(|v| *v.borrow())
-	}
-}
-
-pub struct MaxIterations;
-impl Get<u32> for MaxIterations {
-	fn get() -> u32 {
-		MAX_ITERATIONS.with(|v| *v.borrow())
-	}
 }
 
 impl_outer_origin! {
@@ -195,12 +130,25 @@ pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(
+			frame_support::weights::constants::WEIGHT_PER_SECOND * 2
+		);
+	pub const MaxLocks: u32 = 1024;
+	pub static SessionsPerEra: SessionIndex = 3;
+	pub static ExistentialDeposit: Balance = 1;
+	pub static SlashDeferDuration: EraIndex = 0;
+	pub static ElectionLookahead: BlockNumber = 0;
+	pub static Period: BlockNumber = 5;
+	pub static Offset: BlockNumber = 0;
+	pub static MaxIterations: u32 = 0;
 }
-impl frame_system::Trait for Test {
+
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = RocksDbWeight;
 	type Origin = Origin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
@@ -212,22 +160,16 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = RocksDbWeight;
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
-impl pallet_balances::Trait for Test {
-	type MaxLocks = ();
+impl pallet_balances::Config for Test {
+	type MaxLocks = MaxLocks;
 	type Balance = Balance;
 	type Event = MetaEvent;
 	type DustRemoval = ();
@@ -236,7 +178,6 @@ impl pallet_balances::Trait for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	pub const Offset: BlockNumber = 0;
 	pub const UncleGenerations: u64 = 0;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
 }
@@ -245,7 +186,7 @@ sp_runtime::impl_opaque_keys! {
 		pub other: OtherSessionHandler,
 	}
 }
-impl pallet_session::Trait for Test {
+impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
@@ -258,11 +199,11 @@ impl pallet_session::Trait for Test {
 	type WeightInfo = ();
 }
 
-impl pallet_session::historical::Trait for Test {
+impl pallet_session::historical::Config for Test {
 	type FullIdentification = crate::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = crate::ExposureOf<Test>;
 }
-impl pallet_authorship::Trait for Test {
+impl pallet_authorship::Config for Test {
 	type FindAuthor = Author11;
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
@@ -271,7 +212,7 @@ impl pallet_authorship::Trait for Test {
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
 }
-impl pallet_timestamp::Trait for Test {
+impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -293,6 +234,7 @@ parameter_types! {
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const UnsignedPriority: u64 = 1 << 20;
 	pub const MinSolutionScoreBump: Perbill = Perbill::zero();
+	pub OffchainSolutionWeightLimit: Weight = BlockWeights::get().max_block;
 }
 
 thread_local! {
@@ -310,10 +252,10 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 	}
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
-	type CurrencyToVote = CurrencyToVoteHandler;
+	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = RewardRemainderMock;
 	type Event = MetaEvent;
 	type Slash = ();
@@ -331,10 +273,12 @@ impl Trait for Test {
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
+	type OffchainSolutionWeightLimit = OffchainSolutionWeightLimit;
 	type WeightInfo = ();
 }
 
-impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test where
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
+where
 	Call: From<LocalCall>,
 {
 	type OverarchingCall = Call;
@@ -344,46 +288,36 @@ impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
 pub type Extrinsic = TestXt<Call, ()>;
 
 pub struct ExtBuilder {
-	session_length: BlockNumber,
-	election_lookahead: BlockNumber,
-	session_per_era: SessionIndex,
-	existential_deposit: Balance,
 	validator_pool: bool,
 	nominate: bool,
 	validator_count: u32,
 	minimum_validator_count: u32,
-	slash_defer_duration: EraIndex,
 	fair: bool,
 	num_validators: Option<u32>,
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
-	max_offchain_iterations: u32,
+	initialize_first_session: bool,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
-			session_length: 1,
-			election_lookahead: 0,
-			session_per_era: 3,
-			existential_deposit: 1,
 			validator_pool: false,
 			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
-			slash_defer_duration: 0,
 			fair: true,
 			num_validators: None,
 			invulnerables: vec![],
 			has_stakers: true,
-			max_offchain_iterations: 0,
+			initialize_first_session: true,
 		}
 	}
 }
 
 impl ExtBuilder {
-	pub fn existential_deposit(mut self, existential_deposit: Balance) -> Self {
-		self.existential_deposit = existential_deposit;
+	pub fn existential_deposit(self, existential_deposit: Balance) -> Self {
+		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = existential_deposit);
 		self
 	}
 	pub fn validator_pool(mut self, validator_pool: bool) -> Self {
@@ -402,8 +336,8 @@ impl ExtBuilder {
 		self.minimum_validator_count = count;
 		self
 	}
-	pub fn slash_defer_duration(mut self, eras: EraIndex) -> Self {
-		self.slash_defer_duration = eras;
+	pub fn slash_defer_duration(self, eras: EraIndex) -> Self {
+		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = eras);
 		self
 	}
 	pub fn fair(mut self, is_fair: bool) -> Self {
@@ -418,46 +352,43 @@ impl ExtBuilder {
 		self.invulnerables = invulnerables;
 		self
 	}
-	pub fn session_per_era(mut self, length: SessionIndex) -> Self {
-		self.session_per_era = length;
+	pub fn session_per_era(self, length: SessionIndex) -> Self {
+		SESSIONS_PER_ERA.with(|v| *v.borrow_mut() = length);
 		self
 	}
-	pub fn election_lookahead(mut self, look: BlockNumber) -> Self {
-		self.election_lookahead = look;
+	pub fn election_lookahead(self, look: BlockNumber) -> Self {
+		ELECTION_LOOKAHEAD.with(|v| *v.borrow_mut() = look);
 		self
 	}
-	pub fn session_length(mut self, length: BlockNumber) -> Self {
-		self.session_length = length;
+	pub fn period(self, length: BlockNumber) -> Self {
+		PERIOD.with(|v| *v.borrow_mut() = length);
 		self
 	}
 	pub fn has_stakers(mut self, has: bool) -> Self {
 		self.has_stakers = has;
 		self
 	}
-	pub fn max_offchain_iterations(mut self, iterations: u32) -> Self {
-		self.max_offchain_iterations = iterations;
+	pub fn max_offchain_iterations(self, iterations: u32) -> Self {
+		MAX_ITERATIONS.with(|v| *v.borrow_mut() = iterations);
 		self
 	}
 	pub fn offchain_election_ext(self) -> Self {
-		self.session_per_era(4)
-			.session_length(5)
-			.election_lookahead(3)
+		self.session_per_era(4).period(5).election_lookahead(3)
 	}
-	pub fn set_associated_constants(&self) {
-		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
-		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = self.slash_defer_duration);
-		SESSION_PER_ERA.with(|v| *v.borrow_mut() = self.session_per_era);
-		ELECTION_LOOKAHEAD.with(|v| *v.borrow_mut() = self.election_lookahead);
-		PERIOD.with(|v| *v.borrow_mut() = self.session_length);
-		MAX_ITERATIONS.with(|v| *v.borrow_mut() = self.max_offchain_iterations);
+	pub fn initialize_first_session(mut self, init: bool) -> Self {
+		self.initialize_first_session = init;
+		self
+	}
+	pub fn offset(self, offset: BlockNumber) -> Self {
+		OFFSET.with(|v| *v.borrow_mut() = offset);
+		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
-		self.set_associated_constants();
 		let mut storage = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()
 			.unwrap();
-		let balance_factor = if self.existential_deposit > 1 {
+		let balance_factor = if ExistentialDeposit::get() > 1 {
 			256
 		} else {
 			1
@@ -533,13 +464,17 @@ impl ExtBuilder {
 			SESSION.with(|x| *x.borrow_mut() = (validators.clone(), HashSet::new()));
 		});
 
-		// We consider all test to start after timestamp is initialized
-		// This must be ensured by having `timestamp::on_initialize` called before
-		// `staking::on_initialize`
-		ext.execute_with(|| {
-			System::set_block_number(1);
-			Timestamp::set_timestamp(INIT_TIMESTAMP);
-		});
+		if self.initialize_first_session {
+			// We consider all test to start after timestamp is initialized This must be ensured by
+			// having `timestamp::on_initialize` called before `staking::on_initialize`. Also, if
+			// session length is 1, then it is already triggered.
+			ext.execute_with(|| {
+				System::set_block_number(1);
+				Session::on_initialize(1);
+				Staking::on_initialize(1);
+				Timestamp::set_timestamp(INIT_TIMESTAMP);
+			});
+		}
 
 		ext
 	}
@@ -556,18 +491,10 @@ pub type Session = pallet_session::Module<Test>;
 pub type Timestamp = pallet_timestamp::Module<Test>;
 pub type Staking = Module<Test>;
 
-pub(crate) fn current_era() -> EraIndex {
-	Staking::current_era().unwrap()
-}
-
 fn post_conditions() {
 	check_nominators();
 	check_exposures();
 	check_ledgers();
-}
-
-pub(crate) fn active_era() -> EraIndex {
-	Staking::active_era().unwrap().index
 }
 
 fn check_ledgers() {
@@ -637,8 +564,26 @@ fn assert_is_stash(acc: AccountId) {
 fn assert_ledger_consistent(ctrl: AccountId) {
 	// ensures ledger.total == ledger.active + sum(ledger.unlocking).
 	let ledger = Staking::ledger(ctrl).expect("Not a controller.");
-	let real_total: Balance = ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
+	let real_total: Balance = ledger
+		.unlocking
+		.iter()
+		.fold(ledger.active, |a, c| a + c.value);
 	assert_eq!(real_total, ledger.total);
+	assert!(
+		ledger.active >= Balances::minimum_balance() || ledger.active == 0,
+		"{}: active ledger amount ({}) must be greater than ED {}",
+		ctrl,
+		ledger.active,
+		Balances::minimum_balance()
+	);
+}
+
+pub(crate) fn active_era() -> EraIndex {
+	Staking::active_era().unwrap().index
+}
+
+pub(crate) fn current_era() -> EraIndex {
+	Staking::current_era().unwrap()
 }
 
 pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
@@ -673,56 +618,102 @@ pub(crate) fn bond_nominator(
 	assert_ok!(Staking::nominate(Origin::signed(ctrl), target));
 }
 
+/// Progress to the given block, triggering session and era changes as we progress.
+///
+/// This will finalize the previous block, initialize up to the given block, essentially simulating
+/// a block import/propose process where we first initialize the block, then execute some stuff (not
+/// in the function), and then finalize the block.
 pub(crate) fn run_to_block(n: BlockNumber) {
 	Staking::on_finalize(System::block_number());
-	for b in System::block_number() + 1..=n {
+	for b in (System::block_number() + 1)..=n {
 		System::set_block_number(b);
 		Session::on_initialize(b);
 		Staking::on_initialize(b);
+		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
 		if b != n {
 			Staking::on_finalize(System::block_number());
 		}
 	}
 }
 
+/// Progresses from the current block number (whatever that may be) to the `P * session_index + 1`.
+pub(crate) fn start_session(session_index: SessionIndex) {
+	let end: u64 = if Offset::get().is_zero() {
+		(session_index as u64) * Period::get()
+	} else {
+		Offset::get() + (session_index.saturating_sub(1) as u64) * Period::get()
+	};
+	run_to_block(end);
+	// session must have progressed properly.
+	assert_eq!(
+		Session::current_index(),
+		session_index,
+		"current session index = {}, expected = {}",
+		Session::current_index(),
+		session_index,
+	);
+}
+
+/// Go one session forward.
 pub(crate) fn advance_session() {
 	let current_index = Session::current_index();
 	start_session(current_index + 1);
 }
 
-pub(crate) fn start_session(session_index: SessionIndex) {
-	assert_eq!(<Period as Get<BlockNumber>>::get(), 1, "start_session can only be used with session length 1.");
-	for i in Session::current_index()..session_index {
-		Staking::on_finalize(System::block_number());
-		System::set_block_number((i + 1).into());
-		Timestamp::set_timestamp(System::block_number() * 1000 + INIT_TIMESTAMP);
-		Session::on_initialize(System::block_number());
-		Staking::on_initialize(System::block_number());
-	}
-
-	assert_eq!(Session::current_index(), session_index);
-}
-
-// This start and activate the era given.
-// Because the mock use pallet-session which delays session by one, this will be one session after
-// the election happened, not the first session after the election has happened.
-pub(crate) fn start_era(era_index: EraIndex) {
+/// Progress until the given era.
+pub(crate) fn start_active_era(era_index: EraIndex) {
 	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into());
-	assert_eq!(Staking::current_era().unwrap(), era_index);
-	assert_eq!(Staking::active_era().unwrap().index, era_index);
+	assert_eq!(active_era(), era_index);
+	// One way or another, current_era must have changed before the active era, so they must match
+	// at this point.
+	assert_eq!(current_era(), active_era());
 }
 
 pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
-	inflation::compute_total_payout(
-		<Test as Trait>::RewardCurve::get(),
-		Staking::eras_total_stake(Staking::active_era().unwrap().index),
+	let reward = inflation::compute_total_payout(
+		<Test as Config>::RewardCurve::get(),
+		Staking::eras_total_stake(active_era()),
 		Balances::total_issuance(),
 		duration,
-	).0
+	)
+	.0;
+	assert!(reward > 0);
+	reward
+}
+
+pub(crate) fn maximum_payout_for_duration(duration: u64) -> Balance {
+	inflation::compute_total_payout(
+		<Test as Config>::RewardCurve::get(),
+		0,
+		Balances::total_issuance(),
+		duration,
+	)
+	.1
+}
+
+/// Time it takes to finish a session.
+///
+/// Note, if you see `time_per_session() - BLOCK_TIME`, it is fine. This is because we set the
+/// timestamp after on_initialize, so the timestamp is always one block old.
+pub(crate) fn time_per_session() -> u64 {
+	Period::get() * BLOCK_TIME
+}
+
+/// Time it takes to finish an era.
+///
+/// Note, if you see `time_per_era() - BLOCK_TIME`, it is fine. This is because we set the
+/// timestamp after on_initialize, so the timestamp is always one block old.
+pub(crate) fn time_per_era() -> u64 {
+	time_per_session() * SessionsPerEra::get() as u64
+}
+
+/// Time that will be calculated for the reward per era.
+pub(crate) fn reward_time_per_era() -> u64 {
+	time_per_era() - BLOCK_TIME
 }
 
 pub(crate) fn reward_all_elected() {
-	let rewards = <Test as Trait>::SessionInterface::validators()
+	let rewards = <Test as Config>::SessionInterface::validators()
 		.into_iter()
 		.map(|v| (v, 1));
 
@@ -857,9 +848,9 @@ pub(crate) fn horrible_npos_solution(
 	// Ensure that this result is worse than seq-phragmen. Otherwise, it should not have been used
 	// for testing.
 	let score = {
-		let (_, _, better_score) = prepare_submission_with(true, 0, |_| {});
+		let (_, _, better_score) = prepare_submission_with(true, true, 0, |_| {});
 
-		let support = build_support_map::<AccountId>(&winners, &staked_assignment).0;
+		let support = build_support_map::<AccountId>(&winners, &staked_assignment).unwrap();
 		let score = evaluate_support(&support);
 
 		assert!(sp_npos_elections::is_score_better::<Perbill>(
@@ -898,9 +889,13 @@ pub(crate) fn horrible_npos_solution(
 	(compact, winners, score)
 }
 
-// Note: this should always logically reproduce [`offchain_election::prepare_submission`], yet we
-// cannot do it since we want to have `tweak` injected into the process.
+/// Note: this should always logically reproduce [`offchain_election::prepare_submission`], yet we
+/// cannot do it since we want to have `tweak` injected into the process.
+///
+/// If the input is being tweaked in a way that the score cannot be compute accurately,
+/// `compute_real_score` can be set to true. In this case a `Default` score is returned.
 pub(crate) fn prepare_submission_with(
+	compute_real_score: bool,
 	do_reduce: bool,
 	iterations: usize,
 	tweak: impl FnOnce(&mut Vec<StakedAssignment<AccountId>>),
@@ -909,26 +904,13 @@ pub(crate) fn prepare_submission_with(
 	let sp_npos_elections::ElectionResult {
 		winners,
 		assignments,
-	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
+	} = Staking::do_phragmen::<OffchainAccuracy>(iterations).unwrap();
 	let winners = sp_npos_elections::to_without_backing(winners);
 
-	let stake_of = |who: &AccountId| -> VoteWeight {
-		<CurrencyToVoteHandler as Convert<Balance, VoteWeight>>::convert(
-			Staking::slashable_balance_of(&who)
-		)
-	};
-
-	let mut staked = sp_npos_elections::assignment_ratio_to_staked(assignments, stake_of);
-	let (mut support_map, _) = build_support_map::<AccountId>(&winners, &staked);
-
-	if iterations > 0 {
-		sp_npos_elections::balance_solution(
-			&mut staked,
-			&mut support_map,
-			Zero::zero(),
-			iterations,
-		);
-	}
+	let mut staked = sp_npos_elections::assignment_ratio_to_staked(
+		assignments,
+		Staking::slashable_balance_of_fn(),
+	);
 
 	// apply custom tweaks. awesome for testing.
 	tweak(&mut staked);
@@ -962,24 +944,24 @@ pub(crate) fn prepare_submission_with(
 	let assignments_reduced = sp_npos_elections::assignment_staked_to_ratio(staked);
 
 	// re-compute score by converting, yet again, into staked type
-	let score = {
+	let score = if compute_real_score {
 		let staked = sp_npos_elections::assignment_ratio_to_staked(
 			assignments_reduced.clone(),
-			Staking::slashable_balance_of_vote_weight,
+			Staking::slashable_balance_of_fn(),
 		);
 
-		let (support_map, _) = build_support_map::<AccountId>(
+		let support_map = build_support_map::<AccountId>(
 			winners.as_slice(),
 			staked.as_slice(),
-		);
+		).unwrap();
 		evaluate_support::<AccountId>(&support_map)
+	} else {
+		Default::default()
 	};
 
 	let compact =
 		CompactAssignments::from_assignment(assignments_reduced, nominator_index, validator_index)
-			.map_err(|e| { println!("error in compact: {:?}", e); e })
 			.expect("Failed to create compact");
-
 
 	// winner ids to index
 	let winners = winners.into_iter().map(|w| validator_index(&w).unwrap()).collect::<Vec<_>>();
@@ -996,8 +978,11 @@ pub(crate) fn make_all_reward_payment(era: EraIndex) {
 	// reward validators
 	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
 		let ledger = <Ledger<Test>>::get(&validator_controller).unwrap();
-
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), ledger.stash, era));
+		assert_ok!(Staking::payout_stakers(
+			Origin::signed(1337),
+			ledger.stash,
+			era
+		));
 	}
 }
 

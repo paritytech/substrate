@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 //!
 //! The Balances module provides functionality for handling accounts and balances.
 //!
-//! - [`balances::Trait`](./trait.Trait.html)
+//! - [`balances::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 //!
@@ -79,7 +79,7 @@
 //! - [`Imbalance`](../frame_support/traits/trait.Imbalance.html): Functions for handling
 //! imbalances between total issuance in the system and account balances. Must be used when a function
 //! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-//! - [`IsDeadAccount`](../frame_system/trait.IsDeadAccount.html): Determiner to say whether a
+//! - [`IsDeadAccount`](../frame_support/traits/trait.IsDeadAccount.html): Determiner to say whether a
 //! given account is unused.
 //!
 //! ## Interface
@@ -99,12 +99,12 @@
 //!
 //! ```
 //! use frame_support::traits::Currency;
-//! # pub trait Trait: frame_system::Trait {
+//! # pub trait Config: frame_system::Config {
 //! # 	type Currency: Currency<Self::AccountId>;
 //! # }
 //!
-//! pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-//! pub type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+//! pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+//! pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 //!
 //! # fn main() {}
 //! ```
@@ -114,17 +114,17 @@
 //! ```
 //! use frame_support::traits::{WithdrawReasons, LockableCurrency};
 //! use sp_runtime::traits::Bounded;
-//! pub trait Trait: frame_system::Trait {
+//! pub trait Config: frame_system::Config {
 //! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 //! }
-//! # struct StakingLedger<T: Trait> {
-//! # 	stash: <T as frame_system::Trait>::AccountId,
-//! # 	total: <<T as Trait>::Currency as frame_support::traits::Currency<<T as frame_system::Trait>::AccountId>>::Balance,
+//! # struct StakingLedger<T: Config> {
+//! # 	stash: <T as frame_system::Config>::AccountId,
+//! # 	total: <<T as Config>::Currency as frame_support::traits::Currency<<T as frame_system::Config>::AccountId>>::Balance,
 //! # 	phantom: std::marker::PhantomData<T>,
 //! # }
 //! # const STAKING_ID: [u8; 8] = *b"staking ";
 //!
-//! fn update_ledger<T: Trait>(
+//! fn update_ledger<T: Config>(
 //! 	controller: &T::AccountId,
 //! 	ledger: &StakingLedger<T>
 //! ) {
@@ -145,7 +145,7 @@
 //!
 //! ## Assumptions
 //!
-//! * Total issued balanced of all accounts should be less than `Trait::Balance::max_value()`.
+//! * Total issued balanced of all accounts should be less than `Config::Balance::max_value()`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -154,17 +154,16 @@ mod tests;
 mod tests_local;
 mod tests_composite;
 mod benchmarking;
-mod default_weight;
+pub mod weights;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
-	weights::Weight,
 	traits::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
-		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
+		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
 		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status,
 	}
@@ -178,16 +177,9 @@ use sp_runtime::{
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
+pub use weights::WeightInfo;
 
-pub trait WeightInfo {
-	fn transfer() -> Weight;
-	fn transfer_keep_alive() -> Weight;
-	fn set_balance_creating() -> Weight;
-	fn set_balance_killing() -> Weight;
-	fn force_transfer() -> Weight;
-}
-
-pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
+pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Config {
 	/// The balance of an account.
 	type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
@@ -206,7 +198,7 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	type MaxLocks: Get<u32>;
 }
 
-pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
+pub trait Config<I: Instance = DefaultInstance>: frame_system::Config {
 	/// The balance of an account.
 	type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
@@ -215,7 +207,7 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The minimum amount required to keep an account open.
 	type ExistentialDeposit: Get<Self::Balance>;
@@ -231,18 +223,18 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	type MaxLocks: Get<u32>;
 }
 
-impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
+impl<T: Config<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
-	type WeightInfo = <T as Trait<I>>::WeightInfo;
+	type WeightInfo = <T as Config<I>>::WeightInfo;
 	type MaxLocks = T::MaxLocks;
 }
 
 decl_event!(
 	pub enum Event<T, I: Instance = DefaultInstance> where
-		<T as frame_system::Trait>::AccountId,
-		<T as Trait<I>>::Balance
+		<T as frame_system::Config>::AccountId,
+		<T as Config<I>>::Balance
 	{
 		/// An account was created with some free balance. \[account, free_balance\]
 		Endowed(AccountId, Balance),
@@ -267,7 +259,7 @@ decl_event!(
 );
 
 decl_error! {
-	pub enum Error for Module<T: Trait<I>, I: Instance> {
+	pub enum Error for Module<T: Config<I>, I: Instance> {
 		/// Vesting balance too high to send value
 		VestingBalance,
 		/// Account liquidity restrictions prevent withdrawal
@@ -300,9 +292,9 @@ pub enum Reasons {
 
 impl From<WithdrawReasons> for Reasons {
 	fn from(r: WithdrawReasons) -> Reasons {
-		if r == WithdrawReasons::from(WithdrawReason::TransactionPayment) {
+		if r == WithdrawReasons::from(WithdrawReasons::TRANSACTION_PAYMENT) {
 			Reasons::Fee
-		} else if r.contains(WithdrawReason::TransactionPayment) {
+		} else if r.contains(WithdrawReasons::TRANSACTION_PAYMENT) {
 			Reasons::All
 		} else {
 			Reasons::Misc
@@ -390,7 +382,7 @@ impl Default for Releases {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Balances {
+	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Balances {
 		/// The total units issued in the system.
 		pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T, I>| {
 			config.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n)
@@ -416,10 +408,16 @@ decl_storage! {
 		build(|config: &GenesisConfig<T, I>| {
 			for (_, balance) in &config.balances {
 				assert!(
-					*balance >= <T as Trait<I>>::ExistentialDeposit::get(),
-					"the balance of any account should always be more than existential deposit.",
+					*balance >= <T as Config<I>>::ExistentialDeposit::get(),
+					"the balance of any account should always be at least the existential deposit.",
 				)
 			}
+
+			// ensure no duplicates exist.
+			let endowed_accounts = config.balances.iter().map(|(x, _)| x).cloned().collect::<std::collections::BTreeSet<_>>();
+
+			assert!(endowed_accounts.len() == config.balances.len(), "duplicate balances in genesis.");
+
 			for &(ref who, free) in config.balances.iter() {
 				T::AccountStore::insert(who, AccountData { free, .. Default::default() });
 			}
@@ -428,7 +426,7 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
 		type Error = Error<T, I>;
 
 		/// The minimum amount required to keep an account open.
@@ -573,7 +571,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> Module<T, I> {
+impl<T: Config<I>, I: Instance> Module<T, I> {
 	// PRIVATE MUTABLES
 
 	/// Get the free balance of an account.
@@ -712,7 +710,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 // of the inner member.
 mod imbalances {
 	use super::{
-		result, Subtrait, DefaultInstance, Imbalance, Trait, Zero, Instance, Saturating,
+		result, DefaultInstance, Imbalance, Config, Zero, Instance, Saturating,
 		StorageValue, TryDrop,
 	};
 	use sp_std::mem;
@@ -720,9 +718,9 @@ mod imbalances {
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been created without any equal and opposite accounting.
 	#[must_use]
-	pub struct PositiveImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
+	pub struct PositiveImbalance<T: Config<I>, I: Instance=DefaultInstance>(T::Balance);
 
-	impl<T: Subtrait<I>, I: Instance> PositiveImbalance<T, I> {
+	impl<T: Config<I>, I: Instance> PositiveImbalance<T, I> {
 		/// Create a new positive imbalance from a balance.
 		pub fn new(amount: T::Balance) -> Self {
 			PositiveImbalance(amount)
@@ -732,22 +730,22 @@ mod imbalances {
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been destroyed without any equal and opposite accounting.
 	#[must_use]
-	pub struct NegativeImbalance<T: Subtrait<I>, I: Instance=DefaultInstance>(T::Balance);
+	pub struct NegativeImbalance<T: Config<I>, I: Instance=DefaultInstance>(T::Balance);
 
-	impl<T: Subtrait<I>, I: Instance> NegativeImbalance<T, I> {
+	impl<T: Config<I>, I: Instance> NegativeImbalance<T, I> {
 		/// Create a new negative imbalance from a balance.
 		pub fn new(amount: T::Balance) -> Self {
 			NegativeImbalance(amount)
 		}
 	}
 
-	impl<T: Trait<I>, I: Instance> TryDrop for PositiveImbalance<T, I> {
+	impl<T: Config<I>, I: Instance> TryDrop for PositiveImbalance<T, I> {
 		fn try_drop(self) -> result::Result<(), Self> {
 			self.drop_zero()
 		}
 	}
 
-	impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for PositiveImbalance<T, I> {
+	impl<T: Config<I>, I: Instance> Imbalance<T::Balance> for PositiveImbalance<T, I> {
 		type Opposite = NegativeImbalance<T, I>;
 
 		fn zero() -> Self {
@@ -792,13 +790,13 @@ mod imbalances {
 		}
 	}
 
-	impl<T: Trait<I>, I: Instance> TryDrop for NegativeImbalance<T, I> {
+	impl<T: Config<I>, I: Instance> TryDrop for NegativeImbalance<T, I> {
 		fn try_drop(self) -> result::Result<(), Self> {
 			self.drop_zero()
 		}
 	}
 
-	impl<T: Trait<I>, I: Instance> Imbalance<T::Balance> for NegativeImbalance<T, I> {
+	impl<T: Config<I>, I: Instance> Imbalance<T::Balance> for NegativeImbalance<T, I> {
 		type Opposite = PositiveImbalance<T, I>;
 
 		fn zero() -> Self {
@@ -843,82 +841,26 @@ mod imbalances {
 		}
 	}
 
-	impl<T: Subtrait<I>, I: Instance> Drop for PositiveImbalance<T, I> {
+	impl<T: Config<I>, I: Instance> Drop for PositiveImbalance<T, I> {
 		/// Basic drop handler will just square up the total issuance.
 		fn drop(&mut self) {
-			<super::TotalIssuance<super::ElevatedTrait<T, I>, I>>::mutate(
+			<super::TotalIssuance<T, I>>::mutate(
 				|v| *v = v.saturating_add(self.0)
 			);
 		}
 	}
 
-	impl<T: Subtrait<I>, I: Instance> Drop for NegativeImbalance<T, I> {
+	impl<T: Config<I>, I: Instance> Drop for NegativeImbalance<T, I> {
 		/// Basic drop handler will just square up the total issuance.
 		fn drop(&mut self) {
-			<super::TotalIssuance<super::ElevatedTrait<T, I>, I>>::mutate(
+			<super::TotalIssuance<T, I>>::mutate(
 				|v| *v = v.saturating_sub(self.0)
 			);
 		}
 	}
 }
 
-// TODO: #2052
-// Somewhat ugly hack in order to gain access to module's `increase_total_issuance_by`
-// using only the Subtrait (which defines only the types that are not dependent
-// on Positive/NegativeImbalance). Subtrait must be used otherwise we end up with a
-// circular dependency with Trait having some types be dependent on PositiveImbalance<Trait>
-// and PositiveImbalance itself depending back on Trait for its Drop impl (and thus
-// its type declaration).
-// This works as long as `increase_total_issuance_by` doesn't use the Imbalance
-// types (basically for charging fees).
-// This should eventually be refactored so that the type item that
-// depends on the Imbalance type (DustRemoval) is placed in its own pallet.
-struct ElevatedTrait<T: Subtrait<I>, I: Instance>(T, I);
-impl<T: Subtrait<I>, I: Instance> Clone for ElevatedTrait<T, I> {
-	fn clone(&self) -> Self { unimplemented!() }
-}
-impl<T: Subtrait<I>, I: Instance> PartialEq for ElevatedTrait<T, I> {
-	fn eq(&self, _: &Self) -> bool { unimplemented!() }
-}
-impl<T: Subtrait<I>, I: Instance> Eq for ElevatedTrait<T, I> {}
-impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
-	type BaseCallFilter = T::BaseCallFilter;
-	type Origin = T::Origin;
-	type Call = T::Call;
-	type Index = T::Index;
-	type BlockNumber = T::BlockNumber;
-	type Hash = T::Hash;
-	type Hashing = T::Hashing;
-	type AccountId = T::AccountId;
-	type Lookup = T::Lookup;
-	type Header = T::Header;
-	type Event = ();
-	type BlockHashCount = T::BlockHashCount;
-	type MaximumBlockWeight = T::MaximumBlockWeight;
-	type DbWeight = T::DbWeight;
-	type BlockExecutionWeight = T::BlockExecutionWeight;
-	type ExtrinsicBaseWeight = T::ExtrinsicBaseWeight;
-	type MaximumExtrinsicWeight = T::MaximumBlockWeight;
-	type MaximumBlockLength = T::MaximumBlockLength;
-	type AvailableBlockRatio = T::AvailableBlockRatio;
-	type Version = T::Version;
-	type PalletInfo = T::PalletInfo;
-	type OnNewAccount = T::OnNewAccount;
-	type OnKilledAccount = T::OnKilledAccount;
-	type AccountData = T::AccountData;
-	type SystemWeightInfo = T::SystemWeightInfo;
-}
-impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
-	type Balance = T::Balance;
-	type Event = ();
-	type DustRemoval = ();
-	type ExistentialDeposit = T::ExistentialDeposit;
-	type AccountStore = T::AccountStore;
-	type WeightInfo = <T as Subtrait<I>>::WeightInfo;
-	type MaxLocks = T::MaxLocks;
-}
-
-impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
+impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Balance = T::Balance;
@@ -1019,7 +961,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 				Self::ensure_can_withdraw(
 					transactor,
 					value,
-					WithdrawReason::Transfer.into(),
+					WithdrawReasons::TRANSFER,
 					from_account.free,
 				)?;
 
@@ -1040,7 +982,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	/// Slash a target account `who`, returning the negative imbalance created and any left over
 	/// amount that could not be slashed.
 	///
-	/// Is a no-op if `value` to be slashed is zero.
+	/// Is a no-op if `value` to be slashed is zero or the account does not exist.
 	///
 	/// NOTE: `slash()` prefers free balance, but assumes that reserve balance can be drawn
 	/// from in extreme circumstances. `can_slash()` should be used prior to `slash()` to avoid having
@@ -1051,6 +993,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
+		if Self::is_dead_account(&who) { return (NegativeImbalance::zero(), value) }
 
 		Self::mutate_account(who, |account| {
 			let free_slash = cmp::min(account.free, value);
@@ -1167,7 +1110,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	}
 }
 
-impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>  where
+impl<T: Config<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>  where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	/// Check if `who` can reserve `value` from their free balance.
@@ -1178,7 +1121,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 		Self::account(who).free
 			.checked_sub(&value)
 			.map_or(false, |new_balance|
-				Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), new_balance).is_ok()
+				Self::ensure_can_withdraw(who, value, WithdrawReasons::RESERVE, new_balance).is_ok()
 			)
 	}
 
@@ -1195,7 +1138,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 		Self::try_mutate_account(who, |account, _| -> DispatchResult {
 			account.free = account.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
 			account.reserved = account.reserved.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
-			Self::ensure_can_withdraw(&who, value.clone(), WithdrawReason::Reserve.into(), account.free)
+			Self::ensure_can_withdraw(&who, value.clone(), WithdrawReasons::RESERVE, account.free)
 		})?;
 
 		Self::deposit_event(RawEvent::Reserved(who.clone(), value));
@@ -1204,9 +1147,10 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 
 	/// Unreserve some funds, returning any amount that was unable to be unreserved.
 	///
-	/// Is a no-op if the value to be unreserved is zero.
+	/// Is a no-op if the value to be unreserved is zero or the account does not exist.
 	fn unreserve(who: &T::AccountId, value: Self::Balance) -> Self::Balance {
 		if value.is_zero() { return Zero::zero() }
+		if Self::is_dead_account(&who) { return value }
 
 		let actual = Self::mutate_account(who, |account| {
 			let actual = cmp::min(account.reserved, value);
@@ -1224,12 +1168,13 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 	/// Slash from reserved balance, returning the negative imbalance created,
 	/// and any amount that was unable to be slashed.
 	///
-	/// Is a no-op if the value to be slashed is zero.
+	/// Is a no-op if the value to be slashed is zero or the account does not exist.
 	fn slash_reserved(
 		who: &T::AccountId,
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
+		if Self::is_dead_account(&who) { return (NegativeImbalance::zero(), value) }
 
 		Self::mutate_account(who, |account| {
 			// underflow should never happen, but it if does, there's nothing to be done here.
@@ -1282,7 +1227,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 /// NOTE: You probably won't need to use this! This only needs to be "wired in" to System module
 /// if you're using the local balance storage. **If you're using the composite system account
 /// storage (which is the default in most examples and tests) then there's no need.**
-impl<T: Trait<I>, I: Instance> OnKilledAccount<T::AccountId> for Module<T, I> {
+impl<T: Config<I>, I: Instance> OnKilledAccount<T::AccountId> for Module<T, I> {
 	fn on_killed_account(who: &T::AccountId) {
 		Account::<T, I>::mutate_exists(who, |account| {
 			let total = account.as_ref().map(|acc| acc.total()).unwrap_or_default();
@@ -1295,7 +1240,7 @@ impl<T: Trait<I>, I: Instance> OnKilledAccount<T::AccountId> for Module<T, I> {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> LockableCurrency<T::AccountId> for Module<T, I>
+impl<T: Config<I>, I: Instance> LockableCurrency<T::AccountId> for Module<T, I>
 where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
@@ -1311,7 +1256,7 @@ where
 		amount: T::Balance,
 		reasons: WithdrawReasons,
 	) {
-		if amount.is_zero() || reasons.is_none() { return }
+		if amount.is_zero() || reasons.is_empty() { return }
 		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
 		let mut locks = Self::locks(who).into_iter()
 			.filter_map(|l| if l.id == id { new_lock.take() } else { Some(l) })
@@ -1330,7 +1275,7 @@ where
 		amount: T::Balance,
 		reasons: WithdrawReasons,
 	) {
-		if amount.is_zero() || reasons.is_none() { return }
+		if amount.is_zero() || reasons.is_empty() { return }
 		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
 		let mut locks = Self::locks(who).into_iter().filter_map(|l|
 			if l.id == id {
@@ -1360,7 +1305,7 @@ where
 	}
 }
 
-impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I> where
+impl<T: Config<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I> where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {

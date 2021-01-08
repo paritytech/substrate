@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -111,7 +111,7 @@ fn main() {
 				// stuff to submit
 				let (winners, compact, score, size) = match mode {
 					Mode::InitialSubmission => {
-						/* No need to setup anything */
+						// No need to setup anything
 						get_seq_phragmen_solution::<Test>(do_reduce)
 					},
 					Mode::StrongerSubmission => {

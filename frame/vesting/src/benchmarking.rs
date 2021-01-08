@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,18 +29,18 @@ use crate::Module as Vesting;
 
 const SEED: u32 = 0;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
-fn add_locks<T: Trait>(who: &T::AccountId, n: u8) {
+fn add_locks<T: Config>(who: &T::AccountId, n: u8) {
 	for id in 0..n {
 		let lock_id = [id; 8];
 		let locked = 100u32;
-		let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
+		let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 		T::Currency::set_lock(lock_id, who, locked.into(), reasons);
 	}
 }
 
-fn add_vesting_schedule<T: Trait>(who: &T::AccountId) -> Result<(), &'static str> {
+fn add_vesting_schedule<T: Config>(who: &T::AccountId) -> Result<(), &'static str> {
 	let locked = 100u32;
 	let per_block = 10u32;
 	let starting_block = 1u32;
@@ -58,8 +58,6 @@ fn add_vesting_schedule<T: Trait>(who: &T::AccountId) -> Result<(), &'static str
 }
 
 benchmarks! {
-	_ { }
-
 	vest_locked {
 		let l in 0 .. MaxLocksOf::<T>::get();
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,11 +37,11 @@ thread_local! {
 mod module1 {
 	use super::*;
 
-	pub trait Trait<I>: system::Trait {}
+	pub trait Config<I>: system::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call
-			where origin: <T as system::Trait>::Origin, system=system
+		pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call
+			where origin: <T as system::Config>::Origin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -55,31 +55,31 @@ mod module1 {
 
 	frame_support::decl_event! {
 		pub enum Event<T, I: Instance = DefaultInstance> where
-			<T as system::Trait>::AccountId
+			<T as system::Config>::AccountId
 		{
 			A(AccountId),
 		}
 	}
 
 	frame_support::decl_error! {
-		pub enum Error for Module<T: Trait<I>, I: Instance> {
+		pub enum Error for Module<T: Config<I>, I: Instance> {
 			Something
 		}
 	}
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module {}
+		trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Module {}
 	}
 }
 
 mod module2 {
 	use super::*;
 
-	pub trait Trait: system::Trait {}
+	pub trait Config: system::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call
-			where origin: <T as system::Trait>::Origin, system=system
+		pub struct Module<T: Config> for enum Call
+			where origin: <T as system::Config>::Origin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -102,25 +102,25 @@ mod module2 {
 	}
 
 	frame_support::decl_error! {
-		pub enum Error for Module<T: Trait> {
+		pub enum Error for Module<T: Config> {
 			Something
 		}
 	}
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait> as Module {}
+		trait Store for Module<T: Config> as Module {}
 	}
 }
 
-impl<I> module1::Trait<I> for Runtime {}
-impl module2::Trait for Runtime {}
+impl<I> module1::Config<I> for Runtime {}
+impl module2::Config for Runtime {}
 
 pub type Signature = sr25519::Signature;
 pub type AccountId = <Signature as Verify>::Signer;
 pub type BlockNumber = u64;
 pub type Index = u64;
 
-impl system::Trait for Runtime {
+impl system::Config for Runtime {
 	type BaseCallFilter = ();
 	type Hash = H256;
 	type Origin = Origin;
@@ -129,6 +129,7 @@ impl system::Trait for Runtime {
 	type Event = Event;
 	type PalletInfo = PalletInfo;
 	type Call = Call;
+	type DbWeight = ();
 }
 
 frame_support::construct_runtime!(
