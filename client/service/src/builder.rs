@@ -44,6 +44,7 @@ use log::{info, warn};
 use sc_network::config::{Role, OnDemand};
 use sc_network::NetworkService;
 use sc_network::block_request_handler::{self, BlockRequestHandler};
+use sc_network::light_client_handler::{self, LightClientRequestHandler};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo,
@@ -924,6 +925,21 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		}
 	};
 
+	let light_client_request_protocol_config = {
+		if matches!(config.role, Role::Light) {
+			// Allow outgoing requests but deny incoming requests.
+			light_client_handler::generate_protocol_config(protocol_id.clone())
+		} else {
+			// Allow both outgoing and incoming requests.
+			let (handler, protocol_config) = LightClientRequestHandler::new(
+				protocol_id.clone(),
+				client.clone(),
+			);
+			spawn_handle.spawn("light_client_request_handler", handler.run());
+			protocol_config
+		}
+	};
+
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
@@ -941,6 +957,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		block_announce_validator,
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
+		light_client_request_protocol_config,
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

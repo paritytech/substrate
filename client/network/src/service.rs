@@ -251,9 +251,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				params.network_config.client_version,
 				params.network_config.node_name
 			);
-			let light_client_handler = {
+			// TODO: How about contructing this inside of behaviour.rs passing it the protocol name
+			// via `block_request_protocol_config` and `light_client_request_protocol_config`.
+			let light_client_request_client = {
 				let config = light_client_handler::Config::new(&params.protocol_id);
-				light_client_handler::LightClientHandler::new(
+				light_client_handler::LightClientRequestClient::new(
 					config,
 					params.chain,
 					checker,
@@ -289,9 +291,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					params.role,
 					user_agent,
 					local_public,
-					light_client_handler,
+					light_client_request_client,
 					discovery_config,
 					params.block_request_protocol_config,
+					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 				);
 
