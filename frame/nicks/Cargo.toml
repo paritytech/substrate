@@ -1,6 +1,6 @@
 [package]
 name = "pallet-nicks"
-version = "2.0.0"
+version = "2.0.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"

@@ -1,6 +1,6 @@
 [package]
 name = "pallet-contracts-rpc-runtime-api"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
