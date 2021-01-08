@@ -4,5 +4,5 @@ error[E0446]: private type `_GeneratedPrefixForStorageFoo<T>` in public interfac
 11 |     #[pallet::generate_store(pub trait Store)]
    |                                        ^^^^^ can't leak private type
 ...
-21 |     type Foo<T> = StorageValue<_, u8>;
-   |          - `_GeneratedPrefixForStorageFoo<T>` declared as private
+20 |     #[pallet::storage]
+   |               - `_GeneratedPrefixForStorageFoo<T>` declared as private

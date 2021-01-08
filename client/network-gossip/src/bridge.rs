@@ -180,6 +180,12 @@ impl<B: BlockT> Future for GossipEngine<B> {
 				ForwardingState::Idle => {
 					match this.network_event_stream.poll_next_unpin(cx) {
 						Poll::Ready(Some(event)) => match event {
+							Event::SyncConnected { remote } => {
+								this.network.add_set_reserved(remote, this.protocol.clone());
+							}
+							Event::SyncDisconnected { remote } => {
+								this.network.remove_set_reserved(remote, this.protocol.clone());
+							}
 							Event::NotificationStreamOpened { remote, protocol, role } => {
 								if protocol != this.protocol {
 									continue;
@@ -325,8 +331,14 @@ mod tests {
 		fn report_peer(&self, _: PeerId, _: ReputationChange) {
 		}
 
-		fn disconnect_peer(&self, _: PeerId) {
+		fn disconnect_peer(&self, _: PeerId, _: Cow<'static, str>) {
 			unimplemented!();
+		}
+
+		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
+		}
+
+		fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
 		}
 
 		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {

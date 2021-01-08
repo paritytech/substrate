@@ -102,27 +102,14 @@ where
 
 		// Update the total number of KV pairs and the number of empty pairs.
 		match (&opt_prev_value, &opt_new_value) {
-			(Some(prev_value), None) => {
-				new_info.total_pair_count -= 1;
-				if prev_value.is_empty() {
-					new_info.empty_pair_count -= 1;
-				}
+			(Some(_), None) => {
+				new_info.pair_count -= 1;
 			},
-			(None, Some(new_value)) => {
-				new_info.total_pair_count += 1;
-				if new_value.is_empty() {
-					new_info.empty_pair_count += 1;
-				}
+			(None, Some(_)) => {
+				new_info.pair_count += 1;
 			},
-			(Some(prev_value), Some(new_value)) => {
-				if prev_value.is_empty() {
-					new_info.empty_pair_count -= 1;
-				}
-				if new_value.is_empty() {
-					new_info.empty_pair_count += 1;
-				}
-			}
-			(None, None) => {}
+			(Some(_), Some(_)) => {},
+			(None, None) => {},
 		}
 
 		// Update the total storage size.
@@ -197,8 +184,7 @@ where
 					trie_id,
 					deduct_block: <frame_system::Module<T>>::block_number(),
 					rent_allowance: <BalanceOf<T>>::max_value(),
-					empty_pair_count: 0,
-					total_pair_count: 0,
+					pair_count: 0,
 					last_write: None,
 				}
 				.into(),
@@ -217,7 +203,7 @@ where
 			Err(Error::<T>::DeletionQueueFull.into())
 		} else {
 			DeletionQueue::append(DeletedContract {
-				pair_count: contract.total_pair_count,
+				pair_count: contract.pair_count,
 				trie_id: contract.trie_id.clone(),
 			});
 			Ok(())
