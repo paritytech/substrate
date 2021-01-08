@@ -455,7 +455,7 @@ where
 		);
 		let _guard = guard();
 
-		if sp_core::storage::well_known_keys::contains_child_storage_key(prefix) {
+		if sp_core::storage::well_known_keys::can_contain_child_storage_key(prefix) {
 			warn!(target: "trie", "Refuse to directly clear prefix that is part or contains of child storage key");
 			return;
 		}
@@ -1023,6 +1023,24 @@ mod tests {
 			ext.child_storage_hash(child_info, &[30]),
 			Some(Blake2Hasher::hash(&[31]).as_ref().to_vec()),
 		);
+
+		// check clear prefix is ignored on conflict
+		use sp_core::storage::well_known_keys;
+		let mut ext = ext;
+		let mut not_under_prefix = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
+		not_under_prefix[4] = 88;
+		not_under_prefix.extend(b"path");
+		ext.set_storage(not_under_prefix.clone(), vec![10]);
+
+		ext.clear_prefix(&[]);
+		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4]);
+		let mut under_prefix = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
+		under_prefix.extend(b"path");
+		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4]);
+		assert_eq!(ext.child_storage(child_info, &[30]), Some(vec![31]));
+		assert_eq!(ext.storage(not_under_prefix.as_slice()), Some(vec![10]));
+		ext.clear_prefix(&not_under_prefix[..5]);
+		assert_eq!(ext.storage(not_under_prefix.as_slice()), None);
 	}
 
 	#[test]

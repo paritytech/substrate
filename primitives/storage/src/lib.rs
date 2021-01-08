@@ -182,7 +182,7 @@ pub mod well_known_keys {
 	}
 
 	/// Whether a prefix potentially contains child storage keys.
-	pub fn contains_child_storage_key(prefix: &[u8]) -> bool {
+	pub fn can_contain_child_storage_key(prefix: &[u8]) -> bool {
 		if prefix.len() > CHILD_STORAGE_KEY_PREFIX.len() {
 			prefix.starts_with(CHILD_STORAGE_KEY_PREFIX)
 		} else {
