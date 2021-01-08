@@ -409,8 +409,14 @@ benchmarks! {
 		instance.ensure_tombstone()?;
 
 		// the caller should get the reward for being a good snitch
-		assert_eq!(
-			T::Currency::free_balance(&instance.caller),
+		// this is capped by the maximum amount of rent payed. So we only now that it should
+		// have increased by at most the surcharge reward.
+		assert!(
+			T::Currency::free_balance(&instance.caller) >
+			caller_funding::<T>() - instance.endowment
+		);
+		assert!(
+			T::Currency::free_balance(&instance.caller) <
 			caller_funding::<T>() - instance.endowment + <T as Config>::SurchargeReward::get(),
 		);
 	}
