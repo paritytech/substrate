@@ -935,7 +935,7 @@ impl<T: Config> Module<T> {
 	/// you called `inc_consumers` on `who`.
 	#[deprecated = "Use `dec_consumers` instead"]
 	pub fn dec_ref(who: &T::AccountId) {
-		let _ = Self::inc_consumers(who);
+		let _ = Self::dec_consumers(who);
 	}
 
 	/// The number of outstanding references for the account `who`.
