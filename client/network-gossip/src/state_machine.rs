@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -495,8 +495,14 @@ mod tests {
 			self.inner.lock().unwrap().peer_reports.push((peer_id, reputation_change));
 		}
 
-		fn disconnect_peer(&self, _: PeerId) {
+		fn disconnect_peer(&self, _: PeerId, _: Cow<'static, str>) {
 			unimplemented!();
+		}
+
+		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
+		}
+
+		fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
 		}
 
 		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {

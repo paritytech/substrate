@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -89,6 +89,8 @@ pub struct StorageDef {
 	pub query_kind: Option<QueryKind>,
 	/// Where clause of type definition.
 	pub where_clause: Option<syn::WhereClause>,
+	/// The span of the pallet::storage attribute.
+	pub attr_span: proc_macro2::Span,
 }
 
 /// In `Foo<A, B, C>` retrieve the argument at given position, i.e. A is argument at position 0.
@@ -112,7 +114,11 @@ fn retrieve_arg(
 }
 
 impl StorageDef {
-	pub fn try_from(index: usize, item: &mut syn::Item) -> syn::Result<Self> {
+	pub fn try_from(
+		attr_span: proc_macro2::Span,
+		index: usize,
+		item: &mut syn::Item,
+	) -> syn::Result<Self> {
 		let item = if let syn::Item::Type(item) = item {
 			item
 		} else {
@@ -207,6 +213,7 @@ impl StorageDef {
 			})?;
 
 		Ok(StorageDef {
+			attr_span,
 			index,
 			vis: item.vis.clone(),
 			ident: item.ident.clone(),

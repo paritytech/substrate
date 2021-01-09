@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,9 +25,9 @@ use crate::pallet::Def;
 pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
-	let type_impl_gen = &def.type_impl_generics();
-	let type_use_gen = &def.type_use_generics();
-	let type_decl_gen = &def.type_decl_generics();
+	let type_impl_gen = &def.type_impl_generics(def.pallet_struct.attr_span);
+	let type_use_gen = &def.type_use_generics(def.pallet_struct.attr_span);
+	let type_decl_gen = &def.type_decl_generics(def.pallet_struct.attr_span);
 	let pallet_ident = &def.pallet_struct.pallet;
 	let config_where_clause = &def.config.where_clause;
 
@@ -52,7 +52,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let module_error_metadata = if let Some(error_def) = &def.error {
 		let error_ident = &error_def.error;
-		quote::quote!(
+		quote::quote_spanned!(def.pallet_struct.attr_span =>
 			impl<#type_impl_gen> #frame_support::error::ModuleErrorMetadata
 				for #pallet_ident<#type_use_gen>
 				#config_where_clause
@@ -65,7 +65,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		)
 	} else {
-		quote::quote!(
+		quote::quote_spanned!(def.pallet_struct.attr_span =>
 			impl<#type_impl_gen> #frame_support::error::ModuleErrorMetadata
 				for #pallet_ident<#type_use_gen>
 				#config_where_clause
@@ -77,7 +77,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	};
 
-	quote::quote!(
+	quote::quote_spanned!(def.pallet_struct.attr_span =>
 		#module_error_metadata
 
 		/// Type alias to `Pallet`, to be used by `construct_runtime`.

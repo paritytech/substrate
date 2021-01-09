@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -43,6 +43,7 @@ use sc_keystore::LocalKeystore;
 use log::{info, warn};
 use sc_network::config::{Role, OnDemand};
 use sc_network::NetworkService;
+use sc_network::block_request_handler::{self, BlockRequestHandler};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo,
@@ -908,6 +909,21 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		Box::new(DefaultBlockAnnounceValidator)
 	};
 
+	let block_request_protocol_config = {
+		if matches!(config.role, Role::Light) {
+			// Allow outgoing requests but deny incoming requests.
+			block_request_handler::generate_protocol_config(protocol_id.clone())
+		} else {
+			// Allow both outgoing and incoming requests.
+			let (handler, protocol_config) = BlockRequestHandler::new(
+				protocol_id.clone(),
+				client.clone(),
+			);
+			spawn_handle.spawn("block_request_handler", handler.run());
+			protocol_config
+		}
+	};
+
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
@@ -923,7 +939,8 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		import_queue: Box::new(import_queue),
 		protocol_id,
 		block_announce_validator,
-		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone())
+		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+		block_request_protocol_config,
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -255,6 +255,13 @@ pub trait Config: 'static + Eq + Clone {
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
 
 	type SystemWeightInfo: WeightInfo;
+
+	/// The designated SS85 prefix of this chain.
+	///
+	/// This replaces the "ss58Format" property declared in the chain spec. Reason is
+	/// that the runtime should know about the prefix in order to make use of it as
+	/// an identifier of the chain.
+	type SS58Prefix: Get<u8>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Config>::Hash>;
@@ -539,6 +546,13 @@ decl_module! {
 
 		/// The weight configuration (limits & base values) for each class of extrinsics and block.
 		const BlockWeights: limits::BlockWeights = T::BlockWeights::get();
+
+		/// The designated SS85 prefix of this chain.
+		///
+		/// This replaces the "ss58Format" property declared in the chain spec. Reason is
+		/// that the runtime should know about the prefix in order to make use of it as
+		/// an identifier of the chain.
+		const SS58Prefix: u8 = T::SS58Prefix::get();
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if !UpgradedToDualRefCount::get() {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -381,6 +381,10 @@ sp_api::decl_runtime_apis! {
 
 		/// Returns information regarding the current epoch.
 		fn current_epoch() -> Epoch;
+
+		/// Returns information regarding the next epoch (which was already
+		/// previously announced).
+		fn next_epoch() -> Epoch;
 
 		/// Generates a proof of key ownership for the given authority in the
 		/// current epoch. An example usage of this module is coupled with the

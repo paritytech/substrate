@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,6 +45,8 @@ pub struct EventDef {
 	pub deposit_event: Option<(syn::Visibility, proc_macro2::Span)>,
 	/// Where clause used in event definition.
 	pub where_clause: Option<syn::WhereClause>,
+	/// The span of the pallet::event attribute.
+	pub attr_span: proc_macro2::Span,
 }
 
 /// Attribute for Event: defines metadata name to use.
@@ -150,7 +152,11 @@ impl PalletEventAttrInfo {
 }
 
 impl EventDef {
-	pub fn try_from(index: usize, item: &mut syn::Item) -> syn::Result<Self> {
+	pub fn try_from(
+		attr_span: proc_macro2::Span,
+		index: usize,
+		item: &mut syn::Item,
+	) -> syn::Result<Self> {
 		let item = if let syn::Item::Enum(item) = item {
 			item
 		} else {
@@ -208,6 +214,7 @@ impl EventDef {
 			.collect();
 
 		Ok(EventDef {
+			attr_span,
 			index,
 			metadata,
 			instances,

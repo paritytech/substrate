@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -82,6 +82,7 @@ impl frame_system::Config for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -396,6 +397,7 @@ fn add_remove_proxies_works() {
 		assert_eq!(Balances::reserved_balance(1), 2);
 		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 2, ProxyType::JustTransfer, 0));
 		assert_eq!(Balances::reserved_balance(1), 0);
+		assert_noop!(Proxy::add_proxy(Origin::signed(1), 1, ProxyType::Any, 0), Error::<Test>::NoSelfProxy);
 	});
 }
 

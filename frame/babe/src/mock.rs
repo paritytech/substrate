@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -86,6 +86,7 @@ impl frame_system::Config for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
@@ -294,7 +295,7 @@ pub fn start_era(era_index: EraIndex) {
 	assert_eq!(Staking::current_era(), Some(era_index));
 }
 
-pub fn make_pre_digest(
+pub fn make_primary_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
 	slot_number: sp_consensus_babe::SlotNumber,
 	vrf_output: VRFOutput,

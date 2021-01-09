@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,7 +40,7 @@ macro_rules! decl_tests {
 		use crate::*;
 		use sp_runtime::{FixedPointNumber, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
-			assert_noop, assert_ok, assert_err,
+			assert_noop, assert_storage_noop, assert_ok, assert_err,
 			traits::{
 				LockableCurrency, LockIdentifier, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath
@@ -952,6 +952,29 @@ macro_rules! decl_tests {
 
 					// Slash on non-existent account is okay.
 					assert_eq!(Balances::slash_reserved(&12345, 1_300), (NegativeImbalance::new(0), 1300));
+				});
+		}
+
+		#[test]
+    fn operations_on_dead_account_should_not_change_state() {
+			// These functions all use `mutate_account` which may introduce a storage change when
+			// the account never existed to begin with, and shouldn't exist in the end.
+			<$ext_builder>::default()
+				.existential_deposit(0)
+				.build()
+				.execute_with(|| {
+					assert!(!<Test as Config>::AccountStore::is_explicit(&1337));
+
+					// Unreserve
+					assert_storage_noop!(assert_eq!(Balances::unreserve(&1337, 42), 42));
+					// Reserve
+					assert_noop!(Balances::reserve(&1337, 42), Error::<Test, _>::InsufficientBalance);
+					// Slash Reserve
+					assert_storage_noop!(assert_eq!(Balances::slash_reserved(&1337, 42).1, 42));
+					// Repatriate Reserve
+					assert_noop!(Balances::repatriate_reserved(&1337, &1338, 42, Status::Free), Error::<Test, _>::DeadAccount);
+					// Slash
+					assert_storage_noop!(assert_eq!(Balances::slash(&1337, 42).1, 42));
 				});
 		}
 	}
