@@ -302,6 +302,8 @@ decl_error! {
 		AlreadyActive,
 		/// Account is not alive in FRAME System
 		DeadAccount,
+		/// Account has not been activated to accept transfers of this asset.
+		InactiveAccount,
 	}
 }
 
@@ -707,10 +709,8 @@ decl_module! {
 				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
 					let new_balance = a.balance.saturating_add(amount);
 					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
-					if Self::is_new_account(&a) {
-						Self::new_zombie(details)?;
-						a.is_zombie = true;
-					}
+					// We don't allow permissionless transfers to new accounts to prevent zombie griefing.
+					ensure!(Self::is_new_account(&a), Error::<T>::InactiveAccount);
 					a.balance = new_balance;
 					Ok(())
 				})?;
@@ -782,6 +782,7 @@ decl_module! {
 				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
 					let new_balance = a.balance.saturating_add(amount);
 					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
+					// This is a force transfer from an admin account, so it is allowed to create a new zombie.
 					if Self::is_new_account(&a) {
 						Self::new_zombie(details)?;
 						a.is_zombie = true;
