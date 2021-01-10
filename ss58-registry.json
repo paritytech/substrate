@@ -256,7 +256,7 @@
 		{
 			"prefix": 29,
 			"network": "cord",
-			"displayName": "Dhiway CORD network",
+			"displayName": "Dhiway CORD Network",
 			"symbols": ["DCU"],
 			"decimals": [18],
 			"standardAccount": "*25519",
