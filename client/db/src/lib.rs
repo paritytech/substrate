@@ -264,10 +264,33 @@ pub struct DatabaseSettings {
 	pub state_cache_size: usize,
 	/// Ratio of cache size dedicated to child tries.
 	pub state_cache_child_ratio: Option<(usize, usize)>,
-	/// Pruning mode.
-	pub pruning: PruningMode,
+	/// State pruning mode.
+	pub state_pruning: PruningMode,
 	/// Where to find the database.
 	pub source: DatabaseSettingsSrc,
+	/// Block pruning mode.
+	pub keep_blocks: KeepBlocks,
+	/// Block body/Transaction storage scheme.
+	pub transaction_storage: TransactionStorage,
+}
+
+/// Block pruning settings.
+#[derive(Debug, Clone)]
+pub enum KeepBlocks {
+	/// Keep full block history.
+	All,
+	/// Keep N recent finalized blocks.
+	Some(u32),
+}
+
+/// Block body storage scheme.
+#[derive(Debug, Clone)]
+pub enum TransactionStorage {
+	/// Store block body as deeply encoded list of transactions in the BODY column
+	BlockBody,
+	/// Store a list of hashes in the BODY column and each transaction individually
+	/// in the TRANSACTION column.
+	StorageChain,
 }
 
 /// Where to find the database..
@@ -334,6 +357,8 @@ pub(crate) mod columns {
 	/// Offchain workers local storage
 	pub const OFFCHAIN: u32 = 9;
 	pub const CACHE: u32 = 10;
+	/// Transactions
+	pub const TRANSACTION: u32 = 11;
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -876,8 +901,10 @@ impl<Block: BlockT> Backend<Block> {
 		let db_setting = DatabaseSettings {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			pruning: PruningMode::keep_blocks(keep_blocks),
+			state_pruning: PruningMode::keep_blocks(keep_blocks),
 			source: DatabaseSettingsSrc::Custom(db),
+			keep_blocks: KeepBlocks::All,
+			transaction_storage: TransactionStorage::BlockBody,
 		};
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
@@ -888,12 +915,12 @@ impl<Block: BlockT> Backend<Block> {
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
 	) -> ClientResult<Self> {
-		let is_archive_pruning = config.pruning.is_archive();
+		let is_archive_pruning = config.state_pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let meta = blockchain.meta.clone();
 		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e);
 		let state_db: StateDb<_, _> = StateDb::new(
-			config.pruning.clone(),
+			config.state_pruning.clone(),
 			!config.source.supports_ref_counting(),
 			&StateMetaDb(&*db),
 		).map_err(map_e)?;
@@ -1882,8 +1909,10 @@ pub(crate) mod tests {
 		let backend = Backend::<Block>::new(DatabaseSettings {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			pruning: PruningMode::keep_blocks(1),
+			state_pruning: PruningMode::keep_blocks(1),
 			source: DatabaseSettingsSrc::Custom(backing),
+			keep_blocks: KeepBlocks::All,
+			transaction_storage: TransactionStorage::BlockBody,
 		}, 0).unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);
 		for i in 0..10 {
