@@ -66,7 +66,7 @@ use codec::{Decode, Encode};
 use hash_db::Prefix;
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use sp_database::Transaction;
-use sp_core::ChangesTrieConfiguration;
+use sp_core::{Hasher, ChangesTrieConfiguration};
 use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_arithmetic::traits::Saturating;
@@ -397,10 +397,14 @@ pub struct BlockchainDb<Block: BlockT> {
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
+	transaction_storage: TransactionStorage,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
-	fn new(db: Arc<dyn Database<DbHash>>) -> ClientResult<Self> {
+	fn new(
+		db: Arc<dyn Database<DbHash>>,
+		transaction_storage: TransactionStorage
+	) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
@@ -409,6 +413,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			meta: Arc::new(RwLock::new(meta)),
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 			header_cache: Default::default(),
+			transaction_storage,
 		})
 	}
 
@@ -442,6 +447,20 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			.map(|header| header.and_then(|header|
 				header.digest().log(DigestItem::as_changes_trie_root)
 					.cloned()))
+	}
+
+	fn extrinsic(&self, hash: &Block::Hash) -> ClientResult<Option<Block::Extrinsic>> {
+		match self.db.get(columns::TRANSACTION, hash.as_ref()) {
+			Some(ex) => {
+				match Decode::decode(&mut &ex[..]) {
+					Ok(ex) => Ok(Some(ex)),
+					Err(err) => Err(sp_blockchain::Error::Backend(
+							format!("Error decoding extrinsic {}: {}", hash, err)
+					)),
+				}
+			},
+			None => Ok(None),
+		}
 	}
 }
 
@@ -501,11 +520,31 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
-			Some(body) => match Decode::decode(&mut &body[..]) {
-				Ok(body) => Ok(Some(body)),
-				Err(err) => return Err(sp_blockchain::Error::Backend(
-					format!("Error decoding body: {}", err)
-				)),
+			Some(body) => {
+				match self.transaction_storage {
+					TransactionStorage::BlockBody => match Decode::decode(&mut &body[..]) {
+						Ok(body) => Ok(Some(body)),
+						Err(err) => return Err(sp_blockchain::Error::Backend(
+								format!("Error decoding body: {}", err)
+						)),
+					},
+					TransactionStorage::StorageChain => {
+						match Vec::<Block::Hash>::decode(&mut &body[..]) {
+							Ok(hashes) => {
+								let extrinsics: ClientResult<Vec<Block::Extrinsic>> = hashes.into_iter().map(
+									|h| self.extrinsic(&h)
+									.and_then(|maybe_ex| maybe_ex.ok_or_else(
+										|| sp_blockchain::Error::Backend(
+											format!("Missing transaction: {}", h))))
+								).collect();
+								Ok(Some(extrinsics?))
+							}
+							Err(err) => return Err(sp_blockchain::Error::Backend(
+								format!("Error decoding body list: {}", err)
+							)),
+						}
+					}
+				}
 			}
 			None => Ok(None),
 		}
@@ -880,6 +919,8 @@ pub struct Backend<Block: BlockT> {
 	shared_cache: SharedCache<Block>,
 	import_lock: Arc<RwLock<()>>,
 	is_archive: bool,
+	keep_blocks: KeepBlocks,
+	transaction_storage: TransactionStorage,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 }
@@ -916,7 +957,7 @@ impl<Block: BlockT> Backend<Block> {
 		config: &DatabaseSettings,
 	) -> ClientResult<Self> {
 		let is_archive_pruning = config.state_pruning.is_archive();
-		let blockchain = BlockchainDb::new(db.clone())?;
+		let blockchain = BlockchainDb::new(db.clone(), config.transaction_storage.clone())?;
 		let meta = blockchain.meta.clone();
 		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e);
 		let state_db: StateDb<_, _> = StateDb::new(
@@ -960,6 +1001,8 @@ impl<Block: BlockT> Backend<Block> {
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: Arc::new(StateUsageStats::new()),
+			keep_blocks: config.keep_blocks.clone(),
+			transaction_storage: config.transaction_storage.clone(),
 		})
 	}
 
@@ -1167,7 +1210,21 @@ impl<Block: BlockT> Backend<Block> {
 
 			transaction.set_from_vec(columns::HEADER, &lookup_key, pending_block.header.encode());
 			if let Some(body) = &pending_block.body {
-				transaction.set_from_vec(columns::BODY, &lookup_key, body.encode());
+				match self.transaction_storage {
+					TransactionStorage::BlockBody => {
+						transaction.set_from_vec(columns::BODY, &lookup_key, body.encode());
+					},
+					TransactionStorage::StorageChain => {
+						let mut hashes = Vec::with_capacity(body.len());
+						for extrinsic in body {
+							let extrinsic = extrinsic.encode();
+							let hash = HashFor::<Block>::hash(&extrinsic);
+							transaction.set(columns::TRANSACTION, &hash.as_ref(), &extrinsic);
+							hashes.push(hash);
+						}
+						transaction.set_from_vec(columns::BODY, &lookup_key, hashes.encode());
+					},
+				}
 			}
 			if let Some(justification) = pending_block.justification {
 				transaction.set_from_vec(columns::JUSTIFICATION, &lookup_key, justification.encode());
