@@ -954,7 +954,14 @@ macro_rules! impl_benchmark_test {
 		}
 	};
 }
-
+use sp_std::vec::Vec;
+pub fn join_u8_sequences(seqs: Vec<&[u8]>) -> Vec<u8> {
+    let mut result = Vec::new();
+    for seq in seqs.iter() {
+        result.extend(seq.to_vec());
+    }
+    result
+}
 
 /// This macro adds pallet benchmarks to a `Vec<BenchmarkBatch>` object.
 ///
@@ -1050,7 +1057,18 @@ macro_rules! add_benchmark {
 							*repeat,
 							whitelist,
 							*verify,
-						)?,
+						).map_err(|e| { 
+							$crate::join_u8_sequences(
+								vec![
+								"\n\t* pallet: ".as_bytes(),
+								instance_string,
+								"\n\t* benchmark: ".as_bytes(),
+								benchmark,
+								"\n\t* error message: ".as_bytes(),
+								e.as_bytes()
+								]
+							)
+						})?,
 					});
 				}
 			} else {
@@ -1066,7 +1084,18 @@ macro_rules! add_benchmark {
 						*repeat,
 						whitelist,
 						*verify,
-					)?,
+					).map_err(|e| { 
+						$crate::join_u8_sequences(
+							vec![
+							"\n\t* pallet: ".as_bytes(),
+							instance_string,
+							"\n\t* benchmark: ".as_bytes(),
+							benchmark,
+							"\n\t* error message: ".as_bytes(),
+							e.as_bytes()
+							]
+						)
+					})?,
 				});
 			}
 		}

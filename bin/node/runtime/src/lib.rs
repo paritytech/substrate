@@ -1280,7 +1280,7 @@ impl_runtime_apis! {
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
 		fn dispatch_benchmark(
 			config: frame_benchmarking::BenchmarkConfig
-		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
+		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, Vec<u8>> {
 			use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark, TrackedStorageKey};
 			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency issues.
 			// To get around that, we separated the Session benchmarks into its own crate, which is why

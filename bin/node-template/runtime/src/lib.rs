@@ -450,7 +450,7 @@ impl_runtime_apis! {
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
 		fn dispatch_benchmark(
 			config: frame_benchmarking::BenchmarkConfig
-		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
+		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, Vec<u8>> {
 			use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark, TrackedStorageKey};
 
 			use frame_system_benchmarking::Module as SystemBench;
