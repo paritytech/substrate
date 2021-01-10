@@ -55,6 +55,8 @@
 //!   or to set the Issuer, Freezer or Admin of that asset class.
 //! * **Zombie**: An account which has a balance of some assets in this pallet, but no other
 //!   footprint on-chain, in particular no account managed in the `frame_system` pallet.
+//! * **Active**: An account who has some state stored in this pallet and a reference counter placed
+//!   by this pallet. An active account can only become deactive by emptying their asset balance.
 //!
 //! ### Goals
 //!
@@ -79,6 +81,7 @@
 //!
 //! * `force_create`: Creates a new asset class without taking any deposit.
 //! * `force_destroy`: Destroys an asset class.
+//! * `trust_asset`: Allow the Root origin to trust some asset holds practical value.
 //!
 //! ### Privileged Functions
 //! * `destroy`: Destroys an entire asset class; called by the asset class's Owner.
@@ -90,6 +93,7 @@
 //! * `transfer_ownership`: Changes an asset class's Owner; called by the asset class's Owner.
 //! * `set_team`: Changes an asset class's Admin, Freezer and Issuer; called by the asset class's
 //!   Owner.
+//! * `activate`: Allow a user to activate their account to use some asset.
 //!
 //! Please refer to the [`Call`](./enum.Call.html) enum and its associated variants for documentation on each function.
 //!
@@ -100,6 +104,17 @@
 //! * `total_supply` - Get the total supply of an asset `id`.
 //!
 //! Please refer to the [`Module`](./struct.Module.html) struct for details on publicly available functions.
+//!
+//! ### Additional Considerations
+//!
+//! When interacting with this pallet, it is important that you always use mortal extrinsics to avoid the possibility
+//! of replay attacks of transfers and other balance manipulating functions. This can occur if a user's account is
+//! destroyed, causing their nonce to reset, then an immortal transaction for this pallet could be submitted again
+//! successfully and transfer funds where it shouldn't.
+//!
+//! Additionally note that every active user will be forced to keep their account alive, i.e. they cannot make normal
+//! balance transfers below the existential deposit. A user who wants to be able to kill their account must first purge
+//! themselves of any tokens they hold in this pallet, and ultimately reduce their reference count to zero.
 //!
 //! ## Related Modules
 //!
