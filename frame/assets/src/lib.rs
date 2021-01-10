@@ -122,7 +122,7 @@ use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error
 	traits::{Currency, ReservableCurrency, EnsureOrigin, Get, BalanceStatus::Reserved},
 	dispatch::{DispatchResult, DispatchError},
 };
-use frame_system::ensure_signed;
+use frame_system::{ensure_signed, ensure_root};
 pub use weights::WeightInfo;
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -184,6 +184,8 @@ pub struct AssetDetails<
 	zombies: u32,
 	/// The total number of accounts.
 	accounts: u32,
+	/// Whether the asset is trusted by the runtime system.
+	trusted: bool,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
@@ -194,8 +196,11 @@ pub struct AssetBalance<
 	balance: Balance,
 	/// Whether the account is frozen.
 	is_frozen: bool,
-	/// Whether the account is a zombie. If not, then it has a reference.
+	/// Whether the account is using a zombie slot.
 	is_zombie: bool,
+	/// Whether the account is active, and has a reference.
+	/// This should be mutually exclusive to `is_zombie`.
+	is_active: bool,
 }
 
 decl_storage! {
@@ -245,6 +250,8 @@ decl_event! {
 		ForceCreated(AssetId, AccountId),
 		/// The maximum amount of zombies allowed has changed. \[asset_id, max_zombies\]
 		MaxZombiesChanged(AssetId, u32),
+		/// An asset's trust level has been modified. \[asset_id, trusted\]
+		AssetTrusted(AssetId, bool),
 	}
 }
 
@@ -274,6 +281,12 @@ decl_error! {
 		MinBalanceZero,
 		/// A mint operation lead to an overflow.
 		Overflow,
+		/// This token isn't trusted by the runtime system.
+		NotTrusted,
+		/// This user is already active for this token.
+		AlreadyActive,
+		/// Account is not alive in FRAME System
+		DeadAccount,
 	}
 }
 
@@ -335,6 +348,7 @@ decl_module! {
 				min_balance,
 				zombies: Zero::zero(),
 				accounts: Zero::zero(),
+				trusted: false,
 			});
 			Self::deposit_event(RawEvent::Created(id, owner, admin));
 		}
@@ -384,8 +398,39 @@ decl_module! {
 				min_balance,
 				zombies: Zero::zero(),
 				accounts: Zero::zero(),
+				trusted: false,
 			});
 			Self::deposit_event(RawEvent::ForceCreated(id, owner));
+		}
+
+		/// Trust an asset, allowing the issue to activate accounts on behalf of
+		/// other users. This can help prevent reaching the `max_zombie` limit
+		/// when there are live accounts taking up zombie slots.
+		///
+		/// **Security Warning**: Trusting an asset will allow th asset issuer to
+		/// place reference counters on any number of active users in your runtime.
+		/// This can prevent those users from killing their account or transferring
+		/// their full balance. Trust assets with caution.
+		///
+		/// - `id`: The identifier of the asset to be trusted or untrusted.
+		/// - `trusted`: Whether the asset should be trusted in the runtime system.
+		///
+		/// Emits `AssetTrusted` when successful.
+		///
+		/// Weight: O(1)
+		#[weight = 0]
+		fn trust_asset(origin,
+			#[compact] id: T::AssetId,
+			trusted: bool
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			Asset::<T>::try_mutate(id, |maybe_details| {
+				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+				details.trusted = trusted;
+				Self::deposit_event(RawEvent::AssetTrusted(id, trusted));
+				Ok(())
+			})
 		}
 
 		/// Destroy a class of fungible assets owned by the sender.
@@ -479,8 +524,10 @@ decl_module! {
 				Account::<T>::try_mutate(id, &beneficiary, |t| -> DispatchResult {
 					let new_balance = t.balance.saturating_add(amount);
 					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
-					if t.balance.is_zero() {
-						t.is_zombie = Self::new_account(&beneficiary, details)?;
+					if Self::is_new_account(&t) {
+						println!("hi shawn");
+						Self::new_zombie(details)?;
+						t.is_zombie = true;
 					}
 					t.balance = new_balance;
 					Ok(())
@@ -527,7 +574,7 @@ decl_module! {
 						account.balance -= burned;
 						*maybe_account = if account.balance < d.min_balance {
 							burned += account.balance;
-							Self::dead_account(&who, d, account.is_zombie);
+							Self::dead_account(&who, d, account.is_zombie, account.is_active);
 							None
 						} else {
 							Some(account)
@@ -542,6 +589,61 @@ decl_module! {
 				Ok(())
 			})
 		}
+
+		/// Activate an account to accept and use a specific asset.
+		///
+		/// This extrinsic will transition a user from a zombie or non-existent account
+		/// to an active account for an asset. This extrinsic will place a reference
+		/// counter on the account preventing it from being killed by the System.
+		///
+		/// **NOTE:** Users can also make a transfer with the `transfer` extrinsic
+		/// to activate their account rather than call this extrinsic.
+		///
+		/// Once an account is activated, the user must deplete their asset balance
+		/// in order to remove the reference counter.
+		///
+		/// - `id`: The identifier of the asset that the user should be active for.
+		/// - `target`: The user that should be active for the asset `id`.
+		///
+		/// This function can be called by a user targeting themselves, or by the
+		/// issuer of the asset to an arbitrary live account as long as that asset
+		/// is trusted.
+		///
+		/// Weight: O(1)
+		#[weight = 0]
+		fn activate_account(origin,
+			#[compact] id: T::AssetId,
+			target: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
+			let caller = ensure_signed(origin)?;
+			let target = T::Lookup::lookup(target)?;
+			ensure!(frame_system::Module::<T>::account_exists(&target), Error::<T>::DeadAccount);
+
+			Asset::<T>::try_mutate(id, |maybe_details| {
+				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+
+				if caller != target {
+					ensure!(caller == details.issuer, Error::<T>::NoPermission);
+					ensure!(details.trusted, Error::<T>::NotTrusted);
+				}
+
+				Account::<T>::try_mutate(id, &target, |a| -> DispatchResult {
+					if  !a.is_zombie && a.is_active {
+						return Err(Error::<T>::AlreadyActive.into());
+					} else if Self::is_new_account(a) {
+						// If this is a brand new account in our system...
+						let accounts = details.accounts.checked_add(1).ok_or(Error::<T>::Overflow)?;
+						details.accounts = accounts;
+					}
+					Self::activate(&target, details, &mut a.is_zombie, &mut a.is_active);
+					println!("Final Active {:?}", a);
+					Ok(())
+				})?;
+
+				Ok(())
+			})
+		}
+
 
 		/// Move some assets from the sender account to another.
 		///
@@ -592,8 +694,9 @@ decl_module! {
 				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
 					let new_balance = a.balance.saturating_add(amount);
 					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
-					if a.balance.is_zero() {
-						a.is_zombie = Self::new_account(&dest, details)?;
+					if Self::is_new_account(&a) {
+						Self::new_zombie(details)?;
+						a.is_zombie = true;
 					}
 					a.balance = new_balance;
 					Ok(())
@@ -601,11 +704,11 @@ decl_module! {
 
 				match origin_account.balance.is_zero() {
 					false => {
-						Self::dezombify(&origin, details, &mut origin_account.is_zombie);
+						Self::activate(&origin, details, &mut origin_account.is_zombie, &mut origin_account.is_active);
 						Account::<T>::insert(id, &origin, &origin_account)
 					}
 					true => {
-						Self::dead_account(&origin, details, origin_account.is_zombie);
+						Self::dead_account(&origin, details, origin_account.is_zombie, origin_account.is_active);
 						Account::<T>::remove(id, &origin);
 					}
 				}
@@ -666,8 +769,9 @@ decl_module! {
 				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
 					let new_balance = a.balance.saturating_add(amount);
 					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
-					if a.balance.is_zero() {
-						a.is_zombie = Self::new_account(&dest, details)?;
+					if Self::is_new_account(&a) {
+						Self::new_zombie(details)?;
+						a.is_zombie = true;
 					}
 					a.balance = new_balance;
 					Ok(())
@@ -675,11 +779,11 @@ decl_module! {
 
 				match source_account.balance.is_zero() {
 					false => {
-						Self::dezombify(&source, details, &mut source_account.is_zombie);
+						Self::activate(&source, details, &mut source_account.is_zombie, &mut source_account.is_active);
 						Account::<T>::insert(id, &source, &source_account)
 					}
 					true => {
-						Self::dead_account(&source, details, source_account.is_zombie);
+						Self::dead_account(&source, details, source_account.is_zombie, source_account.is_active);
 						Account::<T>::remove(id, &source);
 					}
 				}
@@ -857,31 +961,35 @@ impl<T: Config> Module<T> {
 		Asset::<T>::get(id).map(|x| x.max_zombies - x.zombies).unwrap_or_else(Zero::zero)
 	}
 
-	fn new_account(
-		who: &T::AccountId,
-		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
-	) -> Result<bool, DispatchError> {
-		let accounts = d.accounts.checked_add(1).ok_or(Error::<T>::Overflow)?;
-		let r = Ok(if frame_system::Module::<T>::account_exists(who) {
-			frame_system::Module::<T>::inc_ref(who);
-			false
-		} else {
-			ensure!(d.zombies < d.max_zombies, Error::<T>::TooManyZombies);
-			d.zombies += 1;
-			true
-		});
-		d.accounts = accounts;
-		r
+	/// Checks whether the account is brand new to us, which is when it has the default value.
+	fn is_new_account(account: &AssetBalance<T::Balance>) -> bool {
+		account == &Default::default()
 	}
 
-	/// If `who`` exists in system and it's a zombie, dezombify it.
-	fn dezombify(
+	fn new_zombie(
+		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
+	) -> DispatchResult {
+		let accounts = d.accounts.checked_add(1).ok_or(Error::<T>::Overflow)?;
+		ensure!(d.zombies < d.max_zombies, Error::<T>::TooManyZombies);
+		d.zombies += 1;
+		d.accounts = accounts;
+		Ok(())
+	}
+
+	/// If `who` exists in system and is not active, activate it and put reference counter.
+	/// If `who` is now active, but was a zombie, dezombify it.
+	fn activate(
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
 		is_zombie: &mut bool,
+		is_active: &mut bool,
 	) {
-		if *is_zombie && frame_system::Module::<T>::account_exists(who) {
+		if !*is_active && frame_system::Module::<T>::account_exists(who) {
 			frame_system::Module::<T>::inc_ref(who);
+			*is_active = true;
+		}
+
+		if *is_active && *is_zombie  {
 			*is_zombie = false;
 			d.zombies = d.zombies.saturating_sub(1);
 		}
@@ -891,10 +999,13 @@ impl<T: Config> Module<T> {
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
 		is_zombie: bool,
+		is_active: bool,
 	) {
+		// These checks should be mutually exclusive, but we check both to be defensive.
 		if is_zombie {
 			d.zombies = d.zombies.saturating_sub(1);
-		} else {
+		}
+		if is_active {
 			frame_system::Module::<T>::dec_ref(who);
 		}
 		d.accounts = d.accounts.saturating_sub(1);
@@ -1026,6 +1137,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			Balances::make_free_balance_be(&1, 100);
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::activate_account(Origin::signed(1), 0, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_noop!(Assets::destroy(Origin::signed(1), 0, 100), Error::<Test>::RefsLeft);
 			assert_noop!(Assets::force_destroy(Origin::root(), 0, 100), Error::<Test>::RefsLeft);
@@ -1058,18 +1170,21 @@ mod tests {
 			assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 50), Error::<Test>::TooManyZombies);
 
 			Balances::make_free_balance_be(&3, 100);
+			assert_ok!(Assets::activate_account(Origin::signed(3), 0, 3));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 3, 100));
 
+			// Zombie can transfer full balance and open up a zombie slot.
 			assert_ok!(Assets::transfer(Origin::signed(0), 0, 1, 100));
 			assert_eq!(Assets::zombie_allowance(0), 1);
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+			assert_eq!(Assets::zombie_allowance(0), 0);
 		});
 	}
 
 	#[test]
 	fn resetting_max_zombies_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 2, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 3, 1));
 			Balances::make_free_balance_be(&1, 100);
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 100));
@@ -1079,13 +1194,13 @@ mod tests {
 
 			assert_noop!(Assets::set_max_zombies(Origin::signed(1), 0, 1), Error::<Test>::TooManyZombies);
 
-			assert_ok!(Assets::set_max_zombies(Origin::signed(1), 0, 3));
+			assert_ok!(Assets::set_max_zombies(Origin::signed(1), 0, 4));
 			assert_eq!(Assets::zombie_allowance(0), 1);
 		});
 	}
 
 	#[test]
-	fn dezombifying_should_work() {
+	fn activating_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 10));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
@@ -1094,15 +1209,19 @@ mod tests {
 			// introduce a bit of balance for account 2.
 			Balances::make_free_balance_be(&2, 100);
 
-			// transfer 25 units, nothing changes.
+			// transfer 25 units, another zombie is created.
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 25));
-			assert_eq!(Assets::zombie_allowance(0), 9);
+			assert_eq!(Assets::zombie_allowance(0), 8);
 
-			// introduce a bit of balance; this will create the account.
+			// Can't activate when account doesn't exist
+			assert_noop!(Assets::activate_account(Origin::signed(1), 0, 1), Error::<Test>::DeadAccount);
+			assert_eq!(Assets::zombie_allowance(0), 8);
+			// introduce a bit of balance and activate; this will create the account.
 			Balances::make_free_balance_be(&1, 100);
-
-			// now transferring 25 units will create it.
-			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 25));
+			assert_ok!(Assets::activate_account(Origin::signed(1), 0, 1));
+			assert_eq!(Assets::zombie_allowance(0), 9);
+			// Activate account 2 as well
+			assert_ok!(Assets::activate_account(Origin::signed(2), 0, 2));
 			assert_eq!(Assets::zombie_allowance(0), 10);
 		});
 	}
@@ -1300,6 +1419,76 @@ mod tests {
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 2), 0);
 			assert_noop!(Assets::burn(Origin::signed(1), 0, 2, u64::max_value()), Error::<Test>::BalanceZero);
+		});
+	}
+
+	#[test]
+	fn activate_account_works() {
+		new_test_ext().execute_with(|| {
+			// Can't activate when user does not exist
+			assert_noop!(Assets::activate_account(Origin::signed(1), 0, 1), Error::<Test>::DeadAccount);
+			Balances::make_free_balance_be(&1, 1_000);
+
+			// Can't activate when asset is not present
+			assert_noop!(Assets::activate_account(Origin::signed(1), 0, 1), Error::<Test>::Unknown);
+			// Create asset
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			// Random user cannot activate another user
+			assert_noop!(Assets::activate_account(Origin::signed(1337), 0, 1), Error::<Test>::NoPermission);
+
+			// User can activate themselves ahead of getting an asset
+			assert_ok!(Assets::activate_account(Origin::signed(1), 0, 1));
+			// When that user gets an asset, they are immediately active, no zombies involved.
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_eq!(Assets::balance(0, 1), 100);
+			assert_eq!(Assets::zombie_allowance(0), 10);
+
+			// Create a zombie account from a user with no balance
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 100));
+			assert_eq!(Assets::balance(0, 2), 100);
+			assert_eq!(Assets::zombie_allowance(0), 9);
+			// Giving the user balance and activating the account dezombifies it
+			Balances::make_free_balance_be(&2, 1_000);
+			assert_ok!(Assets::activate_account(Origin::signed(2), 0, 2));
+			assert_eq!(Assets::zombie_allowance(0), 10);
+
+			// Create a zombie account from a user with balance
+			Balances::make_free_balance_be(&3, 1_000);
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 3, 100));
+			assert_eq!(Assets::balance(0, 3), 100);
+			assert_eq!(Assets::zombie_allowance(0), 9);
+			// Activating the account dezombifies it
+			assert_ok!(Assets::activate_account(Origin::signed(3), 0, 3));
+			assert_eq!(Assets::zombie_allowance(0), 10);
+
+			// Activate again should fail
+			assert_noop!(Assets::activate_account(Origin::signed(3), 0, 3), Error::<Test>::AlreadyActive);
+		});
+	}
+
+	#[test]
+	fn trust_asset_works() {
+		new_test_ext().execute_with(|| {
+			// Create asset
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+
+			// Issuer cannot activate because asset is not trusted
+			Balances::make_free_balance_be(&2, 1_000);
+			assert_noop!(Assets::activate_account(Origin::signed(1), 0, 2), Error::<Test>::NotTrusted);
+
+			// Trust asset
+			assert_ok!(Assets::trust_asset(Origin::root(), 0, true));
+
+			// Trusted asset issuer cannot activate dead accounts
+			assert_noop!(Assets::activate_account(Origin::signed(1), 0, 3), Error::<Test>::DeadAccount);
+			// So let's make the account live
+			Balances::make_free_balance_be(&3, 1_000);
+
+			// Now asset issuer can activate the account
+			assert_ok!(Assets::activate_account(Origin::signed(1), 0, 3));
+
+			// Another random person cannot do this though
+			assert_noop!(Assets::activate_account(Origin::signed(1337), 0, 3), Error::<Test>::NoPermission);
 		});
 	}
 }
