@@ -1005,7 +1005,7 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
-		if Self::is_dead_account(&who) { return (NegativeImbalance::zero(), value) }
+		if Self::total_balance(&who).is_zero() { return (NegativeImbalance::zero(), value) }
 
 		for attempt in 0..2 {
 			match Self::try_mutate_account(who,
@@ -1196,7 +1196,7 @@ impl<T: Config<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I
 	/// Is a no-op if the value to be unreserved is zero or the account does not exist.
 	fn unreserve(who: &T::AccountId, value: Self::Balance) -> Self::Balance {
 		if value.is_zero() { return Zero::zero() }
-		if Self::is_dead_account(&who) { return value }
+		if Self::total_balance(&who).is_zero() { return value }
 
 		let actual = match Self::mutate_account(who, |account| {
 			let actual = cmp::min(account.reserved, value);
@@ -1228,7 +1228,7 @@ impl<T: Config<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
-		if Self::is_dead_account(&who) { return (NegativeImbalance::zero(), value) }
+		if Self::total_balance(&who).is_zero() { return (NegativeImbalance::zero(), value) }
 
 		// NOTE: `mutate_account` may fail if it attempts to reduce the balance to the point that an
 		//   account is attempted to be illegally destroyed.
