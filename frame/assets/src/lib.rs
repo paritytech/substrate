@@ -540,7 +540,6 @@ decl_module! {
 					let new_balance = t.balance.saturating_add(amount);
 					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
 					if Self::is_new_account(&t) {
-						println!("hi shawn");
 						Self::new_zombie(details)?;
 						t.is_zombie = true;
 					}
@@ -651,7 +650,6 @@ decl_module! {
 						details.accounts = accounts;
 					}
 					Self::activate(&target, details, &mut a.is_zombie, &mut a.is_active);
-					println!("Final Active {:?}", a);
 					Ok(())
 				})?;
 
