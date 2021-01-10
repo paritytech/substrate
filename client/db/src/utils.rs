@@ -327,6 +327,23 @@ pub fn read_db<Block>(
 	})
 }
 
+/// Remove database column entry for the given block.
+pub fn remove_db<Block>(
+	transaction: &mut Transaction<DbHash>,
+	db: &dyn Database<DbHash>,
+	col_index: u32,
+	col: u32,
+	id: BlockId<Block>
+) -> sp_blockchain::Result<()>
+where
+	Block: BlockT,
+{
+	block_id_to_lookup_key(db, col_index, id).and_then(|key| match key {
+		Some(key) => Ok(transaction.remove(col, key.as_ref())),
+		None => Ok(()),
+	})
+}
+
 /// Read a header from the database.
 pub fn read_header<Block: BlockT>(
 	db: &dyn Database<DbHash>,

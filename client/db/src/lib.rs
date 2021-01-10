@@ -95,6 +95,8 @@ pub use bench::BenchmarkingState;
 
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
 const CACHE_HEADERS: usize = 8;
+// Max blocks to prune at once
+const MAX_BLOCK_PRUNE: usize = 1024;
 
 /// Default value for storage cache child ratio.
 const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
@@ -1475,12 +1477,59 @@ impl<Block: BlockT> Backend<Block> {
 			}
 		}
 
+		self.prune_blocks(transaction, f_num)?;
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
 		match displaced {
 			x @ &mut None => *x = Some(new_displaced),
 			&mut Some(ref mut displaced) => displaced.merge(new_displaced),
 		}
 
+		Ok(())
+	}
+
+	fn prune_blocks(
+		&self,
+		transaction: &mut Transaction<DbHash>,
+		finalized: NumberFor<Block>,
+	) -> ClientResult<()> {
+		if let KeepBlocks::Some(keep_blocks) = self.keep_blocks {
+			let mut removed_blocks = 0;
+			let mut removed_transactions = 0;
+			let mut number = finalized.saturating_sub(keep_blocks.into());
+			while number > One::one() && removed_blocks < MAX_BLOCK_PRUNE {
+				number = number.saturating_sub(One::one());
+				match read_db(&*self.storage.db, columns::KEY_LOOKUP, columns::BODY, BlockId::<Block>::number(number))? {
+					Some(body) => {
+						removed_blocks += 1;
+						utils::remove_db(
+							transaction,
+							&*self.storage.db,
+							columns::KEY_LOOKUP,
+							columns::BODY,
+							BlockId::<Block>::number(number)
+						)?;
+						match self.transaction_storage {
+							TransactionStorage::BlockBody => {},
+							TransactionStorage::StorageChain => {
+								match Vec::<Block::Hash>::decode(&mut &body[..]) {
+									Ok(hashes) => {
+										removed_transactions += hashes.len();
+										for h in hashes {
+											transaction.remove(columns::TRANSACTION, h.as_ref());
+										}
+									}
+									Err(err) => return Err(sp_blockchain::Error::Backend(
+											format!("Error decoding body list: {}", err)
+									)),
+								}
+							}
+						}
+					}
+					None => break,
+				}
+			}
+			debug!(target: "db", "Pruned {} blocks, {} transactions", removed_blocks, removed_transactions);
+		}
 		Ok(())
 	}
 }
