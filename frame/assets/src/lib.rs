@@ -1174,13 +1174,13 @@ mod tests {
 	#[test]
 	fn max_zombies_should_work() {
 		new_test_ext().execute_with(|| {
+			Balances::make_free_balance_be(&1, 100);
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 2, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 0, 100));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 
 			assert_eq!(Assets::zombie_allowance(0), 0);
 			assert_noop!(Assets::mint(Origin::signed(1), 0, 2, 100), Error::<Test>::TooManyZombies);
-			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::TooManyZombies);
 			assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 50), Error::<Test>::TooManyZombies);
 
 			Balances::make_free_balance_be(&3, 100);
@@ -1190,8 +1190,11 @@ mod tests {
 			// Zombie can transfer full balance and open up a zombie slot.
 			assert_ok!(Assets::transfer(Origin::signed(0), 0, 1, 100));
 			assert_eq!(Assets::zombie_allowance(0), 1);
+			Balances::make_free_balance_be(&2, 100);
+			assert_ok!(Assets::activate_account(Origin::signed(2), 0, 2));
+			// A zombie initiating a transfer will open up a slot
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
-			assert_eq!(Assets::zombie_allowance(0), 0);
+			assert_eq!(Assets::zombie_allowance(0), 2);
 		});
 	}
 
@@ -1214,7 +1217,7 @@ mod tests {
 	}
 
 	#[test]
-	fn activating_should_work() {
+	fn transfer_blocks_new_zombie_creation() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 10));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
@@ -1223,8 +1226,23 @@ mod tests {
 			// introduce a bit of balance for account 2.
 			Balances::make_free_balance_be(&2, 100);
 
-			// transfer 25 units, another zombie is created.
-			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 25));
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 25), Error::<Test>::InactiveAccount);
+		});
+	}
+
+	#[test]
+	fn activating_should_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 10));
+			// Admin can create a zombie with mint.
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_eq!(Assets::zombie_allowance(0), 9);
+
+			// introduce a bit of balance for account 2.
+			Balances::make_free_balance_be(&2, 100);
+
+			// Admin can create a zombie with force transfer
+			assert_ok!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 25));
 			assert_eq!(Assets::zombie_allowance(0), 8);
 
 			// Can't activate when account doesn't exist
@@ -1253,7 +1271,8 @@ mod tests {
 			assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 9), Error::<Test>::BalanceLow);
 
 			// When deducting from an account to below minimum, it should be reaped.
-
+			Balances::make_free_balance_be(&2, 100);
+			assert_ok!(Assets::activate_account(Origin::signed(2), 0, 2));
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 91));
 			assert!(Assets::balance(0, 1).is_zero());
 			assert_eq!(Assets::balance(0, 2), 100);
@@ -1276,9 +1295,13 @@ mod tests {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
+			Balances::make_free_balance_be(&2, 100);
+			assert_ok!(Assets::activate_account(Origin::signed(2), 0, 2));
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
 			assert_eq!(Assets::balance(0, 1), 50);
 			assert_eq!(Assets::balance(0, 2), 50);
+			Balances::make_free_balance_be(&3, 100);
+			assert_ok!(Assets::activate_account(Origin::signed(3), 0, 3));
 			assert_ok!(Assets::transfer(Origin::signed(2), 0, 3, 31));
 			assert_eq!(Assets::balance(0, 1), 50);
 			assert_eq!(Assets::balance(0, 2), 19);
@@ -1294,6 +1317,8 @@ mod tests {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
+			Balances::make_free_balance_be(&2, 100);
+			assert_ok!(Assets::activate_account(Origin::signed(2), 0, 2));
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
 			assert_eq!(Assets::balance(0, 1), 50);
 			assert_eq!(Assets::balance(0, 2), 50);
@@ -1307,6 +1332,8 @@ mod tests {
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::freeze(Origin::signed(1), 0, 1));
+			Balances::make_free_balance_be(&2, 100);
+			assert_ok!(Assets::activate_account(Origin::signed(2), 0, 2));
 			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
 			assert_ok!(Assets::thaw(Origin::signed(1), 0, 1));
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
@@ -1385,6 +1412,8 @@ mod tests {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
+			Balances::make_free_balance_be(&2, 100);
+			assert_ok!(Assets::activate_account(Origin::signed(2), 0, 2));
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
 			assert_eq!(Assets::balance(0, 1), 50);
 			assert_eq!(Assets::balance(0, 2), 50);
