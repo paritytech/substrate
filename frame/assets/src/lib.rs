@@ -710,7 +710,7 @@ decl_module! {
 					let new_balance = a.balance.saturating_add(amount);
 					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
 					// We don't allow permissionless transfers to new accounts to prevent zombie griefing.
-					ensure!(Self::is_new_account(&a), Error::<T>::InactiveAccount);
+					ensure!(!Self::is_new_account(&a), Error::<T>::InactiveAccount);
 					a.balance = new_balance;
 					Ok(())
 				})?;
