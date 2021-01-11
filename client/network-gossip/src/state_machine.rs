@@ -26,7 +26,7 @@ use std::time;
 use log::{debug, error, trace};
 use lru::LruCache;
 use libp2p::PeerId;
-use prometheus_endpoint::{register, Gauge, PrometheusError, Registry, U64};
+use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use sc_network::ObservedRole;
 use wasm_timer::Instant;
@@ -215,7 +215,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			});
 
 			if let Some(ref metrics) = self.metrics {
-				metrics.messages.inc();
+				metrics.registered_messages.inc();
 			}
 		}
 	}
@@ -287,12 +287,14 @@ impl<B: BlockT> ConsensusGossip<B> {
 		self.messages
 			.retain(|entry| !message_expired(entry.topic, &entry.message));
 
+		let expired_messages = before - self.messages.len();
+
 		if let Some(ref metrics) = self.metrics {
-			metrics.messages.set(self.messages.len() as u64);
+			metrics.expired_messages.inc_by(expired_messages as u64)
 		}
 
 		trace!(target: "gossip", "Cleaned up {} stale messages, {} left ({} known)",
-			before - self.messages.len(),
+			expired_messages,
 			self.messages.len(),
 			known_messages.len(),
 		);
@@ -455,16 +457,24 @@ impl<B: BlockT> ConsensusGossip<B> {
 }
 
 struct Metrics {
-	messages: Gauge<U64>,
+	registered_messages: Counter<U64>,
+	expired_messages: Counter<U64>,
 }
 
 impl Metrics {
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
-			messages: register(
-				Gauge::new(
-					"network_gossip_messages_count",
-					"Number of messages stored locally by the gossip service.",
+			registered_messages: register(
+				Counter::new(
+					"network_gossip_registered_messages_total",
+					"Number of registered messages by the gossip service.",
+				)?,
+				registry,
+			)?,
+			expired_messages: register(
+				Counter::new(
+					"network_gossip_expired_messages_total",
+					"Number of expired messages by the gossip service.",
 				)?,
 				registry,
 			)?,
