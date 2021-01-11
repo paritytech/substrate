@@ -24,7 +24,7 @@ use crate::{
 };
 
 use bytes::Bytes;
-use futures::channel::oneshot;
+use futures::{channel::oneshot, stream::StreamExt};
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::identify::IdentifyInfo;
@@ -273,7 +273,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	}
 
 	/// Issue a light client request.
-	pub fn light_client_request(&mut self, r: light_client_handler::Request<B>) -> Result<(), light_client_handler::Error> {
+	pub fn light_client_request(&mut self, r: light_client_handler::Request<B>) -> Result<(), light_client_handler::SendRequestError> {
 		self.light_client_request_client.request(r)
 	}
 }
@@ -441,7 +441,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 
 impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	fn poll<TEv>(&mut self, cx: &mut Context, _: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
-		while let Some(event) = self.light_client_request_client.poll_unpin(cx) {
+		while let Poll::Ready(Some(event)) = self.light_client_request_client.poll_next_unpin(cx) {
 			unimplemented!()
 		}
 

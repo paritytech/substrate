@@ -257,7 +257,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let config = light_client_handler::Config::new(&params.protocol_id);
 				light_client_handler::LightClientRequestClient::new(
 					config,
-					params.chain,
 					checker,
 					peerset_handle.clone(),
 				)
@@ -1275,6 +1274,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			while let Poll::Ready(Some(rq)) = light_client_rqs.poll_next_unpin(cx) {
 				// This can error if there are too many queued requests already.
 				if this.network_service.light_client_request(rq).is_err() {
+					// TODO: Is it always too many requests or can this fail due to other things as
+					// well?
 					log::warn!("Couldn't start light client request: too many pending requests");
 				}
 				if let Some(metrics) = this.metrics.as_ref() {
@@ -1569,11 +1570,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::B(EitherError::A(
-								PingFailure::Timeout)))))))) => "ping-timeout",
+								EitherError::B(EitherError::A(
+								PingFailure::Timeout))))))) => "ping-timeout",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged))))))) => "sync-notifications-clogged",
+								EitherError::A(
+								NotifsHandlerError::SyncNotificationsClogged)))))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) => "protocol-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout)) => "keep-alive-timeout",
 							None => "actively-closed",
