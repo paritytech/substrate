@@ -218,7 +218,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			service.clone(),
 			GRANDPA_PROTOCOL_NAME,
 			validator.clone(),
-			prometheus_registry.clone(),
+			prometheus_registry,
 		)));
 
 		{
