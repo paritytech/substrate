@@ -17,16 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use libp2p::core::multiaddr::{Multiaddr, Protocol};
-use rand::seq::SliceRandom;
 use std::collections::HashMap;
 
 use sp_authority_discovery::AuthorityId;
 use sc_network::PeerId;
-
-/// The maximum number of authority connections initialized through the authority discovery module.
-///
-/// In other words the maximum size of the `authority` peerset priority group.
-const MAX_NUM_AUTHORITY_CONN: usize = 10;
 
 /// Cache for [`AuthorityId`] -> [`Vec<Multiaddr>`] and [`PeerId`] -> [`AuthorityId`] mappings.
 pub(super) struct AddrCache {
@@ -75,30 +69,6 @@ impl AddrCache {
 	/// Returns the [`AuthorityId`] for the given [`PeerId`].
 	pub fn get_authority_id_by_peer_id(&self, peer_id: &PeerId) -> Option<&AuthorityId> {
 		self.peer_id_to_authority_id.get(peer_id)
-	}
-
-	/// Returns a single address for a random subset (maximum of [`MAX_NUM_AUTHORITY_CONN`]) of all
-	/// known authorities.
-	pub fn get_random_subset(&self) -> Vec<Multiaddr> {
-		let mut rng = rand::thread_rng();
-
-		let mut addresses = self
-			.authority_id_to_addresses
-			.iter()
-			.filter_map(|(_authority_id, addresses)| {
-				debug_assert!(!addresses.is_empty());
-				addresses
-					.choose(&mut rng)
-			})
-			.collect::<Vec<&Multiaddr>>();
-
-		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
-		addresses.dedup();
-
-		addresses
-			.choose_multiple(&mut rng, MAX_NUM_AUTHORITY_CONN)
-			.map(|a| (**a).clone())
-			.collect()
 	}
 
 	/// Removes all [`PeerId`]s and [`Multiaddr`]s from the cache that are not related to the given
@@ -192,11 +162,6 @@ mod tests {
 			cache.insert(second.0.clone(), vec![second.1.clone()]);
 			cache.insert(third.0.clone(), vec![third.1.clone()]);
 
-			let subset = cache.get_random_subset();
-			assert!(
-				subset.contains(&first.1) && subset.contains(&second.1) && subset.contains(&third.1),
-				"Expect initial subset to contain all authorities.",
-			);
 			assert_eq!(
 				Some(&vec![third.1.clone()]),
 				cache.get_addresses_by_authority_id(&third.0),
@@ -210,12 +175,6 @@ mod tests {
 
 			cache.retain_ids(&vec![first.0, second.0]);
 
-			let subset = cache.get_random_subset();
-			assert!(
-				subset.contains(&first.1) || subset.contains(&second.1),
-				"Expected both first and second authority."
-			);
-			assert!(!subset.contains(&third.1), "Did not expect address from third authority");
 			assert_eq!(
 				None, cache.get_addresses_by_authority_id(&third.0),
 				"Expect `get_addresses_by_authority_id` to not return `None` for third authority."
