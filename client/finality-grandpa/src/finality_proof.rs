@@ -448,13 +448,19 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 /// We only return proof for finalized blocks (with justification).
 ///
 /// It is assumed that the caller already have a proof-of-finality for the block 'begin'.
+///
+/// Note that if block 'begin' is in a scheduled change interval, the proof is very likely
+/// to be invalid. One way to prevent that would be to look backward for the previous authority
+/// set change and see if a pending set change is in progress. This is not implemented at this
+/// point.
+/// Similarily changing an authority set during a 'delay' will not work with the given algo.
 pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 	blockchain: &B,
 	begin: Block::Hash,
+	max_fragment_limit: Option<usize>,
 ) -> ::sp_blockchain::Result<Vec<u8>>
 {
-
-  let begin = BlockId::Hash(begin);
+	let begin = BlockId::Hash(begin);
 	let begin_number = blockchain.block_number_from_id(&begin)?
 		.ok_or_else(|| ClientError::Backend("Missing start block".to_string()))?;
 	let end = BlockId::Hash(blockchain.last_finalized()?);
@@ -466,13 +472,16 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 		return Err(ClientError::Backend("Unfinalized start for authority proof".to_string()));
 	}
 
-	// TODO fetch bonding duration and store it to error when not from it.
 	let mut result = Vec::new();
 
 	let mut header = blockchain.expect_header(begin)?;
 	let mut index = *header.number() + One::one();
 
 	while index <= end_number {
+		if max_fragment_limit.map(|limit| result.len() <= limit).unwrap_or(false) {
+			break;
+		}
+
 		header = blockchain.expect_header(BlockId::number(index))?;
 
 		if let Some((block_number, sp_finality_grandpa::ScheduledChange {
@@ -856,6 +865,24 @@ pub(crate) mod tests {
 			}
 
 			Ok(())
+		}
+	}
+
+	#[derive(Debug, PartialEq, Encode, Decode)]
+	pub struct TestBlockJustification(TestJustification, u64, H256);
+
+	impl BlockJustification<Header> for TestBlockJustification {
+		fn number(&self) -> <Header as HeaderT>::Number {
+			self.1
+		}
+		fn hash(&self) -> <Header as HeaderT>::Hash {
+			self.2.clone()
+		}
+	}
+
+	impl ProvableJustification<Header> for TestBlockJustification {
+		fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()> {
+			self.0.verify(set_id, authorities)
 		}
 	}
 
@@ -1250,5 +1277,160 @@ pub(crate) mod tests {
 			header(4).hash(),
 		).unwrap();
 		assert!(proof_of_4.is_none());
+	}
+
+	#[test]
+	// TODO better name
+	fn warp_sync_proof() {
+		fn test_blockchain(
+			nb_blocks: u64,
+			mut set_change: &[(u64, Vec<u8>)],
+			mut justifications: &[(u64, Vec<u8>)],
+		) -> (InMemoryBlockchain<Block>, Vec<H256>) {
+			let blockchain = InMemoryBlockchain::<Block>::new();
+			let mut hashes = Vec::<H256>::new();
+			let mut set_id = 0;
+			for i in 0..nb_blocks {
+				let mut set_id_next = set_id;
+				let mut header = header(i);
+				set_change.first()
+					.map(|j| if i == j.0 {
+						set_change = &set_change[1..];
+						let next_authorities: Vec<_> = j.1.iter().map(|i| (AuthorityId::from_slice(&[*i; 32]), 1u64)).collect();
+						set_id_next += 1;
+						header.digest_mut().logs.push(
+							sp_runtime::generic::DigestItem::Consensus(
+								sp_finality_grandpa::GRANDPA_ENGINE_ID,
+								sp_finality_grandpa::ConsensusLog::ScheduledChange(
+									sp_finality_grandpa::ScheduledChange { delay: 0u64, next_authorities }
+								).encode(),
+							));
+					});
+
+				if let Some(parent) = hashes.last() {
+					header.set_parent_hash(parent.clone());
+				}
+				let header_hash = header.hash();
+
+				let justification = justifications.first()
+					.and_then(|j| if i == j.0 {
+						justifications = &justifications[1..];
+
+						let authority = j.1.iter().map(|j|
+							(AuthorityId::from_slice(&[*j; 32]), 1u64)
+						).collect();
+						let justification = TestBlockJustification(
+							TestJustification((set_id, authority), vec![i as u8]),
+							i,
+							header_hash,
+						);
+						Some(justification.encode())
+					} else {
+						None
+					});
+				hashes.push(header_hash.clone());
+				set_id = set_id_next;
+
+				blockchain.insert(header_hash, header, justification, None, NewBlockState::Final)
+					.unwrap();
+			}
+			(blockchain, hashes)
+		}
+
+		let (blockchain, hashes) = test_blockchain(
+			7,
+			vec![(3, vec![9])].as_slice(),
+			vec![
+				(1, vec![1, 2, 3]),
+				(2, vec![1, 2, 3]),
+				(3, vec![1, 2, 3]),
+				(4, vec![9]),
+				(6, vec![9]),
+			].as_slice(),
+		);
+
+		// proof after set change
+		let proof = prove_warp_sync(&blockchain, hashes[6], None).unwrap();
+
+		let initial_authorities: Vec<_> = [1u8, 2, 3].iter().map(|i|
+			(AuthorityId::from_slice(&[*i; 32]), 1u64)
+		).collect();
+
+		let authorities_next: Vec<_> = [9u8].iter().map(|i|
+			(AuthorityId::from_slice(&[*i; 32]), 1u64)
+		).collect();
+
+		assert!(check_warp_sync_proof::<Block, TestBlockJustification>(
+			0,
+			initial_authorities.clone(),
+			proof.clone(),
+		).is_err());
+		assert!(check_warp_sync_proof::<Block, TestBlockJustification>(
+			0,
+			authorities_next.clone(),
+			proof.clone(),
+		).is_err());
+		assert!(check_warp_sync_proof::<Block, TestBlockJustification>(
+			1,
+			initial_authorities.clone(),
+			proof.clone(),
+		).is_err());
+		let (
+			_header,
+			current_set_id,
+			current_set,
+		) = check_warp_sync_proof::<Block, TestBlockJustification>(
+			1,
+			authorities_next.clone(),
+			proof.clone(),
+		).unwrap();
+
+		assert_eq!(current_set_id, 1);
+		assert_eq!(current_set, authorities_next);
+
+		// proof before set change
+		let proof = prove_warp_sync(&blockchain, hashes[1], None).unwrap();
+		let (
+			_header,
+			current_set_id,
+			current_set,
+		) = check_warp_sync_proof::<Block, TestBlockJustification>(
+			0,
+			initial_authorities.clone(),
+			proof.clone(),
+		).unwrap();
+
+		assert_eq!(current_set_id, 1);
+		assert_eq!(current_set, authorities_next);
+
+		// two changes
+		let (blockchain, hashes) = test_blockchain(
+			13,
+			vec![(3, vec![7]), (8, vec![9])].as_slice(),
+			vec![
+				(1, vec![1, 2, 3]),
+				(2, vec![1, 2, 3]),
+				(3, vec![1, 2, 3]),
+				(4, vec![7]),
+				(6, vec![7]),
+				(8, vec![7]), // warning, requires a justification on change set
+				(10, vec![9]),
+			].as_slice(),
+		);
+
+		// proof before set change
+		let proof = prove_warp_sync(&blockchain, hashes[1], None).unwrap();
+		let (
+			_header,
+			current_set_id,
+			current_set,
+		) = check_warp_sync_proof::<Block, TestBlockJustification>(
+			0,
+			initial_authorities.clone(),
+			proof.clone(),
+		).unwrap();
+
+		assert_eq!(current_set_id, 2);
+		assert_eq!(current_set, authorities_next);
 	}
 }

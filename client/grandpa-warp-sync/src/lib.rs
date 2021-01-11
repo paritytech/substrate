@@ -80,6 +80,10 @@ struct Request<B: BlockT> {
 	begin: B::Hash
 }
 
+/// Setting a large fragment limit, allowing client
+/// to define it is possible.
+const WARP_SYNC_FRAGMENTS_LIMIT: usize = 100;
+
 /// Handler for incoming grandpa warp sync requests from a remote peer.
 pub struct GrandpaWarpSyncRequestHandler<TBackend, TBlock> {
 	backend: Arc<TBackend>,
@@ -108,7 +112,7 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 		let request = Request::<TBlock>::decode(&mut &payload[..])?;
 
 		let response = sc_finality_grandpa::prove_warp_sync(
-			self.backend.blockchain(), request.begin,
+			self.backend.blockchain(), request.begin, Some(WARP_SYNC_FRAGMENTS_LIMIT)
 		)?;
 
 		pending_response.send(response)
