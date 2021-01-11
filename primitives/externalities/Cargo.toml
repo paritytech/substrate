@@ -1,6 +1,6 @@
 [package]
 name = "sp-externalities"
-version = "0.8.0"
+version = "0.8.1"
 license = "Apache-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
