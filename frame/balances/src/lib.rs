@@ -973,10 +973,7 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 					.ok_or(Error::<T, I>::Overflow)?;
 
 				let ed = T::ExistentialDeposit::get();
-				ensure!(
-					to_acc.total() >= ed,
-					Error::<T, I>::ExistentialDeposit,
-				);
+				ensure!(to_acc.total() >= ed, Error::<T, I>::ExistentialDeposit);
 
 				Self::ensure_can_withdraw(
 					transactor,
