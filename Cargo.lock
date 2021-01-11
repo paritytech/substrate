@@ -8338,7 +8338,7 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
- "sha2 0.8.2",
+ "sha2 0.9.2",
  "sp-debug-derive",
  "sp-externalities",
  "sp-runtime-interface",
