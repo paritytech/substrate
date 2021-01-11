@@ -674,6 +674,7 @@ impl<T: Config> Module<T> {
 		if !authorities.is_empty() {
 			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
 			Authorities::put(authorities);
+			NextAuthorities::put(authorities);
 		}
 	}
 
