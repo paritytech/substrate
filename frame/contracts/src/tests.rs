@@ -35,7 +35,7 @@ use sp_runtime::{
 use sp_io::hashing::blake2_256;
 use frame_support::{
 	assert_ok, assert_err, assert_err_ignore_postinfo, impl_outer_dispatch, impl_outer_event,
-	impl_outer_origin, parameter_types, StorageMap,
+	impl_outer_origin, parameter_types, StorageMap, assert_storage_noop,
 	traits::{Currency, ReservableCurrency, OnInitialize},
 	weights::{Weight, PostDispatchInfo, DispatchClass, constants::WEIGHT_PER_SECOND},
 	dispatch::DispatchErrorWithPostInfo,
@@ -2513,7 +2513,7 @@ fn not_deployed_if_endowment_too_low_for_first_rent() {
 			// Create
 			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
-			assert_err_ignore_postinfo!(Contracts::instantiate(
+			assert_storage_noop!(assert_err_ignore_postinfo!(Contracts::instantiate(
 					Origin::signed(ALICE),
 					30_000,
 					GAS_LIMIT, code_hash.into(),
@@ -2522,7 +2522,7 @@ fn not_deployed_if_endowment_too_low_for_first_rent() {
 					vec![],
 				),
 				Error::<Test>::NewContractNotFunded,
-			);
+			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 			assert_matches!(ContractInfoOf::<Test>::get(&addr), None);
 		});

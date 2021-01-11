@@ -322,56 +322,62 @@ where
 		let caller = self.self_account.clone();
 		let dest = Contracts::<T>::contract_address(&caller, code_hash, salt);
 
-		// TrieId has not been generated yet and storage is empty since contract is new.
-		//
-		// Generate it now.
-		let dest_trie_id = Storage::<T>::generate_trie_id(&dest);
+		let output = frame_support::storage::with_transaction(|| {
+			// Generate the trie id in a new transaction to only increment the counter on success.
+			let dest_trie_id = Storage::<T>::generate_trie_id(&dest);
 
-		let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
-			Storage::<T>::place_contract(
-				&dest,
-				nested
-					.self_trie_id
-					.clone()
-					.expect("the nested context always has to have self_trie_id"),
-				code_hash.clone()
-			)?;
+			let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
+				Storage::<T>::place_contract(
+					&dest,
+					nested
+						.self_trie_id
+						.clone()
+						.expect("the nested context always has to have self_trie_id"),
+					code_hash.clone()
+				)?;
 
-			// Send funds unconditionally here. If the `endowment` is below existential_deposit
-			// then error will be returned here.
-			transfer(
-				TransferCause::Instantiate,
-				transactor_kind,
-				&caller,
-				&dest,
-				endowment,
-				nested,
-			)?;
+				// Send funds unconditionally here. If the `endowment` is below existential_deposit
+				// then error will be returned here.
+				transfer(
+					TransferCause::Instantiate,
+					transactor_kind,
+					&caller,
+					&dest,
+					endowment,
+					nested,
+				)?;
 
-			let executable = nested.loader.load_init(&code_hash)
-				.map_err(|_| Error::<T>::CodeNotFound)?;
-			let output = nested.vm
-				.execute(
-					&executable,
-					nested.new_call_context(caller.clone(), endowment),
-					input_data,
-					gas_meter,
-				).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
+				let executable = nested.loader.load_init(&code_hash)
+					.map_err(|_| Error::<T>::CodeNotFound)?;
+				let output = nested.vm
+					.execute(
+						&executable,
+						nested.new_call_context(caller.clone(), endowment),
+						input_data,
+						gas_meter,
+					).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
 
-			// Collect the rent for the first block to prevent the creation of very large
-			// contracts that never intended to pay for even one block.
-			// This also makes sure that it is above the subsistence threshold
-			// in order to keep up the guarantuee that we always leave a tombstone behind
-			// with the exception of a contract that called `seal_terminate`.
-			Rent::<T>::charge(&dest)?
-				.and_then(|c| c.get_alive())
-				.ok_or_else(|| Error::<T>::NewContractNotFunded)?;
+				// Collect the rent for the first block to prevent the creation of very large
+				// contracts that never intended to pay for even one block.
+				// This also makes sure that it is above the subsistence threshold
+				// in order to keep up the guarantuee that we always leave a tombstone behind
+				// with the exception of a contract that called `seal_terminate`.
+				Rent::<T>::charge(&dest)?
+					.and_then(|c| c.get_alive())
+					.ok_or_else(|| Error::<T>::NewContractNotFunded)?;
 
-			// Deposit an instantiation event.
-			deposit_event::<T>(vec![], RawEvent::Instantiated(caller.clone(), dest.clone()));
+				// Deposit an instantiation event.
+				deposit_event::<T>(vec![], RawEvent::Instantiated(caller.clone(), dest.clone()));
 
-			Ok(output)
+				Ok(output)
+			});
+
+			use frame_support::storage::TransactionOutcome::*;
+			match output {
+				Ok(_) => Commit(output),
+				Err(_) => Rollback(output),
+			}
 		})?;
 
 		Ok((dest, output))
