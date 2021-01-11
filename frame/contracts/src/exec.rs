@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::{
 	CodeHash, ConfigCache, Event, RawEvent, Config, Module as Contracts,
@@ -267,12 +268,12 @@ where
 			Err(Error::<T>::MaxCallDepthReached)?
 		}
 
-		// Assumption: `collect` doesn't collide with overlay because
-		// `collect` will be done on first call and destination contract and balance
-		// cannot be changed before the first call
-		// We do not allow 'calling' plain accounts. For transfering value
-		// `seal_transfer` must be used.
-		let contract = if let Some(ContractInfo::Alive(info)) = Rent::<T>::collect(&dest) {
+		// This charges the rent and denies access to a contract that is in need of
+		// eviction by returning `None`. We cannot evict eagerly here because those
+		// changes would be rolled back in case this contract is called by another
+		// contract.
+		// See: https://github.com/paritytech/substrate/issues/6439#issuecomment-648754324
+		let contract = if let Ok(Some(ContractInfo::Alive(info))) = Rent::<T>::charge(&dest) {
 			info
 		} else {
 			Err(Error::<T>::NotCallable)?
@@ -574,13 +575,16 @@ where
 			value,
 			self.ctx,
 		)?;
-		let self_trie_id = self.ctx.self_trie_id.as_ref().expect(
-			"this function is only invoked by in the context of a contract;\
-				a contract has a trie id;\
-				this can't be None; qed",
-		);
-		Storage::<T>::destroy_contract(&self_id, self_trie_id);
-		Ok(())
+		if let Some(ContractInfo::Alive(info)) = ContractInfoOf::<T>::take(&self_id) {
+			Storage::<T>::queue_trie_for_deletion(&info)?;
+			Ok(())
+		} else {
+			panic!(
+				"this function is only invoked by in the context of a contract;\
+				this contract is therefore alive;\
+				qed"
+			);
+		}
 	}
 
 	fn call(

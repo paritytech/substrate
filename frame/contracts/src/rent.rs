@@ -1,31 +1,35 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! A module responsible for computing the right amount of weight and charging it.
 
 use crate::{
 	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, RawEvent,
 	TombstoneContractInfo, Config, CodeHash, ConfigCache, Error,
+	storage::Storage,
 };
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_core::crypto::UncheckedFrom;
-use frame_support::storage::child;
-use frame_support::traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReasons};
-use frame_support::StorageMap;
+use frame_support::{
+	debug, StorageMap,
+	storage::child,
+	traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReasons},
+};
 use pallet_contracts_primitives::{ContractAccessError, RentProjection, RentProjectionResult};
 use sp_runtime::{
 	DispatchError,
@@ -73,10 +77,6 @@ enum Verdict<T: Config> {
 	/// For example, it already paid its rent in the current block, or it has enough deposit for not
 	/// paying rent at all.
 	Exempt,
-	/// Funds dropped below the subsistence deposit.
-	///
-	/// Remove the contract along with it's storage.
-	Kill,
 	/// The contract cannot afford payment within its rent budget so it gets evicted. However,
 	/// because its balance is greater than the subsistence threshold it leaves a tombstone.
 	Evict {
@@ -101,21 +101,15 @@ where
 		free_balance: &BalanceOf<T>,
 		contract: &AliveContractInfo<T>
 	) -> BalanceOf<T> {
-		let free_storage = free_balance
-			.checked_div(&T::RentDepositOffset::get())
-			.unwrap_or_else(Zero::zero);
-
-		// For now, we treat every empty KV pair as if it was one byte long.
-		let empty_pairs_equivalent = contract.empty_pair_count;
-
-		let effective_storage_size = <BalanceOf<T>>::from(
-			contract.storage_size + T::StorageSizeOffset::get() + empty_pairs_equivalent,
-		)
-		.saturating_sub(free_storage);
-
-		effective_storage_size
-			.checked_mul(&T::RentByteFee::get())
-			.unwrap_or_else(|| <BalanceOf<T>>::max_value())
+		let uncovered_by_balance = T::DepositPerStorageByte::get()
+			.saturating_mul(contract.storage_size.into())
+			.saturating_add(
+				T::DepositPerStorageItem::get()
+					.saturating_mul(contract.pair_count.into())
+			)
+			.saturating_add(T::DepositPerContract::get())
+			.saturating_sub(*free_balance);
+		T::RentFraction::get().mul_ceil(uncovered_by_balance)
 	}
 
 	/// Returns amount of funds available to consume by rent mechanism.
@@ -180,11 +174,17 @@ where
 		let rent_budget = match Self::rent_budget(&total_balance, &free_balance, contract) {
 			Some(rent_budget) => rent_budget,
 			None => {
-				// The contract's total balance is already below subsistence threshold. That
-				// indicates that the contract cannot afford to leave a tombstone.
-				//
-				// So cleanly wipe the contract.
-				return Verdict::Kill;
+				// All functions that allow a contract to transfer balance enforce
+				// that the contract always stays above the subsistence threshold.
+				// We want the rent system to always leave a tombstone to prevent the
+				// accidental loss of a contract. Ony `seal_terminate` can remove a
+				// contract without a tombstone. Therefore this case should be never
+				// hit.
+				debug::error!(
+					"Tombstoned a contract that is below the subsistence threshold: {:?}",
+					account
+				);
+				0u32.into()
 			}
 		};
 
@@ -233,19 +233,19 @@ where
 		alive_contract_info: AliveContractInfo<T>,
 		current_block_number: T::BlockNumber,
 		verdict: Verdict<T>,
-	) -> Option<ContractInfo<T>> {
+		allow_eviction: bool,
+	) -> Result<Option<ContractInfo<T>>, DispatchError> {
 		match verdict {
-			Verdict::Exempt => return Some(ContractInfo::Alive(alive_contract_info)),
-			Verdict::Kill => {
-				<ContractInfoOf<T>>::remove(account);
-				child::kill_storage(
-					&alive_contract_info.child_trie_info(),
-					None,
-				);
-				<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), false));
-				None
+			Verdict::Exempt => return Ok(Some(ContractInfo::Alive(alive_contract_info))),
+			Verdict::Evict { amount: _ } if !allow_eviction => {
+				Ok(None)
 			}
 			Verdict::Evict { amount } => {
+				// We need to remove the trie first because it is the only operation
+				// that can fail and this function is called without a storage
+				// transaction when called through `claim_surcharge`.
+				Storage::<T>::queue_trie_for_deletion(&alive_contract_info)?;
+
 				if let Some(amount) = amount {
 					amount.withdraw(account);
 				}
@@ -261,14 +261,8 @@ where
 				);
 				let tombstone_info = ContractInfo::Tombstone(tombstone);
 				<ContractInfoOf<T>>::insert(account, &tombstone_info);
-
-				child::kill_storage(
-					&alive_contract_info.child_trie_info(),
-					None,
-				);
-
 				<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), true));
-				Some(tombstone_info)
+				Ok(Some(tombstone_info))
 			}
 			Verdict::Charge { amount } => {
 				let contract_info = ContractInfo::Alive(AliveContractInfo::<T> {
@@ -277,21 +271,21 @@ where
 					..alive_contract_info
 				});
 				<ContractInfoOf<T>>::insert(account, &contract_info);
-
 				amount.withdraw(account);
-				Some(contract_info)
+				Ok(Some(contract_info))
 			}
 		}
 	}
 
 	/// Make account paying the rent for the current block number
 	///
-	/// NOTE this function performs eviction eagerly. All changes are read and written directly to
-	/// storage.
-	pub fn collect(account: &T::AccountId) -> Option<ContractInfo<T>> {
+	/// This functions does **not** evict the contract. It returns `None` in case the
+	/// contract is in need of eviction. [`snitch_contract_should_be_evicted`] must
+	/// be called to perform the eviction.
+	pub fn charge(account: &T::AccountId) -> Result<Option<ContractInfo<T>>, DispatchError> {
 		let contract_info = <ContractInfoOf<T>>::get(account);
 		let alive_contract_info = match contract_info {
-			None | Some(ContractInfo::Tombstone(_)) => return contract_info,
+			None | Some(ContractInfo::Tombstone(_)) => return Ok(contract_info),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 
@@ -302,7 +296,7 @@ where
 			Zero::zero(),
 			&alive_contract_info,
 		);
-		Self::enact_verdict(account, alive_contract_info, current_block_number, verdict)
+		Self::enact_verdict(account, alive_contract_info, current_block_number, verdict, false)
 	}
 
 	/// Process a report that a contract under the given address should be evicted.
@@ -320,10 +314,10 @@ where
 	pub fn snitch_contract_should_be_evicted(
 		account: &T::AccountId,
 		handicap: T::BlockNumber,
-	) -> bool {
-		let contract_info = <ContractInfoOf<T>>::get(account);
-		let alive_contract_info = match contract_info {
-			None | Some(ContractInfo::Tombstone(_)) => return false,
+	) -> Result<bool, DispatchError> {
+		let contract = <ContractInfoOf<T>>::get(account);
+		let contract = match contract {
+			None | Some(ContractInfo::Tombstone(_)) => return Ok(false),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 		let current_block_number = <frame_system::Module<T>>::block_number();
@@ -331,16 +325,16 @@ where
 			account,
 			current_block_number,
 			handicap,
-			&alive_contract_info,
+			&contract,
 		);
 
 		// Enact the verdict only if the contract gets removed.
 		match verdict {
-			Verdict::Kill | Verdict::Evict { .. } => {
-				Self::enact_verdict(account, alive_contract_info, current_block_number, verdict);
-				true
+			Verdict::Evict { .. } => {
+				Self::enact_verdict(account, contract, current_block_number, verdict, true)?;
+				Ok(true)
 			}
-			_ => false,
+			_ => Ok(false),
 		}
 	}
 
@@ -358,9 +352,11 @@ where
 	pub fn compute_projection(
 		account: &T::AccountId,
 	) -> RentProjectionResult<T::BlockNumber> {
+		use ContractAccessError::IsTombstone;
+
 		let contract_info = <ContractInfoOf<T>>::get(account);
 		let alive_contract_info = match contract_info {
-			None | Some(ContractInfo::Tombstone(_)) => return Err(ContractAccessError::IsTombstone),
+			None | Some(ContractInfo::Tombstone(_)) => return Err(IsTombstone),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 		let current_block_number = <frame_system::Module<T>>::block_number();
@@ -371,11 +367,11 @@ where
 			&alive_contract_info,
 		);
 		let new_contract_info =
-			Self::enact_verdict(account, alive_contract_info, current_block_number, verdict);
+			Self::enact_verdict(account, alive_contract_info, current_block_number, verdict, false);
 
 		// Check what happened after enaction of the verdict.
-		let alive_contract_info = match new_contract_info {
-			None | Some(ContractInfo::Tombstone(_)) => return Err(ContractAccessError::IsTombstone),
+		let alive_contract_info = match new_contract_info.map_err(|_| IsTombstone)? {
+			None | Some(ContractInfo::Tombstone(_)) => return Err(IsTombstone),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 
@@ -482,8 +478,7 @@ where
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
 			trie_id: origin_contract.trie_id,
 			storage_size: origin_contract.storage_size,
-			empty_pair_count: origin_contract.empty_pair_count,
-			total_pair_count: origin_contract.total_pair_count,
+			pair_count: origin_contract.pair_count,
 			code_hash,
 			rent_allowance,
 			deduct_block: current_block,

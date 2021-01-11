@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -164,6 +164,7 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 /// An object to track the currently used extrinsic weight in a block.
 pub type ConsumedWeight = PerDispatchClass<Weight>;
 
+/// System configuration trait. Implemented by runtime.
 pub trait Config: 'static + Eq + Clone {
 	/// The basic call filter to use in Origin. All origins are built with this filter as base,
 	/// except Root.
@@ -256,6 +257,13 @@ pub trait Config: 'static + Eq + Clone {
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
 
 	type SystemWeightInfo: WeightInfo;
+
+	/// The designated SS85 prefix of this chain.
+	///
+	/// This replaces the "ss58Format" property declared in the chain spec. Reason is
+	/// that the runtime should know about the prefix in order to make use of it as
+	/// an identifier of the chain.
+	type SS58Prefix: Get<u8>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Config>::Hash>;
@@ -497,6 +505,11 @@ decl_error! {
 	}
 }
 
+/// Pallet struct placeholder on which is implemented the pallet logic.
+///
+/// It is currently an alias for `Module` as old macros still generate/use old name.
+pub type Pallet<T> = Module<T>;
+
 decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 		type Error = Error<T>;
@@ -509,6 +522,13 @@ decl_module! {
 
 		/// The weight configuration (limits & base values) for each class of extrinsics and block.
 		const BlockWeights: limits::BlockWeights = T::BlockWeights::get();
+
+		/// The designated SS85 prefix of this chain.
+		///
+		/// This replaces the "ss58Format" property declared in the chain spec. Reason is
+		/// that the runtime should know about the prefix in order to make use of it as
+		/// an identifier of the chain.
+		const SS58Prefix: u8 = T::SS58Prefix::get();
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if !UpgradedToU32RefCount::get() {
@@ -1342,4 +1362,15 @@ impl<T: Config> Lookup for ChainContext<T> {
 	fn lookup(&self, s: Self::Source) -> Result<Self::Target, LookupError> {
 		<T::Lookup as StaticLookup>::lookup(s)
 	}
+}
+
+/// Prelude to be used alongside pallet macro, for ease of use.
+pub mod pallet_prelude {
+	pub use crate::{ensure_signed, ensure_none, ensure_root};
+
+	/// Type alias for the `Origin` associated type of system config.
+	pub type OriginFor<T> = <T as crate::Config>::Origin;
+
+	/// Type alias for the `BlockNumber` associated type of system config.
+	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;
 }

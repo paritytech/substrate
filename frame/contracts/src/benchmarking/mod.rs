@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,7 +39,7 @@ use self::{
 use frame_benchmarking::{benchmarks, account, whitelisted_caller};
 use frame_system::{Module as System, RawOrigin};
 use parity_wasm::elements::{Instruction, ValueType, BlockType};
-use sp_runtime::traits::{Hash, Bounded};
+use sp_runtime::traits::{Hash, Bounded, Zero};
 use sp_std::{default::Default, convert::{TryInto}, vec::Vec, vec};
 use pallet_contracts_primitives::RentProjection;
 
@@ -116,12 +116,13 @@ where
 				// the subsistence threshold does not pay rent given a large enough subsistence
 				// threshold. But we need rent payments to occur in order to benchmark for worst cases.
 				let storage_size = ConfigCache::<T>::subsistence_threshold_uncached()
-					.checked_div(&T::RentDepositOffset::get())
+					.checked_div(&T::DepositPerStorageByte::get())
 					.unwrap_or_else(Zero::zero);
 
 				// Endowment should be large but not as large to inhibit rent payments.
-				let endowment = T::RentDepositOffset::get()
-					.saturating_mul(storage_size + T::StorageSizeOffset::get().into())
+				let endowment = T::DepositPerStorageByte::get()
+					.saturating_mul(storage_size)
+					.saturating_add(T::DepositPerContract::get())
 					.saturating_sub(1u32.into());
 
 				(storage_size, endowment)
@@ -209,36 +210,51 @@ where
 	}
 }
 
-/// A `Contract` that was evicted after accumulating some storage.
+/// A `Contract` that contains some storage items.
 ///
-/// This is used to benchmark contract resurrection.
-struct Tombstone<T: Config> {
+/// This is used to benchmark contract destruction and resurection. Those operations'
+/// weight depend on the amount of storage accumulated.
+struct ContractWithStorage<T: Config> {
 	/// The contract that was evicted.
 	contract: Contract<T>,
 	/// The storage the contract held when it was avicted.
 	storage: Vec<(StorageKey, Vec<u8>)>,
 }
 
-impl<T: Config> Tombstone<T>
+impl<T: Config> ContractWithStorage<T>
 where
 	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	/// Create and evict a new contract with the supplied storage item count and size each.
+	/// Same as [`Self::with_code`] but with dummy contract code.
 	fn new(stor_num: u32, stor_size: u32) -> Result<Self, &'static str> {
-		let contract = Contract::<T>::new(WasmModule::dummy(), vec![], Endow::CollectRent)?;
+		Self::with_code(WasmModule::dummy(), stor_num, stor_size)
+	}
+
+	/// Create and evict a new contract with the supplied storage item count and size each.
+	fn with_code(code: WasmModule<T>, stor_num: u32, stor_size: u32) -> Result<Self, &'static str> {
+		let contract = Contract::<T>::new(code, vec![], Endow::CollectRent)?;
 		let storage_items = create_storage::<T>(stor_num, stor_size)?;
 		contract.store(&storage_items)?;
-		System::<T>::set_block_number(
-			contract.eviction_at()? + T::SignedClaimHandicap::get() + 5u32.into()
-		);
-		Rent::<T>::collect(&contract.account_id);
-		contract.ensure_tombstone()?;
-
-		Ok(Tombstone {
+		Ok(Self {
 			contract,
 			storage: storage_items,
 		})
+	}
+
+	/// Increase the system block number so that this contract is eligible for eviction.
+	fn set_block_num_for_eviction(&self) -> Result<(), &'static str>  {
+		System::<T>::set_block_number(
+			self.contract.eviction_at()? + T::SignedClaimHandicap::get() + 5u32.into()
+		);
+		Ok(())
+	}
+
+	/// Evict this contract.
+	fn evict(&mut self) -> Result<(), &'static str> {
+		self.set_block_num_for_eviction()?;
+		Rent::<T>::snitch_contract_should_be_evicted(&self.contract.account_id, Zero::zero())?;
+		self.contract.ensure_tombstone()
 	}
 }
 
@@ -267,7 +283,28 @@ benchmarks! {
 		T::AccountId: AsRef<[u8]>,
 	}
 
-	_ {
+	// The base weight without any actual work performed apart from the setup costs.
+	on_initialize {}: {
+		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
+	}
+
+	on_initialize_per_trie_key {
+		let k in 0..1024;
+		let instance = ContractWithStorage::<T>::new(k, T::MaxValueSize::get())?;
+		Storage::<T>::queue_trie_for_deletion(&instance.contract.alive_info()?)?;
+	}: {
+		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
+	}
+
+	on_initialize_per_queue_item {
+		let q in 0..1024.min(T::DeletionQueueDepth::get());
+		for i in 0 .. q {
+			let instance = Contract::<T>::with_index(i, WasmModule::dummy(), vec![], Endow::Max)?;
+			Storage::<T>::queue_trie_for_deletion(&instance.alive_info()?)?;
+			ContractInfoOf::<T>::remove(instance.account_id);
+		}
+	}: {
+		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
 	}
 
 	// This extrinsic is pretty much constant as it is only a simple setter.
@@ -650,7 +687,8 @@ benchmarks! {
 		// Restore just moves the trie id from origin to destination and therefore
 		// does not depend on the size of the destination contract. However, to not
 		// trigger any edge case we won't use an empty contract as destination.
-		let tombstone = Tombstone::<T>::new(10, T::MaxValueSize::get())?;
+		let mut tombstone = ContractWithStorage::<T>::new(10, T::MaxValueSize::get())?;
+		tombstone.evict()?;
 
 		let dest = tombstone.contract.account_id.encode();
 		let dest_len = dest.len();
@@ -723,7 +761,8 @@ benchmarks! {
 
 	seal_restore_to_per_delta {
 		let d in 0 .. API_BENCHMARK_BATCHES;
-		let tombstone = Tombstone::<T>::new(0, 0)?;
+		let mut tombstone = ContractWithStorage::<T>::new(0, 0)?;
+		tombstone.evict()?;
 		let delta = create_storage::<T>(d * API_BENCHMARK_BATCH_SIZE, T::MaxValueSize::get())?;
 
 		let dest = tombstone.contract.account_id.encode();
@@ -2368,7 +2407,20 @@ benchmarks! {
 	#[extra]
 	print_schedule {
 		#[cfg(feature = "std")]
-		println!("{:#?}", Schedule::<T>::default());
+		{
+			let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
+				T::WeightInfo::on_initialize_per_trie_key(0);
+			let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
+				T::WeightInfo::on_initialize_per_queue_item(0);
+			let weight_limit = T::DeletionWeightLimit::get();
+			let queue_depth: u64 = T::DeletionQueueDepth::get().into();
+			println!("{:#?}", Schedule::<T>::default());
+			println!("###############################################");
+			println!("Lazy deletion throughput per block (empty queue, full queue): {}, {}",
+				weight_limit / weight_per_key,
+				(weight_limit - weight_per_queue_item * queue_depth) / weight_per_key,
+			);
+		}
 		#[cfg(not(feature = "std"))]
 		return Err("Run this bench with a native runtime in order to see the schedule.");
 	}: {}
@@ -2393,6 +2445,10 @@ mod tests {
 			}
 		}
 	}
+
+	create_test!(on_initialize);
+	create_test!(on_initialize_per_trie_key);
+	create_test!(on_initialize_per_queue_item);
 
 	create_test!(update_schedule);
 	create_test!(put_code);

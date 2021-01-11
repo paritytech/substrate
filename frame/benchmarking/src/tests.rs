@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -94,6 +94,7 @@ impl frame_system::Config for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 impl Config for Test {
@@ -111,13 +112,8 @@ fn new_test_ext() -> sp_io::TestExternalities {
 benchmarks!{
 	where_clause { where <T as OtherConfig>::OtherEvent: Into<<T as Config>::Event> }
 
-	_ {
-		// Define a common range for `b`.
-		let b in 1 .. 1000 => ();
-	}
-
 	set_value {
-		let b in ...;
+		let b in 1 .. 1000;
 		let caller = account::<T::AccountId>("caller", 0, 0);
 	}: _ (RawOrigin::Signed(caller), b.into())
 	verify {
@@ -125,7 +121,7 @@ benchmarks!{
 	}
 
 	other_name {
-		let b in ...;
+		let b in 1 .. 1000;
 	}: dummy (RawOrigin::None, b.into())
 
 	sort_vector {
@@ -141,7 +137,7 @@ benchmarks!{
 	}
 
 	bad_origin {
-		let b in ...;
+		let b in 1 .. 1000;
 		let caller = account::<T::AccountId>("caller", 0, 0);
 	}: dummy (RawOrigin::Signed(caller), b.into())
 
