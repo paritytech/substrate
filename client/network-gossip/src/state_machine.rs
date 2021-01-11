@@ -23,9 +23,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::iter;
 use std::time;
-use log::{error, trace};
+use log::{debug, error, trace};
 use lru::LruCache;
 use libp2p::PeerId;
+use prometheus_endpoint::{register, Gauge, PrometheusError, Registry, U64};
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use sc_network::ObservedRole;
 use wasm_timer::Instant;
@@ -151,11 +152,25 @@ pub struct ConsensusGossip<B: BlockT> {
 	protocol: Cow<'static, str>,
 	validator: Arc<dyn Validator<B>>,
 	next_broadcast: Instant,
+	metrics: Option<Metrics>,
 }
 
 impl<B: BlockT> ConsensusGossip<B> {
 	/// Create a new instance using the given validator.
-	pub fn new(validator: Arc<dyn Validator<B>>, protocol: Cow<'static, str>) -> Self {
+	pub fn new(
+		validator: Arc<dyn Validator<B>>,
+		protocol: Cow<'static, str>,
+		metrics_registry: Option<&Registry>,
+	) -> Self {
+		let metrics = match metrics_registry.map(Metrics::register) {
+			Some(Ok(metrics)) => Some(metrics),
+			Some(Err(e)) => {
+				debug!(target: "gossip", "Failed to register metrics: {:?}", e);
+				None
+			}
+			None => None,
+		};
+
 		ConsensusGossip {
 			peers: HashMap::new(),
 			messages: Default::default(),
@@ -163,6 +178,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			protocol,
 			validator,
 			next_broadcast: Instant::now() + REBROADCAST_INTERVAL,
+			metrics,
 		}
 	}
 
@@ -197,6 +213,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 				message,
 				sender,
 			});
+
+			if let Some(ref metrics) = self.metrics {
+				metrics.messages.inc();
+			}
 		}
 	}
 
@@ -264,7 +284,12 @@ impl<B: BlockT> ConsensusGossip<B> {
 		let before = self.messages.len();
 
 		let mut message_expired = self.validator.message_expired();
-		self.messages.retain(|entry| !message_expired(entry.topic, &entry.message));
+		self.messages
+			.retain(|entry| !message_expired(entry.topic, &entry.message));
+
+		if let Some(ref metrics) = self.metrics {
+			metrics.messages.set(self.messages.len() as u64);
+		}
 
 		trace!(target: "gossip", "Cleaned up {} stale messages, {} left ({} known)",
 			before - self.messages.len(),
@@ -426,6 +451,24 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		peer.known_messages.insert(message_hash);
 		network.write_notification(who.clone(), self.protocol.clone(), message);
+	}
+}
+
+struct Metrics {
+	messages: Gauge<U64>,
+}
+
+impl Metrics {
+	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			messages: register(
+				Gauge::new(
+					"network_gossip_messages_count",
+					"Number of messages stored locally by the gossip service.",
+				)?,
+				registry,
+			)?,
+		})
 	}
 }
 
