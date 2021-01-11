@@ -246,7 +246,6 @@
 //!
 
 mod behaviour;
-mod block_requests;
 mod chain;
 mod peer_info;
 mod discovery;
@@ -259,6 +258,7 @@ mod service;
 mod transport;
 mod utils;
 
+pub mod block_request_handler;
 pub mod config;
 pub mod error;
 pub mod gossip;

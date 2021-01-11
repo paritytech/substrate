@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use crate::pallet::Def;
-use syn::spanned::Spanned;
 
 /// * implement the trait `sp_runtime::BuildModuleGenesisStorage`
 /// * add #[cfg(features = "std")] to GenesisBuild implementation.
@@ -26,21 +25,21 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 	} else {
 		return Default::default()
 	};
+	let genesis_build = def.genesis_build.as_ref().expect("Checked by def parser");
 
 	let frame_support = &def.frame_support;
-	let type_impl_gen = &def.type_impl_generics();
-	let type_use_gen = &def.type_use_generics();
+	let type_impl_gen = &def.type_impl_generics(genesis_build.attr_span);
+	let type_use_gen = &def.type_use_generics(genesis_build.attr_span);
 	let trait_use_gen = if def.config.has_instance {
-		quote::quote!(T, I)
+		quote::quote_spanned!(genesis_build.attr_span => T, I)
 	} else {
 		// `__InherentHiddenInstance` used by construct_runtime here is alias for `()`
-		quote::quote!(T, ())
+		quote::quote_spanned!(genesis_build.attr_span => T, ())
 	};
 	let gen_cfg_ident = &genesis_config.genesis_config;
 
-	let gen_cfg_use_gen = genesis_config.gen_kind.type_use_gen();
+	let gen_cfg_use_gen = genesis_config.gen_kind.type_use_gen(genesis_build.attr_span);
 
-	let genesis_build = def.genesis_build.as_ref().expect("Checked by def parser");
 	let genesis_build_item = &mut def.item.content.as_mut()
 		.expect("Checked by def parser").1[genesis_build.index];
 
@@ -53,7 +52,7 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 	genesis_build_item_impl.attrs.push(syn::parse_quote!( #[cfg(feature = "std")] ));
 	let where_clause = &genesis_build.where_clause;
 
-	quote::quote_spanned!(genesis_build_item.span() =>
+	quote::quote_spanned!(genesis_build.attr_span =>
 		#[cfg(feature = "std")]
 		impl<#type_impl_gen> #frame_support::sp_runtime::BuildModuleGenesisStorage<#trait_use_gen>
 			for #gen_cfg_ident<#gen_cfg_use_gen> #where_clause

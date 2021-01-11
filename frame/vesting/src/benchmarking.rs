@@ -58,8 +58,6 @@ fn add_vesting_schedule<T: Config>(who: &T::AccountId) -> Result<(), &'static st
 }
 
 benchmarks! {
-	_ { }
-
 	vest_locked {
 		let l in 0 .. MaxLocksOf::<T>::get();
 

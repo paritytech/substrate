@@ -23,8 +23,6 @@ use frame_benchmarking::benchmarks;
 type Header = sp_runtime::generic::Header<u64, sp_runtime::traits::BlakeTwo256>;
 
 benchmarks! {
-	_ {	}
-
 	check_equivocation_proof {
 		let x in 0 .. 1;
 

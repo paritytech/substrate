@@ -33,7 +33,7 @@ sp-externalities = { version = "0.8.0", path = "../../primitives/externalities" 
 sc-executor-common = { version = "0.8.0", path = "common" }
 sc-executor-wasmi = { version = "0.8.0", path = "wasmi" }
 sc-executor-wasmtime = { version = "0.8.0", path = "wasmtime", optional = true }
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 log = "0.4.8"
 libsecp256k1 = "0.3.4"
 
@@ -44,12 +44,12 @@ hex-literal = "0.3.1"
 sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" }
-test-case = "0.3.3"
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
 sc-tracing = { version = "2.0.0", path = "../tracing" }
 tracing = "0.1.22"
 tracing-subscriber = "0.2.15"
+paste = "0.1.6"
 
 [features]
 default = [ "std" ]
