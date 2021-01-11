@@ -95,8 +95,6 @@ pub use bench::BenchmarkingState;
 
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
 const CACHE_HEADERS: usize = 8;
-// Max blocks to prune at once
-const MAX_BLOCK_PRUNE: usize = 1024;
 
 /// Default value for storage cache child ratio.
 const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
@@ -277,7 +275,7 @@ pub struct DatabaseSettings {
 }
 
 /// Block pruning settings.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum KeepBlocks {
 	/// Keep full block history.
 	All,
@@ -286,7 +284,7 @@ pub enum KeepBlocks {
 }
 
 /// Block body storage scheme.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum TransactionStorage {
 	/// Store block body as deeply encoded list of transactions in the BODY column
 	BlockBody,
@@ -939,6 +937,20 @@ impl<Block: BlockT> Backend<Block> {
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
+		Self::new_test_with_tx_storage(
+			keep_blocks,
+			canonicalization_delay,
+			TransactionStorage::BlockBody
+		)
+	}
+
+	/// Create new memory-backed client backend for tests.
+	#[cfg(any(test, feature = "test-helpers"))]
+	fn new_test_with_tx_storage(
+		keep_blocks: u32,
+		canonicalization_delay: u64,
+		transaction_storage: TransactionStorage
+	) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
@@ -946,8 +958,8 @@ impl<Block: BlockT> Backend<Block> {
 			state_cache_child_ratio: Some((50, 100)),
 			state_pruning: PruningMode::keep_blocks(keep_blocks),
 			source: DatabaseSettingsSrc::Custom(db),
-			keep_blocks: KeepBlocks::All,
-			transaction_storage: TransactionStorage::BlockBody,
+			keep_blocks: KeepBlocks::Some(keep_blocks),
+			transaction_storage,
 		};
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
@@ -1493,14 +1505,12 @@ impl<Block: BlockT> Backend<Block> {
 		finalized: NumberFor<Block>,
 	) -> ClientResult<()> {
 		if let KeepBlocks::Some(keep_blocks) = self.keep_blocks {
-			let mut removed_blocks = 0;
-			let mut removed_transactions = 0;
-			let mut number = finalized.saturating_sub(keep_blocks.into());
-			while number > One::one() && removed_blocks < MAX_BLOCK_PRUNE {
-				number = number.saturating_sub(One::one());
+			// Always keep the last finalized block
+			let keep = std::cmp::max(keep_blocks, 1);
+			if finalized >= keep.into() {
+				let number = finalized.saturating_sub(keep.into());
 				match read_db(&*self.storage.db, columns::KEY_LOOKUP, columns::BODY, BlockId::<Block>::number(number))? {
 					Some(body) => {
-						removed_blocks += 1;
 						utils::remove_db(
 							transaction,
 							&*self.storage.db,
@@ -1508,12 +1518,12 @@ impl<Block: BlockT> Backend<Block> {
 							columns::BODY,
 							BlockId::<Block>::number(number)
 						)?;
+						debug!(target: "db", "Removing block #{}", number);
 						match self.transaction_storage {
 							TransactionStorage::BlockBody => {},
 							TransactionStorage::StorageChain => {
 								match Vec::<Block::Hash>::decode(&mut &body[..]) {
 									Ok(hashes) => {
-										removed_transactions += hashes.len();
 										for h in hashes {
 											transaction.remove(columns::TRANSACTION, h.as_ref());
 										}
@@ -1525,10 +1535,9 @@ impl<Block: BlockT> Backend<Block> {
 							}
 						}
 					}
-					None => break,
+					None => return Ok(()),
 				}
 			}
-			debug!(target: "db", "Pruned {} blocks, {} transactions", removed_blocks, removed_transactions);
 		}
 		Ok(())
 	}
@@ -1938,6 +1947,17 @@ pub(crate) mod tests {
 		changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
 		extrinsics_root: H256,
 	) -> H256 {
+		insert_block(backend, number, parent_hash, changes, extrinsics_root, Vec::new())
+	}
+
+	pub fn insert_block(
+		backend: &Backend<Block>,
+		number: u64,
+		parent_hash: H256,
+		changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
+		extrinsics_root: H256,
+		body: Vec<ExtrinsicWrapper<u64>>,
+	) -> H256 {
 		use sp_runtime::testing::Digest;
 
 		let mut digest = Digest::default();
@@ -1963,7 +1983,7 @@ pub(crate) mod tests {
 		};
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, block_id).unwrap();
-		op.set_block_data(header, Some(Vec::new()), None, NewBlockState::Best).unwrap();
+		op.set_block_data(header, Some(body), None, NewBlockState::Best).unwrap();
 		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear)).unwrap();
 		backend.commit_operation(op).unwrap();
 
@@ -2561,5 +2581,34 @@ pub(crate) mod tests {
 			.unwrap().unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
+	}
+
+	#[test]
+	fn prune_blocks_on_finalize() {
+		for storage in &[TransactionStorage::BlockBody, TransactionStorage::StorageChain] {
+			let backend = Backend::<Block>::new_test_with_tx_storage(2, 0, *storage);
+			let mut blocks = Vec::new();
+			let mut prev_hash = Default::default();
+			for i in 0 .. 5 {
+				let hash = insert_block(&backend, i, prev_hash, None, Default::default(), vec![i.into()]);
+				blocks.push(hash);
+				prev_hash = hash;
+			}
+
+			{
+				let mut op = backend.begin_operation().unwrap();
+				backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
+				for i in 1 .. 5 {
+					op.mark_finalized(BlockId::Hash(blocks[i]), None).unwrap();
+				}
+				backend.commit_operation(op).unwrap();
+			}
+			let bc = backend.blockchain();
+			assert_eq!(None, bc.body(BlockId::hash(blocks[0])).unwrap());
+			assert_eq!(None, bc.body(BlockId::hash(blocks[1])).unwrap());
+			assert_eq!(None, bc.body(BlockId::hash(blocks[2])).unwrap());
+			assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
+			assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		}
 	}
 }
