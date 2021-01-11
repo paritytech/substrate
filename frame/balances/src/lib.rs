@@ -153,6 +153,7 @@
 mod tests;
 mod tests_local;
 mod tests_composite;
+mod tests_reentrancy;
 mod benchmarking;
 pub mod weights;
 
@@ -1004,18 +1005,15 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 					*maybe_to_acc = Some(to_acc.clone());
 				}
 
-				let maybe_from_acc_endowed = if from_acc_is_new { Some(from_acc.free) } else { None };
-				let maybe_to_acc_endowed = if to_acc_is_new { Some(to_acc.free) } else { None };
-
-				if let Some(from_acc_endowed) = maybe_from_acc_endowed {
+				if from_acc_is_new {
 					Self::deposit_event(
-						RawEvent::Endowed(transactor.clone(), from_acc_endowed)
+						RawEvent::Endowed(transactor.clone(), from_acc.free)
 					);
 				}
 
-				if let Some(to_acc_endowed) = maybe_to_acc_endowed {
+				if to_acc_is_new {
 					Self::deposit_event(
-						RawEvent::Endowed(dest.clone(), to_acc_endowed)
+						RawEvent::Endowed(dest.clone(), to_acc.free)
 					);
 				}
 				Ok(())
@@ -1023,11 +1021,11 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		})?;
 
 		if maybe_from_acc_call_post_mutation {
-			let _ = Self::post_mutation(transactor, from_acc);
+			Self::post_mutation(transactor, from_acc);
 		}
 
 		if maybe_to_acc_call_post_mutation {
-			let _ = Self::post_mutation(dest, to_acc);
+			Self::post_mutation(dest, to_acc);
 		}
 
 		// Emit transfer event.
