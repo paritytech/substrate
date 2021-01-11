@@ -1255,7 +1255,6 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 	///
 	/// Is a no-op if value to be reserved is zero.
 	fn reserve_named(id: &ReserveIdentifier, who: &T::AccountId, value: Self::Balance) -> DispatchResult {
-		<Self as ReservableCurrency<_>>::reserve(who, value)?;
 		Reserves::<T, I>::try_mutate(who, |reserves| -> DispatchResult {
 			match reserves.binary_search_by_key(id, |data| data.id) {
 				Ok(idx) => {
@@ -1270,6 +1269,7 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 					});
 				},
 			};
+			<Self as ReservableCurrency<_>>::reserve(who, value)?;
 			Ok(())
 		})
 	}
