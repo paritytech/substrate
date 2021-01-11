@@ -32,6 +32,11 @@ use sc_network::ObservedRole;
 use wasm_timer::Instant;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
+// NOTE: The current value is adjusted based on largest production network deployment (Kusama) and
+// the current main gossip user (GRANDPA). Currently there are ~800 validators on Kusama, as such,
+// each GRANDPA round should generate ~1600 messages, and we currently keep track of the last 2
+// completed rounds and the current live one. That makes it so that at any point we will be holding
+// ~4800 live messages.
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 8192;
 
 const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
