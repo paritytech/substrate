@@ -374,7 +374,8 @@ mod tests {
 		let mut gossip_engine = GossipEngine::<Block>::new(
 			network.clone(),
 			"/my_protocol",
-			Arc::new(AllowAll{}),
+			Arc::new(AllowAll {}),
+			None,
 		);
 
 		// Drop network event stream sender side.
@@ -401,7 +402,8 @@ mod tests {
 		let mut gossip_engine = GossipEngine::<Block>::new(
 			network.clone(),
 			protocol.clone(),
-			Arc::new(AllowAll{}),
+			Arc::new(AllowAll {}),
+			None,
 		);
 
 		let mut event_sender = network.inner.lock()
@@ -535,7 +537,8 @@ mod tests {
 			let mut gossip_engine = GossipEngine::<Block>::new(
 				network.clone(),
 				protocol.clone(),
-				Arc::new(TestValidator{}),
+				Arc::new(TestValidator {}),
+				None,
 			);
 
 			// Create channels.
@@ -551,8 +554,10 @@ mod tests {
 			// Insert sender sides into `gossip_engine`.
 			for (topic, tx) in txs {
 				match gossip_engine.message_sinks.get_mut(&topic) {
-					Some(entry) =>  entry.push(tx),
-					None => {gossip_engine.message_sinks.insert(topic, vec![tx]);},
+					Some(entry) => entry.push(tx),
+					None => {
+						gossip_engine.message_sinks.insert(topic, vec![tx]);
+					}
 				}
 			}
 
