@@ -1257,14 +1257,14 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 			match reserves.binary_search_by_key(id, |data| data.id) {
 				Ok(idx) => {
 					// this add can't overflow but just to be defensive.
-					reserves[idx].amount = reserves[idx].amount.saturating_add(value)
+					reserves[idx].amount = reserves[idx].amount.saturating_add(value);
 				},
 				Err(idx) => {
 					ensure!((reserves.len() as u32) < T::MaxReserves::get(), Error::<T, I>::TooManyReserves);
 					reserves.insert(idx, ReserveData {
 						id: id.clone(),
 						amount: value
-					})
+					});
 				},
 			};
 			Ok(())
@@ -1372,10 +1372,44 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 				Ok(idx) => {
 					let to_change = cmp::min(reserves[idx].amount, value);
 
-					let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(slashed, beneficiary, to_change, status)?;
+					let actual = if status == Status::Reserved {
+						// make it the reserved under same identifier
+						Reserves::<T, I>::try_mutate(beneficiary, |reserves| -> Result<T::Balance, DispatchError> {
+							match reserves.binary_search_by_key(id, |data| data.id) {
+								Ok(idx) => {
+									let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(slashed, beneficiary, to_change, status)?;
 
-					// remain should always be zero but just to be defensive here
-					let actual = to_change.saturating_sub(remain);
+									// remain should always be zero but just to be defensive here
+									let actual = to_change.saturating_sub(remain);
+
+									// this add can't overflow but just to be defensive.
+									reserves[idx].amount = reserves[idx].amount.saturating_add(actual);
+
+									Ok(actual)
+								},
+								Err(idx) => {
+									ensure!((reserves.len() as u32) < T::MaxReserves::get(), Error::<T, I>::TooManyReserves);
+
+									let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(slashed, beneficiary, to_change, status)?;
+
+									// remain should always be zero but just to be defensive here
+									let actual = to_change.saturating_sub(remain);
+
+									reserves.insert(idx, ReserveData {
+										id: id.clone(),
+										amount: actual
+									});
+
+									Ok(actual)
+								},
+							}
+						})?
+					} else {
+						let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(slashed, beneficiary, to_change, status)?;
+
+						// remain should always be zero but just to be defensive here
+						to_change.saturating_sub(remain)
+					};
 
 					// `actual <= to_change` and `to_change <= amount`; qed;
 					reserves[idx].amount -= actual;
