@@ -499,6 +499,21 @@ macro_rules! assert_noop {
 	}
 }
 
+/// Evaluate any expression and assert that runtime storage has not been mutated
+/// (i.e. expression is a storage no-operation).
+///
+/// Used as `assert_storage_noop(expression_to_assert)`.
+#[macro_export]
+macro_rules! assert_storage_noop {
+	(
+		$x:expr
+	) => {
+		let h = $crate::storage_root();
+		$x;
+		assert_eq!(h, $crate::storage_root());
+	}
+}
+
 /// Assert an expression returns an error specified.
 ///
 /// Used as `assert_err!(expression_to_assert, expected_error_expression)`
@@ -1256,6 +1271,8 @@ pub mod pallet_prelude {
 /// }
 /// ```
 /// I.e. a regular rust enum named `Error`, with generic `T` and fieldless variants.
+/// The generic `T` mustn't bound anything and where clause is not allowed. But bounds and where
+/// clause shouldn't be needed for any usecase.
 ///
 /// ### Macro expansion
 ///
@@ -1397,8 +1414,9 @@ pub mod pallet_prelude {
 ///
 /// ### Macro expansion
 ///
-/// Macro generate struct with the name of the function and its generic, and implement
-/// `Get<$ReturnType>` on it using the provided function block.
+/// Macro renames the function to some internal name, generate a struct with the original name of
+/// the function and its generic, and implement `Get<$ReturnType>` by calling the user defined
+/// function.
 ///
 /// # Genesis config: `#[pallet::genesis_config]` optional
 ///

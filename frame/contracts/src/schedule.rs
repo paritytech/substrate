@@ -110,6 +110,13 @@ pub struct Limits {
 	pub code_size: u32,
 }
 
+impl Limits {
+	/// The maximum memory size in bytes that a contract can occupy.
+	pub fn max_memory_size(&self) -> u32 {
+		self.memory_pages * 64 * 1024
+	}
+}
+
 /// Describes the weight for all categories of supported wasm instructions.
 ///
 /// There there is one field for each wasm instruction that describes the weight to

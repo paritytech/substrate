@@ -115,7 +115,7 @@ use sp_runtime::{
 	traits::{
 		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, Convert, Saturating,
 	},
-	RuntimeDebug,
+	RuntimeDebug, Perbill,
 };
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
@@ -123,7 +123,7 @@ use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 };
-use frame_system::{ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root, Module as System};
 use pallet_contracts_primitives::{
 	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult, ExecResult,
 };
@@ -205,11 +205,8 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	///
 	/// It is a sum of each key-value pair stored by this contract.
 	pub storage_size: u32,
-	/// The number of key-value pairs that have values of zero length.
-	/// The condition `empty_pair_count ≤ total_pair_count` always holds.
-	pub empty_pair_count: u32,
 	/// The total number of key-value pairs in storage of this contract.
-	pub total_pair_count: u32,
+	pub pair_count: u32,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash,
 	/// Pay rent at most up to this value.
@@ -286,24 +283,35 @@ pub trait Config: frame_system::Config {
 	/// The minimum amount required to generate a tombstone.
 	type TombstoneDeposit: Get<BalanceOf<Self>>;
 
-	/// A size offset for an contract. A just created account with untouched storage will have that
-	/// much of storage from the perspective of the state rent.
+	/// The balance every contract needs to deposit to stay alive indefinitely.
+	///
+	/// This is different from the [`Self::TombstoneDeposit`] because this only needs to be
+	/// deposited while the contract is alive. Costs for additional storage are added to
+	/// this base cost.
 	///
 	/// This is a simple way to ensure that contracts with empty storage eventually get deleted by
 	/// making them pay rent. This creates an incentive to remove them early in order to save rent.
-	type StorageSizeOffset: Get<u32>;
+	type DepositPerContract: Get<BalanceOf<Self>>;
 
-	/// Price of a byte of storage per one block interval. Should be greater than 0.
-	type RentByteFee: Get<BalanceOf<Self>>;
-
-	/// The amount of funds a contract should deposit in order to offset
-	/// the cost of one byte.
+	/// The balance a contract needs to deposit per storage byte to stay alive indefinitely.
 	///
 	/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1 BU/byte/day,
 	/// then a contract with 1,000,000 BU that uses 1,000 bytes of storage would pay no rent.
 	/// But if the balance reduced to 500,000 BU and the storage stayed the same at 1,000,
 	/// then it would pay 500 BU/day.
-	type RentDepositOffset: Get<BalanceOf<Self>>;
+	type DepositPerStorageByte: Get<BalanceOf<Self>>;
+
+	/// The balance a contract needs to deposit per storage item to stay alive indefinitely.
+	///
+	/// It works the same as [`Self::DepositPerStorageByte`] but for storage items.
+	type DepositPerStorageItem: Get<BalanceOf<Self>>;
+
+	/// The fraction of the deposit that should be used as rent per block.
+	///
+	/// When a contract hasn't enough balance deposited to stay alive indefinitely it needs
+	/// to pay per block for the storage it consumes that is not covered by the deposit.
+	/// This determines how high this rent payment is per block as a fraction of the deposit.
+	type RentFraction: Get<Perbill>;
 
 	/// Reward that is received by the party whose touch has led
 	/// to removal of a contract.
@@ -325,6 +333,12 @@ pub trait Config: frame_system::Config {
 
 	/// Type that allows the runtime authors to add new host functions for a contract to call.
 	type ChainExtension: chain_extension::ChainExtension;
+
+	/// The maximum number of tries that can be queued for deletion.
+	type DeletionQueueDepth: Get<u32>;
+
+	/// The maximum amount of weight that can be consumed per block for lazy trie removal.
+	type DeletionWeightLimit: Get<Weight>;
 }
 
 decl_error! {
@@ -396,6 +410,17 @@ decl_error! {
 		/// in this error. Note that this usually  shouldn't happen as deploying such contracts
 		/// is rejected.
 		NoChainExtension,
+		/// Removal of a contract failed because the deletion queue is full.
+		///
+		/// This can happen when either calling [`Module::claim_surcharge`] or `seal_terminate`.
+		/// The queue is filled by deleting contracts and emptied by a fixed amount each block.
+		/// Trying again during another block is the only way to resolve this issue.
+		DeletionQueueFull,
+		/// A contract could not be evicted because it has enough balance to pay rent.
+		///
+		/// This can be returned from [`Module::claim_surcharge`] because the target
+		/// contract has enough balance to pay for its rent.
+		ContractNotEvictable,
 	}
 }
 
@@ -418,25 +443,35 @@ decl_module! {
 		/// The minimum amount required to generate a tombstone.
 		const TombstoneDeposit: BalanceOf<T> = T::TombstoneDeposit::get();
 
-		/// A size offset for an contract. A just created account with untouched storage will have that
-		/// much of storage from the perspective of the state rent.
+		/// The balance every contract needs to deposit to stay alive indefinitely.
 		///
-		/// This is a simple way to ensure that contracts with empty storage eventually get deleted
-		/// by making them pay rent. This creates an incentive to remove them early in order to save
-		/// rent.
-		const StorageSizeOffset: u32 = T::StorageSizeOffset::get();
+		/// This is different from the [`Self::TombstoneDeposit`] because this only needs to be
+		/// deposited while the contract is alive. Costs for additional storage are added to
+		/// this base cost.
+		///
+		/// This is a simple way to ensure that contracts with empty storage eventually get deleted by
+		/// making them pay rent. This creates an incentive to remove them early in order to save rent.
+		const DepositPerContract: BalanceOf<T> = T::DepositPerContract::get();
 
-		/// Price of a byte of storage per one block interval. Should be greater than 0.
-		const RentByteFee: BalanceOf<T> = T::RentByteFee::get();
-
-		/// The amount of funds a contract should deposit in order to offset
-		/// the cost of one byte.
+		/// The balance a contract needs to deposit per storage byte to stay alive indefinitely.
 		///
 		/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1 BU/byte/day,
 		/// then a contract with 1,000,000 BU that uses 1,000 bytes of storage would pay no rent.
 		/// But if the balance reduced to 500,000 BU and the storage stayed the same at 1,000,
 		/// then it would pay 500 BU/day.
-		const RentDepositOffset: BalanceOf<T> = T::RentDepositOffset::get();
+		const DepositPerStorageByte: BalanceOf<T> = T::DepositPerStorageByte::get();
+
+		/// The balance a contract needs to deposit per storage item to stay alive indefinitely.
+		///
+		/// It works the same as [`Self::DepositPerStorageByte`] but for storage items.
+		const DepositPerStorageItem: BalanceOf<T> = T::DepositPerStorageItem::get();
+
+		/// The fraction of the deposit that should be used as rent per block.
+		///
+		/// When a contract hasn't enough balance deposited to stay alive indefinitely it needs
+		/// to pay per block for the storage it consumes that is not covered by the deposit.
+		/// This determines how high this rent payment is per block as a fraction of the deposit.
+		const RentFraction: Perbill = T::RentFraction::get();
 
 		/// Reward that is received by the party whose touch has led
 		/// to removal of a contract.
@@ -449,7 +484,23 @@ decl_module! {
 		/// The maximum size of a storage value in bytes. A reasonable default is 16 KiB.
 		const MaxValueSize: u32 = T::MaxValueSize::get();
 
+		/// The maximum number of tries that can be queued for deletion.
+		const DeletionQueueDepth: u32 = T::DeletionQueueDepth::get();
+
+		/// The maximum amount of weight that can be consumed per block for lazy trie removal.
+		const DeletionWeightLimit: Weight = T::DeletionWeightLimit::get();
+
 		fn deposit_event() = default;
+
+		fn on_initialize() -> Weight {
+			// We do not want to go above the block limit and rather avoid lazy deletion
+			// in that case. This should only happen on runtime upgrades.
+			let weight_limit = T::BlockWeights::get().max_block
+				.saturating_sub(System::<T>::block_weight().total())
+				.min(T::DeletionWeightLimit::get());
+			Storage::<T>::process_deletion_queue_batch(weight_limit)
+				.saturating_add(T::WeightInfo::on_initialize())
+		}
 
 		/// Updates the schedule for metering contracts.
 		///
@@ -549,10 +600,14 @@ decl_module! {
 		/// Allows block producers to claim a small reward for evicting a contract. If a block producer
 		/// fails to do so, a regular users will be allowed to claim the reward.
 		///
-		/// If contract is not evicted as a result of this call, no actions are taken and
-		/// the sender is not eligible for the reward.
+		/// If contract is not evicted as a result of this call, [`Error::ContractNotEvictable`]
+		/// is returned and the sender is not eligible for the reward.
 		#[weight = T::WeightInfo::claim_surcharge()]
-		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
+		pub fn claim_surcharge(
+			origin,
+			dest: T::AccountId,
+			aux_sender: Option<T::AccountId>
+		) -> DispatchResult {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
 				(Ok(frame_system::RawOrigin::Signed(account)), None) => {
@@ -574,8 +629,10 @@ decl_module! {
 			};
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
-			if Rent::<T>::snitch_contract_should_be_evicted(&dest, handicap) {
-				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get())?;
+			if Rent::<T>::snitch_contract_should_be_evicted(&dest, handicap)? {
+				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get()).map(|_| ())
+			} else {
+				Err(Error::<T>::ContractNotEvictable.into())
 			}
 		}
 	}
@@ -733,6 +790,11 @@ decl_storage! {
 		///
 		/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 		pub ContractInfoOf: map hasher(twox_64_concat) T::AccountId => Option<ContractInfo<T>>;
+		/// Evicted contracts that await child trie deletion.
+		///
+		/// Child trie deletion is a heavy operation depending on the amount of storage items
+		/// stored in said trie. Therefore this operation is performed lazily in `on_initialize`.
+		pub DeletionQueue: Vec<storage::DeletedContract>;
 	}
 }
 

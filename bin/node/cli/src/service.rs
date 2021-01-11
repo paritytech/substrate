@@ -178,7 +178,7 @@ pub fn new_full_base(
 
 	let shared_voter_state = rpc_setup;
 
-	config.network.notifications_protocols.push(grandpa::GRANDPA_PROTOCOL_NAME.into());
+	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 
 	#[cfg(feature = "cli")]
 	config.network.request_response_protocols.push(sc_grandpa_warp_sync::request_response_config_for_chain(
@@ -351,7 +351,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 	let (client, backend, keystore_container, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
-	config.network.notifications_protocols.push(grandpa::GRANDPA_PROTOCOL_NAME.into());
+	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 

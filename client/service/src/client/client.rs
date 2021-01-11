@@ -1306,7 +1306,7 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 	}
 }
 
-impl<B, E, Block, RA>  ExecutorProvider<Block> for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> ExecutorProvider<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
 	Block: BlockT,
