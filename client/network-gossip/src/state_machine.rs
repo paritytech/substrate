@@ -37,6 +37,9 @@ use wasm_timer::Instant;
 // each GRANDPA round should generate ~1600 messages, and we currently keep track of the last 2
 // completed rounds and the current live one. That makes it so that at any point we will be holding
 // ~4800 live messages.
+//
+// Assuming that each known message is tracked with a 32 byte hash (common for `Block::Hash`), then
+// this cache should take about 256 KB of memory.
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 8192;
 
 const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
