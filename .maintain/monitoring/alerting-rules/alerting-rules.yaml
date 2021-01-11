@@ -149,11 +149,9 @@ groups:
       hours.'
 
   - alert: UnboundedChannelPersistentlyLarge
-    expr: '
-    (
+    expr: '(
         (polkadot_unbounded_channel_len{action = "send"} -
             ignoring(action) polkadot_unbounded_channel_len{action = "received"})
-        # Fallback if the `received` is null
         or on(instance) polkadot_unbounded_channel_len{action = "send"}
     ) >= 200'
     for: 5m
@@ -161,14 +159,12 @@ groups:
       severity: warning
     annotations:
       message: 'Channel {{ $labels.entity }} on node {{ $labels.instance }} contains
-      more than 200 items for more than 5 minutes. Nore might be frozen.'
+      more than 200 items for more than 5 minutes. Node might be frozen.'
 
   - alert: UnboundedChannelVeryLarge
-    expr: '
-    (
+    expr: '(
         (polkadot_unbounded_channel_len{action = "send"} -
             ignoring(action) polkadot_unbounded_channel_len{action = "received"})
-        # Fallback if the `received` is null
         or on(instance) polkadot_unbounded_channel_len{action = "send"}
     ) > 5000'
     labels:
