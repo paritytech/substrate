@@ -36,7 +36,7 @@ use sc_client_api::{
 	StorageProof,
 	light
 };
-use sc_peerset::{PeersetHandle, ReputationChange};
+// use sc_peerset::{PeersetHandle, ReputationChange};
 use sp_core::{
 	storage::{ChildInfo, ChildType,StorageKey, PrefixedStorageKey},
 	hexdisplay::HexDisplay,
@@ -71,20 +71,22 @@ pub struct LightClientRequestHandler<B: Block> {
 	request_receiver: mpsc::Receiver<IncomingRequest>,
 	/// Blockchain client.
 	client: Arc<dyn Client<B>>,
-	/// Handle to use for reporting misbehaviour of peers.
-	peerset: PeersetHandle,
+	// TODO: Still need to figure out how to pass the peerset to the handler. Can't do it in
+	// `builder.rs` as the peerset is only constructed later on in `protocol.rs`.
+	// /// Handle to use for reporting misbehaviour of peers.
+	// peerset: PeersetHandle,
 }
 
 impl<B: Block> LightClientRequestHandler<B> {
 	/// Create a new [`BlockRequestHandler`].
-	pub fn new(protocol_id: ProtocolId, client: Arc<dyn Client<B>>, peerset: PeersetHandle) -> (Self, ProtocolConfig) {
+	pub fn new(protocol_id: ProtocolId, client: Arc<dyn Client<B>>/*, peerset: PeersetHandle*/) -> (Self, ProtocolConfig) {
 		// TODO: justify 20.
 		let (tx, request_receiver) = mpsc::channel(20);
 
 		let mut protocol_config = generate_protocol_config(protocol_id);
 		protocol_config.inbound_queue = Some(tx);
 
-		(Self { client, request_receiver, peerset }, protocol_config)
+		(Self { client, request_receiver/*, peerset */ }, protocol_config)
 	}
 
 	fn handle_request(
@@ -339,7 +341,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 				Err(e) => {
 					match e {
 						HandleRequestError::BadRequest(_) => {
-							self.peerset.report_peer(peer, ReputationChange::new(-(1 << 12), "bad request"))
+							// self.peerset.report_peer(peer, ReputationChange::new(-(1 << 12), "bad request"))
 
 						}
 						_ => {},

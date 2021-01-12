@@ -230,41 +230,6 @@ where
 		self.peers.remove(&peer);
 	}
 
-	/// Prepares a request by selecting a suitable peer and connection to send it to.
-	///
-	/// If there is currently no suitable peer for the request, the given request
-	/// is returned as `Err`.
-	fn prepare_request(&self, req: RequestWrapper<B>)
-		-> Result<(PeerId, RequestWrapper<B>), RequestWrapper<B>>
-	{
-		let number = required_block(&req.request);
-
-		let mut peer = None;
-		for (peer_id, peer_info) in self.peers.iter() {
-			if peer_info.status == PeerStatus::Idle {
-				match peer_info.best_block {
-					Some(n) => if n >= number {
-						peer = Some((peer_id, peer_info));
-						break
-					},
-					None => peer = Some((peer_id, peer_info))
-				}
-			}
-		}
-
-		if let Some((peer_id, peer_info)) = peer {
-			let rw = RequestWrapper {
-				timestamp: req.timestamp,
-				retries: req.retries,
-				request: req.request,
-				peer: Some(*peer_id),
-			};
-			Ok((*peer_id, rw))
-		} else {
-			Err(req)
-		}
-	}
-
 	/// Process a local request's response from remote.
 	///
 	/// If successful, this will give us the actual, checked data we should be
@@ -411,49 +376,59 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 				request.retries -= 1
 			}
 
-
-			match self.prepare_request(request) {
-				Err(request) => {
+			let number = required_block(&request.request);
+			let peer = match self.peers.iter().find_map(|(peer_id, peer_info)| {
+				if peer_info.status == PeerStatus::Idle {
+					if peer_info.best_block.map(|n| n >= number).unwrap_or(false) {
+						return Some(*peer_id)
+					}
+				}
+				None
+			}) {
+				Some(peer) => peer,
+				None => {
 					self.pending_requests.push_front(request);
 					log::debug!("no peer available to send request to");
-					break
+
+					// TODO: Double check, this was previously `break`, but there might be another
+					// request with a lower block number that one of our peers might serve.
+					continue
 				}
-				Ok((peer, request)) => {
-					let request_bytes = match serialize_request(&request.request) {
-						Ok(bytes) => bytes,
-						Err(error) => {
-							log::debug!("failed to serialize request: {}", error);
-							send_reply(Err(ClientError::RemoteFetchFailed), request.request);
-							continue
-						}
-					};
+			};
 
-					let (expected, protocol) = match request.request {
-						Request::Body { .. } =>
-							(ExpectedResponseTy::Block, self.config.block_protocol.clone()),
-						_ =>
-							(ExpectedResponseTy::Light, self.config.light_protocol.clone()),
-					};
-
-					let (tx, rx) = oneshot::channel();
-
-					let request_id = self.next_request_id();
-					if let Some(p) = self.peers.get_mut(&peer) {
-						p.status = PeerStatus::BusyWith(request_id);
-					}
-
-					self.outstanding.push(async move {
-						(expected, request_id, request, rx.await.unwrap())
-					}.boxed());
-
-					return Poll::Ready(Some(OutEvent::SendRequest {
-						target: peer,
-						request: request_bytes,
-						pending_response: tx,
-						protocol_name: protocol,
-					}));
+			let request_bytes = match serialize_request(&request.request) {
+				Ok(bytes) => bytes,
+				Err(error) => {
+					log::debug!("failed to serialize request: {}", error);
+					send_reply(Err(ClientError::RemoteFetchFailed), request.request);
+					continue
 				}
+			};
+
+			let (expected, protocol) = match request.request {
+				Request::Body { .. } =>
+					(ExpectedResponseTy::Block, self.config.block_protocol.clone()),
+				_ =>
+					(ExpectedResponseTy::Light, self.config.light_protocol.clone()),
+			};
+
+			let (tx, rx) = oneshot::channel();
+
+			let request_id = self.next_request_id();
+			if let Some(p) = self.peers.get_mut(&peer) {
+				p.status = PeerStatus::BusyWith(request_id);
 			}
+
+			self.outstanding.push(async move {
+				(expected, request_id, request, rx.await.unwrap())
+			}.boxed());
+
+			return Poll::Ready(Some(OutEvent::SendRequest {
+				target: peer,
+				request: request_bytes,
+				pending_response: tx,
+				protocol_name: protocol,
+			}));
 		}
 
 		while let Poll::Ready(Some((expected, id, request_wrapper, response))) = self.outstanding.poll_next_unpin(cx) {
