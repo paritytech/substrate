@@ -28,6 +28,7 @@ use sp_runtime::traits::Block as BlockT;
 use std::time::Duration;
 use std::sync::Arc;
 use sc_service::{SpawnTaskHandle, config::{Configuration, Role}};
+use sc_finality_grandpa::WarpSyncFragmentCache;
 
 /// Generates the appropriate [`RequestResponseConfig`] for a given chain configuration.
 pub fn request_response_config_for_chain<TBlock: BlockT, TBackend: Backend<TBlock> + 'static>(
@@ -84,9 +85,15 @@ struct Request<B: BlockT> {
 /// to define it is possible.
 const WARP_SYNC_FRAGMENTS_LIMIT: usize = 100;
 
+/// Number of item with justification in warp sync cache.
+/// This should be customizable, setting a low number
+/// until then.
+const WARP_SYNC_CACHE_SIZE: usize = 20;
+
 /// Handler for incoming grandpa warp sync requests from a remote peer.
-pub struct GrandpaWarpSyncRequestHandler<TBackend, TBlock> {
+pub struct GrandpaWarpSyncRequestHandler<TBackend, TBlock: BlockT> {
 	backend: Arc<TBackend>,
+	cache: Arc<parking_lot::RwLock<WarpSyncFragmentCache<TBlock::Header>>>,
 	request_receiver: mpsc::Receiver<IncomingRequest>,
 	_phantom: std::marker::PhantomData<TBlock>
 }
@@ -98,8 +105,9 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 
 		let mut request_response_config = generate_request_response_config(protocol_id);
 		request_response_config.inbound_queue = Some(tx);
+		let cache = Arc::new(parking_lot::RwLock::new(WarpSyncFragmentCache::new(WARP_SYNC_CACHE_SIZE)));
 
-		(Self { backend, request_receiver, _phantom: std::marker::PhantomData }, request_response_config)
+		(Self { backend, request_receiver, cache, _phantom: std::marker::PhantomData }, request_response_config)
 	}
 
 	fn handle_request(
@@ -111,8 +119,9 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 	{
 		let request = Request::<TBlock>::decode(&mut &payload[..])?;
 
+		let mut cache = self.cache.write();
 		let response = sc_finality_grandpa::prove_warp_sync(
-			self.backend.blockchain(), request.begin, Some(WARP_SYNC_FRAGMENTS_LIMIT)
+			self.backend.blockchain(), request.begin, Some(WARP_SYNC_FRAGMENTS_LIMIT), Some(&mut cache)
 		)?;
 
 		pending_response.send(response)
