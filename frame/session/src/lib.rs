@@ -163,7 +163,7 @@ impl<
 			+ Zero
 			+ PartialOrd
 			+ Saturating
-			+ Clone
+			+ Clone,
 		Period: Get<BlockNumber>,
 		Offset: Get<BlockNumber>,
 	> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset>
