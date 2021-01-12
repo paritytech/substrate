@@ -7589,7 +7589,7 @@ dependencies = [
 [[package]]
 name = "scale-info"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/scale-info#1c80736fefb825af1c9773b3d7f28bec49390722"
+source = "git+https://github.com/paritytech/scale-info#bfed7ff7815ee73bbc598c9733b4b36eede73590"
 dependencies = [
  "cfg-if 1.0.0",
  "derive_more",
@@ -7600,7 +7600,7 @@ dependencies = [
 [[package]]
 name = "scale-info-derive"
 version = "0.2.1"
-source = "git+https://github.com/paritytech/scale-info#1c80736fefb825af1c9773b3d7f28bec49390722"
+source = "git+https://github.com/paritytech/scale-info#bfed7ff7815ee73bbc598c9733b4b36eede73590"
 dependencies = [
  "proc-macro2",
  "quote",

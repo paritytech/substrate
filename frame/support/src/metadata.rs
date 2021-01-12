@@ -81,7 +81,7 @@ macro_rules! impl_runtime_metadata {
 									>::SignedExtensions as $crate::sp_runtime::traits::SignedExtension
 								>::identifier()
 									.into_iter()
-									.map($crate::metadata::DecodeDifferent::Encode)
+									.map(|(id, _)| $crate::metadata::DecodeDifferent::Encode(id))
 									.collect(),
 						},
 				}.into()

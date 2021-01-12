@@ -722,7 +722,7 @@ impl Dispatchable for () {
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
-pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq {
+pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq + ::scale_info::TypeInfo + 'static {
 	/// Unique identifier of this signed extension.
 	///
 	/// This will be exposed in the metadata to identify the signed extension used
@@ -849,8 +849,8 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// *exactly* one identifier.
 	///
 	/// This method provides a default implementation that returns `vec![SELF::IDENTIFIER]`.
-	fn identifier() -> Vec<&'static str> {
-		sp_std::vec![Self::IDENTIFIER]
+	fn identifier() -> Vec<(&'static str, ::scale_info::MetaType)> {
+		sp_std::vec![(Self::IDENTIFIER, ::scale_info::meta_type::<Self>())]
 	}
 }
 
@@ -914,7 +914,7 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 		Ok(())
 	}
 
-	fn identifier() -> Vec<&'static str> {
+	fn identifier() -> Vec<(&'static str, ::scale_info::MetaType)> {
 		let mut ids = Vec::new();
 		for_tuples!( #( ids.extend(Tuple::identifier()); )* );
 		ids

@@ -26,22 +26,18 @@ macro_rules! impl_runtime_metadata_vnext {
 		impl $runtime {
 			pub fn metadata_vnext() -> $crate::metadata::v13::RuntimeMetadataPrefixed {
 				$crate::metadata::v13::RuntimeMetadataLastVersion::new(
-						$crate::__runtime_modules_to_metadata_vnext!($runtime;; $( $rest )*),
-						$crate::metadata::v13::ExtrinsicMetadata {
-							version: <$ext as $crate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
-							signed_extensions: vec![] // todo: init extensions (see below)
-						}
-						// extrinsic: $crate::metadata::ExtrinsicMetadata {
-						// 	version: <$ext as $crate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
-						// 	signed_extensions: <
-						// 			<
-						// 				$ext as $crate::sp_runtime::traits::ExtrinsicMetadata
-						// 			>::SignedExtensions as $crate::sp_runtime::traits::SignedExtension
-						// 		>::identifier()
-						// 			.into_iter()
-						// 			.map($crate::metadata::DecodeDifferent::Encode)
-						// 			.collect(),
-						// },
+					$crate::__runtime_modules_to_metadata_vnext!($runtime;; $( $rest )*),
+					$crate::metadata::v13::ExtrinsicMetadata {
+						version: <$ext as $crate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
+						signed_extensions: <
+								<
+									$ext as $crate::sp_runtime::traits::ExtrinsicMetadata
+								>::SignedExtensions as $crate::sp_runtime::traits::SignedExtension
+							>::identifier()
+								.into_iter()
+								.map(|(_, ty)| ty)
+								.collect(),
+					},
 				).into()
 			}
 		}
