@@ -29,6 +29,32 @@ use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::{vec, prelude::Vec};
 
+/// Stateless verification of the leaf proof.
+pub fn verify_leaf_proof<T, I, L>(
+	root: <T as Config<I>>::Hash,
+	leaf: L,
+	proof: primitives::Proof<<T as Config<I>>::Hash>,
+) -> Result<bool, Error> where
+	T: Config<I>,
+	I: Instance,
+	L: primitives::FullLeaf,
+{
+	let size = NodesUtils::new(proof.leaf_count).size();
+	let leaf_position = mmr_lib::leaf_index_to_pos(proof.leaf_index);
+
+	let p = mmr_lib::MerkleProof::<
+		NodeOf<T, I, L>,
+		Hasher<HashingOf<T, I>, L>,
+	>::new(
+		size,
+		proof.items.into_iter().map(Node::Hash).collect(),
+	);
+	p.verify(
+		Node::Hash(root),
+		vec![(leaf_position, Node::Data(leaf))],
+	).map_err(|e| Error::Verify.log_debug(e))
+}
+
 /// A wrapper around a MMR library to expose limited functionality.
 ///
 /// Available functions depend on the storage kind ([Runtime](crate::mmr::storage::RuntimeStorage)

@@ -254,6 +254,29 @@ fn should_verify() {
 }
 
 #[test]
+fn verification_should_be_stateless() {
+	let _ = env_logger::try_init();
+
+	// Start off with chain initialisation and storing indexing data off-chain
+	// (MMR Leafs)
+	let mut ext = new_test_ext();
+	ext.execute_with(|| init_chain(7));
+	ext.persist_offchain_overlay();
+
+	// Try to generate proof now. This requires the offchain extensions to be present
+	// to retrieve full leaf data.
+	register_offchain_ext(&mut ext);
+	let (leaf, proof5) = ext.execute_with(|| {
+		// when
+		crate::Module::<Test>::generate_proof(5).unwrap()
+	});
+	let root = ext.execute_with(|| crate::Module::<Test>::mmr_root_hash());
+
+	// Verify proof without relying on any on-chain data.
+	assert_eq!(crate::verify_leaf_proof::<Test, _>(root, leaf, proof5), Ok(true));
+}
+
+#[test]
 fn should_verify_on_the_next_block_since_there_is_no_pruning_yet() {
 	let _ = env_logger::try_init();
 	let mut ext = new_test_ext();

@@ -74,6 +74,7 @@ mod mock;
 mod tests;
 
 pub mod primitives;
+pub use mmr::Error as MmrError;
 
 pub trait WeightInfo {
 	fn on_initialize(peaks: u64) -> Weight;
@@ -118,6 +119,9 @@ pub trait Config<I = DefaultInstance>: frame_system::Config {
 	/// [LeafDataProvider](primitives::LeafDataProvider)s can be composed into tuples to put
 	/// multiple elements into the tree. In such a case it might be worth using [primitives::Compact]
 	/// to make MMR proof for one element of the tuple leaner.
+	///
+	/// Note that leaf at each block MUST be unique. You may want to include a block hash or block
+	/// number as an easiest way to ensure that.
 	type LeafData: primitives::LeafDataProvider;
 
 	/// A hook to act on the new MMR root.
@@ -182,6 +186,23 @@ type LeafOf<T, I> = <<T as Config<I>>::LeafData as primitives::LeafDataProvider>
 /// Hashing used for the pallet.
 pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;
 
+/// Stateless MMR proof verification.
+///
+/// This function can be used to verify received MMR proof (`proof`)
+/// for given leaf data (`leaf`) against a known MMR root hash (`root`).
+///
+/// The verification does not require any storage access.
+pub fn verify_leaf_proof<T, I>(
+	root: <T as Config<I>>::Hash,
+	leaf: LeafOf<T, I>,
+	proof: primitives::Proof<<T as Config<I>>::Hash>,
+) -> Result<bool, MmrError> where
+	T: Config<I>,
+	I: Instance,
+{
+	mmr::verify_leaf_proof::<T, I, _>(root, leaf, proof)
+}
+
 impl<T: Config<I>, I: Instance> Module<T, I> {
 	fn offchain_key(pos: u64) -> sp_std::prelude::Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
@@ -195,7 +216,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_proof(leaf_index: u64) -> Result<
 		(LeafOf<T, I>, primitives::Proof<<T as Config<I>>::Hash>),
-		mmr::Error,
+		MmrError,
 	> {
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(Self::mmr_leaves());
 		mmr.generate_proof(leaf_index)
@@ -210,12 +231,12 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	pub fn verify_leaf(
 		leaf: LeafOf<T, I>,
 		proof: primitives::Proof<<T as Config<I>>::Hash>,
-	) -> Result<(), mmr::Error> {
+	) -> Result<(), MmrError> {
 		if proof.leaf_count > Self::mmr_leaves()
 			|| proof.leaf_count == 0
 			|| proof.items.len() as u32 > mmr::utils::NodesUtils::new(proof.leaf_count).depth()
 		{
-			return Err(mmr::Error::Verify.log_debug(
+			return Err(MmrError::Verify.log_debug(
 				"The proof has incorrect number of leaves or proof items."
 			));
 		}
@@ -225,7 +246,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		if is_valid {
 			Ok(())
 		} else {
-			Err(mmr::Error::Verify.log_debug("The proof is incorrect."))
+			Err(MmrError::Verify.log_debug("The proof is incorrect."))
 		}
 	}
 }

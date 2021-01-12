@@ -274,7 +274,6 @@ pub struct Proof<Hash> {
 	pub items: Vec<Hash>,
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;
