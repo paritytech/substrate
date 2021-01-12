@@ -448,11 +448,6 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 /// We only return proof for finalized blocks (with justification).
 ///
 /// It is assumed that the caller already have a proof-of-finality for the block 'begin'.
-///
-/// Note that if block 'begin' is in a scheduled change interval, the proof is very likely
-/// to be invalid. One way to prevent that would be to look backward for the previous authority
-/// set change and see if a pending set change is in progress. This is not implemented at this
-/// point.
 pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 	blockchain: &B,
 	begin: Block::Hash,
@@ -472,12 +467,26 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 	}
 
 	let mut result = Vec::new();
-
-	let header = blockchain.expect_header(begin)?;
-	let mut index = *header.number() + One::one();
-
 	let mut last_apply = None;
 
+	let header = blockchain.expect_header(begin)?;
+	let mut index = *header.number();
+
+	// Find previous change in case there is a delay.
+	// This operation is a costy and only for the delay corner case.
+	while index > Zero::zero() {
+		if let Some((fragement, apply_block)) = get_warp_sync_proof_fragment(blockchain, index)? {
+			if last_apply.map(|next| &next > header.number()).unwrap_or(false) {
+				result.push(fragement);
+				last_apply = Some(apply_block);
+			} else {
+				break;
+			}
+		}
+		index = index - One::one();
+	}
+
+	let mut index = *header.number() + One::one();
 	while index <= end_number {
 		if max_fragment_limit.map(|limit| result.len() <= limit).unwrap_or(false) {
 			break;
@@ -485,7 +494,7 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 
 		if let Some((fragement, apply_block)) = get_warp_sync_proof_fragment(blockchain, index)? {
 			if last_apply.map(|next| apply_block < next).unwrap_or(false) {
-				// previous delayed will not apply, do not include it.
+				// Previous delayed will not apply, do not include it.
 				result.pop();
 			}
 			result.push(fragement);
@@ -503,7 +512,7 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 				justification,
 			});
 		} else {
-			println!("should be unreachable");
+			// no justification, don't include it.
 		}
 	}
 
