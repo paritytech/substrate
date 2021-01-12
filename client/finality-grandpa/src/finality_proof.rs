@@ -475,6 +475,7 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 	// Find previous change in case there is a delay.
 	// This operation is a costy and only for the delay corner case.
 	while index > Zero::zero() {
+		index = index - One::one();
 		if let Some((fragement, apply_block)) = get_warp_sync_proof_fragment(blockchain, index)? {
 			if last_apply.map(|next| &next > header.number()).unwrap_or(false) {
 				result.push(fragement);
@@ -483,10 +484,9 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 				break;
 			}
 		}
-		index = index - One::one();
 	}
 
-	let mut index = *header.number() + One::one();
+	let mut index = *header.number();
 	while index <= end_number {
 		if max_fragment_limit.map(|limit| result.len() <= limit).unwrap_or(false) {
 			break;
