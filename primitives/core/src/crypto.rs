@@ -496,6 +496,8 @@ ss58_address_format!(
 		(25, "alphaville", "ZERO testnet, standard account (*25519).")
 	SubsocialAccount =>
 		(28, "subsocial", "Subsocial network, standard account (*25519).")
+	DhiwayAccount =>
+		(29, "cord", "Dhiway CORD network, standard account (*25519).")	
 	PhalaAccount =>
 		(30, "phala", "Phala Network, standard account (*25519).")
 	RobonomicsAccount =>
