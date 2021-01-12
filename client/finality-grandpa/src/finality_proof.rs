@@ -252,7 +252,7 @@ type FinalityProof<Header> = Vec<FinalityProofFragment<Header>>;
 /// Finality for block B is proved by providing:
 /// 1) headers of this block;
 /// 2) the justification for the block containing a authority set change digest;
-#[derive(Debug, PartialEq, Encode, Decode)]
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub(crate) struct AuthoritySetProofFragment<Header: HeaderT> {
 	/// The header of the given block.
 	pub header: Header,
@@ -452,6 +452,7 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 	blockchain: &B,
 	begin: Block::Hash,
 	max_fragment_limit: Option<usize>,
+	cache: Option<&mut WarpSyncFragmentCache<Block::Header>>,
 ) -> ::sp_blockchain::Result<Vec<u8>>
 {
 	let begin = BlockId::Hash(begin);
@@ -470,34 +471,66 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 	let mut last_apply = None;
 
 	let header = blockchain.expect_header(begin)?;
-	let mut index = *header.number();
+	let begin = *header.number();
+	let mut index = begin;
 
 	// Find previous change in case there is a delay.
 	// This operation is a costy and only for the delay corner case.
-	while index > Zero::zero() {
-		index = index - One::one();
-		if let Some((fragement, apply_block)) = get_warp_sync_proof_fragment(blockchain, index)? {
-			if last_apply.map(|next| &next > header.number()).unwrap_or(false) {
-				result.push(fragement);
-				last_apply = Some(apply_block);
-			} else {
-				break;
+	if let Some(cache_item) = cache.and_then(|cache| cache.get_item(begin)) {
+		if cache_item.apply > begin {
+			result.push(cache_item.fragment.clone());
+			last_apply = Some(cache_item.apply);
+		}
+		index = cache_item.end.unwrap_or_else(|| *header.number());
+	} else {
+		while index > Zero::zero() {
+			index = index - One::one();
+			if let Some((fragment, apply_block)) = get_warp_sync_proof_fragment(blockchain, index)? {
+				if last_apply.map(|next| &next > header.number()).unwrap_or(false) {
+					result.push(fragment);
+					last_apply = Some(apply_block);
+				} else {
+					break;
+				}
 			}
 		}
+		index = *header.number();
 	}
 
-	let mut index = *header.number();
+	let mut cache_at = None;
+
 	while index <= end_number {
+		cache.map(|cache| {
+			if let Some((at, item)) = cache_at.as_ref() {
+				if at == index {
+					if let Some((start, at, end, fragment)) = cache_at.take() {
+						cache.new_item(
+							start,
+							at,
+							end,
+							fragment,
+						);
+					}
+				}
+			}
+		});
 		if max_fragment_limit.map(|limit| result.len() <= limit).unwrap_or(false) {
 			break;
 		}
 
-		if let Some((fragement, apply_block)) = get_warp_sync_proof_fragment(blockchain, index)? {
+		if let Some((fragment, apply_block)) = get_warp_sync_proof_fragment(blockchain, index)? {
 			if last_apply.map(|next| apply_block < next).unwrap_or(false) {
 				// Previous delayed will not apply, do not include it.
 				result.pop();
+				cache_at = None;
 			}
-			result.push(fragement);
+			cache.map(|cache| {
+				result.last().map(|last| {
+					let start = *last.header.number();
+					cache_at = Some((start, apply_block, index, last.clone()));
+				});
+			});
+			result.push(fragment);
 			last_apply = Some(apply_block);
 		}
 
@@ -825,6 +858,112 @@ impl<Block: BlockT> BlockJustification<Block::Header> for GrandpaJustification<B
 	}
 	fn hash(&self) -> Block::Hash {
 		self.commit.target_hash.clone()
+	}
+}
+
+// Number of item in warp sync cache.
+// This should be customizable, setting a low number
+// until then.
+const WARP_SYNC_CACHE_SIZE: usize = 20;
+
+/// Simple cache for warp sync queries.
+struct WarpSyncFragmentCache<Header: HeaderT> {
+	// First block to apply this authority set is key,
+	// last block is added with authority set. 
+	cache: std::collections::BTreeMap<Header::Number, Box<CacheItem<Header>>>,
+
+	lru_last: *mut CacheItem<Header>,
+	lru_first: *mut CacheItem<Header>,
+}
+
+struct CacheItem<Header: HeaderT> {
+	fragment: AuthoritySetProofFragment<Header>,
+	start: Header::Number,
+	apply: Header::Number,
+	end: Option<Header::Number>,
+	lru_prev: *mut CacheItem<Header>,
+	lru_next: *mut CacheItem<Header>,
+}
+
+impl<Header: HeaderT> WarpSyncFragmentCache<Header> {
+	/// Instantiate a new cache for the warp sync prover.
+	pub fn new() -> Self {
+		WarpSyncFragmentCache {
+			cache: Default::default(),
+			lru_last: std::ptr::null_mut(),
+			lru_first: std::ptr::null_mut(),
+		}
+	}
+
+	fn new_item(
+		&mut self,
+		start: Header::Number,
+		apply: Header::Number,
+		end: Option<Header::Number>,
+		fragment: AuthoritySetProofFragment<Header>,
+	) {
+		if self.cache.len() == WARP_SYNC_CACHE_SIZE {
+			self.pop_first();
+		}
+
+		let mut item = Box::new(CacheItem {
+			fragment,
+			start: start.clone(),
+			apply,
+			end,
+			lru_prev: std::ptr::null_mut(),
+			lru_next: std::ptr::null_mut(),
+		});
+		if self.cache.len() == 0 {
+			self.lru_first = item.as_mut() as *mut _;
+		}
+		if self.cache.len() > 0 {
+			item.lru_prev = self.lru_last;
+			let last = unsafe { self.lru_last.as_mut().unwrap() };
+			last.lru_next = item.as_mut() as *mut _;
+		}
+		self.lru_last = item.as_mut() as *mut _;
+		self.cache.insert(start.clone(), item);
+	}
+
+	fn pop_first(&mut self) {
+		if self.cache.len() == 0 {
+			return;
+		}
+		if self.cache.len() == 1 {
+			self.cache.clear();
+			self.lru_first = std::ptr::null_mut();
+			self.lru_last = std::ptr::null_mut();
+			return;
+		}
+		let first = unsafe { self.lru_first.as_mut().unwrap() };
+		self.lru_first = first.lru_next;
+		let second = unsafe { first.lru_next.as_mut().unwrap() };
+		second.lru_prev = std::ptr::null_mut();
+		self.cache.remove(&first.start.clone());
+	}
+
+	fn get_item(
+		&mut self,
+		block: Header::Number,
+	) -> Option<&CacheItem<Header>> {
+		// Not the quickest.
+		if let Some((_start, mut item)) = self.cache.iter_mut().find(|k| &block >= k.0) {
+			if item.end.map(|end| block < end).unwrap_or(true) { 
+				if item.lru_prev != std::ptr::null_mut() {
+					let prev = unsafe { item.lru_prev.as_mut().unwrap() };
+					prev.lru_next = item.lru_next;
+				}
+				item.lru_prev = self.lru_last;
+				item.lru_next = std::ptr::null_mut();
+				let last = unsafe { self.lru_last.as_mut().unwrap() };
+				last.lru_next = item.as_mut() as *mut _;
+				self.lru_last = item.as_mut() as *mut _;
+				return Some(&item); 
+			}
+		}
+
+		None
 	}
 }
 
