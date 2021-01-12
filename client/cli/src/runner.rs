@@ -30,17 +30,18 @@ use std::marker::PhantomData;
 use std::error;
 use std::result;
 use std::io;
+use sc_service::Error as ServiceError;
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), E>
 where
 	F: Future<Output = std::result::Result<(), E>> + future::FusedFuture,
-	E: error::Error + Send + Sync + 'static + From<io::Error>,
+	E: error::Error + Send + Sync + 'static + From<ServiceError>,
 {
 	use tokio::signal::unix::{signal, SignalKind};
 
-	let mut stream_int = signal(SignalKind::interrupt())?;
-	let mut stream_term = signal(SignalKind::terminate())?;
+	let mut stream_int = signal(SignalKind::interrupt()).map_err(ServiceError::Io)?;
+	let mut stream_term = signal(SignalKind::terminate()).map_err(ServiceError::Io)?;
 
 	let t1 = stream_int.recv().fuse();
 	let t2 = stream_term.recv().fuse();
@@ -58,10 +59,10 @@ where
 }
 
 #[cfg(not(unix))]
-async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
+async fn main<F, E>(func: F) -> std::result::Result<(), E>
 where
 	F: Future<Output = std::result::Result<(), E>> + future::FusedFuture,
-	E: 'static + std::error::Error,
+	E: error::Error + Send + Sync + 'static + From<ServiceError>,
 {
 	use tokio::signal::ctrl_c;
 
@@ -100,7 +101,7 @@ fn run_until_exit<F, E>(
 ) -> result::Result<(), E>
 where
 	F: Future<Output = result::Result<(), E>> + future::Future,
-	E: error::Error + Send + Sync + 'static + From<sc_service::Error> + From<io::Error>,
+	E: error::Error + Send + Sync + 'static + From<ServiceError>,
 {
 	let f = future.fuse();
 	pin_mut!(f);
@@ -180,8 +181,8 @@ impl<C: SubstrateCli> Runner<C> {
 		initialize: impl FnOnce(Configuration) -> F,
 	) -> result::Result<(), E>
 	where
-		F: Future<Output = sc_service::error::Result<TaskManager>>,
-		E: error::Error + Send + Sync + 'static + From<sc_service::Error> + From<io::Error>,
+		F: Future<Output = ServiceError::Result<TaskManager>>,
+		E: error::Error + Send + Sync + 'static + From<ServiceError>,
 	{
 		self.print_node_infos();
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
