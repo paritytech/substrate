@@ -947,83 +947,42 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> DispatchResult {
 		if value.is_zero() || transactor == dest { return Ok(()) }
 
-		let mut maybe_from_acc_call_post_mutation = false;
-		let mut maybe_to_acc_call_post_mutation = false;
-		let mut from_acc: AccountData<T::Balance> = Default::default();
-		let mut to_acc: AccountData<T::Balance> = Default::default();
-
+		// Pre-check dest for error before mutation.
 		T::AccountStore::try_mutate_exists(dest, |maybe_to_acc| -> DispatchResult {
-			let to_acc_is_new = maybe_to_acc.is_none();
-			to_acc = maybe_to_acc.take().unwrap_or_default();
-
-			T::AccountStore::try_mutate_exists(transactor, |maybe_from_acc| -> DispatchResult {
-				let from_acc_is_new = maybe_from_acc.is_none();
-				from_acc = maybe_from_acc
-					.take()
-					.unwrap_or_default();
-
-				from_acc.free = from_acc.free.checked_sub(&value)
-					.ok_or(Error::<T, I>::InsufficientBalance)?;
-
-				// NOTE: total stake being stored in the same type means
-				// that this could never overflow
-				// but better to be safe than sorry.
-				to_acc.free = to_acc
-					.free.checked_add(&value)
-					.ok_or(Error::<T, I>::Overflow)?;
-
-				let ed = T::ExistentialDeposit::get();
-				ensure!(to_acc.total() >= ed, Error::<T, I>::ExistentialDeposit);
-
-				Self::ensure_can_withdraw(
-					transactor,
-					value,
-					WithdrawReasons::TRANSFER,
-					from_acc.free,
-				)?;
-
-				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
-				let allow_death = allow_death && system::Module::<T>::allow_death(transactor);
-				ensure!(allow_death || from_acc.free >= ed, Error::<T, I>::KeepAlive);
-
-				maybe_from_acc_call_post_mutation =
-					from_acc.total() < T::ExistentialDeposit::get();
-				if from_acc.total() < T::ExistentialDeposit::get() {
-					*maybe_from_acc = None;
-				} else {
-					*maybe_from_acc = Some(from_acc.clone());
-				}
-
-				maybe_to_acc_call_post_mutation =
-					to_acc.total() < T::ExistentialDeposit::get();
-				if to_acc.total() < T::ExistentialDeposit::get() {
-					*maybe_to_acc = None;
-				} else {
-					*maybe_to_acc = Some(to_acc.clone());
-				}
-
-				if from_acc_is_new {
-					Self::deposit_event(
-						RawEvent::Endowed(transactor.clone(), from_acc.free)
-					);
-				}
-
-				if to_acc_is_new {
-					Self::deposit_event(
-						RawEvent::Endowed(dest.clone(), to_acc.free)
-					);
-				}
-				Ok(())
-			})
+			let mut to_acc: AccountData<T::Balance> = Default::default();
+			to_acc = maybe_to_acc.get().unwrap_or_default();
+			to_acc.free = to_account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
+			let ed = T::ExistentialDeposit::get();
+			ensure!(to_account.total() >= ed, Error::<T, I>::ExistentialDeposit);
+			Ok(())
 		})?;
 
-		if maybe_from_acc_call_post_mutation {
-			Self::post_mutation(transactor, from_acc);
-		}
+		// update only transactor.
+		Self::try_mutate_account(transactor, |from_account, _| -> DispatchResult {
+			from_account.free = from_account.free.checked_sub(&value)
+				.ok_or(Error::<T, I>::InsufficientBalance)?;
 
-		if maybe_to_acc_call_post_mutation {
-			Self::post_mutation(dest, to_acc);
-		}
+			Self::ensure_can_withdraw(
+				transactor,
+				value,
+				WithdrawReasons::TRANSFER,
+				from_account.free,
+			)?;
+
+			let ed = T::ExistentialDeposit::get();
+			let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
+			let allow_death = allow_death && system::Module::<T>::allow_death(transactor);
+			ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
+			Ok(())
+		})?;
+
+		// update the dest
+		Self::try_mutate_account(dest, |to_account, _| -> DispatchResult {
+			// NOTE: total stake being stored in the same type means that this could never overflow
+			// but better to be safe than sorry.
+			to_account.free = to_account.free.checked_add(&value);
+			Ok(())
+		})?;
 
 		// Emit transfer event.
 		Self::deposit_event(
@@ -1036,6 +995,7 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 
 		Ok(())
 	}
+
 	/// Slash a target account `who`, returning the negative imbalance created and any left over
 	/// amount that could not be slashed.
 	///
