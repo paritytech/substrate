@@ -164,7 +164,6 @@ impl<
 			+ PartialOrd
 			+ Saturating
 			+ Clone
-			+ sp_std::fmt::Debug,
 		Period: Get<BlockNumber>,
 		Offset: Get<BlockNumber>,
 	> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset>
