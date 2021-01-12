@@ -22,12 +22,10 @@ use crate::{
 		storage::{Storage, OffchainStorage, RuntimeStorage},
 		utils::NodesUtils,
 	},
-	primitives,
+	primitives::{self, Error},
 };
-use frame_support::{debug, RuntimeDebug};
-use sp_std::fmt;
 #[cfg(not(feature = "std"))]
-use sp_std::{vec, prelude::Vec};
+use sp_std::vec;
 
 /// Stateless verification of the leaf proof.
 pub fn verify_leaf_proof<T, I, L>(
@@ -175,38 +173,5 @@ impl<T, I, L> Mmr<OffchainStorage, T, I, L> where
 			})
 			.map(|p| (leaf, p))
 	}
-}
-
-/// Merkle Mountain Range operation error.
-#[derive(RuntimeDebug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
-pub enum Error {
-	/// Error while pushing new node.
-	Push,
-	/// Error getting the new root.
-	GetRoot,
-	/// Error commiting changes.
-	Commit,
-	/// Error during proof generation.
-	GenerateProof,
-	/// Proof verification error.
-	Verify,
-	/// Leaf not found in the storage.
-	LeafNotFound,
-}
-
-impl Error {
-	/// Consume given error `e` with `self` and generate a native log entry with error details.
-	pub(crate) fn log_error(self, e: impl fmt::Debug) -> Self {
-		debug::native::error!("[{:?}] MMR error: {:?}", self, e);
-		self
-	}
-
-	/// Consume given error `e` with `self` and generate a native log entry with error details.
-	pub(crate) fn log_debug(self, e: impl fmt::Debug) -> Self {
-		debug::native::debug!("[{:?}] MMR error: {:?}", self, e);
-		self
-	}
-
 }
 

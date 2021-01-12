@@ -17,13 +17,14 @@
 
 //! Merkle Mountain Range primitive types.
 
-use frame_support::RuntimeDebug;
+#![cfg_attr(not(feature = "std"), no_std)]
+#![warn(missing_docs)]
+
+use frame_support::{RuntimeDebug, debug};
 use sp_runtime::traits;
 use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
-
-// TODO [ToDr] ADD RUNTIME API
 
 /// A provider of the MMR's leaf data.
 pub trait LeafDataProvider {
@@ -166,6 +167,7 @@ impl<H: traits::Hash, L: FullLeaf> DataOrHash<H, L> {
 /// you don't care about with their hashes.
 #[derive(RuntimeDebug, Clone, PartialEq)]
 pub struct Compact<H, T> {
+	/// Internal tuple representation.
 	pub tuple: T,
 	_hash: sp_std::marker::PhantomData<H>,
 }
@@ -179,6 +181,7 @@ impl<H, T> sp_std::ops::Deref for Compact<H, T> {
 }
 
 impl<H, T> Compact<H, T> {
+	/// Create a new [Compact] wrapper for a tuple.
 	pub fn new(tuple: T) -> Self {
 		Self { tuple, _hash: Default::default() }
 	}
@@ -274,6 +277,60 @@ pub struct Proof<Hash> {
 	pub leaf_count: u64,
 	/// Proof elements (hashes of siblings of inner nodes on the path to the leaf).
 	pub items: Vec<Hash>,
+}
+
+/// Merkle Mountain Range operation error.
+#[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
+pub enum Error {
+	/// Error while pushing new node.
+	Push,
+	/// Error getting the new root.
+	GetRoot,
+	/// Error commiting changes.
+	Commit,
+	/// Error during proof generation.
+	GenerateProof,
+	/// Proof verification error.
+	Verify,
+	/// Leaf not found in the storage.
+	LeafNotFound,
+}
+
+impl Error {
+	#![allow(unused_variables)]
+	/// Consume given error `e` with `self` and generate a native log entry with error details.
+	pub fn log_error(self, e: impl fmt::Debug) -> Self {
+		debug::native::error!("[{:?}] MMR error: {:?}", self, e);
+		self
+	}
+
+	/// Consume given error `e` with `self` and generate a native log entry with error details.
+	pub fn log_debug(self, e: impl fmt::Debug) -> Self {
+		debug::native::debug!("[{:?}] MMR error: {:?}", self, e);
+		self
+	}
+}
+
+sp_api::decl_runtime_apis! {
+	/// API to interact with MMR pallet.
+	pub trait MmrApi<Leaf: codec::Codec, Hash: codec::Codec> {
+		/// Generate MMR proof for a leaf under given index.
+		fn generate_proof(leaf_index: u64) -> Result<(Leaf, Proof<Hash>), Error>;
+
+		/// Verify MMR proof against on-chain MMR.
+		///
+		/// Note this function will use on-chain MMR root hash and check if the proof
+		/// matches the hash.
+		/// See [Self::verify_proof_stateless] for a stateless verifier.
+		fn verify_proof(leaf: Leaf, proof: Proof<Hash>) -> Result<(), Error>;
+
+		/// Verify MMR proof against given root hash.
+		///
+		/// Note this function does not require any on-chain storage - the
+		/// proof is verified against given MMR root hash.
+		fn verify_proof_stateless(root: Hash, leaf: Leaf, proof: Proof<Hash>)
+			-> Result<(), Error>;
+	}
 }
 
 #[cfg(test)]

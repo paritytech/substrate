@@ -1261,6 +1261,26 @@ impl_runtime_apis! {
 		}
 	}
 
+	impl pallet_mmr::primitives::MmrApi<
+		Block,
+		<<Runtime as pallet_mmr::Config>::LeafData as
+			pallet_mmr::primitives::LeafDataProvider>::LeafData,
+		<Runtime as pallet_mmr::Config>::Hash,
+	> for Runtime {
+		fn generate_proof(leaf_index: u64) -> Result<(Leaf, Proof<Hash>), Error> {
+			Mmr::generate_proof(leaf_index)
+		}
+
+		fn verify_proof(leaf: Leaf, proof: Proof<Hash>) -> Result<(), Error> {
+			Mmr::verify_proof(leaf, proof)
+		}
+
+		fn verify_proof_stateless(root: Hash, leaf: Leaf, proof: Proof<Hash>)
+			-> Result<(), Error> {
+			pallet_mmr::verify_leaf_proof::<Self, _>(root, leaf, proof)
+		}
+	}
+
 	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			SessionKeys::generate(seed)
