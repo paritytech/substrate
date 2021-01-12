@@ -30,6 +30,7 @@ use std::marker::PhantomData;
 use std::error;
 use std::result;
 use sc_service::Error as ServiceError;
+use crate::error::Error as CliError;
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), E>
@@ -191,20 +192,24 @@ impl<C: SubstrateCli> Runner<C> {
 	}
 
 	/// A helper function that runs a command with the configuration of this node.
-	pub fn sync_run(self, runner: impl FnOnce(Configuration) -> Result<()>) -> Result<()> {
+	pub fn sync_run<E>(self, runner: impl FnOnce(Configuration) -> result::Result<(), E>) -> result::Result<(), E>
+	where
+		E: error::Error + Send + Sync + 'static + From<ServiceError>,
+	{
 		runner(self.config)
 	}
 
 	/// A helper function that runs a future with tokio and stops if the process receives
 	/// the signal `SIGTERM` or `SIGINT`.
-	pub fn async_run<FUT>(
-		self, runner: impl FnOnce(Configuration) -> Result<(FUT, TaskManager)>,
-	) -> Result<()>
+	pub fn async_run<F, E>(
+		self, runner: impl FnOnce(Configuration) -> result::Result<(F, TaskManager), E>,
+	) -> result::Result<(), E>
 	where
-		FUT: Future<Output = Result<()>>,
+		F: Future<Output = result::Result<(), E>>,
+		E: error::Error + Send + Sync + 'static + From<ServiceError> + From<CliError>,
 	{
 		let (future, task_manager) = runner(self.config)?;
-		run_until_exit(self.tokio_runtime, future, task_manager)
+		run_until_exit::<_,E>(self.tokio_runtime, future, task_manager)
 	}
 
 	/// Get an immutable reference to the node Configuration
