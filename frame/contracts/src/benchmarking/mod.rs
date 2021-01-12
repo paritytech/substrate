@@ -109,7 +109,6 @@ where
 		endowment: Endow,
 	) -> Result<Contract<T>, &'static str>
 	{
-		use sp_runtime::traits::{CheckedDiv, SaturatedConversion};
 		let (storage_size, endowment) = match endowment {
 			Endow::CollectRent => {
 				// storage_size cannot be zero because otherwise a contract that is just above
