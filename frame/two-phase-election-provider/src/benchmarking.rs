@@ -127,11 +127,11 @@ where
 	// write the snapshot to staking or whoever is the data provider.
 	T::DataProvider::put_snapshot(all_voters.clone(), targets.clone());
 
-	let stake_of = crate::stake_of_fn!(all_voters, T::AccountId);
-	let voter_index = crate::voter_index_fn!(all_voters, T::AccountId, T);
-	let voter_at = crate::voter_at_fn!(all_voters, T::AccountId, T);
-	let target_at = crate::target_at_fn!(targets, T::AccountId, T);
-	let target_index = crate::target_index_fn!(targets, T::AccountId, T);
+	crate::stake_of_fn!(let stake_of, all_voters, T);
+	crate::voter_index_fn!(let voter_index, all_voters, T);
+	crate::voter_at_fn!(let voter_at, all_voters, T);
+	crate::target_at_fn!(let target_at, targets, T);
+	crate::target_index_fn!(let target_index, targets, T);
 
 	let assignments = active_voters
 		.iter()
@@ -288,15 +288,15 @@ benchmarks! {
 
 	// This is checking a valid solution. The worse case is indeed a valid solution.
 	feasibility_check {
-		// number of voters in snapshot.
-		let v in 200 .. 300;
+		// number of votes in snapshot.
+		let v in 2000 .. 3000;
 		// number of targets in snapshot.
-		let t in 80 .. 140;
-		// number of assignments, i.e. compact.voter_count(). This means the active nominators,
-		// thus must be a subset of `v` component.
-		let a in 80 .. 140;
+		let t in 500 .. 800;
+		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
+		// a subset of `v` component.
+		let a in 500 .. 1500;
 		// number of desired targets. Must be a subset of `t` component.
-		let d in 30 .. 60;
+		let d in 200 .. 400;
 
 		let size = SolutionSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(size, a, d);

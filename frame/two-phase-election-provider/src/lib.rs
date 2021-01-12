@@ -210,7 +210,7 @@ const LOG_TARGET: &'static str = "election-provider";
 #[doc(hidden)]
 pub use sp_runtime::traits::UniqueSaturatedInto;
 #[doc(hidden)]
-pub use sp_std::convert::TryInto;
+pub use sp_std;
 
 pub mod signed;
 pub mod unsigned;
@@ -1064,8 +1064,9 @@ where
 		} = Self::snapshot().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
 		// ----- Start building. First, we need some closures.
-		let voter_at = crate::voter_at_fn!(snapshot_voters, T::AccountId, T);
-		let target_at = crate::target_at_fn!(snapshot_targets, T::AccountId, T);
+		crate::voter_at_fn!(let voter_at , snapshot_voters, T);
+		crate::target_at_fn!(let target_at, snapshot_targets, T);
+		crate::voter_index_fn_usize!(let voter_index, snapshot_voters, T);
 
 		// first, make sure that all the winners are sane.
 		let winners = winners
@@ -1084,14 +1085,15 @@ where
 			.iter()
 			.map(|ref assignment| {
 				// check that assignment.who is actually a voter (defensive-only).
-				// NOTE: This check is fully defensive as we know that this assignment.who is
-				// a voter, what we don't know is stake and targets. Essentially, we have lost the
-				// index after converting `compact` -> `assignment`. This can be optimized in the
-				// future.
-				let (_voter, _stake, targets) = snapshot_voters
-					.iter()
-					.find(|(v, _, _)| v == &assignment.who)
-					.ok_or(FeasibilityError::InvalidVoter)?;
+				// NOTE: while using the index map from `voter_index` is better than a blind linear
+				// search, this *still* has room for optimization. Note that we had the index when
+				// we did `compact -> assignment` and we lost it. Ideal is to keep the index around.
+
+				// defensive-only: must exist in the snapshot.
+				let snapshot_index = voter_index(&assignment.who).ok_or(FeasibilityError::InvalidVoter)?;
+				// defensive-only: index comes from the snapshot, must exist.
+				let (_voter, _stake, targets) = snapshot_voters.get(snapshot_index).ok_or(FeasibilityError::InvalidVoter)?;
+
 				// check that all of the targets are valid based on the snapshot.
 				if assignment
 					.distribution
@@ -1105,7 +1107,7 @@ where
 			.collect::<Result<(), FeasibilityError>>()?;
 
 		// ----- Start building support. First, we need some more closures.
-		let stake_of = stake_of_fn!(snapshot_voters, T::AccountId);
+		stake_of_fn!(let stake_of, snapshot_voters, T);
 
 		// This might fail if the normalization fails. Very unlikely. See `integrity_test`.
 		let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
