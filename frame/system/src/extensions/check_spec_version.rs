@@ -17,16 +17,17 @@
 
 use crate::{Config, Module};
 use codec::{Encode, Decode};
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::SignedExtension,
 	transaction_validity::TransactionValidityError,
 };
 
 /// Ensure the runtime version registered in the transaction is the same as at present.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckSpecVersion<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
+#[derive(Encode, Decode, Clone, Eq, PartialEq, ::scale_info::TypeInfo)]
+pub struct CheckSpecVersion<T: Config + TypeInfo + Send + Sync>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckSpecVersion<T> {
+impl<T: Config + TypeInfo + Send + Sync> sp_std::fmt::Debug for CheckSpecVersion<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckSpecVersion")
@@ -38,14 +39,14 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckSpecVersion<T> {
 	}
 }
 
-impl<T: Config + Send + Sync> CheckSpecVersion<T> {
+impl<T: Config + TypeInfo + Send + Sync> CheckSpecVersion<T> {
 	/// Create new `SignedExtension` to check runtime version.
 	pub fn new() -> Self {
 		Self(sp_std::marker::PhantomData)
 	}
 }
 
-impl<T: Config + Send + Sync> SignedExtension for CheckSpecVersion<T> {
+impl<T: Config + TypeInfo + Send + Sync> SignedExtension for CheckSpecVersion<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Config>::Call;
 	type AdditionalSigned = u32;

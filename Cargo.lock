@@ -5099,6 +5099,7 @@ dependencies = [
  "pallet-balances",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec",
+ "scale-info",
  "serde",
  "smallvec 1.5.0",
  "sp-core",

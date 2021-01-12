@@ -21,6 +21,7 @@ use frame_support::{
 	weights::DispatchInfo,
 	StorageMap,
 };
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{SignedExtension, DispatchInfoOf, Dispatchable, One},
 	transaction_validity::{
@@ -34,17 +35,17 @@ use sp_std::vec;
 ///
 /// Note that this does not set any priority by default. Make sure that AT LEAST one of the signed
 /// extension sets some kind of priority upon validating transactions.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub struct CheckNonce<T: Config>(#[codec(compact)] T::Index);
 
-impl<T: Config> CheckNonce<T> {
+impl<T: Config + TypeInfo> CheckNonce<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(nonce: T::Index) -> Self {
 		Self(nonce)
 	}
 }
 
-impl<T: Config> sp_std::fmt::Debug for CheckNonce<T> {
+impl<T: Config + TypeInfo> sp_std::fmt::Debug for CheckNonce<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckNonce({})", self.0)
@@ -56,7 +57,7 @@ impl<T: Config> sp_std::fmt::Debug for CheckNonce<T> {
 	}
 }
 
-impl<T: Config> SignedExtension for CheckNonce<T> where
+impl<T: Config + TypeInfo> SignedExtension for CheckNonce<T> where
 	T::Call: Dispatchable<Info=DispatchInfo>
 {
 	type AccountId = T::AccountId;

@@ -203,7 +203,7 @@ pub mod pallet {
 		/// with a sender account.
 		type Index:
 			Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + AtLeast32Bit
-			+ Copy;
+			+ Copy + scale_info::TypeInfo;
 
 		/// The block number type used by the runtime.
 		type BlockNumber:

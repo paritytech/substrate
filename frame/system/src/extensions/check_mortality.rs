@@ -18,6 +18,7 @@
 use codec::{Encode, Decode};
 use crate::{Config, Module, BlockHash};
 use frame_support::StorageMap;
+use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::Era,
 	traits::{SignedExtension, DispatchInfoOf, SaturatedConversion},
@@ -27,17 +28,17 @@ use sp_runtime::{
 };
 
 /// Check for transaction mortality.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckMortality<T: Config + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+pub struct CheckMortality<T: Config + TypeInfo + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
 
-impl<T: Config + Send + Sync> CheckMortality<T> {
+impl<T: Config + TypeInfo + Send + Sync> CheckMortality<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(era: Era) -> Self {
 		Self(era, sp_std::marker::PhantomData)
 	}
 }
 
-impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckMortality<T> {
+impl<T: Config + TypeInfo + Send + Sync> sp_std::fmt::Debug for CheckMortality<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckMortality({:?})", self.0)
@@ -49,7 +50,7 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckMortality<T> {
 	}
 }
 
-impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
+impl<T: Config + TypeInfo + Send + Sync> SignedExtension for CheckMortality<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;

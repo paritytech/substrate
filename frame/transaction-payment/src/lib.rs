@@ -44,6 +44,7 @@ use frame_support::{
 	},
 	dispatch::DispatchResult,
 };
+use scale_info::TypeInfo;
 use sp_runtime::{
 	FixedU128, FixedPointNumber, FixedPointOperand, Perquintill, RuntimeDebug,
 	transaction_validity::{
@@ -441,10 +442,10 @@ impl<T> Convert<Weight, BalanceOf<T>> for Module<T> where
 
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub struct ChargeTransactionPayment<T: Config>(#[codec(compact)] BalanceOf<T>);
 
-impl<T: Config> ChargeTransactionPayment<T> where
+impl<T: Config + TypeInfo> ChargeTransactionPayment<T> where
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 	BalanceOf<T>: Send + Sync + FixedPointOperand,
 {
@@ -492,7 +493,7 @@ impl<T: Config> ChargeTransactionPayment<T> where
 	}
 }
 
-impl<T: Config> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
+impl<T: Config + TypeInfo> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "ChargeTransactionPayment<{:?}>", self.0)
@@ -503,8 +504,8 @@ impl<T: Config> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 	}
 }
 
-impl<T: Config> SignedExtension for ChargeTransactionPayment<T> where
-	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
+impl<T: Config + TypeInfo> SignedExtension for ChargeTransactionPayment<T> where
+	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand + TypeInfo,
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";

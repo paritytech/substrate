@@ -17,6 +17,7 @@
 
 use crate::{limits::BlockWeights, Config, Module};
 use codec::{Encode, Decode};
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{SignedExtension, DispatchInfoOf, Dispatchable, PostDispatchInfoOf, Printable},
 	transaction_validity::{
@@ -32,10 +33,10 @@ use frame_support::{
 };
 
 /// Block resource (weight) limit check.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, Default)]
-pub struct CheckWeight<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
+#[derive(Encode, Decode, Clone, Eq, PartialEq, Default, TypeInfo)]
+pub struct CheckWeight<T: Config + TypeInfo + Send + Sync>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config + Send + Sync> CheckWeight<T> where
+impl<T: Config + TypeInfo + Send + Sync> CheckWeight<T> where
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 {
 	/// Checks if the current extrinsic does not exceed the maximum weight a single extrinsic
@@ -185,7 +186,7 @@ pub fn calculate_consumed_weight<Call>(
 	Ok(all_weight)
 }
 
-impl<T: Config + Send + Sync> SignedExtension for CheckWeight<T> where
+impl<T: Config + TypeInfo + Send + Sync> SignedExtension for CheckWeight<T> where
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
 {
 	type AccountId = T::AccountId;
@@ -266,7 +267,7 @@ impl<T: Config + Send + Sync> SignedExtension for CheckWeight<T> where
 	}
 }
 
-impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckWeight<T> {
+impl<T: Config + TypeInfo + Send + Sync> sp_std::fmt::Debug for CheckWeight<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckWeight")

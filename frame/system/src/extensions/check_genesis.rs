@@ -17,16 +17,17 @@
 
 use codec::{Encode, Decode};
 use crate::{Config, Module};
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{SignedExtension, Zero},
 	transaction_validity::TransactionValidityError,
 };
 
 /// Genesis hash check to provide replay protection between different networks.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckGenesis<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+pub struct CheckGenesis<T: Config + TypeInfo + Send + Sync>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckGenesis<T> {
+impl<T: Config + Send + Sync + ::scale_info::TypeInfo> sp_std::fmt::Debug for CheckGenesis<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckGenesis")
@@ -38,14 +39,14 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckGenesis<T> {
 	}
 }
 
-impl<T: Config + Send + Sync> CheckGenesis<T> {
+impl<T: Config + TypeInfo + Send + Sync> CheckGenesis<T> {
 	/// Creates new `SignedExtension` to check genesis hash.
 	pub fn new() -> Self {
 		Self(sp_std::marker::PhantomData)
 	}
 }
 
-impl<T: Config + Send + Sync> SignedExtension for CheckGenesis<T> {
+impl<T: Config + TypeInfo + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Config>::Call;
 	type AdditionalSigned = T::Hash;
