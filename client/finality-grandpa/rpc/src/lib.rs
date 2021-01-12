@@ -255,7 +255,7 @@ mod tests {
 		fn rpc_prove_finality(
 			&self,
 			_block: NumberFor<Block>
-		) -> Result<Option<EncodedFinalityProof>, sp_blockchain::Error> {
+		) -> Result<Option<EncodedFinalityProof>, sc_finality_grandpa::FinalityProofError> {
 			Ok(Some(EncodedFinalityProof(
 				self.finality_proof
 					.as_ref()

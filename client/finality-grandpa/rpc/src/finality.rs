@@ -31,7 +31,7 @@ pub trait RpcFinalityProofProvider<Block: BlockT> {
 	fn rpc_prove_finality(
 		&self,
 		block: NumberFor<Block>,
-	) -> Result<Option<EncodedFinalityProof>, sp_blockchain::Error>;
+	) -> Result<Option<EncodedFinalityProof>, sc_finality_grandpa::FinalityProofError>;
 }
 
 impl<B, Block> RpcFinalityProofProvider<Block> for FinalityProofProvider<B, Block>
@@ -43,7 +43,7 @@ where
 	fn rpc_prove_finality(
 		&self,
 		block: NumberFor<Block>,
-	) -> Result<Option<EncodedFinalityProof>, sp_blockchain::Error> {
+	) -> Result<Option<EncodedFinalityProof>, sc_finality_grandpa::FinalityProofError> {
 		self.prove_finality(block)
 			.map(|x| x.map(|y| EncodedFinalityProof(y.into())))
 	}

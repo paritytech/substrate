@@ -136,7 +136,9 @@ where
 {
 	/// Prove finality for the given block number by returning a Justification for the last block of
 	/// the authority set.
-	pub fn prove_finality(&self, block: NumberFor<Block>) -> Result<Option<Vec<u8>>, ClientError> {
+	pub fn prove_finality(&self, block: NumberFor<Block>)
+		-> Result<Option<Vec<u8>>, FinalityProofError>
+	{
 		let authority_set_changes = if let Some(changes) = self
 			.shared_authority_set
 			.as_ref()
@@ -169,12 +171,26 @@ pub struct FinalityProof<Header: HeaderT> {
 	pub unknown_headers: Vec<Header>,
 }
 
+/// Errors occurring when trying to prove finality
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum FinalityProofError {
+	/// The requested block has not yet been finalized.
+	#[display(fmt = "Block not yet finalized")]
+	BlockNotYetFinalized,
+	/// The requested block is not covered by authority set changes. Likely this means the block is
+	/// in the latest authority set, and the subscription API is more appropriate.
+	#[display(fmt = "Block not covered by authority set changes")]
+	BlockNotInAuthoritySetChanges,
+	/// Errors originating from the client.
+	Client(sp_blockchain::Error),
+}
+
 fn prove_finality<Block, B, J>(
 	blockchain: &B,
 	authorities_provider: &dyn AuthoritySetForFinalityProver<Block>,
 	authority_set_changes: AuthoritySetChanges<NumberFor<Block>>,
 	block: NumberFor<Block>,
-) -> ::sp_blockchain::Result<Option<Vec<u8>>>
+) -> Result<Option<Vec<u8>>, FinalityProofError>
 where
 	Block: BlockT,
 	B: BlockchainBackend<Block>,
@@ -189,7 +205,7 @@ where
 			info.finalized_number,
 		);
 		trace!(target: "afg", "{}", &err);
-		return Err(ClientError::ProveFinalityRpc(err));
+		return Err(FinalityProofError::BlockNotYetFinalized);
 	}
 
 	// Get set_id the block belongs to, and the last block of the set which should contain a
@@ -203,7 +219,7 @@ where
 			block,
 		);
 		trace!(target: "afg", "{}", &err);
-		return Err(ClientError::ProveFinalityRpc(err));
+		return Err(FinalityProofError::BlockNotInAuthoritySetChanges);
 	};
 
 	// Get the Justification stored at the last block of the set
@@ -410,7 +426,7 @@ pub(crate) mod tests {
 			authority_set_changes,
 			*header(4).number(),
 		);
-		assert!(matches!(proof_of_4, Err(ClientError::ProveFinalityRpc(_))));
+		assert!(matches!(proof_of_4, Err(FinalityProofError::BlockNotYetFinalized)));
 	}
 
 	#[test]
@@ -638,7 +654,7 @@ pub(crate) mod tests {
 			authority_set_changes,
 			*header(5).number(),
 		);
-		assert!(matches!(proof_of_5, Err(ClientError::ProveFinalityRpc(..))));
+		assert!(matches!(proof_of_5, Err(FinalityProofError::BlockNotInAuthoritySetChanges)));
 	}
 
 	#[test]
