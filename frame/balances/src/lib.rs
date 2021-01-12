@@ -987,11 +987,7 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 
 		// Emit transfer event.
 		Self::deposit_event(
-			RawEvent::Transfer(
-				transactor.clone(),
-				dest.clone(),
-				value
-			)
+			RawEvent::Transfer(transactor.clone(),dest.clone(),value)
 		);
 
 		Ok(())
