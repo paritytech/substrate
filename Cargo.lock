@@ -7218,6 +7218,7 @@ dependencies = [
  "rand 0.7.3",
  "sc-network",
  "sp-runtime",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "wasm-timer",
 ]
