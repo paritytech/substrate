@@ -27,12 +27,15 @@ use log::info;
 use sc_service::{Configuration, TaskType, TaskManager};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::marker::PhantomData;
+use std::error;
+use std::result;
+use std::io;
 
 #[cfg(target_family = "unix")]
-async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
+async fn main<F, E>(func: F) -> std::result::Result<(), E>
 where
 	F: Future<Output = std::result::Result<(), E>> + future::FusedFuture,
-	E: 'static + std::error::Error,
+	E: error::Error + Send + Sync + 'static + From<io::Error>,
 {
 	use tokio::signal::unix::{signal, SignalKind};
 
@@ -90,19 +93,19 @@ pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::
 		.build()
 }
 
-fn run_until_exit<FUT, ERR>(
+fn run_until_exit<F, E>(
 	mut tokio_runtime: tokio::runtime::Runtime,
-	future: FUT,
+	future: F,
 	task_manager: TaskManager,
-) -> Result<()>
+) -> result::Result<(), E>
 where
-	FUT: Future<Output = std::result::Result<(), ERR>> + future::Future,
-	ERR: 'static + std::error::Error,
+	F: Future<Output = result::Result<(), E>> + future::Future,
+	E: error::Error + Send + Sync + 'static + From<sc_service::Error> + From<io::Error>,
 {
 	let f = future.fuse();
 	pin_mut!(f);
 
-	tokio_runtime.block_on(main(f)).map_err(|e| e.to_string())?;
+	tokio_runtime.block_on(main(f))?;
 	tokio_runtime.block_on(task_manager.clean_shutdown());
 
 	Ok(())
@@ -172,15 +175,19 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// A helper function that runs a node with tokio and stops if the process receives the signal
 	/// `SIGTERM` or `SIGINT`.
-	pub fn run_node_until_exit<F: Future<Output = sc_service::error::Result<TaskManager>>>(
+	pub fn run_node_until_exit<F,E>(
 		mut self,
 		initialize: impl FnOnce(Configuration) -> F,
-	) -> Result<()> {
+	) -> result::Result<(), E>
+	where
+		F: Future<Output = sc_service::error::Result<TaskManager>>,
+		E: error::Error + Send + Sync + 'static + From<sc_service::Error> + From<io::Error>,
+	{
 		self.print_node_infos();
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
 		self.tokio_runtime.block_on(task_manager.clean_shutdown());
-		res.map_err(|e| e.to_string().into())
+		Ok(res?)
 	}
 
 	/// A helper function that runs a command with the configuration of this node.
