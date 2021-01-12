@@ -29,7 +29,6 @@ use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::marker::PhantomData;
 use std::error;
 use std::result;
-use std::io;
 use sc_service::Error as ServiceError;
 
 #[cfg(target_family = "unix")]
@@ -181,7 +180,7 @@ impl<C: SubstrateCli> Runner<C> {
 		initialize: impl FnOnce(Configuration) -> F,
 	) -> result::Result<(), E>
 	where
-		F: Future<Output = ServiceError::Result<TaskManager>>,
+		F: Future<Output = result::Result<TaskManager, E>>,
 		E: error::Error + Send + Sync + 'static + From<ServiceError>,
 	{
 		self.print_node_infos();
