@@ -876,8 +876,10 @@ where
 	}
 }
 
+/// Events returned by [`LightClientRequestClient`].
 pub enum OutEvent {
-	Request {
+	/// Emit a request to be send out on the network e.g. via [`crate::request_responses`].
+	SendRequest {
 		target: PeerId,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
@@ -940,7 +942,7 @@ impl<B: Block> Stream for LightClientRequestClient<B> {
 						(expected, request_id, request, rx.await.unwrap())
 					}.boxed());
 
-					return Poll::Ready(Some(OutEvent::Request {
+					return Poll::Ready(Some(OutEvent::SendRequest {
 						target: peer,
 						request: request_bytes,
 						pending_response: tx,

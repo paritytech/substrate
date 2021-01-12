@@ -17,9 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	config::{ProtocolId, Role}, light_client_handler, peer_info, request_responses,
+	config::{ProtocolId, Role},
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
+	peer_info, request_responses, light_client_handler,
 	ObservedRole, DhtEvent, ExHashT,
 };
 
@@ -441,8 +442,13 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 
 impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	fn poll<TEv>(&mut self, cx: &mut Context, _: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
+		use light_client_handler::OutEvent;
 		while let Poll::Ready(Some(event)) = self.light_client_request_client.poll_next_unpin(cx) {
-			unimplemented!()
+			match event {
+				OutEvent::SendRequest { target, request, pending_response, protocol_name } => {
+					self.request_responses.send_request(&target, &protocol_name, request, pending_response)
+				}
+			}
 		}
 
 		if let Some(event) = self.events.pop_front() {
