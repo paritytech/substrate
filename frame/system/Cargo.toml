@@ -1,6 +1,6 @@
 [package]
 name = "frame-system"
-version = "2.0.0"
+version = "2.0.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -20,7 +20,7 @@ sp-std = { version = "2.0.0", default-features = false, path = "../../primitives
 sp-io = { version = "2.0.0", path = "../../primitives/io", default-features = false }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-version = { version = "2.0.0", default-features = false, path = "../../primitives/version" }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
+frame-support = { version = "2.0.1", default-features = false, path = "../support" }
 impl-trait-for-tuples = "0.2.0"
 
 [dev-dependencies]
