@@ -19,7 +19,7 @@
 //! Helpers for outgoing and incoming light client requests.
 
 /// For outgoing light client requests.
-pub mod client;
+pub mod sender;
 /// For incoming light client requests.
 pub mod handler;
 

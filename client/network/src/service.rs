@@ -254,8 +254,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			// TODO: How about contructing this inside of behaviour.rs passing it the protocol name
 			// via `block_request_protocol_config` and `light_client_request_protocol_config`.
 			let light_client_request_client = {
-				let config = light_client_requests::client::Config::new(&params.protocol_id);
-				light_client_requests::client::LightClientRequestClient::new(
+				let config = light_client_requests::sender::Config::new(&params.protocol_id);
+				light_client_requests::sender::LightClientRequestSender::new(
 					config,
 					checker,
 					peerset_handle.clone(),
@@ -1246,7 +1246,7 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// Messages from the [`NetworkService`] that must be processed.
 	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B, H>>,
 	/// Receiver for queries from the light client that must be processed.
-	light_client_rqs: Option<TracingUnboundedReceiver<light_client_requests::client::Request<B>>>,
+	light_client_rqs: Option<TracingUnboundedReceiver<light_client_requests::sender::Request<B>>>,
 	/// Senders for events that happen on the network.
 	event_streams: out_events::OutChannels,
 	/// Prometheus network metrics.

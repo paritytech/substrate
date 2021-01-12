@@ -20,77 +20,50 @@
 
 //! Helper for outgoing light client requests.
 //!
-//! Prepare outgoing light client requests with [`LightClientRequestClient`] send out via
-//! [`crate::request_responses::RequestResponsesBehaviour`].
+//! Call [`LightClientRequestSender::send_request`] to send out light client requests. Under the
+//! hood the following will hapen:
+//!
+//! 1. Build the request.
+//!
+//! 2. Forward the request to [`crate::request_responses::RequestResponsesBehaviour`] via
+//! [`OutEvent::SendRequest`].
+//!
+//! 3. Wait for the response and forward the response via the [`oneshot::Sender`] provided earlier
+//! with [`LightClientRequestSender::send_request`].
 
-use bytes::Bytes;
 use codec::{self, Encode, Decode};
 use crate::{
-	chain::Client,
 	config::ProtocolId,
-	protocol::message::{BlockAttributes, Direction, FromBlock},
+	protocol::message::{BlockAttributes},
 	schema,
+	PeerId,
 };
-use crate::request_responses::{IncomingRequest, ProtocolConfig, RequestFailure};
-use futures::{channel::{mpsc, oneshot}, future::BoxFuture, prelude::*, stream::FuturesUnordered};
-use libp2p::{
-	core::{
-		ConnectedPoint,
-		Multiaddr,
-		PeerId,
-		connection::ConnectionId,
-		upgrade::{InboundUpgrade, ReadOneError, UpgradeInfo, Negotiated},
-		upgrade::{OutboundUpgrade, read_one, write_one}
-	},
-	swarm::{
-		AddressRecord,
-		NegotiatedSubstream,
-		NetworkBehaviour,
-		NetworkBehaviourAction,
-		NotifyHandler,
-		OneShotHandler,
-		OneShotHandlerConfig,
-		PollParameters,
-		SubstreamProtocol,
-	}
-};
-use nohash_hasher::IntMap;
+use crate::request_responses::{RequestFailure};
+use futures::{channel::{oneshot}, future::BoxFuture, prelude::*, stream::FuturesUnordered};
 use prost::Message;
 use sc_client_api::{
-	StorageProof,
 	light::{
-		self, RemoteReadRequest, RemoteBodyRequest, ChangesProof,
-		RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
+		self, RemoteBodyRequest,
 	}
 };
-use sc_peerset::{PeersetHandle, ReputationChange};
-use sp_core::{
-	storage::{ChildInfo, ChildType,StorageKey, PrefixedStorageKey},
-	hexdisplay::HexDisplay,
-};
-use smallvec::SmallVec;
+use sc_peerset::ReputationChange;
 use sp_blockchain::{Error as ClientError};
 use sp_runtime::{
-	traits::{Block, Header, NumberFor, Zero},
-	generic::BlockId,
+	traits::{Block, Header, NumberFor},
 };
 use std::{
 	collections::{BTreeMap, VecDeque, HashMap},
-	io,
-	iter,
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
 	time::Duration,
 };
-use log::debug;
-use void::Void;
 use wasm_timer::Instant;
 
 /// Reputation change for a peer when a request timed out.
 pub(crate) const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 8);
 
-/// Configuration options for `LightClientRequestClient` behaviour.
+/// Configuration options for `LightClientRequestSender` behaviour.
 #[derive(Debug, Clone)]
 pub struct Config {
 	max_request_size: usize,
@@ -177,7 +150,7 @@ impl Config {
 }
 
 /// The light client handler behaviour.
-pub struct LightClientRequestClient<B: Block> {
+pub struct LightClientRequestSender<B: Block> {
 	/// This behaviour's configuration.
 	config: Config,
 	/// Verifies that received responses are correct.
@@ -196,9 +169,9 @@ pub struct LightClientRequestClient<B: Block> {
 	peerset: sc_peerset::PeersetHandle,
 }
 
-impl<B: Block> Unpin for LightClientRequestClient<B> {}
+impl<B: Block> Unpin for LightClientRequestSender<B> {}
 
-impl<B> LightClientRequestClient<B>
+impl<B> LightClientRequestSender<B>
 where
 	B: Block,
 {
@@ -208,7 +181,7 @@ where
 		checker: Arc<dyn light::FetchChecker<B>>,
 		peerset: sc_peerset::PeersetHandle,
 	) -> Self {
-		LightClientRequestClient {
+		LightClientRequestSender {
 			config: cfg,
 			checker,
 			peers: Default::default(),
@@ -252,7 +225,7 @@ where
 	/// Remove the given peer.
 	///
 	/// In-flight requests to the given peer might fail and be retried. See
-	/// [`<LightClientRequestClient as Stream>::poll_next`].
+	/// [`<LightClientRequestSender as Stream>::poll_next`].
 	fn remove_peer(&mut self, peer: PeerId) {
 		self.peers.remove(&peer);
 	}
@@ -408,12 +381,6 @@ where
 		Ok(Reply::Extrinsics(body))
 	}
 
-}
-
-impl<B> LightClientRequestClient<B>
-where
-	B: Block
-{
 	pub fn inject_connected(&mut self, peer: PeerId) {
 		let prev_entry = self.peers.insert(peer, Default::default());
 		debug_assert!(
@@ -427,19 +394,8 @@ where
 	}
 }
 
-/// Events returned by [`LightClientRequestClient`].
-pub enum OutEvent {
-	/// Emit a request to be send out on the network e.g. via [`crate::request_responses`].
-	SendRequest {
-		target: PeerId,
-		request: Vec<u8>,
-		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
-		protocol_name: String,
-	}
-}
 
-
-impl<B: Block> Stream for LightClientRequestClient<B> {
+impl<B: Block> Stream for LightClientRequestSender<B> {
 	type Item = OutEvent;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -525,22 +481,14 @@ impl<B: Block> Stream for LightClientRequestClient<B> {
 						ExpectedResponseTy::Light => {
 							schema::v1::light::Response::decode(&response[..])
 								.map(|r| Response::Light(r))
-								.map_err(|e| {
-									ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e))
-								})
 						},
 						ExpectedResponseTy::Block => {
 							schema::v1::BlockResponse::decode(&response[..])
 								.map(|r| Response::Block(r))
-								.map_err(|e| {
-									ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e))
-								})
 						}
 					}
 				}
 				Err(e) => {
-					unimplemented!();
-
 					self.remove_peer(request_wrapper.peer.unwrap());
 					self.peerset.report_peer(request_wrapper.peer.unwrap(),
 											 ReputationChange::new(TIMEOUT_REPUTATION_CHANGE, "light request timeout"));
@@ -593,6 +541,17 @@ impl<B: Block> Stream for LightClientRequestClient<B> {
 		}
 
 		Poll::Pending
+	}
+}
+
+/// Events returned by [`LightClientRequestSender`].
+pub enum OutEvent {
+	/// Emit a request to be send out on the network e.g. via [`crate::request_responses`].
+	SendRequest {
+		target: PeerId,
+		request: Vec<u8>,
+		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		protocol_name: String,
 	}
 }
 
