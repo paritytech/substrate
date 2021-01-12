@@ -613,6 +613,7 @@ publish-to-crates-io:
 
 deploy-kubernetes-alerting-rules:
   stage:                           deploy
+  needs:                           []
   interruptible:                   true
   retry:                           1
   tags:
