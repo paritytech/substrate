@@ -580,7 +580,7 @@ pub(crate) fn check_finality_proof<Block: BlockT, B, J>(
 	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	remote_proof: Vec<u8>,
 ) -> ClientResult<FinalityEffects<Block::Header>>
-where
+	where
 		NumberFor<Block>: BlockNumberOps,
 		B: BlockchainBackend<Block>,
 		J: ProvableJustification<Block::Header>,
@@ -589,42 +589,42 @@ where
 	let proof = FinalityProof::<Block::Header>::decode(&mut &remote_proof[..])
 		.map_err(|_| ClientError::BadJustification("failed to decode finality proof".into()))?;
 
-		// empty proof can't prove anything
-		if proof.is_empty() {
-			return Err(ClientError::BadJustification("empty proof of finality".into()));
-		}
+	// empty proof can't prove anything
+	if proof.is_empty() {
+		return Err(ClientError::BadJustification("empty proof of finality".into()));
+	}
 
-		// iterate and verify proof fragments
-		let last_fragment_index = proof.len() - 1;
-		let mut authorities = AuthoritiesOrEffects::Authorities(current_set_id, current_authorities);
-		for (proof_fragment_index, proof_fragment) in proof.into_iter().enumerate() {
-			// check that proof is non-redundant. The proof still can be valid, but
-			// we do not want peer to spam us with redundant data
-			if proof_fragment_index != last_fragment_index {
-				let has_unknown_headers = !proof_fragment.unknown_headers.is_empty();
-				let has_new_authorities = proof_fragment.authorities_proof.is_some();
-				if has_unknown_headers || !has_new_authorities {
-					return Err(ClientError::BadJustification("redundant proof of finality".into()));
-				}
+	// iterate and verify proof fragments
+	let last_fragment_index = proof.len() - 1;
+	let mut authorities = AuthoritiesOrEffects::Authorities(current_set_id, current_authorities);
+	for (proof_fragment_index, proof_fragment) in proof.into_iter().enumerate() {
+		// check that proof is non-redundant. The proof still can be valid, but
+		// we do not want peer to spam us with redundant data
+		if proof_fragment_index != last_fragment_index {
+			let has_unknown_headers = !proof_fragment.unknown_headers.is_empty();
+			let has_new_authorities = proof_fragment.authorities_proof.is_some();
+			if has_unknown_headers || !has_new_authorities {
+				return Err(ClientError::BadJustification("redundant proof of finality".into()));
 			}
-
-			authorities = check_finality_proof_fragment::<_, _, J>(
-				blockchain,
-				authorities,
-				authorities_provider,
-				proof_fragment)?;
 		}
 
-		let effects = authorities.extract_effects().expect("at least one loop iteration is guaranteed
+		authorities = check_finality_proof_fragment::<_, _, J>(
+			blockchain,
+			authorities,
+			authorities_provider,
+			proof_fragment)?;
+	}
+
+	let effects = authorities.extract_effects().expect("at least one loop iteration is guaranteed
 			because proof is not empty;\
 			check_finality_proof_fragment is called on every iteration;\
 			check_finality_proof_fragment always returns FinalityEffects;\
 			qed");
 
-		telemetry!(CONSENSUS_INFO; "afg.finality_proof_ok";
-			"set_id" => ?effects.new_set_id, "finalized_header_hash" => ?effects.block);
+	telemetry!(CONSENSUS_INFO; "afg.finality_proof_ok";
+		"set_id" => ?effects.new_set_id, "finalized_header_hash" => ?effects.block);
 
-		Ok(effects)
+	Ok(effects)
 }
 
 /// Check GRANDPA authority change sequence to assert finality of a target block.
@@ -726,7 +726,7 @@ fn check_finality_proof_fragment<Block: BlockT, B, J>(
 	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	proof_fragment: FinalityProofFragment<Block::Header>,
 ) -> ClientResult<AuthoritiesOrEffects<Block::Header>>
-where
+	where
 		NumberFor<Block>: BlockNumberOps,
 		B: BlockchainBackend<Block>,
 		J: Decode + ProvableJustification<Block::Header>,
@@ -735,34 +735,34 @@ where
 	let (mut current_set_id, mut current_authorities) = authority_set.extract_authorities();
 	let justification: J = Decode::decode(&mut &proof_fragment.justification[..])
 		.map_err(|_| ClientError::JustificationDecode)?;
-		justification.verify(current_set_id, &current_authorities)?;
+	justification.verify(current_set_id, &current_authorities)?;
 
-		// and now verify new authorities proof (if provided)
-		if let Some(new_authorities_proof) = proof_fragment.authorities_proof {
-			// the proof is either generated using known header and it is safe to query header
-			// here, because its non-finality proves that it can't be pruned
-			// or it is generated using last unknown header (because it is the one who has
-			// justification => we only generate proofs for headers with justifications)
-			let header = match proof_fragment.unknown_headers.iter().rev().next().cloned() {
-				Some(header) => header,
-				None => blockchain.expect_header(BlockId::Hash(proof_fragment.block))?,
-			};
-			current_authorities = authorities_provider.check_authorities_proof(
-				proof_fragment.block,
-				header,
-				new_authorities_proof,
-			)?;
+	// and now verify new authorities proof (if provided)
+	if let Some(new_authorities_proof) = proof_fragment.authorities_proof {
+		// the proof is either generated using known header and it is safe to query header
+		// here, because its non-finality proves that it can't be pruned
+		// or it is generated using last unknown header (because it is the one who has
+		// justification => we only generate proofs for headers with justifications)
+		let header = match proof_fragment.unknown_headers.iter().rev().next().cloned() {
+			Some(header) => header,
+			None => blockchain.expect_header(BlockId::Hash(proof_fragment.block))?,
+		};
+		current_authorities = authorities_provider.check_authorities_proof(
+			proof_fragment.block,
+			header,
+			new_authorities_proof,
+		)?;
 
-			current_set_id += 1;
-		}
+		current_set_id += 1;
+	}
 
-		Ok(AuthoritiesOrEffects::Effects(FinalityEffects {
-			headers_to_import: proof_fragment.unknown_headers,
-			block: proof_fragment.block,
-			justification: proof_fragment.justification,
-			new_set_id: current_set_id,
-			new_authorities: current_authorities,
-		}))
+	Ok(AuthoritiesOrEffects::Effects(FinalityEffects {
+		headers_to_import: proof_fragment.unknown_headers,
+		block: proof_fragment.block,
+		justification: proof_fragment.justification,
+		new_set_id: current_set_id,
+		new_authorities: current_authorities,
+	}))
 }
 
 /// Authorities set from initial authorities set or finality effects.
@@ -809,13 +809,13 @@ pub(crate) trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 	) -> ClientResult<Self> {
 		let justification = Self::decode(&mut &**justification)
 			.map_err(|_| ClientError::JustificationDecode)?;
-			justification.verify(set_id, authorities)?;
-			Ok(justification)
+		justification.verify(set_id, authorities)?;
+		Ok(justification)
 	}
 }
 
 impl<Block: BlockT> ProvableJustification<Block::Header> for GrandpaJustification<Block>
-where
+	where
 		NumberFor<Block>: BlockNumberOps,
 {
 	fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()> {
@@ -900,7 +900,7 @@ pub(crate) mod tests {
 	pub(crate) type FinalityProof = super::FinalityProof<Header>;
 
 	impl<GetAuthorities, ProveAuthorities> AuthoritySetForFinalityProver<Block> for (GetAuthorities, ProveAuthorities)
-	where
+		where
 			GetAuthorities: Send + Sync + Fn(BlockId<Block>) -> ClientResult<AuthorityList>,
 			ProveAuthorities: Send + Sync + Fn(BlockId<Block>) -> ClientResult<StorageProof>,
 	{
@@ -917,17 +917,17 @@ pub(crate) mod tests {
 
 	impl<Closure> AuthoritySetForFinalityChecker<Block> for ClosureAuthoritySetForFinalityChecker<Closure>
 		where
-				Closure: Send + Sync + Fn(H256, Header, StorageProof) -> ClientResult<AuthorityList>,
-		{
-			fn check_authorities_proof(
-				&self,
-				hash: H256,
-				header: Header,
-				proof: StorageProof,
-			) -> ClientResult<AuthorityList> {
-				self.0(hash, header, proof)
-			}
+			Closure: Send + Sync + Fn(H256, Header, StorageProof) -> ClientResult<AuthorityList>,
+	{
+		fn check_authorities_proof(
+			&self,
+			hash: H256,
+			header: Header,
+			proof: StorageProof,
+		) -> ClientResult<AuthorityList> {
+			self.0(hash, header, proof)
 		}
+	}
 
 	#[derive(Debug, PartialEq, Encode, Decode)]
 	pub struct TestJustification(pub (u64, AuthorityList), pub Vec<u8>);
@@ -1044,22 +1044,22 @@ pub(crate) mod tests {
 		blockchain.insert(side_header(4).hash(), side_header(4), None, None, NewBlockState::Best).unwrap();
 		blockchain.insert(second_side_header(5).hash(), second_side_header(5), None, None, NewBlockState::Best)
 			.unwrap();
-			blockchain.insert(header(5).hash(), header(5), Some(vec![5]), None, NewBlockState::Final).unwrap();
+		blockchain.insert(header(5).hash(), header(5), Some(vec![5]), None, NewBlockState::Final).unwrap();
 
-			// chain is 1 -> 2 -> 3 -> 4 -> 5
-			//                      \> 4' -> 5'
-			// and the best finalized is 5
-			// => when requesting for (4'; 5'], error is returned
-			prove_finality::<_, _, TestJustification>(
-				&blockchain,
-				&(
-					|_| unreachable!("should return before calling GetAuthorities"),
-					|_| unreachable!("should return before calling ProveAuthorities"),
-				),
-				0,
-				side_header(4).hash(),
-				second_side_header(5).hash(),
-			).unwrap_err();
+		// chain is 1 -> 2 -> 3 -> 4 -> 5
+		//                      \> 4' -> 5'
+		// and the best finalized is 5
+		// => when requesting for (4'; 5'], error is returned
+		prove_finality::<_, _, TestJustification>(
+			&blockchain,
+			&(
+				|_| unreachable!("should return before calling GetAuthorities"),
+				|_| unreachable!("should return before calling ProveAuthorities"),
+			),
+			0,
+			side_header(4).hash(),
+			second_side_header(5).hash(),
+		).unwrap_err();
 	}
 
 	#[test]
@@ -1094,14 +1094,14 @@ pub(crate) mod tests {
 		// blocks 4 && 5 are finalized with justification
 		// => since authorities are the same, we only need justification for 5
 		let proof_of_5: FinalityProof = Decode::decode(&mut &prove_finality::<_, _, TestJustification>(
-				&blockchain,
-				&(
-					|_| Ok(authorities.clone()),
-					|_| unreachable!("should return before calling ProveAuthorities"),
-				),
-				0,
-				header(3).hash(),
-				header(5).hash(),
+			&blockchain,
+			&(
+				|_| Ok(authorities.clone()),
+				|_| unreachable!("should return before calling ProveAuthorities"),
+			),
+			0,
+			header(3).hash(),
+			header(5).hash(),
 		).unwrap().unwrap()[..]).unwrap();
 		assert_eq!(proof_of_5, vec![FinalityProofFragment {
 			block: header(5).hash(),
@@ -1120,14 +1120,14 @@ pub(crate) mod tests {
 		// block 4 is finalized with justification + we request for finality of 5
 		// => we can't prove finality of 5, but providing finality for 4 is still useful for requester
 		let proof_of_5: FinalityProof = Decode::decode(&mut &prove_finality::<_, _, TestJustification>(
-				&blockchain,
-				&(
-					|_| Ok(vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)]),
-					|_| unreachable!("should return before calling ProveAuthorities"),
-				),
-				0,
-				header(3).hash(),
-				header(5).hash(),
+			&blockchain,
+			&(
+				|_| Ok(vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)]),
+				|_| unreachable!("should return before calling ProveAuthorities"),
+			),
+			0,
+			header(3).hash(),
+			header(5).hash(),
 		).unwrap().unwrap()[..]).unwrap();
 		assert_eq!(proof_of_5, vec![FinalityProofFragment {
 			block: header(4).hash(),
@@ -1154,24 +1154,24 @@ pub(crate) mod tests {
 		// when querying for finality of 6, we assume that the #3 is the last block known to the requester
 		// => since we only have justification for #7, we provide #7
 		let proof_of_6: FinalityProof = Decode::decode(&mut &prove_finality::<_, _, TestJustification>(
-				&blockchain,
-				&(
-					|block_id| match block_id {
-						BlockId::Hash(h) if h == header(3).hash() => Ok(auth3.clone()),
-						BlockId::Number(4) => Ok(auth3.clone()),
-						BlockId::Number(5) => Ok(auth5.clone()),
-						BlockId::Number(7) => Ok(auth7.clone()),
-						_ => unreachable!("no other authorities should be fetched: {:?}", block_id),
-					},
-					|block_id| match block_id {
-						BlockId::Number(5) => Ok(StorageProof::new(vec![vec![50]])),
-						BlockId::Number(7) => Ok(StorageProof::new(vec![vec![70]])),
-						_ => unreachable!("no other authorities should be proved: {:?}", block_id),
-					},
-				),
-				0,
-				header(3).hash(),
-				header(6).hash(),
+			&blockchain,
+			&(
+				|block_id| match block_id {
+					BlockId::Hash(h) if h == header(3).hash() => Ok(auth3.clone()),
+					BlockId::Number(4) => Ok(auth3.clone()),
+					BlockId::Number(5) => Ok(auth5.clone()),
+					BlockId::Number(7) => Ok(auth7.clone()),
+					_ => unreachable!("no other authorities should be fetched: {:?}", block_id),
+				},
+				|block_id| match block_id {
+					BlockId::Number(5) => Ok(StorageProof::new(vec![vec![50]])),
+					BlockId::Number(7) => Ok(StorageProof::new(vec![vec![70]])),
+					_ => unreachable!("no other authorities should be proved: {:?}", block_id),
+				},
+			),
+			0,
+			header(3).hash(),
+			header(6).hash(),
 		).unwrap().unwrap()[..]).unwrap();
 		// initial authorities set (which start acting from #0) is [3; 32]
 		assert_eq!(proof_of_6, vec![
