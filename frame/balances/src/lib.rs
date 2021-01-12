@@ -73,6 +73,7 @@
 //! - [`Currency`](../frame_support/traits/trait.Currency.html): Functions for dealing with a
 //! fungible assets system.
 //! - [`ReservableCurrency`](../frame_support/traits/trait.ReservableCurrency.html):
+//! - [`NamedReservableCurrency`](../frame_support/traits/trait.ReservableCurrency.html):
 //! Functions for dealing with assets that can be reserved from an account.
 //! - [`LockableCurrency`](../frame_support/traits/trait.LockableCurrency.html): Functions for
 //! dealing with accounts that allow liquidity restrictions.
@@ -332,9 +333,12 @@ pub struct BalanceLock<Balance> {
 	pub reasons: Reasons,
 }
 
+/// Store named reserved balance
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct ReserveData<Balance> {
+	/// The identifier for the named reserve
 	pub id: ReserveIdentifier,
+	/// The amount of the named reserve
 	pub amount: Balance,
 }
 
@@ -353,6 +357,7 @@ pub struct AccountData<Balance> {
 	///
 	/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
 	/// that are still 'owned' by the account holder, but which are suspendable.
+	/// This includes named reserve and unnamed reserve.
 	pub reserved: Balance,
 	/// The amount that `free` may not drop below when withdrawing for *anything except transaction
 	/// fee payment*.
@@ -1350,6 +1355,7 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 	}
 
 	/// Move the reserved balance of one account into the balance of another, according to `status`.
+	/// If `status` is `Reserved`, the balance will be reserved with given `id`.
 	///
 	/// Is a no-op if:
 	/// - the value to be moved is zero; or
