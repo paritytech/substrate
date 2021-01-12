@@ -453,7 +453,6 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 /// to be invalid. One way to prevent that would be to look backward for the previous authority
 /// set change and see if a pending set change is in progress. This is not implemented at this
 /// point.
-/// Similarily changing an authority set during a 'delay' will not work with the given algo.
 pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 	blockchain: &B,
 	begin: Block::Hash,
@@ -474,63 +473,26 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 
 	let mut result = Vec::new();
 
-	let mut header = blockchain.expect_header(begin)?;
+	let header = blockchain.expect_header(begin)?;
 	let mut index = *header.number() + One::one();
+
+	let mut last_apply = None;
 
 	while index <= end_number {
 		if max_fragment_limit.map(|limit| result.len() <= limit).unwrap_or(false) {
 			break;
 		}
 
-		header = blockchain.expect_header(BlockId::number(index))?;
-
-		if let Some((block_number, sp_finality_grandpa::ScheduledChange {
-			next_authorities: _,
-			delay,
-		})) = crate::import::find_forced_change::<Block>(&header) {
-			let dest = block_number + delay;
-			if dest <= end_number {
-				if let Some(justification) = blockchain.justification(BlockId::Number(index.clone()))? {
-					result.push(AuthoritySetProofFragment {
-						header: header.clone(),
-						justification,
-					});
-				} else {
-					println!("should be unreachable");
-				}
-
-				let inc = delay == Zero::zero() && block_number == index;
-				index = dest;
-				if inc {
-					index += One::one();
-				}
-				continue;
+		if let Some((fragement, apply_block)) = get_warp_sync_proof_fragment(blockchain, index)? {
+			if last_apply.map(|next| apply_block < next).unwrap_or(false) {
+				// previous delayed will not apply, do not include it.
+				result.pop();
 			}
+			result.push(fragement);
+			last_apply = Some(apply_block);
 		}
 
-		if let Some(sp_finality_grandpa::ScheduledChange {
-			next_authorities: _,
-			delay,
-		}) = crate::import::find_scheduled_change::<Block>(&header) {
-			let dest = index + delay;
-			if dest <= end_number {
-				if let Some(justification) = blockchain.justification(BlockId::Number(index.clone()))? {
-					result.push(AuthoritySetProofFragment {
-						header: header.clone(),
-						justification,
-					});
-				} else {
-					println!("should be unreachable");
-				}
-				index = dest;
-				if delay == Zero::zero() {
-					index += One::one();
-				}
-				continue;
-			}
-		}
-
-		index = *header.number() + One::one();
+		index = index + One::one();
 	}
 
 	if result.last().as_ref().map(|head| head.header.number()) != Some(&end_number) {
@@ -546,6 +508,48 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 	}
 
 	Ok(result.encode())
+}
+
+/// Try get a warp sync proof fragment a a given finalized block.
+fn get_warp_sync_proof_fragment<Block: BlockT, B: BlockchainBackend<Block>>(
+	blockchain: &B,
+	index: NumberFor<Block>,
+) -> ::sp_blockchain::Result<Option<(AuthoritySetProofFragment<Block::Header>, NumberFor<Block>)>>
+{
+
+	let header = blockchain.expect_header(BlockId::number(index))?;
+
+	if let Some((block_number, sp_finality_grandpa::ScheduledChange {
+		next_authorities: _,
+		delay,
+	})) = crate::import::find_forced_change::<Block>(&header) {
+		let dest = block_number + delay;
+		if let Some(justification) = blockchain.justification(BlockId::Number(index.clone()))? {
+			return Ok(Some((AuthoritySetProofFragment {
+				header: header.clone(),
+				justification,
+			}, dest)));
+		} else {
+			return Err(ClientError::Backend("Unjustified block with authority set change".to_string()));
+		}
+	}
+
+	if let Some(sp_finality_grandpa::ScheduledChange {
+		next_authorities: _,
+		delay,
+	}) = crate::import::find_scheduled_change::<Block>(&header) {
+		let dest = index + delay;
+		if let Some(justification) = blockchain.justification(BlockId::Number(index.clone()))? {
+			return Ok(Some((AuthoritySetProofFragment {
+				header: header.clone(),
+				justification,
+			}, dest)));
+		} else {
+			return Err(ClientError::Backend("Unjustified block with authority set change".to_string()));
+		}
+	}
+
+	Ok(None)
 }
 
 /// Check GRANDPA proof-of-finality for the given block.
@@ -1280,8 +1284,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	// TODO better name
-	fn warp_sync_proof() {
+	fn warp_sync_proof_encoding_decoding() {
 		fn test_blockchain(
 			nb_blocks: u64,
 			mut set_change: &[(u64, Vec<u8>)],
