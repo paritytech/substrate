@@ -25,6 +25,7 @@ use futures::prelude::*;
 use futures::channel::mpsc::{channel, Sender, Receiver};
 use libp2p::PeerId;
 use log::trace;
+use prometheus_endpoint::Registry;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,
@@ -72,12 +73,13 @@ impl<B: BlockT> GossipEngine<B> {
 		network: N,
 		protocol: impl Into<Cow<'static, str>>,
 		validator: Arc<dyn Validator<B>>,
+		metrics_registry: Option<&Registry>,
 	) -> Self where B: 'static {
 		let protocol = protocol.into();
 		let network_event_stream = network.event_stream();
 
 		GossipEngine {
-			state_machine: ConsensusGossip::new(validator, protocol.clone()),
+			state_machine: ConsensusGossip::new(validator, protocol.clone(), metrics_registry),
 			network: Box::new(network),
 			periodic_maintenance_interval: futures_timer::Delay::new(PERIODIC_MAINTENANCE_INTERVAL),
 			protocol,
@@ -372,7 +374,8 @@ mod tests {
 		let mut gossip_engine = GossipEngine::<Block>::new(
 			network.clone(),
 			"/my_protocol",
-			Arc::new(AllowAll{}),
+			Arc::new(AllowAll {}),
+			None,
 		);
 
 		// Drop network event stream sender side.
@@ -399,7 +402,8 @@ mod tests {
 		let mut gossip_engine = GossipEngine::<Block>::new(
 			network.clone(),
 			protocol.clone(),
-			Arc::new(AllowAll{}),
+			Arc::new(AllowAll {}),
+			None,
 		);
 
 		let mut event_sender = network.inner.lock()
@@ -533,7 +537,8 @@ mod tests {
 			let mut gossip_engine = GossipEngine::<Block>::new(
 				network.clone(),
 				protocol.clone(),
-				Arc::new(TestValidator{}),
+				Arc::new(TestValidator {}),
+				None,
 			);
 
 			// Create channels.
@@ -549,8 +554,10 @@ mod tests {
 			// Insert sender sides into `gossip_engine`.
 			for (topic, tx) in txs {
 				match gossip_engine.message_sinks.get_mut(&topic) {
-					Some(entry) =>  entry.push(tx),
-					None => {gossip_engine.message_sinks.insert(topic, vec![tx]);},
+					Some(entry) => entry.push(tx),
+					None => {
+						gossip_engine.message_sinks.insert(topic, vec![tx]);
+					}
 				}
 			}
 
