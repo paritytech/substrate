@@ -16,13 +16,13 @@
 // limitations under the License.
 
 use crate::*;
-use crate::primitives::{LeafDataProvider, Compact};
 
 use codec::{Encode, Decode};
 use frame_support::{
 	impl_outer_origin, parameter_types,
 };
 use sp_core::H256;
+use sp_mmr::{LeafDataProvider, Compact};
 use sp_runtime::{
 	testing::Header,
 	traits::{

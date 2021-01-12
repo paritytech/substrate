@@ -20,6 +20,7 @@ mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, ver
 serde = { version = "1.0.101", optional = true }
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
+sp-mmr = { version = "2.0.0", default-features = false, path = "../../primitives/merkle-mountain-range" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 
@@ -38,6 +39,7 @@ std = [
 	"serde",
 	"sp-core/std",
 	"sp-io/std",
+	"sp-mmr/std",
 	"sp-runtime/std",
 	"sp-std/std",
 ]

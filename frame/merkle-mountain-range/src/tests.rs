@@ -17,7 +17,6 @@
 
 use crate::*;
 use crate::mock::*;
-use crate::primitives::{Proof, Compact};
 
 use frame_support::traits::OnInitialize;
 use sp_core::{
@@ -27,6 +26,7 @@ use sp_core::{
 		OffchainExt,
 	},
 };
+use sp_mmr::{Proof, Compact};
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()

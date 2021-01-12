@@ -23,6 +23,8 @@ use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
 
+// TODO [ToDr] ADD RUNTIME API
+
 /// A provider of the MMR's leaf data.
 pub trait LeafDataProvider {
 	/// A type that should end up in the leaf of MMR.
@@ -279,8 +281,12 @@ mod tests {
 	use super::*;
 
 	use codec::Decode;
-	use crate::tests::hex;
+	use sp_core::H256;
 	use sp_runtime::traits::Keccak256;
+
+	pub(crate) fn hex(s: &str) -> H256 {
+		s.parse().unwrap()
+	}
 
 	type Test = DataOrHash<Keccak256, String>;
 	type TestCompact = Compact<Keccak256, (Test, Test)>;

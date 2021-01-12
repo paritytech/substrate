@@ -4761,6 +4761,7 @@ dependencies = [
  "serde",
  "sp-core",
  "sp-io",
+ "sp-mmr",
  "sp-runtime",
  "sp-std",
 ]
@@ -8457,6 +8458,19 @@ dependencies = [
  "serde",
  "sp-core",
  "sp-externalities",
+]
+
+[[package]]
+name = "sp-mmr"
+version = "2.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "hex-literal",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]

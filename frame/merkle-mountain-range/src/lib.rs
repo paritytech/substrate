@@ -73,7 +73,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub mod primitives;
+pub use sp_mmr as primitives;
 pub use mmr::Error as MmrError;
 
 pub trait WeightInfo {
