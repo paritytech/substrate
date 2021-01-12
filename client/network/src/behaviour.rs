@@ -20,7 +20,7 @@ use crate::{
 	config::{ProtocolId, Role},
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
-	peer_info, request_responses, light_client_handler,
+	peer_info, request_responses, light_client_requests,
 	ObservedRole, DhtEvent, ExHashT,
 };
 
@@ -71,7 +71,7 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 
 	/// Light client request handling.
 	#[behaviour(ignore)]
-	light_client_request_client: light_client_handler::LightClientRequestClient<B>,
+	light_client_request_client: light_client_requests::client::LightClientRequestClient<B>,
 
 	/// Protocol name used to send out block requests via
 	/// [`request_responses::RequestResponsesBehaviour`].
@@ -177,7 +177,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		role: Role,
 		user_agent: String,
 		local_public_key: PublicKey,
-		light_client_request_client: light_client_handler::LightClientRequestClient<B>,
+		light_client_request_client: light_client_requests::client::LightClientRequestClient<B>,
 		disco_config: DiscoveryConfig,
 		block_request_protocol_config: request_responses::ProtocolConfig,
 		light_client_request_protocol_config: request_responses::ProtocolConfig,
@@ -274,7 +274,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	}
 
 	/// Issue a light client request.
-	pub fn light_client_request(&mut self, r: light_client_handler::Request<B>) -> Result<(), light_client_handler::SendRequestError> {
+	pub fn light_client_request(&mut self, r: light_client_requests::client::Request<B>) -> Result<(), light_client_requests::client::SendRequestError> {
 		self.light_client_request_client.request(r)
 	}
 }
@@ -442,7 +442,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 
 impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	fn poll<TEv>(&mut self, cx: &mut Context, _: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
-		use light_client_handler::OutEvent;
+		use light_client_requests::client::OutEvent;
 		while let Poll::Ready(Some(event)) = self.light_client_request_client.poll_next_unpin(cx) {
 			match event {
 				OutEvent::SendRequest { target, request, pending_response, protocol_name } => {

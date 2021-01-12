@@ -249,7 +249,7 @@ mod behaviour;
 mod chain;
 mod peer_info;
 mod discovery;
-mod light_client_handler;
+mod light_client_requests;
 mod on_demand_layer;
 mod protocol;
 mod request_responses;
