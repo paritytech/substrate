@@ -372,6 +372,7 @@
 		},
 		{
 			"prefix": 45,
+			"network": "uniarts",
 			"displayName": "UniArts Network",
 			"symbols": ["UART", "UINK"],
 			"decimals": [12, 12],

@@ -27,7 +27,7 @@ use codec::{Encode, Decode};
 use sp_std::prelude::*;
 use sp_std::marker::PhantomData;
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::Bounded;
+use sp_runtime::traits::{Bounded, Saturating};
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
 	dispatch::DispatchResult,
@@ -182,7 +182,11 @@ where
 					code_hash: ch,
 					storage_size: 0,
 					trie_id,
-					deduct_block: <frame_system::Module<T>>::block_number(),
+					deduct_block:
+						// We want to charge rent for the first block in advance. Therefore we
+						// treat the contract as if it was created in the last block and then
+						// charge rent for it during instantation.
+						<frame_system::Module<T>>::block_number().saturating_sub(1u32.into()),
 					rent_allowance: <BalanceOf<T>>::max_value(),
 					pair_count: 0,
 					last_write: None,

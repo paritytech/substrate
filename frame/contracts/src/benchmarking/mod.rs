@@ -336,7 +336,7 @@ benchmarks! {
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let data = vec![42u8; (n * 1024) as usize];
 		let salt = vec![42u8; (s * 1024) as usize];
-		let endowment = ConfigCache::<T>::subsistence_threshold_uncached();
+		let endowment = caller_funding::<T>() / 3u32.into();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_mem();
@@ -1373,7 +1373,7 @@ benchmarks! {
 		let hash_len = hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
 		let hashes_bytes = hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
 		let hashes_len = hashes_bytes.len();
-		let value = ConfigCache::<T>::subsistence_threshold_uncached();
+		let value = Endow::max::<T>() / (r * API_BENCHMARK_BATCH_SIZE + 2).into();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
@@ -1457,7 +1457,8 @@ benchmarks! {
 	}: call(origin, callee, 0u32.into(), Weight::max_value(), vec![])
 	verify {
 		for addr in &addresses {
-			instance.alive_info()?;
+			ContractInfoOf::<T>::get(&addr).and_then(|c| c.get_alive())
+				.ok_or_else(|| "Contract should have been instantiated")?;
 		}
 	}
 
@@ -1493,7 +1494,7 @@ benchmarks! {
 		let input_len = inputs.get(0).map(|x| x.len()).unwrap_or(0);
 		let input_bytes = inputs.iter().cloned().flatten().collect::<Vec<_>>();
 		let inputs_len = input_bytes.len();
-		let value = ConfigCache::<T>::subsistence_threshold_uncached();
+		let value = Endow::max::<T>() / (API_BENCHMARK_BATCH_SIZE + 2).into();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
