@@ -455,7 +455,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 				match Decode::decode(&mut &ex[..]) {
 					Ok(ex) => Ok(Some(ex)),
 					Err(err) => Err(sp_blockchain::Error::Backend(
-							format!("Error decoding extrinsic {}: {}", hash, err)
+						format!("Error decoding extrinsic {}: {}", hash, err)
 					)),
 				}
 			},
@@ -525,7 +525,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 					TransactionStorage::BlockBody => match Decode::decode(&mut &body[..]) {
 						Ok(body) => Ok(Some(body)),
 						Err(err) => return Err(sp_blockchain::Error::Backend(
-								format!("Error decoding body: {}", err)
+							format!("Error decoding body: {}", err)
 						)),
 					},
 					TransactionStorage::StorageChain => {
@@ -1529,7 +1529,7 @@ impl<Block: BlockT> Backend<Block> {
 										}
 									}
 									Err(err) => return Err(sp_blockchain::Error::Backend(
-											format!("Error decoding body list: {}", err)
+										format!("Error decoding body list: {}", err)
 									)),
 								}
 							}
