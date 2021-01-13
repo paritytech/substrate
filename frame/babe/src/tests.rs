@@ -255,6 +255,12 @@ fn can_enact_next_config() {
 #[test]
 fn can_fetch_current_and_next_epoch_data() {
 	new_test_ext(5).execute_with(|| {
+		// genesis authorities should be used for the first and second epoch
+		assert_eq!(
+			Babe::current_epoch().authorities,
+			Babe::next_epoch().authorities,
+		);
+
 		// 1 era = 3 epochs
 		// 1 epoch = 3 slots
 		// Eras start from 0.

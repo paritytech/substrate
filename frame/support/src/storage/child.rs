@@ -243,3 +243,21 @@ pub fn root(
 		),
 	}
 }
+
+/// Return the length in bytes of the value without reading it. `None` if it does not exist.
+pub fn len(
+	child_info: &ChildInfo,
+	key: &[u8],
+) -> Option<u32> {
+	match child_info.child_type() {
+		ChildType::ParentKeyId => {
+			let mut buffer = [0; 0];
+			sp_io::default_child_storage::read(
+				child_info.storage_key(),
+				key,
+				&mut buffer,
+				0,
+			)
+		}
+	}
+}

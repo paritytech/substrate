@@ -496,6 +496,8 @@ ss58_address_format!(
 		(25, "alphaville", "ZERO testnet, standard account (*25519).")
 	SubsocialAccount =>
 		(28, "subsocial", "Subsocial network, standard account (*25519).")
+	DhiwayAccount =>
+		(29, "cord", "Dhiway CORD network, standard account (*25519).")	
 	PhalaAccount =>
 		(30, "phala", "Phala Network, standard account (*25519).")
 	RobonomicsAccount =>
@@ -518,6 +520,8 @@ ss58_address_format!(
 		(43, "reserved43", "Reserved for future use (43).")
 	ChainXAccount =>
 		(44, "chainx", "ChainX mainnet, standard account (*25519).")
+	UniartsAccount =>
+		(45, "uniarts", "UniArts Chain mainnet, standard account (*25519).")
 	Reserved46 =>
 		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>
