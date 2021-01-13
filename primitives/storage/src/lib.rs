@@ -180,6 +180,16 @@ pub mod well_known_keys {
 		// Other code might depend on this, so be careful changing this.
 		key.starts_with(CHILD_STORAGE_KEY_PREFIX)
 	}
+
+	/// Returns if the given `key` starts with [`CHILD_STORAGE_KEY_PREFIX`] or collides with it.
+	pub fn starts_with_child_storage_key(key: &[u8]) -> bool {
+		if key.len() > CHILD_STORAGE_KEY_PREFIX.len() {
+			key.starts_with(CHILD_STORAGE_KEY_PREFIX)
+		} else {
+			CHILD_STORAGE_KEY_PREFIX.starts_with(key)
+		}
+	}
+
 }
 
 /// Information related to a child state.
