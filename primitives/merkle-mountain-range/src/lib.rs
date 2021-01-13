@@ -311,6 +311,68 @@ impl Error {
 	}
 }
 
+/// A helper type to allow using arbitrary SCALE-encoded leaf data in the RuntimeApi.
+///
+/// The point is to be able to verify MMR proofs from external MMRs, where we don't
+/// know the exact leaf type, but it's enough for us to have it SCALE-encoded.
+///
+/// Note the leaf type should be encoded in it's compact form when passed through this type.
+/// See [FullLeaf] documentation for details.
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(RuntimeDebug, Clone, PartialEq)]
+pub struct OpaqueLeaf(
+	/// Leaf type encoded in it's compact form.
+	#[cfg_attr(feature = "std", serde(with = "sp_core::bytes"))]
+	pub Vec<u8>
+);
+
+impl OpaqueLeaf {
+	/// Convert a concrete MMR leaf into an opaque type.
+	pub fn from_leaf<T: FullLeaf>(leaf: T) -> Self {
+		leaf.using_encoded(|d| OpaqueLeaf(d.to_vec()), true)
+	}
+}
+
+impl codec::Encode for OpaqueLeaf {
+	fn size_hint(&self) -> usize {
+		self.0.len()
+	}
+
+	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+		dest.write(&self.0)
+	}
+}
+
+impl codec::Decode for OpaqueLeaf {
+	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
+		const MAX_LENGTH: usize = 1 * 1024 * 1024;
+		let capacity = value.remaining_len()?;
+		match capacity {
+			Some(capacity) if capacity > MAX_LENGTH => {
+				Err(codec::Error::from("maximal leaf length exceeded."))
+			},
+			Some(capacity) => {
+				let mut buffer = Vec::with_capacity(capacity);
+				buffer.resize(capacity, 0);
+				value.read(&mut buffer)?;
+				Ok(OpaqueLeaf(buffer))
+			},
+			// read byte-by-byte, up to MAX_LENGTH
+			None => {
+				let mut buffer = Vec::with_capacity(MAX_LENGTH / 1024);
+				while buffer.len() < MAX_LENGTH {
+					if let Ok(byte) = value.read_byte() {
+						buffer.push(byte);
+					} else {
+						return Ok(OpaqueLeaf(buffer))
+					}
+				}
+				Err(codec::Error::from("maximal leaf length exceeded."))
+			}
+		}
+	}
+}
+
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
 	pub trait MmrApi<Leaf: codec::Codec, Hash: codec::Codec> {
@@ -328,7 +390,7 @@ sp_api::decl_runtime_apis! {
 		///
 		/// Note this function does not require any on-chain storage - the
 		/// proof is verified against given MMR root hash.
-		fn verify_proof_stateless(root: Hash, leaf: Leaf, proof: Proof<Hash>)
+		fn verify_proof_stateless(root: Hash, leaf: OpaqueLeaf, proof: Proof<Hash>)
 			-> Result<(), Error>;
 	}
 }
@@ -473,5 +535,46 @@ mod tests {
 		assert_eq!(decoded, cases.into_iter().map(Result::<_, codec::Error>::Ok).collect::<Vec<_>>());
 
 		assert_eq!(decoded_compact, vec![Ok(d.clone()), Ok(d.clone())]);
+	}
+
+	#[test]
+	fn opaque_leaves_should_be_scale_compatible_with_concrete_ones() {
+		// given
+		let a = Test::Data("Hello World!".into());
+		let b = Test::Data("".into());
+
+		let c: TestCompact = Compact::new((a.clone(), b.clone()));
+		let d: TestCompact = Compact::new((
+			Test::Hash(a.hash()),
+			Test::Hash(b.hash()),
+		));
+		let cases = vec![c, d.clone()];
+
+		let encoded_compact = cases
+			.iter()
+			.map(|c| c.using_encoded(|x| x.to_vec(), true))
+			.collect::<Vec<_>>();
+
+		let decoded_opaque = encoded_compact
+			.iter()
+			.map(|x| OpaqueLeaf::decode(&mut &**x))
+			.collect::<Vec<_>>();
+
+		let reencoded = decoded_opaque
+			.iter()
+			.map(|x| x.as_ref().map(codec::Encode::encode))
+			.collect::<Vec<_>>();
+
+		// then
+		// make sure that re-encoding opaque leaves end up with the same encoding.
+		assert_eq!(
+			reencoded,
+			encoded_compact.clone().into_iter().map(Ok).collect::<Vec<_>>()
+		);
+		// make sure that decoded opaque leaves simply contain raw bytes payload.
+		assert_eq!(
+			decoded_opaque,
+			encoded_compact.into_iter().map(OpaqueLeaf).map(Ok).collect::<Vec<_>>()
+		);
 	}
 }

@@ -1070,6 +1070,20 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExt
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<Runtime, Block, frame_system::ChainContext<Runtime>, Runtime, AllModules>;
 
+/// MMR helper types.
+mod mmr {
+	use super::Runtime;
+	pub use pallet_mmr::primitives::*;
+
+	pub type Leaf = <
+		<Runtime as pallet_mmr::Config>::LeafData
+		as
+		LeafDataProvider
+	>::LeafData;
+	pub type Hash = <Runtime as pallet_mmr::Config>::Hash;
+	pub type Hashing = <Runtime as pallet_mmr::Config>::Hashing;
+}
+
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -1263,21 +1277,24 @@ impl_runtime_apis! {
 
 	impl pallet_mmr::primitives::MmrApi<
 		Block,
-		<<Runtime as pallet_mmr::Config>::LeafData as
-			pallet_mmr::primitives::LeafDataProvider>::LeafData,
-		<Runtime as pallet_mmr::Config>::Hash,
+		mmr::Leaf,
+		mmr::Hash,
 	> for Runtime {
-		fn generate_proof(leaf_index: u64) -> Result<(Leaf, Proof<Hash>), Error> {
+		fn generate_proof(leaf_index: u64) -> Result<(mmr::Leaf, mmr::Proof<mmr::Hash>), mmr::Error> {
 			Mmr::generate_proof(leaf_index)
 		}
 
-		fn verify_proof(leaf: Leaf, proof: Proof<Hash>) -> Result<(), Error> {
-			Mmr::verify_proof(leaf, proof)
+		fn verify_proof(leaf: mmr::Leaf, proof: mmr::Proof<mmr::Hash>) -> Result<(), mmr::Error> {
+			Mmr::verify_leaf(leaf, proof)
 		}
 
-		fn verify_proof_stateless(root: Hash, leaf: Leaf, proof: Proof<Hash>)
-			-> Result<(), Error> {
-			pallet_mmr::verify_leaf_proof::<Self, _>(root, leaf, proof)
+		fn verify_proof_stateless(
+			root: mmr::Hash,
+			leaf: mmr::OpaqueLeaf,
+			proof: mmr::Proof<mmr::Hash>
+		) -> Result<(), mmr::Error> {
+			let node = mmr::DataOrHash::Data(leaf);
+			pallet_mmr::verify_leaf_proof::<mmr::Hashing, _>(root, node, proof)
 		}
 	}
 

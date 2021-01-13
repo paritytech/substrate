@@ -273,7 +273,8 @@ fn verification_should_be_stateless() {
 	let root = ext.execute_with(|| crate::Module::<Test>::mmr_root_hash());
 
 	// Verify proof without relying on any on-chain data.
-	assert_eq!(crate::verify_leaf_proof::<Test, _>(root, leaf, proof5), Ok(()));
+	let leaf = crate::primitives::DataOrHash::Data(leaf);
+	assert_eq!(crate::verify_leaf_proof::<<Test as Config>::Hashing, _>(root, leaf, proof5), Ok(()));
 }
 
 #[test]

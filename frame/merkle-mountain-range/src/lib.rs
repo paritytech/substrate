@@ -191,15 +191,15 @@ pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;
 /// for given leaf data (`leaf`) against a known MMR root hash (`root`).
 ///
 /// The verification does not require any storage access.
-pub fn verify_leaf_proof<T, I>(
-	root: <T as Config<I>>::Hash,
-	leaf: LeafOf<T, I>,
-	proof: primitives::Proof<<T as Config<I>>::Hash>,
+pub fn verify_leaf_proof<H, L>(
+	root: H::Output,
+	leaf: mmr::Node<H, L>,
+	proof: primitives::Proof<H::Output>,
 ) -> Result<(), primitives::Error> where
-	T: Config<I>,
-	I: Instance,
+	H: traits::Hash,
+	L: primitives::FullLeaf,
 {
-	let is_valid = mmr::verify_leaf_proof::<T, I, _>(root, leaf, proof)?;
+	let is_valid = mmr::verify_leaf_proof::<H, L>(root, leaf, proof)?;
 	if is_valid {
 		Ok(())
 	} else {

@@ -28,28 +28,27 @@ use crate::{
 use sp_std::vec;
 
 /// Stateless verification of the leaf proof.
-pub fn verify_leaf_proof<T, I, L>(
-	root: <T as Config<I>>::Hash,
-	leaf: L,
-	proof: primitives::Proof<<T as Config<I>>::Hash>,
+pub fn verify_leaf_proof<H, L>(
+	root: H::Output,
+	leaf: Node<H, L>,
+	proof: primitives::Proof<H::Output>,
 ) -> Result<bool, Error> where
-	T: Config<I>,
-	I: Instance,
+	H: sp_runtime::traits::Hash,
 	L: primitives::FullLeaf,
 {
 	let size = NodesUtils::new(proof.leaf_count).size();
 	let leaf_position = mmr_lib::leaf_index_to_pos(proof.leaf_index);
 
 	let p = mmr_lib::MerkleProof::<
-		NodeOf<T, I, L>,
-		Hasher<HashingOf<T, I>, L>,
+		Node<H, L>,
+		Hasher<H, L>,
 	>::new(
 		size,
 		proof.items.into_iter().map(Node::Hash).collect(),
 	);
 	p.verify(
 		Node::Hash(root),
-		vec![(leaf_position, Node::Data(leaf))],
+		vec![(leaf_position, leaf)],
 	).map_err(|e| Error::Verify.log_debug(e))
 }
 
