@@ -166,13 +166,12 @@ where
 	///
 	/// If successful, this will give us the actual, checked data we should be
 	/// sending back to the client, otherwise an error.
-	fn on_response
-		( &mut self
-		, peer: PeerId
-		, request: &Request<B>
-		, response: Response
-		) -> Result<Reply<B>, SendRequestError>
-	{
+	fn on_response(
+		&mut self,
+		peer: PeerId,
+		request: &Request<B>,
+		response: Response,
+	) -> Result<Reply<B>, SendRequestError>	{
 		log::trace!("response from {}", peer);
 		match response {
 			Response::Light(r) => self.on_response_light(peer, request, r),
@@ -180,13 +179,12 @@ where
 		}
 	}
 
-	fn on_response_light
-		( &mut self
-		, peer: PeerId
-		, request: &Request<B>
-		, response: schema::v1::light::Response
-		) -> Result<Reply<B>, SendRequestError>
-	{
+	fn on_response_light(
+		&mut self,
+		peer: PeerId,
+		request: &Request<B>,
+		response: schema::v1::light::Response,
+	) -> Result<Reply<B>, SendRequestError> {
 		use schema::v1::light::response::Response;
 		match response.response {
 			Some(Response::RemoteCallResponse(response)) =>
@@ -252,13 +250,12 @@ where
 		}
 	}
 
-	fn on_response_block
-		( &mut self
-		, peer: PeerId
-		, request: &Request<B>
-		, response: schema::v1::BlockResponse
-		) -> Result<Reply<B>, SendRequestError>
-	{
+	fn on_response_block(
+		&mut self,
+		peer: PeerId,
+		request: &Request<B>,
+		response: schema::v1::BlockResponse,
+	) -> Result<Reply<B>, SendRequestError> {
 		let request = if let Request::Body { request , .. } = &request {
 			request
 		} else {

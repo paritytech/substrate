@@ -51,8 +51,8 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 
 /// Generate the block protocol name from chain specific protocol identifier.
 //
-// Visibility
-
+// Visibility `pub(crate)` to allow `crate::light_client_requests::client` to generate block request
+// protocol name and send block requests.
 pub(crate) fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 	let mut s = String::new();
 	s.push_str("/");
@@ -83,6 +83,22 @@ impl <B: BlockT> BlockRequestHandler<B> {
 		protocol_config.inbound_queue = Some(tx);
 
 		(Self { client, request_receiver }, protocol_config)
+	}
+
+	/// Run [`BlockRequestHandler`].
+	pub async fn run(mut self) {
+		while let Some(request) = self.request_receiver.next().await {
+			let IncomingRequest { peer, payload, pending_response } = request;
+
+			match self.handle_request(payload, pending_response) {
+				Ok(()) => debug!(target: LOG_TARGET, "Handled block request from {}.", peer),
+				Err(e) => debug!(
+					target: LOG_TARGET,
+					"Failed to handle block request from {}: {}",
+					peer, e,
+				),
+			}
+		}
 	}
 
 	fn handle_request(
@@ -186,22 +202,6 @@ impl <B: BlockT> BlockRequestHandler<B> {
 
 		pending_response.send(data)
 			.map_err(|_| HandleRequestError::SendResponse)
-	}
-
-	/// Run [`BlockRequestHandler`].
-	pub async fn run(mut self) {
-		while let Some(request) = self.request_receiver.next().await {
-			let IncomingRequest { peer, payload, pending_response } = request;
-
-			match self.handle_request(payload, pending_response) {
-				Ok(()) => debug!(target: LOG_TARGET, "Handled block request from {}.", peer),
-				Err(e) => debug!(
-					target: LOG_TARGET,
-					"Failed to handle block request from {}: {}",
-					peer, e,
-				),
-			}
-		}
 	}
 }
 

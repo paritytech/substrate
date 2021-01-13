@@ -91,6 +91,31 @@ impl<B: Block> LightClientRequestHandler<B> {
 		(Self { client, request_receiver/*, peerset */ }, protocol_config)
 	}
 
+	/// Run [`LightClientRequestHandler`].
+	pub async fn run(mut self) {
+		while let Some(request) = self.request_receiver.next().await {
+			let IncomingRequest { peer, payload, pending_response } = request;
+
+			match self.handle_request(peer, payload, pending_response) {
+				Ok(()) => debug!(target: LOG_TARGET, "Handled light client request from {}.", peer),
+				Err(e) => {
+					match e {
+						HandleRequestError::BadRequest(_) => {
+							// self.peerset.report_peer(peer, ReputationChange::new(-(1 << 12), "bad request"))
+
+						}
+						_ => {},
+					}
+					debug!(
+						target: LOG_TARGET,
+						"Failed to handle light client request from {}: {}",
+						peer, e,
+					);
+				},
+			}
+		}
+	}
+
 	fn handle_request(
 		&mut self,
 		peer: PeerId,
@@ -111,40 +136,39 @@ impl<B: Block> LightClientRequestHandler<B> {
 			Some(schema::v1::light::request::Request::RemoteChangesRequest(r)) =>
 				self.on_remote_changes_request(&peer, r)?,
 			None => {
-				log::debug!("ignoring request without request data from peer {}", peer);
+				log::debug!("Ignoring request without request data from peer {}.", peer);
 				return Ok(())
 			}
 		};
 
-		log::trace!("enqueueing response for peer {}", peer);
+		log::trace!("Enqueueing response for peer {}.", peer);
 		let mut data = Vec::new();
 		response.encode(&mut data)?;
 		pending_response.send(data)
 			.map_err(|_| HandleRequestError::SendResponse)
 	}
 
-	fn on_remote_call_request
-		( &mut self
-		, peer: &PeerId
-		, request: &schema::v1::light::RemoteCallRequest
-		) -> Result<schema::v1::light::Response, HandleRequestError>
-	{
-		log::trace!("remote call request from {} ({} at {:?})",
-			peer,
-			request.method,
-			request.block,
+	fn on_remote_call_request(
+		&mut self,
+		peer: &PeerId,
+		request: &schema::v1::light::RemoteCallRequest,
+	) -> Result<schema::v1::light::Response, HandleRequestError> {
+		log::trace!(
+			"Remote call request from {} ({} at {:?}).",
+			peer, request.method, request.block,
 		);
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof = match self.client.execution_proof(&BlockId::Hash(block), &request.method, &request.data) {
+		let proof = match self.client.execution_proof(
+			&BlockId::Hash(block),
+			&request.method, &request.data,
+		) {
 			Ok((_, proof)) => proof,
 			Err(e) => {
-				log::trace!("remote call request from {} ({} at {:?}) failed with: {}",
-					peer,
-					request.method,
-					request.block,
-					e,
+				log::trace!(
+					"remote call request from {} ({} at {:?}) failed with: {}",
+					peer, request.method, request.block, e,
 				);
 				StorageProof::empty()
 			}
@@ -158,32 +182,33 @@ impl<B: Block> LightClientRequestHandler<B> {
 		Ok(schema::v1::light::Response { response: Some(response) })
 	}
 
-	fn on_remote_read_request
-		( &mut self
-		, peer: &PeerId
-		, request: &schema::v1::light::RemoteReadRequest
-		) -> Result<schema::v1::light::Response, HandleRequestError>
-	{
+	fn on_remote_read_request(
+		&mut self,
+		peer: &PeerId,
+		request: &schema::v1::light::RemoteReadRequest,
+	) -> Result<schema::v1::light::Response, HandleRequestError> {
 		if request.keys.is_empty() {
-			log::debug!("invalid remote read request sent by {}", peer);
-			return Err(HandleRequestError::BadRequest("remote read request without keys"))
+			log::debug!("Invalid remote read request sent by {}.", peer);
+			return Err(HandleRequestError::BadRequest("Remote read request without keys."))
 		}
 
-		log::trace!("remote read request from {} ({} at {:?})",
-			peer,
-			fmt_keys(request.keys.first(), request.keys.last()),
-			request.block);
+		log::trace!(
+			"Remote read request from {} ({} at {:?}).",
+			peer, fmt_keys(request.keys.first(), request.keys.last()), request.block,
+		);
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof = match self.client.read_proof(&BlockId::Hash(block), &mut request.keys.iter().map(AsRef::as_ref)) {
+		let proof = match self.client.read_proof(
+			&BlockId::Hash(block),
+			&mut request.keys.iter().map(AsRef::as_ref),
+		) {
 			Ok(proof) => proof,
 			Err(error) => {
-				log::trace!("remote read request from {} ({} at {:?}) failed with: {}",
-					peer,
-					fmt_keys(request.keys.first(), request.keys.last()),
-					request.block,
-					error);
+				log::trace!(
+					"remote read request from {} ({} at {:?}) failed with: {}",
+					peer, fmt_keys(request.keys.first(), request.keys.last()), request.block, error,
+				);
 				StorageProof::empty()
 			}
 		};
@@ -196,22 +221,23 @@ impl<B: Block> LightClientRequestHandler<B> {
 		Ok(schema::v1::light::Response { response: Some(response) })
 	}
 
-	fn on_remote_read_child_request
-		( &mut self
-		, peer: &PeerId
-		, request: &schema::v1::light::RemoteReadChildRequest
-		) -> Result<schema::v1::light::Response, HandleRequestError>
-	{
+	fn on_remote_read_child_request(
+		&mut self,
+		peer: &PeerId,
+		request: &schema::v1::light::RemoteReadChildRequest,
+	) -> Result<schema::v1::light::Response, HandleRequestError> {
 		if request.keys.is_empty() {
-			log::debug!("invalid remote child read request sent by {}", peer);
-			return Err(HandleRequestError::BadRequest("remove read child request without keys"))
+			log::debug!("Invalid remote child read request sent by {}.", peer);
+			return Err(HandleRequestError::BadRequest("Remove read child request without keys."))
 		}
 
-		log::trace!("remote read child request from {} ({} {} at {:?})",
+		log::trace!(
+			"Remote read child request from {} ({} {} at {:?}).",
 			peer,
 			HexDisplay::from(&request.storage_key),
 			fmt_keys(request.keys.first(), request.keys.last()),
-			request.block);
+			request.block,
+		);
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
@@ -227,12 +253,14 @@ impl<B: Block> LightClientRequestHandler<B> {
 		)) {
 			Ok(proof) => proof,
 			Err(error) => {
-				log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
+				log::trace!(
+					"remote read child request from {} ({} {} at {:?}) failed with: {}",
 					peer,
 					HexDisplay::from(&request.storage_key),
 					fmt_keys(request.keys.first(), request.keys.last()),
 					request.block,
-					error);
+					error,
+				);
 				StorageProof::empty()
 			}
 		};
@@ -245,22 +273,21 @@ impl<B: Block> LightClientRequestHandler<B> {
 		Ok(schema::v1::light::Response { response: Some(response) })
 	}
 
-	fn on_remote_header_request
-		( &mut self
-		, peer: &PeerId
-		, request: &schema::v1::light::RemoteHeaderRequest
-		) -> Result<schema::v1::light::Response, HandleRequestError>
-	{
-		log::trace!("remote header proof request from {} ({:?})", peer, request.block);
+	fn on_remote_header_request(
+		&mut self,
+		peer: &PeerId,
+		request: &schema::v1::light::RemoteHeaderRequest,
+	) -> Result<schema::v1::light::Response, HandleRequestError> {
+		log::trace!("Remote header proof request from {} ({:?}).", peer, request.block);
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 		let (header, proof) = match self.client.header_proof(&BlockId::Number(block)) {
 			Ok((header, proof)) => (header.encode(), proof),
 			Err(error) => {
-				log::trace!("remote header proof request from {} ({:?}) failed with: {}",
-					peer,
-					request.block,
-					error);
+				log::trace!(
+					"Remote header proof request from {} ({:?}) failed with: {}.",
+					peer, request.block, error
+				);
 				(Default::default(), StorageProof::empty())
 			}
 		};
@@ -273,13 +300,13 @@ impl<B: Block> LightClientRequestHandler<B> {
 		Ok(schema::v1::light::Response { response: Some(response) })
 	}
 
-	fn on_remote_changes_request
-		( &mut self
-		, peer: &PeerId
-		, request: &schema::v1::light::RemoteChangesRequest
-		) -> Result<schema::v1::light::Response, HandleRequestError>
-	{
-		log::trace!("remote changes proof request from {} for key {} ({:?}..{:?})",
+	fn on_remote_changes_request(
+		&mut self,
+		peer: &PeerId,
+		request: &schema::v1::light::RemoteChangesRequest,
+	) -> Result<schema::v1::light::Response, HandleRequestError> {
+		log::trace!(
+			"Remote changes proof request from {} for key {} ({:?}..{:?}).",
 			peer,
 			if !request.storage_key.is_empty() {
 				format!("{} : {}", HexDisplay::from(&request.storage_key), HexDisplay::from(&request.key))
@@ -287,7 +314,8 @@ impl<B: Block> LightClientRequestHandler<B> {
 				HexDisplay::from(&request.key).to_string()
 			},
 			request.first,
-			request.last);
+			request.last,
+		);
 
 		let first = Decode::decode(&mut request.first.as_ref())?;
 		let last = Decode::decode(&mut request.last.as_ref())?;
@@ -303,12 +331,14 @@ impl<B: Block> LightClientRequestHandler<B> {
 		let proof = match self.client.key_changes_proof(first, last, min, max, storage_key, &key) {
 			Ok(proof) => proof,
 			Err(error) => {
-				log::trace!("remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}",
+				log::trace!(
+					"Remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}.",
 					peer,
 					format!("{} : {}", HexDisplay::from(&request.storage_key), HexDisplay::from(&key.0)),
 					request.first,
 					request.last,
-					error);
+					error,
+				);
 
 				light::ChangesProof::<B::Header> {
 					max_block: Zero::zero(),
@@ -332,30 +362,6 @@ impl<B: Block> LightClientRequestHandler<B> {
 		};
 
 		Ok(schema::v1::light::Response { response: Some(response) })
-	}
-
-	pub async fn run(mut self) {
-		while let Some(request) = self.request_receiver.next().await {
-			let IncomingRequest { peer, payload, pending_response } = request;
-
-			match self.handle_request(peer, payload, pending_response) {
-				Ok(()) => debug!(target: LOG_TARGET, "Handled light client request from {}.", peer),
-				Err(e) => {
-					match e {
-						HandleRequestError::BadRequest(_) => {
-							// self.peerset.report_peer(peer, ReputationChange::new(-(1 << 12), "bad request"))
-
-						}
-						_ => {},
-					}
-					debug!(
-						target: LOG_TARGET,
-						"Failed to handle light client request from {}: {}",
-						peer, e,
-					);
-				},
-			}
-		}
 	}
 }
 
