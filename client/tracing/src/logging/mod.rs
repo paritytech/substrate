@@ -79,6 +79,7 @@ macro_rules! disable_log_reloading {
 /// Common implementation to get the subscriber.
 fn get_subscriber_internal<N, E, F, W>(
 	pattern: &str,
+	max_level: Option<log::LevelFilter>,
 	force_colors: Option<bool>,
 	telemetry_external_transport: Option<ExtTransport>,
 	builder_hook: impl Fn(
@@ -104,8 +105,6 @@ where
 		}
 		Ok(env_filter)
 	}
-
-	tracing_log::LogTracer::init()?;
 
 	// Initialize filter - ensure to use `parse_default_directive` for any defaults to persist
 	// after log filter reloading by RPC
@@ -136,19 +135,26 @@ where
 		env_filter = parse_user_directives(env_filter, pattern)?;
 	}
 
+	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
+
+	let max_level = max_level.unwrap_or_else(|| match max_level_hint {
+		Some(tracing_subscriber::filter::LevelFilter::INFO) | None => log::LevelFilter::Info,
+		Some(tracing_subscriber::filter::LevelFilter::TRACE) => log::LevelFilter::Trace,
+		Some(tracing_subscriber::filter::LevelFilter::WARN) => log::LevelFilter::Warn,
+		Some(tracing_subscriber::filter::LevelFilter::ERROR) => log::LevelFilter::Error,
+		Some(tracing_subscriber::filter::LevelFilter::DEBUG) => log::LevelFilter::Debug,
+		Some(tracing_subscriber::filter::LevelFilter::OFF) => log::LevelFilter::Off,
+	});
+
+	tracing_log::LogTracer::builder()
+		.with_max_level(max_level)
+		.init()?;
+
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
-	let simple = match Layer::<FmtSubscriber>::max_level_hint(&env_filter) {
+	let simple = match max_level_hint {
 		Some(level) if level <= tracing_subscriber::filter::LevelFilter::INFO => true,
 		_ => false,
 	};
-
-	// Always log the special target `sc_tracing`, overrides global level.
-	// Required because profiling traces are emitted via `sc_tracing`
-	// NOTE: this must be done after we check the `max_level_hint` otherwise
-	// it is always raised to `TRACE`.
-	env_filter = env_filter.add_directive(
-		parse_default_directive("sc_tracing=trace").expect("provided directive is valid"),
-	);
 
 	let enable_color = force_colors.unwrap_or_else(|| atty::is(atty::Stream::Stderr));
 	let timer = ChronoLocal::with_format(if simple {
@@ -242,9 +248,13 @@ impl GlobalLoggerBuilder {
 	/// This sets various global logging and tracing instances and thus may only be called once.
 	pub fn init(self) -> Result<TelemetryWorker> {
 		if let Some((tracing_receiver, profiling_targets)) = self.profiling {
+			// If profiling is activated, we require `trace` logging.
+			let max_level = Some(log::LevelFilter::Trace);
+
 			if self.disable_log_reloading {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
-					&format!("{},{}", self.pattern, profiling_targets),
+					&format!("{},{},sc_tracing=trace", self.pattern, profiling_targets),
+					max_level,
 					self.force_colors,
 					self.telemetry_external_transport,
 					|builder| builder,
@@ -256,7 +266,8 @@ impl GlobalLoggerBuilder {
 				Ok(telemetry_worker)
 			} else {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
-					&format!("{},{}", self.pattern, profiling_targets),
+					&format!("{},{},sc_tracing=trace", self.pattern, profiling_targets),
+					max_level,
 					self.force_colors,
 					self.telemetry_external_transport,
 					|builder| disable_log_reloading!(builder),
@@ -271,6 +282,7 @@ impl GlobalLoggerBuilder {
 			if self.disable_log_reloading {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
 					&self.pattern,
+					None,
 					self.force_colors,
 					self.telemetry_external_transport,
 					|builder| builder,
@@ -282,6 +294,7 @@ impl GlobalLoggerBuilder {
 			} else {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
 					&self.pattern,
+					None,
 					self.force_colors,
 					self.telemetry_external_transport,
 					|builder| disable_log_reloading!(builder),
@@ -458,5 +471,48 @@ mod tests {
 			re.is_match(output.trim()),
 			format!("Expected:\n{}\nGot:\n{}", re, output),
 		);
+	}
+
+	#[test]
+	fn log_max_level_is_set_properly() {
+		fn run_test(rust_log: Option<String>, tracing_targets: Option<String>) -> String {
+			let executable = env::current_exe().unwrap();
+			let mut command = Command::new(executable);
+
+			command
+				.env("PRINT_MAX_LOG_LEVEL", "1")
+				.args(&["--nocapture", "log_max_level_is_set_properly"]);
+
+			if let Some(rust_log) = rust_log {
+				command.env("RUST_LOG", rust_log);
+			}
+
+			if let Some(tracing_targets) = tracing_targets {
+				command.env("TRACING_TARGETS", tracing_targets);
+			}
+
+			let output = command.output().unwrap();
+
+			String::from_utf8(output.stderr).unwrap()
+		}
+
+		if env::var("PRINT_MAX_LOG_LEVEL").is_ok() {
+			init_logger(&env::var("TRACING_TARGETS").unwrap_or_default());
+			eprint!("MAX_LOG_LEVEL={:?}", log::max_level());
+		} else {
+			assert_eq!("MAX_LOG_LEVEL=Info", run_test(None, None));
+			assert_eq!(
+				"MAX_LOG_LEVEL=Trace",
+				run_test(Some("test=trace".into()), None)
+			);
+			assert_eq!(
+				"MAX_LOG_LEVEL=Debug",
+				run_test(Some("test=debug".into()), None)
+			);
+			assert_eq!(
+				"MAX_LOG_LEVEL=Trace",
+				run_test(None, Some("test=info".into()))
+			);
+		}
 	}
 }

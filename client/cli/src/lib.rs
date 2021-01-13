@@ -70,7 +70,8 @@ pub trait SubstrateCli: Sized {
 	/// Extracts the file name from `std::env::current_exe()`.
 	/// Resorts to the env var `CARGO_PKG_NAME` in case of Error.
 	fn executable_name() -> String {
-		std::env::current_exe().ok()
+		std::env::current_exe()
+			.ok()
 			.and_then(|e| e.file_name().map(|s| s.to_os_string()))
 			.and_then(|w| w.into_string().ok())
 			.unwrap_or_else(|| env!("CARGO_PKG_NAME").into())
@@ -100,7 +101,10 @@ pub trait SubstrateCli: Sized {
 	///
 	/// Gets the struct from the command line arguments. Print the
 	/// error message and quit the program in case of failure.
-	fn from_args() -> Self where Self: StructOpt + Sized {
+	fn from_args() -> Self
+	where
+		Self: StructOpt + Sized,
+	{
 		<Self as SubstrateCli>::from_iter(&mut std::env::args_os())
 	}
 
@@ -155,7 +159,7 @@ pub trait SubstrateCli: Sized {
 					let _ = std::io::stdout().write_all(e.message.as_bytes());
 					std::process::exit(0);
 				}
-			},
+			}
 		};
 
 		<Self as StructOpt>::from_clap(&matches)
