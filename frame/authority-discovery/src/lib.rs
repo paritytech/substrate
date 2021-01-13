@@ -67,6 +67,11 @@ impl<T: Config> Module<T> {
 		Keys::get()
 	}
 
+	/// Retrieve authority identifiers of the next authority set in the original order.
+	pub fn next_authorities() -> Vec<AuthorityId> {
+		NextKeys::get()
+	}
+
 	fn initialize_keys(keys: &[AuthorityId]) {
 		if !keys.is_empty() {
 			assert!(Keys::get().is_empty(), "Keys are already initialized!");
@@ -98,9 +103,9 @@ impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 		if changed {
 			let keys = validators.map(|x| x.1);
 			Keys::put(keys.collect::<Vec<_>>());
+			let next_keys = queued_validators.map(|x| x.1);
+			NextKeys::put(next_keys.collect::<Vec<_>>());
 		}
-		let keys = queued_validators.map(|x| x.1);
-		NextKeys::put(keys.collect::<Vec<_>>());
 	}
 
 	fn on_disabled(_i: usize) {
@@ -269,15 +274,10 @@ mod tests {
 				third_authorities_and_account_ids.clone().into_iter(),
 			);
 			let authorities_returned = AuthorityDiscovery::authorities();
-			let mut first_and_third_authorities = first_authorities.iter()
-				.chain(third_authorities.iter())
-				.cloned()
-				.collect::<Vec<AuthorityId>>();
-			first_and_third_authorities.sort();
 			assert_eq!(
-				first_and_third_authorities,
+				first_authorities,
 				authorities_returned,
-				"Expected current authority set not to change as `changed` was set to false.",
+				"Expected authority set not to change as `changed` was set to false.",
 			);
 
 			// When `changed` set to true, the authority set should be updated.
