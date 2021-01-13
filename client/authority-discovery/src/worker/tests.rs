@@ -105,6 +105,10 @@ sp_api::mock_impl_runtime_apis! {
 		fn authorities(&self) -> Vec<AuthorityId> {
 			self.authorities.clone()
 		}
+
+		fn next_authorities() -> Vec<AuthorityId> {
+			self.authorities.clone()
+		}
 	}
 }
 

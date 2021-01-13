@@ -1217,6 +1217,9 @@ impl_runtime_apis! {
 		fn authorities() -> Vec<AuthorityDiscoveryId> {
 			AuthorityDiscovery::authorities()
 		}
+		fn next_authorities() -> Vec<AuthorityDiscoveryId> {
+			AuthorityDiscovery::next_authorities()
+		}
 	}
 
 	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {

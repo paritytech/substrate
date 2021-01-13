@@ -328,18 +328,30 @@ where
 			Role::Discover => HashSet::new(),
 		};
 
-		let mut authorities = self
+		let authorities = self
 			.client
 			.runtime_api()
 			.authorities(&id)
 			.map_err(Error::CallingRuntime)?
 			.into_iter()
-			.filter(|id| !local_keys.contains(id.as_ref()))
-			.collect();
+			.filter(|id| !local_keys.contains(id.as_ref()));
+		let next_authorities = self
+			.client
+			.runtime_api()
+			.next_authorities(&id)
+			.unwrap_or_default()
+			.into_iter()
+			.filter(|id| !local_keys.contains(id.as_ref()));
+		let mut authorities = authorities
+			.chain(next_authorities)
+			.collect::<Vec<_>>();
 
+		authorities.sort();
+		authorities.dedup();
 		self.addr_cache.retain_ids(&authorities);
 
 		authorities.shuffle(&mut thread_rng());
+
 		self.pending_lookups = authorities;
 		// Ignore all still in-flight lookups. Those that are still in-flight are likely stalled as
 		// query interval ticks are far enough apart for all lookups to succeed.
@@ -544,12 +556,20 @@ where
 			.collect::<HashSet<_>>();
 
 		let id = BlockId::hash(client.info().best_hash);
+
 		let authorities = client.runtime_api()
 			.authorities(&id)
 			.map_err(Error::CallingRuntime)?
 			.into_iter()
 			.map(std::convert::Into::into)
-			.collect::<HashSet<_>>();
+			.chain(
+				client
+					.runtime_api()
+					.next_authorities(&id)
+					.unwrap_or_default()
+					.into_iter()
+					.map(std::convert::Into::into)
+			).collect::<HashSet<_>>();
 
 		let intersection = local_pub_keys.intersection(&authorities)
 			.cloned()
