@@ -1958,18 +1958,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "futures_codec"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce54d63f8b0c75023ed920d46fd71d0cbbb830b0ee012726b5b4f506fb6dea5b"
-dependencies = [
- "bytes 0.5.6",
- "futures 0.3.9",
- "memchr",
- "pin-project 0.4.27",
-]
-
-[[package]]
 name = "gcc"
 version = "0.3.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7212,9 +7200,10 @@ dependencies = [
  "assert_matches",
  "async-std",
  "async-trait",
+ "asynchronous-codec",
  "bitflags",
  "bs58",
- "bytes 0.5.6",
+ "bytes 1.0.1",
  "derive_more",
  "either",
  "erased-serde",
@@ -7222,7 +7211,6 @@ dependencies = [
  "fork-tree",
  "futures 0.3.9",
  "futures-timer 3.0.2",
- "futures_codec",
  "hex",
  "ip_network",
  "libp2p",
@@ -7259,7 +7247,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "thiserror",
- "unsigned-varint 0.5.1",
+ "unsigned-varint 0.6.0",
  "void",
  "wasm-timer",
  "zeroize",
@@ -9963,12 +9951,6 @@ name = "unsigned-varint"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7fdeedbf205afadfe39ae559b75c3240f24e257d0ca27e85f85cb82aa19ac35"
-dependencies = [
- "bytes 0.5.6",
- "futures-io",
- "futures-util",
- "futures_codec",
-]
 
 [[package]]
 name = "unsigned-varint"
