@@ -190,7 +190,10 @@ impl<C: SubstrateCli> Runner<C> {
 	}
 
 	/// A helper function that runs a command with the configuration of this node.
-	pub fn sync_run<E>(self, runner: impl FnOnce(Configuration) -> std::result::Result<(), E>) -> std::result::Result<(), E>
+	pub fn sync_run<E>(
+		self,
+		runner: impl FnOnce(Configuration) -> std::result::Result<(), E>
+	) -> std::result::Result<(), E>
 	where
 		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
 	{
