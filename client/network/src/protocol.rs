@@ -244,8 +244,6 @@ struct Peer<B: BlockT, H: ExHashT> {
 	known_transactions: LruHashSet<H>,
 	/// Holds a set of blocks known to this peer.
 	known_blocks: LruHashSet<B::Hash>,
-	/// Request counter,
-	next_request_id: message::RequestId,
 }
 
 /// Info about a peer's known state.
@@ -897,7 +895,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				.expect("Constant is nonzero")),
 			known_blocks: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_BLOCKS)
 				.expect("Constant is nonzero")),
-			next_request_id: 0,
 		};
 
 		let req = if peer.info.roles.is_full() {
@@ -1407,13 +1404,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 fn prepare_block_request<B: BlockT, H: ExHashT>(
 	peers: &mut HashMap<PeerId, Peer<B, H>>,
 	who: PeerId,
-	mut request: message::BlockRequest<B>,
+	request: message::BlockRequest<B>,
 ) -> CustomMessageOutcome<B> {
 	let (tx, rx) = oneshot::channel();
 
 	if let Some(ref mut peer) = peers.get_mut(&who) {
-		request.id = peer.next_request_id;
-		peer.next_request_id += 1;
 		peer.block_request = Some((request.clone(), rx));
 	}
 
