@@ -56,7 +56,6 @@ use sync::{ChainSync, SyncState};
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet, VecDeque, hash_map::Entry};
 use std::sync::Arc;
-use std::fmt::Write;
 use std::{io, iter, num::NonZeroUsize, pin::Pin, task::Poll, time};
 
 mod generic_proto;
@@ -230,14 +229,6 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	boot_node_ids: HashSet<PeerId>,
 }
 
-#[derive(Default)]
-struct PacketStats {
-	bytes_in: u64,
-	bytes_out: u64,
-	count_in: u64,
-	count_out: u64,
-}
-
 /// Peer information
 #[derive(Debug)]
 struct Peer<B: BlockT, H: ExHashT> {
@@ -270,7 +261,6 @@ pub struct PeerInfo<B: BlockT> {
 struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: HashMap<PeerId, Peer<B, H>>,
-	stats: HashMap<&'static str, PacketStats>,
 	pub chain: Arc<dyn Client<B>>,
 }
 
@@ -513,7 +503,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			config,
 			context_data: ContextData {
 				peers: HashMap::new(),
-				stats: HashMap::new(),
 				chain,
 			},
 			genesis_hash: info.genesis_hash,
@@ -662,10 +651,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				return CustomMessageOutcome::None;
 			}
 		};
-
-		let mut stats = self.context_data.stats.entry(message.id()).or_default();
-		stats.bytes_in += data.len() as u64;
-		stats.count_in += 1;
 
 		match message {
 			GenericMessage::Status(_) =>
@@ -1404,22 +1389,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	fn format_stats(&self) -> String {
-		let mut out = String::new();
-		for (id, stats) in &self.context_data.stats {
-			let _ = writeln!(
-				&mut out,
-				"{}: In: {} bytes ({}), Out: {} bytes ({})",
-				id,
-				stats.bytes_in,
-				stats.count_in,
-				stats.bytes_out,
-				stats.count_out,
-			);
-		}
-		out
-	}
-
 	fn report_metrics(&self) {
 		use std::convert::TryInto;
 
@@ -1914,11 +1883,5 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 
 	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
 		self.behaviour.inject_listener_closed(id, reason);
-	}
-}
-
-impl<B: BlockT, H: ExHashT> Drop for Protocol<B, H> {
-	fn drop(&mut self) {
-		debug!(target: "sync", "Network stats:\n{}", self.format_stats());
 	}
 }
