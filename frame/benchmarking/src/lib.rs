@@ -954,13 +954,39 @@ macro_rules! impl_benchmark_test {
 		}
 	};
 }
-use sp_std::vec::Vec;
-pub fn join_u8_sequences(seqs: Vec<&[u8]>) -> Vec<u8> {
-    let mut result = Vec::new();
-    for seq in seqs.iter() {
-        result.extend(seq.to_vec());
-    }
-    result
+
+/// show error message and debugging info for the case of an error happening
+/// during a benchmark
+pub fn show_benchmark_debug_info(
+	instance_string: &[u8],
+	benchmark: &[u8],
+	lowest_range_values: &sp_std::prelude::Vec<u32>,
+	highest_range_values: &sp_std::prelude::Vec<u32>,
+	steps: &sp_std::prelude::Vec<u32>,
+	repeat: &u32,
+	verify: &bool,
+	error_message: &str,
+) -> sp_runtime::RuntimeString {
+	sp_runtime::format_runtime_string!(
+		"\n* Pallet: {}\n\
+		* Benchmark: {}\n\
+		* Lowest_range_values: {:?}\n\
+		* Highest_range_values: {:?}\n\
+		* Steps: {:?}\n\
+		* Repeat: {:?}\n\
+		* Verify: {:?}\n\
+		* Error message: {}",
+		sp_std::str::from_utf8(instance_string)
+		.expect("it's all just strings ran through the wasm interface. qed"),
+		sp_std::str::from_utf8(benchmark)
+		.expect("it's all just strings ran through the wasm interface. qed"),
+		lowest_range_values,
+		highest_range_values,
+		steps,
+		repeat,
+		verify,
+		error_message,
+	)
 }
 
 /// This macro adds pallet benchmarks to a `Vec<BenchmarkBatch>` object.
@@ -1058,15 +1084,15 @@ macro_rules! add_benchmark {
 							whitelist,
 							*verify,
 						).map_err(|e| { 
-							$crate::join_u8_sequences(
-								vec![
-								"\n\t* pallet: ".as_bytes(),
+							$crate::show_benchmark_debug_info(
 								instance_string,
-								"\n\t* benchmark: ".as_bytes(),
 								benchmark,
-								"\n\t* error message: ".as_bytes(),
-								e.as_bytes()
-								]
+								lowest_range_values,
+								highest_range_values,
+								steps,
+								repeat,
+								verify,
+								e,
 							)
 						})?,
 					});
@@ -1085,15 +1111,15 @@ macro_rules! add_benchmark {
 						whitelist,
 						*verify,
 					).map_err(|e| { 
-						$crate::join_u8_sequences(
-							vec![
-							"\n\t* pallet: ".as_bytes(),
+						$crate::show_benchmark_debug_info(
 							instance_string,
-							"\n\t* benchmark: ".as_bytes(),
 							benchmark,
-							"\n\t* error message: ".as_bytes(),
-							e.as_bytes()
-							]
+							lowest_range_values,
+							highest_range_values,
+							steps,
+							repeat,
+							verify,
+							e,
 						)
 					})?,
 				});
