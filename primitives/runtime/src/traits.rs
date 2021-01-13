@@ -722,7 +722,7 @@ impl Dispatchable for () {
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
-pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq + ::scale_info::TypeInfo + 'static {
+pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq + scale_info::TypeInfo + 'static {
 	/// Unique identifier of this signed extension.
 	///
 	/// This will be exposed in the metadata to identify the signed extension used

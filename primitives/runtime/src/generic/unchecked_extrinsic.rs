@@ -35,7 +35,7 @@ const EXTRINSIC_VERSION: u8 = 4;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, scale_info::TypeInfo)]
 pub struct UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Extra: SignedExtension

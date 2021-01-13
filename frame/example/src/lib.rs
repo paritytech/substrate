@@ -263,6 +263,7 @@ use frame_support::{
 use sp_std::prelude::*;
 use frame_system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{
 		SignedExtension, Bounded, SaturatedConversion, DispatchInfoOf,
@@ -601,7 +602,7 @@ impl<T: Config> Module<T> {
 ///
 /// Additionally, it drops any transaction with an encoded length higher than 200 bytes. No
 /// particular reason why, just to demonstrate the power of signed extensions.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub struct WatchDummy<T: Config + Send + Sync>(PhantomData<T>);
 
 impl<T: Config + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
@@ -610,7 +611,7 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 	}
 }
 
-impl<T: Config + Send + Sync> SignedExtension for WatchDummy<T>
+impl<T: Config + TypeInfo + Send + Sync> SignedExtension for WatchDummy<T>
 where
 	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
 {
