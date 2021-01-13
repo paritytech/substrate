@@ -6,7 +6,7 @@ edition = "2018"
 publish = false
 
 [dependencies]
-substrate-test-runner = { version = "0.8.0", path = "../../../test-utils/substrate-test-runner" }
+substrate-test-runner = { git = "https://github.com/paritytech/substrate-test-runner", branch = "substrate" }
 
 frame-system = { version = "2.0.0", path = "../../../frame/system" }
 frame-support = { path = "../../../frame/support", version = "2.0.0" }
