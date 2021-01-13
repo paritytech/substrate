@@ -322,53 +322,62 @@ where
 		let caller = self.self_account.clone();
 		let dest = Contracts::<T>::contract_address(&caller, code_hash, salt);
 
-		// TrieId has not been generated yet and storage is empty since contract is new.
-		//
-		// Generate it now.
-		let dest_trie_id = Storage::<T>::generate_trie_id(&dest);
+		let output = frame_support::storage::with_transaction(|| {
+			// Generate the trie id in a new transaction to only increment the counter on success.
+			let dest_trie_id = Storage::<T>::generate_trie_id(&dest);
 
-		let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
-			Storage::<T>::place_contract(
-				&dest,
-				nested
-					.self_trie_id
-					.clone()
-					.expect("the nested context always has to have self_trie_id"),
-				code_hash.clone()
-			)?;
+			let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
+				Storage::<T>::place_contract(
+					&dest,
+					nested
+						.self_trie_id
+						.clone()
+						.expect("the nested context always has to have self_trie_id"),
+					code_hash.clone()
+				)?;
 
-			// Send funds unconditionally here. If the `endowment` is below existential_deposit
-			// then error will be returned here.
-			transfer(
-				TransferCause::Instantiate,
-				transactor_kind,
-				&caller,
-				&dest,
-				endowment,
-				nested,
-			)?;
+				// Send funds unconditionally here. If the `endowment` is below existential_deposit
+				// then error will be returned here.
+				transfer(
+					TransferCause::Instantiate,
+					transactor_kind,
+					&caller,
+					&dest,
+					endowment,
+					nested,
+				)?;
 
-			let executable = nested.loader.load_init(&code_hash)
-				.map_err(|_| Error::<T>::CodeNotFound)?;
-			let output = nested.vm
-				.execute(
-					&executable,
-					nested.new_call_context(caller.clone(), endowment),
-					input_data,
-					gas_meter,
-				).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
+				let executable = nested.loader.load_init(&code_hash)
+					.map_err(|_| Error::<T>::CodeNotFound)?;
+				let output = nested.vm
+					.execute(
+						&executable,
+						nested.new_call_context(caller.clone(), endowment),
+						input_data,
+						gas_meter,
+					).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
-			// We need each contract that exists to be above the subsistence threshold
-			// in order to keep up the guarantuee that we always leave a tombstone behind
-			// with the exception of a contract that called `seal_terminate`.
-			if T::Currency::total_balance(&dest) < nested.config.subsistence_threshold() {
-				Err(Error::<T>::NewContractNotFunded)?
+
+				// Collect the rent for the first block to prevent the creation of very large
+				// contracts that never intended to pay for even one block.
+				// This also makes sure that it is above the subsistence threshold
+				// in order to keep up the guarantuee that we always leave a tombstone behind
+				// with the exception of a contract that called `seal_terminate`.
+				Rent::<T>::charge(&dest)?
+					.and_then(|c| c.get_alive())
+					.ok_or_else(|| Error::<T>::NewContractNotFunded)?;
+
+				// Deposit an instantiation event.
+				deposit_event::<T>(vec![], RawEvent::Instantiated(caller.clone(), dest.clone()));
+
+				Ok(output)
+			});
+
+			use frame_support::storage::TransactionOutcome::*;
+			match output {
+				Ok(_) => Commit(output),
+				Err(_) => Rollback(output),
 			}
-
-			// Deposit an instantiation event.
-			deposit_event::<T>(vec![], RawEvent::Instantiated(caller.clone(), dest.clone()));
-
-			Ok(output)
 		})?;
 
 		Ok((dest, output))
@@ -908,7 +917,7 @@ mod tests {
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			place_contract(&BOB, return_ch);
 			set_balance(&origin, 100);
-			set_balance(&dest, 0);
+			let balance = get_balance(&dest);
 
 			let output = ctx.call(
 				dest.clone(),
@@ -919,7 +928,9 @@ mod tests {
 
 			assert!(!output.is_success());
 			assert_eq!(get_balance(&origin), 100);
-			assert_eq!(get_balance(&dest), 0);
+
+			// the rent is still charged
+			assert!(get_balance(&dest) < balance);
 		});
 	}
 
@@ -1057,10 +1068,10 @@ mod tests {
 			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
-			set_balance(&ALICE, 100);
+			set_balance(&ALICE, cfg.subsistence_threshold() * 10);
 
 			let result = ctx.instantiate(
-				cfg.subsistence_threshold(),
+				cfg.subsistence_threshold() * 3,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&input_data_ch,
 				vec![1, 2, 3, 4],
@@ -1307,7 +1318,7 @@ mod tests {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				let (address, output) = ctx.ext.instantiate(
 					&dummy_ch,
-					ConfigCache::<Test>::subsistence_threshold_uncached(),
+					ConfigCache::<Test>::subsistence_threshold_uncached() * 3,
 					ctx.gas_meter,
 					vec![],
 					&[48, 49, 50],
@@ -1321,8 +1332,7 @@ mod tests {
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-			set_balance(&ALICE, 1000);
-			set_balance(&BOB, 100);
+			set_balance(&ALICE, cfg.subsistence_threshold() * 100);
 			place_contract(&BOB, instantiator_ch);
 
 			assert_matches!(
@@ -1431,19 +1441,20 @@ mod tests {
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
 		let rent_allowance_ch = loader.insert(|ctx| {
+			let allowance = ConfigCache::<Test>::subsistence_threshold_uncached() * 3;
 			assert_eq!(ctx.ext.rent_allowance(), <BalanceOf<Test>>::max_value());
-			ctx.ext.set_rent_allowance(10);
-			assert_eq!(ctx.ext.rent_allowance(), 10);
+			ctx.ext.set_rent_allowance(allowance);
+			assert_eq!(ctx.ext.rent_allowance(), allowance);
 			exec_success()
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
 			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-			set_balance(&ALICE, 100);
+			set_balance(&ALICE, cfg.subsistence_threshold() * 10);
 
 			let result = ctx.instantiate(
-				cfg.subsistence_threshold(),
+				cfg.subsistence_threshold() * 5,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&rent_allowance_ch,
 				vec![],

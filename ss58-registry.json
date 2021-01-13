@@ -254,6 +254,15 @@
 			"website": null
 		},
 		{
+			"prefix": 29,
+			"network": "cord",
+			"displayName": "Dhiway CORD Network",
+			"symbols": ["DCU"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://dhiway.com/"
+		},
+		{
 			"prefix": 30,
 			"network": "phala",
 			"displayName": "Phala Network",
@@ -369,6 +378,15 @@
 			"decimals": [8],
 			"standardAccount": "*25519",
 			"website": "https://chainx.org/"
+		},
+		{
+			"prefix": 45,
+			"network": "uniarts",
+			"displayName": "UniArts Network",
+			"symbols": ["UART", "UINK"],
+			"decimals": [12, 12],
+			"standardAccount": "*25519",
+			"website": "https://uniarts.me"
 		},
 		{
 			"prefix": 46,
