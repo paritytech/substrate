@@ -16,8 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// TODO: How about renaming this to sender instead of client?
-
 //! Helper for outgoing light client requests.
 //!
 //! Call [`LightClientRequestSender::send_request`] to send out light client requests. Under the
@@ -70,6 +68,7 @@ struct Config {
 	light_protocol: String,
 	block_protocol: String,
 }
+
 impl Config {
 	/// Create a new [`LightClientRequestSender`] configuration.
 	pub fn new(id: &ProtocolId) -> Self {
@@ -81,7 +80,7 @@ impl Config {
 	}
 }
 
-/// The light client handler behaviour.
+/// State machine helping to send out light client requests.
 pub struct LightClientRequestSender<B: Block> {
 	/// This behaviour's configuration.
 	config: Config,
@@ -94,9 +93,7 @@ pub struct LightClientRequestSender<B: Block> {
 	/// Requests on their way to remote peers.
 	//
 	// TODO: Consider renaming to requests_pending_response.
-	outstanding: FuturesUnordered<BoxFuture<'static, (ExpectedResponseTy, RequestId, RequestWrapper<B>, Result<Vec<u8>, RequestFailure>)>>,
-	/// (Local) Request ID counter
-	next_request_id: RequestId,
+	outstanding: FuturesUnordered<BoxFuture<'static, (ExpectedResponseTy, RequestWrapper<B>, Result<Vec<u8>, RequestFailure>)>>,
 	/// Handle to use for reporting misbehaviour of peers.
 	peerset: sc_peerset::PeersetHandle,
 }
@@ -119,7 +116,6 @@ where
 			peers: Default::default(),
 			pending_requests: Default::default(),
 			outstanding: Default::default(),
-			next_request_id: 1,
 			peerset,
 		}
 	}
@@ -146,12 +142,6 @@ where
 		};
 		self.pending_requests.push_back(rw);
 		Ok(())
-	}
-
-	fn next_request_id(&mut self) -> RequestId {
-		let id = self.next_request_id;
-		self.next_request_id += 1;
-		id
 	}
 
 	/// Remove the given peer.
@@ -306,25 +296,27 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 				request.retries -= 1
 			}
 
-			let number = required_block(&request.request);
-			let peer = match self.peers.iter().find_map(|(peer_id, peer_info)| {
-				if peer_info.status == PeerStatus::Idle {
-					if peer_info.best_block.map(|n| n >= number).unwrap_or(false) {
-						return Some(*peer_id)
-					}
-				}
-				None
-			}) {
-				Some(peer) => peer,
-				None => {
-					self.pending_requests.push_front(request);
-					log::debug!("no peer available to send request to");
-
-					// TODO: Double check, this was previously `break`, but there might be another
-					// request with a lower block number that one of our peers might serve.
-					continue
-				}
+			let (expected, protocol) = match request.request {
+				Request::Body { .. } =>
+					(ExpectedResponseTy::Block, self.config.block_protocol.clone()),
+				_ =>
+					(ExpectedResponseTy::Light, self.config.light_protocol.clone()),
 			};
+
+			let number = required_block(&request.request);
+			let (peer_id, peer_info) = match self.peers.iter_mut()
+				.filter(|(_, peer_info)| peer_info.status == PeerStatus::Idle)
+				.find(|(peer_id, peer_info)| peer_info.best_block.map(|n| n >= number).unwrap_or(false)) {
+					Some((peer_id, peer_info)) => (*peer_id, peer_info),
+					None => {
+						self.pending_requests.push_front(request);
+						log::debug!("no peer available to send request to");
+
+						// TODO: Double check, this was previously `break`, but there might be another
+						// request with a lower block number that one of our peers might serve.
+						continue
+					}
+				};
 
 			let request_bytes = match serialize_request(&request.request) {
 				Ok(bytes) => bytes,
@@ -335,37 +327,28 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 				}
 			};
 
-			let (expected, protocol) = match request.request {
-				Request::Body { .. } =>
-					(ExpectedResponseTy::Block, self.config.block_protocol.clone()),
-				_ =>
-					(ExpectedResponseTy::Light, self.config.light_protocol.clone()),
-			};
 
 			let (tx, rx) = oneshot::channel();
 
-			let request_id = self.next_request_id();
-			if let Some(p) = self.peers.get_mut(&peer) {
-				p.status = PeerStatus::BusyWith(request_id);
-			}
+			peer_info.status = PeerStatus::Busy;
 
 			self.outstanding.push(async move {
-				(expected, request_id, request, rx.await.unwrap())
+				(expected, request, rx.await.unwrap())
 			}.boxed());
 
 			return Poll::Ready(Some(OutEvent::SendRequest {
-				target: peer,
+				target: peer_id,
 				request: request_bytes,
 				pending_response: tx,
 				protocol_name: protocol,
 			}));
 		}
 
-		while let Poll::Ready(Some((expected, id, request_wrapper, response))) = self.outstanding.poll_next_unpin(cx) {
+		while let Poll::Ready(Some((expected, request_wrapper, response))) = self.outstanding.poll_next_unpin(cx) {
 			let peer = request_wrapper.peer;
 			// TODO: handle unwrap. Or is it needed in the first place?
 			if let Some(info) = self.peers.get_mut(&request_wrapper.peer.unwrap()) {
-				if info.status != PeerStatus::BusyWith(id) {
+				if info.status != PeerStatus::Busy {
 					// If we get here, something is wrong with our internal handling of peer
 					// status information. At any time, a single peer processes at most one
 					// request from us and its status should contain the request ID we are
@@ -415,7 +398,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 			match self.on_response(peer.unwrap(), &request_wrapper.request, response.unwrap()) {
 				Ok(reply) => send_reply(Ok(reply), request_wrapper.request),
 				Err(SendRequestError::UnexpectedResponse) => {
-					log::debug!("unexpected response {} from peer {}", id, peer.unwrap());
+					log::debug!("unexpected response from peer {}", peer.unwrap());
 					self.remove_peer(peer.unwrap());
 					self.peerset.report_peer(peer.unwrap(), ReputationChange::new_fatal("unexpected response from peer"));
 					let request_wrapper = RequestWrapper {
@@ -427,7 +410,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 					self.pending_requests.push_back(request_wrapper);
 				}
 				Err(other) => {
-					log::debug!("error handling response {} from peer {}: {}", id, peer.unwrap(), other);
+					log::debug!("error handling response from peer {}: {}", peer.unwrap(), other);
 					self.remove_peer(peer.unwrap());
 					self.peerset.report_peer(peer.unwrap(), ReputationChange::new_fatal("invalid response from peer"));
 					if request_wrapper.retries > 0 {
@@ -664,16 +647,13 @@ impl<B: Block> Default for PeerInfo<B> {
 	}
 }
 
-// TODO: Is the whole concept of request ids still needed?
-type RequestId = u64;
-
 /// A peer is either idle or busy processing a request from us.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PeerStatus {
 	/// The peer is available.
 	Idle,
 	/// We wait for the peer to return us a response for the given request ID.
-	BusyWith(RequestId),
+	Busy,
 }
 
 /// The possible light client requests we support.
