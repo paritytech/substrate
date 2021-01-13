@@ -495,8 +495,14 @@ mod tests {
 			self.inner.lock().unwrap().peer_reports.push((peer_id, reputation_change));
 		}
 
-		fn disconnect_peer(&self, _: PeerId) {
+		fn disconnect_peer(&self, _: PeerId, _: Cow<'static, str>) {
 			unimplemented!();
+		}
+
+		fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
+		}
+
+		fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {
 		}
 
 		fn write_notification(&self, _: PeerId, _: Cow<'static, str>, _: Vec<u8>) {
