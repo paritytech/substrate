@@ -1182,7 +1182,7 @@ where
 			})
 			.map_err(|err| {
 				Self::deposit_event(Event::ElectionFinalized(None));
-				log!(error, "Failed to finalize election round. Error = {:?}", err);
+				log!(warn, "Failed to finalize election round. reason {:?}", err);
 				err
 			})
 	}
