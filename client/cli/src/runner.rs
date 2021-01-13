@@ -176,7 +176,7 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// A helper function that runs a node with tokio and stops if the process receives the signal
 	/// `SIGTERM` or `SIGINT`.
-	pub fn run_node_until_exit<F,E>(
+	pub fn run_node_until_exit<F, E>(
 		mut self,
 		initialize: impl FnOnce(Configuration) -> F,
 	) -> result::Result<(), E>
@@ -209,7 +209,7 @@ impl<C: SubstrateCli> Runner<C> {
 		E: error::Error + Send + Sync + 'static + From<ServiceError> + From<CliError>,
 	{
 		let (future, task_manager) = runner(self.config)?;
-		run_until_exit::<_,E>(self.tokio_runtime, future, task_manager)
+		run_until_exit::<_, E>(self.tokio_runtime, future, task_manager)
 	}
 
 	/// Get an immutable reference to the node Configuration
