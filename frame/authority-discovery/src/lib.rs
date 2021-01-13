@@ -18,12 +18,12 @@
 //! # Authority discovery module.
 //!
 //! This module is used by the `client/authority-discovery` to retrieve the
-//! current set of authorities.
+//! current and the next set of authorities.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{collections::btree_set::BTreeSet, prelude::*};
+use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage};
 use sp_authority_discovery::AuthorityId;
 
@@ -32,8 +32,10 @@ pub trait Config: frame_system::Config + pallet_session::Config {}
 
 decl_storage! {
 	trait Store for Module<T: Config> as AuthorityDiscovery {
-		/// Keys of the current and next authority set.
+		/// Keys of the current authority set.
 		Keys get(fn keys): Vec<AuthorityId>;
+		/// Keys of the next authority set.
+		NextKeys get(fn next_keys): Vec<AuthorityId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<AuthorityId>;
@@ -47,8 +49,21 @@ decl_module! {
 }
 
 impl<T: Config> Module<T> {
-	/// Retrieve authority identifiers of the current and next authority set.
+	/// Retrieve authority identifiers of the current and next authority set
+	/// sorted and deduplicated.
 	pub fn authorities() -> Vec<AuthorityId> {
+		let mut keys = Keys::get();
+		let next = NextKeys::get();
+
+		keys.extend(next);
+		keys.sort();
+		keys.dedup();
+
+		keys
+	}
+
+	/// Retrieve authority identifiers of the current authority set in the original order.
+	pub fn current_authorities() -> Vec<AuthorityId> {
 		Keys::get()
 	}
 
@@ -56,6 +71,7 @@ impl<T: Config> Module<T> {
 		if !keys.is_empty() {
 			assert!(Keys::get().is_empty(), "Keys are already initialized!");
 			Keys::put(keys);
+			NextKeys::put(keys);
 		}
 	}
 }
@@ -80,9 +96,11 @@ impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	{
 		// Remember who the authorities are for the new and next session.
 		if changed {
-			let keys = validators.chain(queued_validators).map(|x| x.1).collect::<BTreeSet<_>>();
-			Keys::put(keys.into_iter().collect::<Vec<_>>());
+			let keys = validators.map(|x| x.1);
+			Keys::put(keys.collect::<Vec<_>>());
 		}
+		let keys = queued_validators.map(|x| x.1);
+		NextKeys::put(keys.collect::<Vec<_>>());
 	}
 
 	fn on_disabled(_i: usize) {
@@ -250,12 +268,16 @@ mod tests {
 				second_authorities_and_account_ids.clone().into_iter(),
 				third_authorities_and_account_ids.clone().into_iter(),
 			);
-			let mut authorities_returned = AuthorityDiscovery::authorities();
-			authorities_returned.sort();
+			let authorities_returned = AuthorityDiscovery::authorities();
+			let mut first_and_third_authorities = first_authorities.iter()
+				.chain(third_authorities.iter())
+				.cloned()
+				.collect::<Vec<AuthorityId>>();
+			first_and_third_authorities.sort();
 			assert_eq!(
-				first_authorities,
+				first_and_third_authorities,
 				authorities_returned,
-				"Expected authority set not to change as `changed` was set to false.",
+				"Expected current authority set not to change as `changed` was set to false.",
 			);
 
 			// When `changed` set to true, the authority set should be updated.
