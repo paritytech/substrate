@@ -136,7 +136,7 @@ where
 		}
 		let rw = RequestWrapper {
 			timestamp: Instant::now(),
-			retries: retries(&req),
+			retries: req.retries(),
 			request: req,
 			peer: None, // we do not know the peer yet
 		};
@@ -303,20 +303,20 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 					(ExpectedResponseTy::Light, self.config.light_protocol.clone()),
 			};
 
-			let number = required_block(&request.request);
 			let (peer_id, peer_info) = match self.peers.iter_mut()
 				.filter(|(_, peer_info)| peer_info.status == PeerStatus::Idle)
-				.find(|(peer_id, peer_info)| peer_info.best_block.map(|n| n >= number).unwrap_or(false)) {
-					Some((peer_id, peer_info)) => (*peer_id, peer_info),
-					None => {
-						self.pending_requests.push_front(request);
-						log::debug!("no peer available to send request to");
+				.find(|(_, peer_info)| peer_info.best_block.map(|n| n >= request.request.required_block()).unwrap_or(false))
+			{
+				Some((peer_id, peer_info)) => (*peer_id, peer_info),
+				None => {
+					self.pending_requests.push_front(request);
+					log::debug!("no peer available to send request to");
 
-						// TODO: Double check, this was previously `break`, but there might be another
-						// request with a lower block number that one of our peers might serve.
-						continue
-					}
-				};
+					// TODO: Double check, this was previously `break`, but there might be another
+					// request with a lower block number that one of our peers might serve.
+					continue
+				}
+			};
 
 			let request_bytes = match serialize_request(&request.request) {
 				Ok(bytes) => bytes,
@@ -581,28 +581,6 @@ pub enum SendRequestError {
 }
 
 
-fn required_block<B: Block>(request: &Request<B>) -> NumberFor<B> {
-	match request {
-		Request::Body { request, .. } => *request.header.number(),
-		Request::Header { request, .. } => request.block,
-		Request::Read { request, .. } => *request.header.number(),
-		Request::ReadChild { request, .. } => *request.header.number(),
-		Request::Call { request, .. } => *request.header.number(),
-		Request::Changes { request, .. } => request.max_block.0,
-	}
-}
-
-fn retries<B: Block>(request: &Request<B>) -> usize {
-	let rc = match request {
-		Request::Body { request, .. } => request.retry_count,
-		Request::Header { request, .. } => request.retry_count,
-		Request::Read { request, .. } => request.retry_count,
-		Request::ReadChild { request, .. } => request.retry_count,
-		Request::Call { request, .. } => request.retry_count,
-		Request::Changes { request, .. } => request.retry_count,
-	};
-	rc.unwrap_or(0)
-}
 
 /// The data to send back to the light client over the oneshot channel.
 //
@@ -688,5 +666,30 @@ pub enum Request<B: Block> {
 	Changes {
 		request: light::RemoteChangesRequest<B::Header>,
 		sender: oneshot::Sender<Result<Vec<(NumberFor<B>, u32)>, ClientError>>
+	}
+}
+
+impl<B: Block> Request<B> {
+	fn required_block(&self) -> NumberFor<B> {
+		match self {
+			Request::Body { request, .. } => *request.header.number(),
+			Request::Header { request, .. } => request.block,
+			Request::Read { request, .. } => *request.header.number(),
+			Request::ReadChild { request, .. } => *request.header.number(),
+			Request::Call { request, .. } => *request.header.number(),
+			Request::Changes { request, .. } => request.max_block.0,
+		}
+	}
+
+	fn retries(&self) -> usize {
+		let rc = match self {
+			Request::Body { request, .. } => request.retry_count,
+			Request::Header { request, .. } => request.retry_count,
+			Request::Read { request, .. } => request.retry_count,
+			Request::ReadChild { request, .. } => request.retry_count,
+			Request::Call { request, .. } => request.retry_count,
+			Request::Changes { request, .. } => request.retry_count,
+		};
+		rc.unwrap_or(0)
 	}
 }
