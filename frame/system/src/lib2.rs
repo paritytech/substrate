@@ -107,6 +107,7 @@ pub mod pallet {
 		type BaseCallFilter: Filter<Self::Call>;
 
 		/// Block & extrinsics weights: base values and limits.
+		#[pallet::constant]
 		type BlockWeights: Get<limits::BlockWeights>;
 
 		/// The maximum length of a block (in bytes).
@@ -164,9 +165,11 @@ pub mod pallet {
 		type Event: Parameter + Member + From<Event<Self>> + Debug;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
+		#[pallet::constant]
 		type BlockHashCount: Get<Self::BlockNumber>;
 
 		/// The weight of runtime database operations the runtime can invoke.
+		#[pallet::constant]
 		type DbWeight: Get<RuntimeDbWeight>;
 
 		/// Get the chain's current version.
@@ -199,6 +202,7 @@ pub mod pallet {
 		/// This replaces the "ss58Format" property declared in the chain spec. Reason is
 		/// that the runtime should know about the prefix in order to make use of it as
 		/// an identifier of the chain.
+		#[pallet::constant]
 		type SS58Prefix: Get<u8>;
 	}
 
