@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-prost-build = "0.6.1"
+prost-build = "0.7"
 
 [dependencies]
 async-trait = "0.1"
@@ -40,7 +40,7 @@ nohash-hasher = "0.2.0"
 parking_lot = "0.11.1"
 pin-project = "0.4.6"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0", path = "../../utils/prometheus" }
-prost = "0.6.1"
+prost = "0.7"
 rand = "0.7.2"
 sc-block-builder = { version = "0.8.0", path = "../block-builder" }
 sc-client-api = { version = "2.0.0", path = "../api" }
