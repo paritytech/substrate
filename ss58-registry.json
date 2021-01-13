@@ -371,6 +371,14 @@
 			"website": "https://chainx.org/"
 		},
 		{
+			"prefix": 45,
+			"displayName": "UniArts Network",
+			"symbols": ["UART", "UINK"],
+			"decimals": [12, 12],
+			"standardAccount": "*25519",
+			"website": "https://uniarts.me"
+		},
+		{
 			"prefix": 46,
 			"network": "reserved46",
 			"displayName": "This prefix is reserved.",
