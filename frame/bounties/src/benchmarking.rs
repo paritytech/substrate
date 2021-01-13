@@ -94,8 +94,6 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 const MAX_BYTES: u32 = 16384;
 
 benchmarks! {
-	_ { }
-
 	propose_bounty {
 		let d in 0 .. MAX_BYTES;
 

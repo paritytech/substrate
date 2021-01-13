@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use crate::pallet::Def;
-use syn::spanned::Spanned;
 
 /// * Add __Ignore variant on Event
 /// * Impl various trait on Event including metadata
@@ -40,12 +39,12 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	let event_ident = &event.event;
 	let frame_system = &def.frame_system;
 	let frame_support = &def.frame_support;
-	let event_use_gen = &event.gen_kind.type_use_gen();
-	let event_impl_gen= &event.gen_kind.type_impl_gen();
+	let event_use_gen = &event.gen_kind.type_use_gen(event.attr_span);
+	let event_impl_gen= &event.gen_kind.type_impl_gen(event.attr_span);
 	let metadata = event.metadata.iter()
 		.map(|(ident, args, docs)| {
 			let name = format!("{}", ident);
-			quote::quote!(
+			quote::quote_spanned!(event.attr_span =>
 				#frame_support::event::EventMetadata {
 					name: #frame_support::event::DecodeDifferent::Encode(#name),
 					arguments: #frame_support::event::DecodeDifferent::Encode(&[
@@ -57,9 +56,6 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 				},
 			)
 		});
-
-	let event_item_span =
-		def.item.content.as_mut().expect("Checked by def parser").1[event.index].span();
 
 	let event_item = {
 		let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[event.index];
@@ -99,10 +95,10 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 
 
 	let deposit_event = if let Some((fn_vis, fn_span)) = &event.deposit_event {
-		let event_use_gen = &event.gen_kind.type_use_gen();
-		let trait_use_gen = &def.trait_use_generics();
-		let type_impl_gen = &def.type_impl_generics();
-		let type_use_gen = &def.type_use_generics();
+		let event_use_gen = &event.gen_kind.type_use_gen(event.attr_span);
+		let trait_use_gen = &def.trait_use_generics(event.attr_span);
+		let type_impl_gen = &def.type_impl_generics(event.attr_span);
+		let type_use_gen = &def.type_use_generics(event.attr_span);
 
 		quote::quote_spanned!(*fn_span =>
 			impl<#type_impl_gen> Pallet<#type_use_gen> #completed_where_clause {
@@ -125,7 +121,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		Default::default()
 	};
 
-	quote::quote_spanned!(event_item_span =>
+	quote::quote_spanned!(event.attr_span =>
 		#deposit_event
 
 		impl<#event_impl_gen> From<#event_ident<#event_use_gen>> for () #event_where_clause {

@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-uncles"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic uncle inclusion utilities for consensus"
 edition = "2018"

@@ -26,10 +26,16 @@ pub struct GenesisBuildDef {
 	pub instances: Vec<helper::InstanceUsage>,
 	/// The where_clause used.
 	pub where_clause: Option<syn::WhereClause>,
+	/// The span of the pallet::genesis_build attribute.
+	pub attr_span: proc_macro2::Span,
 }
 
 impl GenesisBuildDef {
-	pub fn try_from(index: usize, item: &mut syn::Item) -> syn::Result<Self> {
+	pub fn try_from(
+		attr_span: proc_macro2::Span,
+		index: usize,
+		item: &mut syn::Item,
+	) -> syn::Result<Self> {
 		let item = if let syn::Item::Impl(item) = item {
 			item
 		} else {
@@ -48,6 +54,7 @@ impl GenesisBuildDef {
 		instances.push(helper::check_genesis_builder_usage(&item_trait)?);
 
 		Ok(Self {
+			attr_span,
 			index,
 			instances,
 			where_clause: item.generics.where_clause.clone(),

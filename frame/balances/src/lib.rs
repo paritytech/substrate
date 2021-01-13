@@ -982,7 +982,7 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	/// Slash a target account `who`, returning the negative imbalance created and any left over
 	/// amount that could not be slashed.
 	///
-	/// Is a no-op if `value` to be slashed is zero.
+	/// Is a no-op if `value` to be slashed is zero or the account does not exist.
 	///
 	/// NOTE: `slash()` prefers free balance, but assumes that reserve balance can be drawn
 	/// from in extreme circumstances. `can_slash()` should be used prior to `slash()` to avoid having
@@ -993,6 +993,7 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
+		if Self::is_dead_account(&who) { return (NegativeImbalance::zero(), value) }
 
 		Self::mutate_account(who, |account| {
 			let free_slash = cmp::min(account.free, value);
@@ -1146,9 +1147,10 @@ impl<T: Config<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I
 
 	/// Unreserve some funds, returning any amount that was unable to be unreserved.
 	///
-	/// Is a no-op if the value to be unreserved is zero.
+	/// Is a no-op if the value to be unreserved is zero or the account does not exist.
 	fn unreserve(who: &T::AccountId, value: Self::Balance) -> Self::Balance {
 		if value.is_zero() { return Zero::zero() }
+		if Self::is_dead_account(&who) { return value }
 
 		let actual = Self::mutate_account(who, |account| {
 			let actual = cmp::min(account.reserved, value);
@@ -1166,12 +1168,13 @@ impl<T: Config<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I
 	/// Slash from reserved balance, returning the negative imbalance created,
 	/// and any amount that was unable to be slashed.
 	///
-	/// Is a no-op if the value to be slashed is zero.
+	/// Is a no-op if the value to be slashed is zero or the account does not exist.
 	fn slash_reserved(
 		who: &T::AccountId,
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance) {
 		if value.is_zero() { return (NegativeImbalance::zero(), Zero::zero()) }
+		if Self::is_dead_account(&who) { return (NegativeImbalance::zero(), value) }
 
 		Self::mutate_account(who, |account| {
 			// underflow should never happen, but it if does, there's nothing to be done here.
