@@ -54,6 +54,7 @@ use sp_runtime::traits::{
 use sp_arithmetic::traits::SaturatedConversion;
 use sync::{ChainSync, SyncState};
 use std::borrow::Cow;
+use std::convert::TryFrom as _;
 use std::collections::{HashMap, HashSet, VecDeque, hash_map::Entry};
 use std::sync::Arc;
 use std::{io, iter, num::NonZeroUsize, pin::Pin, task::Poll, time};
@@ -1378,10 +1379,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	fn report_metrics(&self) {
-		use std::convert::TryInto;
-
 		if let Some(metrics) = &self.metrics {
-			let n = self.peers.len().try_into().unwrap_or(std::u64::MAX);
+			let n = u64::try_from(self.peers.len()).unwrap_or(std::u64::MAX);
 			metrics.peers.set(n);
 
 			let m = self.sync.metrics();
