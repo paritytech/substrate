@@ -22,7 +22,7 @@ use sc_service::{
 	RpcSession, Role, Configuration, TaskManager, RpcHandlers,
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
 	GenericChainSpec, RuntimeGenesis,
-	KeepBlocks, TransactionStorage,
+	KeepBlocks, TransactionStorageMode,
 };
 use wasm_bindgen::prelude::*;
 use futures::{
@@ -89,7 +89,7 @@ where
 		prometheus_config: Default::default(),
 		state_pruning: Default::default(),
 		keep_blocks: KeepBlocks::All,
-		transaction_storage: TransactionStorage::BlockBody,
+		transaction_storage: TransactionStorageMode::BlockBody,
 		rpc_cors: Default::default(),
 		rpc_http: Default::default(),
 		rpc_ipc: Default::default(),

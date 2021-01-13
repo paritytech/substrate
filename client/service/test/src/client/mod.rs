@@ -32,7 +32,7 @@ use sc_client_api::{
 	StorageProvider, BlockBackend, in_mem, BlockchainEvents,
 };
 use sc_client_db::{
-	Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode, KeepBlocks, TransactionStorage
+	Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode, KeepBlocks, TransactionStorageMode
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_service::client::{self, Client, LocalCallExecutor, new_in_mem};
@@ -1279,7 +1279,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 			state_cache_child_ratio: None,
 			state_pruning: PruningMode::ArchiveAll,
 			keep_blocks: KeepBlocks::All,
-			transaction_storage: TransactionStorage::BlockBody,
+			transaction_storage: TransactionStorageMode::BlockBody,
 			source: DatabaseSettingsSrc::RocksDb {
 				path: tmp.path().into(),
 				cache_size: 1024,
@@ -1482,7 +1482,7 @@ fn returns_status_for_pruned_blocks() {
 			state_cache_child_ratio: None,
 			state_pruning: PruningMode::keep_blocks(1),
 			keep_blocks: KeepBlocks::All,
-			transaction_storage: TransactionStorage::BlockBody,
+			transaction_storage: TransactionStorageMode::BlockBody,
 			source: DatabaseSettingsSrc::RocksDb {
 				path: tmp.path().into(),
 				cache_size: 1024,

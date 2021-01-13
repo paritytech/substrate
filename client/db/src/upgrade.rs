@@ -105,7 +105,7 @@ fn version_file_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
 	use sc_state_db::PruningMode;
-	use crate::{DatabaseSettings, DatabaseSettingsSrc, KeepBlocks, TransactionStorage};
+	use crate::{DatabaseSettings, DatabaseSettingsSrc, KeepBlocks, TransactionStorageMode};
 	use crate::tests::Block;
 	use super::*;
 
@@ -124,7 +124,7 @@ mod tests {
 			state_pruning: PruningMode::ArchiveAll,
 			source: DatabaseSettingsSrc::RocksDb { path: db_path.to_owned(), cache_size: 128 },
 			keep_blocks: KeepBlocks::All,
-			transaction_storage: TransactionStorage::BlockBody,
+			transaction_storage: TransactionStorageMode::BlockBody,
 		}, DatabaseType::Full).map(|_| ())
 	}
 

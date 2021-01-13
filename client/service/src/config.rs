@@ -20,7 +20,7 @@
 
 pub use sc_client_db::{
 	Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig,
-	KeepBlocks, TransactionStorage
+	KeepBlocks, TransactionStorageMode
 };
 pub use sc_network::Multiaddr;
 pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
@@ -66,7 +66,7 @@ pub struct Configuration {
 	/// Block pruning settings.
 	pub keep_blocks: KeepBlocks,
 	/// Transaction storage scheme.
-	pub transaction_storage: TransactionStorage,
+	pub transaction_storage: TransactionStorageMode,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.

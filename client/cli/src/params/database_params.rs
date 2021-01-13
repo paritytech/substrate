@@ -18,7 +18,7 @@
 
 use crate::arg_enums::Database;
 use structopt::StructOpt;
-use sc_service::TransactionStorage;
+use sc_service::TransactionStorageMode;
 
 /// Parameters for block import.
 #[derive(Debug, StructOpt)]
@@ -53,11 +53,11 @@ impl DatabaseParams {
 	}
 
 	/// Transaction storage scheme.
-	pub fn transaction_storage(&self) -> TransactionStorage {
+	pub fn transaction_storage(&self) -> TransactionStorageMode {
 		if self.storage_chain {
-			TransactionStorage::StorageChain
+			TransactionStorageMode::StorageChain
 		} else {
-			TransactionStorage::BlockBody
+			TransactionStorageMode::BlockBody
 		}
 	}
 }

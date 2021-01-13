@@ -271,7 +271,7 @@ pub struct DatabaseSettings {
 	/// Block pruning mode.
 	pub keep_blocks: KeepBlocks,
 	/// Block body/Transaction storage scheme.
-	pub transaction_storage: TransactionStorage,
+	pub transaction_storage: TransactionStorageMode,
 }
 
 /// Block pruning settings.
@@ -285,7 +285,7 @@ pub enum KeepBlocks {
 
 /// Block body storage scheme.
 #[derive(Debug, Clone, Copy)]
-pub enum TransactionStorage {
+pub enum TransactionStorageMode {
 	/// Store block body as deeply encoded list of transactions in the BODY column
 	BlockBody,
 	/// Store a list of hashes in the BODY column and each transaction individually
@@ -397,13 +397,13 @@ pub struct BlockchainDb<Block: BlockT> {
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
-	transaction_storage: TransactionStorage,
+	transaction_storage: TransactionStorageMode,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(
 		db: Arc<dyn Database<DbHash>>,
-		transaction_storage: TransactionStorage
+		transaction_storage: TransactionStorageMode
 	) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
@@ -522,13 +522,13 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
 			Some(body) => {
 				match self.transaction_storage {
-					TransactionStorage::BlockBody => match Decode::decode(&mut &body[..]) {
+					TransactionStorageMode::BlockBody => match Decode::decode(&mut &body[..]) {
 						Ok(body) => Ok(Some(body)),
 						Err(err) => return Err(sp_blockchain::Error::Backend(
 							format!("Error decoding body: {}", err)
 						)),
 					},
-					TransactionStorage::StorageChain => {
+					TransactionStorageMode::StorageChain => {
 						match Vec::<Block::Hash>::decode(&mut &body[..]) {
 							Ok(hashes) => {
 								let extrinsics: ClientResult<Vec<Block::Extrinsic>> = hashes.into_iter().map(
@@ -920,7 +920,7 @@ pub struct Backend<Block: BlockT> {
 	import_lock: Arc<RwLock<()>>,
 	is_archive: bool,
 	keep_blocks: KeepBlocks,
-	transaction_storage: TransactionStorage,
+	transaction_storage: TransactionStorageMode,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 }
@@ -940,7 +940,7 @@ impl<Block: BlockT> Backend<Block> {
 		Self::new_test_with_tx_storage(
 			keep_blocks,
 			canonicalization_delay,
-			TransactionStorage::BlockBody
+			TransactionStorageMode::BlockBody
 		)
 	}
 
@@ -949,7 +949,7 @@ impl<Block: BlockT> Backend<Block> {
 	fn new_test_with_tx_storage(
 		keep_blocks: u32,
 		canonicalization_delay: u64,
-		transaction_storage: TransactionStorage
+		transaction_storage: TransactionStorageMode
 	) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
@@ -1225,10 +1225,10 @@ impl<Block: BlockT> Backend<Block> {
 			transaction.set_from_vec(columns::HEADER, &lookup_key, pending_block.header.encode());
 			if let Some(body) = &pending_block.body {
 				match self.transaction_storage {
-					TransactionStorage::BlockBody => {
+					TransactionStorageMode::BlockBody => {
 						transaction.set_from_vec(columns::BODY, &lookup_key, body.encode());
 					},
-					TransactionStorage::StorageChain => {
+					TransactionStorageMode::StorageChain => {
 						let mut hashes = Vec::with_capacity(body.len());
 						for extrinsic in body {
 							let extrinsic = extrinsic.encode();
@@ -1520,8 +1520,8 @@ impl<Block: BlockT> Backend<Block> {
 						)?;
 						debug!(target: "db", "Removing block #{}", number);
 						match self.transaction_storage {
-							TransactionStorage::BlockBody => {},
-							TransactionStorage::StorageChain => {
+							TransactionStorageMode::BlockBody => {},
+							TransactionStorageMode::StorageChain => {
 								match Vec::<Block::Hash>::decode(&mut &body[..]) {
 									Ok(hashes) => {
 										for h in hashes {
@@ -2038,7 +2038,7 @@ pub(crate) mod tests {
 			state_pruning: PruningMode::keep_blocks(1),
 			source: DatabaseSettingsSrc::Custom(backing),
 			keep_blocks: KeepBlocks::All,
-			transaction_storage: TransactionStorage::BlockBody,
+			transaction_storage: TransactionStorageMode::BlockBody,
 		}, 0).unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);
 		for i in 0..10 {
@@ -2585,7 +2585,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn prune_blocks_on_finalize() {
-		for storage in &[TransactionStorage::BlockBody, TransactionStorage::StorageChain] {
+		for storage in &[TransactionStorageMode::BlockBody, TransactionStorageMode::StorageChain] {
 			let backend = Backend::<Block>::new_test_with_tx_storage(2, 0, *storage);
 			let mut blocks = Vec::new();
 			let mut prev_hash = Default::default();

@@ -32,7 +32,7 @@ use sc_service::config::{
 	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
 	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
-use sc_service::{ChainSpec, TracingReceiver, KeepBlocks, TransactionStorage };
+use sc_service::{ChainSpec, TracingReceiver, KeepBlocks, TransactionStorageMode };
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -204,10 +204,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	}
 
 	/// Get the database transaction storage scheme.
-	fn database_transaction_storage(&self) -> Result<TransactionStorage> {
+	fn database_transaction_storage(&self) -> Result<TransactionStorageMode> {
 		Ok(self.database_params()
 			.map(|x| x.transaction_storage())
-			.unwrap_or(TransactionStorage::BlockBody))
+			.unwrap_or(TransactionStorageMode::BlockBody))
 	}
 
 	/// Get the database backend variant.
