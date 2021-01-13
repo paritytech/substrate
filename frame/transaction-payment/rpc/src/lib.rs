@@ -20,7 +20,6 @@
 use std::sync::Arc;
 use std::convert::TryInto;
 use codec::{Codec, Decode};
-use serde::{Serialize, Deserialize};
 use sp_blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
@@ -28,34 +27,9 @@ use sp_runtime::{generic::BlockId, traits::{Block as BlockT, MaybeDisplay}};
 use sp_api::ProvideRuntimeApi;
 use sp_core::Bytes;
 use sp_rpc::number::NumberOrHex;
-use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 pub use self::gen_client::Client as TransactionPaymentClient;
-
-/// `RpcInclusionFee` is used to represent `InclusionFee` in RPC.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcInclusionFee {
-	/// This is the minimum amount a user pays for a transaction. It is declared
-	/// as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
-	pub base_fee: NumberOrHex,
-	/// The length fee, the amount paid for the encoded length (in bytes) of the transaction.
-	pub len_fee: NumberOrHex,
-	/// - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
-	///     the congestion of the network.
-	/// - `weight_fee`: This amount is computed based on the weight of the transaction. Weight
-	/// accounts for the execution time of a transaction.
-	///
-	/// adjusted_weight_fee = targeted_fee_adjustment * weight_fee
-	pub adjusted_weight_fee: NumberOrHex,
-}
-
-/// The `RpcFeeDetails` is used to represent `FeeDetails` without the `tip` field in RPC.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcFeeDetails {
-	pub inclusion_fee: Option<RpcInclusionFee>,
-}
 
 #[rpc]
 pub trait TransactionPaymentApi<BlockHash, ResponseType> {
@@ -70,7 +44,7 @@ pub trait TransactionPaymentApi<BlockHash, ResponseType> {
 		&self,
 		encoded_xt: Bytes,
 		at: Option<BlockHash>
-	) -> Result<RpcFeeDetails>;
+	) -> Result<FeeDetails<NumberOrHex>>;
 }
 
 /// A struct that implements the [`TransactionPaymentApi`].
@@ -82,7 +56,7 @@ pub struct TransactionPayment<C, P> {
 impl<C, P> TransactionPayment<C, P> {
 	/// Create new `TransactionPayment` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
-		TransactionPayment { client, _marker: Default::default() }
+		Self { client, _marker: Default::default() }
 	}
 }
 
@@ -111,7 +85,7 @@ where
 	Block: BlockT,
 	C: 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
-	Balance: Codec + MaybeDisplay + Copy + TryInto<NumberOrHex>,
+	Balance: Codec + MaybeDisplay + Copy + Default + TryInto<NumberOrHex>,
 {
 	fn query_info(
 		&self,
@@ -141,8 +115,8 @@ where
 	fn query_fee_details(
 		&self,
 		encoded_xt: Bytes,
-		at: Option<<Block as BlockT>::Hash>
-	) -> Result<RpcFeeDetails> {
+		at: Option<<Block as BlockT>::Hash>,
+	) -> Result<FeeDetails<NumberOrHex>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -168,16 +142,17 @@ where
 			data: None,
 		});
 
-		Ok(RpcFeeDetails {
+		Ok(FeeDetails {
 			inclusion_fee: if let Some(inclusion_fee) = fee_details.inclusion_fee {
-				Some(RpcInclusionFee {
+				Some(InclusionFee {
 					base_fee: try_into_rpc_balance(inclusion_fee.base_fee)?,
 					len_fee: try_into_rpc_balance(inclusion_fee.len_fee)?,
 					adjusted_weight_fee: try_into_rpc_balance(inclusion_fee.adjusted_weight_fee)?,
 				})
 			} else {
 				None
-			}
+			},
+			tip: Default::default(),
 		})
 	}
 }

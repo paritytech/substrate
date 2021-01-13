@@ -5139,7 +5139,6 @@ dependencies = [
  "jsonrpc-derive",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec",
- "serde",
  "sp-api",
  "sp-blockchain",
  "sp-core",

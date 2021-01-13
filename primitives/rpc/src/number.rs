@@ -39,6 +39,12 @@ pub enum NumberOrHex {
 	Hex(U256),
 }
 
+impl Default for NumberOrHex {
+	fn default() -> Self {
+		Self::Number(Default::default())
+	}
+}
+
 impl NumberOrHex {
 	/// Converts this number into an U256.
 	pub fn into_u256(self) -> U256 {

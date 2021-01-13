@@ -22,7 +22,7 @@
 use codec::Codec;
 use sp_runtime::traits::MaybeDisplay;
 
-pub use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
+pub use pallet_transaction_payment::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 
 sp_api::decl_runtime_apis! {
 	pub trait TransactionPaymentApi<Balance> where

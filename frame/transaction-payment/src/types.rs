@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,7 +49,7 @@ impl<Balance: AtLeast32BitUnsigned + Copy> InclusionFee<Balance> {
 	/// ```ignore
 	/// inclusion_fee = base_fee + len_fee + adjusted_weight_fee
 	/// ```
-	pub fn total(&self) -> Balance {
+	pub fn inclusion_fee(&self) -> Balance {
 		self.base_fee
 			.saturating_add(self.len_fee)
 			.saturating_add(self.adjusted_weight_fee)
@@ -78,7 +78,7 @@ impl<Balance: AtLeast32BitUnsigned + Copy> FeeDetails<Balance> {
 	/// final_fee = inclusion_fee + tip;
 	/// ```
 	pub fn final_fee(&self) -> Balance {
-		self.inclusion_fee.as_ref().map(|i| i.total()).unwrap_or_else(|| Zero::zero()).saturating_add(self.tip)
+		self.inclusion_fee.as_ref().map(|i| i.inclusion_fee()).unwrap_or_else(|| Zero::zero()).saturating_add(self.tip)
 	}
 }
 
@@ -93,7 +93,9 @@ pub struct RuntimeDispatchInfo<Balance> {
 	pub weight: Weight,
 	/// Class of this dispatch.
 	pub class: DispatchClass,
-	/// The inclusion fee of this dispatch. This does not include a tip or anything else that
+	/// The inclusion fee of this dispatch.
+	///
+	/// This does not include a tip or anything else that
 	/// depends on the signature (i.e. depends on a `SignedExtension`).
 	#[cfg_attr(feature = "std", serde(with = "serde_balance"))]
 	pub partial_fee: Balance,
@@ -101,7 +103,7 @@ pub struct RuntimeDispatchInfo<Balance> {
 
 #[cfg(feature = "std")]
 mod serde_balance {
-    use serde::{Deserialize, Serializer, Deserializer};
+	use serde::{Deserialize, Serializer, Deserializer};
 
 	pub fn serialize<S: Serializer, T: std::fmt::Display>(t: &T, serializer: S) -> Result<S::Ok, S::Error> {
 		serializer.serialize_str(&t.to_string())
