@@ -55,13 +55,15 @@ use log::debug;
 
 const LOG_TARGET: &str = "light-client-request-handler";
 
+// TODO: Should this be moved one up, given that requests are both handled and send via this.
+//
 /// Generates a [`ProtocolConfig`] for the light client request protocol, refusing incoming requests.
-pub fn generate_protocol_config(protocol_id: ProtocolId) -> ProtocolConfig {
+pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 	ProtocolConfig {
 		name: super::generate_protocol_name(protocol_id).into(),
-		max_request_size: 1024 * 1024,
+		max_request_size: 1 * 1024 * 1024,
 		max_response_size: 16 * 1024 * 1024,
-		request_timeout: Duration::from_secs(40),
+		request_timeout: Duration::from_secs(15),
 		inbound_queue: None,
 	}
 }
@@ -79,7 +81,7 @@ pub struct LightClientRequestHandler<B: Block> {
 
 impl<B: Block> LightClientRequestHandler<B> {
 	/// Create a new [`BlockRequestHandler`].
-	pub fn new(protocol_id: ProtocolId, client: Arc<dyn Client<B>>/*, peerset: PeersetHandle*/) -> (Self, ProtocolConfig) {
+	pub fn new(protocol_id: &ProtocolId, client: Arc<dyn Client<B>>/*, peerset: PeersetHandle*/) -> (Self, ProtocolConfig) {
 		// TODO: justify 20.
 		let (tx, request_receiver) = mpsc::channel(20);
 

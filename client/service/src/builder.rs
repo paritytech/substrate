@@ -913,11 +913,11 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	let block_request_protocol_config = {
 		if matches!(config.role, Role::Light) {
 			// Allow outgoing requests but deny incoming requests.
-			block_request_handler::generate_protocol_config(protocol_id.clone())
+			block_request_handler::generate_protocol_config(&protocol_id)
 		} else {
 			// Allow both outgoing and incoming requests.
 			let (handler, protocol_config) = BlockRequestHandler::new(
-				protocol_id.clone(),
+				&protocol_id,
 				client.clone(),
 			);
 			spawn_handle.spawn("block_request_handler", handler.run());
@@ -928,11 +928,11 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	let light_client_request_protocol_config = {
 		if matches!(config.role, Role::Light) {
 			// Allow outgoing requests but deny incoming requests.
-			light_client_requests::handler::generate_protocol_config(protocol_id.clone())
+			light_client_requests::handler::generate_protocol_config(&protocol_id)
 		} else {
 			// Allow both outgoing and incoming requests.
 			let (handler, protocol_config) = LightClientRequestHandler::new(
-				protocol_id.clone(),
+				&protocol_id,
 				client.clone(),
 			);
 			spawn_handle.spawn("light_client_request_handler", handler.run());

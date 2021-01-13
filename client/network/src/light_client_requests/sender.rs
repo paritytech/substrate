@@ -63,89 +63,21 @@ use wasm_timer::Instant;
 /// Reputation change for a peer when a request timed out.
 pub(crate) const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 8);
 
-/// Configuration options for `LightClientRequestSender` behaviour.
+/// Configuration options for [`LightClientRequestSender`].
 #[derive(Debug, Clone)]
-pub struct Config {
-	max_request_size: usize,
-	max_response_size: usize,
+struct Config {
 	max_pending_requests: usize,
-	inactivity_timeout: Duration,
-	request_timeout: Duration,
 	light_protocol: String,
 	block_protocol: String,
 }
 impl Config {
-	/// Create a fresh configuration with the following options:
-	///
-	/// - max. request size = 1 MiB
-	/// - max. response size = 16 MiB
-	/// - max. pending requests = 128
-	/// - inactivity timeout = 15s
-	/// - request timeout = 15s
+	/// Create a new [`LightClientRequestSender`] configuration.
 	pub fn new(id: &ProtocolId) -> Self {
-		let mut c = Config {
-			max_request_size: 1 * 1024 * 1024,
-			max_response_size: 16 * 1024 * 1024,
+		Config {
 			max_pending_requests: 128,
-			inactivity_timeout: Duration::from_secs(15),
-			request_timeout: Duration::from_secs(15),
-			light_protocol: String::new(),
-			block_protocol: String::new(),
-		};
-		c.set_protocol(id);
-		c
-	}
-
-	/// Limit the max. length in bytes of a request.
-	pub fn set_max_request_size(&mut self, v: usize) -> &mut Self {
-		self.max_request_size = v;
-		self
-	}
-
-	/// Limit the max. length in bytes of a response.
-	pub fn set_max_response_size(&mut self, v: usize) -> &mut Self {
-		self.max_response_size = v;
-		self
-	}
-
-	/// Limit the max. number of pending requests.
-	pub fn set_max_pending_requests(&mut self, v: usize) -> &mut Self {
-		self.max_pending_requests = v;
-		self
-	}
-
-	/// Limit the max. duration the connection may remain inactive before closing it.
-	pub fn set_inactivity_timeout(&mut self, v: Duration) -> &mut Self {
-		self.inactivity_timeout = v;
-		self
-	}
-
-	/// Limit the max. request duration.
-	pub fn set_request_timeout(&mut self, v: Duration) -> &mut Self {
-		self.request_timeout = v;
-		self
-	}
-
-	// TODO: Unify this with LightClientRequestHandler.
-	/// Set protocol to use for upgrade negotiation.
-	pub fn set_protocol(&mut self, id: &ProtocolId) -> &mut Self {
-		self.light_protocol = {
-			let mut s = String::new();
-			s.push_str("/");
-			s.push_str(id.as_ref());
-			s.push_str("/light/2");
-			s
-		};
-
-		self.block_protocol = {
-			let mut s = String::new();
-			s.push_str("/");
-			s.push_str(id.as_ref());
-			s.push_str("/sync/2");
-			s
-		};
-
-		self
+			light_protocol: super::generate_protocol_name(id),
+			block_protocol: crate::block_request_handler::generate_protocol_name(id),
+		}
 	}
 }
 
@@ -177,12 +109,12 @@ where
 {
 	/// Construct a new light client handler.
 	pub fn new(
-		cfg: Config,
+		id: &ProtocolId,
 		checker: Arc<dyn light::FetchChecker<B>>,
 		peerset: sc_peerset::PeersetHandle,
 	) -> Self {
 		LightClientRequestSender {
-			config: cfg,
+			config: Config::new(id),
 			checker,
 			peers: Default::default(),
 			pending_requests: Default::default(),
@@ -367,7 +299,8 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 		// If we have a pending request to send, try to find an available peer and send it.
 		let now = Instant::now();
 		while let Some(mut request) = self.pending_requests.pop_front() {
-			if now > request.timestamp + self.config.request_timeout {
+			// TODO: Consider moving 40s to a constant combined with `ProtocolConfig::request_timeout` in `handler.rs`.
+			if now > request.timestamp + Duration::from_secs(40) {
 				if request.retries == 0 {
 					send_reply(Err(ClientError::RemoteFetchFailed), request.request);
 					continue

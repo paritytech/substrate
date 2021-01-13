@@ -26,7 +26,7 @@ pub mod handler;
 use crate::config::ProtocolId;
 
 /// Generate the light client protocol name from chain specific protocol identifier.
-fn generate_protocol_name(protocol_id: ProtocolId) -> String {
+fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 	let mut s = String::new();
 	s.push_str("/");
 	s.push_str(protocol_id.as_ref());

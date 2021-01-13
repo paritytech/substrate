@@ -254,9 +254,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			// TODO: How about contructing this inside of behaviour.rs passing it the protocol name
 			// via `block_request_protocol_config` and `light_client_request_protocol_config`.
 			let light_client_request_client = {
-				let config = light_client_requests::sender::Config::new(&params.protocol_id);
 				light_client_requests::sender::LightClientRequestSender::new(
-					config,
+					&params.protocol_id,
 					checker,
 					peerset_handle.clone(),
 				)
