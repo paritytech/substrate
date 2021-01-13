@@ -1777,8 +1777,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				}
 			},
 			GenericProtoOut::Notification { peer_id, set_id, message } =>
-				match usize::from(set_id) {
-					0 if self.peers.contains_key(&peer_id) => {
+				match set_id {
+					HARDCODED_PEERSETS_SYNC if self.peers.contains_key(&peer_id) => {
 						if let Ok(announce) = message::BlockAnnounce::decode(&mut message.as_ref()) {
 							self.push_block_announce_validation(peer_id, announce);
 
@@ -1794,7 +1794,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 							CustomMessageOutcome::None
 						}
 					}
-					1 if self.peers.contains_key(&peer_id) => {
+					HARDCODED_PEERSETS_TX if self.peers.contains_key(&peer_id) => {
 						if let Ok(m) = <message::Transactions<B::Extrinsic> as Decode>::decode(
 							&mut message.as_ref(),
 						) {
@@ -1804,7 +1804,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						}
 						CustomMessageOutcome::None
 					}
-					0 | 1 => {
+					HARDCODED_PEERSETS_SYNC | HARDCODED_PEERSETS_TX => {
 						debug!(
 							target: "sync",
 							"Received sync or transaction for peer earlier refused by sync layer: {}",
