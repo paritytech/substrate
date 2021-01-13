@@ -89,19 +89,10 @@ where
 		let hashed_key = blake2_256(key);
 		let child_trie_info = &crate::child_trie_info(&trie_id);
 
-		// In order to correctly update the book keeping we need to fetch the previous
-		// value of the key-value pair.
-		//
-		// It might be a bit more clean if we had an API that supported getting the size
-		// of the value without going through the loading of it. But at the moment of
-		// writing, there is no such API.
-		//
-		// That's not a show stopper in any case, since the performance cost is
-		// dominated by the trie traversal anyway.
-		let opt_prev_value = child::get_raw(&child_trie_info, &hashed_key);
+		let opt_prev_len = child::len(&child_trie_info, &hashed_key);
 
 		// Update the total number of KV pairs and the number of empty pairs.
-		match (&opt_prev_value, &opt_new_value) {
+		match (&opt_prev_len, &opt_new_value) {
 			(Some(_), None) => {
 				new_info.pair_count -= 1;
 			},
@@ -113,10 +104,7 @@ where
 		}
 
 		// Update the total storage size.
-		let prev_value_len = opt_prev_value
-			.as_ref()
-			.map(|old_value| old_value.len() as u32)
-			.unwrap_or(0);
+		let prev_value_len = opt_prev_len.unwrap_or(0);
 		let new_value_len = opt_new_value
 			.as_ref()
 			.map(|new_value| new_value.len() as u32)
