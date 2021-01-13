@@ -499,6 +499,21 @@ macro_rules! assert_noop {
 	}
 }
 
+/// Evaluate any expression and assert that runtime storage has not been mutated
+/// (i.e. expression is a storage no-operation).
+///
+/// Used as `assert_storage_noop(expression_to_assert)`.
+#[macro_export]
+macro_rules! assert_storage_noop {
+	(
+		$x:expr
+	) => {
+		let h = $crate::storage_root();
+		$x;
+		assert_eq!(h, $crate::storage_root());
+	}
+}
+
 /// Assert an expression returns an error specified.
 ///
 /// Used as `assert_err!(expression_to_assert, expected_error_expression)`
