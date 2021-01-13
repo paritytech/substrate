@@ -504,8 +504,8 @@ impl pallet_staking::Config for Runtime {
 
 parameter_types! {
 	// phase durations
-	pub const SignedPhase: u32 = 5;
-	pub const UnsignedPhase: u32 = 5;
+	pub const SignedPhase: u32 = 100;
+	pub const UnsignedPhase: u32 = 100;
 
 	// signed configs
 	pub const MaxSignedSubmissions: u32 = 10;
@@ -519,7 +519,7 @@ parameter_types! {
 	// unsigned configs
 	pub const TwoPhaseUnsignedPriority: TransactionPriority = StakingUnsignedPriority::get() - 1u64;
 	pub const MaxUnsignedIterations: u32 = 10;
-	pub SolutionImprovementThreshold: Perbill = Perbill::from_rational_approximation(5u32, 10_000);
+	pub SolutionImprovementThreshold: Perbill = Perbill::from_rational_approximation(1u32, 10_000);
 	pub MinerMaxWeight: Weight = RuntimeBlockWeights::get()
 		.get(DispatchClass::Normal)
 		.max_extrinsic.expect("Normal extrinsics have a weight limit configured; qed")
@@ -1386,7 +1386,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_treasury, Treasury);
 			add_benchmark!(params, batches, pallet_utility, Utility);
 			add_benchmark!(params, batches, pallet_vesting, Vesting);
-			add_benchmark!(params, batches, pallet_two_phase_election_provider, TwoPhaseElectionProvider);
+			// add_benchmark!(params, batches, pallet_two_phase_election_provider, TwoPhaseElectionProvider);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

@@ -796,7 +796,7 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	type ElectionProvider: sp_election_providers::ElectionProvider<
 		Self::AccountId,
 		Self::BlockNumber,
-		// we only accept an election provider that has staking as data provider
+		// we only accept an election provider that has staking as data provider.
 		DataProvider = Module<Self>,
 	>;
 

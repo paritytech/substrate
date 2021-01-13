@@ -114,6 +114,7 @@ pub(super) fn secondary_slot_author(
 		return None;
 	}
 
+	dbg!((randomness, slot_number).using_encoded(blake2_256));
 	let rand = U256::from((randomness, slot_number).using_encoded(blake2_256));
 
 	let authorities_len = U256::from(authorities.len());

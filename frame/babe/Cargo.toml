@@ -39,6 +39,7 @@ pallet-offences = { version = "2.0.0", path = "../offences" }
 pallet-staking = { version = "2.0.0", path = "../staking" }
 pallet-staking-reward-curve = { version = "2.0.0", path = "../staking/reward-curve" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-election-providers = { version = "2.0.0", path = "../../primitives/election-providers" }
 
 [features]
 default = ["std"]

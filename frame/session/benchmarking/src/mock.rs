@@ -21,6 +21,7 @@
 
 use sp_runtime::traits::IdentityLookup;
 use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types};
+use sp_election_providers::onchain;
 
 type AccountId = u64;
 type AccountIndex = u32;
@@ -154,6 +155,13 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Test where
 	type Extrinsic = Extrinsic;
 }
 
+impl onchain::Config for Test {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
+	type Accuracy = sp_runtime::Perbill;
+	type DataProvider = Staking;
+}
+
 impl pallet_staking::Config for Test {
 	type Currency = Balances;
 	type UnixTime = pallet_timestamp::Module<Self>;
@@ -176,6 +184,7 @@ impl pallet_staking::Config for Test {
 	type MaxIterations = ();
 	type MinSolutionScoreBump = ();
 	type OffchainSolutionWeightLimit = ();
+	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = ();
 }
 
