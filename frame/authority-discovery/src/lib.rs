@@ -17,8 +17,8 @@
 
 //! # Authority discovery module.
 //!
-//! This module is used by the `client/authority-discovery` to retrieve the
-//! current and the next set of authorities.
+//! This module is used by the `client/authority-discovery` and by polkadot's parachain logic
+//! to retrieve the current and the next set of authorities.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
