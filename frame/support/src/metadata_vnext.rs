@@ -28,6 +28,7 @@ macro_rules! impl_runtime_metadata_vnext {
 				$crate::metadata::v13::RuntimeMetadataLastVersion::new(
 					$crate::__runtime_modules_to_metadata_vnext!($runtime;; $( $rest )*),
 					$crate::metadata::v13::ExtrinsicMetadata {
+						ty: $crate::scale_info::meta_type::<$ext>(),
 						version: <$ext as $crate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
 						signed_extensions: <
 								<
@@ -35,7 +36,10 @@ macro_rules! impl_runtime_metadata_vnext {
 								>::SignedExtensions as $crate::sp_runtime::traits::SignedExtension
 							>::identifier()
 								.into_iter()
-								.map(|(_, ty)| ty)
+								.map(|(id, ty)| $crate::metadata::v13::SignedExtensionMetadata {
+									identifier: id,
+									ty,
+								})
 								.collect(),
 					},
 				).into()

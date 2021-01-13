@@ -1619,7 +1619,7 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "12.0.0"
-source = "git+https://github.com/paritytech/frame-metadata?branch=aj-chameleon#f3cec248a9a85c265e733b128ba368224aca7175"
+source = "git+https://github.com/paritytech/frame-metadata?branch=aj-chameleon#b1008c8f6032eb2ed27a590b28ac39356b7b480f"
 dependencies = [
  "cfg-if 1.0.0",
  "parity-scale-codec",
@@ -7593,7 +7593,7 @@ dependencies = [
 [[package]]
 name = "scale-info"
 version = "0.4.1"
-source = "git+https://github.com/paritytech/scale-info#bfed7ff7815ee73bbc598c9733b4b36eede73590"
+source = "git+https://github.com/paritytech/scale-info#8b7bd5e372abd6dd83efdecb727522e7c5b0e712"
 dependencies = [
  "cfg-if 1.0.0",
  "derive_more",
@@ -7604,7 +7604,7 @@ dependencies = [
 [[package]]
 name = "scale-info-derive"
 version = "0.2.1"
-source = "git+https://github.com/paritytech/scale-info#bfed7ff7815ee73bbc598c9733b4b36eede73590"
+source = "git+https://github.com/paritytech/scale-info#8b7bd5e372abd6dd83efdecb727522e7c5b0e712"
 dependencies = [
  "proc-macro2",
  "quote",
