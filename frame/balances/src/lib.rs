@@ -151,8 +151,6 @@
 
 #[macro_use]
 mod tests;
-#[cfg(feature = "tests")]
-pub mod tests_e2e;
 mod tests_local;
 mod tests_composite;
 mod benchmarking;

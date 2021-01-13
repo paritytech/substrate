@@ -1,7 +1,7 @@
 [package]
 name = "substrate-test-runner"
 version = "0.8.0"
-authors = ["Tomasz Drwięga <tomusdrw@gmail.com>", "Seun Lanlege <seunlanlege@gmail.com>"]
+authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]

@@ -3,6 +3,7 @@ name = "pallet-balances-e2e-tests"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+publish = false
 
 [dependencies]
 pallet-sudo = { version = "2.0.0", path = "../../../frame/sudo" }

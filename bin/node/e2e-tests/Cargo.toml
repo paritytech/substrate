@@ -3,6 +3,7 @@ name = "node-e2e-tests"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+publish = false
 
 [dependencies]
 substrate-test-runner = { version = "0.8.0", path = "../../../test-utils/substrate-test-runner" }

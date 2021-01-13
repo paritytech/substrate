@@ -116,7 +116,6 @@ sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
 sc-consensus = { version = "0.8.0", path = "../../../client/consensus/common" }
 sc-consensus-babe = { version = "0.8.0", features = ["test-helpers"], path = "../../../client/consensus/babe" }
 sc-consensus-epochs = { version = "0.8.0", path = "../../../client/consensus/epochs" }
-sc-consensus-manual-seal = { version = "0.8.0", path = "../../../client/consensus/manual-seal" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 futures = "0.3.9"
 tempfile = "3.1.0"

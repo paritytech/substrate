@@ -16,6 +16,7 @@ type Extrinsic<R, S> = UncheckedExtrinsic<
     S,
 >;
 
+/// Tests the Balances::force_transfer call
 pub fn force_transfer<T>(node: &Node<T>)
     where
         T: ChainInfo,
@@ -63,6 +64,7 @@ pub fn force_transfer<T>(node: &Node<T>)
     assert_eq!(new_bob_balance, bob_balance + (balance))
 }
 
+/// Tests the Balances::set_balance call
 pub fn set_balance<T>(node: &Node<T>)
     where
         T: ChainInfo,
@@ -108,6 +110,7 @@ pub fn set_balance<T>(node: &Node<T>)
     assert_eq!(updated_bob_balance, alice_balance)
 }
 
+/// Tests the Balances::transfer_keep_alive call
 pub fn transfer_keep_alive<T>(node: &Node<T>)
     where
         T: ChainInfo,

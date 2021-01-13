@@ -3920,7 +3920,6 @@ dependencies = [
  "sc-consensus",
  "sc-consensus-babe",
  "sc-consensus-epochs",
- "sc-consensus-manual-seal",
  "sc-consensus-slots",
  "sc-finality-grandpa",
  "sc-keystore",
