@@ -215,7 +215,7 @@ decl_module! {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			let maybe_storage_version = <Self as GetPalletVersion>::storage_version();
 			match maybe_storage_version {
-				Some(storage_version) if storage_version <= PalletVersion::new(2, 0, 0) => {
+				Some(storage_version) if storage_version < PalletVersion::new(2, 1, 0) => {
 					Vesting::<T>::translate::<Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>, _>(|_: T::AccountId, value: Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>| {
 						if let Some(vesting) = value {
 							return Some(vec![vesting])
