@@ -303,7 +303,7 @@ where
 	/// Process a report that a contract under the given address should be evicted.
 	///
 	/// Enact the eviction right away if the contract should be evicted and return the amount
-	/// of balance that the contract had while it was alive.
+	/// of rent that the contract payed over its lifetime.
 	/// Otherwise, **do nothing** and return None.
 	///
 	/// The `handicap` parameter gives a way to check the rent to a moment in the past instead
@@ -333,6 +333,7 @@ where
 		// Enact the verdict only if the contract gets removed.
 		match verdict {
 			Verdict::Evict { ref amount } => {
+				// The outstanding `amount` is withdrawn inside `enact_verdict`.
 				let rent_payed = amount
 					.as_ref()
 					.map(|a| a.peek())
