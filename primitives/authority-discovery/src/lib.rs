@@ -47,9 +47,7 @@ sp_api::decl_runtime_apis! {
 	/// This api is used by the `client/authority-discovery` module to retrieve identifiers
 	/// of the current and next authority set.
 	pub trait AuthorityDiscoveryApi {
-		/// Retrieve authority identifiers of the current authority set.
+		/// Retrieve authority identifiers of the current and next authority set.
 		fn authorities() -> Vec<AuthorityId>;
-		/// Retrieve authority identifiers of the next authority set.
-		fn next_authorities() -> Vec<AuthorityId>;
 	}
 }

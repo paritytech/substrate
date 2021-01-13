@@ -18,12 +18,12 @@
 //! # Authority discovery module.
 //!
 //! This module is used by the `client/authority-discovery` to retrieve the
-//! current and the next set of authorities.
+//! current set of authorities.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
+use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 use frame_support::{decl_module, decl_storage};
 use sp_authority_discovery::AuthorityId;
 
@@ -32,10 +32,8 @@ pub trait Config: frame_system::Config + pallet_session::Config {}
 
 decl_storage! {
 	trait Store for Module<T: Config> as AuthorityDiscovery {
-		/// Keys of the current authority set.
+		/// Keys of the current and next authority set.
 		Keys get(fn keys): Vec<AuthorityId>;
-		/// Keys of the next authority set.
-		NextKeys get(fn next_keys): Vec<AuthorityId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<AuthorityId>;
@@ -49,21 +47,15 @@ decl_module! {
 }
 
 impl<T: Config> Module<T> {
-	/// Retrieve authority identifiers of the current authority set.
+	/// Retrieve authority identifiers of the current and next authority set.
 	pub fn authorities() -> Vec<AuthorityId> {
 		Keys::get()
-	}
-
-	/// Retrieve authority identifiers of the next authority set.
-	pub fn next_authorities() -> Vec<AuthorityId> {
-		NextKeys::get()
 	}
 
 	fn initialize_keys(keys: &[AuthorityId]) {
 		if !keys.is_empty() {
 			assert!(Keys::get().is_empty(), "Keys are already initialized!");
 			Keys::put(keys);
-			NextKeys::put(keys);
 		}
 	}
 }
@@ -82,15 +74,15 @@ impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 		Self::initialize_keys(&authorities.map(|x| x.1).collect::<Vec<_>>());
 	}
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
+	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
 	where
 		I: Iterator<Item = (&'a T::AccountId, Self::Key)>,
 	{
 		// Remember who the authorities are for the new and next session.
-		let keys = validators.map(|x| x.1).collect::<Vec<_>>();
-		Keys::put(keys);
-		let next_keys = queued_validators.map(|x| x.1).collect::<Vec<_>>();
-		NextKeys::put(next_keys);
+		if changed {
+			let keys = validators.chain(queued_validators).map(|x| x.1).collect::<BTreeSet<_>>();
+			Keys::put(keys.into_iter().collect::<Vec<_>>());
+		}
 	}
 
 	fn on_disabled(_i: usize) {
@@ -202,7 +194,7 @@ mod tests {
 		// everywhere.
 		let account_id = AuthorityPair::from_seed_slice(vec![10; 32].as_ref()).unwrap().public();
 
-		let first_authorities: Vec<AuthorityId> = vec![0, 1].into_iter()
+		let mut first_authorities: Vec<AuthorityId> = vec![0, 1].into_iter()
 			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
 			.map(AuthorityId::from)
 			.collect();
@@ -217,7 +209,7 @@ mod tests {
 			.map(|id| (&account_id, id))
 			.collect::<Vec<(&AuthorityId, AuthorityId)> >();
 
-		let third_authorities: Vec<AuthorityId> = vec![4, 5].into_iter()
+		let mut third_authorities: Vec<AuthorityId> = vec![4, 5].into_iter()
 			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
 			.map(AuthorityId::from)
 			.collect();
@@ -247,28 +239,54 @@ mod tests {
 			AuthorityDiscovery::on_genesis_session(
 				first_authorities.iter().map(|id| (id, id.clone()))
 			);
-
-			let authorities_returned = AuthorityDiscovery::authorities();
+			first_authorities.sort();
+			let mut authorities_returned = AuthorityDiscovery::authorities();
+			authorities_returned.sort();
 			assert_eq!(first_authorities, authorities_returned);
-			assert_eq!(AuthorityDiscovery::next_authorities(), authorities_returned);
 
+			// When `changed` set to false, the authority set should not be updated.
 			AuthorityDiscovery::on_new_session(
-				true,
+				false,
 				second_authorities_and_account_ids.clone().into_iter(),
 				third_authorities_and_account_ids.clone().into_iter(),
 			);
-
-			let authorities_returned = AuthorityDiscovery::authorities();
-			let next_authorities_returned = AuthorityDiscovery::next_authorities();
+			let mut authorities_returned = AuthorityDiscovery::authorities();
+			authorities_returned.sort();
 			assert_eq!(
+				first_authorities,
 				authorities_returned,
-				second_authorities,
-				"Expected authority set to change.",
+				"Expected authority set not to change as `changed` was set to false.",
 			);
+
+			// When `changed` set to true, the authority set should be updated.
+			AuthorityDiscovery::on_new_session(
+				true,
+				second_authorities_and_account_ids.into_iter(),
+				third_authorities_and_account_ids.clone().into_iter(),
+			);
+			let mut second_and_third_authorities = second_authorities.iter()
+				.chain(third_authorities.iter())
+				.cloned()
+				.collect::<Vec<AuthorityId>>();
+			second_and_third_authorities.sort();
+			assert_eq!(
+				second_and_third_authorities,
+				AuthorityDiscovery::authorities(),
+				"Expected authority set to contain both the authorities of the new as well as the \
+				 next session."
+			);
+
+			// With overlapping authority sets, `authorities()` should return a deduplicated set.
+			AuthorityDiscovery::on_new_session(
+				true,
+				third_authorities_and_account_ids.clone().into_iter(),
+				third_authorities_and_account_ids.clone().into_iter(),
+			);
+			third_authorities.sort();
 			assert_eq!(
 				third_authorities,
-				next_authorities_returned,
-				"Expected next authority set to change.",
+				AuthorityDiscovery::authorities(),
+				"Expected authority set to be deduplicated."
 			);
 		});
 	}
