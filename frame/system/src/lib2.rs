@@ -17,6 +17,80 @@
 
 //! TODO module docs
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(feature = "std")]
+use serde::Serialize;
+use sp_std::prelude::*;
+#[cfg(any(feature = "std", test))]
+use sp_std::map;
+use sp_std::convert::Infallible;
+use sp_std::marker::PhantomData;
+use sp_std::fmt::Debug;
+use sp_version::RuntimeVersion;
+use sp_runtime::{
+	RuntimeDebug, Perbill, DispatchError, Either, generic,
+	traits::{
+		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
+		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
+		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
+		Dispatchable, AtLeast32BitUnsigned, Saturating,
+	},
+	offchain::storage_lock::BlockNumberProvider,
+};
+
+use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
+use frame_support::{
+	decl_module, decl_event, decl_storage, decl_error, Parameter, ensure, debug,
+	storage,
+	traits::{
+		Contains, Get, PalletInfo, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
+		StoredMap, EnsureOrigin, OriginTrait, Filter,
+	},
+	weights::{
+		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
+		extract_actual_weight, PerDispatchClass,
+	},
+	dispatch::DispatchResultWithPostInfo,
+};
+use codec::{Encode, Decode, FullCodec, EncodeLike};
+
+#[cfg(any(feature = "std", test))]
+use sp_io::TestExternalities;
+
+pub mod offchain;
+pub mod limits;
+#[cfg(test)]
+pub(crate) mod mock;
+
+mod extensions;
+pub mod weights;
+#[cfg(test)]
+mod tests;
+
+
+pub use extensions::{
+	check_mortality::CheckMortality, check_genesis::CheckGenesis, check_nonce::CheckNonce,
+	check_spec_version::CheckSpecVersion, check_tx_version::CheckTxVersion,
+	check_weight::CheckWeight,
+};
+// Backward compatible re-export.
+pub use extensions::check_mortality::CheckMortality as CheckEra;
+pub use weights::WeightInfo;
+
+/// Compute the trie root of a list of extrinsics.
+pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
+	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
+}
+
+/// Compute the trie root of a list of extrinsics.
+pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
+	H::ordered_trie_root(xts)
+}
+
+/// An object to track the currently used extrinsic weight in a block.
+pub type ConsumedWeight = PerDispatchClass<Weight>;
+
 pub use pallet::*;
 
 #[frame_support::pallet]
