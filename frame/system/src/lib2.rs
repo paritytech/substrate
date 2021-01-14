@@ -211,6 +211,27 @@ pub mod pallet {
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
+	#[pallet::hooks]
+	impl<T: Trait> Hooks for Pallet<T> {
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			if !UpgradedToU32RefCount::get() {
+				Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)|
+					Some(AccountInfo { nonce, refcount: rc as RefCount, data })
+				);
+				UpgradedToU32RefCount::put(true);
+				T::BlockWeights::get().max_block
+			} else {
+				0
+			}
+		}
+
+		fn integrity_test() {
+			T::BlockWeights::get()
+				.validate()
+				.expect("The weights are invalid.");
+		}
+	}
+
 	#[pallet::interface]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
 	// TODO_MAYBE_WHERE_CLAUSE
