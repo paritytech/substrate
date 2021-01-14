@@ -465,8 +465,10 @@ pub mod pallet {
 		NonZeroRefCount,
 	}
 
+	/// Exposed trait-generic origin type.
 	#[pallet::origin]
-	// TODO_ORIGIN
+	pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
+
 	#[pallet::validate_unsigned]
 	// TODO_VALIDATE_UNSIGNED
 	/// The full account information for a particular account ID.
