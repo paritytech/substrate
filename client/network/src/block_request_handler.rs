@@ -28,9 +28,9 @@ use futures::channel::{mpsc, oneshot};
 use futures::stream::StreamExt;
 use log::debug;
 use prost::Message;
-use sp_runtime::Justifications;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, One, Zero};
+use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 use std::cmp::min;
 use std::sync::{Arc};
 use std::time::Duration;
@@ -122,15 +122,21 @@ impl <B: BlockT> BlockRequestHandler<B> {
 			let number = *header.number();
 			let hash = header.hash();
 			let parent_hash = *header.parent_hash();
-			let justification = if get_justification {
+			let justifications = if get_justification {
 				self.client.justification(&BlockId::Hash(hash))?
 			} else {
 				None
 			};
-			let is_empty_justification = justification
-				.as_ref()
-				.map(|j| j.0.is_empty())
-				.unwrap_or(false);
+
+			// To keep compatibility we only send the grandpa justification
+			let justification = justifications
+				.map(|just|
+					match just.0.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
+						Some((_, grandpa_justification)) => grandpa_justification,
+						None => Vec::new(),
+				})
+				.unwrap_or(Vec::new());
+			let is_empty_justification = justification.is_empty();
 
 			let body = if get_body {
 				match self.client.block_body(&BlockId::Hash(hash))? {
@@ -145,8 +151,6 @@ impl <B: BlockT> BlockRequestHandler<B> {
 			} else {
 				Vec::new()
 			};
-
-			let justification = justification.unwrap_or(Justifications(Vec::new())).encode();
 
 			let block_data = crate::schema::v1::BlockData {
 				hash: hash.encode(),
