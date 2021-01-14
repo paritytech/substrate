@@ -37,7 +37,7 @@ use crate::{DatabaseSettings, DatabaseSettingsSrc, Database, DbHash};
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
 #[cfg(any(feature = "with-kvdb-rocksdb", feature = "with-parity-db", feature = "test-helpers", test))]
-pub const NUM_COLUMNS: u32 = 11;
+pub const NUM_COLUMNS: u32 = 12;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: u32 = 0;
 
@@ -324,6 +324,23 @@ pub fn read_db<Block>(
 	block_id_to_lookup_key(db, col_index, id).and_then(|key| match key {
 		Some(key) => Ok(db.get(col, key.as_ref())),
 		None => Ok(None),
+	})
+}
+
+/// Remove database column entry for the given block.
+pub fn remove_from_db<Block>(
+	transaction: &mut Transaction<DbHash>,
+	db: &dyn Database<DbHash>,
+	col_index: u32,
+	col: u32,
+	id: BlockId<Block>,
+) -> sp_blockchain::Result<()>
+where
+	Block: BlockT,
+{
+	block_id_to_lookup_key(db, col_index, id).and_then(|key| match key {
+		Some(key) => Ok(transaction.remove(col, key.as_ref())),
+		None => Ok(()),
 	})
 }
 
