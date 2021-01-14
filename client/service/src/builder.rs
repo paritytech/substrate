@@ -51,7 +51,7 @@ use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
 use std::sync::Arc;
 use wasm_timer::SystemTime;
-use sc_telemetry::{telemetry, TelemetryConnectionNotifier, SUBSTRATE_INFO};
+use sc_telemetry::{telemetry, ConnectionMessage, TelemetryConnectionNotifier, SUBSTRATE_INFO};
 use sp_transaction_pool::MaintainedTransactionPool;
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
@@ -690,28 +690,22 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 
-	let is_authority = config.role.is_authority();
-	let network_id = network.local_peer_id().to_base58();
-	let name = config.network.node_name.clone();
-	let impl_name = config.impl_name.clone();
-	let impl_version = config.impl_version.clone();
-	let chain_name = config.chain_spec.name().to_owned();
-	let startup_time = SystemTime::UNIX_EPOCH.elapsed()
-		.map(|dur| dur.as_millis())
-		.unwrap_or(0);
-
-	let mut obj = serde_json::Map::new();
-	obj.insert("name".to_string(), name.clone().into());
-	obj.insert("implementation".to_string(), impl_name.clone().into());
-	obj.insert("version".to_string(), impl_version.clone().into());
-	obj.insert("config".to_string(), "".into());
-	obj.insert("chain".to_string(), chain_name.clone().into());
-	obj.insert("genesis_hash".to_string(), format!("{:?}", genesis_hash).into());
-	obj.insert("authority".to_string(), is_authority.into());
-	obj.insert("startup_time".to_string(), startup_time.to_string().into());
-	obj.insert("network_id".to_string(), network_id.clone().into());
-
-	Some(telemetry_handle.start_telemetry(endpoints, obj))
+	Some(telemetry_handle.start_telemetry(
+		endpoints,
+		ConnectionMessage {
+			name: config.network.node_name.to_owned(),
+			implementation: config.impl_name.to_owned(),
+			version: config.impl_version.to_owned(),
+			config: String::new(),
+			chain: config.chain_spec.name().to_owned(),
+			genesis_hash: format!("{:?}", genesis_hash),
+			authority: config.role.is_authority(),
+			startup_time: SystemTime::UNIX_EPOCH.elapsed()
+				.map(|dur| dur.as_millis())
+				.unwrap_or(0).to_string(),
+			network_id: network.local_peer_id().to_base58(),
+		},
+	))
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(

@@ -35,6 +35,7 @@
 use futures::{channel::mpsc, prelude::*};
 use libp2p::{wasm_ext, Multiaddr};
 use log::{error, warn};
+use serde::Serialize;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use std::{
 	collections::{HashMap, HashSet},
@@ -81,6 +82,29 @@ pub(crate) type InitPayload = (
 
 /// A handle representing a telemetry span, with the capability to enter the span if it exists.
 pub type TelemetrySpan = tracing::Span;
+
+/// Message sent when the connection (re-)establishes.
+#[derive(Debug, Serialize)]
+pub struct ConnectionMessage {
+	/// Node's name.
+	pub name: String,
+	/// Node's implementation.
+	pub implementation: String,
+	/// Node's version.
+	pub version: String,
+	/// Node's configuration.
+	pub config: String,
+	/// Node's chain.
+	pub chain: String,
+	/// Node's genesis hash.
+	pub genesis_hash: String,
+	/// Node is an authority.
+	pub authority: bool,
+	/// Node's startup time.
+	pub startup_time: String,
+	/// Node's network ID.
+	pub network_id: String,
+}
 
 /// Telemetry worker.
 ///
@@ -152,13 +176,16 @@ impl TelemetryWorker {
 		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
 		let mut node_args: HashMap<
 			Multiaddr,
-			(Vec<ConnectionMessage>, Vec<ConnectionNotifierSender>),
+			(
+				Vec<serde_json::Map<String, serde_json::Value>>,
+				Vec<ConnectionNotifierSender>,
+			),
 		> = HashMap::new();
 		let mut existing_nodes: HashSet<Multiaddr> = HashSet::new();
 
 		// initialize the telemetry nodes
 		init_receiver.close();
-		while let Some((id, endpoints, mut connection_message, mut connection_notifiers_rx)) =
+		while let Some((id, endpoints, connection_message, mut connection_notifiers_rx)) =
 			init_receiver.next().await
 		{
 			let endpoints = endpoints.0;
@@ -166,21 +193,35 @@ impl TelemetryWorker {
 			connection_notifiers_rx.close();
 			let connection_notifier_senders: Vec<_> = connection_notifiers_rx.collect().await;
 
-			connection_message.insert("msg".into(), "system.connected".into());
-
 			for (addr, verbosity) in endpoints {
 				node_map
 					.entry(id.clone())
 					.or_insert_with(Vec::new)
 					.push((verbosity, addr.clone()));
 				existing_nodes.insert(addr.clone());
-				let mut obj = serde_json::Map::new();
-				obj.insert("id".to_string(), id.into_u64().into());
-				obj.insert("payload".to_string(), connection_message.clone().into());
+
 				let (connection_messages, connection_notifiers) = node_args
 					.entry(addr.clone())
 					.or_insert_with(|| (Vec::new(), Vec::new()));
-				connection_messages.push(obj);
+
+				match serde_json::to_value(&connection_message) {
+					Ok(serde_json::Value::Object(mut value)) => {
+						value.insert("msg".into(), "system.connected".into());
+						let mut obj = serde_json::Map::new();
+						obj.insert("id".to_string(), id.into_u64().into());
+						obj.insert("payload".to_string(), value.into());
+						connection_messages.push(obj);
+					}
+					Ok(_) => unreachable!("ConnectionMessage always serialize to an object; qed"),
+					Err(err) => {
+						log::error!(
+							target: "telemetry",
+							"Could not serialize connection message: {}",
+							err,
+						);
+					}
+				}
+
 				connection_notifiers.extend(connection_notifier_senders.clone());
 			}
 		}

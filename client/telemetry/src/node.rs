@@ -23,7 +23,6 @@ use libp2p::Multiaddr;
 use rand::Rng as _;
 use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
 
-pub(crate) type ConnectionMessage = serde_json::Map<String, serde_json::Value>;
 pub(crate) type ConnectionNotifierSender = sp_utils::mpsc::TracingUnboundedSender<()>;
 
 /// Handler for a single telemetry node.
@@ -46,7 +45,7 @@ pub(crate) struct Node<TTrans: Transport> {
 	/// Transport used to establish new connections.
 	transport: TTrans,
 	/// Messages that are sent when the connection (re-)establishes.
-	connection_messages: Vec<ConnectionMessage>,
+	connection_messages: Vec<serde_json::Map<String, serde_json::Value>>,
 	/// Notifier for when the connection (re-)establishes.
 	telemetry_connection_notifier: Vec<ConnectionNotifierSender>,
 }
@@ -84,7 +83,7 @@ impl<TTrans: Transport> Node<TTrans> {
 	pub(crate) fn new(
 		transport: TTrans,
 		addr: Multiaddr,
-		connection_messages: Vec<ConnectionMessage>,
+		connection_messages: Vec<serde_json::Map<String, serde_json::Value>>,
 		telemetry_connection_notifier: Vec<ConnectionNotifierSender>,
 	) -> Self {
 		Node {
@@ -172,17 +171,18 @@ where
 							let _ = sender.send(());
 						}
 
-						fn with_ts(json: &ConnectionMessage) -> ConnectionMessage {
-							let mut json = json.clone();
-							json.insert("ts".to_string(), chrono::Local::now().to_rfc3339().into());
-							json
-						}
-
 						let buf = self
 							.connection_messages
 							.iter()
-							.cloned()
-							.filter_map(|json| match serde_json::to_vec(&with_ts(&json)) {
+							.map(|json| {
+								let mut json = json.clone();
+								json.insert(
+									"ts".to_string(),
+									chrono::Local::now().to_rfc3339().into(),
+								);
+								json
+							})
+							.filter_map(|json| match serde_json::to_vec(&json) {
 								Ok(message) => Some(message),
 								Err(err) => {
 									log::error!(
