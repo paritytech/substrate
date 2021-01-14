@@ -70,7 +70,7 @@ impl<B: BlockT> StoredBlock<B> {
 		}
 	}
 
-	fn justification(&self) -> Option<&Justifications> {
+	fn justifications(&self) -> Option<&Justifications> {
 		match *self {
 			StoredBlock::Header(_, ref j) | StoredBlock::Full(_, ref j) => j.as_ref()
 		}
@@ -398,9 +398,9 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		}))
 	}
 
-	fn justification(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>> {
+	fn justifications(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>> {
 		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b|
-			b.justification().map(|x| x.clone()))
+			b.justifications().map(|x| x.clone()))
 		))
 	}
 
@@ -845,7 +845,7 @@ mod tests {
 
 		blockchain.append_justification(block, (ID2, vec![4])).unwrap();
 		assert_eq!(
-			blockchain.justification(block).unwrap(),
+			blockchain.justifications(block).unwrap(),
 			Some(Justifications(vec![
 				(ID1, vec![3]),
 				(ID2, vec![4]),

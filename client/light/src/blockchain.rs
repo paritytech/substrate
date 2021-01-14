@@ -109,7 +109,7 @@ impl<S, Block> BlockchainBackend<Block> for Blockchain<S> where Block: BlockT, S
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
-	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justifications>> {
+	fn justifications(&self, _id: BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 

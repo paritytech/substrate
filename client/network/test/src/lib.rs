@@ -180,10 +180,10 @@ impl PeersClient {
 		}
 	}
 
-	pub fn justification(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
+	pub fn justifications(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.justification(block),
-			PeersClient::Light(ref client, ref _backend) => client.justification(block),
+			PeersClient::Full(ref client, ref _backend) => client.justifications(block),
+			PeersClient::Light(ref client, ref _backend) => client.justifications(block),
 		}
 	}
 

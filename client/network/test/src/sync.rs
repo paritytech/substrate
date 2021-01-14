@@ -251,8 +251,8 @@ fn sync_justifications() {
 	net.block_until_sync();
 
 	// there's currently no justification for block #10
-	assert_eq!(net.peer(0).client().justification(&BlockId::Number(10)).unwrap(), None);
-	assert_eq!(net.peer(1).client().justification(&BlockId::Number(10)).unwrap(), None);
+	assert_eq!(net.peer(0).client().justifications(&BlockId::Number(10)).unwrap(), None);
+	assert_eq!(net.peer(1).client().justifications(&BlockId::Number(10)).unwrap(), None);
 
 	// we finalize block #10, #15 and #20 for peer 0 with a justification
 	let just = (ID, Vec::new());
@@ -273,10 +273,10 @@ fn sync_justifications() {
 		net.poll(cx);
 
 		for height in (10..21).step_by(5) {
-			if net.peer(0).client().justification(&BlockId::Number(height)).unwrap() != Some(Justifications(Vec::new())) {
+			if net.peer(0).client().justifications(&BlockId::Number(height)).unwrap() != Some(Justifications(Vec::new())) {
 				return Poll::Pending;
 			}
-			if net.peer(1).client().justification(&BlockId::Number(height)).unwrap() != Some(Justifications(Vec::new())) {
+			if net.peer(1).client().justifications(&BlockId::Number(height)).unwrap() != Some(Justifications(Vec::new())) {
 				return Poll::Pending;
 			}
 		}
@@ -308,8 +308,8 @@ fn sync_justifications_across_forks() {
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		if net.peer(0).client().justification(&BlockId::Number(10)).unwrap() == Some(Justifications(Vec::new())) &&
-			net.peer(1).client().justification(&BlockId::Number(10)).unwrap() == Some(Justifications(Vec::new()))
+		if net.peer(0).client().justifications(&BlockId::Number(10)).unwrap() == Some(Justifications(Vec::new())) &&
+			net.peer(1).client().justifications(&BlockId::Number(10)).unwrap() == Some(Justifications(Vec::new()))
 		{
 			Poll::Ready(())
 		} else {

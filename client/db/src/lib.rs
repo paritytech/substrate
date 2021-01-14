@@ -486,7 +486,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		}
 	}
 
-	fn justification(&self, id: BlockId<Block>) -> ClientResult<Option<Justifications>> {
+	fn justifications(&self, id: BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Ok(justification) => Ok(Some(justification)),
@@ -1543,7 +1543,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		// Read and merge Justification
 		use sp_blockchain::Backend;
 		let justifications =
-			if let Some(mut stored_justifications) = self.blockchain.justification(block)? {
+			if let Some(mut stored_justifications) = self.blockchain.justifications(block)? {
 				if stored_justifications
 					.0
 					.iter()
@@ -2410,7 +2410,7 @@ pub(crate) mod tests {
 		backend.finalize_block(BlockId::Number(1), justification.clone()).unwrap();
 
 		assert_eq!(
-			backend.blockchain().justification(BlockId::Number(1)).unwrap(),
+			backend.blockchain().justifications(BlockId::Number(1)).unwrap(),
 			justification,
 		);
 	}
@@ -2440,7 +2440,7 @@ pub(crate) mod tests {
 		));
 
 		assert_eq!(
-			backend.blockchain().justification(BlockId::Number(1)).unwrap(),
+			backend.blockchain().justifications(BlockId::Number(1)).unwrap(),
 			Some(Justifications(vec![just0, just1])),
 		);
 	}

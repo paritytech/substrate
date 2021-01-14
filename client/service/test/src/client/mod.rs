@@ -1036,17 +1036,17 @@ fn import_with_justification() {
 	);
 
 	assert_eq!(
-		client.justification(&BlockId::Hash(a3.hash())).unwrap(),
+		client.justifications(&BlockId::Hash(a3.hash())).unwrap(),
 		Some(justification),
 	);
 
 	assert_eq!(
-		client.justification(&BlockId::Hash(a1.hash())).unwrap(),
+		client.justifications(&BlockId::Hash(a1.hash())).unwrap(),
 		None,
 	);
 
 	assert_eq!(
-		client.justification(&BlockId::Hash(a2.hash())).unwrap(),
+		client.justifications(&BlockId::Hash(a2.hash())).unwrap(),
 		None,
 	);
 }

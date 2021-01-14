@@ -411,7 +411,7 @@ fn finalize_3_voters_no_observers() {
 
 	// normally there's no justification for finalized blocks
 	assert!(
-		net.lock().peer(0).client().justification(&BlockId::Number(20)).unwrap().is_none(),
+		net.lock().peer(0).client().justifications(&BlockId::Number(20)).unwrap().is_none(),
 		"Extra justification for block#1",
 	);
 }
@@ -653,7 +653,7 @@ fn justification_is_generated_periodically() {
 	// when block#32 (justification_period) is finalized, justification
 	// is required => generated
 	for i in 0..3 {
-		assert!(net.lock().peer(i).client().justification(&BlockId::Number(32)).unwrap().is_some());
+		assert!(net.lock().peer(i).client().justifications(&BlockId::Number(32)).unwrap().is_some());
 	}
 }
 
@@ -698,12 +698,12 @@ fn sync_justifications_on_change_blocks() {
 	// the first 3 peers are grandpa voters and therefore have already finalized
 	// block 21 and stored a justification
 	for i in 0..3 {
-		assert!(net.lock().peer(i).client().justification(&BlockId::Number(21)).unwrap().is_some());
+		assert!(net.lock().peer(i).client().justifications(&BlockId::Number(21)).unwrap().is_some());
 	}
 
 	// the last peer should get the justification by syncing from other peers
 	futures::executor::block_on(futures::future::poll_fn(move |cx| {
-		if net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
+		if net.lock().peer(3).client().justifications(&BlockId::Number(21)).unwrap().is_none() {
 			net.lock().poll(cx);
 			Poll::Pending
 		} else {
@@ -1631,7 +1631,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 
 	// the justification should be imported and available from the client
 	assert!(
-		client.justification(&BlockId::Hash(block_hash)).unwrap().is_some(),
+		client.justifications(&BlockId::Hash(block_hash)).unwrap().is_some(),
 	);
 }
 

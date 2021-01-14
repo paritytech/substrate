@@ -334,7 +334,7 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 			unknown_headers.push(unknown_header);
 		}
 
-		if let Some(justification) = blockchain.justification(current_id)? {
+		if let Some(justification) = blockchain.justifications(current_id)? {
 			if let Some((_, grandpa_justification)) = justification.0.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
 				// check if the current block enacts new GRANDPA authorities set
 				let new_authorities = authorities_provider.authorities(&current_id)?;
