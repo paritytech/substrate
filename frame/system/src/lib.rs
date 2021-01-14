@@ -288,7 +288,7 @@ pub mod pallet {
 			Self::can_set_code(&code)?;
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
-			Self::deposit_event(RawEvent::CodeUpdated);
+			Self::deposit_event(Event::CodeUpdated);
 			Ok(().into())
 		}
 
@@ -307,7 +307,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
-			Self::deposit_event(RawEvent::CodeUpdated);
+			Self::deposit_event(Event::CodeUpdated);
 			Ok(().into())
 		}
 
@@ -1196,10 +1196,10 @@ impl<T: Config> Module<T> {
 		info.weight = extract_actual_weight(r, &info);
 		Self::deposit_event(
 			match r {
-				Ok(_) => RawEvent::ExtrinsicSuccess(info),
+				Ok(_) => Event::ExtrinsicSuccess(info),
 				Err(err) => {
 					sp_runtime::print(err);
-					RawEvent::ExtrinsicFailed(err.error, info)
+					Event::ExtrinsicFailed(err.error, info)
 				},
 			}
 		);
@@ -1228,13 +1228,13 @@ impl<T: Config> Module<T> {
 	/// An account is being created.
 	pub fn on_created_account(who: T::AccountId) {
 		T::OnNewAccount::on_new_account(&who);
-		Self::deposit_event(RawEvent::NewAccount(who));
+		Self::deposit_event(Event::NewAccount(who));
 	}
 
 	/// Do anything that needs to be done after an account has been killed.
 	fn on_killed_account(who: T::AccountId) {
 		T::OnKilledAccount::on_killed_account(&who);
-		Self::deposit_event(RawEvent::KilledAccount(who));
+		Self::deposit_event(Event::KilledAccount(who));
 	}
 
 	/// Remove an account from storage. This should only be done when its refs are zero or you'll
