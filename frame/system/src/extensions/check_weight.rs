@@ -115,8 +115,8 @@ impl<T: Config + Send + Sync> CheckWeight<T> where
 		let next_weight = Self::check_block_weight(info)?;
 		Self::check_extrinsic_weight(info)?;
 
-		crate::AllExtrinsicsLen::put(next_len);
-		crate::BlockWeight::put(next_weight);
+		crate::AllExtrinsicsLen::<T>::put(next_len);
+		crate::BlockWeight::<T>::put(next_weight);
 		Ok(())
 	}
 
@@ -257,7 +257,7 @@ impl<T: Config + Send + Sync> SignedExtension for CheckWeight<T> where
 
 		let unspent = post_info.calc_unspent(info);
 		if unspent > 0 {
-			crate::BlockWeight::mutate(|current_weight| {
+			crate::BlockWeight::<T>::mutate(|current_weight| {
 				current_weight.sub(unspent, info.class);
 			})
 		}
