@@ -33,7 +33,7 @@ pub struct PruningParams {
 	/// Specify the number of finalized blocks to keep in the database.
 	///
 	/// Default is to keep all blocks.
-	#[structopt(long = "block-pruning", value_name = "COUNT")]
+	#[structopt(long, value_name = "COUNT")]
 	pub block_pruning: Option<u32>,
 }
 
