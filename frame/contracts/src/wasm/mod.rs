@@ -18,15 +18,15 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use crate::{CodeHash, Schedule, Config};
-use crate::wasm::env_def::FunctionImplProvider;
-use crate::exec::Ext;
-use crate::gas::GasMeter;
-
+use crate::{
+	CodeHash, Schedule, Config,
+	wasm::env_def::FunctionImplProvider,
+	exec::Ext,
+	gas::GasMeter,
+};
 use sp_std::prelude::*;
 use sp_core::crypto::UncheckedFrom;
 use codec::{Encode, Decode};
-use sp_sandbox;
 
 #[macro_use]
 mod env_def;
@@ -172,7 +172,7 @@ mod tests {
 	use sp_core::H256;
 	use hex_literal::hex;
 	use sp_runtime::DispatchError;
-	use frame_support::weights::Weight;
+	use frame_support::{dispatch::DispatchResult, weights::Weight};
 	use assert_matches::assert_matches;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
 
@@ -228,8 +228,9 @@ mod tests {
 		fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}
-		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> DispatchResult {
 			*self.storage.entry(key).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
+			Ok(())
 		}
 		fn instantiate(
 			&mut self,
@@ -362,7 +363,7 @@ mod tests {
 		fn get_storage(&self, key: &[u8; 32]) -> Option<Vec<u8>> {
 			(**self).get_storage(key)
 		}
-		fn set_storage(&mut self, key: [u8; 32], value: Option<Vec<u8>>) {
+		fn set_storage(&mut self, key: [u8; 32], value: Option<Vec<u8>>) -> DispatchResult {
 			(**self).set_storage(key, value)
 		}
 		fn instantiate(
