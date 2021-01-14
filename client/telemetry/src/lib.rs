@@ -448,7 +448,6 @@ macro_rules! format_fields_to_json {
 		let mut map = $crate::serde_json::Map::new();
 		map.insert($k.into(), std::format!("{:?}", &$v).into());
 		$crate::serde_json::Result::Ok(map)
-		ok_map
 		$(
 			.and_then(|mut prev_map| {
 				format_fields_to_json!($($t)*)
