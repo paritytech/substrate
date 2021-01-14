@@ -114,6 +114,7 @@ pub mod pallet {
 		type BlockWeights: Get<limits::BlockWeights>;
 
 		/// The maximum length of a block (in bytes).
+		#[pallet::constant]
 		type BlockLength: Get<limits::BlockLength>;
 
 		/// The `Origin` type used by dispatchable calls.
