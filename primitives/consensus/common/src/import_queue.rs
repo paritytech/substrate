@@ -69,7 +69,7 @@ pub struct IncomingBlock<B: BlockT> {
 	/// Block body if requested.
 	pub body: Option<Vec<<B as BlockT>::Extrinsic>>,
 	/// Justification if requested.
-	pub justification: Option<Justifications>,
+	pub justifications: Option<Justifications>,
 	/// The peer, we received this from
 	pub origin: Option<Origin>,
 	/// Allow importing the block skipping state verification if parent state is missing.
@@ -182,7 +182,7 @@ pub(crate) fn import_single_block_metered<B: BlockT, V: Verifier<B>, Transaction
 ) -> Result<BlockImportResult<NumberFor<B>>, BlockImportError> {
 	let peer = block.origin;
 
-	let (header, justification) = match (block.header, block.justification) {
+	let (header, justification) = match (block.header, block.justifications) {
 		(Some(header), justification) => (header, justification),
 		(None, _) => {
 			if let Some(ref peer) = peer {
