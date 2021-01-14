@@ -196,7 +196,7 @@ impl TelemetryWorker {
 			for (addr, verbosity) in endpoints {
 				node_map
 					.entry(id.clone())
-					.or_insert_with(Vec::new)
+					.or_default() 
 					.push((verbosity, addr.clone()));
 				existing_nodes.insert(addr.clone());
 
