@@ -73,11 +73,12 @@ where
 		let desired_targets = Self::desired_targets().ok_or(ElectionError::SnapshotUnAvailable)?;
 
 		// closures.
-		crate::voter_index_fn!(let voter_index, voters, T);
-		crate::target_index_fn!(let target_index, targets, T);
-		crate::voter_at_fn!(let voter_at, voters, T);
-		crate::target_at_fn!(let target_at, targets, T);
-		crate::stake_of_fn!(let stake_of, voters, T);
+		let cache = helpers::generate_voter_cache::<T>(&voters);
+		let voter_index = helpers::voter_index_fn::<T>(&cache);
+		let target_index = helpers::target_index_fn_linear::<T>(&targets);
+		let voter_at = helpers::voter_at_fn::<T>(&voters);
+		let target_at = helpers::target_at_fn::<T>(&targets);
+		let stake_of = helpers::stake_of_fn::<T>(&voters, &cache);
 
 		let ElectionResult {
 			assignments,

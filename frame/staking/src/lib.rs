@@ -1083,37 +1083,37 @@ decl_storage! {
 		/// Snapshot of validators at the beginning of the current election window. This should only
 		/// have a value when [`EraElectionStatus`] == `ElectionStatus::Open(_)`.
 		///
-		/// DEPRECATED.
+		/// TODO: TWO_PHASE: should be removed once we switch to two-phase.
 		pub SnapshotValidators get(fn snapshot_validators): Option<Vec<T::AccountId>>;
 
 		/// Snapshot of nominators at the beginning of the current election window. This should only
 		/// have a value when [`EraElectionStatus`] == `ElectionStatus::Open(_)`.
 		///
-		/// DEPRECATED.
+		/// TODO: TWO_PHASE: should be removed once we switch to two-phase.
 		pub SnapshotNominators get(fn snapshot_nominators): Option<Vec<T::AccountId>>;
 
 		/// The next validator set. At the end of an era, if this is available (potentially from the
 		/// result of an offchain worker), it is immediately used. Otherwise, the on-chain election
 		/// is executed.
 		///
-		/// DEPRECATED.
+		/// TODO: TWO_PHASE: should be removed once we switch to two-phase.
 		pub QueuedElected get(fn queued_elected): Option<ElectionResult<T::AccountId, BalanceOf<T>>>;
 
 		/// The score of the current [`QueuedElected`].
 		///
-		/// DEPRECATED.
+		/// TODO: TWO_PHASE: should be removed once we switch to two-phase.
 		pub QueuedScore get(fn queued_score): Option<ElectionScore>;
 
 		/// Flag to control the execution of the offchain election. When `Open(_)`, we accept
 		/// solutions to be submitted.
 		///
-		/// DEPRECATED.
+		/// TODO: TWO_PHASE: should be removed once we switch to two-phase.
 		pub EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
 
 		/// True if the current **planned** session is final. Note that this does not take era
 		/// forcing into account.
 		///
-		/// DEPRECATED.
+		/// TODO: TWO_PHASE: should be removed once we switch to two-phase.
 		pub IsCurrentSessionFinal get(fn is_current_session_final): bool = false;
 
 		/// True if network has been upgraded to this version.

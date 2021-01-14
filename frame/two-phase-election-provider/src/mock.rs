@@ -115,9 +115,10 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let desired_targets = TwoPhase::desired_targets().unwrap();
 
 	// closures
-	crate::voter_index_fn!(let voter_index, voters, Runtime);
-	crate::target_index_fn!(let target_index, targets, Runtime);
-	crate::stake_of_fn!(let stake_of, voters, Runtime);
+	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
+	let voter_index = helpers::voter_index_fn_linear::<Runtime>(&voters);
+	let target_index = helpers::target_index_fn_linear::<Runtime>(&targets);
+	let stake_of = helpers::stake_of_fn::<Runtime>(&voters, &cache);
 
 	let ElectionResult {
 		winners,

@@ -202,7 +202,7 @@ mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[macro_use]
-pub(crate) mod macros;
+pub mod helpers;
 
 const LOG_TARGET: &'static str = "election-provider";
 
@@ -634,8 +634,15 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			let max_vote: usize = <CompactOf<T> as CompactSolution>::LIMIT;
+			use sp_std::mem::size_of;
+			// The index type of both voters and targets need to be smaller than that of usize (very
+			// unlikely to be the case, but anyhow).
+			assert!(size_of::<CompactVoterIndexOf<T>>() <= size_of::<usize>());
+			assert!(size_of::<CompactTargetIndexOf<T>>() <= size_of::<usize>());
+
+			// ----------------------------
 			// based on the requirements of [`sp_npos_elections::Assignment::try_normalize`].
+			let max_vote: usize = <CompactOf<T> as CompactSolution>::LIMIT;
 
 			// 1. Maximum sum of [ChainAccuracy; 16] must fit into `UpperOf<ChainAccuracy>`..
 			let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracyOf<T>>> = (0..max_vote)
@@ -1064,9 +1071,10 @@ where
 		} = Self::snapshot().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
 		// ----- Start building. First, we need some closures.
-		crate::voter_at_fn!(let voter_at , snapshot_voters, T);
-		crate::target_at_fn!(let target_at, snapshot_targets, T);
-		crate::voter_index_fn_usize!(let voter_index, snapshot_voters, T);
+		let cache = helpers::generate_voter_cache::<T>(&snapshot_voters);
+		let voter_at = helpers::voter_at_fn::<T>(&snapshot_voters);
+		let target_at = helpers::target_at_fn::<T>(&snapshot_targets);
+		let voter_index = helpers::voter_index_fn_usize::<T>(&cache);
 
 		// first, make sure that all the winners are sane.
 		let winners = winners
@@ -1106,8 +1114,8 @@ where
 			})
 			.collect::<Result<(), FeasibilityError>>()?;
 
-		// ----- Start building support. First, we need some more closures.
-		stake_of_fn!(let stake_of, snapshot_voters, T);
+		// ----- Start building support. First, we need one more closure.
+		let stake_of = helpers::stake_of_fn::<T>(&snapshot_voters, &cache);
 
 		// This might fail if the normalization fails. Very unlikely. See `integrity_test`.
 		let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
