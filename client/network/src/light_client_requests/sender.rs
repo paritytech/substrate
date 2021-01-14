@@ -713,3 +713,43 @@ impl<B: Block> Request<B> {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use futures::channel::oneshot;
+	use sp_runtime::{
+		generic::Header,
+		traits::{BlakeTwo256, Block as BlockT, NumberFor},
+	};
+
+	type Block =
+		sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
+
+	fn dummy_header() -> sp_test_primitives::Header {
+		sp_test_primitives::Header {
+			parent_hash: Default::default(),
+			number: 0,
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: Default::default(),
+		}
+	}
+
+	#[test]
+	fn body_request_fields_encoded_properly() {
+		let (sender, _receiver) = oneshot::channel();
+		let request = Request::<Block>::Body {
+			request: RemoteBodyRequest {
+				header: dummy_header(),
+				retry_count: None,
+			},
+			sender,
+		};
+		let serialized_request = request.serialize_request().unwrap();
+		let deserialized_request = schema::v1::BlockRequest::decode(&serialized_request[..]).unwrap();
+		assert!(BlockAttributes::from_be_u32(deserialized_request.fields)
+				.unwrap()
+				.contains(BlockAttributes::BODY));
+	}
+}

@@ -36,6 +36,7 @@ fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 
 #[cfg(test)]
 mod tests {
+	/*
 	use super::*;
 	use super::{Event, LightClientRequestClient, OutboundProtocol, PeerStatus, Request, Response};
 	use crate::{chain::Client, config::ProtocolId, schema};
@@ -911,22 +912,5 @@ mod tests {
 		assert_eq!(vec![(100, 2)], task::block_on(chan.1).unwrap().unwrap());
 		//              ^--- from `DummyFetchChecker::check_changes_proof`
 	}
-
-	#[test]
-	fn body_request_fields_encoded_properly() {
-		let (sender, _) = oneshot::channel();
-		let serialized_request = serialize_request::<Block>(&Request::Body {
-			request: RemoteBodyRequest {
-				header: dummy_header(),
-				retry_count: None,
-			},
-			sender,
-		})
-		.unwrap();
-		let deserialized_request =
-			schema::v1::BlockRequest::decode(&serialized_request[..]).unwrap();
-		assert!(BlockAttributes::from_be_u32(deserialized_request.fields)
-			.unwrap()
-			.contains(BlockAttributes::BODY));
-	}
+	*/
 }
