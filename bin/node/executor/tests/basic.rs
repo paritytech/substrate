@@ -602,23 +602,17 @@ fn deploying_wasm_contract_should_work() {
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: Call::Contracts(
-					pallet_contracts::Call::put_code::<Runtime>(transfer_code)
-				),
-			},
-			CheckedExtrinsic {
-				signed: Some((charlie(), signed_extra(1, 0))),
-				function: Call::Contracts(
-					pallet_contracts::Call::instantiate::<Runtime>(
+					pallet_contracts::Call::instantiate_with_code::<Runtime>(
 						1 * DOLLARS + subsistence,
 						500_000_000,
-						transfer_ch,
+						transfer_code,
 						Vec::new(),
 						Vec::new(),
 					)
 				),
 			},
 			CheckedExtrinsic {
-				signed: Some((charlie(), signed_extra(2, 0))),
+				signed: Some((charlie(), signed_extra(1, 0))),
 				function: Call::Contracts(
 					pallet_contracts::Call::call::<Runtime>(
 						sp_runtime::MultiAddress::Id(addr.clone()),

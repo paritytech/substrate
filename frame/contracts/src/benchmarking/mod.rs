@@ -137,7 +137,7 @@ where
 		// same block number.
 		System::<T>::set_block_number(1u32.into());
 
-		Contracts::<T>::put_code_raw(module.code)?;
+		Contracts::<T>::store_code_raw(module.code)?;
 		Contracts::<T>::instantiate(
 			RawOrigin::Signed(caller.clone()).into(),
 			endowment,
@@ -198,7 +198,7 @@ where
 	/// Get the block number when this contract will be evicted. Returns an error when
 	/// the rent collection won't happen because the contract has to much endowment.
 	fn eviction_at(&self) -> Result<T::BlockNumber, &'static str> {
-		let projection = Rent::<T>::compute_projection(&self.account_id)
+		let projection = Rent::<T, PrefabWasmModule<T>>::compute_projection(&self.account_id)
 			.map_err(|_| "Invalid acc for rent")?;
 		match projection {
 			RentProjection::EvictionAt(at) => Ok(at),
@@ -250,7 +250,7 @@ where
 	/// Evict this contract.
 	fn evict(&mut self) -> Result<(), &'static str> {
 		self.set_block_num_for_eviction()?;
-		Rent::<T>::try_eviction(&self.contract.account_id, Zero::zero())?;
+		Rent::<T, PrefabWasmModule<T>>::try_eviction(&self.contract.account_id, Zero::zero())?;
 		self.contract.ensure_tombstone()
 	}
 }
@@ -314,24 +314,34 @@ benchmarks! {
 
 	// This constructs a contract that is maximal expensive to instrument.
 	// It creates a maximum number of metering blocks per byte.
-	// `n`: Size of the code in kilobytes.
-	put_code {
-		let n in 0 .. Contracts::<T>::current_schedule().limits.code_size / 1024;
+	// The size of the salt influences the runtime because is is hashed in order to
+	// determine the contract address.
+	// `c`: Size of the code in kilobytes.
+	// `s`: Size of the salt in kilobytes.
+	instantiate_with_code {
+		let c in 0 .. Contracts::<T>::current_schedule().limits.code_size / 1024;
+		let s in 0 .. code::max_pages::<T>() * 64;
+		let salt = vec![42u8; (s * 1024) as usize];
+		let endowment = caller_funding::<T>() / 3u32.into();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
-		let module = WasmModule::<T>::sized(n * 1024);
-		let origin = RawOrigin::Signed(caller);
-	}: _(origin, module.code)
+		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024);
+		let origin = RawOrigin::Signed(caller.clone());
+		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
+	}: _(origin, endowment, Weight::max_value(), code, vec![], salt)
+	verify {
+		// endowment was removed from the caller
+		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - endowment);
+		// contract has the full endowment because no rent collection happended
+		assert_eq!(T::Currency::free_balance(&addr), endowment);
+		// instantiate should leave a alive contract
+		Contract::<T>::address_alive_info(&addr)?;
+	}
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
-	// The size of the input data influences the runtime because it is hashed in order to determine
-	// the contract address.
-	// `n`: Size of the data passed to constructor in kilobytes.
 	// `s`: Size of the salt in kilobytes.
 	instantiate {
-		let n in 0 .. code::max_pages::<T>() * 64;
 		let s in 0 .. code::max_pages::<T>() * 64;
-		let data = vec![42u8; (n * 1024) as usize];
 		let salt = vec![42u8; (s * 1024) as usize];
 		let endowment = caller_funding::<T>() / 3u32.into();
 		let caller = whitelisted_caller();
@@ -339,8 +349,8 @@ benchmarks! {
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_mem();
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
-		Contracts::<T>::put_code_raw(code)?;
-	}: _(origin, endowment, Weight::max_value(), hash, data, salt)
+		Contracts::<T>::store_code_raw(code)?;
+	}: _(origin, endowment, Weight::max_value(), hash, vec![], salt)
 	verify {
 		// endowment was removed from the caller
 		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - endowment);
@@ -1369,7 +1379,7 @@ benchmarks! {
 					])),
 					.. Default::default()
 				});
-				Contracts::<T>::put_code_raw(code.code)?;
+				Contracts::<T>::store_code_raw(code.code)?;
 				Ok(code.hash)
 			})
 			.collect::<Result<Vec<_>, &'static str>>()?;
@@ -1492,7 +1502,7 @@ benchmarks! {
 		let hash = callee_code.hash.clone();
 		let hash_bytes = callee_code.hash.encode();
 		let hash_len = hash_bytes.len();
-		Contracts::<T>::put_code_raw(callee_code.code)?;
+		Contracts::<T>::store_code_raw(callee_code.code)?;
 		let inputs = (0..API_BENCHMARK_BATCH_SIZE).map(|x| x.encode()).collect::<Vec<_>>();
 		let input_len = inputs.get(0).map(|x| x.len()).unwrap_or(0);
 		let input_bytes = inputs.iter().cloned().flatten().collect::<Vec<_>>();
@@ -2455,7 +2465,7 @@ mod tests {
 	create_test!(on_initialize_per_queue_item);
 
 	create_test!(update_schedule);
-	create_test!(put_code);
+	create_test!(instantiate_with_code);
 	create_test!(instantiate);
 	create_test!(call);
 	create_test!(claim_surcharge);

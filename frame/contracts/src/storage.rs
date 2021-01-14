@@ -164,31 +164,30 @@ where
 		account: &AccountIdOf<T>,
 		trie_id: TrieId,
 		ch: CodeHash<T>,
-	) -> Result<(), &'static str> {
-		<ContractInfoOf<T>>::mutate(account, |maybe_contract_info| {
-			if maybe_contract_info.is_some() {
-				return Err("Alive contract or tombstone already exists");
+	) -> Result<AliveContractInfo<T>, &'static str> {
+		<ContractInfoOf<T>>::try_mutate(account, |existing| {
+			if existing.is_some() {
+				return Err(Error::<T>::DuplicateContract.into());
 			}
 
-			*maybe_contract_info = Some(
-				AliveContractInfo::<T> {
-					code_hash: ch,
-					storage_size: 0,
-					trie_id,
-					deduct_block:
-						// We want to charge rent for the first block in advance. Therefore we
-						// treat the contract as if it was created in the last block and then
-						// charge rent for it during instantation.
-						<frame_system::Module<T>>::block_number().saturating_sub(1u32.into()),
-					rent_allowance: <BalanceOf<T>>::max_value(),
-					rent_payed: <BalanceOf<T>>::zero(),
-					pair_count: 0,
-					last_write: None,
-				}
-				.into(),
-			);
+			let contract = AliveContractInfo::<T> {
+				code_hash: ch,
+				storage_size: 0,
+				trie_id,
+				deduct_block:
+					// We want to charge rent for the first block in advance. Therefore we
+					// treat the contract as if it was created in the last block and then
+					// charge rent for it during instantation.
+					<frame_system::Module<T>>::block_number().saturating_sub(1u32.into()),
+				rent_allowance: <BalanceOf<T>>::max_value(),
+				rent_payed: <BalanceOf<T>>::zero(),
+				pair_count: 0,
+				last_write: None,
+			};
 
-			Ok(())
+			*existing = Some(contract.clone().into());
+
+			Ok(contract)
 		})
 	}
 

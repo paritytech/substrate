@@ -20,7 +20,7 @@
 use crate::{
 	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, RawEvent,
 	TombstoneContractInfo, Config, CodeHash, ConfigCache, Error,
-	storage::Storage,
+	storage::Storage, wasm::PrefabWasmModule, exec::Executable,
 };
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
@@ -86,12 +86,13 @@ enum Verdict<T: Config> {
 	Charge { amount: OutstandingAmount<T> },
 }
 
-pub struct Rent<T>(sp_std::marker::PhantomData<T>);
+pub struct Rent<T, E>(sp_std::marker::PhantomData<(T, E)>);
 
-impl<T> Rent<T>
+impl<T, E> Rent<T, E>
 where
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+	E: Executable<T>,
 {
 	/// Returns a fee charged per block from the contract.
 	///
@@ -99,7 +100,8 @@ where
 	/// then the fee can drop to zero.
 	fn compute_fee_per_block(
 		free_balance: &BalanceOf<T>,
-		contract: &AliveContractInfo<T>
+		contract: &AliveContractInfo<T>,
+		_code_size_share: u32,
 	) -> BalanceOf<T> {
 		let uncovered_by_balance = T::DepositPerStorageByte::get()
 			.saturating_mul(contract.storage_size.into())
@@ -148,6 +150,7 @@ where
 		current_block_number: T::BlockNumber,
 		handicap: T::BlockNumber,
 		contract: &AliveContractInfo<T>,
+		code_size: u32,
 	) -> Verdict<T> {
 		// How much block has passed since the last deduction for the contract.
 		let blocks_passed = {
@@ -164,7 +167,7 @@ where
 		let free_balance = T::Currency::free_balance(account);
 
 		// An amount of funds to charge per block for storage taken up by the contract.
-		let fee_per_block = Self::compute_fee_per_block(&free_balance, contract);
+		let fee_per_block = Self::compute_fee_per_block(&free_balance, contract, code_size);
 		if fee_per_block.is_zero() {
 			// The rent deposit offset reduced the fee to 0. This means that the contract
 			// gets the rent for free.
@@ -233,14 +236,11 @@ where
 		alive_contract_info: AliveContractInfo<T>,
 		current_block_number: T::BlockNumber,
 		verdict: Verdict<T>,
-		allow_eviction: bool,
-	) -> Result<Option<ContractInfo<T>>, DispatchError> {
-		match verdict {
-			Verdict::Exempt => return Ok(Some(ContractInfo::Alive(alive_contract_info))),
-			Verdict::Evict { amount: _ } if !allow_eviction => {
-				Ok(None)
-			}
-			Verdict::Evict { amount } => {
+		evictable_code: Option<PrefabWasmModule<T>>,
+	) -> Result<Option<AliveContractInfo<T>>, DispatchError> {
+		match (verdict, evictable_code) {
+			(Verdict::Exempt, _) => return Ok(Some(alive_contract_info)),
+			(Verdict::Evict { amount }, Some(code)) => {
 				// We need to remove the trie first because it is the only operation
 				// that can fail and this function is called without a storage
 				// transaction when called through `claim_surcharge`.
@@ -261,19 +261,23 @@ where
 				);
 				let tombstone_info = ContractInfo::Tombstone(tombstone);
 				<ContractInfoOf<T>>::insert(account, &tombstone_info);
+				code.store_decremented();
 				<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), true));
-				Ok(Some(tombstone_info))
+				Ok(None)
 			}
-			Verdict::Charge { amount } => {
-				let contract_info = ContractInfo::Alive(AliveContractInfo::<T> {
+			(Verdict::Evict { amount: _ }, None) => {
+				Ok(None)
+			}
+			(Verdict::Charge { amount }, _) => {
+				let contract = ContractInfo::Alive(AliveContractInfo::<T> {
 					rent_allowance: alive_contract_info.rent_allowance - amount.peek(),
 					deduct_block: current_block_number,
 					rent_payed: alive_contract_info.rent_payed.saturating_add(amount.peek()),
 					..alive_contract_info
 				});
-				<ContractInfoOf<T>>::insert(account, &contract_info);
+				<ContractInfoOf<T>>::insert(account, &contract);
 				amount.withdraw(account);
-				Ok(Some(contract_info))
+				Ok(Some(contract.get_alive().expect("We just constructed it as alive. qed")))
 			}
 		}
 	}
@@ -283,21 +287,20 @@ where
 	/// This functions does **not** evict the contract. It returns `None` in case the
 	/// contract is in need of eviction. [`try_eviction`] must
 	/// be called to perform the eviction.
-	pub fn charge(account: &T::AccountId) -> Result<Option<ContractInfo<T>>, DispatchError> {
-		let contract_info = <ContractInfoOf<T>>::get(account);
-		let alive_contract_info = match contract_info {
-			None | Some(ContractInfo::Tombstone(_)) => return Ok(contract_info),
-			Some(ContractInfo::Alive(contract)) => contract,
-		};
-
+	pub fn charge(
+		account: &T::AccountId,
+		contract: AliveContractInfo<T>,
+		code_size: u32,
+	) -> Result<Option<AliveContractInfo<T>>, DispatchError> {
 		let current_block_number = <frame_system::Module<T>>::block_number();
 		let verdict = Self::consider_case(
 			account,
 			current_block_number,
 			Zero::zero(),
-			&alive_contract_info,
+			&contract,
+			code_size,
 		);
-		Self::enact_verdict(account, alive_contract_info, current_block_number, verdict, false)
+		Self::enact_verdict(account, contract, current_block_number, verdict, None)
 	}
 
 	/// Process a report that a contract under the given address should be evicted.
@@ -322,12 +325,14 @@ where
 			None | Some(ContractInfo::Tombstone(_)) => return Ok(None),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
+		let module = PrefabWasmModule::<T>::from_storage_noinstr(contract.code_hash)?;
 		let current_block_number = <frame_system::Module<T>>::block_number();
 		let verdict = Self::consider_case(
 			account,
 			current_block_number,
 			handicap,
 			&contract,
+			module.occupied_storage(),
 		);
 
 		// Enact the verdict only if the contract gets removed.
@@ -339,7 +344,9 @@ where
 					.map(|a| a.peek())
 					.unwrap_or_else(|| <BalanceOf<T>>::zero())
 					.saturating_add(contract.rent_payed);
-				Self::enact_verdict(account, contract, current_block_number, verdict, true)?;
+				Self::enact_verdict(
+					account, contract, current_block_number, verdict, Some(module),
+				)?;
 				Ok(Some(rent_payed))
 			}
 			_ => Ok(None),
@@ -367,26 +374,33 @@ where
 			None | Some(ContractInfo::Tombstone(_)) => return Err(IsTombstone),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
+		let module = PrefabWasmModule::from_storage_noinstr(alive_contract_info.code_hash)
+			.map_err(|_| IsTombstone)?;
+		let code_size = module.occupied_storage();
 		let current_block_number = <frame_system::Module<T>>::block_number();
 		let verdict = Self::consider_case(
 			account,
 			current_block_number,
 			Zero::zero(),
 			&alive_contract_info,
+			code_size,
 		);
-		let new_contract_info =
-			Self::enact_verdict(account, alive_contract_info, current_block_number, verdict, false);
+		let new_contract_info = Self::enact_verdict(
+			account, alive_contract_info, current_block_number, verdict, Some(module),
+		);
 
 		// Check what happened after enaction of the verdict.
 		let alive_contract_info = match new_contract_info.map_err(|_| IsTombstone)? {
-			None | Some(ContractInfo::Tombstone(_)) => return Err(IsTombstone),
-			Some(ContractInfo::Alive(contract)) => contract,
+			None => return Err(IsTombstone),
+			Some(contract) => contract,
 		};
 
 		// Compute how much would the fee per block be with the *updated* balance.
 		let total_balance = T::Currency::total_balance(account);
 		let free_balance = T::Currency::free_balance(account);
-		let fee_per_block = Self::compute_fee_per_block(&free_balance, &alive_contract_info);
+		let fee_per_block = Self::compute_fee_per_block(
+			&free_balance, &alive_contract_info, code_size,
+		);
 		if fee_per_block.is_zero() {
 			return Ok(RentProjection::NoEviction);
 		}
@@ -418,6 +432,7 @@ where
 	/// Restores the destination account using the origin as prototype.
 	///
 	/// The restoration will be performed iff:
+	/// - the supplied code_hash does still exist on-chain
 	/// - origin exists and is alive,
 	/// - the origin's storage is not written in the current block
 	/// - the restored account has tombstone
@@ -455,6 +470,9 @@ where
 			origin_contract.last_write
 		};
 
+		// Fails if the code hash does not exist on chain
+		E::add_user(code_hash)?;
+
 		// We are allowed to eagerly modify storage even though the function can
 		// fail later due to tombstones not matching. This is because the restoration
 		// is always called from a contract and therefore in a storage transaction.
@@ -483,6 +501,7 @@ where
 		origin_contract.storage_size -= bytes_taken;
 
 		<ContractInfoOf<T>>::remove(&origin);
+		E::remove_user(origin_contract.code_hash);
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
 			trie_id: origin_contract.trie_id,
 			storage_size: origin_contract.storage_size,

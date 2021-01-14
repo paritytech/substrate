@@ -103,7 +103,7 @@ pub struct ImportedFunction {
 	pub return_type: Option<ValueType>,
 }
 
-/// A wasm module ready to be put on chain with `put_code`.
+/// A wasm module ready to be put on chain.
 #[derive(Clone)]
 pub struct WasmModule<T:Config> {
 	pub code: Vec<u8>,
@@ -245,16 +245,16 @@ where
 	}
 
 	/// Creates a wasm module of `target_bytes` size. Used to benchmark the performance of
-	/// `put_code` for different sizes of wasm modules. The generated module maximizes
+	/// `instantiate_with_code` for different sizes of wasm modules. The generated module maximizes
 	/// instrumentation runtime by nesting blocks as deeply as possible given the byte budget.
 	pub fn sized(target_bytes: u32) -> Self {
 		use parity_wasm::elements::Instruction::{If, I32Const, Return, End};
-		// Base size of a contract is 47 bytes and each expansion adds 6 bytes.
+		// Base size of a contract is 63 bytes and each expansion adds 6 bytes.
 		// We do one expansion less to account for the code section and function body
 		// size fields inside the binary wasm module representation which are leb128 encoded
 		// and therefore grow in size when the contract grows. We are not allowed to overshoot
-		// because of the maximum code size that is enforced by `put_code`.
-		let expansions = (target_bytes.saturating_sub(47) / 6).saturating_sub(1);
+		// because of the maximum code size that is enforced by `instantiate_with_code`.
+		let expansions = (target_bytes.saturating_sub(63) / 6).saturating_sub(1);
 		const EXPANSION: [Instruction; 4] = [
 			I32Const(0),
 			If(BlockType::NoResult),
@@ -263,6 +263,7 @@ where
 		];
 		ModuleDefinition {
 			call_body: Some(body::repeated(expansions, &EXPANSION)),
+			memory: Some(ImportedMemory::max::<T>()),
 			.. Default::default()
 		}
 		.into()
