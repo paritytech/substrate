@@ -26,7 +26,7 @@ use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use sp_runtime::traits::Hash;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{
-	storage::{self, StorageMap},
+	storage,
 	traits::Get,
 	weights::DispatchClass,
 };

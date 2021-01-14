@@ -28,7 +28,6 @@ use sp_runtime::{
 use frame_support::{
 	traits::{Get},
 	weights::{PostDispatchInfo, DispatchInfo, DispatchClass, priority::FrameTransactionPriority},
-	StorageValue,
 };
 
 /// Block resource (weight) limit check.
