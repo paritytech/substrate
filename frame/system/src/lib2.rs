@@ -232,22 +232,199 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::interface]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
-	// TODO_MAYBE_WHERE_CLAUSE
-	{
-		// TODO_ON_FINALIZE
-		// TODO_ON_INITIALIZE
-		// TODO_ON_RUNTIME_UPGRADE
-		// TODO_INTEGRITY_TEST
-		// TODO_OFFCHAIN_WORKER
-	}
-
 	#[pallet::call]
-	impl<T: Config> Pallet<T>
-	// TODO_MAYBE_WHERE_CLAUSE
-	{
-		// TODO_UPGRADE_DISPATCHABLES
+	impl<T: Config> Pallet<T> {
+		/// A dispatch that will fill the block weight up to the given ratio.
+		// TODO: This should only be available for testing, rather than in general usage, but
+		// that's not possible at present (since it's within the decl_module macro).
+		#[weight(*_ratio * T::BlockWeights::get().max_block)]
+		fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			Ok(().into())
+		}
+
+		/// Make some on-chain remark.
+		///
+		/// # <weight>
+		/// - `O(1)`
+		/// - Base Weight: 0.665 µs, independent of remark length.
+		/// - No DB operations.
+		/// # </weight>
+		#[weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
+		fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+			Ok(().into())
+		}
+
+		/// Set the number of pages in the WebAssembly environment's heap.
+		///
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 storage write.
+		/// - Base Weight: 1.405 µs
+		/// - 1 write to HEAP_PAGES
+		/// # </weight>
+		#[weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
+		fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
+			Ok(().into())
+		}
+
+		/// Set the new runtime code.
+		///
+		/// # <weight>
+		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
+		/// - 1 storage write (codec `O(C)`).
+		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is expensive).
+		/// - 1 event.
+		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
+		/// We will treat this as a full block.
+		/// # </weight>
+		#[weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			Self::can_set_code(&code)?;
+
+			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+			Self::deposit_event(RawEvent::CodeUpdated);
+			Ok(().into())
+		}
+
+		/// Set the new runtime code without doing any checks of the given `code`.
+		///
+		/// # <weight>
+		/// - `O(C)` where `C` length of `code`
+		/// - 1 storage write (codec `O(C)`).
+		/// - 1 event.
+		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
+		/// # </weight>
+		#[weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		pub fn set_code_without_checks(
+			origin: OriginFor<T>,
+			code: Vec<u8>
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+			Self::deposit_event(RawEvent::CodeUpdated);
+			Ok(().into())
+		}
+
+		/// Set the new changes trie configuration.
+		///
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 storage write or delete (codec `O(1)`).
+		/// - 1 call to `deposit_log`: Uses `append` API, so O(1)
+		/// - Base Weight: 7.218 µs
+		/// - DB Weight:
+		///     - Writes: Changes Trie, System Digest
+		/// # </weight>
+		#[weight((T::SystemWeightInfo::set_changes_trie_config(), DispatchClass::Operational))]
+		pub fn set_changes_trie_config(
+			origin: OriginFor<T>,
+			changes_trie_config: Option<ChangesTrieConfiguration>
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			match changes_trie_config.clone() {
+				Some(changes_trie_config) => storage::unhashed::put_raw(
+					well_known_keys::CHANGES_TRIE_CONFIG,
+					&changes_trie_config.encode(),
+				),
+				None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
+			}
+
+			let log = generic::DigestItem::ChangesTrieSignal(
+				generic::ChangesTrieSignal::NewConfiguration(changes_trie_config),
+			);
+			Self::deposit_log(log.into());
+			Ok(().into())
+		}
+
+		/// Set some items of storage.
+		///
+		/// # <weight>
+		/// - `O(I)` where `I` length of `items`
+		/// - `I` storage writes (`O(1)`).
+		/// - Base Weight: 0.568 * i µs
+		/// - Writes: Number of items
+		/// # </weight>
+		#[weight((
+			T::SystemWeightInfo::set_storage(items.len() as u32),
+			DispatchClass::Operational,
+		))]
+		fn set_storage(origin: OriginFor<T>, items: Vec<KeyValue>) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			for i in &items {
+				storage::unhashed::put_raw(&i.0, &i.1);
+			}
+			Ok(().into())
+		}
+
+		/// Kill some items from storage.
+		///
+		/// # <weight>
+		/// - `O(IK)` where `I` length of `keys` and `K` length of one key
+		/// - `I` storage deletions.
+		/// - Base Weight: .378 * i µs
+		/// - Writes: Number of items
+		/// # </weight>
+		#[weight((
+			T::SystemWeightInfo::kill_storage(keys.len() as u32),
+			DispatchClass::Operational,
+		))]
+		fn kill_storage(origin: OriginFor<T>, keys: Vec<Key>) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			for key in &keys {
+				storage::unhashed::kill(&key);
+			}
+			Ok(().into())
+		}
+
+		/// Kill all storage items with a key that starts with the given prefix.
+		///
+		/// **NOTE:** We rely on the Root origin to provide us the number of subkeys under
+		/// the prefix we are removing to accurately calculate the weight of this function.
+		///
+		/// # <weight>
+		/// - `O(P)` where `P` amount of keys with prefix `prefix`
+		/// - `P` storage deletions.
+		/// - Base Weight: 0.834 * P µs
+		/// - Writes: Number of subkeys + 1
+		/// # </weight>
+		#[weight((
+			T::SystemWeightInfo::kill_prefix(_subkeys.saturating_add(1)),
+			DispatchClass::Operational,
+		))]
+		fn kill_prefix(
+			origin: OriginFor<T>,
+			prefix: Key,
+			_subkeys: u32
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			storage::unhashed::kill_prefix(&prefix);
+			Ok(().into())
+		}
+
+		/// Kill the sending account, assuming there are no references outstanding and the composite
+		/// data is equal to its default value.
+		///
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 storage read and deletion.
+		/// --------------------
+		/// Base Weight: 8.626 µs
+		/// No DB Read or Write operations because caller is already in overlay
+		/// # </weight>
+		#[weight((T::SystemWeightInfo::suicide(), DispatchClass::Operational))]
+		pub fn suicide(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let account = Account::<T>::get(&who);
+			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
+			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
+			Self::kill_account(&who);
+			Ok(().into())
+		}
 	}
 
 	#[pallet::inherent]
