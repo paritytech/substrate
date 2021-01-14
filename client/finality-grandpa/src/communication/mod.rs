@@ -217,7 +217,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let gossip_engine = Arc::new(Mutex::new(GossipEngine::new(
 			service.clone(),
 			GRANDPA_PROTOCOL_NAME,
-			validator.clone()
+			validator.clone(),
+			prometheus_registry,
 		)));
 
 		{

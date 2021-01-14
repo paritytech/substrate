@@ -77,7 +77,7 @@ pub fn blake2_64(data: &[u8]) -> [u8; 8] {
 
 /// Do a XX 64-bit hash and place result in `dest`.
 pub fn twox_64_into(data: &[u8], dest: &mut [u8; 8]) {
-	use ::core::hash::Hasher;
+	use core::hash::Hasher;
 	let mut h0 = twox_hash::XxHash::with_seed(0);
 	h0.write(data);
 	let r0 = h0.finish();
@@ -94,7 +94,7 @@ pub fn twox_64(data: &[u8]) -> [u8; 8] {
 
 /// Do a XX 128-bit hash and place result in `dest`.
 pub fn twox_128_into(data: &[u8], dest: &mut [u8; 16]) {
-	use ::core::hash::Hasher;
+	use core::hash::Hasher;
 	let mut h0 = twox_hash::XxHash::with_seed(0);
 	let mut h1 = twox_hash::XxHash::with_seed(1);
 	h0.write(data);
@@ -163,8 +163,8 @@ pub fn keccak_512(data: &[u8]) -> [u8; 64] {
 /// Do a sha2 256-bit hash and return result.
 pub fn sha2_256(data: &[u8]) -> [u8; 32] {
 	let mut hasher = Sha256::new();
-	hasher.input(data);
+	hasher.update(data);
 	let mut output = [0u8; 32];
-	output.copy_from_slice(&hasher.result());
+	output.copy_from_slice(&hasher.finalize());
 	output
 }

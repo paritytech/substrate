@@ -38,8 +38,6 @@ pub enum Error {
 	CallingRuntime(sp_blockchain::Error),
 	/// Received a dht record with a key that does not match any in-flight awaited keys.
 	ReceivingUnexpectedRecord,
-	/// Failed to set the authority discovery peerset priority group in the peerset module.
-	SettingPeersetPriorityGroup(String),
 	/// Failed to encode a protobuf payload.
 	EncodingProto(prost::EncodeError),
 	/// Failed to decode a protobuf payload.
