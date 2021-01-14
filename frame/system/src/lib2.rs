@@ -559,18 +559,14 @@ pub mod pallet {
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig
-// TODO_MAYBE_WHERE_CLAUSE
-	{
+	pub struct GenesisConfig {
 		pub changes_trie_config: Option<ChangesTrieConfiguration>,
 		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
 	}
 
 	#[cfg(feature = "std")]
-	impl Default for GenesisConfig
-	// TODO_MAYBE_WHERE_CLAUSE
-	{
+	impl Default for GenesisConfig {
 		fn default() -> Self {
 			Self {
 				changes_trie_config: Default::default(),
@@ -580,9 +576,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig
-	// TODO_MAYBE_WHERE_CLAUSE
-	{
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			{
 				let builder: fn(&Self) -> _ = |_| vec![(T::BlockNumber::zero(), hash69())];
