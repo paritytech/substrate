@@ -99,8 +99,9 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
-	#[pallet::config]
 	/// System configuration trait. Implemented by runtime.
+	#[pallet::config]
+	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: 'static + Eq + Clone {
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
