@@ -514,7 +514,8 @@ parameter_types! {
 	pub const SignedDepositByte: Balance = 1 * CENTS;
 
 	// fallback: no need to do on-chain phragmen initially.
-	pub const Fallback: pallet_two_phase_election_provider::FallbackStrategy = pallet_two_phase_election_provider::FallbackStrategy::Nothing;
+	pub const Fallback: pallet_two_phase_election_provider::FallbackStrategy =
+		pallet_two_phase_election_provider::FallbackStrategy::Nothing;
 
 	// unsigned configs
 	pub const TwoPhaseUnsignedPriority: TransactionPriority = StakingUnsignedPriority::get() - 1u64;
@@ -549,6 +550,7 @@ impl pallet_two_phase_election_provider::Config for Runtime {
 	type CompactSolution = pallet_staking::CompactAssignments;
 	type Fallback = Fallback;
 	type WeightInfo = pallet_two_phase_election_provider::weights::SubstrateWeight<Runtime>;
+	type BenchmarkingConfig = ();
 }
 
 parameter_types! {

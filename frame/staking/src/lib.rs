@@ -1077,43 +1077,42 @@ decl_storage! {
 		/// The last planned session scheduled by the session pallet.
 		///
 		/// This is basically in sync with the call to [`SessionManager::new_session`].
-		/// TODO: TWO_PHASE: needs care to set the initial value upon migration.
 		pub CurrentPlannedSession get(fn current_planned_session): SessionIndex;
 
 		/// Snapshot of validators at the beginning of the current election window. This should only
 		/// have a value when [`EraElectionStatus`] == `ElectionStatus::Open(_)`.
 		///
-		/// TODO: TWO_PHASE: should be removed once we switch to two-phase.
+		/// TWO_PHASE_NOTE: should be removed once we switch to two-phase.
 		pub SnapshotValidators get(fn snapshot_validators): Option<Vec<T::AccountId>>;
 
 		/// Snapshot of nominators at the beginning of the current election window. This should only
 		/// have a value when [`EraElectionStatus`] == `ElectionStatus::Open(_)`.
 		///
-		/// TODO: TWO_PHASE: should be removed once we switch to two-phase.
+		/// TWO_PHASE_NOTE: should be removed once we switch to two-phase.
 		pub SnapshotNominators get(fn snapshot_nominators): Option<Vec<T::AccountId>>;
 
 		/// The next validator set. At the end of an era, if this is available (potentially from the
 		/// result of an offchain worker), it is immediately used. Otherwise, the on-chain election
 		/// is executed.
 		///
-		/// TODO: TWO_PHASE: should be removed once we switch to two-phase.
+		/// TWO_PHASE_NOTE: should be removed once we switch to two-phase.
 		pub QueuedElected get(fn queued_elected): Option<ElectionResult<T::AccountId, BalanceOf<T>>>;
 
 		/// The score of the current [`QueuedElected`].
 		///
-		/// TODO: TWO_PHASE: should be removed once we switch to two-phase.
+		/// TWO_PHASE_NOTE: should be removed once we switch to two-phase.
 		pub QueuedScore get(fn queued_score): Option<ElectionScore>;
 
 		/// Flag to control the execution of the offchain election. When `Open(_)`, we accept
 		/// solutions to be submitted.
 		///
-		/// TODO: TWO_PHASE: should be removed once we switch to two-phase.
+		/// TWO_PHASE_NOTE: should be removed once we switch to two-phase.
 		pub EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
 
 		/// True if the current **planned** session is final. Note that this does not take era
 		/// forcing into account.
 		///
-		/// TODO: TWO_PHASE: should be removed once we switch to two-phase.
+		/// TWO_PHASE_NOTE: should be removed once we switch to two-phase.
 		pub IsCurrentSessionFinal get(fn is_current_session_final): bool = false;
 
 		/// True if network has been upgraded to this version.
@@ -3028,7 +3027,7 @@ impl<T: Config> Module<T> {
 	///
 	/// Returns `Err(())` if less than [`MinimumValidatorCount`] validators have been elected, `Ok`
 	/// otherwise.
-	#[allow(dead_code)] // TODO: TWO_PHASE
+	#[allow(dead_code)] // TWO_PHASE_NOTE
 	pub fn process_election(
 		flat_supports: sp_npos_elections::Supports<T::AccountId>,
 		current_era: EraIndex,
@@ -3076,7 +3075,7 @@ impl<T: Config> Module<T> {
 		}
 
 		// emit event
-		// TODO: TWO_PHASE: remove the inner value.
+		// TWO_PHASE_NOTE: remove the inner value.
 		Self::deposit_event(RawEvent::StakingElection(ElectionCompute::Signed));
 
 		log!(
@@ -3099,7 +3098,7 @@ impl<T: Config> Module<T> {
 			"Experimental election provider outputted {:?}",
 			outcome
 		);
-		// TODO: TWO_PHASE: This code path shall not return anything for now. Later on, redirect the
+		// TWO_PHASE_NOTE: This code path shall not return anything for now. Later on, redirect the
 		// results to `process_election`.
 		None
 	}
@@ -3578,7 +3577,7 @@ where
 	}
 
 	fn can_report() -> bool {
-		// TODO: TWO_PHASE: we can get rid of this API
+		// TWO_PHASE_NOTE: we can get rid of this API
 		Self::era_election_status().is_closed()
 	}
 }

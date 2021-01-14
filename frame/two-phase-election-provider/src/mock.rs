@@ -310,6 +310,7 @@ impl crate::Config for Runtime {
 	type UnsignedPriority = UnsignedPriority;
 	type DataProvider = StakingMock;
 	type WeightInfo = DualMockWeightInfo;
+	type BenchmarkingConfig = ();
 	type OnChainAccuracy = Perbill;
 	type Fallback = Fallback;
 	type CompactSolution = TestCompact;

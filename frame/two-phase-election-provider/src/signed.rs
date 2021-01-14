@@ -136,10 +136,6 @@ where
 	/// solution quality. If insertion was successful, `Some(index)` is returned where index is the
 	/// index of the newly inserted item.
 	///
-	/// The length of the queue will always be kept less than or equal to `T::MaxSignedSubmissions`.
-	///
-	/// If a solution is removed, their bond is unreserved.
-	///
 	/// Invariant: The returned index is always a valid index in `queue` and can safely be used to
 	/// inspect the newly inserted element.
 	pub fn insert_submission(
@@ -184,23 +180,12 @@ where
 					// It is either 0 (in which case `0 <= queue.len()`) or one of the queue indices
 					// + 1. The biggest queue index is `queue.len() - 1`, thus `at <= queue.len()`.
 					queue.insert(at, submission);
-					// if length has exceeded the limit, eject the weakest, return shifted index.
-					if queue.len() as u32 > T::MaxSignedSubmissions::get() {
-						Self::remove_weakest(queue);
-						// Invariant: at > 0
-						// Proof by contradiction: Assume at is 0 and this will underflow. Then the
-						// previous length of the queue must have been `T::MaxSignedSubmissions` so
-						// that `queue.len() + 1` (for the newly inserted one) is more than
-						// `T::MaxSignedSubmissions`. But this would have been detected by the first
-						// if branch; qed.
-						Some(at - 1)
-					} else {
-						Some(at)
-					}
+					Some(at)
 				}
 			});
 
-		debug_assert!(queue.len() as u32 <= T::MaxSignedSubmissions::get());
+		// If the call site is sane and removes the weakest, then this must always be correct.
+		debug_assert!(queue.len() as u32 <= T::MaxSignedSubmissions::get() + 1);
 		outcome
 	}
 

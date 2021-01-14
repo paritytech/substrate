@@ -5036,7 +5036,6 @@ mod election_data_provider {
 					45
 				);
 				assert_eq!(staking_events().len(), 1);
-				// TODO: TWO_PHASE: remove the internal value.
 				assert_eq!(*staking_events().last().unwrap(), RawEvent::StakingElection(ElectionCompute::OnChain));
 
 				for b in 21..45 {
@@ -5054,7 +5053,6 @@ mod election_data_provider {
 					70
 				);
 				assert_eq!(staking_events().len(), 3);
-				// TODO: TWO_PHASE: remove the internal value.
 				assert_eq!(*staking_events().last().unwrap(), RawEvent::StakingElection(ElectionCompute::OnChain));
 			})
 	}

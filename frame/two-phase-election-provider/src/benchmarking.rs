@@ -216,7 +216,7 @@ benchmarks! {
 
 	finalize_signed_phase_reject_solution {
 		let receiver = account("receiver", 0, SEED);
-		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
+		let initial_balance = T::Currency::minimum_balance().max(One::one()) * 10u32.into();
 		let deposit: BalanceOf<T> = 10u32.into();
 		T::Currency::make_free_balance_be(&receiver, initial_balance);
 		assert_ok!(T::Currency::reserve(&receiver, deposit));
@@ -243,14 +243,14 @@ benchmarks! {
 		let c in 1 .. (T::MaxSignedSubmissions::get() - 1);
 
 		// the solution will be worse than all of them meaning the score need to be checked against all.
-		let solution = RawSolution { score: [(1000_0000u128 - 1).into(), 0, 0], ..Default::default() };
+		let solution = RawSolution { score: [(1_0000_000u128 - 1).into(), 0, 0], ..Default::default() };
 
 		<CurrentPhase<T>>::put(Phase::Signed);
 		<Round<T>>::put(1);
 
 		for i in 0..c {
 			<SignedSubmissions<T>>::mutate(|queue| {
-				let solution = RawSolution { score: [(1000_0000 + i).into(), 0, 0], ..Default::default() };
+				let solution = RawSolution { score: [(1_0000_000 + i).into(), 0, 0], ..Default::default() };
 				let signed_submission = SignedSubmission { solution, ..Default::default() };
 				// note: this is quite tricky: we know that the queue will stay sorted here. The
 				// last will be best.
@@ -268,14 +268,14 @@ benchmarks! {
 
 	submit_unsigned {
 		// number of votes in snapshot.
-		let v in 2000 .. 3000;
+		let v in 2000 .. T::BenchmarkingConfig::VOTERS[1];
 		// number of targets in snapshot.
-		let t in 500 .. 800;
+		let t in 500 .. T::BenchmarkingConfig::TARGETS[1];
 		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
-		let a in 500 .. 1500;
+		let a in 500 .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
 		// number of desired targets. Must be a subset of `t` component.
-		let d in 200 .. 400;
+		let d in 200 .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
 		let witness = SolutionSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(witness, a, d);
@@ -290,14 +290,14 @@ benchmarks! {
 	// This is checking a valid solution. The worse case is indeed a valid solution.
 	feasibility_check {
 		// number of votes in snapshot.
-		let v in 2000 .. 3000;
+		let v in 2000 .. T::BenchmarkingConfig::VOTERS[1];
 		// number of targets in snapshot.
-		let t in 500 .. 800;
+		let t in 500 .. T::BenchmarkingConfig::TARGETS[1];
 		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
-		let a in 500 .. 1500;
+		let a in 500 .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
 		// number of desired targets. Must be a subset of `t` component.
-		let d in 200 .. 400;
+		let d in 200 .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
 		let size = SolutionSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(size, a, d);
@@ -341,15 +341,11 @@ mod test {
 		});
 
 		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(test_benchmark_finalize_signed_phase_accept_solution::<
-				Runtime,
-			>());
+			assert_ok!(test_benchmark_finalize_signed_phase_accept_solution::<Runtime>());
 		});
 
 		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(test_benchmark_finalize_signed_phase_reject_solution::<
-				Runtime,
-			>());
+			assert_ok!(test_benchmark_finalize_signed_phase_reject_solution::<Runtime>());
 		});
 
 		ExtBuilder::default().build_and_execute(|| {

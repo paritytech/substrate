@@ -255,6 +255,25 @@ where
 	type DataProvider = T::DataProvider;
 }
 
+/// Configuration for the benchmarks of the pallet.
+pub trait BenchmarkingConfig {
+	/// Range of voters.
+	const VOTERS: [u32; 2];
+	/// Range of targets.
+	const TARGETS: [u32; 2];
+	/// Range of active voters.
+	const ACTIVE_VOTERS: [u32; 2];
+	/// Range of desired targets.
+	const DESIRED_TARGETS: [u32; 2];
+}
+
+impl BenchmarkingConfig for () {
+	const VOTERS: [u32; 2] = [2000, 3000];
+	const TARGETS: [u32; 2] = [500, 800];
+	const ACTIVE_VOTERS: [u32; 2] = [500, 1500];
+	const DESIRED_TARGETS: [u32; 2] = [200, 400];
+}
+
 /// Current phase of the pallet.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum Phase<Bn> {
@@ -580,6 +599,9 @@ pub mod pallet {
 		/// Configuration for the fallback
 		type Fallback: Get<FallbackStrategy>;
 
+		/// The configuration of benchmarking.
+		type BenchmarkingConfig: BenchmarkingConfig;
+
 		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -710,10 +732,8 @@ pub mod pallet {
 
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
-			let maybe_index =
-				Self::insert_submission(&who, &mut signed_submissions, solution, size);
-			ensure!(maybe_index.is_some(), Error::<T>::QueueFull);
-			let index = maybe_index.expect("Option checked to be `Some`; qed.");
+			let index = Self::insert_submission(&who, &mut signed_submissions, solution, size)
+				.ok_or(Error::<T>::QueueFull)?;
 
 			// collect deposit. Thereafter, the function cannot fail.
 			// Defensive -- index is valid.
@@ -723,8 +743,12 @@ pub mod pallet {
 				.unwrap_or_default();
 			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::CannotPayDeposit)?;
 
-			// store the new signed submission.
+			// Remove the weakest, if needed.
+			if signed_submissions.len() as u32 > T::MaxSignedSubmissions::get() {
+				Self::remove_weakest(&mut signed_submissions);
+			}
 			debug_assert!(signed_submissions.len() as u32 <= T::MaxSignedSubmissions::get());
+
 			log!(
 				info,
 				"queued signed solution with (claimed) score {:?}",
@@ -734,6 +758,7 @@ pub mod pallet {
 					.unwrap_or_default()
 			);
 
+			// store the new signed submission.
 			<SignedSubmissions<T>>::put(signed_submissions);
 			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed));
 			Ok(None.into())
