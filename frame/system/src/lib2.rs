@@ -469,8 +469,6 @@ pub mod pallet {
 	#[pallet::origin]
 	pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 
-	#[pallet::validate_unsigned]
-	// TODO_VALIDATE_UNSIGNED
 	/// The full account information for a particular account ID.
 	#[pallet::storage]
 	#[pallet::getter(fn account)]
