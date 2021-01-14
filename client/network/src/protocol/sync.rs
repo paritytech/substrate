@@ -821,7 +821,7 @@ impl<B: BlockT> ChainSync<B> {
 										hash: block_data.block.hash,
 										header: block_data.block.header,
 										body: block_data.block.body,
-										justification: block_data.block.justification,
+										justification: block_data.block.justifications,
 										origin: block_data.origin,
 										allow_missing_state: true,
 										import_existing: false,
@@ -840,7 +840,7 @@ impl<B: BlockT> ChainSync<B> {
 									hash: b.hash,
 									header: b.header,
 									body: b.body,
-									justification: b.justification,
+									justification: b.justifications,
 									origin: Some(who.clone()),
 									allow_missing_state: true,
 									import_existing: false,
@@ -949,7 +949,7 @@ impl<B: BlockT> ChainSync<B> {
 							hash: b.hash,
 							header: b.header,
 							body: b.body,
-							justification: b.justification,
+							justification: b.justifications,
 							origin: Some(who.clone()),
 							allow_missing_state: true,
 							import_existing: false,
@@ -1020,7 +1020,7 @@ impl<B: BlockT> ChainSync<B> {
 					return Err(BadPeer(who, rep::BAD_JUSTIFICATION));
 				}
 
-				block.justification
+				block.justifications
 			} else {
 				// we might have asked the peer for a justification on a block that we assumed it
 				// had but didn't (regardless of whether it had a justification for it or not).
@@ -2054,7 +2054,7 @@ mod test {
 					body: Some(b.deconstruct().1),
 					receipt: None,
 					message_queue: None,
-					justification: None,
+					justifications: None,
 				}
 			).collect(),
 		}

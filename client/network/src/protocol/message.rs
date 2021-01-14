@@ -233,8 +233,8 @@ pub mod generic {
 		pub receipt: Option<Vec<u8>>,
 		/// Block message queue if requested.
 		pub message_queue: Option<Vec<u8>>,
-		/// Justification if requested.
-		pub justification: Option<Justifications>,
+		/// Justifications if requested.
+		pub justifications: Option<Justifications>,
 	}
 
 	/// Identifies starting point of a block sequence.

@@ -769,7 +769,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				} else {
 					None
 				},
-				justification: if !block_data.justification.is_empty() {
+				justifications: if !block_data.justification.is_empty() {
 					// For compatibility we assume that the incoming Justifications is an
 					// `EncodedJustification`, as before, and that it can only be for GRANDPA.
 					let justification: EncodedJustification = block_data.justification;
@@ -1232,7 +1232,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 						body: None,
 						receipt: None,
 						message_queue: None,
-						justification: None,
+						justifications: None,
 					},
 				],
 			},
