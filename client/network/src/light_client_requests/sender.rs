@@ -54,11 +54,11 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
-	time::Duration,
 };
-use wasm_timer::Instant;
 
 /// Reputation change for a peer when a request timed out.
+//
+// TODO: Still needed?
 pub(crate) const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 8);
 
 /// Configuration options for [`LightClientRequestSender`].
@@ -91,9 +91,7 @@ pub struct LightClientRequestSender<B: Block> {
 	/// Pending (local) requests.
 	pending_requests: VecDeque<PendingRequest<B>>,
 	/// Requests on their way to remote peers.
-	//
-	// TODO: Consider renaming to requests_pending_response.
-	outstanding: FuturesUnordered<BoxFuture<'static, (SentRequest<B>, Result<Vec<u8>, RequestFailure>)>>,
+	sent_requests: FuturesUnordered<BoxFuture<'static, (SentRequest<B>, Result<Vec<u8>, RequestFailure>)>>,
 	/// Handle to use for reporting misbehaviour of peers.
 	peerset: sc_peerset::PeersetHandle,
 }
@@ -101,8 +99,6 @@ pub struct LightClientRequestSender<B: Block> {
 /// Augments a pending light client request with metadata.
 #[derive(Debug)]
 struct PendingRequest<B: Block> {
-	/// Time when this value was created.
-	timestamp: Instant,
 	/// Remaining retries.
 	retries: usize,
 	/// The actual request.
@@ -112,14 +108,13 @@ struct PendingRequest<B: Block> {
 impl<B: Block> PendingRequest<B> {
 	fn new(req: Request<B>) -> Self {
 		PendingRequest {
-			timestamp: Instant::now(),
 			retries: req.retries(),
 			request: req,
 		}
 	}
+
 	fn into_sent(self, peer_id: PeerId) -> SentRequest<B> {
 		SentRequest {
-			timestamp: self.timestamp,
 			retries: self.retries,
 			request: self.request,
 			peer: peer_id,
@@ -130,14 +125,21 @@ impl<B: Block> PendingRequest<B> {
 /// Augments a light client request with metadata that is currently being send to a remote.
 #[derive(Debug)]
 struct SentRequest<B: Block> {
-	/// Time when this value was created.
-	timestamp: Instant,
 	/// Remaining retries.
 	retries: usize,
 	/// The actual request.
 	request: Request<B>,
 	/// The peer that the request is send to.
 	peer: PeerId,
+}
+
+impl<B: Block> SentRequest<B> {
+	fn into_pending(self) -> PendingRequest<B> {
+		PendingRequest {
+			retries: self.retries,
+			request: self.request,
+		}
+	}
 }
 
 impl<B: Block> Unpin for LightClientRequestSender<B> {}
@@ -157,7 +159,7 @@ where
 			checker,
 			peers: Default::default(),
 			pending_requests: Default::default(),
-			outstanding: Default::default(),
+			sent_requests: Default::default(),
 			peerset,
 		}
 	}
@@ -320,19 +322,13 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		// If we have a pending request to send, try to find an available peer and send it.
-		let now = Instant::now();
 		while let Some(mut pending_request) = self.pending_requests.pop_front() {
-			// TODO: Consider moving 40s to a constant combined with `ProtocolConfig::request_timeout` in `handler.rs`.
-			if now > pending_request.timestamp + Duration::from_secs(40) {
-				if pending_request.retries == 0 {
-					pending_request.request.return_reply(Err(ClientError::RemoteFetchFailed));
-					continue
-				}
-				pending_request.timestamp = Instant::now();
-
-				// TODO: Isn't the amount of retries already reduced earlier? Why do it again?
-				pending_request.retries -= 1
+			if pending_request.retries == 0 {
+				pending_request.request.return_reply(Err(ClientError::RemoteFetchFailed));
+				continue
 			}
+
+			pending_request.retries -= 1;
 
 			let protocol = if pending_request.request.is_block_request() {
 				self.config.block_protocol.clone()
@@ -369,7 +365,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 
 			peer_info.status = PeerStatus::Busy;
 
-			self.outstanding.push(async move {
+			self.sent_requests.push(async move {
 				(pending_request.into_sent(peer_id), rx.await.unwrap())
 			}.boxed());
 
@@ -381,16 +377,14 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 			}));
 		}
 
-		while let Poll::Ready(Some((sent_request, response))) = self.outstanding.poll_next_unpin(cx) {
+		// If we have received responses to previously sent requests, check them and pass them on.
+		while let Poll::Ready(Some((sent_request, response))) = self.sent_requests.poll_next_unpin(cx) {
 			if let Some(info) = self.peers.get_mut(&sent_request.peer) {
 				if info.status != PeerStatus::Busy {
-					// If we get here, something is wrong with our internal handling of peer
-					// status information. At any time, a single peer processes at most one
-					// request from us and its status should contain the request ID we are
-					// expecting a response for. If a peer would send us a response with a
-					// random ID, we should not have an entry for it with this peer ID in
-					// our `outstanding` map, so a malicious peer should not be able to get
-					// us here. It is our own fault and must be fixed!
+					// If we get here, something is wrong with our internal handling of peer status
+					// information. At any time, a single peer processes at most one request from
+					// us. A malicious peer should not be able to get us here. It is our own fault
+					// and must be fixed!
 					panic!("unexpected peer status {:?} for {}", info.status, sent_request.peer);
 				}
 
@@ -412,17 +406,15 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 					self.remove_peer(sent_request.peer);
 					self.peerset.report_peer(
 						sent_request.peer,
+						// TODO: Could as well be due to other things than timeout. Maybe
+						// differentiate based on `e`.
 						ReputationChange::new(TIMEOUT_REPUTATION_CHANGE, "light request timeout"),
 					);
 					if sent_request.retries == 0 {
 						sent_request.request.return_reply(Err(ClientError::RemoteFetchFailed));
 						continue
 					}
-					self.pending_requests.push_back(PendingRequest {
-						timestamp: Instant::now(),
-						retries: sent_request.retries - 1,
-						request: sent_request.request,
-					});
+					self.pending_requests.push_back(sent_request.into_pending());
 					continue;
 				}
 			};
@@ -433,22 +425,14 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 					log::debug!("Unexpected response from peer {}.", sent_request.peer);
 					self.remove_peer(sent_request.peer);
 					self.peerset.report_peer(sent_request.peer, ReputationChange::new_fatal("unexpected response from peer"));
-					self.pending_requests.push_back(PendingRequest {
-						timestamp: sent_request.timestamp,
-						retries: sent_request.retries,
-						request: sent_request.request,
-					});
+					self.pending_requests.push_back(sent_request.into_pending());
 				}
 				Err(other) => {
 					log::debug!("error handling response from peer {}: {}", sent_request.peer, other);
 					self.remove_peer(sent_request.peer);
 					self.peerset.report_peer(sent_request.peer, ReputationChange::new_fatal("invalid response from peer"));
 					if sent_request.retries > 0 {
-						self.pending_requests.push_back(PendingRequest {
-							timestamp: sent_request.timestamp,
-							retries: sent_request.retries - 1,
-							request: sent_request.request,
-						})
+						self.pending_requests.push_back(sent_request.into_pending())
 					} else {
 						sent_request.request.return_reply(Err(ClientError::RemoteFetchFailed))
 					}
