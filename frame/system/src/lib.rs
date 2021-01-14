@@ -1382,7 +1382,7 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 
 /// Split an `option` into two constituent options, as defined by a `splitter` function.
 pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S))
-							-> (Option<R>, Option<S>)
+	-> (Option<R>, Option<S>)
 {
 	match option {
 		Some(inner) => {
