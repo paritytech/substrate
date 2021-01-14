@@ -52,7 +52,7 @@ pub fn timestamp_from_now(timestamp: Timestamp) -> Duration {
 /// If `None`, returns a never-ending `Future`.
 pub fn deadline_to_future(
 	deadline: Option<Timestamp>,
-) -> futures::future::MaybeDone<impl futures::Future> {
+) -> futures::future::MaybeDone<impl futures::Future<Output = ()>> {
 	use futures::future::{self, Either};
 
 	future::maybe_done(match deadline.map(timestamp_from_now) {

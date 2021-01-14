@@ -35,7 +35,7 @@ use sp_runtime::{
 use sp_io::hashing::blake2_256;
 use frame_support::{
 	assert_ok, assert_err, assert_err_ignore_postinfo, impl_outer_dispatch, impl_outer_event,
-	impl_outer_origin, parameter_types, StorageMap,
+	impl_outer_origin, parameter_types, StorageMap, assert_storage_noop,
 	traits::{Currency, ReservableCurrency, OnInitialize},
 	weights::{Weight, PostDispatchInfo, DispatchClass, constants::WEIGHT_PER_SECOND},
 	dispatch::DispatchErrorWithPostInfo,
@@ -74,6 +74,7 @@ impl_outer_dispatch! {
 pub mod test_utils {
 	use super::{Test, Balances};
 	use crate::{
+		ConfigCache,
 		ContractInfoOf, CodeHash,
 		storage::Storage,
 		exec::{StorageKey, AccountIdOf},
@@ -90,6 +91,7 @@ pub mod test_utils {
 	}
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
 		let trie_id = Storage::<Test>::generate_trie_id(address);
+		set_balance(address, ConfigCache::<Test>::subsistence_threshold_uncached() * 10);
 		Storage::<Test>::place_contract(&address, trie_id, code_hash).unwrap()
 	}
 	pub fn set_balance(who: &AccountIdOf<Test>, amount: u64) {
@@ -453,14 +455,14 @@ fn instantiate_and_call_and_deposit_event() {
 		.build()
 		.execute_with(|| {
 			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-			let subsistence = super::ConfigCache::<Test>::subsistence_threshold_uncached();
+			let subsistence = ConfigCache::<Test>::subsistence_threshold_uncached();
 
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
 
 			// Check at the end to get hash on error easily
 			let creation = Contracts::instantiate(
 				Origin::signed(ALICE),
-				subsistence,
+				subsistence * 3,
 				GAS_LIMIT,
 				code_hash.into(),
 				vec![],
@@ -494,14 +496,14 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Endowed(addr.clone(), subsistence)
+						pallet_balances::RawEvent::Endowed(addr.clone(), subsistence * 3)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Transfer(ALICE, addr.clone(), subsistence)
+						pallet_balances::RawEvent::Transfer(ALICE, addr.clone(), subsistence * 3)
 					),
 					topics: vec![],
 				},
@@ -545,12 +547,19 @@ fn deposit_event_max_value_limit() {
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
+			// The instantation deducted the rent for one block immediatly
+			let first_rent = <Test as Config>::RentFraction::get()
+				// base_deposit - free_balance
+				.mul_ceil(80_000 - 30_000)
+				// blocks to rent
+				* 1;
+
 			// Check creation
 			let bob_contract = ContractInfoOf::<Test>::get(addr.clone())
 				.unwrap()
 				.get_alive()
 				.unwrap();
-			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
+			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value() - first_rent);
 
 			// Call contract with allowed storage value.
 			assert_ok!(Contracts::call(
@@ -617,6 +626,7 @@ mod call {
 	use super::{AccountIdOf, Test};
 	pub fn set_storage_4_byte() -> Vec<u8> { 0u32.to_le_bytes().to_vec() }
 	pub fn remove_storage_4_byte() -> Vec<u8> { 1u32.to_le_bytes().to_vec() }
+	#[allow(dead_code)]
 	pub fn transfer(to: &AccountIdOf<Test>) -> Vec<u8> {
 		2u32.to_le_bytes().iter().chain(AsRef::<[u8]>::as_ref(to)).cloned().collect()
 	}
@@ -798,10 +808,18 @@ fn deduct_blocks() {
 				vec![],
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+			ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
 
-			// Check creation
+			// The instantation deducted the rent for one block immediatly
+			let rent0 = <Test as Config>::RentFraction::get()
+				// base_deposit + deploy_set_storage (4 bytes in 1 item) - free_balance
+				.mul_ceil(80_000 + 40_000 + 10_000 - 30_000)
+				// blocks to rent
+				* 1;
 			let bob_contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.rent_allowance, 1_000);
+			assert_eq!(bob_contract.rent_allowance, 1_000 - rent0);
+			assert_eq!(bob_contract.deduct_block, 1);
+			assert_eq!(Balances::free_balance(&addr), 30_000 - rent0);
 
 			// Advance 4 blocks
 			initialize_block(5);
@@ -814,13 +832,13 @@ fn deduct_blocks() {
 			// Check result
 			let rent = <Test as Config>::RentFraction::get()
 				// base_deposit + deploy_set_storage (4 bytes in 1 item) - free_balance
-				.mul_ceil(80_000 + 40_000 + 10_000 - 30_000)
+				.mul_ceil(80_000 + 40_000 + 10_000 - (30_000 - rent0))
 				// blocks to rent
 				* 4;
 			let bob_contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.rent_allowance, 1_000 - rent);
+			assert_eq!(bob_contract.rent_allowance, 1_000 - rent0 - rent);
 			assert_eq!(bob_contract.deduct_block, 5);
-			assert_eq!(Balances::free_balance(&addr), 30_000 - rent);
+			assert_eq!(Balances::free_balance(&addr), 30_000 - rent0 - rent);
 
 			// Advance 7 blocks more
 			initialize_block(12);
@@ -833,23 +851,22 @@ fn deduct_blocks() {
 			// Check result
 			let rent_2 = <Test as Config>::RentFraction::get()
 				// base_deposit + deploy_set_storage (4 bytes in 1 item) - free_balance
-				.mul_ceil(80_000 + 40_000 + 10_000 - (30_000 - rent))
+				.mul_ceil(80_000 + 40_000 + 10_000 - (30_000 - rent0 - rent))
 				// blocks to rent
 				* 7;
 			let bob_contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.rent_allowance, 1_000 - rent - rent_2);
+			assert_eq!(bob_contract.rent_allowance, 1_000 - rent0 - rent - rent_2);
 			assert_eq!(bob_contract.deduct_block, 12);
-			assert_eq!(Balances::free_balance(&addr), 30_000 - rent - rent_2);
+			assert_eq!(Balances::free_balance(&addr), 30_000 - rent0 - rent - rent_2);
 
 			// Second call on same block should have no effect on rent
 			assert_ok!(
 				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null())
 			);
-
 			let bob_contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.rent_allowance, 1_000 - rent - rent_2);
+			assert_eq!(bob_contract.rent_allowance, 1_000 - rent0 - rent - rent_2);
 			assert_eq!(bob_contract.deduct_block, 12);
-			assert_eq!(Balances::free_balance(&addr), 30_000 - rent - rent_2);
+			assert_eq!(Balances::free_balance(&addr), 30_000 - rent0 - rent - rent_2)
 		});
 }
 
@@ -866,16 +883,16 @@ fn signed_claim_surcharge_contract_removals() {
 #[test]
 fn claim_surcharge_malus() {
 	// Test surcharge malus for inherent
-	claim_surcharge(4, |addr| Contracts::claim_surcharge(Origin::none(), addr, Some(ALICE)).is_ok(), true);
-	claim_surcharge(3, |addr| Contracts::claim_surcharge(Origin::none(), addr, Some(ALICE)).is_ok(), true);
-	claim_surcharge(2, |addr| Contracts::claim_surcharge(Origin::none(), addr, Some(ALICE)).is_ok(), true);
-	claim_surcharge(1, |addr| Contracts::claim_surcharge(Origin::none(), addr, Some(ALICE)).is_ok(), false);
+	claim_surcharge(27, |addr| Contracts::claim_surcharge(Origin::none(), addr, Some(ALICE)).is_ok(), true);
+	claim_surcharge(26, |addr| Contracts::claim_surcharge(Origin::none(), addr, Some(ALICE)).is_ok(), true);
+	claim_surcharge(25, |addr| Contracts::claim_surcharge(Origin::none(), addr, Some(ALICE)).is_ok(), true);
+	claim_surcharge(24, |addr| Contracts::claim_surcharge(Origin::none(), addr, Some(ALICE)).is_ok(), false);
 
 	// Test surcharge malus for signed
-	claim_surcharge(4, |addr| Contracts::claim_surcharge(Origin::signed(ALICE), addr, None).is_ok(), true);
-	claim_surcharge(3, |addr| Contracts::claim_surcharge(Origin::signed(ALICE), addr, None).is_ok(), false);
-	claim_surcharge(2, |addr| Contracts::claim_surcharge(Origin::signed(ALICE), addr, None).is_ok(), false);
-	claim_surcharge(1, |addr| Contracts::claim_surcharge(Origin::signed(ALICE), addr, None).is_ok(), false);
+	claim_surcharge(27, |addr| Contracts::claim_surcharge(Origin::signed(ALICE), addr, None).is_ok(), true);
+	claim_surcharge(26, |addr| Contracts::claim_surcharge(Origin::signed(ALICE), addr, None).is_ok(), false);
+	claim_surcharge(25, |addr| Contracts::claim_surcharge(Origin::signed(ALICE), addr, None).is_ok(), false);
+	claim_surcharge(24, |addr| Contracts::claim_surcharge(Origin::signed(ALICE), addr, None).is_ok(), false);
 }
 
 /// Claim surcharge with the given trigger_call at the given blocks.
@@ -892,7 +909,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn(AccountIdOf<Test>) -> bool
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
 			assert_ok!(Contracts::instantiate(
 				Origin::signed(ALICE),
-				100,
+				30_000,
 				GAS_LIMIT, code_hash.into(),
 				<Test as pallet_balances::Config>::Balance::from(1_000u32).encode(), // rent allowance
 				vec![],
@@ -931,30 +948,36 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm.clone()));
 			assert_ok!(Contracts::instantiate(
 				Origin::signed(ALICE),
-				100,
+				500,
 				GAS_LIMIT, code_hash.into(),
 				<Test as pallet_balances::Config>::Balance::from(1_000u32).encode(), // rent allowance
 				vec![],
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+			let allowance = ContractInfoOf::<Test>::get(&addr)
+				.unwrap().get_alive().unwrap().rent_allowance;
+			let balance = Balances::free_balance(&addr);
 
-			let subsistence_threshold = 50 /*existential_deposit*/ + 16 /*tombstone_deposit*/;
+			let subsistence_threshold = ConfigCache::<Test>::subsistence_threshold_uncached();
 
 			// Trigger rent must have no effect
 			assert!(!trigger_call(addr.clone()));
-			assert_eq!(ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap().rent_allowance, 1_000);
-			assert_eq!(Balances::free_balance(&addr), 100);
+			assert_eq!(
+				ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap().rent_allowance,
+				allowance,
+			);
+			assert_eq!(Balances::free_balance(&addr), balance);
 
 			// Advance blocks
-			initialize_block(10);
+			initialize_block(27);
 
-			// Trigger rent through call
+			// Trigger rent through call (should remove the contract)
 			assert!(trigger_call(addr.clone()));
 			assert!(ContractInfoOf::<Test>::get(&addr).unwrap().get_tombstone().is_some());
 			assert_eq!(Balances::free_balance(&addr), subsistence_threshold);
 
 			// Advance blocks
-			initialize_block(20);
+			initialize_block(30);
 
 			// Trigger rent must have no effect
 			assert!(!trigger_call(addr.clone()));
@@ -972,13 +995,16 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm.clone()));
 			assert_ok!(Contracts::instantiate(
 				Origin::signed(ALICE),
-				1_000,
+				30_000,
 				GAS_LIMIT,
 				code_hash.into(),
-				<Test as pallet_balances::Config>::Balance::from(100u32).encode(), // rent allowance
+				<Test as pallet_balances::Config>::Balance::from(1000u32).encode(), // rent allowance
 				vec![],
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+			let allowance = ContractInfoOf::<Test>::get(&addr)
+				.unwrap().get_alive().unwrap().rent_allowance;
+			let balance = Balances::free_balance(&addr);
 
 			// Trigger rent must have no effect
 			assert!(!trigger_call(addr.clone()));
@@ -988,12 +1014,12 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 					.get_alive()
 					.unwrap()
 					.rent_allowance,
-				100
+				allowance,
 			);
-			assert_eq!(Balances::free_balance(&addr), 1_000);
+			assert_eq!(Balances::free_balance(&addr), balance);
 
 			// Advance blocks
-			initialize_block(10);
+			initialize_block(27);
 
 			// Trigger rent through call
 			assert!(trigger_call(addr.clone()));
@@ -1002,7 +1028,7 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 				.get_tombstone()
 				.is_some());
 			// Balance should be initial balance - initial rent_allowance
-			assert_eq!(Balances::free_balance(&addr), 900);
+			assert_eq!(Balances::free_balance(&addr), 29000);
 
 			// Advance blocks
 			initialize_block(20);
@@ -1013,7 +1039,7 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 				.unwrap()
 				.get_tombstone()
 				.is_some());
-			assert_eq!(Balances::free_balance(&addr), 900);
+			assert_eq!(Balances::free_balance(&addr), 29000);
 		});
 
 	// Balance reached and inferior to subsistence threshold
@@ -1023,18 +1049,20 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 		.execute_with(|| {
 			// Create
 			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-			let subsistence_threshold =
-				Balances::minimum_balance() + <Test as Config>::TombstoneDeposit::get();
+			let subsistence_threshold = ConfigCache::<Test>::subsistence_threshold_uncached();
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm.clone()));
 			assert_ok!(Contracts::instantiate(
 				Origin::signed(ALICE),
-				50 + subsistence_threshold,
+				subsistence_threshold * 3,
 				GAS_LIMIT,
 				code_hash.into(),
 				<Test as pallet_balances::Config>::Balance::from(1_000u32).encode(), // rent allowance
 				vec![],
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+			let allowance = ContractInfoOf::<Test>::get(&addr)
+				.unwrap().get_alive().unwrap().rent_allowance;
+			let balance = Balances::free_balance(&addr);
 
 			// Trigger rent must have no effect
 			assert!(!trigger_call(addr.clone()));
@@ -1044,32 +1072,18 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 					.get_alive()
 					.unwrap()
 					.rent_allowance,
-				1_000
+				allowance,
 			);
 			assert_eq!(
 				Balances::free_balance(&addr),
-				50 + subsistence_threshold,
+				balance,
 			);
 
-			// Transfer funds
-			assert_ok!(Contracts::call(
-				Origin::signed(ALICE),
-				addr.clone(),
-				0,
-				GAS_LIMIT,
-				call::transfer(&BOB),
-			));
-			assert_eq!(
-				ContractInfoOf::<Test>::get(&addr)
-					.unwrap()
-					.get_alive()
-					.unwrap()
-					.rent_allowance,
-				1_000
-			);
+			// Make contract have exactly the subsitence threshold
+			Balances::make_free_balance_be(&addr, subsistence_threshold);
 			assert_eq!(Balances::free_balance(&addr), subsistence_threshold);
 
-			// Advance blocks
+			// Advance blocks (should remove as balance is exactly subsistence)
 			initialize_block(10);
 
 			// Trigger rent through call
@@ -1101,7 +1115,7 @@ fn call_removed_contract() {
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm.clone()));
 			assert_ok!(Contracts::instantiate(
 				Origin::signed(ALICE),
-				100,
+				30_000,
 				GAS_LIMIT, code_hash.into(),
 				<Test as pallet_balances::Config>::Balance::from(1_000u32).encode(), // rent allowance
 				vec![],
@@ -1114,7 +1128,7 @@ fn call_removed_contract() {
 			);
 
 			// Advance blocks
-			initialize_block(10);
+			initialize_block(27);
 
 			// Calling contract should deny access because rent cannot be paid.
 			assert_err_ignore_postinfo!(
@@ -1157,9 +1171,16 @@ fn default_rent_allowance_on_instantiate() {
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
+			// The instantation deducted the rent for one block immediatly
+			let first_rent = <Test as Config>::RentFraction::get()
+				// base_deposit - free_balance
+				.mul_ceil(80_000 - 30_000)
+				// blocks to rent
+				* 1;
+
 			// Check creation
 			let bob_contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
+			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value() - first_rent);
 
 			// Advance blocks
 			initialize_block(5);
@@ -1239,15 +1260,15 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				30_000,
 				GAS_LIMIT,
 				set_rent_code_hash.into(),
-				<Test as pallet_balances::Config>::Balance::from(0u32).encode(),
+				<Test as pallet_balances::Config>::Balance::from(1_000u32).encode(),
 				vec![],
 			));
 			let addr_bob = Contracts::contract_address(&ALICE, &set_rent_code_hash, &[]);
 
-			// Check if `BOB` was created successfully and that the rent allowance is
-			// set to 0.
+			// Check if `BOB` was created successfully and that the rent allowance is below what
+			// we specified as the first rent was already collected.
 			let bob_contract = ContractInfoOf::<Test>::get(&addr_bob).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.rent_allowance, 0);
+			assert!(bob_contract.rent_allowance < 5_000);
 
 			if test_different_storage {
 				assert_ok!(Contracts::call(
@@ -1257,10 +1278,10 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				);
 			}
 
-			// Advance 4 blocks, to the 5th.
-			initialize_block(5);
+			// Advance blocks in order to make the contract run out of money for rent.
+			initialize_block(27);
 
-			// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
+			// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 20_000
 			// we expect that it is no longer callable but keeps existing until someone
 			// calls `claim_surcharge`.
 			assert_err_ignore_postinfo!(
@@ -1304,8 +1325,8 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 			// The trie is regarded as 'dirty' when it was written to in the current block.
 			if !test_restore_to_with_dirty_storage {
-				// Advance 1 block, to the 6th.
-				initialize_block(6);
+				// Advance 1 block.
+				initialize_block(28);
 			}
 
 			// Perform a call to `DJANGO`. This should either perform restoration successfully or
@@ -1452,10 +1473,7 @@ fn storage_max_value_limit() {
 				vec![],
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
-
-			// Check creation
-			let bob_contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
-			assert_eq!(bob_contract.rent_allowance, <BalanceOf<Test>>::max_value());
+			ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
 
 			// Call contract with allowed storage value.
 			assert_ok!(Contracts::call(
@@ -1795,7 +1813,7 @@ fn transfer_return_code() {
 		assert_ok!(
 			Contracts::instantiate(
 				Origin::signed(ALICE),
-				subsistence,
+				subsistence * 3,
 				GAS_LIMIT,
 				code_hash.into(),
 				vec![],
@@ -1805,6 +1823,7 @@ fn transfer_return_code() {
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 		// Contract has only the minimal balance so any transfer will return BelowSubsistence.
+		Balances::make_free_balance_be(&addr, subsistence);
 		let result = Contracts::bare_call(
 			ALICE,
 			addr.clone(),
@@ -1844,7 +1863,7 @@ fn call_return_code() {
 		assert_ok!(
 			Contracts::instantiate(
 				Origin::signed(ALICE),
-				subsistence,
+				subsistence * 3,
 				GAS_LIMIT,
 				caller_hash.into(),
 				vec![0],
@@ -1852,6 +1871,7 @@ fn call_return_code() {
 			),
 		);
 		let addr_bob = Contracts::contract_address(&ALICE, &caller_hash, &[]);
+		Balances::make_free_balance_be(&addr_bob, subsistence);
 
 		// Contract calls into Django which is no valid contract
 		let result = Contracts::bare_call(
@@ -1866,7 +1886,7 @@ fn call_return_code() {
 		assert_ok!(
 			Contracts::instantiate(
 				Origin::signed(CHARLIE),
-				subsistence,
+				subsistence * 3,
 				GAS_LIMIT,
 				callee_hash.into(),
 				vec![0],
@@ -1874,6 +1894,7 @@ fn call_return_code() {
 			),
 		);
 		let addr_django = Contracts::contract_address(&CHARLIE, &callee_hash, &[]);
+		Balances::make_free_balance_be(&addr_django, subsistence);
 
 		// Contract has only the minimal balance so any transfer will return BelowSubsistence.
 		let result = Contracts::bare_call(
@@ -1938,7 +1959,7 @@ fn instantiate_return_code() {
 		assert_ok!(
 			Contracts::instantiate(
 				Origin::signed(ALICE),
-				subsistence,
+				subsistence * 3,
 				GAS_LIMIT,
 				caller_hash.into(),
 				vec![],
@@ -1948,6 +1969,7 @@ fn instantiate_return_code() {
 		let addr = Contracts::contract_address(&ALICE, &caller_hash, &[]);
 
 		// Contract has only the minimal balance so any transfer will return BelowSubsistence.
+		Balances::make_free_balance_be(&addr, subsistence);
 		let result = Contracts::bare_call(
 			ALICE,
 			addr.clone(),
@@ -2030,7 +2052,7 @@ fn disabled_chain_extension_errors_on_call() {
 		assert_ok!(
 			Contracts::instantiate(
 				Origin::signed(ALICE),
-				subsistence,
+				subsistence * 3,
 				GAS_LIMIT,
 				hash.into(),
 				vec![],
@@ -2061,7 +2083,7 @@ fn chain_extension_works() {
 		assert_ok!(
 			Contracts::instantiate(
 				Origin::signed(ALICE),
-				subsistence,
+				subsistence * 3,
 				GAS_LIMIT,
 				hash.into(),
 				vec![],
@@ -2132,7 +2154,7 @@ fn lazy_removal_works() {
 		assert_ok!(
 			Contracts::instantiate(
 				Origin::signed(ALICE),
-				subsistence,
+				subsistence * 3,
 				GAS_LIMIT,
 				hash.into(),
 				vec![],
@@ -2193,7 +2215,7 @@ fn lazy_removal_partial_remove_works() {
 		assert_ok!(
 			Contracts::instantiate(
 				Origin::signed(ALICE),
-				subsistence,
+				subsistence * 3,
 				GAS_LIMIT,
 				hash.into(),
 				vec![],
@@ -2275,7 +2297,7 @@ fn lazy_removal_does_no_run_on_full_block() {
 		assert_ok!(
 			Contracts::instantiate(
 				Origin::signed(ALICE),
-				subsistence,
+				subsistence * 3,
 				GAS_LIMIT,
 				hash.into(),
 				vec![],
@@ -2360,7 +2382,7 @@ fn lazy_removal_does_not_use_all_weight() {
 		assert_ok!(
 			Contracts::instantiate(
 				Origin::signed(ALICE),
-				subsistence,
+				subsistence * 3,
 				GAS_LIMIT,
 				hash.into(),
 				vec![],
@@ -2431,7 +2453,7 @@ fn deletion_queue_full() {
 		assert_ok!(
 			Contracts::instantiate(
 				Origin::signed(ALICE),
-				subsistence,
+				subsistence * 3,
 				GAS_LIMIT,
 				hash.into(),
 				vec![],
@@ -2471,4 +2493,37 @@ fn deletion_queue_full() {
 		// Contract should be alive because removal failed
 		<ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
 	});
+}
+
+#[test]
+fn not_deployed_if_endowment_too_low_for_first_rent() {
+	let (wasm, code_hash) = compile_module::<Test>("set_rent").unwrap();
+
+	// The instantation deducted the rent for one block immediatly
+	let first_rent = <Test as Config>::RentFraction::get()
+		// base_deposit + deploy_set_storage (4 bytes in 1 item) - free_balance
+		.mul_ceil(80_000u32 + 40_000 + 10_000 - 30_000)
+		// blocks to rent
+		* 1;
+
+	ExtBuilder::default()
+		.existential_deposit(50)
+		.build()
+		.execute_with(|| {
+			// Create
+			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
+			assert_storage_noop!(assert_err_ignore_postinfo!(Contracts::instantiate(
+					Origin::signed(ALICE),
+					30_000,
+					GAS_LIMIT, code_hash.into(),
+					(BalanceOf::<Test>::from(first_rent) - BalanceOf::<Test>::from(1u32))
+						.encode(), // rent allowance
+					vec![],
+				),
+				Error::<Test>::NewContractNotFunded,
+			));
+			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+			assert_matches!(ContractInfoOf::<Test>::get(&addr), None);
+		});
 }
