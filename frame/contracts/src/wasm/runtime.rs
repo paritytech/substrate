@@ -643,8 +643,7 @@ define_env!(Env, <E: Ext>,
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		let value = Some(ctx.read_sandbox_memory(value_ptr, value_len)?);
-		ctx.ext.set_storage(key, value);
-		Ok(())
+		ctx.ext.set_storage(key, value).map_err(Into::into)
 	},
 
 	// Clear the value at the given key in the contract storage.
@@ -656,8 +655,7 @@ define_env!(Env, <E: Ext>,
 		ctx.charge_gas(RuntimeToken::ClearStorage)?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		ctx.ext.set_storage(key, None);
-		Ok(())
+		ctx.ext.set_storage(key, None).map_err(Into::into)
 	},
 
 	// Retrieve the value under the given key from storage.
