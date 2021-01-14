@@ -447,7 +447,7 @@ macro_rules! format_fields_to_json {
 	( $k:literal => ? $v:expr $(,)? $(, $($t:tt)+ )? ) => {{
 		let mut map = $crate::serde_json::Map::new();
 		map.insert($k.into(), std::format!("{:?}", &$v).into());
-		let ok_map: $crate::serde_json::Result<_> = Ok(map);
+		$crate::serde_json::Result::Ok(map)
 		ok_map
 		$(
 			.and_then(|mut prev_map| {
