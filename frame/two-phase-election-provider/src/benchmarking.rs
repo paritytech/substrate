@@ -243,7 +243,7 @@ benchmarks! {
 		let c in 1 .. (T::MaxSignedSubmissions::get() - 1);
 
 		// the solution will be worse than all of them meaning the score need to be checked against all.
-		let solution = RawSolution { score: [(1000_0000u128 - 1).into(), 0, 0], ..Default::default() };
+		let solution = RawSolution { score: [(10_000_000u128 - 1).into(), 0, 0], ..Default::default() };
 
 		<CurrentPhase<T>>::put(Phase::Signed);
 		<Round<T>>::put(1);
