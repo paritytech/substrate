@@ -24,7 +24,7 @@ use sp_core::crypto::UncheckedFrom;
 use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, Zero, Convert, Saturating};
 use frame_support::{
-	dispatch::DispatchError,
+	dispatch::DispatchResult,
 	traits::{ExistenceRequirement, Currency, Time, Randomness},
 	weights::Weight,
 	ensure, StorageMap,
@@ -65,7 +65,7 @@ pub trait Ext {
 
 	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
 	/// the storage entry is deleted.
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>);
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> DispatchResult;
 
 	/// Instantiate a contract from the given code.
 	///
@@ -85,7 +85,7 @@ pub trait Ext {
 		&mut self,
 		to: &AccountIdOf<Self::T>,
 		value: BalanceOf<Self::T>,
-	) -> Result<(), DispatchError>;
+	) -> DispatchResult;
 
 	/// Transfer all funds to `beneficiary` and delete the contract.
 	///
@@ -97,7 +97,7 @@ pub trait Ext {
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
-	) -> Result<(), DispatchError>;
+	) -> DispatchResult;
 
 	/// Call (possibly transferring some amount of funds) into the specified account.
 	fn call(
@@ -121,7 +121,7 @@ pub trait Ext {
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> Result<(), DispatchError>;
+	) -> DispatchResult;
 
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
@@ -454,7 +454,7 @@ fn transfer<'a, T: Config, V: Vm<T>, L: Loader<T>>(
 	dest: &T::AccountId,
 	value: BalanceOf<T>,
 	ctx: &mut ExecutionContext<'a, T, V, L>,
-) -> Result<(), DispatchError>
+) -> DispatchResult
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
@@ -520,23 +520,19 @@ where
 		Storage::<T>::read(trie_id, key)
 	}
 
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> DispatchResult {
 		let trie_id = self.ctx.self_trie_id.as_ref().expect(
 			"`ctx.self_trie_id` points to an alive contract within the `CallContext`;\
 				it cannot be `None`;\
 				expect can't fail;\
 				qed",
 		);
-		if let Err(storage::ContractAbsentError) =
-			Storage::<T>::write(&self.ctx.self_account, trie_id, &key, value)
-		{
-			panic!(
-				"the contract must be in the alive state within the `CallContext`;\
-				the contract cannot be absent in storage;
-				write cannot return `None`;
-				qed"
-			);
-		}
+		// write panics if the passed account is not alive.
+		// the contract must be in the alive state within the `CallContext`;\
+		// the contract cannot be absent in storage;
+		// write cannot return `None`;
+		// qed
+		Storage::<T>::write(&self.ctx.self_account, trie_id, &key, value)
 	}
 
 	fn instantiate(
@@ -554,7 +550,7 @@ where
 		&mut self,
 		to: &T::AccountId,
 		value: BalanceOf<T>,
-	) -> Result<(), DispatchError> {
+	) -> DispatchResult {
 		transfer(
 			TransferCause::Call,
 			TransactorKind::Contract,
@@ -568,7 +564,7 @@ where
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
-	) -> Result<(), DispatchError> {
+	) -> DispatchResult {
 		let self_id = self.ctx.self_account.clone();
 		let value = T::Currency::free_balance(&self_id);
 		if let Some(caller_ctx) = self.ctx.caller {
@@ -612,7 +608,7 @@ where
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> Result<(), DispatchError> {
+	) -> DispatchResult {
 		if let Some(caller_ctx) = self.ctx.caller {
 			if caller_ctx.is_live(&self.ctx.self_account) {
 				return Err(Error::<T>::ReentranceDenied.into());

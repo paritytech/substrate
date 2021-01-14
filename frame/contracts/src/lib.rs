@@ -122,6 +122,7 @@ use frame_support::{
 	storage::child::ChildInfo,
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
+	weights::Pays,
 };
 use frame_system::{ensure_signed, ensure_root, Module as System};
 use pallet_contracts_primitives::{
@@ -211,6 +212,10 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	pub code_hash: CodeHash,
 	/// Pay rent at most up to this value.
 	pub rent_allowance: Balance,
+	/// The amount of rent that was payed by the contract over its whole lifetime.
+	///
+	/// A restored contract starts with a value of zero just like a new contract.
+	pub rent_payed: Balance,
 	/// Last block rent has been payed.
 	pub deduct_block: BlockNumber,
 	/// Last block child storage has been written.
@@ -421,6 +426,11 @@ decl_error! {
 		/// This can be returned from [`Module::claim_surcharge`] because the target
 		/// contract has enough balance to pay for its rent.
 		ContractNotEvictable,
+		/// A storage modification exhausted the 32bit type that holds the storage size.
+		///
+		/// This can either happen when the accumulated storage in bytes is too large or
+		/// when number of storage items is too large.
+		StorageExhausted,
 	}
 }
 
@@ -597,8 +607,12 @@ decl_module! {
 			gas_meter.into_dispatch_result(result)
 		}
 
-		/// Allows block producers to claim a small reward for evicting a contract. If a block producer
-		/// fails to do so, a regular users will be allowed to claim the reward.
+		/// Allows block producers to claim a small reward for evicting a contract. If a block
+		/// producer fails to do so, a regular users will be allowed to claim the reward.
+		///
+		/// In case of a successful eviction no fees are charged from the sender. However, the
+		/// reward is capped by the total amount of rent that was payed by the contract while
+		/// it was alive.
 		///
 		/// If contract is not evicted as a result of this call, [`Error::ContractNotEvictable`]
 		/// is returned and the sender is not eligible for the reward.
@@ -607,7 +621,7 @@ decl_module! {
 			origin,
 			dest: T::AccountId,
 			aux_sender: Option<T::AccountId>
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
 				(Ok(frame_system::RawOrigin::Signed(account)), None) => {
@@ -629,8 +643,13 @@ decl_module! {
 			};
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
-			if Rent::<T>::snitch_contract_should_be_evicted(&dest, handicap)? {
-				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get()).map(|_| ())
+			if let Some(rent_payed) = Rent::<T>::try_eviction(&dest, handicap)? {
+				T::Currency::deposit_into_existing(
+					&rewarded,
+					T::SurchargeReward::get().min(rent_payed),
+				)
+				.map(|_| Pays::No.into())
+				.map_err(Into::into)
 			} else {
 				Err(Error::<T>::ContractNotEvictable.into())
 			}

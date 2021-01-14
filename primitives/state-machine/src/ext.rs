@@ -454,8 +454,9 @@ where
 			HexDisplay::from(&prefix),
 		);
 		let _guard = guard();
-		if is_child_storage_key(prefix) {
-			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
+
+		if sp_core::storage::well_known_keys::starts_with_child_storage_key(prefix) {
+			warn!(target: "trie", "Refuse to directly clear prefix that is part or contains of child storage key");
 			return;
 		}
 
@@ -1022,6 +1023,45 @@ mod tests {
 			ext.child_storage_hash(child_info, &[30]),
 			Some(Blake2Hasher::hash(&[31]).as_ref().to_vec()),
 		);
+	}
+
+	#[test]
+	fn clear_prefix_cannot_delete_a_child_root() {
+		let child_info = ChildInfo::new_default(b"Child1");
+		let child_info = &child_info;
+		let mut cache = StorageTransactionCache::default();
+		let mut overlay = OverlayedChanges::default();
+		let mut offchain_overlay = prepare_offchain_overlay_with_changes();
+		let backend = Storage {
+			top: map![],
+			children_default: map![
+				child_info.storage_key().to_vec() => StorageChild {
+					data: map![
+						vec![30] => vec![40]
+					],
+					child_info: child_info.to_owned(),
+				}
+			],
+		}.into();
+
+		let ext = TestExt::new(&mut overlay, &mut offchain_overlay, &mut cache, &backend, None, None);
+
+		use sp_core::storage::well_known_keys;
+		let mut ext = ext;
+		let mut not_under_prefix = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
+		not_under_prefix[4] = 88;
+		not_under_prefix.extend(b"path");
+		ext.set_storage(not_under_prefix.clone(), vec![10]);
+
+		ext.clear_prefix(&[]);
+		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4]);
+		let mut under_prefix = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
+		under_prefix.extend(b"path");
+		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4]);
+		assert_eq!(ext.child_storage(child_info, &[30]), Some(vec![40]));
+		assert_eq!(ext.storage(not_under_prefix.as_slice()), Some(vec![10]));
+		ext.clear_prefix(&not_under_prefix[..5]);
+		assert_eq!(ext.storage(not_under_prefix.as_slice()), None);
 	}
 
 	#[test]
