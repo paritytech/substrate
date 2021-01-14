@@ -23,7 +23,7 @@ pub fn force_transfer<T>(node: &Node<T>)
         T::Runtime: pallet_sudo::Config + pallet_balances::Config,
         <T::Runtime as frame_system::Config>::Call: From<SudoCall<T::Runtime>> + From<BalancesCall<T::Runtime>> + Encode,
         <T::Runtime as pallet_sudo::Config>::Call: From<BalancesCall<T::Runtime>>,
-        <T::Runtime as pallet_balances::Config>::Balance: From<u64>,
+        <T::Runtime as pallet_balances::Config>::Balance: From<u8>,
         <T::Runtime as frame_system::Config>::AccountId: From<AccountId32> + Encode,
         <T::Block as BlockT>::Extrinsic: From<Extrinsic<T::Runtime, T::SignedExtras>>,
         <<T::Runtime as frame_system::Config>::Lookup as sp_runtime::traits::StaticLookup>::Source: From<AccountId32>,
@@ -38,7 +38,7 @@ pub fn force_transfer<T>(node: &Node<T>)
         Balances::<T::Runtime>::free_balance(alice.clone()),
         Balances::<T::Runtime>::free_balance(bob.clone()),
     ));
-    let balance = alice_balance / 2u128.into();
+    let balance = alice_balance / 2u8.into();
 
     let balances_call = BalancesCall::force_transfer(alice.clone().into(), bob.clone().into(), balance.into());
     node.submit_extrinsic(
@@ -71,7 +71,7 @@ pub fn set_balance<T>(node: &Node<T>)
         T::Runtime: pallet_sudo::Config + pallet_balances::Config,
         <T::Runtime as frame_system::Config>::Call: From<SudoCall<T::Runtime>> + From<BalancesCall<T::Runtime>> + Encode,
         <T::Runtime as pallet_sudo::Config>::Call: From<BalancesCall<T::Runtime>>,
-        <T::Runtime as pallet_balances::Config>::Balance: From<u64>,
+        <T::Runtime as pallet_balances::Config>::Balance: From<u8>,
         <T::Runtime as frame_system::Config>::AccountId: From<AccountId32> + Encode,
         <T::Block as BlockT>::Extrinsic: From<Extrinsic<T::Runtime, T::SignedExtras>>,
         <<T::Runtime as frame_system::Config>::Lookup as sp_runtime::traits::StaticLookup>::Source: From<AccountId32>,
@@ -87,7 +87,7 @@ pub fn set_balance<T>(node: &Node<T>)
         Balances::<T::Runtime>::free_balance(alice.clone())
     ));
 
-    let call = BalancesCall::set_balance(bob.clone().into(), alice_balance, 0u128.into());
+    let call = BalancesCall::set_balance(bob.clone().into(), alice_balance, 0u8.into());
     node.submit_extrinsic(
         SudoCall::sudo(Box::new(call.into())),
         alice.into()
@@ -117,7 +117,7 @@ pub fn transfer_keep_alive<T>(node: &Node<T>)
         T::Runtime: pallet_sudo::Config + pallet_balances::Config,
         <T::Runtime as frame_system::Config>::Call: From<SudoCall<T::Runtime>> + From<BalancesCall<T::Runtime>> + Encode,
         <T::Runtime as pallet_sudo::Config>::Call: From<BalancesCall<T::Runtime>>,
-        <T::Runtime as pallet_balances::Config>::Balance: From<u64>,
+        <T::Runtime as pallet_balances::Config>::Balance: From<u8>,
         <T::Runtime as frame_system::Config>::AccountId: From<AccountId32> + Encode,
         <T::Block as BlockT>::Extrinsic: From<Extrinsic<T::Runtime, T::SignedExtras>>,
         <<T::Runtime as frame_system::Config>::Lookup as sp_runtime::traits::StaticLookup>::Source: From<AccountId32>,
@@ -133,7 +133,7 @@ pub fn transfer_keep_alive<T>(node: &Node<T>)
         Balances::<T::Runtime>::free_balance(alice.clone())
     ));
     // attempt to send more than the existential deposit
-    let balance = bob_balance - (<T::Runtime as pallet_balances::Config>::ExistentialDeposit::get() / 2u128.into());
+    let balance = bob_balance - (<T::Runtime as pallet_balances::Config>::ExistentialDeposit::get() / 2u8.into());
 
     let call = BalancesCall::transfer_keep_alive(alice.clone().into(), balance.into());
     node.submit_extrinsic(call, bob.clone().into());
