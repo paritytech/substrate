@@ -196,7 +196,7 @@ impl TelemetryWorker {
 			for (addr, verbosity) in endpoints {
 				node_map
 					.entry(id.clone())
-					.or_default() 
+					.or_default()
 					.push((verbosity, addr.clone()));
 				existing_nodes.insert(addr.clone());
 
@@ -259,7 +259,6 @@ impl TelemetryWorker {
 			.flat_map(
 				|(verbosity, message, nodes): (u8, String, &Vec<(u8, Multiaddr)>)| {
 					let mut to_send = Vec::with_capacity(nodes.len());
-					let before = Instant::now();
 
 					for (node_max_verbosity, addr) in nodes {
 						if verbosity > *node_max_verbosity {
@@ -273,13 +272,6 @@ impl TelemetryWorker {
 						}
 
 						to_send.push((addr.clone(), message.clone()));
-					}
-
-					if before.elapsed() > Duration::from_millis(200) {
-						log::warn!(
-							target: "telemetry",
-							"Processing one telemetry message took more than 200ms",
-						);
 					}
 
 					stream::iter(to_send)
