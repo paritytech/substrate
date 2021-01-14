@@ -326,7 +326,7 @@ pub mod pallet {
 		#[pallet::weight((T::SystemWeightInfo::set_changes_trie_config(), DispatchClass::Operational))]
 		pub fn set_changes_trie_config(
 			origin: OriginFor<T>,
-			changes_trie_config: Option<ChangesTrieConfiguration>
+			changes_trie_config: Option<ChangesTrieConfiguration>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			match changes_trie_config.clone() {
