@@ -328,7 +328,7 @@ pub fn read_db<Block>(
 }
 
 /// Remove database column entry for the given block.
-pub fn remove_db<Block>(
+pub fn remove_from_db<Block>(
 	transaction: &mut Transaction<DbHash>,
 	db: &dyn Database<DbHash>,
 	col_index: u32,

@@ -34,7 +34,7 @@ pub struct PruningParams {
 	///
 	/// Default is to keep all blocks.
 	#[structopt(long, value_name = "COUNT")]
-	pub block_pruning: Option<u32>,
+	pub keep_blocks: Option<u32>,
 }
 
 impl PruningParams {
@@ -65,8 +65,8 @@ impl PruningParams {
 	}
 
 	/// Get the block pruning value from the parameters
-	pub fn block_pruning(&self) -> error::Result<KeepBlocks> {
-		Ok(match self.block_pruning {
+	pub fn keep_blocks(&self) -> error::Result<KeepBlocks> {
+		Ok(match self.keep_blocks {
 			Some(n) => KeepBlocks::Some(n),
 			None => KeepBlocks::All,
 		})

@@ -267,7 +267,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// `KeepBlocks::All`.
 	fn keep_blocks(&self) -> Result<KeepBlocks> {
 		self.pruning_params()
-			.map(|x| x.block_pruning())
+			.map(|x| x.keep_blocks())
 			.unwrap_or_else(|| Ok(KeepBlocks::All))
 	}
 

@@ -286,7 +286,7 @@ pub enum KeepBlocks {
 /// Block body storage scheme.
 #[derive(Debug, Clone, Copy)]
 pub enum TransactionStorageMode {
-	/// Store block body as deeply encoded list of transactions in the BODY column
+	/// Store block body as an encoded list of full transactions in the BODY column
 	BlockBody,
 	/// Store a list of hashes in the BODY column and each transaction individually
 	/// in the TRANSACTION column.
@@ -532,8 +532,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 						match Vec::<Block::Hash>::decode(&mut &body[..]) {
 							Ok(hashes) => {
 								let extrinsics: ClientResult<Vec<Block::Extrinsic>> = hashes.into_iter().map(
-									|h| self.extrinsic(&h)
-									.and_then(|maybe_ex| maybe_ex.ok_or_else(
+									|h| self.extrinsic(&h) .and_then(|maybe_ex| maybe_ex.ok_or_else(
 										|| sp_blockchain::Error::Backend(
 											format!("Missing transaction: {}", h))))
 								).collect();
@@ -1507,36 +1506,37 @@ impl<Block: BlockT> Backend<Block> {
 		if let KeepBlocks::Some(keep_blocks) = self.keep_blocks {
 			// Always keep the last finalized block
 			let keep = std::cmp::max(keep_blocks, 1);
-			if finalized >= keep.into() {
-				let number = finalized.saturating_sub(keep.into());
-				match read_db(&*self.storage.db, columns::KEY_LOOKUP, columns::BODY, BlockId::<Block>::number(number))? {
-					Some(body) => {
-						utils::remove_db(
-							transaction,
-							&*self.storage.db,
-							columns::KEY_LOOKUP,
-							columns::BODY,
-							BlockId::<Block>::number(number),
-						)?;
-						debug!(target: "db", "Removing block #{}", number);
-						match self.transaction_storage {
-							TransactionStorageMode::BlockBody => {},
-							TransactionStorageMode::StorageChain => {
-								match Vec::<Block::Hash>::decode(&mut &body[..]) {
-									Ok(hashes) => {
-										for h in hashes {
-											transaction.remove(columns::TRANSACTION, h.as_ref());
-										}
+			if finalized < keep.into() {
+				return Ok(())
+			}
+			let number = finalized.saturating_sub(keep.into());
+			match read_db(&*self.storage.db, columns::KEY_LOOKUP, columns::BODY, BlockId::<Block>::number(number))? {
+				Some(body) => {
+					debug!(target: "db", "Removing block #{}", number);
+					utils::remove_from_db(
+						transaction,
+						&*self.storage.db,
+						columns::KEY_LOOKUP,
+						columns::BODY,
+						BlockId::<Block>::number(number),
+					)?;
+					match self.transaction_storage {
+						TransactionStorageMode::BlockBody => {},
+						TransactionStorageMode::StorageChain => {
+							match Vec::<Block::Hash>::decode(&mut &body[..]) {
+								Ok(hashes) => {
+									for h in hashes {
+										transaction.remove(columns::TRANSACTION, h.as_ref());
 									}
-									Err(err) => return Err(sp_blockchain::Error::Backend(
-										format!("Error decoding body list: {}", err)
-									)),
 								}
+								Err(err) => return Err(sp_blockchain::Error::Backend(
+									format!("Error decoding body list: {}", err)
+								)),
 							}
 						}
 					}
-					None => return Ok(()),
 				}
+				None => return Ok(()),
 			}
 		}
 		Ok(())
