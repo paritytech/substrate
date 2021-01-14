@@ -446,8 +446,25 @@ pub mod pallet {
 	#[deprecated(note = "use `Event` instead")]
 	pub type RawEvent<T: Config> = Event<T>;
 
+	/// Error for the System module
 	#[pallet::error]
-	// TODO_ERROR
+	pub enum Error {
+		/// The name of specification does not match between the current runtime
+		/// and the new runtime.
+		InvalidSpecName,
+		/// The specification version is not allowed to decrease between the current runtime
+		/// and the new runtime.
+		SpecVersionNeedsToIncrease,
+		/// Failed to extract the runtime version from the new runtime.
+		///
+		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
+		FailedToExtractRuntimeVersion,
+		/// Suicide called when the account has non-default composite data.
+		NonDefaultComposite,
+		/// There is a non-zero reference count preventing the account from being purged.
+		NonZeroRefCount,
+	}
+
 	#[pallet::origin]
 	// TODO_ORIGIN
 	#[pallet::validate_unsigned]
