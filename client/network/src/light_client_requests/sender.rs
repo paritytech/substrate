@@ -355,7 +355,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 				}
 			};
 
-			let request_bytes = match serialize_request(&pending_request.request) {
+			let request_bytes = match pending_request.request.serialize_request() {
 				Ok(bytes) => bytes,
 				Err(error) => {
 					log::debug!("failed to serialize request: {}", error);
@@ -525,71 +525,6 @@ fn send_reply<B: Block>(result: Result<Reply<B>, ClientError>, request: Request<
 	}
 }
 
-// TODO: Why not make this a method?
-fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::EncodeError> {
-	let request = match request {
-		Request::Body { request, .. } => {
-			let rq = schema::v1::BlockRequest {
-				fields: BlockAttributes::BODY.to_be_u32(),
-				from_block: Some(schema::v1::block_request::FromBlock::Hash(
-					request.header.hash().encode(),
-				)),
-				to_block: Default::default(),
-				direction: schema::v1::Direction::Ascending as i32,
-				max_blocks: 1,
-			};
-
-			let mut buf = Vec::with_capacity(rq.encoded_len());
-			rq.encode(&mut buf)?;
-			return Ok(buf);
-		}
-		Request::Header { request, .. } => {
-			let r = schema::v1::light::RemoteHeaderRequest { block: request.block.encode() };
-			schema::v1::light::request::Request::RemoteHeaderRequest(r)
-		}
-		Request::Read { request, .. } => {
-			let r = schema::v1::light::RemoteReadRequest {
-				block: request.block.encode(),
-				keys: request.keys.clone(),
-			};
-			schema::v1::light::request::Request::RemoteReadRequest(r)
-		}
-		Request::ReadChild { request, .. } => {
-			let r = schema::v1::light::RemoteReadChildRequest {
-				block: request.block.encode(),
-				storage_key: request.storage_key.clone().into_inner(),
-				keys: request.keys.clone(),
-			};
-			schema::v1::light::request::Request::RemoteReadChildRequest(r)
-		}
-		Request::Call { request, .. } => {
-			let r = schema::v1::light::RemoteCallRequest {
-				block: request.block.encode(),
-				method: request.method.clone(),
-				data: request.call_data.clone(),
-			};
-			schema::v1::light::request::Request::RemoteCallRequest(r)
-		}
-		Request::Changes { request, .. } => {
-			let r = schema::v1::light::RemoteChangesRequest {
-				first: request.first_block.1.encode(),
-				last: request.last_block.1.encode(),
-				min: request.tries_roots.1.encode(),
-				max: request.max_block.1.encode(),
-				storage_key: request.storage_key.clone().map(|s| s.into_inner())
-					.unwrap_or_default(),
-				key: request.key.clone(),
-			};
-			schema::v1::light::request::Request::RemoteChangesRequest(r)
-		}
-	};
-
-	let rq = schema::v1::light::Request { request: Some(request) };
-	let mut buf = Vec::with_capacity(rq.encoded_len());
-	rq.encode(&mut buf)?;
-	Ok(buf)
-}
-
 /// Error returned by [`LightClientRequestSender::request`].
 #[derive(derive_more::Display, derive_more::From)]
 pub enum SendRequestError {
@@ -731,5 +666,69 @@ impl<B: Block> Request<B> {
 			Request::Changes { request, .. } => request.retry_count,
 		};
 		rc.unwrap_or(0)
+	}
+
+	fn serialize_request(&self) -> Result<Vec<u8>, prost::EncodeError> {
+		let request = match self {
+			Request::Body { request, .. } => {
+				let rq = schema::v1::BlockRequest {
+					fields: BlockAttributes::BODY.to_be_u32(),
+					from_block: Some(schema::v1::block_request::FromBlock::Hash(
+						request.header.hash().encode(),
+					)),
+					to_block: Default::default(),
+					direction: schema::v1::Direction::Ascending as i32,
+					max_blocks: 1,
+				};
+
+				let mut buf = Vec::with_capacity(rq.encoded_len());
+				rq.encode(&mut buf)?;
+				return Ok(buf);
+			}
+			Request::Header { request, .. } => {
+				let r = schema::v1::light::RemoteHeaderRequest { block: request.block.encode() };
+				schema::v1::light::request::Request::RemoteHeaderRequest(r)
+			}
+			Request::Read { request, .. } => {
+				let r = schema::v1::light::RemoteReadRequest {
+					block: request.block.encode(),
+					keys: request.keys.clone(),
+				};
+				schema::v1::light::request::Request::RemoteReadRequest(r)
+			}
+			Request::ReadChild { request, .. } => {
+				let r = schema::v1::light::RemoteReadChildRequest {
+					block: request.block.encode(),
+					storage_key: request.storage_key.clone().into_inner(),
+					keys: request.keys.clone(),
+				};
+				schema::v1::light::request::Request::RemoteReadChildRequest(r)
+			}
+			Request::Call { request, .. } => {
+				let r = schema::v1::light::RemoteCallRequest {
+					block: request.block.encode(),
+					method: request.method.clone(),
+					data: request.call_data.clone(),
+				};
+				schema::v1::light::request::Request::RemoteCallRequest(r)
+			}
+			Request::Changes { request, .. } => {
+				let r = schema::v1::light::RemoteChangesRequest {
+					first: request.first_block.1.encode(),
+					last: request.last_block.1.encode(),
+					min: request.tries_roots.1.encode(),
+					max: request.max_block.1.encode(),
+					storage_key: request.storage_key.clone().map(|s| s.into_inner())
+						.unwrap_or_default(),
+					key: request.key.clone(),
+				};
+				schema::v1::light::request::Request::RemoteChangesRequest(r)
+			}
+		};
+
+		let rq = schema::v1::light::Request { request: Some(request) };
+		let mut buf = Vec::with_capacity(rq.encoded_len());
+		rq.encode(&mut buf)?;
+		Ok(buf)
 	}
 }
