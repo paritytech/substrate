@@ -1,6 +1,6 @@
 [package]
 name = "sc-client-db"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -21,7 +21,7 @@ kvdb-memorydb = "0.8.0"
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
 parity-util-mem = { version = "0.8.0", default-features = false, features = ["std"] }
-codec = { package = "parity-scale-codec", version = "1.3.4", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.6", features = ["derive"] }
 blake2-rfc = "0.2.18"
 
 sc-client-api = { version = "2.0.0", path = "../api" }

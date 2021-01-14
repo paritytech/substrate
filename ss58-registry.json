@@ -254,6 +254,15 @@
 			"website": null
 		},
 		{
+			"prefix": 29,
+			"network": "cord",
+			"displayName": "Dhiway CORD Network",
+			"symbols": ["DCU"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://dhiway.com/"
+		},
+		{
 			"prefix": 30,
 			"network": "phala",
 			"displayName": "Phala Network",
