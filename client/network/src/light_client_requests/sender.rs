@@ -325,7 +325,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 			// TODO: Consider moving 40s to a constant combined with `ProtocolConfig::request_timeout` in `handler.rs`.
 			if now > pending_request.timestamp + Duration::from_secs(40) {
 				if pending_request.retries == 0 {
-					send_reply(Err(ClientError::RemoteFetchFailed), pending_request.request);
+					pending_request.request.return_reply(Err(ClientError::RemoteFetchFailed));
 					continue
 				}
 				pending_request.timestamp = Instant::now();
@@ -359,7 +359,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 				Ok(bytes) => bytes,
 				Err(error) => {
 					log::debug!("failed to serialize request: {}", error);
-					send_reply(Err(ClientError::RemoteFetchFailed), pending_request.request);
+					pending_request.request.return_reply(Err(ClientError::RemoteFetchFailed));
 					continue
 				}
 			};
@@ -391,7 +391,6 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 					// random ID, we should not have an entry for it with this peer ID in
 					// our `outstanding` map, so a malicious peer should not be able to get
 					// us here. It is our own fault and must be fixed!
-					// TODO: handle unwrap. Or is it needed in the first place?
 					panic!("unexpected peer status {:?} for {}", info.status, sent_request.peer);
 				}
 
@@ -416,7 +415,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 						ReputationChange::new(TIMEOUT_REPUTATION_CHANGE, "light request timeout"),
 					);
 					if sent_request.retries == 0 {
-						send_reply(Err(ClientError::RemoteFetchFailed), sent_request.request);
+						sent_request.request.return_reply(Err(ClientError::RemoteFetchFailed));
 						continue
 					}
 					self.pending_requests.push_back(PendingRequest {
@@ -429,7 +428,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 			};
 
 			match self.on_response(sent_request.peer, &sent_request.request, response.unwrap()) {
-				Ok(reply) => send_reply(Ok(reply), sent_request.request),
+				Ok(reply) => sent_request.request.return_reply(Ok(reply)),
 				Err(Error::UnexpectedResponse) => {
 					log::debug!("Unexpected response from peer {}.", sent_request.peer);
 					self.remove_peer(sent_request.peer);
@@ -451,7 +450,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 							request: sent_request.request,
 						})
 					} else {
-						send_reply(Err(ClientError::RemoteFetchFailed), sent_request.request)
+						sent_request.request.return_reply(Err(ClientError::RemoteFetchFailed))
 					}
 				}
 			}
@@ -483,46 +482,6 @@ pub enum Response {
 	Light(schema::v1::light::Response),
 	/// Incoming block response from remote.
 	Block(schema::v1::BlockResponse),
-}
-
-// TODO: Consider renaming, given that this is not sending the request out on the wire, but instead
-// sending the request up to the one that requested it.
-fn send_reply<B: Block>(result: Result<Reply<B>, ClientError>, request: Request<B>) {
-	fn send<T>(item: T, sender: oneshot::Sender<T>) {
-		let _ = sender.send(item); // It is okay if the other end already hung up.
-	}
-	match request {
-		Request::Body { request, sender } => match result {
-			Err(e) => send(Err(e), sender),
-			Ok(Reply::Extrinsics(x)) => send(Ok(x), sender),
-			reply => log::error!("invalid reply for body request: {:?}, {:?}", reply, request),
-		}
-		Request::Header { request, sender } => match result {
-			Err(e) => send(Err(e), sender),
-			Ok(Reply::Header(x)) => send(Ok(x), sender),
-			reply => log::error!("invalid reply for header request: {:?}, {:?}", reply, request),
-		}
-		Request::Read { request, sender } => match result {
-			Err(e) => send(Err(e), sender),
-			Ok(Reply::MapVecU8OptVecU8(x)) => send(Ok(x), sender),
-			reply => log::error!("invalid reply for read request: {:?}, {:?}", reply, request),
-		}
-		Request::ReadChild { request, sender } => match result {
-			Err(e) => send(Err(e), sender),
-			Ok(Reply::MapVecU8OptVecU8(x)) => send(Ok(x), sender),
-			reply => log::error!("invalid reply for read child request: {:?}, {:?}", reply, request),
-		}
-		Request::Call { request, sender } => match result {
-			Err(e) => send(Err(e), sender),
-			Ok(Reply::VecU8(x)) => send(Ok(x), sender),
-			reply => log::error!("invalid reply for call request: {:?}, {:?}", reply, request),
-		}
-		Request::Changes { request, sender } => match result {
-			Err(e) => send(Err(e), sender),
-			Ok(Reply::VecNumberU32(x)) => send(Ok(x), sender),
-			reply => log::error!("invalid reply for changes request: {:?}, {:?}", reply, request),
-		}
-	}
 }
 
 /// Error returned by [`LightClientRequestSender::request`].
@@ -730,5 +689,43 @@ impl<B: Block> Request<B> {
 		let mut buf = Vec::with_capacity(rq.encoded_len());
 		rq.encode(&mut buf)?;
 		Ok(buf)
+	}
+
+	fn return_reply(self, result: Result<Reply<B>, ClientError>) {
+		fn send<T>(item: T, sender: oneshot::Sender<T>) {
+			let _ = sender.send(item); // It is okay if the other end already hung up.
+		}
+		match self {
+			Request::Body { request, sender } => match result {
+				Err(e) => send(Err(e), sender),
+				Ok(Reply::Extrinsics(x)) => send(Ok(x), sender),
+				reply => log::error!("invalid reply for body request: {:?}, {:?}", reply, request),
+			}
+			Request::Header { request, sender } => match result {
+				Err(e) => send(Err(e), sender),
+				Ok(Reply::Header(x)) => send(Ok(x), sender),
+				reply => log::error!("invalid reply for header request: {:?}, {:?}", reply, request),
+			}
+			Request::Read { request, sender } => match result {
+				Err(e) => send(Err(e), sender),
+				Ok(Reply::MapVecU8OptVecU8(x)) => send(Ok(x), sender),
+				reply => log::error!("invalid reply for read request: {:?}, {:?}", reply, request),
+			}
+			Request::ReadChild { request, sender } => match result {
+				Err(e) => send(Err(e), sender),
+				Ok(Reply::MapVecU8OptVecU8(x)) => send(Ok(x), sender),
+				reply => log::error!("invalid reply for read child request: {:?}, {:?}", reply, request),
+			}
+			Request::Call { request, sender } => match result {
+				Err(e) => send(Err(e), sender),
+				Ok(Reply::VecU8(x)) => send(Ok(x), sender),
+				reply => log::error!("invalid reply for call request: {:?}, {:?}", reply, request),
+			}
+			Request::Changes { request, sender } => match result {
+				Err(e) => send(Err(e), sender),
+				Ok(Reply::VecNumberU32(x)) => send(Ok(x), sender),
+				reply => log::error!("invalid reply for changes request: {:?}, {:?}", reply, request),
+			}
+		}
 	}
 }
