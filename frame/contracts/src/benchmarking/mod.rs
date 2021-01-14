@@ -413,7 +413,7 @@ benchmarks! {
 			caller_funding::<T>() - instance.endowment
 		);
 		assert!(
-			T::Currency::free_balance(&instance.caller) <
+			T::Currency::free_balance(&instance.caller) <=
 			caller_funding::<T>() - instance.endowment + <T as Config>::SurchargeReward::get(),
 		);
 	}
