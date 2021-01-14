@@ -36,9 +36,8 @@ fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 
 #[cfg(test)]
 mod tests {
-	/*
+	use sp_blockchain::Error as ClientError;
 	use super::*;
-	use super::{Event, LightClientRequestClient, OutboundProtocol, PeerStatus, Request, Response};
 	use crate::{chain::Client, config::ProtocolId, schema};
 	use assert_matches::assert_matches;
 	use async_std::task;
@@ -56,8 +55,7 @@ mod tests {
 		swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters},
 		yamux, Multiaddr, PeerId,
 	};
-	use sc_client_api::{FetchChecker, RemoteReadChildRequest, StorageProof};
-	use sp_blockchain::Error as ClientError;
+	use sc_client_api::{FetchChecker, RemoteReadChildRequest};
 	use sp_core::storage::ChildInfo;
 	use sp_runtime::{
 		generic::Header,
@@ -72,6 +70,15 @@ mod tests {
 		task::{Context, Poll},
 	};
 	use void::Void;
+	use sc_client_api::{
+		StorageProof,
+		light::{
+			self, RemoteReadRequest, RemoteBodyRequest, ChangesProof,
+			RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
+		}
+	};
+
+	/*
 
 	type Block =
 		sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
@@ -103,12 +110,14 @@ mod tests {
 		)
 	}
 
-	struct DummyFetchChecker<B> {
-		ok: bool,
-		_mark: std::marker::PhantomData<B>,
+	*/
+
+	pub struct DummyFetchChecker<B> {
+		pub ok: bool,
+		pub _mark: std::marker::PhantomData<B>,
 	}
 
-	impl<B: BlockT> light::FetchChecker<B> for DummyFetchChecker<B> {
+	impl<B: BlockT> FetchChecker<B> for DummyFetchChecker<B> {
 		fn check_header_proof(
 			&self,
 			_request: &RemoteHeaderRequest<B::Header>,
@@ -186,6 +195,8 @@ mod tests {
 			}
 		}
 	}
+
+	/*
 
 	fn make_config() -> super::Config {
 		super::Config::new(&ProtocolId::from("foo"))
@@ -265,20 +276,6 @@ mod tests {
 		}
 	}
 
-	#[test]
-	fn disconnects_from_peer_if_told() {
-		let peer = PeerId::random();
-		let pset = peerset();
-		let mut behaviour = make_behaviour(true, pset.1, make_config());
-
-		behaviour.inject_connection_established(&peer, &ConnectionId::new(1), &empty_dialer());
-		behaviour.inject_connected(&peer);
-		assert_eq!(1, behaviour.peers.len());
-
-		behaviour.inject_connection_closed(&peer, &ConnectionId::new(1), &empty_dialer());
-		behaviour.inject_disconnected(&peer);
-		assert_eq!(0, behaviour.peers.len())
-	}
 
 	#[test]
 	fn disconnects_from_peer_if_request_times_out() {

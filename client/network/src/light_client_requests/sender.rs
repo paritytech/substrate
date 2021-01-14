@@ -723,6 +723,41 @@ mod tests {
 		traits::{BlakeTwo256, Block as BlockT, NumberFor},
 	};
 
+	fn protocol_id() -> ProtocolId {
+		ProtocolId::from("test")
+	}
+
+	fn peerset() -> (sc_peerset::Peerset, sc_peerset::PeersetHandle) {
+		let cfg = sc_peerset::SetConfig {
+			in_peers: 128,
+			out_peers: 128,
+			bootnodes: Default::default(),
+			reserved_only: false,
+			reserved_nodes: Default::default(),
+		};
+		sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets: vec![cfg] })
+	}
+
+	#[test]
+	fn removes_peer_if_told() {
+		let peer = PeerId::random();
+		let (_peer_set, peer_set_handle) = peerset();
+		let mut sender = LightClientRequestSender::<Block>::new(
+			&protocol_id(),
+			Arc::new(crate::light_client_requests::tests::DummyFetchChecker {
+				ok: true,
+				_mark: std::marker::PhantomData,
+			}),
+			peer_set_handle,
+		);
+
+		sender.inject_connected(peer);
+		assert_eq!(1, sender.peers.len());
+
+		sender.inject_disconnected(peer);
+		assert_eq!(0, sender.peers.len());
+	}
+
 	type Block =
 		sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
 
@@ -752,4 +787,5 @@ mod tests {
 				.unwrap()
 				.contains(BlockAttributes::BODY));
 	}
+
 }
