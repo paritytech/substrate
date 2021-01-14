@@ -63,7 +63,7 @@ pub struct Configuration {
 	pub state_cache_child_ratio: Option<usize>,
 	/// State pruning settings.
 	pub state_pruning: PruningMode,
-	/// Block pruning settings.
+	/// Number of blocks to keep in the db.
 	pub keep_blocks: KeepBlocks,
 	/// Transaction storage scheme.
 	pub transaction_storage: TransactionStorageMode,

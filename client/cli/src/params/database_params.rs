@@ -37,7 +37,12 @@ pub struct DatabaseParams {
 	pub database_cache_size: Option<usize>,
 
 	/// Enable storage chain mode
-	#[structopt(long = "storage-chain")]
+	///
+	/// This changes the storage format for blocks bodys. 
+	/// If this is enabled, each transaction is stored separately in the
+	/// transaction database column and is only referenced by hash
+	/// in the block body column.
+	#[structopt(long)]
 	pub storage_chain: bool,
 }
 

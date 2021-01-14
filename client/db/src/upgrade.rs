@@ -55,14 +55,11 @@ pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_bl
 /// 1) the number of columns has changed from 11 to 12;
 /// 2) transactions column is added;
 fn migrate_1_to_2<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_blockchain::Result<()> {
-	{
-		let db_path = db_path.to_str()
-			.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
-		let db_cfg = DatabaseConfig::with_columns(V1_NUM_COLUMNS);
-		let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
-		db.add_column().map_err(db_err)?;
-	}
-	Ok(())
+	let db_path = db_path.to_str()
+		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
+	let db_cfg = DatabaseConfig::with_columns(V1_NUM_COLUMNS);
+	let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
+	db.add_column().map_err(db_err)
 }
 
 /// Reads current database version from the file at given path.

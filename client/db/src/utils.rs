@@ -333,7 +333,7 @@ pub fn remove_db<Block>(
 	db: &dyn Database<DbHash>,
 	col_index: u32,
 	col: u32,
-	id: BlockId<Block>
+	id: BlockId<Block>,
 ) -> sp_blockchain::Result<()>
 where
 	Block: BlockT,

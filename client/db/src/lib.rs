@@ -940,7 +940,7 @@ impl<Block: BlockT> Backend<Block> {
 		Self::new_test_with_tx_storage(
 			keep_blocks,
 			canonicalization_delay,
-			TransactionStorageMode::BlockBody
+			TransactionStorageMode::BlockBody,
 		)
 	}
 
@@ -949,7 +949,7 @@ impl<Block: BlockT> Backend<Block> {
 	fn new_test_with_tx_storage(
 		keep_blocks: u32,
 		canonicalization_delay: u64,
-		transaction_storage: TransactionStorageMode
+		transaction_storage: TransactionStorageMode,
 	) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
@@ -1516,7 +1516,7 @@ impl<Block: BlockT> Backend<Block> {
 							&*self.storage.db,
 							columns::KEY_LOOKUP,
 							columns::BODY,
-							BlockId::<Block>::number(number)
+							BlockId::<Block>::number(number),
 						)?;
 						debug!(target: "db", "Removing block #{}", number);
 						match self.transaction_storage {
