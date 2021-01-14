@@ -98,12 +98,14 @@ pub fn reload_filter() -> Result<(), String> {
 ///
 /// Includes substrate defaults and CLI supplied directives.
 pub fn reset_log_filter() -> Result<(), String> {
-	*CURRENT_DIRECTIVES
-		.get_or_init(|| Mutex::new(Vec::new()))
-		.lock() = DEFAULT_DIRECTIVES
+	let directive = DEFAULT_DIRECTIVES
 		.get_or_init(|| Mutex::new(Vec::new()))
 		.lock()
 		.clone();
+	
+	*CURRENT_DIRECTIVES
+		.get_or_init(|| Mutex::new(Vec::new()))
+		.lock() = directive;
 	reload_filter()
 }
 
