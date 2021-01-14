@@ -26,6 +26,8 @@
 //!
 //! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
 
+#![warn(missing_docs)]
+
 pub mod logging;
 
 use rustc_hash::FxHashMap;
@@ -86,10 +88,15 @@ pub trait TraceHandler: Send + Sync {
 /// Represents a tracing event, complete with values
 #[derive(Debug)]
 pub struct TraceEvent {
+	/// Name of the event.
 	pub name: &'static str,
+	/// Target of the event.
 	pub target: String,
+	/// Level of the event.
 	pub level: Level,
+	/// Values for this event.
 	pub values: Values,
+	/// Id of the parent tracing event, if any.
 	pub parent_id: Option<Id>,
 }
 

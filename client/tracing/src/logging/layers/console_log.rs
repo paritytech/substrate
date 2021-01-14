@@ -30,6 +30,7 @@ use tracing_subscriber::{
 };
 use wasm_bindgen::prelude::*;
 
+/// A `Layer` that display logs in the browser's console.
 pub struct ConsoleLogLayer<S, N = tracing_subscriber::fmt::format::DefaultFields, T = SystemTime> {
 	event_format: EventFormat<T>,
 	fmt_fields: N,
@@ -37,6 +38,7 @@ pub struct ConsoleLogLayer<S, N = tracing_subscriber::fmt::format::DefaultFields
 }
 
 impl<S, T> ConsoleLogLayer<S, tracing_subscriber::fmt::format::DefaultFields, T> {
+	/// Create a new [`ConsoleLogLayer`] using the `EventFormat` provided in argument.
 	pub fn new(event_format: EventFormat<T>) -> Self {
 		Self {
 			event_format,
