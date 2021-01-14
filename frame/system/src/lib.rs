@@ -238,7 +238,7 @@ pub mod pallet {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight(*_ratio * T::BlockWeights::get().max_block)]
+		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
 		fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Ok(().into())
@@ -251,7 +251,7 @@ pub mod pallet {
 		/// - Base Weight: 0.665 µs, independent of remark length.
 		/// - No DB operations.
 		/// # </weight>
-		#[weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
+		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
 		fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			Ok(().into())
@@ -265,7 +265,7 @@ pub mod pallet {
 		/// - Base Weight: 1.405 µs
 		/// - 1 write to HEAP_PAGES
 		/// # </weight>
-		#[weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
+		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
 		fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
@@ -282,7 +282,7 @@ pub mod pallet {
 		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
 		/// We will treat this as a full block.
 		/// # </weight>
-		#[weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
@@ -300,7 +300,7 @@ pub mod pallet {
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
 		/// # </weight>
-		#[weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code_without_checks(
 			origin: OriginFor<T>,
 			code: Vec<u8>
@@ -321,7 +321,7 @@ pub mod pallet {
 		/// - DB Weight:
 		///     - Writes: Changes Trie, System Digest
 		/// # </weight>
-		#[weight((T::SystemWeightInfo::set_changes_trie_config(), DispatchClass::Operational))]
+		#[pallet::weight((T::SystemWeightInfo::set_changes_trie_config(), DispatchClass::Operational))]
 		pub fn set_changes_trie_config(
 			origin: OriginFor<T>,
 			changes_trie_config: Option<ChangesTrieConfiguration>
@@ -350,7 +350,7 @@ pub mod pallet {
 		/// - Base Weight: 0.568 * i µs
 		/// - Writes: Number of items
 		/// # </weight>
-		#[weight((
+		#[pallet::weight((
 			T::SystemWeightInfo::set_storage(items.len() as u32),
 			DispatchClass::Operational,
 		))]
@@ -370,7 +370,7 @@ pub mod pallet {
 		/// - Base Weight: .378 * i µs
 		/// - Writes: Number of items
 		/// # </weight>
-		#[weight((
+		#[pallet::weight((
 			T::SystemWeightInfo::kill_storage(keys.len() as u32),
 			DispatchClass::Operational,
 		))]
@@ -393,7 +393,7 @@ pub mod pallet {
 		/// - Base Weight: 0.834 * P µs
 		/// - Writes: Number of subkeys + 1
 		/// # </weight>
-		#[weight((
+		#[pallet::weight((
 			T::SystemWeightInfo::kill_prefix(_subkeys.saturating_add(1)),
 			DispatchClass::Operational,
 		))]
@@ -417,7 +417,7 @@ pub mod pallet {
 		/// Base Weight: 8.626 µs
 		/// No DB Read or Write operations because caller is already in overlay
 		/// # </weight>
-		#[weight((T::SystemWeightInfo::suicide(), DispatchClass::Operational))]
+		#[pallet::weight((T::SystemWeightInfo::suicide(), DispatchClass::Operational))]
 		pub fn suicide(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let account = Account::<T>::get(&who);
