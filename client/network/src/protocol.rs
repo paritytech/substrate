@@ -47,7 +47,7 @@ use sp_consensus::{
 	block_validation::BlockAnnounceValidator,
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
-use sp_runtime::{generic::BlockId, Justifications};
+use sp_runtime::{generic::BlockId, EncodedJustification, Justifications};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub
 };
@@ -770,10 +770,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					None
 				},
 				justification: if !block_data.justification.is_empty() {
-					let justifications: Justifications =
-						Decode::decode(&mut &block_data.justification[..])
-							.expect("WIP(JON): remove me");
-					Some(justifications)
+					// For compatibility we assume that the incoming Justifications is an
+					// `EncodedJustification`, as before.
+					let justification: EncodedJustification = block_data.justification;
+					let justifications = vec![(sp_finality_grandpa::GRANDPA_ENGINE_ID, justification)];
+					Some(Justifications(justifications))
 				} else if block_data.is_empty_justification {
 					Some(Justifications(Vec::new()))
 				} else {
