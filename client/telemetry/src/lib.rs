@@ -164,7 +164,7 @@ impl TelemetryWorker {
 	/// This should be run in a background task.
 	pub async fn run(self) {
 		let Self {
-			receiver,
+			mut receiver,
 			sender: _sender,
 			mut init_receiver,
 			init_sender: _init_sender,
@@ -240,52 +240,41 @@ impl TelemetryWorker {
 			})
 			.collect();
 
-		let mut stream = receiver
-			.filter_map(|(id, verbosity, message): (Id, u8, String)| {
-				if let Some(nodes) = node_map.get(&id) {
-					future::ready(Some((verbosity, message, nodes)))
-				} else {
-					log::error!(
-						target: "telemetry",
-						"Received telemetry log for unknown id ({:?}): {}",
-						id,
-						message,
-					);
-					future::ready(None)
-				}
-			})
-			.flat_map(
-				|(verbosity, message, nodes): (u8, String, &Vec<(u8, Multiaddr)>)| {
-					let mut to_send = Vec::with_capacity(nodes.len());
-
-					for (node_max_verbosity, addr) in nodes {
-						if verbosity > *node_max_verbosity {
-							log::trace!(
-								target: "telemetry",
-								"Skipping {} for log entry with verbosity {:?}",
-								addr,
-								verbosity,
-							);
-							continue;
-						}
-
-						to_send.push((addr.clone(), message.clone()));
-					}
-
-					stream::iter(to_send)
-				},
-			);
-
-		while let Some((addr, message)) = stream.next().await {
-			if let Some(node) = node_pool.get_mut(&addr) {
-				let _ = node.send(message).await;
+		while let Some((id, verbosity, message)) = receiver.next().await {
+			let nodes = if let Some(nodes) = node_map.get(&id) {
+				nodes
 			} else {
 				log::error!(
 					target: "telemetry",
-					"Received message for unknown node ({}). This is a bug. Message sent: {}",
-					addr,
+					"Received telemetry log for unknown id ({:?}): {}",
+					id,
 					message,
 				);
+				continue;
+			};
+
+			for (node_max_verbosity, addr) in nodes {
+				if verbosity > *node_max_verbosity {
+					log::trace!(
+						target: "telemetry",
+						"Skipping {} for log entry with verbosity {:?}",
+						addr,
+						verbosity,
+					);
+					continue;
+				}
+
+				if let Some(node) = node_pool.get_mut(&addr) {
+					let _ = node.send(message.clone()).await;
+				} else {
+					log::error!(
+						target: "telemetry",
+						"Received message for unknown node ({}). This is a bug. \
+						Message sent: {}",
+						addr,
+						message,
+					);
+				}
 			}
 		}
 
