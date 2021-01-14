@@ -243,14 +243,14 @@ benchmarks! {
 		let c in 1 .. (T::MaxSignedSubmissions::get() - 1);
 
 		// the solution will be worse than all of them meaning the score need to be checked against all.
-		let solution = RawSolution { score: [(1_0000_000u128 - 1).into(), 0, 0], ..Default::default() };
+		let solution = RawSolution { score: [(10_000_000u128 - 1).into(), 0, 0], ..Default::default() };
 
 		<CurrentPhase<T>>::put(Phase::Signed);
 		<Round<T>>::put(1);
 
 		for i in 0..c {
 			<SignedSubmissions<T>>::mutate(|queue| {
-				let solution = RawSolution { score: [(1_0000_000 + i).into(), 0, 0], ..Default::default() };
+				let solution = RawSolution { score: [(10_000_000 + i).into(), 0, 0], ..Default::default() };
 				let signed_submission = SignedSubmission { solution, ..Default::default() };
 				// note: this is quite tricky: we know that the queue will stay sorted here. The
 				// last will be best.
