@@ -27,7 +27,7 @@ use codec::{Encode, Decode};
 use sp_std::prelude::*;
 use sp_std::marker::PhantomData;
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Bounded, Saturating};
+use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
 	dispatch::DispatchResult,
@@ -181,6 +181,7 @@ where
 						// charge rent for it during instantation.
 						<frame_system::Module<T>>::block_number().saturating_sub(1u32.into()),
 					rent_allowance: <BalanceOf<T>>::max_value(),
+					rent_payed: <BalanceOf<T>>::zero(),
 					pair_count: 0,
 					last_write: None,
 				}
