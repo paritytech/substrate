@@ -771,7 +771,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				},
 				justification: if !block_data.justification.is_empty() {
 					// For compatibility we assume that the incoming Justifications is an
-					// `EncodedJustification`, as before.
+					// `EncodedJustification`, as before, and that it can only be for GRANDPA.
 					let justification: EncodedJustification = block_data.justification;
 					let justifications = vec![(sp_finality_grandpa::GRANDPA_ENGINE_ID, justification)];
 					Some(Justifications(justifications))
