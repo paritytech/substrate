@@ -40,10 +40,8 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use std::{
 	collections::{HashMap, HashSet},
 	io,
-	time::Duration,
 };
 use tracing::Id;
-use wasm_timer::Instant;
 
 pub use libp2p::wasm_ext::ExtTransport;
 pub use serde_json;

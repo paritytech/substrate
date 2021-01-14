@@ -17,11 +17,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::prelude::*;
-use futures_timer::Delay;
 use libp2p::core::transport::Transport;
 use libp2p::Multiaddr;
 use rand::Rng as _;
 use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
+use wasm_timer::Delay;
 
 pub(crate) type ConnectionNotifierSender = sp_utils::mpsc::TracingUnboundedSender<()>;
 
