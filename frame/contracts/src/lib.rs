@@ -421,6 +421,11 @@ decl_error! {
 		/// This can be returned from [`Module::claim_surcharge`] because the target
 		/// contract has enough balance to pay for its rent.
 		ContractNotEvictable,
+		/// A storage modification exhausted the 32bit type that holds the storage size.
+		///
+		/// This can either happen when the accumulated storage in bytes is too large or
+		/// when number of storage items is too large.
+		StorageExhausted,
 	}
 }
 

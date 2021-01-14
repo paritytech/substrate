@@ -49,8 +49,6 @@ pub struct DeletedContract {
 	trie_id: TrieId,
 }
 
-
-
 pub struct Storage<T>(PhantomData<T>);
 
 impl<T> Storage<T>
@@ -75,15 +73,19 @@ where
 	/// `read`, this function also requires the `account` ID.
 	///
 	/// If the contract specified by the id `account` doesn't exist `Err` is returned.`
+	///
+	/// # Panics
+	///
+	/// Panics iff the `account` specified is not alive and in storage.
 	pub fn write(
 		account: &AccountIdOf<T>,
 		trie_id: &TrieId,
 		key: &StorageKey,
 		opt_new_value: Option<Vec<u8>>,
-	) -> Result<(), ContractAbsentError> {
+	) -> DispatchResult {
 		let mut new_info = match <ContractInfoOf<T>>::get(account) {
 			Some(ContractInfo::Alive(alive)) => alive,
-			None | Some(ContractInfo::Tombstone(_)) => return Err(ContractAbsentError),
+			None | Some(ContractInfo::Tombstone(_)) => panic!("Contract not found"),
 		};
 
 		let hashed_key = blake2_256(key);
@@ -94,10 +96,12 @@ where
 		// Update the total number of KV pairs and the number of empty pairs.
 		match (&opt_prev_len, &opt_new_value) {
 			(Some(_), None) => {
-				new_info.pair_count -= 1;
+				new_info.pair_count = new_info.pair_count.checked_sub(1)
+					.ok_or_else(|| Error::<T>::StorageExhausted)?;
 			},
 			(None, Some(_)) => {
-				new_info.pair_count += 1;
+				new_info.pair_count = new_info.pair_count.checked_add(1)
+					.ok_or_else(|| Error::<T>::StorageExhausted)?;
 			},
 			(Some(_), Some(_)) => {},
 			(None, None) => {},
@@ -111,8 +115,9 @@ where
 			.unwrap_or(0);
 		new_info.storage_size = new_info
 			.storage_size
-			.saturating_add(new_value_len)
-			.saturating_sub(prev_value_len);
+			.checked_sub(prev_value_len)
+			.and_then(|val| val.checked_add(new_value_len))
+			.ok_or_else(|| Error::<T>::StorageExhausted)?;
 
 		new_info.last_write = Some(<frame_system::Module<T>>::block_number());
 		<ContractInfoOf<T>>::insert(&account, ContractInfo::Alive(new_info));
