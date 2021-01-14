@@ -402,7 +402,7 @@ pub mod pallet {
 		pub(crate) fn kill_prefix(
 			origin: OriginFor<T>,
 			prefix: Key,
-			_subkeys: u32
+			_subkeys: u32,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
