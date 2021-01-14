@@ -713,9 +713,6 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 	}
 }
 
-/// Exposed trait-generic origin type.
-pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
-
 // Create a Hash with 69 for each byte,
 // only used to build genesis config.
 #[cfg(feature = "std")]
