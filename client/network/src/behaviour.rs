@@ -345,10 +345,12 @@ Behaviour<B, H> {
 				self.light_client_request_client.update_best_block(&peer_id, number);
 			}
 			CustomMessageOutcome::SyncConnected(peer_id) => {
+				// TODO: Should this be tied to sync connections, or to connections in general?
 				self.light_client_request_client.inject_connected(peer_id);
 				self.events.push_back(BehaviourOut::SyncConnected(peer_id))
 			}
 			CustomMessageOutcome::SyncDisconnected(peer_id) => {
+				// TODO: Should this be tied to sync connections, or to connections in general?
 				self.light_client_request_client.inject_disconnected(peer_id);
 				self.events.push_back(BehaviourOut::SyncDisconnected(peer_id))
 			}

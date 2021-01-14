@@ -197,20 +197,19 @@ where
 		peer: PeerId,
 		request: &Request<B>,
 		response: Response,
-	) -> Result<Reply<B>, SendRequestError>	{
+	) -> Result<Reply<B>, Error>	{
 		log::trace!("response from {}", peer);
 		match response {
-			Response::Light(r) => self.on_response_light(peer, request, r),
-			Response::Block(r) => self.on_response_block(peer, request, r),
+			Response::Light(r) => self.on_response_light(request, r),
+			Response::Block(r) => self.on_response_block(request, r),
 		}
 	}
 
 	fn on_response_light(
 		&mut self,
-		peer: PeerId,
 		request: &Request<B>,
 		response: schema::v1::light::Response,
-	) -> Result<Reply<B>, SendRequestError> {
+	) -> Result<Reply<B>, Error> {
 		use schema::v1::light::response::Response;
 		match response.response {
 			Some(Response::RemoteCallResponse(response)) =>
@@ -219,7 +218,7 @@ where
 					let reply = self.checker.check_execution_proof(request, proof)?;
 					Ok(Reply::VecU8(reply))
 				} else {
-					Err(SendRequestError::UnexpectedResponse)
+					Err(Error::UnexpectedResponse)
 				}
 			Some(Response::RemoteReadResponse(response)) =>
 				match request {
@@ -233,7 +232,7 @@ where
 						let reply = self.checker.check_read_child_proof(&request, proof)?;
 						Ok(Reply::MapVecU8OptVecU8(reply))
 					}
-					_ => Err(SendRequestError::UnexpectedResponse)
+					_ => Err(Error::UnexpectedResponse)
 				}
 			Some(Response::RemoteChangesResponse(response)) =>
 				if let Request::Changes { request, .. } = request {
@@ -256,7 +255,7 @@ where
 					})?;
 					Ok(Reply::VecNumberU32(reply))
 				} else {
-					Err(SendRequestError::UnexpectedResponse)
+					Err(Error::UnexpectedResponse)
 				}
 			Some(Response::RemoteHeaderResponse(response)) =>
 				if let Request::Header { request, .. } = request {
@@ -270,37 +269,37 @@ where
 					let reply = self.checker.check_header_proof(&request, header, proof)?;
 					Ok(Reply::Header(reply))
 				} else {
-					Err(SendRequestError::UnexpectedResponse)
+					Err(Error::UnexpectedResponse)
 				}
-			None => Err(SendRequestError::UnexpectedResponse)
+			None => Err(Error::UnexpectedResponse)
 		}
 	}
 
 	fn on_response_block(
 		&mut self,
-		peer: PeerId,
 		request: &Request<B>,
 		response: schema::v1::BlockResponse,
-	) -> Result<Reply<B>, SendRequestError> {
+	) -> Result<Reply<B>, Error> {
 		let request = if let Request::Body { request , .. } = &request {
 			request
 		} else {
-			return Err(SendRequestError::UnexpectedResponse);
+			return Err(Error::UnexpectedResponse);
 		};
 
 		let body: Vec<_> = match response.blocks.into_iter().next() {
 			Some(b) => b.body,
-			None => return Err(SendRequestError::UnexpectedResponse),
+			None => return Err(Error::UnexpectedResponse),
 		};
 
 		let body = body.into_iter()
-			.map(|mut extrinsic| B::Extrinsic::decode(&mut &extrinsic[..]))
+			.map(|extrinsic| B::Extrinsic::decode(&mut &extrinsic[..]))
 			.collect::<Result<_, _>>()?;
 
 		let body = self.checker.check_body_proof(&request, body)?;
 		Ok(Reply::Extrinsics(body))
 	}
 
+	/// Signal that the node is connected to the given peer.
 	pub fn inject_connected(&mut self, peer: PeerId) {
 		let prev_entry = self.peers.insert(peer, Default::default());
 		debug_assert!(
@@ -309,6 +308,7 @@ where
 		);
 	}
 
+	/// Signal that the node disconnected from the given peer.
 	pub fn inject_disconnected(&mut self, peer: PeerId) {
 		self.remove_peer(peer)
 	}
@@ -409,6 +409,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 					}
 				}
 				Err(e) => {
+					log::debug!("Request to peer {} failed with {:?}.", sent_request.peer, e);
 					self.remove_peer(sent_request.peer);
 					self.peerset.report_peer(
 						sent_request.peer,
@@ -429,7 +430,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 
 			match self.on_response(sent_request.peer, &sent_request.request, response.unwrap()) {
 				Ok(reply) => send_reply(Ok(reply), sent_request.request),
-				Err(SendRequestError::UnexpectedResponse) => {
+				Err(Error::UnexpectedResponse) => {
 					log::debug!("Unexpected response from peer {}.", sent_request.peer);
 					self.remove_peer(sent_request.peer);
 					self.peerset.report_peer(sent_request.peer, ReputationChange::new_fatal("unexpected response from peer"));
@@ -464,9 +465,13 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 pub enum OutEvent {
 	/// Emit a request to be send out on the network e.g. via [`crate::request_responses`].
 	SendRequest {
+		/// The remote peer to send the request to.
 		target: PeerId,
+		/// The encoded request.
 		request: Vec<u8>,
+		/// The [`onehsot::Sender`] channel to pass the response to.
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		/// The name of the protocol to use to send the request.
 		protocol_name: String,
 	}
 }
@@ -585,11 +590,17 @@ fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::E
 	Ok(buf)
 }
 
+/// Error returned by [`LightClientRequestSender::request`].
 #[derive(derive_more::Display, derive_more::From)]
 pub enum SendRequestError {
 	/// There are currently too many pending request.
 	#[display(fmt = "too many pending requests")]
 	TooManyRequests,
+}
+
+/// Error type to propagate errors internally.
+#[derive(derive_more::Display, derive_more::From)]
+enum Error {
 	/// The response type does not correspond to the issued request.
 	#[display(fmt = "unexpected response")]
 	UnexpectedResponse,
@@ -600,8 +611,6 @@ pub enum SendRequestError {
 	#[display(fmt = "client error: {}", _0)]
 	Client(ClientError),
 }
-
-
 
 /// The data to send back to the light client over the oneshot channel.
 //
@@ -652,28 +661,46 @@ enum PeerStatus {
 // used because we currently only support a subset of those.
 #[derive(Debug)]
 pub enum Request<B: Block> {
+	/// Remote body request.
 	Body {
+		/// Request.
 		request: RemoteBodyRequest<B::Header>,
+		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<Vec<B::Extrinsic>, ClientError>>
 	},
+	/// Remote header request.
 	Header {
+		/// Request.
 		request: light::RemoteHeaderRequest<B::Header>,
+		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<B::Header, ClientError>>
 	},
+	/// Remote read request.
 	Read {
+		/// Request.
 		request: light::RemoteReadRequest<B::Header>,
+		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
+	/// Remote read child request.
 	ReadChild {
+		/// Request.
 		request: light::RemoteReadChildRequest<B::Header>,
+		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
+	/// Remote call request.
 	Call {
+		/// Request.
 		request: light::RemoteCallRequest<B::Header>,
+		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<Vec<u8>, ClientError>>
 	},
+	/// Remote changes request.
 	Changes {
+		/// Request.
 		request: light::RemoteChangesRequest<B::Header>,
+		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<Vec<(NumberFor<B>, u32)>, ClientError>>
 	}
 }

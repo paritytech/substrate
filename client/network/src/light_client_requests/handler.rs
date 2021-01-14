@@ -68,6 +68,7 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 }
 
 
+/// Handler for incoming light client requests from a remote peer.
 pub struct LightClientRequestHandler<B: Block> {
 	request_receiver: mpsc::Receiver<IncomingRequest>,
 	/// Blockchain client.
