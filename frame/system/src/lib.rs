@@ -449,7 +449,7 @@ pub mod pallet {
 
 	/// Error for the System module
 	#[pallet::error]
-	pub enum Error {
+	pub enum Error<T> {
 		/// The name of specification does not match between the current runtime
 		/// and the new runtime.
 		InvalidSpecName,
