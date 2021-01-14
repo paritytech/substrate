@@ -222,7 +222,7 @@ impl TelemetryWorker {
 					}
 				}
 
-				connection_notifiers.extend(connection_notifier_senders.clone());
+				connection_notifiers.extend(connection_notifier_senders);
 			}
 		}
 
