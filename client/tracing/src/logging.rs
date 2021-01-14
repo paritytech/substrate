@@ -126,7 +126,7 @@ where
 		}
 
 		if self.display_target {
-			write!(writer, "{}:", meta.target())?;
+			write!(writer, "{}: ", meta.target())?;
 		}
 
 		// Custom code to display node name
