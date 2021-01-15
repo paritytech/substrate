@@ -748,8 +748,7 @@ pub trait SessionInterface<AccountId>: frame_system::Config {
 	fn prune_historical_up_to(up_to: SessionIndex);
 }
 
-impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T
-where
+impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
 	T: pallet_session::historical::Config<
 		FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
@@ -757,10 +756,8 @@ where
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
-	T::ValidatorIdOf: Convert<
-		<T as frame_system::Config>::AccountId,
-		Option<<T as frame_system::Config>::AccountId>,
-	>,
+	T::ValidatorIdOf:
+		Convert<<T as frame_system::Config>::AccountId, Option<<T as frame_system::Config>::AccountId>>,
 {
 	fn disable_validator(validator: &<T as frame_system::Config>::AccountId) -> Result<bool, ()> {
 		<pallet_session::Module<T>>::disable(validator)
@@ -3027,7 +3024,8 @@ impl<T: Config> Module<T> {
 	///
 	/// Returns `Err(())` if less than [`MinimumValidatorCount`] validators have been elected, `Ok`
 	/// otherwise.
-	#[allow(dead_code)] // TWO_PHASE_NOTE
+	// TWO_PHASE_NOTE: the deadcode
+	#[allow(dead_code)]
 	pub fn process_election(
 		flat_supports: sp_npos_elections::Supports<T::AccountId>,
 		current_era: EraIndex,

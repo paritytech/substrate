@@ -393,4 +393,3 @@ pub fn create_assignments_for_offchain<T: Config>(
 
 	Ok((winners, assignments))
 }
-
