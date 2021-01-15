@@ -10,7 +10,7 @@ sc-transaction-pool = { version = "2.0.0", path = "./client/transaction-pool" }
 sc-transaction-graph = { version = "2.0.0", path = "./client/transaction-pool/graph" }
 sc-client-api = { version = "2.0.0", path = "./client/api" }
 sc-rpc-server = { version = "2.0.0", path = "./client/rpc-servers" }
-manual-seal = { package = "sc-consensus-manual-seal", version = "0.8.0", path = "./client/consensus/manual-seal" }
+sc-consensus-manual-seal= { version = "0.8.0", path = "./client/consensus/manual-seal" }
 
 # primitive deps
 sp-core = { version = "2.0.0", path = "./primitives/core" }
