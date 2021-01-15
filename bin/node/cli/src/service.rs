@@ -219,21 +219,23 @@ pub fn new_full_base(
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let (_rpc_handlers, telemetry_telemetry_connection_notifier) = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
-		config,
-		backend: backend.clone(),
-		client: client.clone(),
-		keystore: keystore_container.sync_keystore(),
-		network: network.clone(),
-		rpc_extensions_builder: Box::new(rpc_extensions_builder),
-		transaction_pool: transaction_pool.clone(),
-		task_manager: &mut task_manager,
-		on_demand: None,
-		remote_blockchain: None,
-		network_status_sinks: network_status_sinks.clone(),
-		system_rpc_tx,
-		telemetry_span,
-	})?;
+	let (_rpc_handlers, telemetry_connection_notifier) = sc_service::spawn_tasks(
+		sc_service::SpawnTasksParams {
+			config,
+			backend: backend.clone(),
+			client: client.clone(),
+			keystore: keystore_container.sync_keystore(),
+			network: network.clone(),
+			rpc_extensions_builder: Box::new(rpc_extensions_builder),
+			transaction_pool: transaction_pool.clone(),
+			task_manager: &mut task_manager,
+			on_demand: None,
+			remote_blockchain: None,
+			network_status_sinks: network_status_sinks.clone(),
+			system_rpc_tx,
+			telemetry_span,
+		},
+	)?;
 
 	let (block_import, grandpa_link, babe_link) = import_setup;
 
@@ -318,7 +320,7 @@ pub fn new_full_base(
 			config,
 			link: grandpa_link,
 			network: network.clone(),
-			telemetry_on_connect: telemetry_telemetry_connection_notifier.map(|x| x.on_connect_stream()),
+			telemetry_on_connect: telemetry_connection_notifier.map(|x| x.on_connect_stream()),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
 			shared_voter_state,
@@ -425,7 +427,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 
 	let rpc_extensions = node_rpc::create_light(light_deps);
 
-	let (rpc_handlers, telemetry_telemetry_connection_notifier) =
+	let (rpc_handlers, telemetry_connection_notifier) =
 		sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 			on_demand: Some(on_demand),
 			remote_blockchain: Some(backend.remote_blockchain()),
@@ -439,7 +441,14 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 			telemetry_span,
 		})?;
 
-	Ok((task_manager, rpc_handlers, telemetry_telemetry_connection_notifier, client, network, transaction_pool))
+	Ok((
+		task_manager,
+		rpc_handlers,
+		telemetry_connection_notifier,
+		client,
+		network,
+		transaction_pool,
+	))
 }
 
 /// Builds a new service for a light client.
