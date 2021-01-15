@@ -81,6 +81,7 @@ fn get_subscriber_internal<N, E, F, W>(
 	pattern: &str,
 	max_level: Option<log::LevelFilter>,
 	force_colors: Option<bool>,
+	telemetry_buffer_size: Option<usize>,
 	telemetry_external_transport: Option<ExtTransport>,
 	builder_hook: impl Fn(
 		SubscriberBuilder<
@@ -164,7 +165,7 @@ where
 	});
 
 	let (telemetry_layer, telemetry_worker) =
-		sc_telemetry::TelemetryLayer::new(telemetry_external_transport)?;
+		sc_telemetry::TelemetryLayer::new(telemetry_buffer_size, telemetry_external_transport)?;
 	let event_format = EventFormat {
 		timer,
 		display_target: !simple,
@@ -198,6 +199,7 @@ where
 pub struct GlobalLoggerBuilder {
 	pattern: String,
 	profiling: Option<(crate::TracingReceiver, String)>,
+	telemetry_buffer_size: Option<usize>,
 	telemetry_external_transport: Option<ExtTransport>,
 	disable_log_reloading: bool,
 	force_colors: Option<bool>,
@@ -209,6 +211,7 @@ impl GlobalLoggerBuilder {
 		Self {
 			pattern: pattern.into(),
 			profiling: None,
+			telemetry_buffer_size: None,
 			telemetry_external_transport: None,
 			disable_log_reloading: false,
 			force_colors: None,
@@ -228,6 +231,12 @@ impl GlobalLoggerBuilder {
 	/// Wether or not to disable log reloading.
 	pub fn with_log_reloading(&mut self, enabled: bool) -> &mut Self {
 		self.disable_log_reloading = !enabled;
+		self
+	}
+
+	/// Set a custom buffer size for the telemetry.
+	pub fn with_telemetry_buffer_size(&mut self, buffer_size: usize) -> &mut Self {
+		self.telemetry_buffer_size = Some(buffer_size);
 		self
 	}
 
@@ -256,6 +265,7 @@ impl GlobalLoggerBuilder {
 					&format!("{},{},sc_tracing=trace", self.pattern, profiling_targets),
 					max_level,
 					self.force_colors,
+					self.telemetry_buffer_size,
 					self.telemetry_external_transport,
 					|builder| builder,
 				)?;
@@ -269,6 +279,7 @@ impl GlobalLoggerBuilder {
 					&format!("{},{},sc_tracing=trace", self.pattern, profiling_targets),
 					max_level,
 					self.force_colors,
+					self.telemetry_buffer_size,
 					self.telemetry_external_transport,
 					|builder| disable_log_reloading!(builder),
 				)?;
@@ -284,6 +295,7 @@ impl GlobalLoggerBuilder {
 					&self.pattern,
 					None,
 					self.force_colors,
+					self.telemetry_buffer_size,
 					self.telemetry_external_transport,
 					|builder| builder,
 				)?;
@@ -296,6 +308,7 @@ impl GlobalLoggerBuilder {
 					&self.pattern,
 					None,
 					self.force_colors,
+					self.telemetry_buffer_size,
 					self.telemetry_external_transport,
 					|builder| disable_log_reloading!(builder),
 				)?;

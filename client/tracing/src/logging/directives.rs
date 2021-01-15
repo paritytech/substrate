@@ -102,7 +102,7 @@ pub fn reset_log_filter() -> Result<(), String> {
 		.get_or_init(|| Mutex::new(Vec::new()))
 		.lock()
 		.clone();
-	
+
 	*CURRENT_DIRECTIVES
 		.get_or_init(|| Mutex::new(Vec::new()))
 		.lock() = directive;

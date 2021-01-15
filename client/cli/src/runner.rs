@@ -224,7 +224,7 @@ impl<C: SubstrateCli> Runner<C> {
 		&mut self.config
 	}
 
-	/// Get a new [`TelemetryHandle`] and its associated [`TelemetrySpan`]. TODO
+	/// Get a new [`TelemetryHandle`].
 	///
 	/// This is used when you want to register a new telemetry for a Substrate node.
 	pub fn telemetry_handle(&self) -> TelemetryHandle {

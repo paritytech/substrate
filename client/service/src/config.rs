@@ -200,7 +200,7 @@ impl Configuration {
 		self.prometheus_config.as_ref().map(|config| &config.registry)
 	}
 
-	/// TODO
+	/// Returns the telemetry endpoints if any and if the telemetry handle exists.
 	pub(crate) fn telemetry_endpoints(&self) -> Option<&TelemetryEndpoints> {
 		if self.telemetry_handle.is_none() {
 			return None;

@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::TelemetryWorker;
+use crate::{initialize_transport, TelemetryWorker};
 use futures::channel::mpsc;
 use libp2p::wasm_ext::ExtTransport;
 use parking_lot::Mutex;
@@ -34,10 +34,21 @@ pub struct TelemetryLayer(Mutex<mpsc::Sender<(Id, u8, String)>>);
 
 impl TelemetryLayer {
 	/// Create a new [`TelemetryLayer`] and [`TelemetryWorker`].
+	///
+	/// If not provided, the `buffer_size` will be 16 by default.
+	///
+	/// The [`ExtTransport`] is used in WASM contexts where we need some binding between the
+	/// networking provided by the operating system or environment and libp2p.
+	///
+	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
+	/// >                internal buffering going on. In the context of WebSockets, each `write`
+	/// >                must be one individual WebSockets frame.
 	pub fn new(
+		buffer_size: Option<usize>,
 		telemetry_external_transport: Option<ExtTransport>,
 	) -> io::Result<(Self, TelemetryWorker)> {
-		let worker = TelemetryWorker::new(telemetry_external_transport)?;
+		let transport = initialize_transport(telemetry_external_transport)?;
+		let worker = TelemetryWorker::new(buffer_size.unwrap_or(16), transport);
 		let sender = worker.message_sender();
 		Ok((Self(Mutex::new(sender)), worker))
 	}

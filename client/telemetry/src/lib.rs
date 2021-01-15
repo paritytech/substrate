@@ -18,26 +18,27 @@
 
 //! To start using this module, please initialize the global logger from `sc-tracing`. This will
 //! return a [`TelemetryWorker`] which can be used to register substrate node. In order to do that,
-//! first call [`TelemetryWorker::handle()`] to get a handle to the worker, then use
-//! [`TelemetryHandle::start_telemetry()`] to initialize the telemetry. This will also return a
-//! [`TelemetryConnectionNotifier`] which can be used to create streams of events for whenever the
-//! connection to a telemetry server is (re-)established.
+//! first call [`TelemetryWorker::handle()`] to get a handle to the worker, then call
+//! [`TelemetrySpan::new()`] to create a new span, then use [`TelemetryHandle::start_telemetry()`]
+//! to initialize the telemetry. This will also return a [`TelemetryConnectionNotifier`] which can
+//! be used to create streams of events for whenever the connection to a telemetry server is
+//! (re-)established.
 //!
 //! The macro [`telemetry`] can be used to report telemetries from anywhere in the code but the
 //! telemetry must have been initialized through [`TelemetryHandle::start_telemetry()`].
-//! Initializing the telemetry will make all the following code execution (including newly created
-//! async background tasks) report the telemetries through the endpoints provided during the
-//! initialization. If multiple telemetries have been started, the latest one (higher up in the
-//! stack) will be used. If no telemetry has been started, nothing will be reported.
+//!
+//! The telemetry span needs to be passed to the [`sc_service::TaskManager`] in order to make all
+//! the async background tasks report the telemetries through the endpoints provided during the
+//! initialization.
 
 #![warn(missing_docs)]
 
 use futures::{channel::mpsc, prelude::*};
-use libp2p::{wasm_ext, Multiaddr};
+use libp2p::Multiaddr;
 use log::{error, warn};
 use serde::Serialize;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
-use std::{collections::HashMap, io};
+use std::collections::HashMap;
 use tracing::Id;
 
 pub use libp2p::wasm_ext::ExtTransport;
@@ -75,12 +76,12 @@ pub(crate) type TelemetryMessage = (Id, u8, String);
 pub struct TelemetrySpan(tracing::Span);
 
 impl TelemetrySpan {
-	/// TODO
+	/// Enters this span, returning a guard that will exit the span when dropped.
 	pub fn enter(&self) -> tracing::span::Entered {
 		self.0.enter()
 	}
 
-	/// TODO
+	/// Constructs a new [`TelemetrySpan`].
 	pub fn new() -> Self {
 		Self(tracing::info_span!(TELEMETRY_LOG_SPAN))
 	}
@@ -124,28 +125,20 @@ pub struct TelemetryWorker {
 }
 
 impl TelemetryWorker {
-	/// Create a [`TelemetryWorker`] instance using an [`ExtTransport`].
-	///
-	/// The [`ExtTransport`] is used in WASM contexts where we need some binding between the
-	/// networking provided by the operating system or environment and libp2p.
-	///
-	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
-	/// >                internal buffering going on. In the context of WebSockets, each `write`
-	/// >                must be one individual WebSockets frame.
-	pub(crate) fn new(wasm_external_transport: Option<wasm_ext::ExtTransport>) -> io::Result<Self> {
-		let (message_sender, message_receiver) = mpsc::channel(16);
+	pub(crate) fn new(buffer_size: usize, transport: WsTrans) -> Self {
+		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
 		let (register_sender, register_receiver) = mpsc::unbounded();
 
-		Ok(Self {
+		Self {
 			message_receiver,
 			message_sender,
 			register_receiver,
 			register_sender,
-			transport: initialize_transport(wasm_external_transport)?,
-		})
+			transport,
+		}
 	}
 
-	/// Get a new [`TelemetryHandle`] and its associated [`TelemetrySpan`]. TODO
+	/// Get a new [`TelemetryHandle`].
 	///
 	/// This is used when you want to register a new telemetry for a Substrate node.
 	pub fn handle(&self) -> TelemetryHandle {
