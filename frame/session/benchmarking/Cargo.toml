@@ -16,6 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
 sp-session = { version = "2.0.0", default-features = false, path = "../../../primitives/session" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-election-providers = { version = "2.0.0", default-features = false, path = "../../../primitives/election-providers" }
 frame-system = { version = "2.0.0", default-features = false, path = "../../system" }
 frame-benchmarking = { version = "2.0.0", default-features = false, path = "../../benchmarking" }
 frame-support = { version = "2.0.0", default-features = false, path = "../../support" }
@@ -37,6 +38,7 @@ default = ["std"]
 std = [
 	"sp-std/std",
 	"sp-session/std",
+	"sp-election-providers/std",
 	"sp-runtime/std",
 	"frame-system/std",
 	"frame-benchmarking/std",

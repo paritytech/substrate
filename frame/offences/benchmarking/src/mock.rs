@@ -29,7 +29,7 @@ use sp_runtime::{
 	traits::{IdentityLookup, Block as BlockT},
 	testing::{Header, UintAuthorityId},
 };
-
+use sp_election_providers::onchain;
 
 type AccountId = u64;
 type AccountIndex = u32;
@@ -147,6 +147,13 @@ parameter_types! {
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
+impl onchain::Config for Test {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
+	type Accuracy = Perbill;
+	type DataProvider = Staking;
+}
+
 impl pallet_staking::Config for Test {
 	type Currency = Balances;
 	type UnixTime = pallet_timestamp::Module<Self>;
@@ -169,6 +176,7 @@ impl pallet_staking::Config for Test {
 	type MaxIterations = ();
 	type MinSolutionScoreBump = ();
 	type OffchainSolutionWeightLimit = ();
+	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = ();
 }
 

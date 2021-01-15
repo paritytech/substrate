@@ -151,11 +151,26 @@ parameter_types! {
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
-impl<C> frame_system::offchain::SendTransactionTypes<C> for Test where
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
+where
 	Call: From<C>,
 {
 	type OverarchingCall = Call;
 	type Extrinsic = Extrinsic;
+}
+
+pub struct MockElectionProvider;
+impl sp_election_providers::ElectionProvider<AccountId, BlockNumber> for MockElectionProvider {
+	type Error = ();
+	type DataProvider = pallet_staking::Module<Test>;
+
+	fn elect() -> Result<sp_npos_elections::Supports<AccountId>, Self::Error> {
+		Err(())
+	}
+
+	fn ongoing() -> bool {
+		false
+	}
 }
 
 impl pallet_staking::Config for Test {
@@ -181,4 +196,5 @@ impl pallet_staking::Config for Test {
 	type UnsignedPriority = ();
 	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();
+	type ElectionProvider = MockElectionProvider;
 }
