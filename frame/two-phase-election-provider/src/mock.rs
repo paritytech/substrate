@@ -169,7 +169,7 @@ impl frame_system::Config for Runtime {
 	type BlockHashCount = ();
 	type DbWeight = ();
 	type BlockLength = ();
-	type BlockWeights = ();
+	type BlockWeights = BlockWeights;
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -196,9 +196,6 @@ impl pallet_balances::Config for Runtime {
 }
 
 parameter_types! {
-	pub static SignedPhase: u64 = 10;
-	pub static UnsignedPhase: u64 = 5;
-	pub static MaxSignedSubmissions: u32 = 5;
 	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
 	pub static Voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)> = vec![
 		(1, 10, vec![10, 20]),
@@ -211,20 +208,28 @@ parameter_types! {
 		(30, 30, vec![30]),
 		(40, 40, vec![40]),
 	];
+
+	pub static Fallback: FallbackStrategy = FallbackStrategy::OnChain;
 	pub static DesiredTargets: u32 = 2;
+	pub static SignedPhase: u64 = 10;
+	pub static UnsignedPhase: u64 = 5;
+	pub static MaxSignedSubmissions: u32 = 5;
 	pub static SignedDepositBase: Balance = 5;
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
 	pub static SignedRewardFactor: Perbill = Perbill::zero();
 	pub static SignedRewardMax: Balance = 10;
+	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
+
 	pub static MinerMaxIterations: u32 = 5;
 	pub static UnsignedPriority: u64 = 100;
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
-	pub static EpochLength: u64 = 30;
-	pub static Fallback: FallbackStrategy = FallbackStrategy::OnChain;
 	pub static MockWeightInfo: bool = false;
+
+
+	pub static EpochLength: u64 = 30;
 }
 
 // Hopefully this won't be too much of a hassle to maintain.
@@ -283,7 +288,9 @@ impl two_phase::weights::WeightInfo for DualMockWeightInfo {
 	}
 	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		if MockWeightInfo::get() {
-			Zero::zero()
+			// 10 base
+			// 5 per edge.
+			(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight))
 		} else {
 			<() as two_phase::weights::WeightInfo>::feasibility_check(v, t, a, d)
 		}
@@ -307,6 +314,7 @@ impl crate::Config for Runtime {
 	type RewardHandler = ();
 	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
+	type SignedMaxWeight = SignedMaxWeight;
 	type UnsignedPriority = UnsignedPriority;
 	type DataProvider = StakingMock;
 	type WeightInfo = DualMockWeightInfo;
@@ -381,6 +389,10 @@ impl ExtBuilder {
 	}
 	pub fn miner_weight(self, weight: Weight) -> Self {
 		<MinerMaxWeight>::set(weight);
+		self
+	}
+	pub fn signed_weight(self, weight: Weight) -> Self {
+		<SignedMaxWeight>::set(weight);
 		self
 	}
 	pub fn mock_weight_info(self, mock: bool) -> Self {

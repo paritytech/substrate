@@ -336,6 +336,12 @@ where
 			Error::<T>::EarlySubmission
 		);
 
+		// ensure correct number of winners.
+		ensure!(
+			Self::desired_targets() == solution.compact.unique_targets().len() as u32,
+			Error::<T>::WrongWinnerCount,
+		);
+
 		// ensure score is being improved. Panic henceforth.
 		ensure!(
 			Self::queued_solution().map_or(true, |q: ReadySolution<_>| is_score_better::<Perbill>(
@@ -655,29 +661,27 @@ mod tests {
 
 	#[test]
 	fn priority_is_set() {
-		ExtBuilder::default()
-			.unsigned_priority(20)
-			.build_and_execute(|| {
-				roll_to(25);
-				assert!(TwoPhase::current_phase().is_unsigned());
+		ExtBuilder::default().unsigned_priority(20).build_and_execute(|| {
+			roll_to(25);
+			assert!(TwoPhase::current_phase().is_unsigned());
 
-				let solution = RawSolution::<TestCompact> {
-					score: [5, 0, 0],
-					..Default::default()
-				};
-				let call = Call::submit_unsigned(solution.clone(), witness());
+			let solution = RawSolution::<TestCompact> {
+				score: [5, 0, 0],
+				..Default::default()
+			};
+			let call = Call::submit_unsigned(solution.clone(), witness());
 
-				// initial
-				assert_eq!(
-					<TwoPhase as ValidateUnsigned>::validate_unsigned(
-						TransactionSource::Local,
-						&call
-					)
-					.unwrap()
-					.priority,
-					25
-				);
-			})
+			// initial
+			assert_eq!(
+				<TwoPhase as ValidateUnsigned>::validate_unsigned(
+					TransactionSource::Local,
+					&call
+				)
+				.unwrap()
+				.priority,
+				25
+			);
+		})
 	}
 
 	#[test]
@@ -747,54 +751,49 @@ mod tests {
 
 	#[test]
 	fn miner_trims_weight() {
-		ExtBuilder::default()
-			.miner_weight(100)
-			.mock_weight_info(true)
-			.build_and_execute(|| {
-				roll_to(25);
-				assert!(TwoPhase::current_phase().is_unsigned());
+		ExtBuilder::default().miner_weight(100).mock_weight_info(true).build_and_execute(|| {
+			roll_to(25);
+			assert!(TwoPhase::current_phase().is_unsigned());
 
-				let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
-				let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
-					witness.voters,
-					witness.targets,
-					solution.compact.voter_count() as u32,
-					solution.compact.unique_targets().len() as u32,
-				);
-				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, 35);
-				assert_eq!(solution.compact.voter_count(), 5);
+			let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
+			let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
+				witness.voters,
+				witness.targets,
+				solution.compact.voter_count() as u32,
+				solution.compact.unique_targets().len() as u32,
+			);
+			// default solution will have 5 edges (5 * 5 + 10)
+			assert_eq!(solution_weight, 35);
+			assert_eq!(solution.compact.voter_count(), 5);
 
-				// now reduce the max weight
-				<MinerMaxWeight>::set(25);
+			// now reduce the max weight
+			<MinerMaxWeight>::set(25);
 
-				let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
-				let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
-					witness.voters,
-					witness.targets,
-					solution.compact.voter_count() as u32,
-					solution.compact.unique_targets().len() as u32,
-				);
-				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, 25);
-				assert_eq!(solution.compact.voter_count(), 3);
-			})
+			let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
+			let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
+				witness.voters,
+				witness.targets,
+				solution.compact.voter_count() as u32,
+				solution.compact.unique_targets().len() as u32,
+			);
+			// default solution will have 5 edges (5 * 5 + 10)
+			assert_eq!(solution_weight, 25);
+			assert_eq!(solution.compact.voter_count(), 3);
+		})
 	}
 
 	#[test]
 	fn miner_will_not_submit_if_not_enough_winners() {
-		ExtBuilder::default()
-			.desired_targets(8)
-			.build_and_execute(|| {
-				roll_to(25);
-				assert!(TwoPhase::current_phase().is_unsigned());
+		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
+			roll_to(25);
+			assert!(TwoPhase::current_phase().is_unsigned());
 
-				// mine seq_phragmen solution with 2 iters.
-				assert_eq!(
-					TwoPhase::mine_solution(2).unwrap_err(),
-					ElectionError::Feasibility(FeasibilityError::WrongWinnerCount),
-				);
-			})
+			// mine seq_phragmen solution with 2 iters.
+			assert_eq!(
+				TwoPhase::mine_solution(2).unwrap_err(),
+				ElectionError::Feasibility(FeasibilityError::WrongWinnerCount),
+			);
+		})
 	}
 
 	#[test]
@@ -805,7 +804,6 @@ mod tests {
 			.add_voter(8, 5, vec![10])
 			.solution_improvement_threshold(Perbill::from_percent(50))
 			.build_and_execute(|| {
-
 				roll_to(25);
 				assert!(TwoPhase::current_phase().is_unsigned());
 				assert_eq!(TwoPhase::desired_targets().unwrap(), 1);

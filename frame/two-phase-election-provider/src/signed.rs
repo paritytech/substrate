@@ -203,6 +203,16 @@ where
 		}
 	}
 
+	/// The feasibility weight of the given raw solution.
+	pub fn feasibility_weight_of(solution: &RawSolution<CompactOf<T>>, size: SolutionSize) -> Weight {
+		T::WeightInfo::feasibility_check(
+			size.voters,
+			size.targets,
+			solution.compact.voter_count() as u32,
+			solution.compact.unique_targets().len() as u32,
+		)
+	}
+
 	/// Collect sufficient deposit to store this solution this chain.
 	///
 	/// The deposit is composed of 3 main elements:
@@ -212,12 +222,7 @@ where
 	/// 3. a per-weight deposit, for the potential weight usage in an upcoming on_initialize
 	pub fn deposit_for(solution: &RawSolution<CompactOf<T>>, size: SolutionSize) -> BalanceOf<T> {
 		let encoded_len: BalanceOf<T> = solution.using_encoded(|e| e.len() as u32).into();
-		let feasibility_weight = T::WeightInfo::feasibility_check(
-			size.voters,
-			size.targets,
-			solution.compact.voter_count() as u32,
-			solution.compact.unique_targets().len() as u32,
-		);
+		let feasibility_weight = Self::feasibility_weight_of(solution, size);
 
 		let len_deposit = T::SignedDepositByte::get() * encoded_len;
 		let weight_deposit = T::SignedDepositWeight::get() * feasibility_weight.saturated_into();
@@ -328,41 +333,37 @@ mod tests {
 
 	#[test]
 	fn reward_is_capped() {
-		ExtBuilder::default()
-			.reward(5, Perbill::from_percent(25), 10)
-			.build_and_execute(|| {
-				roll_to(15);
-				assert!(TwoPhase::current_phase().is_signed());
+		ExtBuilder::default().reward(5, Perbill::from_percent(25), 10).build_and_execute(|| {
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
 
-				let solution = raw_solution();
-				assert_eq!(solution.score[0], 40);
-				assert_eq!(balances(&99), (100, 0));
+			let solution = raw_solution();
+			assert_eq!(solution.score[0], 40);
+			assert_eq!(balances(&99), (100, 0));
 
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
-				assert_eq!(balances(&99), (95, 5));
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_eq!(balances(&99), (95, 5));
 
-				assert!(TwoPhase::finalize_signed_phase().0);
-				// expected reward is 5 + 10
-				assert_eq!(balances(&99), (100 + 10, 0));
-			});
+			assert!(TwoPhase::finalize_signed_phase().0);
+			// expected reward is 5 + 10
+			assert_eq!(balances(&99), (100 + 10, 0));
+		});
 
-		ExtBuilder::default()
-			.reward(5, Perbill::from_percent(25), 20)
-			.build_and_execute(|| {
-				roll_to(15);
-				assert!(TwoPhase::current_phase().is_signed());
+		ExtBuilder::default().reward(5, Perbill::from_percent(25), 20).build_and_execute(|| {
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
 
-				let solution = raw_solution();
-				assert_eq!(solution.score[0], 40);
-				assert_eq!(balances(&99), (100, 0));
+			let solution = raw_solution();
+			assert_eq!(solution.score[0], 40);
+			assert_eq!(balances(&99), (100, 0));
 
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
-				assert_eq!(balances(&99), (95, 5));
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_eq!(balances(&99), (95, 5));
 
-				assert!(TwoPhase::finalize_signed_phase().0);
-				// expected reward is 5 + 10
-				assert_eq!(balances(&99), (100 + 15, 0));
-			});
+			assert!(TwoPhase::finalize_signed_phase().0);
+			// expected reward is 5 + 10
+			assert_eq!(balances(&99), (100 + 15, 0));
+		});
 	}
 
 	#[test]
@@ -534,134 +535,128 @@ mod tests {
 
 	#[test]
 	fn early_ejected_solution_gets_bond_back() {
-		ExtBuilder::default()
-			.signed_deposit(2, 0, 0)
-			.build_and_execute(|| {
-				roll_to(15);
-				assert!(TwoPhase::current_phase().is_signed());
+		ExtBuilder::default().signed_deposit(2, 0, 0).build_and_execute(|| {
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
 
-				for s in 0..MaxSignedSubmissions::get() {
-					// score is always getting better
-					let solution = RawSolution {
-						score: [(5 + s).into(), 0, 0],
-						..Default::default()
-					};
-					assert_ok!(submit_with_witness(Origin::signed(99), solution));
-				}
-
-				assert_eq!(balances(&99).1, 2 * 5);
-				assert_eq!(balances(&999).1, 0);
-
-				// better.
+			for s in 0..MaxSignedSubmissions::get() {
+				// score is always getting better
 				let solution = RawSolution {
-					score: [20, 0, 0],
+					score: [(5 + s).into(), 0, 0],
 					..Default::default()
 				};
-				assert_ok!(submit_with_witness(Origin::signed(999), solution));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			}
 
-				// got one bond back.
-				assert_eq!(balances(&99).1, 2 * 4);
-				assert_eq!(balances(&999).1, 2);
-			})
+			assert_eq!(balances(&99).1, 2 * 5);
+			assert_eq!(balances(&999).1, 0);
+
+			// better.
+			let solution = RawSolution {
+				score: [20, 0, 0],
+				..Default::default()
+			};
+			assert_ok!(submit_with_witness(Origin::signed(999), solution));
+
+			// got one bond back.
+			assert_eq!(balances(&99).1, 2 * 4);
+			assert_eq!(balances(&999).1, 2);
+		})
 	}
 
 	#[test]
 	fn equally_good_solution_is_not_accepted() {
-		ExtBuilder::default()
-			.max_signed_submission(3)
-			.build_and_execute(|| {
-				roll_to(15);
-				assert!(TwoPhase::current_phase().is_signed());
+		ExtBuilder::default().max_signed_submission(3).build_and_execute(|| {
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
 
-				for i in 0..MaxSignedSubmissions::get() {
-					let solution = RawSolution {
-						score: [(5 + i).into(), 0, 0],
-						..Default::default()
-					};
-					assert_ok!(submit_with_witness(Origin::signed(99), solution));
-				}
-				assert_eq!(
-					TwoPhase::signed_submissions()
-						.into_iter()
-						.map(|s| s.solution.score[0])
-						.collect::<Vec<_>>(),
-					vec![5, 6, 7]
-				);
-
-				// 5 is not accepted. This will only cause processing with no benefit.
+			for i in 0..MaxSignedSubmissions::get() {
 				let solution = RawSolution {
-					score: [5, 0, 0],
+					score: [(5 + i).into(), 0, 0],
 					..Default::default()
 				};
-				assert_noop!(
-					submit_with_witness(Origin::signed(99), solution),
-					Error::<Runtime>::QueueFull,
-				);
-			})
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			}
+			assert_eq!(
+				TwoPhase::signed_submissions()
+					.into_iter()
+					.map(|s| s.solution.score[0])
+					.collect::<Vec<_>>(),
+				vec![5, 6, 7]
+			);
+
+			// 5 is not accepted. This will only cause processing with no benefit.
+			let solution = RawSolution {
+				score: [5, 0, 0],
+				..Default::default()
+			};
+			assert_noop!(
+				submit_with_witness(Origin::signed(99), solution),
+				Error::<Runtime>::QueueFull,
+			);
+		})
 	}
 
 	#[test]
 	fn solutions_are_always_sorted() {
-		ExtBuilder::default()
-			.max_signed_submission(3)
-			.build_and_execute(|| {
-				let scores = || TwoPhase::signed_submissions()
-					.into_iter()
-					.map(|s| s.solution.score[0])
-					.collect::<Vec<_>>();
+		ExtBuilder::default().max_signed_submission(3).build_and_execute(|| {
+			let scores = || TwoPhase::signed_submissions()
+				.into_iter()
+				.map(|s| s.solution.score[0])
+				.collect::<Vec<_>>();
 
-				roll_to(15);
-				assert!(TwoPhase::current_phase().is_signed());
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
 
-				let solution = RawSolution {
-					score: [5, 0, 0],
-					..Default::default()
-				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
-				assert_eq!(scores(), vec![5]);
+			let solution = RawSolution {
+				score: [5, 0, 0],
+				..Default::default()
+			};
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_eq!(scores(), vec![5]);
 
-				let solution = RawSolution {
-					score: [8, 0, 0],
-					..Default::default()
-				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
-				assert_eq!(scores(), vec![5, 8]);
+			let solution = RawSolution {
+				score: [8, 0, 0],
+				..Default::default()
+			};
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_eq!(scores(), vec![5, 8]);
 
-				let solution = RawSolution {
-					score: [3, 0, 0],
-					..Default::default()
-				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
-				assert_eq!(scores(), vec![3, 5, 8]);
+			let solution = RawSolution {
+				score: [3, 0, 0],
+				..Default::default()
+			};
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_eq!(scores(), vec![3, 5, 8]);
 
-				let solution = RawSolution {
-					score: [6, 0, 0],
-					..Default::default()
-				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
-				assert_eq!(scores(), vec![5, 6, 8]);
+			let solution = RawSolution {
+				score: [6, 0, 0],
+				..Default::default()
+			};
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_eq!(scores(), vec![5, 6, 8]);
 
-				let solution = RawSolution {
-					score: [6, 0, 0],
-					..Default::default()
-				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
-				assert_eq!(scores(), vec![6, 6, 8]);
+			let solution = RawSolution {
+				score: [6, 0, 0],
+				..Default::default()
+			};
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_eq!(scores(), vec![6, 6, 8]);
 
-				let solution = RawSolution {
-					score: [10, 0, 0],
-					..Default::default()
-				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
-				assert_eq!(scores(), vec![6, 8, 10]);
+			let solution = RawSolution {
+				score: [10, 0, 0],
+				..Default::default()
+			};
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_eq!(scores(), vec![6, 8, 10]);
 
-				let solution = RawSolution {
-					score: [12, 0, 0],
-					..Default::default()
-				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
-				assert_eq!(scores(), vec![8, 10, 12]);
-			})
+			let solution = RawSolution {
+				score: [12, 0, 0],
+				..Default::default()
+			};
+			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_eq!(scores(), vec![8, 10, 12]);
+		})
 	}
 
 	#[test]
@@ -707,6 +702,37 @@ mod tests {
 			assert_eq!(balances(&999), (95, 0));
 			// 9999 gets everything back.
 			assert_eq!(balances(&9999), (100, 0));
+		})
+	}
+
+	#[test]
+	fn cannot_consume_too_much_future_weight() {
+		ExtBuilder::default().signed_weight(40).mock_weight_info(true).build_and_execute(|| {
+			roll_to(15);
+			assert!(TwoPhase::current_phase().is_signed());
+
+			let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
+			let solution_weight = <Runtime as Config>::WeightInfo::feasibility_check(
+				witness.voters,
+				witness.targets,
+				solution.compact.voter_count() as u32,
+				solution.compact.unique_targets().len() as u32,
+			);
+			// default solution will have 5 edges (5 * 5 + 10)
+			assert_eq!(solution_weight, 35);
+			assert_eq!(solution.compact.voter_count(), 5);
+			assert_eq!(<Runtime as Config>::SignedMaxWeight::get(), 40);
+
+			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
+
+			<SignedMaxWeight>::set(30);
+
+			// note: resubmitting the same solution is technically okay as long as the queue has
+			// space.
+			assert_noop!(
+				submit_with_witness(Origin::signed(99), solution),
+				Error::<Runtime>::TooMuchWeight,
+			);
 		})
 	}
 }

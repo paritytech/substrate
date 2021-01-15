@@ -38,14 +38,14 @@ const SEED: u32 = 0;
 fn solution_with_size<T: Config>(
 	size: SolutionSize,
 	active_voters_count: u32,
-	winners_count: u32,
+	desired_targets: u32,
 ) -> RawSolution<CompactOf<T>>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 	<InnerOf<CompactAccuracyOf<T>> as sp_std::convert::TryFrom<usize>>::Error: sp_std::fmt::Debug,
 {
-	assert!(size.targets >= winners_count, "must have enough targets");
+	assert!(size.targets >= desired_targets, "must have enough targets");
 	assert!(
 		size.targets >= (<CompactOf<T>>::LIMIT * 2) as u32,
 		"must have enough targets for unique votes."
@@ -55,7 +55,7 @@ where
 		"must have enough voters"
 	);
 	assert!(
-		(<CompactOf<T>>::LIMIT as u32) < winners_count,
+		(<CompactOf<T>>::LIMIT as u32) < desired_targets,
 		"must have enough winners to give them votes."
 	);
 
@@ -72,7 +72,7 @@ where
 	// decide who are the winners.
 	let winners = targets
 		.as_slice()
-		.choose_multiple(&mut rng, winners_count as usize)
+		.choose_multiple(&mut rng, desired_targets as usize)
 		.cloned()
 		.collect::<Vec<_>>();
 
@@ -113,17 +113,18 @@ where
 
 	assert_eq!(active_voters.len() as u32, active_voters_count);
 	assert_eq!(all_voters.len() as u32, size.voters);
-	assert_eq!(winners.len() as u32, winners_count);
+	assert_eq!(winners.len() as u32, desired_targets);
 
 	<SnapshotMetadata<T>>::put(RoundSnapshotMetadata {
 		voters_len: all_voters.len() as u32,
 		targets_len: targets.len() as u32,
 	});
-	<DesiredTargets<T>>::put(winners_count);
+	<DesiredTargets<T>>::put(desired_targets);
 	<Snapshot<T>>::put(RoundSnapshot {
 		voters: all_voters.clone(),
 		targets: targets.clone(),
 	});
+
 	// write the snapshot to staking or whoever is the data provider.
 	T::DataProvider::put_snapshot(all_voters.clone(), targets.clone());
 
@@ -268,14 +269,14 @@ benchmarks! {
 
 	submit_unsigned {
 		// number of votes in snapshot.
-		let v in 2000 .. T::BenchmarkingConfig::VOTERS[1];
+		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
 		// number of targets in snapshot.
-		let t in 500 .. T::BenchmarkingConfig::TARGETS[1];
+		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
-		let a in 500 .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
 		// number of desired targets. Must be a subset of `t` component.
-		let d in 200 .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
+		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
 		let witness = SolutionSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(witness, a, d);
@@ -290,14 +291,14 @@ benchmarks! {
 	// This is checking a valid solution. The worse case is indeed a valid solution.
 	feasibility_check {
 		// number of votes in snapshot.
-		let v in 2000 .. T::BenchmarkingConfig::VOTERS[1];
+		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
 		// number of targets in snapshot.
-		let t in 500 .. T::BenchmarkingConfig::TARGETS[1];
+		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
-		let a in 500 .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
 		// number of desired targets. Must be a subset of `t` component.
-		let d in 200 .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
+		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
 		let size = SolutionSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(size, a, d);

@@ -268,10 +268,10 @@ pub trait BenchmarkingConfig {
 }
 
 impl BenchmarkingConfig for () {
-	const VOTERS: [u32; 2] = [2000, 3000];
-	const TARGETS: [u32; 2] = [500, 800];
-	const ACTIVE_VOTERS: [u32; 2] = [500, 1500];
-	const DESIRED_TARGETS: [u32; 2] = [200, 400];
+	const VOTERS: [u32; 2] = [4000, 6000];
+	const TARGETS: [u32; 2] = [1000, 1600];
+	const ACTIVE_VOTERS: [u32; 2] = [1000, 3000];
+	const DESIRED_TARGETS: [u32; 2] = [400, 800];
 }
 
 /// Current phase of the pallet.
@@ -546,19 +546,31 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxSignedSubmissions: Get<u32>;
 
+		/// Base reward for a signed solution
 		#[pallet::constant]
 		type SignedRewardBase: Get<BalanceOf<Self>>;
+		/// Per-score reward for a signed solution.
 		#[pallet::constant]
 		type SignedRewardFactor: Get<Perbill>;
+		/// Maximum cap for a signed solution.
 		#[pallet::constant]
 		type SignedRewardMax: Get<Option<BalanceOf<Self>>>;
 
+		/// Base deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositBase: Get<BalanceOf<Self>>;
+		/// Per-byte deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositByte: Get<BalanceOf<Self>>;
+		/// Per-weight deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
+		/// Maximum weight of a signed solution.
+		///
+		/// This should probably be similar to [`Config::MinerMaxWeight`].
+		#[pallet::constant]
+		type SignedMaxWeight: Get<Weight>;
+
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better".
@@ -730,6 +742,12 @@ pub mod pallet {
 			// defensive-only: if phase is signed, snapshot will exist.
 			let size = Self::build_solution_size().unwrap_or_default();
 
+			// NOTE: we compute this function once in `insert_submission` as well, could optimize.
+			ensure!(
+				Self::feasibility_weight_of(&solution, size) < T::SignedMaxWeight::get(),
+				Error::<T>::TooMuchWeight,
+			);
+
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
 			let index = Self::insert_submission(&who, &mut signed_submissions, solution, size)
@@ -853,14 +871,18 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Submission was too early.
 		EarlySubmission,
+		/// Wrong number of winners presented.
+		WrongWinnerCount,
 		/// Submission was too weak, score-wise.
 		WeakSubmission,
 		/// The queue was full, and the solution was not better than any of the existing ones.
 		QueueFull,
 		/// The origin failed to pay the deposit.
 		CannotPayDeposit,
-		/// witness data to dispathable is invalid.
+		/// witness data to dispatchable is invalid.
 		InvalidWitness,
+		/// The signed submission consumes too much weight
+		TooMuchWeight,
 	}
 
 	#[pallet::origin]
@@ -1080,10 +1102,12 @@ where
 		// winners are not directly encoded in the solution.
 		let winners = compact.unique_targets();
 
-		// TODO: this can probably checked ahead of time, both in signed and unsigned story.
 		let desired_targets =
 			Self::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
+		// NOTE: this is a bit of duplicate, but we keep it around for veracity. The unsigned path
+		// already checked this in `unsigned_per_dispatch_checks`. The signed path *could* check it
+		// upon arrival.
 		ensure!(
 			winners.len() as u32 == desired_targets,
 			FeasibilityError::WrongWinnerCount,
@@ -1154,7 +1178,6 @@ where
 		let known_score = (&supports).evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
-		// let supports = supports.flatten();
 		Ok(ReadySolution {
 			supports,
 			compute,
@@ -1471,7 +1494,10 @@ mod tests {
 
 			roll_to(25);
 			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
-			assert_eq!(two_phase_events(), vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)]);
+			assert_eq!(
+				two_phase_events(),
+				vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)],
+			);
 			assert!(TwoPhase::snapshot().is_some());
 
 			roll_to(29);
@@ -1608,53 +1634,67 @@ mod tests {
 
 	#[test]
 	fn fallback_strategy_works() {
-		ExtBuilder::default()
-			.fallabck(FallbackStrategy::OnChain)
-			.build_and_execute(|| {
-				roll_to(15);
-				assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+		ExtBuilder::default().fallabck(FallbackStrategy::OnChain).build_and_execute(|| {
+			roll_to(15);
+			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
 
-				roll_to(25);
-				assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
+			roll_to(25);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
 
-				// zilch solutions thus far.
-				let supports = TwoPhase::elect().unwrap();
+			// zilch solutions thus far.
+			let supports = TwoPhase::elect().unwrap();
 
-				assert_eq!(
-					supports,
-					vec![
-						(
-							30,
-							Support {
-								total: 40,
-								voters: vec![(2, 5), (4, 5), (30, 30)]
-							}
-						),
-						(
-							40,
-							Support {
-								total: 60,
-								voters: vec![(2, 5), (3, 10), (4, 5), (40, 40)]
-							}
-						)
-					]
-				)
-			});
+			assert_eq!(
+				supports,
+				vec![
+					(
+						30,
+						Support {
+							total: 40,
+							voters: vec![(2, 5), (4, 5), (30, 30)]
+						}
+					),
+					(
+						40,
+						Support {
+							total: 60,
+							voters: vec![(2, 5), (3, 10), (4, 5), (40, 40)]
+						}
+					)
+				]
+			)
+		});
 
-		ExtBuilder::default()
-			.fallabck(FallbackStrategy::Nothing)
-			.build_and_execute(|| {
-				roll_to(15);
-				assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+		ExtBuilder::default().fallabck(FallbackStrategy::Nothing).build_and_execute(|| {
+			roll_to(15);
+			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
 
-				roll_to(25);
-				assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
+			roll_to(25);
+			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
 
-				// zilch solutions thus far.
-				assert_eq!(
-					TwoPhase::elect().unwrap_err(),
-					ElectionError::NoFallbackConfigured
-				);
-			})
+			// zilch solutions thus far.
+			assert_eq!(
+				TwoPhase::elect().unwrap_err(),
+				ElectionError::NoFallbackConfigured
+			);
+		})
+	}
+
+	#[test]
+	fn number_of_voters_allowed_2sec_block() {
+		// Just a rough estimate with the substrate weights.
+		assert!(!MockWeightInfo::get());
+
+		let all_voters: u32 = 100_000;
+		let all_targets: u32 = 2_000;
+		let desired: u32 = 1_000;
+		let weight_with = |active| <Runtime as Config>::WeightInfo::submit_unsigned(all_voters, all_targets, active, desired);
+
+		let mut active = 1;
+		while weight_with(active) <= <Runtime as frame_system::Config>::BlockWeights::get().max_block {
+			active += 1;
+		}
+
+		println!("can support {} voters to yield a weight of {}", active, weight_with(active));
 	}
 }
