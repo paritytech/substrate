@@ -37,7 +37,7 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! The System module does not implement any dispatchable functions.
+//! The System pallet does not implement any dispatchable functions.
 //!
 //! ### Public Functions
 //!
@@ -45,7 +45,7 @@
 //!
 //! ### Signed Extensions
 //!
-//! The System module defines the following extensions:
+//! The System pallet defines the following extensions:
 //!
 //!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
 //!     exceed the limits.
@@ -200,7 +200,7 @@ pub mod pallet {
 		///
 		/// Used to define the type and conversion mechanism for referencing accounts in transactions.
 		/// It's perfectly reasonable for this to be an identity conversion (with the source type being
-		/// `AccountId`), but other modules (e.g. Indices module) may provide more functional/efficient
+		/// `AccountId`), but other pallets (e.g. Indices pallet) may provide more functional/efficient
 		/// alternatives.
 		type Lookup: StaticLookup<Target=Self::AccountId>;
 
@@ -233,7 +233,7 @@ pub mod pallet {
 		type PalletInfo: PalletInfo;
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
-		/// module does regardless).
+		/// pallet does regardless).
 		type AccountData: Member + FullCodec + Clone + Default;
 
 		/// Handler for when a new account has just been created.
@@ -284,7 +284,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
-		// that's not possible at present (since it's within the decl_module macro).
+		// that's not possible at present (since it's within the pallet macro).
 		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
 		pub(crate) fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
@@ -475,7 +475,7 @@ pub mod pallet {
 		}
 	}
 
-	/// Event for the System module.
+	/// Event for the System pallet.
 	#[pallet::event]
 	pub enum Event<T: Config> {
 		/// An extrinsic completed successfully. \[info\]
@@ -494,7 +494,7 @@ pub mod pallet {
 	#[deprecated(note = "use `Event` instead")]
 	pub type RawEvent<T> = Event<T>;
 
-	/// Error for the System module
+	/// Error for the System pallet
 	#[pallet::error]
 	pub enum Error<T> {
 		/// The name of specification does not match between the current runtime
@@ -736,7 +736,7 @@ pub struct EventRecord<E: Parameter + Member, T> {
 	pub topics: Vec<T>,
 }
 
-/// Origin for the System module.
+/// Origin for the System pallet.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
@@ -745,7 +745,7 @@ pub enum RawOrigin<AccountId> {
 	Signed(AccountId),
 	/// It is signed by nobody, can be either:
 	/// * included and agreed upon by the validators anyway,
-	/// * or unsigned transaction validated by a module.
+	/// * or unsigned transaction validated by a pallet.
 	None,
 }
 
@@ -781,7 +781,7 @@ pub type RefCount = u32;
 pub struct AccountInfo<Index, AccountData> {
 	/// The number of transactions this account has sent.
 	pub nonce: Index,
-	/// The number of other modules that currently depend on this account's existence. The account
+	/// The number of other pallets that currently depend on this account's existence. The account
 	/// cannot be reaped until this is zero.
 	pub refcount: RefCount,
 	/// The additional data that belongs to this account. Used to store the balance(s) in a lot of
@@ -993,7 +993,7 @@ pub enum RefStatus {
 	Unreferenced,
 }
 
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
 	/// Deposits an event into this block's event record.
 	pub fn deposit_event(event: impl Into<T::Event>) {
 		Self::deposit_event_indexed(&[], event.into());
@@ -1075,10 +1075,10 @@ impl<T: Config> Module<T> {
 		AllExtrinsicsLen::<T>::get().unwrap_or_default()
 	}
 
-	/// Inform the system module of some additional weight that should be accounted for, in the
+	/// Inform the system pallet of some additional weight that should be accounted for, in the
 	/// current block.
 	///
-	/// NOTE: use with extra care; this function is made public only be used for certain modules
+	/// NOTE: use with extra care; this function is made public only be used for certain pallets
 	/// that need it. A runtime that does not have dynamic calls should never need this and should
 	/// stick to static weights. A typical use case for this is inner calls or smart contract calls.
 	/// Furthermore, it only makes sense to use this when it is presumably  _cheap_ to provide the
@@ -1183,7 +1183,7 @@ impl<T: Config> Module<T> {
 		<Digest<T>>::append(item);
 	}
 
-	/// Get the basic externalities for this module, useful for tests.
+	/// Get the basic externalities for this pallet, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities {
 		TestExternalities::new(sp_core::storage::Storage {
@@ -1284,7 +1284,7 @@ impl<T: Config> Module<T> {
 	}
 
 	/// To be called immediately after finishing the initialization of the block
-	/// (e.g., called `on_initialize` for all modules).
+	/// (e.g., called `on_initialize` for all pallets).
 	pub fn note_finished_initialize() {
 		ExecutionPhase::<T>::put(Phase::ApplyExtrinsic(0))
 	}
@@ -1302,7 +1302,7 @@ impl<T: Config> Module<T> {
 	}
 
 	/// Remove an account from storage. This should only be done when its refs are zero or you'll
-	/// get storage leaks in other modules. Nonetheless we assume that the calling logic knows best.
+	/// get storage leaks in other pallets. Nonetheless we assume that the calling logic knows best.
 	///
 	/// This is a no-op if the account doesn't already exist. If it does then it will ensure
 	/// cleanups (those in `on_killed_account`) take place.
@@ -1316,7 +1316,7 @@ impl<T: Config> Module<T> {
 				);
 			}
 		}
-		Module::<T>::on_killed_account(who.clone());
+		Pallet::<T>::on_killed_account(who.clone());
 	}
 
 	/// Determine whether or not it is possible to update the code.
@@ -1346,7 +1346,7 @@ impl<T: Config> Module<T> {
 pub struct CallOnCreatedAccount<T>(PhantomData<T>);
 impl<T: Config> Happened<T::AccountId> for CallOnCreatedAccount<T> {
 	fn happened(who: &T::AccountId) {
-		Module::<T>::on_created_account(who.clone());
+		Pallet::<T>::on_created_account(who.clone());
 	}
 }
 
@@ -1354,23 +1354,23 @@ impl<T: Config> Happened<T::AccountId> for CallOnCreatedAccount<T> {
 pub struct CallKillAccount<T>(PhantomData<T>);
 impl<T: Config> Happened<T::AccountId> for CallKillAccount<T> {
 	fn happened(who: &T::AccountId) {
-		Module::<T>::kill_account(who)
+		Pallet::<T>::kill_account(who)
 	}
 }
 
-impl<T: Config> BlockNumberProvider for Module<T>
+impl<T: Config> BlockNumberProvider for Pallet<T>
 {
 	type BlockNumber = <T as Config>::BlockNumber;
 
 	fn current_block_number() -> Self::BlockNumber {
-		Module::<T>::block_number()
+		Pallet::<T>::block_number()
 	}
 }
 
 // Implement StoredMap for a simple single-item, kill-account-on-remove system. This works fine for
 // storing a single item which is required to not be empty/default for the account to exist.
 // Anything more complex will need more sophisticated logic.
-impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Module<T> {
+impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 	fn get(k: &T::AccountId) -> T::AccountData {
 		Account::<T>::get(k).data
 	}
@@ -1436,7 +1436,7 @@ pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S
 	}
 }
 
-impl<T: Config> IsDeadAccount<T::AccountId> for Module<T> {
+impl<T: Config> IsDeadAccount<T::AccountId> for Pallet<T> {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		!Account::<T>::contains_key(who)
 	}
