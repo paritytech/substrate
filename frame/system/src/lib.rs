@@ -629,10 +629,10 @@ pub mod pallet {
 			<LastRuntimeUpgrade<T>>::put(LastRuntimeUpgradeInfo::from(T::Version::get()));
 			<UpgradedToU32RefCount<T>>::put(true);
 
-			sp_io::storage::set(well_known_keys::CODE, &self.code);
-			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
+			storage::set(well_known_keys::CODE, &self.code);
+			storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
 			if let Some(ref changes_trie_config) = self.changes_trie_config {
-				sp_io::storage::set(well_known_keys::CHANGES_TRIE_CONFIG, &changes_trie_config.encode());
+				storage::set(well_known_keys::CHANGES_TRIE_CONFIG, &changes_trie_config.encode());
 			}
 		}
 	}
