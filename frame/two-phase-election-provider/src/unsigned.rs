@@ -338,7 +338,7 @@ where
 
 		// ensure correct number of winners.
 		ensure!(
-			Self::desired_targets() == solution.compact.unique_targets().len() as u32,
+			Self::desired_targets().unwrap_or_default() == solution.compact.unique_targets().len() as u32,
 			Error::<T>::WrongWinnerCount,
 		);
 
