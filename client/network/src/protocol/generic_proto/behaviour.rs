@@ -914,11 +914,11 @@ impl GenericProto {
 				error!(target: "sub-libp2p", "PSM => Drop({}, {:?}): Not enabled (Incoming).",
 					entry.key().0, set_id);
 				*entry.into_mut() = st;
-				debug_assert!(!false);
+				debug_assert!(false);
 			},
 			PeerState::Poisoned => {
 				error!(target: "sub-libp2p", "State of {:?} is poisoned", entry.key());
-				debug_assert!(!false);
+				debug_assert!(false);
 			},
 		}
 	}
@@ -1674,8 +1674,9 @@ impl NetworkBehaviour for GenericProto {
 									notifications_sink: replacement_sink,
 								};
 								self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
-								*entry.into_mut() = PeerState::Enabled { connections };
 							}
+
+							*entry.into_mut() = PeerState::Enabled { connections };
 
 						} else {
 							// List of open connections wasn't empty before but now it is.
