@@ -217,13 +217,32 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 			None
 		))
 	}
-	
+
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
-		state_update.read_resolve()
+		match state_update {
+			WorkerResult::CallAt(result, None, ..)
+			| WorkerResult::Optimistic(result, None, ..)
+			| WorkerResult::Valid(result, None, ..) => Some(result),
+			WorkerResult::CallAt(result, Some(delta), ..)
+			| WorkerResult::Optimistic(result, Some(delta), ..)
+			| WorkerResult::Valid(result, Some(delta), ..) => {
+				if delta.is_empty() {
+					Some(result)
+				} else {
+					unimplemented!("Storing change is not supported in ReadOnlyExternalities");
+				}
+			},
+			WorkerResult::Invalid => None,
+			WorkerResult::RuntimePanic => {
+				panic!("Runtime panic from a worker.")
+			},
+			WorkerResult::HardPanic => {
+				panic!("Hard panic runing a worker.")
+			},
+		}
 	}
 
 	fn dismiss_worker(&mut self, _id: TaskId) {
-		unimplemented!("TODO needs filter/loggers from declaration to get deterministic failure of access parent writable, would need nothing if ReadOnly never spawn from non read only TODO check that");
 	}
 }
 

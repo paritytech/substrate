@@ -384,6 +384,15 @@ impl Default for StateDelta {
 	}
 }
 
+impl StateDelta {
+	/// Does state delta contain change.
+	pub fn is_empty(&self) -> bool {
+		self.top.added.is_empty()
+			&& self.top.deleted.is_empty()
+			&& self.children.is_empty()
+	}
+}
+
 #[derive(codec::Encode, codec::Decode)]
 pub struct TrieDelta {
 	/// Key values added.
@@ -463,26 +472,6 @@ impl StateLog {
 	/// Return true if a write related information was logged.
 	pub fn has_write(&self) -> bool {
 		!self.write_keys.is_empty() || !self.write_prefix.is_empty()
-	}
-}
-
-impl WorkerResult {
-	/// Resolve state default implementation for
-	/// Read only Externalities that do not register changes.
-	/// TODO this function is bad: remove and use explicitely.
-	pub fn read_resolve(self) -> Option<Vec<u8>> {
-		match self {
-			WorkerResult::CallAt(result, ..) => Some(result),
-			WorkerResult::Optimistic(result, ..) => Some(result),
-			WorkerResult::Valid(result, ..) => Some(result),
-			WorkerResult::Invalid => None,
-			WorkerResult::RuntimePanic => {
-				panic!("Runtime panic from a worker.")
-			},
-			WorkerResult::HardPanic => {
-				panic!("Hard panic runing a worker.")
-			},
-		}
 	}
 }
 
