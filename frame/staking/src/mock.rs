@@ -997,19 +997,19 @@ pub(crate) fn make_all_reward_payment(era: EraIndex) {
 macro_rules! assert_session_era {
 	($session:expr, $era:expr) => {
 		assert_eq!(
-															Session::current_index(),
-															$session,
-															"wrong session {} != {}",
-															Session::current_index(),
-															$session,
-														);
-														assert_eq!(
-															Staking::current_era().unwrap(),
-															$era,
-															"wrong current era {} != {}",
-															Staking::current_era().unwrap(),
-															$era,
-														);
+			Session::current_index(),
+			$session,
+			"wrong session {} != {}",
+			Session::current_index(),
+			$session,
+		);
+		assert_eq!(
+			Staking::current_era().unwrap(),
+			$era,
+			"wrong current era {} != {}",
+			Staking::current_era().unwrap(),
+			$era,
+		);
 	};
 }
 

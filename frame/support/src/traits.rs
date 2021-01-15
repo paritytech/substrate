@@ -347,23 +347,22 @@ impl<T> Happened<T> for () {
 /// be the default value), or where the account is being removed or reset back to the default value
 /// where previously it did exist (though may have been in a default state). This works well with
 /// system module's `CallOnCreatedAccount` and `CallKillAccount`.
-pub struct StorageMapShim<S, Created, Removed, K, T>(
-	sp_std::marker::PhantomData<(S, Created, Removed, K, T)>,
-);
+pub struct StorageMapShim<
+	S,
+	Created,
+	Removed,
+	K,
+	T
+>(sp_std::marker::PhantomData<(S, Created, Removed, K, T)>);
 impl<
-		S: StorageMap<K, T, Query = T>,
-		Created: Happened<K>,
-		Removed: Happened<K>,
-		K: FullCodec,
-		T: FullCodec,
-	> StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T>
-{
-	fn get(k: &K) -> T {
-		S::get(k)
-	}
-	fn is_explicit(k: &K) -> bool {
-		S::contains_key(k)
-	}
+	S: StorageMap<K, T, Query=T>,
+	Created: Happened<K>,
+	Removed: Happened<K>,
+	K: FullCodec,
+	T: FullCodec,
+> StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
+	fn get(k: &K) -> T { S::get(k) }
+	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
 	fn insert(k: &K, t: T) {
 		let existed = S::contains_key(&k);
 		S::insert(k, t);
