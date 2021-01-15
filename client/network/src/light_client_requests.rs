@@ -277,64 +277,6 @@ mod tests {
 	}
 
 	#[test]
-	fn disconnects_from_peer_on_incorrect_response() {
-		let peer = PeerId::random();
-		let pset = peerset();
-		let mut behaviour = make_behaviour(false, pset.1, make_config());
-		//                                 ^--- Making sure the response data check fails.
-
-		let conn = ConnectionId::new(1);
-		behaviour.inject_connection_established(&peer, &conn, &empty_dialer());
-		behaviour.inject_connected(&peer);
-		assert_eq!(1, behaviour.peers.len());
-
-		let chan = oneshot::channel();
-		let request = light::RemoteCallRequest {
-			block: Default::default(),
-			header: dummy_header(),
-			method: "test".into(),
-			call_data: vec![],
-			retry_count: Some(1),
-		};
-		behaviour
-			.request(Request::Call {
-				request,
-				sender: chan.0,
-			})
-			.unwrap();
-
-		assert_eq!(1, behaviour.pending_requests.len());
-		assert_eq!(0, behaviour.outstanding.len());
-		poll(&mut behaviour); // Make progress
-		assert_eq!(0, behaviour.pending_requests.len());
-		assert_eq!(1, behaviour.outstanding.len());
-
-		let request_id = *behaviour.outstanding.keys().next().unwrap();
-
-		let response = {
-			let r = schema::v1::light::RemoteCallResponse {
-				proof: empty_proof(),
-			};
-			schema::v1::light::Response {
-				response: Some(schema::v1::light::response::Response::RemoteCallResponse(r)),
-			}
-		};
-
-		behaviour.inject_event(
-			peer.clone(),
-			conn,
-			Event::Response(request_id, Response::Light(response)),
-		);
-		assert!(behaviour.peers.is_empty());
-
-		poll(&mut behaviour); // More progress
-
-		// The request should be back in the pending queue
-		assert_eq!(1, behaviour.pending_requests.len());
-		assert_eq!(0, behaviour.outstanding.len());
-	}
-
-	#[test]
 	fn disconnects_from_peer_on_unexpected_response() {
 		let peer = PeerId::random();
 		let pset = peerset();
