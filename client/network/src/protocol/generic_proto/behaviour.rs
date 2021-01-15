@@ -1674,8 +1674,9 @@ impl NetworkBehaviour for GenericProto {
 									notifications_sink: replacement_sink,
 								};
 								self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
-								*entry.into_mut() = PeerState::Enabled { connections };
 							}
+
+							*entry.into_mut() = PeerState::Enabled { connections };
 
 						} else {
 							// List of open connections wasn't empty before but now it is.
