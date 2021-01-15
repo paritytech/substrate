@@ -36,7 +36,7 @@ use crate::{
 	schema,
 	PeerId,
 };
-use crate::request_responses::{RequestFailure};
+use crate::request_responses::{RequestFailure, OutboundFailure};
 use futures::{channel::{oneshot}, future::BoxFuture, prelude::*, stream::FuturesUnordered};
 use prost::Message;
 use sc_client_api::{
@@ -99,8 +99,8 @@ pub struct LightClientRequestSender<B: Block> {
 /// Augments a pending light client request with metadata.
 #[derive(Debug)]
 struct PendingRequest<B: Block> {
-	/// Remaining retries.
-	retries: usize,
+	/// Remaining attempts.
+	attempts_left: usize,
 	/// The actual request.
 	request: Request<B>,
 }
@@ -108,14 +108,15 @@ struct PendingRequest<B: Block> {
 impl<B: Block> PendingRequest<B> {
 	fn new(req: Request<B>) -> Self {
 		PendingRequest {
-			retries: req.retries(),
+			// Number of retries + one for the initial attempt.
+			attempts_left: req.retries() + 1,
 			request: req,
 		}
 	}
 
 	fn into_sent(self, peer_id: PeerId) -> SentRequest<B> {
 		SentRequest {
-			retries: self.retries,
+			attempts_left: self.attempts_left,
 			request: self.request,
 			peer: peer_id,
 		}
@@ -125,8 +126,8 @@ impl<B: Block> PendingRequest<B> {
 /// Augments a light client request with metadata that is currently being send to a remote.
 #[derive(Debug)]
 struct SentRequest<B: Block> {
-	/// Remaining retries.
-	retries: usize,
+	/// Remaining attempts.
+	attempts_left: usize,
 	/// The actual request.
 	request: Request<B>,
 	/// The peer that the request is send to.
@@ -136,7 +137,7 @@ struct SentRequest<B: Block> {
 impl<B: Block> SentRequest<B> {
 	fn into_pending(self) -> PendingRequest<B> {
 		PendingRequest {
-			retries: self.retries,
+			attempts_left: self.attempts_left,
 			request: self.request,
 		}
 	}
@@ -321,62 +322,6 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 	type Item = OutEvent;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		// If we have a pending request to send, try to find an available peer and send it.
-		while let Some(mut pending_request) = self.pending_requests.pop_front() {
-			if pending_request.retries == 0 {
-				pending_request.request.return_reply(Err(ClientError::RemoteFetchFailed));
-				continue
-			}
-
-			pending_request.retries -= 1;
-
-			let protocol = if pending_request.request.is_block_request() {
-				self.config.block_protocol.clone()
-			} else {
-				self.config.light_protocol.clone()
-			};
-
-			let (peer_id, peer_info) = match self.peers.iter_mut()
-				.filter(|(_, peer_info)| peer_info.status == PeerStatus::Idle)
-				.find(|(_, peer_info)| peer_info.best_block.map(|n| n >= pending_request.request.required_block()).unwrap_or(false))
-			{
-				Some((peer_id, peer_info)) => (*peer_id, peer_info),
-				None => {
-					self.pending_requests.push_front(pending_request);
-					log::debug!("no peer available to send request to");
-
-					// TODO: Double check, this was previously `break`, but there might be another
-					// request with a lower block number that one of our peers might serve.
-					continue
-				}
-			};
-
-			let request_bytes = match pending_request.request.serialize_request() {
-				Ok(bytes) => bytes,
-				Err(error) => {
-					log::debug!("failed to serialize request: {}", error);
-					pending_request.request.return_reply(Err(ClientError::RemoteFetchFailed));
-					continue
-				}
-			};
-
-
-			let (tx, rx) = oneshot::channel();
-
-			peer_info.status = PeerStatus::Busy;
-
-			self.sent_requests.push(async move {
-				(pending_request.into_sent(peer_id), rx.await.unwrap())
-			}.boxed());
-
-			return Poll::Ready(Some(OutEvent::SendRequest {
-				target: peer_id,
-				request: request_bytes,
-				pending_response: tx,
-				protocol_name: protocol,
-			}));
-		}
-
 		// If we have received responses to previously sent requests, check them and pass them on.
 		while let Poll::Ready(Some((sent_request, response))) = self.sent_requests.poll_next_unpin(cx) {
 			if let Some(info) = self.peers.get_mut(&sent_request.peer) {
@@ -410,10 +355,6 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 						// differentiate based on `e`.
 						ReputationChange::new(TIMEOUT_REPUTATION_CHANGE, "light request timeout"),
 					);
-					if sent_request.retries == 0 {
-						sent_request.request.return_reply(Err(ClientError::RemoteFetchFailed));
-						continue
-					}
 					self.pending_requests.push_back(sent_request.into_pending());
 					continue;
 				}
@@ -431,13 +372,75 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 					log::debug!("error handling response from peer {}: {}", sent_request.peer, other);
 					self.remove_peer(sent_request.peer);
 					self.peerset.report_peer(sent_request.peer, ReputationChange::new_fatal("invalid response from peer"));
-					if sent_request.retries > 0 {
-						self.pending_requests.push_back(sent_request.into_pending())
-					} else {
-						sent_request.request.return_reply(Err(ClientError::RemoteFetchFailed))
+					self.pending_requests.push_back(sent_request.into_pending())
+				}
+			}
+		}
+
+		// If we have a pending request to send, try to find an available peer and send it.
+		while let Some(mut pending_request) = self.pending_requests.pop_front() {
+			if pending_request.attempts_left == 0 {
+				pending_request.request.return_reply(Err(ClientError::RemoteFetchFailed));
+				continue
+			}
+
+			pending_request.attempts_left -= 1;
+
+			let protocol = if pending_request.request.is_block_request() {
+				self.config.block_protocol.clone()
+			} else {
+				self.config.light_protocol.clone()
+			};
+
+			// Out of all idle peers, find one who's best block is high enough, choose any idle peer
+			// if none exists.
+			let mut peer = None;
+			for (peer_id, peer_info) in self.peers.iter_mut() {
+				if peer_info.status == PeerStatus::Idle {
+					match peer_info.best_block {
+						Some(n) => if n >= pending_request.request.required_block() {
+							peer = Some((*peer_id, peer_info));
+							break
+						},
+						None => peer = Some((*peer_id, peer_info))
 					}
 				}
 			}
+
+			// Break in case there is no idle peer.
+			let (peer_id, peer_info) = match peer {
+				Some((peer_id, peer_info)) => (peer_id, peer_info),
+				None => {
+					self.pending_requests.push_front(pending_request);
+					log::debug!("No peer available to send request to.");
+
+					break;
+				}
+			};
+
+			let request_bytes = match pending_request.request.serialize_request() {
+				Ok(bytes) => bytes,
+				Err(error) => {
+					log::debug!("failed to serialize request: {}", error);
+					pending_request.request.return_reply(Err(ClientError::RemoteFetchFailed));
+					continue
+				}
+			};
+
+			let (tx, rx) = oneshot::channel();
+
+			peer_info.status = PeerStatus::Busy;
+
+			self.sent_requests.push(async move {
+				(pending_request.into_sent(peer_id), rx.await.unwrap())
+			}.boxed());
+
+			return Poll::Ready(Some(OutEvent::SendRequest {
+				target: peer_id,
+				request: request_bytes,
+				pending_response: tx,
+				protocol_name: protocol,
+			}));
 		}
 
 		Poll::Pending
@@ -445,6 +448,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 }
 
 /// Events returned by [`LightClientRequestSender`].
+#[derive(Debug)]
 pub enum OutEvent {
 	/// Emit a request to be send out on the network e.g. via [`crate::request_responses`].
 	SendRequest {
@@ -469,7 +473,7 @@ pub enum Response {
 }
 
 /// Error returned by [`LightClientRequestSender::request`].
-#[derive(derive_more::Display, derive_more::From)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum SendRequestError {
 	/// There are currently too many pending request.
 	#[display(fmt = "too many pending requests")]
@@ -477,7 +481,7 @@ pub enum SendRequestError {
 }
 
 /// Error type to propagate errors internally.
-#[derive(derive_more::Display, derive_more::From)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 enum Error {
 	/// The response type does not correspond to the issued request.
 	#[display(fmt = "unexpected response")]
@@ -717,11 +721,15 @@ impl<B: Block> Request<B> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	use assert_matches::assert_matches;
 	use futures::channel::oneshot;
-	use sp_runtime::{
-		generic::Header,
-		traits::{BlakeTwo256, Block as BlockT, NumberFor},
-	};
+	use futures::executor::block_on;
+	use futures::poll;
+	use sp_runtime::generic::Header;
+	use sp_runtime::traits::{BlakeTwo256, Block as BlockT, NumberFor};
+	use std::collections::HashSet;
+	use std::iter::FromIterator;
 
 	fn protocol_id() -> ProtocolId {
 		ProtocolId::from("test")
@@ -788,4 +796,88 @@ mod tests {
 				.contains(BlockAttributes::BODY));
 	}
 
+	#[test]
+	fn disconnects_from_peer_if_request_times_out() {
+		let peer0 = PeerId::random();
+		let peer1 = PeerId::random();
+
+		let (_peer_set, peer_set_handle) = peerset();
+		let mut sender = LightClientRequestSender::<Block>::new(
+			&protocol_id(),
+			Arc::new(crate::light_client_requests::tests::DummyFetchChecker {
+				ok: true,
+				_mark: std::marker::PhantomData,
+			}),
+			peer_set_handle,
+		);
+
+		sender.inject_connected(peer0);
+		sender.inject_connected(peer1);
+
+		assert_eq!(
+			HashSet::from_iter(&[peer0.clone(), peer1.clone()]),
+			sender.peers.keys().collect::<HashSet<_>>(),
+			"Expect knowledge of two peers."
+		);
+
+		assert!(sender.pending_requests.is_empty(), "Expect no pending request.");
+		assert!(sender.sent_requests.is_empty(), "Expect no sent request.");
+
+		// Issue a request!
+		let chan = oneshot::channel();
+		let request = light::RemoteCallRequest {
+			block: Default::default(),
+			header: dummy_header(),
+			method: "test".into(),
+			call_data: vec![],
+			retry_count: Some(1),
+		};
+		sender.request(Request::Call { request, sender: chan.0 }).unwrap();
+		assert_eq!(1, sender.pending_requests.len(), "Expect one pending request.");
+
+		let OutEvent::SendRequest { target, pending_response, .. } = block_on(sender.next()).unwrap();
+		assert!(
+			target == peer0 || target == peer1,
+			"Expect request to originate from known peer.",
+		);
+
+		// And we should have one busy peer.
+		assert!({
+			let (idle, busy): (Vec<_>, Vec<_>) = sender
+				.peers
+				.iter()
+				.partition(|(_, info)| info.status == PeerStatus::Idle);
+			idle.len() == 1
+				&& busy.len() == 1
+				&& (idle[0].0 == &peer0 || busy[0].0 == &peer0)
+				&& (idle[0].0 == &peer1 || busy[0].0 == &peer1)
+		});
+
+		assert_eq!(0, sender.pending_requests.len(), "Expect no pending request.");
+		assert_eq!(1, sender.sent_requests.len(), "Expect one request to be sent.");
+
+		// Report first attempt as timed out.
+		pending_response.send(Err(RequestFailure::Network(OutboundFailure::Timeout))).unwrap();
+
+		// Expect a new request to be issued.
+		let OutEvent::SendRequest { pending_response, .. } = block_on(sender.next()).unwrap();
+
+		assert_eq!(1, sender.peers.len(), "Expect peer to be removed.");
+		assert_eq!(0, sender.pending_requests.len(), "Expect no request to be pending.");
+		assert_eq!(1, sender.sent_requests.len(), "Expect new request to be issued.");
+
+		// Report second attempt as timed out.
+		pending_response.send(Err(RequestFailure::Network(OutboundFailure::Timeout))).unwrap();
+		assert_matches!(
+			block_on(async { poll!(sender.next()) }), Poll::Pending,
+			"Expect sender to not issue another attempt.",
+		);
+		assert_matches!(
+			block_on(chan.1).unwrap(), Err(ClientError::RemoteFetchFailed),
+			"Expect request failure to be reported.",
+		);
+		assert_eq!(0, sender.peers.len(), "Expect no peer to be left");
+		assert_eq!(0, sender.pending_requests.len(), "Expect no request to be pending.");
+		assert_eq!(0, sender.sent_requests.len(), "Expect no other request to be in progress.");
+	}
 }
