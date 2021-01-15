@@ -374,6 +374,8 @@ pub enum PollBlockAnnounceValidation<H> {
 		/// The announcement.
 		announce: BlockAnnounce<H>,
 	},
+	/// The block announcement should be skipped.
+	Skip,
 }
 
 /// Result of [`ChainSync::block_announce_validation`].
@@ -388,15 +390,6 @@ enum PreValidateBlockAnnounce<H> {
 		/// Should the peer be disconnected?
 		disconnect: bool,
 	},
-	/// The announcement does not require further handling.
-	Nothing {
-		/// Who sent the processed block announcement?
-		who: PeerId,
-		/// Was this their new best block?
-		is_best: bool,
-		/// The announcement.
-		announce: BlockAnnounce<H>,
-	},
 	/// The pre-validation was sucessful and the announcement should be
 	/// further processed.
 	Process {
@@ -407,6 +400,8 @@ enum PreValidateBlockAnnounce<H> {
 		/// The announcement.
 		announce: BlockAnnounce<H>,
 	},
+	/// The block announcement should be skipped.
+	Skip,
 }
 
 /// Result of [`ChainSync::on_block_justification`].
@@ -1278,7 +1273,7 @@ impl<B: BlockT> ChainSync<B> {
 					who,
 					hash,
 				);
-				PreValidateBlockAnnounce::Nothing { is_best, who, announce }
+				PreValidateBlockAnnounce::Skip
 			}.boxed());
 			return
 		}
@@ -1295,7 +1290,7 @@ impl<B: BlockT> ChainSync<B> {
 						hash,
 						who,
 					);
-					PreValidateBlockAnnounce::Nothing { is_best, who, announce }
+					PreValidateBlockAnnounce::Skip
 				}.boxed());
 				return
 			}
@@ -1308,7 +1303,7 @@ impl<B: BlockT> ChainSync<B> {
 						hash,
 						who,
 					);
-					PreValidateBlockAnnounce::Nothing { is_best, who, announce }
+					PreValidateBlockAnnounce::Skip
 				}.boxed());
 				return
 			}
@@ -1337,7 +1332,7 @@ impl<B: BlockT> ChainSync<B> {
 				}
 				Err(e) => {
 					error!(target: "sync", "💔 Block announcement validation errored: {}", e);
-					PreValidateBlockAnnounce::Nothing { is_best, who, announce }
+					PreValidateBlockAnnounce::Skip
 				}
 			}
 		}.boxed());
@@ -1393,10 +1388,6 @@ impl<B: BlockT> ChainSync<B> {
 		);
 
 		let (announce, is_best, who) = match pre_validation_result {
-			PreValidateBlockAnnounce::Nothing { is_best, who, announce } => {
-				self.peer_block_announce_validation_finished(&who);
-				return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
-			},
 			PreValidateBlockAnnounce::Failure { who, disconnect } => {
 				self.peer_block_announce_validation_finished(&who);
 				return PollBlockAnnounceValidation::Failure { who, disconnect }
@@ -1405,6 +1396,7 @@ impl<B: BlockT> ChainSync<B> {
 				self.peer_block_announce_validation_finished(&who);
 				(announce, is_new_best, who)
 			},
+			PreValidateBlockAnnounce::Skip => return PollBlockAnnounceValidation::Skip,
 		};
 
 		let number = *announce.header.number();
