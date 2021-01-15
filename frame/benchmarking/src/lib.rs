@@ -955,6 +955,39 @@ macro_rules! impl_benchmark_test {
 	};
 }
 
+/// show error message and debugging info for the case of an error happening
+/// during a benchmark
+pub fn show_benchmark_debug_info(
+	instance_string: &[u8],
+	benchmark: &[u8],
+	lowest_range_values: &sp_std::prelude::Vec<u32>,
+	highest_range_values: &sp_std::prelude::Vec<u32>,
+	steps: &sp_std::prelude::Vec<u32>,
+	repeat: &u32,
+	verify: &bool,
+	error_message: &str,
+) -> sp_runtime::RuntimeString {
+	sp_runtime::format_runtime_string!(
+		"\n* Pallet: {}\n\
+		* Benchmark: {}\n\
+		* Lowest_range_values: {:?}\n\
+		* Highest_range_values: {:?}\n\
+		* Steps: {:?}\n\
+		* Repeat: {:?}\n\
+		* Verify: {:?}\n\
+		* Error message: {}",
+		sp_std::str::from_utf8(instance_string)
+		.expect("it's all just strings ran through the wasm interface. qed"),
+		sp_std::str::from_utf8(benchmark)
+		.expect("it's all just strings ran through the wasm interface. qed"),
+		lowest_range_values,
+		highest_range_values,
+		steps,
+		repeat,
+		verify,
+		error_message,
+	)
+}
 
 /// This macro adds pallet benchmarks to a `Vec<BenchmarkBatch>` object.
 ///
@@ -1050,7 +1083,18 @@ macro_rules! add_benchmark {
 							*repeat,
 							whitelist,
 							*verify,
-						)?,
+						).map_err(|e| { 
+							$crate::show_benchmark_debug_info(
+								instance_string,
+								benchmark,
+								lowest_range_values,
+								highest_range_values,
+								steps,
+								repeat,
+								verify,
+								e,
+							)
+						})?,
 					});
 				}
 			} else {
@@ -1066,7 +1110,18 @@ macro_rules! add_benchmark {
 						*repeat,
 						whitelist,
 						*verify,
-					)?,
+					).map_err(|e| { 
+						$crate::show_benchmark_debug_info(
+							instance_string,
+							benchmark,
+							lowest_range_values,
+							highest_range_values,
+							steps,
+							repeat,
+							verify,
+							e,
+						)
+					})?,
 				});
 			}
 		}

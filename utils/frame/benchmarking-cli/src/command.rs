@@ -174,7 +174,7 @@ impl BenchmarkCmd {
 					}
 				}
 			},
-			Err(error) => eprintln!("Error: {:?}", error),
+			Err(error) => eprintln!("Error: {}", error),
 		}
 
 		Ok(())
