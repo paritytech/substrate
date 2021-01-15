@@ -47,18 +47,6 @@ pub(crate) type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 
-/*
-
-
-		-------------------------------------------- NODE
-
-		// signed configs
-	pub const SignedMaxSubmissions: u32 = 10;
-	pub const SignedRewardBase: Balance = 1 * DOLLARS;
-	pub const SignedDepositBase: Balance = 1 * DOLLARS;
-	pub const SignedDepositByte: Balance = 1 * CENTS;
-*/
-
 impl<T: Config> Pallet<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
