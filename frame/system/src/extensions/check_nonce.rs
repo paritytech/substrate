@@ -17,9 +17,7 @@
 
 use codec::{Encode, Decode};
 use crate::Config;
-use frame_support::{
-	weights::DispatchInfo,
-};
+use frame_support::weights::DispatchInfo;
 use sp_runtime::{
 	traits::{SignedExtension, DispatchInfoOf, Dispatchable, One},
 	transaction_validity::{
