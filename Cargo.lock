@@ -4757,11 +4757,26 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
+ "pallet-mmr-primitives",
  "parity-scale-codec",
  "serde",
  "sp-core",
  "sp-io",
- "sp-mmr",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-mmr-primitives"
+version = "2.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "hex-literal",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-core",
  "sp-runtime",
  "sp-std",
 ]
@@ -8459,21 +8474,6 @@ dependencies = [
  "serde",
  "sp-core",
  "sp-externalities",
-]
-
-[[package]]
-name = "sp-mmr"
-version = "2.0.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "hex-literal",
- "parity-scale-codec",
- "serde",
- "sp-api",
- "sp-core",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]

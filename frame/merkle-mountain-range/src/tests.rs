@@ -26,7 +26,7 @@ use sp_core::{
 		OffchainExt,
 	},
 };
-use sp_mmr::{Proof, Compact};
+use pallet_mmr_primitives::{Proof, Compact};
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()

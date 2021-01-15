@@ -73,7 +73,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub use sp_mmr as primitives;
+pub use pallet_mmr_primitives as primitives;
 
 pub trait WeightInfo {
 	fn on_initialize(peaks: u64) -> Weight;
