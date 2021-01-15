@@ -731,6 +731,7 @@ mod tests {
 	use std::collections::HashSet;
 	use std::iter::FromIterator;
 	use sc_client_api::StorageProof;
+	use sp_core::storage::ChildInfo;
 
 	fn protocol_id() -> ProtocolId {
 		ProtocolId::from("test")
@@ -1085,5 +1086,185 @@ mod tests {
 				)
 			}
 		}
+	}
+
+	fn issue_request(request: Request<Block>) {
+		let peer = PeerId::random();
+
+		let (_peer_set, peer_set_handle) = peerset();
+		let mut sender = LightClientRequestSender::<Block>::new(
+			&protocol_id(),
+			Arc::new(crate::light_client_requests::tests::DummyFetchChecker {
+				ok: true,
+				_mark: std::marker::PhantomData,
+			}),
+			peer_set_handle,
+		);
+
+		sender.inject_connected(peer);
+		assert_eq!(1, sender.peers.len(), "Expect one peer.");
+
+		let response = match request {
+			Request::Body { .. } => unimplemented!(),
+			Request::Header { .. } => {
+				let r = schema::v1::light::RemoteHeaderResponse {
+					header: dummy_header().encode(),
+					proof: empty_proof(),
+				};
+				schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteHeaderResponse(
+						r,
+					)),
+				}
+			}
+			Request::Read { .. } => {
+				let r = schema::v1::light::RemoteReadResponse {
+					proof: empty_proof(),
+				};
+				schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteReadResponse(r)),
+				}
+			}
+			Request::ReadChild { .. } => {
+				let r = schema::v1::light::RemoteReadResponse {
+					proof: empty_proof(),
+				};
+				schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteReadResponse(r)),
+				}
+			}
+			Request::Call { .. } => {
+				let r = schema::v1::light::RemoteCallResponse {
+					proof: empty_proof(),
+				};
+				schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteCallResponse(r)),
+				}
+			}
+			Request::Changes { .. } => {
+				let r = schema::v1::light::RemoteChangesResponse {
+					max: std::iter::repeat(1).take(32).collect(),
+					proof: Vec::new(),
+					roots: Vec::new(),
+					roots_proof: empty_proof(),
+				};
+				schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteChangesResponse(r)),
+				}
+			}
+		};
+
+		let response = {
+			let mut data = Vec::new();
+			response.encode(&mut data).unwrap();
+			data
+		};
+
+		sender.request(request).unwrap();
+
+		assert_eq!(1, sender.pending_requests.len());
+		assert_eq!(0, sender.sent_requests.len());
+		let OutEvent::SendRequest { pending_response, .. } = block_on(sender.next()).unwrap();
+		assert_eq!(0, sender.pending_requests.len());
+		assert_eq!(1, sender.sent_requests.len());
+
+		pending_response.send(Ok(response)).unwrap();
+		assert_matches!(
+			block_on(async { poll!(sender.next()) }), Poll::Pending,
+			"Expect sender to not issue another attempt, given that there is no peer left.",
+		);
+
+		assert_eq!(0, sender.pending_requests.len());
+		assert_eq!(0, sender.sent_requests.len())
+	}
+
+	#[test]
+	fn receives_remote_call_response() {
+		let mut chan = oneshot::channel();
+		let request = light::RemoteCallRequest {
+			block: Default::default(),
+			header: dummy_header(),
+			method: "test".into(),
+			call_data: vec![],
+			retry_count: None,
+		};
+		issue_request(Request::Call {
+			request,
+			sender: chan.0,
+		});
+		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
+	}
+
+	#[test]
+	fn receives_remote_read_response() {
+		let mut chan = oneshot::channel();
+		let request = light::RemoteReadRequest {
+			header: dummy_header(),
+			block: Default::default(),
+			keys: vec![b":key".to_vec()],
+			retry_count: None,
+		};
+		issue_request(Request::Read {
+			request,
+			sender: chan.0,
+		});
+		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
+	}
+
+	#[test]
+	fn receives_remote_read_child_response() {
+		let mut chan = oneshot::channel();
+		let child_info = ChildInfo::new_default(&b":child_storage:default:sub"[..]);
+		let request = light::RemoteReadChildRequest {
+			header: dummy_header(),
+			block: Default::default(),
+			storage_key: child_info.prefixed_storage_key(),
+			keys: vec![b":key".to_vec()],
+			retry_count: None,
+		};
+		issue_request(Request::ReadChild {
+			request,
+			sender: chan.0,
+		});
+		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
+	}
+
+	#[test]
+	fn receives_remote_header_response() {
+		let mut chan = oneshot::channel();
+		let request = light::RemoteHeaderRequest {
+			cht_root: Default::default(),
+			block: 1,
+			retry_count: None,
+		};
+		issue_request(Request::Header {
+			request,
+			sender: chan.0,
+		});
+		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
+	}
+
+	#[test]
+	fn receives_remote_changes_response() {
+		let mut chan = oneshot::channel();
+		let request = light::RemoteChangesRequest {
+			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
+				zero: (0, Default::default()),
+				end: None,
+				config: Some(sp_core::ChangesTrieConfiguration::new(4, 2)),
+			}],
+			first_block: (1, Default::default()),
+			last_block: (100, Default::default()),
+			max_block: (100, Default::default()),
+			tries_roots: (1, Default::default(), Vec::new()),
+			key: Vec::new(),
+			storage_key: None,
+			retry_count: None,
+		};
+		issue_request(Request::Changes {
+			request,
+			sender: chan.0,
+		});
+		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
 	}
 }
