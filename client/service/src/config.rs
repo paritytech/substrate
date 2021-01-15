@@ -18,7 +18,10 @@
 
 //! Service configuration.
 
-pub use sc_client_db::{Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig};
+pub use sc_client_db::{
+	Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig,
+	KeepBlocks, TransactionStorageMode
+};
 pub use sc_network::Multiaddr;
 pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
 pub use sc_executor::WasmExecutionMethod;
@@ -58,8 +61,12 @@ pub struct Configuration {
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
 	pub state_cache_child_ratio: Option<usize>,
-	/// Pruning settings.
-	pub pruning: PruningMode,
+	/// State pruning settings.
+	pub state_pruning: PruningMode,
+	/// Number of blocks to keep in the db.
+	pub keep_blocks: KeepBlocks,
+	/// Transaction storage scheme.
+	pub transaction_storage: TransactionStorageMode,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.
