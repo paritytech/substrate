@@ -24,7 +24,8 @@ use sp_std::prelude::*;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::{H256, Header}};
 use frame_support::{
 	dispatch::DispatchResult,
-	decl_module, decl_storage, impl_outer_origin, assert_ok, assert_err, ensure
+	decl_module, decl_storage, impl_outer_origin, assert_ok, assert_err, ensure,
+	parameter_types, pallet_prelude::Get,
 };
 use frame_system::{RawOrigin, ensure_signed, ensure_none};
 
@@ -67,6 +68,8 @@ pub trait Config: frame_system::Config + OtherConfig
 	where Self::OtherEvent: Into<<Self as Config>::Event>
 {
 	type Event;
+	type LowerBound: Get<u32>;
+	type UpperBound: Get<u32>;
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -97,8 +100,15 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 }
 
+parameter_types!{
+	pub const LowerBound: u32 = 1;
+	pub const UpperBound: u32 = 100;
+}
+
 impl Config for Test {
 	type Event = ();
+	type LowerBound = LowerBound;
+	type UpperBound = UpperBound;
 }
 
 impl OtherConfig for Test {
@@ -155,6 +165,10 @@ benchmarks!{
 	no_components {
 		let caller = account::<T::AccountId>("caller", 0, 0);
 	}: set_value(RawOrigin::Signed(caller), 0)
+
+	variable_components {
+		let b in ( T::LowerBound::get() ) .. T::UpperBound::get();
+	}: dummy (RawOrigin::None, b.into())
 }
 
 #[test]
@@ -248,5 +262,6 @@ fn benchmarks_generate_unit_tests() {
 		assert_err!(test_benchmark_bad_origin::<Test>(), "Bad origin");
 		assert_err!(test_benchmark_bad_verify::<Test>(), "You forgot to sort!");
 		assert_ok!(test_benchmark_no_components::<Test>());
+		assert_ok!(test_benchmark_variable_components::<Test>());
 	});
 }

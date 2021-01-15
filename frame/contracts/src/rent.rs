@@ -142,7 +142,7 @@ where
 	/// Consider the case for rent payment of the given account and returns a `Verdict`.
 	///
 	/// Use `handicap` in case you want to change the reference block number. (To get more details see
-	/// `snitch_contract_should_be_evicted` ).
+	/// `try_eviction` ).
 	fn consider_case(
 		account: &T::AccountId,
 		current_block_number: T::BlockNumber,
@@ -268,6 +268,7 @@ where
 				let contract_info = ContractInfo::Alive(AliveContractInfo::<T> {
 					rent_allowance: alive_contract_info.rent_allowance - amount.peek(),
 					deduct_block: current_block_number,
+					rent_payed: alive_contract_info.rent_payed.saturating_add(amount.peek()),
 					..alive_contract_info
 				});
 				<ContractInfoOf<T>>::insert(account, &contract_info);
@@ -280,7 +281,7 @@ where
 	/// Make account paying the rent for the current block number
 	///
 	/// This functions does **not** evict the contract. It returns `None` in case the
-	/// contract is in need of eviction. [`snitch_contract_should_be_evicted`] must
+	/// contract is in need of eviction. [`try_eviction`] must
 	/// be called to perform the eviction.
 	pub fn charge(account: &T::AccountId) -> Result<Option<ContractInfo<T>>, DispatchError> {
 		let contract_info = <ContractInfoOf<T>>::get(account);
@@ -301,8 +302,9 @@ where
 
 	/// Process a report that a contract under the given address should be evicted.
 	///
-	/// Enact the eviction right away if the contract should be evicted and return true.
-	/// Otherwise, **do nothing** and return false.
+	/// Enact the eviction right away if the contract should be evicted and return the amount
+	/// of rent that the contract payed over its lifetime.
+	/// Otherwise, **do nothing** and return None.
 	///
 	/// The `handicap` parameter gives a way to check the rent to a moment in the past instead
 	/// of current block. E.g. if the contract is going to be evicted at the current block,
@@ -311,13 +313,13 @@ where
 	///
 	/// NOTE this function performs eviction eagerly. All changes are read and written directly to
 	/// storage.
-	pub fn snitch_contract_should_be_evicted(
+	pub fn try_eviction(
 		account: &T::AccountId,
 		handicap: T::BlockNumber,
-	) -> Result<bool, DispatchError> {
+	) -> Result<Option<BalanceOf<T>>, DispatchError> {
 		let contract = <ContractInfoOf<T>>::get(account);
 		let contract = match contract {
-			None | Some(ContractInfo::Tombstone(_)) => return Ok(false),
+			None | Some(ContractInfo::Tombstone(_)) => return Ok(None),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 		let current_block_number = <frame_system::Module<T>>::block_number();
@@ -330,11 +332,17 @@ where
 
 		// Enact the verdict only if the contract gets removed.
 		match verdict {
-			Verdict::Evict { .. } => {
+			Verdict::Evict { ref amount } => {
+				// The outstanding `amount` is withdrawn inside `enact_verdict`.
+				let rent_payed = amount
+					.as_ref()
+					.map(|a| a.peek())
+					.unwrap_or_else(|| <BalanceOf<T>>::zero())
+					.saturating_add(contract.rent_payed);
 				Self::enact_verdict(account, contract, current_block_number, verdict, true)?;
-				Ok(true)
+				Ok(Some(rent_payed))
 			}
-			_ => Ok(false),
+			_ => Ok(None),
 		}
 	}
 
@@ -481,6 +489,7 @@ where
 			pair_count: origin_contract.pair_count,
 			code_hash,
 			rent_allowance,
+			rent_payed: <BalanceOf<T>>::zero(),
 			deduct_block: current_block,
 			last_write,
 		}));
