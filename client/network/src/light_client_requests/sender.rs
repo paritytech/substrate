@@ -950,4 +950,64 @@ mod tests {
 		assert_eq!(1, sender.pending_requests.len(), "Expect request to be pending again.");
 		assert_eq!(0, sender.sent_requests.len(), "Expect no request to be sent.");
 	}
+
+	#[test]
+	fn disconnects_from_peer_on_wrong_response_type() {
+		let peer = PeerId::random();
+		let (_peer_set, peer_set_handle) = peerset();
+		let mut sender = LightClientRequestSender::<Block>::new(
+			&protocol_id(),
+			Arc::new(crate::light_client_requests::tests::DummyFetchChecker {
+				ok: true,
+				_mark: std::marker::PhantomData,
+			}),
+			peer_set_handle,
+		);
+
+		sender.inject_connected(peer);
+		assert_eq!(1, sender.peers.len(), "Expect one peer.");
+
+		let chan = oneshot::channel();
+		let request = light::RemoteCallRequest {
+			block: Default::default(),
+			header: dummy_header(),
+			method: "test".into(),
+			call_data: vec![],
+			retry_count: Some(1),
+		};
+		sender
+			.request(Request::Call {
+				request,
+				sender: chan.0,
+			})
+			.unwrap();
+
+		assert_eq!(1, sender.pending_requests.len());
+		assert_eq!(0, sender.sent_requests.len());
+		let OutEvent::SendRequest { pending_response, .. } = block_on(sender.next()).unwrap();
+		assert_eq!(0, sender.pending_requests.len(), "Expect zero pending requests.");
+		assert_eq!(1, sender.sent_requests.len(), "Expect one sent request.");
+
+		let response = {
+			let r = schema::v1::light::RemoteReadResponse {
+				proof: empty_proof(),
+			}; // Not a RemoteCallResponse!
+			let response = schema::v1::light::Response {
+				response: Some(schema::v1::light::response::Response::RemoteReadResponse(r)),
+			};
+			let mut data = Vec::new();
+			response.encode(&mut data).unwrap();
+			data
+		};
+
+		pending_response.send(Ok(response)).unwrap();
+		assert_matches!(
+			block_on(async { poll!(sender.next()) }), Poll::Pending,
+			"Expect sender to not issue another attempt, given that there is no peer left.",
+		);
+
+		assert!(sender.peers.is_empty(), "Expect no peers to be left.");
+		assert_eq!(1, sender.pending_requests.len(), "Expect request to be pending again.");
+		assert_eq!(0, sender.sent_requests.len(), "Expect no request to be sent.");
+	}
 }
