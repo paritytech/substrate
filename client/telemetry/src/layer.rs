@@ -38,7 +38,7 @@ impl TelemetryLayer {
 		telemetry_external_transport: Option<ExtTransport>,
 	) -> io::Result<(Self, TelemetryWorker)> {
 		let worker = TelemetryWorker::new(telemetry_external_transport)?;
-		let sender = worker.sender();
+		let sender = worker.message_sender();
 		Ok((Self(Mutex::new(sender)), worker))
 	}
 }

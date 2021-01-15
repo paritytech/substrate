@@ -159,7 +159,7 @@ impl<Block: BlockT> NetworkStatusSinks<Block> {
 
 }
 
-/// An imcomplete set of chain components, but enough to run the chain ops subcommands.
+/// An incomplete set of chain components, but enough to run the chain ops subcommands.
 pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, TransactionPool, Other> {
 	/// A shared client instance.
 	pub client: Arc<Client>,

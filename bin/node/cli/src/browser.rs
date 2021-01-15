@@ -41,11 +41,10 @@ async fn start_inner(chain_spec: Option<String>, log_directives: String) -> Resu
 		None => crate::chain_spec::development_config(),
 	};
 
-	let (telemetry_handle, telemetry_span) = telemetry_worker.handle();
+	let telemetry_handle = telemetry_worker.handle();
 	let config = browser_configuration(
 		chain_spec,
 		Some(telemetry_handle),
-		Some(telemetry_span),
 	).await?;
 
 	info!("Substrate browser node");

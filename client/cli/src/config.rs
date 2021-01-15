@@ -33,7 +33,7 @@ use sc_service::config::{
 	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver};
-use sc_telemetry::{TelemetryHandle, TelemetrySpan};
+use sc_telemetry::TelemetryHandle;
 use sc_tracing::logging::GlobalLoggerBuilder;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -454,7 +454,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		cli: &C,
 		task_executor: TaskExecutor,
 		telemetry_handle: Option<TelemetryHandle>,
-		telemetry_span: Option<TelemetrySpan>,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
@@ -525,7 +524,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
 			telemetry_handle,
-			telemetry_span,
 		})
 	}
 

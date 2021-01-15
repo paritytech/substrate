@@ -45,9 +45,9 @@ pub(crate) struct Node<TTrans: Transport> {
 	/// Transport used to establish new connections.
 	transport: TTrans,
 	/// Messages that are sent when the connection (re-)establishes.
-	connection_messages: Vec<serde_json::Map<String, serde_json::Value>>,
+	pub(crate) connection_messages: Vec<serde_json::Map<String, serde_json::Value>>,
 	/// Notifier for when the connection (re-)establishes.
-	telemetry_connection_notifier: Vec<ConnectionNotifierSender>,
+	pub(crate) telemetry_connection_notifier: Vec<ConnectionNotifierSender>,
 }
 
 enum NodeSocket<TTrans: Transport> {

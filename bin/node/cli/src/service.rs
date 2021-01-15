@@ -34,7 +34,7 @@ use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use node_executor::Executor;
-use sc_telemetry::TelemetryConnectionNotifier;
+use sc_telemetry::{TelemetryConnectionNotifier, TelemetrySpan};
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -58,9 +58,10 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 			sc_consensus_babe::BabeLink<Block>,
 		),
 		grandpa::SharedVoterState,
+		Option<TelemetrySpan>,
 	)
 >, ServiceError> {
-	let (client, backend, keystore_container, task_manager) =
+	let (client, backend, keystore_container, task_manager, telemetry_span) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
 
@@ -156,7 +157,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		import_queue,
 		transaction_pool,
 		inherent_data_providers,
-		other: (rpc_extensions_builder, import_setup, rpc_setup),
+		other: (rpc_extensions_builder, import_setup, rpc_setup, telemetry_span),
 	})
 }
 
@@ -186,7 +187,7 @@ pub fn new_full_base(
 		select_chain,
 		transaction_pool,
 		inherent_data_providers,
-		other: (rpc_extensions_builder, import_setup, rpc_setup),
+		other: (rpc_extensions_builder, import_setup, rpc_setup, telemetry_span),
 	} = new_partial(&config)?;
 
 	let shared_voter_state = rpc_setup;
@@ -231,6 +232,7 @@ pub fn new_full_base(
 		remote_blockchain: None,
 		network_status_sinks: network_status_sinks.clone(),
 		system_rpc_tx,
+		telemetry_span,
 	})?;
 
 	let (block_import, grandpa_link, babe_link) = import_setup;
@@ -354,7 +356,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
-	let (client, backend, keystore_container, mut task_manager, on_demand) =
+	let (client, backend, keystore_container, mut task_manager, on_demand, telemetry_span) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
@@ -434,6 +436,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 			config, backend, network_status_sinks, system_rpc_tx,
 			network: network.clone(),
 			task_manager: &mut task_manager,
+			telemetry_span,
 		})?;
 
 	Ok((task_manager, rpc_handlers, telemetry_telemetry_connection_notifier, client, network, transaction_pool))
