@@ -29,7 +29,7 @@ use frame_support::weights::{Weight, DispatchClass, constants, PerDispatchClass,
 use sp_runtime::{RuntimeDebug, Perbill};
 
 /// Block length limit configuration.
-#[derive(RuntimeDebug, Clone)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
 pub struct BlockLength {
 	/// Maximal total length in bytes for each extrinsic class.
 	///
