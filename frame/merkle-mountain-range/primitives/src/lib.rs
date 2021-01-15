@@ -130,7 +130,7 @@ mod encoding {
 		}
 	}
 
-	impl<H: traits::Hash, L: FullLeaf> codec::Decode for DataOrHash<H, L> {
+	impl<H: traits::Hash, L: FullLeaf + codec::Decode> codec::Decode for DataOrHash<H, L> {
 		fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
 			let decoded: Either<Vec<u8>, H::Output> = Either::decode(value)?;
 			Ok(match decoded {
@@ -318,8 +318,15 @@ impl Error {
 ///
 /// Note the leaf type should be encoded in it's compact form when passed through this type.
 /// See [FullLeaf] documentation for details.
+///
+/// This type is SCALE-compatible with `Vec<u8>` encoding. I.e. you must encode your leaf twice:
+/// ```rust,ignore
+/// let encoded: Vec<u8> = my_leaf.encode();
+/// let opaque: Vec<u8> = encoded.encode();
+/// let decoded = OpaqueLeaf::decode(&mut &*opaque);
+/// ```
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(RuntimeDebug, Clone, PartialEq)]
+#[derive(RuntimeDebug, Clone, PartialEq, codec::Decode)]
 pub struct OpaqueLeaf(
 	/// Leaf type encoded in it's compact form.
 	#[cfg_attr(feature = "std", serde(with = "sp_core::bytes"))]
@@ -329,47 +336,18 @@ pub struct OpaqueLeaf(
 impl OpaqueLeaf {
 	/// Convert a concrete MMR leaf into an opaque type.
 	pub fn from_leaf<T: FullLeaf>(leaf: T) -> Self {
-		leaf.using_encoded(|d| OpaqueLeaf(d.to_vec()), true)
+		let encoded_leaf = leaf.using_encoded(|d| d.to_vec(), true);
+		// OpaqueLeaf must be SCALE-compatible with `Vec<u8>`.
+		// Simply using raw encoded bytes don't work, cause we don't know the
+		// length of the expected data.
+		let encoded_vec = codec::Encode::encode(&encoded_leaf);
+		OpaqueLeaf(encoded_vec)
 	}
 }
 
-impl codec::Encode for OpaqueLeaf {
-	fn size_hint(&self) -> usize {
-		self.0.len()
-	}
-
-	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
-		dest.write(&self.0)
-	}
-}
-
-impl codec::Decode for OpaqueLeaf {
-	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
-		const MAX_LENGTH: usize = 1 * 1024 * 1024;
-		let capacity = value.remaining_len()?;
-		match capacity {
-			Some(capacity) if capacity > MAX_LENGTH => {
-				Err(codec::Error::from("maximal leaf length exceeded."))
-			},
-			Some(capacity) => {
-				let mut buffer = Vec::with_capacity(capacity);
-				buffer.resize(capacity, 0);
-				value.read(&mut buffer)?;
-				Ok(OpaqueLeaf(buffer))
-			},
-			// read byte-by-byte, up to MAX_LENGTH
-			None => {
-				let mut buffer = Vec::with_capacity(MAX_LENGTH / 1024);
-				while buffer.len() < MAX_LENGTH {
-					if let Ok(byte) = value.read_byte() {
-						buffer.push(byte);
-					} else {
-						return Ok(OpaqueLeaf(buffer))
-					}
-				}
-				Err(codec::Error::from("maximal leaf length exceeded."))
-			}
-		}
+impl FullLeaf for OpaqueLeaf {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, _compact: bool) -> R {
+		f(&self.0)
 	}
 }
 
@@ -390,7 +368,9 @@ sp_api::decl_runtime_apis! {
 		///
 		/// Note this function does not require any on-chain storage - the
 		/// proof is verified against given MMR root hash.
-		fn verify_proof_stateless(root: Hash, leaf: OpaqueLeaf, proof: Proof<Hash>)
+		///
+		/// The leaf data is expected to be encoded in it's compact form.
+		fn verify_proof_stateless(root: Hash, leaf: Vec<u8>, proof: Proof<Hash>)
 			-> Result<(), Error>;
 	}
 }
@@ -557,12 +537,19 @@ mod tests {
 
 		let decoded_opaque = encoded_compact
 			.iter()
-			.map(|x| OpaqueLeaf::decode(&mut &**x))
+			// Encode the Vec<u8> again.
+			.map(codec::Encode::encode)
+			.map(|x| OpaqueLeaf::decode(&mut &*x))
 			.collect::<Vec<_>>();
 
 		let reencoded = decoded_opaque
 			.iter()
-			.map(|x| x.as_ref().map(codec::Encode::encode))
+			.map(|x| x.as_ref().map(|x| x.using_encoded(|x| x.to_vec(), false)))
+			.collect::<Vec<_>>();
+
+		let reencoded_compact = decoded_opaque
+			.iter()
+			.map(|x| x.as_ref().map(|x| x.using_encoded(|x| x.to_vec(), true)))
 			.collect::<Vec<_>>();
 
 		// then
@@ -570,6 +557,11 @@ mod tests {
 		assert_eq!(
 			reencoded,
 			encoded_compact.clone().into_iter().map(Ok).collect::<Vec<_>>()
+		);
+		// make sure that compact and non-compact encoding is the same.
+		assert_eq!(
+			reencoded,
+			reencoded_compact
 		);
 		// make sure that decoded opaque leaves simply contain raw bytes payload.
 		assert_eq!(

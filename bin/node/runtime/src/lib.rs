@@ -1290,10 +1290,10 @@ impl_runtime_apis! {
 
 		fn verify_proof_stateless(
 			root: mmr::Hash,
-			leaf: mmr::OpaqueLeaf,
+			leaf: Vec<u8>,
 			proof: mmr::Proof<mmr::Hash>
 		) -> Result<(), mmr::Error> {
-			let node = mmr::DataOrHash::Data(leaf);
+			let node = mmr::DataOrHash::Data(mmr::OpaqueLeaf(leaf));
 			pallet_mmr::verify_leaf_proof::<mmr::Hashing, _>(root, node, proof)
 		}
 	}
