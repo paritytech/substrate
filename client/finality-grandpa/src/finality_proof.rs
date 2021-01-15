@@ -213,12 +213,12 @@ where
 	let (set_id, last_block_for_set) = if let Some(id) = authority_set_changes.get_set_id(block) {
 		id
 	} else {
-		let err = format!(
+		trace!(
+			target: "afg",
 			"AuthoritySetChanges does not cover the requested block #{}. \
 			Maybe the subscription API is more appropriate.",
 			block,
 		);
-		trace!(target: "afg", "{}", &err);
 		return Err(FinalityProofError::BlockNotInAuthoritySetChanges);
 	};
 
@@ -263,7 +263,7 @@ where
 				trace!(
 					target: "afg",
 					"Encountered new authorities when collecting unknown headers. \
-					Returning empty proof"
+					Returning empty proof",
 				);
 				return Ok(None);
 			}

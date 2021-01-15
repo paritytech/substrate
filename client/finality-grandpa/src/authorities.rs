@@ -690,7 +690,7 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 }
 
 // Tracks historical authority set changes. We store the block numbers for the first block of each
-// authority set, once they have been finalalized.
+// authority set, once they have been finalized.
 #[derive(Debug, Encode, Decode, Clone, PartialEq)]
 pub struct AuthoritySetChanges<N>(pub Vec<(u64, N)>);
 
