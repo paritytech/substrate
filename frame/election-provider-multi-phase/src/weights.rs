@@ -50,6 +50,9 @@ pub trait WeightInfo {
 	fn on_initialize_open_signed() -> Weight;
 	fn on_initialize_open_unsigned_without_snapshot() -> Weight;
 	fn on_initialize_open_unsigned_with_snapshot() -> Weight;
+	fn finalize_signed_phase_accept_solution() -> Weight;
+	fn finalize_signed_phase_reject_solution() -> Weight;
+	fn submit(c: u32) -> Weight;
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight;
 	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight;
 }
@@ -75,6 +78,23 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		(76_100_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(8 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+	}
+	fn finalize_signed_phase_accept_solution() -> Weight {
+		(38_088_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+	}
+	fn finalize_signed_phase_reject_solution() -> Weight {
+		(17_124_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	fn submit(c: u32) -> Weight {
+		(52_370_000 as Weight)
+			// Standard Error: 17_000
+			.saturating_add((3_395_000 as Weight).saturating_mul(c as Weight))
+			.saturating_add(T::DbWeight::get().reads(3 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn submit_unsigned(v: u32, _t: u32, a: u32, d: u32) -> Weight {
 		(0 as Weight)
@@ -120,6 +140,23 @@ impl WeightInfo for () {
 		(76_100_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(8 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+	}
+	fn finalize_signed_phase_accept_solution() -> Weight {
+		(38_088_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+	}
+	fn finalize_signed_phase_reject_solution() -> Weight {
+		(17_124_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn submit(c: u32) -> Weight {
+		(52_370_000 as Weight)
+			// Standard Error: 17_000
+			.saturating_add((3_395_000 as Weight).saturating_mul(c as Weight))
+			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn submit_unsigned(v: u32, _t: u32, a: u32, d: u32) -> Weight {
 		(0 as Weight)

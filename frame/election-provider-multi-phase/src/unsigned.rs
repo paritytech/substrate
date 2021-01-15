@@ -254,7 +254,9 @@ where
 		}
 
 		debug_assert!(
-			weight_with(voters.min(size.voters)) <= max_weight,
+			weight_with(voters.min(size.voters)) <= max_weight || weight_with(0) > max_weight,
+			// --------------------------------------------------^^ Base weight is more than max,
+			// not much we can do here.
 			"weight_with({}) <= {}",
 			voters.min(size.voters),
 			max_weight,
@@ -343,84 +345,42 @@ where
 }
 
 #[cfg(test)]
-mod max_weight {
-	#![allow(unused_variables)]
+mod weight_trim {
 	use super::{mock::*, *};
-
-	struct TestWeight;
-	impl crate::weights::WeightInfo for TestWeight {
-		fn on_initialize_nothing() -> Weight {
-			unreachable!()
-		}
-		fn on_initialize_open_signed() -> Weight {
-			unreachable!()
-		}
-		fn on_initialize_open_unsigned_with_snapshot() -> Weight {
-			unreachable!()
-		}
-		fn on_initialize_open_unsigned_without_snapshot() -> Weight {
-			unreachable!()
-		}
-		fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
-			(0 * v + 0 * t + 1000 * a + 0 * d) as Weight
-		}
-		fn feasibility_check(v: u32, _t: u32, a: u32, d: u32) -> Weight {
-			unreachable!()
-		}
-	}
 
 	#[test]
 	fn find_max_voter_binary_search_works() {
-		let w = SolutionSize { voters: 10, targets: 0 };
+		<MockWeightInfo>::set(true);
 
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 999), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1000), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1001), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1990), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1999), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2000), 2);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2001), 2);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 2);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2990), 2);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2999), 2);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3000), 3);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 3);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 5500), 5);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 7777), 7);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 9999), 9);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 10_000), 10);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 10_999), 10);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 11_000), 10);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 22_000), 10);
+		let w = SolutionSize { voters: 10, targets: 0 };
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 0), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 1), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 9), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 14), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 15), 1);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 19), 1);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 20), 2);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 25), 3);
 
 		let w = SolutionSize { voters: 1, targets: 0 };
-
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 999), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1000), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1001), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1990), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1999), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2000), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2001), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 1);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 0), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 1), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 9), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 14), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 15), 1);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 19), 1);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 20), 1);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 25), 1);
 
 		let w = SolutionSize { voters: 2, targets: 0 };
-
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 999), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1000), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1001), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1999), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2000), 2);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2001), 2);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 2);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 2);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 0), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 1), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 9), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 14), 0);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 15), 1);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 19), 1);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 20), 2);
+		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 25), 2);
 	}
 }
 

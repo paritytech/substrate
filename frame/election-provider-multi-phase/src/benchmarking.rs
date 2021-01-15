@@ -175,6 +175,39 @@ benchmarks! {
 		assert!(<TwoPhase<T>>::current_phase().is_signed());
 	}
 
+	finalize_signed_phase_accept_solution {
+		let receiver = account("receiver", 0, SEED);
+		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
+		T::Currency::make_free_balance_be(&receiver, initial_balance);
+		let ready: ReadySolution<T::AccountId> = Default::default();
+		let deposit: BalanceOf<T> = 10u32.into();
+		let reward: BalanceOf<T> = 20u32.into();
+
+		assert_ok!(T::Currency::reserve(&receiver, deposit));
+		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
+	}: {
+		<TwoPhase<T>>::finalize_signed_phase_accept_solution(ready, &receiver, deposit, reward)
+	} verify {
+		assert_eq!(T::Currency::free_balance(&receiver), initial_balance + 20u32.into());
+		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
+	}
+
+	finalize_signed_phase_reject_solution {
+		let receiver = account("receiver", 0, SEED);
+		let initial_balance = T::Currency::minimum_balance().max(One::one()) * 10u32.into();
+		let deposit: BalanceOf<T> = 10u32.into();
+		T::Currency::make_free_balance_be(&receiver, initial_balance);
+		assert_ok!(T::Currency::reserve(&receiver, deposit));
+
+		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
+		assert_eq!(T::Currency::reserved_balance(&receiver), 10u32.into());
+	}: {
+		<TwoPhase<T>>::finalize_signed_phase_reject_solution(&receiver, deposit)
+	} verify {
+		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
+		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
+	}
+
 	on_initialize_open_unsigned_with_snapshot {
 		assert!(<TwoPhase<T>>::snapshot().is_none());
 		assert!(<TwoPhase<T>>::current_phase().is_off());
@@ -204,6 +237,33 @@ benchmarks! {
 		<TwoPhase::<T>>::create_snapshot()
 	} verify {
 		assert!(<TwoPhase<T>>::snapshot().is_some());
+	}
+
+	submit {
+		let c in 1 .. (T::SignedMaxSubmissions::get() - 1);
+
+		// the solution will be worse than all of them meaning the score need to be checked against all.
+		let solution = RawSolution { score: [(10_000_000u128 - 1).into(), 0, 0], ..Default::default() };
+
+		<CurrentPhase<T>>::put(Phase::Signed);
+		<Round<T>>::put(1);
+
+		for i in 0..c {
+			<SignedSubmissions<T>>::mutate(|queue| {
+				let solution = RawSolution { score: [(10_000_000 + i).into(), 0, 0], ..Default::default() };
+				let signed_submission = SignedSubmission { solution, ..Default::default() };
+				// note: this is quite tricky: we know that the queue will stay sorted here. The
+				// last will be best.
+				queue.push(signed_submission);
+			})
+		}
+
+		let caller = frame_benchmarking::whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
+
+	}: _(RawOrigin::Signed(caller), solution, c)
+	verify {
+		assert!(<TwoPhase<T>>::signed_submissions().len() as u32 == c + 1);
 	}
 
 	submit_unsigned {
@@ -258,6 +318,22 @@ mod test {
 	fn test_benchmarks() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_ok!(test_benchmark_feasibility_check::<Runtime>());
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_finalize_signed_phase_accept_solution::<Runtime>());
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_finalize_signed_phase_reject_solution::<Runtime>());
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_on_initialize_open_signed::<Runtime>());
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(test_benchmark_submit::<Runtime>());
 		});
 
 		ExtBuilder::default().build_and_execute(|| {

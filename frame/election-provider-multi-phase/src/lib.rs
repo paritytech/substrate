@@ -48,7 +48,7 @@
 //!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
 //! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
 //! on-chain for a number of blocks, and the potential weight of the solution upon being checked. A
-//! maximum of [`pallet::Config::MaxSignedSubmissions`] solutions are stored. The queue is always
+//! maximum of [`pallet::Config::SignedMaxSubmissions`] solutions are stored. The queue is always
 //! sorted based on score (worse to best).
 //!
 //! Upon arrival of a new solution:
@@ -174,7 +174,7 @@ use codec::{Decode, Encode, HasCompact};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{Currency, Get, ReservableCurrency},
+	traits::{Currency, Get, ReservableCurrency, OnUnbalanced},
 	weights::Weight,
 };
 use frame_system::{ensure_none, ensure_signed, offchain::SendTransactionTypes};
@@ -216,8 +216,8 @@ pub mod weights;
 
 use weights::WeightInfo;
 
-// pub mod signed;
-// use signed::SignedSubmission;
+pub mod signed;
+use signed::{SignedSubmission, BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf};
 
 /// The compact solution type used by this crate.
 pub type CompactOf<T> = <T as Config>::CompactSolution;
@@ -535,6 +535,40 @@ pub mod pallet {
 		/// this values, based on [`WeightInfo::submit_unsigned`].
 		type MinerMaxWeight: Get<Weight>;
 
+		/// Maximum number of singed submissions that can be queued.
+		#[pallet::constant]
+		type SignedMaxSubmissions: Get<u32>;
+		/// Maximum weight of a signed solution.
+		///
+		/// This should probably be similar to [`Config::MinerMaxWeight`].
+		#[pallet::constant]
+		type SignedMaxWeight: Get<Weight>;
+
+		/// Base reward for a signed solution
+		#[pallet::constant]
+		type SignedRewardBase: Get<BalanceOf<Self>>;
+		/// Per-score reward for a signed solution.
+		#[pallet::constant]
+		type SignedRewardFactor: Get<Perbill>;
+		/// Maximum cap for a signed solution.
+		#[pallet::constant]
+		type SignedRewardMax: Get<Option<BalanceOf<Self>>>;
+
+		/// Base deposit for a signed solution.
+		#[pallet::constant]
+		type SignedDepositBase: Get<BalanceOf<Self>>;
+		/// Per-byte deposit for a signed solution.
+		#[pallet::constant]
+		type SignedDepositByte: Get<BalanceOf<Self>>;
+		/// Per-weight deposit for a signed solution.
+		#[pallet::constant]
+		type SignedDepositWeight: Get<BalanceOf<Self>>;
+
+		/// Handler for the slashed deposits.
+		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
+		/// Handler for the rewards.
+		type RewardHandler: OnUnbalanced<PositiveImbalanceOf<Self>>;
+
 		/// Something that will provide the election data.
 		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 
@@ -654,6 +688,77 @@ pub mod pallet {
 		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 	{
+		/// Submit a solution for the signed phase.
+		///
+		/// The dispatch origin fo this call must be __signed__.
+		///
+		/// The solution is potentially queued, based on the claimed score and processed at the end
+		/// of the signed phase.
+		///
+		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
+		/// might be rewarded, slashed, or get all or a part of the deposit back.
+		///
+		/// # <weight>
+		/// Queue size must be provided as witness data.
+		/// # </weight>
+		#[pallet::weight(T::WeightInfo::submit(*witness_data))]
+		pub fn submit(
+			origin: OriginFor<T>,
+			solution: RawSolution<CompactOf<T>>,
+			witness_data: u32,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+
+			// ensure witness data is correct.
+			ensure!(
+				witness_data >= <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
+				Error::<T>::InvalidWitness,
+			);
+
+			// ensure solution is timely.
+			ensure!(Self::current_phase().is_signed(), Error::<T>::EarlySubmission,);
+
+			// NOTE: this is the only case where having separate snapshot would have been better
+			// because could do just decode_len. But we can create abstractions to do this.
+
+			// build size. Note: this is not needed for weight calc, thus not input.
+			// defensive-only: if phase is signed, snapshot will exist.
+			let size = Self::build_solution_size().unwrap_or_default();
+
+			// NOTE: we compute this function once in `insert_submission` as well, could optimize.
+			ensure!(
+				Self::feasibility_weight_of(&solution, size) < T::SignedMaxWeight::get(),
+				Error::<T>::TooMuchWeight,
+			);
+
+			// ensure solution claims is better.
+			let mut signed_submissions = Self::signed_submissions();
+			let index = Self::insert_submission(&who, &mut signed_submissions, solution, size)
+				.ok_or(Error::<T>::QueueFull)?;
+
+			// collect deposit. Thereafter, the function cannot fail.
+			// Defensive -- index is valid.
+			let deposit = signed_submissions.get(index).map(|s| s.deposit).unwrap_or_default();
+			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::CannotPayDeposit)?;
+
+			// Remove the weakest, if needed.
+			if signed_submissions.len() as u32 > T::SignedMaxSubmissions::get() {
+				Self::remove_weakest(&mut signed_submissions);
+			}
+			debug_assert!(signed_submissions.len() as u32 <= T::SignedMaxSubmissions::get());
+
+			log!(
+				info,
+				"queued signed solution with (claimed) score {:?}",
+				signed_submissions.get(index).map(|s| s.solution.score).unwrap_or_default()
+			);
+
+			// store the new signed submission.
+			<SignedSubmissions<T>>::put(signed_submissions);
+			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed));
+			Ok(None.into())
+		}
+
 		/// Submit a solution for the unsigned phase.
 		///
 		/// The dispatch origin fo this call must be __none__.
@@ -853,6 +958,15 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn snapshot_metadata)]
 	pub type SnapshotMetadata<T: Config> = StorageValue<_, RoundSnapshotMetadata>;
+
+	/// Sorted (worse -> best) list of unchecked, signed solutions.
+	#[pallet::storage]
+	#[pallet::getter(fn signed_submissions)]
+	pub type SignedSubmissions<T: Config> = StorageValue<
+		_,
+		Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
+		ValueQuery,
+	>;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]

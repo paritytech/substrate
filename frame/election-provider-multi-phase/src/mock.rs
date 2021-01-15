@@ -201,8 +201,14 @@ parameter_types! {
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedPhase: u64 = 10;
 	pub static UnsignedPhase: u64 = 5;
-	pub static MaxSignedSubmissions: u32 = 5;
-
+	pub static SignedMaxSubmissions: u32 = 5;
+	pub static SignedDepositBase: Balance = 5;
+	pub static SignedDepositByte: Balance = 0;
+	pub static SignedDepositWeight: Balance = 0;
+	pub static SignedRewardBase: Balance = 7;
+	pub static SignedRewardFactor: Perbill = Perbill::zero();
+	pub static SignedRewardMax: Balance = 10;
+	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxIterations: u32 = 5;
 	pub static UnsignedPriority: u64 = 100;
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
@@ -244,6 +250,27 @@ impl two_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as two_phase::weights::WeightInfo>::on_initialize_open_unsigned_without_snapshot()
 		}
 	}
+	fn finalize_signed_phase_accept_solution() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as two_phase::weights::WeightInfo>::finalize_signed_phase_accept_solution()
+		}
+	}
+	fn finalize_signed_phase_reject_solution() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as two_phase::weights::WeightInfo>::finalize_signed_phase_reject_solution()
+		}
+	}
+	fn submit(c: u32) -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as two_phase::weights::WeightInfo>::submit(c)
+		}
+	}
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		if MockWeightInfo::get() {
 			// 10 base
@@ -273,6 +300,16 @@ impl crate::Config for Runtime {
 	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
 	type UnsignedPriority = UnsignedPriority;
+	type SignedRewardBase = SignedRewardBase;
+	type SignedRewardFactor = SignedRewardFactor;
+	type SignedRewardMax = SignedRewardMax;
+	type SignedDepositBase = SignedDepositBase;
+	type SignedDepositByte = ();
+	type SignedDepositWeight = ();
+	type SignedMaxWeight = SignedMaxWeight;
+	type SignedMaxSubmissions = SignedMaxSubmissions;
+	type SlashHandler = ();
+	type RewardHandler = ();
 	type DataProvider = StakingMock;
 	type WeightInfo = DualMockWeightInfo;
 	type BenchmarkingConfig = ();
@@ -342,6 +379,26 @@ impl ExtBuilder {
 	}
 	pub fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
 		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
+		self
+	}
+	pub fn signed_max_submission(self, count: u32) -> Self {
+		<SignedMaxSubmissions>::set(count);
+		self
+	}
+	pub fn signed_deposit(self, base: u64, byte: u64, weight: u64) -> Self {
+		<SignedDepositBase>::set(base);
+		<SignedDepositByte>::set(byte);
+		<SignedDepositWeight>::set(weight);
+		self
+	}
+	pub fn reward(self, base: u64, factor: Perbill, max: u64) -> Self {
+		<SignedRewardBase>::set(base);
+		<SignedRewardFactor>::set(factor);
+		<SignedRewardMax>::set(max);
+		self
+	}
+	pub fn signed_weight(self, weight: Weight) -> Self {
+		<SignedMaxWeight>::set(weight);
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
