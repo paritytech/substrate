@@ -889,7 +889,6 @@ mod tests {
 	#[test]
 	fn disconnects_from_peer_on_incorrect_response() {
 		let peer = PeerId::random();
-		let pset = peerset();
 
 		let (_peer_set, peer_set_handle) = peerset();
 		let mut sender = LightClientRequestSender::<Block>::new(
@@ -1009,5 +1008,82 @@ mod tests {
 		assert!(sender.peers.is_empty(), "Expect no peers to be left.");
 		assert_eq!(1, sender.pending_requests.len(), "Expect request to be pending again.");
 		assert_eq!(0, sender.sent_requests.len(), "Expect no request to be sent.");
+	}
+
+	#[test]
+	fn receives_remote_failure_after_retry_count_failures() {
+		let peers = (0..4).map(|_| PeerId::random()).collect::<Vec<_>>();
+
+		let (_peer_set, peer_set_handle) = peerset();
+		let mut sender = LightClientRequestSender::<Block>::new(
+			&protocol_id(),
+			Arc::new(crate::light_client_requests::tests::DummyFetchChecker {
+				ok: false,
+				//  ^--- Making sure the response data check fails.
+				_mark: std::marker::PhantomData,
+			}),
+			peer_set_handle,
+		);
+
+		for peer in &peers {
+			sender.inject_connected(*peer);
+		}
+		assert_eq!(4, sender.peers.len(), "Expect four peers.");
+
+		let mut chan = oneshot::channel();
+		let request = light::RemoteCallRequest {
+			block: Default::default(),
+			header: dummy_header(),
+			method: "test".into(),
+			call_data: vec![],
+			retry_count: Some(3), // Attempt up to three retries.
+		};
+		sender
+			.request(Request::Call {
+				request,
+				sender: chan.0,
+			})
+			.unwrap();
+
+		assert_eq!(1, sender.pending_requests.len());
+		assert_eq!(0, sender.sent_requests.len());
+		let mut pending_response = match block_on(sender.next()).unwrap() {
+			OutEvent::SendRequest { pending_response, .. } => Some(pending_response),
+		};
+		assert_eq!(0, sender.pending_requests.len(), "Expect zero pending requests.");
+		assert_eq!(1, sender.sent_requests.len(), "Expect one sent request.");
+
+		for (i, peer) in peers.iter().enumerate() {
+			// Construct an invalid response
+			let response = {
+				let r = schema::v1::light::RemoteCallResponse {
+					proof: empty_proof(),
+				};
+				let response = schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteCallResponse(r)),
+				};
+				let mut data = Vec::new();
+				response.encode(&mut data).unwrap();
+				data
+			};
+			pending_response.take().unwrap().send(Ok(response)).unwrap();
+
+			if i < 3 {
+				pending_response = match block_on(sender.next()).unwrap() {
+					OutEvent::SendRequest { pending_response, .. } => Some(pending_response),
+				};
+				assert_matches!(chan.1.try_recv(), Ok(None))
+			} else {
+				// Last peer and last attempt.
+				assert_matches!(
+					block_on(async { poll!(sender.next()) }), Poll::Pending,
+					"Expect sender to not issue another attempt, given that there is no peer left.",
+				);
+				assert_matches!(
+					chan.1.try_recv(),
+					Ok(Some(Err(ClientError::RemoteFetchFailed)))
+				)
+			}
+		}
 	}
 }
