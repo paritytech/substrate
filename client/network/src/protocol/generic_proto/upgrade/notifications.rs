@@ -38,7 +38,7 @@
 
 use bytes::BytesMut;
 use futures::prelude::*;
-use futures_codec::Framed;
+use asynchronous_codec::Framed;
 use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade};
 use log::error;
 use std::{borrow::Cow, convert::Infallible, io, iter, mem, pin::Pin, task::{Context, Poll}};
@@ -106,11 +106,6 @@ impl NotificationsIn {
 		NotificationsIn {
 			protocol_name: protocol_name.into(),
 		}
-	}
-
-	/// Returns the name of the protocol that we accept.
-	pub fn protocol_name(&self) -> &Cow<'static, str> {
-		&self.protocol_name
 	}
 }
 

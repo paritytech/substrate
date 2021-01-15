@@ -34,8 +34,6 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 }
 
 benchmarks! {
-	_ { }
-
 	batch {
 		let c in 0 .. 1000;
 		let mut calls: Vec<<T as Config>::Call> = Vec::new();

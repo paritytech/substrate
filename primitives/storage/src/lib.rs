@@ -181,12 +181,12 @@ pub mod well_known_keys {
 		key.starts_with(CHILD_STORAGE_KEY_PREFIX)
 	}
 
-	/// Whether a prefix potentially contains child storage keys.
-	pub fn contains_child_storage_key(prefix: &[u8]) -> bool {
-		if prefix.len() > CHILD_STORAGE_KEY_PREFIX.len() {
-			prefix.starts_with(CHILD_STORAGE_KEY_PREFIX)
+	/// Returns if the given `key` starts with [`CHILD_STORAGE_KEY_PREFIX`] or collides with it.
+	pub fn starts_with_child_storage_key(key: &[u8]) -> bool {
+		if key.len() > CHILD_STORAGE_KEY_PREFIX.len() {
+			key.starts_with(CHILD_STORAGE_KEY_PREFIX)
 		} else {
-			CHILD_STORAGE_KEY_PREFIX.starts_with(prefix)
+			CHILD_STORAGE_KEY_PREFIX.starts_with(key)
 		}
 	}
 

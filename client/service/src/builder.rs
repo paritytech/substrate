@@ -43,6 +43,7 @@ use sc_keystore::LocalKeystore;
 use log::{info, warn};
 use sc_network::config::{Role, OnDemand};
 use sc_network::NetworkService;
+use sc_network::block_request_handler::{self, BlockRequestHandler};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo,
@@ -325,8 +326,10 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			state_cache_size: config.state_cache_size,
 			state_cache_child_ratio:
 			config.state_cache_child_ratio.map(|v| (v, 100)),
-			pruning: config.pruning.clone(),
+			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
+			keep_blocks: config.keep_blocks.clone(),
+			transaction_storage: config.transaction_storage.clone(),
 		};
 
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
@@ -383,8 +386,10 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 			state_cache_size: config.state_cache_size,
 			state_cache_child_ratio:
 				config.state_cache_child_ratio.map(|v| (v, 100)),
-			pruning: config.pruning.clone(),
+			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
+			keep_blocks: config.keep_blocks.clone(),
+			transaction_storage: config.transaction_storage.clone(),
 		};
 		sc_client_db::light::LightStorage::new(db_settings)?
 	};
@@ -908,6 +913,21 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		Box::new(DefaultBlockAnnounceValidator)
 	};
 
+	let block_request_protocol_config = {
+		if matches!(config.role, Role::Light) {
+			// Allow outgoing requests but deny incoming requests.
+			block_request_handler::generate_protocol_config(protocol_id.clone())
+		} else {
+			// Allow both outgoing and incoming requests.
+			let (handler, protocol_config) = BlockRequestHandler::new(
+				protocol_id.clone(),
+				client.clone(),
+			);
+			spawn_handle.spawn("block_request_handler", handler.run());
+			protocol_config
+		}
+	};
+
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
@@ -923,7 +943,8 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		import_queue: Box::new(import_queue),
 		protocol_id,
 		block_announce_validator,
-		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone())
+		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+		block_request_protocol_config,
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

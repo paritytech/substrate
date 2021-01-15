@@ -279,9 +279,6 @@ pub fn init_logger(
 		Ok(env_filter)
 	}
 
-	tracing_log::LogTracer::init()
-		.map_err(|e| format!("Registering Substrate logger failed: {:}!", e))?;
-
 	// Initialize filter - ensure to use `parse_default_directive` for any defaults to persist
 	// after log filter reloading by RPC
 	let mut env_filter = EnvFilter::default()
@@ -313,22 +310,43 @@ pub fn init_logger(
 		env_filter = parse_user_directives(env_filter, &pattern)?;
 	}
 
+	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
+
+	let max_level = if tracing_targets.is_some() {
+		// If profiling is activated, we require `trace` logging.
+		log::LevelFilter::Trace
+	} else {
+		match max_level_hint {
+			Some(tracing_subscriber::filter::LevelFilter::INFO) | None => log::LevelFilter::Info,
+			Some(tracing_subscriber::filter::LevelFilter::TRACE) => log::LevelFilter::Trace,
+			Some(tracing_subscriber::filter::LevelFilter::WARN) => log::LevelFilter::Warn,
+			Some(tracing_subscriber::filter::LevelFilter::ERROR) => log::LevelFilter::Error,
+			Some(tracing_subscriber::filter::LevelFilter::DEBUG) => log::LevelFilter::Debug,
+			Some(tracing_subscriber::filter::LevelFilter::OFF) => log::LevelFilter::Off,
+		}
+	};
+
+	tracing_log::LogTracer::builder()
+		.with_max_level(max_level)
+		.init()
+		.map_err(|e| format!("Registering Substrate logger failed: {:}!", e))?;
+
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
-	let simple = match Layer::<FmtSubscriber>::max_level_hint(&env_filter) {
+	let simple = match max_level_hint {
 		Some(level) if level <= tracing_subscriber::filter::LevelFilter::INFO => true,
 		_ => false,
 	};
 
-	// Always log the special target `sc_tracing`, overrides global level.
-	// Required because profiling traces are emitted via `sc_tracing`
-	// NOTE: this must be done after we check the `max_level_hint` otherwise
-	// it is always raised to `TRACE`.
-	env_filter = env_filter.add_directive(
-		parse_default_directive("sc_tracing=trace").expect("provided directive is valid")
-	);
-
 	// Make sure to include profiling targets in the filter
 	if let Some(tracing_targets) = tracing_targets.clone() {
+		// Always log the special target `sc_tracing`, overrides global level.
+		// Required because profiling traces are emitted via `sc_tracing`
+		// NOTE: this must be done after we check the `max_level_hint` otherwise
+		// it is always raised to `TRACE`.
+		env_filter = env_filter.add_directive(
+			parse_default_directive("sc_tracing=trace").expect("provided directive is valid")
+		);
+
 		env_filter = parse_user_directives(env_filter, &tracing_targets)?;
 	}
 
@@ -540,5 +558,41 @@ mod tests {
 			re.is_match(output.trim()),
 			format!("Expected:\n{}\nGot:\n{}", re, output),
 		);
+	}
+
+	#[test]
+	fn log_max_level_is_set_properly() {
+		fn run_test(rust_log: Option<String>, tracing_targets: Option<String>) -> String {
+			let executable = env::current_exe().unwrap();
+			let mut command = Command::new(executable);
+
+			command.env("PRINT_MAX_LOG_LEVEL", "1")
+				.args(&["--nocapture", "log_max_level_is_set_properly"]);
+
+			if let Some(rust_log) = rust_log {
+				command.env("RUST_LOG", rust_log);
+			}
+
+			if let Some(tracing_targets) = tracing_targets {
+				command.env("TRACING_TARGETS", tracing_targets);
+			}
+
+			let output = command.output().unwrap();
+
+			String::from_utf8(output.stderr).unwrap()
+		}
+
+		if env::var("PRINT_MAX_LOG_LEVEL").is_ok() {
+			init_logger(InitLoggerParams {
+				tracing_targets: env::var("TRACING_TARGETS").ok(),
+				..Default::default()
+			}).unwrap();
+			eprint!("MAX_LOG_LEVEL={:?}", log::max_level());
+		} else {
+			assert_eq!("MAX_LOG_LEVEL=Info", run_test(None, None));
+			assert_eq!("MAX_LOG_LEVEL=Trace", run_test(Some("test=trace".into()), None));
+			assert_eq!("MAX_LOG_LEVEL=Debug", run_test(Some("test=debug".into()), None));
+			assert_eq!("MAX_LOG_LEVEL=Trace", run_test(None, Some("test=info".into())));
+		}
 	}
 }
