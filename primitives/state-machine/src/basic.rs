@@ -339,17 +339,15 @@ impl Externalities for BasicExternalities {
 		_worker_id: u64,
 		_declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
-		unimplemented!("TODO")
+		unimplemented!("Workers are not supported by BasicExternalities");
 	}
 	
-	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
-		// No transaction, works as read (TODO this will not be true for worker in write mode).
-		// TODO this is actually incorrect for optimistic, similarily callat should fail on drop Tx.
-		state_update.read_resolve()
+	fn resolve_worker_result(&mut self, _state_update: WorkerResult) -> Option<Vec<u8>> {
+		unimplemented!("Workers are not supported by BasicExternalities");
 	}
 	
 	fn dismiss_worker(&mut self, _id: TaskId) {
-		unimplemented!("TODO from get_async_backend needs at least filter");
+		unimplemented!("Workers are not supported by BasicExternalities");
 	}
 }
 
