@@ -175,13 +175,13 @@ impl StateLogger {
 
 	// compare read from parent (`self`) against write from child (`access`).
 	fn check_read_write(&self, access: &StateLog, marker: TaskId) -> bool {
-		for key in access.write_keys.iter() {
+		for key in access.read_write_keys.iter() {
 			if !self.check_key_against_read(key, marker) {
 				return false;
 			}
 		}
 		// Here ordering prefix could be use to optimize check (skiping child of a given prefix).
-		for prefix in access.write_prefix.iter() {
+		for prefix in access.read_write_prefix.iter() {
 			if !self.check_prefix_against_read(prefix, marker) {
 				return false;
 			}
@@ -190,13 +190,13 @@ impl StateLogger {
 	}
 	// compare write from parent (`self`) against write from child (`access`).
 	fn check_write_write(&self, access: &StateLog, marker: TaskId) -> bool {
-		for key in access.write_keys.iter() {
+		for key in access.read_write_keys.iter() {
 			if !self.check_key_against_write(key, marker) {
 				return false;
 			}
 		}
 		// Here ordering prefix could be use to optimize check (skiping child of a given prefix).
-		for prefix in access.write_prefix.iter() {
+		for prefix in access.read_write_prefix.iter() {
 			if !self.check_prefix_against_write(prefix, marker) {
 				return false;
 			}
@@ -381,7 +381,7 @@ impl AccessLogger {
 			WorkerResult::Optimistic(_result, _delta, marker, accesses) => {
 				let result = || -> bool {
 					let has_read_child = accesses.has_read();
-					let has_write_child = accesses.has_write();
+					let has_read_write_child = accesses.has_read_write();
 					let has_read_parent = !self.is_children_read_empty(*marker);
 					let has_write_parent = !self.is_children_write_empty(*marker);
 
@@ -403,7 +403,7 @@ impl AccessLogger {
 							}
 						}
 					}
-					if has_write_child {
+					if has_read_write_child {
 						if has_write_parent {
 							if !self.top_logger.check_write_write(&accesses.top_logger, *marker) {
 								return false;
@@ -433,20 +433,20 @@ impl AccessLogger {
 						}
 					}
 					// merge accesses with parent if needed
-					if self.parent_log_write && has_write_child {
+					if self.parent_log_write && has_read_write_child {
 						// relative to the current three configs when write is logged for child, it is also for
 						// parent.
-						for key in accesses.top_logger.write_keys.iter() {
+						for key in accesses.top_logger.read_write_keys.iter() {
 							self.log_write(None, key.as_slice());
 						}
-						for key in accesses.top_logger.write_prefix.iter() {
+						for key in accesses.top_logger.read_write_prefix.iter() {
 							self.log_write_prefix(None, key.as_slice());
 						}
 						for (storage_key, child_logger) in accesses.children_logger.iter() {
-							for key in child_logger.write_keys.iter() {
+							for key in child_logger.read_write_keys.iter() {
 								self.log_write_storage_key(Some(storage_key.as_slice()), key.as_slice());
 							}
-							for key in child_logger.write_prefix.iter() {
+							for key in child_logger.read_write_prefix.iter() {
 								self.log_write_prefix_storage_key(Some(storage_key.as_slice()), key.as_slice());
 							}
 						}
@@ -713,8 +713,8 @@ impl AccessLogger {
 			result.top_logger.read_keys = sp_std::mem::take(self.top_logger.parent_read_key.get_mut());
 			result.top_logger.read_intervals = sp_std::mem::take(self.top_logger.parent_read_intervals.get_mut());
 		}
-		result.top_logger.write_keys = sp_std::mem::take(&mut self.top_logger.parent_write_key);
-		result.top_logger.write_prefix = sp_std::mem::take(&mut self.top_logger.parent_write_prefix)
+		result.top_logger.read_write_keys = sp_std::mem::take(&mut self.top_logger.parent_write_key);
+		result.top_logger.read_write_prefix = sp_std::mem::take(&mut self.top_logger.parent_write_prefix)
 			.iter().value_iter().map(|(key, _)| key).collect();
 		result.children_logger = self.children_logger.get_mut().iter_mut()
 			.map(|(storage_key, logger)| {
@@ -723,8 +723,8 @@ impl AccessLogger {
 				log.read_keys = sp_std::mem::take(logger.parent_read_key.get_mut());
 				log.read_intervals = sp_std::mem::take(logger.parent_read_intervals.get_mut());
 			}
-			log.write_keys = sp_std::mem::take(&mut logger.parent_write_key);
-			log.write_prefix = sp_std::mem::take(&mut logger.parent_write_prefix)
+			log.read_write_keys = sp_std::mem::take(&mut logger.parent_write_key);
+			log.read_write_prefix = sp_std::mem::take(&mut logger.parent_write_prefix)
 				.iter().value_iter().map(|(key, _)| key).collect();
 			(storage_key.clone(), log)
 		}).collect();

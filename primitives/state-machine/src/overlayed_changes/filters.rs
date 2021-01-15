@@ -784,10 +784,13 @@ impl Filters {
 						self.failure_handlers.remove(task_id);
 						self.remove_forbid_writes(filter, task_id);
 					},
-					WorkerDeclaration::WriteAtJoinDeclarative(write_filter, read_filter, _failure) => {
+					WorkerDeclaration::WriteAtJoinDeclarative(filters, _failure) => {
+						if !filters.write_only.is_empty() || !filters.write_only_append.is_empty() {
+							unimplemented!("TODO");
+						}
 						self.failure_handlers.remove(task_id);
-						self.remove_forbid_writes(write_filter, task_id);
-						self.remove_forbid_writes(read_filter, task_id);
+						self.remove_forbid_writes(filters.read_write, task_id);
+						self.remove_forbid_writes(filters.read_only, task_id);
 					},
 				}
 			}

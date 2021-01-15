@@ -377,7 +377,9 @@ impl Default for StateDelta {
 		StateDelta {
 			top: TrieDelta {
 				added: Vec::new(),
+				appended: Vec::new(),
 				deleted: Vec::new(),
+				deleted_prefix: Vec::new(),
 			},
 			children: Vec::new(),
 		}
@@ -395,10 +397,23 @@ impl StateDelta {
 
 #[derive(codec::Encode, codec::Decode)]
 pub struct TrieDelta {
-	/// Key values added.
+	/// Key values added or modified.
 	pub added: Vec<(Vec<u8>, Vec<u8>)>,
+	/// Values appended at a given key location.
+	/// TODO feeding this force use to maintain an
+	/// append log, but seems worth it as size
+	/// of trie delta will be way lower (unimplemented
+	/// at this point).
+	pub appended: Vec<(Vec<u8>, Vec<Vec<u8>>)>,
 	/// Keys deleted.
 	pub deleted: Vec<Vec<u8>>,
+	/// Key prefix deleted and subsequent.
+	/// TODO feeding this force use to maintain a
+	/// delete prefix log, but worth it when considering
+	/// the size of encoding this.
+	/// TODO implement TODO apply before all operation and
+	/// have added updated from content in prefix.
+	pub deleted_prefix: Vec<Vec<u8>>,
 }
 
 /// Log of a given worker call.
@@ -436,12 +451,12 @@ impl AccessLog {
 		false
 	}
 	/// Return true if a write related information was logged.
-	pub fn has_write(&self) -> bool {
-		if self.top_logger.has_write() {
+	pub fn has_read_write(&self) -> bool {
+		if self.top_logger.has_read_write() {
 			return true;
 		}
 		for (_key, logger) in self.children_logger.iter() {
-			if logger.has_write() {
+			if logger.has_read_write() {
 				return true;
 			}
 		}
@@ -452,26 +467,38 @@ impl AccessLog {
 /// Log of a given trie state.
 #[derive(codec::Encode, codec::Decode, Default)]
 pub struct StateLog {
-	/// Read access to a key.
+	/// Read only access to a key.
 	pub read_keys: Vec<Vec<u8>>,
-	/// Write access to a key.
-	pub write_keys: Vec<Vec<u8>>,
-	/// Write access to a whole prefix (eg key removal
+	/// Read and write access to a key.
+	pub read_write_keys: Vec<Vec<u8>>,
+	/// Read and write access to a whole prefix (eg key removal
 	/// by prefix).
-	pub write_prefix: Vec<Vec<u8>>,
+	pub read_write_prefix: Vec<Vec<u8>>,
 	/// Worker did iterate over a given interval.
 	/// Interval is a pair of inclusive start and end key.
 	pub read_intervals: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	/// Key write with no read access.
+	pub write_only_key: Vec<Vec<u8>>, 
+	/// Append operation in write only mode.
+	pub write_only_append_key: Vec<Vec<u8>>, 
 }
 
 impl StateLog {
+	/// Check that no incompatible access are done.
+	/// TODO debug assert call it where relevant: only for test or double check
+	pub fn validate(&self) -> bool {
+		if !self.write_only_key.is_empty() || !self.write_only_append_key.is_empty() {
+			unimplemented!()
+		}
+		true
+	}
 	/// Return true if a read related information was logged.
 	pub fn has_read(&self) -> bool {
 		!self.read_keys.is_empty() || !self.read_intervals.is_empty()
 	}
 	/// Return true if a write related information was logged.
-	pub fn has_write(&self) -> bool {
-		!self.write_keys.is_empty() || !self.write_prefix.is_empty()
+	pub fn has_read_write(&self) -> bool {
+		!self.read_write_keys.is_empty() || !self.read_write_prefix.is_empty()
 	}
 }
 
@@ -755,9 +782,7 @@ pub enum WorkerDeclaration {
 	WriteAtJoinOptimistic,
 
 	/// Declaration for `WorkerType::WriteAtJoinDeclarative`.
-	/// First declaration is child write allowed access, second declaration
-	/// is child read only allowed access (only needed if not declared in write access).
-	WriteAtJoinDeclarative(AccessDeclaration, AccessDeclaration, DeclarationFailureHandling),
+	WriteAtJoinDeclarative(AccessDeclarations, DeclarationFailureHandling),
 }
 
 impl WorkerDeclaration {
@@ -778,6 +803,37 @@ impl WorkerDeclaration {
 	}
 }
 
+/// Access filters on storage.
+/// Please define key only once and sort them.
+#[derive(Debug, Clone, codec::Encode, codec::Decode)]
+pub struct AccessDeclarations {
+	/// Read access, depending on mode, this should exclude a concurrent write access.
+	pub read_only: AccessDeclaration,
+	/// Read and write access, depending on mode, this should exclude a concurrent read
+	/// or write access.
+	pub read_write: AccessDeclaration,
+	/// Write only access, depending on mode, this should exclude a concurrent read access.
+	/// Multiple writes are done in order of worker 'spawn'.
+	pub write_only: AccessDeclaration,
+	/// Write only append access, depending on mode, this should exclude a concurrent read access.
+	/// Multiple writes does append in order of worker 'spawn'.
+	pub write_only_append: AccessDeclaration,
+}
+
+impl AccessDeclarations {
+	/// Some declaration are incoherent, eg 'write_only' is not compatible with
+	/// 'read_only'.
+	/// This function ensure everything is coherent. 
+	pub fn validate(&self) -> bool {
+		// TODO consider forcing key to be ordered!!!
+		// TODO implement (following check is same as unimplemented
+		if !self.write_only.is_empty() || !self.write_only_append.is_empty() {
+			return false
+		}
+		true
+	}
+}
+
 /// Access filter on storage.
 #[derive(Debug, Clone, codec::Encode, codec::Decode)]
 pub struct AccessDeclaration {
@@ -788,6 +844,13 @@ pub struct AccessDeclaration {
 
 	/// Lock only over a given key.
 	pub keys_lock: Vec<Vec<u8>>,
+}
+
+impl AccessDeclaration {
+	/// Is there any declaration.
+	pub fn is_empty(&self) -> bool {
+		self.prefixes_lock.is_empty() && self.keys_lock.is_empty()
+	}
 }
 
 impl AccessDeclaration {

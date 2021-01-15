@@ -441,12 +441,19 @@ impl OverlayedChanges {
 				self.filters.add_change(WorkerDeclaration::WriteDeclarative(filter.clone(), failure), child_marker);
 				self.filters.forbid_writes(filter, child_marker);
 			},
-			WorkerDeclaration::WriteAtJoinDeclarative(write_filter, read_filter, failure) => {
-				self.filters.guard_child_filter_read(&read_filter);
-				self.filters.guard_child_filter_write(&write_filter);
-				self.filters.add_change(WorkerDeclaration::WriteAtJoinDeclarative(write_filter.clone(), read_filter.clone(), failure), child_marker);
-				self.filters.forbid_reads(write_filter, child_marker);
-				self.filters.forbid_writes(read_filter, child_marker);
+			WorkerDeclaration::WriteAtJoinDeclarative(filters, failure) => {
+				if !filters.write_only.is_empty() || !filters.write_only_append.is_empty() {
+					unimplemented!("TODO");
+				}
+				if !filters.validate() {
+					panic!("TODO panic or failure handler and move to parent call");
+				}
+				self.filters.guard_child_filter_read(&filters.read_only);
+				self.filters.guard_child_filter_write(&filters.read_write);
+				// TODO return a bool and on error spawn a noops async_ext that always return invalid.
+				self.filters.add_change(WorkerDeclaration::WriteAtJoinDeclarative(filters.clone(), failure), child_marker);
+				self.filters.forbid_reads(filters.read_write, child_marker);
+				self.filters.forbid_writes(filters.read_only, child_marker);
 			},
 		}
 	}
@@ -476,10 +483,13 @@ impl OverlayedChanges {
 				self.filters.set_failure_handler(None, failure);
 				self.filters.allow_writes(filter);
 			},
-			WorkerDeclaration::WriteAtJoinDeclarative(write_filter, read_filter, failure) => {
+			WorkerDeclaration::WriteAtJoinDeclarative(filters, failure) => {
+				if !filters.write_only.is_empty() || !filters.write_only_append.is_empty() {
+					unimplemented!("TODO");
+				}
 				self.filters.set_failure_handler(None, failure);
-				self.filters.allow_reads(read_filter);
-				self.filters.allow_writes(write_filter);
+				self.filters.allow_reads(filters.read_only);
+				self.filters.allow_writes(filters.read_write);
 			},
 		}
 	}
@@ -869,9 +879,15 @@ impl OverlayedChanges {
 					deleted.push(key);
 				}
 			}
+			// TODO implement extraction of delta for logged append and logged delete prefix
+			// actually having append and delete prefix as first state component of state machine
+			// would be more straight forward and better for all but https://github.com/paritytech/substrate/pull/5280
+			// did not have support (delete prefix as first state citizen).
 			children.push((info, sp_externalities::TrieDelta {
 				added,
 				deleted,
+				appended: Vec::new(),
+				deleted_prefix: Vec::new(),
 			}));
 		}
 
@@ -888,6 +904,8 @@ impl OverlayedChanges {
 			top: sp_externalities::TrieDelta {
 				added,
 				deleted,
+				appended: Vec::new(), // TODO
+				deleted_prefix: Vec::new(), // TODO
 			},
 			children,
 		}
