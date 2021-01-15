@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,8 +19,11 @@
 ///! sandbox to execute the wasm code. This is because we do not need the full
 ///! environment that provides the seal interface as imported functions.
 
-use super::code::WasmModule;
-use super::Trait;
+use super::{
+	Config,
+	code::WasmModule,
+};
+use sp_core::crypto::UncheckedFrom;
 use sp_sandbox::{EnvironmentDefinitionBuilder, Instance, Memory};
 
 /// Minimal execution environment without any exported functions.
@@ -36,7 +39,11 @@ impl Sandbox {
 	}
 }
 
-impl<T: Trait> From<&WasmModule<T>> for Sandbox {
+impl<T: Config> From<&WasmModule<T>> for Sandbox
+where
+	T: Config,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
 	/// Creates an instance from the supplied module and supplies as much memory
 	/// to the instance as the module declares as imported.
 	fn from(module: &WasmModule<T>) -> Self {

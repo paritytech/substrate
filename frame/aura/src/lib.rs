@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 //! # Aura Module
 //!
-//! - [`aura::Trait`](./trait.Trait.html)
+//! - [`aura::Config`](./trait.Config.html)
 //! - [`Module`](./struct.Module.html)
 //!
 //! ## Overview
@@ -66,13 +66,13 @@ use sp_consensus_aura::{
 mod mock;
 mod tests;
 
-pub trait Trait: pallet_timestamp::Trait {
+pub trait Config: pallet_timestamp::Config {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default;
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Aura {
+	trait Store for Module<T: Config> as Aura {
 		/// The last timestamp.
 		LastTimestamp get(fn last): T::Moment;
 
@@ -86,10 +86,10 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+	pub struct Module<T: Config> for enum Call where origin: T::Origin { }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	fn change_authorities(new: Vec<T::AuthorityId>) {
 		<Authorities<T>>::put(&new);
 
@@ -108,11 +108,11 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -145,7 +145,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> FindAuthor<u32> for Module<T> {
+impl<T: Config> FindAuthor<u32> for Module<T> {
 	fn find_author<'a, I>(digests: I) -> Option<u32> where
 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
 	{
@@ -167,7 +167,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 #[doc(hidden)]
 pub struct FindAccountFromAuthorIndex<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
 
-impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
+impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
 	for FindAccountFromAuthorIndex<T, Inner>
 {
 	fn find_author<'a, I>(digests: I) -> Option<T::AuthorityId>
@@ -183,7 +183,7 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
 /// Find the authority ID of the Aura authority who authored the current block.
 pub type AuraAuthorId<T> = FindAccountFromAuthorIndex<T, Module<T>>;
 
-impl<T: Trait> IsMember<T::AuthorityId> for Module<T> {
+impl<T: Config> IsMember<T::AuthorityId> for Module<T> {
 	fn is_member(authority_id: &T::AuthorityId) -> bool {
 		Self::authorities()
 			.iter()
@@ -191,12 +191,12 @@ impl<T: Trait> IsMember<T::AuthorityId> for Module<T> {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Determine the Aura slot-duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of its slot.
-		<T as pallet_timestamp::Trait>::MinimumPeriod::get().saturating_mul(2u32.into())
+		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
 	}
 
 	fn on_timestamp_set(now: T::Moment, slot_duration: T::Moment) {
@@ -218,13 +218,13 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
+impl<T: Config> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(moment: T::Moment) {
 		Self::on_timestamp_set(moment, Self::slot_duration())
 	}
 }
 
-impl<T: Trait> ProvideInherent for Module<T> {
+impl<T: Config> ProvideInherent for Module<T> {
 	type Call = pallet_timestamp::Call<T>;
 	type Error = MakeFatalError<sp_inherents::Error>;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;

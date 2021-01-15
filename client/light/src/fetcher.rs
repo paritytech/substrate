@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -239,7 +239,7 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 			convert_hash(request.header.state_root()),
 			remote_proof,
 			request.keys.iter(),
-		).map_err(Into::into)
+		).map_err(|e| ClientError::from(e))
 	}
 
 	fn check_read_child_proof(
@@ -249,14 +249,14 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
 		let child_info = match ChildType::from_prefixed_key(&request.storage_key) {
 			Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-			None => return Err("Invalid child type".into()),
+			None => return Err(ClientError::InvalidChildType),
 		};
 		read_child_proof_check::<H, _>(
 			convert_hash(request.header.state_root()),
 			remote_proof,
 			&child_info,
 			request.keys.iter(),
-		).map_err(Into::into)
+		).map_err(|e| ClientError::from(e))
 	}
 
 	fn check_execution_proof(
@@ -292,10 +292,10 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		if *request.header.extrinsics_root() == extrinsics_root {
 			Ok(body)
 		} else {
-			Err(format!("RemoteBodyRequest: invalid extrinsics root expected: {} but got {}",
-				*request.header.extrinsics_root(),
-				extrinsics_root,
-			).into())
+			Err(ClientError::ExtrinsicRootInvalid {
+				received: request.header.extrinsics_root().to_string(),
+				expected: extrinsics_root.to_string(),
+			})
 		}
 
 	}

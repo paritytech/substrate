@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -27,7 +27,6 @@ pub mod arg_enums;
 mod commands;
 mod config;
 mod error;
-mod logging;
 mod params;
 mod runner;
 
@@ -47,13 +46,18 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
-#[doc(hidden)]
-pub use tracing;
 use tracing_subscriber::{
-	filter::Directive, fmt::time::ChronoLocal, layer::SubscriberExt, FmtSubscriber, Layer,
+	fmt::time::ChronoLocal,
+	EnvFilter,
+	FmtSubscriber,
+	Layer,
+	layer::SubscriberExt,
 };
+pub use sc_tracing::logging;
 
 pub use logging::PREFIX_LOG_SPAN;
+#[doc(hidden)]
+pub use tracing;
 
 /// Substrate client CLI
 ///
@@ -108,10 +112,7 @@ pub trait SubstrateCli: Sized {
 	///
 	/// Gets the struct from the command line arguments. Print the
 	/// error message and quit the program in case of failure.
-	fn from_args() -> Self
-	where
-		Self: StructOpt + Sized,
-	{
+	fn from_args() -> Self where Self: StructOpt + Sized {
 		<Self as SubstrateCli>::from_iter(&mut std::env::args_os())
 	}
 
@@ -236,101 +237,162 @@ pub trait SubstrateCli: Sized {
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }
 
+/// The parameters for [`init_logger`].
+#[derive(Default)]
+pub struct InitLoggerParams {
+	/// A comma seperated list of logging patterns.
+	///
+	/// E.g.: `test-crate=debug`
+	pub pattern: String,
+	/// The tracing receiver.
+	pub tracing_receiver: sc_tracing::TracingReceiver,
+	/// Optional comma seperated list of tracing targets.
+	pub tracing_targets: Option<String>,
+	/// Should log reloading be disabled?
+	pub disable_log_reloading: bool,
+	/// Should the log color output be disabled?
+	pub disable_log_color: bool,
+}
+
 /// Initialize the global logger
 ///
 /// This sets various global logging and tracing instances and thus may only be called once.
 pub fn init_logger(
-	pattern: &str,
-	tracing_receiver: sc_tracing::TracingReceiver,
-	profiling_targets: Option<String>,
+	InitLoggerParams {
+		pattern,
+		tracing_receiver,
+		tracing_targets,
+		disable_log_reloading,
+		disable_log_color,
+	}: InitLoggerParams,
 ) -> std::result::Result<(), String> {
-	fn parse_directives(dirs: impl AsRef<str>) -> Vec<Directive> {
-		dirs.as_ref()
-			.split(',')
-			.filter_map(|s| s.parse().ok())
-			.collect()
+	use sc_tracing::parse_default_directive;
+
+	// Accept all valid directives and print invalid ones
+	fn parse_user_directives(
+		mut env_filter: EnvFilter,
+		dirs: &str,
+	) -> std::result::Result<EnvFilter, String> {
+		for dir in dirs.split(',') {
+			env_filter = env_filter.add_directive(parse_default_directive(&dir)?);
+		}
+		Ok(env_filter)
 	}
 
-	if let Err(e) = tracing_log::LogTracer::init() {
-		return Err(format!(
-			"Registering Substrate logger failed: {:}!", e
-		))
-	}
-
-	let mut env_filter = tracing_subscriber::EnvFilter::default()
+	// Initialize filter - ensure to use `parse_default_directive` for any defaults to persist
+	// after log filter reloading by RPC
+	let mut env_filter = EnvFilter::default()
+		// Enable info
+		.add_directive(parse_default_directive("info")
+			.expect("provided directive is valid"))
 		// Disable info logging by default for some modules.
-		.add_directive("ws=off".parse().expect("provided directive is valid"))
-		.add_directive("yamux=off".parse().expect("provided directive is valid"))
-		.add_directive("cranelift_codegen=off".parse().expect("provided directive is valid"))
+		.add_directive(parse_default_directive("ws=off")
+			.expect("provided directive is valid"))
+		.add_directive(parse_default_directive("yamux=off")
+			.expect("provided directive is valid"))
+		.add_directive(parse_default_directive("cranelift_codegen=off")
+			.expect("provided directive is valid"))
 		// Set warn logging by default for some modules.
-		.add_directive("cranelift_wasm=warn".parse().expect("provided directive is valid"))
-		.add_directive("hyper=warn".parse().expect("provided directive is valid"))
-		// Enable info for others.
-		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
+		.add_directive(parse_default_directive("cranelift_wasm=warn")
+			.expect("provided directive is valid"))
+		.add_directive(parse_default_directive("hyper=warn")
+			.expect("provided directive is valid"));
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
-			// We're not sure if log or tracing is available at this moment, so silently ignore the
-			// parse error.
-			for directive in parse_directives(lvl) {
-				env_filter = env_filter.add_directive(directive);
-			}
+			env_filter = parse_user_directives(env_filter, &lvl)?;
 		}
 	}
 
 	if pattern != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
 		// parse error.
-		for directive in parse_directives(pattern) {
-			env_filter = env_filter.add_directive(directive);
-		}
+		env_filter = parse_user_directives(env_filter, &pattern)?;
 	}
 
+	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
+
+	let max_level = if tracing_targets.is_some() {
+		// If profiling is activated, we require `trace` logging.
+		log::LevelFilter::Trace
+	} else {
+		match max_level_hint {
+			Some(tracing_subscriber::filter::LevelFilter::INFO) | None => log::LevelFilter::Info,
+			Some(tracing_subscriber::filter::LevelFilter::TRACE) => log::LevelFilter::Trace,
+			Some(tracing_subscriber::filter::LevelFilter::WARN) => log::LevelFilter::Warn,
+			Some(tracing_subscriber::filter::LevelFilter::ERROR) => log::LevelFilter::Error,
+			Some(tracing_subscriber::filter::LevelFilter::DEBUG) => log::LevelFilter::Debug,
+			Some(tracing_subscriber::filter::LevelFilter::OFF) => log::LevelFilter::Off,
+		}
+	};
+
+	tracing_log::LogTracer::builder()
+		.with_max_level(max_level)
+		.init()
+		.map_err(|e| format!("Registering Substrate logger failed: {:}!", e))?;
+
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
-	let simple = match Layer::<FmtSubscriber>::max_level_hint(&env_filter) {
+	let simple = match max_level_hint {
 		Some(level) if level <= tracing_subscriber::filter::LevelFilter::INFO => true,
 		_ => false,
 	};
 
-	// Always log the special target `sc_tracing`, overrides global level.
-	// NOTE: this must be done after we check the `max_level_hint` otherwise
-	// it is always raised to `TRACE`.
-	env_filter = env_filter.add_directive(
-		"sc_tracing=trace"
-			.parse()
-			.expect("provided directive is valid"),
-	);
-
 	// Make sure to include profiling targets in the filter
-	if let Some(profiling_targets) = profiling_targets.clone() {
-		for directive in parse_directives(profiling_targets) {
-			env_filter = env_filter.add_directive(directive);
-		}
+	if let Some(tracing_targets) = tracing_targets.clone() {
+		// Always log the special target `sc_tracing`, overrides global level.
+		// Required because profiling traces are emitted via `sc_tracing`
+		// NOTE: this must be done after we check the `max_level_hint` otherwise
+		// it is always raised to `TRACE`.
+		env_filter = env_filter.add_directive(
+			parse_default_directive("sc_tracing=trace").expect("provided directive is valid")
+		);
+
+		env_filter = parse_user_directives(env_filter, &tracing_targets)?;
 	}
 
-	let isatty = atty::is(atty::Stream::Stderr);
-	let enable_color = isatty;
+	let enable_color = atty::is(atty::Stream::Stderr) && !disable_log_color;
 	let timer = ChronoLocal::with_format(if simple {
 		"%Y-%m-%d %H:%M:%S".to_string()
 	} else {
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-	let subscriber = FmtSubscriber::builder()
+	let subscriber_builder = FmtSubscriber::builder()
 		.with_env_filter(env_filter)
-		.with_writer(std::io::stderr)
+		.with_writer(std::io::stderr as _)
 		.event_format(logging::EventFormat {
 			timer,
-			ansi: enable_color,
+			enable_color,
 			display_target: !simple,
 			display_level: !simple,
 			display_thread_name: !simple,
-		})
-		.finish().with(logging::NodeNameLayer);
+		});
+	if disable_log_reloading {
+		let subscriber = subscriber_builder
+			.finish()
+			.with(logging::NodeNameLayer);
+		initialize_tracing(subscriber, tracing_receiver, tracing_targets)
+	} else {
+		let subscriber_builder = subscriber_builder.with_filter_reloading();
+		let handle = subscriber_builder.reload_handle();
+		sc_tracing::set_reload_handle(handle);
+		let subscriber = subscriber_builder
+			.finish()
+			.with(logging::NodeNameLayer);
+		initialize_tracing(subscriber, tracing_receiver, tracing_targets)
+	}
+}
 
+fn initialize_tracing<S>(
+	subscriber: S,
+	tracing_receiver: sc_tracing::TracingReceiver,
+	profiling_targets: Option<String>,
+) -> std::result::Result<(), String>
+where
+	S: tracing::Subscriber + Send + Sync + 'static,
+{
 	if let Some(profiling_targets) = profiling_targets {
 		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &profiling_targets);
-
 		if let Err(e) = tracing::subscriber::set_global_default(subscriber.with(profiling)) {
 			return Err(format!(
 				"Registering Substrate tracing subscriber failed: {:}!", e
@@ -339,7 +401,7 @@ pub fn init_logger(
 	} else {
 		if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
 			return Err(format!(
-				"Registering Substrate tracing subscriber  failed: {:}!", e
+				"Registering Substrate tracing subscriber failed: {:}!", e
 			))
 		}
 	}
@@ -356,7 +418,9 @@ mod tests {
 	#[test]
 	fn test_logger_filters() {
 		let test_pattern = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
-		init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
+		init_logger(
+			InitLoggerParams { pattern: test_pattern.into(), ..Default::default() },
+		).unwrap();
 
 		tracing::dispatcher::get_default(|dispatcher| {
 			let test_filter = |target, level| {
@@ -415,7 +479,9 @@ mod tests {
 	fn log_something_with_dash_target_name() {
 		if env::var("ENABLE_LOGGING").is_ok() {
 			let test_pattern = "test-target=info";
-			init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
+			init_logger(
+				InitLoggerParams { pattern: test_pattern.into(), ..Default::default() },
+			).unwrap();
 
 			log::info!(target: "test-target", "{}", EXPECTED_LOG_MESSAGE);
 		}
@@ -451,7 +517,9 @@ mod tests {
 	fn prefix_in_log_lines_entrypoint() {
 		if env::var("ENABLE_LOGGING").is_ok() {
 			let test_pattern = "test-target=info";
-			init_logger(&test_pattern, Default::default(), Default::default()).unwrap();
+			init_logger(
+				InitLoggerParams { pattern: test_pattern.into(), ..Default::default() },
+			).unwrap();
 			prefix_in_log_lines_process();
 		}
 	}
@@ -459,5 +527,72 @@ mod tests {
 	#[crate::prefix_logs_with(EXPECTED_NODE_NAME)]
 	fn prefix_in_log_lines_process() {
 		log::info!("{}", EXPECTED_LOG_MESSAGE);
+	}
+
+	/// This is no actual test, it will be used by the `do_not_write_with_colors_on_tty` test.
+	/// The given test will call the test executable to only execute this test that
+	/// will only print a log line with some colors in it.
+	#[test]
+	fn do_not_write_with_colors_on_tty_entrypoint() {
+		if env::var("ENABLE_LOGGING").is_ok() {
+			init_logger(InitLoggerParams::default()).unwrap();
+			log::info!("{}", ansi_term::Colour::Yellow.paint(EXPECTED_LOG_MESSAGE));
+		}
+	}
+
+	#[test]
+	fn do_not_write_with_colors_on_tty() {
+		let re = regex::Regex::new(&format!(
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  {}$",
+			EXPECTED_LOG_MESSAGE,
+		)).unwrap();
+		let executable = env::current_exe().unwrap();
+		let output = Command::new(executable)
+			.env("ENABLE_LOGGING", "1")
+			.args(&["--nocapture", "do_not_write_with_colors_on_tty_entrypoint"])
+			.output()
+			.unwrap();
+
+		let output = String::from_utf8(output.stderr).unwrap();
+		assert!(
+			re.is_match(output.trim()),
+			format!("Expected:\n{}\nGot:\n{}", re, output),
+		);
+	}
+
+	#[test]
+	fn log_max_level_is_set_properly() {
+		fn run_test(rust_log: Option<String>, tracing_targets: Option<String>) -> String {
+			let executable = env::current_exe().unwrap();
+			let mut command = Command::new(executable);
+
+			command.env("PRINT_MAX_LOG_LEVEL", "1")
+				.args(&["--nocapture", "log_max_level_is_set_properly"]);
+
+			if let Some(rust_log) = rust_log {
+				command.env("RUST_LOG", rust_log);
+			}
+
+			if let Some(tracing_targets) = tracing_targets {
+				command.env("TRACING_TARGETS", tracing_targets);
+			}
+
+			let output = command.output().unwrap();
+
+			String::from_utf8(output.stderr).unwrap()
+		}
+
+		if env::var("PRINT_MAX_LOG_LEVEL").is_ok() {
+			init_logger(InitLoggerParams {
+				tracing_targets: env::var("TRACING_TARGETS").ok(),
+				..Default::default()
+			}).unwrap();
+			eprint!("MAX_LOG_LEVEL={:?}", log::max_level());
+		} else {
+			assert_eq!("MAX_LOG_LEVEL=Info", run_test(None, None));
+			assert_eq!("MAX_LOG_LEVEL=Trace", run_test(Some("test=trace".into()), None));
+			assert_eq!("MAX_LOG_LEVEL=Debug", run_test(Some("test=debug".into()), None));
+			assert_eq!("MAX_LOG_LEVEL=Trace", run_test(None, Some("test=info".into())));
+		}
 	}
 }

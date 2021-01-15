@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -41,7 +41,7 @@
 //! In normal situations, messages sent through a [`QueuedSender`] will arrive in the same
 //! order as they have been sent.
 //! It is possible, in the situation of disconnects and reconnects, that messages arrive in a
-//! different order. See also https://github.com/paritytech/substrate/issues/6756.
+//! different order. See also <https://github.com/paritytech/substrate/issues/6756>.
 //! However, if multiple instances of [`QueuedSender`] exist for the same peer and protocol, or
 //! if some other code uses the [`NetworkService`] to send notifications to this combination or
 //! peer and protocol, then the notifications will be interleaved in an unpredictable way.
@@ -53,8 +53,9 @@ use async_std::sync::{Mutex, MutexGuard};
 use futures::prelude::*;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use libp2p::PeerId;
-use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
+use sp_runtime::traits::Block as BlockT;
 use std::{
+	borrow::Cow,
 	collections::VecDeque,
 	fmt,
 	sync::Arc,
@@ -82,7 +83,7 @@ impl<M> QueuedSender<M> {
 	pub fn new<B, H, F>(
 		service: Arc<NetworkService<B, H>>,
 		peer_id: PeerId,
-		protocol: ConsensusEngineId,
+		protocol: Cow<'static, str>,
 		queue_size_limit: usize,
 		messages_encode: F
 	) -> (Self, impl Future<Output = ()> + Send + 'static)
@@ -193,7 +194,7 @@ async fn create_background_future<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>
 	mut wait_for_sender: Receiver<()>,
 	service: Arc<NetworkService<B, H>>,
 	peer_id: PeerId,
-	protocol: ConsensusEngineId,
+	protocol: Cow<'static, str>,
 	shared_message_queue: SharedMessageQueue<M>,
 	messages_encode: F,
 ) {
@@ -212,7 +213,7 @@ async fn create_background_future<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>
 
 			// Starting from below, we try to send the message. If an error happens when sending,
 			// the only sane option we have is to silently discard the message.
-			let sender = match service.notification_sender(peer_id.clone(), protocol) {
+			let sender = match service.notification_sender(peer_id.clone(), protocol.clone()) {
 				Ok(s) => s,
 				Err(_) => continue,
 			};

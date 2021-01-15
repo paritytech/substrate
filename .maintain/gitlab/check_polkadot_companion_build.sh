@@ -9,6 +9,7 @@
 # polkadot companion: paritytech/polkadot#567
 #
 
+set -e
 
 github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
 # use github api v3 in order to access the data without authentication
@@ -40,10 +41,9 @@ EOT
 git config --global user.name 'CI system'
 git config --global user.email '<>'
 
-cargo install -f --version 0.2.0 diener
-
 # Merge master into our branch before building Polkadot to make sure we don't miss
 # any commits that are required by Polkadot.
+git fetch --depth 100 origin
 git merge origin/master
 
 # Clone the current Polkadot master branch into ./polkadot.
@@ -86,9 +86,12 @@ else
 fi
 
 cd ..
-$CARGO_HOME/bin/diener --substrate --branch $CI_COMMIT_REF_NAME --git https://gitlab.parity.io/parity/substrate.git --path polkadot
+diener --substrate --branch $CI_COMMIT_REF_NAME --git https://gitlab.parity.io/parity/substrate.git --path polkadot
 cd polkadot
 
 # Test Polkadot pr or master branch with this Substrate commit.
 cargo update -p sp-io
 time cargo test --all --release --verbose --features=real-overseer
+
+cd parachain/test-parachains/adder/collator/
+time cargo test --release --verbose --locked --features=real-overseer

@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! BABE testsuite
 
@@ -37,11 +39,11 @@ use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
 	NoNetwork as DummyOracle, Proposal, RecordProof, AlwaysCanAuthor,
-	import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport},
+	import_queue::{BoxBlockImport, BoxJustificationImport},
 };
 use sc_network_test::*;
 use sc_network_test::{Block as TestBlock, PeersClient};
-use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
+use sc_network::config::ProtocolConfig;
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use sc_client_api::{BlockchainEvents, backend::TransactionFor};
 use log::debug;
@@ -272,8 +274,6 @@ impl TestNetFactory for BabeTestNet {
 		-> (
 			BlockImportAdapter<Transaction>,
 			Option<BoxJustificationImport<Block>>,
-			Option<BoxFinalityProofImport<Block>>,
-			Option<BoxFinalityProofRequestBuilder<Block>>,
 			Option<PeerData>,
 		)
 	{
@@ -294,8 +294,6 @@ impl TestNetFactory for BabeTestNet {
 		);
 		(
 			BlockImportAdapter::new_full(block_import),
-			None,
-			None,
 			None,
 			Some(PeerData { link, inherent_data_providers, block_import: data_block_import }),
 		)

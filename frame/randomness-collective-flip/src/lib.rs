@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,10 +39,10 @@
 //! ```
 //! use frame_support::{decl_module, dispatch, traits::Randomness};
 //!
-//! pub trait Trait: frame_system::Trait {}
+//! pub trait Config: frame_system::Config {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //! 		#[weight = 0]
 //! 		pub fn random_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _random_value = <pallet_randomness_collective_flip::Module<T>>::random(&b"my context"[..]);
@@ -63,18 +63,18 @@ use frame_support::{
 };
 use safe_mix::TripletMix;
 use codec::Encode;
-use frame_system::Trait;
+use frame_system::Config;
 
 const RANDOM_MATERIAL_LEN: u32 = 81;
 
-fn block_number_to_index<T: Trait>(block_number: T::BlockNumber) -> usize {
+fn block_number_to_index<T: Config>(block_number: T::BlockNumber) -> usize {
 	// on_initialize is called on the first block after genesis
 	let index = (block_number - 1u32.into()) % RANDOM_MATERIAL_LEN.into();
 	index.try_into().ok().expect("Something % 81 is always smaller than usize; qed")
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		fn on_initialize(block_number: T::BlockNumber) -> Weight {
 			let parent_hash = <frame_system::Module<T>>::parent_hash();
 
@@ -91,7 +91,7 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as RandomnessCollectiveFlip {
+	trait Store for Module<T: Config> as RandomnessCollectiveFlip {
 		/// Series of block headers from the last 81 blocks that acts as random seed material. This
 		/// is arranged as a ring buffer with `block_number % 81` being the index into the `Vec` of
 		/// the oldest hash.
@@ -99,7 +99,7 @@ decl_storage! {
 	}
 }
 
-impl<T: Trait> Randomness<T::Hash> for Module<T> {
+impl<T: Config> Randomness<T::Hash> for Module<T> {
 	/// This randomness uses a low-influence function, drawing upon the block hashes from the
 	/// previous 81 blocks. Its result for any given subject will be known far in advance by anyone
 	/// observing the chain. Any block producer has significant influence over their block hashes
@@ -135,12 +135,12 @@ mod tests {
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill,
 		testing::Header,
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
 	};
+	use frame_system::limits;
 	use frame_support::{
-		impl_outer_origin, parameter_types, weights::Weight, traits::{Randomness, OnInitialize},
+		impl_outer_origin, parameter_types, traits::{Randomness, OnInitialize},
 	};
 
 	#[derive(Clone, PartialEq, Eq)]
@@ -152,13 +152,17 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: limits::BlockWeights = limits::BlockWeights
+			::simple_max(1024);
+		pub BlockLength: limits::BlockLength = limits::BlockLength
+			::max(2 * 1024);
 	}
 
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = BlockLength;
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -170,19 +174,13 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 
 	type System = frame_system::Module<Test>;
@@ -207,7 +205,6 @@ mod tests {
 			System::initialize(
 				&i,
 				&parent_hash,
-				&Default::default(),
 				&Default::default(),
 				frame_system::InitKind::Full,
 			);

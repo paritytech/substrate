@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,6 +31,22 @@ pub enum RuntimeString {
 	#[cfg(not(feature = "std"))]
 	Owned(Vec<u8>),
 }
+
+/// Convenience macro to use the format! interface to get a `RuntimeString::Owned`
+#[macro_export]
+macro_rules! format_runtime_string {
+	($($args:tt)*) => {{
+		#[cfg(feature = "std")]
+		{
+			sp_runtime::RuntimeString::Owned(format!($($args)*))
+		}
+		#[cfg(not(feature = "std"))]
+		{
+			sp_runtime::RuntimeString::Owned(sp_std::alloc::format!($($args)*).as_bytes().to_vec())
+		}
+	}};
+}
+
 
 impl From<&'static str> for RuntimeString {
 	fn from(data: &'static str) -> Self {

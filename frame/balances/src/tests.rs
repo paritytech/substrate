@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,7 @@
 pub struct CallWithDispatchInfo;
 impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
 	type Origin = ();
-	type Trait = ();
+	type Config = ();
 	type Info = frame_support::weights::DispatchInfo;
 	type PostInfo = frame_support::weights::PostDispatchInfo;
 
@@ -40,7 +40,7 @@ macro_rules! decl_tests {
 		use crate::*;
 		use sp_runtime::{FixedPointNumber, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
-			assert_noop, assert_ok, assert_err,
+			assert_noop, assert_storage_noop, assert_ok, assert_err,
 			traits::{
 				LockableCurrency, LockIdentifier, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath, StoredMap
@@ -55,7 +55,7 @@ macro_rules! decl_tests {
 		pub type System = frame_system::Module<$test>;
 		pub type Balances = Module<$test>;
 
-		pub const CALL: &<$test as frame_system::Trait>::Call = &$crate::tests::CallWithDispatchInfo;
+		pub const CALL: &<$test as frame_system::Config>::Call = &$crate::tests::CallWithDispatchInfo;
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
@@ -91,7 +91,7 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
 				assert_eq!(Balances::free_balance(1), 10);
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath));
-				assert!(!<<Test as Trait>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
+				assert!(!<<Test as Config>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
 			});
 		}
 
@@ -630,12 +630,21 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
-		#[should_panic = "the balance of any account should always be more than existential deposit."]
+		#[should_panic = "the balance of any account should always be at least the existential deposit."]
 		fn cannot_set_genesis_value_below_ed() {
 			($existential_deposit).with(|v| *v.borrow_mut() = 11);
 			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>().unwrap();
 			let _ = GenesisConfig::<$test> {
 				balances: vec![(1, 10)],
+			}.assimilate_storage(&mut t).unwrap();
+		}
+
+		#[test]
+		#[should_panic = "duplicate balances in genesis."]
+		fn cannot_set_genesis_value_twice() {
+			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>().unwrap();
+			let _ = GenesisConfig::<$test> {
+				balances: vec![(1, 10), (2, 20), (1, 15)],
 			}.assimilate_storage(&mut t).unwrap();
 		}
 
@@ -785,6 +794,29 @@ macro_rules! decl_tests {
 							Event::system(system::RawEvent::KilledAccount(1))
 						]
 					);
+				});
+		}
+
+		#[test]
+		fn operations_on_dead_account_should_not_change_state() {
+			// These functions all use `mutate_account` which may introduce a storage change when
+			// the account never existed to begin with, and shouldn't exist in the end.
+			<$ext_builder>::default()
+				.existential_deposit(0)
+				.build()
+				.execute_with(|| {
+					assert!(!<Test as Config>::AccountStore::is_explicit(&1337));
+
+					// Unreserve
+					assert_storage_noop!(assert_eq!(Balances::unreserve(&1337, 42), 42));
+					// Reserve
+					assert_noop!(Balances::reserve(&1337, 42), Error::<Test, _>::InsufficientBalance);
+					// Slash Reserve
+					assert_storage_noop!(assert_eq!(Balances::slash_reserved(&1337, 42).1, 42));
+					// Repatriate Reserve
+					assert_noop!(Balances::repatriate_reserved(&1337, &1338, 42, Status::Free), Error::<Test, _>::DeadAccount);
+					// Slash
+					assert_storage_noop!(assert_eq!(Balances::slash(&1337, 42).1, 42));
 				});
 		}
 	}

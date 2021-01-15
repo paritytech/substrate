@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,6 @@ use sp_runtime::{
 	traits::Hash as HashT,
 	transaction_validity::InvalidTransaction,
 };
-use pallet_contracts::ContractAddressFor;
 use frame_system::{self, EventRecord, Phase};
 
 use node_runtime::{
@@ -581,15 +580,15 @@ const CODE_TRANSFER: &str = r#"
 #[test]
 fn deploying_wasm_contract_should_work() {
 	let transfer_code = wat::parse_str(CODE_TRANSFER).unwrap();
-	let transfer_ch = <Runtime as frame_system::Trait>::Hashing::hash(&transfer_code);
+	let transfer_ch = <Runtime as frame_system::Config>::Hashing::hash(&transfer_code);
 
-	let addr = <Runtime as pallet_contracts::Trait>::DetermineContractAddress::contract_address_for(
+	let addr = pallet_contracts::Module::<Runtime>::contract_address(
+		&charlie(),
 		&transfer_ch,
 		&[],
-		&charlie(),
 	);
 
-	let subsistence = pallet_contracts::Config::<Runtime>::subsistence_threshold_uncached();
+	let subsistence = pallet_contracts::ConfigCache::<Runtime>::subsistence_threshold_uncached();
 
 	let b = construct_block(
 		&mut new_test_ext(compact_code_unwrap(), false),
@@ -613,7 +612,8 @@ fn deploying_wasm_contract_should_work() {
 						1 * DOLLARS + subsistence,
 						500_000_000,
 						transfer_ch,
-						Vec::new()
+						Vec::new(),
+						Vec::new(),
 					)
 				),
 			},
@@ -621,7 +621,7 @@ fn deploying_wasm_contract_should_work() {
 				signed: Some((charlie(), signed_extra(2, 0))),
 				function: Call::Contracts(
 					pallet_contracts::Call::call::<Runtime>(
-						pallet_indices::address::Address::Id(addr.clone()),
+						sp_runtime::MultiAddress::Id(addr.clone()),
 						10,
 						500_000_000,
 						vec![0x00, 0x01, 0x02, 0x03]

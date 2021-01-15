@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,12 +21,14 @@
 
 mod storage;
 mod construct_runtime;
+mod pallet;
 mod pallet_version;
 mod transactional;
 mod debug_no_bound;
 mod clone_no_bound;
 mod partial_eq_no_bound;
 
+pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use proc_macro::TokenStream;
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
@@ -35,7 +37,7 @@ use proc_macro::TokenStream;
 ///
 /// ```nocompile
 /// decl_storage! {
-/// 	trait Store for Module<T: Trait> as Example {
+/// 	trait Store for Module<T: Config> as Example {
 /// 		Foo get(fn foo) config(): u32=12;
 /// 		Bar: map hasher(identity) u32 => u32;
 /// 		pub Zed build(|config| vec![(0, 0)]): map hasher(identity) u32 => u32;
@@ -43,7 +45,7 @@ use proc_macro::TokenStream;
 /// }
 /// ```
 ///
-/// Declaration is set with the header `(pub) trait Store for Module<T: Trait> as Example`,
+/// Declaration is set with the header `(pub) trait Store for Module<T: Config> as Example`,
 /// with `Store` a (pub) trait generated associating each storage item to the `Module` and
 /// `as Example` setting the prefix used for storage items of this module. `Example` must be unique:
 /// another module with the same name and the same inner storage item name will conflict.
@@ -169,7 +171,7 @@ use proc_macro::TokenStream;
 ///
 /// ```nocompile
 /// decl_storage! {
-/// 	trait Store for Module<T: Trait> as Example {
+/// 	trait Store for Module<T: Config> as Example {
 ///
 /// 		// Your storage items
 /// 	}
@@ -202,7 +204,7 @@ use proc_macro::TokenStream;
 /// (`DefaultInstance` type is optional):
 ///
 /// ```nocompile
-/// trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Example {}
+/// trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Example {}
 /// ```
 ///
 /// Accessing the structure no requires the instance as generic parameter:
@@ -214,7 +216,7 @@ use proc_macro::TokenStream;
 /// This macro supports a where clause which will be replicated to all generated types.
 ///
 /// ```nocompile
-/// trait Store for Module<T: Trait> as Example where T::AccountId: std::fmt::Display {}
+/// trait Store for Module<T: Config> as Example where T::AccountId: std::fmt::Display {}
 /// ```
 ///
 /// ## Limitations
@@ -303,6 +305,12 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
+}
+
+/// Macro to define a pallet. Docs are at `frame_support::pallet`.
+#[proc_macro_attribute]
+pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
+	pallet::pallet(attr, item)
 }
 
 /// Execute the annotated function in a new storage transaction.

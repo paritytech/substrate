@@ -1,23 +1,24 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! This module contains the cost schedule and supporting code that constructs a
 //! sane default schedule from a `WeightInfo` implementation.
 
-use crate::{Trait, weights::WeightInfo};
+use crate::{Config, weights::WeightInfo};
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
@@ -42,7 +43,7 @@ pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug)]
-pub struct Schedule<T: Trait> {
+pub struct Schedule<T: Config> {
 	/// Version of the schedule.
 	pub version: u32,
 
@@ -69,7 +70,7 @@ pub struct Limits {
 
 	/// Maximum allowed stack height in number of elements.
 	///
-	/// See https://wiki.parity.io/WebAssembly-StackHeight to find out
+	/// See <https://wiki.parity.io/WebAssembly-StackHeight> to find out
 	/// how the stack frame cost is calculated. Each element can be of one of the
 	/// wasm value types. This means the maximum size per element is 64bit.
 	pub stack_height: u32,
@@ -109,6 +110,13 @@ pub struct Limits {
 	pub code_size: u32,
 }
 
+impl Limits {
+	/// The maximum memory size in bytes that a contract can occupy.
+	pub fn max_memory_size(&self) -> u32 {
+		self.memory_pages * 64 * 1024
+	}
+}
+
 /// Describes the weight for all categories of supported wasm instructions.
 ///
 /// There there is one field for each wasm instruction that describes the weight to
@@ -131,7 +139,7 @@ pub struct Limits {
 ///    and dropping return values in order to maintain a valid module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug)]
-pub struct InstructionWeights<T: Trait> {
+pub struct InstructionWeights<T: Config> {
 	pub i64const: u32,
 	pub i64load: u32,
 	pub i64store: u32,
@@ -190,7 +198,7 @@ pub struct InstructionWeights<T: Trait> {
 /// Describes the weight for each imported function that a contract is allowed to call.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug)]
-pub struct HostFnWeights<T: Trait> {
+pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_caller`.
 	pub caller: Weight,
 
@@ -302,6 +310,9 @@ pub struct HostFnWeights<T: Trait> {
 	/// Weight per output byte received through `seal_instantiate`.
 	pub instantiate_per_output_byte: Weight,
 
+	/// Weight per salt byte supplied to `seal_instantiate`.
+	pub instantiate_per_salt_byte: Weight,
+
 	/// Weight of calling `seal_hash_sha_256`.
 	pub hash_sha2_256: Weight,
 
@@ -407,7 +418,7 @@ macro_rules! cost_byte_batched {
 	}
 }
 
-impl<T: Trait> Default for Schedule<T> {
+impl<T: Config> Default for Schedule<T> {
 	fn default() -> Self {
 		Self {
 			version: 0,
@@ -437,7 +448,7 @@ impl Default for Limits {
 	}
 }
 
-impl<T: Trait> Default for InstructionWeights<T> {
+impl<T: Config> Default for InstructionWeights<T> {
 	fn default() -> Self {
 		let max_pages = Limits::default().memory_pages;
 		Self {
@@ -497,7 +508,7 @@ impl<T: Trait> Default for InstructionWeights<T> {
 	}
 }
 
-impl<T: Trait> Default for HostFnWeights<T> {
+impl<T: Config> Default for HostFnWeights<T> {
 	fn default() -> Self {
 		Self {
 			caller: cost_batched!(seal_caller),
@@ -535,8 +546,9 @@ impl<T: Trait> Default for HostFnWeights<T> {
 			call_per_input_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 1, 0),
 			call_per_output_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 0, 1),
 			instantiate: cost_batched!(seal_instantiate),
-			instantiate_per_input_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_kb, 1, 0),
-			instantiate_per_output_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_kb, 0, 1),
+			instantiate_per_input_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 1, 0, 0),
+			instantiate_per_output_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 0, 1, 0),
+			instantiate_per_salt_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 0, 0, 1),
 			hash_sha2_256: cost_batched!(seal_hash_sha2_256),
 			hash_sha2_256_per_byte: cost_byte_batched!(seal_hash_sha2_256_per_kb),
 			hash_keccak_256: cost_batched!(seal_hash_keccak_256),
@@ -550,12 +562,12 @@ impl<T: Trait> Default for HostFnWeights<T> {
 	}
 }
 
-struct ScheduleRules<'a, T: Trait> {
+struct ScheduleRules<'a, T: Config> {
 	schedule: &'a Schedule<T>,
 	params: Vec<u32>,
 }
 
-impl<T: Trait> Schedule<T> {
+impl<T: Config> Schedule<T> {
 	pub fn rules(&self, module: &elements::Module) -> impl rules::Rules + '_ {
 		ScheduleRules {
 			schedule: &self,
@@ -572,7 +584,7 @@ impl<T: Trait> Schedule<T> {
 	}
 }
 
-impl<'a, T: Trait> rules::Rules for ScheduleRules<'a, T> {
+impl<'a, T: Config> rules::Rules for ScheduleRules<'a, T> {
 	fn instruction_cost(&self, instruction: &elements::Instruction) -> Option<u32> {
 		use parity_wasm::elements::Instruction::*;
 		let w = &self.schedule.instruction_weights;
@@ -607,6 +619,7 @@ impl<'a, T: Trait> rules::Rules for ScheduleRules<'a, T> {
 			I32Clz | I64Clz => w.i64clz,
 			I32Ctz | I64Ctz => w.i64ctz,
 			I32Popcnt | I64Popcnt => w.i64popcnt,
+			I32Eqz | I64Eqz => w.i64eqz,
 			I64ExtendSI32 => w.i64extendsi32,
 			I64ExtendUI32 => w.i64extendui32,
 			I32WrapI64 => w.i32wrapi64,

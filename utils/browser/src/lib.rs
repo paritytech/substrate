@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,8 @@ use sc_network::config::TransportConfig;
 use sc_service::{
 	RpcSession, Role, Configuration, TaskManager, RpcHandlers,
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
-	GenericChainSpec, RuntimeGenesis
+	GenericChainSpec, RuntimeGenesis,
+	KeepBlocks, TransactionStorageMode,
 };
 use wasm_bindgen::prelude::*;
 use futures::{
@@ -75,6 +76,7 @@ where
 
 			DatabaseConfig::Custom(sp_database::as_database(db))
 		},
+		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::InMemory,
 		default_heap_pages: Default::default(),
 		dev_key_seed: Default::default(),
@@ -85,7 +87,9 @@ where
 		impl_version: String::from("0.0.0"),
 		offchain_worker: Default::default(),
 		prometheus_config: Default::default(),
-		pruning: Default::default(),
+		state_pruning: Default::default(),
+		keep_blocks: KeepBlocks::All,
+		transaction_storage: TransactionStorageMode::BlockBody,
 		rpc_cors: Default::default(),
 		rpc_http: Default::default(),
 		rpc_ipc: Default::default(),
@@ -105,6 +109,7 @@ where
 		informant_output_format: sc_informant::OutputFormat {
 			enable_color: false,
 		},
+		disable_log_reloading: false,
 	};
 
 	Ok(config)

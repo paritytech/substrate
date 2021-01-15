@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,11 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, gossip::QueuedSender, Event, NetworkService, NetworkWorker};
+use crate::block_request_handler::BlockRequestHandler;
+use crate::gossip::QueuedSender;
+use crate::{config,  Event, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, Header as _};
-use std::{sync::Arc, time::Duration};
+use std::{borrow::Cow, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
 
 type TestNetworkService = NetworkService<
@@ -33,7 +35,7 @@ type TestNetworkService = NetworkService<
 ///
 /// > **Note**: We return the events stream in order to not possibly lose events between the
 /// >			construction of the service and the moment the events stream is grabbed.
-fn build_test_full_node(config: config::NetworkConfiguration)
+fn build_test_full_node(network_config: config::NetworkConfiguration)
 	-> (Arc<TestNetworkService>, impl Stream<Item = Event>)
 {
 	let client = Arc::new(
@@ -86,26 +88,35 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		PassThroughVerifier(false),
 		Box::new(client.clone()),
 		None,
-		None,
 		&sp_core::testing::TaskExecutor::new(),
 		None,
 	));
 
+	let protocol_id = config::ProtocolId::from("/test-protocol-name");
+
+	let block_request_protocol_config = {
+		let (handler, protocol_config) = BlockRequestHandler::new(
+			protocol_id.clone(),
+			client.clone(),
+		);
+		async_std::task::spawn(handler.run().boxed());
+		protocol_config
+	};
+
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
-		network_config: config,
+		network_config,
 		chain: client.clone(),
-		finality_proof_provider: None,
-		finality_proof_request_builder: None,
 		on_demand: None,
 		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
-		protocol_id: config::ProtocolId::from("/test-protocol-name"),
+		protocol_id,
 		import_queue,
 		block_announce_validator: Box::new(
 			sp_consensus::block_validation::DefaultBlockAnnounceValidator,
 		),
 		metrics_registry: None,
+		block_request_protocol_config,
 	})
 	.unwrap();
 
@@ -120,29 +131,41 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 	(service, event_stream)
 }
 
-const ENGINE_ID: sp_runtime::ConsensusEngineId = *b"foo\0";
+const PROTOCOL_NAME: Cow<'static, str> = Cow::Borrowed("/foo");
 
 /// Builds two nodes and their associated events stream.
-/// The nodes are connected together and have the `ENGINE_ID` protocol registered.
+/// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
 fn build_nodes_one_proto()
 	-> (Arc<TestNetworkService>, impl Stream<Item = Event>, Arc<TestNetworkService>, impl Stream<Item = Event>)
 {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
+		extra_sets: vec![
+			config::NonDefaultSetConfig {
+				notifications_protocol: PROTOCOL_NAME,
+				set_config: Default::default()
+			}
+		],
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
 		.. config::NetworkConfiguration::new_local()
 	});
 
 	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![(ENGINE_ID, From::from("/foo"))],
 		listen_addresses: vec![],
-		reserved_nodes: vec![config::MultiaddrWithPeerId {
-			multiaddr: listen_addr,
-			peer_id: node1.local_peer_id().clone(),
-		}],
+		extra_sets: vec![
+			config::NonDefaultSetConfig {
+				notifications_protocol: PROTOCOL_NAME,
+				set_config: config::SetConfig {
+					reserved_nodes: vec![config::MultiaddrWithPeerId {
+						multiaddr: listen_addr,
+						peer_id: node1.local_peer_id().clone(),
+					}],
+					.. Default::default()
+				},
+			}
+		],
 		transport: config::TransportConfig::MemoryOnly,
 		.. config::NetworkConfiguration::new_local()
 	});
@@ -165,7 +188,7 @@ fn basic_works() {
 				Event::NotificationStreamClosed { .. } => panic!(),
 				Event::NotificationsReceived { messages, .. } => {
 					for message in messages {
-						assert_eq!(message.0, ENGINE_ID);
+						assert_eq!(message.0, PROTOCOL_NAME);
 						assert_eq!(message.1, &b"message"[..]);
 						received_notifications += 1;
 					}
@@ -181,7 +204,7 @@ fn basic_works() {
 
 	async_std::task::block_on(async move {
 		let (mut sender, bg_future) =
-			QueuedSender::new(node1, node2_id, ENGINE_ID, NUM_NOTIFS, |msg| msg);
+			QueuedSender::new(node1, node2_id, PROTOCOL_NAME, NUM_NOTIFS, |msg| msg);
 		async_std::task::spawn(bg_future);
 
 		// Wait for the `NotificationStreamOpened`.

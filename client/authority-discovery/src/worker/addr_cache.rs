@@ -1,30 +1,26 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use libp2p::core::multiaddr::{Multiaddr, Protocol};
-use rand::seq::SliceRandom;
 use std::collections::HashMap;
 
 use sp_authority_discovery::AuthorityId;
 use sc_network::PeerId;
-
-/// The maximum number of authority connections initialized through the authority discovery module.
-///
-/// In other words the maximum size of the `authority` peerset priority group.
-const MAX_NUM_AUTHORITY_CONN: usize = 10;
 
 /// Cache for [`AuthorityId`] -> [`Vec<Multiaddr>`] and [`PeerId`] -> [`AuthorityId`] mappings.
 pub(super) struct AddrCache {
@@ -75,30 +71,6 @@ impl AddrCache {
 		self.peer_id_to_authority_id.get(peer_id)
 	}
 
-	/// Returns a single address for a random subset (maximum of [`MAX_NUM_AUTHORITY_CONN`]) of all
-	/// known authorities.
-	pub fn get_random_subset(&self) -> Vec<Multiaddr> {
-		let mut rng = rand::thread_rng();
-
-		let mut addresses = self
-			.authority_id_to_addresses
-			.iter()
-			.filter_map(|(_authority_id, addresses)| {
-				debug_assert!(!addresses.is_empty());
-				addresses
-					.choose(&mut rng)
-			})
-			.collect::<Vec<&Multiaddr>>();
-
-		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
-		addresses.dedup();
-
-		addresses
-			.choose_multiple(&mut rng, MAX_NUM_AUTHORITY_CONN)
-			.map(|a| (**a).clone())
-			.collect()
-	}
-
 	/// Removes all [`PeerId`]s and [`Multiaddr`]s from the cache that are not related to the given
 	/// [`AuthorityId`]s.
 	pub fn retain_ids(&mut self, authority_ids: &Vec<AuthorityId>) {
@@ -139,7 +111,7 @@ fn peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
 mod tests {
 	use super::*;
 
-	use libp2p::multihash;
+	use libp2p::multihash::{self, Multihash};
 	use quickcheck::{Arbitrary, Gen, QuickCheck, TestResult};
 	use rand::Rng;
 
@@ -163,7 +135,7 @@ mod tests {
 		fn arbitrary<G: Gen>(g: &mut G) -> Self {
 			let seed: [u8; 32] = g.gen();
 			let peer_id = PeerId::from_multihash(
-				multihash::wrap(multihash::Code::Sha2_256, &seed)
+				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap()
 			).unwrap();
 			let multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse::<Multiaddr>()
 				.unwrap()
@@ -190,11 +162,6 @@ mod tests {
 			cache.insert(second.0.clone(), vec![second.1.clone()]);
 			cache.insert(third.0.clone(), vec![third.1.clone()]);
 
-			let subset = cache.get_random_subset();
-			assert!(
-				subset.contains(&first.1) && subset.contains(&second.1) && subset.contains(&third.1),
-				"Expect initial subset to contain all authorities.",
-			);
 			assert_eq!(
 				Some(&vec![third.1.clone()]),
 				cache.get_addresses_by_authority_id(&third.0),
@@ -208,12 +175,6 @@ mod tests {
 
 			cache.retain_ids(&vec![first.0, second.0]);
 
-			let subset = cache.get_random_subset();
-			assert!(
-				subset.contains(&first.1) || subset.contains(&second.1),
-				"Expected both first and second authority."
-			);
-			assert!(!subset.contains(&third.1), "Did not expect address from third authority");
 			assert_eq!(
 				None, cache.get_addresses_by_authority_id(&third.0),
 				"Expect `get_addresses_by_authority_id` to not return `None` for third authority."

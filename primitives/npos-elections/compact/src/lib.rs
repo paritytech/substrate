@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,8 +58,8 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///
 /// The given struct provides function to convert from/to Assignment:
 ///
-/// - [`from_assignment()`].
-/// - [`fn into_assignment()`].
+/// - `fn from_assignment<..>(..)`
+/// - `fn into_assignment<..>(..)`
 ///
 /// The generated struct is by default deriving both `Encode` and `Decode`. This is okay but could
 /// lead to many 0s in the solution. If prefixed with `#[compact]`, then a custom compact encoding

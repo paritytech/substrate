@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,8 +41,8 @@ mod shared;
 pub mod offchain;
 pub mod onchain;
 
-/// Trait necessary for the historical module.
-pub trait Trait: super::Trait {
+/// Config necessary for the historical module.
+pub trait Config: super::Config {
 	/// Full identification of the validator.
 	type FullIdentification: Parameter;
 
@@ -57,7 +57,7 @@ pub trait Trait: super::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Session {
+	trait Store for Module<T: Config> as Session {
 		/// Mapping from historical session indices to session-data root hash and validator count.
 		HistoricalSessions get(fn historical_root):
 			map hasher(twox_64_concat) SessionIndex => Option<(T::Hash, ValidatorCount)>;
@@ -71,10 +71,10 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Prune historical stored session roots up to (but not including)
 	/// `up_to`.
 	pub fn prune_up_to(up_to: SessionIndex) {
@@ -116,7 +116,7 @@ pub trait SessionManager<ValidatorId, FullIdentification>: crate::SessionManager
 /// sets the historical trie root of the ending session.
 pub struct NoteHistoricalRoot<T, I>(sp_std::marker::PhantomData<(T, I)>);
 
-impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T, I>
+impl<T: Config, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T, I>
 	where I: SessionManager<T::ValidatorId, T::FullIdentification>
 {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
@@ -160,15 +160,15 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 }
 
 /// A tuple of the validator's ID and their full identification.
-pub type IdentificationTuple<T> = (<T as crate::Trait>::ValidatorId, <T as Trait>::FullIdentification);
+pub type IdentificationTuple<T> = (<T as crate::Config>::ValidatorId, <T as Config>::FullIdentification);
 
 /// A trie instance for checking and generating proofs.
-pub struct ProvingTrie<T: Trait> {
+pub struct ProvingTrie<T: Config> {
 	db: MemoryDB<T::Hashing>,
 	root: T::Hash,
 }
 
-impl<T: Trait> ProvingTrie<T> {
+impl<T: Config> ProvingTrie<T> {
 	fn generate_for<I>(validators: I) -> Result<Self, &'static str>
 		where I: IntoIterator<Item=(T::ValidatorId, T::FullIdentification)>
 	{
@@ -260,7 +260,7 @@ impl<T: Trait> ProvingTrie<T> {
 	}
 }
 
-impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
+impl<T: Config, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
 	for Module<T>
 {
 	type Proof = MembershipProof;

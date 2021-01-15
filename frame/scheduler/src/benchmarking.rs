@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +31,7 @@ use frame_system::Module as System;
 const BLOCK_NUMBER: u32 = 2;
 
 // Add `n` named items to the schedule
-fn fill_schedule<T: Trait> (when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
+fn fill_schedule<T: Config> (when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
 	// Essentially a no-op call.
 	let call = frame_system::Call::set_storage(vec![]);
 	for i in 0..n {
@@ -52,8 +52,6 @@ fn fill_schedule<T: Trait> (when: T::BlockNumber, n: u32) -> Result<(), &'static
 }
 
 benchmarks! {
-	_ { }
-
 	schedule {
 		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();

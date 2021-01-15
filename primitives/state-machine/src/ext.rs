@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -411,18 +411,41 @@ where
 	fn kill_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
-	) {
+		limit: Option<u32>,
+	) -> bool {
 		trace!(target: "state", "{:04x}: KillChild({})",
 			self.id,
 			HexDisplay::from(&child_info.storage_key()),
 		);
 		let _guard = guard();
-
 		self.mark_dirty();
 		self.overlay.clear_child_storage(child_info);
-		self.backend.for_keys_in_child_storage(child_info, |key| {
-			self.overlay.set_child_storage(child_info, key.to_vec(), None);
-		});
+
+		if let Some(limit) = limit {
+			let mut num_deleted: u32 = 0;
+			let mut all_deleted = true;
+			self.backend.apply_to_child_keys_while(child_info, |key| {
+				if num_deleted == limit {
+					all_deleted = false;
+					return false;
+				}
+				if let Some(num) = num_deleted.checked_add(1) {
+					num_deleted = num;
+				} else {
+					all_deleted = false;
+					return false;
+				}
+				self.overlay.set_child_storage(child_info, key.to_vec(), None);
+				true
+			});
+			all_deleted
+		} else {
+			self.backend.apply_to_child_keys_while(child_info, |key| {
+				self.overlay.set_child_storage(child_info, key.to_vec(), None);
+				true
+			});
+			true
+		}
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -431,8 +454,9 @@ where
 			HexDisplay::from(&prefix),
 		);
 		let _guard = guard();
-		if is_child_storage_key(prefix) {
-			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
+
+		if sp_core::storage::well_known_keys::starts_with_child_storage_key(prefix) {
+			warn!(target: "trie", "Refuse to directly clear prefix that is part or contains of child storage key");
 			return;
 		}
 
@@ -482,10 +506,6 @@ where
 			|| backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL).unwrap_or_default()
 		);
 		StorageAppend::new(current_value).append(value);
-	}
-
-	fn chain_id(&self) -> u64 {
-		42
 	}
 
 	fn storage_root(&mut self) -> Vec<u8> {
@@ -1003,6 +1023,45 @@ mod tests {
 			ext.child_storage_hash(child_info, &[30]),
 			Some(Blake2Hasher::hash(&[31]).as_ref().to_vec()),
 		);
+	}
+
+	#[test]
+	fn clear_prefix_cannot_delete_a_child_root() {
+		let child_info = ChildInfo::new_default(b"Child1");
+		let child_info = &child_info;
+		let mut cache = StorageTransactionCache::default();
+		let mut overlay = OverlayedChanges::default();
+		let mut offchain_overlay = prepare_offchain_overlay_with_changes();
+		let backend = Storage {
+			top: map![],
+			children_default: map![
+				child_info.storage_key().to_vec() => StorageChild {
+					data: map![
+						vec![30] => vec![40]
+					],
+					child_info: child_info.to_owned(),
+				}
+			],
+		}.into();
+
+		let ext = TestExt::new(&mut overlay, &mut offchain_overlay, &mut cache, &backend, None, None);
+
+		use sp_core::storage::well_known_keys;
+		let mut ext = ext;
+		let mut not_under_prefix = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
+		not_under_prefix[4] = 88;
+		not_under_prefix.extend(b"path");
+		ext.set_storage(not_under_prefix.clone(), vec![10]);
+
+		ext.clear_prefix(&[]);
+		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4]);
+		let mut under_prefix = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
+		under_prefix.extend(b"path");
+		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4]);
+		assert_eq!(ext.child_storage(child_info, &[30]), Some(vec![40]));
+		assert_eq!(ext.storage(not_under_prefix.as_slice()), Some(vec![10]));
+		ext.clear_prefix(&not_under_prefix[..5]);
+		assert_eq!(ext.storage(not_under_prefix.as_slice()), None);
 	}
 
 	#[test]

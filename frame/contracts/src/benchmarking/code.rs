@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,11 +24,12 @@
 //! we define this simple definition of a contract that can be passed to `create_code` that
 //! compiles it down into a `WasmModule` that can be used as a contract's code.
 
-use crate::Trait;
+use crate::Config;
 use crate::Module as Contracts;
 
 use parity_wasm::elements::{Instruction, Instructions, FuncBody, ValueType, BlockType};
 use pwasm_utils::stack_height::inject_limiter;
+use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_sandbox::{EnvironmentDefinitionBuilder, Memory};
 use sp_std::{prelude::*, convert::TryFrom};
@@ -86,7 +87,11 @@ pub struct ImportedMemory {
 }
 
 impl ImportedMemory {
-	pub fn max<T: Trait>() -> Self {
+	pub fn max<T: Config>() -> Self
+	where
+		T: Config,
+		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+	{
 		let pages = max_pages::<T>();
 		Self { min_pages: pages, max_pages: pages }
 	}
@@ -100,13 +105,17 @@ pub struct ImportedFunction {
 
 /// A wasm module ready to be put on chain with `put_code`.
 #[derive(Clone)]
-pub struct WasmModule<T:Trait> {
+pub struct WasmModule<T:Config> {
 	pub code: Vec<u8>,
 	pub hash: <T::Hashing as Hash>::Output,
 	memory: Option<ImportedMemory>,
 }
 
-impl<T: Trait> From<ModuleDefinition> for WasmModule<T> {
+impl<T: Config> From<ModuleDefinition> for WasmModule<T>
+where
+	T: Config,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
 	fn from(def: ModuleDefinition) -> Self {
 		// internal functions start at that offset.
 		let func_offset = u32::try_from(def.imported_functions.len()).unwrap();
@@ -216,7 +225,11 @@ impl<T: Trait> From<ModuleDefinition> for WasmModule<T> {
 	}
 }
 
-impl<T: Trait> WasmModule<T> {
+impl<T: Config> WasmModule<T>
+where
+	T: Config,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
 	/// Creates a wasm module with an empty `call` and `deploy` function and nothing else.
 	pub fn dummy() -> Self {
 		ModuleDefinition::default().into()
@@ -470,6 +483,10 @@ pub mod body {
 }
 
 /// The maximum amount of pages any contract is allowed to have according to the current `Schedule`.
-pub fn max_pages<T: Trait>() -> u32 {
+pub fn max_pages<T: Config>() -> u32
+where
+	T: Config,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
 	Contracts::<T>::current_schedule().limits.memory_pages
 }

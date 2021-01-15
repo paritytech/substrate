@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -708,13 +708,7 @@ impl<'a> ToClientSideDecl<'a> {
 							},
 							#crate_::NativeOrEncoded::Encoded(r) => {
 								<#ret_type as #crate_::Decode>::decode(&mut &r[..])
-									.map_err(|err|
-										format!(
-											"Failed to decode result of `{}`: {}",
-											#function_name,
-											err.what(),
-										).into()
-									)
+									.map_err(|err| { #crate_::ApiError::new(#function_name, err).into() })
 							}
 						}
 					)

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -33,7 +33,6 @@
 //!
 
 use crate::Event;
-use super::maybe_utf8_bytes_to_string;
 
 use futures::{prelude::*, channel::mpsc, ready, stream::FusedStream};
 use parking_lot::Mutex;
@@ -228,23 +227,33 @@ impl Metrics {
 					.with_label_values(&["dht", "sent", name])
 					.inc_by(num);
 			}
-			Event::NotificationStreamOpened { engine_id, .. } => {
+			Event::SyncConnected { .. } => {
 				self.events_total
-					.with_label_values(&[&format!("notif-open-{:?}", engine_id), "sent", name])
+					.with_label_values(&["sync-connected", "sent", name])
+					.inc_by(num);
+			}
+			Event::SyncDisconnected { .. } => {
+				self.events_total
+					.with_label_values(&["sync-disconnected", "sent", name])
+					.inc_by(num);
+			}
+			Event::NotificationStreamOpened { protocol, .. } => {
+				self.events_total
+					.with_label_values(&[&format!("notif-open-{:?}", protocol), "sent", name])
 					.inc_by(num);
 			},
-			Event::NotificationStreamClosed { engine_id, .. } => {
+			Event::NotificationStreamClosed { protocol, .. } => {
 				self.events_total
-					.with_label_values(&[&format!("notif-closed-{:?}", engine_id), "sent", name])
+					.with_label_values(&[&format!("notif-closed-{:?}", protocol), "sent", name])
 					.inc_by(num);
 			},
 			Event::NotificationsReceived { messages, .. } => {
-				for (engine_id, message) in messages {
+				for (protocol, message) in messages {
 					self.events_total
-						.with_label_values(&[&format!("notif-{:?}", engine_id), "sent", name])
+						.with_label_values(&[&format!("notif-{:?}", protocol), "sent", name])
 						.inc_by(num);
 					self.notifications_sizes
-						.with_label_values(&[&maybe_utf8_bytes_to_string(engine_id), "sent", name])
+						.with_label_values(&[protocol, "sent", name])
 						.inc_by(num.saturating_mul(u64::try_from(message.len()).unwrap_or(u64::max_value())));
 				}
 			},
@@ -258,23 +267,33 @@ impl Metrics {
 					.with_label_values(&["dht", "received", name])
 					.inc();
 			}
-			Event::NotificationStreamOpened { engine_id, .. } => {
+			Event::SyncConnected { .. } => {
 				self.events_total
-					.with_label_values(&[&format!("notif-open-{:?}", engine_id), "received", name])
+					.with_label_values(&["sync-connected", "received", name])
+					.inc();
+			}
+			Event::SyncDisconnected { .. } => {
+				self.events_total
+					.with_label_values(&["sync-disconnected", "received", name])
+					.inc();
+			}
+			Event::NotificationStreamOpened { protocol, .. } => {
+				self.events_total
+					.with_label_values(&[&format!("notif-open-{:?}", protocol), "received", name])
 					.inc();
 			},
-			Event::NotificationStreamClosed { engine_id, .. } => {
+			Event::NotificationStreamClosed { protocol, .. } => {
 				self.events_total
-					.with_label_values(&[&format!("notif-closed-{:?}", engine_id), "received", name])
+					.with_label_values(&[&format!("notif-closed-{:?}", protocol), "received", name])
 					.inc();
 			},
 			Event::NotificationsReceived { messages, .. } => {
-				for (engine_id, message) in messages {
+				for (protocol, message) in messages {
 					self.events_total
-						.with_label_values(&[&format!("notif-{:?}", engine_id), "received", name])
+						.with_label_values(&[&format!("notif-{:?}", protocol), "received", name])
 						.inc();
 					self.notifications_sizes
-						.with_label_values(&[&maybe_utf8_bytes_to_string(engine_id), "received", name])
+						.with_label_values(&[&protocol, "received", name])
 						.inc_by(u64::try_from(message.len()).unwrap_or(u64::max_value()));
 				}
 			},

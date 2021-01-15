@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -172,7 +172,7 @@ impl Clone for BenchDb {
 			.map(|f_result|
 				f_result.expect("failed to read file in seed db")
 					.path()
-			).collect();
+			).collect::<Vec<PathBuf>>();
 		fs_extra::copy_items(
 			&seed_db_files,
 			dir.path(),
@@ -317,7 +317,7 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 					BlockType::RandomTransfersKeepAlive => {
 						Call::Balances(
 							BalancesCall::transfer_keep_alive(
-								pallet_indices::address::Address::Id(receiver),
+								sp_runtime::MultiAddress::Id(receiver),
 								node_runtime::ExistentialDeposit::get() + 1,
 							)
 						)
@@ -325,7 +325,7 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 					BlockType::RandomTransfersReaping => {
 						Call::Balances(
 							BalancesCall::transfer(
-								pallet_indices::address::Address::Id(receiver),
+								sp_runtime::MultiAddress::Id(receiver),
 								// Transfer so that ending balance would be 1 less than existential deposit
 								// so that we kill the sender account.
 								100*DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
@@ -410,8 +410,10 @@ impl BenchDb {
 		let db_config = sc_client_db::DatabaseSettings {
 			state_cache_size: 16*1024*1024,
 			state_cache_child_ratio: Some((0, 100)),
-			pruning: PruningMode::ArchiveAll,
+			state_pruning: PruningMode::ArchiveAll,
 			source: database_type.into_settings(dir.into()),
+			keep_blocks: sc_client_db::KeepBlocks::All,
+			transaction_storage: sc_client_db::TransactionStorageMode::BlockBody,
 		};
 		let task_executor = TaskExecutor::new();
 
@@ -591,7 +593,7 @@ impl BenchKeyring {
 					}
 				}).into();
 				UncheckedExtrinsic {
-					signature: Some((pallet_indices::address::Address::Id(signed), signature, extra)),
+					signature: Some((sp_runtime::MultiAddress::Id(signed), signature, extra)),
 					function: payload.0,
 				}
 			}
@@ -695,7 +697,6 @@ impl BenchContext {
 					clear_justification_requests: false,
 					needs_justification: false,
 					bad_justification: false,
-					needs_finality_proof: false,
 					is_new_best: true,
 				}
 			)

@@ -34,15 +34,15 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # third-party dependencies
-codec = { package = "parity-scale-codec", version = "1.3.4" }
+codec = { package = "parity-scale-codec", version = "1.3.6" }
 serde = { version = "1.0.102", features = ["derive"] }
-futures = { version = "0.3.1", features = ["compat"] }
+futures = { version = "0.3.9", features = ["compat"] }
 hex-literal = "0.3.1"
 log = "0.4.8"
 rand = "0.7.2"
 structopt = { version = "0.3.8", optional = true }
-tracing = "0.1.19"
-parking_lot = "0.10.0"
+tracing = "0.1.22"
+parking_lot = "0.11.1"
 
 # primitives
 sp-authority-discovery = { version = "2.0.0",  path = "../../../primitives/authority-discovery" }
@@ -102,7 +102,7 @@ node-inspect = { version = "0.8.0", optional = true, path = "../inspect" }
 
 # WASM-specific dependencies
 wasm-bindgen = { version = "0.2.57", optional = true }
-wasm-bindgen-futures = { version = "0.4.7", optional = true }
+wasm-bindgen-futures = { version = "0.4.18", optional = true }
 browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.8.0"}
 
 [target.'cfg(target_arch="x86_64")'.dependencies]
@@ -117,7 +117,7 @@ sc-consensus = { version = "0.8.0", path = "../../../client/consensus/common" }
 sc-consensus-babe = { version = "0.8.0", features = ["test-helpers"], path = "../../../client/consensus/babe" }
 sc-consensus-epochs = { version = "0.8.0", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
-futures = "0.3.4"
+futures = "0.3.9"
 tempfile = "3.1.0"
 assert_cmd = "1.0"
 nix = "0.17"
