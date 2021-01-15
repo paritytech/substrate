@@ -141,9 +141,7 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
-	use super::pallet_prelude::*;
-	use crate as frame_system;
+	use crate::{*, pallet_prelude::*, self as frame_system};
 	use frame_support::pallet_prelude::*;
 
 	/// System configuration trait. Implemented by runtime.
