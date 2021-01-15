@@ -36,6 +36,9 @@ fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 
 #[cfg(test)]
 mod tests {
+	use crate::request_responses::{RequestFailure, IncomingRequest};
+	use futures::executor::{block_on, LocalPool};
+	use futures::task::Spawn;
 	use sp_blockchain::Error as ClientError;
 	use super::*;
 	use crate::{chain::Client, config::ProtocolId, schema};
@@ -77,40 +80,7 @@ mod tests {
 			RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
 		}
 	};
-
-	/*
-
-	type Block =
-		sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
-	type Handler = LightClientRequestClient<Block>;
-	type Swarm = libp2p::swarm::Swarm<Handler>;
-
-	fn empty_proof() -> Vec<u8> {
-		StorageProof::empty().encode()
-	}
-
-	fn make_swarm(ok: bool, ps: sc_peerset::PeersetHandle, cf: super::Config) -> Swarm {
-		let client = Arc::new(substrate_test_runtime_client::new());
-		let checker = Arc::new(DummyFetchChecker {
-			ok,
-			_mark: std::marker::PhantomData,
-		});
-		let id_key = identity::Keypair::generate_ed25519();
-		let dh_key = Keypair::<X25519>::new().into_authentic(&id_key).unwrap();
-		let local_peer = id_key.public().into_peer_id();
-		let transport = MemoryTransport::default()
-			.upgrade(upgrade::Version::V1)
-			.authenticate(NoiseConfig::xx(dh_key).into_authenticated())
-			.multiplex(yamux::YamuxConfig::default())
-			.boxed();
-		Swarm::new(
-			transport,
-			LightClientRequestClient::new(cf, client, checker, ps),
-			local_peer,
-		)
-	}
-
-	*/
+	use futures::future::BoxFuture;
 
 	pub struct DummyFetchChecker<B> {
 		pub ok: bool,
@@ -196,44 +166,10 @@ mod tests {
 		}
 	}
 
-	/*
+	// TODO: Deduplicate the functions below with sender.rs
 
-	fn make_config() -> super::Config {
-		super::Config::new(&ProtocolId::from("foo"))
-	}
-
-	fn dummy_header() -> sp_test_primitives::Header {
-		sp_test_primitives::Header {
-			parent_hash: Default::default(),
-			number: 0,
-			state_root: Default::default(),
-			extrinsics_root: Default::default(),
-			digest: Default::default(),
-		}
-	}
-
-	struct EmptyPollParams(PeerId);
-
-	impl PollParameters for EmptyPollParams {
-		type SupportedProtocolsIter = iter::Empty<Vec<u8>>;
-		type ListenedAddressesIter = iter::Empty<Multiaddr>;
-		type ExternalAddressesIter = iter::Empty<AddressRecord>;
-
-		fn supported_protocols(&self) -> Self::SupportedProtocolsIter {
-			iter::empty()
-		}
-
-		fn listened_addresses(&self) -> Self::ListenedAddressesIter {
-			iter::empty()
-		}
-
-		fn external_addresses(&self) -> Self::ExternalAddressesIter {
-			iter::empty()
-		}
-
-		fn local_peer_id(&self) -> &PeerId {
-			&self.0
-		}
+	fn protocol_id() -> ProtocolId {
+		ProtocolId::from("test")
 	}
 
 	fn peerset() -> (sc_peerset::Peerset, sc_peerset::PeersetHandle) {
@@ -247,61 +183,48 @@ mod tests {
 		sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets: vec![cfg] })
 	}
 
-	fn make_behaviour(
-		ok: bool,
-		ps: sc_peerset::PeersetHandle,
-		cf: super::Config,
-	) -> LightClientRequestClient<Block> {
+	fn dummy_header() -> sp_test_primitives::Header {
+		sp_test_primitives::Header {
+			parent_hash: Default::default(),
+			number: 0,
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: Default::default(),
+		}
+	}
+
+	type Block =
+		sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
+
+	fn send_receive(request: sender::Request<Block>, pool: &LocalPool) {
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let checker = Arc::new(DummyFetchChecker {
-			ok,
-			_mark: std::marker::PhantomData,
-		});
-		LightClientRequestClient::new(cf, client, checker, ps)
-	}
+		let (handler, protocol_config) = handler::LightClientRequestHandler::new(&protocol_id(), client);
+		pool.spawner().spawn_obj(handler.run().boxed().into()).unwrap();
 
-	fn empty_dialer() -> ConnectedPoint {
-		ConnectedPoint::Dialer {
-			address: Multiaddr::empty(),
-		}
-	}
+		let (_peer_set, peer_set_handle) = peerset();
+		let mut sender = sender::LightClientRequestSender::<Block>::new(
+			&protocol_id(),
+			Arc::new(crate::light_client_requests::tests::DummyFetchChecker {
+				ok: true,
+				_mark: std::marker::PhantomData,
+			}),
+			peer_set_handle,
+		);
+		sender.inject_connected(PeerId::random());
 
-	fn poll(
-		mut b: &mut LightClientRequestClient<Block>,
-	) -> Poll<NetworkBehaviourAction<OutboundProtocol, Void>> {
-		let mut p = EmptyPollParams(PeerId::random());
-		match future::poll_fn(|cx| Pin::new(&mut b).poll(cx, &mut p)).now_or_never() {
-			Some(a) => Poll::Ready(a),
-			None => Poll::Pending,
-		}
-	}
+		sender.request(request).unwrap();
+		let sender::OutEvent::SendRequest { pending_response, request, .. } = block_on(sender.next()).unwrap();
+		let (tx, rx) = oneshot::channel();
+		block_on(protocol_config.inbound_queue.unwrap().send(IncomingRequest {
+			peer: PeerId::random(),
+			payload: request,
+			pending_response: tx,
+		})).unwrap();
+		pool.spawner().spawn_obj(async move {
+			pending_response.send(Ok(rx.await.unwrap())).unwrap();
+		}.boxed().into()).unwrap();
 
-
-
-
-	fn send_receive(request: Request<Block>) {
-		// We start a swarm on the listening side which awaits incoming requests and answers them:
-		let local_pset = peerset();
-		let local_listen_addr: libp2p::Multiaddr =
-			libp2p::multiaddr::Protocol::Memory(rand::random()).into();
-		let mut local_swarm = make_swarm(true, local_pset.1, make_config());
-		Swarm::listen_on(&mut local_swarm, local_listen_addr.clone()).unwrap();
-
-		// We also start a swarm that makes requests and awaits responses:
-		let remote_pset = peerset();
-		let mut remote_swarm = make_swarm(true, remote_pset.1, make_config());
-
-		// We now schedule a request, dial the remote and let the two swarm work it out:
-		remote_swarm.request(request).unwrap();
-		Swarm::dial_addr(&mut remote_swarm, local_listen_addr).unwrap();
-
-		let future = {
-			let a = local_swarm.for_each(|_| future::ready(()));
-			let b = remote_swarm.for_each(|_| future::ready(()));
-			future::join(a, b).map(|_| ())
-		};
-
-		task::spawn(future);
+		pool.spawner().spawn_obj(sender.for_each(|_| future::ready(())).boxed().into()).unwrap();
 	}
 
 	#[test]
@@ -314,11 +237,13 @@ mod tests {
 			call_data: vec![],
 			retry_count: None,
 		};
-		send_receive(Request::Call {
+
+		let mut pool = LocalPool::new();
+		send_receive(sender::Request::Call {
 			request,
 			sender: chan.0,
-		});
-		assert_eq!(vec![42], task::block_on(chan.1).unwrap().unwrap());
+		}, &pool);
+		assert_eq!(vec![42], pool.run_until(chan.1).unwrap().unwrap());
 		//              ^--- from `DummyFetchChecker::check_execution_proof`
 	}
 
@@ -331,13 +256,14 @@ mod tests {
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		};
-		send_receive(Request::Read {
+		let mut pool = LocalPool::new();
+		send_receive(sender::Request::Read {
 			request,
 			sender: chan.0,
-		});
+		}, &pool);
 		assert_eq!(
 			Some(vec![42]),
-			task::block_on(chan.1)
+			pool.run_until(chan.1)
 				.unwrap()
 				.unwrap()
 				.remove(&b":key"[..])
@@ -357,13 +283,14 @@ mod tests {
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		};
-		send_receive(Request::ReadChild {
+		let mut pool = LocalPool::new();
+		send_receive(sender::Request::ReadChild {
 			request,
 			sender: chan.0,
-		});
+		}, &pool);
 		assert_eq!(
 			Some(vec![42]),
-			task::block_on(chan.1)
+			pool.run_until(chan.1)
 				.unwrap()
 				.unwrap()
 				.remove(&b":key"[..])
@@ -381,13 +308,14 @@ mod tests {
 			block: 1,
 			retry_count: None,
 		};
-		send_receive(Request::Header {
+		let mut pool = LocalPool::new();
+		send_receive(sender::Request::Header {
 			request,
 			sender: chan.0,
-		});
+		}, &pool);
 		// The remote does not know block 1:
 		assert_matches!(
-			task::block_on(chan.1).unwrap(),
+			pool.run_until(chan.1).unwrap(),
 			Err(ClientError::RemoteFetchFailed)
 		);
 	}
@@ -409,12 +337,12 @@ mod tests {
 			storage_key: None,
 			retry_count: None,
 		};
-		send_receive(Request::Changes {
+		let mut pool = LocalPool::new();
+		send_receive(sender::Request::Changes {
 			request,
 			sender: chan.0,
-		});
-		assert_eq!(vec![(100, 2)], task::block_on(chan.1).unwrap().unwrap());
+		}, &pool);
+		assert_eq!(vec![(100, 2)], pool.run_until(chan.1).unwrap().unwrap());
 		//              ^--- from `DummyFetchChecker::check_changes_proof`
 	}
-	*/
 }
