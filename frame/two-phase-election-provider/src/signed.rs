@@ -23,6 +23,21 @@ use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, CompactSolution};
 use sp_runtime::Perbill;
 
+/// A raw, unchecked signed submission.
+///
+/// This is just a wrapper around [`RawSolution`] and some additional info.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+pub struct SignedSubmission<A, B: HasCompact, C> {
+	/// Who submitted this solution.
+	pub(crate) who: A,
+	/// The deposit reserved for storing this solution.
+	pub(crate) deposit: B,
+	/// The reward that should be given to this solution, if chosen the as the final one.
+	pub(crate) reward: B,
+	/// The raw solution itself.
+	pub(crate) solution: RawSolution<C>,
+}
+
 impl<T: Config> Pallet<T>
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,

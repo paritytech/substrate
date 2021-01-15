@@ -32,7 +32,6 @@
 //!                 +   <--T::SignedPhase-->  +  <--T::UnsignedPhase-->   +
 //!   +-------------------------------------------------------------------+
 //!    Phase::Off   +       Phase::Signed     +      Phase::Unsigned      +
-//!
 //! ```
 //!
 //! Note that the unsigned phase starts [`pallet::Config::UnsignedPhase`] blocks before the
@@ -162,9 +161,9 @@
 //!
 //! **Recursive Fallback**: Currently, the fallback is a separate enum. A different and fancier way
 //! of doing this would be to have the fallback be another
-//! [`sp_election_providers::ElectionProvider`]. In this case, this pallet can even have the on-chain
-//! election provider as fallback, or special _noop_ fallback that simply returns an error, thus
-//! replicating [`FallbackStrategy::Nothing`].
+//! [`sp_election_providers::ElectionProvider`]. In this case, this pallet can even have the
+//! on-chain election provider as fallback, or special _noop_ fallback that simply returns an error,
+//! thus replicating [`FallbackStrategy::Nothing`].
 //!
 //! **Score based on size**: We should always prioritize small solutions over bigger ones, if there
 //! is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
@@ -217,6 +216,7 @@ pub mod unsigned;
 pub mod weights;
 
 use weights::WeightInfo;
+use signed::SignedSubmission;
 
 /// The compact solution type used by this crate.
 pub type CompactOf<T> = <T as Config>::CompactSolution;
@@ -372,21 +372,6 @@ impl<C: Default> Default for RawSolution<C> {
 	}
 }
 
-/// A raw, unchecked signed submission.
-///
-/// This is just a wrapper around [`RawSolution`] and some additional info.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct SignedSubmission<A, B: HasCompact, C> {
-	/// Who submitted this solution.
-	who: A,
-	/// The deposit reserved for storing this solution.
-	deposit: B,
-	/// The reward that should be given to this solution, if chosen the as the final one.
-	reward: B,
-	/// The raw solution itself.
-	solution: RawSolution<C>,
-}
-
 /// A checked solution, ready to be enacted.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct ReadySolution<A> {
@@ -421,8 +406,8 @@ pub struct SolutionSize {
 }
 
 /// A snapshot of all the data that is needed for en entire round. They are provided by
-/// [`ElectionDataProvider`] at the beginning of the signed phase and are kept around until the
-/// round is finished.
+/// [`ElectionDataProvider`] at the beginning of the signed phase (or the unsigned phase, if signed
+/// phase is non-existent) and are kept around until the round is finished.
 ///
 /// These are stored together because they are often times accessed together.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]

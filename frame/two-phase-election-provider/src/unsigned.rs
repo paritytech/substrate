@@ -574,7 +574,7 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned_retracts_wrong_phase() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
 			let solution = RawSolution::<TestCompact> {
 				score: [5, 0, 0],
 				..Default::default()
@@ -621,7 +621,7 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned_retracts_low_score() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
 			roll_to(25);
 			assert!(TwoPhase::current_phase().is_unsigned());
 
@@ -650,10 +650,32 @@ mod tests {
 			assert!(matches!(
 				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
 					.unwrap_err(),
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(1))
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(2))
 			));
 			assert!(matches!(
 				<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(2))
+			));
+		})
+	}
+
+	#[test]
+	fn validate_unsigned_retracts_incorrect_winner_count() {
+		ExtBuilder::default().desired_targets(1).build_and_execute(|| {
+			roll_to(25);
+			assert!(TwoPhase::current_phase().is_unsigned());
+
+			let solution = RawSolution::<TestCompact> {
+				score: [5, 0, 0],
+				..Default::default()
+			};
+			let call = Call::submit_unsigned(solution.clone(), witness());
+			assert_eq!(solution.compact.unique_targets().len(), 0);
+
+			// won't work anymore.
+			assert!(matches!(
+				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
+					.unwrap_err(),
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(1))
 			));
 		})
@@ -661,7 +683,7 @@ mod tests {
 
 	#[test]
 	fn priority_is_set() {
-		ExtBuilder::default().unsigned_priority(20).build_and_execute(|| {
+		ExtBuilder::default().unsigned_priority(20).desired_targets(0).build_and_execute(|| {
 			roll_to(25);
 			assert!(TwoPhase::current_phase().is_unsigned());
 
@@ -671,7 +693,6 @@ mod tests {
 			};
 			let call = Call::submit_unsigned(solution.clone(), witness());
 
-			// initial
 			assert_eq!(
 				<TwoPhase as ValidateUnsigned>::validate_unsigned(
 					TransactionSource::Local,
@@ -686,8 +707,7 @@ mod tests {
 
 	#[test]
 	#[should_panic(
-		expected = "Invalid unsigned submission must produce invalid block and deprive \
-		validator from their authoring reward.: FeasibilityError::WrongWinnerCount"
+		expected = "Invalid unsigned submission must produce invalid block and deprive validator from their authoring reward.: DispatchError::Module { index: 0, error: 1, message: Some(\"WrongWinnerCount\") }"
 	)]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
