@@ -326,8 +326,10 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			state_cache_size: config.state_cache_size,
 			state_cache_child_ratio:
 			config.state_cache_child_ratio.map(|v| (v, 100)),
-			pruning: config.pruning.clone(),
+			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
+			keep_blocks: config.keep_blocks.clone(),
+			transaction_storage: config.transaction_storage.clone(),
 		};
 
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
@@ -384,8 +386,10 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 			state_cache_size: config.state_cache_size,
 			state_cache_child_ratio:
 				config.state_cache_child_ratio.map(|v| (v, 100)),
-			pruning: config.pruning.clone(),
+			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
+			keep_blocks: config.keep_blocks.clone(),
+			transaction_storage: config.transaction_storage.clone(),
 		};
 		sc_client_db::light::LightStorage::new(db_settings)?
 	};
