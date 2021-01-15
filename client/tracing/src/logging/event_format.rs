@@ -89,6 +89,10 @@ where
 			}
 		}
 
+		if self.display_target {
+			write!(writer, "{}: ", meta.target())?;
+		}
+
 		// Custom code to display node name
 		if let Some(span) = ctx.lookup_current() {
 			let parents = span.parents();
@@ -101,9 +105,6 @@ where
 			}
 		}
 
-		if self.display_target {
-			write!(writer, "{}:", meta.target())?;
-		}
 		ctx.format_fields(writer, event)?;
 		writeln!(writer)?;
 
