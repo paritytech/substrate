@@ -624,56 +624,16 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			{
-				let builder: fn(&Self) -> _ = |_| vec![(T::BlockNumber::zero(), hash69())];
-				let data = &builder(self);
-				let data: &frame_support::sp_std::vec::Vec<(T::BlockNumber, T::Hash)> = data;
-				data.iter().for_each(|(k, v)| {
-					<BlockHash<T, > as frame_support::storage::StorageMap
-					<T::BlockNumber, T::Hash>>::insert::<&T::
-					BlockNumber, &T::Hash>(k, v);
-				});
+			<BlockHash<T>>::insert::<_, T::Hash>(T::BlockNumber::zero(), hash69());
+			<ParentHash<T>>::put::<T::Hash>(hash69());
+			<LastRuntimeUpgrade<T>>::put(LastRuntimeUpgradeInfo::from(T::Version::get()));
+			<UpgradedToU32RefCount<T>>::put(true);
+
+			sp_io::storage::set(well_known_keys::CODE, &self.code);
+			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
+			if let Some(ref changes_trie_config) = self.changes_trie_config {
+				sp_io::storage::set(well_known_keys::CHANGES_TRIE_CONFIG, &changes_trie_config.encode());
 			}
-			{
-				let builder: fn(&Self) -> _ = |_| hash69();
-				let data = &builder(self);
-				let v: &T::Hash = data;
-				<ParentHash<T> as frame_support::storage::StorageValue<T::Hash>>::put::<&T::Hash>(
-					v,
-				);
-			}
-			{
-				let builder: fn(&Self) -> _ =
-					|_| Some(LastRuntimeUpgradeInfo::from(T::Version::get()));
-				let data = builder(self);
-				let data = Option::as_ref(&data);
-				let v: Option<&LastRuntimeUpgradeInfo> = data;
-				if let Some(v) = v {
-					<LastRuntimeUpgrade<T> as frame_support::storage::StorageValue<
-						LastRuntimeUpgradeInfo,
-					>>::put::<&LastRuntimeUpgradeInfo>(v);
-				}
-			}
-			{
-				let builder: fn(&Self) -> _ = |_| true;
-				let data = &builder(self);
-				let v: &bool = data;
-				<UpgradedToU32RefCount<T> as frame_support::storage::StorageValue<bool>>::put::<&bool>(
-					v,
-				);
-			}
-			let extra_genesis_builder: fn(&Self) = |config: &GenesisConfig| {
-				use codec::Encode;
-				sp_io::storage::set(well_known_keys::CODE, &config.code);
-				sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
-				if let Some(ref changes_trie_config) = config.changes_trie_config {
-					sp_io::storage::set(
-						well_known_keys::CHANGES_TRIE_CONFIG,
-						&changes_trie_config.encode(),
-					);
-				}
-			};
-			extra_genesis_builder(self);
 		}
 	}
 }
