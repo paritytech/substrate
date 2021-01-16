@@ -1222,6 +1222,8 @@ decl_error! {
 		IncorrectHistoryDepth,
 		/// Incorrect number of slashing spans provided.
 		IncorrectSlashingSpans,
+		/// Internal state has become somehow corrupted and the operation cannot continue.
+		BadState,
 	}
 }
 
@@ -1423,12 +1425,12 @@ decl_module! {
 				Err(Error::<T>::InsufficientValue)?
 			}
 
+			system::Module::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
+
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
 			<Bonded<T>>::insert(&stash, &controller);
 			<Payee<T>>::insert(&stash, payee);
-
-			system::Module::<T>::inc_ref(&stash);
 
 			let current_era = CurrentEra::get().unwrap_or(0);
 			let history_depth = Self::history_depth();
@@ -2028,9 +2030,9 @@ decl_module! {
 			}
 		}
 
-		/// Remove all data structure concerning a staker/stash once its balance is zero.
+		/// Remove all data structure concerning a staker/stash once its balance is at the minimum.
 		/// This is essentially equivalent to `withdraw_unbonded` except it can be called by anyone
-		/// and the target `stash` must have no funds left.
+		/// and the target `stash` must have no funds left beyond the ED.
 		///
 		/// This can be called from any origin.
 		///
@@ -2045,7 +2047,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = T::WeightInfo::reap_stash(*num_slashing_spans)]
 		fn reap_stash(_origin, stash: T::AccountId, num_slashing_spans: u32) {
-			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
+			let at_minimum = T::Currency::total_balance(&stash) == T::Currency::minimum_balance();
+			ensure!(at_minimum, Error::<T>::FundedTarget);
 			Self::kill_stash(&stash, num_slashing_spans)?;
 			T::Currency::remove_lock(STAKING_ID, &stash);
 		}
@@ -3007,7 +3010,7 @@ impl<T: Config> Module<T> {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 
-		system::Module::<T>::dec_ref(stash);
+		system::Module::<T>::dec_consumers(stash);
 
 		Ok(())
 	}
