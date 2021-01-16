@@ -67,8 +67,8 @@ then
   pr_body="$(sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p' "${pr_data_file}")"
 
   pr_companion="$(echo "${pr_body}" | sed -n -r \
-      -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
-      -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
+      -e 's;^.*[Cc]ompanion.*paritytech/polkadot#([0-9]+).*$;\1;p' \
+      -e 's;^.*[Cc]ompanion.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
     | tail -n 1)"
 
   if [ "${pr_companion}" ]

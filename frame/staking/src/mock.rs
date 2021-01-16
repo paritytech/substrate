@@ -395,6 +395,8 @@ impl ExtBuilder {
 		};
 
 		let num_validators = self.num_validators.unwrap_or(self.validator_count);
+		// Check that the number of validators is sensible.
+		assert!(num_validators <= 8);
 		let validators = (0..num_validators)
 			.map(|x| ((x + 1) * 10 + 1) as AccountId)
 			.collect::<Vec<_>>();
@@ -413,6 +415,14 @@ impl ExtBuilder {
 				(31, balance_factor * 2000),
 				(40, balance_factor),
 				(41, balance_factor * 2000),
+				(50, balance_factor),
+				(51, balance_factor * 2000),
+				(60, balance_factor),
+				(61, balance_factor * 2000),
+				(70, balance_factor),
+				(71, balance_factor * 2000),
+				(80, balance_factor),
+				(81, balance_factor * 2000),
 				(100, 2000 * balance_factor),
 				(101, 2000 * balance_factor),
 				// This allows us to have a total_payout different from 0.
