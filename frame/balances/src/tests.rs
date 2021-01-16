@@ -956,14 +956,14 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
-    fn operations_on_dead_account_should_not_change_state() {
+		fn operations_on_dead_account_should_not_change_state() {
 			// These functions all use `mutate_account` which may introduce a storage change when
 			// the account never existed to begin with, and shouldn't exist in the end.
 			<$ext_builder>::default()
 				.existential_deposit(0)
 				.build()
 				.execute_with(|| {
-					assert!(!<Test as Config>::AccountStore::is_explicit(&1337));
+					assert!(!frame_system::Account::<Test>::contains_key(&1337));
 
 					// Unreserve
 					assert_storage_noop!(assert_eq!(Balances::unreserve(&1337, 42), 42));
