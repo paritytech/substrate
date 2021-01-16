@@ -11,7 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.6", default-features = false, features = ["derive"] }
 
 pallet-aura = { version = "2.0.0", default-features = false, path = "../../../frame/aura" }
 pallet-balances = { version = "2.0.0", default-features = false, path = "../../../frame/balances" }

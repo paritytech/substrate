@@ -19,7 +19,7 @@ error[E0277]: the trait bound `u32: From<sp_api_hidden_includes_DECL_RUNTIME_API
    ::: $WORKSPACE/primitives/api/src/lib.rs
     |
     |     type Error: std::fmt::Debug + From<ApiError>;
-    |                                   -------------- required by this bound in `ApiErrorExt`
+    |                                   -------------- required by this bound in `sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ApiErrorExt::Error`
     |
     = help: the following implementations were found:
               <u32 as From<HttpError>>
