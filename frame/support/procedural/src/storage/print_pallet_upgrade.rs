@@ -81,13 +81,13 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 		};
 
 		let genesis_config_impl_gen = if genesis_config_def.is_generic {
-			impl_gen.clone()
+			impl_gen
 		} else {
 			Default::default()
 		};
 
 		let genesis_config_use_gen = if genesis_config_def.is_generic {
-			use_gen.clone()
+			use_gen
 		} else {
 			Default::default()
 		};
