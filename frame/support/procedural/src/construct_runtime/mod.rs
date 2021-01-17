@@ -205,7 +205,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		#integrity_test
 	);
 
-	Ok(res.into())
+	Ok(res)
 }
 
 fn decl_validate_unsigned<'a>(
@@ -299,7 +299,7 @@ fn decl_runtime_metadata<'a>(
 			module_declaration.find_part("Module").map(|_| {
 				let filtered_names: Vec<_> = module_declaration
 					.module_parts()
-					.into_iter()
+					.iter()
 					.filter(|part| part.name() != "Module")
 					.map(|part| part.ident())
 					.collect();

@@ -152,7 +152,7 @@ impl Def {
 		}
 
 		let def = Def {
-			item: item,
+			item,
 			config: config.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::config]`"))?,
 			pallet_struct: pallet_struct
 				.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::pallet]`"))?,
