@@ -615,7 +615,7 @@ decl_module! {
 		/// Close a vote that is either approved, disapproved, or whose voting period has ended
 		/// with operational transaction priority.
 		///
-		/// May be called only by an active member close the proposal with operational priority.
+		/// May be called only by an active member to close the proposal with operational priority.
 		///
 		/// If called before the end of the voting period it will only close the vote if it is
 		/// has enough votes to be approved or disapproved.
