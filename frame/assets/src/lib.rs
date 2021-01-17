@@ -1389,7 +1389,7 @@ mod tests {
 	}
 
 	#[test]
-	fn transferring_frozen_asset_should_not_works() {
+	fn transferring_frozen_asset_should_not_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
