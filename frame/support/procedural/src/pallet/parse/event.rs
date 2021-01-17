@@ -165,7 +165,7 @@ impl EventDef {
 
 		let event_attrs: Vec<PalletEventAttr> = helper::take_item_attrs(&mut item.attrs)?;
 		let attr_info = PalletEventAttrInfo::from_attrs(event_attrs)?;
-		let metadata = attr_info.metadata.unwrap_or_else(|| vec![]);
+		let metadata = attr_info.metadata.unwrap_or_else(Vec::new);
 		let deposit_event = attr_info.deposit_event;
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
