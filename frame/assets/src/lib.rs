@@ -218,7 +218,7 @@ pub struct AssetMetadata<DepositBalance> {
 	deposit: DepositBalance,
 	/// The user friendly name of this asset. Limited in length by `StringLimit`.
 	name: Vec<u8>,
-	/// The exchange symbol for this asset. Limited in length by `StringLimit`.
+	/// The ticker symbol for this asset. Limited in length by `StringLimit`.
 	symbol: Vec<u8>,
 	/// The number of decimals this asset uses to represent one unit.
 	decimals: u8,
