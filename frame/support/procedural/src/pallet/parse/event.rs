@@ -72,8 +72,8 @@ enum PalletEventAttr {
 impl PalletEventAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
-			Self::Metadata { span, .. } => span.clone(),
-			Self::DepositEvent { span, .. } => span.clone(),
+			Self::Metadata { span, .. } => *span,
+			Self::DepositEvent { span, .. } => *span,
 		}
 	}
 }
