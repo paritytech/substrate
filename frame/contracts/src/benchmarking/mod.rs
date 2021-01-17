@@ -109,21 +109,18 @@ where
 		endowment: Endow,
 	) -> Result<Contract<T>, &'static str>
 	{
-		use sp_runtime::traits::{CheckedDiv, SaturatedConversion};
 		let (storage_size, endowment) = match endowment {
 			Endow::CollectRent => {
 				// storage_size cannot be zero because otherwise a contract that is just above
 				// the subsistence threshold does not pay rent given a large enough subsistence
 				// threshold. But we need rent payments to occur in order to benchmark for worst cases.
-				let storage_size = ConfigCache::<T>::subsistence_threshold_uncached()
-					.checked_div(&T::DepositPerStorageByte::get())
-					.unwrap_or_else(Zero::zero);
+				let storage_size = u32::max_value() / 10;
 
 				// Endowment should be large but not as large to inhibit rent payments.
+				// Balance will only cover half the storage
 				let endowment = T::DepositPerStorageByte::get()
-					.saturating_mul(storage_size)
-					.saturating_add(T::DepositPerContract::get())
-					.saturating_sub(1u32.into());
+					.saturating_mul(<BalanceOf<T>>::from(storage_size) / 2u32.into())
+					.saturating_add(T::DepositPerContract::get());
 
 				(storage_size, endowment)
 			},
@@ -159,7 +156,7 @@ where
 		};
 
 		let mut contract = result.alive_info()?;
-		contract.storage_size = storage_size.saturated_into::<u32>();
+		contract.storage_size = storage_size;
 		ContractInfoOf::<T>::insert(&result.account_id, ContractInfo::Alive(contract));
 
 		Ok(result)
@@ -253,7 +250,7 @@ where
 	/// Evict this contract.
 	fn evict(&mut self) -> Result<(), &'static str> {
 		self.set_block_num_for_eviction()?;
-		Rent::<T>::snitch_contract_should_be_evicted(&self.contract.account_id, Zero::zero())?;
+		Rent::<T>::try_eviction(&self.contract.account_id, Zero::zero())?;
 		self.contract.ensure_tombstone()
 	}
 }
@@ -409,8 +406,14 @@ benchmarks! {
 		instance.ensure_tombstone()?;
 
 		// the caller should get the reward for being a good snitch
-		assert_eq!(
-			T::Currency::free_balance(&instance.caller),
+		// this is capped by the maximum amount of rent payed. So we only now that it should
+		// have increased by at most the surcharge reward.
+		assert!(
+			T::Currency::free_balance(&instance.caller) >
+			caller_funding::<T>() - instance.endowment
+		);
+		assert!(
+			T::Currency::free_balance(&instance.caller) <=
 			caller_funding::<T>() - instance.endowment + <T as Config>::SurchargeReward::get(),
 		);
 	}

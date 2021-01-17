@@ -27,7 +27,7 @@ use codec::{Encode, Decode};
 use sp_std::prelude::*;
 use sp_std::marker::PhantomData;
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Bounded, Saturating};
+use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
 	dispatch::DispatchResult,
@@ -48,8 +48,6 @@ pub struct DeletedContract {
 	pair_count: u32,
 	trie_id: TrieId,
 }
-
-
 
 pub struct Storage<T>(PhantomData<T>);
 
@@ -75,56 +73,51 @@ where
 	/// `read`, this function also requires the `account` ID.
 	///
 	/// If the contract specified by the id `account` doesn't exist `Err` is returned.`
+	///
+	/// # Panics
+	///
+	/// Panics iff the `account` specified is not alive and in storage.
 	pub fn write(
 		account: &AccountIdOf<T>,
 		trie_id: &TrieId,
 		key: &StorageKey,
 		opt_new_value: Option<Vec<u8>>,
-	) -> Result<(), ContractAbsentError> {
+	) -> DispatchResult {
 		let mut new_info = match <ContractInfoOf<T>>::get(account) {
 			Some(ContractInfo::Alive(alive)) => alive,
-			None | Some(ContractInfo::Tombstone(_)) => return Err(ContractAbsentError),
+			None | Some(ContractInfo::Tombstone(_)) => panic!("Contract not found"),
 		};
 
 		let hashed_key = blake2_256(key);
 		let child_trie_info = &crate::child_trie_info(&trie_id);
 
-		// In order to correctly update the book keeping we need to fetch the previous
-		// value of the key-value pair.
-		//
-		// It might be a bit more clean if we had an API that supported getting the size
-		// of the value without going through the loading of it. But at the moment of
-		// writing, there is no such API.
-		//
-		// That's not a show stopper in any case, since the performance cost is
-		// dominated by the trie traversal anyway.
-		let opt_prev_value = child::get_raw(&child_trie_info, &hashed_key);
+		let opt_prev_len = child::len(&child_trie_info, &hashed_key);
 
 		// Update the total number of KV pairs and the number of empty pairs.
-		match (&opt_prev_value, &opt_new_value) {
+		match (&opt_prev_len, &opt_new_value) {
 			(Some(_), None) => {
-				new_info.pair_count -= 1;
+				new_info.pair_count = new_info.pair_count.checked_sub(1)
+					.ok_or_else(|| Error::<T>::StorageExhausted)?;
 			},
 			(None, Some(_)) => {
-				new_info.pair_count += 1;
+				new_info.pair_count = new_info.pair_count.checked_add(1)
+					.ok_or_else(|| Error::<T>::StorageExhausted)?;
 			},
 			(Some(_), Some(_)) => {},
 			(None, None) => {},
 		}
 
 		// Update the total storage size.
-		let prev_value_len = opt_prev_value
-			.as_ref()
-			.map(|old_value| old_value.len() as u32)
-			.unwrap_or(0);
+		let prev_value_len = opt_prev_len.unwrap_or(0);
 		let new_value_len = opt_new_value
 			.as_ref()
 			.map(|new_value| new_value.len() as u32)
 			.unwrap_or(0);
 		new_info.storage_size = new_info
 			.storage_size
-			.saturating_add(new_value_len)
-			.saturating_sub(prev_value_len);
+			.checked_sub(prev_value_len)
+			.and_then(|val| val.checked_add(new_value_len))
+			.ok_or_else(|| Error::<T>::StorageExhausted)?;
 
 		new_info.last_write = Some(<frame_system::Module<T>>::block_number());
 		<ContractInfoOf<T>>::insert(&account, ContractInfo::Alive(new_info));
@@ -188,6 +181,7 @@ where
 						// charge rent for it during instantation.
 						<frame_system::Module<T>>::block_number().saturating_sub(1u32.into()),
 					rent_allowance: <BalanceOf<T>>::max_value(),
+					rent_payed: <BalanceOf<T>>::zero(),
 					pair_count: 0,
 					last_write: None,
 				}

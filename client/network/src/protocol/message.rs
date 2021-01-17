@@ -286,30 +286,6 @@ pub mod generic {
 		ConsensusBatch(Vec<ConsensusMessage>),
 	}
 
-	impl<Header, Hash, Number, Extrinsic> Message<Header, Hash, Number, Extrinsic> {
-		/// Message id useful for logging.
-		pub fn id(&self) -> &'static str {
-			match self {
-				Message::Status(_) => "Status",
-				Message::BlockRequest(_) => "BlockRequest",
-				Message::BlockResponse(_) => "BlockResponse",
-				Message::BlockAnnounce(_) => "BlockAnnounce",
-				Message::Transactions(_) => "Transactions",
-				Message::Consensus(_) => "Consensus",
-				Message::RemoteCallRequest(_) => "RemoteCallRequest",
-				Message::RemoteCallResponse(_) => "RemoteCallResponse",
-				Message::RemoteReadRequest(_) => "RemoteReadRequest",
-				Message::RemoteReadResponse(_) => "RemoteReadResponse",
-				Message::RemoteHeaderRequest(_) => "RemoteHeaderRequest",
-				Message::RemoteHeaderResponse(_) => "RemoteHeaderResponse",
-				Message::RemoteChangesRequest(_) => "RemoteChangesRequest",
-				Message::RemoteChangesResponse(_) => "RemoteChangesResponse",
-				Message::RemoteReadChildRequest(_) => "RemoteReadChildRequest",
-				Message::ConsensusBatch(_) => "ConsensusBatch",
-			}
-		}
-	}
-
 	/// Status sent on connection.
 	// TODO https://github.com/paritytech/substrate/issues/4674: replace the `Status`
 	// struct with this one, after waiting a few releases beyond `NetworkSpecialization`'s

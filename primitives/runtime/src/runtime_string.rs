@@ -32,6 +32,22 @@ pub enum RuntimeString {
 	Owned(Vec<u8>),
 }
 
+/// Convenience macro to use the format! interface to get a `RuntimeString::Owned`
+#[macro_export]
+macro_rules! format_runtime_string {
+	($($args:tt)*) => {{
+		#[cfg(feature = "std")]
+		{
+			sp_runtime::RuntimeString::Owned(format!($($args)*))
+		}
+		#[cfg(not(feature = "std"))]
+		{
+			sp_runtime::RuntimeString::Owned(sp_std::alloc::format!($($args)*).as_bytes().to_vec())
+		}
+	}};
+}
+
+
 impl From<&'static str> for RuntimeString {
 	fn from(data: &'static str) -> Self {
 		Self::Borrowed(data)

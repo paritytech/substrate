@@ -41,8 +41,6 @@ EOT
 git config --global user.name 'CI system'
 git config --global user.email '<>'
 
-cargo install -f --version 0.2.0 diener
-
 # Merge master into our branch before building Polkadot to make sure we don't miss
 # any commits that are required by Polkadot.
 git fetch --depth 100 origin
@@ -69,8 +67,8 @@ then
   pr_body="$(sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p' "${pr_data_file}")"
 
   pr_companion="$(echo "${pr_body}" | sed -n -r \
-      -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
-      -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
+      -e 's;^.*[Cc]ompanion.*paritytech/polkadot#([0-9]+).*$;\1;p' \
+      -e 's;^.*[Cc]ompanion.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
     | tail -n 1)"
 
   if [ "${pr_companion}" ]
@@ -88,7 +86,7 @@ else
 fi
 
 cd ..
-$CARGO_HOME/bin/diener --substrate --branch $CI_COMMIT_REF_NAME --git https://gitlab.parity.io/parity/substrate.git --path polkadot
+diener --substrate --branch $CI_COMMIT_REF_NAME --git https://gitlab.parity.io/parity/substrate.git --path polkadot
 cd polkadot
 
 # Test Polkadot pr or master branch with this Substrate commit.
