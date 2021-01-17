@@ -294,7 +294,7 @@ impl ConfigDef {
 			return Err(syn::Error::new(item.generics.params[2].span(), msg));
 		}
 
-		let has_instance = if let Some(_) = item.generics.params.first() {
+		let has_instance = if item.generics.params.first().is_some() {
 			helper::check_config_def_gen(&item.generics, item.ident.span())?;
 			true
 		} else {

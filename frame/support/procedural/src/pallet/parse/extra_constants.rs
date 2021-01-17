@@ -81,12 +81,12 @@ impl ExtraConstantsDef {
 				return Err(syn::Error::new(impl_item.span(), msg));
 			};
 
-			if method.sig.inputs.len() != 0 {
+			if !method.sig.inputs.is_empty() {
 				let msg = "Invalid pallet::extra_constants, method must have 0 args";
 				return Err(syn::Error::new(method.sig.span(), msg));
 			}
 
-			if method.sig.generics.params.len() != 0 {
+			if !method.sig.generics.params.is_empty() {
 				let msg = "Invalid pallet::extra_constants, method must have 0 generics";
 				return Err(syn::Error::new(method.sig.generics.params[0].span(), msg));
 			}
