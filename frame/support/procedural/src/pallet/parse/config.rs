@@ -255,7 +255,7 @@ pub fn replace_self_by_t(input: proc_macro2::TokenStream) -> proc_macro2::TokenS
 				).into(),
 			proc_macro2::TokenTree::Ident(ident) if ident == "Self" =>
 				proc_macro2::Ident::new("T", ident.span()).into(),
-			other @ _ => other
+			other => other
 		})
 		.collect()
 }
