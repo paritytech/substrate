@@ -65,7 +65,11 @@ pub struct LightClientRequestHandler<B: Block> {
 
 impl<B: Block> LightClientRequestHandler<B> {
 	/// Create a new [`BlockRequestHandler`].
-	pub fn new(protocol_id: &ProtocolId, client: Arc<dyn Client<B>>/*, peerset: PeersetHandle*/) -> (Self, ProtocolConfig) {
+	pub fn new(
+		protocol_id: &ProtocolId,
+		client: Arc<dyn Client<B>>,
+		/* peerset: PeersetHandle,*/
+	) -> (Self, ProtocolConfig) {
 		// TODO: justify 20.
 		let (tx, request_receiver) = mpsc::channel(20);
 

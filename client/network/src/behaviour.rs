@@ -274,7 +274,10 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	}
 
 	/// Issue a light client request.
-	pub fn light_client_request(&mut self, r: light_client_requests::sender::Request<B>) -> Result<(), light_client_requests::sender::SendRequestError> {
+	pub fn light_client_request(
+		&mut self,
+		r: light_client_requests::sender::Request<B>,
+	) -> Result<(), light_client_requests::sender::SendRequestError> {
 		self.light_client_request_client.request(r)
 	}
 }
@@ -443,7 +446,11 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 }
 
 impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
-	fn poll<TEv>(&mut self, cx: &mut Context, _: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
+	fn poll<TEv>(
+		&mut self,
+		cx: &mut Context,
+		_: &mut impl PollParameters,
+	) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
 		use light_client_requests::sender::OutEvent;
 		while let Poll::Ready(Some(event)) = self.light_client_request_client.poll_next_unpin(cx) {
 			match event {

@@ -114,10 +114,10 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// correct protocol name. In addition all of [`RequestResponseConfig`] is used to handle
 	/// incoming light client requests, if enabled.
 	///
-	/// Can be constructed either via [`light_client_handler::generate_protocol_config`] allowing
+	/// Can be constructed either via [`light_client_requests::generate_protocol_config`] allowing
 	/// outgoing but not incoming requests, or constructed via
-	/// [`light_client_handler::LightClientRequestHandler::new`] allowing both outgoing and incoming
-	/// requests.
+	/// [`light_client_requests::handler::LightClientRequestHandler::new`] allowing both outgoing
+	/// and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
 }
 

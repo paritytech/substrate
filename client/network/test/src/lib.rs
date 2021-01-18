@@ -788,7 +788,7 @@ pub trait TestNetFactory: Sized {
 		);
 
 		let light_client_request_protocol_config =
-			light_client_requests::handler::generate_protocol_config(&protocol_id);
+			light_client_requests::generate_protocol_config(&protocol_id);
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
