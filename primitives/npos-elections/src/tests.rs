@@ -59,13 +59,7 @@ fn float_phragmen_poc_works() {
 		&_Support { own: 0.0, total: 35.0, others: vec![(20u64, 20.0), (30u64, 15.0)] }
 	);
 
-	equalize_float(
-		phragmen_result.assignments,
-		&mut support_map,
-		0.0,
-		2,
-		stake_of,
-	);
+	equalize_float(phragmen_result.assignments, &mut support_map, 0.0, 2, stake_of);
 
 	assert_eq!(
 		support_map.get(&2).unwrap(),

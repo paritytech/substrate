@@ -107,10 +107,7 @@ where
 		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
 		.collect();
 
-	Ok(ElectionResult {
-		winners,
-		assignments,
-	})
+	Ok(ElectionResult { winners, assignments })
 }
 
 /// Core implementation of seq-phragmen.

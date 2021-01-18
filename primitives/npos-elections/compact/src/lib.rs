@@ -362,6 +362,7 @@ fn imports() -> Result<TokenStream2> {
 		}
 	}
 }
+
 struct SolutionDef {
 	vis: syn::Visibility,
 	ident: syn::Ident,
