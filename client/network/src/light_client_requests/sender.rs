@@ -36,7 +36,7 @@ use crate::{
 	schema,
 	PeerId,
 };
-use crate::request_responses::{RequestFailure, OutboundFailure};
+use crate::request_responses::RequestFailure;
 use futures::{channel::{oneshot}, future::BoxFuture, prelude::*, stream::FuturesUnordered};
 use prost::Message;
 use sc_client_api::{
@@ -721,18 +721,19 @@ impl<B: Block> Request<B> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::light_client_requests::tests::{DummyFetchChecker, protocol_id, peerset, dummy_header};
+	use crate::request_responses::OutboundFailure;
 
 	use assert_matches::assert_matches;
 	use futures::channel::oneshot;
 	use futures::executor::block_on;
 	use futures::poll;
-	use sp_runtime::generic::Header;
-	use sp_runtime::traits::{BlakeTwo256, Block as BlockT, NumberFor};
-	use std::collections::HashSet;
-	use std::iter::FromIterator;
 	use sc_client_api::StorageProof;
 	use sp_core::storage::ChildInfo;
-	use crate::light_client_requests::tests::{DummyFetchChecker, protocol_id, peerset, dummy_header};
+	use sp_runtime::generic::Header;
+	use sp_runtime::traits::BlakeTwo256;
+	use std::collections::HashSet;
+	use std::iter::FromIterator;
 
 	fn empty_proof() -> Vec<u8> {
 		StorageProof::empty().encode()
@@ -1030,7 +1031,7 @@ mod tests {
 		assert_eq!(0, sender.pending_requests.len(), "Expect zero pending requests.");
 		assert_eq!(1, sender.sent_requests.len(), "Expect one sent request.");
 
-		for (i, peer) in peers.iter().enumerate() {
+		for (i, _peer) in peers.iter().enumerate() {
 			// Construct an invalid response
 			let response = {
 				let r = schema::v1::light::RemoteCallResponse {

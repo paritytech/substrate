@@ -40,7 +40,6 @@ use sp_core::{
 	storage::{ChildInfo, ChildType,StorageKey, PrefixedStorageKey},
 	hexdisplay::HexDisplay,
 };
-use sp_blockchain::{Error as ClientError};
 use sp_runtime::{
 	traits::{Block, Zero},
 	generic::BlockId,
@@ -376,14 +375,9 @@ enum HandleRequestError {
 	/// A bad request has been received.
 	#[display(fmt = "bad request: {}", _0)]
 	BadRequest(&'static str),
-
-	// TODO: All of these needed?
 	/// Encoding or decoding of some data failed.
 	#[display(fmt = "codec error: {}", _0)]
 	Codec(codec::Error),
-	/// The chain client errored.
-	#[display(fmt = "client error: {}", _0)]
-	Client(ClientError),
 }
 
 fn fmt_keys(first: Option<&Vec<u8>>, last: Option<&Vec<u8>>) -> String {

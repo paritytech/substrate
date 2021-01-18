@@ -36,51 +36,25 @@ fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 
 #[cfg(test)]
 mod tests {
-	use crate::request_responses::{RequestFailure, IncomingRequest};
+	use super::*;
+
+	use assert_matches::assert_matches;
+	use crate::request_responses::IncomingRequest;
+	use crate::config::ProtocolId;
 	use futures::executor::{block_on, LocalPool};
 	use futures::task::Spawn;
-	use sp_blockchain::Error as ClientError;
-	use super::*;
-	use crate::{chain::Client, config::ProtocolId, schema};
-	use assert_matches::assert_matches;
-	use async_std::task;
-	use codec::Encode;
 	use futures::{channel::oneshot, prelude::*};
-	use libp2p::{
-		core::{
-			connection::ConnectionId,
-			identity,
-			muxing::{StreamMuxerBox, SubstreamRef},
-			transport::{memory::MemoryTransport, Boxed, Transport},
-			upgrade, ConnectedPoint,
-		},
-		noise::{self, Keypair, NoiseConfig, X25519},
-		swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters},
-		yamux, Multiaddr, PeerId,
-	};
+	use libp2p::PeerId;
+	use sc_client_api::StorageProof;
+	use sc_client_api::light::{RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest};
+	use sc_client_api::light::{self, RemoteReadRequest, RemoteBodyRequest, ChangesProof};
 	use sc_client_api::{FetchChecker, RemoteReadChildRequest};
+	use sp_blockchain::Error as ClientError;
 	use sp_core::storage::ChildInfo;
-	use sp_runtime::{
-		generic::Header,
-		traits::{BlakeTwo256, Block as BlockT, NumberFor},
-	};
-	use std::{
-		collections::{HashMap, HashSet},
-		io,
-		iter::{self, FromIterator},
-		pin::Pin,
-		sync::Arc,
-		task::{Context, Poll},
-	};
-	use void::Void;
-	use sc_client_api::{
-		StorageProof,
-		light::{
-			self, RemoteReadRequest, RemoteBodyRequest, ChangesProof,
-			RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
-		}
-	};
-	use futures::future::BoxFuture;
+	use sp_runtime::generic::Header;
+	use sp_runtime::traits::{BlakeTwo256, Block as BlockT, NumberFor};
+	use std::collections::HashMap;
+	use std::sync::Arc;
 
 	pub struct DummyFetchChecker<B> {
 		pub ok: bool,
@@ -165,8 +139,6 @@ mod tests {
 			}
 		}
 	}
-
-	// TODO: Deduplicate the functions below with sender.rs
 
 	pub fn protocol_id() -> ProtocolId {
 		ProtocolId::from("test")
