@@ -685,6 +685,7 @@ pub trait TestNetFactory: Sized {
 		network_config.extra_sets = config.notifications_protocols.into_iter().map(|p| {
 			NonDefaultSetConfig {
 				notifications_protocol: p,
+				max_notification_size: 1024 * 1024,
 				set_config: Default::default()
 			}
 		}).collect();

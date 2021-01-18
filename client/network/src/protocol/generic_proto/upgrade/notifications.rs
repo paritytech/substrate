@@ -41,7 +41,7 @@ use futures::prelude::*;
 use asynchronous_codec::Framed;
 use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade};
 use log::error;
-use std::{borrow::Cow, convert::Infallible, io, iter, mem, pin::Pin, task::{Context, Poll}};
+use std::{borrow::Cow, convert::{Infallible, TryFrom as _}, io, iter, mem, pin::Pin, task::{Context, Poll}};
 use unsigned_varint::codec::UviBytes;
 
 /// Maximum allowed size of the two handshake messages, in bytes.
@@ -53,6 +53,8 @@ const MAX_HANDSHAKE_SIZE: usize = 1024;
 pub struct NotificationsIn {
 	/// Protocol name to use when negotiating the substream.
 	protocol_name: Cow<'static, str>,
+	/// Maximum allowed size for a single notification.
+	max_notification_size: u64,
 }
 
 /// Upgrade that opens a substream, waits for the remote to accept by sending back a status
@@ -63,6 +65,8 @@ pub struct NotificationsOut {
 	protocol_name: Cow<'static, str>,
 	/// Message to send when we start the handshake.
 	initial_message: Vec<u8>,
+	/// Maximum allowed size for a single notification.
+	max_notification_size: u64,
 }
 
 /// A substream for incoming notification messages.
@@ -102,9 +106,10 @@ pub struct NotificationsOutSubstream<TSubstream> {
 
 impl NotificationsIn {
 	/// Builds a new potential upgrade.
-	pub fn new(protocol_name: impl Into<Cow<'static, str>>) -> Self {
+	pub fn new(protocol_name: impl Into<Cow<'static, str>>, max_notification_size: u64) -> Self {
 		NotificationsIn {
 			protocol_name: protocol_name.into(),
+			max_notification_size,
 		}
 	}
 }
@@ -148,8 +153,11 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 				socket.read_exact(&mut initial_message).await?;
 			}
 
+			let mut codec = UviBytes::default();
+			codec.set_max_len(usize::try_from(self.max_notification_size).unwrap_or(usize::max_value()));
+
 			let substream = NotificationsInSubstream {
-				socket: Framed::new(socket, UviBytes::default()),
+				socket: Framed::new(socket, codec),
 				handshake: NotificationsInSubstreamHandshake::NotSent,
 			};
 
@@ -287,7 +295,11 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 
 impl NotificationsOut {
 	/// Builds a new potential upgrade.
-	pub fn new(protocol_name: impl Into<Cow<'static, str>>, initial_message: impl Into<Vec<u8>>) -> Self {
+	pub fn new(
+		protocol_name: impl Into<Cow<'static, str>>,
+		initial_message: impl Into<Vec<u8>>,
+		max_notification_size: u64,
+	) -> Self {
 		let initial_message = initial_message.into();
 		if initial_message.len() > MAX_HANDSHAKE_SIZE {
 			error!(target: "sub-libp2p", "Outbound networking handshake is above allowed protocol limit");
@@ -296,6 +308,7 @@ impl NotificationsOut {
 		NotificationsOut {
 			protocol_name: protocol_name.into(),
 			initial_message,
+			max_notification_size,
 		}
 	}
 }
@@ -342,8 +355,11 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 				socket.read_exact(&mut handshake).await?;
 			}
 
+			let mut codec = UviBytes::default();
+			codec.set_max_len(usize::try_from(self.max_notification_size).unwrap_or(usize::max_value()));
+
 			Ok((handshake, NotificationsOutSubstream {
-				socket: Framed::new(socket, UviBytes::default()),
+				socket: Framed::new(socket, codec),
 			}))
 		})
 	}

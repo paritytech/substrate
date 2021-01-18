@@ -475,16 +475,19 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				best_hash,
 				genesis_hash,
 			).encode();
+
 			GenericProto::new(
 				protocol_id.clone(),
 				versions,
 				build_status_message::<B>(&config, best_number, best_hash, genesis_hash),
 				peerset,
-				iter::once((block_announces_protocol, block_announces_handshake))
-					.chain(iter::once((transactions_protocol, vec![])))
-					.chain(network_config.extra_sets.iter()
-						.map(|s| (s.notifications_protocol.clone(), handshake_message.clone()))
-					),
+				iter::once((block_announces_protocol, block_announces_handshake, 1024 * 1024))
+					.chain(iter::once((transactions_protocol, vec![], 1024 * 1024)))
+					.chain(network_config.extra_sets.iter().map(|s| (
+						s.notifications_protocol.clone(),
+						handshake_message.clone(),
+						s.max_notification_size
+					))),
 			)
 		};
 
