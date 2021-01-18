@@ -259,6 +259,7 @@ mod transport;
 mod utils;
 
 pub mod block_request_handler;
+pub mod bitswap;
 pub mod config;
 pub mod error;
 pub mod gossip;

@@ -18,6 +18,7 @@
 
 use crate::{
 	config::{ProtocolId, Role}, light_client_handler, peer_info, request_responses,
+	bitswap::Bitswap,
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
 	ObservedRole, DhtEvent, ExHashT,
@@ -57,6 +58,7 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	peer_info: peer_info::PeerInfoBehaviour,
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
+	bitswap: Bitswap<B>,
 	/// Generic request-reponse protocols.
 	request_responses: request_responses::RequestResponsesBehaviour,
 	/// Light client request handling.
@@ -178,6 +180,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		disco_config: DiscoveryConfig,
 		// Block request protocol config.
 		block_request_protocol_config: request_responses::ProtocolConfig,
+		bitswap: Bitswap<B>,
 		// All remaining request protocol configs.
 		mut request_response_protocols: Vec<request_responses::ProtocolConfig>,
 	) -> Result<Self, request_responses::RegisterError> {
@@ -189,6 +192,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
 			discovery: disco_config.finish(),
+			bitswap,
 			request_responses:
 				request_responses::RequestResponsesBehaviour::new(request_response_protocols.into_iter())?,
 			light_client_handler,
