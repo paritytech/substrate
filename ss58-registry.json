@@ -290,6 +290,15 @@
 			"website": "https://phala.network"
 		},
 		{
+			"prefix": 31,
+			"network": "litentry",
+			"displayName": "Litentry Network",
+			"symbols": ["LIT"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://litentry.com/"
+		},
+		{
 			"prefix": 32,
 			"network": "robonomics",
 			"displayName": "Robonomics Network",
