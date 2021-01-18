@@ -402,8 +402,8 @@ pub struct NetworkConfiguration {
 	/// presence of potentially adversarial nodes.
 	pub kademlia_disjoint_query_paths: bool,
 
-	/// Size of Yamux window receive window of all substreams. `None` for the default (256kiB).
-	/// Any value inferior to 256kiB is invalid.
+	/// Size of Yamux receive window of all substreams. `None` for the default (256kiB).
+	/// Any value less than 256kiB is invalid.
 	///
 	/// # Context
 	///
