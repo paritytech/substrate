@@ -54,90 +54,52 @@ use frame_system::ensure_signed;
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
-pub trait Config: frame_system::Config {
-	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
-	/// The currency trait.
-	type Currency: ReservableCurrency<Self::AccountId>;
+pub use pallet::*;
 
-	/// Reservation fee.
-	type ReservationFee: Get<BalanceOf<Self>>;
+#[frame_support::pallet]
+pub mod pallet {
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+	use super::*;
 
-	/// What to do with slashed funds.
-	type Slashed: OnUnbalanced<NegativeImbalanceOf<Self>>;
+	#[pallet::pallet]
+	#[pallet::generate_store(trait Store)]
+	pub struct Pallet<T>(PhantomData<T>);
 
-	/// The origin which may forcibly set or remove a name. Root can always do this.
-	type ForceOrigin: EnsureOrigin<Self::Origin>;
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-	/// The minimum length a name may be.
-	type MinLength: Get<usize>;
-
-	/// The maximum length a name may be.
-	type MaxLength: Get<usize>;
-}
-
-decl_storage! {
-	trait Store for Module<T: Config> as Nicks {
-		/// Example storage
-		ExampleStorage get(fn example_storage) config(): u32 = 3u32;
-
-		/// The lookup table for names.
-		NameOf: map hasher(twox_64_concat) T::AccountId => Option<(Vec<u8>, BalanceOf<T>)>;
-	}
-	add_extra_genesis {
-		config(initial_names): Vec<(T::AccountId, Vec<u8>)>;
-		build(|config: &GenesisConfig<T>| {
-			for name in &config.initial_names {
-				NameOf::<T>::insert(&name.0, (&name.1, BalanceOf::<T>::from(0u32)));
-			}
-		});
-	}
-}
-
-decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId, Balance = BalanceOf<T> {
-		/// A name was set. \[who\]
-		NameSet(AccountId),
-		/// A name was forcibly set. \[target\]
-		NameForced(AccountId),
-		/// A name was changed. \[who\]
-		NameChanged(AccountId),
-		/// A name was cleared, and the given balance returned. \[who, deposit\]
-		NameCleared(AccountId, Balance),
-		/// A name was removed and the given balance slashed. \[target, deposit\]
-		NameKilled(AccountId, Balance),
-	}
-);
-
-decl_error! {
-	/// Error for the nicks module.
-	pub enum Error for Module<T: Config> {
-		/// A name is too short.
-		TooShort,
-		/// A name is too long.
-		TooLong,
-		/// An account isn't named.
-		Unnamed,
-	}
-}
-
-decl_module! {
-	/// Nicks module declaration.
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		type Error = Error<T>;
-
-		fn deposit_event() = default;
+		/// The currency trait.
+		type Currency: ReservableCurrency<Self::AccountId>;
 
 		/// Reservation fee.
-		const ReservationFee: BalanceOf<T> = T::ReservationFee::get();
+		#[pallet::constant]
+		type ReservationFee: Get<BalanceOf<Self>>;
+
+		/// What to do with slashed funds.
+		type Slashed: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+		/// The origin which may forcibly set or remove a name. Root can always do this.
+		type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The minimum length a name may be.
-		const MinLength: u32 = T::MinLength::get() as u32;
+		#[pallet::constant]
+		type MinLength: Get<u32>;
 
 		/// The maximum length a name may be.
-		const MaxLength: u32 = T::MaxLength::get() as u32;
+		#[pallet::constant]
+		type MaxLength: Get<u32>;
+	}
 
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
 		/// Set an account's name. The name should be a UTF-8-encoded string by convention, though
 		/// we don't check it.
 		///
@@ -154,24 +116,25 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
-		#[weight = 50_000_000]
-		fn set_name(origin, name: Vec<u8>) {
+		#[pallet::weight(50_000_000)]
+		pub(super) fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(name.len() >= T::MinLength::get(), Error::<T>::TooShort);
-			ensure!(name.len() <= T::MaxLength::get(), Error::<T>::TooLong);
+			ensure!(name.len() >= T::MinLength::get() as usize, Error::<T>::TooShort);
+			ensure!(name.len() <= T::MaxLength::get() as usize, Error::<T>::TooLong);
 
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
-				Self::deposit_event(RawEvent::NameChanged(sender.clone()));
+				Self::deposit_event(Event::NameChanged(sender.clone()));
 				deposit
 			} else {
 				let deposit = T::ReservationFee::get();
 				T::Currency::reserve(&sender, deposit.clone())?;
-				Self::deposit_event(RawEvent::NameSet(sender.clone()));
+				Self::deposit_event(Event::NameSet(sender.clone()));
 				deposit
 			};
 
 			<NameOf<T>>::insert(&sender, (name, deposit));
+			Ok(().into())
 		}
 
 		/// Clear an account's name and return the deposit. Fails if the account was not named.
@@ -184,15 +147,17 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
-		#[weight = 70_000_000]
-		fn clear_name(origin) {
+		#[pallet::weight(70_000_000)]
+		pub(super) fn clear_name(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 
 			let deposit = <NameOf<T>>::take(&sender).ok_or(Error::<T>::Unnamed)?.1;
 
 			let _ = T::Currency::unreserve(&sender, deposit.clone());
 
-			Self::deposit_event(RawEvent::NameCleared(sender, deposit));
+			Self::deposit_event(Event::NameCleared(sender, deposit));
+
+			Ok(().into())
 		}
 
 		/// Remove an account's name and take charge of the deposit.
@@ -208,8 +173,11 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
-		#[weight = 70_000_000]
-		fn kill_name(origin, target: <T::Lookup as StaticLookup>::Source) {
+		#[pallet::weight(70_000_000)]
+		pub(super) fn kill_name(
+			origin: OriginFor<T>,
+			target: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResultWithPostInfo{
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			// Figure out who we're meant to be clearing.
@@ -219,7 +187,9 @@ decl_module! {
 			// Slash their deposit from them.
 			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit.clone()).0);
 
-			Self::deposit_event(RawEvent::NameKilled(target, deposit));
+			Self::deposit_event(Event::NameKilled(target, deposit));
+
+			Ok(().into())
 		}
 
 		/// Set a third-party account's name with no deposit.
@@ -234,15 +204,90 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
-		#[weight = 70_000_000]
-		fn force_name(origin, target: <T::Lookup as StaticLookup>::Source, name: Vec<u8>) {
+		#[pallet::weight(70_000_000)]
+		pub(super) fn force_name(
+			origin: OriginFor<T>,
+			target: <T::Lookup as StaticLookup>::Source,
+			name: Vec<u8>,
+		) -> DispatchResultWithPostInfo {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			let target = T::Lookup::lookup(target)?;
 			let deposit = <NameOf<T>>::get(&target).map(|x| x.1).unwrap_or_else(Zero::zero);
 			<NameOf<T>>::insert(&target, (name, deposit));
 
-			Self::deposit_event(RawEvent::NameForced(target));
+			Self::deposit_event(Event::NameForced(target));
+
+			Ok(().into())
+		}
+	}
+
+	#[pallet::event]
+	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	// pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId, Balance = BalanceOf<T> {
+	pub enum Event<T: Config> {
+		/// A name was set. \[who\]
+		NameSet(T::AccountId),
+		/// A name was forcibly set. \[target\]
+		NameForced(T::AccountId),
+		/// A name was changed. \[who\]
+		NameChanged(T::AccountId),
+		/// A name was cleared, and the given balance returned. \[who, deposit\]
+		NameCleared(T::AccountId, BalanceOf<T>),
+		/// A name was removed and the given balance slashed. \[target, deposit\]
+		NameKilled(T::AccountId, BalanceOf<T>),
+	}
+
+	/// Error for the nicks module.
+	#[pallet::error]
+	pub enum Error<T> {
+		/// A name is too short.
+		TooShort,
+		/// A name is too long.
+		TooLong,
+		/// An account isn't named.
+		Unnamed,
+	}
+
+
+	#[pallet::type_value]
+	pub(super) fn DefaultForExampleStorage() -> u32 { 3u32 }
+
+	/// Example storage
+	#[pallet::storage]
+	#[pallet::getter(fn example_storage)]
+	pub(super) type ExampleStorage<T: Config> = StorageValue<_, u32, ValueQuery, DefaultForExampleStorage>;
+
+	/// The lookup table for names.
+	#[pallet::storage]
+	pub(super) type NameOf<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, (Vec<u8>, BalanceOf<T>)>;
+
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		/// Example storage
+		pub example_storage: u32,
+		pub initial_names: Vec<(T::AccountId, Vec<u8>)>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self {
+				example_storage: DefaultForExampleStorage::get(),
+				initial_names: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			<ExampleStorage<T>>::put(&self.example_storage);
+			for name in & self.initial_names {
+				NameOf::<T>::insert(&name.0,(&name.1, BalanceOf::<T>::from(0u32)));
+			}
 		}
 	}
 }
@@ -250,6 +295,7 @@ decl_module! {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use frame_support::traits::GenesisBuild;
 	use crate as pallet_nicks;
 
 	use frame_support::{
@@ -329,8 +375,8 @@ mod tests {
 	}
 	parameter_types! {
 		pub const ReservationFee: u64 = 2;
-		pub const MinLength: usize = 3;
-		pub const MaxLength: usize = 16;
+		pub const MinLength: u32 = 3;
+		pub const MaxLength: u32 = 16;
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
