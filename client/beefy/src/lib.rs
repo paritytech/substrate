@@ -382,6 +382,7 @@ pub async fn start_beefy_gadget<Block, Pair, Backend, Client, Network, SyncOracl
 		Arc::new(AllowAll {
 			topic: topic::<Block>(),
 		}),
+		None,
 	);
 
 	let at = BlockId::hash(client.info().best_hash);
@@ -432,12 +433,4 @@ where
 			_ => None,
 		}
 	})
-}
-
-#[cfg(test)]
-mod tests {
-	#[test]
-	fn it_works() {
-		assert_eq!(2 + 2, 4);
-	}
 }
