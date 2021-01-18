@@ -255,7 +255,7 @@ pub fn replace_self_by_t(input: proc_macro2::TokenStream) -> proc_macro2::TokenS
 				).into(),
 			proc_macro2::TokenTree::Ident(ident) if ident == "Self" =>
 				proc_macro2::Ident::new("T", ident.span()).into(),
-			other @ _ => other
+			other => other
 		})
 		.collect()
 }
@@ -294,7 +294,7 @@ impl ConfigDef {
 			return Err(syn::Error::new(item.generics.params[2].span(), msg));
 		}
 
-		let has_instance = if let Some(_) = item.generics.params.first() {
+		let has_instance = if item.generics.params.first().is_some() {
 			helper::check_config_def_gen(&item.generics, item.ident.span())?;
 			true
 		} else {
