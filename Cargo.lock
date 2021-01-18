@@ -8464,6 +8464,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "sp-arithmetic",
+ "sp-core",
  "sp-npos-elections-compact",
  "sp-runtime",
  "sp-std",

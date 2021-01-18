@@ -78,9 +78,9 @@ where
 			stake_map.insert(v.clone(), *s);
 		});
 
-		let stake_of = Box::new(|w: &T::AccountId| -> VoteWeight {
+		let stake_of = |w: &T::AccountId| -> VoteWeight {
 			stake_map.get(w).cloned().unwrap_or_default()
-		});
+		};
 
 		let ElectionResult {
 			winners,
