@@ -452,7 +452,7 @@ mod tests {
 			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
 			let (handshake, mut substream) = upgrade::apply_outbound(
 				socket,
-				NotificationsOut::new(PROTO_NAME, &b"initial message"[..]),
+				NotificationsOut::new(PROTO_NAME, &b"initial message"[..], 1024 * 1024),
 				upgrade::Version::V1
 			).await.unwrap();
 
@@ -467,7 +467,7 @@ mod tests {
 			let (socket, _) = listener.accept().await.unwrap();
 			let (initial_message, mut substream) = upgrade::apply_inbound(
 				socket,
-				NotificationsIn::new(PROTO_NAME)
+				NotificationsIn::new(PROTO_NAME, 1024 * 1024)
 			).await.unwrap();
 
 			assert_eq!(initial_message, b"initial message");
@@ -491,7 +491,7 @@ mod tests {
 			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
 			let (handshake, mut substream) = upgrade::apply_outbound(
 				socket,
-				NotificationsOut::new(PROTO_NAME, vec![]),
+				NotificationsOut::new(PROTO_NAME, vec![], 1024 * 1024),
 				upgrade::Version::V1
 			).await.unwrap();
 
@@ -506,7 +506,7 @@ mod tests {
 			let (socket, _) = listener.accept().await.unwrap();
 			let (initial_message, mut substream) = upgrade::apply_inbound(
 				socket,
-				NotificationsIn::new(PROTO_NAME)
+				NotificationsIn::new(PROTO_NAME, 1024 * 1024)
 			).await.unwrap();
 
 			assert!(initial_message.is_empty());
@@ -528,7 +528,7 @@ mod tests {
 			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
 			let outcome = upgrade::apply_outbound(
 				socket,
-				NotificationsOut::new(PROTO_NAME, &b"hello"[..]),
+				NotificationsOut::new(PROTO_NAME, &b"hello"[..], 1024 * 1024),
 				upgrade::Version::V1
 			).await;
 
@@ -545,7 +545,7 @@ mod tests {
 			let (socket, _) = listener.accept().await.unwrap();
 			let (initial_msg, substream) = upgrade::apply_inbound(
 				socket,
-				NotificationsIn::new(PROTO_NAME)
+				NotificationsIn::new(PROTO_NAME, 1024 * 1024)
 			).await.unwrap();
 
 			assert_eq!(initial_msg, b"hello");
@@ -567,7 +567,7 @@ mod tests {
 			let ret = upgrade::apply_outbound(
 				socket,
 				// We check that an initial message that is too large gets refused.
-				NotificationsOut::new(PROTO_NAME, (0..32768).map(|_| 0).collect::<Vec<_>>()),
+				NotificationsOut::new(PROTO_NAME, (0..32768).map(|_| 0).collect::<Vec<_>>(), 1024 * 1024),
 				upgrade::Version::V1
 			).await;
 			assert!(ret.is_err());
@@ -580,7 +580,7 @@ mod tests {
 			let (socket, _) = listener.accept().await.unwrap();
 			let ret = upgrade::apply_inbound(
 				socket,
-				NotificationsIn::new(PROTO_NAME)
+				NotificationsIn::new(PROTO_NAME, 1024 * 1024)
 			).await;
 			assert!(ret.is_err());
 		});
@@ -597,7 +597,7 @@ mod tests {
 			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
 			let ret = upgrade::apply_outbound(
 				socket,
-				NotificationsOut::new(PROTO_NAME, &b"initial message"[..]),
+				NotificationsOut::new(PROTO_NAME, &b"initial message"[..], 1024 * 1024),
 				upgrade::Version::V1
 			).await;
 			assert!(ret.is_err());
@@ -610,7 +610,7 @@ mod tests {
 			let (socket, _) = listener.accept().await.unwrap();
 			let (initial_message, mut substream) = upgrade::apply_inbound(
 				socket,
-				NotificationsIn::new(PROTO_NAME)
+				NotificationsIn::new(PROTO_NAME, 1024 * 1024)
 			).await.unwrap();
 			assert_eq!(initial_message, b"initial message");
 
