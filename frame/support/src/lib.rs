@@ -1885,7 +1885,7 @@ pub mod pallet_prelude {
 /// 		use super::*;
 ///
 /// 		#[pallet::pallet]
-/// 		#[pallet::generete($visibility_of_trait_store trait Store)]
+/// 		#[pallet::generate_store($visibility_of_trait_store trait Store)]
 /// 		// NOTE: if the visibility of trait store is private but you want to make it available
 /// 		// in super, then use `pub(super)` or `pub(crate)` to make it available in crate.
 /// 		pub struct Pallet<T>(PhantomData<T>);
