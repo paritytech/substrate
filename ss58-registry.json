@@ -120,12 +120,12 @@
 		},
 		{
 			"prefix": 12,
-			"network": "polymath",
-			"displayName": "Polymath",
-			"symbols": null,
-			"decimals": null,
+			"network": "polymesh",
+			"displayName": "Polymesh",
+			"symbols": ["POLYX"],
+			"decimals": [6],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://polymath.network/"
 		},
 		{
 			"prefix": 13,
