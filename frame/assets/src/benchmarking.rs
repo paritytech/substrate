@@ -215,8 +215,8 @@ benchmarks! {
 	}
 
 	set_metadata {
-		let n in 0 .. T::StringLimit::get() as u32;
-		let s in 0 .. T::StringLimit::get() as u32;
+		let n in 0 .. T::StringLimit::get();
+		let s in 0 .. T::StringLimit::get();
 
 		let name = vec![0u8; n as usize];
 		let symbol = vec![0u8; s as usize];
