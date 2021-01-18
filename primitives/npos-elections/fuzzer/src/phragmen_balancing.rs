@@ -72,9 +72,7 @@ fn main() {
 				)
 				.unwrap();
 				let winners = to_without_backing(unbalanced.winners.clone());
-				let score = to_supports(winners.as_ref(), staked.as_ref())
-					.unwrap()
-					.evaluate();
+				let score = to_supports(winners.as_ref(), staked.as_ref()).unwrap().evaluate();
 
 				if score[0] == 0 {
 					// such cases cannot be improved by balancing.

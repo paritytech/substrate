@@ -96,26 +96,18 @@ where
 	// sort winners based on desirability.
 	winners.sort_by_key(|c_ptr| c_ptr.borrow().round);
 
-	let mut assignments = voters
-		.into_iter()
-		.filter_map(|v| v.into_assignment())
-		.collect::<Vec<_>>();
+	let mut assignments =
+		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
 	let _ = assignments
 		.iter_mut()
-		.map(|a| {
-			a.try_normalize()
-				.map_err(|e| crate::Error::ArithmeticError(e))
-		})
+		.map(|a| a.try_normalize().map_err(|e| crate::Error::ArithmeticError(e)))
 		.collect::<Result<(), _>>()?;
 	let winners = winners
 		.into_iter()
 		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
 		.collect();
 
-	Ok(ElectionResult {
-		winners,
-		assignments,
-	})
+	Ok(ElectionResult { winners, assignments })
 }
 
 /// Core implementation of seq-phragmen.

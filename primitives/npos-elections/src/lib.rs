@@ -61,7 +61,7 @@
 //!
 //! The `Assignment` field of the election result is voter-major, i.e. it is from the perspective of
 //! the voter. The struct that represents the opposite is called a `Support`. This struct is usually
-//! accessed in a map-like manner, i.e. keyed vy voters, therefor it is stored as a mapping called
+//! accessed in a map-like manner, i.e. keyed by voters, therefor it is stored as a mapping called
 //! `SupportMap`.
 //!
 //! Moreover, the support is built from absolute backing values, not ratios like the example above.
@@ -138,16 +138,16 @@ pub trait CompactSolution: Sized {
 	/// The maximum number of votes that are allowed.
 	const LIMIT: usize;
 
-	/// The voter type.
+	/// The voter type. Needs to be an index (convert to usize).
 	type Voter: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
 
-	/// The target type
+	/// The target type. Needs to be an index (convert to usize).
 	type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
 
 	/// The weight/accuracy type of each vote.
 	type Accuracy: PerThing128;
 
-	/// Build self from a `Vec<Assignment<A, Self::Accuracy>>`.
+	/// Build self from a `assignments: Vec<Assignment<A, Self::Accuracy>>`.
 	fn from_assignment<FV, FT, A>(
 		assignments: Vec<Assignment<A, Self::Accuracy>>,
 		voter_index: FV,
@@ -167,7 +167,7 @@ pub trait CompactSolution: Sized {
 
 	/// Get the length of all the voters that this type is encoding.
 	///
-	/// This is basically the same as the number of assignments.
+	/// This is basically the same as the number of assignments, or number of active voters.
 	fn voter_count(&self) -> usize;
 
 	/// Get the total count of edges.
@@ -194,7 +194,7 @@ pub trait CompactSolution: Sized {
 	/// This will only search until the first instance of `to_remove`, and return true. If
 	/// no instance is found (no-op), then it returns false.
 	///
-	/// In other words, if this return true, exactly one element must have been removed from
+	/// In other words, if this return true, exactly **one** element must have been removed from
 	/// `self.len()`.
 	fn remove_voter(&mut self, to_remove: Self::Voter) -> bool;
 
@@ -428,10 +428,11 @@ pub struct Assignment<AccountId, P: PerThing> {
 impl<AccountId: IdentifierT, P: PerThing128> Assignment<AccountId, P> {
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
-	/// It needs `stake` which is the total budget of the voter. If `fill` is set to true, it
-	/// _tries_ to ensure that all the potential rounding errors are compensated and the
-	/// distribution's sum is exactly equal to the total budget, by adding or subtracting the
-	/// remainder from the last distribution.
+	/// It needs `stake` which is the total budget of the voter.
+	///
+	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
+	/// site might compensate by calling `try_normalize()` on the returned `StakedAssignment` as a
+	/// post-precessing.
 	///
 	/// If an edge ratio is [`Bounded::min_value()`], it is dropped. This edge can never mean
 	/// anything useful.

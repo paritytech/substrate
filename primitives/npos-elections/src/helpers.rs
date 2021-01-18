@@ -17,6 +17,7 @@
 
 //! Helper methods for npos-elections.
 
+use sp_arithmetic::{InnerOf, PerThing};
 use crate::{
 	Assignment, Error, ExtendedBalance, IdentifierT, PerThing128, StakedAssignment, VoteWeight,
 	WithApprovalOf,
@@ -57,8 +58,7 @@ where
 	staked
 		.iter_mut()
 		.map(|a| {
-			a.try_normalize(stake_of(&a.who).into())
-				.map_err(|err| Error::ArithmeticError(err))
+			a.try_normalize(stake_of(&a.who).into()).map_err(|err| Error::ArithmeticError(err))
 		})
 		.collect::<Result<_, _>>()?;
 	Ok(staked)
