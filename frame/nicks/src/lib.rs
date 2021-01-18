@@ -79,8 +79,19 @@ pub trait Config: frame_system::Config {
 
 decl_storage! {
 	trait Store for Module<T: Config> as Nicks {
+		/// Example storage
+		ExampleStorage get(fn example_storage) config(): u32 = 3u32;
+
 		/// The lookup table for names.
 		NameOf: map hasher(twox_64_concat) T::AccountId => Option<(Vec<u8>, BalanceOf<T>)>;
+	}
+	add_extra_genesis {
+		config(initial_names): Vec<(T::AccountId, Vec<u8>)>;
+		build(|config: &GenesisConfig<T>| {
+			for name in &config.initial_names {
+				NameOf::<T>::insert(&name.0, (&name.1, BalanceOf::<T>::from(0u32)));
+			}
+		});
 	}
 }
 
@@ -239,6 +250,7 @@ decl_module! {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate as pallet_nicks;
 
 	use frame_support::{
 		assert_ok, assert_noop, impl_outer_origin, parameter_types,
@@ -252,6 +264,24 @@ mod tests {
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = frame_system {}
+	}
+
+	type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<(), (), (), ()>;
+
+	frame_support::impl_outer_event!(
+		pub enum Event for Test {
+			#[codec(index = "0")] pallet_nicks<T>,
+		}
+	);
+
+	frame_support::impl_runtime_metadata!(
+		for Test with modules where Extrinsic = UncheckedExtrinsic
+			pallet_nicks::Module as Nicks { index 0 } with Storage Call Event,
+	);
+
+	#[test]
+	fn test_metadata() {
+		println!("{:#?}", Test::metadata());
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -325,6 +355,10 @@ mod tests {
 				(1, 10),
 				(2, 10),
 			],
+		}.assimilate_storage(&mut t).unwrap();
+		pallet_nicks::GenesisConfig::<Test> {
+			example_storage: 4u32,
+			initial_names: vec![],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}

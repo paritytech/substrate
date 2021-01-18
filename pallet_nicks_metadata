@@ -1,0 +1,288 @@
+
+running 1 test
+test tests::test_metadata ... FAILED
+
+failures:
+
+---- tests::test_metadata stdout ----
+RuntimeMetadataPrefixed(
+    1635018093,
+    RuntimeMetadata::V12(
+        RuntimeMetadataV12 {
+            modules: [
+                ModuleMetadata {
+                    name: "Nicks",
+                    storage: Some(
+                        StorageMetadata {
+                            prefix: "Nicks",
+                            entries: [
+                                StorageEntryMetadata {
+                                    name: "ExampleStorage",
+                                    modifier: StorageEntryModifier::Default,
+                                    ty: StorageEntryType::Plain(
+                                        "u32",
+                                    ),
+                                    default: [
+                                        3,
+                                        0,
+                                        0,
+                                        0,
+                                    ],
+                                    documentation: [
+                                        " Example storage",
+                                    ],
+                                },
+                                StorageEntryMetadata {
+                                    name: "NameOf",
+                                    modifier: StorageEntryModifier::Optional,
+                                    ty: StorageEntryType::Map {
+                                        hasher: StorageHasher::Twox64Concat,
+                                        key: "T::AccountId",
+                                        value: "(Vec<u8>, BalanceOf<T>)",
+                                        unused: false,
+                                    },
+                                    default: [
+                                        0,
+                                    ],
+                                    documentation: [
+                                        " The lookup table for names.",
+                                    ],
+                                },
+                            ],
+                        },
+                    ),
+                    calls: Some(
+                        [
+                            FunctionMetadata {
+                                name: "set_name",
+                                arguments: [
+                                    FunctionArgumentMetadata {
+                                        name: "name",
+                                        ty: "Vec<u8>",
+                                    },
+                                ],
+                                documentation: [
+                                    " Set an account\'s name. The name should be a UTF-8-encoded string by convention, though",
+                                    " we don\'t check it.",
+                                    "",
+                                    " The name may not be more than `T::MaxLength` bytes, nor less than `T::MinLength` bytes.",
+                                    "",
+                                    " If the account doesn\'t already have a name, then a fee of `ReservationFee` is reserved",
+                                    " in the account.",
+                                    "",
+                                    " The dispatch origin for this call must be _Signed_.",
+                                    "",
+                                    " # <weight>",
+                                    " - O(1).",
+                                    " - At most one balance operation.",
+                                    " - One storage read/write.",
+                                    " - One event.",
+                                    " # </weight>",
+                                ],
+                            },
+                            FunctionMetadata {
+                                name: "clear_name",
+                                arguments: [],
+                                documentation: [
+                                    " Clear an account\'s name and return the deposit. Fails if the account was not named.",
+                                    "",
+                                    " The dispatch origin for this call must be _Signed_.",
+                                    "",
+                                    " # <weight>",
+                                    " - O(1).",
+                                    " - One balance operation.",
+                                    " - One storage read/write.",
+                                    " - One event.",
+                                    " # </weight>",
+                                ],
+                            },
+                            FunctionMetadata {
+                                name: "kill_name",
+                                arguments: [
+                                    FunctionArgumentMetadata {
+                                        name: "target",
+                                        ty: "<T::Lookup as StaticLookup>::Source",
+                                    },
+                                ],
+                                documentation: [
+                                    " Remove an account\'s name and take charge of the deposit.",
+                                    "",
+                                    " Fails if `who` has not been named. The deposit is dealt with through `T::Slashed`",
+                                    " imbalance handler.",
+                                    "",
+                                    " The dispatch origin for this call must match `T::ForceOrigin`.",
+                                    "",
+                                    " # <weight>",
+                                    " - O(1).",
+                                    " - One unbalanced handler (probably a balance transfer)",
+                                    " - One storage read/write.",
+                                    " - One event.",
+                                    " # </weight>",
+                                ],
+                            },
+                            FunctionMetadata {
+                                name: "force_name",
+                                arguments: [
+                                    FunctionArgumentMetadata {
+                                        name: "target",
+                                        ty: "<T::Lookup as StaticLookup>::Source",
+                                    },
+                                    FunctionArgumentMetadata {
+                                        name: "name",
+                                        ty: "Vec<u8>",
+                                    },
+                                ],
+                                documentation: [
+                                    " Set a third-party account\'s name with no deposit.",
+                                    "",
+                                    " No length checking is done on the name.",
+                                    "",
+                                    " The dispatch origin for this call must match `T::ForceOrigin`.",
+                                    "",
+                                    " # <weight>",
+                                    " - O(1).",
+                                    " - At most one balance operation.",
+                                    " - One storage read/write.",
+                                    " - One event.",
+                                    " # </weight>",
+                                ],
+                            },
+                        ],
+                    ),
+                    event: Some(
+                        [
+                            EventMetadata {
+                                name: "NameSet",
+                                arguments: [
+                                    "AccountId",
+                                ],
+                                documentation: [
+                                    " A name was set. \\[who\\]",
+                                ],
+                            },
+                            EventMetadata {
+                                name: "NameForced",
+                                arguments: [
+                                    "AccountId",
+                                ],
+                                documentation: [
+                                    " A name was forcibly set. \\[target\\]",
+                                ],
+                            },
+                            EventMetadata {
+                                name: "NameChanged",
+                                arguments: [
+                                    "AccountId",
+                                ],
+                                documentation: [
+                                    " A name was changed. \\[who\\]",
+                                ],
+                            },
+                            EventMetadata {
+                                name: "NameCleared",
+                                arguments: [
+                                    "AccountId",
+                                    "Balance",
+                                ],
+                                documentation: [
+                                    " A name was cleared, and the given balance returned. \\[who, deposit\\]",
+                                ],
+                            },
+                            EventMetadata {
+                                name: "NameKilled",
+                                arguments: [
+                                    "AccountId",
+                                    "Balance",
+                                ],
+                                documentation: [
+                                    " A name was removed and the given balance slashed. \\[target, deposit\\]",
+                                ],
+                            },
+                        ],
+                    ),
+                    constants: [
+                        ModuleConstantMetadata {
+                            name: "ReservationFee",
+                            ty: "BalanceOf<T>",
+                            value: [
+                                2,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                            ],
+                            documentation: [
+                                " Reservation fee.",
+                            ],
+                        },
+                        ModuleConstantMetadata {
+                            name: "MinLength",
+                            ty: "u32",
+                            value: [
+                                3,
+                                0,
+                                0,
+                                0,
+                            ],
+                            documentation: [
+                                " The minimum length a name may be.",
+                            ],
+                        },
+                        ModuleConstantMetadata {
+                            name: "MaxLength",
+                            ty: "u32",
+                            value: [
+                                16,
+                                0,
+                                0,
+                                0,
+                            ],
+                            documentation: [
+                                " The maximum length a name may be.",
+                            ],
+                        },
+                    ],
+                    errors: [
+                        ErrorMetadata {
+                            name: "TooShort",
+                            documentation: [
+                                " A name is too short.",
+                            ],
+                        },
+                        ErrorMetadata {
+                            name: "TooLong",
+                            documentation: [
+                                " A name is too long.",
+                            ],
+                        },
+                        ErrorMetadata {
+                            name: "Unnamed",
+                            documentation: [
+                                " An account isn\'t named.",
+                            ],
+                        },
+                    ],
+                    index: 0,
+                },
+            ],
+            extrinsic: ExtrinsicMetadata {
+                version: 4,
+                signed_extensions: [
+                    "UnitSignedExtension",
+                ],
+            },
+        },
+    ),
+)
+thread 'tests::test_metadata' panicked at 'explicit panic', frame/nicks/src/lib.rs:285:9
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::test_metadata
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
