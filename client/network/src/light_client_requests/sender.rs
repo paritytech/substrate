@@ -732,21 +732,7 @@ mod tests {
 	use std::iter::FromIterator;
 	use sc_client_api::StorageProof;
 	use sp_core::storage::ChildInfo;
-
-	fn protocol_id() -> ProtocolId {
-		ProtocolId::from("test")
-	}
-
-	fn peerset() -> (sc_peerset::Peerset, sc_peerset::PeersetHandle) {
-		let cfg = sc_peerset::SetConfig {
-			in_peers: 128,
-			out_peers: 128,
-			bootnodes: Default::default(),
-			reserved_only: false,
-			reserved_nodes: Default::default(),
-		};
-		sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets: vec![cfg] })
-	}
+	use crate::light_client_requests::tests::{DummyFetchChecker, protocol_id, peerset, dummy_header};
 
 	fn empty_proof() -> Vec<u8> {
 		StorageProof::empty().encode()
@@ -758,7 +744,7 @@ mod tests {
 		let (_peer_set, peer_set_handle) = peerset();
 		let mut sender = LightClientRequestSender::<Block>::new(
 			&protocol_id(),
-			Arc::new(crate::light_client_requests::tests::DummyFetchChecker {
+			Arc::new(DummyFetchChecker {
 				ok: true,
 				_mark: std::marker::PhantomData,
 			}),
@@ -774,16 +760,6 @@ mod tests {
 
 	type Block =
 		sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
-
-	fn dummy_header() -> sp_test_primitives::Header {
-		sp_test_primitives::Header {
-			parent_hash: Default::default(),
-			number: 0,
-			state_root: Default::default(),
-			extrinsics_root: Default::default(),
-			digest: Default::default(),
-		}
-	}
 
 	#[test]
 	fn body_request_fields_encoded_properly() {

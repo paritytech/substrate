@@ -168,11 +168,11 @@ mod tests {
 
 	// TODO: Deduplicate the functions below with sender.rs
 
-	fn protocol_id() -> ProtocolId {
+	pub fn protocol_id() -> ProtocolId {
 		ProtocolId::from("test")
 	}
 
-	fn peerset() -> (sc_peerset::Peerset, sc_peerset::PeersetHandle) {
+	pub fn peerset() -> (sc_peerset::Peerset, sc_peerset::PeersetHandle) {
 		let cfg = sc_peerset::SetConfig {
 			in_peers: 128,
 			out_peers: 128,
@@ -183,7 +183,7 @@ mod tests {
 		sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets: vec![cfg] })
 	}
 
-	fn dummy_header() -> sp_test_primitives::Header {
+	pub fn dummy_header() -> sp_test_primitives::Header {
 		sp_test_primitives::Header {
 			parent_hash: Default::default(),
 			number: 0,
