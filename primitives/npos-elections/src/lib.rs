@@ -87,6 +87,7 @@ use sp_std::{
 	prelude::*,
 	rc::Rc,
 };
+use sp_core::RuntimeDebug;
 
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
@@ -230,7 +231,7 @@ pub trait PerThing128: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance>
 impl<T: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance>> PerThing128 for T {}
 
 /// The errors that might occur in the this crate and compact.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum Error {
 	/// While going from compact to staked, the stake of all the edges has gone above the total and
 	/// the last stake cannot be assigned.
@@ -263,7 +264,7 @@ pub type WithApprovalOf<A> = (A, ExtendedBalance);
 pub type CandidatePtr<A> = Rc<RefCell<Candidate<A>>>;
 
 /// A candidate entity for the election.
-#[derive(Debug, Clone, Default)]
+#[derive(RuntimeDebug, Clone, Default)]
 pub struct Candidate<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -404,7 +405,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 }
 
 /// Final result of the election.
-#[derive(Debug)]
+#[derive(RuntimeDebug)]
 pub struct ElectionResult<AccountId, P: PerThing> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
@@ -415,7 +416,7 @@ pub struct ElectionResult<AccountId, P: PerThing> {
 }
 
 /// A voter's stake assignment among a set of targets, represented as ratios.
-#[derive(Debug, Clone, Default)]
+#[derive(RuntimeDebug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct Assignment<AccountId, P: PerThing> {
 	/// Voter's identifier.
@@ -484,7 +485,7 @@ impl<AccountId: IdentifierT, P: PerThing128> Assignment<AccountId, P> {
 
 /// A voter's stake assignment among a set of targets, represented as absolute values in the scale
 /// of [`ExtendedBalance`].
-#[derive(Debug, Clone, Default)]
+#[derive(RuntimeDebug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct StakedAssignment<AccountId> {
 	/// Voter's identifier
@@ -564,7 +565,7 @@ impl<AccountId> StakedAssignment<AccountId> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet they
 /// do not necessarily have to be the same.
-#[derive(Default, Debug, Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Default, RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Support<AccountId> {
 	/// Total support.
