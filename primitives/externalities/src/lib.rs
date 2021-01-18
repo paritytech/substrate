@@ -477,21 +477,9 @@ pub struct StateLog {
 	/// Worker did iterate over a given interval.
 	/// Interval is a pair of inclusive start and end key.
 	pub read_intervals: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	/// Key write with no read access.
-	pub write_only_key: Vec<Vec<u8>>, 
-	/// Append operation in write only mode.
-	pub write_only_append_key: Vec<Vec<u8>>, 
 }
 
 impl StateLog {
-	/// Check that no incompatible access are done.
-	/// TODO debug assert call it where relevant: only for test or double check
-	pub fn validate(&self) -> bool {
-		if !self.write_only_key.is_empty() || !self.write_only_append_key.is_empty() {
-			unimplemented!()
-		}
-		true
-	}
 	/// Return true if a read related information was logged.
 	pub fn has_read(&self) -> bool {
 		!self.read_keys.is_empty() || !self.read_intervals.is_empty()
@@ -816,26 +804,6 @@ pub struct AccessDeclarations {
 	/// Read and write access, depending on mode, this should exclude a concurrent read
 	/// or write access.
 	pub read_write: AccessDeclaration,
-	/// Write only access, depending on mode, this should exclude a concurrent read access.
-	/// Multiple writes are done in order of worker 'spawn'.
-	pub write_only: AccessDeclaration,
-	/// Write only append access, depending on mode, this should exclude a concurrent read access.
-	/// Multiple writes does append in order of worker 'spawn'.
-	pub write_only_append: AccessDeclaration,
-}
-
-impl AccessDeclarations {
-	/// Some declaration are incoherent, eg 'write_only' is not compatible with
-	/// 'read_only'.
-	/// This function ensure everything is coherent. 
-	pub fn validate(&self) -> bool {
-		// TODO consider forcing key to be ordered!!!
-		// TODO implement (following check is same as unimplemented
-		if !self.write_only.is_empty() || !self.write_only_append.is_empty() {
-			return false
-		}
-		true
-	}
 }
 
 /// Access filter on storage.

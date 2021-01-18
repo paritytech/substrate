@@ -442,12 +442,6 @@ impl OverlayedChanges {
 				self.filters.forbid_writes(filter, child_marker);
 			},
 			WorkerDeclaration::WriteDeclarative(filters, failure) => {
-				if !filters.write_only.is_empty() || !filters.write_only_append.is_empty() {
-					unimplemented!("TODO");
-				}
-				if !filters.validate() {
-					panic!("TODO panic or failure handler and move to parent call");
-				}
 				self.filters.guard_child_filter_read(&filters.read_only);
 				self.filters.guard_child_filter_write(&filters.read_write);
 				// TODO return a bool and on error spawn a noops async_ext that always return invalid.
@@ -484,9 +478,6 @@ impl OverlayedChanges {
 				self.filters.allow_writes(filter);
 			},
 			WorkerDeclaration::WriteDeclarative(filters, failure) => {
-				if !filters.write_only.is_empty() || !filters.write_only_append.is_empty() {
-					unimplemented!("TODO");
-				}
 				self.filters.set_failure_handler(None, failure);
 				self.filters.allow_reads(filters.read_only);
 				self.filters.allow_writes(filters.read_write);
