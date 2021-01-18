@@ -35,12 +35,16 @@ pub use self::bandwidth::BandwidthSinks;
 /// If `memory_only` is true, then only communication within the same process are allowed. Only
 /// addresses with the format `/memory/...` are allowed.
 ///
+/// `yamux_window_size` consists in the size of the Yamux windows. `None` to leave the default
+/// (256kiB).
+///
 /// Returns a `BandwidthSinks` object that allows querying the average bandwidth produced by all
 /// the connections spawned with this transport.
 pub fn build_transport(
 	keypair: identity::Keypair,
 	memory_only: bool,
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
+	yamux_window_size: Option<u32>,
 ) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>) {
 	// Build the base layer of the transport.
 	let transport = if let Some(t) = wasm_external_transport {
@@ -97,6 +101,10 @@ pub fn build_transport(
 		// Enable proper flow-control: window updates are only sent when
 		// buffered data has been consumed.
 		yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::on_read());
+
+		if let Some(yamux_window_size) = yamux_window_size {
+			yamux_config.set_receive_window_size(yamux_window_size);
+		}
 
 		core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
 	};
