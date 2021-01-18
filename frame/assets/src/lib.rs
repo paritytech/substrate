@@ -152,7 +152,7 @@ pub trait Config: frame_system::Config {
 	type AssetDepositPerZombie: Get<BalanceOf<Self>>;
 
 	/// The maximum length of a name or symbol stored on-chain.
-	type StringLimit: Get<usize>;
+	type StringLimit: Get<u32>;
 
 	/// The basic amount of funds that must be reserved when adding metadata to your asset.
 	type MetadataDepositBase: Get<BalanceOf<Self>>;
@@ -973,8 +973,8 @@ decl_module! {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			ensure!(name.len() <= T::StringLimit::get(), Error::<T>::BadMetadata);
-			ensure!(symbol.len() <= T::StringLimit::get(), Error::<T>::BadMetadata);
+			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
+			ensure!(symbol.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
 
 			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
 			ensure!(&origin == &d.owner, Error::<T>::NoPermission);
@@ -1153,7 +1153,7 @@ mod tests {
 	parameter_types! {
 		pub const AssetDepositBase: u64 = 1;
 		pub const AssetDepositPerZombie: u64 = 1;
-		pub const StringLimit: usize = 50;
+		pub const StringLimit: u32 = 50;
 		pub const MetadataDepositBase: u64 = 1;
 		pub const MetadataDepositPerByte: u64 = 1;
 	}
