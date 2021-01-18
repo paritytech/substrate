@@ -85,7 +85,7 @@ use sp_runtime::{
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
-	Parameter, ensure, debug, storage,
+	Parameter, debug, storage,
 	traits::{
 		Contains, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
 		StoredMap, EnsureOrigin, OriginTrait, Filter,
@@ -576,6 +576,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type UpgradedToU32RefCount<T: Config> = StorageValue<_, bool, ValueQuery>;
 
+	/// True if we have upgraded so that AccountInfo contains two types of `RefCount`. False
+	/// (default) if not.
+	#[pallet::storage]
+	pub(super) type UpgradedToDualRefCount<T: Config> = StorageValue<_, bool, ValueQuery>;
+
 	/// The execution phase of the block.
 	#[pallet::storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
@@ -611,6 +616,25 @@ pub mod pallet {
 				sp_io::storage::set(well_known_keys::CHANGES_TRIE_CONFIG, &changes_trie_config.encode());
 			}
 		}
+	}
+}
+
+mod migrations {
+	use super::*;
+
+	#[allow(dead_code)]
+	pub fn migrate_all<T: Config>() -> frame_support::weights::Weight {
+		Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)|
+			Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, data })
+		);
+		T::BlockWeights::get().max_block
+	}
+
+	pub fn migrate_to_dual_ref_count<T: Config>() -> frame_support::weights::Weight {
+		Account::<T>::translate::<(T::Index, RefCount, T::AccountData), _>(|_key, (nonce, rc, data)|
+			Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, data })
+		);
+		T::BlockWeights::get().max_block
 	}
 }
 
