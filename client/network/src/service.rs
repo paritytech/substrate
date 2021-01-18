@@ -295,7 +295,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				// The yamux buffer size limit is configured to be equal to the maximum frame size
 				// of all protocols. 10 bytes are added to each limit for the length prefix that
 				// is not included in the upper layer protocols limit but is still present in the
-				// yamux buffer.
+				// yamux buffer. These 10 bytes correspond to the maximum size required to encode
+				// a variable-length-encoding 64bits number. In other words, we make the
+				// assumption that no notification larger than 2^64 will ever be sent.
 				let yamux_maximum_buffer_size = {
 					let requests_max = params.network_config
 						.request_response_protocols.iter()
