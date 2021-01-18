@@ -1389,7 +1389,11 @@ pub mod pallet_prelude {
 ///
 ///
 /// The macro implement the function `storage_metadata` on `Pallet` implementing the metadata for
-/// storages.
+/// storages:
+/// * for storage value the type for value is copied into metadata
+/// * for storage map the type for value and the type for key is copied into metadata
+/// * for storage double map the type for value, key1, and key2 is copied into
+///   metadata.
 ///
 /// # Type value: `#[pallet::type_value]` optional
 ///
@@ -1550,17 +1554,17 @@ pub mod pallet_prelude {
 ///
 /// ```
 /// #[frame_support::pallet]
-/// // NOTE: Example is name of the pallet, it will be used as unique identifier for storage
+/// // NOTE: The name of the pallet will be provided by construct_runtime, and will be used as
+/// // unique identifier for storage. It is not defined in the pallet itself.
 /// pub mod pallet {
 /// 	use frame_support::pallet_prelude::*; // Import various types used in pallet definition
-/// 	use frame_system::pallet_prelude::*; // OriginFor helper type for implementing dispatchables.
+/// 	use frame_system::pallet_prelude::*; // Import some system helper types.
 ///
 /// 	type BalanceOf<T> = <T as Config>::Balance;
 ///
 /// 	// Define the generic parameter of the pallet
-/// 	// The macro checks trait generics: is expected none or `I = ()`.
-/// 	// The macro parses `#[pallet::constant]` attributes: used to generate constant metadata,
-/// 	// expected syntax is `type $IDENT: Get<$TYPE>;`.
+/// 	// The macro parses `#[pallet::constant]` attributes, and use them to generate constant
+/// 	// metadata,
 /// 	#[pallet::config]
 /// 	pub trait Config: frame_system::Config {
 /// 		#[pallet::constant] // put the constant in metadata
@@ -1577,15 +1581,11 @@ pub mod pallet_prelude {
 /// 	}
 ///
 /// 	// Define the pallet struct placeholder, various pallet function are implemented on it.
-/// 	// The macro checks struct generics: is expected `T` or `T, I = DefaultInstance`
 /// 	#[pallet::pallet]
 /// 	#[pallet::generate_store(pub(super) trait Store)]
 /// 	pub struct Pallet<T>(PhantomData<T>);
 ///
 /// 	// Implement on the pallet hooks on pallet.
-/// 	// The macro checks:
-/// 	// * trait is `Hooks` (imported from pallet_prelude)
-/// 	// * struct is `Pallet<T>` or `Pallet<T, I>`
 /// 	#[pallet::hooks]
 /// 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 /// 	}
@@ -1595,25 +1595,15 @@ pub mod pallet_prelude {
 /// 	// WARNING: Each parameter used in functions must implement: Clone, Debug, Eq, PartialEq,
 /// 	// Codec.
 /// 	//
-/// 	// The macro checks:
-/// 	// * pallet is `Pallet<T>` or `Pallet<T, I>`
-/// 	// * trait is `Call`
-/// 	// * each dispatchable functions first argument is `origin: OriginFor<T>` (OriginFor is
-/// 	//   imported from frame_system.
-/// 	//
-/// 	// The macro parse `#[pallet::compact]` attributes, function parameter with this attribute
-/// 	// will be encoded/decoded using compact codec in implementation of codec for the enum
-/// 	// `Call`.
-/// 	//
-/// 	// The macro generate the enum `Call` with a variant for each dispatchable and implements
-/// 	// codec, Eq, PartialEq, Clone and Debug.
+/// 	// The macro parses `#[pallet::compact]` attributes on function arguments, and use it to
+/// 	// implement `Call` encoding/decoding.
 /// 	#[pallet::call]
 /// 	impl<T: Config> Pallet<T> {
 /// 		/// Doc comment put in metadata
 /// 		#[pallet::weight(0)] // Defines weight for call (function parameters are in scope)
 /// 		fn toto(
 /// 			origin: OriginFor<T>,
-/// 			#[pallet::compact] _foo: u32
+/// 			#[pallet::compact] _foo: u32,
 /// 		) -> DispatchResultWithPostInfo {
 /// 			let _ = origin;
 /// 			unimplemented!();
@@ -1621,7 +1611,6 @@ pub mod pallet_prelude {
 /// 	}
 ///
 /// 	// Declare pallet Error enum. (this is optional)
-/// 	// The macro checks enum generics and that each variant is unit.
 /// 	// The macro generate error metadata using doc comment on each variant.
 /// 	#[pallet::error]
 /// 	pub enum Error<T> {
@@ -1651,19 +1640,19 @@ pub mod pallet_prelude {
 /// 		Something(u32),
 /// 	}
 ///
-/// 	// Define a struct which implements `frame_support::traits::Get<T::Balance>`
+/// 	// Define a struct which implements `frame_support::traits::Get<T::Balance>`. (optional)
 /// 	#[pallet::type_value]
 /// 	pub(super) fn MyDefault<T: Config>() -> T::Balance { 3.into() }
 ///
-/// 	// Declare a storage, any amount of storage can be declared.
+/// 	// Declare a storage, any amount of storage can be declared. (optional)
 /// 	//
 /// 	// Is expected either `StorageValue`, `StorageMap` or `StorageDoubleMap`.
-/// 	// The macro generates for struct `$identP` (for storage of name `$ident`) and implement
-/// 	// storage instance on it.
+/// 	// The macro generates the prefix type and replace first generic `_`.
+/// 	//
 /// 	// The macro macro expand the metadata for the storage with the type used:
-/// 	// * For storage value the type for value will be copied into metadata
-/// 	// * For storage map the type for value and the type for key will be copied into metadata
-/// 	// * For storage double map the type for value, key1, and key2 will be copied into
+/// 	// * for storage value the type for value is copied into metadata
+/// 	// * for storage map the type for value and the type for key is copied into metadata
+/// 	// * for storage double map the type for value, key1, and key2 is copied into
 /// 	//   metadata.
 /// 	//
 /// 	// NOTE: for storage hasher, the type is not copied because storage hasher trait already
@@ -1672,14 +1661,14 @@ pub mod pallet_prelude {
 /// 	pub(super) type MyStorageValue<T: Config> =
 /// 		StorageValue<_, T::Balance, ValueQuery, MyDefault<T>>;
 ///
-/// 	// Another declaration
+/// 	// Another storage declaration
 /// 	#[pallet::storage]
 /// 	#[pallet::getter(fn my_storage)]
 /// 	pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
 ///
 /// 	// Declare genesis config. (This is optional)
 /// 	//
-/// 	// The macro accept either type alias or struct or enum, it checks generics are consistent.
+/// 	// The macro accept either struct or enum, it checks generics are consistent.
 /// 	//
 /// 	// Type must implement `Default` traits
 /// 	#[pallet::genesis_config]
@@ -1700,7 +1689,7 @@ pub mod pallet_prelude {
 /// 	#[pallet::origin]
 /// 	pub struct Origin<T>(PhantomData<T>);
 ///
-/// 	// Declare validate_unsigned implementation.
+/// 	// Declare validate_unsigned implementation. (this is optional)
 /// 	#[pallet::validate_unsigned]
 /// 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 /// 		type Call = Call<T>;
@@ -1713,8 +1702,6 @@ pub mod pallet_prelude {
 /// 	}
 ///
 /// 	// Declare inherent provider for pallet. (this is optional)
-/// 	//
-/// 	// The macro checks pallet is `Pallet<T>` or `Pallet<T, I>` and trait is `ProvideInherent`
 /// 	#[pallet::inherent]
 /// 	impl<T: Config> ProvideInherent for Pallet<T> {
 /// 		type Call = Call<T>;
