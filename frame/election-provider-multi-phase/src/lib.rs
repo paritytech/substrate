@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Two phase, offchain election provider pallet.
+//! # Multi phase, offchain election provider pallet.
 //!
-//! As the name suggests, this election-provider has two distinct phases (see [`Phase`]), signed and
-//! unsigned.
+//! Currently, this election-provider has two distinct phases (see [`Phase`]), **signed** and
+//! **unsigned**.
 //!
 //! ## Phases
 //!
@@ -35,13 +35,15 @@
 //! ```
 //!
 //! Note that the unsigned phase starts [`pallet::Config::UnsignedPhase`] blocks before the
-//! `next_election_prediction`, but only ends when a call to [`ElectionProvider::elect`] happens.
+//! `next_election_prediction`, but only ends when a call to [`ElectionProvider::elect`] happens. If
+//! no `elect` happens, the signed phase is extended.
 //!
 //! > Given this, it is rather important for the user of this pallet to ensure it always terminates
 //! election via `elect` before requesting a new one.
 //!
 //! Each of the phases can be disabled by essentially setting their length to zero. If both phases
-//! have length zero, then the pallet essentially runs only the on-chain backup.
+//! have length zero, then the pallet essentially runs only the fallback strategy, denoted by
+//! [`Config::FallbackStrategy`].
 //!
 //! ### Signed Phase
 //!
@@ -101,6 +103,10 @@
 //! Validators will only submit solutions if the one that they have computed is sufficiently better
 //! than the best queued one (see [`pallet::Config::SolutionImprovementThreshold`]) and will limit
 //! the weigh of the solution to [`pallet::Config::MinerMaxWeight`].
+//!
+//! The unsigned phase can be made passive depending on how the previous signed phase went, by
+//! setting the first inner value of [`Phase`] to `false`. For now, the signed phase is always
+//! active.
 //!
 //! ### Fallback
 //!
@@ -165,19 +171,19 @@
 //! on-chain election provider as fallback, or special _noop_ fallback that simply returns an error,
 //! thus replicating [`FallbackStrategy::Nothing`].
 //!
-//! **Score based on size**: We should always prioritize small solutions over bigger ones, if there
-//! is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
+//! **Score based on (byte) size**: We should always prioritize small solutions over bigger ones, if
+//! there is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode, HasCompact};
+use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, ReservableCurrency},
 	weights::Weight,
 };
-use frame_system::{ensure_none, ensure_signed, offchain::SendTransactionTypes};
+use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use sp_election_providers::{ElectionDataProvider, ElectionProvider, onchain};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, is_score_better, CompactSolution, ElectionScore,
@@ -205,19 +211,10 @@ pub mod helpers;
 
 const LOG_TARGET: &'static str = "election-provider";
 
-// for the helper macros
-#[doc(hidden)]
-pub use sp_runtime::traits::UniqueSaturatedInto;
-#[doc(hidden)]
-pub use sp_std;
-
 pub mod unsigned;
 pub mod weights;
 
 use weights::WeightInfo;
-
-// pub mod signed;
-// use signed::SignedSubmission;
 
 /// The compact solution type used by this crate.
 pub type CompactOf<T> = <T as Config>::CompactSolution;
@@ -231,6 +228,7 @@ pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::Accuracy;
 /// The accuracy of the election, when computed on-chain. Equal to [`Config::OnChainAccuracy`].
 pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
 
+/// Wrapper type that implements the configurations needed for the on-chain backup.
 struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>)
 where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
@@ -310,7 +308,7 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 	}
 }
 
-/// A configuration for the module to indicate what should happen in the case of a fallback i.e.
+/// A configuration for the pallet to indicate what should happen in the case of a fallback i.e.
 /// reaching a call to `elect` with no good solution.
 #[cfg_attr(test, derive(Clone))]
 pub enum FallbackStrategy {
@@ -379,7 +377,7 @@ pub struct ReadySolution<A> {
 	compute: ElectionCompute,
 }
 
-/// Solution size of the election.
+/// Size of the snapshot from which the solution was derived.
 ///
 /// This is needed for proper weight calculation.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
@@ -397,10 +395,9 @@ pub struct SolutionSize {
 }
 
 /// A snapshot of all the data that is needed for en entire round. They are provided by
-/// [`ElectionDataProvider`] at the beginning of the signed phase (or the unsigned phase, if signed
-/// phase is non-existent) and are kept around until the round is finished.
+/// [`ElectionDataProvider`] and are kept around until the round is finished.
 ///
-/// These are stored together because they are often times accessed together.
+/// These are stored together because they are often accessed together.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct RoundSnapshot<A> {
 	/// All of the voters.
@@ -433,16 +430,16 @@ pub enum ElectionError {
 	Feasibility(FeasibilityError),
 	/// An error in the on-chain fallback.
 	OnChainFallback(onchain::Error),
-	/// No fallback is configured
+	/// No fallback is configured.
 	NoFallbackConfigured,
 	/// An internal error in the NPoS elections crate.
 	NposElections(sp_npos_elections::Error),
 	/// Snapshot data was unavailable unexpectedly.
 	SnapshotUnAvailable,
 	/// Submitting a transaction to the pool failed.
-	///
-	/// This can only happen in the unsigned phase.
 	PoolSubmissionFailed,
+	/// The pre-dispatch checks failed for the mined solution.
+	PreDispatchChecksFailed,
 }
 
 impl From<onchain::Error> for ElectionError {
@@ -470,7 +467,8 @@ pub enum FeasibilityError {
 	WrongWinnerCount,
 	/// The snapshot is not available.
 	///
-	/// This must be an internal error of the chain.
+	/// Kinda defensive: The pallet should technically never attempt to do a feasibility check when
+	/// no snapshot is present.
 	SnapshotUnavailable,
 	/// Internal error from the election crate.
 	NposElection(sp_npos_elections::Error),
@@ -520,12 +518,12 @@ pub mod pallet {
 		type SignedPhase: Get<Self::BlockNumber>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
-		/// "better".
+		/// "better" (in any phase).
 		#[pallet::constant]
 		type SolutionImprovementThreshold: Get<Perbill>;
 
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
-		type UnsignedPriority: Get<TransactionPriority>;
+		type MinerTxPriority: Get<TransactionPriority>;
 		/// Maximum number of iteration of balancing that will be executed in the embedded miner of
 		/// the pallet.
 		type MinerMaxIterations: Get<u32>;
@@ -586,15 +584,17 @@ pub mod pallet {
 				{
 					let (need_snapshot, enabled, additional) = if current_phase == Phase::Signed {
 						// followed by a signed phase: close the signed phase, no need for snapshot.
-						// TODO
+						// NOTE: SIGNED_PHASE
 						(false, true, Weight::zero())
 					} else {
-						// no signed phase
+						// no signed phase: create a new snapshot, definitely `enable` the unsigned
+						// phase.
 						(true, true, Weight::zero())
 					};
 
 					Self::on_initialize_open_unsigned(need_snapshot, enabled, now);
 					log!(info, "Starting unsigned phase({}) at #{:?}.", enabled, now);
+
 					let base_weight = if need_snapshot {
 						T::WeightInfo::on_initialize_open_unsigned_with_snapshot() }
 					else {
@@ -616,7 +616,7 @@ pub mod pallet {
 						}
 						Err(e) => log!(error, "error while submitting transaction in OCW: {:?}", e),
 					},
-					Err(why) => log!(error, "Error in unsigned offchain worker: {:?}", why),
+					Err(why) => log!(warn, "denied offchain worker: {:?}", why),
 				}
 			}
 		}
@@ -658,16 +658,16 @@ pub mod pallet {
 		///
 		/// The dispatch origin fo this call must be __none__.
 		///
-		/// This submission is checked on the fly, thus it is likely yo be more limited and smaller.
-		/// Moreover, this unsigned solution is only validated when submitted to the pool from the
-		/// local process. Effectively, this means that only active validators can submit this
-		/// transaction when authoring a block.
+		/// This submission is checked on the fly. Moreover, this unsigned solution is only
+		/// validated when submitted to the pool from the **local** node. Effectively, this means
+		/// that only active validators can submit this transaction when authoring a block (similar
+		/// to an inherent).
 		///
 		/// To prevent any incorrect solution (and thus wasted time/weight), this transaction will
-		/// panic if the solution submitted by the validator is invalid, effectively putting their
-		/// authoring reward at risk.
+		/// panic if the solution submitted by the validator is invalid in any way, effectively
+		/// putting their authoring reward at risk.
 		///
-		/// No deposit or reward is associated with this.
+		/// No deposit or reward is associated with this submission.
 		#[pallet::weight(T::WeightInfo::submit_unsigned(
 			witness.voters,
 			witness.targets,
@@ -683,8 +683,7 @@ pub mod pallet {
 			let error_message = "Invalid unsigned submission must produce invalid block and \
 			                     deprive validator from their authoring reward.";
 
-			// check phase and score.
-			// NOTE: since we do this in pre-dispatch, we can just ignore it here.
+			// NOTE: since we do this in pre-dispatch, we _could_ just ignore it here.
 			Self::unsigned_pre_dispatch_checks(&solution).expect(error_message);
 
 			// ensure witness was correct.
@@ -733,6 +732,7 @@ pub mod pallet {
 		UnsignedPhaseStarted(u32),
 	}
 
+	/// Error of the pallet that can be returned in response to dispatches.
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Submission was too early.
@@ -781,15 +781,14 @@ pub mod pallet {
 				ValidTransaction::with_tag_prefix("OffchainElection")
 					// The higher the score[0], the better a solution is.
 					.priority(
-						T::UnsignedPriority::get()
-							.saturating_add(solution.score[0].saturated_into()),
+						T::MinerTxPriority::get().saturating_add(solution.score[0].saturated_into()),
 					)
 					// used to deduplicate unsigned solutions: each validator should produce one
 					// solution per round at most, and solutions are not propagate.
 					.and_provides(solution.round)
 					// transaction should stay in the pool for the duration of the unsigned phase.
 					.longevity(T::UnsignedPhase::get().saturated_into::<u64>())
-					// We don't propagate this. This can never the validated at a remote node.
+					// We don't propagate this. This can never be validated at a remote node.
 					.propagate(false)
 					.build()
 			} else {
@@ -816,7 +815,7 @@ pub mod pallet {
 	/// Internal counter for the number of rounds.
 	///
 	/// This is useful for de-duplication of transactions submitted to the pool, and general
-	/// diagnostics of the module.
+	/// diagnostics of the pallet.
 	///
 	/// This is merely incremented once per every time that an upstream `elect` is called.
 	#[pallet::storage]
@@ -828,7 +827,7 @@ pub mod pallet {
 	#[pallet::getter(fn current_phase)]
 	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, ValueQuery>;
 
-	/// Current best solution, signed or unsigned.
+	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
 	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolution<T::AccountId>>;
@@ -867,7 +866,7 @@ where
 	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
 	///
 	/// This is decoupled for easy weight calculation.
-	pub fn on_initialize_open_signed() {
+	pub(crate) fn on_initialize_open_signed() {
 		<CurrentPhase<T>>::put(Phase::Signed);
 		Self::create_snapshot();
 		Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
@@ -877,7 +876,7 @@ where
 	///
 	/// This is decoupled for easy weight calculation. Note that the default weight benchmark of
 	/// this function will assume an empty signed queue for `finalize_signed_phase`.
-	pub fn on_initialize_open_unsigned(
+	pub(crate) fn on_initialize_open_unsigned(
 		need_snapshot: bool,
 		enabled: bool,
 		now: T::BlockNumber,
@@ -888,7 +887,6 @@ where
 			Self::create_snapshot();
 		}
 
-		// for now always start the unsigned phase.
 		<CurrentPhase<T>>::put(Phase::Unsigned((enabled, now)));
 		Self::deposit_event(Event::UnsignedPhaseStarted(Self::round()));
 	}
@@ -898,7 +896,7 @@ where
 	/// 1. [`SnapshotMetadata`]
 	/// 2. [`RoundSnapshot`]
 	/// 3. [`DesiredTargets`]
-	pub fn create_snapshot() {
+	pub(crate) fn create_snapshot() {
 		// if any of them don't exist, create all of them. This is a bit conservative.
 		let targets = T::DataProvider::targets();
 		let voters = T::DataProvider::voters();
@@ -912,15 +910,14 @@ where
 		<Snapshot<T>>::put(RoundSnapshot { voters, targets });
 	}
 
+	/// Kill everything created by [`Pallet::create_snapshot`].
+	pub(crate) fn kill_snapshot() {
+		<Snapshot<T>>::kill();
+		<SnapshotMetadata<T>>::kill();
+		<DesiredTargets<T>>::kill();
+	}
+
 	/// Checks the feasibility of a solution.
-	///
-	/// This checks the solution for the following:
-	///
-	/// 0. **all** of the used indices must be correct.
-	/// 1. present correct number of winners.
-	/// 2. any assignment is checked to match with [Snapshot::voters].
-	/// 3. for each assignment, the check of `ElectionDataProvider` is also examined.
-	/// 4. the claimed score is valid.
 	fn feasibility_check(
 		solution: RawSolution<CompactOf<T>>,
 		compute: ElectionCompute,
@@ -938,7 +935,7 @@ where
 
 		// NOTE: this is a bit of duplicate, but we keep it around for veracity. The unsigned path
 		// already checked this in `unsigned_per_dispatch_checks`. The signed path *could* check it
-		// upon arrival.
+		// upon arrival, thus we would then remove it here. Given overlay it is cheap anyhow
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount,);
 
 		// read the entire snapshot.
@@ -957,8 +954,7 @@ where
 			.map(|i| target_at(i).ok_or(FeasibilityError::InvalidWinner))
 			.collect::<Result<Vec<T::AccountId>, FeasibilityError>>()?;
 
-		// Then convert compact -> Assignment. This will fail if any of the indices are gibberish.
-		// that winner indices are already checked.
+		// Then convert compact -> assignment. This will fail if any of the indices are gibberish.
 		let assignments = compact
 			.into_assignment(voter_at, target_at)
 			.map_err::<FeasibilityError, _>(Into::into)?;
@@ -993,6 +989,7 @@ where
 		// This might fail if the normalization fails. Very unlikely. See `integrity_test`.
 		let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
 			.map_err::<FeasibilityError, _>(Into::into)?;
+
 		// This might fail if one of the voter edges is pointing to a non-winner, which is not
 		// really possible anymore because all the winners come from the same `compact`.
 		let supports = sp_npos_elections::to_supports(&winners, &staked_assignments)
@@ -1018,9 +1015,7 @@ where
 		<CurrentPhase<T>>::put(Phase::Off);
 
 		// kill snapshots
-		<Snapshot<T>>::kill();
-		<SnapshotMetadata<T>>::kill();
-		<DesiredTargets<T>>::kill();
+		Self::kill_snapshot();
 	}
 
 	/// On-chain fallback of election.
@@ -1036,10 +1031,6 @@ where
 	}
 
 	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError> {
-		// NOTE: SignedSubmission is guaranteed to be drained by the end of the signed phase too,
-		// thus no need for a manual cleanup:
-		// TODO
-		// debug_assert!(Self::signed_submissions().is_empty());
 		<QueuedSolution<T>>::take()
 			.map_or_else(
 				|| match T::Fallback::get() {
@@ -1073,7 +1064,6 @@ where
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		let outcome = Self::do_elect();
-		// cleanup.
 		Self::post_elect();
 		outcome
 	}
@@ -1144,7 +1134,7 @@ mod feasibility_check {
 
 			assert_noop!(
 				TwoPhase::feasibility_check(solution, COMPUTE),
-				FeasibilityError::WrongWinnerCount
+				FeasibilityError::WrongWinnerCount,
 			);
 		})
 	}

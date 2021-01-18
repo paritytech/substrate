@@ -20,14 +20,20 @@
 use crate::*;
 use frame_support::dispatch::DispatchResult;
 use frame_system::offchain::SubmitTransaction;
-use sp_npos_elections::{seq_phragmen, CompactSolution, ElectionResult};
+use sp_npos_elections::{
+	seq_phragmen, CompactSolution, ElectionResult, assignment_ratio_to_staked_normalized, reduce,
+	assignment_staked_to_ratio_normalized,
+};
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
 use sp_std::cmp::Ordering;
 
 /// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election/";
+
 /// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
 /// within a window of 5 blocks.
+// TODO: this should go into config, and we should store the solution an repeat with this threshold
+// until we can submit it, or if the election happened. Okay for now though
 pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
 
 impl<T: Config> Pallet<T>
@@ -35,7 +41,7 @@ where
 	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
 	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
 {
-	/// Min a new npos solution.
+	/// Mine a new npos solution.
 	pub fn mine_solution(
 		iters: usize,
 	) -> Result<(RawSolution<CompactOf<T>>, SolutionSize), ElectionError> {
@@ -50,14 +56,15 @@ where
 			Some((iters, 0)),
 		)
 		.map_err(Into::into)
-		.and_then(|election_result| {
-			if election_result.winners.len() as u32 == desired_targets {
-				Ok(election_result)
-			} else {
-				Err(ElectionError::Feasibility(FeasibilityError::WrongWinnerCount))
-			}
-		})
 		.and_then(Self::prepare_election_result)
+		.and_then(|(raw_solution, size)| {
+			Self::unsigned_pre_dispatch_checks(&raw_solution)
+				.map_err(|e| {
+				log!(warn, "pre-disaptch-checks failed for mined solution: {:?}", e);
+				ElectionError::PreDispatchChecksFailed
+			})?;
+			Ok((raw_solution, size))
+		})
 	}
 
 	/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
@@ -67,6 +74,9 @@ where
 	pub fn prepare_election_result(
 		election_result: ElectionResult<T::AccountId, CompactAccuracyOf<T>>,
 	) -> Result<(RawSolution<CompactOf<T>>, SolutionSize), ElectionError> {
+		// NOTE: This code path is generally not optimized as it is run offchain. Could use some at
+		// some point though.
+
 		// storage items. Note: we have already read this from storage, they must be in cache.
 		let RoundSnapshot { voters, targets } =
 			Self::snapshot().ok_or(ElectionError::SnapshotUnAvailable)?;
@@ -83,13 +93,12 @@ where
 		let ElectionResult { assignments, winners } = election_result;
 
 		// convert to staked and reduce.
-		let mut staked =
-			sp_npos_elections::assignment_ratio_to_staked_normalized(assignments, &stake_of)
-				.map_err::<ElectionError, _>(Into::into)?;
+		let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)
+			.map_err::<ElectionError, _>(Into::into)?;
 		sp_npos_elections::reduce(&mut staked);
 
 		// convert back to ration and make compact.
-		let ratio = sp_npos_elections::assignment_staked_to_ratio_normalized(staked)?;
+		let ratio = assignment_staked_to_ratio_normalized(staked)?;
 		let compact = <CompactOf<T>>::from_assignment(ratio, &voter_index, &target_index)?;
 
 		let size = SolutionSize { voters: voters.len() as u32, targets: targets.len() as u32 };
@@ -116,7 +125,8 @@ where
 
 	/// Get a random number of iterations to run the balancing in the OCW.
 	///
-	/// Uses the offchain seed to generate a random number, maxed with `T::MinerMaxIterations`.
+	/// Uses the offchain seed to generate a random number, maxed with
+	/// [`Config::MinerMaxIterations`].
 	pub fn get_balancing_iters() -> usize {
 		match T::MinerMaxIterations::get() {
 			0 => 0,
@@ -315,11 +325,18 @@ where
 			.map_err(|_| ElectionError::PoolSubmissionFailed)
 	}
 
+	/// Do the basics checks that MUST happen during the validation and pre-dispatch of an unsigned
+	/// transaction.
+	///
+	/// Can optionally also be called during dispatch, if needed.
+	///
+	/// NOTE: Ideally, these tests should move more and more outside of this and more to the miner's
+	/// code, so that we do less and less storage reads here.
 	pub(crate) fn unsigned_pre_dispatch_checks(
 		solution: &RawSolution<CompactOf<T>>,
 	) -> DispatchResult {
 		// ensure solution is timely. Don't panic yet. This is a cheap check.
-		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::EarlySubmission);
+		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::EarlySubmission,);
 
 		// ensure correct number of winners.
 		ensure!(
@@ -335,7 +352,7 @@ where
 				q.score,
 				T::SolutionImprovementThreshold::get()
 			)),
-			Error::<T>::WeakSubmission
+			Error::<T>::WeakSubmission,
 		);
 
 		Ok(())
@@ -476,6 +493,19 @@ mod tests {
 			)
 			.is_ok());
 			assert!(<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).is_ok());
+
+			// unsigned -- but not enabled.
+			<CurrentPhase<Runtime>>::put(Phase::Unsigned((false, 25)));
+			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(matches!(
+				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
+					.unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
+			));
+			assert!(matches!(
+				<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
+			));
 		})
 	}
 
@@ -534,7 +564,7 @@ mod tests {
 
 	#[test]
 	fn priority_is_set() {
-		ExtBuilder::default().unsigned_priority(20).desired_targets(0).build_and_execute(|| {
+		ExtBuilder::default().miner_tx_priority(20).desired_targets(0).build_and_execute(|| {
 			roll_to(25);
 			assert!(TwoPhase::current_phase().is_unsigned());
 
@@ -650,7 +680,7 @@ mod tests {
 			// mine seq_phragmen solution with 2 iters.
 			assert_eq!(
 				TwoPhase::mine_solution(2).unwrap_err(),
-				ElectionError::Feasibility(FeasibilityError::WrongWinnerCount),
+				ElectionError::PreDispatchChecksFailed,
 			);
 		})
 	}

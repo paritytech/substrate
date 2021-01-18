@@ -93,11 +93,6 @@ pub fn roll_to_with_ocw(n: u64) {
 	}
 }
 
-/// Get the free and reserved balance of some account.
-pub fn balances(who: &AccountId) -> (Balance, Balance) {
-	(Balances::free_balance(who), Balances::reserved_balance(who))
-}
-
 /// Spit out a verifiable raw solution.
 ///
 /// This is a good example of what an offchain miner would do.
@@ -204,7 +199,7 @@ parameter_types! {
 	pub static MaxSignedSubmissions: u32 = 5;
 
 	pub static MinerMaxIterations: u32 = 5;
-	pub static UnsignedPriority: u64 = 100;
+	pub static MinerTxPriority: u64 = 100;
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MockWeightInfo: bool = false;
@@ -272,7 +267,7 @@ impl crate::Config for Runtime {
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
-	type UnsignedPriority = UnsignedPriority;
+	type MinerTxPriority = MinerTxPriority;
 	type DataProvider = StakingMock;
 	type WeightInfo = DualMockWeightInfo;
 	type BenchmarkingConfig = ();
@@ -311,8 +306,8 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 }
 
 impl ExtBuilder {
-	pub fn unsigned_priority(self, p: u64) -> Self {
-		<UnsignedPriority>::set(p);
+	pub fn miner_tx_priority(self, p: u64) -> Self {
+		<MinerTxPriority>::set(p);
 		self
 	}
 	pub fn solution_improvement_threshold(self, p: Perbill) -> Self {
