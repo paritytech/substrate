@@ -27,7 +27,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_io;
 use sp_npos_elections::{
-	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
+	to_support_map, EvaluateSupport, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
 };
 use sp_runtime::{
 	curve::PiecewiseLinear,
@@ -860,8 +860,8 @@ pub(crate) fn horrible_npos_solution(
 	let score = {
 		let (_, _, better_score) = prepare_submission_with(true, true, 0, |_| {});
 
-		let support = build_support_map::<AccountId>(&winners, &staked_assignment).unwrap();
-		let score = evaluate_support(&support);
+		let support = to_support_map::<AccountId>(&winners, &staked_assignment).unwrap();
+		let score = support.evaluate();
 
 		assert!(sp_npos_elections::is_score_better::<Perbill>(
 			better_score,
@@ -960,11 +960,11 @@ pub(crate) fn prepare_submission_with(
 			Staking::slashable_balance_of_fn(),
 		);
 
-		let support_map = build_support_map::<AccountId>(
+		let support_map = to_support_map::<AccountId>(
 			winners.as_slice(),
 			staked.as_slice(),
 		).unwrap();
-		evaluate_support::<AccountId>(&support_map)
+		support_map.evaluate()
 	} else {
 		Default::default()
 	};

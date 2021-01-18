@@ -21,6 +21,7 @@ use super::*;
 use crate::Module as Staking;
 use testing_utils::*;
 
+use sp_npos_elections::CompactSolution;
 use sp_runtime::traits::One;
 use frame_system::RawOrigin;
 pub use frame_benchmarking::{benchmarks, account, whitelisted_caller, whitelist_account};

@@ -244,11 +244,9 @@ pub fn get_weak_solution<T: Config>(
 			<Module<T>>::slashable_balance_of_fn(),
 		);
 
-		let support_map = build_support_map::<T::AccountId>(
-			winners.as_slice(),
-			staked.as_slice(),
-		).unwrap();
-		evaluate_support::<T::AccountId>(&support_map)
+		let support_map =
+			to_support_map::<T::AccountId>(winners.as_slice(), staked.as_slice()).unwrap();
+		support_map.evaluate()
 	};
 
 	// compact encode the assignment.
