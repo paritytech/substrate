@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -952,11 +952,14 @@ decl_storage! {
 
 		/// The active era information, it holds index and start.
 		///
-		/// The active era is the era currently rewarded.
-		/// Validator set of this era must be equal to `SessionInterface::validators`.
+		/// The active era is the era being currently rewarded. Validator set of this era must be
+		/// equal to [`SessionInterface::validators`].
 		pub ActiveEra get(fn active_era): Option<ActiveEraInfo>;
 
 		/// The session index at which the era start for the last `HISTORY_DEPTH` eras.
+		///
+		/// Note: This tracks the starting session (i.e. session index when era start being active)
+		/// for the eras in `[CurrentEra - HISTORY_DEPTH, CurrentEra]`.
 		pub ErasStartSessionIndex get(fn eras_start_session_index):
 			map hasher(twox_64_concat) EraIndex => Option<SessionIndex>;
 
@@ -1219,6 +1222,8 @@ decl_error! {
 		IncorrectHistoryDepth,
 		/// Incorrect number of slashing spans provided.
 		IncorrectSlashingSpans,
+		/// Internal state has become somehow corrupted and the operation cannot continue.
+		BadState,
 	}
 }
 
@@ -1420,12 +1425,12 @@ decl_module! {
 				Err(Error::<T>::InsufficientValue)?
 			}
 
+			system::Module::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
+
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
 			<Bonded<T>>::insert(&stash, &controller);
 			<Payee<T>>::insert(&stash, payee);
-
-			system::Module::<T>::inc_ref(&stash);
 
 			let current_era = CurrentEra::get().unwrap_or(0);
 			let history_depth = Self::history_depth();
@@ -2025,9 +2030,9 @@ decl_module! {
 			}
 		}
 
-		/// Remove all data structure concerning a staker/stash once its balance is zero.
+		/// Remove all data structure concerning a staker/stash once its balance is at the minimum.
 		/// This is essentially equivalent to `withdraw_unbonded` except it can be called by anyone
-		/// and the target `stash` must have no funds left.
+		/// and the target `stash` must have no funds left beyond the ED.
 		///
 		/// This can be called from any origin.
 		///
@@ -2042,7 +2047,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = T::WeightInfo::reap_stash(*num_slashing_spans)]
 		fn reap_stash(_origin, stash: T::AccountId, num_slashing_spans: u32) {
-			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
+			let at_minimum = T::Currency::total_balance(&stash) == T::Currency::minimum_balance();
+			ensure!(at_minimum, Error::<T>::FundedTarget);
 			Self::kill_stash(&stash, num_slashing_spans)?;
 			T::Currency::remove_lock(STAKING_ID, &stash);
 		}
@@ -2630,14 +2636,17 @@ impl<T: Config> Module<T> {
 	/// Start a session potentially starting an era.
 	fn start_session(start_session: SessionIndex) {
 		let next_active_era = Self::active_era().map(|e| e.index + 1).unwrap_or(0);
+		// This is only `Some` when current era has already progressed to the next era, while the
+		// active era is one behind (i.e. in the *last session of the active era*, or *first session
+		// of the new current era*, depending on how you look at it).
 		if let Some(next_active_era_start_session_index) =
 			Self::eras_start_session_index(next_active_era)
 		{
 			if next_active_era_start_session_index == start_session {
 				Self::start_era(start_session);
 			} else if next_active_era_start_session_index < start_session {
-				// This arm should never happen, but better handle it than to stall the
-				// staking pallet.
+				// This arm should never happen, but better handle it than to stall the staking
+				// pallet.
 				frame_support::print("Warning: A session appears to have been skipped.");
 				Self::start_era(start_session);
 			}
@@ -2893,9 +2902,11 @@ impl<T: Config> Module<T> {
 	/// Self votes are added and nominations before the most recent slashing span are ignored.
 	///
 	/// No storage item is updated.
-	pub fn do_phragmen<Accuracy: PerThing>(iterations: usize)
-	-> Option<PrimitiveElectionResult<T::AccountId, Accuracy>>
-		where ExtendedBalance: From<InnerOf<Accuracy>>
+	pub fn do_phragmen<Accuracy: PerThing>(
+		iterations: usize,
+	) -> Option<PrimitiveElectionResult<T::AccountId, Accuracy>>
+	where
+		ExtendedBalance: From<InnerOf<Accuracy>>,
 	{
 		let weight_of = Self::slashable_balance_of_fn();
 		let mut all_nominators: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> = Vec::new();
@@ -2928,7 +2939,11 @@ impl<T: Config> Module<T> {
 
 		if all_validators.len() < Self::minimum_validator_count().max(1) as usize {
 			// If we don't have enough candidates, nothing to do.
-			log!(error, "💸 Chain does not have enough staking candidates to operate. Era {:?}.", Self::current_era());
+			log!(
+				warn,
+				"💸 Chain does not have enough staking candidates to operate. Era {:?}.",
+				Self::current_era()
+			);
 			None
 		} else {
 			seq_phragmen::<_, Accuracy>(
@@ -2995,7 +3010,7 @@ impl<T: Config> Module<T> {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 
-		system::Module::<T>::dec_ref(stash);
+		system::Module::<T>::dec_consumers(stash);
 
 		Ok(())
 	}
@@ -3090,12 +3105,30 @@ impl<T: Config> Module<T> {
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+		frame_support::debug::native::trace!(
+			target: LOG_TARGET,
+			"[{}] planning new_session({})",
+			<frame_system::Module<T>>::block_number(),
+			new_index
+		);
 		Self::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex) {
+		frame_support::debug::native::trace!(
+			target: LOG_TARGET,
+			"[{}] starting start_session({})",
+			<frame_system::Module<T>>::block_number(),
+			start_index
+		);
 		Self::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {
+		frame_support::debug::native::trace!(
+			target: LOG_TARGET,
+			"[{}] ending end_session({})",
+			<frame_system::Module<T>>::block_number(),
+			end_index
+		);
 		Self::end_session(end_index)
 	}
 }

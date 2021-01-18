@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -309,6 +309,8 @@ decl_error! {
 		MinBalanceZero,
 		/// A mint operation lead to an overflow.
 		Overflow,
+		/// Some internal state is broken.
+		BadState,
 		/// Invalid metadata given.
 		BadMetadata,
 	}
@@ -1039,7 +1041,7 @@ impl<T: Config> Module<T> {
 	) -> Result<bool, DispatchError> {
 		let accounts = d.accounts.checked_add(1).ok_or(Error::<T>::Overflow)?;
 		let r = Ok(if frame_system::Module::<T>::account_exists(who) {
-			frame_system::Module::<T>::inc_ref(who);
+			frame_system::Module::<T>::inc_consumers(who).map_err(|_| Error::<T>::BadState)?;
 			false
 		} else {
 			ensure!(d.zombies < d.max_zombies, Error::<T>::TooManyZombies);
@@ -1057,7 +1059,9 @@ impl<T: Config> Module<T> {
 		is_zombie: &mut bool,
 	) {
 		if *is_zombie && frame_system::Module::<T>::account_exists(who) {
-			frame_system::Module::<T>::inc_ref(who);
+			// If the account exists, then it should have at least one provider
+			// so this cannot fail... but being defensive anyway.
+			let _ = frame_system::Module::<T>::inc_consumers(who);
 			*is_zombie = false;
 			d.zombies = d.zombies.saturating_sub(1);
 		}
@@ -1071,7 +1075,7 @@ impl<T: Config> Module<T> {
 		if is_zombie {
 			d.zombies = d.zombies.saturating_sub(1);
 		} else {
-			frame_system::Module::<T>::dec_ref(who);
+			frame_system::Module::<T>::dec_consumers(who);
 		}
 		d.accounts = d.accounts.saturating_sub(1);
 	}
@@ -1129,6 +1133,7 @@ mod tests {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 
 	parameter_types! {

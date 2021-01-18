@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,7 @@
 //! - [`ClassifyDispatch`]: class of the dispatch.
 //! - [`PaysFee`]: weather this weight should be translated to fee and deducted upon dispatch.
 //!
-//! Substrate then bundles then output information of the two traits into [`DispatchInfo`] struct
+//! Substrate then bundles the output information of the three traits into [`DispatchInfo`] struct
 //! and provides it by implementing the [`GetDispatchInfo`] for all `Call` both inner and outer call
 //! types.
 //!
@@ -91,10 +91,11 @@
 //! # fn main() {}
 //! ```
 //!
-//! ### 2. Define weights as a function of input arguments using `FunctionOf` tuple struct. This struct works
-//! in a similar manner as above. 3 items must be provided and each can be either a fixed value or a
-//! function/closure with the same parameters list as the dispatchable function itself, wrapper in a
-//! tuple.
+//! ### 2. Define weights as a function of input arguments using `FunctionOf` tuple struct.
+//!
+//! This struct works in a similar manner as above. 3 items must be provided and each can be either
+//! a fixed value or a function/closure with the same parameters list as the dispatchable function
+//! itself, wrapper in a tuple.
 //!
 //! Using this only makes sense if you want to use a function for at least one of the elements. If
 //! all 3 are static values, providing a raw tuple is easier.
@@ -866,7 +867,7 @@ mod tests {
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
 			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
-			fn f2(_origin) { unimplemented!(); }
+			fn f20(_origin) { unimplemented!(); }
 
 			#[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
 			fn f21(_origin) { unimplemented!(); }
@@ -900,13 +901,29 @@ mod tests {
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::No);
 
-		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().weight, 120);
-		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().class, DispatchClass::Normal);
-		assert_eq!(Call::<TraitImpl>::f12(10, 20).get_dispatch_info().weight, 0);
-		assert_eq!(Call::<TraitImpl>::f12(10, 20).get_dispatch_info().class, DispatchClass::Operational);
-		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().weight, 12300);
-		assert_eq!(Call::<TraitImpl>::f21().get_dispatch_info().weight, 45600);
-		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().class, DispatchClass::Normal);
+		// #[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
+		let info = Call::<TraitImpl>::f11(13, 20).get_dispatch_info();
+		assert_eq!(info.weight, 150); // 13*10 + 20
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = (0, DispatchClass::Operational, Pays::Yes)]
+		let info = Call::<TraitImpl>::f12(10, 20).get_dispatch_info();
+		assert_eq!(info.weight, 0);
+		assert_eq!(info.class, DispatchClass::Operational);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
+		let info = Call::<TraitImpl>::f20().get_dispatch_info();
+		assert_eq!(info.weight, 12300); // 100*3 + 1000*2 + 10_1000
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
+		let info = Call::<TraitImpl>::f21().get_dispatch_info();
+		assert_eq!(info.weight, 45600); // 100*6 + 1000*5 + 40_1000
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
 	}
 
 	#[test]
@@ -938,7 +955,7 @@ mod tests {
 
 	type Balance = u64;
 
-	// 0.5x^3 + 2.333x2 + 7x - 10_000
+	// 0.5x^3 + 2.333x^2 + 7x - 10_000
 	struct Poly;
 	impl WeightToFeePolynomial for Poly {
 		type Balance = Balance;
@@ -975,13 +992,16 @@ mod tests {
 
 	#[test]
 	fn polynomial_works() {
+		// 100^3/2=500000 100^2*(2+1/3)=23333 700 -10000
 		assert_eq!(Poly::calc(&100), 514033);
+		// 10123^3/2=518677865433 10123^2*(2+1/3)=239108634 70861 -10000
 		assert_eq!(Poly::calc(&10_123), 518917034928);
 	}
 
 	#[test]
 	fn polynomial_does_not_underflow() {
 		assert_eq!(Poly::calc(&0), 0);
+		assert_eq!(Poly::calc(&10), 0);
 	}
 
 	#[test]

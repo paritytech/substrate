@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -81,6 +81,7 @@ impl frame_system::Config for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -287,6 +288,40 @@ fn close_tip_works() {
 }
 
 #[test]
+fn slash_tip_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_eq!(Treasury::pot(), 100);
+
+		assert_eq!(Balances::reserved_balance(0), 0);
+		assert_eq!(Balances::free_balance(0), 100);
+
+		assert_ok!(TipsModTestInst::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
+
+		assert_eq!(Balances::reserved_balance(0), 12);
+		assert_eq!(Balances::free_balance(0), 88);
+
+		let h = tip_hash();
+		assert_eq!(last_event(), RawEvent::NewTip(h));
+
+		// can't remove from any origin
+		assert_noop!(
+			TipsModTestInst::slash_tip(Origin::signed(0), h.clone()),
+			BadOrigin,
+		);
+
+		// can remove from root.
+		assert_ok!(TipsModTestInst::slash_tip(Origin::root(), h.clone()));
+		assert_eq!(last_event(), RawEvent::TipSlashed(h, 0, 12));
+
+		// tipper slashed
+		assert_eq!(Balances::reserved_balance(0), 0);
+		assert_eq!(Balances::free_balance(0), 88);
+	});
+}
+
+#[test]
 fn retract_tip_works() {
 	new_test_ext().execute_with(|| {
 		// with report awesome
@@ -409,11 +444,7 @@ fn test_last_reward_migration() {
 
 	s.top = data.into_iter().collect();
 
-	println!("Executing the test!");
-
 	sp_io::TestExternalities::new(s).execute_with(|| {
-
-		println!("Calling migrate_retract_tip_for_tip_new()!");
 
 		TipsModTestInst::migrate_retract_tip_for_tip_new();
 

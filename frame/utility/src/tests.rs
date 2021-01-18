@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -118,6 +118,7 @@ impl frame_system::Config for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -143,7 +144,8 @@ pub struct TestBaseCallFilter;
 impl Filter<Call> for TestBaseCallFilter {
 	fn filter(c: &Call) -> bool {
 		match *c {
-			Call::Balances(_) => true,
+			// Transfer works. Use `transfer_keep_alive` for a call that doesn't pass the filter.
+			Call::Balances(pallet_balances::Call::transfer(..)) => true,
 			Call::Utility(_) => true,
 			// For benchmarking, this acts as a noop call
 			Call::System(frame_system::Call::remark(..)) => true,
@@ -274,7 +276,7 @@ fn as_derivative_filters() {
 		assert_err_ignore_postinfo!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
-			Box::new(Call::System(frame_system::Call::suicide())),
+			Box::new(Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))),
 		), DispatchError::BadOrigin);
 	});
 }
@@ -319,7 +321,7 @@ fn batch_with_signed_filters() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(
 			Utility::batch(Origin::signed(1), vec![
-				Call::System(frame_system::Call::suicide())
+				Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))
 			]),
 		);
 		expect_event(Event::BatchInterrupted(0, DispatchError::BadOrigin));

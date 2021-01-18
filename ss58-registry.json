@@ -245,6 +245,24 @@
 			"website": "https://zero.io"
 		},
 		{
+			"prefix": 26,
+			"network": "jupiter",
+			"displayName": "Jupiter",
+			"symbols": ["jDOT"],
+			"decimals": [10],
+			"standardAccount": "*25519",
+			"website": "https://jupiter.patract.io"
+		},
+		{
+			"prefix": 27,
+			"network": "patract",
+			"displayName": "Patract",
+			"symbols": ["pDOT", "pKSM"],
+			"decimals": [10, 12],
+			"standardAccount": "*25519",
+			"website": "https://patract.network"
+		},
+		{
 			"prefix": 28,
 			"network": "subsocial",
 			"displayName": "Subsocial",
@@ -252,6 +270,15 @@
 			"decimals": null,
 			"standardAccount": "*25519",
 			"website": null
+		},
+		{
+			"prefix": 29,
+			"network": "cord",
+			"displayName": "Dhiway CORD Network",
+			"symbols": ["DCU"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://dhiway.com/"
 		},
 		{
 			"prefix": 30,
@@ -279,6 +306,15 @@
 			"decimals": null,
 			"standardAccount": "*25519",
 			"website": null
+		},
+		{
+			"prefix": 35,
+			"network": "vln",
+			"displayName": "Valiu Liquidity Network",
+			"symbols": ["USDv"],
+			"decimals": [15],
+			"standardAccount": "*25519",
+			"website": "https://valiu.com/"
 		},
 		{
 			"prefix": 36,
@@ -360,6 +396,15 @@
 			"decimals": [8],
 			"standardAccount": "*25519",
 			"website": "https://chainx.org/"
+		},
+		{
+			"prefix": 45,
+			"network": "uniarts",
+			"displayName": "UniArts Network",
+			"symbols": ["UART", "UINK"],
+			"decimals": [12, 12],
+			"standardAccount": "*25519",
+			"website": "https://uniarts.me"
 		},
 		{
 			"prefix": 46,
