@@ -618,16 +618,16 @@ pub enum WorkerType {
 	/// join (usually we can do with it being the state use at spawn).
 	///
 	/// We return `None` on join if some state access break this asumption.
-	ReadAtJoinOptimistic = 3,
+	ReadOptimistic = 3,
 
-	/// Same as `ReadAtJoinOptimistic`, but we do not check conflict on join.
+	/// Same as `ReadOptimistic`, but we do not check conflict on join.
 	/// Instead we declare child workre read accesses and check during processing
 	/// that there is no invalid access.
 	///
 	/// As for all declarative types, depending on failure access declaration
 	/// an illegal access can either result in panic or returning `None`
 	/// on join (as in optimistic mode).
-	ReadAtJoinDeclarative = 4,
+	ReadDeclarative = 4,
 
 	/// `ReadAtSpawn` with allowed write.
 	/// Write from child workers always overwrite write from parent workers
@@ -639,26 +639,30 @@ pub enum WorkerType {
 	///
 	/// As for all optimistic type, the workers need to log access and resolve
 	/// error on result access only.
-	WriteOptimistic = 6,
+	/// We define it as light as it does allow read access of data that
+	/// is write in a different worker.
+	WriteLightOptimistic = 6,
 
-	/// Same as `WriteOptimistic`, but conflict are detected depending on access
+	/// Same as `WriteLightOptimistic`, but conflict are detected depending on access
 	/// declaration.
 	/// We declare allowed write access for child worker (which is forbidden access
 	/// in the parent worker).
-	WriteDeclarative = 7,
+	/// We define it as light as it does allow read access of data that
+	/// is write in a different worker.
+	WriteLightDeclarative = 7,
 
-	/// Same as `WriteOptimistic`, with the additional constraint that we connot read data
+	/// Same as `WriteLightOptimistic`, with the additional constraint that we connot read data
 	/// when it is writable in a parent or a child worker.
 	///
 	/// So write from child exclude read from parent and write from parent exclude read
 	/// from child.
-	WriteAtJoinOptimistic = 8,
+	WriteOptimistic = 8,
 
-	/// Same as `WriteAtJoinOptimistic`, but conflict are detected depending on access
+	/// Same as `WriteOptimistic`, but conflict are detected depending on access
 	/// declaration.
 	/// We declare allowed write access for child worker and allowed read only access
 	/// (no need to declare read access for already declared write access).
-	WriteAtJoinDeclarative = 9,
+	WriteDeclarative = 9,
 }
 
 impl Default for WorkerType {
@@ -674,13 +678,13 @@ impl WorkerType {
 			0 => WorkerType::Stateless,
 			1 => WorkerType::ReadLastBlock,
 			2 => WorkerType::ReadAtSpawn,
-			3 => WorkerType::ReadAtJoinOptimistic,
-			4 => WorkerType::ReadAtJoinDeclarative,
+			3 => WorkerType::ReadOptimistic,
+			4 => WorkerType::ReadDeclarative,
 			5 => WorkerType::WriteAtSpawn,
-			6 => WorkerType::WriteOptimistic,
-			7 => WorkerType::WriteDeclarative,
-			8 => WorkerType::WriteAtJoinOptimistic,
-			9 => WorkerType::WriteAtJoinDeclarative,
+			6 => WorkerType::WriteLightOptimistic,
+			7 => WorkerType::WriteLightDeclarative,
+			8 => WorkerType::WriteOptimistic,
+			9 => WorkerType::WriteDeclarative,
 			_ => return None,
 		})
 	}
@@ -713,19 +717,27 @@ impl WorkerType {
 				WorkerType::ReadAtSpawn => (),
 				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
 			},
-			WorkerType::ReadAtJoinOptimistic => match kind {
+			WorkerType::ReadOptimistic => match kind {
 				WorkerType::Stateless => (),
 				WorkerType::ReadAtSpawn => (),
-				WorkerType::ReadAtJoinOptimistic => (),
+				WorkerType::ReadOptimistic => (),
 				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
 			},
-			WorkerType::ReadAtJoinDeclarative => match kind {
+			WorkerType::ReadDeclarative => match kind {
 				WorkerType::ReadAtSpawn => (),
-				WorkerType::ReadAtJoinDeclarative => (),
+				WorkerType::ReadDeclarative => (),
 				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
 			},
 			WorkerType::WriteAtSpawn => match kind {
 				WorkerType::WriteAtSpawn => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::WriteLightOptimistic => match kind {
+				WorkerType::WriteLightOptimistic => (),
+				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
+			},
+			WorkerType::WriteLightDeclarative => match kind {
+				WorkerType::WriteLightDeclarative => (),
 				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
 			},
 			WorkerType::WriteOptimistic => match kind {
@@ -734,14 +746,6 @@ impl WorkerType {
 			},
 			WorkerType::WriteDeclarative => match kind {
 				WorkerType::WriteDeclarative => (),
-				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
-			},
-			WorkerType::WriteAtJoinOptimistic => match kind {
-				WorkerType::WriteAtJoinOptimistic => (),
-				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
-			},
-			WorkerType::WriteAtJoinDeclarative => match kind {
-				WorkerType::WriteAtJoinDeclarative => (),
 				_ => panic!(INCOMPATIBLE_CHILD_WORKER_TYPE),
 			},
 		}
@@ -760,29 +764,29 @@ pub enum WorkerDeclaration {
 	/// Declaration for `WorkerType::ReadAtSpawn`, no content.
 	ReadAtSpawn,
 
-	/// Declaration for `WorkerType::ReadAtJoinOptimistic`, no content.
-	ReadAtJoinOptimistic,
+	/// Declaration for `WorkerType::ReadOptimistic`, no content.
+	ReadOptimistic,
 
-	/// Declaration for `WorkerType::ReadAtJoinDeclarative`.
+	/// Declaration for `WorkerType::ReadDeclarative`.
 	/// Declaration is child worker allowed read access.
-	ReadAtJoinDeclarative(AccessDeclaration, DeclarationFailureHandling),
+	ReadDeclarative(AccessDeclaration, DeclarationFailureHandling),
 
 	/// Declaration for `WorkerType::ReadAtSpawn`, no content.
 	WriteAtSpawn,
+
+	/// Declaration for `WorkerType::WriteLightOptimistic`, no content.
+	WriteLightOptimistic,
+
+	/// Declaration for `WorkerType::WriteLightDeclarative`.
+	/// Declaration is child worker allowed write access, read access
+	/// is not filtered.
+	WriteLightDeclarative(AccessDeclaration, DeclarationFailureHandling),
 
 	/// Declaration for `WorkerType::WriteOptimistic`, no content.
 	WriteOptimistic,
 
 	/// Declaration for `WorkerType::WriteDeclarative`.
-	/// Declaration is child worker allowed write access, read access
-	/// is not filtered.
-	WriteDeclarative(AccessDeclaration, DeclarationFailureHandling),
-
-	/// Declaration for `WorkerType::WriteAtJoinOptimistic`, no content.
-	WriteAtJoinOptimistic,
-
-	/// Declaration for `WorkerType::WriteAtJoinDeclarative`.
-	WriteAtJoinDeclarative(AccessDeclarations, DeclarationFailureHandling),
+	WriteDeclarative(AccessDeclarations, DeclarationFailureHandling),
 }
 
 impl WorkerDeclaration {
@@ -792,13 +796,13 @@ impl WorkerDeclaration {
 			WorkerDeclaration::Stateless => WorkerType::Stateless,
 			WorkerDeclaration::ReadLastBlock => WorkerType::ReadLastBlock,
 			WorkerDeclaration::ReadAtSpawn => WorkerType::ReadAtSpawn,
-			WorkerDeclaration::ReadAtJoinOptimistic => WorkerType::ReadAtJoinOptimistic,
-			WorkerDeclaration::ReadAtJoinDeclarative(..) => WorkerType::ReadAtJoinDeclarative,
+			WorkerDeclaration::ReadOptimistic => WorkerType::ReadOptimistic,
+			WorkerDeclaration::ReadDeclarative(..) => WorkerType::ReadDeclarative,
 			WorkerDeclaration::WriteAtSpawn => WorkerType::WriteAtSpawn,
+			WorkerDeclaration::WriteLightOptimistic => WorkerType::WriteLightOptimistic,
+			WorkerDeclaration::WriteLightDeclarative(..) => WorkerType::WriteLightDeclarative,
 			WorkerDeclaration::WriteOptimistic => WorkerType::WriteOptimistic,
 			WorkerDeclaration::WriteDeclarative(..) => WorkerType::WriteDeclarative,
-			WorkerDeclaration::WriteAtJoinOptimistic => WorkerType::WriteAtJoinOptimistic,
-			WorkerDeclaration::WriteAtJoinDeclarative(..) => WorkerType::WriteAtJoinDeclarative,
 		}
 	}
 }

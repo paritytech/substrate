@@ -417,31 +417,31 @@ impl OverlayedChanges {
 			| WorkerDeclaration::ReadLastBlock
 			| WorkerDeclaration::ReadAtSpawn
 			| WorkerDeclaration::WriteAtSpawn => (),
-			WorkerDeclaration::ReadAtJoinOptimistic => {
+			WorkerDeclaration::ReadOptimistic => {
+				self.optimistic_logger.log_writes(Some(child_marker));
+			},
+			WorkerDeclaration::WriteLightOptimistic => {
 				self.optimistic_logger.log_writes(Some(child_marker));
 			},
 			WorkerDeclaration::WriteOptimistic => {
-				self.optimistic_logger.log_writes(Some(child_marker));
-			},
-			WorkerDeclaration::WriteAtJoinOptimistic => {
 				self.optimistic_logger.log_reads(Some(child_marker));
 				self.optimistic_logger.log_writes(Some(child_marker));
 			},
-			WorkerDeclaration::ReadAtJoinDeclarative(filter, failure) => {
+			WorkerDeclaration::ReadDeclarative(filter, failure) => {
 				self.filters.guard_child_filter_read(&filter);
 				self.filters.set_failure_handler(Some(child_marker), failure);
 				// TODO consider merging add_change and forbid_writes (or even the full block).
-				self.filters.add_change(WorkerDeclaration::ReadAtJoinDeclarative(filter.clone(), failure), child_marker);
+				self.filters.add_change(WorkerDeclaration::ReadDeclarative(filter.clone(), failure), child_marker);
 				self.filters.forbid_writes(filter, child_marker);
 			},
-			WorkerDeclaration::WriteDeclarative(filter, failure) => {
+			WorkerDeclaration::WriteLightDeclarative(filter, failure) => {
 				self.filters.guard_child_filter_write(&filter);
 				self.filters.set_failure_handler(Some(child_marker), failure);
 				// TODO see if possible to only push worker type??
-				self.filters.add_change(WorkerDeclaration::WriteDeclarative(filter.clone(), failure), child_marker);
+				self.filters.add_change(WorkerDeclaration::WriteLightDeclarative(filter.clone(), failure), child_marker);
 				self.filters.forbid_writes(filter, child_marker);
 			},
-			WorkerDeclaration::WriteAtJoinDeclarative(filters, failure) => {
+			WorkerDeclaration::WriteDeclarative(filters, failure) => {
 				if !filters.write_only.is_empty() || !filters.write_only_append.is_empty() {
 					unimplemented!("TODO");
 				}
@@ -451,7 +451,7 @@ impl OverlayedChanges {
 				self.filters.guard_child_filter_read(&filters.read_only);
 				self.filters.guard_child_filter_write(&filters.read_write);
 				// TODO return a bool and on error spawn a noops async_ext that always return invalid.
-				self.filters.add_change(WorkerDeclaration::WriteAtJoinDeclarative(filters.clone(), failure), child_marker);
+				self.filters.add_change(WorkerDeclaration::WriteDeclarative(filters.clone(), failure), child_marker);
 				self.filters.forbid_reads(filters.read_write, child_marker);
 				self.filters.forbid_writes(filters.read_only, child_marker);
 			},
@@ -465,25 +465,25 @@ impl OverlayedChanges {
 			| WorkerDeclaration::ReadLastBlock
 			| WorkerDeclaration::ReadAtSpawn
 			| WorkerDeclaration::WriteAtSpawn => (),
-			WorkerDeclaration::ReadAtJoinOptimistic => {
+			WorkerDeclaration::ReadOptimistic => {
 				self.optimistic_logger.log_reads(None);
+			},
+			WorkerDeclaration::WriteLightOptimistic => {
+				self.optimistic_logger.log_writes(None);
 			},
 			WorkerDeclaration::WriteOptimistic => {
-				self.optimistic_logger.log_writes(None);
-			},
-			WorkerDeclaration::WriteAtJoinOptimistic => {
 				self.optimistic_logger.log_reads(None);
 				self.optimistic_logger.log_writes(None);
 			},
-			WorkerDeclaration::ReadAtJoinDeclarative(filter, failure) => {
+			WorkerDeclaration::ReadDeclarative(filter, failure) => {
 				self.filters.set_failure_handler(None, failure); 
 				self.filters.allow_reads(filter);
 			},
-			WorkerDeclaration::WriteDeclarative(filter, failure) => {
+			WorkerDeclaration::WriteLightDeclarative(filter, failure) => {
 				self.filters.set_failure_handler(None, failure);
 				self.filters.allow_writes(filter);
 			},
-			WorkerDeclaration::WriteAtJoinDeclarative(filters, failure) => {
+			WorkerDeclaration::WriteDeclarative(filters, failure) => {
 				if !filters.write_only.is_empty() || !filters.write_only_append.is_empty() {
 					unimplemented!("TODO");
 				}

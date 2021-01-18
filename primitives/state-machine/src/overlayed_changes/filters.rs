@@ -772,19 +772,19 @@ impl Filters {
 					| WorkerDeclaration::ReadLastBlock
 					| WorkerDeclaration::ReadAtSpawn
 					| WorkerDeclaration::WriteAtSpawn => (),
-					WorkerDeclaration::ReadAtJoinOptimistic => (),
+					WorkerDeclaration::ReadOptimistic => (),
+					WorkerDeclaration::WriteLightOptimistic => (),
 					WorkerDeclaration::WriteOptimistic => (),
-					WorkerDeclaration::WriteAtJoinOptimistic => (),
-					WorkerDeclaration::ReadAtJoinDeclarative(filter, _failure) => {
+					WorkerDeclaration::ReadDeclarative(filter, _failure) => {
 						// undo a `set_parent_declaration` call.
 						self.failure_handlers.remove(task_id);
 						self.remove_forbid_writes(filter, task_id);
 					},
-					WorkerDeclaration::WriteDeclarative(filter, _failure) => {
+					WorkerDeclaration::WriteLightDeclarative(filter, _failure) => {
 						self.failure_handlers.remove(task_id);
 						self.remove_forbid_writes(filter, task_id);
 					},
-					WorkerDeclaration::WriteAtJoinDeclarative(filters, _failure) => {
+					WorkerDeclaration::WriteDeclarative(filters, _failure) => {
 						if !filters.write_only.is_empty() || !filters.write_only_append.is_empty() {
 							unimplemented!("TODO");
 						}

@@ -358,7 +358,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_optimistic_read_no_conflict() {
 		sp_tasks::set_capacity(1);
-		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadOptimistic);
 		sp_io::storage::set(b"key2", b"val");
 		if handle.join().is_some() {
 			sp_io::storage::set(b"foo", b"bar");
@@ -367,7 +367,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_optimistic_read_conflict() {
 		sp_tasks::set_capacity(1);
-		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadOptimistic);
 		sp_io::storage::set(b"key", b"val");
 		if handle.join().is_none() {
 			sp_io::storage::set(b"foo", b"bar");
@@ -376,7 +376,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_optimistic_read_conflict_2() {
 		sp_tasks::set_capacity(1);
-		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteLightOptimistic);
 		sp_io::storage::set(b"key", b"val");
 		if handle.join().is_none() {
 			sp_io::storage::set(b"foo", b"bar");
@@ -385,7 +385,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_optimistic_read_conflict_nested() {
 		sp_tasks::set_capacity(2);
-		let handle = sp_tasks::spawn(tasks::read_key_nested, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		let handle = sp_tasks::spawn(tasks::read_key_nested, vec![], WorkerDeclaration::ReadOptimistic);
 		sp_io::storage::set(b"key", b"val");
 		if handle.join().is_none() {
 			sp_io::storage::set(b"foo", b"bar");
@@ -394,7 +394,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_declarative_read_no_conflict() {
 		sp_tasks::set_capacity(1);
-		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadDeclarative(
 			AccessDeclaration {
 				prefixes_lock: vec![b"key".to_vec()],
 				keys_lock: Default::default(),
@@ -410,7 +410,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_declarative_read_conflict() {
 		sp_tasks::set_capacity(1);
-		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadDeclarative(
 			AccessDeclaration {
 				prefixes_lock: vec![b"key".to_vec()],
 				keys_lock: Default::default(),
@@ -426,7 +426,7 @@ sp_core::wasm_export_functions! {
 	fn test_declarative_read_conflict_2() {
 		sp_tasks::set_capacity(1);
 		// read key reading at undeclared location
-		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadDeclarative(
 			AccessDeclaration {
 				prefixes_lock: vec![b"aey".to_vec()],
 				keys_lock: Default::default(),
@@ -441,7 +441,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_declarative_read_conflict_nested() {
 		sp_tasks::set_capacity(2);
-		let handle = sp_tasks::spawn(tasks::read_key_nested, vec![], WorkerDeclaration::ReadAtJoinDeclarative(
+		let handle = sp_tasks::spawn(tasks::read_key_nested, vec![], WorkerDeclaration::ReadDeclarative(
 			AccessDeclaration {
 				prefixes_lock: vec![b"key".to_vec()],
 				keys_lock: Default::default(),
@@ -456,7 +456,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_optimistic_write_success() {
 		sp_tasks::set_capacity(1);
-		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteLightOptimistic);
 		assert!(sp_io::storage::get(b"key").is_none());
 		if handle.join().is_some() {
 			if sp_io::storage::get(b"key") == Some(b"foo".to_vec()) {
@@ -468,7 +468,7 @@ sp_core::wasm_export_functions! {
 	fn test_close_parent_transaction() {
 		sp_tasks::set_capacity(1);
 		sp_io::storage::start_transaction();
-		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadOptimistic);
 		sp_io::storage::commit_transaction();
 		// even if no conflict we do not validate a result when transaction context is lower.
 		if handle.join().is_none() {
@@ -479,7 +479,7 @@ sp_core::wasm_export_functions! {
 	fn test_close_parent_transaction_2() {
 		sp_tasks::set_capacity(1);
 		sp_io::storage::start_transaction();
-		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		let handle = sp_tasks::spawn(tasks::read_key, vec![], WorkerDeclaration::ReadOptimistic);
 		sp_io::storage::commit_transaction();
 		sp_io::storage::start_transaction();
 		// even if no conflict we do not validate a result when transaction context is lower.
@@ -492,7 +492,7 @@ sp_core::wasm_export_functions! {
 	fn test_unclose_parent_transaction() {
 		sp_tasks::set_capacity(1);
 		sp_io::storage::start_transaction();
-		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteLightOptimistic);
 		sp_io::storage::start_transaction();
 		assert!(sp_io::storage::get(b"key").is_none());
 		// we allow to get content in a different transaction if it is a child of the starting
@@ -508,7 +508,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_unclose_child_transaction() {
 		sp_tasks::set_capacity(1);
-		let handle = sp_tasks::spawn(tasks::unclose_child_transaction, vec![], WorkerDeclaration::WriteOptimistic);
+		let handle = sp_tasks::spawn(tasks::unclose_child_transaction, vec![], WorkerDeclaration::WriteLightOptimistic);
 		// unclose tx in child is a panic case as unclose tx in result, so we expect panic, code
 		// is hear to make it explicit join is called.
 		if handle.join().is_none() {
@@ -518,7 +518,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_read_write_conflict_1() {
 		sp_tasks::set_capacity(1);
-		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
 		assert!(sp_io::storage::get(b"key").is_none());
 		if handle.join().is_none() {
 			sp_io::storage::set(b"foo", b"bar");
@@ -529,7 +529,7 @@ sp_core::wasm_export_functions! {
 		sp_tasks::set_capacity(1);
 		sp_io::storage::set(b"aaaa", b"dummy");
 		sp_io::storage::set(b"z", b"dummy");
-		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
 		assert_eq!(sp_io::storage::next_key(b"aaaaaaaa"), Some(b"z".to_vec()));
 		if handle.join().is_none() {
 			sp_io::storage::set(b"foo", b"bar");
@@ -540,7 +540,7 @@ sp_core::wasm_export_functions! {
 		sp_tasks::set_capacity(1);
 		sp_io::storage::set(b"k", b"dummy");
 		sp_io::storage::set(b"z", b"dummy");
-		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
 		assert_eq!(sp_io::storage::next_key(b"k"), Some(b"z".to_vec()));
 		if handle.join().is_none() {
 			sp_io::storage::set(b"foo", b"bar");
@@ -550,7 +550,7 @@ sp_core::wasm_export_functions! {
 	fn test_read_write_conflict_4() {
 		sp_tasks::set_capacity(1);
 		sp_io::storage::set(b"k", b"dummy");
-		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
 		assert_eq!(sp_io::storage::next_key(b"k"), None);
 		if handle.join().is_none() {
 			sp_io::storage::set(b"foo", b"bar");
@@ -561,7 +561,7 @@ sp_core::wasm_export_functions! {
 		sp_tasks::set_capacity(1);
 		sp_io::storage::set(b"k", b"dummy");
 //		sp_io::storage::set(b"z", b"dummy");
-		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteAtJoinOptimistic);
+		let handle = sp_tasks::spawn(tasks::write_key, vec![], WorkerDeclaration::WriteOptimistic);
 		assert_eq!(sp_io::storage::next_key(b"key2"), None);
 //		assert_eq!(sp_io::storage::next_key(b"key2"), Some(b"z".to_vec()));
 		if handle.join().is_some() {
@@ -605,7 +605,7 @@ mod tasks {
 	}
 
 	pub fn read_key_nested(_data: Vec<u8>) -> Vec<u8> {
-		let handle = sp_tasks::spawn(read_key, vec![], WorkerDeclaration::ReadAtJoinOptimistic);
+		let handle = sp_tasks::spawn(read_key, vec![], WorkerDeclaration::ReadOptimistic);
 		handle.join().unwrap();
 		Default::default()
 	}
