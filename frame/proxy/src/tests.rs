@@ -317,7 +317,7 @@ fn proxy_announced_removes_announcement_and_returns_deposit() {
 #[test]
 fn filtering_works() {
 	new_test_ext().execute_with(|| {
-		Balances::mutate_account(&1, |a| a.free = 1000);
+		assert!(Balances::mutate_account(&1, |a| a.free = 1000).is_ok());
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::Any, 0));
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 3, ProxyType::JustTransfer, 0));
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 4, ProxyType::JustUtility, 0));
@@ -331,7 +331,7 @@ fn filtering_works() {
 		expect_event(RawEvent::ProxyExecuted(Err(DispatchError::BadOrigin)));
 
 		let derivative_id = Utility::derivative_account_id(1, 0);
-		Balances::mutate_account(&derivative_id, |a| a.free = 1000);
+		assert!(Balances::mutate_account(&derivative_id, |a| a.free = 1000).is_ok());
 		let inner = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
 
 		let call = Box::new(Call::Utility(UtilityCall::as_derivative(0, inner.clone())));
