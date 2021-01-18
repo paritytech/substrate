@@ -39,9 +39,9 @@ pub use self::bandwidth::BandwidthSinks;
 /// default (256kiB).
 ///
 /// `yamux_maximum_buffer_size` is the maximum allowed size of the Yamux buffer. This should be
-/// set either the maximum of all the maximum allowed sizes of messages frames of all high-level
-/// protocols combined, or to some generously high value if you are sure that a maximum size is
-/// enforced on all high-level protocols.
+/// set either to the maximum of all the maximum allowed sizes of messages frames of all
+/// high-level protocols combined, or to some generously high value if you are sure that a maximum
+/// size is enforced on all high-level protocols.
 ///
 /// Returns a `BandwidthSinks` object that allows querying the average bandwidth produced by all
 /// the connections spawned with this transport.
