@@ -36,7 +36,7 @@ use crate::{
 	schema,
 	PeerId,
 };
-use crate::request_responses::RequestFailure;
+use crate::request_responses::{RequestFailure, OutboundFailure};
 use futures::{channel::{oneshot}, future::BoxFuture, prelude::*, stream::FuturesUnordered};
 use prost::Message;
 use sc_client_api::{
@@ -56,10 +56,14 @@ use std::{
 	task::{Context, Poll},
 };
 
-/// Reputation change for a peer when a request timed out.
-//
-// TODO: Still needed?
-pub(crate) const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 8);
+mod rep {
+	use super::*;
+
+	/// Reputation change for a peer when a request timed out.
+	pub const TIMEOUT: ReputationChange = ReputationChange::new(-(1 << 8), "light client request timeout");
+	/// Reputation change for a peer when a request is refused.
+	pub const REFUSED: ReputationChange = ReputationChange::new(-(1 << 8), "light client request refused");
+}
 
 /// Configuration options for [`LightClientRequestSender`].
 #[derive(Debug, Clone)]
@@ -323,7 +327,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		// If we have received responses to previously sent requests, check them and pass them on.
-		while let Poll::Ready(Some((sent_request, response))) = self.sent_requests.poll_next_unpin(cx) {
+		while let Poll::Ready(Some((sent_request, request_result))) = self.sent_requests.poll_next_unpin(cx) {
 			if let Some(info) = self.peers.get_mut(&sent_request.peer) {
 				if info.status != PeerStatus::Busy {
 					// If we get here, something is wrong with our internal handling of peer status
@@ -336,42 +340,122 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 				info.status = PeerStatus::Idle; // Make peer available again.
 			}
 
-			let response = match response {
-				Ok(response) => {
-					if sent_request.request.is_block_request() {
-						schema::v1::BlockResponse::decode(&response[..])
-							.map(|r| Response::Block(r))
-					} else {
-						schema::v1::light::Response::decode(&response[..])
-							.map(|r| Response::Light(r))
-					}
+			let decoded_request_result = request_result.map(|response| {
+				if sent_request.request.is_block_request() {
+					schema::v1::BlockResponse::decode(&response[..])
+						.map(|r| Response::Block(r))
+				} else {
+					schema::v1::light::Response::decode(&response[..])
+						.map(|r| Response::Light(r))
 				}
+			});
+
+			let response = match decoded_request_result {
+				Ok(Ok(response)) => response,
+				Ok(Err(e)) => {
+					log::debug!("Failed to decode response from peer {}: {:?}.", sent_request.peer, e);
+					self.remove_peer(sent_request.peer);
+					self.peerset.report_peer(sent_request.peer, ReputationChange::new_fatal("invalid response from peer"));
+					self.pending_requests.push_back(sent_request.into_pending());
+					continue;
+				},
 				Err(e) => {
 					log::debug!("Request to peer {} failed with {:?}.", sent_request.peer, e);
-					self.remove_peer(sent_request.peer);
-					self.peerset.report_peer(
-						sent_request.peer,
-						// TODO: Could as well be due to other things than timeout. Maybe
-						// differentiate based on `e`.
-						ReputationChange::new(TIMEOUT_REPUTATION_CHANGE, "light request timeout"),
-					);
-					self.pending_requests.push_back(sent_request.into_pending());
+
+					match e {
+						RequestFailure::NotConnected => {
+							self.remove_peer(sent_request.peer);
+							self.pending_requests.push_back(sent_request.into_pending());
+						}
+						RequestFailure::UnknownProtocol => {
+							debug_assert!(
+								false,
+								"Light client and block request protocol should be known when \
+								 sending requests.",
+							);
+						}
+						RequestFailure::Refused => {
+							self.remove_peer(sent_request.peer);
+							self.peerset.report_peer(
+								sent_request.peer,
+								rep::REFUSED,
+							);
+							self.pending_requests.push_back(sent_request.into_pending());
+						}
+						RequestFailure::Obsolete => {
+							debug_assert!(
+								false,
+								"Can not receive `RequestFailure::Obsolete` after dropping the \
+								 response receiver.",
+							);
+							self.pending_requests.push_back(sent_request.into_pending());
+						}
+						RequestFailure::Network(OutboundFailure::Timeout) => {
+							self.remove_peer(sent_request.peer);
+							self.peerset.report_peer(
+								sent_request.peer,
+								rep::TIMEOUT,
+							);
+							self.pending_requests.push_back(sent_request.into_pending());
+						},
+						RequestFailure::Network(OutboundFailure::UnsupportedProtocols) => {
+							self.remove_peer(sent_request.peer);
+							self.peerset.report_peer(
+								sent_request.peer,
+								ReputationChange::new_fatal(
+									"peer does not support light client or block request protocol",
+								),
+							);
+							self.pending_requests.push_back(sent_request.into_pending());
+						}
+						RequestFailure::Network(OutboundFailure::DialFailure) => {
+							self.remove_peer(sent_request.peer);
+							self.peerset.report_peer(
+								sent_request.peer,
+								ReputationChange::new_fatal(
+									"failed to dial peer",
+								),
+							);
+							self.pending_requests.push_back(sent_request.into_pending());
+						}
+						RequestFailure::Network(OutboundFailure::ConnectionClosed) => {
+							self.remove_peer(sent_request.peer);
+							self.peerset.report_peer(
+								sent_request.peer,
+								ReputationChange::new_fatal(
+									"connection to peer closed",
+								),
+							);
+							self.pending_requests.push_back(sent_request.into_pending());
+						}
+					}
+
 					continue;
 				}
 			};
 
-			match self.on_response(sent_request.peer, &sent_request.request, response.unwrap()) {
+			match self.on_response(sent_request.peer, &sent_request.request, response) {
 				Ok(reply) => sent_request.request.return_reply(Ok(reply)),
 				Err(Error::UnexpectedResponse) => {
 					log::debug!("Unexpected response from peer {}.", sent_request.peer);
 					self.remove_peer(sent_request.peer);
-					self.peerset.report_peer(sent_request.peer, ReputationChange::new_fatal("unexpected response from peer"));
+					self.peerset.report_peer(
+						sent_request.peer,
+						ReputationChange::new_fatal(
+							"unexpected response from peer",
+						),
+					);
 					self.pending_requests.push_back(sent_request.into_pending());
 				}
 				Err(other) => {
 					log::debug!("error handling response from peer {}: {}", sent_request.peer, other);
 					self.remove_peer(sent_request.peer);
-					self.peerset.report_peer(sent_request.peer, ReputationChange::new_fatal("invalid response from peer"));
+					self.peerset.report_peer(
+						sent_request.peer,
+						ReputationChange::new_fatal(
+							"invalid response from peer",
+						),
+					);
 					self.pending_requests.push_back(sent_request.into_pending())
 				}
 			}
