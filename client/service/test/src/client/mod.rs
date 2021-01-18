@@ -31,7 +31,9 @@ use substrate_test_runtime_client::{
 use sc_client_api::{
 	StorageProvider, BlockBackend, in_mem, BlockchainEvents,
 };
-use sc_client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode};
+use sc_client_db::{
+	Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode, KeepBlocks, TransactionStorageMode
+};
 use sc_block_builder::BlockBuilderProvider;
 use sc_service::client::{self, Client, LocalCallExecutor, new_in_mem};
 use sp_runtime::traits::{
@@ -1275,7 +1277,9 @@ fn doesnt_import_blocks_that_revert_finality() {
 		DatabaseSettings {
 			state_cache_size: 1 << 20,
 			state_cache_child_ratio: None,
-			pruning: PruningMode::ArchiveAll,
+			state_pruning: PruningMode::ArchiveAll,
+			keep_blocks: KeepBlocks::All,
+			transaction_storage: TransactionStorageMode::BlockBody,
 			source: DatabaseSettingsSrc::RocksDb {
 				path: tmp.path().into(),
 				cache_size: 1024,
@@ -1476,7 +1480,9 @@ fn returns_status_for_pruned_blocks() {
 		DatabaseSettings {
 			state_cache_size: 1 << 20,
 			state_cache_child_ratio: None,
-			pruning: PruningMode::keep_blocks(1),
+			state_pruning: PruningMode::keep_blocks(1),
+			keep_blocks: KeepBlocks::All,
+			transaction_storage: TransactionStorageMode::BlockBody,
 			source: DatabaseSettingsSrc::RocksDb {
 				path: tmp.path().into(),
 				cache_size: 1024,

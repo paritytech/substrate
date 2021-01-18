@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-prost-build = "0.6.1"
+prost-build = "0.7"
 
 [dependencies]
 async-trait = "0.1"
@@ -23,10 +23,10 @@ derive_more = "0.99.2"
 either = "1.5.3"
 futures = "0.3.9"
 futures-timer = "3.0.1"
-libp2p = { version = "0.33.0", default-features = false, features = ["kad"] }
+libp2p = { version = "0.34.0", default-features = false, features = ["kad"] }
 log = "0.4.8"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0"}
-prost = "0.6.1"
+prost = "0.7"
 rand = "0.7.2"
 sc-client-api = { version = "2.0.0", path = "../api" }
 sc-network = { version = "0.8.0", path = "../network" }
