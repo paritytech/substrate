@@ -301,11 +301,11 @@
 		{
 			"prefix": 32,
 			"network": "robonomics",
-			"displayName": "Robonomics Network",
-			"symbols": null,
-			"decimals": null,
+			"displayName": "Robonomics",
+			"symbols": ["XRT"],
+			"decimals": [9],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://robonomics.network"
 		},
 		{
 			"prefix": 33,
