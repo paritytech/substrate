@@ -35,8 +35,8 @@ pub use self::bandwidth::BandwidthSinks;
 /// If `memory_only` is true, then only communication within the same process are allowed. Only
 /// addresses with the format `/memory/...` are allowed.
 ///
-/// `yamux_window_size` consists in the size of the Yamux windows. `None` to leave the default
-/// (256kiB).
+///`yamux_window_size` is the maximum size of the Yamux receive windows. `None` to leave the
+/// default (256kiB).
 ///
 /// Returns a `BandwidthSinks` object that allows querying the average bandwidth produced by all
 /// the connections spawned with this transport.
