@@ -47,25 +47,10 @@ use sp_runtime::{
 use std::{
 	collections::{BTreeMap},
 	sync::Arc,
-	time::Duration,
 };
 use log::debug;
 
 const LOG_TARGET: &str = "light-client-request-handler";
-
-// TODO: Should this be moved one up, given that requests are both handled and send via this.
-//
-/// Generates a [`ProtocolConfig`] for the light client request protocol, refusing incoming requests.
-pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
-	ProtocolConfig {
-		name: super::generate_protocol_name(protocol_id).into(),
-		max_request_size: 1 * 1024 * 1024,
-		max_response_size: 16 * 1024 * 1024,
-		request_timeout: Duration::from_secs(15),
-		inbound_queue: None,
-	}
-}
-
 
 /// Handler for incoming light client requests from a remote peer.
 pub struct LightClientRequestHandler<B: Block> {
@@ -84,7 +69,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 		// TODO: justify 20.
 		let (tx, request_receiver) = mpsc::channel(20);
 
-		let mut protocol_config = generate_protocol_config(protocol_id);
+		let mut protocol_config = super::generate_protocol_config(protocol_id);
 		protocol_config.inbound_queue = Some(tx);
 
 		(Self { client, request_receiver/*, peerset */ }, protocol_config)

@@ -928,7 +928,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	let light_client_request_protocol_config = {
 		if matches!(config.role, Role::Light) {
 			// Allow outgoing requests but deny incoming requests.
-			light_client_requests::handler::generate_protocol_config(&protocol_id)
+			light_client_requests::generate_protocol_config(&protocol_id)
 		} else {
 			// Allow both outgoing and incoming requests.
 			let (handler, protocol_config) = LightClientRequestHandler::new(

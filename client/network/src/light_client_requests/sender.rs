@@ -18,8 +18,7 @@
 
 //! Helper for outgoing light client requests.
 //!
-//! Call [`LightClientRequestSender::send_request`] to send out light client requests. Under the
-//! hood the following will hapen:
+//! Call [`LightClientRequestSender::send_request`] to send out light client requests. It will:
 //!
 //! 1. Build the request.
 //!

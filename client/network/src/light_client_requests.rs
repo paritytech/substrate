@@ -24,6 +24,9 @@ pub mod sender;
 pub mod handler;
 
 use crate::config::ProtocolId;
+use crate::request_responses::ProtocolConfig;
+
+use std::time::Duration;
 
 /// Generate the light client protocol name from chain specific protocol identifier.
 fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
@@ -34,13 +37,24 @@ fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 	s
 }
 
+/// Generates a [`ProtocolConfig`] for the light client request protocol, refusing incoming requests.
+pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
+	ProtocolConfig {
+		name: generate_protocol_name(protocol_id).into(),
+		max_request_size: 1 * 1024 * 1024,
+		max_response_size: 16 * 1024 * 1024,
+		request_timeout: Duration::from_secs(15),
+		inbound_queue: None,
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	use assert_matches::assert_matches;
 	use crate::request_responses::IncomingRequest;
 	use crate::config::ProtocolId;
+
+	use assert_matches::assert_matches;
 	use futures::executor::{block_on, LocalPool};
 	use futures::task::Spawn;
 	use futures::{channel::oneshot, prelude::*};
