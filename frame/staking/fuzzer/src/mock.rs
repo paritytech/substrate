@@ -63,7 +63,7 @@ impl frame_system::Config for Test {
 	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnKilledAccount = (Balances,);
+	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 }
@@ -166,10 +166,6 @@ impl sp_election_providers::ElectionProvider<AccountId, BlockNumber> for MockEle
 
 	fn elect() -> Result<sp_npos_elections::Supports<AccountId>, Self::Error> {
 		Err(())
-	}
-
-	fn ongoing() -> bool {
-		false
 	}
 }
 

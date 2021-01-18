@@ -21,6 +21,7 @@ use super::*;
 use crate::Module as Staking;
 use testing_utils::*;
 
+use sp_npos_elections::CompactSolution;
 use sp_runtime::traits::One;
 use frame_system::RawOrigin;
 pub use frame_benchmarking::{benchmarks, account, whitelisted_caller, whitelist_account};
@@ -397,7 +398,7 @@ benchmarks! {
 		let s in 1 .. MAX_SPANS;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
 		add_slashing_spans::<T>(&stash, s);
-		T::Currency::make_free_balance_be(&stash, 0u32.into());
+		T::Currency::make_free_balance_be(&stash, T::Currency::minimum_balance());
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), stash.clone(), s)
 	verify {

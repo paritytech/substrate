@@ -57,8 +57,7 @@ where
 	staked
 		.iter_mut()
 		.map(|a| {
-			a.try_normalize(stake_of(&a.who).into())
-				.map_err(|err| Error::ArithmeticError(err))
+			a.try_normalize(stake_of(&a.who).into()).map_err(|err| Error::ArithmeticError(err))
 		})
 		.collect::<Result<_, _>>()?;
 	Ok(staked)

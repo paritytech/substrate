@@ -311,7 +311,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					TransportConfig::Normal { wasm_external_transport, .. } =>
 						(false, wasm_external_transport)
 				};
-				transport::build_transport(local_identity, config_mem, config_wasm)
+
+				transport::build_transport(
+					local_identity,
+					config_mem,
+					config_wasm,
+					params.network_config.yamux_window_size
+				)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
 				.connection_limits(ConnectionLimits::default()

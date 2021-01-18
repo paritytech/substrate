@@ -52,19 +52,11 @@ fn float_phragmen_poc_works() {
 
 	assert_eq!(
 		support_map.get(&2).unwrap(),
-		&_Support {
-			own: 0.0,
-			total: 25.0,
-			others: vec![(10u64, 10.0), (30u64, 15.0)]
-		}
+		&_Support { own: 0.0, total: 25.0, others: vec![(10u64, 10.0), (30u64, 15.0)] }
 	);
 	assert_eq!(
 		support_map.get(&3).unwrap(),
-		&_Support {
-			own: 0.0,
-			total: 35.0,
-			others: vec![(20u64, 20.0), (30u64, 15.0)]
-		}
+		&_Support { own: 0.0, total: 35.0, others: vec![(20u64, 20.0), (30u64, 15.0)] }
 	);
 
 	equalize_float(
@@ -77,19 +69,11 @@ fn float_phragmen_poc_works() {
 
 	assert_eq!(
 		support_map.get(&2).unwrap(),
-		&_Support {
-			own: 0.0,
-			total: 30.0,
-			others: vec![(10u64, 10.0), (30u64, 20.0)]
-		}
+		&_Support { own: 0.0, total: 30.0, others: vec![(10u64, 10.0), (30u64, 20.0)] }
 	);
 	assert_eq!(
 		support_map.get(&3).unwrap(),
-		&_Support {
-			own: 0.0,
-			total: 30.0,
-			others: vec![(20u64, 20.0), (30u64, 10.0)]
-		}
+		&_Support { own: 0.0, total: 30.0, others: vec![(20u64, 20.0), (30u64, 10.0)] }
 	);
 }
 

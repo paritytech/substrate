@@ -317,6 +317,8 @@ decl_error! {
 		Overflow,
 		/// This account is already set up for recovery
 		AlreadyProxy,
+		/// Some internal state is broken.
+		BadState,
 	}
 }
 
@@ -586,9 +588,9 @@ decl_module! {
 				recovery_config.threshold as usize <= active_recovery.friends.len(),
 				Error::<T>::Threshold
 			);
+			system::Module::<T>::inc_consumers(&who).map_err(|_| Error::<T>::BadState)?;
 			// Create the recovery storage item
 			Proxy::<T>::insert(&who, &account);
-			system::Module::<T>::inc_ref(&who);
 			Self::deposit_event(RawEvent::AccountRecovered(account, who));
 		}
 
@@ -675,7 +677,7 @@ decl_module! {
 			// Check `who` is allowed to make a call on behalf of `account`
 			ensure!(Self::proxy(&who) == Some(account), Error::<T>::NotAllowed);
 			Proxy::<T>::remove(&who);
-			system::Module::<T>::dec_ref(&who);
+			system::Module::<T>::dec_consumers(&who);
 		}
 	}
 }
