@@ -24,21 +24,26 @@ use std::path::{Path, PathBuf};
 
 use sp_runtime::traits::Block as BlockT;
 use crate::utils::DatabaseType;
+use kvdb_rocksdb::{Database, DatabaseConfig};
 
 /// Version file name.
 const VERSION_FILE_NAME: &'static str = "db_version";
 
 /// Current db version.
-const CURRENT_VERSION: u32 = 1;
+const CURRENT_VERSION: u32 = 2;
+
+/// Number of columns in v1.
+const V1_NUM_COLUMNS: u32 = 11;
 
 /// Upgrade database to current version.
-pub fn upgrade_db<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_blockchain::Result<()> {
+pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_blockchain::Result<()> {
 	let is_empty = db_path.read_dir().map_or(true, |mut d| d.next().is_none());
 	if !is_empty {
 		let db_version = current_version(db_path)?;
 		match db_version {
 			0 => Err(sp_blockchain::Error::Backend(format!("Unsupported database version: {}", db_version)))?,
-			1 => (),
+			1 => migrate_1_to_2::<Block>(db_path, db_type)?,
+			CURRENT_VERSION => (),
 			_ => Err(sp_blockchain::Error::Backend(format!("Future database version: {}", db_version)))?,
 		}
 	}
@@ -46,6 +51,16 @@ pub fn upgrade_db<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 	update_version(db_path)
 }
 
+/// Migration from version1 to version2:
+/// 1) the number of columns has changed from 11 to 12;
+/// 2) transactions column is added;
+fn migrate_1_to_2<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_blockchain::Result<()> {
+	let db_path = db_path.to_str()
+		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
+	let db_cfg = DatabaseConfig::with_columns(V1_NUM_COLUMNS);
+	let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
+	db.add_column().map_err(db_err)
+}
 
 /// Reads current database version from the file at given path.
 /// If the file does not exist returns 0.
@@ -87,7 +102,7 @@ fn version_file_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
 	use sc_state_db::PruningMode;
-	use crate::{DatabaseSettings, DatabaseSettingsSrc};
+	use crate::{DatabaseSettings, DatabaseSettingsSrc, KeepBlocks, TransactionStorageMode};
 	use crate::tests::Block;
 	use super::*;
 
@@ -103,8 +118,10 @@ mod tests {
 		crate::utils::open_database::<Block>(&DatabaseSettings {
 			state_cache_size: 0,
 			state_cache_child_ratio: None,
-			pruning: PruningMode::ArchiveAll,
+			state_pruning: PruningMode::ArchiveAll,
 			source: DatabaseSettingsSrc::RocksDb { path: db_path.to_owned(), cache_size: 128 },
+			keep_blocks: KeepBlocks::All,
+			transaction_storage: TransactionStorageMode::BlockBody,
 		}, DatabaseType::Full).map(|_| ())
 	}
 
@@ -121,5 +138,16 @@ mod tests {
 		open_database(db_dir.path()).unwrap();
 		open_database(db_dir.path()).unwrap();
 		assert_eq!(current_version(db_dir.path()).unwrap(), CURRENT_VERSION);
+	}
+
+	#[test]
+	fn upgrade_from_1_to_2_works() {
+		for version_from_file in &[None, Some(1)] {
+			let db_dir = tempfile::TempDir::new().unwrap();
+			let db_path = db_dir.path();
+			create_db(db_path, *version_from_file);
+			open_database(db_path).unwrap();
+			assert_eq!(current_version(db_path).unwrap(), CURRENT_VERSION);
+		}
 	}
 }

@@ -28,6 +28,11 @@ stages:
   - deploy
   - flaming-fir
 
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH
+
 variables:                         &default-vars
   GIT_STRATEGY:                    fetch
   GIT_DEPTH:                       100
@@ -52,8 +57,6 @@ default:
 .kubernetes-build:                 &kubernetes-build
   tags:
     - kubernetes-parity-build
-  environment:
-    name: parity-build
   interruptible:                   true
 
 .docker-env:                       &docker-env
@@ -71,11 +74,6 @@ default:
   interruptible:                   true
   tags:
     - linux-docker
-
-workflow:
-  rules:
-    - if: $CI_COMMIT_TAG
-    - if: $CI_COMMIT_BRANCH
 
 .test-refs:                        &test-refs
   rules:
@@ -129,7 +127,7 @@ check-signed-tag:
   <<:                              *kubernetes-build
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - ./.maintain/gitlab/check_signed.sh
 
@@ -149,6 +147,19 @@ test-dependency-rules:
   <<:                              *kubernetes-build
   script:
     - .maintain/ensure-deps.sh
+
+test-prometheus-alerting-rules:
+  stage:                           check
+  image:                           paritytech/tools:latest
+  <<:                              *kubernetes-build
+  rules:
+    - if: $CI_COMMIT_BRANCH
+      changes:
+        - .gitlab-ci.yml
+        - .maintain/monitoring/**/*
+  script:
+    - promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
+    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml | promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
 
 #### stage:                        test
 
@@ -340,14 +351,6 @@ cargo-check-macos:
   tags:
     - osx
 
-test-prometheus-alerting-rules:
-  stage:                           test
-  image:                           paritytech/tools:latest
-  <<:                              *kubernetes-build
-  script:
-    - promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
-    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml | promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
-
 #### stage:                        build
 
 check-polkadot-companion-status:
@@ -494,13 +497,13 @@ build-rust-doc:
     DOCKERFILE:                    $PRODUCT.Dockerfile
     IMAGE_NAME:                    docker.io/parity/$PRODUCT
   before_script:
-    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity" ||
-        ( echo "no docker credentials provided"; exit 1 )
-  script:
     - cd ./artifacts/$PRODUCT/
     - VERSION="$(cat ./VERSION)"
     - echo "${PRODUCT} version = ${VERSION}"
     - test -z "${VERSION}" && exit 1
+  script:
+    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity" ||
+        ( echo "no docker credentials provided"; exit 1 )
     - buildah bud
         --format=docker
         --build-arg VCS_REF="${CI_COMMIT_SHA}"
@@ -509,10 +512,11 @@ build-rust-doc:
         --tag "$IMAGE_NAME:latest"
         --file "$DOCKERFILE" .
     - echo "$Docker_Hub_Pass_Parity" |
-      buildah login --username "$Docker_Hub_User_Parity" --password-stdin docker.io
+        buildah login --username "$Docker_Hub_User_Parity" --password-stdin docker.io
     - buildah info
     - buildah push --format=v2s2 "$IMAGE_NAME:$VERSION"
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
+    - buildah logout "$IMAGE_NAME"
 
 publish-docker-substrate:
   stage:                           publish
@@ -526,7 +530,6 @@ publish-docker-substrate:
     <<:                            *docker-build-vars
     PRODUCT:                       substrate
   after_script:
-    - buildah logout "$IMAGE_NAME"
     # only VERSION information is needed for the deployment
     - find ./artifacts/ -depth -not -name VERSION -type f -delete
 
@@ -539,8 +542,6 @@ publish-docker-subkey:
   variables:
     <<:                            *docker-build-vars
     PRODUCT:                       subkey
-  after_script:
-    - buildah logout "$IMAGE_NAME"
 
 publish-s3-release:
   stage:                           publish
@@ -595,7 +596,7 @@ publish-draft-release:
   image:                           paritytech/tools:latest
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - ./.maintain/gitlab/publish_draft_release.sh
   allow_failure:                   true
@@ -605,14 +606,19 @@ publish-to-crates-io:
   <<:                              *docker-env
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
   allow_failure:                   true
 
-deploy-kubernetes-alerting-rules:
+#### stage:                        deploy
+
+deploy-prometheus-alerting-rules:
   stage:                           deploy
+  needs:
+    - job:                         test-prometheus-alerting-rules
+      artifacts:                   false
   interruptible:                   true
   retry:                           1
   tags:
@@ -634,52 +640,25 @@ deploy-kubernetes-alerting-rules:
         - .gitlab-ci.yml
         - .maintain/monitoring/**/*
 
-.validator-deploy:                 &validator-deploy
-  stage:                           flaming-fir
+trigger-simnet:
+  stage:                           deploy
   rules:
-    # .build-refs, but manual
-    - if: $CI_COMMIT_REF_NAME == "master"
-      when: manual
-    - if: $CI_PIPELINE_SOURCE == "web"
-      when: manual
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-      when: manual
+    # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
+    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
   needs:
-    # script will fail if there is no artifacts/substrate/VERSION
     - job:                         publish-docker-substrate
-      artifacts:                   true
-  image:                           parity/azure-ansible:v1
-  allow_failure:                   true
-  interruptible:                   true
-  tags:
-    - linux-docker
+      artifacts:                   false
+  trigger:
+    project:                       parity/simnet
+    branch:                        master
+    strategy:                      depend
 
-validator 1 4:
-  <<:                              *validator-deploy
-  script:
-    - ./.maintain/flamingfir-deploy.sh flamingfir-validator1
-
-validator 2 4:
-  <<:                              *validator-deploy
-  script:
-    - ./.maintain/flamingfir-deploy.sh flamingfir-validator2
-
-validator 3 4:
-  <<:                              *validator-deploy
-  script:
-    - ./.maintain/flamingfir-deploy.sh flamingfir-validator3
-
-validator 4 4:
-  <<:                              *validator-deploy
-  script:
-    - ./.maintain/flamingfir-deploy.sh flamingfir-validator4
-
-#### stage:                       .post
+#### stage:                        .post
 
 check-labels:
-  stage:                          .post
-  image:                          paritytech/tools:latest
-  <<:                             *kubernetes-build
+  stage:                           .post
+  image:                           paritytech/tools:latest
+  <<:                              *kubernetes-build
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
