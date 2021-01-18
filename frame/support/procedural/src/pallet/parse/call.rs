@@ -174,7 +174,7 @@ impl CallDef {
 					helper::take_item_attrs(&mut method.attrs)?;
 
 				if call_var_attrs.len() != 1 {
-					let msg = if call_var_attrs.len() == 0 {
+					let msg = if call_var_attrs.is_empty() {
 						"Invalid pallet::call, require weight attribute i.e. `#[pallet::weight = $expr]`"
 					} else {
 						"Invalid pallet::call, too many weight attributes given"

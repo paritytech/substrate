@@ -287,6 +287,14 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 		.build_storage::<Test>()
 		.unwrap();
 
+	let balances: Vec<_> = (0..authorities.len())
+		.map(|i| (i as u64, 10_000_000))
+		.collect();
+
+	pallet_balances::GenesisConfig::<Test> { balances }
+		.assimilate_storage(&mut t)
+		.unwrap();
+
 	// stashes are the index.
 	let session_keys: Vec<_> = authorities
 		.iter()
@@ -302,6 +310,12 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 		})
 		.collect();
 
+	// NOTE: this will initialize the grandpa authorities
+	// through OneSessionHandler::on_genesis_session
+	pallet_session::GenesisConfig::<Test> { keys: session_keys }
+		.assimilate_storage(&mut t)
+		.unwrap();
+
 	// controllers are the index + 1000
 	let stakers: Vec<_> = (0..authorities.len())
 		.map(|i| {
@@ -313,20 +327,6 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 			)
 		})
 		.collect();
-
-	let balances: Vec<_> = (0..authorities.len())
-		.map(|i| (i as u64, 10_000_000))
-		.collect();
-
-	// NOTE: this will initialize the grandpa authorities
-	// through OneSessionHandler::on_genesis_session
-	pallet_session::GenesisConfig::<Test> { keys: session_keys }
-		.assimilate_storage(&mut t)
-		.unwrap();
-
-	pallet_balances::GenesisConfig::<Test> { balances }
-		.assimilate_storage(&mut t)
-		.unwrap();
 
 	let staking_config = pallet_staking::GenesisConfig::<Test> {
 		stakers,
