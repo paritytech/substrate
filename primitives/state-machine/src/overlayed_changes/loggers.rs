@@ -748,8 +748,8 @@ mod test {
 		parent_access_base.log_reads(Some(task1));
 		parent_access_base.log_reads(Some(task2));
 		let mut child_access = StateLog::default();
-		child_access.write_keys.push(b"key1".to_vec());
-		child_access.write_prefix.push(b"prefix".to_vec());
+		child_access.read_write_keys.push(b"key1".to_vec());
+		child_access.read_write_prefix.push(b"prefix".to_vec());
 		assert!(parent_access_base.top_logger.check_write_write(&child_access, task1));
 		assert!(parent_access_base.top_logger.check_write_write(&child_access, task2));
 
@@ -813,10 +813,10 @@ mod test {
 		// log read in parent should not interfere
 		parent_access_base.log_reads(Some(task1));
 		let mut child_access = StateLog::default();
-		child_access.write_keys.push(b"keyw".to_vec());
-		child_access.write_prefix.push(b"prefixw".to_vec());
-		child_access.write_prefix.push(b"prefixx".to_vec());
-		child_access.write_prefix.push(b"prefixz".to_vec());
+		child_access.read_write_keys.push(b"keyw".to_vec());
+		child_access.read_write_prefix.push(b"prefixw".to_vec());
+		child_access.read_write_prefix.push(b"prefixx".to_vec());
+		child_access.read_write_prefix.push(b"prefixz".to_vec());
 		child_access.read_keys.push(b"keyr".to_vec());
 		child_access.read_intervals.push((b"st_int".to_vec(), Some(b"w".to_vec())));
 		child_access.read_intervals.push((b"z_int".to_vec(), Some(b"z_inter".to_vec())));
@@ -886,10 +886,10 @@ mod test {
 		// log read in parent should not interfere
 		parent_access_base.log_reads(Some(task1));
 		let mut child_access = StateLog::default();
-		child_access.write_keys.push(b"keyw".to_vec());
-		child_access.write_prefix.push(b"prefixw".to_vec());
-		child_access.write_prefix.push(b"prefixx".to_vec());
-		child_access.write_prefix.push(b"prefixz".to_vec());
+		child_access.read_write_keys.push(b"keyw".to_vec());
+		child_access.read_write_prefix.push(b"prefixw".to_vec());
+		child_access.read_write_prefix.push(b"prefixx".to_vec());
+		child_access.read_write_prefix.push(b"prefixz".to_vec());
 		child_access.read_keys.push(b"keyr".to_vec());
 		child_access.read_intervals.push((b"st_int".to_vec(), Some(b"w".to_vec())));
 		child_access.read_intervals.push((b"z_int".to_vec(), Some(b"z_inter".to_vec())));
