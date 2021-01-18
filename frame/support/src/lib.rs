@@ -1858,15 +1858,14 @@ pub mod pallet_prelude {
 ///
 /// ## Upgrade guidelines:
 ///
-/// 1. make crate compiling: rename usage of frame_system::Trait to frame_system::Config.
-/// 2. export metadata of the pallet for later checks
-/// 3. generate the template upgrade for the pallet provided by decl_storage with environment
+/// 1. export metadata of the pallet for later checks
+/// 2. generate the template upgrade for the pallet provided by decl_storage with environment
 /// 	variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p my_pallet`
 /// 	This template can be used as information it contains all information for storages, genesis
 /// 	config and genesis build.
-/// 4. reorganize pallet to have trait Trait, decl_* macros, ValidateUnsigned, ProvideInherent,
-/// 	Origin all together in one file. suggested order:
-/// 	* trait,
+/// 3. reorganize pallet to have trait `Config`, `decl_*` macros, `ValidateUnsigned`,
+/// 	`ProvideInherent`, `Origin` all together in one file. suggested order:
+/// 	* Config,
 /// 	* decl_module,
 /// 	* decl_event,
 /// 	* decl_error,
@@ -1875,7 +1874,7 @@ pub mod pallet_prelude {
 /// 	* validate_unsigned,
 /// 	* provide_inherent,
 /// 	so far it should compile and all be correct.
-/// 5. start writing new pallet module
+/// 4. start writing new pallet module
 /// 	```ignore
 /// 	pub use pallet::*;
 ///
@@ -1893,13 +1892,12 @@ pub mod pallet_prelude {
 /// 		// pub struct Pallet<T, I = ()>(PhantomData<T>); // for instantiable pallet
 /// 	}
 /// 	```
-/// 6. **migrate trait**: move trait into the module with
-/// 	* rename `Trait` to `Config`
+/// 5. **migrate Config**: move trait into the module with
 /// 	* all const in decl_module to `#[pallet::constant]`
-/// 7. **migrate decl_module**: write:
+/// 6. **migrate decl_module**: write:
 /// 	```ignore
 /// 	#[pallet::hooks]
-/// 	impl<T: Trait> Hooks for Pallet<T> {
+/// 	impl<T: Config> Hooks for Pallet<T> {
 /// 	}
 /// 	```
 /// 	and write inside on_initialize/on_finalize/on_runtime_upgrade/offchain_worker/integrity_test
@@ -1907,7 +1905,7 @@ pub mod pallet_prelude {
 /// 	then write:
 /// 	```ignore
 /// 	#[pallet::call]
-/// 	impl<T: Trait> Pallet<T> {
+/// 	impl<T: Config> Pallet<T> {
 /// 	}
 /// 	```
 /// 	and write inside all the call in decl_module with a few changes in the signature:
@@ -1917,12 +1915,12 @@ pub mod pallet_prelude {
 /// 	- `#[compact]` must now be written `#[pallet::compact]`
 /// 	- `#[weight = ..]` must now be written `#[pallet::weight(..)]`
 ///
-/// 8. **migrate event**:
+/// 7. **migrate event**:
 /// 	rewrite as a simple enum under with the attribute `#[pallet::event]`,
 /// 	use `#[pallet::generate_deposit($vis fn deposit_event)]` to generate deposit_event,
 /// 	use `#[pallet::metadata(...)]` to configure the metadata for types in order not to break them.
-/// 9. **migrate error**: just rewrite it with attribute `#[pallet::error]`.
-/// 10. **migrate storage**:
+/// 8. **migrate error**: just rewrite it with attribute `#[pallet::error]`.
+/// 9. **migrate storage**:
 /// 	decl_storage provide an upgrade template (see 3.). All storages, genesis config, genesis
 /// 	build and default implementation of genesis config can be taken from it directly.
 ///
@@ -1973,13 +1971,13 @@ pub mod pallet_prelude {
 /// 	can be implemented manually, just implement those functions by calling `GenesisBuild`
 /// 	implementation.
 ///
-/// 11. **migrate origin**: just move the origin to the pallet module under `#[pallet::origin]`
-/// 12. **migrate validate_unsigned**: just move the ValidateUnsigned implementation to the pallet
+/// 10. **migrate origin**: just move the origin to the pallet module under `#[pallet::origin]`
+/// 11. **migrate validate_unsigned**: just move the ValidateUnsigned implementation to the pallet
 /// 	module under `#[pallet::validate_unsigned]`
-/// 13. **migrate provide_inherent**: just move the ValidateUnsigned implementation to the pallet
+/// 12. **migrate provide_inherent**: just move the ValidateUnsigned implementation to the pallet
 /// 	module under `#[pallet::provide_inherent]`
-/// 14. rename the usage of Module to Pallet and the usage of Config to Trait inside the crate.
-/// 15. migration is done, now double check migration with the checking migration guidelines.
+/// 13. rename the usage of `Module` to `Pallet` inside the crate.
+/// 14. migration is done, now double check migration with the checking migration guidelines.
 ///
 /// ## Checking upgrade guidelines:
 ///
@@ -1990,18 +1988,18 @@ pub mod pallet_prelude {
 /// 	* storage names, hasher, prefixes, default value
 /// 	* error , error, constant,
 /// * manually check that:
-/// 	* Origin is moved inside macro unser `#[pallet::origin]` if it exists
-/// 	* ValidateUnsigned is moved inside macro under `#[pallet::validate_unsigned)]` if it exists
-/// 	* ProvideInherent is moved inside macro under `#[pallet::inherent)]` if it exists
-/// 	* on_initialize/on_finalize/on_runtime_upgrade/offchain_worker are moved to Hooks
+/// 	* `Origin` is moved inside macro unser `#[pallet::origin]` if it exists
+/// 	* `ValidateUnsigned` is moved inside macro under `#[pallet::validate_unsigned)]` if it exists
+/// 	* `ProvideInherent` is moved inside macro under `#[pallet::inherent)]` if it exists
+/// 	* `on_initialize`/`on_finalize`/`on_runtime_upgrade`/`offchain_worker` are moved to `Hooks`
 /// 		implementation
-/// 	* storages with `config(..)` are converted to genesis_config field, and their default is
+/// 	* storages with `config(..)` are converted to `GenesisConfig` field, and their default is
 /// 		`= $expr;` if the storage have default value
-/// 	* storages with `build($expr)` or `config(..)` are built in genesis_build
-/// 	* add_extra_genesis fields are converted to genesis_config field with their correct default
-/// 		if specified
-/// 	* add_extra_genesis build is written into genesis_build
-/// * storages now use PalletInfo for module_prefix instead of the one given to decl_storage:
+/// 	* storages with `build($expr)` or `config(..)` are built in `GenesisBuild::build`
+/// 	* `add_extra_genesis` fields are converted to `GenesisConfig` field with their correct
+/// 		default if specified
+/// 	* `add_extra_genesis` build is written into `GenesisBuild::build`
+/// * storages now use `PalletInfo` for `module_prefix` instead of the one given to `decl_storage`:
 /// 	Thus any use of this pallet in `construct_runtime!` should be careful to update name in
 /// 	order not to break storage or to upgrade storage (moreover for instantiable pallet).
 /// 	If pallet is published, make sure to warn about this breaking change.
