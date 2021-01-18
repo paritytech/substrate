@@ -23,7 +23,7 @@
 
 use crate::{
 	IdentifierT, ElectionResult, ExtendedBalance, setup_inputs, VoteWeight, Voter, CandidatePtr,
-	balance,
+	balance, PerThing128,
 };
 use sp_arithmetic::{PerThing, InnerOf, Rational128, traits::Bounded};
 use sp_std::{prelude::*, rc::Rc};
@@ -41,13 +41,14 @@ use sp_std::{prelude::*, rc::Rc};
 /// assignments, `assignment.distribution.map(|p| p.deconstruct()).sum()` fails to fit inside
 /// `UpperOf<P>`. A user of this crate may statically assert that this can never happen and safely
 /// `expect` this to return `Ok`.
-pub fn phragmms<AccountId: IdentifierT, P: PerThing>(
+pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 	to_elect: usize,
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	balancing_config: Option<(usize, ExtendedBalance)>,
 ) -> Result<ElectionResult<AccountId, P>, &'static str>
-	where ExtendedBalance: From<InnerOf<P>>
+where
+	ExtendedBalance: From<InnerOf<P>>,
 {
 	let (candidates, mut voters) = setup_inputs(initial_candidates, initial_voters);
 

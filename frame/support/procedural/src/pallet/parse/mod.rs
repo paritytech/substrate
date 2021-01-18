@@ -66,7 +66,7 @@ impl Def {
 		let frame_system = generate_crate_access_2018("frame-system")?;
 		let frame_support = generate_crate_access_2018("frame-support")?;
 
-		let item_span = item.span().clone();
+		let item_span = item.span();
 		let items = &mut item.content.as_mut()
 			.ok_or_else(|| {
 				let msg = "Invalid pallet definition, expected mod to be inlined.";
@@ -152,7 +152,7 @@ impl Def {
 		}
 
 		let def = Def {
-			item: item,
+			item,
 			config: config.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::config]`"))?,
 			pallet_struct: pallet_struct
 				.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::pallet]`"))?,
@@ -403,20 +403,20 @@ enum PalletAttr {
 impl PalletAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
-			Self::Config(span) => span.clone(),
-			Self::Pallet(span) => span.clone(),
-			Self::Hooks(span) => span.clone(),
-			Self::Call(span) => span.clone(),
-			Self::Error(span) => span.clone(),
-			Self::Event(span) => span.clone(),
-			Self::Origin(span) => span.clone(),
-			Self::Inherent(span) => span.clone(),
-			Self::Storage(span) => span.clone(),
-			Self::GenesisConfig(span) => span.clone(),
-			Self::GenesisBuild(span) => span.clone(),
-			Self::ValidateUnsigned(span) => span.clone(),
-			Self::TypeValue(span) => span.clone(),
-			Self::ExtraConstants(span) => span.clone(),
+			Self::Config(span) => *span,
+			Self::Pallet(span) => *span,
+			Self::Hooks(span) => *span,
+			Self::Call(span) => *span,
+			Self::Error(span) => *span,
+			Self::Event(span) => *span,
+			Self::Origin(span) => *span,
+			Self::Inherent(span) => *span,
+			Self::Storage(span) => *span,
+			Self::GenesisConfig(span) => *span,
+			Self::GenesisBuild(span) => *span,
+			Self::ValidateUnsigned(span) => *span,
+			Self::TypeValue(span) => *span,
+			Self::ExtraConstants(span) => *span,
 		}
 	}
 }

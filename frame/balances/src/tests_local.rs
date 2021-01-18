@@ -74,9 +74,9 @@ impl frame_system::Config for Test {
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = ();
-	type AccountData = super::AccountData<u64>;
+	type AccountData = ();
 	type OnNewAccount = ();
-	type OnKilledAccount = Module<Test>;
+	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 }
@@ -99,9 +99,9 @@ impl Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = StorageMapShim<
 		super::Account<Test>,
-		system::CallOnCreatedAccount<Test>,
-		system::CallKillAccount<Test>,
-		u64, super::AccountData<u64>
+		system::Provider<Test>,
+		u64,
+		super::AccountData<u64>,
 	>;
 	type MaxLocks = MaxLocks;
 	type WeightInfo = ();
@@ -162,7 +162,7 @@ decl_tests!{ Test, ExtBuilder, EXISTENTIAL_DEPOSIT }
 #[test]
 fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 	<ExtBuilder>::default()
-		.existential_deposit(0)
+		.existential_deposit(2)
 		.build()
 		.execute_with(|| {
 			assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
@@ -176,12 +176,12 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 				]
 			);
 
-			let _ = Balances::slash(&1, 99);
+			let _ = Balances::slash(&1, 98);
 
 			// no events
 			assert_eq!(events(), []);
 
-			assert_ok!(System::suicide(Origin::signed(1)));
+			let _ = Balances::slash(&1, 1);
 
 			assert_eq!(
 				events(),
