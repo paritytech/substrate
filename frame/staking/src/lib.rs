@@ -454,12 +454,17 @@ pub struct ValidatorPrefs {
 	/// nominators.
 	#[codec(compact)]
 	pub commission: Perbill,
+	/// Whether or not this validator is accepting more nominations. If `true`, then no nominator
+	/// who is not already nominating this validator may nominate them. By default, validators
+	/// are accepting nominations.
+	pub closed: bool,
 }
 
 impl Default for ValidatorPrefs {
 	fn default() -> Self {
 		ValidatorPrefs {
 			commission: Default::default(),
+			closed: false,
 		}
 	}
 }
@@ -1152,6 +1157,8 @@ decl_event!(
 		/// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
 		/// from the unlocking queue. \[stash, amount\]
 		Withdrawn(AccountId, Balance),
+		/// A nominator has been kicked from a validator. \[nominator, stash\]
+		Kicked(AccountId, AccountId),
 	}
 );
 
@@ -1675,9 +1682,17 @@ decl_module! {
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
+
+			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
+
 			let targets = targets.into_iter()
 				.take(MAX_NOMINATIONS)
 				.map(|t| T::Lookup::lookup(t))
+				.filter(|n| if let Ok(ref n) = n {
+					old.contains(n) || !Validators::<T>::get(n).closed
+				} else {
+					true
+				})
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
 			let nominations = Nominations {
@@ -2167,6 +2182,42 @@ decl_module! {
 			);
 
 			Ok(adjustments)
+		}
+
+		/// Remove the given nominations from the calling validator.
+		///
+		/// Effects will be felt at the beginning of the next era.
+		///
+		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		/// And, it can be only called when [`EraElectionStatus`] is `Closed`. The controller
+		/// account should represent a validator.
+		///
+		/// - `who`: A list of nominator stash accounts who are nominating this validator which
+		///   should no longer be nominating this validator.
+		///
+		/// Note: Making this call only makes sense if you first set the validator preferences to
+		/// block any further nominations.
+		#[weight = T::WeightInfo::kick(who.len() as u32)]
+		pub fn kick(origin, who: Vec<<T::Lookup as StaticLookup>::Source>) -> DispatchResult {
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
+			let controller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let stash = &ledger.stash;
+
+			for nom_stash in who.into_iter()
+				.map(T::Lookup::lookup)
+				.collect::<Result<Vec<T::AccountId>, _>>()?
+				.into_iter()
+			{
+				Nominators::<T>::mutate(&nom_stash, |maybe_nom| if let Some(ref mut nom) = maybe_nom {
+					if let Some(pos) = nom.targets.iter().position(|v| v == stash) {
+						nom.targets.swap_remove(pos);
+						Self::deposit_event(RawEvent::Kicked(nom_stash.clone(), stash.clone()));
+					}
+				});
+			}
+
+			Ok(())
 		}
 	}
 }
