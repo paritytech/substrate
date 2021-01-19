@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -438,6 +438,7 @@ mod tests {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 
 	parameter_types! {
@@ -582,7 +583,6 @@ mod tests {
 				&number,
 				&hash,
 				&Default::default(),
-				&Default::default(),
 				Default::default()
 			);
 
@@ -680,7 +680,6 @@ mod tests {
 			header.digest_mut().pop(); // pop the seal off.
 			System::initialize(
 				&1,
-				&Default::default(),
 				&Default::default(),
 				header.digest(),
 				Default::default(),

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 
 use super::*;
 use std::cell::RefCell;
-use frame_support::{impl_outer_origin, parameter_types};
+use frame_support::{impl_outer_origin, parameter_types, BasicExternalities};
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
 	Perbill, impl_opaque_keys,
@@ -178,11 +178,18 @@ pub fn reset_before_session_end_called() {
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	GenesisConfig::<Test> {
-		keys: NEXT_VALIDATORS.with(|l|
-			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
-		),
-	}.assimilate_storage(&mut t).unwrap();
+	let keys: Vec<_> = NEXT_VALIDATORS.with(|l|
+		l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
+	);
+	BasicExternalities::execute_with_storage(&mut t, || {
+		for (ref k, ..) in &keys {
+			frame_system::Module::<Test>::inc_providers(k);
+		}
+		frame_system::Module::<Test>::inc_providers(&4);
+		// An additional identity that we use.
+		frame_system::Module::<Test>::inc_providers(&69);
+	});
+	GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
 	sp_io::TestExternalities::new(t)
 }
 
@@ -218,6 +225,7 @@ impl frame_system::Config for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 impl pallet_timestamp::Config for Test {

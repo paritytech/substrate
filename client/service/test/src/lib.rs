@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -35,6 +35,7 @@ use sc_service::{
 	GenericChainSpec,
 	ChainSpecExtension,
 	Configuration,
+	KeepBlocks, TransactionStorageMode,
 	config::{BasePath, DatabaseConfig, KeystoreConfig},
 	RuntimeGenesis,
 	Role,
@@ -250,7 +251,9 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		},
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
-		pruning: Default::default(),
+		state_pruning: Default::default(),
+		keep_blocks: KeepBlocks::All,
+		transaction_storage: TransactionStorageMode::BlockBody,
 		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		wasm_runtime_overrides: Default::default(),

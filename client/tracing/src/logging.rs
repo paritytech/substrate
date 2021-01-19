@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -125,6 +125,10 @@ where
 			}
 		}
 
+		if self.display_target {
+			write!(writer, "{}: ", meta.target())?;
+		}
+
 		// Custom code to display node name
 		if let Some(span) = ctx.lookup_current() {
 			let parents = span.parents();
@@ -137,9 +141,6 @@ where
 			}
 		}
 
-		if self.display_target {
-			write!(writer, "{}:", meta.target())?;
-		}
 		ctx.format_fields(writer, event)?;
 		writeln!(writer)?;
 

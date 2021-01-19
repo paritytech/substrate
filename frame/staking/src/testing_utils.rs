@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -244,11 +244,9 @@ pub fn get_weak_solution<T: Config>(
 			<Module<T>>::slashable_balance_of_fn(),
 		);
 
-		let support_map = build_support_map::<T::AccountId>(
-			winners.as_slice(),
-			staked.as_slice(),
-		).unwrap();
-		evaluate_support::<T::AccountId>(&support_map)
+		let support_map =
+			to_support_map::<T::AccountId>(winners.as_slice(), staked.as_slice()).unwrap();
+		support_map.evaluate()
 	};
 
 	// compact encode the assignment.

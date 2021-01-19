@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -59,15 +59,14 @@ fn create_approved_proposals<T: Config<I>, I: Instance>(n: u32) -> Result<(), &'
 	Ok(())
 }
 
-fn setup_pod_account<T: Config<I>, I: Instance>() {
+fn setup_pot_account<T: Config<I>, I: Instance>() {
 	let pot_account = Treasury::<T, I>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
 benchmarks_instance! {
-	_ { }
-
+	
 	propose_spend {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		// Whitelist caller account from further DB operations.
@@ -97,7 +96,7 @@ benchmarks_instance! {
 
 	on_initialize_proposals {
 		let p in 0 .. 100;
-		setup_pod_account::<T, _>();
+		setup_pot_account::<T, _>();
 		create_approved_proposals::<T, _>(p)?;
 	}: {
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
