@@ -1554,8 +1554,8 @@ pub mod pallet_prelude {
 ///
 /// ```
 /// #[frame_support::pallet]
-/// // NOTE: The name of the pallet will be provided by construct_runtime, and will be used as
-/// // unique identifier for storage. It is not defined in the pallet itself.
+/// // NOTE: The name of the pallet is provided by `construct_runtime` and is used as
+/// // the unique identifier for the pallet's storage. It is not defined in the pallet itself.
 /// pub mod pallet {
 /// 	use frame_support::pallet_prelude::*; // Import various types used in the pallet definition
 /// 	use frame_system::pallet_prelude::*; // Import some system helper types.
@@ -1595,8 +1595,8 @@ pub mod pallet_prelude {
 /// 	// WARNING: Each parameter used in functions must implement: Clone, Debug, Eq, PartialEq,
 /// 	// Codec.
 /// 	//
-/// 	// The macro parses `#[pallet::compact]` attributes on function arguments, and use it to
-/// 	// implement `Call` encoding/decoding.
+/// 	// The macro parses `#[pallet::compact]` attributes on function arguments and implements
+/// 	// the `Call` encoding/decoding accordingly.
 /// 	#[pallet::call]
 /// 	impl<T: Config> Pallet<T> {
 /// 		/// Doc comment put in metadata
@@ -1611,7 +1611,7 @@ pub mod pallet_prelude {
 /// 	}
 ///
 /// 	// Declare the pallet `Error` enum (this is optional).
-/// 	// The macro generate error metadata using doc comment on each variant.
+/// 	// The macro generates error metadata using the doc comment on each variant.
 /// 	#[pallet::error]
 /// 	pub enum Error<T> {
 /// 		/// doc comment put into metadata
@@ -1644,7 +1644,7 @@ pub mod pallet_prelude {
 /// 	#[pallet::type_value]
 /// 	pub(super) fn MyDefault<T: Config>() -> T::Balance { 3.into() }
 ///
-/// 	// Declare a storage, any amount of storage can be declared. (optional)
+/// 	// Declare a storage item. Any amount of storage items can be declared (optional).
 /// 	//
 /// 	// Is expected either `StorageValue`, `StorageMap` or `StorageDoubleMap`.
 /// 	// The macro generates the prefix type and replace first generic `_`.
