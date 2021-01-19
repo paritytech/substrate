@@ -155,6 +155,7 @@ fn build_nodes_one_proto()
 		extra_sets: vec![
 			config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME,
+				max_notification_size: 1024 * 1024,
 				set_config: Default::default()
 			}
 		],
@@ -167,6 +168,7 @@ fn build_nodes_one_proto()
 		extra_sets: vec![
 			config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME,
+				max_notification_size: 1024 * 1024,
 				set_config: config::SetConfig {
 					reserved_nodes: vec![config::MultiaddrWithPeerId {
 						multiaddr: listen_addr,
@@ -322,6 +324,7 @@ fn lots_of_incoming_peers_works() {
 		extra_sets: vec![
 			config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME,
+				max_notification_size: 1024 * 1024,
 				set_config: config::SetConfig {
 					in_peers: u32::max_value(),
 					.. Default::default()
@@ -346,6 +349,7 @@ fn lots_of_incoming_peers_works() {
 			extra_sets: vec![
 				config::NonDefaultSetConfig {
 					notifications_protocol: PROTOCOL_NAME,
+					max_notification_size: 1024 * 1024,
 					set_config: config::SetConfig {
 						reserved_nodes: vec![config::MultiaddrWithPeerId {
 							multiaddr: listen_addr.clone(),
