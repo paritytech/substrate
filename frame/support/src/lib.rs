@@ -1563,8 +1563,8 @@ pub mod pallet_prelude {
 /// 	type BalanceOf<T> = <T as Config>::Balance;
 ///
 /// 	// Define the generic parameter of the pallet
-/// 	// The macro parses `#[pallet::constant]` attributes, and uses them to generate constant
-/// 	// metadata,
+/// 	// The macro parses `#[pallet::constant]` attributes and uses them to generate metadata
+/// 	// for the pallet's constants.
 /// 	#[pallet::config]
 /// 	pub trait Config: frame_system::Config {
 /// 		#[pallet::constant] // put the constant in metadata
