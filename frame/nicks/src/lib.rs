@@ -279,11 +279,6 @@ mod tests {
 			pallet_nicks::Module as Nicks { index 0 } with Storage Call Event,
 	);
 
-	#[test]
-	fn test_metadata() {
-		println!("{:#?}", Test::metadata());
-	}
-
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
