@@ -491,7 +491,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		};
 
 		let block_announce_data_cache = lru::LruCache::new(
-			network_config.default_peers_set.in_peers as usize,
+			network_config.default_peers_set.in_peers as usize
+				+ network_config.default_peers_set.out_peers as usize,
 		);
 
 		let protocol = Protocol {
