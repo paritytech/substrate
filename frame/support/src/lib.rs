@@ -1880,8 +1880,8 @@ pub mod pallet_prelude {
 ///
 /// 	#[frame_support::pallet]
 /// 	pub mod pallet {
-/// 		pub use frame_support::pallet_prelude::*;
-/// 		pub use frame_system::pallet_prelude::*;
+/// 		use frame_support::pallet_prelude::*;
+/// 		use frame_system::pallet_prelude::*;
 /// 		use super::*;
 ///
 /// 		#[pallet::pallet]
