@@ -1557,6 +1557,8 @@ pub mod pallet_prelude {
 /// # Example for pallet without instance.
 ///
 /// ```
+/// pub use pallet::*; // reexport in crate namespace for `construct_runtime!`
+///
 /// #[frame_support::pallet]
 /// // NOTE: The name of the pallet is provided by `construct_runtime` and is used as
 /// // the unique identifier for the pallet's storage. It is not defined in the pallet itself.
@@ -1745,6 +1747,8 @@ pub mod pallet_prelude {
 /// # Example for pallet with instance.
 ///
 /// ```
+/// pub use pallet::*;
+///
 /// #[frame_support::pallet]
 /// pub mod pallet {
 /// 	use frame_support::pallet_prelude::*;
