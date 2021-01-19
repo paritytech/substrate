@@ -1540,7 +1540,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 		// Reduce free_balance of stash to 0
 		let _ = Balances::slash(&11, Balance::max_value());
 		// Check total balance of stash
-		assert_eq!(Balances::total_balance(&11), 0);
+		assert_eq!(Balances::total_balance(&11), 10);
 
 		// Reap the stash
 		assert_ok!(Staking::reap_stash(Origin::none(), 11, 0));
@@ -1596,7 +1596,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		// Reduce free_balance of stash to 0
 		let _ = Balances::slash(&11, Balance::max_value());
 		// Check total balance of stash
-		assert_eq!(Balances::total_balance(&11), 0);
+		assert_eq!(Balances::total_balance(&11), 10);
 
 		// Reap the stash
 		assert_ok!(Staking::reap_stash(Origin::none(), 11, 0));
@@ -2454,8 +2454,8 @@ fn garbage_collection_after_slashing() {
 		// validator and nominator slash in era are garbage-collected by era change,
 		// so we don't test those here.
 
-		assert_eq!(Balances::free_balance(11), 0);
-		assert_eq!(Balances::total_balance(&11), 0);
+		assert_eq!(Balances::free_balance(11), 2);
+		assert_eq!(Balances::total_balance(&11), 2);
 
 		let slashing_spans = <Staking as crate::Store>::SlashingSpans::get(&11).unwrap();
 		assert_eq!(slashing_spans.iter().count(), 2);

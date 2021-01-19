@@ -173,7 +173,7 @@ impl StorageDef {
 					value: retrieve_arg(&typ.path.segments[0], 5)?,
 				}
 			}
-			found @ _ => {
+			found => {
 				let msg = format!(
 					"Invalid pallet::storage, expected ident: `StorageValue` or \
 					`StorageMap` or `StorageDoubleMap` in order to expand metadata, found \
