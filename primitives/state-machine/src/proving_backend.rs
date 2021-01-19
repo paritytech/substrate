@@ -29,9 +29,8 @@ use sp_trie::{
 pub use sp_trie::{Recorder, trie_types::{Layout, TrieError}};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
-use crate::{Error, ExecutionError, Backend, DBValue};
+use crate::{Error, ExecutionError, Backend, DBValue, AsyncBackend};
 use sp_core::storage::ChildInfo;
-use sp_externalities::AsyncBackend;
 
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> {

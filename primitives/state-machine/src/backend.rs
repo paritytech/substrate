@@ -30,7 +30,6 @@ use crate::{
 use sp_std::{vec::Vec, boxed::Box};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
-use sp_externalities::AsyncBackend;
 use super::EXT_NOT_ALLOWED_TO_FAIL;
 
 /// A state backend is used to read state data and can have changes committed
@@ -250,6 +249,70 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Get backend to use with threads.
 	fn async_backend(&self) -> Box<dyn AsyncBackend>;
+}
+
+/// Read state backend to use with workers.
+///
+/// This trait must be usable as `dyn AsyncBackend`,
+/// which is not the case for Backend trait.
+pub trait AsyncBackend: Send {
+	/// Read runtime storage.
+	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Read child runtime storage.
+	///
+	/// Returns an `Option` that holds the SCALE encoded hash.
+	fn child_storage(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Option<Vec<u8>>;
+
+	/// Returns the key immediately following the given key, if it exists.
+	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Returns the key immediately following the given key, if it exists, in child storage.
+	fn next_child_storage_key(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8]
+	) -> Option<Vec<u8>>;
+
+	/// Alternative to Clone for backend.
+	/// If dyn_clonable get compatible with no_std, this
+	/// function could be removed.
+	fn async_backend(&self) -> Box<dyn AsyncBackend>;
+}
+
+/// '()' can be use as an epmty 'AsyncBackend'.
+impl AsyncBackend for () {
+	fn storage(&self, _key: &[u8]) -> Option<Vec<u8>> {
+		None
+	}
+
+	fn child_storage(
+		&self,
+		_child_info: &ChildInfo,
+		_key: &[u8],
+	) -> Option<Vec<u8>> {
+		None
+	}
+
+	fn next_storage_key(&self, _key: &[u8]) -> Option<Vec<u8>> {
+		None
+	}
+
+	fn next_child_storage_key(
+		&self,
+		_child_info: &ChildInfo,
+		_key: &[u8]
+	) -> Option<Vec<u8>> {
+		None
+	}
+
+	fn async_backend(&self) -> Box<dyn AsyncBackend> {
+		Box::new(())
+	}
 }
 
 /// Async Backend implemented for a given state machine backend.

@@ -340,7 +340,6 @@ pub struct RuntimeInstanceSpawn {
 	dismiss_handles: dismiss_handle::DismissHandles,
 }
 
-
 #[cfg(all(feature = "abort-future", feature = "std"))]
 mod dismiss_handle {
 	use super::*;

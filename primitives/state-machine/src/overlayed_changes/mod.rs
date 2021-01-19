@@ -380,18 +380,14 @@ impl OverlayedChanges {
 	}
 
 	/// Set access declaration in the parent worker.
-	///
-	/// TODO rename 'declare_worker_in_parent'
-	pub fn set_parent_declaration(&mut self, _child_marker: TaskId, declaration: WorkerDeclaration) {
+	pub fn declare_worker_in_parent(&mut self, _child_marker: TaskId, declaration: WorkerDeclaration) {
 		match declaration {
 			WorkerDeclaration::Stateless => (),
 		}
 	}
 
 	/// Set access declaration in the child worker.
-	///
-	/// TODO rename 'set_worker_declaration'
-	pub fn set_child_declaration(&mut self, declaration: WorkerDeclaration) {
+	pub fn set_worker_declaration(&mut self, declaration: WorkerDeclaration) {
 		match declaration {
 			WorkerDeclaration::Stateless => (),
 		}
@@ -704,8 +700,7 @@ impl OverlayedChanges {
 
 	/// For optimistic worker type, we log access in the overlay.
 	/// When call on a non optimistic worker returns `None`.
-	/// TODO rename to extract_access_log.
-	pub fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
+	pub fn extract_access_log(&mut self) -> Option<sp_externalities::AccessLog> {
 		// FIXME see https://github.com/paritytech/substrate/pull/7687 for optimistic
 		// access worker type. This shall extend to also simulated exrinsic execution.
 		None
