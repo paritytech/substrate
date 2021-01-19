@@ -372,10 +372,10 @@ pub type EraIndex = u32;
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
 
-// Note: Maximum nomination limit is set here -- 16.
+// Note: Maximum nomination limit is set here -- 24.
 generate_solution_type!(
 	#[compact]
-	pub struct CompactAssignments::<NominatorIndex, ValidatorIndex, OffchainAccuracy>(16)
+	pub struct CompactAssignments::<NominatorIndex, ValidatorIndex, OffchainAccuracy>(24)
 );
 
 /// Accuracy used for on-chain election.
@@ -1265,6 +1265,9 @@ decl_module! {
 		/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
 		/// their reward. This used to limit the i/o cost for the nominator payout.
 		const MaxNominatorRewardedPerValidator: u32 = T::MaxNominatorRewardedPerValidator::get();
+
+		/// The maximum of validator candidates each nominator may nominate.
+		const MaxNominations: u32 = MAX_NOMINATIONS as u32;
 
 		type Error = Error<T>;
 

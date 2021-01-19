@@ -506,10 +506,10 @@ benchmarks! {
 			Some(w),
 		)?;
 
-		// needed for the solution to be generates.
+		// needed for the solution to be generated.
 		assert!(<Staking<T>>::create_stakers_snapshot().0);
 
-		// set number of winners
+		// set number of winners.
 		ValidatorCount::put(w);
 
 		// create a assignments in total for the w winners.

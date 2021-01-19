@@ -107,18 +107,18 @@ pub fn create_validators<T: Config>(
 /// we are working with a clean state.
 ///
 /// Parameters:
-/// - `validators`: number of bonded validators
+/// - `validators`: number of bonded validators.
 /// - `nominators`: number of bonded nominators.
-/// - `edge_per_nominator`: number of edge (vote) per nominator.
+/// - `edges_per_nominator`: number of edges (votes) per nominator.
 /// - `randomize_stake`: whether to randomize the stakes.
 /// - `to_nominate`: if `Some(n)`, only the first `n` bonded validator are voted upon.
-///    Else, all of them are considered and `edge_per_nominator` random validators are voted for.
+///    Else, all of them are considered and `edges_per_nominator` random validators are voted for.
 ///
-/// Return the validators choosen to be nominated.
+/// Return the validators chosen to be nominated.
 pub fn create_validators_with_nominators_for_era<T: Config>(
 	validators: u32,
 	nominators: u32,
-	edge_per_nominator: usize,
+	edges_per_nominator: usize,
 	randomize_stake: bool,
 	to_nominate: Option<u32>,
 ) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
@@ -155,9 +155,9 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 		// Have them randomly validate
 		let mut available_validators = validator_choosen.clone();
 		let mut selected_validators: Vec<<T::Lookup as StaticLookup>::Source> =
-			Vec::with_capacity(edge_per_nominator);
+			Vec::with_capacity(edges_per_nominator);
 
-		for _ in 0 .. validators.min(edge_per_nominator as u32) {
+		for _ in 0 .. validators.min(edges_per_nominator as u32) {
 			let selected = rng.next_u32() as usize % available_validators.len();
 			let validator = available_validators.remove(selected);
 			selected_validators.push(validator);
