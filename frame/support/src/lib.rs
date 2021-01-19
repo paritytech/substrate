@@ -1218,7 +1218,7 @@ pub mod pallet_prelude {
 /// using `#[pallet::compact]`, function must return DispatchResultWithPostInfo.
 ///
 /// All arguments must implement `Debug`, `PartialEq`, `Eq`, `Decode`, `Encode`, `Clone`. For ease
-/// of use just bound trait `Member` available in frame_support::pallet_prelude.
+/// of use, bound the trait `Member` available in frame_support::pallet_prelude.
 ///
 /// **WARNING**: modifying dispatchables, changing their order, removing some must be done with
 /// care. Indeed this will change the outer runtime call type (which is an enum with one variant
@@ -1306,7 +1306,7 @@ pub mod pallet_prelude {
 ///
 /// Each field must implement `Clone`, `Eq`, `PartialEq`, `Encode`, `Decode`, and `Debug` (on std
 /// only).
-/// For ease of use just bound trait `Member` available in frame_support::pallet_prelude.
+/// For ease of use, bound the trait `Member` available in frame_support::pallet_prelude.
 ///
 /// Variant documentations and field types are put into metadata.
 /// The attribute `#[pallet::metadata(..)]` allows to specify the metadata to put for some types.
@@ -1585,9 +1585,15 @@ pub mod pallet_prelude {
 /// 	#[pallet::generate_store(pub(super) trait Store)]
 /// 	pub struct Pallet<T>(PhantomData<T>);
 ///
-/// 	// Implement on the pallet hooks on pallet.
+/// 	// Implement the pallet hooks.
 /// 	#[pallet::hooks]
 /// 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+/// 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+/// 			unimplemented!();
+/// 		}
+///
+/// 		// can implement also: on_finalize, on_runtime_upgrade, offchain_worker, ...
+/// 		// see `Hooks` trait
 /// 	}
 ///
 /// 	// Declare Call struct and implement dispatchables.
@@ -1618,7 +1624,7 @@ pub mod pallet_prelude {
 /// 		InsufficientProposersBalance,
 /// 	}
 ///
-/// 	// Declare pallet Event enum. (this is optional)
+/// 	// Declare pallet Event enum (this is optional).
 /// 	//
 /// 	// WARNING: Each type used in variants must implement: Clone, Debug, Eq, PartialEq, Codec.
 /// 	//
@@ -1683,13 +1689,13 @@ pub mod pallet_prelude {
 /// 		fn build(&self) {}
 /// 	}
 ///
-/// 	// Declare a pallet origin. (this is optional)
+/// 	// Declare a pallet origin (this is optional).
 /// 	//
 /// 	// The macro accept type alias or struct or enum, it checks generics are consistent.
 /// 	#[pallet::origin]
 /// 	pub struct Origin<T>(PhantomData<T>);
 ///
-/// 	// Declare validate_unsigned implementation. (this is optional)
+/// 	// Declare validate_unsigned implementation (this is optional).
 /// 	#[pallet::validate_unsigned]
 /// 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 /// 		type Call = Call<T>;
@@ -1701,7 +1707,7 @@ pub mod pallet_prelude {
 /// 		}
 /// 	}
 ///
-/// 	// Declare inherent provider for pallet. (this is optional)
+/// 	// Declare inherent provider for pallet (this is optional).
 /// 	#[pallet::inherent]
 /// 	impl<T: Config> ProvideInherent for Pallet<T> {
 /// 		type Call = Call<T>;
@@ -1968,13 +1974,13 @@ pub mod pallet_prelude {
 ///
 /// 	NOTE: decl_storage also generates functions `assimilate_storage` and `build_storage`
 /// 	directly on GenesisConfig, those are sometimes used in tests. In order not to break they
-/// 	can be implemented manually, just implement those functions by calling `GenesisBuild`
+/// 	can be implemented manually, one can implement those functions by calling `GenesisBuild`
 /// 	implementation.
 ///
-/// 10. **migrate origin**: just move the origin to the pallet module under `#[pallet::origin]`
-/// 11. **migrate validate_unsigned**: just move the ValidateUnsigned implementation to the pallet
+/// 10. **migrate origin**: move the origin to the pallet module under `#[pallet::origin]`
+/// 11. **migrate validate_unsigned**: move the ValidateUnsigned implementation to the pallet
 /// 	module under `#[pallet::validate_unsigned]`
-/// 12. **migrate provide_inherent**: just move the ValidateUnsigned implementation to the pallet
+/// 12. **migrate provide_inherent**: move the ValidateUnsigned implementation to the pallet
 /// 	module under `#[pallet::provide_inherent]`
 /// 13. rename the usage of `Module` to `Pallet` inside the crate.
 /// 14. migration is done, now double check migration with the checking migration guidelines.
