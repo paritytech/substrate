@@ -22,8 +22,6 @@
 use codec::Encode;
 #[cfg(feature = "std")]
 use codec::Decode;
-#[cfg(feature = "std")]
-use sp_inherents::ProvideInherentData;
 use sp_inherents::{InherentIdentifier, IsFatalError, InherentData};
 
 use sp_runtime::RuntimeString;
@@ -35,12 +33,14 @@ pub type InherentType = u64;
 
 /// Errors that can occur while checking the timestamp inherent.
 #[derive(Encode, sp_runtime::RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Decode))]
+#[cfg_attr(feature = "std", derive(Decode, thiserror::Error))]
 pub enum InherentError {
 	/// The timestamp is valid in the future.
 	/// This is a non-fatal-error and will not stop checking the inherents.
+	#[cfg_attr(feature = "std", error("Block will be valid at {0}."))]
 	ValidAtTimestamp(InherentType),
 	/// Some other error.
+	#[cfg_attr(feature = "std", error("Some other error {0}."))]
 	Other(RuntimeString),
 }
 
@@ -83,11 +83,7 @@ impl TimestampInherentData for InherentData {
 pub struct InherentDataProvider;
 
 #[cfg(feature = "std")]
-impl ProvideInherentData for InherentDataProvider {
-	fn inherent_identifier(&self) -> &'static InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
-
+impl sp_inherents::InherentDataProvider for InherentDataProvider {
 	fn provide_inherent_data(
 		&self,
 		inherent_data: &mut InherentData,
@@ -104,8 +100,12 @@ impl ProvideInherentData for InherentDataProvider {
 			})
 	}
 
-	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		InherentError::try_from(&INHERENT_IDENTIFIER, error).map(|e| format!("{:?}", e))
+	fn try_decode_error(
+		&self,
+		identifier: &InherentIdentifier,
+		error: &[u8],
+	) -> Option<Box<dyn std::error::Error + Send + Sync>> {
+		InherentError::try_from(&INHERENT_IDENTIFIER, error).map(|e| Box::new(e) as Box<_>)
 	}
 }
 

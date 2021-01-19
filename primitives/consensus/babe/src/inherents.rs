@@ -19,7 +19,7 @@
 
 use sp_inherents::{Error, InherentData, InherentIdentifier};
 #[cfg(feature = "std")]
-use sp_inherents::{InherentDataProviders, ProvideInherentData};
+use sp_inherents::{InherentDataProviders, InherentDataProvider};
 #[cfg(feature = "std")]
 use sp_timestamp::TimestampInherentData;
 
@@ -66,7 +66,7 @@ impl InherentDataProvider {
 }
 
 #[cfg(feature = "std")]
-impl ProvideInherentData for InherentDataProvider {
+impl InherentDataProvider for InherentDataProvider {
 	fn on_register(&self, providers: &InherentDataProviders) -> Result<(), Error> {
 		if !providers.has_provider(&sp_timestamp::INHERENT_IDENTIFIER) {
 			// Add the timestamp inherent data provider, as we require it.

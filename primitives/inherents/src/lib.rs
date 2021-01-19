@@ -44,6 +44,9 @@ use parking_lot::RwLock;
 #[cfg(feature = "std")]
 use std::{sync::Arc, format};
 
+#[cfg(feature = "std")]
+use sp_runtime::{traits::Block as BlockT, generic::BlockId};
+
 /// An error that can occur within the inherent data system.
 #[cfg(feature = "std")]
 #[derive(Debug, Encode, Decode, thiserror::Error)]
@@ -257,97 +260,44 @@ impl PartialEq for CheckInherentsResult {
 	}
 }
 
-/// All `InherentData` providers.
-#[cfg(feature = "std")]
-#[derive(Clone, Default)]
-pub struct InherentDataProviders {
-	providers: Arc<RwLock<Vec<Box<dyn ProvideInherentData + Send + Sync>>>>,
+pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs> {
+	type InherentDataProviders: InherentDataProvider;
+	type Error: std::error::Error + Send + Sync;
+
+	fn create_inherent_data_providers(
+		&self,
+		at: &BlockId<Block>,
+		extra_args: ExtraArgs,
+	) -> Result<Self::InherentDataProviders, Self::Error>;
 }
 
-#[cfg(feature = "std")]
-impl InherentDataProviders {
-	/// Create a new instance.
-	pub fn new() -> Self {
-		Self::default()
-	}
+impl<F, Block, IDP, Error, ExtraArgs> CreateInherentDataProviders<Block, ExtraArgs> for F
+where
+	Block: BlockT,
+	F: Fn(&BlockId<Block>, ExtraArgs) -> Result<IDP, Error>,
+	Error: Send + Sync + std::error::Error,
+	IDP: InherentDataProvider,
+{
+	type Error = Error;
+	type InherentDataProviders = IDP;
 
-	/// Register an `InherentData` provider.
-	///
-	/// The registration order is preserved and this order will also be used when creating the
-	/// inherent data.
-	///
-	/// # Result
-	///
-	/// Will return an error, if a provider with the same identifier already exists.
-	pub fn register_provider<P: ProvideInherentData + Send + Sync +'static>(
+	fn create_inherent_data_providers(
 		&self,
-		provider: P,
-	) -> Result<(), Error> {
-		if self.has_provider(&provider.inherent_identifier()) {
-			Err(
-				format!(
-					"Inherent data provider with identifier {:?} already exists!",
-					&provider.inherent_identifier()
-				).into()
-			)
-		} else {
-			provider.on_register(self)?;
-			self.providers.write().push(Box::new(provider));
-			Ok(())
-		}
-	}
-
-	/// Returns if a provider for the given identifier exists.
-	pub fn has_provider(&self, identifier: &InherentIdentifier) -> bool {
-		self.providers.read().iter().any(|p| p.inherent_identifier() == identifier)
-	}
-
-	/// Create inherent data.
-	pub fn create_inherent_data(&self) -> Result<InherentData, Error> {
-		let mut data = InherentData::new();
-		self.providers.read().iter().try_for_each(|p| {
-			p.provide_inherent_data(&mut data)
-				.map_err(|e| format!("Error for `{:?}`: {:?}", p.inherent_identifier(), e))
-		})?;
-		Ok(data)
-	}
-
-	/// Converts a given encoded error into a `String`.
-	///
-	/// Useful if the implementation encounters an error for an identifier it does not know.
-	pub fn error_to_string(&self, identifier: &InherentIdentifier, error: &[u8]) -> String {
-		let res = self.providers.read().iter().filter_map(|p|
-			if p.inherent_identifier() == identifier {
-				Some(
-					p.error_to_string(error)
-						.unwrap_or_else(|| error_to_string_fallback(identifier))
-				)
-			} else {
-				None
-			}
-		).next();
-
-		match res {
-			Some(res) => res,
-			None => format!(
-				"Error while checking inherent of type \"{}\", but this inherent type is unknown.",
-				String::from_utf8_lossy(identifier)
-			)
-		}
+		at: &BlockId<Block>,
+		extra_args: ExtraArgs,
+	) -> Result<Self::InherentDataProviders, Self::Error> {
+		(*self)(at, extra_args)
 	}
 }
 
 /// Something that provides inherent data.
 #[cfg(feature = "std")]
-pub trait ProvideInherentData {
-	/// Is called when this inherent data provider is registered at the given
-	/// `InherentDataProviders`.
-	fn on_register(&self, _: &InherentDataProviders) -> Result<(), Error> {
-		Ok(())
+pub trait InherentDataProvider {
+	fn create_inherent_data(&self) -> Result<InherentData, Error> {
+		let mut inherent_data = InherentData::new();
+		self.provide_inherent_data(&mut inherent_data)?;
+		Ok(inherent_data)
 	}
-
-	/// The identifier of the inherent for that data will be provided.
-	fn inherent_identifier(&self) -> &'static InherentIdentifier;
 
 	/// Provide inherent data that should be included in a block.
 	///
@@ -357,16 +307,31 @@ pub trait ProvideInherentData {
 	/// Convert the given encoded error to a string.
 	///
 	/// If the given error could not be decoded, `None` should be returned.
-	fn error_to_string(&self, error: &[u8]) -> Option<String>;
+	fn try_decode_error(
+		&self,
+		identifier: &InherentIdentifier,
+		error: &[u8],
+	) -> Option<Box<dyn std::error::Error + Send + Sync>>;
 }
 
-/// A fallback function, if the decoding of an error fails.
-#[cfg(feature = "std")]
-fn error_to_string_fallback(identifier: &InherentIdentifier) -> String {
-	format!(
-		"Error while checking inherent of type \"{}\", but error could not be decoded.",
-		String::from_utf8_lossy(identifier)
-	)
+#[impl_trait_for_tuples::impl_for_tuples(10)]
+impl InherentDataProvider for Tuple {
+	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
+		for_tuples!( #( Tuple.provide_inherent_data(inherent_data)?; )* );
+		Ok(())
+	}
+
+	fn try_decode_error(
+		&self,
+		identifier: &InherentIdentifier,
+		error: &[u8],
+	) -> Option<Box<dyn std::error::Error + Send + Sync>> {
+		for_tuples!( #(
+			if let Some(e) = Tuple.try_decode_error(identifier, error) { return Some(e) }
+		)* );
+
+		None
+	}
 }
 
 /// Did we encounter a fatal error while checking an inherent?
@@ -486,70 +451,28 @@ mod tests {
 
 	const ERROR_TO_STRING: &str = "Found error!";
 
-	impl ProvideInherentData for TestInherentDataProvider {
-		fn on_register(&self, _: &InherentDataProviders) -> Result<(), Error> {
-			*self.registered.write() = true;
-			Ok(())
-		}
-
-		fn inherent_identifier(&self) -> &'static InherentIdentifier {
-			&TEST_INHERENT_0
-		}
+	impl InherentDataProvider for TestInherentDataProvider {
+		type Error = Error;
 
 		fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
 			data.put_data(TEST_INHERENT_0, &42)
 		}
 
-		fn error_to_string(&self, _: &[u8]) -> Option<String> {
+		fn try_decode_error(&self, _: &InherentIdentifier, _: &[u8]) -> Option<Self::Error> {
 			Some(ERROR_TO_STRING.into())
 		}
 	}
 
 	#[test]
-	fn registering_inherent_provider() {
-		let provider = TestInherentDataProvider::new();
-		let providers = InherentDataProviders::new();
-
-		providers.register_provider(provider.clone()).unwrap();
-		assert!(provider.is_registered());
-		assert!(providers.has_provider(provider.inherent_identifier()));
-
-		// Second time should fail
-		assert!(providers.register_provider(provider.clone()).is_err());
-	}
-
-	#[test]
 	fn create_inherent_data_from_all_providers() {
 		let provider = TestInherentDataProvider::new();
-		let providers = InherentDataProviders::new();
-
-		providers.register_provider(provider.clone()).unwrap();
-		assert!(provider.is_registered());
+		let providers = StackedInherentDataProvider::new(provider);
 
 		let inherent_data = providers.create_inherent_data().unwrap();
 
 		assert_eq!(
-			inherent_data.get_data::<u32>(provider.inherent_identifier()).unwrap().unwrap(),
-			42u32
-		);
-	}
-
-	#[test]
-	fn encoded_error_to_string() {
-		let provider = TestInherentDataProvider::new();
-		let providers = InherentDataProviders::new();
-
-		providers.register_provider(provider.clone()).unwrap();
-		assert!(provider.is_registered());
-
-		assert_eq!(
-			&providers.error_to_string(&TEST_INHERENT_0, &[1, 2]), ERROR_TO_STRING
-		);
-
-		assert!(
-			providers
-				.error_to_string(&TEST_INHERENT_1, &[1, 2])
-				.contains("inherent type is unknown")
+			inherent_data.get_data::<u32>(&TEST_INHERENT_0).unwrap().unwrap(),
+			42u32,
 		);
 	}
 

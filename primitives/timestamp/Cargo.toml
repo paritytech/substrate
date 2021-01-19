@@ -20,6 +20,7 @@ codec = { package = "parity-scale-codec", version = "1.3.6", default-features = 
 sp-inherents = { version = "2.0.0", default-features = false, path = "../inherents" }
 impl-trait-for-tuples = "0.2.0"
 wasm-timer = { version = "0.2", optional = true }
+thiserror = { version = "1.0.21", optional = true }
 
 [features]
 default = [ "std" ]
@@ -30,4 +31,5 @@ std = [
 	"codec/std",
 	"sp-inherents/std",
 	"wasm-timer",
+	"thiserror",
 ]

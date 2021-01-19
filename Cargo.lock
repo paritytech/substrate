@@ -8398,9 +8398,11 @@ dependencies = [
 name = "sp-inherents"
 version = "2.0.1"
 dependencies = [
+ "impl-trait-for-tuples 0.2.0",
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "sp-core",
+ "sp-runtime",
  "sp-std",
  "thiserror",
 ]
@@ -8730,6 +8732,7 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-std",
+ "thiserror",
  "wasm-timer",
 ]
 

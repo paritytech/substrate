@@ -20,10 +20,11 @@
 //!
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
-use super::SlotCompatible;
-use sp_consensus::Error;
+use super::InherentDataProviderExt;
+use sp_consensus::{Error, SelectChain};
 use futures::{prelude::*, task::Context, task::Poll};
-use sp_inherents::{InherentData, InherentDataProviders};
+use sp_inherents::{InherentData, CreateInherentDataProviders, InherentDataProvider};
+use sp_runtime::{traits::{Block as BlockT, Header as HeaderT}, generic::BlockId};
 
 use std::{pin::Pin, time::{Duration, Instant}};
 use futures_timer::Delay;
@@ -46,47 +47,58 @@ pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 }
 
 /// Information about a slot.
-pub struct SlotInfo {
+pub struct SlotInfo<B: BlockT> {
 	/// The slot number.
 	pub number: u64,
 	/// Current timestamp.
-	pub timestamp: u64,
+	pub timestamp: Duration,
 	/// The instant at which the slot ends.
 	pub ends_at: Instant,
 	/// The inherent data.
 	pub inherent_data: InherentData,
 	/// Slot duration.
 	pub duration: u64,
+	/// The chain header this slot is based on.
+	pub chain_head: B::Header,
 }
 
 /// A stream that returns every time there is a new slot.
-pub(crate) struct Slots<SC> {
+pub(crate) struct Slots<Block, C, IDP> {
 	last_slot: u64,
 	slot_duration: u64,
 	inner_delay: Option<Delay>,
-	inherent_data_providers: InherentDataProviders,
-	timestamp_extractor: SC,
+	inherent_data_providers: IDP,
+	client: C,
+	_phantom: std::marker::PhantomData<Block>,
 }
 
-impl<SC> Slots<SC> {
+impl<Block, C, IDP> Slots<Block, C, IDP> {
 	/// Create a new `Slots` stream.
 	pub fn new(
 		slot_duration: u64,
-		inherent_data_providers: InherentDataProviders,
-		timestamp_extractor: SC,
+		inherent_data_providers: IDP,
+		client: C,
 	) -> Self {
 		Slots {
 			last_slot: 0,
 			slot_duration,
 			inner_delay: None,
 			inherent_data_providers,
-			timestamp_extractor,
+			client,
+			_phantom: Default::default(),
 		}
 	}
 }
 
-impl<SC: SlotCompatible> Stream for Slots<SC> {
-	type Item = Result<SlotInfo, Error>;
+impl<Block, C, IDP> Stream for Slots<Block, C, IDP>
+where
+	Block: BlockT,
+	C: SelectChain<Block>,
+	IDP: CreateInherentDataProviders<Block, ()>,
+	IDP::InherentDataProviders: crate::InherentDataProviderExt,
+IDP::Error: Into<Error>,
+{
+	type Item = Result<SlotInfo<Block>, Error>;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		loop {
@@ -109,18 +121,36 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 
 			// timeout has fired.
 
-			let inherent_data = match self.inherent_data_providers.create_inherent_data() {
+			let chain_head = match self.client.best_chain() {
+				Ok(x) => x,
+				Err(e) => {
+					log::warn!(
+						target: "slots",
+						"Unable to author block in slot. No best block header: {:?}",
+						e,
+					);
+					// Let's try at the next slot..
+					self.inner_delay.take();
+					continue;
+				}
+			};
+
+			let inherent_data_providers = match self.inherent_data_providers
+				.create_inherent_data_providers(&BlockId::Hash(chain_head.hash()), ())
+			{
 				Ok(id) => id,
-				Err(err) => return Poll::Ready(Some(Err(sp_consensus::Error::InherentData(err)))),
+				Err(err) => return Poll::Ready(Some(Err(err.into()))),
 			};
-			let result = self.timestamp_extractor.extract_timestamp_and_slot(&inherent_data);
-			let (timestamp, slot_num, offset) = match result {
-				Ok(v) => v,
-				Err(err) => return Poll::Ready(Some(Err(err))),
+
+			let timestamp = inherent_data_providers.timestamp();
+			let slot_num = inherent_data_providers.slot();
+			let inherent_data = match inherent_data_providers.create_inherent_data() {
+				Ok(d) => d,
+				Err(err) => return Poll::Ready(Some(Err(err.into()))),
 			};
+
 			// reschedule delay for next slot.
-			let ends_in = offset +
-				time_until_next(Duration::from_millis(timestamp), slot_duration);
+			let ends_in = time_until_next(timestamp, slot_duration);
 			let ends_at = Instant::now() + ends_in;
 			self.inner_delay = Some(Delay::new(ends_in));
 
@@ -134,10 +164,11 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 					timestamp,
 					ends_at,
 					inherent_data,
+					chain_head,
 				})))
 			}
 		}
 	}
 }
 
-impl<SC> Unpin for Slots<SC> {}
+impl<Block, C, IDP> Unpin for Slots<Block, C, IDP> {}

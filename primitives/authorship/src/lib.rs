@@ -70,7 +70,7 @@ impl<F, H> InherentDataProvider<F, H> {
 }
 
 #[cfg(feature = "std")]
-impl<F, H: Encode + std::fmt::Debug> sp_inherents::ProvideInherentData for InherentDataProvider<F, H>
+impl<F, H: Encode + std::fmt::Debug> sp_inherents::InherentDataProvider for InherentDataProvider<F, H>
 where F: Fn() -> Vec<H>
 {
 	fn inherent_identifier(&self) -> &'static InherentIdentifier {

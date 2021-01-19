@@ -65,15 +65,15 @@ use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
-use sp_inherents::{InherentDataProviders, InherentData};
+use sp_inherents::{InherentData, CreateInherentDataProviders};
 use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
 };
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
-	CheckedHeader, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
-	BackoffAuthoringBlocksStrategy,
+	CheckedHeader, SlotInfo, StorageChanges, check_equivocation,
+	BackoffAuthoringBlocksStrategy, InherentDataProviderExt,
 };
 
 use sp_api::ApiExt;
@@ -122,31 +122,15 @@ fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option
 	Some(current_author)
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-struct AuraSlotCompatible;
-
-impl SlotCompatible for AuraSlotCompatible {
-	fn extract_timestamp_and_slot(
-		&self,
-		data: &InherentData,
-	) -> Result<(TimestampInherent, AuraInherent, std::time::Duration), sp_consensus::Error> {
-		data.timestamp_inherent_data()
-			.and_then(|t| data.aura_inherent_data().map(|a| (t, a)))
-			.map_err(Into::into)
-			.map_err(sp_consensus::Error::InherentData)
-			.map(|(x, y)| (x, y, Default::default()))
-	}
-}
-
 /// Start the aura worker. The returned future should be run in a futures executor.
-pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
+pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error, IDP>(
 	slot_duration: SlotDuration,
 	client: Arc<C>,
 	select_chain: SC,
 	block_import: I,
 	env: E,
 	sync_oracle: SO,
-	inherent_data_providers: InherentDataProviders,
+	inherent_data_providers: IDP,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
 	keystore: SyncCryptoStorePtr,
@@ -166,6 +150,8 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 	SO: SyncOracle + Send + Sync + Clone,
 	CAW: CanAuthorWith<B> + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	IDP: CreateInherentDataProviders,
+	IDP::InherentDataProviders: InherentDataProviderExt,
 {
 	let worker = AuraWorker {
 		client,
@@ -177,11 +163,8 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 		backoff_authoring_blocks,
 		_key_type: PhantomData::<P>,
 	};
-	register_aura_inherent_data_provider(
-		&inherent_data_providers,
-		slot_duration.slot_duration()
-	)?;
-	Ok(sc_consensus_slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
+
+	Ok(sc_consensus_slots::start_slot_worker(
 		slot_duration,
 		select_chain,
 		worker,
@@ -832,12 +815,12 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, I, C, P, S, CAW>(
+pub fn import_queue<B, I, C, P, S, CAW, IDP>(
 	slot_duration: SlotDuration,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<B>>,
 	client: Arc<C>,
-	inherent_data_providers: InherentDataProviders,
+	inherent_data_providers: IDP,
 	spawner: &S,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
@@ -852,6 +835,7 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 	P::Signature: Encode + Decode,
 	S: sp_core::traits::SpawnNamed,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
+	IDP: CreateInherentDataProviders<B,>
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;

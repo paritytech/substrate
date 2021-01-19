@@ -42,7 +42,7 @@ use sp_consensus_babe::{
 	BabeApi, inherents::BabeInherentData, ConsensusLog, BABE_ENGINE_ID, AuthorityId,
 	digests::{PreDigest, SecondaryPlainPreDigest, NextEpochDescriptor}, BabeAuthorityWeight,
 };
-use sp_inherents::{InherentDataProviders, InherentData, ProvideInherentData, InherentIdentifier};
+use sp_inherents::{InherentDataProviders, InherentData, InherentDataProvider, InherentIdentifier};
 use sp_runtime::{
 	traits::{DigestItemFor, DigestFor, Block as BlockT, Zero, Header},
 	generic::{Digest, BlockId},
@@ -281,7 +281,7 @@ impl SlotTimestampProvider {
 	}
 }
 
-impl ProvideInherentData for SlotTimestampProvider {
+impl InherentDataProvider for SlotTimestampProvider {
 	fn inherent_identifier(&self) -> &'static InherentIdentifier {
 		&INHERENT_IDENTIFIER
 	}
