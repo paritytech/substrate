@@ -258,7 +258,6 @@ mod transport;
 mod utils;
 
 pub mod block_request_handler;
-// TODO: Double check. Should the whole module be pub?
 pub mod light_client_requests;
 pub mod config;
 pub mod error;

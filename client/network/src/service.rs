@@ -1276,12 +1276,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		// Check for new incoming light client requests.
 		if let Some(light_client_rqs) = this.light_client_rqs.as_mut() {
 			while let Poll::Ready(Some(rq)) = light_client_rqs.poll_next_unpin(cx) {
-				// This can error if there are too many queued requests already.
-				if this.network_service.light_client_request(rq).is_err() {
-					// TODO: Is it always too many requests or can this fail due to other things as
-					// well?
-					log::warn!("Couldn't start light client request: too many pending requests");
+				let result = this.network_service.light_client_request(rq);
+				match result {
+					Ok(()) => {},
+					Err(light_client_requests::sender::SendRequestError::TooManyRequests) => {
+						log::warn!("Couldn't start light client request: too many pending requests");
+					}
 				}
+
 				if let Some(metrics) = this.metrics.as_ref() {
 					metrics.issued_light_requests.inc();
 				}
