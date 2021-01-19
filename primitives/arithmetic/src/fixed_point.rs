@@ -254,12 +254,10 @@ pub trait FixedPointNumber:
 	fn ceil(self) -> Self {
 		if self.is_negative() {
 			self.trunc()
+		} else if self.frac() == Self::zero() {
+			self
 		} else {
-			if self.frac() == Self::zero() {
-				self
-			} else {
-				self.saturating_add(Self::one()).trunc()
-			}
+			self.saturating_add(Self::one()).trunc()
 		}
 	}
 
@@ -281,12 +279,10 @@ pub trait FixedPointNumber:
 		let n = self.frac().saturating_mul(Self::saturating_from_integer(10));
 		if n < Self::saturating_from_integer(5) {
 			self.trunc()
+		} else if self.is_positive() {
+			self.saturating_add(Self::one()).trunc()
 		} else {
-			if self.is_positive() {
-				self.saturating_add(Self::one()).trunc()
-			} else {
-				self.saturating_sub(Self::one()).trunc()
-			}
+			self.saturating_sub(Self::one()).trunc()
 		}
 	}
 }
