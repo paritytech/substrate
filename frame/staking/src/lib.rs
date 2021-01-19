@@ -1264,6 +1264,10 @@ decl_error! {
 		IncorrectSlashingSpans,
 		/// Internal state has become somehow corrupted and the operation cannot continue.
 		BadState,
+		/// Too many nomination targets supplied.
+		TooManyTargets,
+		/// A nomination target was supplied that was blocked or otherwise not a validator.
+		BadTarget,
 	}
 }
 
@@ -1714,17 +1718,17 @@ decl_module! {
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
+			ensure!(targets.len() <= MAX_NOMINATIONS, Error::<T>::TooManyTargets);
 
 			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
 
 			let targets = targets.into_iter()
-				.take(MAX_NOMINATIONS)
-				.map(|t| T::Lookup::lookup(t))
-				.filter(|n| if let Ok(ref n) = n {
-					old.contains(n) || !Validators::<T>::get(n).blocked
+				.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
+				.map(|n| n.and_then(|n| if old.contains(&n) || !Validators::<T>::get(&n).blocked {
+					Ok(n)
 				} else {
-					true
-				})
+					Err(Error::<T>::BadTarget.into())
+				}))
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
 			let nominations = Nominations {
