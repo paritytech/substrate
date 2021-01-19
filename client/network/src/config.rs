@@ -110,10 +110,6 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Request response configuration for the light client request protocol.
 	///
-	/// [`RequestResponseConfig`] [`name`] is used to tag outgoing light client requests with the
-	/// correct protocol name. In addition all of [`RequestResponseConfig`] is used to handle
-	/// incoming light client requests, if enabled.
-	///
 	/// Can be constructed either via [`light_client_requests::generate_protocol_config`] allowing
 	/// outgoing but not incoming requests, or constructed via
 	/// [`light_client_requests::handler::LightClientRequestHandler::new`] allowing both outgoing
