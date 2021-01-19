@@ -1131,6 +1131,8 @@ where
 		// change phase
 		<CurrentPhase<T>>::put(Phase::Off);
 
+		// TODO: clean signed submissions: test case: call `elect` in the middle of the signed phase.
+
 		// kill snapshots
 		<Snapshot<T>>::kill();
 		<SnapshotMetadata<T>>::kill();
@@ -1150,10 +1152,6 @@ where
 	}
 
 	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError> {
-		// NOTE: SignedSubmission is guaranteed to be drained by the end of the signed phase too,
-		// thus no need for a manual cleanup:
-		// TODO
-		// debug_assert!(Self::signed_submissions().is_empty());
 		<QueuedSolution<T>>::take()
 			.map_or_else(
 				|| match T::Fallback::get() {
