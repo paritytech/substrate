@@ -92,7 +92,7 @@ pub trait FixedPointNumber:
 	///
 	/// Returns `None` if `int` exceeds accuracy.
 	fn checked_from_integer(int: Self::Inner) -> Option<Self> {
-		int.checked_mul(&Self::DIV).map(|inner| Self::from_inner(inner))
+		int.checked_mul(&Self::DIV).map(Self::from_inner)
 	}
 
 	/// Creates `self` from a rational number. Equal to `n / d`.
@@ -119,7 +119,7 @@ pub trait FixedPointNumber:
 
 		multiply_by_rational(n.value, Self::DIV.unique_saturated_into(), d.value).ok()
 			.and_then(|value| from_i129(I129 { value, negative }))
-			.map(|inner| Self::from_inner(inner))
+			.map(Self::from_inner)
 	}
 
 	/// Checked multiplication for integer type `N`. Equal to `self * n`.
@@ -184,7 +184,7 @@ pub trait FixedPointNumber:
 		if inner >= Self::Inner::zero() {
 			self
 		} else {
-			Self::from_inner(inner.checked_neg().unwrap_or_else(|| Self::Inner::max_value()))
+			Self::from_inner(inner.checked_neg().unwrap_or_else(Self::Inner::max_value))
 		}
 	}
 
@@ -230,7 +230,7 @@ pub trait FixedPointNumber:
 		self.into_inner().checked_div(&Self::DIV)
 			.expect("panics only if DIV is zero, DIV is not zero; qed")
 			.checked_mul(&Self::DIV)
-			.map(|inner| Self::from_inner(inner))
+			.map(Self::from_inner)
 			.expect("can not overflow since fixed number is >= integer part")
 	}
 
@@ -581,7 +581,7 @@ macro_rules! implement_fixed {
 			{
 				use sp_std::str::FromStr;
 				let s = String::deserialize(deserializer)?;
-				$name::from_str(&s).map_err(|err_str| de::Error::custom(err_str))
+				$name::from_str(&s).map_err(de::Error::custom)
 			}
 		}
 
