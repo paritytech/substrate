@@ -206,7 +206,7 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 					.expect("Proof provided in the module doc; qed.");
 				if output_with_idx[min_index].1 >= threshold {
 					min_index += 1;
-					min_index = min_index % count;
+					min_index %= count;
 				}
 			}
 		}
@@ -218,7 +218,7 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 				.expect("Proof provided in the module doc; qed.");
 			if output_with_idx[min_index].1 >= threshold {
 				min_index += 1;
-				min_index = min_index % count;
+				min_index %= count;
 			}
 			leftover -= One::one()
 		}
