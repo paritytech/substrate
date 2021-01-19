@@ -263,21 +263,6 @@ impl OverlayedChangeSet {
 		self.changes.into_iter().map(|(k, mut v)| (k, v.pop_transaction().value))
 	}
 
-	/// Consume this changeset and return all committed changes.
-	///
-	/// Panics:
-	/// Panics if there are open transactions: `transaction_depth() > inital_depth`
-	pub fn drain_commited_for(mut self, initial_depth: usize) -> impl Iterator<Item=(StorageKey, Option<StorageValue>)> {
-		assert!(self.transaction_depth() == initial_depth, "Drain is not allowed with open transactions.");
-		// we have a single transaction opened over the parent ones (initial depth includes
-		// this transaction).
-		let changed_keys = self.dirty_keys.pop().expect(PROOF_OVERLAY_NON_EMPTY);
-		changed_keys.into_iter().filter_map(move |key| {
-			self.changes.remove(&key)
-				.map(|mut value| (key, value.pop_transaction().value))
-		})
-	}
-
 	/// Returns the current nesting depth of the transaction stack.
 	///
 	/// A value of zero means that no transaction is open and changes are committed on write.

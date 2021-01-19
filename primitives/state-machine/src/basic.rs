@@ -341,11 +341,11 @@ impl Externalities for BasicExternalities {
 	) -> Box<dyn AsyncExternalities> {
 		unimplemented!("Workers are not supported by BasicExternalities");
 	}
-	
+
 	fn resolve_worker_result(&mut self, _state_update: WorkerResult) -> Option<Vec<u8>> {
 		unimplemented!("Workers are not supported by BasicExternalities");
 	}
-	
+
 	fn dismiss_worker(&mut self, _id: TaskId) {
 		unimplemented!("Workers are not supported by BasicExternalities");
 	}

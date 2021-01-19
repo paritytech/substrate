@@ -182,21 +182,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> ProvingBackend<'a, S, H>
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> OwnedProvingBackend<S, H>
-	where H::Out: Codec
-{
-	#[allow(dead_code)] // TODO implement joining different collected proofs.
-	/// Extracting the gathered unordered proof.
-	pub fn extract_proof(&self) -> StorageProof {
-		let trie_nodes = self.0.essence().backend_storage().proof_recorder
-			.read()
-			.iter()
-			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
-			.collect();
-		StorageProof::new(trie_nodes)
-	}
-}
-
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'static + Hasher> TrieBackendStorage<H>
 	for ProofRecorderBackend<'a, S, H>
 {
@@ -220,7 +205,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'static + Hasher> TrieBackendStorage<
 	}
 }
 
-// TODO check if use
 impl<S: TrieBackendStorage<H>, H: Hasher + 'static> TrieBackendStorage<H>
 	for OwnedProofRecorderBackend<S, H>
 {

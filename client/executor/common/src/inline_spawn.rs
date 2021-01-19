@@ -297,7 +297,6 @@ pub fn process_task<
 	#[cfg(feature = "std")]
 	instance_ref: I,
 ) -> WorkerResult {
-
 	let result = match task {
 		Task::Wasm(WasmTask { dispatcher_ref, func, data }) => {
 
@@ -342,7 +341,7 @@ pub fn process_task<
 		},
 	};
 	match result {
-		Ok(Ok(result)) =>	match async_ext.extract_state() {
+		Ok(Ok(result)) => match async_ext.extract_state() {
 			AsyncExternalitiesPostExecution::Invalid => {
 				WorkerResult::Invalid
 			},

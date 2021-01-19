@@ -1362,7 +1362,7 @@ pub trait RuntimeTasks {
 		// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
 		// a given id, to make this safer.
 		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-	
+
 		runtime_spawn.dismiss(handle, ext_unsafe);
 		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 	}

@@ -444,7 +444,7 @@ impl RuntimeInstanceSpawnInfo {
 			capacity,
 		}
 	}
-	
+
 	fn start(&mut self, depth: usize) -> Processing {
 		if self.nb_runing < self.capacity {
 			self.nb_runing += 1;
@@ -495,6 +495,12 @@ impl RuntimeInstanceSpawn {
 		}
 	}
 
+	// TODO variant of insert that collect
+	// AsyncExternalitiesPostExecution and keep a hierarchy of the called
+	// task (use case is processing tx in tx pool and try to order them depending on
+	// result). -> thus the parameter allows choosing your execution order.
+	// Kind of simulate where you can chain multiple call on the same ext?
+	// (will also need a variant of process_task that do not resolve result).
 	fn insert(
 		&self,
 		handle: u64,
@@ -729,7 +735,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 
 impl RuntimeInstanceSpawn {
 	/// Instantiate a new `RuntimeInstanceSpawn`.
-	/// 
+	///
 	/// Usualy one should rather be using `register_on_externalities`.
 	fn new(
 		module: Option<Arc<dyn WasmModule>>,
@@ -754,7 +760,7 @@ impl RuntimeInstanceSpawn {
 
 	/// Allows to register an `RunstimeSpawn` without a
 	/// wasm module.
-	/// 
+	///
 	/// In most case `register_on_externalities` should be use,
 	/// this function is mostly for testing purpose (when
 	/// it is guaranteed to run in native mode).

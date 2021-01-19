@@ -340,8 +340,6 @@ cfg_if! {
 				fn test_storage();
 				/// Check a witness.
 				fn test_witness(proof: StorageProof, root: crate::Hash);
-				/// Run various tests against task workers api.
-				fn test_tasks();
 				/// Test that ensures that we can call a function that takes multiple
 				/// arguments.
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
@@ -395,8 +393,6 @@ cfg_if! {
 				fn test_storage();
 				/// Check a witness.
 				fn test_witness(proof: StorageProof, root: crate::Hash);
-				/// Run various tests against task workers api.
-				fn test_tasks();
 				/// Test that ensures that we can call a function that takes multiple
 				/// arguments.
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
@@ -703,10 +699,6 @@ cfg_if! {
 					test_witness(proof, root);
 				}
 
-				fn test_tasks() {
-					test_tasks();
-				}
-
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
 					assert_eq!(&data[..], &other[..]);
 					assert_eq!(data.len(), num as usize);
@@ -966,10 +958,6 @@ cfg_if! {
 					test_witness(proof, root);
 				}
 
-				fn test_tasks() {
-					test_tasks();
-				}
-
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
 					assert_eq!(&data[..], &other[..]);
 					assert_eq!(data.len(), num as usize);
@@ -1199,9 +1187,6 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 
 	fn worker_test(_inp: Vec<u8>) -> Vec<u8> {
 		let mut result = Vec::<u8>::default();
-		assert!(sp_io::storage::get(&[0]).is_some());
-		assert!(sp_io::storage::get(b"value3").is_some());
-		assert!(sp_io::storage::get(b"xyz").is_none());
 		result.push(42);
 		result
 	}
@@ -1222,8 +1207,6 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 
 	#[cfg(not(feature = "std"))]
 	let _guard = unsafe {(
-		sp_io::storage::host_get.replace_implementation(host_storage_get),
-		sp_io::storage::host_set.replace_implementation(host_storage_set),
 		sp_io::runtime_tasks::host_set_capacity.replace_implementation(host_runtime_tasks_set_capacity),
 		sp_io::runtime_tasks::host_spawn.replace_implementation(host_runtime_tasks_spawn),
 		sp_io::runtime_tasks::host_join.replace_implementation(host_runtime_tasks_join),
@@ -1231,63 +1214,12 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 	)};
 
 	sp_externalities::set_and_run_with_externalities(&mut ext, || {
-		sp_externalities::with_externalities(|ext| {
-			assert!(ext.storage(&[0]).is_some());
-			assert!(ext.storage(b"value3").is_some());
-			assert!(ext.storage(b"xyz").is_none());
-		}).unwrap();
-
-		assert!(sp_io::storage::get(&[0]).is_some());
-		assert!(sp_io::storage::get(b"value3").is_some());
-		assert!(sp_io::storage::get(b"xyz").is_none());
 		sp_tasks::set_capacity(4);
-		let handle = sp_tasks::spawn(worker_test, Vec::new(), WorkerDeclaration::ReadAtSpawn);
-		sp_io::storage::set(b"xyz", b"test");
-		assert!(sp_io::storage::get(b"xyz").is_some());
+		let handle = sp_tasks::spawn(worker_test, Vec::new(), WorkerDeclaration::Stateless);
 		let res = handle.join().expect("expected result for task");
 		assert!(res.get(0) == Some(&42));
 	});
 }
-
-fn test_tasks() {
-	sp_tasks::set_capacity(4);
-
-	fn todo(_inp: Vec<u8>) -> Vec<u8> {
-		//panic!("TODO, actually there is some testing to do with panic too");
-		let mut result = Vec::<u8>::default();
-		result.push(42);
-		result
-	}
-	let handle = sp_tasks::spawn(todo, Vec::new(), WorkerDeclaration::ReadAtSpawn);
-	let res = handle.join().expect("expected result for task");
-	assert!(res.get(0) == Some(&42));
-
-	fn tokill(_inp: Vec<u8>) -> Vec<u8> {
-		loop { }
-	}
-	let handle = sp_tasks::spawn(tokill, Vec::new(), WorkerDeclaration::ReadAtSpawn);
-	handle.dismiss();
-	fn do_panic(_inp: Vec<u8>) -> Vec<u8> {
-		panic!("Expected test panic.");
-	}
-	let handle = sp_tasks::spawn(do_panic, Vec::new(), WorkerDeclaration::ReadAtSpawn);
-	// Dismiss don't panic
-	handle.dismiss();
-
-	sp_io::storage::start_transaction();
-	let handle = sp_tasks::spawn(todo, Vec::new(), WorkerDeclaration::ReadAtSpawn);
-	// invalidate state for handle
-	sp_io::storage::rollback_transaction();
-	assert!(handle.join().is_none());
-	sp_io::storage::start_transaction();
-	let handle = sp_tasks::spawn(todo, Vec::new(), WorkerDeclaration::ReadLastBlock);
-	sp_io::storage::rollback_transaction();
-	// state stay correct for last block
-	assert!(handle.join().is_some());
-	
-	// TODO	unimplemented!("join, kill and consort");
-}
-
 
 #[cfg(test)]
 mod tests {
@@ -1377,16 +1309,5 @@ mod tests {
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		runtime_api.test_witness(&block_id, proof, root).unwrap();
-	}
-
-	#[test]
-	fn test_tasks() {
-		let client = TestClientBuilder::new()
-			.set_execution_strategy(ExecutionStrategy::Both)
-			.build();
-		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.chain_info().best_number);
-
-		runtime_api.test_tasks(&block_id).unwrap();
 	}
 }

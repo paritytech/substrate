@@ -29,9 +29,7 @@ use sp_core::{
 };
 use sp_externalities::{Externalities, TaskId, AsyncBackend, AsyncExternalitiesPostExecution,
 	WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities};
-use sp_core::hexdisplay::HexDisplay;
-use crate::ext::guard;
-use crate::{StorageValue, StorageKey, trace};
+use crate::{StorageValue, StorageKey};
 
 /// Async view on state machine Ext.
 /// It contains its own set of state and rules,
@@ -40,7 +38,7 @@ pub struct AsyncExt {
 	kind: WorkerType,
 	// Actually unused at this point, is for write variant.
 	overlay: OverlayedChanges,
-	spawn_id: Option<TaskId>,
+	spawn_id: Option<TaskId>, // TODO this is probably costless to switch to non optional
 	backend: Box<dyn AsyncBackend>,
 }
 
@@ -53,6 +51,9 @@ impl std::fmt::Debug for AsyncExt
 }
 
 /// Obtain externality and for a child worker.
+/// TODO make fn generic and pass parent backend
+/// then call  let backend = self.backend.async_backend();
+/// only for non stateless.
 pub fn new_child_worker_async_ext(
 	worker_id: u64,
 	declaration: WorkerDeclaration,
@@ -61,6 +62,8 @@ pub fn new_child_worker_async_ext(
 ) -> AsyncExt {
 	let mut result = match &declaration {
 		WorkerDeclaration::Stateless => {
+			// early exit, stateless do not need
+			// to know about backend or current overlay.
 			return AsyncExt {
 				kind: WorkerType::Stateless,
 				overlay: Default::default(),
@@ -68,14 +71,7 @@ pub fn new_child_worker_async_ext(
 				backend: Box::new(()),
 			}
 		},
-		WorkerDeclaration::ReadLastBlock => {
-			return AsyncExt {
-				kind: declaration.get_type(),
-				overlay: Default::default(),
-				spawn_id: None,
-				backend,
-			}
-		},
+		#[allow(unreachable_patterns)] // FIXME only for future async ext with state.
 		_ => {
 			AsyncExt {
 				kind: declaration.get_type(),
@@ -94,46 +90,15 @@ pub fn new_child_worker_async_ext(
 }
 
 impl AsyncExt {
-	fn guard_stateless(
-		&self,
-		panic: &'static str,
-	) {
-		match self.kind {
-			WorkerType::Stateless => {
-				panic!(panic)
-			},
-			_ => (),
-		}
-	}
-
-	fn guard_read_only(
-		&self,
-		panic: &'static str,
-	) {
-		if !self.write_access() {
-			panic!(panic)
-		}
-	}
-
 	/// Check if externality can write.
 	/// This does not indicate that a given write will
 	/// be allowend or will not result in an invalid
 	/// worker execution.
 	pub fn write_access(&self) -> bool {
 		match self.kind {
-			WorkerType::Stateless
-			| WorkerType::ReadLastBlock
-			| WorkerType::ReadAtSpawn
-			| WorkerType::ReadOptimistic
-			| WorkerType::ReadDeclarative => false,
-			WorkerType::WriteAtSpawn
-			| WorkerType::WriteLightOptimistic
-			| WorkerType::WriteLightDeclarative
-			| WorkerType::WriteOptimistic
-			| WorkerType::WriteDeclarative => true,
+			WorkerType::Stateless => false,
 		}
 	}
-
 }
 
 impl Externalities for AsyncExt {
@@ -141,17 +106,8 @@ impl Externalities for AsyncExt {
 		panic!("`set_offchain_storage`: should not be used in async externalities!")
 	}
 
-	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
-		self.guard_stateless("`storage`: should not be used in async externalities!");
-		let _guard = guard();
-		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.storage(key));
-		trace!(target: "state", "{:?}: Th Get {}={:?}",
-			self.spawn_id,
-			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from)
-		);
-		result
+	fn storage(&self, _key: &[u8]) -> Option<StorageValue> {
+		panic!("`storage`: should not be used in async externalities!");
 	}
 
 	fn storage_hash(&self, _key: &[u8]) -> Option<Vec<u8>> {
@@ -162,27 +118,12 @@ impl Externalities for AsyncExt {
 
 	fn child_storage(
 		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
+		_child_info: &ChildInfo,
+		_key: &[u8],
 	) -> Option<StorageValue> {
-		self.guard_stateless(
+		panic!(
 			"`child_storage`: should not be used in async externalities!",
 		);
-		let _guard = guard();
-		let result = self.overlay
-			.child_storage(child_info, key)
-			.map(|x| x.map(|x| x.to_vec()))
-			.unwrap_or_else(||
-				self.backend.child_storage(child_info, key));
-
-		trace!(target: "state", "{:?}: Th GetChild({}) {}={:?}",
-			self.spawn_id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from)
-		);
-
-		result
 	}
 
 	fn child_storage_hash(
@@ -193,63 +134,31 @@ impl Externalities for AsyncExt {
 		panic!("`child_storage_hash`: should not be used in async externalities!")
 	}
 
-	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		self.guard_stateless("`next_storage_key`: should not be used in async externalities!");
-		let next_backend_key = self.backend.next_storage_key(key);
-		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
-
-		match (next_backend_key, next_overlay_key_change) {
-			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
-			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
-				Some(overlay_key.0.to_vec())
-			} else {
-				self.next_storage_key(&overlay_key.0[..])
-			},
-		}
+	fn next_storage_key(&self, _key: &[u8]) -> Option<StorageKey> {
+		panic!("`next_storage_key`: should not be used in async externalities!");
 	}
 
 	fn next_child_storage_key(
 		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
+		_child_info: &ChildInfo,
+		_key: &[u8],
 	) -> Option<StorageKey> {
-		self.guard_stateless(
+		panic!(
 			"`next_child_storage_key`: should not be used in async externalities!",
 		);
-		let next_backend_key = self.backend.next_child_storage_key(child_info, key);
-		let next_overlay_key_change = self.overlay.next_child_storage_key_change(
-			child_info.storage_key(),
-			key
-		);
-
-		match (next_backend_key, next_overlay_key_change) {
-			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
-			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
-				Some(overlay_key.0.to_vec())
-			} else {
-				self.next_child_storage_key(
-					child_info,
-					&overlay_key.0[..],
-				)
-			},
-		}
 	}
 
-	fn place_storage(&mut self, key: StorageKey, maybe_value: Option<StorageValue>) {
-		self.guard_read_only("`place_storage`: should not be used in read only worker externalities!");
-		self.overlay.set_storage(key, maybe_value);
+	fn place_storage(&mut self, _key: StorageKey, _maybe_value: Option<StorageValue>) {
+		panic!("`place_storage`: should not be used in read only worker externalities!");
 	}
 
 	fn place_child_storage(
 		&mut self,
-		child_info: &ChildInfo,
-		key: StorageKey,
-		value: Option<StorageValue>,
+		_child_info: &ChildInfo,
+		_key: StorageKey,
+		_value: Option<StorageValue>,
 	) {
-		self.guard_read_only("`place_child_storage`: should not be used in read only worker externalities!");
-		self.overlay.set_child_storage(child_info, key, value);
+		panic!("`place_child_storage`: should not be used in read only worker externalities!");
 	}
 
 	fn kill_child_storage(
@@ -274,21 +183,13 @@ impl Externalities for AsyncExt {
 
 	fn storage_append(
 		&mut self,
-		key: Vec<u8>,
-		value: Vec<u8>,
+		_key: Vec<u8>,
+		_value: Vec<u8>,
 	) {
-		self.guard_read_only("`storage_append`: should not be used in read only worker externalities!");
-		let backend = &mut self.backend;
-		let current_value = self.overlay.value_mut_or_insert_with(
-			&key,
-			|| backend.storage(&key).unwrap_or_default()
-		);
-		crate::ext::StorageAppend::new(current_value).append(value);
+		panic!("`storage_append`: should not be used in read only worker externalities!");
 	}
 
 	fn storage_root(&mut self) -> Vec<u8> {
-		// TODO currently no storage_root function to avoid having to move the hasher trait
-		// in AsyncExternalities extension.
 		panic!("`storage_root`: should not be used in async externalities!")
 	}
 
@@ -296,8 +197,6 @@ impl Externalities for AsyncExt {
 		&mut self,
 		_child_info: &ChildInfo,
 	) -> Vec<u8> {
-		// TODO currently no storage_root function to avoid having to move the hasher trait
-		// in AsyncExternalities extension.
 		panic!("`child_storage_root`: should not be used in async externalities!")
 	}
 
@@ -306,18 +205,15 @@ impl Externalities for AsyncExt {
 	}
 
 	fn storage_start_transaction(&mut self) {
-		self.guard_read_only("`storage_start_transaction`: should not be used in read only worker externalities!");
-		self.overlay.start_transaction()
+		panic!("`storage_start_transaction`: should not be used in read only worker externalities!");
 	}
 
 	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
-		self.guard_read_only("`storage_rollback_transaction`: should not be used in read only worker externalities!");
-		self.overlay.rollback_transaction().map_err(|_| ())
+		panic!("`storage_rollback_transaction`: should not be used in read only worker externalities!");
 	}
 
 	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
-		self.guard_read_only("`storage_commit_transaction`: should not be used in read only worker externalities!");
-		self.overlay.commit_transaction().map_err(|_| ())
+		panic!("`storage_commit_transaction`: should not be used in read only worker externalities!");
 	}
 
 	fn wipe(&mut self) {}

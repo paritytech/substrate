@@ -745,7 +745,7 @@ macro_rules! does_panic {
 			let mut ext = ext.ext();
 
 			let error_result = call_in_wasm(
-				$method_name,	
+				$method_name,
 				&[],
 				wasm_method,
 				&mut ext,
@@ -754,7 +754,7 @@ macro_rules! does_panic {
 			dbg!(&error_result);
 			assert!(format!("{}", error_result).contains("Runtime panicked"));
 		}
-	}; 
+	};
 }
 
 macro_rules! dont_panic {
@@ -766,53 +766,16 @@ macro_rules! dont_panic {
 			let mut ext = ext.ext();
 
 			call_in_wasm(
-				$method_name,	
+				$method_name,
 				&[],
 				wasm_method,
 				&mut ext,
 			).unwrap();
 		}
-	}; 
-}
-
-macro_rules! does_write_foo {
-	($test_name: ident, $method_name: expr) => {
-		test_wasm_execution!($test_name);
-		fn $test_name(wasm_method: WasmExecutionMethod) {
-
-			let mut ext = TestExternalities::default();
-			let mut ext = ext.ext();
-
-			call_in_wasm(
-				$method_name,	
-				&[],
-				wasm_method,
-				&mut ext,
-			).unwrap();
-			assert_eq!(ext.storage(b"foo"), Some(b"bar".to_vec()));
-		}
-	}; 
+	};
 }
 
 dont_panic!(inline_runtime_call_should_work, "test_inline");
 dont_panic!(spawning_runtime_instance_should_work, "test_spawn");
 dont_panic!(spawning_runtime_instance_nested_should_work, "test_nested_spawn");
 does_panic!(panic_in_spawned_instance_panics_on_joining_its_result, "test_panic_in_spawned");
-does_write_foo!(optimistic_read_no_conflict, "test_optimistic_read_no_conflict");
-does_write_foo!(optimistic_read_conflict, "test_optimistic_read_conflict");
-does_write_foo!(optimistic_read_conflict_2, "test_optimistic_read_conflict_2");
-does_write_foo!(optimistic_read_conflict_nested, "test_optimistic_read_conflict_nested");
-does_write_foo!(declarative_read_no_conflict, "test_declarative_read_no_conflict");
-does_write_foo!(declarative_read_conflict, "test_declarative_read_conflict");
-does_write_foo!(declarative_read_conflict_2, "test_declarative_read_conflict_2");
-does_panic!(declarative_read_conflict_nested, "test_declarative_read_conflict_nested");
-does_write_foo!(optimistic_write_success, "test_optimistic_write_success");
-does_write_foo!(close_parent_transaction, "test_close_parent_transaction");
-does_write_foo!(close_parent_transaction_2, "test_close_parent_transaction_2");
-does_write_foo!(unclose_parent_transaction, "test_unclose_parent_transaction");
-does_panic!(unclose_child_transaction, "test_unclose_child_transaction");
-does_write_foo!(read_write_conflict_1, "test_read_write_conflict_1");
-does_write_foo!(read_write_conflict_2, "test_read_write_conflict_2");
-does_write_foo!(read_write_conflict_3, "test_read_write_conflict_3");
-does_write_foo!(read_write_conflict_4, "test_read_write_conflict_4");
-does_write_foo!(read_write_conflict_5, "test_read_write_conflict_5");

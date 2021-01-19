@@ -214,7 +214,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 			worker_id,
 			declaration,
 			backend,
-			None
+			None, // No current overlay state since read only.
 		))
 	}
 
