@@ -1130,7 +1130,7 @@ decl_storage! {
 	}
 }
 
-mod migrations {
+pub mod migrations {
 	use super::*;
 
 	#[derive(Decode)]
@@ -1146,20 +1146,12 @@ mod migrations {
 			}
 		}
 	}
-	fn migrate_to_blockable<T: Config>() {
+	pub fn migrate_to_blockable<T: Config>() -> frame_support::weights::Weight {
 		Validators::<T>::translate::<OldValidatorPrefs, _>(|_, p| Some(p.upgraded()));
 		ErasValidatorPrefs::<T>::translate::<OldValidatorPrefs, _>(|_, _, p| Some(p.upgraded()));
-	}
-
-	pub fn migrate<T: Config>() {
-		if StorageVersion::get() == Releases::V4_0_0 {
-			StorageVersion::put(Releases::V5_0_0);
-			migrate_to_blockable::<T>();
-		}
+		T::BlockWeights::get().max_block
 	}
 }
-
-pub use migrations::migrate;
 
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Config>::AccountId {
@@ -1312,6 +1304,15 @@ decl_module! {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			if StorageVersion::get() == Releases::V4_0_0 {
+				StorageVersion::put(Releases::V5_0_0);
+				migrations::migrate_to_blockable::<T>()
+			} else {
+				0
+			}
+		}
 
 		/// sets `ElectionStatus` to `Open(now)` where `now` is the block number at which the
 		/// election window has opened, if we are at the last session and less blocks than
