@@ -205,7 +205,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		#integrity_test
 	);
 
-	Ok(res.into())
+	Ok(res)
 }
 
 fn decl_validate_unsigned<'a>(
@@ -299,7 +299,7 @@ fn decl_runtime_metadata<'a>(
 			module_declaration.find_part("Module").map(|_| {
 				let filtered_names: Vec<_> = module_declaration
 					.module_parts()
-					.into_iter()
+					.iter()
 					.filter(|part| part.name() != "Module")
 					.map(|part| part.ident())
 					.collect();
@@ -360,24 +360,21 @@ fn decl_outer_origin<'a>(
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
 	for module_declaration in modules_except_system {
-		match module_declaration.find_part("Origin") {
-			Some(module_entry) => {
-				let module = &module_declaration.module;
-				let instance = module_declaration.instance.as_ref();
-				let generics = &module_entry.generics;
-				if instance.is_some() && generics.params.len() == 0 {
-					let msg = format!(
-						"Instantiable module with no generic `Origin` cannot \
-						 be constructed: module `{}` must have generic `Origin`",
-						module_declaration.name
-					);
-					return Err(syn::Error::new(module_declaration.name.span(), msg));
-				}
-				let index = module_declaration.index.to_string();
-				let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
-				modules_tokens.extend(tokens);
+		if let Some(module_entry) = module_declaration.find_part("Origin") {
+			let module = &module_declaration.module;
+			let instance = module_declaration.instance.as_ref();
+			let generics = &module_entry.generics;
+			if instance.is_some() && generics.params.is_empty() {
+				let msg = format!(
+					"Instantiable module with no generic `Origin` cannot \
+					 be constructed: module `{}` must have generic `Origin`",
+					module_declaration.name
+				);
+				return Err(syn::Error::new(module_declaration.name.span(), msg));
 			}
-			None => {}
+			let index = module_declaration.index.to_string();
+			let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
+			modules_tokens.extend(tokens);
 		}
 	}
 
@@ -403,25 +400,22 @@ fn decl_outer_event<'a>(
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
 	for module_declaration in module_declarations {
-		match module_declaration.find_part("Event") {
-			Some(module_entry) => {
-				let module = &module_declaration.module;
-				let instance = module_declaration.instance.as_ref();
-				let generics = &module_entry.generics;
-				if instance.is_some() && generics.params.len() == 0 {
-					let msg = format!(
-						"Instantiable module with no generic `Event` cannot \
-						 be constructed: module `{}` must have generic `Event`",
-						module_declaration.name,
-					);
-					return Err(syn::Error::new(module_declaration.name.span(), msg));
-				}
-
-				let index = module_declaration.index.to_string();
-				let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
-				modules_tokens.extend(tokens);
+		if let Some(module_entry) = module_declaration.find_part("Event") {
+			let module = &module_declaration.module;
+			let instance = module_declaration.instance.as_ref();
+			let generics = &module_entry.generics;
+			if instance.is_some() && generics.params.is_empty() {
+				let msg = format!(
+					"Instantiable module with no generic `Event` cannot \
+					 be constructed: module `{}` must have generic `Event`",
+					module_declaration.name,
+				);
+				return Err(syn::Error::new(module_declaration.name.span(), msg));
 			}
-			None => {}
+
+			let index = module_declaration.index.to_string();
+			let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
+			modules_tokens.extend(tokens);
 		}
 	}
 
