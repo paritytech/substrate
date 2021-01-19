@@ -252,8 +252,7 @@ where
 		part,
 		rounding,
 	);
-	let part_n = part.into();
-	(x / part_n).saturating_mul(maximum).saturating_add(c)
+	(x / part.into()).saturating_mul(maximum).saturating_add(c)
 }
 
 /// Overflow-prune multiplication. Accurately multiply a value by `self` without overflowing.
@@ -287,7 +286,7 @@ where
 	P::Inner: Into<N>
 {
 	let numer_upper = P::Upper::from(numer);
-	let denom_n: N = denom.into();
+	let denom_n = N::from(denom);
 	let denom_upper = P::Upper::from(denom);
 	let rem = x.rem(denom_n);
 	// `rem` is less than `denom`, which fits in `P::Inner`.
