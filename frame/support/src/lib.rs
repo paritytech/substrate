@@ -1389,7 +1389,7 @@ pub mod pallet_prelude {
 ///
 ///
 /// The macro implements the function `storage_metadata` on `Pallet` implementing the metadata for
-/// storages:
+/// storage types:
 /// * for a storage value, the type of the value is copied into the metadata
 /// * for a storage map, the type of the values and the key's type is copied into the metadata
 /// * for a storage double map, the type of the values, and the types of key1 and key2 are copied into
