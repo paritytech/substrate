@@ -114,19 +114,16 @@ impl_normalize_for_numeric!(u8, u16, u32, u64, u128);
 
 impl<P: PerThing> Normalizable<P> for Vec<P> {
 	fn normalize(&self, targeted_sum: P) -> Result<Vec<P>, &'static str> {
-		let inners = self
-			.iter()
-			.map(|p| p.clone().deconstruct().into())
-			.collect::<Vec<_>>();
+		let uppers =
+			self.iter().map(|p| <UpperOf<P>>::from(p.clone().deconstruct())).collect::<Vec<_>>();
 
-		let normalized = normalize(inners.as_ref(), targeted_sum.deconstruct().into())?;
+		let normalized =
+			normalize(uppers.as_ref(), <UpperOf<P>>::from(targeted_sum.deconstruct()))?;
 
-		Ok(
-			normalized
-				.into_iter()
-				.map(|i: UpperOf<P>| P::from_parts(i.saturated_into()))
-				.collect()
-		)
+		Ok(normalized
+			.into_iter()
+			.map(|i: UpperOf<P>| P::from_parts(i.saturated_into::<P::Inner>()))
+			.collect())
 	}
 }
 

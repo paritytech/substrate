@@ -25,7 +25,7 @@ use crate::{
 	IdentifierT, ElectionResult, ExtendedBalance, setup_inputs, VoteWeight, Voter, CandidatePtr,
 	balance, PerThing128,
 };
-use sp_arithmetic::{PerThing, InnerOf, Rational128, traits::Bounded};
+use sp_arithmetic::{PerThing, Rational128, traits::Bounded};
 use sp_std::{prelude::*, rc::Rc};
 
 /// Execute the phragmms method.
@@ -46,10 +46,7 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	balancing_config: Option<(usize, ExtendedBalance)>,
-) -> Result<ElectionResult<AccountId, P>, &'static str>
-where
-	ExtendedBalance: From<InnerOf<P>>,
-{
+) -> Result<ElectionResult<AccountId, P>, &'static str> {
 	let (candidates, mut voters) = setup_inputs(initial_candidates, initial_voters);
 
 	let mut winners = vec![];
@@ -89,7 +86,7 @@ where
 pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 	candidates: &[CandidatePtr<AccountId>],
 	voters: &[Voter<AccountId>],
-) -> Option<CandidatePtr<AccountId>> where ExtendedBalance: From<InnerOf<P>> {
+) -> Option<CandidatePtr<AccountId>> {
 	for c_ptr in candidates.iter() {
 		let mut candidate = c_ptr.borrow_mut();
 		if !candidate.elected {

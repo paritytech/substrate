@@ -2903,10 +2903,7 @@ impl<T: Config> Module<T> {
 	/// No storage item is updated.
 	pub fn do_phragmen<Accuracy: PerThing128>(
 		iterations: usize,
-	) -> Option<PrimitiveElectionResult<T::AccountId, Accuracy>>
-	where
-		ExtendedBalance: From<InnerOf<Accuracy>>,
-	{
+	) -> Option<PrimitiveElectionResult<T::AccountId, Accuracy>> {
 		let weight_of = Self::slashable_balance_of_fn();
 		let mut all_nominators: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> = Vec::new();
 		let mut all_validators = Vec::new();
