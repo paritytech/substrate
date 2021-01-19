@@ -2236,8 +2236,8 @@ decl_module! {
 		/// block any further nominations.
 		#[weight = T::WeightInfo::kick(who.len() as u32)]
 		pub fn kick(origin, who: Vec<<T::Lookup as StaticLookup>::Source>) -> DispatchResult {
-			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 
