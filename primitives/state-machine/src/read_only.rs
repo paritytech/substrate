@@ -209,12 +209,12 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		worker_id: u64,
 		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
-		let backend = self.backend.async_backend();
+		let async_backend = self.backend.async_backend();
 		Box::new(crate::async_ext::new_child_worker_async_ext(
 			worker_id,
 			declaration,
-			backend,
-			None
+			async_backend,
+			None, // No current overlay state since read only.
 		))
 	}
 

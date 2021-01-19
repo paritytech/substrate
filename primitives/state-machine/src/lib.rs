@@ -48,7 +48,6 @@ pub use std_reexport::*;
 pub use execution::*;
 #[cfg(feature = "std")]
 pub use log::{debug, warn, trace, error as log_error};
-pub use sp_externalities::AsyncBackend;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -124,7 +123,7 @@ pub use crate::overlayed_changes::{
 	StorageCollection, ChildStorageCollection,
 	StorageChanges, StorageTransactionCache,
 };
-pub use crate::backend::Backend;
+pub use crate::backend::{Backend, AsyncBackend};
 pub use crate::trie_backend_essence::{TrieBackendStorage, Storage};
 pub use crate::trie_backend::TrieBackend;
 pub use crate::stats::{UsageInfo, UsageUnit, StateMachineStats};

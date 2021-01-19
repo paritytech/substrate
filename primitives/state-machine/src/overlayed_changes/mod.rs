@@ -410,7 +410,7 @@ impl OverlayedChanges {
 	///
 	/// For worker declaration it also guard child declaration on parent, resulting in failure when
 	/// child declaration allows more than current parent allowed access.
-	pub fn set_parent_declaration(&mut self, child_marker: TaskId, declaration: WorkerDeclaration) {
+	pub fn declare_worker_in_parent(&mut self, child_marker: TaskId, declaration: WorkerDeclaration) {
 		self.markers.set_marker(child_marker);
 		match declaration {
 			WorkerDeclaration::Stateless
@@ -452,8 +452,8 @@ impl OverlayedChanges {
 		}
 	}
 
-	/// Set access declaration in the parent worker.
-	pub fn set_child_declaration(&mut self, declaration: WorkerDeclaration) {
+	/// Set access declaration in the child worker.
+	pub fn set_worker_declaration(&mut self, declaration: WorkerDeclaration) {
 		match declaration {
 			WorkerDeclaration::Stateless
 			| WorkerDeclaration::ReadLastBlock
@@ -846,7 +846,7 @@ impl OverlayedChanges {
 
 	/// For optimistic worker, we extract logs from the overlay.
 	/// When call on a non optimistic worker returns `None`.
-	pub fn extract_optimistic_log(&mut self) -> Option<sp_externalities::AccessLog> {
+	pub fn extract_access_log(&mut self) -> Option<sp_externalities::AccessLog> {
 		self.optimistic_logger.extract_parent_log()
 	}
 

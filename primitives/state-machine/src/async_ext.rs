@@ -27,11 +27,11 @@ use sp_std::{
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 };
-use sp_externalities::{Externalities, TaskId, AsyncBackend, AsyncExternalitiesPostExecution,
+use sp_externalities::{Externalities, TaskId, AsyncExternalitiesPostExecution,
 	WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities};
 use sp_core::hexdisplay::HexDisplay;
 use crate::ext::guard;
-use crate::{StorageValue, StorageKey, trace};
+use crate::{StorageValue, StorageKey, AsyncBackend, trace};
 
 /// Async view on state machine Ext.
 /// It contains its own set of state and rules,
@@ -40,7 +40,7 @@ pub struct AsyncExt {
 	kind: WorkerType,
 	// Actually unused at this point, is for write variant.
 	overlay: OverlayedChanges,
-	spawn_id: Option<TaskId>,
+	spawn_id: TaskId,
 	backend: Box<dyn AsyncBackend>,
 }
 
@@ -52,7 +52,7 @@ impl std::fmt::Debug for AsyncExt
 	}
 }
 
-/// Obtain externality and for a child worker.
+/// Obtain externality for a child worker.
 pub fn new_child_worker_async_ext(
 	worker_id: u64,
 	declaration: WorkerDeclaration,
@@ -64,7 +64,7 @@ pub fn new_child_worker_async_ext(
 			return AsyncExt {
 				kind: WorkerType::Stateless,
 				overlay: Default::default(),
-				spawn_id: None,
+				spawn_id: worker_id,
 				backend: Box::new(()),
 			}
 		},
@@ -72,7 +72,7 @@ pub fn new_child_worker_async_ext(
 			return AsyncExt {
 				kind: declaration.get_type(),
 				overlay: Default::default(),
-				spawn_id: None,
+				spawn_id: worker_id,
 				backend,
 			}
 		},
@@ -80,16 +80,16 @@ pub fn new_child_worker_async_ext(
 			AsyncExt {
 				kind: declaration.get_type(),
 				overlay: Default::default(),
-				spawn_id: Some(worker_id),
+				spawn_id: worker_id,
 				backend: backend,
 			}
 		},
 	};
 	parent_overlay.map(|overlay| {
 		result.overlay = overlay.child_worker_overlay();
-		overlay.set_parent_declaration(worker_id, declaration.clone());
+		overlay.declare_worker_in_parent(worker_id, declaration.clone());
 	});
-	result.overlay.set_child_declaration(declaration);
+	result.overlay.set_worker_declaration(declaration);
 	result
 }
 
@@ -398,7 +398,7 @@ impl AsyncExternalities for AsyncExt {
 		if self.overlay.did_fail() {
 			return AsyncExternalitiesPostExecution::Invalid;
 		}
-		if let Some(optimistic) = self.overlay.extract_optimistic_log() {
+		if let Some(optimistic) = self.overlay.extract_access_log() {
 			return AsyncExternalitiesPostExecution::Optimistic(optimistic);
 		}
 		AsyncExternalitiesPostExecution::NeedResolve
