@@ -100,6 +100,7 @@ fn main() {
 					num_nominators,
 					edge_per_voter as usize,
 					true,
+					1000,
 					None,
 				));
 
