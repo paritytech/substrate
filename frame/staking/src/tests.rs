@@ -365,6 +365,9 @@ fn staking_should_work() {
 }
 
 #[test]
+fn 
+
+#[test]
 fn less_than_needed_candidates_works() {
 	ExtBuilder::default()
 		.minimum_validator_count(1)
@@ -403,7 +406,7 @@ fn no_candidate_emergency_condition() {
 		.execute_with(|| {
 			// initial validators
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
-			let prefs = ValidatorPrefs { commission: Perbill::one(), closed: false };
+			let prefs = ValidatorPrefs { commission: Perbill::one(), .. Default::default() };
 			<Staking as crate::Store>::Validators::insert(11, prefs.clone());
 
 			// set the minimum validator count.
@@ -971,7 +974,7 @@ fn validator_payment_prefs_work() {
 		let commission = Perbill::from_percent(40);
 		<Validators<Test>>::insert(&11, ValidatorPrefs {
 			commission: commission.clone(),
-			closed: false,
+			.. Default::default()
 		});
 
 		// Reward controller so staked ratio doesn't change.

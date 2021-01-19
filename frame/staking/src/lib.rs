@@ -457,14 +457,14 @@ pub struct ValidatorPrefs {
 	/// Whether or not this validator is accepting more nominations. If `true`, then no nominator
 	/// who is not already nominating this validator may nominate them. By default, validators
 	/// are accepting nominations.
-	pub closed: bool,
+	pub blocked: bool,
 }
 
 impl Default for ValidatorPrefs {
 	fn default() -> Self {
 		ValidatorPrefs {
 			commission: Default::default(),
-			closed: false,
+			blocked: false,
 		}
 	}
 }
@@ -901,11 +901,12 @@ enum Releases {
 	V2_0_0,
 	V3_0_0,
 	V4_0_0,
+	V5_0_0,
 }
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V4_0_0
+		Releases::V5_0_0
 	}
 }
 
@@ -1092,8 +1093,8 @@ decl_storage! {
 		/// True if network has been upgraded to this version.
 		/// Storage version of the pallet.
 		///
-		/// This is set to v3.0.0 for new networks.
-		StorageVersion build(|_: &GenesisConfig<T>| Releases::V4_0_0): Releases;
+		/// This is set to v5.0.0 for new networks.
+		StorageVersion build(|_: &GenesisConfig<T>| Releases::V5_0_0): Releases;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1128,6 +1129,37 @@ decl_storage! {
 		});
 	}
 }
+
+mod migrations {
+	use super::*;
+
+	#[derive(Decode)]
+	struct OldValidatorPrefs {
+		#[codec(compact)]
+		pub commission: Perbill
+	}
+	impl OldValidatorPrefs {
+		fn upgraded(self) -> ValidatorPrefs {
+			ValidatorPrefs {
+				commission: self.commission,
+				.. Default::default()
+			}
+		}
+	}
+	fn migrate_to_blockable<T: Config>() {
+		Validators::<T>::translate::<OldValidatorPrefs, _>(|_, p| Some(p.upgraded()));
+		ErasValidatorPrefs::<T>::translate::<OldValidatorPrefs, _>(|_, _, p| Some(p.upgraded()));
+	}
+
+	pub fn migrate<T: Config>() {
+		if StorageVersion::get() == Releases::V4_0_0 {
+			StorageVersion::put(Releases::V5_0_0);
+			migrate_to_blockable::<T>();
+		}
+	}
+}
+
+pub use migrations::migrate;
 
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Config>::AccountId {
@@ -1689,7 +1721,7 @@ decl_module! {
 				.take(MAX_NOMINATIONS)
 				.map(|t| T::Lookup::lookup(t))
 				.filter(|n| if let Ok(ref n) = n {
-					old.contains(n) || !Validators::<T>::get(n).closed
+					old.contains(n) || !Validators::<T>::get(n).blocked
 				} else {
 					true
 				})
