@@ -166,9 +166,9 @@ groups:
         (polkadot_unbounded_channel_len{action = "send"} -
             ignoring(action) polkadot_unbounded_channel_len{action = "received"})
         or on(instance) polkadot_unbounded_channel_len{action = "send"}
-    ) > 5000'
+    ) > 15000'
     labels:
       severity: warning
     annotations:
       message: 'Channel {{ $labels.entity }} on node {{ $labels.instance }} contains more than
-      5000 items.'
+      15000 items.'
