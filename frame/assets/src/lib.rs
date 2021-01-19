@@ -153,6 +153,19 @@ pub trait Config: frame_system::Config {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// The amount of funds that must be reserved when creating a new approval.
+	type ApprovalDeposit: Get<BalanceOf<Self>>;
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+/// The amount by which this asset is trusted to be worth anything.
+pub enum Quality {
+	/// Not trusted; assume it's worth nothing and thus requires a consumer reference.
+	Unknown,
+	/// Trusted; the `min_balance` of this asset is assumed to be an adequate ED and thus it gives
+	/// a provider reference.
+	Valuable,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
@@ -184,6 +197,8 @@ pub struct AssetDetails<
 	zombies: u32,
 	/// The total number of accounts.
 	accounts: u32,
+	/// Whether the asset is considered valuable.
+	quality: Quality,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
@@ -212,6 +227,13 @@ decl_storage! {
 			hasher(blake2_128_concat) T::AssetId,
 			hasher(blake2_128_concat) T::AccountId
 			=> AssetBalance<T::Balance>;
+
+		/// Approved balance transfers. First balance is the amount approved for transfer. Second
+		/// is the amount of `T::Currency` reserved for storing this.
+		Approvals: double_map
+			hasher(blake2_128_concat) T::AssetId,
+			hasher(blake2_128_concat) (T::AccountId, T::AccountId)
+			=> (T::Balance, T::Balance);
 	}
 }
 
@@ -836,6 +858,67 @@ decl_module! {
 				Self::deposit_event(RawEvent::MaxZombiesChanged(id, max_zombies));
 				Ok(())
 			})
+		}
+
+		#[weight = 0]
+		fn approve_transfer(origin,
+			#[compact] id: T::AssetId,
+			destination: <T::Lookup as StaticLookup>::Source,
+			#[compact] amount: BalanceOf<T>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let destination = T::Lookup::lookup(destination)?;
+
+			let key = (origin, destination);
+			Approvals::<T>::try_mutate(id, &key, |&mut (mut approved, mut deposit)| {
+				let approval_deposit = T::ApprovalDeposit::get();
+				if deposit < approval_deposit {
+					T::Currency::reserve(origin, approval_deposit - deposit)?;
+					deposit = approval_deposit;
+				}
+				approved = approved.saturating_add(&amount)
+			});
+			let (origin, destination) = key;
+			Self::deposit_event(RawEvent::TransferApproved(id, origin, destination, amount));
+		}
+
+		#[weight = 0]
+		fn cancel_approval(origin,
+			#[compact] id: T::AssetId,
+			destination: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let destination = T::Lookup::lookup(destination)?;
+			let key = (origin, destination);
+			Approvals::<T>::remove(id, &key);
+			let (origin, destination) = key;
+			Self::deposit_event(RawEvent::ApprovalCancelled(id, origin, destination));
+		}
+
+		#[weight = 0]
+		fn transfer_approved(origin,
+			#[compact] id: T::AssetId,
+			source: <T::Lookup as StaticLookup>::Source,
+			destination: <T::Lookup as StaticLookup>::Source,
+			#[compact] amount: BalanceOf<T>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let source = T::Lookup::lookup(destination)?;
+			let destination = T::Lookup::lookup(destination)?;
+
+			let key = ;
+			Approvals::<T>::try_mutate_exists(id, (source.clone(), origin.clone()), |approved| {
+				let (mut remaining, deposit) = approved.take().unwrap_or_default();
+				ensure!(remaining >= amount, Error::<T>::Unapproved);
+				remaining -= amount;
+				if remaining.is_zero() {
+					T::Currency::unreserve(source, deposit);
+				} else {
+					*approved = Some((remaining, deposit));
+				}
+			});
+			let (origin, destination) = key;
+			Self::deposit_event(RawEvent::ApprovalCancelled(id, origin, destination));
 		}
 	}
 }
