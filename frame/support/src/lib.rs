@@ -1381,6 +1381,10 @@ pub mod pallet_prelude {
 /// alias then the generation of the getter might fail. In this case getter can be implemented
 /// manually.
 ///
+/// NOTE: The generic `Hasher` must implement [`StorageHasher`] trait (or the type is not
+/// usable at all). We use [`StorageHasher::METADATA`] for the metadata of the hasher of the
+/// storage item. Thus generic hasher is supported.
+///
 /// ### Macro expansion
 ///
 /// For each storage the macro generate a struct named
@@ -1661,8 +1665,9 @@ pub mod pallet_prelude {
 /// 	// * for a storage double map the types of the values and keys are copied into the
 /// 	//   metadata.
 /// 	//
-/// 	// NOTE: for storage hasher, the type is not copied because the storage hasher trait already
-/// 	// implements metadata. Thus generic storage hasher is supported.
+/// 	// NOTE: The generic `Hasher` must implement `StorageHasher` trait (or the type is not
+/// 	// usable at all). We use `StorageHasher::METADATA` for the metadata of the hasher of the
+/// 	// storage item. Thus generic hasher is supported.
 /// 	#[pallet::storage]
 /// 	pub(super) type MyStorageValue<T: Config> =
 /// 		StorageValue<_, T::Balance, ValueQuery, MyDefault<T>>;
