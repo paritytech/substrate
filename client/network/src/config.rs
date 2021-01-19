@@ -528,6 +528,8 @@ pub struct NonDefaultSetConfig {
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
 	/// >           by the networking code.
 	pub notifications_protocol: Cow<'static, str>,
+	/// Maximum allowed size of single notifications.
+	pub max_notification_size: u64,
 	/// Base configuration.
 	pub set_config: SetConfig,
 }
