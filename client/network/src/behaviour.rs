@@ -71,7 +71,7 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 
 	/// Light client request handling.
 	#[behaviour(ignore)]
-	light_client_request_client: light_client_requests::sender::LightClientRequestSender<B>,
+	light_client_request_sender: light_client_requests::sender::LightClientRequestSender<B>,
 
 	/// Protocol name used to send out block requests via
 	/// [`request_responses::RequestResponsesBehaviour`].
@@ -177,7 +177,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		role: Role,
 		user_agent: String,
 		local_public_key: PublicKey,
-		light_client_request_client: light_client_requests::sender::LightClientRequestSender<B>,
+		light_client_request_sender: light_client_requests::sender::LightClientRequestSender<B>,
 		disco_config: DiscoveryConfig,
 		block_request_protocol_config: request_responses::ProtocolConfig,
 		light_client_request_protocol_config: request_responses::ProtocolConfig,
@@ -188,7 +188,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		let block_request_protocol_name = block_request_protocol_config.name.to_string();
 		request_response_protocols.push(block_request_protocol_config);
 
-		// TODO: Pass light client protocol name to LightClientRequestSender.
 		request_response_protocols.push(light_client_request_protocol_config);
 
 		Ok(Behaviour {
@@ -197,7 +196,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 			discovery: disco_config.finish(),
 			request_responses:
 				request_responses::RequestResponsesBehaviour::new(request_response_protocols.into_iter())?,
-			light_client_request_client,
+			light_client_request_sender,
 			events: VecDeque::new(),
 			role,
 
@@ -278,7 +277,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		&mut self,
 		r: light_client_requests::sender::Request<B>,
 	) -> Result<(), light_client_requests::sender::SendRequestError> {
-		self.light_client_request_client.request(r)
+		self.light_client_request_sender.request(r)
 	}
 }
 
@@ -345,16 +344,16 @@ Behaviour<B, H> {
 				self.events.push_back(BehaviourOut::NotificationsReceived { remote, messages });
 			},
 			CustomMessageOutcome::PeerNewBest(peer_id, number) => {
-				self.light_client_request_client.update_best_block(&peer_id, number);
+				self.light_client_request_sender.update_best_block(&peer_id, number);
 			}
 			CustomMessageOutcome::SyncConnected(peer_id) => {
 				// TODO: Should this be tied to sync connections, or to connections in general?
-				self.light_client_request_client.inject_connected(peer_id);
+				self.light_client_request_sender.inject_connected(peer_id);
 				self.events.push_back(BehaviourOut::SyncConnected(peer_id))
 			}
 			CustomMessageOutcome::SyncDisconnected(peer_id) => {
 				// TODO: Should this be tied to sync connections, or to connections in general?
-				self.light_client_request_client.inject_disconnected(peer_id);
+				self.light_client_request_sender.inject_disconnected(peer_id);
 				self.events.push_back(BehaviourOut::SyncDisconnected(peer_id))
 			}
 			CustomMessageOutcome::None => {}
@@ -452,7 +451,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		_: &mut impl PollParameters,
 	) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
 		use light_client_requests::sender::OutEvent;
-		while let Poll::Ready(Some(event)) = self.light_client_request_client.poll_next_unpin(cx) {
+		while let Poll::Ready(Some(event)) = self.light_client_request_sender.poll_next_unpin(cx) {
 			match event {
 				OutEvent::SendRequest { target, request, pending_response, protocol_name } => {
 					self.request_responses.send_request(&target, &protocol_name, request, pending_response)
