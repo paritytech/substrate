@@ -96,8 +96,10 @@ pub trait PerThing:
 	/// # }
 	/// ```
 	fn mul_floor<N>(self, b: N) -> N
-	where N: Clone + From<Self::Inner> + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
-		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Unsigned
+	where
+		N: Clone + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
+			ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Unsigned,
+		Self::Inner: Into<N>,
 	{
 		overflow_prune_mul::<N, Self>(b, self.deconstruct(), Rounding::Down)
 	}
@@ -118,8 +120,10 @@ pub trait PerThing:
 	/// # }
 	/// ```
 	fn mul_ceil<N>(self, b: N) -> N
-	where N: Clone + From<Self::Inner> + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
-		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Unsigned
+	where
+		N: Clone + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
+			ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Unsigned,
+		Self::Inner: Into<N>
 	{
 		overflow_prune_mul::<N, Self>(b, self.deconstruct(), Rounding::Up)
 	}
@@ -134,9 +138,11 @@ pub trait PerThing:
 	/// # }
 	/// ```
 	fn saturating_reciprocal_mul<N>(self, b: N) -> N
-	where N: Clone + From<Self::Inner> + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
-		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Saturating +
-		Unsigned
+	where
+		N: Clone + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
+			ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Saturating +
+			Unsigned,
+		Self::Inner: Into<N>,
 	{
 		saturating_reciprocal_mul::<N, Self>(b, self.deconstruct(), Rounding::Nearest)
 	}
@@ -154,9 +160,11 @@ pub trait PerThing:
 	/// # }
 	/// ```
 	fn saturating_reciprocal_mul_floor<N>(self, b: N) -> N
-	where N: Clone + From<Self::Inner> + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
-		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Saturating +
-		Unsigned
+	where
+		N: Clone + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
+			ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Saturating +
+			Unsigned,
+		Self::Inner: Into<N>,
 	{
 		saturating_reciprocal_mul::<N, Self>(b, self.deconstruct(), Rounding::Down)
 	}
@@ -174,9 +182,11 @@ pub trait PerThing:
 	/// # }
 	/// ```
 	fn saturating_reciprocal_mul_ceil<N>(self, b: N) -> N
-	where N: Clone + From<Self::Inner> + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
-		ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Saturating +
-		Unsigned
+	where
+		N: Clone + UniqueSaturatedInto<Self::Inner> + ops::Rem<N, Output=N> +
+			ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Saturating +
+			Unsigned,
+		Self::Inner: Into<N>,
 	{
 		saturating_reciprocal_mul::<N, Self>(b, self.deconstruct(), Rounding::Up)
 	}
@@ -211,14 +221,8 @@ pub trait PerThing:
 	/// ```
 	fn from_rational_approximation<N>(p: N, q: N) -> Self
 	where
-		N: Clone
-			+ Ord
-			+ TryInto<Self::Inner>
-			+ TryInto<Self::Upper>
-			+ ops::Div<N, Output = N>
-			+ ops::Rem<N, Output = N>
-			+ ops::Add<N, Output = N>
-			+ Unsigned,
+		N: Clone + Ord + TryInto<Self::Inner> + TryInto<Self::Upper> +
+			ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned,
 		Self::Inner: Into<N>;
 }
 
@@ -236,38 +240,32 @@ enum Rounding {
 /// bounds instead of overflowing.
 fn saturating_reciprocal_mul<N, P>(x: N, part: P::Inner, rounding: Rounding) -> N
 where
-	N: Clone
-		+ From<P::Inner>
-		+ UniqueSaturatedInto<P::Inner>
-		+ ops::Div<N, Output = N>
-		+ ops::Mul<N, Output = N>
-		+ ops::Add<N, Output = N>
-		+ ops::Rem<N, Output = N>
-		+ Saturating
-		+ Unsigned,
+	N: Clone + UniqueSaturatedInto<P::Inner> + ops::Div<N, Output=N> + ops::Mul<N,
+	Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N> + Saturating + Unsigned,
 	P: PerThing,
+	P::Inner: Into<N>,
 {
-	let maximum = N::from(P::ACCURACY);
-	let c = rational_mul_correction::<N, P>(x.clone(), P::ACCURACY, part, rounding);
-	let part_n = N::from(part);
+	let maximum: N = P::ACCURACY.into();
+	let c = rational_mul_correction::<N, P>(
+		x.clone(),
+		P::ACCURACY,
+		part,
+		rounding,
+	);
+	let part_n = part.into();
 	(x / part_n).saturating_mul(maximum).saturating_add(c)
 }
 
 /// Overflow-prune multiplication. Accurately multiply a value by `self` without overflowing.
 fn overflow_prune_mul<N, P>(x: N, part: P::Inner, rounding: Rounding) -> N
 where
-	N: Clone
-		+ From<P::Inner>
-		+ UniqueSaturatedInto<P::Inner>
-		+ ops::Div<N, Output = N>
-		+ ops::Mul<N, Output = N>
-		+ ops::Add<N, Output = N>
-		+ ops::Rem<N, Output = N>
-		+ Unsigned,
+	N: Clone + UniqueSaturatedInto<P::Inner> + ops::Div<N, Output=N> + ops::Mul<N,
+	Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N> + Unsigned,
 	P: PerThing,
+	P::Inner: Into<N>,
 {
-	let maximum = N::from(P::ACCURACY);
-	let part_n = N::from(part);
+	let maximum: N = P::ACCURACY.into();
+	let part_n: N = part.into();
 	let c = rational_mul_correction::<N, P>(
 		x.clone(),
 		part,
@@ -283,17 +281,13 @@ where
 /// to `x / denom * numer` for an accurate result.
 fn rational_mul_correction<N, P>(x: N, numer: P::Inner, denom: P::Inner, rounding: Rounding) -> N
 where
-	N: From<P::Inner>
-		+ UniqueSaturatedInto<P::Inner>
-		+ ops::Div<N, Output = N>
-		+ ops::Mul<N, Output = N>
-		+ ops::Add<N, Output = N>
-		+ ops::Rem<N, Output = N>
-		+ Unsigned,
+	N: UniqueSaturatedInto<P::Inner> + ops::Div<N, Output=N> + ops::Mul<N,
+	Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N> + Unsigned,
 	P: PerThing,
+	P::Inner: Into<N>
 {
 	let numer_upper = P::Upper::from(numer);
-	let denom_n = N::from(denom);
+	let denom_n: N = denom.into();
 	let denom_upper = P::Upper::from(denom);
 	let rem = x.rem(denom_n);
 	// `rem` is less than `denom`, which fits in `P::Inner`.
@@ -318,7 +312,7 @@ where
 			rem_mul_div_inner = rem_mul_div_inner + 1.into();
 		},
 	}
-	N::from(rem_mul_div_inner)
+	rem_mul_div_inner.into()
 }
 
 macro_rules! implement_per_thing {
@@ -376,8 +370,10 @@ macro_rules! implement_per_thing {
 			}
 
 			fn from_rational_approximation<N>(p: N, q: N) -> Self
-			where N: Clone + Ord + TryInto<Self::Inner> + TryInto<Self::Upper>
-				+ ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned + Zero + One,
+			where
+				N: Clone + Ord + TryInto<Self::Inner> + TryInto<Self::Upper>
+				 + ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned
+				 + Zero + One,
 				Self::Inner: Into<N>,
 			{
 				let div_ceil = |x: N, f: N| -> N {
@@ -489,45 +485,56 @@ macro_rules! implement_per_thing {
 
 			/// See [`PerThing::mul_floor`].
 			pub fn mul_floor<N>(self, b: N) -> N
-				where N: Clone + From<$type> + UniqueSaturatedInto<$type> +
-					ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
-					ops::Add<N, Output=N> + Unsigned
+				where
+					N: Clone + UniqueSaturatedInto<$type> +
+						ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
+						ops::Add<N, Output=N> + Unsigned,
+					$type: Into<N>,
+
 			{
 				PerThing::mul_floor(self, b)
 			}
 
 			/// See [`PerThing::mul_ceil`].
 			pub fn mul_ceil<N>(self, b: N) -> N
-				where N: Clone + From<$type> + UniqueSaturatedInto<$type> +
-					ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
-					ops::Add<N, Output=N> + Unsigned
+				where
+					N: Clone + UniqueSaturatedInto<$type> +
+						ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
+						ops::Add<N, Output=N> + Unsigned,
+					$type: Into<N>,
 			{
 				PerThing::mul_ceil(self, b)
 			}
 
 			/// See [`PerThing::saturating_reciprocal_mul`].
 			pub fn saturating_reciprocal_mul<N>(self, b: N) -> N
-				where N: Clone + From<$type> + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N> +
-					ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> +
-					Saturating + Unsigned
+				where
+					N: Clone + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N> +
+						ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> +
+						Saturating + Unsigned,
+					$type: Into<N>,
 			{
 				PerThing::saturating_reciprocal_mul(self, b)
 			}
 
 			/// See [`PerThing::saturating_reciprocal_mul_floor`].
 			pub fn saturating_reciprocal_mul_floor<N>(self, b: N) -> N
-				where N: Clone + From<$type> + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N> +
-					ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> +
-					Saturating + Unsigned
+				where
+					N: Clone + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N> +
+						ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> +
+						Saturating + Unsigned,
+					$type: Into<N>,
 			{
 				PerThing::saturating_reciprocal_mul_floor(self, b)
 			}
 
 			/// See [`PerThing::saturating_reciprocal_mul_ceil`].
 			pub fn saturating_reciprocal_mul_ceil<N>(self, b: N) -> N
-				where N: Clone + From<$type> + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N> +
-					ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> +
-					Saturating + Unsigned
+				where
+					N: Clone + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N> +
+						ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> +
+						Saturating + Unsigned,
+					$type: Into<N>,
 			{
 				PerThing::saturating_reciprocal_mul_ceil(self, b)
 			}
@@ -627,8 +634,9 @@ macro_rules! implement_per_thing {
 		/// This is tailored to be used with a balance type.
 		impl<N> ops::Mul<N> for $name
 		where
-			N: Clone + From<$type> + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N>
+			N: Clone + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N>
 				+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Unsigned,
+			$type: Into<N>,
 		{
 			type Output = N;
 			fn mul(self, b: N) -> Self::Output {

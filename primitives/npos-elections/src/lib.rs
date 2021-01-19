@@ -75,7 +75,7 @@
 
 use sp_arithmetic::{
 	traits::{Bounded, UniqueSaturatedInto, Zero},
-	InnerOf, Normalizable, PerThing, Rational128, ThresholdOrd,
+	Normalizable, PerThing, Rational128, ThresholdOrd,
 };
 use sp_std::{
 	cell::RefCell,
@@ -705,10 +705,7 @@ where
 /// greater or less than `that`.
 ///
 /// Note that the third component should be minimized.
-pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool
-where
-	ExtendedBalance: From<InnerOf<P>>,
-{
+pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool {
 	match this
 		.iter()
 		.zip(that.iter())
