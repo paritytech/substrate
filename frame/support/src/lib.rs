@@ -1653,7 +1653,7 @@ pub mod pallet_prelude {
 /// 	// Declare a storage item. Any amount of storage items can be declared (optional).
 /// 	//
 /// 	// Is expected either `StorageValue`, `StorageMap` or `StorageDoubleMap`.
-/// 	// The macro generates the prefix type and replace first generic `_`.
+/// 	// The macro generates the prefix type and replaces the first generic `_`.
 /// 	//
 /// 	// The macro expands the metadata for the storage item with the type used:
 /// 	// * for a storage value the type of the value is copied into the metadata
