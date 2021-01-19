@@ -409,7 +409,7 @@ benchmarks! {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
 
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, 1000, None)?;
 		let session_index = SessionIndex::one();
 	}: {
 		let validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
@@ -420,7 +420,7 @@ benchmarks! {
 	payout_all {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, 1000, None)?;
 		// Start a new Era
 		let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 		assert!(new_validators.len() == v as usize);
@@ -503,6 +503,7 @@ benchmarks! {
 			n,
 			MAX_NOMINATIONS,
 			false,
+			1000,
 			Some(w),
 		)?;
 
@@ -574,6 +575,7 @@ benchmarks! {
 			n,
 			MAX_NOMINATIONS,
 			false,
+			1000,
 			Some(w),
 		)?;
 
@@ -657,7 +659,7 @@ benchmarks! {
 		// number of nominator intention.
 		let n in 500 .. 1000;
 
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, 1000, None)?;
 
 		// needed for the solution to be generates.
 		assert!(<Staking<T>>::create_stakers_snapshot().0);
@@ -720,7 +722,7 @@ mod tests {
 			let v = 10;
 			let n = 100;
 
-			create_validators_with_nominators_for_era::<Test>(v, n, MAX_NOMINATIONS, false, None)
+			create_validators_with_nominators_for_era::<Test>(v, n, MAX_NOMINATIONS, false, 1000, None)
 				.unwrap();
 
 			let count_validators = Validators::<Test>::iter().count();
@@ -835,6 +837,8 @@ mod tests {
 			assert_ok!(test_benchmark_payout_all::<Test>());
 			// only run one of them to same time on the CI. ignore the other two.
 			assert_ok!(test_benchmark_submit_solution_initial::<Test>());
+			assert_ok!(test_benchmark_submit_solution_better::<Test>());
+			assert_ok!(test_benchmark_submit_solution_weaker::<Test>());
 		});
 	}
 

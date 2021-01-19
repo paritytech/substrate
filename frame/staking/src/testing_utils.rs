@@ -120,6 +120,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	nominators: u32,
 	edges_per_nominator: usize,
 	randomize_stake: bool,
+	balance_factor: u32,
 	to_nominate: Option<u32>,
 ) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
 	clear_validators_and_nominators::<T>();
@@ -130,7 +131,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 
 	// Create validators
 	for i in 0 .. validators {
-		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
+		let balance_factor = if randomize_stake { rng.next_u32() % 255 + balance_factor } else { balance_factor };
 		let (v_stash, v_controller) = create_stash_controller::<T>(i, balance_factor, RewardDestination::Staked)?;
 		let validator_prefs = ValidatorPrefs {
 			commission: Perbill::from_percent(50),
@@ -145,7 +146,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 
 	// Create nominators
 	for j in 0 .. nominators {
-		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
+		let balance_factor = if randomize_stake { rng.next_u32() % 255 + balance_factor } else { balance_factor };
 		let (_n_stash, n_controller) = create_stash_controller::<T>(
 			u32::max_value() - j,
 			balance_factor,
