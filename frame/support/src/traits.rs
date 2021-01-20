@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,7 @@ use sp_runtime::{
 	traits::{
 		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
 		BadOrigin, AtLeast32BitUnsigned, UniqueSaturatedFrom, UniqueSaturatedInto,
-		SaturatedConversion,
+		SaturatedConversion, StoredMapError,
 	},
 };
 use crate::dispatch::Parameter;
@@ -300,41 +300,60 @@ mod test_impl_filter_stack {
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
-pub trait StoredMap<K, T> {
+pub trait StoredMap<K, T: Default> {
 	/// Get the item, or its default if it doesn't yet exist; we make no distinction between the
 	/// two.
 	fn get(k: &K) -> T;
-	/// Get whether the item takes up any storage. If this is `false`, then `get` will certainly
-	/// return the `T::default()`. If `true`, then there is no implication for `get` (i.e. it
-	/// may return any value, including the default).
-	///
-	/// NOTE: This may still be `true`, even after `remove` is called. This is the case where
-	/// a single storage entry is shared between multiple `StoredMap` items single, without
-	/// additional logic to enforce it, deletion of any one them doesn't automatically imply
-	/// deletion of them all.
-	fn is_explicit(k: &K) -> bool;
-	/// Mutate the item.
-	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R;
-	/// Mutate the item, removing or resetting to default value if it has been mutated to `None`.
-	fn mutate_exists<R>(k: &K, f: impl FnOnce(&mut Option<T>) -> R) -> R;
+
 	/// Maybe mutate the item only if an `Ok` value is returned from `f`. Do nothing if an `Err` is
 	/// returned. It is removed or reset to default value if it has been mutated to `None`
-	fn try_mutate_exists<R, E>(k: &K, f: impl FnOnce(&mut Option<T>) -> Result<R, E>) -> Result<R, E>;
+	fn try_mutate_exists<R, E: From<StoredMapError>>(
+		k: &K,
+		f: impl FnOnce(&mut Option<T>) -> Result<R, E>,
+	) -> Result<R, E>;
+
+	// Everything past here has a default implementation.
+
+	/// Mutate the item.
+	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> Result<R, StoredMapError> {
+		Self::mutate_exists(k, |maybe_account| match maybe_account {
+			Some(ref mut account) => f(account),
+			x @ None => {
+				let mut account = Default::default();
+				let r = f(&mut account);
+				*x = Some(account);
+				r
+			}
+		})
+	}
+
+	/// Mutate the item, removing or resetting to default value if it has been mutated to `None`.
+	///
+	/// This is infallible as long as the value does not get destroyed.
+	fn mutate_exists<R>(
+		k: &K,
+		f: impl FnOnce(&mut Option<T>) -> R,
+	) -> Result<R, StoredMapError> {
+		Self::try_mutate_exists(k, |x| -> Result<R, StoredMapError> { Ok(f(x)) })
+	}
+
 	/// Set the item to something new.
-	fn insert(k: &K, t: T) { Self::mutate(k, |i| *i = t); }
+	fn insert(k: &K, t: T) -> Result<(), StoredMapError> { Self::mutate(k, |i| *i = t) }
+
 	/// Remove the item or otherwise replace it with its default value; we don't care which.
-	fn remove(k: &K);
+	fn remove(k: &K) -> Result<(), StoredMapError> { Self::mutate_exists(k, |x| *x = None) }
 }
 
 /// A simple, generic one-parameter event notifier/handler.
-pub trait Happened<T> {
-	/// The thing happened.
-	fn happened(t: &T);
+pub trait HandleLifetime<T> {
+	/// An account was created.
+	fn created(_t: &T) -> Result<(), StoredMapError> { Ok(()) }
+
+	/// An account was killed.
+	fn killed(_t: &T) -> Result<(), StoredMapError> { Ok(()) }
 }
 
-impl<T> Happened<T> for () {
-	fn happened(_: &T) {}
-}
+impl<T> HandleLifetime<T> for () {}
 
 /// A shim for placing around a storage item in order to use it as a `StoredValue`. Ideally this
 /// wouldn't be needed as `StorageValue`s should blanket implement `StoredValue`s, however this
@@ -347,68 +366,63 @@ impl<T> Happened<T> for () {
 /// be the default value), or where the account is being removed or reset back to the default value
 /// where previously it did exist (though may have been in a default state). This works well with
 /// system module's `CallOnCreatedAccount` and `CallKillAccount`.
-pub struct StorageMapShim<
-	S,
-	Created,
-	Removed,
-	K,
-	T
->(sp_std::marker::PhantomData<(S, Created, Removed, K, T)>);
+pub struct StorageMapShim<S, L, K, T>(sp_std::marker::PhantomData<(S, L, K, T)>);
 impl<
 	S: StorageMap<K, T, Query=T>,
-	Created: Happened<K>,
-	Removed: Happened<K>,
+	L: HandleLifetime<K>,
 	K: FullCodec,
-	T: FullCodec,
-> StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
+	T: FullCodec + Default,
+> StoredMap<K, T> for StorageMapShim<S, L, K, T> {
 	fn get(k: &K) -> T { S::get(k) }
-	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
-	fn insert(k: &K, t: T) {
-		let existed = S::contains_key(&k);
+	fn insert(k: &K, t: T) -> Result<(), StoredMapError> {
+		if !S::contains_key(&k) {
+			L::created(k)?;
+		}
 		S::insert(k, t);
-		if !existed {
-			Created::happened(k);
-		}
+		Ok(())
 	}
-	fn remove(k: &K) {
-		let existed = S::contains_key(&k);
-		S::remove(k);
-		if existed {
-			Removed::happened(&k);
+	fn remove(k: &K) -> Result<(), StoredMapError> {
+		if S::contains_key(&k) {
+			L::killed(&k)?;
+			S::remove(k);
 		}
+		Ok(())
 	}
-	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R {
-		let existed = S::contains_key(&k);
-		let r = S::mutate(k, f);
-		if !existed {
-			Created::happened(k);
+	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> Result<R, StoredMapError> {
+		if !S::contains_key(&k) {
+			L::created(k)?;
 		}
-		r
+		Ok(S::mutate(k, f))
 	}
-	fn mutate_exists<R>(k: &K, f: impl FnOnce(&mut Option<T>) -> R) -> R {
-		let (existed, exists, r) = S::mutate_exists(k, |maybe_value| {
-			let existed = maybe_value.is_some();
-			let r = f(maybe_value);
-			(existed, maybe_value.is_some(), r)
-		});
-		if !existed && exists {
-			Created::happened(k);
-		} else if existed && !exists {
-			Removed::happened(k);
-		}
-		r
-	}
-	fn try_mutate_exists<R, E>(k: &K, f: impl FnOnce(&mut Option<T>) -> Result<R, E>) -> Result<R, E> {
+	fn mutate_exists<R>(k: &K, f: impl FnOnce(&mut Option<T>) -> R) -> Result<R, StoredMapError> {
 		S::try_mutate_exists(k, |maybe_value| {
 			let existed = maybe_value.is_some();
-			f(maybe_value).map(|v| (existed, maybe_value.is_some(), v))
-		}).map(|(existed, exists, v)| {
+			let r = f(maybe_value);
+			let exists = maybe_value.is_some();
+
 			if !existed && exists {
-				Created::happened(k);
+				L::created(k)?;
 			} else if existed && !exists {
-				Removed::happened(k);
+				L::killed(k)?;
 			}
-			v
+			Ok(r)
+		})
+	}
+	fn try_mutate_exists<R, E: From<StoredMapError>>(
+		k: &K,
+		f: impl FnOnce(&mut Option<T>) -> Result<R, E>,
+	) -> Result<R, E> {
+		S::try_mutate_exists(k, |maybe_value| {
+			let existed = maybe_value.is_some();
+			let r = f(maybe_value)?;
+			let exists = maybe_value.is_some();
+
+			if !existed && exists {
+				L::created(k).map_err(E::from)?;
+			} else if existed && !exists {
+				L::killed(k).map_err(E::from)?;
+			}
+			Ok(r)
 		})
 	}
 }
@@ -505,18 +519,6 @@ pub trait ContainsLengthBound {
 	fn min_len() -> usize;
 	/// Maximum number of elements contained
 	fn max_len() -> usize;
-}
-
-/// Determiner to say whether a given account is unused.
-pub trait IsDeadAccount<AccountId> {
-	/// Is the given account dead?
-	fn is_dead_account(who: &AccountId) -> bool;
-}
-
-impl<AccountId> IsDeadAccount<AccountId> for () {
-	fn is_dead_account(_who: &AccountId) -> bool {
-		true
-	}
 }
 
 /// Handler for when a new account has been created.
@@ -1653,16 +1655,16 @@ pub trait EnsureOrigin<OuterOrigin> {
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
 /// `construct_runtime` and `impl_outer_dispatch`.
 pub trait UnfilteredDispatchable {
-	/// The origin type of the runtime, (i.e. `frame_system::Trait::Origin`).
+	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
 	type Origin;
 
 	/// Dispatch this call but do not check the filter in origin.
 	fn dispatch_bypass_filter(self, origin: Self::Origin) -> crate::dispatch::DispatchResultWithPostInfo;
 }
 
-/// Methods available on `frame_system::Trait::Origin`.
+/// Methods available on `frame_system::Config::Origin`.
 pub trait OriginTrait: Sized {
-	/// Runtime call type, as in `frame_system::Trait::Call`
+	/// Runtime call type, as in `frame_system::Config::Call`
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
@@ -1674,7 +1676,7 @@ pub trait OriginTrait: Sized {
 	/// Add a filter to the origin.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
 
-	/// Reset origin filters to default one, i.e `frame_system::Trait::BaseCallFilter`.
+	/// Reset origin filters to default one, i.e `frame_system::Config::BaseCallFilter`.
 	fn reset_filter(&mut self);
 
 	/// Replace the caller with caller from the other origin
@@ -1686,13 +1688,13 @@ pub trait OriginTrait: Sized {
 	/// Get the caller.
 	fn caller(&self) -> &Self::PalletsOrigin;
 
-	/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+	/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
 	fn none() -> Self;
 
 	/// Create with system root origin and no filter.
 	fn root() -> Self;
 
-	/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+	/// Create with system signed origin and `frame-system::Config::BaseCallFilter`.
 	fn signed(by: Self::AccountId) -> Self;
 }
 
@@ -1731,13 +1733,19 @@ pub trait Instance: 'static {
 	const PREFIX: &'static str;
 }
 
-/// An instance of a storage.
+/// An instance of a storage in a pallet.
 ///
-/// It is required the the couple `(PalletInfo::name<Pallet>(), STORAGE_PREFIX)` is unique.
-/// Any storage with same couple will collide.
+/// Define an instance for an individual storage inside a pallet.
+/// The pallet prefix is used to isolate the storage between pallets, and the storage prefix is
+/// used to isolate storages inside a pallet.
+///
+/// NOTE: These information can be used to define storages in pallet such as a `StorageMap` which
+/// can use keys after `twox_128(pallet_prefix())++twox_128(STORAGE_PREFIX)`
 pub trait StorageInstance {
-	type Pallet: 'static;
-	type PalletInfo: PalletInfo;
+	/// Prefix of a pallet to isolate it from other pallets.
+	fn pallet_prefix() -> &'static str;
+
+	/// Prefix given to a storage to isolate from other storages in the pallet.
 	const STORAGE_PREFIX: &'static str;
 }
 
@@ -1863,6 +1871,79 @@ pub trait IsSubType<T> {
 	fn is_sub_type(&self) -> Option<&T>;
 }
 
+/// The pallet hooks trait. Implementing this lets you express some logic to execute.
+pub trait Hooks<BlockNumber> {
+	/// The block is being finalized. Implement to have something happen.
+	fn on_finalize(_n: BlockNumber) {}
+
+	/// The block is being initialized. Implement to have something happen.
+	///
+	/// Return the non-negotiable weight consumed in the block.
+	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
+
+	/// Perform a module upgrade.
+	///
+	/// NOTE: this doesn't include all pallet logic triggered on runtime upgrade. For instance it
+	/// doesn't include the write of the pallet version in storage. The final complete logic
+	/// triggered on runtime upgrade is given by implementation of `OnRuntimeUpgrade` trait by
+	/// `Pallet`.
+	///
+	/// # Warning
+	///
+	/// This function will be called before we initialized any runtime state, aka `on_initialize`
+	/// wasn't called yet. So, information like the block number and any other
+	/// block local data are not accessible.
+	///
+	/// Return the non-negotiable weight consumed for runtime upgrade.
+	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+
+	/// Implementing this function on a module allows you to perform long-running tasks
+	/// that make (by default) validators generate transactions that feed results
+	/// of those long-running computations back on chain.
+	///
+	/// NOTE: This function runs off-chain, so it can access the block state,
+	/// but cannot preform any alterations. More specifically alterations are
+	/// not forbidden, but they are not persisted in any way after the worker
+	/// has finished.
+	///
+	/// This function is being called after every block import (when fully synced).
+	///
+	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
+	/// to perform off-chain computations, calls and submit transactions
+	/// with results to trigger any on-chain changes.
+	/// Any state alterations are lost and are not persisted.
+	fn offchain_worker(_n: BlockNumber) {}
+
+	/// Run integrity test.
+	///
+	/// The test is not executed in a externalities provided environment.
+	fn integrity_test() {}
+}
+
+/// A trait to define the build function of a genesis config, T and I are placeholder for pallet
+/// trait and pallet instance.
+#[cfg(feature = "std")]
+pub trait GenesisBuild<T, I=()>: Default + MaybeSerializeDeserialize {
+	/// The build function is called within an externalities allowing storage APIs.
+	/// Thus one can write to storage using regular pallet storages.
+	fn build(&self);
+
+	/// Build the storage using `build` inside default storage.
+	fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
+		let mut storage = Default::default();
+		self.assimilate_storage(&mut storage)?;
+		Ok(storage)
+	}
+
+	/// Assimilate the storage for this module into pre-existing overlays.
+	fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
+		sp_state_machine::BasicExternalities::execute_with_storage(storage, || {
+			self.build();
+			Ok(())
+		})
+	}
+}
+
 /// The storage key postfix that is used to store the [`PalletVersion`] per pallet.
 ///
 /// The full storage key is built by using:
@@ -1895,7 +1976,7 @@ impl PalletVersion {
 
 	/// Returns the storage key for a pallet version.
 	///
-	/// See [`PALLET_VERSION_STORAGE_KEY_POSTIFX`] on how this key is built.
+	/// See [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] on how this key is built.
 	///
 	/// Returns `None` if the given `PI` returned a `None` as name for the given
 	/// `Pallet`.

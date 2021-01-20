@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,21 +24,22 @@ use sp_std::prelude::*;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::{H256, Header}};
 use frame_support::{
 	dispatch::DispatchResult,
-	decl_module, decl_storage, impl_outer_origin, assert_ok, assert_err, ensure
+	decl_module, decl_storage, impl_outer_origin, assert_ok, assert_err, ensure,
+	parameter_types, pallet_prelude::Get,
 };
 use frame_system::{RawOrigin, ensure_signed, ensure_none};
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Test where
-		<T as OtherTrait>::OtherEvent: Into<<T as Trait>::Event>
+	trait Store for Module<T: Config> as Test where
+		<T as OtherConfig>::OtherEvent: Into<<T as Config>::Event>
 	{
 		Value get(fn value): Option<u32>;
 	}
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where
-		origin: T::Origin, <T as OtherTrait>::OtherEvent: Into<<T as Trait>::Event>
+	pub struct Module<T: Config> for enum Call where
+		origin: T::Origin, <T as OtherConfig>::OtherEvent: Into<<T as Config>::Event>
 	{
 		#[weight = 0]
 		fn set_value(origin, n: u32) -> DispatchResult {
@@ -59,21 +60,26 @@ impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
 
-pub trait OtherTrait {
+pub trait OtherConfig {
 	type OtherEvent;
 }
 
-pub trait Trait: frame_system::Trait + OtherTrait
-	where Self::OtherEvent: Into<<Self as Trait>::Event>
+pub trait Config: frame_system::Config + OtherConfig
+	where Self::OtherEvent: Into<<Self as Config>::Event>
 {
 	type Event;
+	type LowerBound: Get<u32>;
+	type UpperBound: Get<u32>;
 }
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -85,26 +91,27 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = ();
-	type MaximumBlockWeight = ();
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = ();
-	type MaximumBlockLength = ();
-	type AvailableBlockRatio = ();
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
-impl Trait for Test {
+parameter_types!{
+	pub const LowerBound: u32 = 1;
+	pub const UpperBound: u32 = 100;
+}
+
+impl Config for Test {
 	type Event = ();
+	type LowerBound = LowerBound;
+	type UpperBound = UpperBound;
 }
 
-impl OtherTrait for Test {
+impl OtherConfig for Test {
 	type OtherEvent = ();
 }
 
@@ -113,15 +120,10 @@ fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 benchmarks!{
-	where_clause { where <T as OtherTrait>::OtherEvent: Into<<T as Trait>::Event> }
-
-	_ {
-		// Define a common range for `b`.
-		let b in 1 .. 1000 => ();
-	}
+	where_clause { where <T as OtherConfig>::OtherEvent: Into<<T as Config>::Event> }
 
 	set_value {
-		let b in ...;
+		let b in 1 .. 1000;
 		let caller = account::<T::AccountId>("caller", 0, 0);
 	}: _ (RawOrigin::Signed(caller), b.into())
 	verify {
@@ -129,7 +131,7 @@ benchmarks!{
 	}
 
 	other_name {
-		let b in ...;
+		let b in 1 .. 1000;
 	}: dummy (RawOrigin::None, b.into())
 
 	sort_vector {
@@ -145,7 +147,7 @@ benchmarks!{
 	}
 
 	bad_origin {
-		let b in ...;
+		let b in 1 .. 1000;
 		let caller = account::<T::AccountId>("caller", 0, 0);
 	}: dummy (RawOrigin::Signed(caller), b.into())
 
@@ -163,6 +165,10 @@ benchmarks!{
 	no_components {
 		let caller = account::<T::AccountId>("caller", 0, 0);
 	}: set_value(RawOrigin::Signed(caller), 0)
+
+	variable_components {
+		let b in ( T::LowerBound::get() ) .. T::UpperBound::get();
+	}: dummy (RawOrigin::None, b.into())
 }
 
 #[test]
@@ -256,5 +262,6 @@ fn benchmarks_generate_unit_tests() {
 		assert_err!(test_benchmark_bad_origin::<Test>(), "Bad origin");
 		assert_err!(test_benchmark_bad_verify::<Test>(), "You forgot to sort!");
 		assert_ok!(test_benchmark_no_components::<Test>());
+		assert_ok!(test_benchmark_variable_components::<Test>());
 	});
 }

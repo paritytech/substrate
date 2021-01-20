@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 //! # Society Module
 //!
-//! - [`society::Trait`](./trait.Trait.html)
+//! - [`society::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
@@ -268,13 +268,13 @@ use frame_support::traits::{
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
-type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+type BalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// The module's configuration trait.
-pub trait Trait<I=DefaultInstance>: system::Trait {
+pub trait Config<I=DefaultInstance>: system::Config {
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 
 	/// The societies's module id
 	type ModuleId: Get<ModuleId>;
@@ -403,7 +403,7 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 
 // This module's storage items.
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Society {
+	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Society {
 		/// The first member.
 		pub Founder get(fn founder) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
 			Option<T::AccountId>;
@@ -472,7 +472,7 @@ decl_storage! {
 // The module's dispatchable functions.
 decl_module! {
 	/// The module declaration.
-	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config<I>, I: Instance=DefaultInstance> for enum Call where origin: T::Origin {
 		type Error = Error<T, I>;
 		/// The minimum amount of a deposit required for a bid to be made.
 		const CandidateDeposit: BalanceOf<T, I> = T::CandidateDeposit::get();
@@ -533,7 +533,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn bid(origin, value: BalanceOf<T, I>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
@@ -572,7 +572,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(B + X)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn unbid(origin, pos: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -642,7 +642,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			// Check user is not suspended.
@@ -683,7 +683,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(B)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn unvouch(origin, pos: u32) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			ensure!(Self::vouching(&voucher) == Some(VouchingStatus::Vouching), Error::<T, I>::NotVouching);
@@ -721,7 +721,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + C)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn vote(origin, candidate: <T::Lookup as StaticLookup>::Source, approve: bool) {
 			let voter = ensure_signed(origin)?;
 			let candidate = T::Lookup::lookup(candidate)?;
@@ -752,7 +752,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn defender_vote(origin, approve: bool) {
 			let voter = ensure_signed(origin)?;
 			let members = <Members<T, I>>::get();
@@ -784,7 +784,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + P + X)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		pub fn payout(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -826,7 +826,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		fn found(origin, founder: T::AccountId, max_members: u32, rules: Vec<u8>) {
 			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
@@ -853,7 +853,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		fn unfound(origin) {
 			let founder = ensure_signed(origin)?;
 			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
@@ -895,7 +895,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + B)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			ensure!(<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::NotSuspended);
@@ -966,7 +966,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(M + logM + B + X)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		fn judge_suspended_candidate(origin, who: T::AccountId, judgement: Judgement) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			if let Some((value, kind)) = <SuspendedCandidates<T, I>>::get(&who) {
@@ -1026,7 +1026,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-		#[weight = T::MaximumBlockWeight::get() / 10]
+		#[weight = T::BlockWeights::get().max_block / 10]
 		fn set_max_members(origin, max: u32) {
 			ensure_root(origin)?;
 			ensure!(max > 1, Error::<T, I>::MaxMembers);
@@ -1038,13 +1038,14 @@ decl_module! {
 			let mut members = vec![];
 
 			let mut weight = 0;
+			let weights = T::BlockWeights::get();
 
 			// Run a candidate/membership rotation
 			if (n % T::RotationPeriod::get()).is_zero() {
 				members = <Members<T, I>>::get();
 				Self::rotate_period(&mut members);
 
-				weight += T::MaximumBlockWeight::get() / 20;
+				weight += weights.max_block / 20;
 			}
 
 			// Run a challenge rotation
@@ -1055,7 +1056,7 @@ decl_module! {
 				}
 				Self::rotate_challenge(&mut members);
 
-				weight += T::MaximumBlockWeight::get() / 20;
+				weight += weights.max_block / 20;
 			}
 
 			weight
@@ -1065,7 +1066,7 @@ decl_module! {
 
 decl_error! {
 	/// Errors for this module.
-	pub enum Error for Module<T: Trait<I>, I: Instance> {
+	pub enum Error for Module<T: Config<I>, I: Instance> {
 		/// An incorrect position was provided.
 		BadPosition,
 		/// User is not a member.
@@ -1108,7 +1109,7 @@ decl_error! {
 decl_event! {
 	/// Events for this module.
 	pub enum Event<T, I=DefaultInstance> where
-		AccountId = <T as system::Trait>::AccountId,
+		AccountId = <T as system::Config>::AccountId,
 		Balance = BalanceOf<T, I>
 	{
 		/// The society is founded by the given identity. \[founder\]
@@ -1151,7 +1152,7 @@ decl_event! {
 
 /// Simple ensure origin struct to filter for the founder account.
 pub struct EnsureFounder<T>(sp_std::marker::PhantomData<T>);
-impl<T: Trait> EnsureOrigin<T::Origin> for EnsureFounder<T> {
+impl<T: Config> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 	type Success = T::AccountId;
 	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
 		o.into().and_then(|o| match (o, Founder::<T>::get()) {
@@ -1182,7 +1183,7 @@ fn pick_usize<'a, R: RngCore>(rng: &mut R, max: usize) -> usize {
 	(rng.next_u32() % (max as u32 + 1)) as usize
 }
 
-impl<T: Trait<I>, I: Instance> Module<T, I> {
+impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// Puts a bid into storage ordered by smallest to largest value.
 	/// Allows a maximum of 1000 bids in queue, removing largest value people first.
 	fn put_bid(
@@ -1669,7 +1670,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 }
 
-impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
+impl<T: Config> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
 	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T>) {
 		let numeric_amount = amount.peek();
 

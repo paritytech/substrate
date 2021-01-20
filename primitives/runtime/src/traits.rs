@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -150,6 +150,25 @@ pub struct BadOrigin;
 impl From<BadOrigin> for &'static str {
 	fn from(_: BadOrigin) -> &'static str {
 		"Bad origin"
+	}
+}
+
+/// Error that can be returned by our impl of `StoredMap`.
+#[derive(Encode, Decode, RuntimeDebug)]
+pub enum StoredMapError {
+	/// Attempt to create map value when it is a consumer and there are no providers in place.
+	NoProviders,
+	/// Attempt to anull/remove value when it is the last provider and there is still at
+	/// least one consumer left.
+	ConsumerRemaining,
+}
+
+impl From<StoredMapError> for &'static str {
+	fn from(e: StoredMapError) -> &'static str {
+		match e {
+			StoredMapError::NoProviders => "No providers",
+			StoredMapError::ConsumerRemaining => "Consumer remaining",
+		}
 	}
 }
 
@@ -693,7 +712,7 @@ pub trait Dispatchable {
 	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
 	type Origin;
 	/// ...
-	type Trait;
+	type Config;
 	/// An opaque set of information attached to the transaction. This could be constructed anywhere
 	/// down the line in a runtime. The current Substrate runtime uses a struct with the same name
 	/// to represent the dispatch class and weight.
@@ -712,7 +731,7 @@ pub type PostDispatchInfoOf<T> = <T as Dispatchable>::PostInfo;
 
 impl Dispatchable for () {
 	type Origin = ();
-	type Trait = ();
+	type Config = ();
 	type Info = ();
 	type PostInfo = ();
 	fn dispatch(self, _origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo> {

@@ -90,7 +90,7 @@ valid behavior_ while _punishing any misbehavior or lack of availability_.
 
 Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
 `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-validator as well as its nominators. Only the [`Trait::MaxNominatorRewardedPerValidator`]
+validator as well as its nominators. Only the [`Config::MaxNominatorRewardedPerValidator`]
 biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
 nominator's account.
 
@@ -137,10 +137,10 @@ use frame_support::{decl_module, dispatch};
 use frame_system::ensure_signed;
 use pallet_staking::{self as staking};
 
-pub trait Trait: staking::Trait {}
+pub trait Config: staking::Config {}
 
 decl_module! {
-    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+    pub struct Module<T: Config> for enum Call where origin: T::Origin {
         /// Reward a validator.
         #[weight = 0]
         pub fn reward_myself(origin) -> dispatch::DispatchResult {
@@ -176,7 +176,7 @@ Validators and nominators are rewarded at the end of each era. The total reward 
 calculated using the era duration and the staking rate (the total amount of tokens staked by
 nominators and validators, divided by the total token supply). It aims to incentivize toward a
 defined staking rate. The full specification can be found
-[here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics.html#inflation-model).
+[here](https://research.web3.foundation/en/latest/polkadot/economics/1-token-economics.html#inflation-model).
 
 Total reward is split among validators and their nominators depending on the number of points
 they received during the era. Points are added to a validator using

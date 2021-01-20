@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 //!
 //! A module for atomically sending funds.
 //!
-//! - [`atomic_swap::Trait`](./trait.Trait.html)
+//! - [`atomic_swap::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 //!
@@ -56,7 +56,7 @@ use sp_runtime::RuntimeDebug;
 
 /// Pending atomic swap operation.
 #[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
-pub struct PendingSwap<T: Trait> {
+pub struct PendingSwap<T: Config> {
 	/// Source of the swap.
 	pub source: T::AccountId,
 	/// Action of this swap.
@@ -74,7 +74,7 @@ pub type HashedProof = [u8; 32];
 /// succeeds with best efforts.
 /// - **Claim**: claim any resources reserved in the first phrase.
 /// - **Cancel**: cancel any resources reserved in the first phrase.
-pub trait SwapAction<AccountId, T: Trait> {
+pub trait SwapAction<AccountId, T: Config> {
 	/// Reserve the resources needed for the swap, from the given `source`. The reservation is
 	/// allowed to fail. If that is the case, the the full swap creation operation is cancelled.
 	fn reserve(&self, source: &AccountId) -> DispatchResult;
@@ -115,7 +115,7 @@ impl<AccountId, C> DerefMut for BalanceSwapAction<AccountId, C> where C: Reserva
 	}
 }
 
-impl<T: Trait, AccountId, C> SwapAction<AccountId, T> for BalanceSwapAction<AccountId, C>
+impl<T: Config, AccountId, C> SwapAction<AccountId, T> for BalanceSwapAction<AccountId, C>
 	where C: ReservableCurrency<AccountId>
 {
 	fn reserve(&self, source: &AccountId) -> DispatchResult {
@@ -136,9 +136,9 @@ impl<T: Trait, AccountId, C> SwapAction<AccountId, T> for BalanceSwapAction<Acco
 }
 
 /// Atomic swap's pallet configuration trait.
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 	/// Swap action.
 	type SwapAction: SwapAction<Self::AccountId, Self> + Parameter;
 	/// Limit of proof size.
@@ -155,7 +155,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as AtomicSwap {
+	trait Store for Module<T: Config> as AtomicSwap {
 		pub PendingSwaps: double_map
 			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) HashedProof
 			=> Option<PendingSwap<T>>;
@@ -163,7 +163,7 @@ decl_storage! {
 }
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Swap already exists.
 		AlreadyExist,
 		/// Swap proof is invalid.
@@ -186,7 +186,7 @@ decl_error! {
 decl_event!(
 	/// Event of atomic swap pallet.
 	pub enum Event<T> where
-		AccountId = <T as system::Trait>::AccountId,
+		AccountId = <T as system::Config>::AccountId,
 		PendingSwap = PendingSwap<T>,
 	{
 		/// Swap created. \[account, proof, swap\]
@@ -201,7 +201,7 @@ decl_event!(
 
 decl_module! {
 	/// Module definition of atomic swap pallet.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;

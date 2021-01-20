@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -328,7 +328,7 @@ impl<Block: BlockT, Client> BlockStatus<Block> for Arc<Client> where
 
 /// A trait that includes all the client functionalities grandpa requires.
 /// Ideally this would be a trait alias, we're not there yet.
-/// tracking issue https://github.com/rust-lang/rust/issues/41517
+/// tracking issue <https://github.com/rust-lang/rust/issues/41517>
 pub trait ClientForGrandpa<Block, BE>:
 	LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
 	+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
@@ -652,6 +652,10 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	/// A link to the block import worker.
 	pub link: LinkHalf<Block, C, SC>,
 	/// The Network instance.
+	///
+	/// It is assumed that this network will feed us Grandpa notifications. When using the
+	/// `sc_network` crate, it is assumed that the Grandpa notifications protocol has been passed
+	/// to the configuration of the networking. See [`grandpa_peers_set_config`].
 	pub network: N,
 	/// If supplied, can be used to hook on telemetry connection established events.
 	pub telemetry_on_connect: Option<TracingUnboundedReceiver<()>>,
@@ -661,6 +665,22 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 	/// The voter state is exposed at an RPC endpoint.
 	pub shared_voter_state: SharedVoterState,
+}
+
+/// Returns the configuration value to put in
+/// [`sc_network::config::NetworkConfiguration::extra_sets`].
+pub fn grandpa_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
+	sc_network::config::NonDefaultSetConfig {
+		notifications_protocol: communication::GRANDPA_PROTOCOL_NAME.into(),
+		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
+		max_notification_size: 1024 * 1024,
+		set_config: sc_network::config::SetConfig {
+			in_peers: 25,
+			out_peers: 25,
+			reserved_nodes: Vec::new(),
+			non_reserved_mode: sc_network::config::NonReservedPeerMode::Accept,
+		},
+	}
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -1063,26 +1083,6 @@ where
 
 		Future::poll(Pin::new(&mut self.network), cx)
 	}
-}
-
-/// When GRANDPA is not initialized we still need to register the finality
-/// tracker inherent provider which might be expected by the runtime for block
-/// authoring. Additionally, we register a gossip message validator that
-/// discards all GRANDPA messages (otherwise, we end up banning nodes that send
-/// us a `Neighbor` message, since there is no registered gossip validator for
-/// the engine id defined in the message.)
-pub fn setup_disabled_grandpa<Block: BlockT, N>(network: N) -> Result<(), sp_consensus::Error>
-where
-	N: NetworkT<Block> + Send + Clone + 'static,
-{
-	// We register the GRANDPA protocol so that we don't consider it an anomaly
-	// to receive GRANDPA messages on the network. We don't process the
-	// messages.
-	network.register_notifications_protocol(
-		From::from(communication::GRANDPA_PROTOCOL_NAME),
-	);
-
-	Ok(())
 }
 
 /// Checks if this node has any available keys in the keystore for any authority id in the given

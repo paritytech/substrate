@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,10 @@
 
 //! Service configuration.
 
-pub use sc_client_db::{Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig};
+pub use sc_client_db::{
+	Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig,
+	KeepBlocks, TransactionStorageMode
+};
 pub use sc_network::Multiaddr;
 pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
 pub use sc_executor::WasmExecutionMethod;
@@ -50,14 +53,20 @@ pub struct Configuration {
 	pub network: NetworkConfiguration,
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
+	/// Remote URI to connect to for async keystore support
+	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
 	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
 	pub state_cache_child_ratio: Option<usize>,
-	/// Pruning settings.
-	pub pruning: PruningMode,
+	/// State pruning settings.
+	pub state_pruning: PruningMode,
+	/// Number of blocks to keep in the db.
+	pub keep_blocks: KeepBlocks,
+	/// Transaction storage scheme.
+	pub transaction_storage: TransactionStorageMode,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.
@@ -87,6 +96,11 @@ pub struct Configuration {
 	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
 	/// endpoint, this transport will be tried in priority before all others.
 	pub telemetry_external_transport: Option<ExtTransport>,
+	/// Telemetry handle.
+	///
+	/// This is a handle to a `TelemetryWorker` instance. It is used to initialize the telemetry for
+	/// a substrate node.
+	pub telemetry_handle: Option<sc_telemetry::TelemetryHandle>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
@@ -103,6 +117,8 @@ pub struct Configuration {
 	pub dev_key_seed: Option<String>,
 	/// Tracing targets
 	pub tracing_targets: Option<String>,
+	/// Is log filter reloading disabled
+	pub disable_log_reloading: bool,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
 	/// The size of the instances cache.
@@ -187,8 +203,21 @@ impl Configuration {
 	}
 
 	/// Returns the prometheus metrics registry, if available.
-	pub fn prometheus_registry<'a>(&'a self) -> Option<&'a Registry> {
+	pub fn prometheus_registry(&self) -> Option<&Registry> {
 		self.prometheus_config.as_ref().map(|config| &config.registry)
+	}
+
+	/// Returns the telemetry endpoints if any and if the telemetry handle exists.
+	pub(crate) fn telemetry_endpoints(&self) -> Option<&TelemetryEndpoints> {
+		if self.telemetry_handle.is_none() {
+			return None;
+		}
+
+		match self.telemetry_endpoints.as_ref() {
+			// Don't initialise telemetry if `telemetry_endpoints` == Some([])
+			Some(endpoints) if !endpoints.is_empty() => Some(endpoints),
+			_ => None,
+		}
 	}
 }
 
@@ -258,6 +287,13 @@ impl BasePath {
 			BasePath::Temporary(temp_dir) => temp_dir.path(),
 			BasePath::Permanenent(path) => path.as_path(),
 		}
+	}
+
+	/// Returns the configuration directory inside this base path.
+	///
+	/// The path looks like `$base_path/chains/$chain_id`
+	pub fn config_dir(&self, chain_id: &str) -> PathBuf {
+		self.path().join("chains").join(chain_id)
 	}
 }
 

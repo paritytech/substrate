@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -680,8 +680,8 @@ fn retracting_active_voter_should_slash_reporter() {
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		assert_eq!(Elections::vote_index(), 2);
-		assert_eq!(<Test as Trait>::InactiveGracePeriod::get(), 1);
-		assert_eq!(<Test as Trait>::VotingPeriod::get(), 4);
+		assert_eq!(<Test as Config>::InactiveGracePeriod::get(), 1);
+		assert_eq!(<Test as Config>::VotingPeriod::get(), 4);
 		assert_eq!(Elections::voter_info(4), Some(VoterInfo { last_win: 1, last_active: 0, stake: 40, pot: 0 }));
 
 		assert_ok!(Elections::reap_inactive_voter(Origin::signed(4),

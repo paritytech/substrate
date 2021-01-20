@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,21 +34,21 @@ const MAX_REFERENDUMS: u32 = 99;
 const MAX_SECONDERS: u32 = 100;
 const MAX_BYTES: u32 = 16_384;
 
-fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
+fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	let events = System::<T>::events();
-	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
+	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	// compare to the last event record
 	let EventRecord { event, .. } = &events[events.len() - 1];
 	assert_eq!(event, &system_event);
 }
 
-fn funded_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
+fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let caller: T::AccountId = account(name, index, SEED);
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	caller
 }
 
-fn add_proposal<T: Trait>(n: u32) -> Result<T::Hash, &'static str> {
+fn add_proposal<T: Config>(n: u32) -> Result<T::Hash, &'static str> {
 	let other = funded_account::<T>("proposer", n);
 	let value = T::MinimumDeposit::get();
 	let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
@@ -62,7 +62,7 @@ fn add_proposal<T: Trait>(n: u32) -> Result<T::Hash, &'static str> {
 	Ok(proposal_hash)
 }
 
-fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
+fn add_referendum<T: Config>(n: u32) -> Result<ReferendumIndex, &'static str> {
 	let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
 	let vote_threshold = VoteThreshold::SimpleMajority;
 
@@ -84,7 +84,7 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 	Ok(referendum_index)
 }
 
-fn account_vote<T: Trait>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
+fn account_vote<T: Config>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
 	let v = Vote {
 		aye: true,
 		conviction: Conviction::Locked1x,
@@ -97,8 +97,6 @@ fn account_vote<T: Trait>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
 }
 
 benchmarks! {
-	_ { }
-
 	propose {
 		let p = T::MaxProposals::get();
 

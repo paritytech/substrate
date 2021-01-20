@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -54,7 +54,7 @@ pub trait WeightInfo {
 
 /// Weights for frame_system using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: crate::Trait> WeightInfo for SubstrateWeight<T> {
+impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 	fn remark(_b: u32, ) -> Weight {
 		(1_973_000 as Weight)
 	}

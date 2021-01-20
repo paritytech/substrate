@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Slots functionality for Substrate.
 //!
@@ -20,7 +22,8 @@
 //! time during which certain events can and/or must occur.  This crate
 //! provides generic functionality for slots.
 
-#![forbid(unsafe_code, missing_docs)]
+#![forbid(unsafe_code)]
+#![deny(missing_docs)]
 
 mod slots;
 mod aux_schema;
@@ -470,6 +473,15 @@ pub enum CheckedHeader<H, S> {
 	Checked(H, S),
 }
 
+
+
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
+pub enum Error<T> where T: Debug {
+	#[error("Slot duration is invalid: {0:?}")]
+	SlotDurationInvalid(SlotDuration<T>),
+}
+
 /// A slot duration. Create with `get_or_compute`.
 // The internal member should stay private here to maintain invariants of
 // `get_or_compute`.
@@ -483,7 +495,7 @@ impl<T> Deref for SlotDuration<T> {
 	}
 }
 
-impl<T: SlotData + Clone> SlotData for SlotDuration<T> {
+impl<T: SlotData> SlotData for SlotDuration<T> {
 	/// Get the slot duration in milliseconds.
 	fn slot_duration(&self) -> u64
 		where T: SlotData,
@@ -494,7 +506,7 @@ impl<T: SlotData + Clone> SlotData for SlotDuration<T> {
 	const SLOT_KEY: &'static [u8] = T::SLOT_KEY;
 }
 
-impl<T: Clone> SlotDuration<T> {
+impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 	/// Either fetch the slot duration from disk or compute it from the
 	/// genesis state.
 	///
@@ -532,10 +544,8 @@ impl<T: Clone> SlotDuration<T> {
 			}
 		}?;
 
-		if slot_duration.slot_duration() == 0 {
-			return Err(sp_blockchain::Error::Msg(
-				"Invalid value for slot_duration: the value must be greater than 0.".into(),
-			))
+		if slot_duration.slot_duration() == 0u64 {
+			return Err(sp_blockchain::Error::Application(Box::new(Error::SlotDurationInvalid(slot_duration))))
 		}
 
 		Ok(slot_duration)
@@ -939,7 +949,7 @@ mod test {
 			true, true, true, true,
 	];
 
-		assert_eq!(backoff, expected);
+		assert_eq!(backoff.as_slice(), &expected[..]);
 	}
 
 	#[test]

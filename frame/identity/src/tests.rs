@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,13 +21,13 @@ use super::*;
 
 use sp_runtime::traits::BadOrigin;
 use frame_support::{
-	assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
+	assert_ok, assert_noop, impl_outer_origin, parameter_types,
 	ord_parameter_types,
 };
 use sp_core::H256;
 use frame_system::{EnsureSignedBy, EnsureOneOf, EnsureRoot};
 use sp_runtime::{
-	Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup},
+	testing::Header, traits::{BlakeTwo256, IdentityLookup},
 };
 
 impl_outer_origin! {
@@ -38,12 +38,13 @@ impl_outer_origin! {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -55,24 +56,19 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = ();
 	type DustRemoval = ();
@@ -103,7 +99,7 @@ type EnsureTwoOrRoot = EnsureOneOf<
 	EnsureRoot<u64>,
 	EnsureSignedBy<Two, u64>
 >;
-impl Trait for Test {
+impl Config for Test {
 	type Event = ();
 	type Currency = Balances;
 	type Slashed = ();

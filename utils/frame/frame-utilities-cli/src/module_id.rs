@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -64,7 +64,7 @@ impl ModuleIdCmd {
 	/// runs the command
 	pub fn run<R>(&self) -> Result<(), Error>
 		where
-			R: frame_system::Trait,
+			R: frame_system::Config,
 			R::AccountId: Ss58Codec,
 	{
 		if self.id.len() != 8 {

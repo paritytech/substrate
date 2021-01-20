@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,17 +30,17 @@ use frame_support::{
 	storage,
 };
 use sp_core::H256;
-use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use crate as utility;
 
 // example module to test behaviors.
 pub mod example {
 	use super::*;
 	use frame_support::dispatch::WithPostDispatchInfo;
-	pub trait Trait: frame_system::Trait { }
+	pub trait Config: frame_system::Config { }
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: <T as frame_system::Trait>::Origin {
+		pub struct Module<T: Config> for enum Call where origin: <T as frame_system::Config>::Origin {
 			#[weight = *weight]
 			fn noop(_origin, weight: Weight) { }
 
@@ -93,12 +93,14 @@ impl_outer_dispatch! {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = Weight::max_value();
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(Weight::max_value());
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = TestBaseCallFilter;
+	type BlockWeights = BlockWeights;
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -110,24 +112,18 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = TestEvent;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type DustRemoval = ();
@@ -142,13 +138,14 @@ parameter_types! {
 	pub const MaxSignatories: u16 = 3;
 }
 
-impl example::Trait for Test {}
+impl example::Config for Test {}
 
 pub struct TestBaseCallFilter;
 impl Filter<Call> for TestBaseCallFilter {
 	fn filter(c: &Call) -> bool {
 		match *c {
-			Call::Balances(_) => true,
+			// Transfer works. Use `transfer_keep_alive` for a call that doesn't pass the filter.
+			Call::Balances(pallet_balances::Call::transfer(..)) => true,
 			Call::Utility(_) => true,
 			// For benchmarking, this acts as a noop call
 			Call::System(frame_system::Call::remark(..)) => true,
@@ -158,7 +155,7 @@ impl Filter<Call> for TestBaseCallFilter {
 		}
 	}
 }
-impl Trait for Test {
+impl Config for Test {
 	type Event = TestEvent;
 	type Call = Call;
 	type WeightInfo = ();
@@ -279,7 +276,7 @@ fn as_derivative_filters() {
 		assert_err_ignore_postinfo!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
-			Box::new(Call::System(frame_system::Call::suicide())),
+			Box::new(Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))),
 		), DispatchError::BadOrigin);
 	});
 }
@@ -324,7 +321,7 @@ fn batch_with_signed_filters() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(
 			Utility::batch(Origin::signed(1), vec![
-				Call::System(frame_system::Call::suicide())
+				Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))
 			]),
 		);
 		expect_event(Event::BatchInterrupted(0, DispatchError::BadOrigin));
@@ -350,6 +347,7 @@ fn batch_early_exit_works() {
 
 #[test]
 fn batch_weight_calculation_doesnt_overflow() {
+	use sp_runtime::Perbill;
 	new_test_ext().execute_with(|| {
 		let big_call = Call::System(SystemCall::fill_block(Perbill::from_percent(50)));
 		assert_eq!(big_call.get_dispatch_info().weight, Weight::max_value() / 2);
@@ -428,7 +426,7 @@ fn batch_handles_weight_refund() {
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
-			<Test as Trait>::WeightInfo::batch(2) + end_weight * 2,
+			<Test as Config>::WeightInfo::batch(2) + end_weight * 2,
 		);
 	});
 }
@@ -465,7 +463,7 @@ fn batch_all_revert() {
 			]),
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
-					actual_weight: Some(<Test as Trait>::WeightInfo::batch_all(2) + info.weight * 2),
+					actual_weight: Some(<Test as Config>::WeightInfo::batch_all(2) + info.weight * 2),
 					pays_fee: Pays::Yes
 				},
 				error: pallet_balances::Error::<Test, _>::InsufficientBalance.into()
@@ -536,7 +534,7 @@ fn batch_all_handles_weight_refund() {
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
-			<Test as Trait>::WeightInfo::batch_all(2) + end_weight * 2,
+			<Test as Config>::WeightInfo::batch_all(2) + end_weight * 2,
 		);
 	});
 }

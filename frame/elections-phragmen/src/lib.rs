@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -77,7 +77,7 @@
 //!
 //! ### Module Information
 //!
-//! - [`election_sp_phragmen::Trait`](./trait.Trait.html)
+//! - [`election_sp_phragmen::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 
@@ -112,9 +112,9 @@ pub use weights::WeightInfo;
 pub const MAXIMUM_VOTE: usize = 16;
 
 type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// An indication that the renouncing account currently has which of the below roles.
 #[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug)]
@@ -140,9 +140,9 @@ pub struct DefunctVoter<AccountId> {
 	pub candidate_count: u32
 }
 
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.c
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Identifier for the elections-phragmen pallet's lock
 	type ModuleId: Get<LockIdentifier>;
@@ -193,7 +193,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as PhragmenElection {
+	trait Store for Module<T: Config> as PhragmenElection {
 		// ---- State
 		/// The current elected membership. Sorted based on account id.
 		pub Members get(fn members): Vec<(T::AccountId, BalanceOf<T>)>;
@@ -213,6 +213,10 @@ decl_storage! {
 	} add_extra_genesis {
 		config(members): Vec<(T::AccountId, BalanceOf<T>)>;
 		build(|config: &GenesisConfig<T>| {
+			assert!(
+				config.members.len() as u32 <= T::DesiredMembers::get(),
+				"Cannot accept more than DesiredMembers genesis member",
+			);
 			let members = config.members.iter().map(|(ref member, ref stake)| {
 				// make sure they have enough stake
 				assert!(
@@ -251,7 +255,7 @@ decl_storage! {
 }
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Cannot vote when no candidates or members exist.
 		UnableToVote,
 		/// Must vote for at least one candidate.
@@ -290,7 +294,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -621,7 +625,7 @@ decl_module! {
 		#[weight = if *has_replacement {
 			T::WeightInfo::remove_member_with_replacement()
 		} else {
-			T::MaximumBlockWeight::get()
+			T::BlockWeights::get().max_block
 		}]
 		fn remove_member(
 			origin,
@@ -667,7 +671,7 @@ decl_module! {
 decl_event!(
 	pub enum Event<T> where
 		Balance = BalanceOf<T>,
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::AccountId,
 	{
 		/// A new term with \[new_members\]. This indicates that enough candidates existed to run the
 		/// election, not that enough have has been elected. The inner value must be examined for
@@ -694,7 +698,7 @@ decl_event!(
 	}
 );
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Attempts to remove a member `who`. If a runner-up exists, it is used as the replacement and
 	/// Ok(true). is returned.
 	///
@@ -829,7 +833,7 @@ impl<T: Trait> Module<T> {
 		if !Self::term_duration().is_zero() {
 			if (block_number % Self::term_duration()).is_zero() {
 				Self::do_phragmen();
-				return T::MaximumBlockWeight::get()
+				return T::BlockWeights::get().max_block;
 			}
 		}
 		0
@@ -1027,7 +1031,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Contains<T::AccountId> for Module<T> {
+impl<T: Config> Contains<T::AccountId> for Module<T> {
 	fn contains(who: &T::AccountId) -> bool {
 		Self::is_member(who)
 	}
@@ -1046,7 +1050,7 @@ impl<T: Trait> Contains<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> ContainsLengthBound for Module<T> {
+impl<T: Config> ContainsLengthBound for Module<T> {
 	fn min_len() -> usize { 0 }
 
 	/// Implementation uses a parameter type so calling is cost-free.
@@ -1058,26 +1062,26 @@ impl<T: Trait> ContainsLengthBound for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use frame_support::{assert_ok, assert_noop, assert_err_with_weight, parameter_types,
-		weights::Weight,
-	};
+	use frame_support::{assert_ok, assert_noop, assert_err_with_weight, parameter_types};
 	use substrate_test_utils::assert_eq_uvec;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill, testing::Header, BuildStorage, DispatchResult,
+		testing::Header, BuildStorage, DispatchResult,
 		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
 	use crate as elections_phragmen;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
 
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -1089,26 +1093,20 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+	type SS58Prefix = ();
 	}
 
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
 	}
 
-	impl pallet_balances::Trait for Test {
+	impl pallet_balances::Config for Test {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
@@ -1175,7 +1173,7 @@ mod tests {
 		pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 	}
 
-	impl Trait for Test {
+	impl Config for Test {
 		type ModuleId = ElectionsPhragmenModuleId;
 		type Event = Event;
 		type Currency = Balances;
@@ -1449,7 +1447,17 @@ mod tests {
 	#[should_panic = "Duplicate member in elections phragmen genesis: 2"]
 	fn genesis_members_cannot_be_duplicate() {
 		ExtBuilder::default()
+			.desired_members(3)
 			.genesis_members(vec![(1, 10), (2, 10), (2, 10)])
+			.build_and_execute(|| {});
+	}
+
+	#[test]
+	#[should_panic = "Cannot accept more than DesiredMembers genesis member"]
+	fn genesis_members_cannot_too_many() {
+		ExtBuilder::default()
+			.genesis_members(vec![(1, 10), (2, 10), (3, 30)])
+			.desired_members(2)
 			.build_and_execute(|| {});
 	}
 

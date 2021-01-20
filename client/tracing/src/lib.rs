@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Instrumentation implementation for substrate.
 //!
@@ -24,10 +26,13 @@
 //!
 //! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
 
+#![warn(missing_docs)]
+
+pub mod logging;
+
 use rustc_hash::FxHashMap;
 use std::fmt;
 use std::time::{Duration, Instant};
-
 use parking_lot::Mutex;
 use serde::ser::{Serialize, Serializer, SerializeMap};
 use tracing::{
@@ -37,10 +42,16 @@ use tracing::{
 	span::{Attributes, Id, Record},
 	subscriber::Subscriber,
 };
-use tracing_subscriber::{CurrentSpan, layer::{Layer, Context}};
-
+use tracing_subscriber::{
+	CurrentSpan,
+	layer::{Layer, Context},
+};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
+
+#[doc(hidden)]
+pub use tracing;
+
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 
 /// Responsible for assigning ids to new spans, which are not re-used.
@@ -77,10 +88,15 @@ pub trait TraceHandler: Send + Sync {
 /// Represents a tracing event, complete with values
 #[derive(Debug)]
 pub struct TraceEvent {
+	/// Name of the event.
 	pub name: &'static str,
+	/// Target of the event.
 	pub target: String,
+	/// Level of the event.
 	pub level: Level,
+	/// Values for this event.
 	pub values: Values,
+	/// Id of the parent tracing event, if any.
 	pub parent_id: Option<Id>,
 }
 
@@ -190,27 +206,6 @@ impl fmt::Display for Values {
 	}
 }
 
-impl slog::SerdeValue for Values {
-	fn as_serde(&self) -> &dyn erased_serde::Serialize {
-		self
-	}
-
-	fn to_sendable(&self) -> Box<dyn slog::SerdeValue + Send + 'static> {
-		Box::new(self.clone())
-	}
-}
-
-impl slog::Value for Values {
-	fn serialize(
-		&self,
-		_record: &slog::Record,
-		key: slog::Key,
-		ser: &mut dyn slog::Serializer,
-	) -> slog::Result {
-		ser.emit_serde(key, self)
-	}
-}
-
 impl ProfilingLayer {
 	/// Takes a `TracingReceiver` and a comma separated list of targets,
 	/// either with a level: "pallet=trace,frame=debug"
@@ -231,15 +226,13 @@ impl ProfilingLayer {
 	/// either with a level, eg: "pallet=trace"
 	/// or without: "pallet" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
-	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str)
-		-> Self
-	{
+	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str) -> Self {
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		Self {
 			targets,
 			trace_handler,
 			span_data: Mutex::new(FxHashMap::default()),
-			current_span: Default::default()
+			current_span: Default::default(),
 		}
 	}
 
@@ -411,7 +404,7 @@ impl TraceHandler for TelemetryTraceHandler {
 			"target" => span_datum.target,
 			"time" => span_datum.overall_time.as_nanos(),
 			"id" => span_datum.id.into_u64(),
-			"parent_id" => span_datum.parent_id.map(|i| i.into_u64()),
+			"parent_id" => span_datum.parent_id.as_ref().map(|i| i.into_u64()),
 			"values" => span_datum.values
 		);
 	}
@@ -420,7 +413,7 @@ impl TraceHandler for TelemetryTraceHandler {
 		telemetry!(SUBSTRATE_INFO; "tracing.event";
 			"name" => event.name,
 			"target" => event.target,
-			"parent_id" => event.parent_id.map(|i| i.into_u64()),
+			"parent_id" => event.parent_id.as_ref().map(|i| i.into_u64()),
 			"values" => event.values
 		);
 	}
@@ -461,7 +454,7 @@ mod tests {
 		};
 		let layer = ProfilingLayer::new_with_handler(
 			Box::new(handler),
-			"test_target"
+			"test_target",
 		);
 		let subscriber = tracing_subscriber::fmt().finish().with(layer);
 		(subscriber, spans, events)
