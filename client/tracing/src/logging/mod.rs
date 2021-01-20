@@ -78,7 +78,7 @@ macro_rules! enable_log_reloading {
 
 /// Common implementation to get the subscriber.
 fn prepare_subscriber<N, E, F, W>(
-	pattern: &str,
+	directives: &str,
 	max_level: Option<log::LevelFilter>,
 	force_colors: Option<bool>,
 	telemetry_buffer_size: Option<usize>,
@@ -130,10 +130,10 @@ where
 		}
 	}
 
-	if pattern != "" {
+	if directives != "" {
 		// We're not sure if log or tracing is available at this moment, so silently ignore the
 		// parse error.
-		env_filter = parse_user_directives(env_filter, pattern)?;
+		env_filter = parse_user_directives(env_filter, directives)?;
 	}
 
 	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
@@ -197,7 +197,7 @@ where
 
 /// A builder that is used to initialize the global logger.
 pub struct GlobalLoggerBuilder {
-	pattern: String,
+	directives: String,
 	profiling: Option<(crate::TracingReceiver, String)>,
 	telemetry_buffer_size: Option<usize>,
 	telemetry_external_transport: Option<ExtTransport>,
@@ -207,9 +207,9 @@ pub struct GlobalLoggerBuilder {
 
 impl GlobalLoggerBuilder {
 	/// Create a new [`GlobalLoggerBuilder`] which can be used to initialize the global logger.
-	pub fn new<S: Into<String>>(pattern: S) -> Self {
+	pub fn new<S: Into<String>>(directives: S) -> Self {
 		Self {
-			pattern: pattern.into(),
+			directives: directives.into(),
 			profiling: None,
 			telemetry_buffer_size: None,
 			telemetry_external_transport: None,
@@ -262,7 +262,7 @@ impl GlobalLoggerBuilder {
 
 			if self.log_reloading {
 				let (subscriber, telemetry_worker) = prepare_subscriber(
-					&format!("{},{},sc_tracing=trace", self.pattern, profiling_targets),
+					&format!("{},{},sc_tracing=trace", self.directives, profiling_targets),
 					max_level,
 					self.force_colors,
 					self.telemetry_buffer_size,
@@ -276,7 +276,7 @@ impl GlobalLoggerBuilder {
 				Ok(telemetry_worker)
 			} else {
 				let (subscriber, telemetry_worker) = prepare_subscriber(
-					&format!("{},{},sc_tracing=trace", self.pattern, profiling_targets),
+					&format!("{},{},sc_tracing=trace", self.directives, profiling_targets),
 					max_level,
 					self.force_colors,
 					self.telemetry_buffer_size,
@@ -292,7 +292,7 @@ impl GlobalLoggerBuilder {
 		} else {
 			if self.log_reloading {
 				let (subscriber, telemetry_worker) = prepare_subscriber(
-					&self.pattern,
+					&self.directives,
 					None,
 					self.force_colors,
 					self.telemetry_buffer_size,
@@ -305,7 +305,7 @@ impl GlobalLoggerBuilder {
 				Ok(telemetry_worker)
 			} else {
 				let (subscriber, telemetry_worker) = prepare_subscriber(
-					&self.pattern,
+					&self.directives,
 					None,
 					self.force_colors,
 					self.telemetry_buffer_size,
@@ -331,8 +331,8 @@ mod tests {
 	const EXPECTED_LOG_MESSAGE: &'static str = "yeah logging works as expected";
 	const EXPECTED_NODE_NAME: &'static str = "THE_NODE";
 
-	fn init_logger(pattern: &str) {
-		let _ = GlobalLoggerBuilder::new(pattern).init().unwrap();
+	fn init_logger(directives: &str) {
+		let _ = GlobalLoggerBuilder::new(directives).init().unwrap();
 	}
 
 	fn run_in_process(test_name: &str) {
@@ -351,8 +351,8 @@ mod tests {
 	fn test_logger_filters() {
 		run_in_process("test_logger_filters");
 
-		let test_pattern = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
-		init_logger(&test_pattern);
+		let test_directives = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
+		init_logger(&test_directives);
 
 		tracing::dispatcher::get_default(|dispatcher| {
 			let test_filter = |target, level| {
@@ -410,8 +410,8 @@ mod tests {
 	#[test]
 	fn log_something_with_dash_target_name() {
 		if env::var("ENABLE_LOGGING").is_ok() {
-			let test_pattern = "test-target=info";
-			let _guard = init_logger(&test_pattern);
+			let test_directives = "test-target=info";
+			let _guard = init_logger(&test_directives);
 
 			log::info!(target: "test-target", "{}", EXPECTED_LOG_MESSAGE);
 		}
