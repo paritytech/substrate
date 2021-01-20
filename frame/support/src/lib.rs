@@ -2023,8 +2023,8 @@ pub mod pallet_prelude {
 /// 		as the name the pallet was giving to `decl_storage`,
 /// 	* or do a storage migration from the old prefix used to the new prefix used.
 ///
-/// 	NOTE: The prefixes used by storages are in the metadata. Thus ensuring the metadata hasn't
-/// 	changed, does ensure that the `pallet_prefix` used by storages haven't changed.
+/// 	NOTE: The prefixes used by storage items are in the metadata. Thus, ensuring the metadata hasn't
+/// 	changed does ensure that the `pallet_prefix`s used by the storage items haven't changed.
 ///
 /// # Notes when macro fails to show proper error message spans:
 ///
