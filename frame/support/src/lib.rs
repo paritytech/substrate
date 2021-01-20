@@ -1667,8 +1667,8 @@ pub mod pallet_prelude {
 /// 	// * for a storage double map the types of the values and keys are copied into the
 /// 	//   metadata.
 /// 	//
-/// 	// NOTE: The generic `Hasher` must implement `StorageHasher` trait (or the type is not
-/// 	// usable at all). We use `StorageHasher::METADATA` for the metadata of the hasher of the
+/// 	// NOTE: The generic `Hasher` must implement the `StorageHasher` trait (or the type is not
+/// 	// usable at all). We use [`StorageHasher::METADATA`] for the metadata of the hasher of the
 /// 	// storage item. Thus generic hasher is supported.
 /// 	#[pallet::storage]
 /// 	pub(super) type MyStorageValue<T: Config> =
