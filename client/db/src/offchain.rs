@@ -120,7 +120,6 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 pub(crate) fn concatenate_prefix_and_key(prefix: &[u8], key: &[u8]) -> Vec<u8> {
 	prefix
 		.iter()
-		.chain(std::iter::once(&b'/'))
 		.chain(key.into_iter())
 		.cloned()
 		.collect()
