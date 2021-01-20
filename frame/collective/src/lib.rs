@@ -42,10 +42,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
 
+use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
-use sp_runtime::{traits::Hash, RuntimeDebug};
-use sp_std::{prelude::*, result};
+use sp_runtime::{RuntimeDebug, traits::Hash};
 
 use frame_support::{
 	codec::{Decode, Encode},
@@ -58,7 +58,7 @@ use frame_support::{
 	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
 	weights::{DispatchClass, GetDispatchInfo, Weight, Pays},
 };
-use frame_system::{self as system, ensure_root, ensure_signed};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;

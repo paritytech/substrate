@@ -4563,11 +4563,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-elections-phragmen"
-<<<<<<< HEAD
 version = "3.0.0"
-=======
-version = "2.0.1"
->>>>>>> e813f62d94431fb220bc9f984ca12fe01c1650b2
 dependencies = [
  "frame-benchmarking",
  "frame-support",
