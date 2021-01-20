@@ -235,7 +235,8 @@ pub type ValidatorId<T> = <
 /// A tuple of (ValidatorId, Identification) where `Identification` is the full identification of `ValidatorId`.
 pub type IdentificationTuple<T> = (
 	ValidatorId<T>,
-	<<T as Config>::ValidatorSet as ValidatorSetWithIdentification<<T as frame_system::Config>::AccountId>>::Identification,
+	<<T as Config>::ValidatorSet as
+		ValidatorSetWithIdentification<<T as frame_system::Config>::AccountId>>::Identification,
 );
 
 pub trait Config: SendTransactionTypes<Call<Self>> + frame_system::Config {
@@ -415,7 +416,9 @@ type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Config>::B
 
 /// Keep track of number of authored blocks per authority, uncles are counted as
 /// well since they're a valid proof of being online.
-impl<T: Config + pallet_authorship::Config> pallet_authorship::EventHandler<ValidatorId<T>, T::BlockNumber> for Module<T>
+impl<
+	T: Config + pallet_authorship::Config,
+> pallet_authorship::EventHandler<ValidatorId<T>, T::BlockNumber> for Module<T>
 {
 	fn note_author(author: ValidatorId<T>) {
 		Self::note_authorship(author);
