@@ -327,16 +327,21 @@ pub(crate) mod tests {
 		set_next_validators, Test, System, Session,
 	};
 	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
+	use frame_support::BasicExternalities;
 
 	type Historical = Module<Test>;
 
 	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		crate::GenesisConfig::<Test> {
-			keys: NEXT_VALIDATORS.with(|l|
-				l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
-			),
-		}.assimilate_storage(&mut t).unwrap();
+		let keys: Vec<_> = NEXT_VALIDATORS.with(|l|
+			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
+		);
+		BasicExternalities::execute_with_storage(&mut t, || {
+			for (ref k, ..) in &keys {
+				frame_system::Module::<Test>::inc_providers(k);
+			}
+		});
+		crate::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
 		sp_io::TestExternalities::new(t)
 	}
 

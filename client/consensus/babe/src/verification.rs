@@ -95,7 +95,11 @@ pub(super) fn check_header<B: BlockT + Sized>(
 
 	match &pre_digest {
 		PreDigest::Primary(primary) => {
-			debug!(target: "babe", "Verifying Primary block");
+			debug!(target: "babe",
+				"Verifying primary block #{} at slot: {}",
+				header.number(),
+				primary.slot_number,
+			);
 
 			check_primary_header::<B>(
 				pre_hash,
@@ -106,7 +110,12 @@ pub(super) fn check_header<B: BlockT + Sized>(
 			)?;
 		},
 		PreDigest::SecondaryPlain(secondary) if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() => {
-			debug!(target: "babe", "Verifying Secondary plain block");
+			debug!(target: "babe",
+				"Verifying secondary plain block #{} at slot: {}",
+				header.number(),
+				secondary.slot_number,
+			);
+
 			check_secondary_plain_header::<B>(
 				pre_hash,
 				secondary,
@@ -115,7 +124,12 @@ pub(super) fn check_header<B: BlockT + Sized>(
 			)?;
 		},
 		PreDigest::SecondaryVRF(secondary) if epoch.config.allowed_slots.is_secondary_vrf_slots_allowed() => {
-			debug!(target: "babe", "Verifying Secondary VRF block");
+			debug!(target: "babe",
+				"Verifying secondary VRF block #{} at slot: {}",
+				header.number(),
+				secondary.slot_number,
+			);
+
 			check_secondary_vrf_header::<B>(
 				pre_hash,
 				secondary,
