@@ -63,7 +63,7 @@ pub enum ExecutionMode {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
-pub struct InnerValue<V> {
+struct InnerValue<V> {
 	/// Current value. None if value has been deleted.
 	value: V,
 	/// The set of extrinsic indices where the values has been changed.
