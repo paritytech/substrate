@@ -40,7 +40,7 @@ macro_rules! decl_tests {
 		use crate::*;
 		use sp_runtime::{FixedPointNumber, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
-			assert_noop, assert_storage_noop, assert_ok, assert_err,
+			assert_noop, assert_storage_noop, assert_ok, assert_err, StorageValue,
 			traits::{
 				LockableCurrency, LockIdentifier, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath
@@ -485,7 +485,7 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
 				assert_eq!(
 					last_event(),
-					Event::balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
+					Event::balances(balances::Event::ReserveRepatriated(1, 2, 41, Status::Free)),
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
@@ -704,7 +704,7 @@ macro_rules! decl_tests {
 
 					assert_eq!(
 						last_event(),
-						Event::balances(RawEvent::Reserved(1, 10)),
+						Event::balances(balances::Event::Reserved(1, 10)),
 					);
 
 					System::set_block_number(3);
@@ -712,7 +712,7 @@ macro_rules! decl_tests {
 
 					assert_eq!(
 						last_event(),
-						Event::balances(RawEvent::Unreserved(1, 5)),
+						Event::balances(balances::Event::Unreserved(1, 5)),
 					);
 
 					System::set_block_number(4);
@@ -721,7 +721,7 @@ macro_rules! decl_tests {
 					// should only unreserve 5
 					assert_eq!(
 						last_event(),
-						Event::balances(RawEvent::Unreserved(1, 5)),
+						Event::balances(balances::Event::Unreserved(1, 5)),
 					);
 				});
 		}
@@ -738,8 +738,8 @@ macro_rules! decl_tests {
 						events(),
 						[
 							Event::system(system::Event::NewAccount(1)),
-							Event::balances(RawEvent::Endowed(1, 100)),
-							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+							Event::balances(balances::Event::Endowed(1, 100)),
+							Event::balances(balances::Event::BalanceSet(1, 100, 0)),
 						]
 					);
 
@@ -748,7 +748,7 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::balances(RawEvent::DustLost(1, 99)),
+							Event::balances(balances::Event::DustLost(1, 99)),
 							Event::system(system::Event::KilledAccount(1))
 						]
 					);
@@ -767,8 +767,8 @@ macro_rules! decl_tests {
 						events(),
 						[
 							Event::system(system::Event::NewAccount(1)),
-							Event::balances(RawEvent::Endowed(1, 100)),
-							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+							Event::balances(balances::Event::Endowed(1, 100)),
+							Event::balances(balances::Event::BalanceSet(1, 100, 0)),
 						]
 					);
 
