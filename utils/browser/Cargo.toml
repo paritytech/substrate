@@ -16,9 +16,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 futures = { version = "0.3", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
-libp2p-wasm-ext = { version = "0.26", features = ["websocket"] }
+libp2p-wasm-ext = { version = "0.27", features = ["websocket"] }
 console_error_panic_hook = "0.1.6"
-console_log = "0.2.0"
 js-sys = "0.3.34"
 wasm-bindgen = "0.2.57"
 wasm-bindgen-futures = "0.4.18"
@@ -28,6 +27,8 @@ sc-informant = { version = "0.8.0", path = "../../client/informant" }
 sc-service = { version = "0.8.0", path = "../../client/service", default-features = false }
 sc-network = { path = "../../client/network", version = "0.8.0"}
 sc-chain-spec = { path = "../../client/chain-spec", version = "2.0.0"}
+sc-telemetry = { path = "../../client/telemetry", version = "2.0.0"}
+sc-tracing = { path = "../../client/tracing", version = "2.0.0"}
 
 # Imported just for the `wasm-bindgen` feature
 getrandom = { version = "0.2", features = ["js"] }

@@ -362,8 +362,8 @@ pub enum PollBlockAnnounceValidation<H> {
 		who: PeerId,
 		/// Was this their new best block?
 		is_best: bool,
-		/// The header of the announcement.
-		header: H,
+		/// The announcement.
+		announce: BlockAnnounce<H>,
 	},
 	/// The announcement header should be imported.
 	ImportHeader {
@@ -371,9 +371,11 @@ pub enum PollBlockAnnounceValidation<H> {
 		who: PeerId,
 		/// Was this their new best block?
 		is_best: bool,
-		/// The header of the announcement.
-		header: H,
+		/// The announcement.
+		announce: BlockAnnounce<H>,
 	},
+	/// The block announcement should be skipped.
+	Skip,
 }
 
 /// Result of [`ChainSync::block_announce_validation`].
@@ -388,15 +390,6 @@ enum PreValidateBlockAnnounce<H> {
 		/// Should the peer be disconnected?
 		disconnect: bool,
 	},
-	/// The announcement does not require further handling.
-	Nothing {
-		/// Who sent the processed block announcement?
-		who: PeerId,
-		/// Was this their new best block?
-		is_best: bool,
-		/// The announcement.
-		announce: BlockAnnounce<H>,
-	},
 	/// The pre-validation was sucessful and the announcement should be
 	/// further processed.
 	Process {
@@ -407,6 +400,8 @@ enum PreValidateBlockAnnounce<H> {
 		/// The announcement.
 		announce: BlockAnnounce<H>,
 	},
+	/// The block announcement should be skipped.
+	Skip,
 }
 
 /// Result of [`ChainSync::on_block_justification`].
@@ -1278,7 +1273,7 @@ impl<B: BlockT> ChainSync<B> {
 					who,
 					hash,
 				);
-				PreValidateBlockAnnounce::Nothing { is_best, who, announce }
+				PreValidateBlockAnnounce::Skip
 			}.boxed());
 			return
 		}
@@ -1295,7 +1290,7 @@ impl<B: BlockT> ChainSync<B> {
 						hash,
 						who,
 					);
-					PreValidateBlockAnnounce::Nothing { is_best, who, announce }
+					PreValidateBlockAnnounce::Skip
 				}.boxed());
 				return
 			}
@@ -1308,7 +1303,7 @@ impl<B: BlockT> ChainSync<B> {
 						hash,
 						who,
 					);
-					PreValidateBlockAnnounce::Nothing { is_best, who, announce }
+					PreValidateBlockAnnounce::Skip
 				}.boxed());
 				return
 			}
@@ -1337,7 +1332,7 @@ impl<B: BlockT> ChainSync<B> {
 				}
 				Err(e) => {
 					error!(target: "sync", "💔 Block announcement validation errored: {}", e);
-					PreValidateBlockAnnounce::Nothing { is_best, who, announce }
+					PreValidateBlockAnnounce::Skip
 				}
 			}
 		}.boxed());
@@ -1393,10 +1388,6 @@ impl<B: BlockT> ChainSync<B> {
 		);
 
 		let (announce, is_best, who) = match pre_validation_result {
-			PreValidateBlockAnnounce::Nothing { is_best, who, announce } => {
-				self.peer_block_announce_validation_finished(&who);
-				return PollBlockAnnounceValidation::Nothing { is_best, who, header: announce.header }
-			},
 			PreValidateBlockAnnounce::Failure { who, disconnect } => {
 				self.peer_block_announce_validation_finished(&who);
 				return PollBlockAnnounceValidation::Failure { who, disconnect }
@@ -1405,12 +1396,12 @@ impl<B: BlockT> ChainSync<B> {
 				self.peer_block_announce_validation_finished(&who);
 				(announce, is_new_best, who)
 			},
+			PreValidateBlockAnnounce::Skip => return PollBlockAnnounceValidation::Skip,
 		};
 
-		let header = announce.header;
-		let number = *header.number();
-		let hash = header.hash();
-		let parent_status = self.block_status(header.parent_hash()).unwrap_or(BlockStatus::Unknown);
+		let number = *announce.header.number();
+		let hash = announce.header.hash();
+		let parent_status = self.block_status(announce.header.parent_hash()).unwrap_or(BlockStatus::Unknown);
 		let known_parent = parent_status != BlockStatus::Unknown;
 		let ancient_parent = parent_status == BlockStatus::InChainPruned;
 
@@ -1419,7 +1410,7 @@ impl<B: BlockT> ChainSync<B> {
 			peer
 		} else {
 			error!(target: "sync", "💔 Called on_block_announce with a bad peer ID");
-			return PollBlockAnnounceValidation::Nothing { is_best, who, header }
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		};
 
 		if is_best {
@@ -1430,7 +1421,7 @@ impl<B: BlockT> ChainSync<B> {
 
 		if let PeerSyncState::AncestorSearch {..} = peer.state {
 			trace!(target: "sync", "Peer state is ancestor search.");
-			return PollBlockAnnounceValidation::Nothing { is_best, who, header }
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		}
 
 		// If the announced block is the best they have and is not ahead of us, our common number
@@ -1438,7 +1429,7 @@ impl<B: BlockT> ChainSync<B> {
 		if is_best {
 			if known && self.best_queued_number >= number {
 				peer.update_common_number(number);
-			} else if header.parent_hash() == &self.best_queued_hash
+			} else if announce.header.parent_hash() == &self.best_queued_hash
 				|| known_parent && self.best_queued_number >= number
 			{
 				peer.update_common_number(number - One::one());
@@ -1452,37 +1443,52 @@ impl<B: BlockT> ChainSync<B> {
 			if let Some(target) = self.fork_targets.get_mut(&hash) {
 				target.peers.insert(who.clone());
 			}
-			return PollBlockAnnounceValidation::Nothing { is_best, who, header }
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		}
 
 		if ancient_parent {
-			trace!(target: "sync", "Ignored ancient block announced from {}: {} {:?}", who, hash, header);
-			return PollBlockAnnounceValidation::Nothing { is_best, who, header }
+			trace!(
+				target: "sync",
+				"Ignored ancient block announced from {}: {} {:?}",
+				who,
+				hash,
+				announce.header,
+			);
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		}
 
 		let requires_additional_data = !self.role.is_light() || !known_parent;
 		if !requires_additional_data {
-			trace!(target: "sync", "Importing new header announced from {}: {} {:?}", who, hash, header);
-			return PollBlockAnnounceValidation::ImportHeader { is_best, header, who }
+			trace!(
+				target: "sync",
+				"Importing new header announced from {}: {} {:?}",
+				who,
+				hash,
+				announce.header,
+			);
+			return PollBlockAnnounceValidation::ImportHeader { is_best, announce, who }
 		}
 
 		if number <= self.best_queued_number {
 			trace!(
 				target: "sync",
-				"Added sync target for block announced from {}: {} {:?}", who, hash, header
+				"Added sync target for block announced from {}: {} {:?}",
+				who,
+				hash,
+				announce.header,
 			);
 			self.fork_targets
 				.entry(hash.clone())
 				.or_insert_with(|| ForkTarget {
 					number,
-					parent_hash: Some(*header.parent_hash()),
+					parent_hash: Some(*announce.header.parent_hash()),
 					peers: Default::default(),
 				})
 				.peers.insert(who.clone());
 		}
 
 		trace!(target: "sync", "Announce validation result is nothing");
-		PollBlockAnnounceValidation::Nothing { is_best, who, header }
+		PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 	}
 
 	/// Call when a peer has disconnected.
