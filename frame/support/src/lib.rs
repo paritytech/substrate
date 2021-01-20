@@ -1377,8 +1377,8 @@ pub mod pallet_prelude {
 /// pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
 /// ```
 ///
-/// NOTE: if the querykind generic parameter is still generic at this stage or is using some type
-/// alias then the generation of the getter might fail. In this case getter can be implemented
+/// NOTE: If the `QueryKind` generic parameter is still generic at this stage or is using some type
+/// alias then the generation of the getter might fail. In this case the getter can be implemented
 /// manually.
 ///
 /// NOTE: The generic `Hasher` must implement the [`StorageHasher`] trait (or the type is not
