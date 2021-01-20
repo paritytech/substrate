@@ -41,7 +41,7 @@ const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
 const CONCLUDED_ROUNDS: &[u8] = b"grandpa_concluded_rounds";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 
-const CURRENT_VERSION: u32 = 2;
+const CURRENT_VERSION: u32 = 3;
 
 /// The voter set state.
 #[derive(Debug, Clone, Encode, Decode)]
@@ -108,6 +108,31 @@ where H: Clone + Debug + PartialEq,
 
 		authority_set.expect("current_authorities is non-empty and weights are non-zero; qed.")
 	}
+}
+
+impl<H, N> Into<AuthoritySet<H, N>> for V2AuthoritySet<H, N>
+where
+	H: Clone + Debug + PartialEq,
+	N: Clone + Debug + Ord,
+{
+	fn into(self) -> AuthoritySet<H, N> {
+		AuthoritySet::new(
+			self.current_authorities,
+			self.set_id,
+			self.pending_standard_changes,
+			self.pending_forced_changes,
+			AuthoritySetChanges::empty(),
+		)
+		.expect("current_authorities is non-empty and weights are non-zero; qed.")
+	}
+}
+
+#[derive(Debug, Clone, Encode, Decode, PartialEq)]
+struct V2AuthoritySet<H, N> {
+	current_authorities: AuthorityList,
+	set_id: u64,
+	pending_standard_changes: ForkTree<H, N, PendingChange<H, N>>,
+	pending_forced_changes: Vec<PendingChange<H, N>>,
 }
 
 pub(crate) fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<Option<T>> {
@@ -260,6 +285,52 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 	Ok(None)
 }
 
+fn migrate_from_version2<Block: BlockT, B, G>(
+	backend: &B,
+	genesis_round: &G,
+) -> ClientResult<Option<(
+	AuthoritySet<Block::Hash, NumberFor<Block>>,
+	VoterSetState<Block>,
+)>>
+where
+	B: AuxStore,
+	G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
+{
+	CURRENT_VERSION.using_encoded(|s|
+		backend.insert_aux(&[(VERSION_KEY, s)], &[])
+	)?;
+
+	if let Some(old_set) = load_decode::<_, V2AuthoritySet<Block::Hash, NumberFor<Block>>>(
+		backend,
+		AUTHORITY_SET_KEY,
+	)? {
+		let new_set: AuthoritySet<Block::Hash, NumberFor<Block>> = old_set.into();
+		backend.insert_aux(&[(AUTHORITY_SET_KEY, new_set.encode().as_slice())], &[])?;
+
+		let set_state = match load_decode::<_, VoterSetState<Block>>(
+			backend,
+			SET_STATE_KEY,
+		)? {
+			Some(state) => state,
+			None => {
+				let state = genesis_round();
+				let base = state.prevote_ghost
+					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
+
+				VoterSetState::live(
+					new_set.set_id,
+					&new_set,
+					base,
+				)
+			}
+		};
+
+		return Ok(Some((new_set, set_state)));
+	}
+
+	Ok(None)
+}
+
 /// Load or initialize persistent data from backend.
 pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	backend: &B,
@@ -294,6 +365,14 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 			}
 		},
 		Some(2) => {
+			if let Some((new_set, set_state)) = migrate_from_version2::<Block, _, _>(backend, &make_genesis_round)? {
+				return Ok(PersistentData {
+					authority_set: new_set.into(),
+					set_state: set_state.into(),
+				});
+			}
+		}
+		Some(3) => {
 			if let Some(set) = load_decode::<_, AuthoritySet<Block::Hash, NumberFor<Block>>>(
 				backend,
 				AUTHORITY_SET_KEY,
@@ -477,7 +556,7 @@ mod test {
 
 		assert_eq!(
 			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
-			Some(2),
+			Some(3),
 		);
 
 		let PersistentData { authority_set, set_state, .. } = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
@@ -569,7 +648,7 @@ mod test {
 
 		assert_eq!(
 			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
-			Some(2),
+			Some(3),
 		);
 
 		let PersistentData { authority_set, set_state, .. } = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
@@ -608,6 +687,75 @@ mod test {
 				),
 				current_rounds,
 			},
+		);
+	}
+
+	#[test]
+	fn load_decode_from_v2_migrates_data_format() {
+		let client = substrate_test_runtime_client::new();
+
+		let authorities = vec![(AuthorityId::default(), 100)];
+		let set_id = 3;
+
+		{
+			let authority_set = V2AuthoritySet::<H256, u64> {
+				current_authorities: authorities.clone(),
+				set_id,
+				pending_standard_changes: ForkTree::new(),
+				pending_forced_changes: Vec::new(),
+			};
+
+			let genesis_state = (H256::random(), 32);
+			let voter_set_state: VoterSetState<sc_network_test::Block> = VoterSetState::live(
+				set_id,
+				&authority_set.clone().into(), // Note the conversion!
+				genesis_state
+			);
+
+			client.insert_aux(
+				&[
+					(AUTHORITY_SET_KEY, authority_set.encode().as_slice()),
+					(SET_STATE_KEY, voter_set_state.encode().as_slice()),
+					(VERSION_KEY, 2u32.encode().as_slice()),
+				],
+				&[],
+			).unwrap();
+		}
+
+		assert_eq!(
+			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
+			Some(2),
+		);
+
+		// should perform the migration
+		load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
+			&client,
+			H256::random(),
+			0,
+			|| unreachable!(),
+		).unwrap();
+
+		assert_eq!(
+			load_decode::<_, u32>(&client, VERSION_KEY).unwrap(),
+			Some(3),
+		);
+
+		let PersistentData { authority_set, set_state, .. } = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
+			&client,
+			H256::random(),
+			0,
+			|| unreachable!(),
+		).unwrap();
+
+		assert_eq!(
+			*authority_set.inner().read(),
+			AuthoritySet::new(
+				authorities.clone(),
+				set_id,
+				ForkTree::new(),
+				Vec::new(),
+				AuthoritySetChanges::empty(),
+			).unwrap(),
 		);
 	}
 
