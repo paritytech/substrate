@@ -35,8 +35,13 @@ pub use self::bandwidth::BandwidthSinks;
 /// If `memory_only` is true, then only communication within the same process are allowed. Only
 /// addresses with the format `/memory/...` are allowed.
 ///
-///`yamux_window_size` is the maximum size of the Yamux receive windows. `None` to leave the
+/// `yamux_window_size` is the maximum size of the Yamux receive windows. `None` to leave the
 /// default (256kiB).
+///
+/// `yamux_maximum_buffer_size` is the maximum allowed size of the Yamux buffer. This should be
+/// set either to the maximum of all the maximum allowed sizes of messages frames of all
+/// high-level protocols combined, or to some generously high value if you are sure that a maximum
+/// size is enforced on all high-level protocols.
 ///
 /// Returns a `BandwidthSinks` object that allows querying the average bandwidth produced by all
 /// the connections spawned with this transport.
@@ -45,6 +50,7 @@ pub fn build_transport(
 	memory_only: bool,
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
 	yamux_window_size: Option<u32>,
+	yamux_maximum_buffer_size: usize,
 ) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>) {
 	// Build the base layer of the transport.
 	let transport = if let Some(t) = wasm_external_transport {
@@ -101,6 +107,7 @@ pub fn build_transport(
 		// Enable proper flow-control: window updates are only sent when
 		// buffered data has been consumed.
 		yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::on_read());
+		yamux_config.set_max_buffer_size(yamux_maximum_buffer_size);
 
 		if let Some(yamux_window_size) = yamux_window_size {
 			yamux_config.set_receive_window_size(yamux_window_size);

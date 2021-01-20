@@ -979,6 +979,9 @@ impl pallet_lottery::Config for Runtime {
 parameter_types! {
 	pub const AssetDepositBase: Balance = 100 * DOLLARS;
 	pub const AssetDepositPerZombie: Balance = 1 * DOLLARS;
+	pub const StringLimit: u32 = 50;
+	pub const MetadataDepositBase: Balance = 10 * DOLLARS;
+	pub const MetadataDepositPerByte: Balance = 1 * DOLLARS;
 }
 
 impl pallet_assets::Config for Runtime {
@@ -989,6 +992,9 @@ impl pallet_assets::Config for Runtime {
 	type ForceOrigin = EnsureRoot<AccountId>;
 	type AssetDepositBase = AssetDepositBase;
 	type AssetDepositPerZombie = AssetDepositPerZombie;
+	type StringLimit = StringLimit;
+	type MetadataDepositBase = MetadataDepositBase;
+	type MetadataDepositPerByte = MetadataDepositPerByte;
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
 }
 
