@@ -492,34 +492,6 @@ pub mod pallet {
 	}
 }
 
-// todo: do we need the subtrait?
-// pub trait Subtrait<I: 'static = DefaultInstance>: frame_system::Config {
-// 	/// The balance of an account.
-// 	type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
-// 		MaybeSerializeDeserialize + Debug;
-//
-// 	/// The minimum amount required to keep an account open.
-// 	type ExistentialDeposit: Get<Self::Balance>;
-//
-// 	/// The means of storing the balances of an account.
-// 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
-//
-// 	/// Weight information for the extrinsics in this pallet.
-// 	type WeightInfo: WeightInfo;
-//
-// 	/// The maximum number of locks that should exist on an account.
-// 	/// Not strictly enforced, but used for weight estimation.
-// 	type MaxLocks: Get<u32>;
-// }
-//
-// impl<T: Config<I>, I: 'static> Subtrait<I> for T {
-// 	type Balance = T::Balance;
-// 	type ExistentialDeposit = T::ExistentialDeposit;
-// 	type AccountStore = T::AccountStore;
-// 	type WeightInfo = <T as Config<I>>::WeightInfo;
-// 	type MaxLocks = T::MaxLocks;
-// }
-
 /// Simplified reasons for withdrawing balance.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
 pub enum Reasons {
