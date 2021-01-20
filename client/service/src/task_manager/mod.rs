@@ -233,7 +233,7 @@ pub struct TaskManager {
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
 	/// task fails.
 	children: Vec<TaskManager>,
-	/// A telemetry handle used to enter the telemetry span when a task is spawned.
+	/// A `TelemetrySpan` used to enter the telemetry span when a task is spawned.
 	telemetry_span: Option<TelemetrySpan>,
 }
 
