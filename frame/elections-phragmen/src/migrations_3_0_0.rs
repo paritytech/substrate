@@ -93,26 +93,27 @@ type Voting<T: V2ToV3> = StorageMap<__Voting, Twox64Concat, T::AccountId, Voter<
 ///
 /// Be aware that this migration is intended to be used only for the mentioned versions. Use
 /// with care and run at your own risk.
-pub fn apply<T: V2ToV3>(
-	old_voter_bond: T::Balance,
-	old_candidacy_bond: T::Balance,
-) -> Weight {
+pub fn apply<T: V2ToV3>(old_voter_bond: T::Balance, old_candidacy_bond: T::Balance) -> Weight {
 	let maybe_storage_version = <T::Module as GetPalletVersion>::storage_version();
+	frame_support::debug::info!(
+		"Running migration for elections-phragmen with storage version {:?}",
+		maybe_storage_version
+	);
 	match maybe_storage_version {
 		Some(storage_version) if storage_version <= PalletVersion::new(2, 0, 0) => {
 			migrate_voters_to_recorded_deposit::<T>(old_voter_bond);
-			migrate_candidates_to_recorded_deposit::<T>(
-				old_candidacy_bond,
-			);
-			migrate_runners_up_to_recorded_deposit::<T>(
-				old_candidacy_bond,
-			);
-			migrate_members_to_recorded_deposit::<T>(
-				old_candidacy_bond,
-			);
+			migrate_candidates_to_recorded_deposit::<T>(old_candidacy_bond);
+			migrate_runners_up_to_recorded_deposit::<T>(old_candidacy_bond);
+			migrate_members_to_recorded_deposit::<T>(old_candidacy_bond);
 			Weight::max_value()
 		}
-		_ => 0,
+		_ => {
+			frame_support::debug::warn!(
+				"Attempted to apply migration to V3 but failed because storage version is {:?}",
+				maybe_storage_version
+			);
+			0
+		},
 	}
 }
 
@@ -120,11 +121,10 @@ pub fn apply<T: V2ToV3>(
 pub fn migrate_voters_to_recorded_deposit<T: V2ToV3>(old_deposit: T::Balance) {
 	<Voting<T>>::translate::<(T::Balance, Vec<T::AccountId>), _>(
 		|_who, (stake, votes)| {
-			let deposit = old_deposit;
 			Some(Voter {
 				votes,
 				stake,
-				deposit,
+				deposit: old_deposit,
 			})
 		},
 	);
@@ -154,7 +154,7 @@ pub fn migrate_candidates_to_recorded_deposit<T: V2ToV3>(old_deposit: T::Balance
 }
 
 /// Migrate all members to recorded deposit.
-pub fn migrate_members_to_recorded_deposit<T: V2ToV3>(deposit: T::Balance) {
+pub fn migrate_members_to_recorded_deposit<T: V2ToV3>(old_deposit: T::Balance) {
 	let _ = <Members<T>>::translate::<Vec<(T::AccountId, T::Balance)>, _>(
 		|maybe_old_members| {
 			maybe_old_members.map(|old_members| {
@@ -164,7 +164,7 @@ pub fn migrate_members_to_recorded_deposit<T: V2ToV3>(deposit: T::Balance) {
 					.map(|(who, stake)| SeatHolder {
 						who,
 						stake,
-						deposit,
+						deposit: old_deposit,
 					})
 					.collect::<Vec<_>>()
 			})
@@ -173,7 +173,7 @@ pub fn migrate_members_to_recorded_deposit<T: V2ToV3>(deposit: T::Balance) {
 }
 
 /// Migrate all runners-up to recorded deposit.
-pub fn migrate_runners_up_to_recorded_deposit<T: V2ToV3>(deposit: T::Balance) {
+pub fn migrate_runners_up_to_recorded_deposit<T: V2ToV3>(old_deposit: T::Balance) {
 	let _ = <RunnersUp<T>>::translate::<Vec<(T::AccountId, T::Balance)>, _>(
 		|maybe_old_runners_up| {
 			maybe_old_runners_up.map(|old_runners_up| {
@@ -186,7 +186,7 @@ pub fn migrate_runners_up_to_recorded_deposit<T: V2ToV3>(deposit: T::Balance) {
 					.map(|(who, stake)| SeatHolder {
 						who,
 						stake,
-						deposit,
+						deposit: old_deposit,
 					})
 					.collect::<Vec<_>>()
 			})
