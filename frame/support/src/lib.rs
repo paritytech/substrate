@@ -2017,7 +2017,7 @@ pub mod pallet_prelude {
 /// * storage items defined with [`pallet`] use the name of the pallet provided by [`PalletInfo::name`]
 /// 	as `pallet_prefix` (in `decl_storage`, storage items used the `pallet_prefix` given as input of
 /// 	`decl_storage` with the syntax `as Example`).
-/// 	Thus runtime using the pallet must be careful about this change.
+/// 	Thus a runtime using the pallet must be careful with this change.
 /// 	To handle this change:
 /// 	* either ensure that the name of the pallet given to `construct_runtime!` is the same
 /// 		as the name the pallet was giving to `decl_storage`,
