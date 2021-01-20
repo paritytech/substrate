@@ -60,9 +60,8 @@ impl LocalStorage {
 
 impl sp_core::offchain::OffchainStorage for LocalStorage {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = Transaction::new();
-		tx.set(columns::OFFCHAIN, &key, value);
+		tx.set(columns::OFFCHAIN, &concatenate_prefix_and_key(prefix, key), value);
 
 		if let Err(err) = self.db.commit(tx) {
 			error!("Error setting on local storage: {}", err)
@@ -70,9 +69,8 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 	}
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = Transaction::new();
-		tx.remove(columns::OFFCHAIN, &key);
+		tx.remove(columns::OFFCHAIN, &concatenate_prefix_and_key(prefix, key));
 
 		if let Err(err) = self.db.commit(tx) {
 			error!("Error removing on local storage: {}", err)
@@ -90,7 +88,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
-		let key: Vec<u8> = prefix.iter().chain(item_key).cloned().collect();
+		let key = concatenate_prefix_and_key(prefix, item_key);
 		let key_lock = {
 			let mut locks = self.locks.lock();
 			locks.entry(key.clone()).or_default().clone()
