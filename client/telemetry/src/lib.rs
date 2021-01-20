@@ -167,154 +167,153 @@ impl TelemetryWorker {
 		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
 		let mut node_pool: HashMap<Multiaddr, _> = HashMap::new();
 
-		// initialize the telemetry nodes and register new notifiers
-		async fn process_register(
-			input: Option<Register>,
-			node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
-			node_map: &mut HashMap<Id, Vec<(u8, Multiaddr)>>,
-			transport: WsTrans,
-		) {
-			let input = if let Some(x) = input {
-				x
-			} else {
-				log::error!(
-					target: "telemetry",
-					"Unexpected end of stream. This is a bug.",
-				);
-				return;
-			};
-
-			match input {
-				Register::Telemetry {
-					id,
-					endpoints,
-					connection_message,
-				} => {
-					let endpoints = endpoints.0;
-
-					let connection_message = match serde_json::to_value(&connection_message) {
-						Ok(serde_json::Value::Object(mut value)) => {
-							value.insert("msg".into(), "system.connected".into());
-							let mut obj = serde_json::Map::new();
-							obj.insert("id".to_string(), id.into_u64().into());
-							obj.insert("payload".to_string(), value.into());
-							Some(obj)
-						}
-						Ok(_) => {
-							unreachable!("ConnectionMessage always serialize to an object; qed")
-						}
-						Err(err) => {
-							log::error!(
-								target: "telemetry",
-								"Could not serialize connection message: {}",
-								err,
-							);
-							None
-						}
-					};
-
-					for (addr, verbosity) in endpoints {
-						node_map
-							.entry(id.clone())
-							.or_default()
-							.push((verbosity, addr.clone()));
-
-						let node = node_pool.entry(addr.clone()).or_insert_with(|| {
-							Node::new(transport.clone(), addr.clone(), Vec::new(), Vec::new())
-						});
-
-						node.connection_messages.extend(connection_message.clone());
-					}
-				}
-				Register::Notifier {
-					addresses,
-					connection_notifier,
-				} => {
-					for addr in addresses {
-						if let Some(node) = node_pool.get_mut(&addr) {
-							node.telemetry_connection_notifier
-								.push(connection_notifier.clone());
-						} else {
-							log::error!(
-								target: "telemetry",
-								"Received connection notifier for unknown node ({}). This is a bug.",
-								addr,
-							);
-						}
-					}
-				}
-			}
-		}
-
-		// dispatch messages to the telemetry nodes
-		async fn process_message(
-			input: Option<TelemetryMessage>,
-			node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
-			node_map: &HashMap<Id, Vec<(u8, Multiaddr)>>,
-		) {
-			let (id, verbosity, message) = if let Some(x) = input {
-				x
-			} else {
-				log::error!(
-					target: "telemetry",
-					"Unexpected end of stream. This is a bug.",
-				);
-				return;
-			};
-
-			let nodes = if let Some(nodes) = node_map.get(&id) {
-				nodes
-			} else {
-				// This is a normal error because the telemetry span is entered before the telemetry
-				// is initialized so it is possible that some messages in the beginning don't get
-				// through.
-				log::trace!(
-					target: "telemetry",
-					"Received telemetry log for unknown id ({:?}): {}",
-					id,
-					message,
-				);
-				return;
-			};
-
-			for (node_max_verbosity, addr) in nodes {
-				if verbosity > *node_max_verbosity {
-					log::trace!(
-						target: "telemetry",
-						"Skipping {} for log entry with verbosity {:?}",
-						addr,
-						verbosity,
-					);
-					return;
-				}
-
-				if let Some(node) = node_pool.get_mut(&addr) {
-					let _ = node.send(message.clone()).await;
-				} else {
-					log::error!(
-						target: "telemetry",
-						"Received message for unknown node ({}). This is a bug. \
-						Message sent: {}",
-						addr,
-						message,
-					);
-				}
-			}
-		}
-
 		loop {
 			futures::select! {
-				message = message_receiver.next() => process_message(
+				message = message_receiver.next() => Self::process_message(
 					message,
 					&mut node_pool,
 					&node_map,
 				).await,
-				init_payload = register_receiver.next() => process_register(
+				init_payload = register_receiver.next() => Self::process_register(
 					init_payload,
 					&mut node_pool,
 					&mut node_map,
 					transport.clone(),
 				).await,
+			}
+		}
+	}
+
+	async fn process_register(
+		input: Option<Register>,
+		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
+		node_map: &mut HashMap<Id, Vec<(u8, Multiaddr)>>,
+		transport: WsTrans,
+	) {
+		let input = if let Some(x) = input {
+			x
+		} else {
+			log::error!(
+				target: "telemetry",
+				"Unexpected end of stream. This is a bug.",
+			);
+			return;
+		};
+
+		match input {
+			Register::Telemetry {
+				id,
+				endpoints,
+				connection_message,
+			} => {
+				let endpoints = endpoints.0;
+
+				let connection_message = match serde_json::to_value(&connection_message) {
+					Ok(serde_json::Value::Object(mut value)) => {
+						value.insert("msg".into(), "system.connected".into());
+						let mut obj = serde_json::Map::new();
+						obj.insert("id".to_string(), id.into_u64().into());
+						obj.insert("payload".to_string(), value.into());
+						Some(obj)
+					}
+					Ok(_) => {
+						unreachable!("ConnectionMessage always serialize to an object; qed")
+					}
+					Err(err) => {
+						log::error!(
+							target: "telemetry",
+							"Could not serialize connection message: {}",
+							err,
+						);
+						None
+					}
+				};
+
+				for (addr, verbosity) in endpoints {
+					node_map
+						.entry(id.clone())
+						.or_default()
+						.push((verbosity, addr.clone()));
+
+					let node = node_pool.entry(addr.clone()).or_insert_with(|| {
+						Node::new(transport.clone(), addr.clone(), Vec::new(), Vec::new())
+					});
+
+					node.connection_messages.extend(connection_message.clone());
+				}
+			}
+			Register::Notifier {
+				addresses,
+				connection_notifier,
+			} => {
+				for addr in addresses {
+					if let Some(node) = node_pool.get_mut(&addr) {
+						node.telemetry_connection_notifier
+							.push(connection_notifier.clone());
+					} else {
+						log::error!(
+							target: "telemetry",
+							"Received connection notifier for unknown node ({}). This is a bug.",
+							addr,
+						);
+					}
+				}
+			}
+		}
+	}
+
+	// dispatch messages to the telemetry nodes
+	async fn process_message(
+		input: Option<TelemetryMessage>,
+		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
+		node_map: &HashMap<Id, Vec<(u8, Multiaddr)>>,
+	) {
+		let (id, verbosity, message) = if let Some(x) = input {
+			x
+		} else {
+			log::error!(
+				target: "telemetry",
+				"Unexpected end of stream. This is a bug.",
+			);
+			return;
+		};
+
+		let nodes = if let Some(nodes) = node_map.get(&id) {
+			nodes
+		} else {
+			// This is a normal error because the telemetry span is entered before the telemetry
+			// is initialized so it is possible that some messages in the beginning don't get
+			// through.
+			log::trace!(
+				target: "telemetry",
+				"Received telemetry log for unknown id ({:?}): {}",
+				id,
+				message,
+			);
+			return;
+		};
+
+		for (node_max_verbosity, addr) in nodes {
+			if verbosity > *node_max_verbosity {
+				log::trace!(
+					target: "telemetry",
+					"Skipping {} for log entry with verbosity {:?}",
+					addr,
+					verbosity,
+				);
+				return;
+			}
+
+			if let Some(node) = node_pool.get_mut(&addr) {
+				let _ = node.send(message.clone()).await;
+			} else {
+				log::error!(
+					target: "telemetry",
+					"Received message for unknown node ({}). This is a bug. \
+					Message sent: {}",
+					addr,
+					message,
+				);
 			}
 		}
 	}
