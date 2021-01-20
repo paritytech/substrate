@@ -171,8 +171,8 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 				events(),
 				[
 					Event::system(system::Event::NewAccount(1)),
-					Event::balances(RawEvent::Endowed(1, 100)),
-					Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+					Event::balances(Event::Endowed(1, 100)),
+					Event::balances(Event::BalanceSet(1, 100, 0)),
 				]
 			);
 
@@ -186,7 +186,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::balances(RawEvent::DustLost(1, 1)),
+					Event::balances(Event::DustLost(1, 1)),
 					Event::system(system::Event::KilledAccount(1))
 				]
 			);

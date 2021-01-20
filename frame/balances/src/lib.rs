@@ -287,7 +287,7 @@ pub mod pallet {
 			T::WeightInfo::set_balance_creating() // Creates a new account.
 				.max(T::WeightInfo::set_balance_killing()) // Kills an existing account.
 		)]
-		fn set_balance(
+		pub(crate) fn set_balance(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] new_free: T::Balance,
