@@ -116,7 +116,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 	}
 }
 
-/// Cocatenate the prefix and key to create an offchain key in the db.
+/// Concatenate the prefix and key to create an offchain key in the db.
 pub(crate) fn concatenate_prefix_and_key(prefix: &[u8], key: &[u8]) -> Vec<u8> {
 	prefix
 		.iter()
