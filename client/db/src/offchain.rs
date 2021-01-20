@@ -43,7 +43,6 @@ impl std::fmt::Debug for LocalStorage {
 
 impl LocalStorage {
 	/// Create new offchain storage for tests (backed by memorydb)
-	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test() -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
@@ -81,8 +80,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		self.db.get(columns::OFFCHAIN, &key)
+		self.db.get(columns::OFFCHAIN, &concatenate_prefix_and_key(prefix, key))
 	}
 
 	fn compare_and_set(
@@ -120,6 +118,16 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		}
 		is_set
 	}
+}
+
+/// Cocatenate the prefix and key to create an offchain key in the db.
+pub(crate) fn concatenate_prefix_and_key(prefix: &[u8], key: &[u8]) -> Vec<u8> {
+	prefix
+		.iter()
+		.chain(std::iter::once(&b'/'))
+		.chain(key.into_iter())
+		.cloned()
+		.collect()
 }
 
 #[cfg(test)]
