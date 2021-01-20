@@ -123,7 +123,7 @@ mod tests {
 		}
 
 		fn copyright_start_year() -> i32 {
-			2020
+			2021
 		}
 
 		fn author() -> String {
