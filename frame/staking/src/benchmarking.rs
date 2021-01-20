@@ -494,9 +494,9 @@ benchmarks! {
 		// `compact.len()`.
 		let a in 200 .. 400;
 		// number of winners, also ValidatorCount. This will be equal to `winner.len()`.
-		let w in 16 .. 100;
+		let w in 24 .. 100;
 
-		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
+		assert!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
 
 		let winners = create_validators_with_nominators_for_era::<T>(
 			v,
@@ -557,7 +557,7 @@ benchmarks! {
 		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
 	}
 
-	// same as submit_solution_initial but we place a very weak solution on chian first.
+	// same as submit_solution_initial but we place a very weak solution on chain first.
 	submit_solution_better {
 		// number of validator intention.
 		let v in 200 .. 400;
@@ -566,9 +566,9 @@ benchmarks! {
 		// number of assignments. Basically, number of active nominators.
 		let a in 200 .. 400;
 		// number of winners, also ValidatorCount.
-		let w in 16 .. 100;
+		let w in 24 .. 100;
 
-		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
+		assert!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
 
 		let winners = create_validators_with_nominators_for_era::<T>(
 			v,
@@ -836,9 +836,7 @@ mod tests {
 			assert_ok!(test_benchmark_do_slash::<Test>());
 			assert_ok!(test_benchmark_payout_all::<Test>());
 			// only run one of them to same time on the CI. ignore the other two.
-			assert_ok!(test_benchmark_submit_solution_initial::<Test>());
 			assert_ok!(test_benchmark_submit_solution_better::<Test>());
-			assert_ok!(test_benchmark_submit_solution_weaker::<Test>());
 		});
 	}
 
@@ -846,7 +844,7 @@ mod tests {
 	#[ignore]
 	fn test_benchmarks_offchain() {
 		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
-			assert_ok!(test_benchmark_submit_solution_better::<Test>());
+			assert_ok!(test_benchmark_submit_solution_initial::<Test>());
 			assert_ok!(test_benchmark_submit_solution_weaker::<Test>());
 		});
 	}
