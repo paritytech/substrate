@@ -46,7 +46,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;
 
-	/// Associated async backend.
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error>;
 
