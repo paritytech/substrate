@@ -452,6 +452,7 @@ pub mod pallet {
 
 	/// Event for the System pallet.
 	#[pallet::event]
+	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
 		/// An extrinsic completed successfully. \[info\]
 		ExtrinsicSuccess(DispatchInfo),
