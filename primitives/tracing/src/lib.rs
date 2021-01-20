@@ -91,8 +91,6 @@
 mod types;
 
 #[cfg(feature = "std")]
-use tracing;
-
 pub use tracing::{
 	debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
 	span, event, Level, Span,
