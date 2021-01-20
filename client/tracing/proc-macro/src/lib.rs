@@ -120,16 +120,16 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 
 	let crate_name = if std::env::var("CARGO_PKG_NAME")
 		.expect("cargo env var always there when compiling; qed")
-		== "sc-cli"
+		== "sc-tracing"
 	{
-		Ident::new("sc_cli", Span::call_site().into())
+		Ident::from(Ident::new("sc_tracing", Span::call_site()))
 	} else {
-		let crate_name = match crate_name("sc-cli") {
+		let crate_name = match crate_name("sc-tracing") {
 			Ok(x) => x,
 			Err(err) => return Error::new(Span::call_site(), err).to_compile_error().into(),
 		};
 
-		Ident::new(&crate_name, Span::call_site().into())
+		Ident::new(&crate_name, Span::call_site())
 	};
 
 	let ItemFn {
@@ -143,7 +143,7 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 		#(#attrs)*
 		#vis #sig {
 			let span = #crate_name::tracing::info_span!(
-				#crate_name::PREFIX_LOG_SPAN,
+				#crate_name::logging::PREFIX_LOG_SPAN,
 				name = #name,
 			);
 			let _enter = span.enter();

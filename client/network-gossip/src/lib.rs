@@ -98,7 +98,7 @@ pub trait Network<B: BlockT> {
 	///
 	/// Note: this method isn't strictly related to gossiping and should eventually be moved
 	/// somewhere else.
-	fn announce(&self, block: B::Hash, associated_data: Vec<u8>);
+	fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>);
 }
 
 impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
@@ -136,7 +136,7 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 		NetworkService::write_notification(self, who, protocol, message)
 	}
 
-	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
+	fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>) {
 		NetworkService::announce_block(self, block, associated_data)
 	}
 }

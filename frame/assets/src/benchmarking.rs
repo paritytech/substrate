@@ -18,7 +18,6 @@
 //! Assets pallet benchmarking.
 
 use super::*;
-use sp_std::prelude::*;
 use sp_runtime::traits::Bounded;
 use frame_system::RawOrigin as SystemOrigin;
 use frame_benchmarking::{benchmarks, account, whitelisted_caller};
@@ -154,14 +153,32 @@ benchmarks! {
 
 	thaw {
 		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
-		assert!(Assets::<T>::freeze(
+		Assets::<T>::freeze(
 			SystemOrigin::Signed(caller.clone()).into(),
 			Default::default(),
-			caller_lookup.clone()
-		).is_ok());
+			caller_lookup.clone(),
+		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup)
 	verify {
 		assert_last_event::<T>(RawEvent::Thawed(Default::default(), caller).into());
+	}
+
+	freeze_asset {
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
+	}: _(SystemOrigin::Signed(caller.clone()), Default::default())
+	verify {
+		assert_last_event::<T>(RawEvent::AssetFrozen(Default::default()).into());
+	}
+
+	thaw_asset {
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
+		Assets::<T>::freeze_asset(
+			SystemOrigin::Signed(caller.clone()).into(),
+			Default::default(),
+		)?;
+	}: _(SystemOrigin::Signed(caller.clone()), Default::default())
+	verify {
+		assert_last_event::<T>(RawEvent::AssetThawed(Default::default()).into());
 	}
 
 	transfer_ownership {
@@ -195,6 +212,21 @@ benchmarks! {
 	}: _(SystemOrigin::Signed(caller), Default::default(), max_zombies)
 	verify {
 		assert_last_event::<T>(RawEvent::MaxZombiesChanged(Default::default(), max_zombies).into());
+	}
+
+	set_metadata {
+		let n in 0 .. T::StringLimit::get();
+		let s in 0 .. T::StringLimit::get();
+
+		let name = vec![0u8; n as usize];
+		let symbol = vec![0u8; s as usize];
+		let decimals = 12;
+
+		let (caller, _) = create_default_asset::<T>(10);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+	}: _(SystemOrigin::Signed(caller), Default::default(), name.clone(), symbol.clone(), decimals)
+	verify {
+		assert_last_event::<T>(RawEvent::MetadataSet(Default::default(), name, symbol, decimals).into());
 	}
 }
 
@@ -274,6 +306,20 @@ mod tests {
 	}
 
 	#[test]
+	fn freeze_asset() {
+		new_test_ext().execute_with(|| {
+			assert!(test_benchmark_freeze_asset::<Test>().is_ok());
+		});
+	}
+
+	#[test]
+	fn thaw_asset() {
+		new_test_ext().execute_with(|| {
+			assert!(test_benchmark_thaw_asset::<Test>().is_ok());
+		});
+	}
+
+	#[test]
 	fn transfer_ownership() {
 		new_test_ext().execute_with(|| {
 			assert!(test_benchmark_transfer_ownership::<Test>().is_ok());
@@ -291,6 +337,13 @@ mod tests {
 	fn set_max_zombies() {
 		new_test_ext().execute_with(|| {
 			assert!(test_benchmark_set_max_zombies::<Test>().is_ok());
+		});
+	}
+
+	#[test]
+	fn set_metadata() {
+		new_test_ext().execute_with(|| {
+			assert!(test_benchmark_set_metadata::<Test>().is_ok());
 		});
 	}
 }
