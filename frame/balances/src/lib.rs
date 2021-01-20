@@ -160,7 +160,7 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
-	StorageValue, Parameter,
+	ensure, Parameter,
 	traits::{
 		Currency, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
@@ -193,13 +193,13 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The balance of an account.
 		type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
-		MaybeSerializeDeserialize + Debug;
+			MaybeSerializeDeserialize + Debug;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
 		type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The minimum amount required to keep an account open.
 		#[pallet::constant]
@@ -283,8 +283,9 @@ pub mod pallet {
 		///     - Killing: 35.11 µs
 		/// - DB Weight: 1 Read, 1 Write to `who`
 		/// # </weight>
-		#[weight(T::WeightInfo::set_balance_creating() // Creates a new account.
-		.max(T::WeightInfo::set_balance_killing()) // Kills an existing account.
+		#[pallet::weight(
+			T::WeightInfo::set_balance_creating() // Creates a new account.
+				.max(T::WeightInfo::set_balance_killing()) // Kills an existing account.
 		)]
 		fn set_balance(
 			origin: OriginFor<T>,
@@ -318,7 +319,7 @@ pub mod pallet {
 
 				(account.free, account.reserved)
 			})?;
-			Self::deposit_event(RawEvent::BalanceSet(who, free, reserved));
+			Self::deposit_event(Event::BalanceSet(who, free, reserved));
 			Ok(().into())
 		}
 
@@ -368,9 +369,8 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId")]
-	#[pallet::metadata(T::Balance = "Balance")]
-	pub enum Event<T: Config<I>, I: 'static> {
+	#[pallet::metadata(T::AccountId = "AccountId", T::Balance = "Balance")]
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// An account was created with some free balance. \[account, free_balance\]
 		Endowed(T::AccountId, T::Balance),
 		/// An account was removed whose balance was non-zero but below ExistentialDeposit,
@@ -393,7 +393,7 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
-	pub enum Error {
+	pub enum Error<T, I = ()> {
 		/// Vesting balance too high to send value
 		VestingBalance,
 		/// Account liquidity restrictions prevent withdrawal
@@ -459,14 +459,14 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			let total = config.balances
+			let total = self.balances
 				.iter()
 				.fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n);
 			<TotalIssuance<T, I>>::put(total);
 
-			<Releases>::put(Releases::V2_0_0);
+			<StorageVersion<T, I>>::put(Releases::V2_0_0);
 
-			for (_, balance) in &config.balances {
+			for (_, balance) in &self.balances {
 				assert!(
 					*balance >= <T as Config<I>>::ExistentialDeposit::get(),
 					"the balance of any account should always be at least the existential deposit.",
@@ -474,11 +474,11 @@ pub mod pallet {
 			}
 
 			// ensure no duplicates exist.
-			let endowed_accounts = config.balances.iter().map(|(x, _)| x).cloned().collect::<std::collections::BTreeSet<_>>();
+			let endowed_accounts = self.balances.iter().map(|(x, _)| x).cloned().collect::<std::collections::BTreeSet<_>>();
 
-			assert!(endowed_accounts.len() == config.balances.len(), "duplicate balances in genesis.");
+			assert!(endowed_accounts.len() == self.balances.len(), "duplicate balances in genesis.");
 
-			for &(ref who, free) in config.balances.iter() {
+			for &(ref who, free) in self.balances.iter() {
 				assert!(T::AccountStore::insert(who, AccountData { free, ..Default::default() }).is_ok());
 			}
 		}
@@ -659,7 +659,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if total < T::ExistentialDeposit::get() {
 			if !total.is_zero() {
 				T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
-				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
+				Self::deposit_event(Event::DustLost(who.clone(), total));
 			}
 			None
 		} else {
@@ -705,7 +705,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			})
 		}).map(|(maybe_endowed, result)| {
 			if let Some(endowed) = maybe_endowed {
-				Self::deposit_event(RawEvent::Endowed(who.clone(), endowed));
+				Self::deposit_event(Event::Endowed(who.clone(), endowed));
 			}
 			result
 		})
@@ -762,8 +762,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 // of the inner member.
 mod imbalances {
 	use super::{
-		result, DefaultInstance, Imbalance, Config, Zero, Instance, Saturating,
-		StorageValue, TryDrop, RuntimeDebug,
+		result, Imbalance, Config, Zero, Saturating,
+		TryDrop, RuntimeDebug,
 	};
 	use sp_std::mem;
 
@@ -1030,7 +1030,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 		})?;
 
 		// Emit transfer event.
-		Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value));
+		Self::deposit_event(Event::Transfer(transactor.clone(), dest.clone(), value));
 
 		Ok(())
 	}
@@ -1231,7 +1231,7 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 			Self::ensure_can_withdraw(&who, value.clone(), WithdrawReasons::RESERVE, account.free)
 		})?;
 
-		Self::deposit_event(RawEvent::Reserved(who.clone(), value));
+		Self::deposit_event(Event::Reserved(who.clone(), value));
 		Ok(())
 	}
 
@@ -1259,7 +1259,7 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 			}
 		};
 
-		Self::deposit_event(RawEvent::Unreserved(who.clone(), actual.clone()));
+		Self::deposit_event(Event::Unreserved(who.clone(), actual.clone()));
 		value - actual
 	}
 
@@ -1334,7 +1334,7 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 			})
 		})?;
 
-		Self::deposit_event(RawEvent::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual, status));
+		Self::deposit_event(Event::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual, status));
 		Ok(value - actual)
 	}
 }
