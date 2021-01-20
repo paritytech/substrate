@@ -260,7 +260,7 @@ impl GlobalLoggerBuilder {
 			// If profiling is activated, we require `trace` logging.
 			let max_level = Some(log::LevelFilter::Trace);
 
-			if !self.log_reloading {
+			if self.log_reloading {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
 					&format!("{},{},sc_tracing=trace", self.pattern, profiling_targets),
 					max_level,
@@ -290,7 +290,7 @@ impl GlobalLoggerBuilder {
 				Ok(telemetry_worker)
 			}
 		} else {
-			if !self.log_reloading {
+			if self.log_reloading {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
 					&self.pattern,
 					None,
