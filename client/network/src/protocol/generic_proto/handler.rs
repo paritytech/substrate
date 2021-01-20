@@ -113,7 +113,7 @@ const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 pub struct NotifsHandlerProto {
 	/// Name of protocols, prototypes for upgrades for inbound substreams, and the message we
 	/// send or respond with in the handshake.
-	protocols: Vec<(Cow<'static, str>, NotificationsIn, Arc<RwLock<Vec<u8>>>)>,
+	protocols: Vec<(Cow<'static, str>, NotificationsIn, Arc<RwLock<Vec<u8>>>, u64)>,
 
 	/// Configuration for the legacy protocol upgrade.
 	legacy_protocol: RegisteredProtocol,
@@ -160,6 +160,9 @@ struct Protocol {
 
 	/// Handshake to send when opening a substream or receiving an open request.
 	handshake: Arc<RwLock<Vec<u8>>>,
+
+	/// Maximum allowed size of individual notifications.
+	max_notification_size: u64,
 
 	/// Current state of the substreams for this protocol.
 	state: State,
@@ -226,7 +229,7 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 
 	fn inbound_protocol(&self) -> SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol> {
 		let protocols = self.protocols.iter()
-			.map(|(_, p, _)| p.clone())
+			.map(|(_, p, _, _)| p.clone())
 			.collect::<UpgradeCollec<_>>();
 
 		SelectUpgrade::new(protocols, self.legacy_protocol.clone())
@@ -234,14 +237,15 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 
 	fn into_handler(self, peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
 		NotifsHandler {
-			protocols: self.protocols.into_iter().map(|(name, in_upgrade, handshake)| {
+			protocols: self.protocols.into_iter().map(|(name, in_upgrade, handshake, max_size)| {
 				Protocol {
 					name,
 					in_upgrade,
 					handshake,
 					state: State::Closed {
 						pending_opening: false,
-					}
+					},
+					max_notification_size: max_size,
 				}
 			}).collect(),
 			peer_id: peer_id.clone(),
@@ -467,18 +471,19 @@ pub enum NotifsHandlerError {
 impl NotifsHandlerProto {
 	/// Builds a new handler.
 	///
-	/// `list` is a list of notification protocols names, and the message to send as part of the
-	/// handshake. At the moment, the message is always the same whether we open a substream
-	/// ourselves or respond to handshake from the remote.
+	/// `list` is a list of notification protocols names, the message to send as part of the
+	/// handshake, and the maximum allowed size of a notification. At the moment, the message
+	/// is always the same whether we open a substream ourselves or respond to handshake from
+	/// the remote.
 	pub fn new(
 		legacy_protocol: RegisteredProtocol,
-		list: impl Into<Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>>,
+		list: impl Into<Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>, u64)>>,
 	) -> Self {
 		let protocols =	list
 			.into()
 			.into_iter()
-			.map(|(proto_name, msg)| {
-				(proto_name.clone(), NotificationsIn::new(proto_name), msg)
+			.map(|(proto_name, msg, max_notif_size)| {
+				(proto_name.clone(), NotificationsIn::new(proto_name, max_notif_size), msg, max_notif_size)
 			})
 			.collect();
 
@@ -624,7 +629,8 @@ impl ProtocolsHandler for NotifsHandler {
 						if !*pending_opening {
 							let proto = NotificationsOut::new(
 								protocol_info.name.clone(),
-								protocol_info.handshake.read().clone()
+								protocol_info.handshake.read().clone(),
+								protocol_info.max_notification_size
 							);
 
 							self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
@@ -643,7 +649,8 @@ impl ProtocolsHandler for NotifsHandler {
 						if !*pending_opening {
 							let proto = NotificationsOut::new(
 								protocol_info.name.clone(),
-								handshake_message.clone()
+								handshake_message.clone(),
+								protocol_info.max_notification_size,
 							);
 
 							self.events_queue.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {

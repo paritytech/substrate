@@ -60,6 +60,7 @@ pub use self::builder::{
 };
 pub use config::{
 	BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskExecutor, TaskType,
+	KeepBlocks, TransactionStorageMode,
 };
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
@@ -247,7 +248,7 @@ async fn build_network_future<
 				};
 
 				if announce_imported_blocks {
-					network.service().announce_block(notification.hash, Vec::new());
+					network.service().announce_block(notification.hash, None);
 				}
 
 				if notification.is_new_best {

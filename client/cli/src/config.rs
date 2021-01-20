@@ -32,7 +32,7 @@ use sc_service::config::{
 	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
 	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
-use sc_service::{ChainSpec, TracingReceiver};
+use sc_service::{ChainSpec, TracingReceiver, KeepBlocks, TransactionStorageMode };
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -203,6 +203,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.unwrap_or_default())
 	}
 
+	/// Get the database transaction storage scheme.
+	fn database_transaction_storage(&self) -> Result<TransactionStorageMode> {
+		Ok(self.database_params()
+			.map(|x| x.transaction_storage())
+			.unwrap_or(TransactionStorageMode::BlockBody))
+	}
+
 	/// Get the database backend variant.
 	///
 	/// By default this is retrieved from `DatabaseParams` if it is available. Otherwise its `None`.
@@ -244,14 +251,24 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Default::default())
 	}
 
-	/// Get the pruning mode.
+	/// Get the state pruning mode.
 	///
 	/// By default this is retrieved from `PruningMode` if it is available. Otherwise its
 	/// `PruningMode::default()`.
-	fn pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
+	fn state_pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
 		self.pruning_params()
-			.map(|x| x.pruning(unsafe_pruning, role))
+			.map(|x| x.state_pruning(unsafe_pruning, role))
 			.unwrap_or_else(|| Ok(Default::default()))
+	}
+
+	/// Get the block pruning mode.
+	///
+	/// By default this is retrieved from `block_pruning` if it is available. Otherwise its
+	/// `KeepBlocks::All`.
+	fn keep_blocks(&self) -> Result<KeepBlocks> {
+		self.pruning_params()
+			.map(|x| x.keep_blocks())
+			.unwrap_or_else(|| Ok(KeepBlocks::All))
 	}
 
 	/// Get the chain ID (string).
@@ -493,7 +510,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			pruning: self.pruning(unsafe_pruning, &role)?,
+			state_pruning: self.state_pruning(unsafe_pruning, &role)?,
+			keep_blocks: self.keep_blocks()?,
+			transaction_storage: self.database_transaction_storage()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,

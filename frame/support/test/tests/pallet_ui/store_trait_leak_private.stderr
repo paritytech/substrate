@@ -5,4 +5,4 @@ error[E0446]: private type `_GeneratedPrefixForStorageFoo<T>` in public interfac
    |                                        ^^^^^ can't leak private type
 ...
 20 |     #[pallet::storage]
-   |               - `_GeneratedPrefixForStorageFoo<T>` declared as private
+   |               ------- `_GeneratedPrefixForStorageFoo<T>` declared as private

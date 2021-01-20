@@ -83,7 +83,9 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use std::{
 	borrow::Cow,
 	collections::{HashMap, HashSet},
+	convert::TryFrom as _,
 	fs,
+	iter,
 	marker::PhantomData,
 	num:: NonZeroUsize,
 	pin::Pin,
@@ -283,6 +285,48 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config
 			};
 
+			let (transport, bandwidth) = {
+				let (config_mem, config_wasm) = match params.network_config.transport {
+					TransportConfig::MemoryOnly => (true, None),
+					TransportConfig::Normal { wasm_external_transport, .. } =>
+						(false, wasm_external_transport)
+				};
+
+				// The yamux buffer size limit is configured to be equal to the maximum frame size
+				// of all protocols. 10 bytes are added to each limit for the length prefix that
+				// is not included in the upper layer protocols limit but is still present in the
+				// yamux buffer. These 10 bytes correspond to the maximum size required to encode
+				// a variable-length-encoding 64bits number. In other words, we make the
+				// assumption that no notification larger than 2^64 will ever be sent.
+				let yamux_maximum_buffer_size = {
+					let requests_max = params.network_config
+						.request_response_protocols.iter()
+						.map(|cfg| usize::try_from(cfg.max_request_size).unwrap_or(usize::max_value()));
+					let responses_max = params.network_config
+						.request_response_protocols.iter()
+						.map(|cfg| usize::try_from(cfg.max_response_size).unwrap_or(usize::max_value()));
+					let notifs_max = params.network_config
+						.extra_sets.iter()
+						.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::max_value()));
+
+					// A "default" max is added to cover all the other protocols: ping, identify,
+					// kademlia.
+					let default_max = 1024 * 1024;
+					iter::once(default_max)
+						.chain(requests_max).chain(responses_max).chain(notifs_max)
+						.max().expect("iterator known to always yield at least one element; qed")
+						.saturating_add(10)
+				};
+
+				transport::build_transport(
+					local_identity,
+					config_mem,
+					config_wasm,
+					params.network_config.yamux_window_size,
+					yamux_maximum_buffer_size
+				)
+			};
+
 			let behaviour = {
 				let result = Behaviour::new(
 					protocol,
@@ -305,14 +349,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				}
 			};
 
-			let (transport, bandwidth) = {
-				let (config_mem, config_wasm) = match params.network_config.transport {
-					TransportConfig::MemoryOnly => (true, None),
-					TransportConfig::Normal { wasm_external_transport, .. } =>
-						(false, wasm_external_transport)
-				};
-				transport::build_transport(local_identity, config_mem, config_wasm)
-			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
 				.connection_limits(ConnectionLimits::default()
 					.with_max_established_per_peer(Some(crate::MAX_CONNECTIONS_PER_PEER as u32))
@@ -822,7 +858,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced. This function forces such an announcement.
-	pub fn announce_block(&self, hash: B::Hash, data: Vec<u8>) {
+	pub fn announce_block(&self, hash: B::Hash, data: Option<Vec<u8>>) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AnnounceBlock(hash, data));
 	}
 
@@ -1200,7 +1236,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	PropagateTransaction(H),
 	PropagateTransactions,
 	RequestJustification(B::Hash, NumberFor<B>),
-	AnnounceBlock(B::Hash, Vec<u8>),
+	AnnounceBlock(B::Hash, Option<Vec<u8>>),
 	GetValue(record::Key),
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),

@@ -34,13 +34,13 @@ decl_storage! {
 
 // Pallets use events to inform users when important changes are made.
 // https://substrate.dev/docs/en/knowledgebase/runtime/events
-decl_event!(
+decl_event! {
 	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId {
 		/// Event documentation should end with an array that provides descriptive names for event
 		/// parameters. [something, who]
 		SomethingStored(u32, AccountId),
 	}
-);
+}
 
 // Errors inform users that something went wrong.
 decl_error! {

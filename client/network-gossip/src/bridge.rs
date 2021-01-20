@@ -166,7 +166,7 @@ impl<B: BlockT> GossipEngine<B> {
 	///
 	/// Note: this method isn't strictly related to gossiping and should eventually be moved
 	/// somewhere else.
-	pub fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
+	pub fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>) {
 		self.network.announce(block, associated_data);
 	}
 }
@@ -347,7 +347,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn announce(&self, _: B::Hash, _: Vec<u8>) {
+		fn announce(&self, _: B::Hash, _: Option<Vec<u8>>) {
 			unimplemented!();
 		}
 	}
