@@ -520,6 +520,9 @@ mod test {
 		fn submit_solution_better(v: u32, n: u32, a: u32, w: u32) -> Weight {
 			(0 * v + 0 * n + 1000 * a + 0 * w) as Weight
 		}
+		fn kick(w: u32) -> Weight {
+			unimplemented!()
+		}
 	}
 
 	#[test]
