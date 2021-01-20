@@ -481,11 +481,11 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 			for (peer_id, peer_info) in self.peers.iter_mut() {
 				if peer_info.status == PeerStatus::Idle {
 					match peer_info.best_block {
-						Some(n) => if n >= pending_request.request.required_block() {
+						Some(n) if n >= pending_request.request.required_block() => {
 							peer = Some((*peer_id, peer_info));
 							break
 						},
-						None => peer = Some((*peer_id, peer_info))
+						_ => peer = Some((*peer_id, peer_info))
 					}
 				}
 			}
