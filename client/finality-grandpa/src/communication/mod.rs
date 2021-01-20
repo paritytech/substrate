@@ -722,7 +722,7 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 			);
 
 			// announce the block we voted on to our peers.
-			self.network.lock().announce(target_hash, Vec::new());
+			self.network.lock().announce(target_hash, None);
 
 			// propagate the message to peers
 			let topic = round_topic::<Block>(self.round, self.set_id);
