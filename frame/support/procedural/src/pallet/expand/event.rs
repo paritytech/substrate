@@ -42,10 +42,10 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	let event_use_gen = &event.gen_kind.type_use_gen(event.attr_span);
 	let event_impl_gen= &event.gen_kind.type_impl_gen(event.attr_span);
 	let metadata = event.metadata.iter()
-		.map(|event| {
-			let name = format!("{}", event.name);
-			let args = event.args.iter().map(|arg| arg.1.clone());
-			let docs = &event.docs;
+		.map(|event_def| {
+			let name = format!("{}", event_def.name);
+			let args = event_def.args.iter().map(|arg| arg.1.clone());
+			let docs = &event_def.docs;
 			quote::quote_spanned!(event.attr_span =>
 				#frame_support::event::EventMetadata {
 					name: #frame_support::event::DecodeDifferent::Encode(#name),
