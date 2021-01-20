@@ -1381,7 +1381,7 @@ pub mod pallet_prelude {
 /// alias then the generation of the getter might fail. In this case getter can be implemented
 /// manually.
 ///
-/// NOTE: The generic `Hasher` must implement [`StorageHasher`] trait (or the type is not
+/// NOTE: The generic `Hasher` must implement the [`StorageHasher`] trait (or the type is not
 /// usable at all). We use [`StorageHasher::METADATA`] for the metadata of the hasher of the
 /// storage item. Thus generic hasher is supported.
 ///
