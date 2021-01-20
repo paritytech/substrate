@@ -67,7 +67,7 @@ pub enum Error {
 	SetLoggerError(#[from] tracing_log::log_tracer::SetLoggerError),
 }
 
-macro_rules! disable_log_reloading {
+macro_rules! enable_log_reloading {
 	($builder:expr) => {{
 		let builder = $builder.with_filter_reloading();
 		let handle = builder.reload_handle();
@@ -201,7 +201,7 @@ pub struct GlobalLoggerBuilder {
 	profiling: Option<(crate::TracingReceiver, String)>,
 	telemetry_buffer_size: Option<usize>,
 	telemetry_external_transport: Option<ExtTransport>,
-	disable_log_reloading: bool,
+	log_reloading: bool,
 	force_colors: Option<bool>,
 }
 
@@ -213,7 +213,7 @@ impl GlobalLoggerBuilder {
 			profiling: None,
 			telemetry_buffer_size: None,
 			telemetry_external_transport: None,
-			disable_log_reloading: false,
+			log_reloading: true,
 			force_colors: None,
 		}
 	}
@@ -230,7 +230,7 @@ impl GlobalLoggerBuilder {
 
 	/// Wether or not to disable log reloading.
 	pub fn with_log_reloading(&mut self, enabled: bool) -> &mut Self {
-		self.disable_log_reloading = !enabled;
+		self.log_reloading = enabled;
 		self
 	}
 
@@ -260,14 +260,14 @@ impl GlobalLoggerBuilder {
 			// If profiling is activated, we require `trace` logging.
 			let max_level = Some(log::LevelFilter::Trace);
 
-			if self.disable_log_reloading {
+			if !self.log_reloading {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
 					&format!("{},{},sc_tracing=trace", self.pattern, profiling_targets),
 					max_level,
 					self.force_colors,
 					self.telemetry_buffer_size,
 					self.telemetry_external_transport,
-					|builder| builder,
+					|builder| enable_log_reloading!(builder),
 				)?;
 				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
@@ -281,7 +281,7 @@ impl GlobalLoggerBuilder {
 					self.force_colors,
 					self.telemetry_buffer_size,
 					self.telemetry_external_transport,
-					|builder| disable_log_reloading!(builder),
+					|builder| builder,
 				)?;
 				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
@@ -290,14 +290,14 @@ impl GlobalLoggerBuilder {
 				Ok(telemetry_worker)
 			}
 		} else {
-			if self.disable_log_reloading {
+			if !self.log_reloading {
 				let (subscriber, telemetry_worker) = get_subscriber_internal(
 					&self.pattern,
 					None,
 					self.force_colors,
 					self.telemetry_buffer_size,
 					self.telemetry_external_transport,
-					|builder| builder,
+					|builder| enable_log_reloading!(builder),
 				)?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
@@ -310,7 +310,7 @@ impl GlobalLoggerBuilder {
 					self.force_colors,
 					self.telemetry_buffer_size,
 					self.telemetry_external_transport,
-					|builder| disable_log_reloading!(builder),
+					|builder| builder,
 				)?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
