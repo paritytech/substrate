@@ -30,7 +30,7 @@ pub mod storage;
 pub mod testing;
 
 /// Local storage prefix used by the Offchain Worker API to
-pub const STORAGE_PREFIX : &'static [u8] = b"storage";
+pub const STORAGE_PREFIX : &[u8] = b"storage";
 
 /// Offchain workers local storage.
 pub trait OffchainStorage: Clone + Send + Sync {

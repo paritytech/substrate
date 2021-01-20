@@ -22,10 +22,8 @@
 //! unless you know what you're doing. Using `sp_io` will be more performant, since instead of
 //! computing the hash in WASM it delegates that computation to the host client.
 
-use blake2_rfc;
 use sha2::{Digest, Sha256};
 use tiny_keccak::{Hasher, Keccak};
-use twox_hash;
 
 /// Do a Blake2 512-bit hash and place result in `dest`.
 pub fn blake2_512_into(data: &[u8], dest: &mut [u8; 64]) {
