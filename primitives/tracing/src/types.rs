@@ -447,7 +447,7 @@ impl From<&tracing_core::Event<'_>> for WasmEntryAttributes {
 		WasmEntryAttributes {
 			parent_id: evt.parent().map(|id| id.into_u64()),
 			metadata: evt.metadata().into(),
-			fields: fields
+			fields
 		}
 	}
 }
@@ -459,7 +459,7 @@ impl From<&tracing_core::span::Attributes<'_>> for WasmEntryAttributes {
 		WasmEntryAttributes {
 			parent_id: attrs.parent().map(|id| id.into_u64()),
 			metadata: attrs.metadata().into(),
-			fields: fields
+			fields
 		}
 	}
 }
