@@ -673,7 +673,7 @@ impl OverlayedChanges {
 
 	/// Write a key value pair to the offchain storage overlay.
 	pub fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
-		use ::sp_core::offchain::STORAGE_PREFIX;
+		use sp_core::offchain::STORAGE_PREFIX;
 		match value {
 			Some(value) => self.offchain.set(STORAGE_PREFIX, key, value),
 			None => self.offchain.remove(STORAGE_PREFIX, key),
@@ -816,6 +816,61 @@ mod tests {
 		overlayed.set_storage(key.clone(), None);
 		assert!(overlayed.storage(&key).unwrap().is_none());
 	}
+
+	#[test]
+	fn offchain_overlayed_storage_transactions_works() {
+		use sp_core::offchain::STORAGE_PREFIX;
+		fn check_offchain_content(
+			state: &OverlayedChanges,
+			nb_commit: usize,
+			expected: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		) {
+			let mut state = state.clone();
+			for _ in 0..nb_commit {
+				state.commit_transaction().unwrap();
+			}
+			let offchain_data: Vec<_> = state.offchain_drain_committed().collect();
+			let expected: Vec<_> = expected.into_iter().map(|(key, value)| {
+				let change = match value {
+					Some(value) => OffchainOverlayedChange::SetValue(value),
+					None => OffchainOverlayedChange::Remove,
+				};
+				((STORAGE_PREFIX.to_vec(), key), change)
+			}).collect();
+			assert_eq!(offchain_data, expected);
+		}
+
+		let mut overlayed = OverlayedChanges::with_offchain_indexing();
+
+		let key = vec![42, 69, 169, 142];
+
+		check_offchain_content(&overlayed, 0, vec![]);
+
+		overlayed.start_transaction();
+
+		overlayed.set_offchain_storage(key.as_slice(), Some(&[1, 2, 3][..]));
+		check_offchain_content(&overlayed, 1, vec![(key.clone(), Some(vec![1, 2, 3]))]);
+
+		overlayed.commit_transaction().unwrap();
+
+		check_offchain_content(&overlayed, 0, vec![(key.clone(), Some(vec![1, 2, 3]))]);
+
+		overlayed.start_transaction();
+
+		overlayed.set_offchain_storage(key.as_slice(), Some(&[][..]));
+		check_offchain_content(&overlayed, 1, vec![(key.clone(), Some(vec![]))]);
+
+		overlayed.set_offchain_storage(key.as_slice(), None);
+		check_offchain_content(&overlayed, 1, vec![(key.clone(), None)]);
+
+		overlayed.rollback_transaction().unwrap();
+
+		check_offchain_content(&overlayed, 0, vec![(key.clone(), Some(vec![1, 2, 3]))]);
+
+		overlayed.set_offchain_storage(key.as_slice(), None);
+		check_offchain_content(&overlayed, 0, vec![(key.clone(), None)]);
+	}
+
 
 	#[test]
 	fn overlayed_storage_root_works() {
