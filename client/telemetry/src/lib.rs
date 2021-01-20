@@ -190,15 +190,7 @@ impl TelemetryWorker {
 		node_map: &mut HashMap<Id, Vec<(u8, Multiaddr)>>,
 		transport: WsTrans,
 	) {
-		let input = if let Some(x) = input {
-			x
-		} else {
-			log::error!(
-				target: "telemetry",
-				"Unexpected end of stream. This is a bug.",
-			);
-			return;
-		};
+		let input = input.expect("the stream is never closed; qed");
 
 		match input {
 			Register::Telemetry {
@@ -268,15 +260,7 @@ impl TelemetryWorker {
 		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
 		node_map: &HashMap<Id, Vec<(u8, Multiaddr)>>,
 	) {
-		let (id, verbosity, message) = if let Some(x) = input {
-			x
-		} else {
-			log::error!(
-				target: "telemetry",
-				"Unexpected end of stream. This is a bug.",
-			);
-			return;
-		};
+		let (id, verbosity, message) = input.expect("the stream is never closed; qed");
 
 		let nodes = if let Some(nodes) = node_map.get(&id) {
 			nodes
