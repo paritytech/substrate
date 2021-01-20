@@ -18,10 +18,7 @@
 
 //! RocksDB-based offchain workers local storage.
 
-use std::{
-	collections::HashMap,
-	sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{columns, Database, DbHash, Transaction};
 use parking_lot::Mutex;
@@ -43,6 +40,7 @@ impl std::fmt::Debug for LocalStorage {
 
 impl LocalStorage {
 	/// Create new offchain storage for tests (backed by memorydb)
+	#[cfg(any(feature = "test-helpers", test))]
 	pub fn new_test() -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
