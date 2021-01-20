@@ -77,7 +77,7 @@ macro_rules! enable_log_reloading {
 }
 
 /// Common implementation to get the subscriber.
-fn get_subscriber_internal<N, E, F, W>(
+fn prepare_subscriber<N, E, F, W>(
 	pattern: &str,
 	max_level: Option<log::LevelFilter>,
 	force_colors: Option<bool>,
@@ -261,7 +261,7 @@ impl GlobalLoggerBuilder {
 			let max_level = Some(log::LevelFilter::Trace);
 
 			if self.log_reloading {
-				let (subscriber, telemetry_worker) = get_subscriber_internal(
+				let (subscriber, telemetry_worker) = prepare_subscriber(
 					&format!("{},{},sc_tracing=trace", self.pattern, profiling_targets),
 					max_level,
 					self.force_colors,
@@ -275,7 +275,7 @@ impl GlobalLoggerBuilder {
 
 				Ok(telemetry_worker)
 			} else {
-				let (subscriber, telemetry_worker) = get_subscriber_internal(
+				let (subscriber, telemetry_worker) = prepare_subscriber(
 					&format!("{},{},sc_tracing=trace", self.pattern, profiling_targets),
 					max_level,
 					self.force_colors,
@@ -291,7 +291,7 @@ impl GlobalLoggerBuilder {
 			}
 		} else {
 			if self.log_reloading {
-				let (subscriber, telemetry_worker) = get_subscriber_internal(
+				let (subscriber, telemetry_worker) = prepare_subscriber(
 					&self.pattern,
 					None,
 					self.force_colors,
@@ -304,7 +304,7 @@ impl GlobalLoggerBuilder {
 
 				Ok(telemetry_worker)
 			} else {
-				let (subscriber, telemetry_worker) = get_subscriber_internal(
+				let (subscriber, telemetry_worker) = prepare_subscriber(
 					&self.pattern,
 					None,
 					self.force_colors,
