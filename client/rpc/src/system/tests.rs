@@ -344,9 +344,7 @@ fn test_add_reset_log_filter() {
 
 	// Enter log generation / filter reload
 	if std::env::var("TEST_LOG_FILTER").is_ok() {
-		sc_cli::init_logger(
-			sc_cli::InitLoggerParams { pattern: "test_before_add=debug".into(), ..Default::default() },
-		).unwrap();
+		sc_tracing::logging::GlobalLoggerBuilder::new("test_before_add=debug").init().unwrap();
 		for line in std::io::stdin().lock().lines() {
 			let line = line.expect("Failed to read bytes");
 			if line.contains("add_reload") {
