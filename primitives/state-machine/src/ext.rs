@@ -1001,7 +1001,6 @@ mod tests {
 		let child_info = &child_info;
 		let mut cache = StorageTransactionCache::default();
 		let mut overlay = OverlayedChanges::default();
-		let mut offchain_overlay = prepare_offchain_overlay_with_changes();
 		let backend = Storage {
 			top: map![],
 			children_default: map![
@@ -1014,7 +1013,7 @@ mod tests {
 			],
 		}.into();
 
-		let ext = TestExt::new(&mut overlay, &mut offchain_overlay, &mut cache, &backend, None, None);
+		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 
 		use sp_core::storage::well_known_keys;
 		let mut ext = ext;

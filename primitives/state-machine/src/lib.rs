@@ -1151,11 +1151,9 @@ mod tests {
 		overlay.set_child_storage(&child_info, b"4".to_vec(), Some(b"1312".to_vec()));
 
 		{
-			let mut offchain_overlay = Default::default();
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(
 				&mut overlay,
-				&mut offchain_overlay,
 				&mut cache,
 				&backend,
 				changes_trie::disabled_state::<_, u64>(),
@@ -1193,11 +1191,9 @@ mod tests {
 		];
 		let backend = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let mut overlay = OverlayedChanges::default();
-		let mut offchain_overlay = Default::default();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(
 			&mut overlay,
-			&mut offchain_overlay,
 			&mut cache,
 			&backend,
 			changes_trie::disabled_state::<_, u64>(),
