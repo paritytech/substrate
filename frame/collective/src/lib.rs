@@ -40,7 +40,7 @@
 //! If there are not, or if no prime is set, then the motion is dropped without being executed.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
@@ -839,6 +839,10 @@ impl<T: Config<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 
 	fn set_prime(prime: Option<T::AccountId>) {
 		Prime::<T, I>::set(prime);
+	}
+
+	fn get_prime() -> Option<T::AccountId> {
+		Prime::<T, I>::get()
 	}
 }
 
