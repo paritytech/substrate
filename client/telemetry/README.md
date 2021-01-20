@@ -1,18 +1,16 @@
 # sc-telemetry
 
-To start using this module, please initialize the global logger from `sc-tracing`. This will
-return a [`TelemetryWorker`] which can be used to register substrate node. In order to do that,
-first call [`TelemetryWorker::handle()`] to get a handle to the worker, then call
-[`TelemetrySpan::new()`] to create a new span, then use [`TelemetryHandle::start_telemetry()`]
-to initialize the telemetry. This will also return a [`TelemetryConnectionNotifier`] which can
-be used to create streams of events for whenever the connection to a telemetry server is
-(re-)established.
+Substrate's client telemetry is a part of substrate that allows logging telemetry information
+with a [Polkadot telemetry](https://github.com/paritytech/substrate-telemetry).
 
-The macro [`telemetry`] can be used to report telemetries from anywhere in the code but the
-telemetry must have been initialized through [`TelemetryHandle::start_telemetry()`].
+It works using Tokio's [tracing](https://github.com/tokio-rs/tracing/). The telemetry
+information uses tracing's logging to report the telemetry which is then retrieved by a
+tracing's `Layer`. This layer will then send the data through an asynchronous channel and to a
+background task called [`TelemetryWorker`] which will send the information to the telemetry
+server.
 
-The telemetry span needs to be passed to the [`sc_service::TaskManager`] in order to make all
-the async background tasks report the telemetries through the endpoints provided during the
-initialization.
+If multiple substrate nodes are running, it uses a tracing's `Span` to identify which substrate
+node is reporting the telemetry. Every task spawned using sc-service's `TaskManager`
+automatically inherit this span.
 
 License: GPL-3.0-or-later WITH Classpath-exception-2.0
