@@ -2014,10 +2014,17 @@ pub mod pallet_prelude {
 /// 	* `add_extra_genesis` fields are converted to `GenesisConfig` field with their correct
 /// 		default if specified
 /// 	* `add_extra_genesis` build is written into `GenesisBuild::build`
-/// * storages now use `PalletInfo` for `module_prefix` instead of the one given to `decl_storage`:
-/// 	Thus any use of this pallet in `construct_runtime!` should be careful to update name in
-/// 	order not to break storage or to upgrade storage (moreover for instantiable pallet).
-/// 	If pallet is published, make sure to warn about this breaking change.
+/// * storages defined with [`pallet`] use the name of the pallet provided by [`PalletInfo::name`]
+/// 	as `pallet_prefix` (in `decl_storage`, storages used the `pallet_prefix` given as input of
+/// 	`decl_storage` with the syntax `"as Example"`).
+/// 	Thus runtime using the pallet must be careful about this change.
+/// 	To handle this change:
+/// 	* either ensure that the name of the pallet given to `construct_runtime!` is the same
+/// 		as the name the pallet was giving to `decl_storage`,
+/// 	* or do a storage migration from the old prefix used to the new prefix used.
+///
+/// 	NOTE: The prefixes used by storages are in the metadata. Thus ensuring the metadata hasn't
+/// 	changed, does ensure that the `pallet_prefix` used by storages haven't changed.
 ///
 /// # Notes when macro fails to show proper error message spans:
 ///
