@@ -13,4 +13,9 @@ If multiple substrate nodes are running, it uses a tracing's `Span` to identify 
 node is reporting the telemetry. Every task spawned using sc-service's `TaskManager`
 automatically inherit this span.
 
+Substrate's nodes initialize/register to the [`TelemetryWorker`] using a [`TelemetryHandle`].
+This handle can be cloned and passed around. It uses an asynchronous channel to communicate with
+the running [`TelemetryWorker`] dedicated to registration. Registering a telemetry can happen at
+any point in time during the execution.
+
 License: GPL-3.0-or-later WITH Classpath-exception-2.0
