@@ -17,7 +17,7 @@
 
 use codec::{Encode, Joiner};
 use frame_support::{
-	StorageValue, StorageMap,
+	StorageValue,
 	traits::Currency,
 	weights::{GetDispatchInfo, constants::ExtrinsicBaseWeight, IdentityFee, WeightToFeePolynomial},
 };
@@ -121,6 +121,15 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	});
 }
 
+fn new_account_info(free_dollars: u128) -> Vec<u8> {
+	frame_system::AccountInfo {
+		nonce: 0u32,
+		consumers: 0,
+		providers: 0,
+		data: (free_dollars * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS),
+	}.encode()
+}
+
 #[test]
 fn transaction_fee_is_correct() {
 	// This uses the exact values of substrate-node.
@@ -131,14 +140,8 @@ fn transaction_fee_is_correct() {
 	//   - 1 milli-dot based on current polkadot runtime.
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
 	let mut t = new_test_ext(compact_code_unwrap(), false);
-	t.insert(
-		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(0u32, 0u32, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
-	);
-	t.insert(
-		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
-		(0u32, 0u32, 10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
-	);
+	t.insert(<frame_system::Account<Runtime>>::hashed_key_for(alice()), new_account_info(100));
+	t.insert(<frame_system::Account<Runtime>>::hashed_key_for(bob()), new_account_info(10));
 	t.insert(
 		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
 		(110 * DOLLARS).encode()

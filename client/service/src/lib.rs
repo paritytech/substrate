@@ -39,7 +39,6 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
 use std::task::Poll;
-use parking_lot::Mutex;
 
 use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
@@ -48,7 +47,7 @@ use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
-use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
+use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver}};
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -60,6 +59,7 @@ pub use self::builder::{
 };
 pub use config::{
 	BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskExecutor, TaskType,
+	KeepBlocks, TransactionStorageMode,
 };
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
@@ -160,20 +160,7 @@ impl<Block: BlockT> NetworkStatusSinks<Block> {
 
 }
 
-/// Sinks to propagate telemetry connection established events.
-#[derive(Default, Clone)]
-pub struct TelemetryConnectionSinks(Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
-
-impl TelemetryConnectionSinks {
-	/// Get event stream for telemetry connection established events.
-	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
-		let (sink, stream) =tracing_unbounded("mpsc_telemetry_on_connect");
-		self.0.lock().push(sink);
-		stream
-	}
-}
-
-/// An imcomplete set of chain components, but enough to run the chain ops subcommands.
+/// An incomplete set of chain components, but enough to run the chain ops subcommands.
 pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, TransactionPool, Other> {
 	/// A shared client instance.
 	pub client: Arc<Client>,
@@ -247,7 +234,7 @@ async fn build_network_future<
 				};
 
 				if announce_imported_blocks {
-					network.service().announce_block(notification.hash, Vec::new());
+					network.service().announce_block(notification.hash, None);
 				}
 
 				if notification.is_new_best {

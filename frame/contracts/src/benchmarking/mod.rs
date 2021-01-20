@@ -109,21 +109,18 @@ where
 		endowment: Endow,
 	) -> Result<Contract<T>, &'static str>
 	{
-		use sp_runtime::traits::{CheckedDiv, SaturatedConversion};
 		let (storage_size, endowment) = match endowment {
 			Endow::CollectRent => {
 				// storage_size cannot be zero because otherwise a contract that is just above
 				// the subsistence threshold does not pay rent given a large enough subsistence
 				// threshold. But we need rent payments to occur in order to benchmark for worst cases.
-				let storage_size = ConfigCache::<T>::subsistence_threshold_uncached()
-					.checked_div(&T::DepositPerStorageByte::get())
-					.unwrap_or_else(Zero::zero);
+				let storage_size = u32::max_value() / 10;
 
 				// Endowment should be large but not as large to inhibit rent payments.
+				// Balance will only cover half the storage
 				let endowment = T::DepositPerStorageByte::get()
-					.saturating_mul(storage_size)
-					.saturating_add(T::DepositPerContract::get())
-					.saturating_sub(1u32.into());
+					.saturating_mul(<BalanceOf<T>>::from(storage_size) / 2u32.into())
+					.saturating_add(T::DepositPerContract::get());
 
 				(storage_size, endowment)
 			},
@@ -159,7 +156,7 @@ where
 		};
 
 		let mut contract = result.alive_info()?;
-		contract.storage_size = storage_size.saturated_into::<u32>();
+		contract.storage_size = storage_size;
 		ContractInfoOf::<T>::insert(&result.account_id, ContractInfo::Alive(contract));
 
 		Ok(result)
@@ -253,7 +250,7 @@ where
 	/// Evict this contract.
 	fn evict(&mut self) -> Result<(), &'static str> {
 		self.set_block_num_for_eviction()?;
-		Rent::<T>::snitch_contract_should_be_evicted(&self.contract.account_id, Zero::zero())?;
+		Rent::<T>::try_eviction(&self.contract.account_id, Zero::zero())?;
 		self.contract.ensure_tombstone()
 	}
 }
@@ -336,7 +333,7 @@ benchmarks! {
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let data = vec![42u8; (n * 1024) as usize];
 		let salt = vec![42u8; (s * 1024) as usize];
-		let endowment = ConfigCache::<T>::subsistence_threshold_uncached();
+		let endowment = caller_funding::<T>() / 3u32.into();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_mem();
@@ -409,8 +406,14 @@ benchmarks! {
 		instance.ensure_tombstone()?;
 
 		// the caller should get the reward for being a good snitch
-		assert_eq!(
-			T::Currency::free_balance(&instance.caller),
+		// this is capped by the maximum amount of rent payed. So we only now that it should
+		// have increased by at most the surcharge reward.
+		assert!(
+			T::Currency::free_balance(&instance.caller) >
+			caller_funding::<T>() - instance.endowment
+		);
+		assert!(
+			T::Currency::free_balance(&instance.caller) <=
 			caller_funding::<T>() - instance.endowment + <T as Config>::SurchargeReward::get(),
 		);
 	}
@@ -1373,7 +1376,7 @@ benchmarks! {
 		let hash_len = hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
 		let hashes_bytes = hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
 		let hashes_len = hashes_bytes.len();
-		let value = ConfigCache::<T>::subsistence_threshold_uncached();
+		let value = Endow::max::<T>() / (r * API_BENCHMARK_BATCH_SIZE + 2).into();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
@@ -1457,7 +1460,8 @@ benchmarks! {
 	}: call(origin, callee, 0u32.into(), Weight::max_value(), vec![])
 	verify {
 		for addr in &addresses {
-			instance.alive_info()?;
+			ContractInfoOf::<T>::get(&addr).and_then(|c| c.get_alive())
+				.ok_or_else(|| "Contract should have been instantiated")?;
 		}
 	}
 
@@ -1493,7 +1497,7 @@ benchmarks! {
 		let input_len = inputs.get(0).map(|x| x.len()).unwrap_or(0);
 		let input_bytes = inputs.iter().cloned().flatten().collect::<Vec<_>>();
 		let inputs_len = input_bytes.len();
-		let value = ConfigCache::<T>::subsistence_threshold_uncached();
+		let value = Endow::max::<T>() / (API_BENCHMARK_BATCH_SIZE + 2).into();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();

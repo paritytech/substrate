@@ -1,6 +1,6 @@
 [package]
 name = "sc-service"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -33,7 +33,6 @@ rand = "0.7.3"
 parking_lot = "0.11.1"
 lazy_static = "1.4.0"
 log = "0.4.11"
-slog = { version = "2.5.2", features = ["nested-values"] }
 futures-timer = "3.0.1"
 wasm-timer = "0.2"
 exit-future = "0.2.0"
@@ -62,7 +61,7 @@ sc-light = { version = "2.0.0", path = "../light" }
 sc-client-api = { version = "2.0.0", path = "../api" }
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
 sc-client-db = { version = "0.8.0", default-features = false, path = "../db" }
-codec = { package = "parity-scale-codec", version = "1.3.4" }
+codec = { package = "parity-scale-codec", version = "1.3.6" }
 sc-executor = { version = "0.8.0", path = "../executor" }
 sc-transaction-pool = { version = "2.0.0", path = "../transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }

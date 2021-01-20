@@ -23,15 +23,24 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::iter;
 use std::time;
-use log::{error, trace};
+use log::{debug, error, trace};
 use lru::LruCache;
 use libp2p::PeerId;
+use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use sc_network::ObservedRole;
 use wasm_timer::Instant;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
-const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
+// NOTE: The current value is adjusted based on largest production network deployment (Kusama) and
+// the current main gossip user (GRANDPA). Currently there are ~800 validators on Kusama, as such,
+// each GRANDPA round should generate ~1600 messages, and we currently keep track of the last 2
+// completed rounds and the current live one. That makes it so that at any point we will be holding
+// ~4800 live messages.
+//
+// Assuming that each known message is tracked with a 32 byte hash (common for `Block::Hash`), then
+// this cache should take about 256 KB of memory.
+const KNOWN_MESSAGES_CACHE_SIZE: usize = 8192;
 
 const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
 
@@ -151,11 +160,25 @@ pub struct ConsensusGossip<B: BlockT> {
 	protocol: Cow<'static, str>,
 	validator: Arc<dyn Validator<B>>,
 	next_broadcast: Instant,
+	metrics: Option<Metrics>,
 }
 
 impl<B: BlockT> ConsensusGossip<B> {
 	/// Create a new instance using the given validator.
-	pub fn new(validator: Arc<dyn Validator<B>>, protocol: Cow<'static, str>) -> Self {
+	pub fn new(
+		validator: Arc<dyn Validator<B>>,
+		protocol: Cow<'static, str>,
+		metrics_registry: Option<&Registry>,
+	) -> Self {
+		let metrics = match metrics_registry.map(Metrics::register) {
+			Some(Ok(metrics)) => Some(metrics),
+			Some(Err(e)) => {
+				debug!(target: "gossip", "Failed to register metrics: {:?}", e);
+				None
+			}
+			None => None,
+		};
+
 		ConsensusGossip {
 			peers: HashMap::new(),
 			messages: Default::default(),
@@ -163,6 +186,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			protocol,
 			validator,
 			next_broadcast: Instant::now() + REBROADCAST_INTERVAL,
+			metrics,
 		}
 	}
 
@@ -197,6 +221,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 				message,
 				sender,
 			});
+
+			if let Some(ref metrics) = self.metrics {
+				metrics.registered_messages.inc();
+			}
 		}
 	}
 
@@ -264,10 +292,17 @@ impl<B: BlockT> ConsensusGossip<B> {
 		let before = self.messages.len();
 
 		let mut message_expired = self.validator.message_expired();
-		self.messages.retain(|entry| !message_expired(entry.topic, &entry.message));
+		self.messages
+			.retain(|entry| !message_expired(entry.topic, &entry.message));
+
+		let expired_messages = before - self.messages.len();
+
+		if let Some(ref metrics) = self.metrics {
+			metrics.expired_messages.inc_by(expired_messages as u64)
+		}
 
 		trace!(target: "gossip", "Cleaned up {} stale messages, {} left ({} known)",
-			before - self.messages.len(),
+			expired_messages,
 			self.messages.len(),
 			known_messages.len(),
 		);
@@ -429,6 +464,32 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 }
 
+struct Metrics {
+	registered_messages: Counter<U64>,
+	expired_messages: Counter<U64>,
+}
+
+impl Metrics {
+	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			registered_messages: register(
+				Counter::new(
+					"network_gossip_registered_messages_total",
+					"Number of registered messages by the gossip service.",
+				)?,
+				registry,
+			)?,
+			expired_messages: register(
+				Counter::new(
+					"network_gossip_expired_messages_total",
+					"Number of expired messages by the gossip service.",
+				)?,
+				registry,
+			)?,
+		})
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use futures::prelude::*;
@@ -509,7 +570,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn announce(&self, _: B::Hash, _: Vec<u8>) {
+		fn announce(&self, _: B::Hash, _: Option<Vec<u8>>) {
 			unimplemented!();
 		}
 	}
@@ -538,7 +599,7 @@ mod tests {
 
 		let prev_hash = H256::random();
 		let best_hash = H256::random();
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into());
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into(), None);
 		let m1_hash = H256::random();
 		let m2_hash = H256::random();
 		let m1 = vec![1, 2, 3];
@@ -565,11 +626,11 @@ mod tests {
 
 	#[test]
 	fn message_stream_include_those_sent_before_asking() {
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into());
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into(), None);
 
 		// Register message.
 		let message = vec![4, 5, 6];
-		let topic = HashFor::<Block>::hash(&[1,2,3]);
+		let topic = HashFor::<Block>::hash(&[1, 2, 3]);
 		consensus.register_message(topic, message.clone());
 
 		assert_eq!(
@@ -580,7 +641,7 @@ mod tests {
 
 	#[test]
 	fn can_keep_multiple_messages_per_topic() {
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into());
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into(), None);
 
 		let topic = [1; 32].into();
 		let msg_a = vec![1, 2, 3];
@@ -594,7 +655,7 @@ mod tests {
 
 	#[test]
 	fn peer_is_removed_on_disconnect() {
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into());
+		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into(), None);
 
 		let mut network = NoOpNetwork::default();
 
@@ -608,14 +669,12 @@ mod tests {
 
 	#[test]
 	fn on_incoming_ignores_discarded_messages() {
-		let to_forward = ConsensusGossip::<Block>::new(
-			Arc::new(DiscardAll),
-			"/foo".into(),
-		).on_incoming(
-			&mut NoOpNetwork::default(),
-			PeerId::random(),
-			vec![vec![1, 2, 3]],
-		);
+		let to_forward = ConsensusGossip::<Block>::new(Arc::new(DiscardAll), "/foo".into(), None)
+			.on_incoming(
+				&mut NoOpNetwork::default(),
+				PeerId::random(),
+				vec![vec![1, 2, 3]],
+			);
 
 		assert!(
 			to_forward.is_empty(),
@@ -628,15 +687,13 @@ mod tests {
 		let mut network = NoOpNetwork::default();
 		let remote = PeerId::random();
 
-		let to_forward = ConsensusGossip::<Block>::new(
-			Arc::new(AllowAll),
-			"/foo".into(),
-		).on_incoming(
-			&mut network,
-			// Unregistered peer.
-			remote.clone(),
-			vec![vec![1, 2, 3]],
-		);
+		let to_forward = ConsensusGossip::<Block>::new(Arc::new(AllowAll), "/foo".into(), None)
+			.on_incoming(
+				&mut network,
+				// Unregistered peer.
+				remote.clone(),
+				vec![vec![1, 2, 3]],
+			);
 
 		assert!(
 			to_forward.is_empty(),

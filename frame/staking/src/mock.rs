@@ -27,7 +27,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_io;
 use sp_npos_elections::{
-	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
+	to_support_map, EvaluateSupport, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
 };
 use sp_runtime::{
 	curve::PiecewiseLinear,
@@ -395,6 +395,8 @@ impl ExtBuilder {
 		};
 
 		let num_validators = self.num_validators.unwrap_or(self.validator_count);
+		// Check that the number of validators is sensible.
+		assert!(num_validators <= 8);
 		let validators = (0..num_validators)
 			.map(|x| ((x + 1) * 10 + 1) as AccountId)
 			.collect::<Vec<_>>();
@@ -413,6 +415,14 @@ impl ExtBuilder {
 				(31, balance_factor * 2000),
 				(40, balance_factor),
 				(41, balance_factor * 2000),
+				(50, balance_factor),
+				(51, balance_factor * 2000),
+				(60, balance_factor),
+				(61, balance_factor * 2000),
+				(70, balance_factor),
+				(71, balance_factor * 2000),
+				(80, balance_factor),
+				(81, balance_factor * 2000),
 				(100, 2000 * balance_factor),
 				(101, 2000 * balance_factor),
 				// This allows us to have a total_payout different from 0.
@@ -850,8 +860,8 @@ pub(crate) fn horrible_npos_solution(
 	let score = {
 		let (_, _, better_score) = prepare_submission_with(true, true, 0, |_| {});
 
-		let support = build_support_map::<AccountId>(&winners, &staked_assignment).unwrap();
-		let score = evaluate_support(&support);
+		let support = to_support_map::<AccountId>(&winners, &staked_assignment).unwrap();
+		let score = support.evaluate();
 
 		assert!(sp_npos_elections::is_score_better::<Perbill>(
 			better_score,
@@ -950,11 +960,11 @@ pub(crate) fn prepare_submission_with(
 			Staking::slashable_balance_of_fn(),
 		);
 
-		let support_map = build_support_map::<AccountId>(
+		let support_map = to_support_map::<AccountId>(
 			winners.as_slice(),
 			staked.as_slice(),
 		).unwrap();
-		evaluate_support::<AccountId>(&support_map)
+		support_map.evaluate()
 	} else {
 		Default::default()
 	};
