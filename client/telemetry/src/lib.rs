@@ -301,7 +301,7 @@ impl TelemetryWorker {
 					addr,
 					verbosity,
 				);
-				return;
+				continue;
 			}
 
 			if let Some(node) = node_pool.get_mut(&addr) {
