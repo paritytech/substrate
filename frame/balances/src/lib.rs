@@ -255,7 +255,7 @@ pub mod pallet {
 		pub fn transfer(
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] value: T::Balance
+			#[pallet::compact] value: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
@@ -289,7 +289,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] new_free: T::Balance,
-			#[pallet::compact] new_reserved: T::Balance
+			#[pallet::compact] new_reserved: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -332,7 +332,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			source: <T::Lookup as StaticLookup>::Source,
 			dest: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] value: T::Balance
+			#[pallet::compact] value: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let source = T::Lookup::lookup(source)?;
@@ -356,7 +356,7 @@ pub mod pallet {
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] value: T::Balance
+			#[pallet::compact] value: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
@@ -410,12 +410,6 @@ pub mod pallet {
 		DeadAccount,
 	}
 
-	// #[pallet::origin]
-	// TODO_ORIGIN
-
-	// #[pallet::validate_unsigned]
-	// TODO_VALIDATE_UNSIGNED
-
 	/// The total units issued in the system.
 	#[pallet::storage]
 	#[pallet::getter(fn total_issuance)]
@@ -425,20 +419,35 @@ pub mod pallet {
 	///
 	/// NOTE: This is only used in the case that this module is used to store balances.
 	#[pallet::storage]
-	pub type Account<T: Config<I>, I: 'static = ()> = StorageMap<_, Blake2_128Concat, T::AccountId, AccountData<T::Balance>, ValueQuery>;
+	pub type Account<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		AccountData<T::Balance>,
+		ValueQuery
+	>;
 
 	/// Any liquidity locks on some account balances.
 	/// NOTE: Should only be accessed when setting, changing and freeing a lock.
 	#[pallet::storage]
 	#[pallet::getter(fn locks)]
-	pub type Locks<T: Config<I>, I: 'static = ()> = StorageMap<_, Blake2_128Concat, T::AccountId, Vec<BalanceLock<T::Balance>>, ValueQuery>;
+	pub type Locks<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Vec<BalanceLock<T::Balance>>,
+		ValueQuery
+	>;
 
 	/// Storage version of the pallet.
 	///
 	/// This is set to v2.0.0 for new networks.
 	#[pallet::storage]
-	pub(super) type StorageVersion<T: Config<I>, I: 'static = ()> = StorageValue<_, Releases, ValueQuery>;
-
+	pub(super) type StorageVersion<T: Config<I>, I: 'static = ()> = StorageValue<
+		_,
+		Releases,
+		ValueQuery
+	>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
