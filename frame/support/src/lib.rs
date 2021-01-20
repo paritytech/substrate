@@ -1387,9 +1387,9 @@ pub mod pallet_prelude {
 ///
 /// ### Macro expansion
 ///
-/// For each storage the macro generate a struct named
-/// `_GeneratedPrefixForStorage$NameOfStorage`, implements `StorageInstance` on it using pallet
-/// name and storage name. And use it as first generic of the aliased type.
+/// For each storage item the macro generates a struct named
+/// `_GeneratedPrefixForStorage$NameOfStorage`, implements `StorageInstance` on it using the 
+/// pallet and storage name. It then uses it as the first generic of the aliased type.
 ///
 ///
 /// The macro implements the function `storage_metadata` on `Pallet` implementing the metadata for
