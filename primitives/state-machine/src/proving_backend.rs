@@ -29,7 +29,7 @@ use sp_trie::{
 pub use sp_trie::{Recorder, trie_types::{Layout, TrieError}};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
-use crate::{Error, ExecutionError, Backend, DBValue, AsyncBackend};
+use crate::{Error, ExecutionError, Backend, DBValue};
 use sp_core::storage::ChildInfo;
 
 /// Patricia trie-based backend specialized in get value proofs.
@@ -119,20 +119,9 @@ pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: Hasher + 'static
 	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
 );
 
-/// A proving backend for workers.
-pub struct OwnedProvingBackend<S: TrieBackendStorage<H>, H: Hasher + 'static> (
-	TrieBackend<OwnedProofRecorderBackend<S, H>, H>,
-);
-
 impl<'a, S: TrieBackendStorage<H>, H: Hasher> Clone for ProvingBackend<'a, S, H> {
 	fn clone(&self) -> Self {
 		ProvingBackend(self.0.clone())
-	}
-}
-
-impl<S: TrieBackendStorage<H>, H: Hasher> Clone for OwnedProvingBackend<S, H> {
-	fn clone(&self) -> Self {
-		OwnedProvingBackend(self.0.clone())
 	}
 }
 
@@ -185,7 +174,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'static + Hasher> TrieBackendStorage<
 	for ProofRecorderBackend<'a, S, H>
 {
 	type Overlay = S::Overlay;
-	type AsyncStorage = OwnedProofRecorderBackend<S::AsyncStorage, H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		if let Some(v) = self.proof_recorder.read().get(key) {
@@ -194,13 +182,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'static + Hasher> TrieBackendStorage<
 		let backend_value =  self.backend.get(key, prefix)?;
 		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
 		Ok(backend_value)
-	}
-
-	fn async_storage(&self) -> Self::AsyncStorage {
-		OwnedProofRecorderBackend {
-			backend: self.backend.async_storage(),
-			proof_recorder: self.proof_recorder.clone(),
-		}
 	}
 }
 
@@ -208,7 +189,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher + 'static> TrieBackendStorage<H>
 	for OwnedProofRecorderBackend<S, H>
 {
 	type Overlay = S::Overlay;
-	type AsyncStorage = OwnedProofRecorderBackend<S::AsyncStorage, H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		if let Some(v) = self.proof_recorder.read().get(key) {
@@ -217,13 +197,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher + 'static> TrieBackendStorage<H>
 		let backend_value =  self.backend.get(key, prefix)?;
 		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
 		Ok(backend_value)
-	}
-
-	fn async_storage(&self) -> Self::AsyncStorage {
-		OwnedProofRecorderBackend {
-			backend: self.backend.async_storage(),
-			proof_recorder: self.proof_recorder.clone(),
-		}
 	}
 }
 
@@ -253,13 +226,6 @@ impl<'a, S: TrieBackendStorage<H>, H: Hasher> std::fmt::Debug
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "ProvingBackend")
-	}
-}
-
-impl<S: TrieBackendStorage<H>, H: Hasher> std::fmt::Debug for OwnedProvingBackend<S, H>
-{
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "OwnedProvingBackend")
 	}
 }
 
@@ -357,114 +323,6 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn usage_info(&self) -> crate::stats::UsageInfo {
 		self.0.usage_info()
-	}
-
-	fn async_backend(&self) -> Box<dyn AsyncBackend> {
-		let async_storage = self.0.backend_storage().async_storage();
-		Box::new(crate::backend::AsyncBackendAdapter::new(OwnedProvingBackend(
-			TrieBackend::new(async_storage, self.0.essence().root().clone())
-		)))
-	}
-}
-
-impl<S, H> Backend<H> for OwnedProvingBackend<S, H>
-	where
-		S: TrieBackendStorage<H> + 'static,
-		H: Hasher + 'static,
-		H::Out: Ord + Codec,
-{
-	type Error = String;
-	type Transaction = S::Overlay;
-	type TrieBackendStorage = S;
-
-	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.storage(key)
-	}
-
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.child_storage(child_info, key)
-	}
-
-	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
-		&self,
-		child_info: &ChildInfo,
-		f: F,
-	) {
-		self.0.apply_to_child_keys_while(child_info, f)
-	}
-
-	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.next_storage_key(key)
-	}
-
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.next_child_storage_key(child_info, key)
-	}
-
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.0.for_keys_with_prefix(prefix, f)
-	}
-
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.0.for_key_values_with_prefix(prefix, f)
-	}
-
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-		f: F,
-	) {
-		self.0.for_child_keys_with_prefix( child_info, prefix, f)
-	}
-
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.0.pairs()
-	}
-
-	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.0.keys(prefix)
-	}
-
-	fn child_keys(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-	) -> Vec<Vec<u8>> {
-		self.0.child_keys(child_info, prefix)
-	}
-
-	fn storage_root<'b>(
-		&self,
-		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
-	) -> (H::Out, Self::Transaction) where H::Out: Ord {
-		self.0.storage_root(delta)
-	}
-
-	fn child_storage_root<'b>(
-		&self,
-		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
-	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
-		self.0.child_storage_root(child_info, delta)
-	}
-
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
-
-	fn usage_info(&self) -> crate::stats::UsageInfo {
-		self.0.usage_info()
-	}
-
-	fn async_backend(&self) -> Box<dyn AsyncBackend> {
-		self.0.async_backend()
 	}
 }
 

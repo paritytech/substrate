@@ -27,10 +27,9 @@ use crate::{
 	trie_backend_essence::TrieBackendStorage,
 	UsageInfo, StorageKey, StorageValue, StorageCollection, ChildStorageCollection,
 };
-use sp_std::{vec::Vec, boxed::Box};
+use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
-use super::EXT_NOT_ALLOWED_TO_FAIL;
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -245,113 +244,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Update the whitelist for tracking db reads/writes
 	fn set_whitelist(&self, _: Vec<TrackedStorageKey>) {}
-
-	/// Get backend to use with threads.
-	fn async_backend(&self) -> Box<dyn AsyncBackend>;
-}
-
-/// Read state backend to use with workers.
-///
-/// This trait must be usable as `dyn AsyncBackend`,
-/// which is not the case for Backend trait.
-pub trait AsyncBackend: Send {
-	/// Read runtime storage.
-	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
-
-	/// Read child runtime storage.
-	///
-	/// Returns an `Option` that holds the SCALE encoded hash.
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>>;
-
-	/// Returns the key immediately following the given key, if it exists.
-	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>>;
-
-	/// Returns the key immediately following the given key, if it exists, in child storage.
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8]
-	) -> Option<Vec<u8>>;
-
-	/// Alternative to Clone for backend.
-	/// If dyn_clonable get compatible with no_std, this
-	/// function could be removed.
-	fn async_backend(&self) -> Box<dyn AsyncBackend>;
-}
-
-/// '()' can be use as an epmty 'AsyncBackend'.
-impl AsyncBackend for () {
-	fn storage(&self, _key: &[u8]) -> Option<Vec<u8>> {
-		None
-	}
-
-	fn child_storage(
-		&self,
-		_child_info: &ChildInfo,
-		_key: &[u8],
-	) -> Option<Vec<u8>> {
-		None
-	}
-
-	fn next_storage_key(&self, _key: &[u8]) -> Option<Vec<u8>> {
-		None
-	}
-
-	fn next_child_storage_key(
-		&self,
-		_child_info: &ChildInfo,
-		_key: &[u8]
-	) -> Option<Vec<u8>> {
-		None
-	}
-
-	fn async_backend(&self) -> Box<dyn AsyncBackend> {
-		Box::new(())
-	}
-}
-
-/// Async Backend implemented for a given state machine backend.
-pub struct AsyncBackendAdapter<H, B>(B, sp_std::marker::PhantomData<H>);
-
-impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackend for AsyncBackendAdapter<H, B> {
-	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.0.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
-	}
-
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
-		self.0.child_storage(child_info, key).expect(EXT_NOT_ALLOWED_TO_FAIL)
-	}
-
-	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.0.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
-	}
-
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8]
-	) -> Option<Vec<u8>> {
-		self.0.next_child_storage_key(child_info, key).expect(EXT_NOT_ALLOWED_TO_FAIL)
-	}
-
-	fn async_backend(&self) -> Box<dyn AsyncBackend> {
-		self.0.async_backend()
-	}
-}
-
-impl<H: Hasher, B: Backend<H> + Send + 'static> AsyncBackendAdapter<H, B> {
-	/// Get an async backend from an existing backend.
-	pub fn new(backend: B) -> Self {
-		AsyncBackendAdapter(backend, sp_std::marker::PhantomData)
-	}
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
@@ -431,10 +323,6 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn usage_info(&self) -> UsageInfo {
 		(*self).usage_info()
-	}
-
-	fn async_backend(&self) -> Box<dyn AsyncBackend> {
-		(*self).async_backend()
 	}
 }
 

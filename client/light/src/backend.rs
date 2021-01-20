@@ -518,11 +518,4 @@ impl<H: Hasher + 'static> StateBackend<H> for GenesisOrUnavailableState<H>
 			GenesisOrUnavailableState::Unavailable => None,
 		}
 	}
-
-	fn async_backend(&self) -> Box<dyn sp_state_machine::AsyncBackend> {
-		match self {
-			GenesisOrUnavailableState::Genesis(state) => state.async_backend(),
-			GenesisOrUnavailableState::Unavailable => Box::new(()),
-		}
-	}
 }

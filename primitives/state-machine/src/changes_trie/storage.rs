@@ -25,7 +25,7 @@ use sp_trie::MemoryDB;
 use parking_lot::RwLock;
 use crate::{
 	StorageKey,
-	trie_backend_essence::{TrieBackendStorage, NoopsBackenStorage},
+	trie_backend_essence::TrieBackendStorage,
 	changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber},
 };
 
@@ -206,14 +206,9 @@ impl<'a, H, Number> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number>
 		H: Hasher + 'static,
 {
 	type Overlay = MemoryDB<H>;
-	type AsyncStorage = NoopsBackenStorage<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.storage.get(key, prefix)
-	}
-
-	fn async_storage(&self) -> Self::AsyncStorage {
-		panic!("Cannot run async with TrieBackendAdapter")
 	}
 }
 

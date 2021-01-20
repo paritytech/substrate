@@ -256,10 +256,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	fn usage_info(&self) -> StateUsageInfo {
 		self.state.usage_info()
 	}
-
-	fn async_backend(&self) -> Box<dyn sp_state_machine::AsyncBackend> {
-		self.state.async_backend()
-	}
 }
 
 /// Database settings.

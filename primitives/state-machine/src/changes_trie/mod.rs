@@ -166,14 +166,9 @@ pub struct TrieBackendStorageAdapter<'a, H: Hasher, Number: BlockNumber>(pub &'a
 
 impl<'a, H: Hasher + 'static, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackendStorageAdapter<'a, H, N> {
 	type Overlay = sp_trie::MemoryDB<H>;
-	type AsyncStorage = crate::trie_backend_essence::NoopsBackenStorage<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.0.get(key, prefix)
-	}
-
-	fn async_storage(&self) -> Self::AsyncStorage {
-		panic!("Cannot run async with TrieBackendStorageAdapter")
 	}
 }
 

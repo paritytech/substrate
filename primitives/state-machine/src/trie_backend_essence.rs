@@ -285,15 +285,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
 		self.keys_values_with_prefix_inner(&self.root, prefix, f, None)
 	}
-
-	/// Backend for workers.
-	pub fn async_backend(&self) -> TrieBackendEssence<S::AsyncStorage, H> {
-		TrieBackendEssence {
-			storage: self.storage.async_storage(),
-			root: self.root.clone(),
-			empty: self.empty.clone(),
-		}
-	}
 }
 
 pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -365,86 +356,37 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue
 
 /// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorage<H: Hasher>: Send + Sync + Clone {
-	/// This is the storage to use with thread workers.
-	/// Most of the time it is the same as this trait.
-	type AsyncStorage: TrieBackendStorage<H> + 'static;
 	/// Type of in-memory overlay.
 	type Overlay: hash_db::HashDB<H, DBValue> + Default + Consolidate;
 
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
-
-	/// Most of `TrieBackendStorage` are 'static, still some are
-	/// not, for this case we use an associated backend type.
-	fn async_storage(&self) -> Self::AsyncStorage;
 }
-
-/// When async_storage returns always `None`,
-/// this can be use as a dummy implementation.
-pub struct NoopsBackenStorage<H>(sp_std::marker::PhantomData<H>);
-
-impl<H> Clone for NoopsBackenStorage<H> {
-	fn clone(&self) -> Self {
-		NoopsBackenStorage(sp_std::marker::PhantomData)
-	}
-}
-
-impl<H: Hasher + 'static> TrieBackendStorage<H> for NoopsBackenStorage<H> {
-	type AsyncStorage = Self;
-	type Overlay = MemoryDB<H>;
-
-	#[cfg(feature = "std")]
-	fn get(&self, _key: &H::Out, _prefix: Prefix) -> Result<Option<DBValue>> {
-		Err("Dummy storage should not be call".into())
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn get(&self, _key: &H::Out, _prefix: Prefix) -> Result<Option<DBValue>> {
-		Err(crate::DefaultError)
-	}
-
-	fn async_storage(&self) -> Self::AsyncStorage {
-		self.clone()
-	}
-}
-
 
 // This implementation is used by normal storage trie clients.
 #[cfg(feature = "std")]
 impl<H: Hasher + 'static> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	type Overlay = PrefixedMemoryDB<H>;
-	type AsyncStorage = Self;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Storage::<H>::get(self.deref(), key, prefix)
-	}
-	fn async_storage(&self) -> Self::AsyncStorage {
-		self.clone()
 	}
 }
 
 // This implementation is used by test storage trie clients.
 impl<H: Hasher + 'static> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
 	type Overlay = PrefixedMemoryDB<H>;
-	type AsyncStorage = Self;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
-	}
-	fn async_storage(&self) -> Self::AsyncStorage {
-		self.clone()
 	}
 }
 
 impl<H: Hasher + 'static> TrieBackendStorage<H> for MemoryDB<H> {
 	type Overlay = MemoryDB<H>;
-	type AsyncStorage = Self;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
-	}
-	fn async_storage(&self) -> Self::AsyncStorage {
-		self.clone()
 	}
 }
 

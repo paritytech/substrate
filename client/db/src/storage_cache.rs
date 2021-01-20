@@ -667,10 +667,6 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		info.include_state_machine_states(&self.overlay_stats);
 		info
 	}
-
-	fn async_backend(&self) -> Box<dyn sp_state_machine::AsyncBackend> {
-		self.state.async_backend()
-	}
 }
 
 /// Extended [`CachingState`] that will sync the caches on drop.
@@ -853,10 +849,6 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		self.caching_state().usage_info()
-	}
-
-	fn async_backend(&self) -> Box<dyn sp_state_machine::AsyncBackend> {
-		self.caching_state().async_backend()
 	}
 }
 

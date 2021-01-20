@@ -24,7 +24,7 @@ use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use sp_core::storage::{ChildInfo, ChildType};
 use codec::{Codec, Decode};
 use crate::{
-	StorageKey, StorageValue, Backend, AsyncBackend,
+	StorageKey, StorageValue, Backend,
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral},
 };
 use sp_std::{boxed::Box, vec::Vec};
@@ -252,14 +252,6 @@ impl<S, H> Backend<H> for TrieBackend<S, H> where
 
 	fn wipe(&self) -> Result<(), Self::Error> {
 		Ok(())
-	}
-
-	fn async_backend(&self) -> Box<dyn AsyncBackend> {
-		use crate::backend::AsyncBackendAdapter;
-
-		let inner: TrieBackend<S::AsyncStorage, H> = TrieBackend { essence: self.essence.async_backend()};
-		let inner: AsyncBackendAdapter<H, TrieBackend<S::AsyncStorage, H>> = AsyncBackendAdapter::new(inner);
-		Box::new(inner)
 	}
 }
 

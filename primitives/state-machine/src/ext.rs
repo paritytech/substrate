@@ -698,11 +698,9 @@ where
 		worker_id: u64,
 		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
-		let backend = self.backend.async_backend();
 		Box::new(crate::async_ext::new_child_worker_async_ext(
 			worker_id,
 			declaration,
-			backend,
 			Some(&mut self.overlay),
 		))
 	}

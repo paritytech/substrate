@@ -29,7 +29,7 @@ use sp_core::{
 };
 use sp_externalities::{Externalities, TaskId, AsyncExternalitiesPostExecution,
 	WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities};
-use crate::{StorageValue, StorageKey, AsyncBackend};
+use crate::{StorageValue, StorageKey};
 
 /// Async view on state machine Ext.
 /// It contains its own set of state and rules,
@@ -39,7 +39,6 @@ pub struct AsyncExt {
 	// Actually unused at this point, is for write variant.
 	overlay: OverlayedChanges,
 	spawn_id: TaskId,
-	backend: Box<dyn AsyncBackend>,
 }
 
 #[cfg(feature = "std")]
@@ -54,7 +53,6 @@ impl std::fmt::Debug for AsyncExt
 pub fn new_child_worker_async_ext(
 	worker_id: u64,
 	declaration: WorkerDeclaration,
-	backend: Box<dyn AsyncBackend>,
 	parent_overlay: Option<&mut OverlayedChanges>,
 ) -> AsyncExt {
 	let mut result = match &declaration {
@@ -65,7 +63,6 @@ pub fn new_child_worker_async_ext(
 				kind: WorkerType::Stateless,
 				overlay: Default::default(),
 				spawn_id: worker_id,
-				backend: Box::new(()),
 			}
 		},
 		#[allow(unreachable_patterns)] // FIXME only for future async ext with state.
@@ -74,7 +71,6 @@ pub fn new_child_worker_async_ext(
 				kind: declaration.get_type(),
 				overlay: Default::default(),
 				spawn_id: worker_id,
-				backend: backend,
 			}
 		},
 	};
@@ -238,12 +234,10 @@ impl Externalities for AsyncExt {
 		worker_id: u64,
 		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
-		let backend = self.backend.async_backend();
 		self.kind.guard_compatible_child_workers(declaration.get_type());
 		Box::new(crate::async_ext::new_child_worker_async_ext(
 			worker_id,
 			declaration,
-			backend,
 			Some(&mut self.overlay),
 		))
 	}

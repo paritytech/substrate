@@ -495,11 +495,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		self.state.borrow().as_ref().map_or(sp_state_machine::UsageInfo::empty(), |s| s.usage_info())
 	}
-
-	fn async_backend(&self) -> Box<dyn sp_state_machine::AsyncBackend> {
-		self.state.borrow().as_ref().map(|state| state.async_backend())
-			.unwrap_or_else(|| Box::new(()))
-	}
 }
 
 impl<Block: BlockT> std::fmt::Debug for BenchmarkingState<Block> {
