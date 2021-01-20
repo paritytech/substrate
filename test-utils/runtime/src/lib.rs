@@ -745,6 +745,10 @@ cfg_if! {
 					<pallet_babe::Module<Runtime>>::current_epoch()
 				}
 
+				fn next_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::next_epoch()
+				}
+
 				fn submit_report_equivocation_unsigned_extrinsic(
 					_equivocation_proof: sp_consensus_babe::EquivocationProof<
 						<Block as BlockT>::Header,
@@ -1002,6 +1006,10 @@ cfg_if! {
 
 				fn current_epoch() -> sp_consensus_babe::Epoch {
 					<pallet_babe::Module<Runtime>>::current_epoch()
+				}
+
+				fn next_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::next_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(

@@ -40,7 +40,7 @@ pub struct CallDef {
 	pub index: usize,
 	/// Information on methods (used for expansion).
 	pub methods: Vec<CallVariantDef>,
-	/// The span of the attribute.
+	/// The span of the pallet::call attribute.
 	pub attr_span: proc_macro2::Span,
 }
 
@@ -124,7 +124,6 @@ pub fn check_dispatchable_first_arg_type(ty: &syn::Type) -> syn::Result<()> {
 
 impl CallDef {
 	pub fn try_from(
-		// Span needed for expansion
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::Item
@@ -175,7 +174,7 @@ impl CallDef {
 					helper::take_item_attrs(&mut method.attrs)?;
 
 				if call_var_attrs.len() != 1 {
-					let msg = if call_var_attrs.len() == 0 {
+					let msg = if call_var_attrs.is_empty() {
 						"Invalid pallet::call, require weight attribute i.e. `#[pallet::weight = $expr]`"
 					} else {
 						"Invalid pallet::call, too many weight attributes given"

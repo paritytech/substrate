@@ -153,6 +153,25 @@ impl From<BadOrigin> for &'static str {
 	}
 }
 
+/// Error that can be returned by our impl of `StoredMap`.
+#[derive(Encode, Decode, RuntimeDebug)]
+pub enum StoredMapError {
+	/// Attempt to create map value when it is a consumer and there are no providers in place.
+	NoProviders,
+	/// Attempt to anull/remove value when it is the last provider and there is still at
+	/// least one consumer left.
+	ConsumerRemaining,
+}
+
+impl From<StoredMapError> for &'static str {
+	fn from(e: StoredMapError) -> &'static str {
+		match e {
+			StoredMapError::NoProviders => "No providers",
+			StoredMapError::ConsumerRemaining => "Consumer remaining",
+		}
+	}
+}
+
 /// An error that indicates that a lookup failed.
 #[derive(Encode, Decode, RuntimeDebug)]
 pub struct LookupError;

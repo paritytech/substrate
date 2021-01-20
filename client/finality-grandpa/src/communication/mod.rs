@@ -217,7 +217,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let gossip_engine = Arc::new(Mutex::new(GossipEngine::new(
 			service.clone(),
 			GRANDPA_PROTOCOL_NAME,
-			validator.clone()
+			validator.clone(),
+			prometheus_registry,
 		)));
 
 		{
@@ -721,7 +722,7 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 			);
 
 			// announce the block we voted on to our peers.
-			self.network.lock().announce(target_hash, Vec::new());
+			self.network.lock().announce(target_hash, None);
 
 			// propagate the message to peers
 			let topic = round_topic::<Block>(self.round, self.set_id);

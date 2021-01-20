@@ -17,14 +17,13 @@
 
 //! Tests for npos-elections.
 
-use crate::mock::*;
 use crate::{
-	seq_phragmen, balancing, build_support_map, is_score_better, helpers::*,
-	Support, StakedAssignment, Assignment, ElectionResult, ExtendedBalance, setup_inputs,
-	seq_phragmen_core, Voter,
+	balancing, helpers::*, is_score_better, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs,
+	to_support_map, to_supports, Assignment, ElectionResult, ExtendedBalance, StakedAssignment,
+	Support, Voter, EvaluateSupport,
 };
+use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
 use substrate_test_utils::assert_eq_uvec;
-use sp_arithmetic::{Perbill, Permill, Percent, PerU16};
 
 #[test]
 fn float_phragmen_poc_works() {
@@ -53,22 +52,22 @@ fn float_phragmen_poc_works() {
 
 	assert_eq!(
 		support_map.get(&2).unwrap(),
-		&_Support { own: 0.0, total: 25.0, others: vec![(10u64, 10.0), (30u64, 15.0)]}
+		&_Support { own: 0.0, total: 25.0, others: vec![(10u64, 10.0), (30u64, 15.0)] }
 	);
 	assert_eq!(
 		support_map.get(&3).unwrap(),
-		&_Support { own: 0.0, total: 35.0, others: vec![(20u64, 20.0), (30u64, 15.0)]}
+		&_Support { own: 0.0, total: 35.0, others: vec![(20u64, 20.0), (30u64, 15.0)] }
 	);
 
 	equalize_float(phragmen_result.assignments, &mut support_map, 0.0, 2, stake_of);
 
 	assert_eq!(
 		support_map.get(&2).unwrap(),
-		&_Support { own: 0.0, total: 30.0, others: vec![(10u64, 10.0), (30u64, 20.0)]}
+		&_Support { own: 0.0, total: 30.0, others: vec![(10u64, 10.0), (30u64, 20.0)] }
 	);
 	assert_eq!(
 		support_map.get(&3).unwrap(),
-		&_Support { own: 0.0, total: 30.0, others: vec![(20u64, 20.0), (30u64, 10.0)]}
+		&_Support { own: 0.0, total: 30.0, others: vec![(20u64, 20.0), (30u64, 10.0)] }
 	);
 }
 
@@ -300,7 +299,7 @@ fn phragmen_poc_works() {
 
 	let staked = assignment_ratio_to_staked(assignments, &stake_of);
 	let winners = to_without_backing(winners);
-	let support_map = build_support_map::<AccountId>(&winners, &staked).unwrap();
+	let support_map = to_support_map::<AccountId>(&winners, &staked).unwrap();
 
 	assert_eq_uvec!(
 		staked,
@@ -374,7 +373,7 @@ fn phragmen_poc_works_with_balancing() {
 
 	let staked = assignment_ratio_to_staked(assignments, &stake_of);
 	let winners = to_without_backing(winners);
-	let support_map = build_support_map::<AccountId>(&winners, &staked).unwrap();
+	let support_map = to_support_map::<AccountId>(&winners, &staked).unwrap();
 
 	assert_eq_uvec!(
 		staked,
@@ -766,7 +765,7 @@ fn phragmen_self_votes_should_be_kept() {
 
 	let staked_assignments = assignment_ratio_to_staked(result.assignments, &stake_of);
 	let winners = to_without_backing(result.winners);
-	let supports = build_support_map::<AccountId>(&winners, &staked_assignments).unwrap();
+	let supports = to_support_map::<AccountId>(&winners, &staked_assignments).unwrap();
 
 	assert_eq!(supports.get(&5u64), None);
 	assert_eq!(
@@ -837,6 +836,34 @@ fn duplicate_target_is_ignored_when_winner() {
 			(20, vec![1, 2]),
 		],
 	);
+}
+
+#[test]
+fn support_map_and_vec_can_be_evaluated() {
+	let candidates = vec![1, 2, 3];
+	let voters = vec![(10, vec![1, 2]), (20, vec![1, 3]), (30, vec![2, 3])];
+
+	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
+	let ElectionResult {
+		winners,
+		assignments,
+	} = seq_phragmen::<_, Perbill>(
+		2,
+		candidates,
+		voters
+			.iter()
+			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.collect::<Vec<_>>(),
+		None,
+	)
+	.unwrap();
+
+	let staked = assignment_ratio_to_staked(assignments, &stake_of);
+	let winners = to_without_backing(winners);
+	let support_map = to_support_map::<AccountId>(&winners, &staked).unwrap();
+	let support_vec = to_supports(&winners, &staked).unwrap();
+
+	assert_eq!(support_map.evaluate(), support_vec.evaluate());
 }
 
 mod assignment_convert_normalize {
@@ -1112,15 +1139,12 @@ mod score {
 }
 
 mod solution_type {
-	use codec::{Decode, Encode};
 	use super::AccountId;
+	use codec::{Decode, Encode};
 	// these need to come from the same dev-dependency `sp-npos-elections`, not from the crate.
-	use crate::{
-		generate_solution_type, Assignment,
-		Error as PhragmenError,
-	};
-	use sp_std::{convert::TryInto, fmt::Debug};
+	use crate::{generate_solution_type, Assignment, CompactSolution, Error as PhragmenError};
 	use sp_arithmetic::Percent;
+	use sp_std::{convert::TryInto, fmt::Debug};
 
 	type TestAccuracy = Percent;
 
@@ -1136,7 +1160,6 @@ mod solution_type {
 			#[compact]
 			struct InnerTestSolutionCompact::<u32, u8, Percent>(12)
 		);
-
 	}
 
 	#[test]
@@ -1190,7 +1213,7 @@ mod solution_type {
 			compact,
 			Decode::decode(&mut &encoded[..]).unwrap(),
 		);
-		assert_eq!(compact.len(), 4);
+		assert_eq!(compact.voter_count(), 4);
 		assert_eq!(compact.edge_count(), 2 + 4);
 		assert_eq!(compact.unique_targets(), vec![10, 11, 20, 40, 50, 51]);
 	}
@@ -1326,7 +1349,7 @@ mod solution_type {
 		).unwrap();
 
 		// basically number of assignments that it is encoding.
-		assert_eq!(compacted.len(), assignments.len());
+		assert_eq!(compacted.voter_count(), assignments.len());
 		assert_eq!(
 			compacted.edge_count(),
 			assignments.iter().fold(0, |a, b| a + b.distribution.len()),
@@ -1410,9 +1433,12 @@ mod solution_type {
 			..Default::default()
 		};
 
-		assert_eq!(compact.unique_targets(), vec![1, 2, 3, 4, 7, 8, 11, 12, 13, 66, 67]);
+		assert_eq!(
+			compact.unique_targets(),
+			vec![1, 2, 3, 4, 7, 8, 11, 12, 13, 66, 67]
+		);
 		assert_eq!(compact.edge_count(), 2 + (2 * 2) + 3 + 16);
-		assert_eq!(compact.len(), 6);
+		assert_eq!(compact.voter_count(), 6);
 
 		// this one has some duplicates.
 		let compact = TestSolutionCompact {
@@ -1429,7 +1455,7 @@ mod solution_type {
 
 		assert_eq!(compact.unique_targets(), vec![1, 3, 4, 7, 8, 11, 13]);
 		assert_eq!(compact.edge_count(), 2 + (2 * 2) + 3);
-		assert_eq!(compact.len(), 5);
+		assert_eq!(compact.voter_count(), 5);
 	}
 
 	#[test]

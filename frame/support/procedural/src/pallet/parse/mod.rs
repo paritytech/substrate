@@ -66,7 +66,7 @@ impl Def {
 		let frame_system = generate_crate_access_2018("frame-system")?;
 		let frame_support = generate_crate_access_2018("frame-support")?;
 
-		let item_span = item.span().clone();
+		let item_span = item.span();
 		let items = &mut item.content.as_mut()
 			.ok_or_else(|| {
 				let msg = "Invalid pallet definition, expected mod to be inlined.";
@@ -92,38 +92,42 @@ impl Def {
 			let pallet_attr: Option<PalletAttr> = helper::take_first_item_attr(item)?;
 
 			match pallet_attr {
-				Some(PalletAttr::Config(_)) if config.is_none() =>
-					config = Some(config::ConfigDef::try_from(&frame_system, index, item)?),
-				Some(PalletAttr::Pallet(_)) if pallet_struct.is_none() =>
-					pallet_struct = Some(pallet_struct::PalletStructDef::try_from(index, item)?),
-				Some(PalletAttr::Hooks(_)) if hooks.is_none() => {
-					let m = hooks::HooksDef::try_from(index, item)?;
+				Some(PalletAttr::Config(span)) if config.is_none() =>
+					config = Some(config::ConfigDef::try_from(&frame_system, span, index, item)?),
+				Some(PalletAttr::Pallet(span)) if pallet_struct.is_none() => {
+					let p = pallet_struct::PalletStructDef::try_from(span, index, item)?;
+					pallet_struct = Some(p);
+				},
+				Some(PalletAttr::Hooks(span)) if hooks.is_none() => {
+					let m = hooks::HooksDef::try_from(span, index, item)?;
 					hooks = Some(m);
 				},
 				Some(PalletAttr::Call(span)) if call.is_none() =>
 					call = Some(call::CallDef::try_from(span, index, item)?),
-				Some(PalletAttr::Error(_)) if error.is_none() =>
-					error = Some(error::ErrorDef::try_from(index, item)?),
-				Some(PalletAttr::Event(_)) if event.is_none() =>
-					event = Some(event::EventDef::try_from(index, item)?),
+				Some(PalletAttr::Error(span)) if error.is_none() =>
+					error = Some(error::ErrorDef::try_from(span, index, item)?),
+				Some(PalletAttr::Event(span)) if event.is_none() =>
+					event = Some(event::EventDef::try_from(span, index, item)?),
 				Some(PalletAttr::GenesisConfig(_)) if genesis_config.is_none() => {
-					genesis_config =
-						Some(genesis_config::GenesisConfigDef::try_from(index, item)?);
+					let g = genesis_config::GenesisConfigDef::try_from(index, item)?;
+					genesis_config = Some(g);
 				},
-				Some(PalletAttr::GenesisBuild(_)) if genesis_build.is_none() =>
-					genesis_build = Some(genesis_build::GenesisBuildDef::try_from(index, item)?),
+				Some(PalletAttr::GenesisBuild(span)) if genesis_build.is_none() => {
+					let g = genesis_build::GenesisBuildDef::try_from(span, index, item)?;
+					genesis_build = Some(g);
+				},
 				Some(PalletAttr::Origin(_)) if origin.is_none() =>
 					origin = Some(origin::OriginDef::try_from(index, item)?),
 				Some(PalletAttr::Inherent(_)) if inherent.is_none() =>
 					inherent = Some(inherent::InherentDef::try_from(index, item)?),
-				Some(PalletAttr::Storage(_)) =>
-					storages.push(storage::StorageDef::try_from(index, item)?),
+				Some(PalletAttr::Storage(span)) =>
+					storages.push(storage::StorageDef::try_from(span, index, item)?),
 				Some(PalletAttr::ValidateUnsigned(_)) if validate_unsigned.is_none() => {
 					let v = validate_unsigned::ValidateUnsignedDef::try_from(index, item)?;
 					validate_unsigned = Some(v);
 				},
-				Some(PalletAttr::TypeValue(_)) =>
-					type_values.push(type_value::TypeValueDef::try_from(index, item)?),
+				Some(PalletAttr::TypeValue(span)) =>
+					type_values.push(type_value::TypeValueDef::try_from(span, index, item)?),
 				Some(PalletAttr::ExtraConstants(_)) => {
 					extra_constants =
 						Some(extra_constants::ExtraConstantsDef::try_from(index, item)?)
@@ -148,7 +152,7 @@ impl Def {
 		}
 
 		let def = Def {
-			item: item,
+			item,
 			config: config.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::config]`"))?,
 			pallet_struct: pallet_struct
 				.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::pallet]`"))?,
@@ -255,33 +259,33 @@ impl Def {
 	/// Depending on if pallet is instantiable:
 	/// * either `T: Config`
 	/// * or `T: Config<I>, I: 'static`
-	pub fn type_impl_generics(&self) -> proc_macro2::TokenStream {
+	pub fn type_impl_generics(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
 		if self.config.has_instance {
-			quote::quote!(T: Config<I>, I: 'static)
+			quote::quote_spanned!(span => T: Config<I>, I: 'static)
 		} else {
-			quote::quote!(T: Config)
+			quote::quote_spanned!(span => T: Config)
 		}
 	}
 
 	/// Depending on if pallet is instantiable:
 	/// * either `T: Config`
 	/// * or `T: Config<I>, I: 'static = ()`
-	pub fn type_decl_bounded_generics(&self) -> proc_macro2::TokenStream {
+	pub fn type_decl_bounded_generics(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
 		if self.config.has_instance {
-			quote::quote!(T: Config<I>, I: 'static = ())
+			quote::quote_spanned!(span => T: Config<I>, I: 'static = ())
 		} else {
-			quote::quote!(T: Config)
+			quote::quote_spanned!(span => T: Config)
 		}
 	}
 
 	/// Depending on if pallet is instantiable:
 	/// * either `T`
 	/// * or `T, I = ()`
-	pub fn type_decl_generics(&self) -> proc_macro2::TokenStream {
+	pub fn type_decl_generics(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
 		if self.config.has_instance {
-			quote::quote!(T, I = ())
+			quote::quote_spanned!(span => T, I = ())
 		} else {
-			quote::quote!(T)
+			quote::quote_spanned!(span => T)
 		}
 	}
 
@@ -289,22 +293,22 @@ impl Def {
 	/// * either ``
 	/// * or `<I>`
 	/// to be used when using pallet trait `Config`
-	pub fn trait_use_generics(&self) -> proc_macro2::TokenStream {
+	pub fn trait_use_generics(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
 		if self.config.has_instance {
-			quote::quote!(<I>)
+			quote::quote_spanned!(span => <I>)
 		} else {
-			quote::quote!()
+			quote::quote_spanned!(span => )
 		}
 	}
 
 	/// Depending on if pallet is instantiable:
 	/// * either `T`
 	/// * or `T, I`
-	pub fn type_use_generics(&self) -> proc_macro2::TokenStream {
+	pub fn type_use_generics(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
 		if self.config.has_instance {
-			quote::quote!(T, I)
+			quote::quote_spanned!(span => T, I)
 		} else {
-			quote::quote!(T)
+			quote::quote_spanned!(span => T)
 		}
 	}
 }
@@ -331,20 +335,20 @@ impl GenericKind {
 	/// Return the generic to be used when using the type.
 	///
 	/// Depending on its definition it can be: ``, `T` or `T, I`
-	pub fn type_use_gen(&self) -> proc_macro2::TokenStream {
+	pub fn type_use_gen(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
 		match self {
 			GenericKind::None => quote::quote!(),
-			GenericKind::Config => quote::quote!(T),
-			GenericKind::ConfigAndInstance => quote::quote!(T, I),
+			GenericKind::Config => quote::quote_spanned!(span => T),
+			GenericKind::ConfigAndInstance => quote::quote_spanned!(span => T, I),
 		}
 	}
 
 	/// Return the generic to be used in `impl<..>` when implementing on the type.
-	pub fn type_impl_gen(&self) -> proc_macro2::TokenStream {
+	pub fn type_impl_gen(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
 		match self {
 			GenericKind::None => quote::quote!(),
-			GenericKind::Config => quote::quote!(T: Config),
-			GenericKind::ConfigAndInstance => quote::quote!(T: Config<I>, I: 'static),
+			GenericKind::Config => quote::quote_spanned!(span => T: Config),
+			GenericKind::ConfigAndInstance => quote::quote_spanned!(span => T: Config<I>, I: 'static),
 		}
 	}
 
@@ -399,20 +403,20 @@ enum PalletAttr {
 impl PalletAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
-			Self::Config(span) => span.clone(),
-			Self::Pallet(span) => span.clone(),
-			Self::Hooks(span) => span.clone(),
-			Self::Call(span) => span.clone(),
-			Self::Error(span) => span.clone(),
-			Self::Event(span) => span.clone(),
-			Self::Origin(span) => span.clone(),
-			Self::Inherent(span) => span.clone(),
-			Self::Storage(span) => span.clone(),
-			Self::GenesisConfig(span) => span.clone(),
-			Self::GenesisBuild(span) => span.clone(),
-			Self::ValidateUnsigned(span) => span.clone(),
-			Self::TypeValue(span) => span.clone(),
-			Self::ExtraConstants(span) => span.clone(),
+			Self::Config(span) => *span,
+			Self::Pallet(span) => *span,
+			Self::Hooks(span) => *span,
+			Self::Call(span) => *span,
+			Self::Error(span) => *span,
+			Self::Event(span) => *span,
+			Self::Origin(span) => *span,
+			Self::Inherent(span) => *span,
+			Self::Storage(span) => *span,
+			Self::GenesisConfig(span) => *span,
+			Self::GenesisBuild(span) => *span,
+			Self::ValidateUnsigned(span) => *span,
+			Self::TypeValue(span) => *span,
+			Self::ExtraConstants(span) => *span,
 		}
 	}
 }

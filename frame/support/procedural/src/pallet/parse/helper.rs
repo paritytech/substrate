@@ -136,7 +136,7 @@ pub fn get_doc_literals(attrs: &Vec<syn::Attribute>) -> Vec<syn::Lit> {
 		.filter_map(|attr| {
 			if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
 				if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
-					Some(meta.lit.clone())
+					Some(meta.lit)
 				} else {
 					None
 				}

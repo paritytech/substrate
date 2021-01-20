@@ -15,17 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # System Module
+//! # System Pallet
 //!
-//! The System module provides low-level access to core types and cross-cutting utilities.
+//! The System pallet provides low-level access to core types and cross-cutting utilities.
 //! It acts as the base layer for other pallets to interact with the Substrate framework components.
 //!
-//! - [`system::Config`](./trait.Config.html)
+//! - [`Config`]
 //!
 //! ## Overview
 //!
-//! The System module defines the core data types used in a Substrate runtime.
-//! It also provides several utility functions (see [`Module`](./struct.Module.html)) for other FRAME pallets.
+//! The System pallet defines the core data types used in a Substrate runtime.
+//! It also provides several utility functions (see [`Pallet`]) for other FRAME pallets.
 //!
 //! In addition, it manages the storage items for extrinsics data, indexes, event records, and digest items,
 //! among other things that support the execution of the current block.
@@ -37,15 +37,15 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! The System module does not implement any dispatchable functions.
+//! The System pallet does not implement any dispatchable functions.
 //!
 //! ### Public Functions
 //!
-//! See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
+//! See the [`Pallet`] struct for details of publicly available functions.
 //!
 //! ### Signed Extensions
 //!
-//! The System module defines the following extensions:
+//! The System pallet defines the following extensions:
 //!
 //!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
 //!     exceed the limits.
@@ -61,34 +61,6 @@
 //!
 //! Lookup the runtime aggregator file (e.g. `node/runtime`) to see the full list of signed
 //! extensions included in a chain.
-//!
-//! ## Usage
-//!
-//! ### Prerequisites
-//!
-//! Import the System module and derive your module's configuration trait from the system trait.
-//!
-//! ### Example - Get extrinsic count and parent hash for the current block
-//!
-//! ```
-//! use frame_support::{decl_module, dispatch};
-//! use frame_system::{self as system, ensure_signed};
-//!
-//! pub trait Config: system::Config {}
-//!
-//! decl_module! {
-//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//! 		#[weight = 0]
-//! 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
-//! 			let _sender = ensure_signed(origin)?;
-//! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
-//! 			let _parent_hash = <system::Module<T>>::parent_hash();
-//! 			Ok(())
-//! 		}
-//! 	}
-//! }
-//! # fn main() { }
-//! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -97,17 +69,16 @@ use serde::Serialize;
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
-use sp_std::convert::Infallible;
 use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	RuntimeDebug, Perbill, Either, generic,
+	RuntimeDebug, Perbill, DispatchError, Either, generic,
 	traits::{
 		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, AtLeast32BitUnsigned, Saturating,
+		Dispatchable, AtLeast32BitUnsigned, Saturating, StoredMapError,
 	},
 	offchain::storage_lock::BlockNumberProvider,
 };
@@ -116,7 +87,7 @@ use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
 	Parameter, debug, storage,
 	traits::{
-		Contains, Get, PalletInfo, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
+		Contains, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
 		StoredMap, EnsureOrigin, OriginTrait, Filter,
 	},
 	weights::{
@@ -169,10 +140,8 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use crate::{*, pallet_prelude::*, self as frame_system};
 	use frame_support::pallet_prelude::*;
-	use super::pallet_prelude::*;
-	use super::*;
-	use crate as frame_system;
 
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
@@ -187,6 +156,7 @@ pub mod pallet {
 		type BlockWeights: Get<limits::BlockWeights>;
 
 		/// The maximum length of a block (in bytes).
+		#[pallet::constant]
 		type BlockLength: Get<limits::BlockLength>;
 
 		/// The `Origin` type used by dispatchable calls.
@@ -194,7 +164,7 @@ pub mod pallet {
 			Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
-			+ OriginTrait<Call = Self::Call>;
+			+ OriginTrait<Call=Self::Call>;
 
 		/// The aggregated `Call` type.
 		type Call: Dispatchable + Debug;
@@ -203,7 +173,7 @@ pub mod pallet {
 		/// with a sender account.
 		type Index:
 			Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + AtLeast32Bit
-			+ Copy + scale_info::TypeInfo;
+			+ Copy;
 
 		/// The block number type used by the runtime.
 		type BlockNumber:
@@ -217,29 +187,28 @@ pub mod pallet {
 			+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf;
 
 		/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
-		type Hashing: Hash<Output = Self::Hash>;
+		type Hashing: Hash<Output=Self::Hash>;
 
 		/// The user account identifier type for the runtime.
 		type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord
-			+ Default + ::scale_info::TypeInfo;
+			+ Default;
 
 		/// Converting trait to take a source type and convert to `AccountId`.
 		///
 		/// Used to define the type and conversion mechanism for referencing accounts in transactions.
 		/// It's perfectly reasonable for this to be an identity conversion (with the source type being
-		/// `AccountId`), but other modules (e.g. Indices module) may provide more functional/efficient
+		/// `AccountId`), but other pallets (e.g. Indices pallet) may provide more functional/efficient
 		/// alternatives.
-		type Lookup: StaticLookup<Target = Self::AccountId>;
+		type Lookup: StaticLookup<Target=Self::AccountId>;
 
 		/// The block header.
 		type Header: Parameter + traits::Header<
-			Number = Self::BlockNumber,
-			Hash = Self::Hash,
+			Number=Self::BlockNumber,
+			Hash=Self::Hash,
 		>;
 
 		/// The aggregated event type of the runtime.
-		type Event: Parameter + Member + From<Event<Self>> + Debug +
-			IsType<<Self as frame_system::Config>::Event>;
+		type Event: Parameter + Member + From<Event<Self>> + Debug + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
@@ -249,8 +218,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type DbWeight: Get<RuntimeDbWeight>;
 
-
 		/// Get the chain's current version.
+		#[pallet::constant]
 		type Version: Get<RuntimeVersion>;
 
 		/// Provides information about the pallet setup in the runtime.
@@ -262,7 +231,7 @@ pub mod pallet {
 		type PalletInfo: PalletInfo;
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
-		/// module does regardless).
+		/// pallet does regardless).
 		type AccountData: Member + FullCodec + Clone + Default;
 
 		/// Handler for when a new account has just been created.
@@ -285,18 +254,15 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			if !<UpgradedToU32RefCount<T>>::get() {
-				Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)|
-					Some(AccountInfo { nonce, refcount: rc as RefCount, data })
-				);
-				<UpgradedToU32RefCount<T>>::put(true);
-				T::BlockWeights::get().max_block
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			if !UpgradedToDualRefCount::<T>::get() {
+				UpgradedToDualRefCount::<T>::put(true);
+				migrations::migrate_to_dual_ref_count::<T>()
 			} else {
 				0
 			}
@@ -313,12 +279,9 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
-		// that's not possible at present (since it's within the decl_module macro).
+		// that's not possible at present (since it's within the pallet macro).
 		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
-		pub(super) fn fill_block(
-			origin: OriginFor<T>,
-			_ratio: Perbill
-		) -> DispatchResultWithPostInfo {
+		pub(crate) fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Ok(().into())
 		}
@@ -331,10 +294,7 @@ pub mod pallet {
 		/// - No DB operations.
 		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
-		pub(super) fn remark(
-			origin: OriginFor<T>,
-			_remark: Vec<u8>
-		) -> DispatchResultWithPostInfo {
+		pub(crate) fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			Ok(().into())
 		}
@@ -348,10 +308,7 @@ pub mod pallet {
 		/// - 1 write to HEAP_PAGES
 		/// # </weight>
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
-		pub(super) fn set_heap_pages(
-			origin: OriginFor<T>,
-			pages: u64
-		) -> DispatchResultWithPostInfo {
+		pub(crate) fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 			Ok(().into())
@@ -368,10 +325,7 @@ pub mod pallet {
 		/// We will treat this as a full block.
 		/// # </weight>
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
-		pub fn set_code(
-			origin: OriginFor<T>,
-			code: Vec<u8>
-		) -> DispatchResultWithPostInfo {
+		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
 
@@ -391,7 +345,7 @@ pub mod pallet {
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn set_code_without_checks(
 			origin: OriginFor<T>,
-			code: Vec<u8>
+			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
@@ -412,7 +366,7 @@ pub mod pallet {
 		#[pallet::weight((T::SystemWeightInfo::set_changes_trie_config(), DispatchClass::Operational))]
 		pub fn set_changes_trie_config(
 			origin: OriginFor<T>,
-			changes_trie_config: Option<ChangesTrieConfiguration>
+			changes_trie_config: Option<ChangesTrieConfiguration>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			match changes_trie_config.clone() {
@@ -442,10 +396,7 @@ pub mod pallet {
 			T::SystemWeightInfo::set_storage(items.len() as u32),
 			DispatchClass::Operational,
 		))]
-		pub(super) fn set_storage(
-			origin: OriginFor<T>,
-			items: Vec<KeyValue>
-		) -> DispatchResultWithPostInfo {
+		pub(crate) fn set_storage(origin: OriginFor<T>, items: Vec<KeyValue>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			for i in &items {
 				storage::unhashed::put_raw(&i.0, &i.1);
@@ -465,10 +416,7 @@ pub mod pallet {
 			T::SystemWeightInfo::kill_storage(keys.len() as u32),
 			DispatchClass::Operational,
 		))]
-		pub(super) fn kill_storage(
-			origin: OriginFor<T>,
-			keys: Vec<Key>
-		) -> DispatchResultWithPostInfo {
+		pub(crate) fn kill_storage(origin: OriginFor<T>, keys: Vec<Key>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			for key in &keys {
 				storage::unhashed::kill(&key);
@@ -491,39 +439,20 @@ pub mod pallet {
 			T::SystemWeightInfo::kill_prefix(_subkeys.saturating_add(1)),
 			DispatchClass::Operational,
 		))]
-		pub(super) fn kill_prefix(
+		pub(crate) fn kill_prefix(
 			origin: OriginFor<T>,
 			prefix: Key,
-			_subkeys: u32
+			_subkeys: u32,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
 			Ok(().into())
 		}
-
-		/// Kill the sending account, assuming there are no references outstanding and the composite
-		/// data is equal to its default value.
-		///
-		/// # <weight>
-		/// - `O(1)`
-		/// - 1 storage read and deletion.
-		/// --------------------
-		/// Base Weight: 8.626 µs
-		/// No DB Read or Write operations because caller is already in overlay
-		/// # </weight>
-		#[pallet::weight((T::SystemWeightInfo::suicide(), DispatchClass::Operational))]
-		pub fn suicide(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let account = Account::<T>::get(&who);
-			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
-			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
-			Self::kill_account(&who);
-			Ok(().into())
-		}
 	}
 
-	/// Event for the System module.
+	/// Event for the System pallet.
 	#[pallet::event]
+	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
 		/// An extrinsic completed successfully. \[info\]
 		ExtrinsicSuccess(DispatchInfo),
@@ -537,7 +466,11 @@ pub mod pallet {
 		KilledAccount(T::AccountId),
 	}
 
-	/// Error for the System module
+	/// Old name generated by `decl_event`.
+	#[deprecated(note = "use `Event` instead")]
+	pub type RawEvent<T> = Event<T>;
+
+	/// Error for the System pallet
 	#[pallet::error]
 	pub enum Error<T> {
 		/// The name of specification does not match between the current runtime
@@ -564,7 +497,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn account)]
 	pub type Account<T: Config> = StorageMap<
-		_, Blake2_128Concat, T::AccountId, AccountInfo<T::Index, T::AccountData>, ValueQuery
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		AccountInfo<T::Index, T::AccountData>,
+		ValueQuery,
 	>;
 
 	/// Total extrinsics count for the current block.
@@ -576,7 +513,6 @@ pub mod pallet {
 	#[pallet::getter(fn block_weight)]
 	pub(super) type BlockWeight<T: Config> = StorageValue<_, ConsumedWeight, ValueQuery>;
 
-
 	/// Total length (in bytes) for all extrinsics put together, for the current block.
 	#[pallet::storage]
 	pub(super) type AllExtrinsicsLen<T: Config> = StorageValue<_, u32>;
@@ -584,16 +520,14 @@ pub mod pallet {
 	/// Map of block numbers to block hashes.
 	#[pallet::storage]
 	#[pallet::getter(fn block_hash)]
-	pub type BlockHash<T: Config> = StorageMap<
-		_, Twox64Concat, T::BlockNumber, T::Hash, ValueQuery
-	>;
+	pub type BlockHash<T: Config> =
+		StorageMap<_, Twox64Concat, T::BlockNumber, T::Hash, ValueQuery>;
 
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
 	#[pallet::getter(fn extrinsic_data)]
-	pub(super) type ExtrinsicData<T: Config> = StorageMap<
-		_, Twox64Concat, u32, Vec<u8>, ValueQuery
-	>;
+	pub(super) type ExtrinsicData<T: Config> =
+		StorageMap<_, Twox64Concat, u32, Vec<u8>, ValueQuery>;
 
 	/// The current block number being processed. Set by `execute_block`.
 	#[pallet::storage]
@@ -613,19 +547,13 @@ pub mod pallet {
 	/// Events deposited for the current block.
 	#[pallet::storage]
 	#[pallet::getter(fn events)]
-	pub(super) type Events<T: Config> = StorageValue<
-		_, Vec<EventRecord<T::Event, T::Hash>>, ValueQuery
-	>;
+	pub(super) type Events<T: Config> =
+		StorageValue<_, Vec<EventRecord<T::Event, T::Hash>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
 	#[pallet::storage]
 	#[pallet::getter(fn event_count)]
 	pub(super) type EventCount<T: Config> = StorageValue<_, EventIndex, ValueQuery>;
-
-	// TODO: https://github.com/paritytech/substrate/issues/2553
-	// Possibly, we can improve it by using something like:
-	// `Option<(BlockNumber, Vec<EventIndex>)>`, however in this case we won't be able to use
-	// `EventTopics::append`.
 
 	/// Mapping between a topic (represented by T::Hash) and a vector of indexes
 	/// of events in the `<Events<T>>` list.
@@ -639,9 +567,8 @@ pub mod pallet {
 	/// no notification will be triggered thus the event might be lost.
 	#[pallet::storage]
 	#[pallet::getter(fn event_topics)]
-	pub(super) type EventTopics<T: Config> = StorageMap<
-		_, Blake2_128Concat, T::Hash, Vec<(T::BlockNumber, EventIndex)>, ValueQuery
-	>;
+	pub(super) type EventTopics<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(T::BlockNumber, EventIndex)>, ValueQuery>;
 
 	/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
 	#[pallet::storage]
@@ -650,6 +577,11 @@ pub mod pallet {
 	/// True if we have upgraded so that `type RefCount` is `u32`. False (default) if not.
 	#[pallet::storage]
 	pub(super) type UpgradedToU32RefCount<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+	/// True if we have upgraded so that AccountInfo contains two types of `RefCount`. False
+	/// (default) if not.
+	#[pallet::storage]
+	pub(super) type UpgradedToDualRefCount<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	/// The execution phase of the block.
 	#[pallet::storage]
@@ -679,6 +611,7 @@ pub mod pallet {
 			<ParentHash<T>>::put::<T::Hash>(hash69());
 			<LastRuntimeUpgrade<T>>::put(LastRuntimeUpgradeInfo::from(T::Version::get()));
 			<UpgradedToU32RefCount<T>>::put(true);
+			<UpgradedToDualRefCount<T>>::put(true);
 
 			sp_io::storage::set(well_known_keys::CODE, &self.code);
 			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
@@ -686,6 +619,25 @@ pub mod pallet {
 				sp_io::storage::set(well_known_keys::CHANGES_TRIE_CONFIG, &changes_trie_config.encode());
 			}
 		}
+	}
+}
+
+mod migrations {
+	use super::*;
+
+	#[allow(dead_code)]
+	pub fn migrate_all<T: Config>() -> frame_support::weights::Weight {
+		Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)|
+			Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, data })
+		);
+		T::BlockWeights::get().max_block
+	}
+
+	pub fn migrate_to_dual_ref_count<T: Config>() -> frame_support::weights::Weight {
+		Account::<T>::translate::<(T::Index, RefCount, T::AccountData), _>(|_key, (nonce, rc, data)|
+			Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, data })
+		);
+		T::BlockWeights::get().max_block
 	}
 }
 
@@ -745,7 +697,7 @@ pub struct EventRecord<E: Parameter + Member, T> {
 	pub topics: Vec<T>,
 }
 
-/// Origin for the System module.
+/// Origin for the System pallet.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
@@ -754,7 +706,7 @@ pub enum RawOrigin<AccountId> {
 	Signed(AccountId),
 	/// It is signed by nobody, can be either:
 	/// * included and agreed upon by the validators anyway,
-	/// * or unsigned transaction validated by a module.
+	/// * or unsigned transaction validated by a pallet.
 	None,
 }
 
@@ -792,7 +744,10 @@ pub struct AccountInfo<Index, AccountData> {
 	pub nonce: Index,
 	/// The number of other modules that currently depend on this account's existence. The account
 	/// cannot be reaped until this is zero.
-	pub refcount: RefCount,
+	pub consumers: RefCount,
+	/// The number of other modules that allow this account to exist. The account may not be reaped
+	/// until this is zero.
+	pub providers: RefCount,
 	/// The additional data that belongs to this account. Used to store the balance(s) in a lot of
 	/// chains.
 	pub data: AccountData,
@@ -824,14 +779,6 @@ impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
 		}
 	}
 }
-
-/// Pallet struct placeholder on which is implemented the pallet logic.
-///
-/// It is currently an alias for `Module` as old macros still generate/use old name.
-pub type Module<T> = Pallet<T>;
-
-/// Alias to Event to prevent breaking code. Soon to be deprecated.
-pub type RawEvent<T> = Event<T>;
 
 pub struct EnsureRoot<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<
@@ -1005,40 +952,162 @@ impl Default for InitKind {
 }
 
 /// Reference status; can be either referenced or unreferenced.
+#[derive(RuntimeDebug)]
 pub enum RefStatus {
 	Referenced,
 	Unreferenced,
 }
 
-impl<T: Config> Module<T> {
-	/// Deposits an event into this block's event record.
-	pub fn deposit_event(event: impl Into<T::Event>) {
-		Self::deposit_event_indexed(&[], event.into());
-	}
+/// Some resultant status relevant to incrementing a provider reference.
+#[derive(RuntimeDebug)]
+pub enum IncRefStatus {
+	/// Account was created.
+	Created,
+	/// Account already existed.
+	Existed,
+}
 
+/// Some resultant status relevant to decrementing a provider reference.
+#[derive(RuntimeDebug)]
+pub enum DecRefStatus {
+	/// Account was destroyed.
+	Reaped,
+	/// Account still exists.
+	Exists,
+}
+
+/// Some resultant status relevant to decrementing a provider reference.
+#[derive(RuntimeDebug)]
+pub enum DecRefError {
+	/// Account cannot have the last provider reference removed while there is a consumer.
+	ConsumerRemaining,
+}
+
+/// Some resultant status relevant to incrementing a provider reference.
+#[derive(RuntimeDebug)]
+pub enum IncRefError {
+	/// Account cannot introduce a consumer while there are no providers.
+	NoProviders,
+}
+
+impl<T: Config> Module<T> {
 	pub fn account_exists(who: &T::AccountId) -> bool {
 		Account::<T>::contains_key(who)
 	}
 
 	/// Increment the reference counter on an account.
+	#[deprecated = "Use `inc_consumers` instead"]
 	pub fn inc_ref(who: &T::AccountId) {
-		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_add(1));
+		let _ = Self::inc_consumers(who);
 	}
 
 	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
-	/// you called `inc_ref` on `who`.
+	/// you called `inc_consumers` on `who`.
+	#[deprecated = "Use `dec_consumers` instead"]
 	pub fn dec_ref(who: &T::AccountId) {
-		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_sub(1));
+		let _ = Self::dec_consumers(who);
 	}
 
 	/// The number of outstanding references for the account `who`.
+	#[deprecated = "Use `consumers` instead"]
 	pub fn refs(who: &T::AccountId) -> RefCount {
-		Account::<T>::get(who).refcount
+		Self::consumers(who)
 	}
 
 	/// True if the account has no outstanding references.
+	#[deprecated = "Use `!is_provider_required` instead"]
 	pub fn allow_death(who: &T::AccountId) -> bool {
-		Account::<T>::get(who).refcount == 0
+		!Self::is_provider_required(who)
+	}
+
+	/// Increment the reference counter on an account.
+	///
+	/// The account `who`'s `providers` must be non-zero or this will return an error.
+	pub fn inc_providers(who: &T::AccountId) -> IncRefStatus {
+		Account::<T>::mutate(who, |a| if a.providers == 0 {
+			// Account is being created.
+			a.providers = 1;
+			Self::on_created_account(who.clone(), a);
+			IncRefStatus::Created
+		} else {
+			a.providers = a.providers.saturating_add(1);
+			IncRefStatus::Existed
+		})
+	}
+
+	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
+	/// you called `inc_consumers` on `who`.
+	pub fn dec_providers(who: &T::AccountId) -> Result<DecRefStatus, DecRefError> {
+		Account::<T>::try_mutate_exists(who, |maybe_account| {
+			if let Some(mut account) = maybe_account.take() {
+				match (account.providers, account.consumers) {
+					(0, _) => {
+						// Logic error - cannot decrement beyond zero and no item should
+						// exist with zero providers.
+						debug::print!("Logic error: Unexpected underflow in reducing provider");
+						Ok(DecRefStatus::Reaped)
+					},
+					(1, 0) => {
+						Module::<T>::on_killed_account(who.clone());
+						Ok(DecRefStatus::Reaped)
+					}
+					(1, _) => {
+						// Cannot remove last provider if there are consumers.
+						Err(DecRefError::ConsumerRemaining)
+					}
+					(x, _) => {
+						account.providers = x - 1;
+						*maybe_account = Some(account);
+						Ok(DecRefStatus::Exists)
+					}
+				}
+			} else {
+				debug::print!("Logic error: Account already dead when reducing provider");
+				Ok(DecRefStatus::Reaped)
+			}
+		})
+	}
+
+	/// The number of outstanding references for the account `who`.
+	pub fn providers(who: &T::AccountId) -> RefCount {
+		Account::<T>::get(who).providers
+	}
+
+	/// Increment the reference counter on an account.
+	///
+	/// The account `who`'s `providers` must be non-zero or this will return an error.
+	pub fn inc_consumers(who: &T::AccountId) -> Result<(), IncRefError> {
+		Account::<T>::try_mutate(who, |a| if a.providers > 0 {
+			a.consumers = a.consumers.saturating_add(1);
+			Ok(())
+		} else {
+			Err(IncRefError::NoProviders)
+		})
+	}
+
+	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
+	/// you called `inc_consumers` on `who`.
+	pub fn dec_consumers(who: &T::AccountId) {
+		Account::<T>::mutate(who, |a| if a.consumers > 0 {
+			a.consumers -= 1;
+		} else {
+			debug::print!("Logic error: Unexpected underflow in reducing consumer");
+		})
+	}
+
+	/// The number of outstanding references for the account `who`.
+	pub fn consumers(who: &T::AccountId) -> RefCount {
+		Account::<T>::get(who).consumers
+	}
+
+	/// True if the account has some outstanding references.
+	pub fn is_provider_required(who: &T::AccountId) -> bool {
+		Account::<T>::get(who).consumers != 0
+	}
+
+	/// Deposits an event into this block's event record.
+	pub fn deposit_event(event: impl Into<T::Event>) {
+		Self::deposit_event_indexed(&[], event.into());
 	}
 
 	/// Deposits an event into this block's event record adding this event
@@ -1092,10 +1161,10 @@ impl<T: Config> Module<T> {
 		AllExtrinsicsLen::<T>::get().unwrap_or_default()
 	}
 
-	/// Inform the system module of some additional weight that should be accounted for, in the
+	/// Inform the system pallet of some additional weight that should be accounted for, in the
 	/// current block.
 	///
-	/// NOTE: use with extra care; this function is made public only be used for certain modules
+	/// NOTE: use with extra care; this function is made public only be used for certain pallets
 	/// that need it. A runtime that does not have dynamic calls should never need this and should
 	/// stick to static weights. A typical use case for this is inner calls or smart contract calls.
 	/// Furthermore, it only makes sense to use this when it is presumably  _cheap_ to provide the
@@ -1148,7 +1217,7 @@ impl<T: Config> Module<T> {
 		// The following fields
 		//
 		// - <Events<T>>
-		// - <EventCount::<T>::<T>>
+		// - <EventCount<T>>
 		// - <EventTopics<T>>
 		// - <Number<T>>
 		// - <ParentHash<T>>
@@ -1200,7 +1269,7 @@ impl<T: Config> Module<T> {
 		<Digest<T>>::append(item);
 	}
 
-	/// Get the basic externalities for this module, useful for tests.
+	/// Get the basic externalities for this pallet, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities {
 		TestExternalities::new(sp_core::storage::Storage {
@@ -1301,13 +1370,13 @@ impl<T: Config> Module<T> {
 	}
 
 	/// To be called immediately after finishing the initialization of the block
-	/// (e.g., called `on_initialize` for all modules).
+	/// (e.g., called `on_initialize` for all pallets).
 	pub fn note_finished_initialize() {
 		ExecutionPhase::<T>::put(Phase::ApplyExtrinsic(0))
 	}
 
 	/// An account is being created.
-	pub fn on_created_account(who: T::AccountId) {
+	pub fn on_created_account(who: T::AccountId, _a: &mut AccountInfo<T::Index, T::AccountData>) {
 		T::OnNewAccount::on_new_account(&who);
 		Self::deposit_event(Event::NewAccount(who));
 	}
@@ -1316,24 +1385,6 @@ impl<T: Config> Module<T> {
 	fn on_killed_account(who: T::AccountId) {
 		T::OnKilledAccount::on_killed_account(&who);
 		Self::deposit_event(Event::KilledAccount(who));
-	}
-
-	/// Remove an account from storage. This should only be done when its refs are zero or you'll
-	/// get storage leaks in other modules. Nonetheless we assume that the calling logic knows best.
-	///
-	/// This is a no-op if the account doesn't already exist. If it does then it will ensure
-	/// cleanups (those in `on_killed_account`) take place.
-	fn kill_account(who: &T::AccountId) {
-		if Account::<T>::contains_key(who) {
-			let account = Account::<T>::take(who);
-			if account.refcount > 0 {
-				debug::debug!(
-					target: "system",
-					"WARNING: Referenced account deleted. This is probably a bug."
-				);
-			}
-		}
-		Module::<T>::on_killed_account(who.clone());
 	}
 
 	/// Determine whether or not it is possible to update the code.
@@ -1359,84 +1410,84 @@ impl<T: Config> Module<T> {
 	}
 }
 
-/// Event handler which calls on_created_account when it happens.
-pub struct CallOnCreatedAccount<T>(PhantomData<T>);
-impl<T: Config> Happened<T::AccountId> for CallOnCreatedAccount<T> {
-	fn happened(who: &T::AccountId) {
-		Module::<T>::on_created_account(who.clone());
+/// Event handler which registers a provider when created.
+pub struct Provider<T>(PhantomData<T>);
+impl<T: Config> HandleLifetime<T::AccountId> for Provider<T> {
+	fn created(t: &T::AccountId) -> Result<(), StoredMapError> {
+		Module::<T>::inc_providers(t);
+		Ok(())
+	}
+	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
+		Module::<T>::dec_providers(t)
+			.map(|_| ())
+			.or_else(|e| match e {
+				DecRefError::ConsumerRemaining => Err(StoredMapError::ConsumerRemaining),
+			})
 	}
 }
 
-/// Event handler which calls kill_account when it happens.
-pub struct CallKillAccount<T>(PhantomData<T>);
-impl<T: Config> Happened<T::AccountId> for CallKillAccount<T> {
-	fn happened(who: &T::AccountId) {
-		Module::<T>::kill_account(who)
+/// Event handler which registers a consumer when created.
+pub struct Consumer<T>(PhantomData<T>);
+impl<T: Config> HandleLifetime<T::AccountId> for Consumer<T> {
+	fn created(t: &T::AccountId) -> Result<(), StoredMapError> {
+		Module::<T>::inc_consumers(t)
+			.map_err(|e| match e {
+				IncRefError::NoProviders => StoredMapError::NoProviders
+			})
+	}
+	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
+		Module::<T>::dec_consumers(t);
+		Ok(())
 	}
 }
 
-impl<T: Config> BlockNumberProvider for Module<T>
+impl<T: Config> BlockNumberProvider for Pallet<T>
 {
 	type BlockNumber = <T as Config>::BlockNumber;
 
 	fn current_block_number() -> Self::BlockNumber {
-		Module::<T>::block_number()
+		Pallet::<T>::block_number()
 	}
 }
 
-// Implement StoredMap for a simple single-item, kill-account-on-remove system. This works fine for
-// storing a single item which is required to not be empty/default for the account to exist.
-// Anything more complex will need more sophisticated logic.
-impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Module<T> {
+fn is_providing<T: Default + Eq>(d: &T) -> bool {
+	d != &T::default()
+}
+
+/// Implement StoredMap for a simple single-item, provide-when-not-default system. This works fine
+/// for storing a single item which allows the account to continue existing as long as it's not
+/// empty/default.
+///
+/// Anything more complex will need more sophisticated logic.
+impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 	fn get(k: &T::AccountId) -> T::AccountData {
 		Account::<T>::get(k).data
 	}
-	fn is_explicit(k: &T::AccountId) -> bool {
-		Account::<T>::contains_key(k)
-	}
-	fn insert(k: &T::AccountId, data: T::AccountData) {
-		let existed = Account::<T>::contains_key(k);
-		Account::<T>::mutate(k, |a| a.data = data);
-		if !existed {
-			Self::on_created_account(k.clone());
-		}
-	}
-	fn remove(k: &T::AccountId) {
-		Self::kill_account(k)
-	}
-	fn mutate<R>(k: &T::AccountId, f: impl FnOnce(&mut T::AccountData) -> R) -> R {
-		let existed = Account::<T>::contains_key(k);
-		let r = Account::<T>::mutate(k, |a| f(&mut a.data));
-		if !existed {
-			Self::on_created_account(k.clone());
-		}
-		r
-	}
-	fn mutate_exists<R>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> R) -> R {
-		Self::try_mutate_exists(k, |x| -> Result<R, Infallible> { Ok(f(x)) }).expect("Infallible; qed")
-	}
-	fn try_mutate_exists<R, E>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>) -> Result<R, E> {
-		Account::<T>::try_mutate_exists(k, |maybe_value| {
-			let existed = maybe_value.is_some();
-			let (maybe_prefix, mut maybe_data) = split_inner(
-				maybe_value.take(),
-				|account| ((account.nonce, account.refcount), account.data)
-			);
-			f(&mut maybe_data).map(|result| {
-				*maybe_value = maybe_data.map(|data| {
-					let (nonce, refcount) = maybe_prefix.unwrap_or_default();
-					AccountInfo { nonce, refcount, data }
-				});
-				(existed, maybe_value.is_some(), result)
-			})
-		}).map(|(existed, exists, v)| {
-			if !existed && exists {
-				Self::on_created_account(k.clone());
-			} else if existed && !exists {
-				Self::on_killed_account(k.clone());
+
+	fn try_mutate_exists<R, E: From<StoredMapError>>(
+		k: &T::AccountId,
+		f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>,
+	) -> Result<R, E> {
+		let account = Account::<T>::get(k);
+		let was_providing = is_providing(&account.data);
+		let mut some_data = if was_providing { Some(account.data) } else { None };
+		let result = f(&mut some_data)?;
+		let is_providing = some_data.is_some();
+		if !was_providing && is_providing {
+			Self::inc_providers(k);
+		} else if was_providing && !is_providing {
+			match Self::dec_providers(k) {
+				Err(DecRefError::ConsumerRemaining) => Err(StoredMapError::ConsumerRemaining)?,
+				Ok(DecRefStatus::Reaped) => return Ok(result),
+				Ok(DecRefStatus::Exists) => {
+					// Update value as normal...
+				}
 			}
-			v
-		})
+		} else if !was_providing && !is_providing {
+			return Ok(result)
+		}
+		Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
+		Ok(result)
 	}
 }
 
@@ -1453,16 +1504,10 @@ pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S
 	}
 }
 
-impl<T: Config> IsDeadAccount<T::AccountId> for Module<T> {
-	fn is_dead_account(who: &T::AccountId) -> bool {
-		!Account::<T>::contains_key(who)
-	}
-}
-
-pub struct ChainContext<T>(sp_std::marker::PhantomData<T>);
+pub struct ChainContext<T>(PhantomData<T>);
 impl<T> Default for ChainContext<T> {
 	fn default() -> Self {
-		ChainContext(sp_std::marker::PhantomData)
+		ChainContext(PhantomData)
 	}
 }
 

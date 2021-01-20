@@ -22,7 +22,7 @@
 //! One is generated for every `SIZE` blocks, allowing us to discard those blocks in
 //! favor of the trie root. When the "ancient" blocks need to be accessed, we simply
 //! request an inclusion proof of a specific block number against the trie with the
-//! root has. A correct proof implies that the claimed block is identical to the one
+//! root hash. A correct proof implies that the claimed block is identical to the one
 //! we discarded.
 
 use hash_db;

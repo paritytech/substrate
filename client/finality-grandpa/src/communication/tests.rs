@@ -58,13 +58,17 @@ impl sc_network_gossip::Network<Block> for TestNetwork {
 		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
 	}
 
-	fn disconnect_peer(&self, _: PeerId) {}
+	fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
+
+	fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
+
+	fn disconnect_peer(&self, _: PeerId, _: Cow<'static, str>) {}
 
 	fn write_notification(&self, who: PeerId, _: Cow<'static, str>, message: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::WriteNotification(who, message));
 	}
 
-	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
+	fn announce(&self, block: Hash, _associated_data: Option<Vec<u8>>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
 	}
 }

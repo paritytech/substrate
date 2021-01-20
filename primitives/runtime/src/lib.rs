@@ -411,6 +411,10 @@ pub enum DispatchError {
 		#[cfg_attr(feature = "std", serde(skip_deserializing))]
 		message: Option<&'static str>,
 	},
+	/// At least one consumer is remaining so the account cannot be destroyed.
+	ConsumerRemaining,
+	/// There are no providers so the account cannot be created.
+	NoProviders,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -460,6 +464,15 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 	}
 }
 
+impl From<crate::traits::StoredMapError> for DispatchError {
+	fn from(e: crate::traits::StoredMapError) -> Self {
+		match e {
+			crate::traits::StoredMapError::ConsumerRemaining => Self::ConsumerRemaining,
+			crate::traits::StoredMapError::NoProviders => Self::NoProviders,
+		}
+	}
+}
+
 impl From<&'static str> for DispatchError {
 	fn from(err: &'static str) -> DispatchError {
 		DispatchError::Other(err)
@@ -470,9 +483,11 @@ impl From<DispatchError> for &'static str {
 	fn from(err: DispatchError) -> &'static str {
 		match err {
 			DispatchError::Other(msg) => msg,
-			DispatchError::CannotLookup => "Can not lookup",
+			DispatchError::CannotLookup => "Cannot lookup",
 			DispatchError::BadOrigin => "Bad origin",
 			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
+			DispatchError::ConsumerRemaining => "Consumer remaining",
+			DispatchError::NoProviders => "No providers",
 		}
 	}
 }
@@ -490,7 +505,7 @@ impl traits::Printable for DispatchError {
 		"DispatchError".print();
 		match self {
 			Self::Other(err) => err.print(),
-			Self::CannotLookup => "Can not lookup".print(),
+			Self::CannotLookup => "Cannot lookup".print(),
 			Self::BadOrigin => "Bad origin".print(),
 			Self::Module { index, error, message } => {
 				index.print();
@@ -499,6 +514,8 @@ impl traits::Printable for DispatchError {
 					msg.print();
 				}
 			}
+			Self::ConsumerRemaining => "Consumer remaining".print(),
+			Self::NoProviders => "No providers".print(),
 		}
 	}
 }

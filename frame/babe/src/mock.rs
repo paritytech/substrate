@@ -295,7 +295,7 @@ pub fn start_era(era_index: EraIndex) {
 	assert_eq!(Staking::current_era(), Some(era_index));
 }
 
-pub fn make_pre_digest(
+pub fn make_primary_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
 	slot_number: sp_consensus_babe::SlotNumber,
 	vrf_output: VRFOutput,
@@ -379,6 +379,14 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 		.build_storage::<Test>()
 		.unwrap();
 
+	let balances: Vec<_> = (0..authorities.len())
+		.map(|i| (i as u64, 10_000_000))
+		.collect();
+
+	pallet_balances::GenesisConfig::<Test> { balances }
+		.assimilate_storage(&mut t)
+		.unwrap();
+
 	// stashes are the index.
 	let session_keys: Vec<_> = authorities
 		.iter()
@@ -394,6 +402,12 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 		})
 		.collect();
 
+	// NOTE: this will initialize the babe authorities
+	// through OneSessionHandler::on_genesis_session
+	pallet_session::GenesisConfig::<Test> { keys: session_keys }
+		.assimilate_storage(&mut t)
+		.unwrap();
+
 	// controllers are the index + 1000
 	let stakers: Vec<_> = (0..authorities.len())
 		.map(|i| {
@@ -405,20 +419,6 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 			)
 		})
 		.collect();
-
-	let balances: Vec<_> = (0..authorities.len())
-		.map(|i| (i as u64, 10_000_000))
-		.collect();
-
-	// NOTE: this will initialize the babe authorities
-	// through OneSessionHandler::on_genesis_session
-	pallet_session::GenesisConfig::<Test> { keys: session_keys }
-		.assimilate_storage(&mut t)
-		.unwrap();
-
-	pallet_balances::GenesisConfig::<Test> { balances }
-		.assimilate_storage(&mut t)
-		.unwrap();
 
 	let staking_config = pallet_staking::GenesisConfig::<Test> {
 		stakers,

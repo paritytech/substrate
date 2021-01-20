@@ -28,7 +28,7 @@ use sp_std::vec;
 use frame_benchmarking::benchmarks;
 use frame_support::{
 	codec::Decode,
-	storage::{StorageValue, StorageMap},
+	storage::StorageValue,
 	traits::{KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::RawOrigin;
@@ -51,8 +51,6 @@ impl<T: Config> OnInitialize<T::BlockNumber> for Module<T> {
 }
 
 benchmarks! {
-	_ {	}
-
 	set_keys {
 		let n = MAX_NOMINATIONS as u32;
 		let (v_stash, _) = create_validator_with_nominators::<T>(

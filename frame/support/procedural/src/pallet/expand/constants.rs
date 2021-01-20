@@ -33,9 +33,9 @@ struct ConstDef {
 /// * Impl fn module_constant_metadata for pallet.
 pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
-	let type_impl_gen = &def.type_impl_generics();
-	let type_decl_gen = &def.type_decl_generics();
-	let type_use_gen = &def.type_use_generics();
+	let type_impl_gen = &def.type_impl_generics(proc_macro2::Span::call_site());
+	let type_decl_gen = &def.type_decl_generics(proc_macro2::Span::call_site());
+	let type_use_gen = &def.type_use_generics(proc_macro2::Span::call_site());
 	let pallet_ident = &def.pallet_struct.pallet;
 
 	let mut where_clauses = vec![&def.config.where_clause];

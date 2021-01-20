@@ -20,15 +20,13 @@
 use crate::{
 	HostFnWeights, Schedule, Config, CodeHash, BalanceOf, Error,
 	exec::{Ext, StorageKey, TopicOf},
-	gas::{Gas, GasMeter, Token, GasMeterResult},
+	gas::{Gas, GasMeter, Token, GasMeterResult, ChargedAmount},
 	wasm::env_def::ConvertibleToWasm,
 };
-use sp_sandbox;
 use parity_wasm::elements::ValueType;
-use frame_system;
-use frame_support::dispatch::DispatchError;
+use frame_support::{dispatch::DispatchError, ensure};
 use sp_std::prelude::*;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeAll, Encode};
 use sp_runtime::traits::SaturatedConversion;
 use sp_core::crypto::UncheckedFrom;
 use sp_io::hashing::{
@@ -126,7 +124,7 @@ impl<T: Into<DispatchError>> From<T> for TrapReason {
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
-enum RuntimeToken {
+pub enum RuntimeToken {
 	/// Charge the gas meter with the cost of a metering block. The charged costs are
 	/// the supplied cost of the block plus the overhead of the metering itself.
 	MeteringBlock(u32),
@@ -198,6 +196,10 @@ enum RuntimeToken {
 	HashBlake256(u32),
 	/// Weight of calling `seal_hash_blake2_128` for the given input size.
 	HashBlake128(u32),
+	/// Weight charged by a chain extension through `seal_call_chain_extension`.
+	ChainExtension(u64),
+	/// Weight charged for copying data from the sandbox.
+	CopyIn(u32),
 }
 
 impl<T: Config> Token<T> for RuntimeToken
@@ -256,6 +258,8 @@ where
 				.saturating_add(s.hash_blake2_256_per_byte.saturating_mul(len.into())),
 			HashBlake128(len) => s.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
+			ChainExtension(amount) => amount,
+			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
 		}
 	}
 }
@@ -376,6 +380,14 @@ where
 		}
 	}
 
+	/// Get a mutable reference to the inner `Ext`.
+	///
+	/// This is mainly for the chain extension to have access to the environment the
+	/// contract is executing in.
+	pub fn ext(&mut self) -> &mut E {
+		self.ext
+	}
+
 	/// Store the reason for a host function triggered trap.
 	///
 	/// This is called by the `define_env` macro in order to store any error returned by
@@ -388,12 +400,12 @@ where
 	/// Charge the gas meter with the specified token.
 	///
 	/// Returns `Err(HostError)` if there is not enough gas.
-	fn charge_gas<Tok>(&mut self, token: Tok) -> Result<(), DispatchError>
+	pub fn charge_gas<Tok>(&mut self, token: Tok) -> Result<ChargedAmount, DispatchError>
 	where
 		Tok: Token<E::T, Metadata=HostFnWeights<E::T>>,
 	{
 		match self.gas_meter.charge(&self.schedule.host_fn_weights, token) {
-			GasMeterResult::Proceed => Ok(()),
+			GasMeterResult::Proceed(amount) => Ok(amount),
 			GasMeterResult::OutOfGas => Err(Error::<E::T>::OutOfGas.into())
 		}
 	}
@@ -403,9 +415,10 @@ where
 	/// Returns `Err` if one of the following conditions occurs:
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
-	fn read_sandbox_memory(&self, ptr: u32, len: u32)
+	pub fn read_sandbox_memory(&self, ptr: u32, len: u32)
 	-> Result<Vec<u8>, DispatchError>
 	{
+		ensure!(len <= self.schedule.limits.max_memory_size(), Error::<E::T>::OutOfBounds);
 		let mut buf = vec![0u8; len as usize];
 		self.memory.get(ptr, buf.as_mut_slice())
 			.map_err(|_| Error::<E::T>::OutOfBounds)?;
@@ -417,7 +430,7 @@ where
 	/// Returns `Err` if one of the following conditions occurs:
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
-	fn read_sandbox_memory_into_buf(&self, ptr: u32, buf: &mut [u8])
+	pub fn read_sandbox_memory_into_buf(&self, ptr: u32, buf: &mut [u8])
 	-> Result<(), DispatchError>
 	{
 		self.memory.get(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
@@ -429,20 +442,29 @@ where
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
 	/// - the buffer contents cannot be decoded as the required type.
-	fn read_sandbox_memory_as<D: Decode>(&self, ptr: u32, len: u32)
+	///
+	/// # Note
+	///
+	/// It is safe to forgo benchmarking and charging weight relative to `len` for fixed
+	/// size types (basically everything not containing a heap collection):
+	/// Despite the fact that we are usually about to read the encoding of a fixed size
+	/// type, we cannot know the encoded size of that type. We therefore are required to
+	/// use the length provided by the contract. This length is untrusted and therefore
+	/// we charge weight relative to the provided size upfront that covers the copy costs.
+	/// On success this cost is refunded as the copying was already covered in the
+	/// overall cost of the host function. This is different from `read_sandbox_memory`
+	/// where the size is dynamic and the costs resulting from that dynamic size must
+	/// be charged relative to this dynamic size anyways (before reading) by constructing
+	/// the benchmark for that.
+	pub fn read_sandbox_memory_as<D: Decode>(&mut self, ptr: u32, len: u32)
 	-> Result<D, DispatchError>
 	{
+		let amount = self.charge_gas(RuntimeToken::CopyIn(len))?;
 		let buf = self.read_sandbox_memory(ptr, len)?;
-		D::decode(&mut &buf[..]).map_err(|_| Error::<E::T>::DecodingFailed.into())
-	}
-
-	/// Write the given buffer to the designated location in the sandbox memory.
-	///
-	/// Returns `Err` if one of the following conditions occurs:
-	///
-	/// - designated area is not within the bounds of the sandbox memory.
-	fn write_sandbox_memory(&mut self, ptr: u32, buf: &[u8]) -> Result<(), DispatchError> {
-		self.memory.set(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
+		let decoded = D::decode_all(&mut &buf[..])
+			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
+		self.gas_meter.refund(amount);
+		Ok(decoded)
 	}
 
 	/// Write the given buffer and its length to the designated locations in sandbox memory and
@@ -464,7 +486,7 @@ where
 	///
 	/// In addition to the error conditions of `write_sandbox_memory` this functions returns
 	/// `Err` if the size of the buffer located at `out_ptr` is too small to fit `buf`.
-	fn write_sandbox_output(
+	pub fn write_sandbox_output(
 		&mut self,
 		out_ptr: u32,
 		out_len_ptr: u32,
@@ -494,6 +516,15 @@ where
 		.map_err(|_| Error::<E::T>::OutOfBounds)?;
 
 		Ok(())
+	}
+
+	/// Write the given buffer to the designated location in the sandbox memory.
+	///
+	/// Returns `Err` if one of the following conditions occurs:
+	///
+	/// - designated area is not within the bounds of the sandbox memory.
+	fn write_sandbox_memory(&mut self, ptr: u32, buf: &[u8]) -> Result<(), DispatchError> {
+		self.memory.set(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
 	}
 
 	/// Computes the given hash function on the supplied input.
@@ -612,8 +643,7 @@ define_env!(Env, <E: Ext>,
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		let value = Some(ctx.read_sandbox_memory(value_ptr, value_len)?);
-		ctx.ext.set_storage(key, value);
-		Ok(())
+		ctx.ext.set_storage(key, value).map_err(Into::into)
 	},
 
 	// Clear the value at the given key in the contract storage.
@@ -625,8 +655,7 @@ define_env!(Env, <E: Ext>,
 		ctx.charge_gas(RuntimeToken::ClearStorage)?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		ctx.ext.set_storage(key, None);
-		Ok(())
+		ctx.ext.set_storage(key, None).map_err(Into::into)
 	},
 
 	// Retrieve the value under the given key from storage.
@@ -891,6 +920,8 @@ define_env!(Env, <E: Ext>,
 	// # Traps
 	//
 	// - The contract is live i.e is already on the call stack.
+	// - Failed to send the balance to the beneficiary.
+	// - The deletion queue is full.
 	seal_terminate(
 		ctx,
 		beneficiary_ptr: u32,
@@ -1145,17 +1176,23 @@ define_env!(Env, <E: Ext>,
 		let rent_allowance: BalanceOf<<E as Ext>::T> =
 			ctx.read_sandbox_memory_as(rent_allowance_ptr, rent_allowance_len)?;
 		let delta = {
+			const KEY_SIZE: usize = 32;
+
 			// We can eagerly allocate because we charged for the complete delta count already
-			let mut delta = Vec::with_capacity(delta_count as usize);
+			// We still need to make sure that the allocation isn't larger than the memory
+			// allocator can handle.
+			ensure!(
+				delta_count
+					.saturating_mul(KEY_SIZE as u32) <= ctx.schedule.limits.max_memory_size(),
+				Error::<E::T>::OutOfBounds,
+			);
+			let mut delta = vec![[0; KEY_SIZE]; delta_count as usize];
 			let mut key_ptr = delta_ptr;
 
-			for _ in 0..delta_count {
-				const KEY_SIZE: usize = 32;
-
-				// Read the delta into the provided buffer and collect it into the buffer.
-				let mut delta_key: StorageKey = [0; KEY_SIZE];
-				ctx.read_sandbox_memory_into_buf(key_ptr, &mut delta_key)?;
-				delta.push(delta_key);
+			for i in 0..delta_count {
+				// Read the delta into the provided buffer
+				// This cannot panic because of the loop condition
+				ctx.read_sandbox_memory_into_buf(key_ptr, &mut delta[i as usize])?;
 
 				// Offset key_ptr to the next element.
 				key_ptr = key_ptr.checked_add(KEY_SIZE as u32).ok_or(Error::<E::T>::OutOfBounds)?;
@@ -1361,5 +1398,38 @@ define_env!(Env, <E: Ext>,
 	seal_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::HashBlake128(input_len))?;
 		Ok(ctx.compute_hash_on_intermediate_buffer(blake2_128, input_ptr, input_len, output_ptr)?)
+	},
+
+	// Call into the chain extension provided by the chain if any.
+	//
+	// Handling of the input values is up to the specific chain extension and so is the
+	// return value. The extension can decide to use the inputs as primitive inputs or as
+	// in/out arguments by interpreting them as pointers. Any caller of this function
+	// must therefore coordinate with the chain that it targets.
+	//
+	// # Note
+	//
+	// If no chain extension exists the contract will trap with the `NoChainExtension`
+	// module error.
+	seal_call_chain_extension(
+		ctx,
+		func_id: u32,
+		input_ptr: u32,
+		input_len: u32,
+		output_ptr: u32,
+		output_len_ptr: u32
+	) -> u32 => {
+		use crate::chain_extension::{ChainExtension, Environment, RetVal};
+		if <E::T as Config>::ChainExtension::enabled() == false {
+			Err(Error::<E::T>::NoChainExtension)?;
+		}
+		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
+		match <E::T as Config>::ChainExtension::call(func_id, env)? {
+			RetVal::Converging(val) => Ok(val),
+			RetVal::Diverging{flags, data} => Err(TrapReason::Return(ReturnData {
+				flags: flags.bits(),
+				data,
+			})),
+		}
 	},
 );

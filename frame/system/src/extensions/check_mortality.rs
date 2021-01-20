@@ -17,7 +17,6 @@
 
 use codec::{Encode, Decode};
 use crate::{Config, Module, BlockHash};
-use frame_support::StorageMap;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::Era,

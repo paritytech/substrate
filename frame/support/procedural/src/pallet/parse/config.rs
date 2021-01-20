@@ -48,7 +48,8 @@ pub struct ConfigDef {
 	pub has_event_type: bool,
 	/// The where clause on trait definition but modified so `Self` is `T`.
 	pub where_clause: Option<syn::WhereClause>,
-
+	/// The span of the pallet::config attribute.
+	pub attr_span: proc_macro2::Span,
 }
 
 /// Input definition for a constant in pallet config.
@@ -254,7 +255,7 @@ pub fn replace_self_by_t(input: proc_macro2::TokenStream) -> proc_macro2::TokenS
 				).into(),
 			proc_macro2::TokenTree::Ident(ident) if ident == "Self" =>
 				proc_macro2::Ident::new("T", ident.span()).into(),
-			other @ _ => other
+			other => other
 		})
 		.collect()
 }
@@ -262,8 +263,9 @@ pub fn replace_self_by_t(input: proc_macro2::TokenStream) -> proc_macro2::TokenS
 impl ConfigDef {
 	pub fn try_from(
 		frame_system: &syn::Ident,
+		attr_span: proc_macro2::Span,
 		index: usize,
-		item: &mut syn::Item
+		item: &mut syn::Item,
 	) -> syn::Result<Self> {
 		let item = if let syn::Item::Trait(item) = item {
 			item
@@ -292,7 +294,7 @@ impl ConfigDef {
 			return Err(syn::Error::new(item.generics.params[2].span(), msg));
 		}
 
-		let has_instance = if let Some(_) = item.generics.params.first() {
+		let has_instance = if item.generics.params.first().is_some() {
 			helper::check_config_def_gen(&item.generics, item.ident.span())?;
 			true
 		} else {
@@ -379,6 +381,7 @@ impl ConfigDef {
 			consts_metadata,
 			has_event_type,
 			where_clause,
+			attr_span,
 		})
 	}
 }

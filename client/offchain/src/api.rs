@@ -187,9 +187,9 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 
 	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
 		let peer_ids: HashSet<PeerId> = nodes.into_iter()
-			.filter_map(|node| PeerId::from_bytes(node.0).ok())
+			.filter_map(|node| PeerId::from_bytes(&node.0).ok())
 			.collect();
-		
+
 		self.network_provider.set_authorized_peers(peer_ids);
 		self.network_provider.set_authorized_only(authorized_only);
 	}
@@ -213,7 +213,7 @@ impl NetworkState {
 
 impl From<NetworkState> for OpaqueNetworkState {
 	fn from(state: NetworkState) -> OpaqueNetworkState {
-		let enc = Encode::encode(&state.peer_id.into_bytes());
+		let enc = Encode::encode(&state.peer_id.to_bytes());
 		let peer_id = OpaquePeerId::new(enc);
 
 		let external_addresses: Vec<OpaqueMultiaddr> = state
@@ -239,7 +239,7 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 		let inner_vec = state.peer_id.0;
 
 		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).map_err(|_| ())?;
-		let peer_id = PeerId::from_bytes(bytes).map_err(|_| ())?;
+		let peer_id = PeerId::from_bytes(&bytes).map_err(|_| ())?;
 
 		let external_addresses: Result<Vec<Multiaddr>, Self::Error> = state.external_addresses
 			.iter()

@@ -29,7 +29,6 @@
 use bytes::Bytes;
 use codec::{self, Encode, Decode};
 use crate::{
-	block_requests::build_protobuf_block_request,
 	chain::Client,
 	config::ProtocolId,
 	protocol::message::{BlockAttributes, Direction, FromBlock},
@@ -1066,13 +1065,16 @@ fn retries<B: Block>(request: &Request<B>) -> usize {
 fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::EncodeError> {
 	let request = match request {
 		Request::Body { request, .. } => {
-			let rq = build_protobuf_block_request::<_, NumberFor<B>>(
-				BlockAttributes::BODY,
-				FromBlock::Hash(request.header.hash()),
-				None,
-				Direction::Ascending,
-				Some(1),
-			);
+			let rq = schema::v1::BlockRequest {
+				fields: BlockAttributes::BODY.to_be_u32(),
+				from_block: Some(schema::v1::block_request::FromBlock::Hash(
+					request.header.hash().encode(),
+				)),
+				to_block: Default::default(),
+				direction: schema::v1::Direction::Ascending as i32,
+				max_blocks: 1,
+			};
+
 			let mut buf = Vec::with_capacity(rq.encoded_len());
 			rq.encode(&mut buf)?;
 			return Ok(buf);
@@ -1486,14 +1488,14 @@ mod tests {
 	}
 
 	fn peerset() -> (sc_peerset::Peerset, sc_peerset::PeersetHandle) {
-		let cfg = sc_peerset::PeersetConfig {
+		let cfg = sc_peerset::SetConfig {
 			in_peers: 128,
 			out_peers: 128,
-			bootnodes: Vec::new(),
+			bootnodes: Default::default(),
 			reserved_only: false,
-			priority_groups: Vec::new(),
+			reserved_nodes: Default::default(),
 		};
-		sc_peerset::Peerset::from_config(cfg)
+		sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig{ sets: vec![cfg] })
 	}
 
 	fn make_behaviour
