@@ -43,7 +43,7 @@ sc_executor::native_executor_instance!(
 );
 
 /// ChainInfo implementation.
-pub struct NodeTemplateChainInfo;
+struct NodeTemplateChainInfo;
 
 impl ChainInfo for NodeTemplateChainInfo {
     type Block = node_primitives::Block;
