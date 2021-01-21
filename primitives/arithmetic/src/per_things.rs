@@ -286,7 +286,7 @@ where
 	P::Inner: Into<N>
 {
 	let numer_upper = P::Upper::from(numer);
-	let denom_n = N::from(denom);
+	let denom_n: N = denom.into();
 	let denom_upper = P::Upper::from(denom);
 	let rem = x.rem(denom_n);
 	// `rem` is less than `denom`, which fits in `P::Inner`.
