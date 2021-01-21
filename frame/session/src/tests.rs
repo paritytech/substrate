@@ -60,9 +60,9 @@ fn keys_cleared_on_kill() {
 		let id = DUMMY;
 		assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), Some(1));
 
-		assert!(!System::allow_death(&1));
+		assert!(System::is_provider_required(&1));
 		assert_ok!(Session::purge_keys(Origin::signed(1)));
-		assert!(System::allow_death(&1));
+		assert!(!System::is_provider_required(&1));
 
 		assert_eq!(Session::load_keys(&1), None);
 		assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), None);

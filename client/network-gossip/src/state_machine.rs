@@ -570,7 +570,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn announce(&self, _: B::Hash, _: Vec<u8>) {
+		fn announce(&self, _: B::Hash, _: Option<Vec<u8>>) {
 			unimplemented!();
 		}
 	}

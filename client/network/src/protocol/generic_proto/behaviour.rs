@@ -103,7 +103,7 @@ pub struct GenericProto {
 	/// Notification protocols. Entries are only ever added and not removed.
 	/// Contains, for each protocol, the protocol name and the message to send as part of the
 	/// initial handshake.
-	notif_protocols: Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>,
+	notif_protocols: Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>, u64)>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -374,10 +374,10 @@ impl GenericProto {
 		versions: &[u8],
 		handshake_message: Vec<u8>,
 		peerset: sc_peerset::Peerset,
-		notif_protocols: impl Iterator<Item = (Cow<'static, str>, Vec<u8>)>,
+		notif_protocols: impl Iterator<Item = (Cow<'static, str>, Vec<u8>, u64)>,
 	) -> Self {
 		let notif_protocols = notif_protocols
-			.map(|(n, hs)| (n, Arc::new(RwLock::new(hs))))
+			.map(|(n, hs, sz)| (n, Arc::new(RwLock::new(hs)), sz))
 			.collect::<Vec<_>>();
 
 		assert!(!notif_protocols.is_empty());
@@ -914,11 +914,11 @@ impl GenericProto {
 				error!(target: "sub-libp2p", "PSM => Drop({}, {:?}): Not enabled (Incoming).",
 					entry.key().0, set_id);
 				*entry.into_mut() = st;
-				debug_assert!(!false);
+				debug_assert!(false);
 			},
 			PeerState::Poisoned => {
 				error!(target: "sub-libp2p", "State of {:?} is poisoned", entry.key());
-				debug_assert!(!false);
+				debug_assert!(false);
 			},
 		}
 	}
@@ -1674,8 +1674,9 @@ impl NetworkBehaviour for GenericProto {
 									notifications_sink: replacement_sink,
 								};
 								self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
-								*entry.into_mut() = PeerState::Enabled { connections };
 							}
+
+							*entry.into_mut() = PeerState::Enabled { connections };
 
 						} else {
 							// List of open connections wasn't empty before but now it is.

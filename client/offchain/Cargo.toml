@@ -37,10 +37,12 @@ hyper = "0.13.9"
 hyper-rustls = "0.21.0"
 
 [dev-dependencies]
-sc-client-db = { version = "0.8.0", default-features = true, path = "../db/" }
+sc-client-db = { version = "0.8.0", default-features = true, path = "../db" }
+sc-block-builder = { version = "0.8.0", path = "../block-builder" }
 sc-transaction-pool = { version = "2.0.0", path = "../transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
+sp-consensus = { version = "0.8.1", path = "../../primitives/consensus/common" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 tokio = "0.2"
 lazy_static = "1.4.0"

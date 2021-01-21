@@ -28,7 +28,7 @@ use sp_std::vec;
 use frame_benchmarking::benchmarks;
 use frame_support::{
 	codec::Decode,
-	storage::{StorageValue, StorageMap},
+	storage::StorageValue,
 	traits::{KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::RawOrigin;
