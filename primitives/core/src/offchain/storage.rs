@@ -41,7 +41,7 @@ impl InMemOffchainStorage {
 	/// Remove a key and its associated value from the offchain database.
 	pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		let _ = self.storage.remove(&key);
+		self.storage.remove(&key);
 	}
 }
 
@@ -84,9 +84,6 @@ impl OffchainStorage for InMemOffchainStorage {
 	}
 }
 
-
-
-
 /// Change to be applied to the offchain worker db in regards to a key.
 #[derive(Debug,Clone,Hash,Eq,PartialEq)]
 pub enum OffchainOverlayedChange {
@@ -97,160 +94,46 @@ pub enum OffchainOverlayedChange {
 }
 
 /// In-memory storage for offchain workers recoding changes for the actual offchain storage implementation.
-#[derive(Debug, Clone)]
-pub enum OffchainOverlayedChanges {
-	/// Writing overlay changes to the offchain worker database is disabled by configuration.
-	Disabled,
-	/// Overlay changes can be recorded using the inner collection of this variant,
-	/// where the identifier is the tuple of `(prefix, key)`.
-	Enabled(HashMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange>),
-}
-
-impl Default for OffchainOverlayedChanges {
-	fn default() -> Self {
-		Self::Disabled
-	}
+#[derive(Debug, Clone, Default)]
+pub struct OffchainOverlayedChanges {
+	changes: HashMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange>,
 }
 
 impl OffchainOverlayedChanges {
-	/// Create the disabled variant.
-	pub fn disabled() -> Self {
-		Self::Disabled
-	}
-
-	/// Create the enabled variant.
-	pub fn enabled() -> Self {
-		Self::Enabled(HashMap::new())
-	}
-
 	/// Consume the offchain storage and iterate over all key value pairs.
-	pub fn into_iter(self) -> OffchainOverlayedChangesIntoIter {
-		OffchainOverlayedChangesIntoIter::new(self)
+	pub fn into_iter(self) -> impl Iterator<Item = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange)> {
+		self.changes.into_iter()
 	}
 
 	/// Iterate over all key value pairs by reference.
-	pub fn iter<'a>(&'a self) -> OffchainOverlayedChangesIter {
-		OffchainOverlayedChangesIter::new(&self)
+	pub fn iter(&self) -> impl Iterator<Item = (&(Vec<u8>, Vec<u8>), &OffchainOverlayedChange)> {
+		self.changes.iter()
 	}
 
 	/// Drain all elements of changeset.
-	pub fn drain<'a, 'd>(&'a mut self) -> OffchainOverlayedChangesDrain<'d> where 'a: 'd {
-		OffchainOverlayedChangesDrain::new(self)
+	pub fn drain(&mut self) -> impl Iterator<Item = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange)> + '_ {
+		self.changes.drain()
 	}
 
 	/// Remove a key and its associated value from the offchain database.
 	pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		if let Self::Enabled(ref mut storage) = self {
-			let _ = storage.insert((prefix.to_vec(), key.to_vec()), OffchainOverlayedChange::Remove);
-		}
+		self.changes.insert((prefix.to_vec(), key.to_vec()), OffchainOverlayedChange::Remove);
 	}
 
 	/// Set the value associated with a key under a prefix to the value provided.
 	pub fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		if let Self::Enabled(ref mut storage) = self {
-			let _ = storage.insert((prefix.to_vec(), key.to_vec()), OffchainOverlayedChange::SetValue(value.to_vec()));
-		}
+		self.changes.insert(
+			(prefix.to_vec(), key.to_vec()),
+			OffchainOverlayedChange::SetValue(value.to_vec()),
+		);
 	}
 
 	/// Obtain a associated value to the given key in storage with prefix.
 	pub fn get(&self, prefix: &[u8], key: &[u8]) -> Option<OffchainOverlayedChange> {
-		if let Self::Enabled(ref storage) = self {
-			let key = (prefix.to_vec(), key.to_vec());
-			storage.get(&key).cloned()
-		} else {
-			None
-		}
+		let key = (prefix.to_vec(), key.to_vec());
+		self.changes.get(&key).cloned()
 	}
 }
-
-use std::collections::hash_map;
-
-/// Iterate by reference over the prepared offchain worker storage changes.
-pub struct OffchainOverlayedChangesIter<'i> {
-	inner: Option<hash_map::Iter<'i, (Vec<u8>, Vec<u8>), OffchainOverlayedChange>>,
-}
-
-impl<'i> Iterator for OffchainOverlayedChangesIter<'i> {
-	type Item = (&'i (Vec<u8>, Vec<u8>), &'i OffchainOverlayedChange);
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(ref mut iter) = self.inner {
-			iter.next()
-		} else {
-			None
-		}
-	}
-}
-
-impl<'i> OffchainOverlayedChangesIter<'i> {
-	/// Create a new iterator based on a refernce to the parent container.
-	pub fn new(container: &'i OffchainOverlayedChanges) -> Self {
-		match container {
-			OffchainOverlayedChanges::Enabled(inner) => Self {
-				inner: Some(inner.iter())
-			},
-			OffchainOverlayedChanges::Disabled => Self { inner: None, },
-		}
-	}
-}
-
-
-/// Iterate by value over the prepared offchain worker storage changes.
-pub struct OffchainOverlayedChangesIntoIter {
-	inner: Option<hash_map::IntoIter<(Vec<u8>,Vec<u8>),OffchainOverlayedChange>>,
-}
-
-impl Iterator for OffchainOverlayedChangesIntoIter {
-	type Item = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange);
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(ref mut iter) = self.inner {
-			iter.next()
-		} else {
-			None
-		}
-	}
-}
-
-impl OffchainOverlayedChangesIntoIter {
-	/// Create a new iterator by consuming the collection.
-	pub fn new(container: OffchainOverlayedChanges) -> Self {
-		match container {
-			OffchainOverlayedChanges::Enabled(inner) => Self {
-				inner: Some(inner.into_iter())
-			},
-			OffchainOverlayedChanges::Disabled => Self { inner: None, },
-		}
-	}
-}
-
-/// Iterate over all items while draining them from the collection.
-pub struct OffchainOverlayedChangesDrain<'d> {
-	inner: Option<hash_map::Drain<'d, (Vec<u8>, Vec<u8>), OffchainOverlayedChange>>,
-}
-
-impl<'d> Iterator for OffchainOverlayedChangesDrain<'d> {
-	type Item = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange);
-	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(ref mut iter) = self.inner {
-			iter.next()
-		} else {
-			None
-		}
-	}
-}
-
-impl<'d> OffchainOverlayedChangesDrain<'d> {
-	/// Create a new iterator by taking a mut reference to the collection,
-	/// for the lifetime of the created drain iterator.
-	pub fn new(container: &'d mut OffchainOverlayedChanges) -> Self {
-		match container {
-			OffchainOverlayedChanges::Enabled(ref mut inner) => Self {
-				inner: Some(inner.drain())
-			},
-			OffchainOverlayedChanges::Disabled => Self { inner: None, },
-		}
-	}
-}
-
 
 #[cfg(test)]
 mod test {
@@ -259,7 +142,7 @@ mod test {
 
 	#[test]
 	fn test_drain() {
-		let mut ooc = OffchainOverlayedChanges::enabled();
+		let mut ooc = OffchainOverlayedChanges::default();
 		ooc.set(STORAGE_PREFIX,b"kkk", b"vvv");
 		let drained = ooc.drain().count();
 		assert_eq!(drained, 1);
@@ -276,7 +159,7 @@ mod test {
 
 	#[test]
 	fn test_accumulated_set_remove_set() {
-		let mut ooc = OffchainOverlayedChanges::enabled();
+		let mut ooc = OffchainOverlayedChanges::default();
 		ooc.set(STORAGE_PREFIX, b"ppp", b"qqq");
 		ooc.remove(STORAGE_PREFIX, b"ppp");
 		// keys are equiv, so it will overwrite the value and the overlay will contain
