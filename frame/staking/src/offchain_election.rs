@@ -23,7 +23,6 @@ use crate::{
 };
 use codec::Decode;
 use frame_support::{traits::Get, weights::Weight, IterableStorageMap};
-use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
 	to_support_map, EvaluateSupport, reduce, Assignment, ElectionResult, ElectionScore,
 	ExtendedBalance, CompactSolution,
@@ -32,6 +31,7 @@ use sp_runtime::{
 	offchain::storage::StorageValueRef, traits::TrailingZeroInput, PerThing, RuntimeDebug,
 };
 use sp_std::{convert::TryInto, prelude::*};
+use frame_system::offchain::SubmitTransaction;
 
 /// Error types related to the offchain election machinery.
 #[derive(RuntimeDebug)]
@@ -105,10 +105,27 @@ pub(crate) fn set_check_offchain_execution_status<T: Config>(
 	}
 }
 
+pub(crate) const OFFCHAIN_QUEUED_CALL: &[u8] = b"parity/staking-election/call";
+
+pub(crate) fn save_solution<T: Config>(call: &Call<T>) -> Result<(), OffchainElectionError> {
+	let storage = StorageValueRef::persistent(&OFFCHAIN_QUEUED_CALL);
+	// TODO: probably we should do this with a mutate to ensure atomicity.
+	storage.set(call);
+}
+
+pub(crate) fn get_solution<T: Config>() -> Option<Call<T>> {
+	let storage = StorageValueRef::persistent(&OFFCHAIN_QUEUED_CALL);
+	storage.get().flatten()
+}
+
+pub(crate) fn submit_soluton<T: Config>(call: Call<T>) -> Result<(), OffchainElectionError>{
+	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.clone().into())
+		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
+}
+
 /// The internal logic of the offchain worker of this module. This runs the phragmen election,
-/// compacts and reduces the solution, computes the score and submits it back to the chain as an
-/// unsigned transaction, without any signature.
-pub(crate) fn compute_offchain_election<T: Config>() -> Result<(), OffchainElectionError> {
+/// compacts and reduces the solution, computes the score returns a call that can be submitted back to the chain.
+pub(crate) fn compute_offchain_election<T: Config>() -> Result<Call<T>, OffchainElectionError> {
 	let iters = get_balancing_iters::<T>();
 	// compute raw solution. Note that we use `OffchainAccuracy`.
 	let ElectionResult {
@@ -135,17 +152,19 @@ pub(crate) fn compute_offchain_election<T: Config>() -> Result<(), OffchainElect
 	// defensive-only: current era can never be none except genesis.
 	let current_era = <Module<T>>::current_era().unwrap_or_default();
 
-	// send it.
-	let call = Call::submit_election_solution_unsigned(
+	Ok(Call::submit_election_solution_unsigned(
 		winners,
 		compact,
 		score,
 		current_era,
 		size,
-	).into();
+	))
+}
 
-	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
-		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
+pub(crate) fn compute_save_and_submit<T: Config>() -> Result<(), OffchainElectionError> {
+	let call = compute_offchain_election::<T>()?;
+	save_solution::<T>(&call)?;
+	submit_soluton::<T>(call)
 }
 
 /// Get a random number of iterations to run the balancing.
