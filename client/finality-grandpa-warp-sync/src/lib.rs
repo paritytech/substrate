@@ -54,7 +54,7 @@ pub fn request_response_config_for_chain<TBlock: BlockT, TBackend: Backend<TBloc
 	}
 }
 
-const LOG_TARGET: &str = "grandpa-warp-sync-request-handler";
+const LOG_TARGET: &str = "finality-grandpa-warp-sync-request-handler";
 
 /// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing incoming requests.
 pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestResponseConfig {

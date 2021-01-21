@@ -195,7 +195,7 @@ pub fn new_full_base(
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 
 	#[cfg(feature = "cli")]
-	config.network.request_response_protocols.push(sc_grandpa_warp_sync::request_response_config_for_chain(
+	config.network.request_response_protocols.push(sc_finality_grandpa_warp_sync::request_response_config_for_chain(
 		&config, task_manager.spawn_handle(), backend.clone(),
 	));
 
