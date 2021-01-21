@@ -376,9 +376,7 @@ impl OverlayedChanges {
 		for (_, (changeset, _)) in self.children.iter_mut() {
 			changeset.start_transaction();
 		}
-		if let Some(offchain) = self.offchain.overlay_mut() {
-			offchain.start_transaction();
-		}
+		self.offchain.overlay_mut().start_transaction();
 	}
 
 	/// Rollback the last transaction started by `start_transaction`.
@@ -392,9 +390,7 @@ impl OverlayedChanges {
 				.expect("Top and children changesets are started in lockstep; qed");
 			!changeset.is_empty()
 		});
-		if let Some(offchain) = self.offchain.overlay_mut() {
-			offchain.rollback_transaction()?;
-		}
+		self.offchain.overlay_mut().rollback_transaction()?;
 		Ok(())
 	}
 
@@ -408,9 +404,7 @@ impl OverlayedChanges {
 			changeset.commit_transaction()
 				.expect("Top and children changesets are started in lockstep; qed");
 		}
-		if let Some(offchain) = self.offchain.overlay_mut() {
-			offchain.commit_transaction()?;
-		}
+		self.offchain.overlay_mut().commit_transaction()?;
 		Ok(())
 	}
 
@@ -424,9 +418,7 @@ impl OverlayedChanges {
 			changeset.enter_runtime()
 				.expect("Top and children changesets are entering runtime in lockstep; qed")
 		}
-		if let Some(offchain) = self.offchain.overlay_mut() {
-			offchain.enter_runtime()?;
-		}
+		self.offchain.overlay_mut().enter_runtime()?;
 		Ok(())
 	}
 
@@ -440,9 +432,7 @@ impl OverlayedChanges {
 			changeset.exit_runtime()
 				.expect("Top and children changesets are entering runtime in lockstep; qed");
 		}
-		if let Some(offchain) = self.offchain.overlay_mut() {
-			offchain.exit_runtime()?;
-		}
+		self.offchain.overlay_mut().exit_runtime()?;
 		Ok(())
 	}
 
@@ -659,13 +649,6 @@ impl OverlayedChanges {
 			)
 	}
 
-	/// Instantiate an offchain overlay with offchain indexing enabled.
-	pub fn with_offchain_indexing() -> Self {
-		let mut result = Self::default();
-		result.offchain = OffchainOverlayedChanges::enabled();
-		result
-	}
-
 	/// Read only access ot offchain overlay.
 	pub fn offchain(&self) -> &OffchainOverlayedChanges {
 		&self.offchain
@@ -840,7 +823,7 @@ mod tests {
 			assert_eq!(offchain_data, expected);
 		}
 
-		let mut overlayed = OverlayedChanges::with_offchain_indexing();
+		let mut overlayed = OverlayedChanges::default();
 
 		let key = vec![42, 69, 169, 142];
 
