@@ -33,7 +33,6 @@ rand = "0.7.3"
 parking_lot = "0.11.1"
 lazy_static = "1.4.0"
 log = "0.4.11"
-slog = { version = "2.5.2", features = ["nested-values"] }
 futures-timer = "3.0.1"
 wasm-timer = "0.2"
 exit-future = "0.2.0"

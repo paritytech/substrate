@@ -230,6 +230,8 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: HashSet<PeerId>,
+	/// A cache for the data that was associated to a block announcement.
+	block_announce_data_cache: lru::LruCache<B::Hash, Vec<u8>>,
 }
 
 /// Peer information
@@ -491,6 +493,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			)
 		};
 
+		let block_announce_data_cache = lru::LruCache::new(
+			network_config.default_peers_set.in_peers as usize
+				+ network_config.default_peers_set.out_peers as usize,
+		);
+
 		let protocol = Protocol {
 			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
 			propagate_timeout: Box::pin(interval(PROPAGATE_TIMEOUT)),
@@ -514,6 +521,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				None
 			},
 			boot_node_ids,
+			block_announce_data_cache,
 		};
 
 		Ok((protocol, peerset_handle, known_addresses))
@@ -1069,7 +1077,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
-	pub fn announce_block(&mut self, hash: B::Hash, data: Vec<u8>) {
+	pub fn announce_block(&mut self, hash: B::Hash, data: Option<Vec<u8>>) {
 		let header = match self.chain.header(BlockId::Hash(hash)) {
 			Ok(Some(header)) => header,
 			Ok(None) => {
@@ -1089,6 +1097,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let is_best = self.chain.info().best_hash == hash;
 		debug!(target: "sync", "Reannouncing block {:?} is_best: {}", hash, is_best);
+
+		let data = data.or_else(|| self.block_announce_data_cache.get(&hash).cloned()).unwrap_or_default();
 
 		for (who, ref mut peer) in self.peers.iter_mut() {
 			let inserted = peer.known_blocks.insert(hash);
@@ -1160,8 +1170,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		validation_result: sync::PollBlockAnnounceValidation<B::Header>,
 	) -> CustomMessageOutcome<B> {
 		let (header, is_best, who) = match validation_result {
-			sync::PollBlockAnnounceValidation::Nothing { is_best, who, header } => {
+			sync::PollBlockAnnounceValidation::Skip =>
+				return CustomMessageOutcome::None,
+			sync::PollBlockAnnounceValidation::Nothing { is_best, who, announce } => {
 				self.update_peer_info(&who);
+
+				if let Some(data) = announce.data {
+					if !data.is_empty() {
+						self.block_announce_data_cache.put(announce.header.hash(), data);
+					}
+				}
 
 				// `on_block_announce` returns `OnBlockAnnounce::ImportHeader`
 				// when we have all data required to import the block
@@ -1170,14 +1188,21 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				// AND
 				// 2) parent block is already imported and not pruned.
 				if is_best {
-					return CustomMessageOutcome::PeerNewBest(who, *header.number())
+					return CustomMessageOutcome::PeerNewBest(who, *announce.header.number())
 				} else {
 					return CustomMessageOutcome::None
 				}
 			}
-			sync::PollBlockAnnounceValidation::ImportHeader { header, is_best, who } => {
+			sync::PollBlockAnnounceValidation::ImportHeader { announce, is_best, who } => {
 				self.update_peer_info(&who);
-				(header, is_best, who)
+
+				if let Some(data) = announce.data {
+					if !data.is_empty() {
+						self.block_announce_data_cache.put(announce.header.hash(), data);
+					}
+				}
+
+				(announce.header, is_best, who)
 			}
 			sync::PollBlockAnnounceValidation::Failure { who, disconnect } => {
 				if disconnect {
