@@ -224,98 +224,6 @@ pub struct AssetMetadata<DepositBalance> {
 	decimals: u8,
 }
 
-decl_storage! {
-	trait Store for Module<T: Config> as Assets {
-		/// Details of an asset.
-		Asset: map hasher(blake2_128_concat) T::AssetId => Option<AssetDetails<
-			T::Balance,
-			T::AccountId,
-			BalanceOf<T>,
-		>>;
-
-		/// The number of units of assets held by any given account.
-		Account: double_map
-			hasher(blake2_128_concat) T::AssetId,
-			hasher(blake2_128_concat) T::AccountId
-			=> AssetBalance<T::Balance>;
-
-		/// Metadata of an asset.
-		Metadata: map hasher(blake2_128_concat) T::AssetId => AssetMetadata<BalanceOf<T>>;
-	}
-}
-
-decl_event! {
-	pub enum Event<T> where
-		<T as frame_system::Config>::AccountId,
-		<T as Config>::Balance,
-		<T as Config>::AssetId,
-	{
-		/// Some asset class was created. \[asset_id, creator, owner\]
-		Created(AssetId, AccountId, AccountId),
-		/// Some assets were issued. \[asset_id, owner, total_supply\]
-		Issued(AssetId, AccountId, Balance),
-		/// Some assets were transferred. \[asset_id, from, to, amount\]
-		Transferred(AssetId, AccountId, AccountId, Balance),
-		/// Some assets were destroyed. \[asset_id, owner, balance\]
-		Burned(AssetId, AccountId, Balance),
-		/// The management team changed \[asset_id, issuer, admin, freezer\]
-		TeamChanged(AssetId, AccountId, AccountId, AccountId),
-		/// The owner changed \[asset_id, owner\]
-		OwnerChanged(AssetId, AccountId),
-		/// Some assets was transferred by an admin. \[asset_id, from, to, amount\]
-		ForceTransferred(AssetId, AccountId, AccountId, Balance),
-		/// Some account `who` was frozen. \[asset_id, who\]
-		Frozen(AssetId, AccountId),
-		/// Some account `who` was thawed. \[asset_id, who\]
-		Thawed(AssetId, AccountId),
-		/// Some asset `asset_id` was frozen. \[asset_id\]
-		AssetFrozen(AssetId),
-		/// Some asset `asset_id` was thawed. \[asset_id\]
-		AssetThawed(AssetId),
-		/// An asset class was destroyed.
-		Destroyed(AssetId),
-		/// Some asset class was force-created. \[asset_id, owner\]
-		ForceCreated(AssetId, AccountId),
-		/// The maximum amount of zombies allowed has changed. \[asset_id, max_zombies\]
-		MaxZombiesChanged(AssetId, u32),
-		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals\]
-		MetadataSet(AssetId, Vec<u8>, Vec<u8>, u8),
-	}
-}
-
-decl_error! {
-	pub enum Error for Module<T: Config> {
-		/// Transfer amount should be non-zero.
-		AmountZero,
-		/// Account balance must be greater than or equal to the transfer amount.
-		BalanceLow,
-		/// Balance should be non-zero.
-		BalanceZero,
-		/// The signing account has no permission to do the operation.
-		NoPermission,
-		/// The given asset ID is unknown.
-		Unknown,
-		/// The origin account is frozen.
-		Frozen,
-		/// The asset ID is already taken.
-		InUse,
-		/// Too many zombie accounts in use.
-		TooManyZombies,
-		/// Attempt to destroy an asset class when non-zombie, reference-bearing accounts exist.
-		RefsLeft,
-		/// Invalid witness data given.
-		BadWitness,
-		/// Minimum balance should be non-zero.
-		MinBalanceZero,
-		/// A mint operation lead to an overflow.
-		Overflow,
-		/// Some internal state is broken.
-		BadState,
-		/// Invalid metadata given.
-		BadMetadata,
-	}
-}
-
 decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
@@ -1013,6 +921,98 @@ decl_module! {
 				Ok(())
 			})
 		}
+	}
+}
+
+decl_event! {
+	pub enum Event<T> where
+		<T as frame_system::Config>::AccountId,
+		<T as Config>::Balance,
+		<T as Config>::AssetId,
+	{
+		/// Some asset class was created. \[asset_id, creator, owner\]
+		Created(AssetId, AccountId, AccountId),
+		/// Some assets were issued. \[asset_id, owner, total_supply\]
+		Issued(AssetId, AccountId, Balance),
+		/// Some assets were transferred. \[asset_id, from, to, amount\]
+		Transferred(AssetId, AccountId, AccountId, Balance),
+		/// Some assets were destroyed. \[asset_id, owner, balance\]
+		Burned(AssetId, AccountId, Balance),
+		/// The management team changed \[asset_id, issuer, admin, freezer\]
+		TeamChanged(AssetId, AccountId, AccountId, AccountId),
+		/// The owner changed \[asset_id, owner\]
+		OwnerChanged(AssetId, AccountId),
+		/// Some assets was transferred by an admin. \[asset_id, from, to, amount\]
+		ForceTransferred(AssetId, AccountId, AccountId, Balance),
+		/// Some account `who` was frozen. \[asset_id, who\]
+		Frozen(AssetId, AccountId),
+		/// Some account `who` was thawed. \[asset_id, who\]
+		Thawed(AssetId, AccountId),
+		/// Some asset `asset_id` was frozen. \[asset_id\]
+		AssetFrozen(AssetId),
+		/// Some asset `asset_id` was thawed. \[asset_id\]
+		AssetThawed(AssetId),
+		/// An asset class was destroyed.
+		Destroyed(AssetId),
+		/// Some asset class was force-created. \[asset_id, owner\]
+		ForceCreated(AssetId, AccountId),
+		/// The maximum amount of zombies allowed has changed. \[asset_id, max_zombies\]
+		MaxZombiesChanged(AssetId, u32),
+		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals\]
+		MetadataSet(AssetId, Vec<u8>, Vec<u8>, u8),
+	}
+}
+
+decl_error! {
+	pub enum Error for Module<T: Config> {
+		/// Transfer amount should be non-zero.
+		AmountZero,
+		/// Account balance must be greater than or equal to the transfer amount.
+		BalanceLow,
+		/// Balance should be non-zero.
+		BalanceZero,
+		/// The signing account has no permission to do the operation.
+		NoPermission,
+		/// The given asset ID is unknown.
+		Unknown,
+		/// The origin account is frozen.
+		Frozen,
+		/// The asset ID is already taken.
+		InUse,
+		/// Too many zombie accounts in use.
+		TooManyZombies,
+		/// Attempt to destroy an asset class when non-zombie, reference-bearing accounts exist.
+		RefsLeft,
+		/// Invalid witness data given.
+		BadWitness,
+		/// Minimum balance should be non-zero.
+		MinBalanceZero,
+		/// A mint operation lead to an overflow.
+		Overflow,
+		/// Some internal state is broken.
+		BadState,
+		/// Invalid metadata given.
+		BadMetadata,
+	}
+}
+
+decl_storage! {
+	trait Store for Module<T: Config> as Assets {
+		/// Details of an asset.
+		Asset: map hasher(blake2_128_concat) T::AssetId => Option<AssetDetails<
+			T::Balance,
+			T::AccountId,
+			BalanceOf<T>,
+		>>;
+
+		/// The number of units of assets held by any given account.
+		Account: double_map
+			hasher(blake2_128_concat) T::AssetId,
+			hasher(blake2_128_concat) T::AccountId
+			=> AssetBalance<T::Balance>;
+
+		/// Metadata of an asset.
+		Metadata: map hasher(blake2_128_concat) T::AssetId => AssetMetadata<BalanceOf<T>>;
 	}
 }
 
