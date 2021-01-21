@@ -251,7 +251,6 @@ fn struct_def(
 				Ok(assignments)
 			}
 
-			#[cfg(any(feature = "std", test))]
 			fn add_edge(&mut self, voter: Self::Voter, target: Self::Target) {
 				self.#single_field_name.push((voter, target));
 			}

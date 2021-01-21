@@ -239,10 +239,7 @@ pub trait CompactSolution: Sized {
 	}
 
 	/// Add a single edge 1-to-1 edge.
-	#[cfg(any(feature = "std", test))]
-	fn add_edge(&mut self, _voter: Self::Voter, _target: Self::Target) {
-		panic!("add_edge not implemented and cannot be used.")
-	}
+	fn add_edge(&mut self, _voter: Self::Voter, _target: Self::Target);
 }
 
 // re-export the compact solution type.
