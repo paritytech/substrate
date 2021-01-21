@@ -120,12 +120,12 @@
 		},
 		{
 			"prefix": 12,
-			"network": "polymath",
-			"displayName": "Polymath",
-			"symbols": null,
-			"decimals": null,
+			"network": "polymesh",
+			"displayName": "Polymesh",
+			"symbols": ["POLYX"],
+			"decimals": [6],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://polymath.network/"
 		},
 		{
 			"prefix": 13,
@@ -245,6 +245,24 @@
 			"website": "https://zero.io"
 		},
 		{
+			"prefix": 26,
+			"network": "jupiter",
+			"displayName": "Jupiter",
+			"symbols": ["jDOT"],
+			"decimals": [10],
+			"standardAccount": "*25519",
+			"website": "https://jupiter.patract.io"
+		},
+		{
+			"prefix": 27,
+			"network": "patract",
+			"displayName": "Patract",
+			"symbols": ["pDOT", "pKSM"],
+			"decimals": [10, 12],
+			"standardAccount": "*25519",
+			"website": "https://patract.network"
+		},
+		{
 			"prefix": 28,
 			"network": "subsocial",
 			"displayName": "Subsocial",
@@ -272,13 +290,22 @@
 			"website": "https://phala.network"
 		},
 		{
+			"prefix": 31,
+			"network": "litentry",
+			"displayName": "Litentry Network",
+			"symbols": ["LIT"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://litentry.com/"
+		},
+		{
 			"prefix": 32,
 			"network": "robonomics",
-			"displayName": "Robonomics Network",
-			"symbols": null,
-			"decimals": null,
+			"displayName": "Robonomics",
+			"symbols": ["XRT"],
+			"decimals": [9],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://robonomics.network"
 		},
 		{
 			"prefix": 33,

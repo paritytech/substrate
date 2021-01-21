@@ -401,6 +401,27 @@ pub struct NetworkConfiguration {
 	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in the
 	/// presence of potentially adversarial nodes.
 	pub kademlia_disjoint_query_paths: bool,
+
+	/// Size of Yamux receive window of all substreams. `None` for the default (256kiB).
+	/// Any value less than 256kiB is invalid.
+	///
+	/// # Context
+	///
+	/// By design, notifications substreams on top of Yamux connections only allow up to `N` bytes
+	/// to be transferred at a time, where `N` is the Yamux receive window size configurable here.
+	/// This means, in practice, that every `N` bytes must be acknowledged by the receiver before
+	/// the sender can send more data. The maximum bandwidth of each notifications substream is
+	/// therefore `N / round_trip_time`.
+	///
+	/// It is recommended to leave this to `None`, and use a request-response protocol instead if
+	/// a large amount of data must be transferred. The reason why the value is configurable is
+	/// that some Substrate users mis-use notification protocols to send large amounts of data.
+	/// As such, this option isn't designed to stay and will likely get removed in the future.
+	///
+	/// Note that configuring a value here isn't a modification of the Yamux protocol, but rather
+	/// a modification of the way the implementation works. Different nodes with different
+	/// configured values remain compatible with each other.
+	pub yamux_window_size: Option<u32>,
 }
 
 impl NetworkConfiguration {
@@ -430,6 +451,7 @@ impl NetworkConfiguration {
 			max_parallel_downloads: 5,
 			allow_non_globals_in_dht: false,
 			kademlia_disjoint_query_paths: false,
+			yamux_window_size: None,
 		}
 	}
 
@@ -506,6 +528,8 @@ pub struct NonDefaultSetConfig {
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
 	/// >           by the networking code.
 	pub notifications_protocol: Cow<'static, str>,
+	/// Maximum allowed size of single notifications.
+	pub max_notification_size: u64,
 	/// Base configuration.
 	pub set_config: SetConfig,
 }
