@@ -70,7 +70,8 @@ impl<B: Block> LightClientRequestHandler<B> {
 		client: Arc<dyn Client<B>>,
 		/* peerset: PeersetHandle,*/
 	) -> (Self, ProtocolConfig) {
-		// TODO: justify 20.
+		// For now due to lack of data on light client request handling in production systems, this
+		// value is chosen to match the block request limit.
 		let (tx, request_receiver) = mpsc::channel(20);
 
 		let mut protocol_config = super::generate_protocol_config(protocol_id);
