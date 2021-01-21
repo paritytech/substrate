@@ -153,10 +153,15 @@ fn perform_call(
 ) -> Result<Vec<u8>> {
 	let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
 
-	let host_state = HostState::new(allocator, instance_wrapper.clone());
-	let ret = state_holder::with_initialized_state(&host_state, || -> Result<_> {
-		Ok(unpack_ptr_and_len(entrypoint.call(data_ptr, data_len)?))
-	});
+	let mut host_state = HostState::new(allocator, instance_wrapper.clone());
+	let ret = state_holder::with_initialized_state(&host_state, ||
+		entrypoint.call(data_ptr, data_len).map(unpack_ptr_and_len)
+	);
+
+	if let Some(err) = host_state.panicked() {
+		return Err(err);
+	}
+
 	let (output_ptr, output_len) = ret?;
 	let output = extract_output_data(&instance_wrapper, output_ptr, output_len)?;
 

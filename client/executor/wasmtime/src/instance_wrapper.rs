@@ -98,7 +98,7 @@ impl EntryPoint {
 		let data_ptr = u32::from(data_ptr) as i32;
 		let data_len = u32::from(data_len) as i32;
 
-		(match self.call_type {
+		match self.call_type {
 			EntryPointType::Direct => {
 				self.func.call(&[
 					wasmtime::Val::I32(data_ptr),
@@ -112,15 +112,14 @@ impl EntryPoint {
 					wasmtime::Val::I32(data_len),
 				])
 			},
-		})
-			.map(|results| 
-				// the signature is checked to have i64 return type
-				results[0].unwrap_i64() as u64
-			)
-			.map_err(|err| Error::from(format!(
-				"Wasm execution trapped: {}",
-				err
-			)))
+		}.map(|results|
+			// the signature is checked to have i64 return type
+			results[0].unwrap_i64() as u64
+		)
+		.map_err(|err| Error::from(format!(
+			"Wasm execution trapped: {}",
+			err,
+		)))
 	}
 
 	pub fn direct(func: wasmtime::Func) -> std::result::Result<Self, &'static str> {

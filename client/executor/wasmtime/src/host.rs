@@ -54,6 +54,7 @@ pub struct HostState {
 	sandbox_store: RefCell<sandbox::Store<SupervisorFuncRef>>,
 	allocator: RefCell<FreeingBumpHeapAllocator>,
 	instance: Rc<InstanceWrapper>,
+	instance_panicked: RefCell<Option<Error>>,
 }
 
 impl HostState {
@@ -63,12 +64,18 @@ impl HostState {
 			sandbox_store: RefCell::new(sandbox::Store::new()),
 			allocator: RefCell::new(allocator),
 			instance,
+			instance_panicked: RefCell::new(None),
 		}
 	}
 
 	/// Materialize `HostContext` that can be used to invoke a substrate host `dyn Function`.
 	pub fn materialize<'a>(&'a self) -> HostContext<'a> {
 		HostContext(self)
+	}
+
+	/// Returns an error if the wasm instance informed about us about itself panicking.
+	fn panicked(&mut self) -> Option<Error> {
+		self.instance_panicked.borrow_mut().take()
 	}
 }
 
@@ -155,6 +162,10 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 
 	fn sandbox(&mut self) -> &mut dyn Sandbox {
 		self
+	}
+
+	fn instance_panicked(&mut self, message: &str) {
+		*self.instance_panicked.borrow_mut() = Some(Error::RuntimePanicked(message.into()));
 	}
 }
 

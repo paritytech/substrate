@@ -1007,6 +1007,17 @@ trait Allocator {
 	}
 }
 
+/// Wasm only panic handler.
+#[runtime_interface(wasm_only)]
+trait PanicHandler {
+	/// Should be called when the wasm instance is panicking.
+	///
+	/// The given `message` should correspond to the reason the instance panicked.
+	fn panicking(&mut self, message: &str) {
+		self.instance_panicked(message);
+	}
+}
+
 /// Interface that provides functions for logging from within the runtime.
 #[runtime_interface]
 pub trait Logging {

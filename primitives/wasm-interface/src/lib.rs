@@ -272,7 +272,9 @@ impl PartialEq for dyn Function {
 	}
 }
 
-/// Context used by `Function` to interact with the allocator and the memory of the wasm instance.
+/// Context used by [`Function`] to interact with the executing context.
+///
+/// This includes access to the memory and the sandbox.
 pub trait FunctionContext {
 	/// Read memory from `address` into a vector.
 	fn read_memory(&self, address: Pointer<u8>, size: WordSize) -> Result<Vec<u8>> {
@@ -290,6 +292,8 @@ pub trait FunctionContext {
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> Result<()>;
 	/// Provides access to the sandbox.
 	fn sandbox(&mut self) -> &mut dyn Sandbox;
+	/// The wasm instance panicked with the given `message`.
+	fn instance_panicked(&mut self, message: &str);
 }
 
 /// Sandbox memory identifier.

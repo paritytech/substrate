@@ -46,6 +46,7 @@ struct FunctionExecutor<'a> {
 	host_functions: &'a [&'static dyn Function],
 	allow_missing_func_imports: bool,
 	missing_functions: &'a [String],
+	instance_panicked: Option<Error>,
 }
 
 impl<'a> FunctionExecutor<'a> {
@@ -65,7 +66,12 @@ impl<'a> FunctionExecutor<'a> {
 			host_functions,
 			allow_missing_func_imports,
 			missing_functions,
+			instance_panicked: None,
 		})
+	}
+
+	fn panicked(&mut self) -> Option<Error> {
+		self.instance_panicked.take()
 	}
 }
 
@@ -123,6 +129,10 @@ impl<'a> FunctionContext for FunctionExecutor<'a> {
 
 	fn sandbox(&mut self) -> &mut dyn Sandbox {
 		self
+	}
+
+	fn instance_panicked(&mut self, message: &str) {
+		self.instance_panicked = Some(Error::RuntimePanicked(message.into()));
 	}
 }
 
@@ -503,7 +513,11 @@ fn call_in_wasm_module(
 				"Failed to execute code with {} pages",
 				memory.current_size().0,
 			);
-			Err(e.into())
+
+			match function_executor.panicked() {
+				Some(e) => Err(e),
+				None => Err(e.into()),
+			}
 		},
 		_ => Err(Error::InvalidReturn),
 	}
