@@ -341,8 +341,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 				let per_thing = P::from_rational_approximation(e.weight, budget);
 			// trim zero edges.
 			if per_thing.is_zero() { None } else { Some((e.who, per_thing)) }
-		})
-			.collect::<Vec<_>>();
+		}).collect::<Vec<_>>();
 
 		if distribution.len() > 0 {
 			Some(Assignment { who, distribution })
