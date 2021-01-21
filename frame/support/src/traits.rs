@@ -1490,6 +1490,14 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+
+	fn pre_checks() -> Result<(), ()> {
+		Ok(())
+	}
+
+	fn post_checks() -> Result<(), ()> {
+		Ok(())
+	}
 }
 
 #[impl_for_tuples(30)]

@@ -461,8 +461,8 @@ fn decl_all_modules<'a>(
 
 	quote!(
 		#types
-		type AllModules = ( #all_modules );
-		type AllModulesWithSystem = ( #all_modules_with_system );
+		pub type AllModules = ( #all_modules );
+		pub type AllModulesWithSystem = ( #all_modules_with_system );
 	)
 }
 
