@@ -65,7 +65,6 @@ mod bench_closure_and_slice {
 	) -> Vec<StakedAssignment<A>>
 	where
 		T: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
-		ExtendedBalance: From<<T as PerThing>::Inner>,
 	{
 		ratio
 			.into_iter()

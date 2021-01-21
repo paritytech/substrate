@@ -75,7 +75,7 @@
 
 use sp_arithmetic::{
 	traits::{Bounded, UniqueSaturatedInto, Zero},
-	InnerOf, Normalizable, PerThing, Rational128, ThresholdOrd,
+	Normalizable, PerThing, Rational128, ThresholdOrd,
 };
 use sp_std::{
 	cell::RefCell,
@@ -209,7 +209,6 @@ pub trait CompactSolution: Sized {
 	where
 		for<'r> FS: Fn(&'r A) -> VoteWeight,
 		A: IdentifierT,
-		ExtendedBalance: From<InnerOf<Self::Accuracy>>,
 	{
 		let ratio = self.into_assignment(voter_at, target_at)?;
 		let staked = helpers::assignment_ratio_to_staked_normalized(ratio, stake_of)?;
@@ -332,14 +331,14 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
 	/// site might compensate by calling `normalize()` on the returned `Assignment` as a
 	/// post-precessing.
-	pub fn into_assignment<P: PerThing>(self) -> Option<Assignment<AccountId, P>>
-	where
-		ExtendedBalance: From<InnerOf<P>>,
-	{
+	pub fn into_assignment<P: PerThing>(self) -> Option<Assignment<AccountId, P>> {
 		let who = self.who;
 		let budget = self.budget;
-		let distribution = self.edges.into_iter().filter_map(|e| {
-			let per_thing = P::from_rational_approximation(e.weight, budget);
+		let distribution = self
+			.edges
+			.into_iter()
+			.filter_map(|e| {
+				let per_thing = P::from_rational_approximation(e.weight, budget);
 			// trim zero edges.
 			if per_thing.is_zero() { None } else { Some((e.who, per_thing)) }
 		}).collect::<Vec<_>>();
@@ -507,7 +506,6 @@ impl<AccountId> StakedAssignment<AccountId> {
 	/// can never be re-created and does not mean anything useful anymore.
 	pub fn into_assignment<P: PerThing>(self) -> Assignment<AccountId, P>
 	where
-		ExtendedBalance: From<InnerOf<P>>,
 		AccountId: IdentifierT,
 	{
 		let stake = self.total();
@@ -706,10 +704,7 @@ where
 /// greater or less than `that`.
 ///
 /// Note that the third component should be minimized.
-pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool
-where
-	ExtendedBalance: From<InnerOf<P>>,
-{
+pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool {
 	match this
 		.iter()
 		.zip(that.iter())
