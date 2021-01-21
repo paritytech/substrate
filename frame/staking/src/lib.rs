@@ -349,8 +349,11 @@ macro_rules! log {
 	};
 }
 
+/// The nominator index in the compact solution.
 pub type NominatorIndexOf<T> = <<T as Config>::CompactSolution as CompactSolution>::Voter;
+/// The validators index in the compact solution.
 pub type ValidatorIndexOf<T> = <<T as Config>::CompactSolution as CompactSolution>::Target;
+/// The offchain accuracy in the compact solution.
 pub type OffchainAccuracyOf<T> = <<T as Config>::CompactSolution as CompactSolution>::Accuracy;
 
 /// Accuracy used for on-chain election.
@@ -734,7 +737,6 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T w
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
 	T::ValidatorIdOf:
 		Convert<<T as frame_system::Config>::AccountId, Option<<T as frame_system::Config>::AccountId>>,
-	ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
 {
 	fn disable_validator(validator: &<T as frame_system::Config>::AccountId) -> Result<bool, ()> {
 		<pallet_session::Module<T>>::disable(validator)
@@ -749,10 +751,7 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T w
 	}
 }
 
-pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>>
-where
-	ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<Self>>>
-{
+pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
@@ -849,7 +848,7 @@ where
 	/// The compact solution type used to accept offchain solution.
 	///
 	/// This is implicitly encoding the maximum number of nominations as well.
-	type CompactSolution: CompactSolution + frame_support::Parameter;
+	type CompactSolution: CompactSolution + frame_support::Parameter + Default;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -891,7 +890,7 @@ impl Default for Releases {
 }
 
 decl_storage! {
-	trait Store for Module<T: Config> as Staking where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
+	trait Store for Module<T: Config> as Staking {
 		/// Number of eras to keep in history.
 		///
 		/// Information is kept for eras in `[current_era - history_depth; current_era]`.
@@ -1143,7 +1142,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the staking module.
-	pub enum Error for Module<T: Config> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
+	pub enum Error for Module<T: Config> {
 		/// Not a controller account.
 		NotController,
 		/// Not a stash account.
@@ -1215,7 +1214,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin, ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		/// Number of sessions per era.
 		const SessionsPerEra: SessionIndex = T::SessionsPerEra::get();
 
@@ -1358,22 +1357,24 @@ decl_module! {
 				)
 			);
 
-			use sp_runtime::UpperOf;
+			use sp_runtime::{UpperOf, traits::CheckedMul};
 			// see the documentation of `Assignment::try_normalize`. Now we can ensure that this
 			// will always return `Ok`.
 			// 1. Maximum sum of Vec<ChainAccuracy> must fit into `UpperOf<ChainAccuracy>`.
 			assert!(
 				<usize as TryInto<UpperOf<ChainAccuracy>>>::try_into(T::CompactSolution::LIMIT)
-				.unwrap()
+				.unwrap_or_else(|_| panic!())
 				.checked_mul(<ChainAccuracy>::one().deconstruct().try_into().unwrap())
 				.is_some()
 			);
 
 			// 2. Maximum sum of Vec<OffchainAccuracyOf<T>> must fit into `UpperOf<OffchainAccuracyOf<T>>`.
+			let max_inner = <OffchainAccuracyOf<T>>::one().deconstruct();
+			let max_inner = <UpperOf<OffchainAccuracyOf<T>>>::from(max_inner);
 			assert!(
 				<usize as TryInto<UpperOf<OffchainAccuracyOf<T>>>>::try_into(T::CompactSolution::LIMIT)
-				.unwrap()
-				.checked_mul(<OffchainAccuracyOf<T>>::one().deconstruct().try_into().unwrap())
+				.unwrap_or_else(|_| panic!())
+				.checked_mul(&max_inner)
 				.is_some()
 			);
 		}
@@ -1672,6 +1673,10 @@ decl_module! {
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
+			ensure!(targets.len() <= T::CompactSolution::LIMIT, Error::<T>::TooManyTargets);
+
+			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
+
 			let targets = targets.into_iter()
 				.take(T::CompactSolution::LIMIT)
 				.map(|t| T::Lookup::lookup(t))
@@ -2168,7 +2173,7 @@ decl_module! {
 	}
 }
 
-impl<T: Config> Module<T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
+impl<T: Config> Module<T>  {
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.
@@ -2902,10 +2907,7 @@ impl<T: Config> Module<T> where ExtendedBalance: From<sp_runtime::InnerOf<Offcha
 	/// No storage item is updated.
 	pub fn do_phragmen<Accuracy: PerThing128>(
 		iterations: usize,
-	) -> Option<PrimitiveElectionResult<T::AccountId, Accuracy>>
-	where
-		ExtendedBalance: From<InnerOf<Accuracy>>,
-	{
+	) -> Option<PrimitiveElectionResult<T::AccountId, Accuracy>> {
 		let weight_of = Self::slashable_balance_of_fn();
 		let mut all_nominators: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> = Vec::new();
 		let mut all_validators = Vec::new();
@@ -3101,7 +3103,7 @@ impl<T: Config> Module<T> where ExtendedBalance: From<sp_runtime::InnerOf<Offcha
 ///
 /// Once the first new_session is planned, all session must start and then end in order, though
 /// some session can lag in between the newest session planned and the latest session started.
-impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
+impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T>  {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		frame_support::debug::native::trace!(
 			target: LOG_TARGET,
@@ -3131,7 +3133,7 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> where
 	}
 }
 
-impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
+impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T>  {
 	fn new_session(new_index: SessionIndex)
 		-> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>>
 	{
@@ -3161,7 +3163,6 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T>
 	where
 		T: Config + pallet_authorship::Config + pallet_session::Config,
-		ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
 {
 	fn note_author(author: T::AccountId) {
 		Self::reward_by_ids(vec![(author, 20)])
@@ -3178,7 +3179,7 @@ impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Module
 /// if any.
 pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
+impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T>  {
 	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
 		<Module<T>>::ledger(&controller).map(|l| l.stash)
 	}
@@ -3193,7 +3194,7 @@ pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
 	for ExposureOf<T>
-	where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
+
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
 		if let Some(active_era) = <Module<T>>::active_era() {
@@ -3218,8 +3219,7 @@ for Module<T> where
 	T::ValidatorIdOf: Convert<
 		<T as frame_system::Config>::AccountId,
 		Option<<T as frame_system::Config>::AccountId>,
-	>,
-	ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
+	>
 {
 	fn on_offence(
 		offenders: &[OffenceDetails<T::AccountId, pallet_session::historical::IdentificationTuple<T>>],
@@ -3352,7 +3352,6 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 	T: Config,
 	R: ReportOffence<Reporter, Offender, O>,
 	O: Offence<Offender>,
-	ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
 {
 	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
 		// disallow any slashing from before the current bonding period.
@@ -3375,7 +3374,7 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 }
 
 #[allow(deprecated)]
-impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
+impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T>  {
 	type Call = Call<T>;
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 		if let Call::submit_election_solution_unsigned(

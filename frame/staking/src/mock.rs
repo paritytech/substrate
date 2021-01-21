@@ -30,12 +30,16 @@ use sp_npos_elections::{
 	to_support_map, EvaluateSupport, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
 };
 use sp_runtime::{
+	PerU16,
 	curve::PiecewiseLinear,
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use std::{cell::RefCell, collections::HashSet};
+use sp_npos_elections::generate_solution_type;
+
+generate_solution_type!(pub struct TestSolution::<u32, u16, PerU16>(24));
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -274,6 +278,7 @@ impl Config for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
 	type OffchainSolutionWeightLimit = OffchainSolutionWeightLimit;
+	type CompactSolution = TestSolution;
 	type WeightInfo = ();
 }
 
@@ -791,7 +796,7 @@ pub(crate) fn add_slash(who: &AccountId) {
 // distributed evenly.
 pub(crate) fn horrible_npos_solution(
 	do_reduce: bool,
-) -> (CompactAssignments, Vec<ValidatorIndex>, ElectionScore) {
+) -> (TestSolution, Vec<ValidatorIndexOf<Test>>, ElectionScore) {
 	let mut backing_stake_of: BTreeMap<AccountId, Balance> = BTreeMap::new();
 
 	// self stake
@@ -878,19 +883,19 @@ pub(crate) fn horrible_npos_solution(
 
 	let snapshot_validators = Staking::snapshot_validators().unwrap();
 	let snapshot_nominators = Staking::snapshot_nominators().unwrap();
-	let nominator_index = |a: &AccountId| -> Option<NominatorIndex> {
-		snapshot_nominators.iter().position(|x| x == a).map(|i| i as NominatorIndex)
+	let nominator_index = |a: &AccountId| -> Option<NominatorIndexOf<Test>> {
+		snapshot_nominators.iter().position(|x| x == a).map(|i| i as NominatorIndexOf<Test>)
 	};
-	let validator_index = |a: &AccountId| -> Option<ValidatorIndex> {
-		snapshot_validators.iter().position(|x| x == a).map(|i| i as ValidatorIndex)
+	let validator_index = |a: &AccountId| -> Option<ValidatorIndexOf<Test>> {
+		snapshot_validators.iter().position(|x| x == a).map(|i| i as ValidatorIndexOf<Test>)
 	};
 
 	// convert back to ratio assignment. This takes less space.
 	let assignments_reduced =
-		sp_npos_elections::assignment_staked_to_ratio::<AccountId, OffchainAccuracy>(staked_assignment);
+		sp_npos_elections::assignment_staked_to_ratio::<AccountId, OffchainAccuracyOf<Test>>(staked_assignment);
 
 	let compact =
-		CompactAssignments::from_assignment(assignments_reduced, nominator_index, validator_index)
+		TestSolution::from_assignment(assignments_reduced, nominator_index, validator_index)
 			.unwrap();
 
 	// winner ids to index
@@ -909,12 +914,12 @@ pub(crate) fn prepare_submission_with(
 	do_reduce: bool,
 	iterations: usize,
 	tweak: impl FnOnce(&mut Vec<StakedAssignment<AccountId>>),
-) -> (CompactAssignments, Vec<ValidatorIndex>, ElectionScore) {
+) -> (TestSolution, Vec<ValidatorIndexOf<Test>>, ElectionScore) {
 	// run election on the default stuff.
 	let sp_npos_elections::ElectionResult {
 		winners,
 		assignments,
-	} = Staking::do_phragmen::<OffchainAccuracy>(iterations).unwrap();
+	} = Staking::do_phragmen::<OffchainAccuracyOf<Test>>(iterations).unwrap();
 	let winners = sp_npos_elections::to_without_backing(winners);
 
 	let mut staked = sp_npos_elections::assignment_ratio_to_staked(
@@ -932,22 +937,22 @@ pub(crate) fn prepare_submission_with(
 	// convert back to ratio assignment. This takes less space.
 	let snapshot_validators = Staking::snapshot_validators().expect("snapshot not created.");
 	let snapshot_nominators = Staking::snapshot_nominators().expect("snapshot not created.");
-	let nominator_index = |a: &AccountId| -> Option<NominatorIndex> {
+	let nominator_index = |a: &AccountId| -> Option<NominatorIndexOf<Test>> {
 		snapshot_nominators
 			.iter()
 			.position(|x| x == a)
 			.map_or_else(
 				|| { println!("unable to find nominator index for {:?}", a); None },
-				|i| Some(i as NominatorIndex),
+				|i| Some(i as NominatorIndexOf<Test>),
 			)
 	};
-	let validator_index = |a: &AccountId| -> Option<ValidatorIndex> {
+	let validator_index = |a: &AccountId| -> Option<ValidatorIndexOf<Test>> {
 		snapshot_validators
 			.iter()
 			.position(|x| x == a)
 			.map_or_else(
 				|| { println!("unable to find validator index for {:?}", a); None },
-				|i| Some(i as ValidatorIndex),
+				|i| Some(i as ValidatorIndexOf<Test>),
 			)
 	};
 
@@ -970,7 +975,7 @@ pub(crate) fn prepare_submission_with(
 	};
 
 	let compact =
-		CompactAssignments::from_assignment(assignments_reduced, nominator_index, validator_index)
+		TestSolution::from_assignment(assignments_reduced, nominator_index, validator_index)
 			.expect("Failed to create compact");
 
 	// winner ids to index

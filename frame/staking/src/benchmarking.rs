@@ -198,9 +198,64 @@ benchmarks! {
 		assert!(Validators::<T>::contains_key(stash));
 	}
 
-	// Worst case scenario, MAX_NOMINATIONS
+	kick {
+		// scenario: we want to kick `k` nominators from nominating us (we are a validator).
+		// we'll assume that `k` is under 128 for the purposes of determining the slope.
+		// each nominator should have `T::CompactSolution::LIMIT` validators nominated, and our validator
+		// should be somewhere in there.
+		let k in 1 .. 128;
+
+		// these are the other validators; there are `T::CompactSolution::LIMIT - 1` of them, so there are a
+		// total of `T::CompactSolution::LIMIT` validators in the system.
+		let rest_of_validators = create_validators::<T>(T::CompactSolution::LIMIT as u32 - 1, 100)?;
+
+		// this is the validator that will be kicking.
+		let (stash, controller) = create_stash_controller::<T>(T::CompactSolution::LIMIT as u32 - 1, 100, Default::default())?;
+		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash.clone());
+
+		// they start validating.
+		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), Default::default())?;
+
+		// we now create the nominators. there will be `k` of them; each will nominate all
+		// validators. we will then kick each of the `k` nominators from the main validator.
+		let mut nominator_stashes = Vec::with_capacity(k as usize);
+		for i in 0 .. k {
+			// create a nominator stash.
+			let (n_stash, n_controller) = create_stash_controller::<T>(T::CompactSolution::LIMIT as u32 + i, 100, Default::default())?;
+
+			// bake the nominations; we first clone them from the rest of the validators.
+			let mut nominations = rest_of_validators.clone();
+			// then insert "our" validator somewhere in there (we vary it) to avoid accidental
+			// optimisations/pessimisations.
+			nominations.insert(i as usize % (nominations.len() + 1), stash_lookup.clone());
+			// then we nominate.
+			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), nominations)?;
+
+			nominator_stashes.push(n_stash);
+		}
+
+		// all nominators now should be nominating our validator...
+		for n in nominator_stashes.iter() {
+			assert!(Nominators::<T>::get(n).unwrap().targets.contains(&stash));
+		}
+
+		// we need the unlookuped version of the nominator stash for the kick.
+		let kicks = nominator_stashes.iter()
+			.map(|n| T::Lookup::unlookup(n.clone()))
+			.collect::<Vec<_>>();
+
+		whitelist_account!(controller);
+	}: _(RawOrigin::Signed(controller), kicks)
+	verify {
+		// all nominators now should *not* be nominating our validator...
+		for n in nominator_stashes.iter() {
+			assert!(!Nominators::<T>::get(n).unwrap().targets.contains(&stash));
+		}
+	}
+
+	// Worst case scenario, T::CompactSolution::LIMIT
 	nominate {
-		let n in 1 .. MAX_NOMINATIONS as u32;
+		let n in 1 .. T::CompactSolution::LIMIT as u32;
 		let (stash, controller) = create_stash_controller::<T>(n + 1, 100, Default::default())?;
 		let validators = create_validators::<T>(n, 100)?;
 		whitelist_account!(controller);
@@ -409,7 +464,7 @@ benchmarks! {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
 
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, 1000, None)?;
+		create_validators_with_nominators_for_era::<T>(v, n, T::CompactSolution::LIMIT, false, 1000, None)?;
 		let session_index = SessionIndex::one();
 	}: {
 		let validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
@@ -420,7 +475,7 @@ benchmarks! {
 	payout_all {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, 1000, None)?;
+		create_validators_with_nominators_for_era::<T>(v, n, T::CompactSolution::LIMIT, false, 1000, None)?;
 		// Start a new Era
 		let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 		assert!(new_validators.len() == v as usize);
@@ -496,12 +551,12 @@ benchmarks! {
 		// number of winners, also ValidatorCount. This will be equal to `winner.len()`.
 		let w in 24 .. 100;
 
-		assert!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
+		assert!(w as usize >= T::CompactSolution::LIMIT, "doesn't support lower value");
 
 		let winners = create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			MAX_NOMINATIONS,
+			T::CompactSolution::LIMIT,
 			false,
 			1000,
 			Some(w),
@@ -568,12 +623,12 @@ benchmarks! {
 		// number of winners, also ValidatorCount.
 		let w in 24 .. 100;
 
-		assert!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
+		assert!(w as usize >= T::CompactSolution::LIMIT, "doesn't support lower value");
 
 		let winners = create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
-			MAX_NOMINATIONS,
+			T::CompactSolution::LIMIT,
 			false,
 			1000,
 			Some(w),
@@ -659,7 +714,7 @@ benchmarks! {
 		// number of nominator intention.
 		let n in 500 .. 1000;
 
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, 1000, None)?;
+		create_validators_with_nominators_for_era::<T>(v, n, T::CompactSolution::LIMIT, false, 1000, None)?;
 
 		// needed for the solution to be generates.
 		assert!(<Staking<T>>::create_stakers_snapshot().0);
@@ -713,7 +768,7 @@ benchmarks! {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::mock::{ExtBuilder, Test, Balances, Staking, Origin};
+	use crate::mock::{ExtBuilder, Test, Balances, Staking, Origin, TestSolution,};
 	use frame_support::assert_ok;
 
 	#[test]
@@ -722,7 +777,7 @@ mod tests {
 			let v = 10;
 			let n = 100;
 
-			create_validators_with_nominators_for_era::<Test>(v, n, MAX_NOMINATIONS, false, 1000, None)
+			create_validators_with_nominators_for_era::<Test>(v, n, T::CompactSolution::LIMIT, false, 1000, None)
 				.unwrap();
 
 			let count_validators = Validators::<Test>::iter().count();

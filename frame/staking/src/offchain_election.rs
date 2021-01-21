@@ -70,7 +70,7 @@ pub(crate) const DEFAULT_LONGEVITY: u64 = 25;
 /// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
 pub(crate) fn set_check_offchain_execution_status<T: Config>(
 	now: T::BlockNumber,
-) -> Result<(), &'static str> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
+) -> Result<(), &'static str>  {
 	let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 	let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
 
@@ -149,7 +149,7 @@ where
 /// Get a random number of iterations to run the balancing.
 ///
 /// Uses the offchain seed to generate a random number.
-pub fn get_balancing_iters<T: Config>() -> usize where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
+pub fn get_balancing_iters<T: Config>() -> usize  {
 	match T::MaxIterations::get() {
 		0 => 0,
 		max @ _ => {
@@ -256,8 +256,7 @@ pub fn trim_to_weight<T: Config, FN>(
 	nominator_index: FN,
 ) -> Result<T::CompactSolution, OffchainElectionError>
 where
-	for<'r> FN: Fn(&'r T::AccountId) -> Option<NominatorIndexOf<T>>,
-	ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
+	for<'r> FN: Fn(&'r T::AccountId) -> Option<NominatorIndexOf<T>>
 {
 	match compact.voter_count().checked_sub(maximum_allowed_voters as usize) {
 		Some(to_remove) if to_remove > 0 => {
@@ -318,11 +317,9 @@ pub fn prepare_submission<T: Config>(
 	do_reduce: bool,
 	maximum_weight: Weight,
 ) -> Result<
-	(Vec<ValidatorIndexOf<T>>, T::CompactSolution, ElectionScore, ElectionSize),
-	OffchainElectionError,
->
-where
-	ExtendedBalance: From<<OffchainAccuracyOf<T> as PerThing>::Inner>,
+		(Vec<ValidatorIndexOf<T>>, T::CompactSolution, ElectionScore, ElectionSize),
+		OffchainElectionError
+	>
 {
 	// make sure that the snapshot is available.
 	let snapshot_validators =
@@ -517,7 +514,7 @@ mod test {
 
 	#[test]
 	fn find_max_voter_binary_search_works() {
-		let size = ElectionSize { validators: 0u16, nominators: 10u32 };
+		let size = ElectionSize { validators: 0u32, nominators: 10u32 };
 
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 0), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1), 0);
@@ -541,7 +538,7 @@ mod test {
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 11_000), 10);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 22_000), 10);
 
-		let size = ElectionSize { validators: 0u16, nominators: 1u32 };
+		let size = ElectionSize { validators: 0u32, nominators: 1u32 };
 
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 0), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1), 0);
@@ -555,7 +552,7 @@ mod test {
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 2010), 1);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 3333), 1);
 
-		let size = ElectionSize { validators: 0u16, nominators: 2u32 };
+		let size = ElectionSize { validators: 0u32, nominators: 2u32 };
 
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 0), 0);
 		assert_eq!(maximum_compact_len::<Staking>(0, size, 1), 0);

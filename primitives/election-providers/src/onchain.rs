@@ -58,10 +58,7 @@ pub trait Config {
 	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T>
-where
-	ExtendedBalance: From<InnerOf<T::Accuracy>>,
-{
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 

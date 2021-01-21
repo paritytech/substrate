@@ -2900,8 +2900,8 @@ mod offchain_election {
 	use std::sync::Arc;
 	use substrate_test_utils::assert_eq_uvec;
 
-	fn percent(x: u16) -> OffchainAccuracy {
-		OffchainAccuracy::from_percent(x)
+	fn percent(x: u16) -> OffchainAccuracyOf<Test> {
+		<OffchainAccuracyOf<Test>>::from_percent(x)
 	}
 
 	/// setup a new set of validators and nominator storage items independent of the parent mock
@@ -2943,15 +2943,15 @@ mod offchain_election {
 
 	fn election_size() -> ElectionSize {
 		ElectionSize {
-			validators: Staking::snapshot_validators().unwrap().len() as ValidatorIndex,
-			nominators: Staking::snapshot_nominators().unwrap().len() as NominatorIndex,
+			validators: Staking::snapshot_validators().unwrap().len() as u32,
+			nominators: Staking::snapshot_nominators().unwrap().len() as u32,
 		}
 	}
 
 	fn submit_solution(
 		origin: Origin,
-		winners: Vec<ValidatorIndex>,
-		compact: CompactAssignments,
+		winners: Vec<ValidatorIndexOf<Test>>,
+		compact: TestSolution,
 		score: ElectionScore,
 	) -> DispatchResultWithPostInfo {
 		Staking::submit_election_solution(
@@ -3167,31 +3167,6 @@ mod offchain_election {
 				RawEvent::StakingElection(ElectionCompute::OnChain),
 			);
 		})
-	}
-
-	#[test]
-	#[ignore]
-	fn offchain_wont_work_if_snapshot_fails() {
-		ExtBuilder::default()
-			.offchain_election_ext()
-			.build()
-			.execute_with(|| {
-				run_to_block(12);
-				assert!(Staking::snapshot_validators().is_some());
-				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
-
-				// validate more than the limit
-				let limit: NominatorIndex = ValidatorIndex::max_value() as NominatorIndex + 1;
-				let ctrl = 1_000_000;
-				for i in 0..limit {
-					bond_validator((1000 + i).into(), (1000 + i + ctrl).into(), 100);
-				}
-
-				// window stays closed since no snapshot was taken.
-				run_to_block(27);
-				assert!(Staking::snapshot_validators().is_none());
-				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
-			})
 	}
 
 	#[test]

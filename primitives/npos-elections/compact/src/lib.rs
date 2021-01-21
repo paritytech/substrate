@@ -170,6 +170,8 @@ fn struct_def(
 	let from_impl = assignment::from_impl(count);
 	let into_impl = assignment::into_impl(count, weight_type.clone());
 
+	let single_field_name = field_name_for(1);
+
 	Ok(quote! (
 		/// A struct to encode a election assignment in a compact way.
 		#derives_and_maybe_compact_encoding
@@ -247,6 +249,11 @@ fn struct_def(
 				let mut assignments: Vec<_npos::Assignment<A, #weight_type>> = Default::default();
 				#into_impl
 				Ok(assignments)
+			}
+
+			#[cfg(any(feature = "std", test))]
+			fn add_edge(&mut self, voter: Self::Voter, target: Self::Target) {
+				self.#single_field_name.push((voter, target));
 			}
 		}
 	))

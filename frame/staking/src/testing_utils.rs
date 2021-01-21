@@ -176,7 +176,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 /// which has a less score than the seq-phragmen.
 pub fn get_weak_solution<T: Config>(
 	do_reduce: bool,
-) -> (Vec<ValidatorIndex>, CompactAssignments, ElectionScore, ElectionSize) {
+) -> (Vec<ValidatorIndexOf<T>>, T::CompactSolution, ElectionScore, ElectionSize) {
 	let mut backing_stake_of: BTreeMap<T::AccountId, BalanceOf<T>> = BTreeMap::new();
 
 	// self stake
@@ -221,17 +221,17 @@ pub fn get_weak_solution<T: Config>(
 	let snapshot_validators = <Module<T>>::snapshot_validators().unwrap();
 	let snapshot_nominators = <Module<T>>::snapshot_nominators().unwrap();
 
-	let nominator_index = |a: &T::AccountId| -> Option<NominatorIndex> {
+	let nominator_index = |a: &T::AccountId| -> Option<NominatorIndexOf<T>> {
 		snapshot_nominators
 			.iter()
 			.position(|x| x == a)
-			.and_then(|i| <usize as TryInto<NominatorIndex>>::try_into(i).ok())
+			.and_then(|i| <usize as TryInto<NominatorIndexOf<T>>>::try_into(i).ok())
 	};
-	let validator_index = |a: &T::AccountId| -> Option<ValidatorIndex> {
+	let validator_index = |a: &T::AccountId| -> Option<ValidatorIndexOf<T>> {
 		snapshot_validators
 			.iter()
 			.position(|x| x == a)
-			.and_then(|i| <usize as TryInto<ValidatorIndex>>::try_into(i).ok())
+			.and_then(|i| <usize as TryInto<ValidatorIndexOf<T>>>::try_into(i).ok())
 	};
 
 	// convert back to ratio assignment. This takes less space.
@@ -240,7 +240,7 @@ pub fn get_weak_solution<T: Config>(
 
 	// re-calculate score based on what the chain will decode.
 	let score = {
-		let staked = assignment_ratio_to_staked::<_, OffchainAccuracy, _>(
+		let staked = assignment_ratio_to_staked::<_, OffchainAccuracyOf<T>, _>(
 			low_accuracy_assignment.clone(),
 			<Module<T>>::slashable_balance_of_fn(),
 		);
@@ -251,7 +251,7 @@ pub fn get_weak_solution<T: Config>(
 	};
 
 	// compact encode the assignment.
-	let compact = CompactAssignments::from_assignment(
+	let compact = T::CompactSolution::from_assignment(
 		low_accuracy_assignment,
 		nominator_index,
 		validator_index,
@@ -267,13 +267,13 @@ pub fn get_weak_solution<T: Config>(
 				.position(|v| *v == w)
 				.unwrap()
 				.try_into()
-				.unwrap()
+				.unwrap_or_else(|_| panic!())
 		})
-		.collect::<Vec<ValidatorIndex>>();
+		.collect::<Vec<ValidatorIndexOf<T>>>();
 
 	let size = ElectionSize {
-		validators: snapshot_validators.len() as ValidatorIndex,
-		nominators: snapshot_nominators.len() as NominatorIndex,
+		validators: snapshot_validators.len() as u32,
+		nominators: snapshot_nominators.len() as u32,
 	};
 
 	(winners, compact, score, size)
@@ -284,8 +284,8 @@ pub fn get_weak_solution<T: Config>(
 pub fn get_seq_phragmen_solution<T: Config>(
 	do_reduce: bool,
 ) -> (
-	Vec<ValidatorIndex>,
-	CompactAssignments,
+	Vec<ValidatorIndexOf<T>>,
+	T::CompactSolution,
 	ElectionScore,
 	ElectionSize,
 ) {
@@ -294,7 +294,7 @@ pub fn get_seq_phragmen_solution<T: Config>(
 	let sp_npos_elections::ElectionResult {
 		winners,
 		assignments,
-	} = <Module<T>>::do_phragmen::<OffchainAccuracy>(iters).unwrap();
+	} = <Module<T>>::do_phragmen::<OffchainAccuracyOf<T>>(iters).unwrap();
 
 	offchain_election::prepare_submission::<T>(
 		assignments,
@@ -310,8 +310,8 @@ pub fn get_single_winner_solution<T: Config>(
 	winner: T::AccountId,
 ) -> Result<
 	(
-		Vec<ValidatorIndex>,
-		CompactAssignments,
+		Vec<ValidatorIndexOf<T>>,
+		T::CompactSolution,
 		ElectionScore,
 		ElectionSize,
 	),
@@ -333,18 +333,17 @@ pub fn get_single_winner_solution<T: Config>(
 	let stake =
 		<T::CurrencyToVote>::to_vote(stake, T::Currency::total_issuance()) as ExtendedBalance;
 
-	let val_index = val_index as ValidatorIndex;
-	let nom_index = nom_index as NominatorIndex;
+	let val_index: ValidatorIndexOf<T> = val_index.try_into().unwrap_or_else(|_| { panic!("Failed to convert") });
+	let nom_index: NominatorIndexOf<T> = nom_index.try_into().unwrap_or_else(|_| { panic!("Failed to convert") });
 
-	let winners = vec![val_index];
-	let compact = CompactAssignments {
-		votes1: vec![(nom_index, val_index)],
-		..Default::default()
-	};
+	let winners: Vec<ValidatorIndexOf<T>> = vec![val_index];
+	let mut compact: T::CompactSolution = Default::default();
+	compact.add_edge(nom_index, val_index);
+
 	let score = [stake, stake, stake * stake];
 	let size = ElectionSize {
-		validators: snapshot_validators.len() as ValidatorIndex,
-		nominators: snapshot_nominators.len() as NominatorIndex,
+		validators: snapshot_validators.len() as u32,
+		nominators: snapshot_nominators.len() as u32,
 	};
 
 	Ok((winners, compact, score, size))
@@ -364,19 +363,19 @@ pub fn init_active_era() {
 }
 
 /// Create random assignments for the given list of winners. Each assignment will have
-/// MAX_NOMINATIONS edges.
+/// T::CompactSolution::LIMIT edges.
 pub fn create_assignments_for_offchain<T: Config>(
 	num_assignments: u32,
 	winners: Vec<<T::Lookup as StaticLookup>::Source>,
 ) -> Result<
 	(
 		Vec<(T::AccountId, ExtendedBalance)>,
-		Vec<Assignment<T::AccountId, OffchainAccuracy>>,
+		Vec<Assignment<T::AccountId, OffchainAccuracyOf<T>>>,
 	),
 	&'static str
 > {
-	let ratio = OffchainAccuracy::from_rational_approximation(1, MAX_NOMINATIONS);
-	let assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>> = <Nominators<T>>::iter()
+	let ratio = <OffchainAccuracyOf<T>>::from_rational_approximation(1, T::CompactSolution::LIMIT.try_into().unwrap());
+	let assignments: Vec<Assignment<T::AccountId, OffchainAccuracyOf<T>>> = <Nominators<T>>::iter()
 		.take(num_assignments as usize)
 		.map(|(n, t)| Assignment {
 			who: n,
