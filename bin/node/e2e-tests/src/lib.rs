@@ -21,17 +21,17 @@
 use substrate_test_runner::{Node, ChainInfo, SignatureVerificationOverride};
 use grandpa::GrandpaBlockImport;
 use sc_service::{TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts};
-use node_runtime::{SignedExtra, Runtime, Call, Event};
+use node_runtime::{SignedExtra, Runtime, Event};
 use sp_runtime::generic::Era;
-use std::{sync::Arc, str::FromStr};
+use std::sync::Arc;
 use sp_inherents::InherentDataProviders;
 use sc_consensus_babe::BabeBlockImport;
 use sp_keystore::SyncCryptoStorePtr;
-use sp_keyring::sr25519::Keyring::Alice;
+use sp_keyring::sr25519::Keyring::{Alice, Bob};
 use node_cli::chain_spec::development_config;
 use sp_consensus_babe::AuthorityId;
 use sc_consensus_manual_seal::{ConsensusDataProvider, consensus::babe::BabeConsensusDataProvider};
-use sp_runtime::AccountId32;
+use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
@@ -42,6 +42,7 @@ sc_executor::native_executor_instance!(
 	SignatureVerificationOverride,
 );
 
+/// ChainInfo implementation.
 pub struct NodeTemplateChainInfo;
 
 impl ChainInfo for NodeTemplateChainInfo {
@@ -57,6 +58,7 @@ impl ChainInfo for NodeTemplateChainInfo {
         Self::SelectChain,
     >;
     type SignedExtras = SignedExtra;
+    type Event = node_runtime::Event;
 
     fn load_spec() -> Result<Box<dyn sc_service::ChainSpec>, String> {
         Ok(Box::new(development_config()))
@@ -135,40 +137,13 @@ impl ChainInfo for NodeTemplateChainInfo {
             block_import,
         ))
     }
-}
 
-/// performs a runtime upgrade given wasm blob and a handle to a node.
-pub fn perform_runtime_upgrade(node: &Node<NodeTemplateChainInfo>) {
-    type SystemCall = frame_system::Call<Runtime>;
-    type SudoCall = pallet_sudo::Call<Runtime>;
-
-    let whales = vec![
-        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", //Alice
-        "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", //Bob
-    ]
-        .into_iter()
-        .map(|account| AccountId32::from_str(account).unwrap())
-        .collect::<Vec<_>>();
-
-    let wasm = include_bytes!("./runtime.wasm");
-
-    let call = Call::Sudo(SudoCall::sudo(Box::new(Call::System(SystemCall::set_code(wasm.to_vec())))));
-    node.submit_extrinsic(call, whales[0].clone());
-    node.seal_blocks(1);
-
-    // assert that the runtime is upgraded by looking at events
-    let events = node.with_state(|| frame_system::Module::<Runtime>::events())
-        .into_iter()
-        .filter(|event| {
-            match event.event {
-                Event::frame_system(frame_system::RawEvent::CodeUpdated) => true,
-                _ => false,
-            }
-        })
-        .collect::<Vec<_>>();
-
-    // make sure event is in state
-    assert_eq!(events.len(), 1);
+    fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &Node<Self>) {
+        let alice = MultiSigner::from(Alice.public()).into_account();
+        let call = pallet_sudo::Call::sudo(Box::new(call)); // :D
+        node.submit_extrinsic(call, alice);
+        node.seal_blocks(1);
+    }
 }
 
 #[cfg(test)]
@@ -180,12 +155,33 @@ mod tests {
     fn runtime_upgrade() {
         let node = Node::<NodeTemplateChainInfo>::new().unwrap();
 
-        // first perform runtime upgrade
-        perform_runtime_upgrade(&node);
+        // // first perform runtime upgrade
+        // let wasm = include_bytes!("./runtime.wasm");
+        // node.upgrade_runtime(wasm.to_vec());
+        //
+        // // assert that the runtime is upgraded by looking at events
+        // let events = node.with_state(|| frame_system::Module::<Runtime>::events())
+        //     .into_iter()
+        //     .filter(|event| {
+        //         match event.event {
+        //             Event::frame_system(frame_system::RawEvent::CodeUpdated) => true,
+        //             _ => false,
+        //         }
+        //     })
+        //     .collect::<Vec<_>>();
+        //
+        // // make sure event is in state
+        // assert_eq!(events.len(), 1);
+
+        let (alice, bob) = (
+            MultiSigner::from(Alice.public()).into_account(),
+            MultiSigner::from(Bob.public()).into_account()
+        );
+
         // pallet balances assertions
-        transfer_keep_alive(&node);
-        set_balance(&node);
-        force_transfer(&node);
+        transfer_keep_alive(&node, alice.clone(), bob.clone());
+        set_balance(&node, alice.clone());
+        force_transfer(&node, alice, bob);
 
     }
 }

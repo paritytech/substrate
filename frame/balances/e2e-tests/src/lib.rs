@@ -1,8 +1,6 @@
 use substrate_test_runner::{Node, ChainInfo};
-use pallet_sudo::Call as SudoCall;
 use pallet_balances::Call as BalancesCall;
-use sp_keyring::sr25519::Keyring::{Alice, Bob};
-use sp_runtime::{traits::IdentifyAccount, MultiSigner, MultiAddress, MultiSignature};
+use sp_runtime::{MultiAddress, MultiSignature};
 use sp_runtime::AccountId32;
 use sp_runtime::traits::Block as BlockT;
 use sp_runtime::generic::UncheckedExtrinsic;
@@ -17,132 +15,107 @@ type Extrinsic<R, S> = UncheckedExtrinsic<
 >;
 
 /// Tests the Balances::force_transfer call
-pub fn force_transfer<T>(node: &Node<T>)
+pub fn force_transfer<T>(
+    node: &Node<T>,
+    account1: <T::Runtime as frame_system::Config>::AccountId,
+    account2: <T::Runtime as frame_system::Config>::AccountId,
+)
     where
         T: ChainInfo,
-        T::Runtime: pallet_sudo::Config + pallet_balances::Config,
-        <T::Runtime as frame_system::Config>::Call: From<SudoCall<T::Runtime>> + From<BalancesCall<T::Runtime>> + Encode,
-        <T::Runtime as pallet_sudo::Config>::Call: From<BalancesCall<T::Runtime>>,
+        T::Runtime: pallet_balances::Config,
+        <T::Runtime as frame_system::Config>::Call: From<BalancesCall<T::Runtime>> + Encode,
         <T::Runtime as pallet_balances::Config>::Balance: From<u8>,
         <T::Runtime as frame_system::Config>::AccountId: From<AccountId32> + Encode,
         <T::Block as BlockT>::Extrinsic: From<Extrinsic<T::Runtime, T::SignedExtras>>,
-        <<T::Runtime as frame_system::Config>::Lookup as sp_runtime::traits::StaticLookup>::Source: From<AccountId32>,
-        AccountId32: std::borrow::Borrow<<T::Runtime as frame_system::Config>::AccountId>
+        <<T::Runtime as frame_system::Config>::Lookup as sp_runtime::traits::StaticLookup>::Source:
+            From<<T::Runtime as frame_system::Config>::AccountId>,
+        AccountId32: std::borrow::Borrow<<T::Runtime as frame_system::Config>::AccountId>,
 {
     type Balances<T> = pallet_balances::Module<T>;
-    let (alice, bob) = (
-        MultiSigner::from(Alice.public()).into_account(),
-        MultiSigner::from(Bob.public()).into_account(),
-    );
-    let (alice_balance, bob_balance) = node.with_state(|| (
-        Balances::<T::Runtime>::free_balance(alice.clone()),
-        Balances::<T::Runtime>::free_balance(bob.clone()),
+
+    let (account1_balance, account2_balance) = node.with_state(|| (
+        Balances::<T::Runtime>::free_balance(account1.clone()),
+        Balances::<T::Runtime>::free_balance(account2.clone()),
     ));
-    let balance = alice_balance / 2u8.into();
+    let balance = account1_balance / 2u8.into();
 
-    let balances_call = BalancesCall::force_transfer(alice.clone().into(), bob.clone().into(), balance.into());
-    node.submit_extrinsic(
-        SudoCall::sudo(Box::new(balances_call.into())),
-        alice.into()
-    );
-    node.seal_blocks(1);
+    let call = BalancesCall::force_transfer(account1.clone().into(), account2.clone().into(), balance.into());
+    T::dispatch_with_root(call.into(), &node);
 
-    // TODO: figure out events
-    // let events = node.events()
-    //     .into_iter()
-    //     .filter(|event| {
-    //         match &event.event {
-    //             Event::pallet_balances(RawEvent::Transfer(_, _, _)) => true,
-    //             _ => false,
-    //         }
-    //     })
-    //     .collect::<Vec<_>>();
-    // assert_eq!(events.len(), 1);
+    let new_account2_balance = node.with_state(|| Balances::<T::Runtime>::free_balance(account2.clone()));
 
-    let new_bob_balance = node.with_state(|| Balances::<T::Runtime>::free_balance(bob.clone()));
-
-    assert_eq!(new_bob_balance, bob_balance + (balance))
+    assert_eq!(new_account2_balance, account2_balance + balance);
+    node.clean();
 }
 
 /// Tests the Balances::set_balance call
-pub fn set_balance<T>(node: &Node<T>)
+pub fn set_balance<T>(
+    node: &Node<T>,
+    account1: <T::Runtime as frame_system::Config>::AccountId,
+)
     where
         T: ChainInfo,
-        T::Runtime: pallet_sudo::Config + pallet_balances::Config,
-        <T::Runtime as frame_system::Config>::Call: From<SudoCall<T::Runtime>> + From<BalancesCall<T::Runtime>> + Encode,
-        <T::Runtime as pallet_sudo::Config>::Call: From<BalancesCall<T::Runtime>>,
-        <T::Runtime as pallet_balances::Config>::Balance: From<u8>,
+        T::Runtime: pallet_balances::Config,
+        <T::Runtime as frame_system::Config>::Call: From<BalancesCall<T::Runtime>> + Encode,
+        <T::Runtime as pallet_balances::Config>::Balance: From<u128>,
         <T::Runtime as frame_system::Config>::AccountId: From<AccountId32> + Encode,
         <T::Block as BlockT>::Extrinsic: From<Extrinsic<T::Runtime, T::SignedExtras>>,
-        <<T::Runtime as frame_system::Config>::Lookup as sp_runtime::traits::StaticLookup>::Source: From<AccountId32>,
+        <<T::Runtime as frame_system::Config>::Lookup as sp_runtime::traits::StaticLookup>::Source:
+            From<<T::Runtime as frame_system::Config>::AccountId>,
         AccountId32: std::borrow::Borrow<<T::Runtime as frame_system::Config>::AccountId>,
 {
     type Balances<T> = pallet_balances::Module<T>;
-    let (alice, bob) = (
-        MultiSigner::from(Alice.public()).into_account(),
-        MultiSigner::from(Bob.public()).into_account(),
-    );
-    let (alice_balance, _bob_balance) = node.with_state(|| (
-        Balances::<T::Runtime>::free_balance(alice.clone()),
-        Balances::<T::Runtime>::free_balance(alice.clone())
+
+    let account1_balance = node.with_state(|| (
+        Balances::<T::Runtime>::free_balance(account1.clone())
     ));
 
-    let call = BalancesCall::set_balance(bob.clone().into(), alice_balance, 0u8.into());
-    node.submit_extrinsic(
-        SudoCall::sudo(Box::new(call.into())),
-        alice.into()
-    );
-    node.seal_blocks(1);
+    let new_balance = account1_balance * 2.into();
 
-    // let events = node.events()
-    //     .into_iter()
-    //     .filter(|event| {
-    //         match &event.event {
-    //             Event::pallet_balances(RawEvent::BalanceSet(_, _, _)) => true,
-    //             _ => false,
-    //         }
-    //     })
-    //     .collect::<Vec<_>>();
-    // assert_eq!(events.len(), 1);
+    let call = BalancesCall::set_balance(account1.clone().into(), new_balance, 0u8.into());
+    T::dispatch_with_root(call.into(), &node);
 
-    let updated_bob_balance = node.with_state(|| Balances::<T::Runtime>::free_balance(bob.clone()));
+    let updated_account1_balance = node.with_state(|| Balances::<T::Runtime>::free_balance(account1.clone()));
 
-    assert_eq!(updated_bob_balance, alice_balance)
+    assert_eq!(updated_account1_balance, new_balance);
+    node.clean();
 }
 
 /// Tests the Balances::transfer_keep_alive call
-pub fn transfer_keep_alive<T>(node: &Node<T>)
+pub fn transfer_keep_alive<T>(
+    node: &Node<T>,
+    account1: <T::Runtime as frame_system::Config>::AccountId,
+    account2: <T::Runtime as frame_system::Config>::AccountId,
+)
     where
         T: ChainInfo,
-        T::Runtime: pallet_sudo::Config + pallet_balances::Config,
-        <T::Runtime as frame_system::Config>::Call: From<SudoCall<T::Runtime>> + From<BalancesCall<T::Runtime>> + Encode,
-        <T::Runtime as pallet_sudo::Config>::Call: From<BalancesCall<T::Runtime>>,
+        T::Runtime: pallet_balances::Config,
+        <T::Runtime as frame_system::Config>::Call: From<BalancesCall<T::Runtime>> + Encode,
         <T::Runtime as pallet_balances::Config>::Balance: From<u8>,
         <T::Runtime as frame_system::Config>::AccountId: From<AccountId32> + Encode,
         <T::Block as BlockT>::Extrinsic: From<Extrinsic<T::Runtime, T::SignedExtras>>,
-        <<T::Runtime as frame_system::Config>::Lookup as sp_runtime::traits::StaticLookup>::Source: From<AccountId32>,
+        <<T::Runtime as frame_system::Config>::Lookup as sp_runtime::traits::StaticLookup>::Source:
+            From<<T::Runtime as frame_system::Config>::AccountId>,
         AccountId32: std::borrow::Borrow<<T::Runtime as frame_system::Config>::AccountId>,
 {
     type Balances<T> = pallet_balances::Module<T>;
-    let (alice, bob) = (
-        MultiSigner::from(Alice.public()).into_account(),
-        MultiSigner::from(Bob.public()).into_account(),
-    );
-    let (bob_balance, alice_balance) = node.with_state(|| (
-        Balances::<T::Runtime>::free_balance(bob.clone()),
-        Balances::<T::Runtime>::free_balance(alice.clone())
+
+    let (account2_balance, account1_balance) = node.with_state(|| (
+        Balances::<T::Runtime>::free_balance(account2.clone()),
+        Balances::<T::Runtime>::free_balance(account1.clone())
     ));
     // attempt to send more than the existential deposit
-    let balance = bob_balance - (<T::Runtime as pallet_balances::Config>::ExistentialDeposit::get() / 2u8.into());
+    let balance = account2_balance - (<T::Runtime as pallet_balances::Config>::ExistentialDeposit::get() / 2u8.into());
 
-    let call = BalancesCall::transfer_keep_alive(alice.clone().into(), balance.into());
-    node.submit_extrinsic(call, bob.clone().into());
+    let call = BalancesCall::transfer_keep_alive(account1.clone().into(), balance.into());
+    node.submit_extrinsic(call, account2.clone());
     node.seal_blocks(1);
 
     // assert that the transaction failed to dispatch
     node.assert_log_line("LiquidityRestrictions");
 
-    let new_balance = node.with_state(|| Balances::<T::Runtime>::free_balance(alice.clone()));
+    let new_balance = node.with_state(|| Balances::<T::Runtime>::free_balance(account1.clone()));
 
-    assert_eq!(alice_balance, new_balance)
+    assert_eq!(account1_balance, new_balance);
+    node.clean();
 }

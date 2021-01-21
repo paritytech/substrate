@@ -4607,7 +4607,6 @@ dependencies = [
  "frame-system",
  "num-traits",
  "pallet-balances",
- "pallet-sudo",
  "parity-scale-codec",
  "sp-keyring",
  "sp-runtime",
@@ -9309,7 +9308,6 @@ dependencies = [
 [[package]]
 name = "substrate-test-runner"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/substrate-test-runner?branch=substrate#2ea9ae860c21ab1044677b42129620ec9e3548da"
 dependencies = [
  "env_logger 0.7.1",
  "frame-system",
