@@ -308,7 +308,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
-	let telemetry_span = if config.telemetry_endpoints.is_some() {
+	let telemetry_span = if config.telemetry_endpoints().is_some() {
 		Some(TelemetrySpan::new())
 	} else {
 		None
@@ -383,7 +383,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
-	let telemetry_span = if config.telemetry_endpoints.is_some() {
+	let telemetry_span = if config.telemetry_endpoints().is_some() {
 		Some(TelemetrySpan::new())
 	} else {
 		None
