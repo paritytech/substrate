@@ -305,11 +305,11 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Percent, Perbill, PerU16, InnerOf, RuntimeDebug, DispatchError,
+	Percent, Perbill, InnerOf, RuntimeDebug, DispatchError, PerThing,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
-		AtLeast32BitUnsigned, Dispatchable,
+		AtLeast32BitUnsigned, Dispatchable, Bounded,
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
@@ -328,14 +328,13 @@ use frame_system::{
 };
 use sp_npos_elections::{
 	ExtendedBalance, Assignment, ElectionScore, ElectionResult as PrimitiveElectionResult,
-	to_support_map, EvaluateSupport, seq_phragmen, generate_solution_type, is_score_better,
-	SupportMap, VoteWeight, CompactSolution, PerThing128,
+	to_support_map, EvaluateSupport, seq_phragmen, is_score_better, CompactSolution, SupportMap,
+	VoteWeight, PerThing128,
 };
 pub use weights::WeightInfo;
 
 const STAKING_ID: LockIdentifier = *b"staking ";
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
-pub const MAX_NOMINATIONS: usize = <CompactAssignments as CompactSolution>::LIMIT;
 
 pub(crate) const LOG_TARGET: &'static str = "staking";
 
@@ -350,39 +349,18 @@ macro_rules! log {
 	};
 }
 
-/// Data type used to index nominators in the compact type
-pub type NominatorIndex = u32;
+pub type NominatorIndexOf<T> = <<T as Config>::CompactSolution as CompactSolution>::Voter;
+pub type ValidatorIndexOf<T> = <<T as Config>::CompactSolution as CompactSolution>::Target;
+pub type OffchainAccuracyOf<T> = <<T as Config>::CompactSolution as CompactSolution>::Accuracy;
 
-/// Data type used to index validators in the compact type.
-pub type ValidatorIndex = u16;
-
-// Ensure the size of both ValidatorIndex and NominatorIndex. They both need to be well below usize.
-static_assertions::const_assert!(size_of::<ValidatorIndex>() <= size_of::<usize>());
-static_assertions::const_assert!(size_of::<NominatorIndex>() <= size_of::<usize>());
-static_assertions::const_assert!(size_of::<ValidatorIndex>() <= size_of::<u32>());
-static_assertions::const_assert!(size_of::<NominatorIndex>() <= size_of::<u32>());
-
-/// Maximum number of stakers that can be stored in a snapshot.
-pub(crate) const MAX_VALIDATORS: usize = ValidatorIndex::max_value() as usize;
-pub(crate) const MAX_NOMINATORS: usize = NominatorIndex::max_value() as usize;
+/// Accuracy used for on-chain election.
+pub type ChainAccuracy = Perbill;
 
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
 
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
-
-// Note: Maximum nomination limit is set here -- 24.
-generate_solution_type!(
-	#[compact]
-	pub struct CompactAssignments::<NominatorIndex, ValidatorIndex, OffchainAccuracy>(24)
-);
-
-/// Accuracy used for on-chain election.
-pub type ChainAccuracy = Perbill;
-
-/// Accuracy used for off-chain election. This better be small.
-pub type OffchainAccuracy = PerU16;
 
 /// The balance type of this module.
 pub type BalanceOf<T> =
@@ -679,7 +657,7 @@ pub struct ElectionResult<AccountId, Balance: HasCompact> {
 	/// Flat list of new exposures, to be updated in the [`Exposure`] storage.
 	exposures: Vec<(AccountId, Exposure<AccountId, Balance>)>,
 	/// Type of the result. This is kept on chain only to track and report the best score's
-	/// submission type. An optimisation could remove this.
+	/// submission type. An optimization could remove this.
 	compute: ElectionCompute,
 }
 
@@ -701,12 +679,11 @@ pub enum ElectionStatus<BlockNumber> {
 pub struct ElectionSize {
 	/// Number of validators in the snapshot of the current election round.
 	#[codec(compact)]
-	pub validators: ValidatorIndex,
+	pub validators: u32,
 	/// Number of nominators in the snapshot of the current election round.
 	#[codec(compact)]
-	pub nominators: NominatorIndex,
+	pub nominators: u32,
 }
-
 
 impl<BlockNumber: PartialEq> ElectionStatus<BlockNumber> {
 	pub fn is_open_at(&self, n: BlockNumber) -> bool {
@@ -757,6 +734,7 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T w
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
 	T::ValidatorIdOf:
 		Convert<<T as frame_system::Config>::AccountId, Option<<T as frame_system::Config>::AccountId>>,
+	ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
 {
 	fn disable_validator(validator: &<T as frame_system::Config>::AccountId) -> Result<bool, ()> {
 		<pallet_session::Module<T>>::disable(validator)
@@ -771,7 +749,10 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T w
 	}
 }
 
-pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
+pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>>
+where
+	ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<Self>>>
+{
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
@@ -865,6 +846,11 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// enough to fit in the block.
 	type OffchainSolutionWeightLimit: Get<Weight>;
 
+	/// The compact solution type used to accept offchain solution.
+	///
+	/// This is implicitly encoding the maximum number of nominations as well.
+	type CompactSolution: CompactSolution + frame_support::Parameter;
+
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -905,7 +891,7 @@ impl Default for Releases {
 }
 
 decl_storage! {
-	trait Store for Module<T: Config> as Staking {
+	trait Store for Module<T: Config> as Staking where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 		/// Number of eras to keep in history.
 		///
 		/// Information is kept for eras in `[current_era - history_depth; current_era]`.
@@ -1157,7 +1143,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the staking module.
-	pub enum Error for Module<T: Config> {
+	pub enum Error for Module<T: Config> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 		/// Not a controller account.
 		NotController,
 		/// Not a stash account.
@@ -1229,7 +1215,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin, ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 		/// Number of sessions per era.
 		const SessionsPerEra: SessionIndex = T::SessionsPerEra::get();
 
@@ -1267,7 +1253,7 @@ decl_module! {
 		const MaxNominatorRewardedPerValidator: u32 = T::MaxNominatorRewardedPerValidator::get();
 
 		/// The maximum of validator candidates each nominator may nominate.
-		const MaxNominations: u32 = MAX_NOMINATIONS as u32;
+		const MaxNominations: u32 = T::CompactSolution::LIMIT as u32;
 
 		type Error = Error<T>;
 
@@ -1355,6 +1341,14 @@ decl_module! {
 		}
 
 		fn integrity_test() {
+			// Ensure the size of both ValidatorIndex and NominatorIndex. They both need to be well
+			// below usize.
+			assert!(size_of::<ValidatorIndexOf<T>>() <= size_of::<usize>());
+			assert!(size_of::<ValidatorIndexOf<T>>() <= size_of::<u32>());
+			assert!(size_of::<NominatorIndexOf<T>>() <= size_of::<usize>());
+			assert!(size_of::<NominatorIndexOf<T>>() <= size_of::<u32>());
+
+
 			sp_io::TestExternalities::new_empty().execute_with(||
 				assert!(
 					T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
@@ -1369,17 +1363,17 @@ decl_module! {
 			// will always return `Ok`.
 			// 1. Maximum sum of Vec<ChainAccuracy> must fit into `UpperOf<ChainAccuracy>`.
 			assert!(
-				<usize as TryInto<UpperOf<ChainAccuracy>>>::try_into(MAX_NOMINATIONS)
+				<usize as TryInto<UpperOf<ChainAccuracy>>>::try_into(T::CompactSolution::LIMIT)
 				.unwrap()
 				.checked_mul(<ChainAccuracy>::one().deconstruct().try_into().unwrap())
 				.is_some()
 			);
 
-			// 2. Maximum sum of Vec<OffchainAccuracy> must fit into `UpperOf<OffchainAccuracy>`.
+			// 2. Maximum sum of Vec<OffchainAccuracyOf<T>> must fit into `UpperOf<OffchainAccuracyOf<T>>`.
 			assert!(
-				<usize as TryInto<UpperOf<OffchainAccuracy>>>::try_into(MAX_NOMINATIONS)
+				<usize as TryInto<UpperOf<OffchainAccuracyOf<T>>>>::try_into(T::CompactSolution::LIMIT)
 				.unwrap()
-				.checked_mul(<OffchainAccuracy>::one().deconstruct().try_into().unwrap())
+				.checked_mul(<OffchainAccuracyOf<T>>::one().deconstruct().try_into().unwrap())
 				.is_some()
 			);
 		}
@@ -1662,7 +1656,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - The transaction's complexity is proportional to the size of `targets` (N)
-		/// which is capped at CompactAssignments::LIMIT (MAX_NOMINATIONS).
+		/// which is capped at (T::CompactSolution::LIMIT).
 		/// - Both the reads and writes follow a similar pattern.
 		/// ---------
 		/// Weight: O(N)
@@ -1679,7 +1673,7 @@ decl_module! {
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			let targets = targets.into_iter()
-				.take(MAX_NOMINATIONS)
+				.take(T::CompactSolution::LIMIT)
 				.map(|t| T::Lookup::lookup(t))
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
@@ -2077,8 +2071,8 @@ decl_module! {
 		/// - The `score` that they claim their solution has.
 		///
 		/// Both validators and nominators will be represented by indices in the solution. The
-		/// indices should respect the corresponding types ([`ValidatorIndex`] and
-		/// [`NominatorIndex`]). Moreover, they should be valid when used to index into
+		/// indices should respect the corresponding types ([`ValidatorIndexOf<T>`] and
+		/// [`NominatorIndexOf<T>`]). Moreover, they should be valid when used to index into
 		/// [`SnapshotValidators`] and [`SnapshotNominators`]. Any invalid index will cause the
 		/// solution to be rejected. These two storage items are set during the election window and
 		/// may be used to determine the indices.
@@ -2114,8 +2108,8 @@ decl_module! {
 		)]
 		pub fn submit_election_solution(
 			origin,
-			winners: Vec<ValidatorIndex>,
-			compact: CompactAssignments,
+			winners: Vec<ValidatorIndexOf<T>>,
+			compact: T::CompactSolution,
 			score: ElectionScore,
 			era: EraIndex,
 			size: ElectionSize,
@@ -2148,8 +2142,8 @@ decl_module! {
 		)]
 		pub fn submit_election_solution_unsigned(
 			origin,
-			winners: Vec<ValidatorIndex>,
-			compact: CompactAssignments,
+			winners: Vec<ValidatorIndexOf<T>>,
+			compact: T::CompactSolution,
 			score: ElectionScore,
 			era: EraIndex,
 			size: ElectionSize,
@@ -2174,7 +2168,7 @@ decl_module! {
 	}
 }
 
-impl<T: Config> Module<T> {
+impl<T: Config> Module<T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.
@@ -2211,21 +2205,23 @@ impl<T: Config> Module<T> {
 		let validators = <Validators<T>>::iter().map(|(v, _)| v).collect::<Vec<_>>();
 		let mut nominators = <Nominators<T>>::iter().map(|(n, _)| n).collect::<Vec<_>>();
 
+		let max_validators: usize = <ValidatorIndexOf<T>>::max_value().saturated_into();
+		let max_nominators: usize = <NominatorIndexOf<T>>::max_value().saturated_into();
+
 		let num_validators = validators.len();
 		let num_nominators = nominators.len();
 		add_db_reads_writes((num_validators + num_nominators) as Weight, 0);
 
-		if
-			num_validators > MAX_VALIDATORS ||
-			num_nominators.saturating_add(num_validators) > MAX_NOMINATORS
+		if num_validators > max_validators
+			|| num_nominators.saturating_add(num_validators) > max_nominators
 		{
 			log!(
 				warn,
 				"💸 Snapshot size too big [{} <> {}][{} <> {}].",
 				num_validators,
-				MAX_VALIDATORS,
+				max_validators,
 				num_nominators,
-				MAX_NOMINATORS,
+				max_nominators,
 			);
 			(false, consumed_weight)
 		} else {
@@ -2463,8 +2459,8 @@ impl<T: Config> Module<T> {
 	/// Checks a given solution and if correct and improved, writes it on chain as the queued result
 	/// of the next round. This may be called by both a signed and an unsigned transaction.
 	pub fn check_and_replace_solution(
-		winners: Vec<ValidatorIndex>,
-		compact_assignments: CompactAssignments,
+		winners: Vec<ValidatorIndexOf<T>>,
+		compact_assignments: T::CompactSolution,
 		compute: ElectionCompute,
 		claimed_score: ElectionScore,
 		era: EraIndex,
@@ -2520,7 +2516,7 @@ impl<T: Config> Module<T> {
 			// NOTE: at the moment, since staking is explicitly blocking any offence until election
 			// is closed, we don't check here if the account id at `snapshot_validators[widx]` is
 			// actually a validator. If this ever changes, this loop needs to also check this.
-			snapshot_validators.get(widx as usize).cloned().ok_or(Error::<T>::OffchainElectionBogusWinner)
+			snapshot_validators.get(widx.saturated_into()).cloned().ok_or(Error::<T>::OffchainElectionBogusWinner)
 		}).collect::<Result<Vec<T::AccountId>, Error<T>>>()?;
 
 		// decode the rest of the snapshot.
@@ -2528,11 +2524,11 @@ impl<T: Config> Module<T> {
 			.ok_or(Error::<T>::SnapshotUnavailable)?;
 
 		// helpers
-		let nominator_at = |i: NominatorIndex| -> Option<T::AccountId> {
-			snapshot_nominators.get(i as usize).cloned()
+		let nominator_at = |i: NominatorIndexOf<T>| -> Option<T::AccountId> {
+			snapshot_nominators.get(i.saturated_into()).cloned()
 		};
-		let validator_at = |i: ValidatorIndex| -> Option<T::AccountId> {
-			snapshot_validators.get(i as usize).cloned()
+		let validator_at = |i: ValidatorIndexOf<T>| -> Option<T::AccountId> {
+			snapshot_validators.get(i.saturated_into()).cloned()
 		};
 
 		// un-compact.
@@ -2592,7 +2588,7 @@ impl<T: Config> Module<T> {
 				// defensive only. A compact assignment of length one does NOT encode the weight and
 				// it is always created to be 100%.
 				ensure!(
-					distribution[0].1 == OffchainAccuracy::one(),
+					distribution[0].1 == <OffchainAccuracyOf<T>>::one(),
 					Error::<T>::OffchainElectionBogusSelfVote,
 				);
 			}
@@ -3105,7 +3101,7 @@ impl<T: Config> Module<T> {
 ///
 /// Once the first new_session is planned, all session must start and then end in order, though
 /// some session can lag in between the newest session planned and the latest session started.
-impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
+impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		frame_support::debug::native::trace!(
 			target: LOG_TARGET,
@@ -3135,7 +3131,7 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
+impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	fn new_session(new_index: SessionIndex)
 		-> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>>
 	{
@@ -3164,7 +3160,8 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 /// * 1 point to the producer of each referenced uncle block.
 impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T>
 	where
-		T: Config + pallet_authorship::Config + pallet_session::Config
+		T: Config + pallet_authorship::Config + pallet_session::Config,
+		ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
 {
 	fn note_author(author: T::AccountId) {
 		Self::reward_by_ids(vec![(author, 20)])
@@ -3181,7 +3178,7 @@ impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Module
 /// if any.
 pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
+impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
 		<Module<T>>::ledger(&controller).map(|l| l.stash)
 	}
@@ -3196,6 +3193,7 @@ pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
 	for ExposureOf<T>
+	where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
 		if let Some(active_era) = <Module<T>>::active_era() {
@@ -3221,6 +3219,7 @@ for Module<T> where
 		<T as frame_system::Config>::AccountId,
 		Option<<T as frame_system::Config>::AccountId>,
 	>,
+	ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
 {
 	fn on_offence(
 		offenders: &[OffenceDetails<T::AccountId, pallet_session::historical::IdentificationTuple<T>>],
@@ -3353,6 +3352,7 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 	T: Config,
 	R: ReportOffence<Reporter, Offender, O>,
 	O: Offence<Offender>,
+	ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
 {
 	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
 		// disallow any slashing from before the current bonding period.
@@ -3375,7 +3375,7 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 }
 
 #[allow(deprecated)]
-impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
+impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	type Call = Call<T>;
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 		if let Call::submit_election_solution_unsigned(

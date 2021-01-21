@@ -47,8 +47,8 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	balancing_config: Option<(usize, ExtendedBalance)>,
 ) -> Result<ElectionResult<AccountId, P>, &'static str>
-where
-	ExtendedBalance: From<InnerOf<P>>,
+// where
+// 	ExtendedBalance: From<InnerOf<P>>,
 {
 	let (candidates, mut voters) = setup_inputs(initial_candidates, initial_voters);
 
@@ -89,7 +89,7 @@ where
 pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 	candidates: &[CandidatePtr<AccountId>],
 	voters: &[Voter<AccountId>],
-) -> Option<CandidatePtr<AccountId>> where ExtendedBalance: From<InnerOf<P>> {
+) -> Option<CandidatePtr<AccountId>> /*where ExtendedBalance: From<InnerOf<P>>*/ {
 	for c_ptr in candidates.iter() {
 		let mut candidate = c_ptr.borrow_mut();
 		if !candidate.elected {

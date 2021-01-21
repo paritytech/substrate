@@ -321,8 +321,9 @@ pub(crate) fn run_and_compare<Output: PerThing128>(
 	voters: Vec<(AccountId, Vec<AccountId>)>,
 	stake_of: &Box<dyn Fn(&AccountId) -> VoteWeight>,
 	to_elect: usize,
-) where
-	ExtendedBalance: From<InnerOf<Output>>,
+)
+	// where
+	// ExtendedBalance: From<InnerOf<Output>>,
 {
 	// run fixed point code.
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Output>(

@@ -21,7 +21,7 @@ use serde::{Serialize, Deserialize};
 use sp_std::{ops, fmt, prelude::*, convert::TryInto};
 use codec::{Encode, CompactAs};
 use crate::traits::{
-	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero, Unsigned,
+	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero, Unsigned, One,
 };
 use sp_debug_derive::RuntimeDebug;
 
@@ -37,7 +37,7 @@ pub trait PerThing:
 	Sized + Saturating + Copy + Default + Eq + PartialEq + Ord + PartialOrd + Bounded + fmt::Debug
 {
 	/// The data type used to build this per-thingy.
-	type Inner: BaseArithmetic + Unsigned + Copy + fmt::Debug;
+	type Inner: BaseArithmetic + Unsigned + Copy + Into<u128> + fmt::Debug;
 
 	/// A data type larger than `Self::Inner`, used to avoid overflow in some computations.
 	/// It must be able to compute `ACCURACY^2`.
@@ -65,14 +65,14 @@ pub trait PerThing:
 	fn from_percent(x: Self::Inner) -> Self {
 		let a: Self::Inner = x.min(100.into());
 		let b: Self::Inner = 100.into();
-		Self::from_rational_approximation(a, b)
+		Self::from_rational_approximation::<Self::Inner>(a, b)
 	}
 
 	/// Return the product of multiplication of this value by itself.
 	fn square(self) -> Self {
 		let p = Self::Upper::from(self.deconstruct());
 		let q = Self::Upper::from(Self::ACCURACY);
-		Self::from_rational_approximation(p * p, q * q)
+		Self::from_rational_approximation::<Self::Upper>(p * p, q * q)
 	}
 
 	/// Multiplication that always rounds down to a whole number. The standard `Mul` rounds to the
@@ -205,8 +205,10 @@ pub trait PerThing:
 	/// # }
 	/// ```
 	fn from_rational_approximation<N>(p: N, q: N) -> Self
-	where N: Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + TryInto<Self::Upper> +
-		ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned;
+	where
+		N: Clone + Ord + TryInto<Self::Inner> + TryInto<Self::Upper> +
+			ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned,
+		Self::Inner: Into<N>;
 }
 
 /// The rounding method to use.
@@ -231,14 +233,15 @@ where
 	Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N> + Saturating + Unsigned,
 	P: PerThing,
 {
-	let maximum: N = P::ACCURACY.into();
+	let maximum = N::from(P::ACCURACY);
 	let c = rational_mul_correction::<N, P>(
 		x.clone(),
 		P::ACCURACY,
 		part,
 		rounding,
 	);
-	(x / part.into()).saturating_mul(maximum).saturating_add(c)
+	let part_n = N::from(part);
+	(x / part_n).saturating_mul(maximum).saturating_add(c)
 }
 
 /// Overflow-prune multiplication. Accurately multiply a value by `self` without overflowing.
@@ -252,8 +255,8 @@ where
 	Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N> + Unsigned,
 	P: PerThing,
 {
-	let maximum: N = P::ACCURACY.into();
-	let part_n: N = part.into();
+	let maximum = N::from(P::ACCURACY);
+	let part_n = N::from(part);
 	let c = rational_mul_correction::<N, P>(
 		x.clone(),
 		part,
@@ -304,7 +307,7 @@ where
 			rem_mul_div_inner = rem_mul_div_inner + 1.into();
 		},
 	}
-	rem_mul_div_inner.into()
+	N::from(rem_mul_div_inner)
 }
 
 macro_rules! implement_per_thing {
@@ -362,14 +365,15 @@ macro_rules! implement_per_thing {
 			}
 
 			fn from_rational_approximation<N>(p: N, q: N) -> Self
-			where N: Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + TryInto<Self::Upper>
-				+ ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned
+			where N: Clone + Ord + TryInto<Self::Inner> + TryInto<Self::Upper>
+				+ ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned + Zero + One,
+				Self::Inner: Into<N>,
 			{
 				let div_ceil = |x: N, f: N| -> N {
 					let mut o = x.clone() / f.clone();
 					let r = x.rem(f.clone());
-					if r > N::from(0) {
-						o = o + N::from(1);
+					if r > N::zero() {
+						o = o + N::one();
 					}
 					o
 				};
@@ -464,9 +468,10 @@ macro_rules! implement_per_thing {
 
 			/// See [`PerThing::from_rational_approximation`].
 			pub fn from_rational_approximation<N>(p: N, q: N) -> Self
-				where N: Clone + Ord + From<$type> + TryInto<$type> +
+				where N: Clone + Ord + TryInto<$type> +
 					TryInto<$upper_type> + ops::Div<N, Output=N> + ops::Rem<N, Output=N> +
-					ops::Add<N, Output=N> + Unsigned
+					ops::Add<N, Output=N> + Unsigned,
+					$type: Into<N>,
 			{
 				<Self as PerThing>::from_rational_approximation(p, q)
 			}

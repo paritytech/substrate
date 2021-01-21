@@ -51,7 +51,7 @@
 
 use super::{
 	EraIndex, Config, Module, Store, BalanceOf, Exposure, Perbill, SessionInterface,
-	NegativeImbalanceOf, UnappliedSlash, Error,
+	NegativeImbalanceOf, UnappliedSlash, Error, ExtendedBalance, OffchainAccuracyOf,
 };
 use sp_runtime::{traits::{Zero, Saturating}, RuntimeDebug, DispatchResult};
 use frame_support::{
@@ -190,7 +190,7 @@ impl<Balance> SpanRecord<Balance> {
 
 /// Parameters for performing a slash.
 #[derive(Clone)]
-pub(crate) struct SlashParams<'a, T: 'a + Config> {
+pub(crate) struct SlashParams<'a, T: 'a + Config> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	/// The stash account being slashed.
 	pub(crate) stash: &'a T::AccountId,
 	/// The proportion of the slash.
@@ -215,7 +215,8 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 /// The pending slash record returned does not have initialized reporters. Those have
 /// to be set at a higher level, if any.
 pub(crate) fn compute_slash<T: Config>(params: SlashParams<T>)
-	-> Option<UnappliedSlash<T::AccountId, BalanceOf<T>>>
+-> Option<UnappliedSlash<T::AccountId, BalanceOf<T>>>
+where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
 {
 	let SlashParams {
 		stash,
@@ -309,9 +310,9 @@ pub(crate) fn compute_slash<T: Config>(params: SlashParams<T>)
 
 // doesn't apply any slash, but kicks out the validator if the misbehavior is from
 // the most recent slashing span.
-fn kick_out_if_recent<T: Config>(
-	params: SlashParams<T>,
-) {
+fn kick_out_if_recent<T: Config>(params: SlashParams<T>)
+where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
+{
 	// these are not updated by era-span or end-span.
 	let mut reward_payout = Zero::zero();
 	let mut val_slashed = Zero::zero();
@@ -342,7 +343,9 @@ fn slash_nominators<T: Config>(
 	params: SlashParams<T>,
 	prior_slash_p: Perbill,
 	nominators_slashed: &mut Vec<(T::AccountId, BalanceOf<T>)>,
-) -> BalanceOf<T> {
+) -> BalanceOf<T>
+	where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
+{
 	let SlashParams {
 		stash: _,
 		slash,
@@ -418,7 +421,7 @@ fn slash_nominators<T: Config>(
 // dropping this struct applies any necessary slashes, which can lead to free balance
 // being 0, and the account being garbage-collected -- a dead account should get no new
 // metadata.
-struct InspectingSpans<'a, T: Config + 'a> {
+struct InspectingSpans<'a, T: Config + 'a> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	dirty: bool,
 	window_start: EraIndex,
 	stash: &'a T::AccountId,
@@ -436,7 +439,7 @@ fn fetch_spans<'a, T: Config + 'a>(
 	paid_out: &'a mut BalanceOf<T>,
 	slash_of: &'a mut BalanceOf<T>,
 	reward_proportion: Perbill,
-) -> InspectingSpans<'a, T> {
+) -> InspectingSpans<'a, T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	let spans = <Module<T> as Store>::SlashingSpans::get(stash).unwrap_or_else(|| {
 		let spans = SlashingSpans::new(window_start);
 		<Module<T> as Store>::SlashingSpans::insert(stash, &spans);
@@ -455,7 +458,7 @@ fn fetch_spans<'a, T: Config + 'a>(
 	}
 }
 
-impl<'a, T: 'a + Config> InspectingSpans<'a, T> {
+impl<'a, T: 'a + Config> InspectingSpans<'a, T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	fn span_index(&self) -> SpanIndex {
 		self.spans.span_index
 	}
@@ -526,7 +529,7 @@ impl<'a, T: 'a + Config> InspectingSpans<'a, T> {
 	}
 }
 
-impl<'a, T: 'a + Config> Drop for InspectingSpans<'a, T> {
+impl<'a, T: 'a + Config> Drop for InspectingSpans<'a, T> where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	fn drop(&mut self) {
 		// only update on disk if we slashed this account.
 		if !self.dirty { return }
@@ -542,7 +545,7 @@ impl<'a, T: 'a + Config> Drop for InspectingSpans<'a, T> {
 }
 
 /// Clear slashing metadata for an obsolete era.
-pub(crate) fn clear_era_metadata<T: Config>(obsolete_era: EraIndex) {
+pub(crate) fn clear_era_metadata<T: Config>(obsolete_era: EraIndex) where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	<Module<T> as Store>::ValidatorSlashInEra::remove_prefix(&obsolete_era);
 	<Module<T> as Store>::NominatorSlashInEra::remove_prefix(&obsolete_era);
 }
@@ -551,7 +554,7 @@ pub(crate) fn clear_era_metadata<T: Config>(obsolete_era: EraIndex) {
 pub(crate) fn clear_stash_metadata<T: Config>(
 	stash: &T::AccountId,
 	num_slashing_spans: u32,
-) -> DispatchResult {
+) -> DispatchResult where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	let spans = match <Module<T> as Store>::SlashingSpans::get(stash) {
 		None => return Ok(()),
 		Some(s) => s,
@@ -581,7 +584,7 @@ pub fn do_slash<T: Config>(
 	value: BalanceOf<T>,
 	reward_payout: &mut BalanceOf<T>,
 	slashed_imbalance: &mut NegativeImbalanceOf<T>,
-) {
+) where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	let controller = match <Module<T>>::bonded(stash) {
 		None => return, // defensive: should always exist.
 		Some(c) => c,
@@ -613,7 +616,7 @@ pub fn do_slash<T: Config>(
 }
 
 /// Apply a previously-unapplied slash.
-pub(crate) fn apply_slash<T: Config>(unapplied_slash: UnappliedSlash<T::AccountId, BalanceOf<T>>) {
+pub(crate) fn apply_slash<T: Config>(unapplied_slash: UnappliedSlash<T::AccountId, BalanceOf<T>>) where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
 	let mut reward_payout = unapplied_slash.payout;
 
@@ -642,7 +645,7 @@ fn pay_reporters<T: Config>(
 	reward_payout: BalanceOf<T>,
 	slashed_imbalance: NegativeImbalanceOf<T>,
 	reporters: &[T::AccountId],
-) {
+) where ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>> {
 	if reward_payout.is_zero() || reporters.is_empty() {
 		// nobody to pay out to or nothing to pay;
 		// just treat the whole value as slashed.

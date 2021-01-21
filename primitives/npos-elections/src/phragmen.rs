@@ -69,8 +69,8 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	balance: Option<(usize, ExtendedBalance)>,
 ) -> Result<ElectionResult<AccountId, P>, crate::Error>
-where
-	ExtendedBalance: From<InnerOf<P>>,
+// where
+// 	ExtendedBalance: From<InnerOf<P>>,
 {
 	let (candidates, voters) = setup_inputs(initial_candidates, initial_voters);
 
