@@ -52,8 +52,9 @@ use libp2p::{
 };
 use std::{
 	borrow::Cow, collections::{hash_map::Entry, HashMap}, convert::TryFrom as _, io, iter,
-	pin::Pin, task::{Context, Poll}, time::{Duration, Instant},
+	pin::Pin, task::{Context, Poll}, time::Duration,
 };
+use wasm_timer::Instant;
 
 pub use libp2p::request_response::{InboundFailure, OutboundFailure, RequestId};
 

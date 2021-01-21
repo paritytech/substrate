@@ -109,6 +109,7 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 
 	let validator_prefs = ValidatorPrefs {
 		commission: Perbill::from_percent(50),
+		.. Default::default()
 	};
 	Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), validator_prefs)?;
 
