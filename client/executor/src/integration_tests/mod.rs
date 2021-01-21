@@ -477,8 +477,8 @@ fn offchain_index(wasm_method: WasmExecutionMethod) {
 
 	use sp_core::offchain::storage::OffchainOverlayedChange;
 	assert_eq!(
-		ext.ext()
-			.get_offchain_storage_changes()
+		ext.overlayed_changes()
+			.offchain_overlay()
 			.get(sp_core::offchain::STORAGE_PREFIX, b"k"),
 		Some(OffchainOverlayedChange::SetValue(b"v".to_vec()))
 	);
