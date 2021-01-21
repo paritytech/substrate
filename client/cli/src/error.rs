@@ -77,6 +77,9 @@ pub enum Error {
 	/// Application specific error chain sequence forwarder.
 	#[error(transparent)]
 	Application(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+
+	#[error(transparent)]
+	GlobalLoggerError(#[from] sc_tracing::logging::Error),
 }
 
 impl std::convert::From<&str> for Error {
