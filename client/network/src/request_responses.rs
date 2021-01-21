@@ -232,7 +232,8 @@ impl RequestResponsesBehaviour {
 		if let Some((protocol, _)) = self.protocols.get_mut(protocol) {
 			if protocol.is_connected(target) {
 				let request_id = protocol.send_request(target, request);
-				self.pending_requests.insert(request_id, (Instant::now(), pending_response));
+				let prev_req_id = self.pending_requests.insert(request_id, (Instant::now(), pending_response));
+				debug_assert!(prev_req_id.is_none(), "Expect request id to be unique.");
 			} else {
 				if pending_response.send(Err(RequestFailure::NotConnected)).is_err() {
 					log::debug!(
