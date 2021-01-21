@@ -155,23 +155,25 @@ mod tests {
     fn runtime_upgrade() {
         let node = Node::<NodeTemplateChainInfo>::new().unwrap();
 
-        // // first perform runtime upgrade
-        // let wasm = include_bytes!("./runtime.wasm");
-        // node.upgrade_runtime(wasm.to_vec());
-        //
-        // // assert that the runtime is upgraded by looking at events
-        // let events = node.with_state(|| frame_system::Module::<Runtime>::events())
-        //     .into_iter()
-        //     .filter(|event| {
-        //         match event.event {
-        //             Event::frame_system(frame_system::RawEvent::CodeUpdated) => true,
-        //             _ => false,
-        //         }
-        //     })
-        //     .collect::<Vec<_>>();
-        //
-        // // make sure event is in state
-        // assert_eq!(events.len(), 1);
+        // first perform runtime upgrade
+        let wasm = include_bytes!("./runtime.wasm");
+        println!("\n\n\nUpgrading\n\n\n");
+        node.upgrade_runtime(wasm.to_vec());
+        println!("\n\n\nUpgraded\n\n\n {:#?}", node.with_state(|| frame_system::Module::<Runtime>::events()));
+
+        // assert that the runtime is upgraded by looking at events
+        let events = node.with_state(|| frame_system::Module::<Runtime>::events())
+            .into_iter()
+            .filter(|event| {
+                match event.event {
+                    Event::frame_system(frame_system::RawEvent::CodeUpdated) => true,
+                    _ => false,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // make sure event is in state
+        assert_eq!(events.len(), 1);
 
         let (alice, bob) = (
             MultiSigner::from(Alice.public()).into_account(),
