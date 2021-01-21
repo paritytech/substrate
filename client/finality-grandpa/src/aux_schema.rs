@@ -71,8 +71,9 @@ struct V0AuthoritySet<H, N> {
 }
 
 impl<H, N> Into<AuthoritySet<H, N>> for V0AuthoritySet<H, N>
-where H: Clone + Debug + PartialEq,
-	  N: Clone + Debug + Ord,
+where
+	H: Clone + Debug + PartialEq,
+	N: Clone + Debug + Ord,
 {
 	fn into(self) -> AuthoritySet<H, N> {
 		let mut pending_standard_changes = ForkTree::new();
@@ -135,13 +136,14 @@ struct V2AuthoritySet<H, N> {
 	pending_forced_changes: Vec<PendingChange<H, N>>,
 }
 
-pub(crate) fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> ClientResult<Option<T>> {
+pub(crate) fn load_decode<B: AuxStore, T: Decode>(
+	backend: &B, 
+	key: &[u8]
+) -> ClientResult<Option<T>> {
 	match backend.get_aux(key)? {
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
-			.map_err(
-				|e| ClientError::Backend(format!("GRANDPA DB is corrupted: {}", e.what())),
-			)
+			.map_err(|e| ClientError::Backend(format!("GRANDPA DB is corrupted: {}", e.what())))
 			.map(Some)
 	}
 }
@@ -155,11 +157,15 @@ pub(crate) struct PersistentData<Block: BlockT> {
 fn migrate_from_version0<Block: BlockT, B, G>(
 	backend: &B,
 	genesis_round: &G,
-) -> ClientResult<Option<(
-	AuthoritySet<Block::Hash, NumberFor<Block>>,
-	VoterSetState<Block>,
-)>> where B: AuxStore,
-		  G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
+) -> ClientResult<
+	Option<(
+		AuthoritySet<Block::Hash, NumberFor<Block>>,
+		VoterSetState<Block>,
+	)>,
+>
+where
+	B: AuxStore,
+	G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
 {
 	CURRENT_VERSION.using_encoded(|s|
 		backend.insert_aux(&[(VERSION_KEY, s)], &[])
@@ -172,18 +178,20 @@ fn migrate_from_version0<Block: BlockT, B, G>(
 		let new_set: AuthoritySet<Block::Hash, NumberFor<Block>> = old_set.into();
 		backend.insert_aux(&[(AUTHORITY_SET_KEY, new_set.encode().as_slice())], &[])?;
 
-		let (last_round_number, last_round_state) = match load_decode::<_, V0VoterSetState<Block::Hash, NumberFor<Block>>>(
-			backend,
-			SET_STATE_KEY,
-		)? {
+		let (last_round_number, last_round_state) = match load_decode::<
+			_,
+			V0VoterSetState<Block::Hash, NumberFor<Block>>,
+		>(backend, SET_STATE_KEY)?
+		{
 			Some((number, state)) => (number, state),
 			None => (0, genesis_round()),
 		};
 
 		let set_id = new_set.set_id;
 
-		let base = last_round_state.prevote_ghost
-			.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
+		let base = last_round_state.prevote_ghost.expect(
+			"state is for completed round; completed rounds must have a prevote ghost; qed."
+		);
 
 		let mut current_rounds = CurrentRounds::new();
 		current_rounds.insert(last_round_number + 1, HasVoted::No);
@@ -213,11 +221,15 @@ fn migrate_from_version0<Block: BlockT, B, G>(
 fn migrate_from_version1<Block: BlockT, B, G>(
 	backend: &B,
 	genesis_round: &G,
-) -> ClientResult<Option<(
-	AuthoritySet<Block::Hash, NumberFor<Block>>,
-	VoterSetState<Block>,
-)>> where B: AuxStore,
-		  G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
+) -> ClientResult<
+	Option<(
+		AuthoritySet<Block::Hash, NumberFor<Block>>,
+		VoterSetState<Block>,
+	)>,
+>
+where
+	B: AuxStore,
+	G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
 {
 	CURRENT_VERSION.using_encoded(|s|
 		backend.insert_aux(&[(VERSION_KEY, s)], &[])
@@ -288,10 +300,12 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 fn migrate_from_version2<Block: BlockT, B, G>(
 	backend: &B,
 	genesis_round: &G,
-) -> ClientResult<Option<(
-	AuthoritySet<Block::Hash, NumberFor<Block>>,
-	VoterSetState<Block>,
-)>>
+) -> ClientResult<
+	Option<(
+		AuthoritySet<Block::Hash, NumberFor<Block>>,
+		VoterSetState<Block>,
+	)>,
+>
 where
 	B: AuxStore,
 	G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
@@ -337,11 +351,10 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	genesis_hash: Block::Hash,
 	genesis_number: NumberFor<Block>,
 	genesis_authorities: G,
-)
-	-> ClientResult<PersistentData<Block>>
-	where
-		B: AuxStore,
-		G: FnOnce() -> ClientResult<AuthorityList>,
+) -> ClientResult<PersistentData<Block>>
+where
+	B: AuxStore,
+	G: FnOnce() -> ClientResult<AuthorityList>,
 {
 	let version: Option<u32> = load_decode(backend, VERSION_KEY)?;
 
@@ -349,7 +362,9 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 
 	match version {
 		None => {
-			if let Some((new_set, set_state)) = migrate_from_version0::<Block, _, _>(backend, &make_genesis_round)? {
+			if let Some((new_set, set_state)) =
+				migrate_from_version0::<Block, _, _>(backend, &make_genesis_round)?
+			{
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
 					set_state: set_state.into(),
@@ -357,7 +372,9 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 			}
 		},
 		Some(1) => {
-			if let Some((new_set, set_state)) = migrate_from_version1::<Block, _, _>(backend, &make_genesis_round)? {
+			if let Some((new_set, set_state)) =
+				migrate_from_version1::<Block, _, _>(backend, &make_genesis_round)?
+			{
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
 					set_state: set_state.into(),
@@ -365,7 +382,9 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 			}
 		},
 		Some(2) => {
-			if let Some((new_set, set_state)) = migrate_from_version2::<Block, _, _>(backend, &make_genesis_round)? {
+			if let Some((new_set, set_state)) =
+				migrate_from_version2::<Block, _, _>(backend, &make_genesis_round)?
+			{
 				return Ok(PersistentData {
 					authority_set: new_set.into(),
 					set_state: set_state.into(),
@@ -446,7 +465,8 @@ pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 	set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
 	new_set: Option<&NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
 	write_aux: F
-) -> R where
+) -> R
+where
 	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
 {
 	// write new authority set state to disk.
@@ -496,8 +516,9 @@ pub(crate) fn write_concluded_round<Block: BlockT, B: AuxStore>(
 }
 
 #[cfg(test)]
-pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode + Clone + Ord>(backend: &B)
-	-> Option<AuthoritySet<H, N>> {
+pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode + Clone + Ord>(
+	backend: &B
+) -> Option<AuthoritySet<H, N>> {
 	load_decode::<_, AuthoritySet<H, N>>(backend, AUTHORITY_SET_KEY)
 		.expect("backend error")
 }
@@ -559,7 +580,11 @@ mod test {
 			Some(3),
 		);
 
-		let PersistentData { authority_set, set_state, .. } = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
+		let PersistentData {
+			authority_set,
+			set_state,
+			..
+		} = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
 			&client,
 			H256::random(),
 			0,
@@ -651,7 +676,11 @@ mod test {
 			Some(3),
 		);
 
-		let PersistentData { authority_set, set_state, .. } = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
+		let PersistentData {
+			authority_set,
+			set_state,
+			..
+		} = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
 			&client,
 			H256::random(),
 			0,
@@ -706,11 +735,12 @@ mod test {
 			};
 
 			let genesis_state = (H256::random(), 32);
-			let voter_set_state: VoterSetState<sc_network_test::Block> = VoterSetState::live(
-				set_id,
-				&authority_set.clone().into(), // Note the conversion!
-				genesis_state
-			);
+			let voter_set_state: VoterSetState<substrate_test_runtime_client::runtime::Block> =
+				VoterSetState::live(
+					set_id,
+					&authority_set.clone().into(), // Note the conversion!
+					genesis_state
+				);
 
 			client.insert_aux(
 				&[
@@ -740,7 +770,10 @@ mod test {
 			Some(3),
 		);
 
-		let PersistentData { authority_set, set_state, .. } = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
+		let PersistentData {
+			authority_set,
+			..
+		 } = load_persistent::<substrate_test_runtime_client::runtime::Block, _, _>(
 			&client,
 			H256::random(),
 			0,
@@ -779,7 +812,9 @@ mod test {
 		round_number.using_encoded(|n| key.extend(n));
 
 		assert_eq!(
-			load_decode::<_, CompletedRound::<substrate_test_runtime_client::runtime::Block>>(&client, &key).unwrap(),
+			load_decode::<_, CompletedRound::<substrate_test_runtime_client::runtime::Block>>(
+				&client, &key
+			).unwrap(),
 			Some(completed_round),
 		);
 	}
