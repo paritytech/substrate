@@ -120,6 +120,11 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		}
 	}
 
+	/// Returns the overlayed changes.
+	pub fn overlayed_changes(&self) -> &OverlayedChanges {
+		&self.overlay
+	}
+
 	/// Move offchain changes from overlay to the persistent store.
 	pub fn persist_offchain_overlay(&mut self) {
 		self.offchain_db.apply_offchain_changes(self.overlay.offchain_drain_committed());

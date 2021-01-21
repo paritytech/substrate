@@ -41,7 +41,7 @@ impl InMemOffchainStorage {
 	/// Remove a key and its associated value from the offchain database.
 	pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		let _ = self.storage.remove(&key);
+		self.storage.remove(&key);
 	}
 }
 

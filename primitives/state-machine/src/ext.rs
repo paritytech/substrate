@@ -18,7 +18,7 @@
 //! Concrete externalities implementation.
 
 use crate::{
-	StorageKey, StorageValue, OverlayedChanges, OffchainOverlayedChanges,
+	StorageKey, StorageValue, OverlayedChanges,
 	backend::Backend, overlayed_changes::OverlayedExtensions,
 };
 use hash_db::Hasher;
@@ -162,11 +162,6 @@ impl<'a, H, N, B> Ext<'a, H, N, B>
 	/// Called when there are changes that likely will invalidate the storage root.
 	fn mark_dirty(&mut self) {
 		self.storage_transaction_cache.reset();
-	}
-
-	/// Read only accessor for the scheduled overlay changes.
-	pub fn get_offchain_storage_changes(&self) -> &OffchainOverlayedChanges {
-		&self.overlay.offchain()
 	}
 }
 
@@ -928,7 +923,6 @@ mod tests {
 				}
 			],
 		}.into();
-
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 
