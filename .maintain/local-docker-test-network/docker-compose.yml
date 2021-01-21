@@ -1,24 +1,26 @@
-# Docker compose file to simulate a sentry node setup.
+# Docker compose file to start a multi node local test network.
 #
+# # Nodes
 #
-# Setup:
+# - Validator node A
+# - Validator node B
+# - Light client C
 #
-# Validator A is not supposed to be connected to the public internet. Instead it
-# connects to a sentry node (sentry-a) which connects to the public internet.
-# Validator B can reach validator A via sentry node A and vice versa.
+# # Auxiliary nodes
 #
+# - Prometheus monitoring each node.
+# - Grafana pointed at the Prometheus node, configured with all dashboards.
 #
-# Usage:
+# # Usage
 #
 # 1. Build `target/release/substrate` binary: `cargo build --release`
-#
-# 2. Start networks and containers: `sudo docker-compose -f .maintain/sentry-node/docker-compose.yml up`
-#
-# 3. Reach:
-#   - polkadot/apps on localhost:3000
+# 2. Start networks and containers:
+#    `sudo docker-compose -f .maintain/sentry-node/docker-compose.yml up`
+# 3. Connect to nodes:
 #   - validator-a: localhost:9944
 #   - validator-b: localhost:9945
-#   - sentry-a: localhost:9946
+#   - light-c: localhost:9946
+#   - via polkadot.js/apps: https://polkadot.js.org/apps/?rpc=ws%3A%2F%2Flocalhost%3A<NODE_PORT>#/explorer
 #   - grafana: localhost:3001
 #   - prometheus: localhost:9090
 
@@ -34,9 +36,8 @@ services:
       - ../../target/release/substrate:/usr/local/bin/substrate
     image: parity/substrate
     networks:
-      - network-a
+      - internet
     command:
-      # Local node id: QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR
       - "--node-key"
       - "0000000000000000000000000000000000000000000000000000000000000001"
       - "--base-path"
@@ -46,56 +47,16 @@ services:
       - "30333"
       - "--validator"
       - "--alice"
-      - "--sentry-nodes"
-      - "/dns/sentry-a/tcp/30333/p2p/12D3KooWSCufgHzV4fCwRijfH2k3abrpAJxTKxEvN1FDuRXA2U9x"
-      - "--reserved-nodes"
-      - "/dns/sentry-a/tcp/30333/p2p/12D3KooWSCufgHzV4fCwRijfH2k3abrpAJxTKxEvN1FDuRXA2U9x"
-      # Not only bind to localhost.
-      - "--unsafe-ws-external"
-      - "--unsafe-rpc-external"
-      # - "--log"
-      # - "sub-libp2p=trace"
-      # - "--log"
-      # - "afg=trace"
-      - "--log"
-      - "sub-authority-discovery=trace"
-      - "--no-telemetry"
-      - "--rpc-cors"
-      - "all"
-      - "--prometheus-external"
-
-  sentry-a:
-    image: parity/substrate
-    ports:
-      - "9946:9944"
-    volumes:
-      - ../../target/release/substrate:/usr/local/bin/substrate
-    networks:
-      - network-a
-      - internet
-    command:
-      # Local node id: QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi
-      - "--node-key"
-      - "0000000000000000000000000000000000000000000000000000000000000003"
-      - "--base-path"
-      - "/tmp/sentry"
-      - "--chain=local"
-      - "--port"
-      - "30333"
-      - "--sentry"
-      - "/dns/validator-a/tcp/30333/p2p/12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp"
-      - "--reserved-nodes"
-      - "/dns/validator-a/tcp/30333/p2p/12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp"
       - "--bootnodes"
       - "/dns/validator-b/tcp/30333/p2p/12D3KooWHdiAxVd8uMQR1hGWXccidmfCwLqcMpGwR6QcTP6QRMuD"
-      - "--no-telemetry"
-      - "--rpc-cors"
-      - "all"
       # Not only bind to localhost.
       - "--unsafe-ws-external"
       - "--unsafe-rpc-external"
       - "--log"
-      - "sub-authority-discovery=trace"
+      - "sub-libp2p=trace"
+      - "--no-telemetry"
+      - "--rpc-cors"
+      - "all"
       - "--prometheus-external"
 
   validator-b:
@@ -107,7 +68,6 @@ services:
     networks:
       - internet
     command:
-      # Local node id: QmSVnNf9HwVMT1Y4cK1P6aoJcEZjmoTXpjKBmAABLMnZEk
       - "--node-key"
       - "0000000000000000000000000000000000000000000000000000000000000002"
       - "--base-path"
@@ -119,8 +79,6 @@ services:
       - "--bob"
       - "--bootnodes"
       - "/dns/validator-a/tcp/30333/p2p/12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp"
-      - "--bootnodes"
-      - "/dns/sentry-a/tcp/30333/p2p/12D3KooWSCufgHzV4fCwRijfH2k3abrpAJxTKxEvN1FDuRXA2U9x"
       - "--no-telemetry"
       - "--rpc-cors"
       - "all"
@@ -128,20 +86,50 @@ services:
       - "--unsafe-ws-external"
       - "--unsafe-rpc-external"
       - "--log"
-      - "sub-authority-discovery=trace"
+      - "sub-libp2p=trace"
+      - "--prometheus-external"
+
+  light-c:
+    image: parity/substrate
+    ports:
+      - "9946:9944"
+    volumes:
+      - ../../target/release/substrate:/usr/local/bin/substrate
+    networks:
+      - internet
+    command:
+      - "--node-key"
+      - "0000000000000000000000000000000000000000000000000000000000000003"
+      - "--base-path"
+      - "/tmp/light"
+      - "--chain=local"
+      - "--port"
+      - "30333"
+      - "--light"
+      - "--bootnodes"
+      - "/dns/validator-a/tcp/30333/p2p/12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp"
+      - "--bootnodes"
+      - "/dns/validator-b/tcp/30333/p2p/12D3KooWHdiAxVd8uMQR1hGWXccidmfCwLqcMpGwR6QcTP6QRMuD"
+      - "--no-telemetry"
+      - "--rpc-cors"
+      - "all"
+      # Not only bind to localhost.
+      - "--unsafe-ws-external"
+      - "--unsafe-rpc-external"
+      - "--log"
+      - "sub-libp2p=trace"
       - "--prometheus-external"
 
   prometheus:
     image: prom/prometheus
     networks:
-      - network-a
       - internet
     ports:
       - "9090:9090"
     links:
       - validator-a:validator-a
-      - sentry-a:sentry-a
       - validator-b:validator-b
+      - light-c:light-c
     volumes:
       - ./prometheus/:/etc/prometheus/
     restart: always
@@ -152,7 +140,6 @@ services:
     depends_on:
       - prometheus
     networks:
-      - network-a
       - internet
     ports:
       - 3001:3000
