@@ -305,7 +305,7 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Percent, Perbill, InnerOf, RuntimeDebug, DispatchError, PerThing,
+	Percent, Perbill, RuntimeDebug, DispatchError, PerThing,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
@@ -333,11 +333,29 @@ use sp_npos_elections::{
 };
 pub use weights::WeightInfo;
 
+/// The default solution type used in substrate-node with 24 maximum winners. A runtime can customize this to their needs.
+pub mod default_solution {
+	use super::*;
+	pub use sp_npos_elections::CompactSolution;
+
+	/// The nominator index type.
+	pub type NominatorIndex = u32;
+	/// The validator index type.
+	pub type ValidatorIndex = u16;
+	/// The accuracy type of the solution.
+	pub type Accuracy = sp_runtime::PerU16;
+
+	sp_npos_elections::generate_solution_type!{
+		pub struct CompactSolution24::<NominatorIndex, ValidatorIndex, Accuracy>(24)
+	}
+}
+
 const STAKING_ID: LockIdentifier = *b"staking ";
+
+/// Maximum number of unlocking chunks.
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 
 pub(crate) const LOG_TARGET: &'static str = "staking";
-
 // syntactic sugar for logging.
 #[macro_export]
 macro_rules! log {
@@ -435,12 +453,17 @@ pub struct ValidatorPrefs {
 	/// nominators.
 	#[codec(compact)]
 	pub commission: Perbill,
+	/// Whether or not this validator is accepting more nominations. If `true`, then no nominator
+	/// who is not already nominating this validator may nominate them. By default, validators
+	/// are accepting nominations.
+	pub blocked: bool,
 }
 
 impl Default for ValidatorPrefs {
 	fn default() -> Self {
 		ValidatorPrefs {
 			commission: Default::default(),
+			blocked: false,
 		}
 	}
 }
@@ -881,11 +904,12 @@ enum Releases {
 	V2_0_0,
 	V3_0_0,
 	V4_0_0,
+	V5_0_0,
 }
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V4_0_0
+		Releases::V5_0_0
 	}
 }
 
@@ -1072,8 +1096,8 @@ decl_storage! {
 		/// True if network has been upgraded to this version.
 		/// Storage version of the pallet.
 		///
-		/// This is set to v3.0.0 for new networks.
-		StorageVersion build(|_: &GenesisConfig<T>| Releases::V4_0_0): Releases;
+		/// This is set to v5.0.0 for new networks.
+		StorageVersion build(|_: &GenesisConfig<T>| Releases::V5_0_0): Releases;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1109,6 +1133,29 @@ decl_storage! {
 	}
 }
 
+pub mod migrations {
+	use super::*;
+
+	#[derive(Decode)]
+	struct OldValidatorPrefs {
+		#[codec(compact)]
+		pub commission: Perbill
+	}
+	impl OldValidatorPrefs {
+		fn upgraded(self) -> ValidatorPrefs {
+			ValidatorPrefs {
+				commission: self.commission,
+				.. Default::default()
+			}
+		}
+	}
+	pub fn migrate_to_blockable<T: Config>() -> frame_support::weights::Weight {
+		Validators::<T>::translate::<OldValidatorPrefs, _>(|_, p| Some(p.upgraded()));
+		ErasValidatorPrefs::<T>::translate::<OldValidatorPrefs, _>(|_, _, p| Some(p.upgraded()));
+		T::BlockWeights::get().max_block
+	}
+}
+
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Config>::AccountId {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
@@ -1137,6 +1184,8 @@ decl_event!(
 		/// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
 		/// from the unlocking queue. \[stash, amount\]
 		Withdrawn(AccountId, Balance),
+		/// A nominator has been kicked from a validator. \[nominator, stash\]
+		Kicked(AccountId, AccountId),
 	}
 );
 
@@ -1210,6 +1259,10 @@ decl_error! {
 		IncorrectSlashingSpans,
 		/// Internal state has become somehow corrupted and the operation cannot continue.
 		BadState,
+		/// Too many nomination targets supplied.
+		TooManyTargets,
+		/// A nomination target was supplied that was blocked or otherwise not a validator.
+		BadTarget,
 	}
 }
 
@@ -1257,6 +1310,15 @@ decl_module! {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			if StorageVersion::get() == Releases::V4_0_0 {
+				StorageVersion::put(Releases::V5_0_0);
+				migrations::migrate_to_blockable::<T>()
+			} else {
+				0
+			}
+		}
 
 		/// sets `ElectionStatus` to `Open(now)` where `now` is the block number at which the
 		/// election window has opened, if we are at the last session and less blocks than
@@ -1678,8 +1740,12 @@ decl_module! {
 			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
 
 			let targets = targets.into_iter()
-				.take(T::CompactSolution::LIMIT)
-				.map(|t| T::Lookup::lookup(t))
+				.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
+				.map(|n| n.and_then(|n| if old.contains(&n) || !Validators::<T>::get(&n).blocked {
+					Ok(n)
+				} else {
+					Err(Error::<T>::BadTarget.into())
+				}))
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
 			let nominations = Nominations {
@@ -2169,6 +2235,42 @@ decl_module! {
 			);
 
 			Ok(adjustments)
+		}
+
+		/// Remove the given nominations from the calling validator.
+		///
+		/// Effects will be felt at the beginning of the next era.
+		///
+		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		/// And, it can be only called when [`EraElectionStatus`] is `Closed`. The controller
+		/// account should represent a validator.
+		///
+		/// - `who`: A list of nominator stash accounts who are nominating this validator which
+		///   should no longer be nominating this validator.
+		///
+		/// Note: Making this call only makes sense if you first set the validator preferences to
+		/// block any further nominations.
+		#[weight = T::WeightInfo::kick(who.len() as u32)]
+		pub fn kick(origin, who: Vec<<T::Lookup as StaticLookup>::Source>) -> DispatchResult {
+			let controller = ensure_signed(origin)?;
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let stash = &ledger.stash;
+
+			for nom_stash in who.into_iter()
+				.map(T::Lookup::lookup)
+				.collect::<Result<Vec<T::AccountId>, _>>()?
+				.into_iter()
+			{
+				Nominators::<T>::mutate(&nom_stash, |maybe_nom| if let Some(ref mut nom) = maybe_nom {
+					if let Some(pos) = nom.targets.iter().position(|v| v == stash) {
+						nom.targets.swap_remove(pos);
+						Self::deposit_event(RawEvent::Kicked(nom_stash.clone(), stash.clone()));
+					}
+				});
+			}
+
+			Ok(())
 		}
 	}
 }

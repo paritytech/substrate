@@ -22,7 +22,7 @@
 use crate::*;
 use sp_arithmetic::{
 	traits::{One, SaturatedConversion, Zero},
-	InnerOf, PerThing,
+	PerThing,
 };
 use sp_runtime::assert_eq_error_rate;
 use sp_std::collections::btree_map::BTreeMap;

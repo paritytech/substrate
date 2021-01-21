@@ -17,11 +17,8 @@
 
 //! Helper methods for npos-elections.
 
-use crate::{
-	Assignment, Error, ExtendedBalance, IdentifierT, PerThing128, StakedAssignment, VoteWeight,
-	WithApprovalOf,
-};
-use sp_arithmetic::{InnerOf, PerThing};
+use crate::{Assignment, Error, IdentifierT, PerThing128, StakedAssignment, VoteWeight, WithApprovalOf};
+use sp_arithmetic::PerThing;
 use sp_std::prelude::*;
 
 /// Converts a vector of ratio assignments into ones with absolute budget value.
@@ -32,7 +29,7 @@ pub fn assignment_ratio_to_staked<A: IdentifierT, P: PerThing128, FS>(
 	stake_of: FS,
 ) -> Vec<StakedAssignment<A>>
 where
-	for<'r> FS: Fn(&'r A) -> VoteWeight
+	for<'r> FS: Fn(&'r A) -> VoteWeight,
 {
 	ratios
 		.into_iter()
@@ -75,9 +72,10 @@ pub fn assignment_staked_to_ratio_normalized<A: IdentifierT, P: PerThing128>(
 	staked: Vec<StakedAssignment<A>>,
 ) -> Result<Vec<Assignment<A, P>>, Error> {
 	let mut ratio = staked.into_iter().map(|a| a.into_assignment()).collect::<Vec<_>>();
-	ratio.iter_mut().map(|a|
-		a.try_normalize().map_err(|err| Error::ArithmeticError(err))
-	).collect::<Result<_, _>>()?;
+	ratio
+		.iter_mut()
+		.map(|a| a.try_normalize().map_err(|err| Error::ArithmeticError(err)))
+		.collect::<Result<_, _>>()?;
 	Ok(ratio)
 }
 

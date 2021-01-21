@@ -75,7 +75,7 @@
 
 use sp_arithmetic::{
 	traits::{Bounded, UniqueSaturatedInto, Zero},
-	InnerOf, Normalizable, PerThing, Rational128, ThresholdOrd,
+	Normalizable, PerThing, Rational128, ThresholdOrd,
 };
 use sp_std::{
 	cell::RefCell,
@@ -362,8 +362,11 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 	pub fn into_assignment<P: PerThing>(self) -> Option<Assignment<AccountId, P>> {
 		let who = self.who;
 		let budget = self.budget;
-		let distribution = self.edges.into_iter().filter_map(|e| {
-			let per_thing = P::from_rational_approximation(e.weight, budget);
+		let distribution = self
+			.edges
+			.into_iter()
+			.filter_map(|e| {
+				let per_thing = P::from_rational_approximation(e.weight, budget);
 			// trim zero edges.
 			if per_thing.is_zero() { None } else { Some((e.who, per_thing)) }
 		}).collect::<Vec<_>>();
@@ -529,7 +532,10 @@ impl<AccountId> StakedAssignment<AccountId> {
 	///
 	/// If an edge stake is so small that it cannot be represented in `T`, it is ignored. This edge
 	/// can never be re-created and does not mean anything useful anymore.
-	pub fn into_assignment<P: PerThing>(self) -> Assignment<AccountId, P> where AccountId: IdentifierT {
+	pub fn into_assignment<P: PerThing>(self) -> Assignment<AccountId, P>
+	where
+		AccountId: IdentifierT,
+	{
 		let stake = self.total();
 		let distribution = self.distribution
 			.into_iter()

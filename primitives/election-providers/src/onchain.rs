@@ -17,7 +17,6 @@
 
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
-use sp_arithmetic::InnerOf;
 use crate::{ElectionDataProvider, ElectionProvider};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};

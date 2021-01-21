@@ -176,6 +176,7 @@ impl pallet_staking::Config for Test {
 	type MaxIterations = ();
 	type MinSolutionScoreBump = ();
 	type OffchainSolutionWeightLimit = ();
+	type CompactSolution = pallet_staking::default_solution::CompactSolution24;
 	type WeightInfo = ();
 }
 

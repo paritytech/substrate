@@ -63,6 +63,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	let (v_stash, v_controller) = create_stash_controller::<T>(0, 100, destination.clone())?;
 	let validator_prefs = ValidatorPrefs {
 		commission: Perbill::from_percent(50),
+		.. Default::default()
 	};
 	Staking::<T>::validate(RawOrigin::Signed(v_controller).into(), validator_prefs)?;
 	let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
@@ -777,7 +778,7 @@ mod tests {
 			let v = 10;
 			let n = 100;
 
-			create_validators_with_nominators_for_era::<Test>(v, n, T::CompactSolution::LIMIT, false, 1000, None)
+			create_validators_with_nominators_for_era::<Test>(v, n, TestSolution::LIMIT, false, 1000, None)
 				.unwrap();
 
 			let count_validators = Validators::<Test>::iter().count();
@@ -871,6 +872,7 @@ mod tests {
 			assert_ok!(test_benchmark_withdraw_unbonded_update::<Test>());
 			assert_ok!(test_benchmark_withdraw_unbonded_kill::<Test>());
 			assert_ok!(test_benchmark_validate::<Test>());
+			assert_ok!(test_benchmark_kick::<Test>());
 			assert_ok!(test_benchmark_nominate::<Test>());
 			assert_ok!(test_benchmark_chill::<Test>());
 			assert_ok!(test_benchmark_set_payee::<Test>());

@@ -28,14 +28,15 @@ use sp_std::vec;
 use frame_benchmarking::benchmarks;
 use frame_support::{
 	codec::Decode,
-	storage::{StorageValue, StorageMap},
+	storage::StorageValue,
 	traits::{KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::RawOrigin;
 use pallet_session::{historical::Module as Historical, Module as Session, *};
 use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
-	MAX_NOMINATIONS, RewardDestination,
+	default_solution::CompactSolution,
+	RewardDestination,
 };
 use sp_runtime::traits::{One, StaticLookup};
 
@@ -52,10 +53,10 @@ impl<T: Config> OnInitialize<T::BlockNumber> for Module<T> {
 
 benchmarks! {
 	set_keys {
-		let n = MAX_NOMINATIONS as u32;
+		let n = <T as pallet_staking::Config>::CompactSolution::LIMIT as u32;
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			MAX_NOMINATIONS as u32,
+			<T as pallet_staking::Config>::CompactSolution::LIMIT as u32,
 			false,
 			RewardDestination::Staked,
 		)?;
@@ -68,10 +69,10 @@ benchmarks! {
 	}: _(RawOrigin::Signed(v_controller), keys, proof)
 
 	purge_keys {
-		let n = MAX_NOMINATIONS as u32;
+		let n = <T as pallet_staking::Config>::CompactSolution::LIMIT as u32;
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			MAX_NOMINATIONS as u32,
+			<T as pallet_staking::Config>::CompactSolution::LIMIT as u32,
 			false,
 			RewardDestination::Staked
 		)?;

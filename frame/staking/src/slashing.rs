@@ -51,7 +51,7 @@
 
 use super::{
 	EraIndex, Config, Module, Store, BalanceOf, Exposure, Perbill, SessionInterface,
-	NegativeImbalanceOf, UnappliedSlash, Error, ExtendedBalance, OffchainAccuracyOf,
+	NegativeImbalanceOf, UnappliedSlash, Error,
 };
 use sp_runtime::{traits::{Zero, Saturating}, RuntimeDebug, DispatchResult};
 use frame_support::{

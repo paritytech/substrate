@@ -63,7 +63,9 @@ mod bench_closure_and_slice {
 		ratio: Vec<Assignment<A, P>>,
 		stakes: &[VoteWeight],
 	) -> Vec<StakedAssignment<A>>
-	where T: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance> {
+	where
+		T: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
+	{
 		ratio
 			.into_iter()
 			.zip(stakes.into_iter().map(|x| *x as ExtendedBalance))

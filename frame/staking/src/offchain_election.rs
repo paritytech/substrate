@@ -26,7 +26,7 @@ use sp_npos_elections::{
 	ExtendedBalance, CompactSolution,
 };
 use sp_runtime::{
-	offchain::storage::StorageValueRef, traits::TrailingZeroInput, PerThing, RuntimeDebug,
+	offchain::storage::StorageValueRef, traits::TrailingZeroInput, RuntimeDebug,
 };
 use sp_std::{convert::TryInto, prelude::*};
 
@@ -105,10 +105,7 @@ pub(crate) fn set_check_offchain_execution_status<T: Config>(
 /// The internal logic of the offchain worker of this module. This runs the phragmen election,
 /// compacts and reduces the solution, computes the score and submits it back to the chain as an
 /// unsigned transaction, without any signature.
-pub(crate) fn compute_offchain_election<T: Config>() -> Result<(), OffchainElectionError>
-where
-	ExtendedBalance: From<sp_runtime::InnerOf<OffchainAccuracyOf<T>>>
-{
+pub(crate) fn compute_offchain_election<T: Config>() -> Result<(), OffchainElectionError> {
 	let iters = get_balancing_iters::<T>();
 	// compute raw solution. Note that we use `OffchainAccuracyOf<T>`.
 	let ElectionResult { winners, assignments } =
@@ -317,10 +314,9 @@ pub fn prepare_submission<T: Config>(
 	do_reduce: bool,
 	maximum_weight: Weight,
 ) -> Result<
-		(Vec<ValidatorIndexOf<T>>, T::CompactSolution, ElectionScore, ElectionSize),
-		OffchainElectionError
-	>
-{
+	(Vec<ValidatorIndexOf<T>>, T::CompactSolution, ElectionScore, ElectionSize),
+	OffchainElectionError,
+> {
 	// make sure that the snapshot is available.
 	let snapshot_validators =
 		<Module<T>>::snapshot_validators().ok_or(OffchainElectionError::SnapshotUnavailable)?;
@@ -509,6 +505,9 @@ mod test {
 		}
 		fn submit_solution_better(v: u32, n: u32, a: u32, w: u32) -> Weight {
 			(0 * v + 0 * n + 1000 * a + 0 * w) as Weight
+		}
+		fn kick(w: u32) -> Weight {
+			unimplemented!()
 		}
 	}
 

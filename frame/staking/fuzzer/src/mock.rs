@@ -180,5 +180,6 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = ();
 	type OffchainSolutionWeightLimit = ();
+	type CompactSolution = pallet_staking::default_solution::CompactSolution24;
 	type WeightInfo = ();
 }
