@@ -196,7 +196,7 @@ where
 }
 
 /// A builder that is used to initialize the global logger.
-pub struct GlobalLoggerBuilder {
+pub struct LoggerBuilder {
 	directives: String,
 	profiling: Option<(crate::TracingReceiver, String)>,
 	telemetry_buffer_size: Option<usize>,
@@ -205,8 +205,8 @@ pub struct GlobalLoggerBuilder {
 	force_colors: Option<bool>,
 }
 
-impl GlobalLoggerBuilder {
-	/// Create a new [`GlobalLoggerBuilder`] which can be used to initialize the global logger.
+impl LoggerBuilder {
+	/// Create a new [`LoggerBuilder`] which can be used to initialize the global logger.
 	pub fn new<S: Into<String>>(directives: S) -> Self {
 		Self {
 			directives: directives.into(),
@@ -332,7 +332,7 @@ mod tests {
 	const EXPECTED_NODE_NAME: &'static str = "THE_NODE";
 
 	fn init_logger(directives: &str) {
-		let _ = GlobalLoggerBuilder::new(directives).init().unwrap();
+		let _ = LoggerBuilder::new(directives).init().unwrap();
 	}
 
 	fn run_in_process(test_name: &str) {
