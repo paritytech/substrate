@@ -94,7 +94,9 @@ pub struct LightClientRequestSender<B: Block> {
 	/// Pending (local) requests.
 	pending_requests: VecDeque<PendingRequest<B>>,
 	/// Requests on their way to remote peers.
-	sent_requests: FuturesUnordered<BoxFuture<'static, (SentRequest<B>, Result<Vec<u8>, RequestFailure>)>>,
+	sent_requests: FuturesUnordered<BoxFuture<
+			'static, (SentRequest<B>, Result<Result<Vec<u8>, RequestFailure>, oneshot::Canceled>),
+		>>,
 	/// Handle to use for reporting misbehaviour of peers.
 	peerset: sc_peerset::PeersetHandle,
 }
@@ -339,6 +341,17 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 				info.status = PeerStatus::Idle; // Make peer available again.
 			}
 
+			let request_result = match request_result {
+				Ok(r) => r,
+				Err(oneshot::Canceled) => {
+					log::debug!("Oneshot for request to peer {} was canceled.", sent_request.peer);
+					self.remove_peer(sent_request.peer);
+					self.peerset.report_peer(sent_request.peer, ReputationChange::new_fatal("no response from peer"));
+					self.pending_requests.push_back(sent_request.into_pending());
+					continue;
+				}
+			};
+
 			let decoded_request_result = request_result.map(|response| {
 				if sent_request.request.is_block_request() {
 					schema::v1::BlockResponse::decode(&response[..])
@@ -515,7 +528,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 			peer_info.status = PeerStatus::Busy;
 
 			self.sent_requests.push(async move {
-				(pending_request.into_sent(peer_id), rx.await.unwrap())
+				(pending_request.into_sent(peer_id), rx.await)
 			}.boxed());
 
 			return Poll::Ready(Some(OutEvent::SendRequest {
