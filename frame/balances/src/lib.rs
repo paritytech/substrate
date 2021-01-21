@@ -17,7 +17,7 @@
 
 //! # Balances Pallet
 //!
-//! The Balances module provides functionality for handling accounts and balances.
+//! The Balances pallet provides functionality for handling accounts and balances.
 //!
 //! - [`balances::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
@@ -25,7 +25,7 @@
 //!
 //! ## Overview
 //!
-//! The Balances module provides functions for:
+//! The Balances pallet provides functions for:
 //!
 //! - Getting and setting free balances.
 //! - Retrieving total, reserved and unreserved balances.
@@ -43,7 +43,7 @@
 //!   fall below this, then the account is said to be dead; and it loses its functionality as well as any
 //!   prior history and all information on it is removed from the chain's state.
 //!   No account should ever have a total balance that is strictly between 0 and the existential
-//!   deposit (exclusive). If this ever happens, it indicates either a bug in this module or an
+//!   deposit (exclusive). If this ever happens, it indicates either a bug in this pallet or an
 //!   erroneous raw mutation of storage.
 //!
 //! - **Total Issuance:** The total number of units in existence in a system.
@@ -67,8 +67,8 @@
 //!
 //! ### Implementations
 //!
-//! The Balances module provides implementations for the following traits. If these traits provide the functionality
-//! that you need, then you can avoid coupling with the Balances module.
+//! The Balances pallet provides implementations for the following traits. If these traits provide the functionality
+//! that you need, then you can avoid coupling with the Balances pallet.
 //!
 //! - [`Currency`](../frame_support/traits/trait.Currency.html): Functions for dealing with a
 //! fungible assets system.
@@ -91,11 +91,11 @@
 //!
 //! ## Usage
 //!
-//! The following examples show how to use the Balances module in your custom module.
+//! The following examples show how to use the Balances pallet in your custom pallet.
 //!
 //! ### Examples from the FRAME
 //!
-//! The Contract module uses the `Currency` trait to handle gas payment, and its types inherit from `Currency`:
+//! The Contract pallet uses the `Currency` trait to handle gas payment, and its types inherit from `Currency`:
 //!
 //! ```
 //! use frame_support::traits::Currency;
@@ -109,7 +109,7 @@
 //! # fn main() {}
 //! ```
 //!
-//! The Staking module uses the `LockableCurrency` trait to lock a stash account's funds:
+//! The Staking pallet uses the `LockableCurrency` trait to lock a stash account's funds:
 //!
 //! ```
 //! use frame_support::traits::{WithdrawReasons, LockableCurrency};
@@ -141,7 +141,7 @@
 //!
 //! ## Genesis config
 //!
-//! The Balances module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+//! The Balances pallet depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 //!
 //! ## Assumptions
 //!
@@ -419,7 +419,7 @@ pub mod pallet {
 
 	/// The balance of an account.
 	///
-	/// NOTE: This is only used in the case that this module is used to store balances.
+	/// NOTE: This is only used in the case that this pallet is used to store balances.
 	#[pallet::storage]
 	pub type Account<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
@@ -977,7 +977,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 	//
 	// # <weight>
 	// Despite iterating over a list of locks, they are limited by the number of
-	// lock IDs, which means the number of runtime modules that intend to use and create locks.
+	// lock IDs, which means the number of runtime pallets that intend to use and create locks.
 	// # </weight>
 	fn ensure_can_withdraw(
 		who: &T::AccountId,
@@ -1020,7 +1020,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 					from_account.free,
 				).map_err(|_| Error::<T, I>::LiquidityRestrictions)?;
 
-				// TODO: This is over-conservative. There may now be other providers, and this module
+				// TODO: This is over-conservative. There may now be other providers, and this pallet
 				//   may not even be a provider.
 				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
 				let allow_death = allow_death && !system::Pallet::<T>::is_provider_required(transactor);
