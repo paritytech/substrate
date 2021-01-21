@@ -305,7 +305,7 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Percent, Perbill, PerU16, InnerOf, RuntimeDebug, DispatchError,
+	Percent, Perbill, PerU16, RuntimeDebug, DispatchError,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,

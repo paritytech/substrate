@@ -29,7 +29,7 @@ use sp_npos_elections::{
 	ExtendedBalance, CompactSolution,
 };
 use sp_runtime::{
-	offchain::storage::StorageValueRef, traits::TrailingZeroInput, PerThing, RuntimeDebug,
+	offchain::storage::StorageValueRef, traits::TrailingZeroInput, RuntimeDebug,
 };
 use sp_std::{convert::TryInto, prelude::*};
 
