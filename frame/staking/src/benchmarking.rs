@@ -200,18 +200,22 @@ benchmarks! {
 	}
 
 	kick {
-		// scenario: we want to kick `k` nominators from nominating us (we are a validator).
-		// we'll assume that `k` is under 128 for the purposes of determining the slope.
-		// each nominator should have `T::CompactSolution::LIMIT` validators nominated, and our validator
-		// should be somewhere in there.
+		// scenario: we want to kick `k` nominators from nominating us (we are a validator). we'll
+		// assume that `k` is under 128 for the purposes of determining the slope. each nominator
+		// should have `T::CompactSolution::LIMIT` validators nominated, and our validator should be
+		// somewhere in there.
 		let k in 1 .. 128;
 
-		// these are the other validators; there are `T::CompactSolution::LIMIT - 1` of them, so there are a
-		// total of `T::CompactSolution::LIMIT` validators in the system.
+		// these are the other validators; there are `T::CompactSolution::LIMIT - 1` of them, so
+		// there are a total of `T::CompactSolution::LIMIT` validators in the system.
 		let rest_of_validators = create_validators::<T>(T::CompactSolution::LIMIT as u32 - 1, 100)?;
 
 		// this is the validator that will be kicking.
-		let (stash, controller) = create_stash_controller::<T>(T::CompactSolution::LIMIT as u32 - 1, 100, Default::default())?;
+		let (stash, controller) = create_stash_controller::<T>(
+			T::CompactSolution::LIMIT as u32 - 1,
+			100,
+			Default::default(),
+		)?;
 		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash.clone());
 
 		// they start validating.

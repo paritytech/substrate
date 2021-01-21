@@ -30,16 +30,14 @@ use sp_npos_elections::{
 	to_support_map, EvaluateSupport, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
 };
 use sp_runtime::{
-	PerU16,
 	curve::PiecewiseLinear,
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use std::{cell::RefCell, collections::HashSet};
-use sp_npos_elections::generate_solution_type;
 
-generate_solution_type!(pub struct TestSolution::<u32, u16, PerU16>(24));
+pub type TestSolution = crate::default_solution::CompactSolution24;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;

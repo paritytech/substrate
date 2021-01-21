@@ -683,7 +683,7 @@ pub struct ElectionResult<AccountId, Balance: HasCompact> {
 	/// Flat list of new exposures, to be updated in the [`Exposure`] storage.
 	exposures: Vec<(AccountId, Exposure<AccountId, Balance>)>,
 	/// Type of the result. This is kept on chain only to track and report the best score's
-	/// submission type. An optimization could remove this.
+	/// submission type. An optimisation could remove this.
 	compute: ElectionCompute,
 }
 
@@ -1430,7 +1430,8 @@ decl_module! {
 				.is_some()
 			);
 
-			// 2. Maximum sum of Vec<OffchainAccuracyOf<T>> must fit into `UpperOf<OffchainAccuracyOf<T>>`.
+			// 2. Maximum sum of Vec<OffchainAccuracyOf<T>> must fit into
+			//    `UpperOf<OffchainAccuracyOf<T>>`.
 			let max_inner = <OffchainAccuracyOf<T>>::one().deconstruct();
 			let max_inner = <UpperOf<OffchainAccuracyOf<T>>>::from(max_inner);
 			assert!(
@@ -3205,7 +3206,7 @@ impl<T: Config> Module<T>  {
 ///
 /// Once the first new_session is planned, all session must start and then end in order, though
 /// some session can lag in between the newest session planned and the latest session started.
-impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T>  {
+impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		frame_support::debug::native::trace!(
 			target: LOG_TARGET,
@@ -3235,7 +3236,7 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T>  {
 	}
 }
 
-impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T>  {
+impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
 	fn new_session(new_index: SessionIndex)
 		-> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>>
 	{
@@ -3264,7 +3265,7 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 /// * 1 point to the producer of each referenced uncle block.
 impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T>
 	where
-		T: Config + pallet_authorship::Config + pallet_session::Config,
+		T: Config + pallet_authorship::Config + pallet_session::Config
 {
 	fn note_author(author: T::AccountId) {
 		Self::reward_by_ids(vec![(author, 20)])
@@ -3281,7 +3282,7 @@ impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Module
 /// if any.
 pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T>  {
+impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
 		<Module<T>>::ledger(&controller).map(|l| l.stash)
 	}
@@ -3296,7 +3297,6 @@ pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
 	for ExposureOf<T>
-
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
 		if let Some(active_era) = <Module<T>>::active_era() {
@@ -3321,7 +3321,7 @@ for Module<T> where
 	T::ValidatorIdOf: Convert<
 		<T as frame_system::Config>::AccountId,
 		Option<<T as frame_system::Config>::AccountId>,
-	>
+	>,
 {
 	fn on_offence(
 		offenders: &[OffenceDetails<T::AccountId, pallet_session::historical::IdentificationTuple<T>>],
@@ -3476,7 +3476,7 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 }
 
 #[allow(deprecated)]
-impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T>  {
+impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 		if let Call::submit_election_solution_unsigned(

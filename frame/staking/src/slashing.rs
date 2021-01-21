@@ -214,7 +214,9 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 ///
 /// The pending slash record returned does not have initialized reporters. Those have
 /// to be set at a higher level, if any.
-pub(crate) fn compute_slash<T: Config>(params: SlashParams<T>) -> Option<UnappliedSlash<T::AccountId, BalanceOf<T>>> {
+pub(crate) fn compute_slash<T: Config>(params: SlashParams<T>)
+	-> Option<UnappliedSlash<T::AccountId, BalanceOf<T>>>
+{
 	let SlashParams {
 		stash,
 		slash,
@@ -307,7 +309,9 @@ pub(crate) fn compute_slash<T: Config>(params: SlashParams<T>) -> Option<Unappli
 
 // doesn't apply any slash, but kicks out the validator if the misbehavior is from
 // the most recent slashing span.
-fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
+fn kick_out_if_recent<T: Config>(
+	params: SlashParams<T>,
+) {
 	// these are not updated by era-span or end-span.
 	let mut reward_payout = Zero::zero();
 	let mut val_slashed = Zero::zero();

@@ -252,8 +252,7 @@ where
 		part,
 		rounding,
 	);
-	let part_n: N = part.into();
-	(x / part_n).saturating_mul(maximum).saturating_add(c)
+	(x / part.into()).saturating_mul(maximum).saturating_add(c)
 }
 
 /// Overflow-prune multiplication. Accurately multiply a value by `self` without overflowing.

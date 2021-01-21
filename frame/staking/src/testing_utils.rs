@@ -335,8 +335,10 @@ pub fn get_single_winner_solution<T: Config>(
 	let stake =
 		<T::CurrencyToVote>::to_vote(stake, T::Currency::total_issuance()) as ExtendedBalance;
 
-	let val_index: ValidatorIndexOf<T> = val_index.try_into().unwrap_or_else(|_| { panic!("Failed to convert") });
-	let nom_index: NominatorIndexOf<T> = nom_index.try_into().unwrap_or_else(|_| { panic!("Failed to convert") });
+	let val_index: ValidatorIndexOf<T> = val_index.try_into()
+		.unwrap_or_else(|_| { panic!("Failed to convert") });
+	let nom_index: NominatorIndexOf<T> = nom_index.try_into()
+		.unwrap_or_else(|_| { panic!("Failed to convert") });
 
 	let winners: Vec<ValidatorIndexOf<T>> = vec![val_index];
 	let mut compact: T::CompactSolution = Default::default();
@@ -376,7 +378,10 @@ pub fn create_assignments_for_offchain<T: Config>(
 	),
 	&'static str
 > {
-	let ratio = <OffchainAccuracyOf<T>>::from_rational_approximation(1, T::CompactSolution::LIMIT.try_into().unwrap());
+	let ratio = <OffchainAccuracyOf<T>>::from_rational_approximation(
+		1,
+		T::CompactSolution::LIMIT.try_into().unwrap(),
+	);
 	let assignments: Vec<Assignment<T::AccountId, OffchainAccuracyOf<T>>> = <Nominators<T>>::iter()
 		.take(num_assignments as usize)
 		.map(|(n, t)| Assignment {

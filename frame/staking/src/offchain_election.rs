@@ -70,7 +70,7 @@ pub(crate) const DEFAULT_LONGEVITY: u64 = 25;
 /// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
 pub(crate) fn set_check_offchain_execution_status<T: Config>(
 	now: T::BlockNumber,
-) -> Result<(), &'static str>  {
+) -> Result<(), &'static str> {
 	let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 	let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
 
@@ -108,9 +108,11 @@ pub(crate) fn set_check_offchain_execution_status<T: Config>(
 pub(crate) fn compute_offchain_election<T: Config>() -> Result<(), OffchainElectionError> {
 	let iters = get_balancing_iters::<T>();
 	// compute raw solution. Note that we use `OffchainAccuracyOf<T>`.
-	let ElectionResult { winners, assignments } =
-		<Module<T>>::do_phragmen::<OffchainAccuracyOf<T>>(iters)
-			.ok_or(OffchainElectionError::ElectionFailed)?;
+	let ElectionResult {
+		winners,
+		assignments,
+	} = <Module<T>>::do_phragmen::<OffchainAccuracyOf<T>>(iters)
+		.ok_or(OffchainElectionError::ElectionFailed)?;
 
 	// process and prepare it for submission.
 	let (winners, compact, score, size) = prepare_submission::<T>(
@@ -253,7 +255,7 @@ pub fn trim_to_weight<T: Config, FN>(
 	nominator_index: FN,
 ) -> Result<T::CompactSolution, OffchainElectionError>
 where
-	for<'r> FN: Fn(&'r T::AccountId) -> Option<NominatorIndexOf<T>>
+	for<'r> FN: Fn(&'r T::AccountId) -> Option<NominatorIndexOf<T>>,
 {
 	match compact.voter_count().checked_sub(maximum_allowed_voters as usize) {
 		Some(to_remove) if to_remove > 0 => {
