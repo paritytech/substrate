@@ -78,7 +78,10 @@ mod tests;
 mod benchmarking;
 pub mod weights;
 
-use sp_std::prelude::*;
+use sp_std::{
+	prelude::*,
+	collections::btree_map::BTreeMap,
+};
 
 use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error};
 
@@ -138,6 +141,23 @@ pub type BountyIndex = u32;
 
 /// A bounty proposal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct SubBounty<AccountId, Balance, BlockNumber> {
+	/// The account proposing it.
+	proposer: AccountId,
+	/// The (total) amount that should be paid if the bounty is rewarded.
+	value: Balance,
+	/// The curator fee. Included in value.
+	fee: Balance,
+	/// The deposit of curator.
+	curator_deposit: Balance,
+	/// The amount held on deposit (reserved) for making this proposal.
+	bond: Balance,
+	/// The status of this bounty.
+	status: BountyStatus<AccountId, BlockNumber>,
+}
+
+/// A bounty proposal.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Bounty<AccountId, Balance, BlockNumber> {
 	/// The account proposing it.
 	proposer: AccountId,
@@ -151,6 +171,15 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	bond: Balance,
 	/// The status of this bounty.
 	status: BountyStatus<AccountId, BlockNumber>,
+	subbountycount: BountyIndex,
+	subbounty: BTreeMap<
+		BountyIndex,
+		Option<SubBounty<AccountId, Balance, BlockNumber>>,
+	>,
+	subbountydiscp: BTreeMap<
+		BountyIndex,
+		Option<Vec<u8>>,
+	>,
 }
 
 /// The status of a bounty proposal.
@@ -702,6 +731,9 @@ impl<T: Config> Module<T> {
 			curator_deposit: 0u32.into(),
 			bond,
 			status: BountyStatus::Proposed,
+			subbountycount: 0u32.into(),
+			subbounty: Default::default(),
+			subbountydiscp: Default::default(),
 		};
 
 		Bounties::<T>::insert(index, &bounty);
