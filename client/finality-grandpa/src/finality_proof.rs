@@ -202,24 +202,6 @@ pub(crate) struct AuthoritySetProofFragment<Header: HeaderT> {
 /// - last fragment match target block.
 type AuthoritySetProof<Header> = Vec<AuthoritySetProofFragment<Header>>;
 
-/// Finality proof request data.
-#[derive(Debug, Encode, Decode)]
-enum FinalityProofRequest<H: Encode + Decode> {
-	/// Original version of the request.
-	Original(OriginalFinalityProofRequest<H>),
-}
-
-/// Original version of finality proof request.
-#[derive(Debug, Encode, Decode)]
-struct OriginalFinalityProofRequest<H: Encode + Decode> {
-	/// The authorities set id we are waiting proof from.
-	///
-	/// The first justification in the proof must be signed by this authority set.
-	pub authorities_set_id: u64,
-	/// Hash of the last known finalized block.
-	pub last_finalized: H,
-}
-
 fn prove_finality<Block, B, J>(
 	blockchain: &B,
 	authorities_provider: &dyn AuthoritySetForFinalityProver<Block>,
@@ -448,6 +430,7 @@ fn get_warp_sync_proof_fragment<Block: BlockT, B: BlockchainBackend<Block>>(
 /// Check GRANDPA authority change sequence to assert finality of a target block.
 ///
 /// Returns the header of the target block.
+#[allow(unused)]
 pub(crate) fn check_warp_sync_proof<Block: BlockT, J>(
 	current_set_id: u64,
 	current_authorities: AuthorityList,
