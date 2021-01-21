@@ -125,9 +125,13 @@ impl SpawnTaskHandle {
 		};
 
 		let future: Pin<Box<dyn Future<Output = ()> + Send>> = if let Some(telemetry_span) = self.telemetry_span.clone() {
+			// this will preserve the current spans entered & enter the telemetry span
+			// this is used by sc_telemetry::layer::TelemetryLayer
 			Box::pin(future.instrument(telemetry_span.span()))
 		} else {
-			Box::pin(future)
+			// this will preserve the current spans entered
+			// this is used by sc_tracing::logging::prefix_logs_with
+			Box::pin(future.in_current_span())
 		};
 
 		let join_handle = self.executor.spawn(future, task_type);
