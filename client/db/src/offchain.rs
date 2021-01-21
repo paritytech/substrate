@@ -18,10 +18,7 @@
 
 //! RocksDB-based offchain workers local storage.
 
-use std::{
-	collections::HashMap,
-	sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{columns, Database, DbHash, Transaction};
 use parking_lot::Mutex;
@@ -43,7 +40,7 @@ impl std::fmt::Debug for LocalStorage {
 
 impl LocalStorage {
 	/// Create new offchain storage for tests (backed by memorydb)
-	#[cfg(any(test, feature = "test-helpers"))]
+	#[cfg(any(feature = "test-helpers", test))]
 	pub fn new_test() -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
@@ -61,9 +58,8 @@ impl LocalStorage {
 
 impl sp_core::offchain::OffchainStorage for LocalStorage {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = Transaction::new();
-		tx.set(columns::OFFCHAIN, &key, value);
+		tx.set(columns::OFFCHAIN, &concatenate_prefix_and_key(prefix, key), value);
 
 		if let Err(err) = self.db.commit(tx) {
 			error!("Error setting on local storage: {}", err)
@@ -71,9 +67,8 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 	}
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = Transaction::new();
-		tx.remove(columns::OFFCHAIN, &key);
+		tx.remove(columns::OFFCHAIN, &concatenate_prefix_and_key(prefix, key));
 
 		if let Err(err) = self.db.commit(tx) {
 			error!("Error removing on local storage: {}", err)
@@ -81,8 +76,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		self.db.get(columns::OFFCHAIN, &key)
+		self.db.get(columns::OFFCHAIN, &concatenate_prefix_and_key(prefix, key))
 	}
 
 	fn compare_and_set(
@@ -92,7 +86,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
-		let key: Vec<u8> = prefix.iter().chain(item_key).cloned().collect();
+		let key = concatenate_prefix_and_key(prefix, item_key);
 		let key_lock = {
 			let mut locks = self.locks.lock();
 			locks.entry(key.clone()).or_default().clone()
@@ -120,6 +114,15 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		}
 		is_set
 	}
+}
+
+/// Concatenate the prefix and key to create an offchain key in the db.
+pub(crate) fn concatenate_prefix_and_key(prefix: &[u8], key: &[u8]) -> Vec<u8> {
+	prefix
+		.iter()
+		.chain(key.into_iter())
+		.cloned()
+		.collect()
 }
 
 #[cfg(test)]
