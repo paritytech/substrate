@@ -302,6 +302,11 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// The population of the genesis storage depends on the order of modules. So, if one of your
 /// modules depends on another module, the module that is depended upon needs to come before
 /// the module depending on it.
+///
+/// # Macro generation
+///
+/// * The macro generates for each pallet a type alias to their `Module` (or `Pallet`).
+///   E.g. `type System = frame_system::Module<Runtime>`
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
