@@ -127,7 +127,7 @@ impl SpawnTaskHandle {
 		let future: Pin<Box<dyn Future<Output = ()> + Send>> = if let Some(telemetry_span) = self.telemetry_span.clone() {
 			Box::pin(future.instrument(telemetry_span.span()))
 		} else {
-			Box::pin(future.in_current_span())
+			Box::pin(future)
 		};
 
 		let join_handle = self.executor.spawn(future, task_type);
