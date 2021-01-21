@@ -480,8 +480,6 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 				continue
 			}
 
-			pending_request.attempts_left -= 1;
-
 			let protocol = if pending_request.request.is_block_request() {
 				self.config.block_protocol.clone()
 			} else {
@@ -526,6 +524,8 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 			let (tx, rx) = oneshot::channel();
 
 			peer_info.status = PeerStatus::Busy;
+
+			pending_request.attempts_left -= 1;
 
 			self.sent_requests.push(async move {
 				(pending_request.into_sent(peer_id), rx.await)
