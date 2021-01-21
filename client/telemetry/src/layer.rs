@@ -100,11 +100,6 @@ where
 						event,
 					);
 				}
-			} else {
-				let mut attrs = TelemetryAttrs::new(Id::from_u64(42_u64));
-				let mut vis = TelemetryAttrsVisitor(&mut attrs);
-				event.record(&mut vis);
-				eprintln!("###### no telemetry span found: {:?}", attrs.json);
 			}
 		}
 	}
