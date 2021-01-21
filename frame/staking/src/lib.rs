@@ -1316,17 +1316,20 @@ decl_module! {
 		/// Check if the current block number is the one at which the election window has been set
 		/// to open. If so, it runs the offchain worker code.
 		fn offchain_worker(now: T::BlockNumber) {
-			use offchain_election::{set_check_offchain_execution_status, compute_offchain_election};
+			use offchain_election::{set_check_offchain_execution_status, compute_save_and_submit, };
 
 			if Self::era_election_status().is_open_at(now) {
 				let offchain_status = set_check_offchain_execution_status::<T>(now);
 				if let Err(why) = offchain_status {
 					log!(warn, "💸 skipping offchain worker in open election window due to [{}]", why);
 				} else {
-					if let Err(e) = compute_offchain_election::<T>() {
-						log!(error, "💸 Error in election offchain worker: {:?}", e);
-					} else {
-						log!(debug, "💸 Executed offchain worker thread without errors.");
+					match compute_save_and_submit::<T>() {
+						Ok(_) => {
+							log!(info, "💸 Executed offchain worker thread without errors.");
+						},
+						Err(why) => {
+							log!(error, "💸 Error in election offchain worker: {:?}", why);
+						}
 					}
 				}
 			}
