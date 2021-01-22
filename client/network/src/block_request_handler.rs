@@ -21,7 +21,7 @@ use codec::{Encode, Decode};
 use crate::chain::Client;
 use crate::config::ProtocolId;
 use crate::protocol::{message::BlockAttributes};
-use crate::request_responses::{IncomingRequest, ProtocolConfig};
+use crate::request_responses::{IncomingRequest, ProtocolConfig, Response};
 use crate::schema::v1::block_request::FromBlock;
 use crate::schema::v1::{BlockResponse, Direction};
 use futures::channel::{mpsc, oneshot};
@@ -85,7 +85,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 	fn handle_request(
 		&self,
 		payload: Vec<u8>,
-		pending_response: oneshot::Sender<Vec<u8>>
+		pending_response: oneshot::Sender<Response>
 	) -> Result<(), HandleRequestError> {
 		let request = crate::schema::v1::BlockRequest::decode(&payload[..])?;
 
@@ -181,8 +181,10 @@ impl <B: BlockT> BlockRequestHandler<B> {
 		let mut data = Vec::with_capacity(res.encoded_len());
 		res.encode(&mut data)?;
 
-		pending_response.send(data)
-			.map_err(|_| HandleRequestError::SendResponse)
+		pending_response.send(Response {
+			result: Ok(data),
+			reputation_changes: None,
+		}).map_err(|_| HandleRequestError::SendResponse)
 	}
 
 	/// Run [`BlockRequestHandler`].
