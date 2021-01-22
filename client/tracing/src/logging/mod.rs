@@ -53,17 +53,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 #[non_exhaustive]
+#[error(transparent)]
 pub enum Error {
-	#[error(transparent)]
 	IoError(#[from] io::Error),
-
-	#[error(transparent)]
 	SetGlobalDefaultError(#[from] tracing::subscriber::SetGlobalDefaultError),
-
-	#[error(transparent)]
 	DirectiveParseError(#[from] tracing_subscriber::filter::ParseError),
-
-	#[error(transparent)]
 	SetLoggerError(#[from] tracing_log::log_tracer::SetLoggerError),
 }
 
