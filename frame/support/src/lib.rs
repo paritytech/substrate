@@ -1997,7 +1997,8 @@ pub mod pallet_prelude {
 ///
 /// ## Checking upgrade guidelines:
 ///
-/// * compare metadata. This checks for:
+/// * compare metadata. Use [https://github.com/ascjones/subsee](subsee) to fetch the metadata
+/// and do a diff of the resulting json before and after migration. This checks for:
 /// 	* call, names, signature, doc
 /// 	* event names, docs
 /// 	* error names, docs
