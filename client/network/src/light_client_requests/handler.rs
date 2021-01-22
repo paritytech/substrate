@@ -28,14 +28,14 @@ use crate::{
 	schema,
 	PeerId,
 };
-use crate::request_responses::{IncomingRequest, ProtocolConfig};
+use crate::request_responses::{IncomingRequest, ProtocolConfig, Response};
 use futures::{channel::{mpsc, oneshot},  prelude::*};
 use prost::Message;
 use sc_client_api::{
 	StorageProof,
 	light
 };
-// use sc_peerset::{PeersetHandle, ReputationChange};
+use sc_peerset::ReputationChange;
 use sp_core::{
 	storage::{ChildInfo, ChildType,StorageKey, PrefixedStorageKey},
 	hexdisplay::HexDisplay,
@@ -57,10 +57,6 @@ pub struct LightClientRequestHandler<B: Block> {
 	request_receiver: mpsc::Receiver<IncomingRequest>,
 	/// Blockchain client.
 	client: Arc<dyn Client<B>>,
-	// TODO: Still need to figure out how to pass the peerset to the handler. Can't do it in
-	// `builder.rs` as the peerset is only constructed later on in `protocol.rs`.
-	// /// Handle to use for reporting misbehaviour of peers.
-	// peerset: PeersetHandle,
 }
 
 impl<B: Block> LightClientRequestHandler<B> {
@@ -68,7 +64,6 @@ impl<B: Block> LightClientRequestHandler<B> {
 	pub fn new(
 		protocol_id: &ProtocolId,
 		client: Arc<dyn Client<B>>,
-		/* peerset: PeersetHandle,*/
 	) -> (Self, ProtocolConfig) {
 		// For now due to lack of data on light client request handling in production systems, this
 		// value is chosen to match the block request limit.
@@ -77,7 +72,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 		let mut protocol_config = super::generate_protocol_config(protocol_id);
 		protocol_config.inbound_queue = Some(tx);
 
-		(Self { client, request_receiver/*, peerset */ }, protocol_config)
+		(Self { client, request_receiver }, protocol_config)
 	}
 
 	/// Run [`LightClientRequestHandler`].
@@ -85,32 +80,55 @@ impl<B: Block> LightClientRequestHandler<B> {
 		while let Some(request) = self.request_receiver.next().await {
 			let IncomingRequest { peer, payload, pending_response } = request;
 
-			match self.handle_request(peer, payload, pending_response) {
-				Ok(()) => debug!(target: LOG_TARGET, "Handled light client request from {}.", peer),
+			match self.handle_request(peer, payload) {
+				Ok(response_data) => {
+					let response = Response { result: Ok(response_data), reputation_changes: None };
+					match pending_response.send(response) {
+						Ok(()) => debug!(
+							target: LOG_TARGET,
+							"Handled light client request from {}.",
+							peer,
+						),
+						Err(e) => debug!(
+							target: LOG_TARGET,
+							"Failed to handle light client request from {}: {}",
+							peer, HandleRequestError::SendResponse,
+						),
+					};
+				} ,
 				Err(e) => {
-					match e {
-						HandleRequestError::BadRequest(_) => {
-							// self.peerset.report_peer(peer, ReputationChange::new(-(1 << 12), "bad request"))
-
-						}
-						_ => {},
-					}
 					debug!(
 						target: LOG_TARGET,
 						"Failed to handle light client request from {}: {}",
 						peer, e,
 					);
+
+					let reputation_changes = match e {
+						HandleRequestError::BadRequest(_) => {
+							Some(vec![ReputationChange::new(-(1 << 12), "bad request")])
+						}
+						_ => None,
+					};
+
+					let response = Response { result: Err(()), reputation_changes };
+					if pending_response.send(response).is_err() {
+						debug!(
+							target: LOG_TARGET,
+							"Failed to handle light client request from {}: {}",
+							peer, HandleRequestError::SendResponse,
+						);
+					};
 				},
 			}
 		}
 	}
 
+
 	fn handle_request(
 		&mut self,
 		peer: PeerId,
 		payload: Vec<u8>,
-		pending_response: oneshot::Sender<Vec<u8>>
-	) -> Result<(), HandleRequestError> {
+	) -> Result<Vec<u8>, HandleRequestError> {
 		let request = schema::v1::light::Request::decode(&payload[..])?;
 
 		let response = match &request.request {
@@ -125,16 +143,14 @@ impl<B: Block> LightClientRequestHandler<B> {
 			Some(schema::v1::light::request::Request::RemoteChangesRequest(r)) =>
 				self.on_remote_changes_request(&peer, r)?,
 			None => {
-				log::debug!("Ignoring request without request data from peer {}.", peer);
-				return Ok(())
+				return Err(HandleRequestError::BadRequest("Remote request without request data."));
 			}
 		};
 
-		log::trace!("Enqueueing response for peer {}.", peer);
 		let mut data = Vec::new();
 		response.encode(&mut data)?;
-		pending_response.send(data)
-			.map_err(|_| HandleRequestError::SendResponse)
+
+		Ok(data)
 	}
 
 	fn on_remote_call_request(

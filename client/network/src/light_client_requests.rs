@@ -207,7 +207,7 @@ mod tests {
 			pending_response: tx,
 		})).unwrap();
 		pool.spawner().spawn_obj(async move {
-			pending_response.send(Ok(rx.await.unwrap())).unwrap();
+			pending_response.send(Ok(rx.await.unwrap().result.unwrap())).unwrap();
 		}.boxed().into()).unwrap();
 
 		pool.spawner().spawn_obj(sender.for_each(|_| future::ready(())).boxed().into()).unwrap();
