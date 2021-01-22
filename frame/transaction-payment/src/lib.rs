@@ -1169,7 +1169,7 @@ mod tests {
 			}));
 			// Killed Event
 			assert!(System::events().iter().any(|event| {
-				event.event == Event::system(system::RawEvent::KilledAccount(2))
+				event.event == Event::system(system::Event::KilledAccount(2))
 			}));
 		});
 	}
