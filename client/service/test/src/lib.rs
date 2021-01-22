@@ -279,6 +279,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		base_path: Some(BasePath::new(root)),
 		informant_output_format: Default::default(),
 		disable_log_reloading: false,
+		worker_limit: None,
 	}
 }
 

@@ -110,6 +110,7 @@ where
 			enable_color: false,
 		},
 		disable_log_reloading: false,
+		worker_limit: None,
 	};
 
 	Ok(config)

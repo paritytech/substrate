@@ -50,7 +50,8 @@ use node_runtime::{
 	AccountId,
 	Signature,
 };
-use sp_core::{ExecutionContext, blake2_256, traits::{SpawnNamed, RemoteHandle}, Pair, Public, sr25519, ed25519};
+use sp_core::{ExecutionContext, blake2_256, traits::{SpawnNamed, SpawnLimiter, RemoteHandle},
+	Pair, Public, sr25519, ed25519};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_inherents::InherentData;
@@ -277,6 +278,16 @@ impl SpawnNamed for TaskExecutor {
 		None
 	}
 
+}
+
+impl SpawnLimiter for TaskExecutor {
+	fn try_reserve(&self, number_of_tasks: usize) -> usize {
+		// no shared limit on tests
+		number_of_tasks
+	}
+
+	fn release(&self, _number_of_tasks: usize) {
+	}
 }
 
 /// Iterator for block content.

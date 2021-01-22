@@ -265,6 +265,11 @@ pub struct RunCmd {
 	/// which includes: database, node key and keystore.
 	#[structopt(long, conflicts_with = "base-path")]
 	pub tmp: bool,
+
+	/// Maximum number of WS RPC server connections.
+	/// No limit when not set.
+	#[structopt(long = "runtime-worker-limit")]
+	pub worker_limit: Option<usize>,
 }
 
 impl RunCmd {
@@ -408,6 +413,10 @@ impl CliConfiguration for RunCmd {
 
 	fn rpc_ws_max_connections(&self) -> Result<Option<usize>> {
 		Ok(self.ws_max_connections)
+	}
+
+	fn worker_limit(&self) -> Result<Option<usize>> {
+		Ok(self.worker_limit)
 	}
 
 	fn rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {

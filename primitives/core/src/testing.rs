@@ -148,9 +148,11 @@ impl crate::traits::SpawnNamed for TaskExecutor {
 	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		self.0.spawn_ok(future);
 	}
+
 	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		self.0.spawn_ok(future);
 	}
+
 	fn spawn_with_handle(
 		&self,
 		_name: &'static str,
@@ -162,6 +164,17 @@ impl crate::traits::SpawnNamed for TaskExecutor {
 		} else {
 			None
 		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl crate::traits::SpawnLimiter for TaskExecutor {
+	fn try_reserve(&self, number_of_tasks: usize) -> usize {
+		// using a thread pool in backend there is no use to apply a limit
+		number_of_tasks
+	}
+
+	fn release(&self, _number_of_tasks: usize) {
 	}
 }
 

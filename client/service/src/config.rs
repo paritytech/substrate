@@ -126,6 +126,8 @@ pub struct Configuration {
 	pub base_path: Option<BasePath>,
 	/// Configuration of the output format that the informant uses.
 	pub informant_output_format: sc_informant::OutputFormat,
+	/// Limit to the number of runtime worker, 'None' for no limit.
+	pub worker_limit: Option<usize>,
 }
 
 /// Type for tasks spawned by the executor.

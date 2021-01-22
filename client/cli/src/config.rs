@@ -463,6 +463,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(true)
 	}
 
+	/// Set a limit to the number of running runtime workers.
+	///
+	/// By default this is `None` for no limit.
+	fn worker_limit(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
 	/// Create a Configuration object from the current object
 	fn create_configuration<C: SubstrateCli>(
 		&self,
@@ -539,6 +546,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			role,
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
+			worker_limit: self.worker_limit()?,
 		})
 	}
 

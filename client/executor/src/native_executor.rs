@@ -34,7 +34,7 @@ use sp_core::{
 	NativeOrEncoded,
 	traits::{
 		CodeExecutor, Externalities, AsyncExternalities, RuntimeCode, MissingHostFunctions,
-		RuntimeSpawnExt, RuntimeSpawn, RemoteHandle, BoxFuture,
+		RuntimeSpawnExt, RuntimeSpawn, RemoteHandle, BoxFuture, SpawnLimiter,
 	},
 };
 use log::trace;
@@ -420,6 +420,7 @@ pub struct RuntimeInstanceSpawnInfo {
 	// of this struct
 	nb_runing: usize,
 	capacity: usize,
+	limiter: Box<dyn sp_core::traits::SpawnNamed>,
 }
 
 enum PendingTask {
@@ -437,10 +438,12 @@ struct RemoteTask {
 impl RuntimeInstanceSpawnInfo {
 	fn new(
 		capacity: usize,
+		limiter: Box<dyn sp_core::traits::SpawnNamed>,
 	) -> Self {
 		RuntimeInstanceSpawnInfo {
 			nb_runing: 0,
 			capacity,
+			limiter,
 		}
 	}
 
@@ -464,8 +467,17 @@ impl RuntimeInstanceSpawnInfo {
 	fn set_capacity(&mut self, capacity: u32) {
 		let capacity: usize = capacity as usize;
 		if capacity > self.capacity {
-			self.capacity = capacity;
+			let needed = capacity - self.capacity;
+			let reserved = self.limiter.try_reserve(needed);
+			self.capacity += reserved;
 		}
+	}
+}
+
+impl Drop for RuntimeInstanceSpawnInfo {
+	fn drop(&mut self) {
+		self.limiter.release(self.capacity);
+		self.capacity = 0;
 	}
 }
 
@@ -741,7 +753,7 @@ impl RuntimeInstanceSpawn {
 		scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 		capacity: usize,
 	) -> Self {
-		let infos = RuntimeInstanceSpawnInfo::new(capacity);
+		let infos = RuntimeInstanceSpawnInfo::new(capacity, scheduler.clone());
 		let (task_sender, task_receiver) = mpsc::channel();
 		Self {
 			module,

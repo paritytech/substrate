@@ -303,7 +303,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.task_executor.clone(), config.worker_limit, registry)?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -372,7 +372,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.task_executor.clone(), config.worker_limit, registry)?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(

@@ -270,7 +270,7 @@ pub type BoxFuture = futures::future::BoxFuture<'static, ()>;
 /// TODO not having dyn_clonable make it not really usable in no_std, but trait exists
 /// so we can query extension for it.
 #[cfg_attr(feature = "std", dyn_clonable::clonable)]
-pub trait SpawnNamed: Clone + Send + Sync {
+pub trait SpawnNamed: SpawnLimiter + Clone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
@@ -282,6 +282,7 @@ pub trait SpawnNamed: Clone + Send + Sync {
 	fn spawn(&self, name: &'static str, future: BoxFuture);
 
 	/// Spawn the given non-blocking future if possible, returns a handle.
+	/// The handle allow to signal that the task can be dismiss.
 	///
 	/// The given `name` is used to identify the future in tracing.
 	fn spawn_with_handle(
@@ -289,6 +290,18 @@ pub trait SpawnNamed: Clone + Send + Sync {
 		name: &'static str,
 		future: BoxFuture,
 	) -> Option<RemoteHandle>;
+}
+
+/// A trait to share number of task limit.
+/// This can be use to implement shared pool.
+#[cfg_attr(feature = "std", dyn_clonable::clonable)]
+pub trait SpawnLimiter: Clone + Send + Sync {
+	/// Ask for a given number of tasks, return the
+	/// actual number reserved.
+	fn try_reserve(&self, number_of_tasks: usize) -> usize;
+
+	/// Release a given number of task.
+	fn release(&self, number_of_tasks: usize);
 }
 
 /// Handle over a spawn named future.
@@ -300,6 +313,9 @@ pub trait SpawnHandle: Send {
 
 #[cfg(not(feature = "std"))]
 impl Clone for Box<dyn SpawnNamed> { }
+
+#[cfg(not(feature = "std"))]
+impl Clone for Box<dyn SpawnLimiter> { }
 
 impl SpawnNamed for Box<dyn SpawnNamed> {
 	fn spawn_blocking(&self, name: &'static str, future: BoxFuture) {
@@ -316,5 +332,16 @@ impl SpawnNamed for Box<dyn SpawnNamed> {
 		future: BoxFuture,
 	) -> Option<RemoteHandle> {
 		(**self).spawn_with_handle(name, future)
+	}
+}
+
+
+impl SpawnLimiter for Box<dyn SpawnNamed> {
+	fn try_reserve(&self, number_of_tasks: usize) -> usize {
+		(**self).try_reserve(number_of_tasks)
+	}
+
+	fn release(&self, number_of_tasks: usize) {
+		(**self).release(number_of_tasks)
 	}
 }
