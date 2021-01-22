@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm, RpcHandlers, NetworkStatusSinks,
+	error::Error, MallocSizeOfWasm, RpcHandlers, NetworkStatusSinks,
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
 	metrics::MetricsService,
 	client::{light, Client, ClientConfig},
@@ -877,18 +877,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		client: client.clone(),
 	});
 
-	let protocol_id = {
-		let protocol_id_full = match config.chain_spec.protocol_id() {
-			Some(pid) => pid,
-			None => {
-				warn!("Using default protocol ID {:?} because none is configured in the \
-					chain specs", DEFAULT_PROTOCOL_ID
-				);
-				DEFAULT_PROTOCOL_ID
-			}
-		};
-		sc_network::config::ProtocolId::from(protocol_id_full)
-	};
+	let protocol_id = config.protocol_id();
 
 	let block_announce_validator = if let Some(f) = block_announce_validator_builder {
 		f(client.clone())

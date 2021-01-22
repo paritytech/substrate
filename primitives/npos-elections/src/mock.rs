@@ -22,7 +22,7 @@
 use crate::*;
 use sp_arithmetic::{
 	traits::{One, SaturatedConversion, Zero},
-	InnerOf, PerThing,
+	PerThing,
 };
 use sp_runtime::assert_eq_error_rate;
 use sp_std::collections::btree_map::BTreeMap;
@@ -321,9 +321,7 @@ pub(crate) fn run_and_compare<Output: PerThing128>(
 	voters: Vec<(AccountId, Vec<AccountId>)>,
 	stake_of: &Box<dyn Fn(&AccountId) -> VoteWeight>,
 	to_elect: usize,
-) where
-	ExtendedBalance: From<InnerOf<Output>>,
-{
+) {
 	// run fixed point code.
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Output>(
 		to_elect,
