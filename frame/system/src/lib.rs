@@ -1532,7 +1532,7 @@ pub mod pallet_prelude {
 }
 
 
-/// An unchecked extrinsic type to be used in test.
+/// An unchecked extrinsic type to be used in tests.
 pub type MockUncheckedExtrinsic<T, Signature = (), Extra = ()> = generic::UncheckedExtrinsic<
 	<T as Config>::AccountId, <T as Config>::Call, Signature, Extra,
 >;
