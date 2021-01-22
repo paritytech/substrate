@@ -193,17 +193,9 @@ where
 	B: Backend<H>,
 	N: crate::changes_trie::BlockNumber,
 {
-	#[cfg(feature = "std")]
 	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
-		use sp_core::offchain::STORAGE_PREFIX;
-		match value {
-			Some(value) => self.overlay.offchain_set_storage(STORAGE_PREFIX, key, value),
-			None => self.overlay.offchain_remove_storage(STORAGE_PREFIX, key),
-		}
+		self.overlay.set_offchain_storage(key, value)
 	}
-
-	#[cfg(not(feature = "std"))]
-	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {}
 
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
 		let _guard = guard();
@@ -790,7 +782,6 @@ mod tests {
 		H256,
 		Blake2Hasher,
 		map,
-		offchain,
 		storage::{
 			Storage,
 			StorageChild,
@@ -813,12 +804,9 @@ mod tests {
 		changes.set_extrinsic_index(1);
 		changes.set_storage(vec![1], Some(vec![100]));
 		changes.set_storage(EXTRINSIC_INDEX.to_vec(), Some(3u32.encode()));
+		changes.set_offchain_storage(b"k1", Some(b"v1"));
+		changes.set_offchain_storage(b"k2", Some(b"v2"));
 		changes
-	}
-
-	fn prepare_offchain_overlay_with_changes(overlay: &mut OverlayedChanges) {
-		overlay.offchain_set_storage(offchain::STORAGE_PREFIX, b"k1", b"v1");
-		overlay.offchain_set_storage(offchain::STORAGE_PREFIX, b"k2", b"v2");
 	}
 
 	fn changes_trie_config() -> ChangesTrieConfiguration {
@@ -849,7 +837,6 @@ mod tests {
 	#[test]
 	fn storage_changes_root_is_some_when_extrinsic_changes_are_non_empty() {
 		let mut overlay = prepare_overlay_with_changes();
-		prepare_offchain_overlay_with_changes(&mut overlay);
 		let mut cache = StorageTransactionCache::default();
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let state = Some(ChangesTrieState::new(changes_trie_config(), Zero::zero(), &storage));
@@ -864,7 +851,6 @@ mod tests {
 	#[test]
 	fn storage_changes_root_is_some_when_extrinsic_changes_are_empty() {
 		let mut overlay = prepare_overlay_with_changes();
-		prepare_offchain_overlay_with_changes(&mut overlay);
 		let mut cache = StorageTransactionCache::default();
 		overlay.set_collect_extrinsics(false);
 		overlay.set_storage(vec![1], None);
@@ -884,7 +870,6 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_storage(vec![20], None);
 		overlay.set_storage(vec![30], Some(vec![31]));
-		prepare_offchain_overlay_with_changes(&mut overlay);
 		let backend = Storage {
 			top: map![
 				vec![10] => vec![10],
@@ -939,8 +924,6 @@ mod tests {
 			],
 		}.into();
 
-		prepare_offchain_overlay_with_changes(&mut overlay);
-
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
 
 		// next_backend < next_overlay
@@ -971,7 +954,6 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_child_storage(child_info, vec![20], None);
 		overlay.set_child_storage(child_info, vec![30], Some(vec![31]));
-		prepare_offchain_overlay_with_changes(&mut overlay);
 		let backend = Storage {
 			top: map![],
 			children_default: map![
@@ -1013,7 +995,6 @@ mod tests {
 		let child_info = &child_info;
 		let mut cache = StorageTransactionCache::default();
 		let mut overlay = OverlayedChanges::default();
-		prepare_offchain_overlay_with_changes(&mut overlay);
 		let backend = Storage {
 			top: map![],
 			children_default: map![
