@@ -28,7 +28,7 @@ frame-benchmarking = { version = "2.0.0", default-features = false, path = "../b
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 sp-std = { version = "2.0.0", path = "../../primitives/std" }
 sp-io = { version = "2.0.0", path = "../../primitives/io" }
-pallet-balances = { version = "2.0.0", default-features = false, path = "../balances" }
+pallet-balances = { version = "2.0.0", path = "../balances" }
 
 [features]
 default = ["std"]
@@ -37,7 +37,6 @@ std = [
 	"codec/std",
 	"sp-std/std",
 	"sp-runtime/std",
-	"pallet-balances/std",
 	"frame-support/std",
 	"frame-system/std",
 	"frame-benchmarking/std",
