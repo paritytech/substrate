@@ -304,15 +304,15 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 			Self::OutEvent,
 		>,
 	> {
-			if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
-				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
-					peer_id: peer_id.clone(),
-					handler: NotifyHandler::Any,
-					event: message,
-				})
-			}
-			Poll::Pending
+		if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
+			return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
+				peer_id: peer_id.clone(),
+				handler: NotifyHandler::Any,
+				event: message,
+			})
 		}
+		Poll::Pending
+	}
 }
 
 /// Bitswap protocol error.
