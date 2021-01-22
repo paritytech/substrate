@@ -230,6 +230,15 @@ impl sp_std::hash::Hash for Public {
 #[derive(Encode, Decode, PassByInner)]
 pub struct Signature(pub [u8; 65]);
 
+// todo: remove this once https://github.com/paritytech/scale-info/pull/54 is merged, which
+// introduces const generics for arrays and should support a 65 element array.
+impl scale_info::TypeInfo for Signature {
+	type Identity = Self;
+
+	fn type_info() -> scale_info::Type {
+		scale_info::TypeDefArray::new(65, scale_info::MetaType::new::<u8>()).into()
+	}
+}
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
 	type Error = ();
 

@@ -189,7 +189,7 @@ impl<'de> Deserialize<'de> for Public {
 /// An Schnorrkel/Ristretto x25519 ("sr25519") signature.
 ///
 /// Instead of importing it for the local module, alias it to be available as a public type
-#[derive(Encode, Decode, PassByInner)]
+#[derive(Encode, Decode, PassByInner, scale_info::TypeInfo)]
 pub struct Signature(pub [u8; 64]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {

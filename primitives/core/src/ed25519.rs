@@ -190,7 +190,7 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 /// A signature (a 512-bit value).
-#[derive(Encode, Decode, PassByInner)]
+#[derive(Encode, Decode, PassByInner, scale_info::TypeInfo)]
 pub struct Signature(pub [u8; 64]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
