@@ -20,44 +20,35 @@
 #![cfg(test)]
 
 use sp_runtime::{
-	traits::{Block as _, IdentityLookup},
+	traits::IdentityLookup,
 	testing::Header,
 };
 use sp_core::H256;
 use sp_io;
-use frame_support::{parameter_types, StorageValue};
-use frame_support::traits::Get;
+use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use pallet_transaction_payment::CurrencyAdapter;
-use std::cell::RefCell;
-use crate::{Module, Config, decl_tests};
+use crate::{GenesisConfig, Module, Config, decl_tests, tests::CallWithDispatchInfo};
 
 use frame_system as system;
-use crate as balances;
+impl_outer_origin!{
+	pub enum Origin for Test {}
+}
 
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+mod balances {
+	pub use crate::Event;
+}
 
-frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
-	{
-		System: system::{Module, Call, Event<T>, Config},
-		Balances: balances::{Module, Call, Event<T>, Config<T>},
+impl_outer_event! {
+	pub enum Event for Test {
+		system<T>,
+		balances<T>,
 	}
-);
-
-thread_local! {
-	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 }
 
-pub struct ExistentialDeposit;
-impl Get<u64> for ExistentialDeposit {
-	fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
-}
-
+// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+#[derive(Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
+pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -72,7 +63,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type Call = CallWithDispatchInfo;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
@@ -81,7 +72,7 @@ impl frame_system::Config for Test {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = PalletInfo;
+	type PalletInfo = ();
 	type AccountData = super::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -135,7 +126,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		balances::GenesisConfig::<Test> {
+		GenesisConfig::<Test> {
 			balances: if self.monied {
 				vec![
 					(1, 10 * self.existential_deposit),

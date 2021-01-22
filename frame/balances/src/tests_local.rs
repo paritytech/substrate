@@ -81,7 +81,7 @@ impl frame_support::traits::PalletInfo for PalletInfo {
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;

@@ -173,7 +173,7 @@ pub mod pallet {
 		/// with a sender account.
 		type Index:
 			Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + AtLeast32Bit
-			+ Copy;
+			+ Copy + scale_info::TypeInfo;
 
 		/// The block number type used by the runtime.
 		type BlockNumber:
@@ -191,7 +191,7 @@ pub mod pallet {
 
 		/// The user account identifier type for the runtime.
 		type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord
-			+ Default;
+			+ Default + scale_info::TypeInfo;
 
 		/// Converting trait to take a source type and convert to `AccountId`.
 		///

@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-#[derive(Debug, codec::Encode, codec::Decode, Clone, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct CallWithDispatchInfo;
 impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
 	type Origin = ();
@@ -28,8 +28,8 @@ impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
 	type PostInfo = frame_support::weights::PostDispatchInfo;
 
 	fn dispatch(self, _origin: Self::Origin)
-				-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-		panic!("Do not use dummy implementation for dispatch.");
+		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+			panic!("Do not use dummy implementation for dispatch.");
 	}
 }
 
@@ -52,7 +52,10 @@ macro_rules! decl_tests {
 		const ID_1: LockIdentifier = *b"1       ";
 		const ID_2: LockIdentifier = *b"2       ";
 
-		pub const CALL: &<$test as frame_system::Config>::Call = &Call::System(system::Call::remark(vec![]));
+		pub type System = frame_system::Module<$test>;
+		pub type Balances = Module<$test>;
+
+		pub const CALL: &<$test as frame_system::Config>::Call = &$crate::tests::CallWithDispatchInfo;
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
@@ -623,7 +626,7 @@ macro_rules! decl_tests {
 		fn cannot_set_genesis_value_below_ed() {
 			($existential_deposit).with(|v| *v.borrow_mut() = 11);
 			let mut t = frame_system::GenesisConfig::default().build_storage::<$test>().unwrap();
-			let _ = balances::GenesisConfig::<$test> {
+			let _ = GenesisConfig::<$test> {
 				balances: vec![(1, 10)],
 			}.assimilate_storage(&mut t).unwrap();
 		}

@@ -203,7 +203,7 @@ pub trait Lookup {
 /// context.
 pub trait StaticLookup {
 	/// Type to lookup from.
-	type Source: Codec + Clone + PartialEq + Debug;
+	type Source: Codec + Clone + PartialEq + Debug + scale_info::TypeInfo;
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
@@ -215,7 +215,7 @@ pub trait StaticLookup {
 /// A lookup implementation returning the input value.
 #[derive(Default)]
 pub struct IdentityLookup<T>(PhantomData<T>);
-impl<T: Codec + Clone + PartialEq + Debug> StaticLookup for IdentityLookup<T> {
+impl<T: Codec + Clone + PartialEq + Debug + scale_info::TypeInfo> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> Result<T, LookupError> { Ok(x) }
@@ -232,8 +232,8 @@ impl<T> Lookup for IdentityLookup<T> {
 pub struct AccountIdLookup<AccountId, AccountIndex>(PhantomData<(AccountId, AccountIndex)>);
 impl<AccountId, AccountIndex> StaticLookup for AccountIdLookup<AccountId, AccountIndex>
 where
-	AccountId: Codec + Clone + PartialEq + Debug,
-	AccountIndex: Codec + Clone + PartialEq + Debug,
+	AccountId: Codec + Clone + PartialEq + Debug + scale_info::TypeInfo + 'static,
+	AccountIndex: Codec + Clone + PartialEq + Debug + scale_info::TypeInfo + 'static,
 	crate::MultiAddress<AccountId, AccountIndex>: Codec,
 {
 	type Source = crate::MultiAddress<AccountId, AccountIndex>;
