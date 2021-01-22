@@ -937,7 +937,7 @@ dependencies = [
  "clap",
  "criterion-plot",
  "csv",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "num-traits",
  "oorandom",
@@ -959,7 +959,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e022feadec601fba1649cfa83586381a4ad31c6bf3a9ab7d408118b05dd9889d"
 dependencies = [
  "cast",
- "itertools",
+ "itertools 0.9.0",
 ]
 
 [[package]]
@@ -2532,6 +2532,15 @@ checksum = "47be2f14c678be2fdcab04ab1171db51b2762ce6f0a8ee87c8dd4a04ed216135"
 
 [[package]]
 name = "itertools"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f56a2d0bc861f9165be4eb3442afd3c236d8a98afd426f65d92324ae1091a484"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
@@ -2878,7 +2887,7 @@ dependencies = [
  "parity-multiaddr",
  "parking_lot 0.11.1",
  "pin-project 1.0.2",
- "prost",
+ "prost 0.7.0",
  "prost-build",
  "rand 0.7.3",
  "ring",
@@ -2935,7 +2944,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "prost",
+ "prost 0.7.0",
  "prost-build",
  "rand 0.7.3",
  "smallvec 1.5.0",
@@ -2957,7 +2966,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "prost",
+ "prost 0.7.0",
  "prost-build",
  "rand 0.7.3",
  "regex",
@@ -2977,7 +2986,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "prost",
+ "prost 0.7.0",
  "prost-build",
  "smallvec 1.5.0",
  "wasm-timer",
@@ -2998,7 +3007,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "prost",
+ "prost 0.7.0",
  "prost-build",
  "rand 0.7.3",
  "sha2 0.9.2",
@@ -3060,7 +3069,7 @@ dependencies = [
  "lazy_static",
  "libp2p-core",
  "log",
- "prost",
+ "prost 0.7.0",
  "prost-build",
  "rand 0.7.3",
  "sha2 0.9.2",
@@ -3096,7 +3105,7 @@ dependencies = [
  "futures 0.3.9",
  "libp2p-core",
  "log",
- "prost",
+ "prost 0.7.0",
  "prost-build",
  "unsigned-varint 0.6.0",
  "void",
@@ -3773,6 +3782,7 @@ dependencies = [
  "sc-consensus-epochs",
  "sc-consensus-slots",
  "sc-finality-grandpa",
+ "sc-finality-grandpa-warp-sync",
  "sc-keystore",
  "sc-network",
  "sc-offchain",
@@ -5767,12 +5777,22 @@ dependencies = [
 
 [[package]]
 name = "prost"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce49aefe0a6144a45de32927c77bd2859a5f7677b55f220ae5b744e87389c212"
+dependencies = [
+ "bytes 0.5.6",
+ "prost-derive 0.6.1",
+]
+
+[[package]]
+name = "prost"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e6984d2f1a23009bd270b8bb56d0926810a3d483f59c987d77969e9d8e840b2"
 dependencies = [
  "bytes 1.0.1",
- "prost-derive",
+ "prost-derive 0.7.0",
 ]
 
 [[package]]
@@ -5783,14 +5803,27 @@ checksum = "32d3ebd75ac2679c2af3a92246639f9fcc8a442ee420719cc4fe195b98dd5fa3"
 dependencies = [
  "bytes 1.0.1",
  "heck",
- "itertools",
+ "itertools 0.9.0",
  "log",
  "multimap",
  "petgraph",
- "prost",
+ "prost 0.7.0",
  "prost-types",
  "tempfile",
  "which 4.0.2",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "537aa19b95acde10a12fec4301466386f757403de4cd4e5b4fa78fb5ecb18f72"
+dependencies = [
+ "anyhow",
+ "itertools 0.8.2",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -5800,7 +5833,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "169a15f3008ecb5160cba7d37bcd690a7601b6d30cfb87a117d45e59d52af5d4"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.9.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -5813,7 +5846,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b518d7cdd93dab1d1122cf07fa9a60771836c668dde9d9e2a139f957f0d9f1bb"
 dependencies = [
  "bytes 1.0.1",
- "prost",
+ "prost 0.7.0",
 ]
 
 [[package]]
@@ -6435,7 +6468,7 @@ dependencies = [
  "libp2p",
  "log",
  "parity-scale-codec",
- "prost",
+ "prost 0.7.0",
  "prost-build",
  "quickcheck",
  "rand 0.7.3",
@@ -6977,6 +7010,7 @@ dependencies = [
  "fork-tree",
  "futures 0.3.9",
  "futures-timer 3.0.2",
+ "linked-hash-map",
  "log",
  "parity-scale-codec",
  "parking_lot 0.11.1",
@@ -7040,6 +7074,25 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "substrate-test-runtime-client",
+]
+
+[[package]]
+name = "sc-finality-grandpa-warp-sync"
+version = "0.8.0"
+dependencies = [
+ "derive_more",
+ "futures 0.3.9",
+ "log",
+ "num-traits",
+ "parity-scale-codec",
+ "parking_lot 0.11.1",
+ "prost 0.6.1",
+ "sc-client-api",
+ "sc-finality-grandpa",
+ "sc-network",
+ "sc-service",
+ "sp-blockchain",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -7126,7 +7179,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "pin-project 0.4.27",
- "prost",
+ "prost 0.7.0",
  "prost-build",
  "quickcheck",
  "rand 0.7.3",
@@ -10480,6 +10533,6 @@ checksum = "b89249644df056b522696b1bb9e7c18c87e8ffa3e2f0dc3b0155875d6498f01b"
 dependencies = [
  "cc",
  "glob",
- "itertools",
+ "itertools 0.9.0",
  "libc",
 ]
