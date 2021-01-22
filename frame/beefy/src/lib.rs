@@ -36,6 +36,8 @@ decl_storage! {
 	trait Store for Module<T: Config> as Beefy {
 		/// The current list of authorities.
 		pub Authorities get(fn authorities): Vec<T::AuthorityId>;
+		/// The current validator set id.
+		pub ValidatorSetId get(fn validator_set_id): beefy_primitives::ValidatorSetId;
 		/// Authorities scheduled for the next session.
 		pub NextAuthorities get(fn next_authorities): Vec<T::AuthorityId>;
 	}
@@ -55,6 +57,7 @@ impl<T: Config> Module<T> {
 		// remains the same.
 		if new != Self::authorities() {
 			<Authorities<T>>::put(&new);
+			<ValidatorSetId>::put(Self::validator_set_id() + 1);
 			let log: DigestItem<T::Hash> =
 				DigestItem::Consensus(BEEFY_ENGINE_ID, ConsensusLog::AuthoritiesChange(new).encode());
 			<frame_system::Module<T>>::deposit_log(log);
@@ -70,6 +73,7 @@ impl<T: Config> Module<T> {
 				"Authorities are already initialized!"
 			);
 			<Authorities<T>>::put(authorities);
+			<ValidatorSetId>::put(0);
 			// for consistency we initialize the next validator set as well.
 			// Note it's an assumption in the `pallet_session` as well.
 			<NextAuthorities<T>>::put(authorities);
