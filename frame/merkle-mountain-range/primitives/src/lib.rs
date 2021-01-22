@@ -323,7 +323,7 @@ impl Error {
 /// The point is to be able to verify MMR proofs from external MMRs, where we don't
 /// know the exact leaf type, but it's enough for us to have it SCALE-encoded.
 ///
-/// Note the leaf type should be encoded in it's compact form when passed through this type.
+/// Note the leaf type should be encoded in its compact form when passed through this type.
 /// See [FullLeaf] documentation for details.
 ///
 /// This type does not implement SCALE encoding/decoding on purpose to avoid confusion,

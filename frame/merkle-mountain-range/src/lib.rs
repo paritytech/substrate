@@ -119,7 +119,7 @@ pub trait Config<I = DefaultInstance>: frame_system::Config {
 	/// multiple elements into the tree. In such a case it might be worth using [primitives::Compact]
 	/// to make MMR proof for one element of the tuple leaner.
 	///
-	/// Note that leaf at each block MUST be unique. You may want to include a block hash or block
+	/// Note that the leaf at each block MUST be unique. You may want to include a block hash or block
 	/// number as an easiest way to ensure that.
 	type LeafData: primitives::LeafDataProvider;
 
