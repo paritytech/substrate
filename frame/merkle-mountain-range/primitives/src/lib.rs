@@ -332,7 +332,7 @@ impl Error {
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(RuntimeDebug, Clone, PartialEq)]
 pub struct OpaqueLeaf(
-	/// Raw bytes of the leaf type encoded in it's compact form.
+	/// Raw bytes of the leaf type encoded in its compact form.
 	///
 	/// NOTE it DOES NOT include length prefix (like `Vec<u8>` encoding would).
 	#[cfg_attr(feature = "std", serde(with = "sp_core::bytes"))]
