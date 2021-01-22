@@ -481,7 +481,7 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Endowed(ALICE, 1_000_000)
+						pallet_balances::Event::Endowed(ALICE, 1_000_000)
 					),
 					topics: vec![],
 				},
@@ -498,14 +498,14 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Endowed(addr.clone(), subsistence * 3)
+						pallet_balances::Event::Endowed(addr.clone(), subsistence * 3)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Transfer(ALICE, addr.clone(), subsistence * 3)
+						pallet_balances::Event::Transfer(ALICE, addr.clone(), subsistence * 3)
 					),
 					topics: vec![],
 				},
@@ -658,7 +658,7 @@ fn test_set_rent_code_and_hash() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(
+					event: MetaEvent::balances(pallet_balances::Event::Endowed(
 						ALICE, 1_000_000
 					)),
 					topics: vec![],
@@ -1240,7 +1240,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(ALICE, 1_000_000)),
+					event: MetaEvent::balances(pallet_balances::Event::Endowed(ALICE, 1_000_000)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -1395,7 +1395,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(CHARLIE, 1_000_000)),
+								event: MetaEvent::balances(pallet_balances::Event::Endowed(CHARLIE, 1_000_000)),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1405,13 +1405,13 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(addr_django.clone(), 30_000)),
+								event: MetaEvent::balances(pallet_balances::Event::Endowed(addr_django.clone(), 30_000)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
 								event: MetaEvent::balances(
-									pallet_balances::RawEvent::Transfer(CHARLIE, addr_django.clone(), 30_000)
+									pallet_balances::Event::Transfer(CHARLIE, addr_django.clone(), 30_000)
 								),
 								topics: vec![],
 							},
