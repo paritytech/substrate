@@ -21,7 +21,7 @@
 #![warn(missing_docs)]
 
 use frame_support::{RuntimeDebug, debug};
-use sp_runtime::traits;
+use sp_runtime::traits::{self, Saturating, One};
 use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
@@ -50,14 +50,21 @@ impl LeafDataProvider for () {
 /// The most common use case for MMRs is to store historical block hashes,
 /// so that any point in time in the future we can receive a proof about some past
 /// blocks without using excessive on-chain storage.
-/// Hence we implement the [LeafDataProvider] for [frame_system::Module], since the
+///
+/// Hence we implement the [LeafDataProvider] for [frame_system::Module]. Since the
 /// current block hash is not available (since the block is not finished yet),
-/// we use the `parent_hash` here.
+/// we use the `parent_hash` here along with parent block number.
 impl<T: frame_system::Config> LeafDataProvider for frame_system::Module<T> {
-	type LeafData = <T as frame_system::Config>::Hash;
+	type LeafData = (
+		<T as frame_system::Config>::BlockNumber,
+		<T as frame_system::Config>::Hash
+	);
 
 	fn leaf_data() -> Self::LeafData {
-		Self::parent_hash()
+		(
+			Self::block_number().saturating_sub(One::one()),
+			Self::parent_hash()
+		)
 	}
 }
 
