@@ -18,8 +18,7 @@
 //!
 //! Allows querying transactions by hash over standard bitswap protocol
 //! Only supports bitswap 1.2.0.
-//!
-
+//! CID is expected to reference 256-bit Blake2b transaction hash.
 
 use std::collections::VecDeque;
 use std::io;
@@ -158,7 +157,6 @@ impl Prefix {
 	/// Convert the prefix to encoded bytes.
 	pub fn to_bytes(&self) -> Vec<u8> {
 		let mut res = Vec::with_capacity(4);
-
 		let mut buf = varint_encode::u64_buffer();
 		let version = varint_encode::u64(self.version.into(), &mut buf);
 		res.extend_from_slice(version);
@@ -171,7 +169,6 @@ impl Prefix {
 		let mut buf = varint_encode::u64_buffer();
 		let mh_len = varint_encode::u64(self.mh_len as u64, &mut buf);
 		res.extend_from_slice(mh_len);
-
 		res
 	}
 }
