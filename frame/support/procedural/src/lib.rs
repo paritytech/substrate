@@ -303,7 +303,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// modules depends on another module, the module that is depended upon needs to come before
 /// the module depending on it.
 ///
-/// # Macro generation
+/// # Type definitions
 ///
 /// * The macro generates for each pallet a type alias to their `Module` (or `Pallet`).
 ///   E.g. `type System = frame_system::Module<Runtime>`
