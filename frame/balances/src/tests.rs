@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, codec::Encode, codec::Decode)]
 pub struct CallWithDispatchInfo;
 impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
 	type Origin = ();
@@ -51,9 +51,6 @@ macro_rules! decl_tests {
 
 		const ID_1: LockIdentifier = *b"1       ";
 		const ID_2: LockIdentifier = *b"2       ";
-
-		pub type System = frame_system::Module<$test>;
-		pub type Balances = Module<$test>;
 
 		pub const CALL: &<$test as frame_system::Config>::Call = &$crate::tests::CallWithDispatchInfo;
 
@@ -485,7 +482,7 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
 				assert_eq!(
 					last_event(),
-					Event::balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
+					Event::Balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
