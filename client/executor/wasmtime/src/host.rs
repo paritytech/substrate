@@ -323,6 +323,8 @@ impl Sandbox for HostState {
 			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
 		};
 
+		println!("Instantiating sandbox from host");
+
 		let instance_idx_or_err_code =
 			match sandbox::instantiate::<_, _, Holder>(
 				SandboxBackend::Wasmer,

@@ -279,6 +279,8 @@ impl Sandbox for FunctionExecutor {
 			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
 		};
 
+		println!("Instantiating sandbox from wasmi");
+
 		let result = EXECUTOR.set(self, || sandbox::instantiate::<_, _, Holder>(
 			SandboxBackend::Wasmi,
 			dispatch_thunk, 

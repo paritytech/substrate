@@ -26,10 +26,7 @@ use std::{collections::HashMap, rc::Rc};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
 
-use wasmi::{
-	Externals, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
-	RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages,
-};
+use wasmi::{Externals, ImportResolver, MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleInstance, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages};
 
 use sp_wasm_interface::Value;
 use wasmtime::Val;
@@ -102,6 +99,15 @@ struct Imports {
 impl Imports {
 	fn func_by_name(&self, module_name: &str, func_name: &str) -> Option<GuestFuncIndex> {
 		self.func_map.get(&(module_name.as_bytes().to_owned(), func_name.as_bytes().to_owned())).cloned()
+	}
+
+	fn memory_by_name(&self, module_name: &str, memory_name: &str) -> Option<MemoryRef> {
+		let key = (
+			module_name.as_bytes().to_vec(),
+			memory_name.as_bytes().to_vec(),
+		);
+		
+		self.memories_map.get(&key).cloned()
 	}
 }
 
@@ -723,7 +729,7 @@ where
 			let wasmtime_engine = wasmtime::Engine::new(&config);
 			let wasmtime_store = wasmtime::Store::new(&wasmtime_engine);
 			let wasmtime_module = wasmtime::Module::new(&wasmtime_engine, wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
-
+			
 			let module_imports: Vec<_> = wasmtime_module
 				.imports()
 				.filter_map(|import| {
@@ -843,23 +849,54 @@ where
 		SandboxBackend::Wasmer => {
 			let compiler = Singlepass::default();
 			let store = wasmer::Store::new(&wasmer::JIT::new(&compiler).engine());
-
+wasmer::im
 			println!("Decoding module...");
 			let module = wasmer::Module::new(&store, wasm).map_err(|error| {
 				println!("{:?}", error);
 				InstantiationError::ModuleDecoding
 			})?;
 
-			let imports: Vec<_> = module
+			println!("Module name is {}", module.name().unwrap_or("(unknown)"));
+
+			type Exports = HashMap<String, wasmer::Exports>;
+			let mut exports_map = Exports::new();
+
+			for import in module
 				.imports()
 				.into_iter()
-				.filter_map(|import| {
-					if let wasmer::ExternType::Function(func_ty) = import.ty() {
+			{
+				match import.ty() {
+					wasmer::ExternType::Global(global) => {
+						println!("Importing global '{}' :: '{}' {}", import.module(), import.name(), global.to_string());
+					}
+
+					wasmer::ExternType::Table(table) => {
+						println!("Importing table '{}' :: '{}' {}", import.module(), import.name(), table.to_string());
+					}
+
+					wasmer::ExternType::Memory(memory_type) => {
+						println!("Importing memory '{}' :: '{}' {}", import.module(), import.name(), memory_type.to_string());
+						let exports = exports_map.entry(import.module().to_string()).or_insert(wasmer::Exports::new());
+
+						// let memory = guest_env.imports.memory_by_name(import.module(), import.name());
+
+						if let Ok(memory) = wasmer::Memory::new(&store, *memory_type) {
+							exports.insert(import.name(), wasmer::Extern::Memory(memory));
+						} else {
+							println!("Failed to import memory '{}' :: '{}'", import.module(), import.name());
+							continue;
+						}
+					}
+
+					wasmer::ExternType::Function(func_ty) => {
+						println!("Importing function '{}' :: '{}' {}", import.module(), import.name(), func_ty.to_string());
+
 						let guest_func_index = if let Some(index) = guest_env.imports.func_by_name(import.module(), import.name()) {
 							index
 						} else {
 							// Missing import
-							return None;
+							println!("Missing import '{}' :: '{}'", import.module(), import.name());
+							continue;
 						};
 
 						let supervisor_func_index = guest_env.guest_to_supervisor_mapping
@@ -947,20 +984,17 @@ where
 							})
 						});
 
-						Some((import.name().to_string(), function))
-					} else {
-						None
+						let exports = exports_map.entry(import.module().to_string()).or_insert(wasmer::Exports::new());
+						exports.insert(import.name(), wasmer::Extern::Function(function));
 					}
-				})
-				.collect();
+				}
+			}
 
 			let mut import_object = wasmer::ImportObject::new();
-			let mut exports = wasmer::Exports::new();
 
-			for (name, function) in imports {
-				exports.insert(name, wasmer::Extern::Function(function));
+			for (module_name, exports) in exports_map.into_iter() {
+				import_object.register(module_name, exports);
 			}
-			import_object.register("env", exports);
 
 			println!("Instantiating module...");
 			let instance = wasmer::Instance::new(&module, &import_object)
