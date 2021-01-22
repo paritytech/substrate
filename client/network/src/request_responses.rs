@@ -765,6 +765,8 @@ impl RequestResponseCodec for GenericCodec {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+
 	use futures::channel::{mpsc, oneshot};
 	use futures::executor::LocalPool;
 	use futures::prelude::*;
@@ -777,6 +779,28 @@ mod tests {
 	use libp2p::swarm::{Swarm, SwarmEvent};
 	use std::{iter, time::Duration};
 
+	fn build_swarm(list: impl Iterator<Item = ProtocolConfig>) -> (Swarm<RequestResponsesBehaviour>, Multiaddr) {
+		let keypair = Keypair::generate_ed25519();
+
+		let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+			.into_authentic(&keypair)
+			.unwrap();
+
+		let transport = MemoryTransport
+			.upgrade(upgrade::Version::V1)
+			.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
+			.multiplex(libp2p::yamux::YamuxConfig::default())
+			.boxed();
+
+		let behaviour = RequestResponsesBehaviour::new(list).unwrap();
+
+		let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
+		let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
+
+		Swarm::listen_on(&mut swarm, listen_addr.clone()).unwrap();
+		(swarm, listen_addr)
+	}
+
 	#[test]
 	fn basic_request_response_works() {
 		let protocol_name = "/test/req-resp/1";
@@ -785,44 +809,24 @@ mod tests {
 		// Build swarms whose behaviour is `RequestResponsesBehaviour`.
 		let mut swarms = (0..2)
 			.map(|_| {
-				let keypair = Keypair::generate_ed25519();
+				let (tx, mut rx) = mpsc::channel::<IncomingRequest>(64);
 
-				let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-					.into_authentic(&keypair)
-					.unwrap();
+				pool.spawner().spawn_obj(async move {
+					while let Some(rq) = rx.next().await {
+						assert_eq!(rq.payload, b"this is a request");
+						let _ = rq.pending_response.send(b"this is a response".to_vec());
+					}
+				}.boxed().into()).unwrap();
 
-				let transport = MemoryTransport
-					.upgrade(upgrade::Version::V1)
-					.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-					.multiplex(libp2p::yamux::YamuxConfig::default())
-					.boxed();
-
-				let behaviour = {
-					let (tx, mut rx) = mpsc::channel(64);
-
-					let b = super::RequestResponsesBehaviour::new(iter::once(super::ProtocolConfig {
-						name: From::from(protocol_name),
-						max_request_size: 1024,
-						max_response_size: 1024 * 1024,
-						request_timeout: Duration::from_secs(30),
-						inbound_queue: Some(tx),
-					})).unwrap();
-
-					pool.spawner().spawn_obj(async move {
-						while let Some(rq) = rx.next().await {
-							assert_eq!(rq.payload, b"this is a request");
-							let _ = rq.pending_response.send(b"this is a response".to_vec());
-						}
-					}.boxed().into()).unwrap();
-
-					b
+				let protocol_config = ProtocolConfig {
+					name: From::from(protocol_name),
+					max_request_size: 1024,
+					max_response_size: 1024 * 1024,
+					request_timeout: Duration::from_secs(30),
+					inbound_queue: Some(tx),
 				};
 
-				let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
-				let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
-
-				Swarm::listen_on(&mut swarm, listen_addr.clone()).unwrap();
-				(swarm, listen_addr)
+				build_swarm(iter::once(protocol_config))
 			})
 			.collect::<Vec<_>>();
 
@@ -839,7 +843,7 @@ mod tests {
 			async move {
 				loop {
 					match swarm.next_event().await {
-						SwarmEvent::Behaviour(super::Event::InboundRequest { result, .. }) => {
+						SwarmEvent::Behaviour(Event::InboundRequest { result, .. }) => {
 							result.unwrap();
 						},
 						_ => {}
@@ -866,7 +870,7 @@ mod tests {
 						assert!(response_receiver.is_none());
 						response_receiver = Some(receiver);
 					}
-					SwarmEvent::Behaviour(super::Event::RequestFinished {
+					SwarmEvent::Behaviour(Event::RequestFinished {
 						result, ..
 					}) => {
 						result.unwrap();
@@ -888,44 +892,24 @@ mod tests {
 		// Build swarms whose behaviour is `RequestResponsesBehaviour`.
 		let mut swarms = (0..2)
 			.map(|_| {
-				let keypair = Keypair::generate_ed25519();
+				let (tx, mut rx) = mpsc::channel::<IncomingRequest>(64);
 
-				let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-					.into_authentic(&keypair)
-					.unwrap();
+				pool.spawner().spawn_obj(async move {
+					while let Some(rq) = rx.next().await {
+						assert_eq!(rq.payload, b"this is a request");
+						let _ = rq.pending_response.send(b"this response exceeds the limit".to_vec());
+					}
+				}.boxed().into()).unwrap();
 
-				let transport = MemoryTransport
-					.upgrade(upgrade::Version::V1)
-					.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-					.multiplex(libp2p::yamux::YamuxConfig::default())
-					.boxed();
-
-				let behaviour = {
-					let (tx, mut rx) = mpsc::channel(64);
-
-					let b = super::RequestResponsesBehaviour::new(iter::once(super::ProtocolConfig {
-						name: From::from(protocol_name),
-						max_request_size: 1024,
-						max_response_size: 8,  // <-- important for the test
-						request_timeout: Duration::from_secs(30),
-						inbound_queue: Some(tx),
-					})).unwrap();
-
-					pool.spawner().spawn_obj(async move {
-						while let Some(rq) = rx.next().await {
-							assert_eq!(rq.payload, b"this is a request");
-							let _ = rq.pending_response.send(b"this response exceeds the limit".to_vec());
-						}
-					}.boxed().into()).unwrap();
-
-					b
+				let protocol_config = ProtocolConfig {
+					name: From::from(protocol_name),
+					max_request_size: 1024,
+					max_response_size: 8,  // <-- important for the test
+					request_timeout: Duration::from_secs(30),
+					inbound_queue: Some(tx),
 				};
 
-				let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
-				let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
-
-				Swarm::listen_on(&mut swarm, listen_addr.clone()).unwrap();
-				(swarm, listen_addr)
+				build_swarm(iter::once(protocol_config))
 			})
 			.collect::<Vec<_>>();
 
@@ -943,7 +927,7 @@ mod tests {
 			async move {
 				loop {
 					match swarm.next_event().await {
-						SwarmEvent::Behaviour(super::Event::InboundRequest { result, .. }) => {
+						SwarmEvent::Behaviour(Event::InboundRequest { result, .. }) => {
 							assert!(result.is_ok());
 							break
 						},
@@ -971,7 +955,7 @@ mod tests {
 						assert!(response_receiver.is_none());
 						response_receiver = Some(receiver);
 					}
-					SwarmEvent::Behaviour(super::Event::RequestFinished {
+					SwarmEvent::Behaviour(Event::RequestFinished {
 						result, ..
 					}) => {
 						assert!(result.is_err());
@@ -982,9 +966,151 @@ mod tests {
 			}
 
 			match response_receiver.unwrap().await.unwrap().unwrap_err() {
-				super::RequestFailure::Network(super::OutboundFailure::ConnectionClosed) => {},
+				RequestFailure::Network(OutboundFailure::ConnectionClosed) => {},
 				_ => panic!()
 			}
 		});
+	}
+
+	/// [`RequestId`] is a monotonically increasing integer, starting at `1`. A [`RequestId`] is
+	/// unique for a single [`RequestResponse`] behaviour, but not across multiple
+	/// [`RequestResponse`] behaviours. Thus when handling [`RequestId`] in the context of multiple
+	/// [`RequestResponse`] behaviours, one needs to couple the protocol name with the [`RequestId`]
+	/// to get a unique request identifier.
+	///
+	/// This test ensures that two requests on different protocols can be handled concurrently
+	/// without a [`RequestId`] collision.
+	#[test]
+	fn request_id_collision() {
+		let protocol_name_1 = "/test/req-resp-1/1";
+		let protocol_name_2 = "/test/req-resp-2/1";
+		let mut pool = LocalPool::new();
+
+		let mut swarm_1 = {
+			let protocol_configs = vec![
+				ProtocolConfig {
+					name: From::from(protocol_name_1),
+					max_request_size: 1024,
+					max_response_size: 1024 * 1024,
+					request_timeout: Duration::from_secs(30),
+					inbound_queue: None,
+				},
+				ProtocolConfig {
+					name: From::from(protocol_name_2),
+					max_request_size: 1024,
+					max_response_size: 1024 * 1024,
+					request_timeout: Duration::from_secs(30),
+					inbound_queue: None,
+				},
+			];
+
+			build_swarm(protocol_configs.into_iter()).0
+		};
+
+		let (mut swarm_2, mut swarm_2_handler_1, mut swarm_2_handler_2, listen_add_2) = {
+			let (tx_1, rx_1) = mpsc::channel(64);
+			let (tx_2, rx_2) = mpsc::channel(64);
+
+			let protocol_configs = vec![
+				ProtocolConfig {
+					name: From::from(protocol_name_1),
+					max_request_size: 1024,
+					max_response_size: 1024 * 1024,
+					request_timeout: Duration::from_secs(30),
+					inbound_queue: Some(tx_1),
+				},
+				ProtocolConfig {
+					name: From::from(protocol_name_2),
+					max_request_size: 1024,
+					max_response_size: 1024 * 1024,
+					request_timeout: Duration::from_secs(30),
+					inbound_queue: Some(tx_2),
+				},
+			];
+
+			let (swarm, listen_addr) = build_swarm(protocol_configs.into_iter());
+
+			(swarm, rx_1, rx_2, listen_addr)
+		};
+
+		// Ask swarm 1 to dial swarm 2. There isn't any discovery mechanism in place in this test,
+		// so they wouldn't connect to each other.
+		Swarm::dial_addr(&mut swarm_1, listen_add_2).unwrap();
+
+		// Run swarm 2 in the background, receiving two requests.
+		pool.spawner().spawn_obj(
+			async move {
+				loop {
+					match swarm_2.next_event().await {
+						SwarmEvent::Behaviour(Event::InboundRequest { result, .. }) => {
+							result.unwrap();
+						},
+						_ => {}
+					}
+				}
+			}.boxed().into()
+		).unwrap();
+
+		// Handle both requests send by swarm 1 to swarm 2 in the background.
+		//
+		// Make sure both requests overlap, by answering the first only after receiving the
+		// second.
+		pool.spawner().spawn_obj(async move {
+			let protocol_1_request = swarm_2_handler_1.next().await;
+			let protocol_2_request = swarm_2_handler_2.next().await;
+
+			protocol_1_request.unwrap()
+				.pending_response
+				.send(b"this is a response".to_vec())
+				.unwrap();
+			protocol_2_request.unwrap()
+				.pending_response
+				.send(b"this is a response".to_vec())
+				.unwrap();
+		}.boxed().into()).unwrap();
+
+		// Have swarm 1 send two requests to swarm 2 and await responses.
+		pool.run_until(
+			async move {
+				let mut response_receivers = None;
+				let mut num_responses = 0;
+
+				loop {
+					match swarm_1.next_event().await {
+						SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+							let (sender_1, receiver_1) = oneshot::channel();
+							let (sender_2, receiver_2) = oneshot::channel();
+							swarm_1.send_request(
+								&peer_id,
+								protocol_name_1,
+								b"this is a request".to_vec(),
+								sender_1,
+							);
+							swarm_1.send_request(
+								&peer_id,
+								protocol_name_2,
+								b"this is a request".to_vec(),
+								sender_2,
+							);
+							assert!(response_receivers.is_none());
+							response_receivers = Some((receiver_1, receiver_2));
+						}
+						SwarmEvent::Behaviour(Event::RequestFinished {
+							result, ..
+						}) => {
+							num_responses += 1;
+							result.unwrap();
+							if num_responses == 2 {
+								break;
+							}
+						}
+						_ => {}
+					}
+				}
+				let (response_receiver_1, response_receiver_2) = response_receivers.unwrap();
+				assert_eq!(response_receiver_1.await.unwrap().unwrap(), b"this is a response");
+				assert_eq!(response_receiver_2.await.unwrap().unwrap(), b"this is a response");
+			}
+		);
 	}
 }
