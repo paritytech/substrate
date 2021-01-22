@@ -112,6 +112,8 @@ mod extensions;
 pub mod weights;
 #[cfg(test)]
 mod tests;
+#[cfg(feature = "std")]
+pub mod mocking;
 
 
 pub use extensions::{
@@ -1530,15 +1532,3 @@ pub mod pallet_prelude {
 	/// Type alias for the `BlockNumber` associated type of system config.
 	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;
 }
-
-
-/// An unchecked extrinsic type to be used in tests.
-pub type MockUncheckedExtrinsic<T, Signature = (), Extra = ()> = generic::UncheckedExtrinsic<
-	<T as Config>::AccountId, <T as Config>::Call, Signature, Extra,
->;
-
-/// An implementation of `sp_runtime::traits::Block` to be used in tests.
-pub type MockBlock<T> = generic::Block<
-	generic::Header<<T as Config>::BlockNumber, sp_runtime::traits::BlakeTwo256>,
-	MockUncheckedExtrinsic<T>,
->;

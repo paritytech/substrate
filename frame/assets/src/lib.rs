@@ -1091,8 +1091,8 @@ mod tests {
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 	use pallet_balances::Error as BalancesError;
 
-	type UncheckedExtrinsic = frame_system::MockUncheckedExtrinsic<Test>;
-	type Block = frame_system::MockBlock<Test>;
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
 		pub enum Test where
