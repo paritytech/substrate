@@ -146,7 +146,7 @@ impl<T, I, L> Mmr<RuntimeStorage, T, I, L> where
 impl<T, I, L> Mmr<OffchainStorage, T, I, L> where
 	T: Config<I>,
 	I: Instance,
-	L: primitives::FullLeaf,
+	L: primitives::FullLeaf + codec::Decode,
 {
 	/// Generate a proof for given leaf index.
 	///

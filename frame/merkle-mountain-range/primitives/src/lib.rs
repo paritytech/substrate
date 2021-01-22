@@ -29,7 +29,7 @@ use sp_std::prelude::Vec;
 /// A provider of the MMR's leaf data.
 pub trait LeafDataProvider {
 	/// A type that should end up in the leaf of MMR.
-	type LeafData: FullLeaf;
+	type LeafData: FullLeaf + codec::Decode;
 
 	/// The method to return leaf data that should be placed
 	/// in the leaf node appended MMR at this block.
@@ -80,7 +80,7 @@ impl<Hash> OnNewRoot<Hash> for () {
 }
 
 /// A full leaf content stored in the offchain-db.
-pub trait FullLeaf: Clone + PartialEq + fmt::Debug + codec::Decode {
+pub trait FullLeaf: Clone + PartialEq + fmt::Debug {
 	/// Encode the leaf either in it's full or compact form.
 	///
 	/// NOTE the encoding returned here MUST be `Decode`able into `FullLeaf`.
@@ -326,29 +326,29 @@ impl Error {
 /// Note the leaf type should be encoded in it's compact form when passed through this type.
 /// See [FullLeaf] documentation for details.
 ///
-/// This type is SCALE-compatible with `Vec<u8>` encoding. I.e. you must encode your leaf twice:
-/// ```rust,ignore
-/// let encoded: Vec<u8> = my_leaf.encode();
-/// let opaque: Vec<u8> = encoded.encode();
-/// let decoded = OpaqueLeaf::decode(&mut &*opaque);
-/// ```
+/// This type does not implement SCALE encoding/decoding on purpose to avoid confusion,
+/// it would have to be SCALE-compatible with the concrete leaf type, but due to SCALE limitations
+/// it's not possible to know how many bytes the encoding of concrete leaf type uses.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(RuntimeDebug, Clone, PartialEq, codec::Decode)]
+#[derive(RuntimeDebug, Clone, PartialEq)]
 pub struct OpaqueLeaf(
-	/// Leaf type encoded in it's compact form.
+	/// Raw bytes of the leaf type encoded in it's compact form.
+	///
+	/// NOTE it DOES NOT include length prefix (like `Vec<u8>` encoding would).
 	#[cfg_attr(feature = "std", serde(with = "sp_core::bytes"))]
 	pub Vec<u8>
 );
 
 impl OpaqueLeaf {
 	/// Convert a concrete MMR leaf into an opaque type.
-	pub fn from_leaf<T: FullLeaf>(leaf: T) -> Self {
+	pub fn from_leaf<T: FullLeaf>(leaf: &T) -> Self {
 		let encoded_leaf = leaf.using_encoded(|d| d.to_vec(), true);
-		// OpaqueLeaf must be SCALE-compatible with `Vec<u8>`.
-		// Simply using raw encoded bytes don't work, cause we don't know the
-		// length of the expected data.
-		let encoded_vec = codec::Encode::encode(&encoded_leaf);
-		OpaqueLeaf(encoded_vec)
+		OpaqueLeaf::from_encoded_leaf(encoded_leaf)
+	}
+
+	/// Create a `OpaqueLeaf` given raw bytes of compact-encoded leaf.
+	pub fn from_encoded_leaf(encoded_leaf: Vec<u8>) -> Self {
+		OpaqueLeaf(encoded_leaf)
 	}
 }
 
@@ -540,40 +540,18 @@ mod tests {
 		let encoded_compact = cases
 			.iter()
 			.map(|c| c.using_encoded(|x| x.to_vec(), true))
+			.map(OpaqueLeaf::from_encoded_leaf)
 			.collect::<Vec<_>>();
 
-		let decoded_opaque = encoded_compact
+		let opaque = cases
 			.iter()
-			// Encode the Vec<u8> again.
-			.map(codec::Encode::encode)
-			.map(|x| OpaqueLeaf::decode(&mut &*x))
-			.collect::<Vec<_>>();
-
-		let reencoded = decoded_opaque
-			.iter()
-			.map(|x| x.as_ref().map(|x| x.using_encoded(|x| x.to_vec(), false)))
-			.collect::<Vec<_>>();
-
-		let reencoded_compact = decoded_opaque
-			.iter()
-			.map(|x| x.as_ref().map(|x| x.using_encoded(|x| x.to_vec(), true)))
+			.map(OpaqueLeaf::from_leaf)
 			.collect::<Vec<_>>();
 
 		// then
-		// make sure that re-encoding opaque leaves end up with the same encoding.
 		assert_eq!(
-			reencoded,
-			encoded_compact.clone().into_iter().map(Ok).collect::<Vec<_>>()
-		);
-		// make sure that compact and non-compact encoding is the same.
-		assert_eq!(
-			reencoded,
-			reencoded_compact
-		);
-		// make sure that decoded opaque leaves simply contain raw bytes payload.
-		assert_eq!(
-			decoded_opaque,
-			encoded_compact.into_iter().map(OpaqueLeaf).map(Ok).collect::<Vec<_>>()
+			encoded_compact,
+			opaque,
 		);
 	}
 }
