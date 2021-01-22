@@ -781,7 +781,6 @@ mod tests {
 
 	use futures::channel::{mpsc, oneshot};
 	use futures::executor::LocalPool;
-	use futures::prelude::*;
 	use futures::task::Spawn;
 	use libp2p::identity::Keypair;
 	use libp2p::Multiaddr;
