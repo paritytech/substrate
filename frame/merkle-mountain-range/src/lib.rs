@@ -203,7 +203,7 @@ pub fn verify_leaf_proof<H, L>(
 	if is_valid {
 		Ok(())
 	} else {
-		Err(primitives::Error::Verify.log_debug("The proof is incorrect."))
+		Err(primitives::Error::Verify.log_debug(("The proof is incorrect.", root)))
 	}
 }
 
