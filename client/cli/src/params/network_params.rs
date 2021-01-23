@@ -106,6 +106,10 @@ pub struct NetworkParams {
 	/// security improvements.
 	#[structopt(long)]
 	pub kademlia_disjoint_query_paths: bool,
+
+	/// Join the IPFS network and serve transactions over bitswap protocol.
+	#[structopt(long)]
+	pub ipfs_server: bool,
 }
 
 impl NetworkParams {
@@ -176,6 +180,7 @@ impl NetworkParams {
 			allow_non_globals_in_dht,
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,
 			yamux_window_size: None,
+			ipfs_server: self.ipfs_server,
 		}
 	}
 }

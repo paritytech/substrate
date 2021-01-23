@@ -330,7 +330,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 
 			let behaviour = {
-				let bitswap = Bitswap::new(client);
+				let bitswap = if params.network_config.ipfs_server { Some(Bitswap::new(client)) } else { None };
 				let result = Behaviour::new(
 					protocol,
 					params.role,

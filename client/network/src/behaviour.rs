@@ -30,7 +30,7 @@ use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::identify::IdentifyInfo;
 use libp2p::kad::record;
-use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters};
+use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, toggle::Toggle};
 use log::debug;
 use prost::Message;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
@@ -58,7 +58,7 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	peer_info: peer_info::PeerInfoBehaviour,
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
-	bitswap: Bitswap<B>,
+	bitswap: Toggle<Bitswap<B>>,
 	/// Generic request-reponse protocols.
 	request_responses: request_responses::RequestResponsesBehaviour,
 	/// Light client request handling.
@@ -180,7 +180,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		disco_config: DiscoveryConfig,
 		// Block request protocol config.
 		block_request_protocol_config: request_responses::ProtocolConfig,
-		bitswap: Bitswap<B>,
+		bitswap: Option<Bitswap<B>>,
 		// All remaining request protocol configs.
 		mut request_response_protocols: Vec<request_responses::ProtocolConfig>,
 	) -> Result<Self, request_responses::RegisterError> {
@@ -192,7 +192,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
 			discovery: disco_config.finish(),
-			bitswap,
+			bitswap: bitswap.into(),
 			request_responses:
 				request_responses::RequestResponsesBehaviour::new(request_response_protocols.into_iter())?,
 			light_client_handler,
