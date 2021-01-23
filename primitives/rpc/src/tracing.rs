@@ -44,6 +44,8 @@ pub struct Event {
 	pub name: String,
 	/// Event target
 	pub target: String,
+	/// Timestamp relative to start of the tracing scope
+	pub rel_timestamp: Duration,
 	/// Associated `Values` of the Event
 	pub values: Values,
 	/// Parent id, if it exists
@@ -51,6 +53,9 @@ pub struct Event {
 }
 
 /// Represents a single instance of a tracing span
+///
+/// Exiting a span does not imply that the span will not be re-entered,
+/// so there is a complete record of all entry & exit times
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Span {
 	/// id for this span
@@ -63,8 +68,10 @@ pub struct Span {
 	pub target: String,
 	/// Line number in source
 	pub line: u32,
-	/// Total duration of span while entered
-	pub overall_time: Duration,
+	/// List of timestamps when the span was entered
+	pub entered: Vec<Duration>,
+	/// List of timestamps when the span was exited
+	pub exited: Vec<Duration>,
 	/// Values recorded to this span
 	pub values: Values,
 }
