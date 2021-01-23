@@ -87,7 +87,11 @@ pub trait Storage {
 	/// Returns the data for `key` in the storage or `None` if the key can not be found.
 	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let res = self.storage(key).map(|s| s.to_vec());
-		sp_tracing::debug!(?key, ?res, "get");
+		sp_tracing::debug!(
+			key = %HexDisplay::from(&key),
+			res = ?res.as_ref().map(HexDisplay::from),
+			"get"
+		);
 		res
 	}
 
@@ -104,33 +108,43 @@ pub trait Storage {
 			value_out[..written].copy_from_slice(&data[..written]);
 			data.len() as u32
 		});
-		sp_tracing::debug!(?key, ?value_out, value_offset, ?res, "read");
+		sp_tracing::debug!(
+			key = %HexDisplay::from(&key),
+			?value_out,
+			value_offset,
+			?res,
+			"read"
+		);
 		res
 	}
 
 	/// Set `key` to `value` in the storage.
 	fn set(&mut self, key: &[u8], value: &[u8]) {
 		self.set_storage(key.to_vec(), value.to_vec());
-		sp_tracing::debug!(?key, ?value, "set");
+		sp_tracing::debug!(
+			key = %HexDisplay::from(&key),
+			res = %HexDisplay::from(&value),
+			"set"
+		);
 	}
 
 	/// Clear the storage of the given `key` and its value.
 	fn clear(&mut self, key: &[u8]) {
 		self.clear_storage(key);
-		sp_tracing::debug!(?key, "clear");
+		sp_tracing::debug!(key = %HexDisplay::from(&key), "clear");
 	}
 
 	/// Check whether the given `key` exists in storage.
 	fn exists(&self, key: &[u8]) -> bool {
 		let res = self.exists_storage(key);
-		sp_tracing::debug!(?key, ?res, "exists");
+		sp_tracing::debug!(key = %HexDisplay::from(&key), res, "exists");
 		res
 	}
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		Externalities::clear_prefix(*self, prefix);
-		sp_tracing::debug!(?prefix, "clear_prefix");
+		sp_tracing::debug!(prefix = %HexDisplay::from(&prefix), "clear_prefix");
 	}
 
 	/// Append the encoded `value` to the storage item at `key`.
@@ -142,7 +156,7 @@ pub trait Storage {
 	/// If the storage item does not support [`EncodeAppend`](codec::EncodeAppend) or
 	/// something else fails at appending, the storage item will be set to `[value]`.
 	fn append(&mut self, key: &[u8], value: Vec<u8>) {
-		sp_tracing::debug!(?key, ?value, "append");
+		sp_tracing::debug!(key = %HexDisplay::from(&key), value = %HexDisplay::from(&value), "append");
 		self.storage_append(key.to_vec(), value);
 	}
 
@@ -153,7 +167,7 @@ pub trait Storage {
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
 		let res = self.storage_root();
-		sp_tracing::debug!(?res, "root");
+		sp_tracing::debug!(res = %HexDisplay::from(&res), "root");
 		res
 	}
 
@@ -167,14 +181,14 @@ pub trait Storage {
 	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
 		let res = self.storage_changes_root(parent_hash)
 			.expect("Invalid `parent_hash` given to `changes_root`.");
-		sp_tracing::debug!(?parent_hash, ?res, "changes_root");
+		sp_tracing::debug!(?parent_hash, res = ?res.as_ref().map(HexDisplay::from), "changes_root");
 		res
 	}
 
 	/// Get the next key in storage after the given one in lexicographic order.
 	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		let res = self.next_storage_key(&key);
-		sp_tracing::debug!(?key, ?res, "next_key");
+		sp_tracing::debug!(key = %HexDisplay::from(&key), res = ?res.as_ref().map(HexDisplay::from), "next_key");
 		res
 	}
 

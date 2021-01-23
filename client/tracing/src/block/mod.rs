@@ -214,7 +214,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		// First filter out any spans that never entered
 		let spans: Vec<Span> = spans.into_iter().filter(|s| !s.entered.is_empty()).collect();
 		// Patch wasm identifiers
-		let mut spans: Vec<Span> = spans.into_iter().filter_map(|s| self.patch_identifiers(s, targets)).collect();
+		let mut spans: Vec<Span> = spans.into_iter().filter_map(|s| patch_and_filter(s, targets)).collect();
 		spans.sort_by(|a, b| a.entered[0].cmp(&b.entered[0]));
 		let block_traces = BlockTrace {
 			block_hash: id.to_string(),
@@ -225,22 +225,22 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		};
 		Ok(block_traces)
 	}
+}
 
-	fn patch_identifiers(&self, mut span: Span, targets: &str) -> Option<Span> {
-		if span.name == WASM_TRACE_IDENTIFIER {
-			span.values.bool_values.insert("wasm".to_owned(), true);
-			if let Some(n) = span.values.string_values.remove(WASM_NAME_KEY) {
-				span.name = n;
-			}
-			if let Some(t) = span.values.string_values.remove(WASM_TARGET_KEY) {
-				span.target = t;
-			}
-			if !check_target(targets, &span.target, &span.level) {
-				return None;
-			}
+fn patch_and_filter(mut span: Span, targets: &str) -> Option<Span> {
+	if span.name == WASM_TRACE_IDENTIFIER {
+		span.values.bool_values.insert("wasm".to_owned(), true);
+		if let Some(n) = span.values.string_values.remove(WASM_NAME_KEY) {
+			span.name = n;
 		}
-		Some(span)
+		if let Some(t) = span.values.string_values.remove(WASM_TARGET_KEY) {
+			span.target = t;
+		}
+		if !check_target(targets, &span.target, &span.level) {
+			return None;
+		}
 	}
+	Some(span)
 }
 
 fn check_target(targets: &str, target: &str, level: &Level) -> bool {
