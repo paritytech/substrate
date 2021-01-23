@@ -582,9 +582,10 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
 parameter_types! {
 	pub const CandidacyBond: Balance = 10 * DOLLARS;
 	// 1 storage item created, key size is 32 bytes, value size is 16+16.
-	pub const VotingBondBase: Balance = deposit(1, 64);
+	pub const VotingBondStorageBase: Balance = deposit(1, 64);
 	// additional data per vote is 32 bytes (account id).
-	pub const VotingBondFactor: Balance = deposit(0, 32);
+	pub const VotingBondStorageFactor: Balance = deposit(0, 32);
+	pub const VotingBondWeightFactor: Balance = 1 * MILLICENTS;
 	pub const TermDuration: BlockNumber = 7 * DAYS;
 	pub const DesiredMembers: u32 = 13;
 	pub const DesiredRunnersUp: u32 = 7;
@@ -604,8 +605,9 @@ impl pallet_elections_phragmen::Config for Runtime {
 	type InitializeMembers = Council;
 	type CurrencyToVote = U128CurrencyToVote;
 	type CandidacyBond = CandidacyBond;
-	type VotingBondBase = VotingBondBase;
-	type VotingBondFactor = VotingBondFactor;
+	type VotingBondStorageBase = VotingBondStorageBase;
+	type VotingBondStorageFactor = VotingBondStorageFactor;
+	type VotingBondWeightFactor = VotingBondWeightFactor;
 	type LoserCandidate = ();
 	type KickedMember = ();
 	type DesiredMembers = DesiredMembers;

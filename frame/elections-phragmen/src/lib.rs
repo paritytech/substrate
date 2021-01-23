@@ -199,10 +199,13 @@ pub trait Config: frame_system::Config {
 	///
 	/// This should be sensibly high to economically ensure the pallet cannot be attacked by
 	/// creating a gigantic number of votes.
-	type VotingBondBase: Get<BalanceOf<Self>>;
+	type VotingBondStorageBase: Get<BalanceOf<Self>>;
 
 	/// The amount of bond that need to be locked for each vote (32 bytes).
-	type VotingBondFactor: Get<BalanceOf<Self>>;
+	type VotingBondStorageFactor: Get<BalanceOf<Self>>;
+
+	/// The amount of bond that accounts for the computational effort caused by the voter
+	type VotingBondWeightFactor: Get<BalanceOf<Self>>;
 
 	/// Handler for the unbalanced reduction when a candidate has lost (and is not a runner-up)
 	type LoserCandidate: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -370,8 +373,9 @@ decl_module! {
 		fn deposit_event() = default;
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
-		const VotingBondBase: BalanceOf<T> = T::VotingBondBase::get();
-		const VotingBondFactor: BalanceOf<T> = T::VotingBondFactor::get();
+		const VotingBondStorageBase: BalanceOf<T> = T::VotingBondStorageBase::get();
+		const VotingBondStorageFactor: BalanceOf<T> = T::VotingBondStorageFactor::get();
+		const VotingBondWeightFactor: BalanceOf<T> = T::VotingBondWeightFactor::get();
 		const DesiredMembers: u32 = T::DesiredMembers::get();
 		const DesiredRunnersUp: u32 = T::DesiredRunnersUp::get();
 		const TermDuration: T::BlockNumber = T::TermDuration::get();
@@ -654,8 +658,12 @@ decl_module! {
 impl<T: Config> Module<T> {
 	/// The deposit value of `count` votes.
 	fn deposit_of(count: usize) -> BalanceOf<T> {
-		T::VotingBondBase::get().saturating_add(
-			T::VotingBondFactor::get().saturating_mul((count as u32).into())
+		T::VotingBondStorageBase::get().saturating_add(
+			T::VotingBondStorageFactor::get().saturating_mul((count as u32).into())
+		).saturating_add(
+			T::VotingBondWeightFactor::get().saturating_mul(
+				(T::WeightInfo::election_phragmen(1, (count as u32).into(), 0) as u32).into()
+			)
 		)
 	}
 
@@ -1097,8 +1105,9 @@ mod tests {
 	}
 
 	frame_support::parameter_types! {
-		pub static VotingBondBase: u64 = 2;
-		pub static VotingBondFactor: u64 = 0;
+		pub static VotingBondStorageBase: u64 = 2;
+		pub static VotingBondStorageFactor: u64 = 0;
+		pub static VotingBondWeightFactor: u64 = 0;
 		pub static CandidacyBond: u64 = 3;
 		pub static DesiredMembers: u32 = 2;
 		pub static DesiredRunnersUp: u32 = 0;
@@ -1163,8 +1172,9 @@ mod tests {
 		type ChangeMembers = TestChangeMembers;
 		type InitializeMembers = ();
 		type CandidacyBond = CandidacyBond;
-		type VotingBondBase = VotingBondBase;
-		type VotingBondFactor = VotingBondFactor;
+		type VotingBondStorageBase = VotingBondStorageBase;
+		type VotingBondStorageFactor = VotingBondStorageFactor;
+		type VotingBondWeightFactor = VotingBondWeightFactor;
 		type TermDuration = TermDuration;
 		type DesiredMembers = DesiredMembers;
 		type DesiredRunnersUp = DesiredRunnersUp;
@@ -1203,12 +1213,16 @@ mod tests {
 	}
 
 	impl ExtBuilder {
-		pub fn voter_bond(self, bond: u64) -> Self {
-			VOTING_BOND_BASE.with(|v| *v.borrow_mut() = bond);
+		pub fn voter_bond_storage_base(self, bond: u64) -> Self {
+			VOTING_BOND_STORAGE_BASE.with(|v| *v.borrow_mut() = bond);
 			self
 		}
-		pub fn voter_bond_factor(self, bond: u64) -> Self {
-			VOTING_BOND_FACTOR.with(|v| *v.borrow_mut() = bond);
+		pub fn voter_bond_storage_factor(self, bond: u64) -> Self {
+			VOTING_BOND_STORAGE_FACTOR.with(|v| *v.borrow_mut() = bond);
+			self
+		}
+		pub fn voter_bond_weight_factor(self, bond: u64) -> Self {
+			VOTING_BOND_WEIGHT_FACTOR.with(|v| *v.borrow_mut() = bond);
 			self
 		}
 		pub fn desired_runners_up(self, count: u32) -> Self {
@@ -1385,8 +1399,9 @@ mod tests {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(<Test as Config>::DesiredMembers::get(), 2);
 			assert_eq!(<Test as Config>::DesiredRunnersUp::get(), 0);
-			assert_eq!(<Test as Config>::VotingBondBase::get(), 2);
-			assert_eq!(<Test as Config>::VotingBondFactor::get(), 0);
+			assert_eq!(<Test as Config>::VotingBondStorageBase::get(), 2);
+			assert_eq!(<Test as Config>::VotingBondStorageFactor::get(), 0);
+			assert_eq!(<Test as Config>::VotingBondWeightFactor::get(), 0);
 			assert_eq!(<Test as Config>::CandidacyBond::get(), 3);
 			assert_eq!(<Test as Config>::TermDuration::get(), 5);
 			assert_eq!(Elections::election_rounds(), 0);
@@ -1719,7 +1734,7 @@ mod tests {
 
 			// a runtime upgrade lowers the voting bond to 1. This guy still un-reserves 2 when
 			// leaving.
-			VOTING_BOND_BASE.with(|v| *v.borrow_mut() = 1);
+			VOTING_BOND_STORAGE_BASE.with(|v| *v.borrow_mut() = 1);
 
 			// proof that bond changed.
 			assert_eq!(balances(&1), (10, 0));
@@ -1734,7 +1749,7 @@ mod tests {
 
 	#[test]
 	fn voting_reserves_bond_per_vote() {
-		ExtBuilder::default().voter_bond_factor(1).build_and_execute(|| {
+		ExtBuilder::default().voter_bond_storage_factor(1).build_and_execute(|| {
 			assert_eq!(balances(&2), (20, 0));
 
 			assert_ok!(submit_candidacy(Origin::signed(5)));
@@ -1772,6 +1787,49 @@ mod tests {
 			assert_eq!(Elections::voting(&2).deposit, 3);
 			assert_eq!(has_lock(&2), 12);
 			assert_eq!(locked_stake_of(&2), 12);
+		});
+	}
+
+	#[test]
+	fn voting_reserves_bond_per_vote_for_computational_effort() {
+		ExtBuilder::default().balance_factor(1000000000).voter_bond_weight_factor(1).build_and_execute(|| {
+			assert_eq!(balances(&1), (10000000000, 0));
+
+			assert_ok!(submit_candidacy(Origin::signed(5)));
+			assert_ok!(submit_candidacy(Origin::signed(4)));
+
+			// initial vote.
+			assert_ok!(vote(Origin::signed(1), vec![4], 10));
+
+			// 2 + 1
+			assert_eq!(balances(&1), (9715593998, 284406002));
+			assert_eq!(Elections::voting(&1).deposit, 284406002);
+			assert_eq!(has_lock(&1), 10);
+			assert_eq!(locked_stake_of(&1), 10);
+
+			// can update; different stake; different lock and reserve.
+			assert_ok!(vote(Origin::signed(2), vec![5, 4], 15));
+			// 2 + 2
+			assert_eq!(balances(&1), (9715593998, 284406002));
+			assert_eq!(Elections::voting(&1).deposit, 284406002);
+			assert_eq!(has_lock(&1), 10);
+			assert_eq!(locked_stake_of(&1), 10);
+
+			// stay at two votes with different stake.
+			assert_ok!(vote(Origin::signed(1), vec![5, 3], 18));
+			// 2 + 2
+			assert_eq!(balances(&1), (9624744998, 375255002));
+			assert_eq!(Elections::voting(&1).deposit, 375255002);
+			assert_eq!(has_lock(&1), 18);
+			assert_eq!(locked_stake_of(&1), 18);
+
+			// back to 1 vote.
+			assert_ok!(vote(Origin::signed(1), vec![4], 12));
+			// 2 + 1
+			assert_eq!(balances(&1), (9715593998, 284406002));
+			assert_eq!(Elections::voting(&1).deposit, 284406002);
+			assert_eq!(has_lock(&1), 12);
+			assert_eq!(locked_stake_of(&1), 12);
 		});
 	}
 
@@ -1961,7 +2019,7 @@ mod tests {
 
 	#[test]
 	fn remove_voter_should_work() {
-		ExtBuilder::default().voter_bond(8).build_and_execute(|| {
+		ExtBuilder::default().voter_bond_storage_base(8).build_and_execute(|| {
 			assert_ok!(submit_candidacy(Origin::signed(5)));
 
 			assert_ok!(vote(Origin::signed(2), vec![5], 20));
