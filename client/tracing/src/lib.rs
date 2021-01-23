@@ -211,31 +211,6 @@ pub struct SpanDatum {
 	pub values: Values,
 }
 
-impl From<SpanDatum> for sp_rpc::tracing::Span {
-	fn from(s: SpanDatum) -> Self {
-		sp_rpc::tracing::Span {
-			id: s.id.into_u64(),
-			parent_id: s.parent_id.map(|id| id.into_u64()),
-			name: s.name,
-			target: s.target,
-			line: s.line,
-			overall_time: s.overall_time,
-			values: s.values.into(),
-		}
-	}
-}
-
-impl From<TraceEvent> for sp_rpc::tracing::Event {
-	fn from(e: TraceEvent) -> Self {
-		sp_rpc::tracing::Event {
-			name: e.name.to_owned(),
-			target: e.target,
-			values: e.values.into(),
-			parent_id: e.parent_id.map(|id| id.into_u64()),
-		}
-	}
-}
-
 impl From<Values> for sp_rpc::tracing::Values {
 	fn from(v: Values) -> Self {
 		sp_rpc::tracing::Values {

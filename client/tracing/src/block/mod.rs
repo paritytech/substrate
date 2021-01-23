@@ -31,31 +31,31 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header},
 };
-use sp_rpc::tracing::{BlockTrace};
+use sp_rpc::tracing::{BlockTrace, Span, Event, Values};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
 use tracing_core::span::{Attributes, Record, Id};
-use tracing_core::{Level, Event};
-use std::time::{Duration, Instant};
-use crate::{SpanDatum, TraceEvent};
+use tracing_core::{Level};
+use std::time::{Instant};
 
 // Default to only runtime and state related traces
-const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
+const DEFAULT_TARGETS: &'static str = "pallet,frame,sp_io::storage=debug";
 const TRACE_TARGET: &'static str = "block_trace";
 
 struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
 	next_id: AtomicU64,
 	current_span: CurrentSpan,
-	spans: Arc<Mutex<HashMap<Id, SpanDatum>>>,
-	events: Arc<Mutex<Vec<TraceEvent>>>,
+	spans: Arc<Mutex<HashMap<Id, Span>>>,
+	events: Arc<Mutex<Vec<Event>>>,
+	timestamp: Instant,
 }
 
 impl BlockSubscriber {
 	fn new(
 		targets: &str,
-		spans: Arc<Mutex<HashMap<Id, SpanDatum>>>,
-		events: Arc<Mutex<Vec<TraceEvent>>>,
+		spans: Arc<Mutex<HashMap<Id, Span>>>,
+		events: Arc<Mutex<Vec<Event>>>,
 	) -> Self {
 		let next_id = AtomicU64::new(1);
 		let mut targets: Vec<_> = targets
@@ -71,16 +71,8 @@ impl BlockSubscriber {
 			current_span: CurrentSpan::default(),
 			spans,
 			events,
+			timestamp: Instant::now(),
 		}
-	}
-
-	fn check_target(&self, target: &str, level: &Level) -> bool {
-		for t in &self.targets {
-			if target.starts_with(t.0.as_str()) && level <= &t.1 {
-				return true;
-			}
-		}
-		false
 	}
 }
 
@@ -95,22 +87,25 @@ impl Subscriber for BlockSubscriber {
 	}
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
-		let mut values = crate::Values::default();
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-		let id = Id::from_u64(id);
+		let mut values = Values::default();
 		attrs.record(&mut values);
-		let span_datum = crate::SpanDatum {
-			id: id.clone(),
-			parent_id: attrs.parent().cloned().or_else(|| self.current_span.id()),
+		let parent_id = attrs.parent()
+			.map(|pid| pid.into_u64())
+			.or_else(|| self.current_span.id().map(|x| x.into_u64()));
+		let span = Span {
+			id,
+			parent_id,
 			name: attrs.metadata().name().to_owned(),
 			target: attrs.metadata().target().to_owned(),
 			level: *attrs.metadata().level(),
 			line: attrs.metadata().line().unwrap_or(0),
-			start_time: Instant::now(),
-			overall_time: Duration::new(0, 0),
-			values,
+			entered: vec![],
+			exited: vec![],
+			values: Values::default(),
 		};
-		self.spans.lock().insert(id.clone(), span_datum);
+		let id = Id::from_u64(id);
+		self.spans.lock().insert(id.clone(), span);
 		id
 	}
 
@@ -125,51 +120,35 @@ impl Subscriber for BlockSubscriber {
 		// Not currently used
 	}
 
-	fn event(&self, event: &Event<'_>) {
+	fn event(&self, event: &tracing_core::Event<'_>) {
 		let mut values = crate::Values::default();
 		event.record(&mut values);
-		let trace_event = TraceEvent {
-			name: event.metadata().name(),
+		let parent_id = event.parent()
+			.map(|pid| pid.into_u64())
+			.or_else(|| self.current_span.id().map(|x| x.into_u64()));
+		let trace_event = Event {
+			name: event.metadata().name().to_owned(),
 			target: event.metadata().target().to_owned(),
 			level: *event.metadata().level(),
-			values,
-			parent_id: event.parent().cloned().or_else(|| self.current_span.id()),
+			rel_timestamp: Instant::now() - self.timestamp,
+			values: values.into(),
+			parent_id,
 		};
 		self.events.lock().push(trace_event);
 	}
 
-	fn enter(&self, span: &Id) {
-		self.current_span.enter(span.clone());
+	fn enter(&self, id: &Id) {
+		self.current_span.enter(id.clone());
 		let mut span_data = self.spans.lock();
-		let start_time = Instant::now();
-		if let Some(mut s) = span_data.get_mut(&span) {
-			s.start_time = start_time;
+		if let Some(span) = span_data.get_mut(&id) {
+			span.entered.push(Instant::now() - self.timestamp);
 		}
 	}
 
 	fn exit(&self, span: &Id) {
-		let end_time = Instant::now();
-		let span_datum = {
-			let mut span_data = self.spans.lock();
-			span_data.remove(&span)
-		};
-
-		if let Some(mut span_datum) = span_datum {
+		if let Some(s) = self.spans.lock().get_mut(span) {
 			self.current_span.exit();
-			span_datum.overall_time += end_time - span_datum.start_time;
-			if span_datum.name == WASM_TRACE_IDENTIFIER {
-				span_datum.values.bool_values.insert("wasm".to_owned(), true);
-				if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
-					span_datum.name = n;
-				}
-				if let Some(t) = span_datum.values.string_values.remove(WASM_TARGET_KEY) {
-					span_datum.target = t;
-				}
-				if !self.check_target(&span_datum.target, &span_datum.level) {
-					return;
-				}
-			}
-			self.spans.lock().insert(span_datum.id.clone(), span_datum);
+			s.exited.push(Instant::now() - self.timestamp)
 		}
 	}
 }
@@ -231,13 +210,44 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.map_err(|_| "Unable to unwrap spans".to_string())?;
 		let events = Arc::try_unwrap(events)
 			.map_err(|_| "Unable to unwrap spans".to_string())?;
+		let spans: Vec<Span> = spans.into_inner().into_iter().map(|(_, s)| s.into()).collect();
+		// First filter out any spans that never entered
+		let spans: Vec<Span> = spans.into_iter().filter(|s| !s.entered.is_empty()).collect();
+		// Patch wasm identifiers
+		let mut spans: Vec<Span> = spans.into_iter().filter_map(|s| self.patch_identifiers(s, targets)).collect();
+		spans.sort_by(|a, b| a.entered[0].cmp(&b.entered[0]));
 		let block_traces = BlockTrace {
 			block_hash: id.to_string(),
 			parent_hash: parent_id.to_string(),
 			tracing_targets: targets.to_string(),
-			spans: spans.into_inner().into_iter().map(|(_, s)| s.into()).collect(),
+			spans,
 			events: events.into_inner().into_iter().map(|s| s.into()).collect(),
 		};
 		Ok(block_traces)
 	}
+
+	fn patch_identifiers(&self, mut span: Span, targets: &str) -> Option<Span> {
+		if span.name == WASM_TRACE_IDENTIFIER {
+			span.values.bool_values.insert("wasm".to_owned(), true);
+			if let Some(n) = span.values.string_values.remove(WASM_NAME_KEY) {
+				span.name = n;
+			}
+			if let Some(t) = span.values.string_values.remove(WASM_TARGET_KEY) {
+				span.target = t;
+			}
+			if !check_target(targets, &span.target, &span.level) {
+				return None;
+			}
+		}
+		Some(span)
+	}
+}
+
+fn check_target(targets: &str, target: &str, level: &Level) -> bool {
+	for (t, l) in targets.split(',').map(|s| crate::parse_target(s)) {
+		if target.starts_with(t.as_str()) && level <= &l {
+			return true;
+		}
+	}
+	false
 }

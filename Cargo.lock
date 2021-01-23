@@ -8529,6 +8529,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-core",
+ "tracing-core",
 ]
 
 [[package]]

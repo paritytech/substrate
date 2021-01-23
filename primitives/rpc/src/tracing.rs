@@ -18,12 +18,14 @@
 //! Types for working with tracing data
 
 use serde::{Serialize, Deserialize};
+use tracing_core::{Field, Level};
+use tracing_core::field::Visit;
 
 use std::collections::HashMap;
 use std::time::Duration;
 
 /// Container for all related spans and events for the block being traced.
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlockTrace {
 	/// Hash of the block being traced
 	pub block_hash: String,
@@ -38,12 +40,15 @@ pub struct BlockTrace {
 }
 
 /// Represents a tracing event, complete with values
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Event {
 	/// Event name
 	pub name: String,
 	/// Event target
 	pub target: String,
+	/// Level
+	#[serde(skip, default = "default_level")]
+	pub level: Level,
 	/// Timestamp relative to start of the tracing scope
 	pub rel_timestamp: Duration,
 	/// Associated `Values` of the Event
@@ -56,7 +61,7 @@ pub struct Event {
 ///
 /// Exiting a span does not imply that the span will not be re-entered,
 /// so there is a complete record of all entry & exit times
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Span {
 	/// id for this span
 	pub id: u64,
@@ -66,6 +71,9 @@ pub struct Span {
 	pub name: String,
 	/// Target, typically module
 	pub target: String,
+	/// Level
+	#[serde(skip, default = "default_level")]
+	pub level: Level,
 	/// Line number in source
 	pub line: u32,
 	/// List of timestamps when the span was entered
@@ -87,4 +95,30 @@ pub struct Values {
 	pub u64_values: HashMap<String, u64>,
 	/// HashMap of `String` values
 	pub string_values: HashMap<String, String>,
+}
+
+impl Visit for Values {
+	fn record_i64(&mut self, field: &Field, value: i64) {
+		self.i64_values.insert(field.name().to_string(), value);
+	}
+
+	fn record_u64(&mut self, field: &Field, value: u64) {
+		self.u64_values.insert(field.name().to_string(), value);
+	}
+
+	fn record_bool(&mut self, field: &Field, value: bool) {
+		self.bool_values.insert(field.name().to_string(), value);
+	}
+
+	fn record_str(&mut self, field: &Field, value: &str) {
+		self.string_values.insert(field.name().to_string(), value.to_owned());
+	}
+
+	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+		self.string_values.insert(field.name().to_string(), format!("{:?}", value).to_owned());
+	}
+}
+
+fn default_level() -> Level {
+	Level::TRACE
 }
