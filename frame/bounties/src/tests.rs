@@ -403,6 +403,8 @@ fn propose_bounty_works() {
 			value: 10,
 			bond: deposit,
 			status: BountyStatus::Proposed,
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
 		});
 
 		assert_eq!(Bounties::bounty_descriptions(0).unwrap(), b"1234567890".to_vec());
@@ -481,6 +483,8 @@ fn approve_bounty_works() {
 			curator_deposit: 0,
 			bond: deposit,
 			status: BountyStatus::Approved,
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
 		});
 		assert_eq!(Bounties::bounty_approvals(), vec![0]);
 
@@ -503,6 +507,8 @@ fn approve_bounty_works() {
 			value: 50,
 			bond: deposit,
 			status: BountyStatus::Funded,
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
 		});
 
 		assert_eq!(Treasury::pot(), 100 - 50 - 25); // burn 25
@@ -538,6 +544,8 @@ fn assign_curator_works() {
 			status: BountyStatus::CuratorProposed {
 				curator: 4,
 			},
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
 		});
 
 		assert_noop!(Bounties::accept_curator(Origin::signed(1), 0), Error::<Test>::RequireCurator);
@@ -557,6 +565,8 @@ fn assign_curator_works() {
 				curator: 4,
 				update_due: 22,
 			},
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
 		});
 
 		assert_eq!(Balances::free_balance(&4), 8);
@@ -589,6 +599,8 @@ fn unassign_curator_works() {
 			value: 50,
 			bond: 85,
 			status: BountyStatus::Funded,
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
 		});
 
 		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
@@ -606,6 +618,8 @@ fn unassign_curator_works() {
 			value: 50,
 			bond: 85,
 			status: BountyStatus::Funded,
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
 		});
 
 		assert_eq!(Balances::free_balance(&4), 8);
@@ -647,6 +661,8 @@ fn award_and_claim_bounty_works() {
 				beneficiary: 3,
 				unlock_at: 5
 			},
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
 		});
 
 		assert_noop!(Bounties::claim_bounty(Origin::signed(1), 0), Error::<Test>::Premature);
@@ -731,6 +747,8 @@ fn cancel_and_refund() {
 			value: 50,
 			bond: 85,
 			status: BountyStatus::Funded,
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
 		});
 
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 60);
@@ -820,6 +838,8 @@ fn expire_and_unassign() {
 			value: 50,
 			bond: 85,
 			status: BountyStatus::Funded,
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
 		});
 
 		assert_eq!(Balances::free_balance(1), 93);
@@ -862,6 +882,8 @@ fn extend_expiry() {
 			value: 50,
 			bond: 85,
 			status: BountyStatus::Active { curator: 4, update_due: 30 },
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
 		});
 
 		assert_ok!(Bounties::extend_bounty_expiry(Origin::signed(4), 0, Vec::new()));
@@ -873,6 +895,8 @@ fn extend_expiry() {
 			value: 50,
 			bond: 85,
 			status: BountyStatus::Active { curator: 4, update_due: 30 }, // still the same
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
 		});
 
 		System::set_block_number(25);
