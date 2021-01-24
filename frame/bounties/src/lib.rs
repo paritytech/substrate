@@ -279,8 +279,8 @@ decl_event!(
         SubBountyCanceled(BountyIndex, BountyIndex),
         /// A subbounty proposal is funded and became active. \[index, subbounty index\]
         SubBountyBecameActive(BountyIndex, BountyIndex),
-		/// A Subbounty expiry is extended. \[index, subbounty index,\]
-		SubBountyExtended(BountyIndex, BountyIndex),
+        /// A Subbounty expiry is extended. \[index, subbounty index,\]
+        SubBountyExtended(BountyIndex, BountyIndex),
     }
 );
 
@@ -308,8 +308,8 @@ decl_error! {
         Premature,
         /// The bounty balance is not enough to add new subbounty.
         InsufficientBountyBalance,
-		/// Subbounty active
-		SubBountyActive,
+        /// Subbounty active
+        SubBountyActive,
     }
 }
 
@@ -783,24 +783,24 @@ decl_module! {
             Self::deposit_event(Event::<T>::BountyExtended(bounty_id));
         }
 
-		/// Add a new subbounty.
+        /// Add a new subbounty.
         ///
         /// The dispatch origin for this call must be curator.
-		/// Bounty must me in "active" state.
+        /// Bounty must me in "active" state.
         ///
-		/// Subbouty gets added successfully & fund gets reserved, if bounty has enough fund.
-		/// else call get failed.
-		///
+        /// Subbouty gets added successfully & fund gets reserved, if bounty has enough fund.
+        /// else call get failed.
+        ///
         /// Payment: `TipReportDepositBase` will be reserved from the origin account, as well as
         /// `DataDepositPerByte` for each byte in `reason`. It will be unreserved upon approval,
         /// or slashed when rejected.
-		///
-		/// if call is success, state of subbounty is moved to "Approved" state.
-		/// And later moved to "Funded" state as part of "spend_fund()" callback.
-		///
-		/// - `bounty_id`: Bounty ID for which subbounty to be added.
-		/// - `value`: Value for executing the proposal.
-		/// - `description`: Text description for the subbounty.
+        ///
+        /// if call is success, state of subbounty is moved to "Approved" state.
+        /// And later moved to "Funded" state as part of "spend_fund()" callback.
+        ///
+        /// - `bounty_id`: Bounty ID for which subbounty to be added.
+        /// - `value`: Value for executing the proposal.
+        /// - `description`: Text description for the subbounty.
         #[weight = 10_000]
         fn add_subbounty(origin,
             #[compact] bounty_id: BountyIndex,
@@ -853,22 +853,22 @@ decl_module! {
                 }
                 Ok(())
             })?;
-		}
+        }
 
-		/// Assign subcurator for funded subbounty.
+        /// Assign subcurator for funded subbounty.
         ///
         /// The dispatch origin for this call must be curator.
-		/// Bounty must me in "active" state.
+        /// Bounty must me in "active" state.
         ///
-		/// Proposed subcurator may be "curator", in this case
-		/// payment fee is considered as Zero.
-		///
-		/// Bounty must be active, for this subbounty call to work.
-		///
-		/// - `bounty_id`: ID pair Bounty ID.
-		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
-		/// - `subcurator`: Address of subcurator.
-		/// - `fee`: payment fee to subcurator for execution.
+        /// Proposed subcurator may be "curator", in this case
+        /// payment fee is considered as Zero.
+        ///
+        /// Bounty must be active, for this subbounty call to work.
+        ///
+        /// - `bounty_id`: ID pair Bounty ID.
+        /// - `subbounty_id`: ID pair SubBounty ID to cancel.
+        /// - `subcurator`: Address of subcurator.
+        /// - `fee`: payment fee to subcurator for execution.
         #[weight = 10_000]
         fn propose_subcurator(
             origin,
@@ -915,20 +915,20 @@ decl_module! {
                 };
                 Ok(())
             })?;
-		}
+        }
 
-		/// Accept the subcurator role for subbounty.
+        /// Accept the subcurator role for subbounty.
         ///
         /// A deposit will be reserved from curator and refund upon
-		/// successful payout. In case if "curator" is "subcurator",
-		/// deposit is not reserved.
-		///
-		/// Bounty must be active, for this subbounty call to work.
-		///
+        /// successful payout. In case if "curator" is "subcurator",
+        /// deposit is not reserved.
+        ///
+        /// Bounty must be active, for this subbounty call to work.
+        ///
         /// May only be called from the curator/proposed subcurator.
-		///
-		/// - `bounty_id`: ID pair Bounty ID.
-		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
+        ///
+        /// - `bounty_id`: ID pair Bounty ID.
+        /// - `subbounty_id`: ID pair SubBounty ID to cancel.
         #[weight = 10_000]
         fn accept_subcurator(origin,
             #[compact] bounty_id: BountyIndex,
@@ -975,33 +975,33 @@ decl_module! {
                 };
                 Ok(())
             })?;
-		}
+        }
 
         /// Unassign subcurator from a subbounty.
         ///
         /// This function can only be called by the
-		/// `RejectOrigin` a signed origin.
-		///
-		/// Bounty must be active, for this subbounty call to work.
+        /// `RejectOrigin` a signed origin.
+        ///
+        /// Bounty must be active, for this subbounty call to work.
         ///
         /// If this function is called by the `RejectOrigin`, we assume that
-		/// the curator is malicious or inactive. As a result,
-		/// we will slash the curator when possible.
+        /// the curator is malicious or inactive. As a result,
+        /// we will slash the curator when possible.
         ///
         /// If the origin is the curator, we take this as a sign they are
-		/// unable to do their job and they willingly give up.
-		/// We could slash them, but for now we allow them to recover their
+        /// unable to do their job and they willingly give up.
+        /// We could slash them, but for now we allow them to recover their
         /// deposit and exit without issue. (We may want to change this
-		/// if it is abused.)
+        /// if it is abused.)
         ///
         /// Finally, the origin can be anyone if and only if the curator
-		/// is "inactive". This allows anyone in the community to call out
-		/// that a curator is not doing their due diligence, and
+        /// is "inactive". This allows anyone in the community to call out
+        /// that a curator is not doing their due diligence, and
         /// we should pick a new curator. In this case the curator
-		/// should also be slashed.
-		///
-		/// - `bounty_id`: ID pair Bounty ID.
-		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
+        /// should also be slashed.
+        ///
+        /// - `bounty_id`: ID pair Bounty ID.
+        /// - `subbounty_id`: ID pair SubBounty ID to cancel.
         #[weight = 10_000]
         fn unassign_subcurator(
             origin,
@@ -1015,7 +1015,7 @@ decl_module! {
             // Ensure parent bounty is Active
             Self::ensure_bounty_active(bounty_id)?;
 
-			// Ensure subbounty is in expected state
+            // Ensure subbounty is in expected state
             SubBounties::<T>::try_mutate_exists(bounty_id,
                 subbounty_id,
                 |maybe_subbounty| -> DispatchResult {
@@ -1086,25 +1086,25 @@ decl_module! {
                         slash_curator(subcurator, &mut subbounty.curator_deposit);
                         // Continue to change bounty status below...
                     },
-				};
-				// Move the subbounty state to Funded.
+                };
+                // Move the subbounty state to Funded.
                 subbounty.status = BountyStatus::Funded;
                 Ok(())
             })?;
-		}
+        }
 
         /// Award subbounty to a beneficiary account.
-		/// The beneficiary will be able to claim the
-		/// funds after a delay.
+        /// The beneficiary will be able to claim the
+        /// funds after a delay.
         ///
         /// The dispatch origin for this call must be
-		/// the curator or subcurator of this subbounty.
-		///
-		/// Bounty must be active, for this subbounty call to work.
-		///
-		/// - `bounty_id`: ID pair Bounty ID.
-		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
-		/// - `beneficiary`: Beneficiary account.
+        /// the curator or subcurator of this subbounty.
+        ///
+        /// Bounty must be active, for this subbounty call to work.
+        ///
+        /// - `bounty_id`: ID pair Bounty ID.
+        /// - `subbounty_id`: ID pair SubBounty ID to cancel.
+        /// - `beneficiary`: Beneficiary account.
         #[weight = 10_000]
         fn award_subbounty(origin,
             #[compact] bounty_id: BountyIndex,
@@ -1117,7 +1117,7 @@ decl_module! {
             // Ensure parent bounty is Active
             Self::ensure_bounty_active(bounty_id)?;
 
-			// Ensure subbounty is in expected state
+            // Ensure subbounty is in expected state
             SubBounties::<T>::try_mutate_exists(bounty_id,
                 subbounty_id,
                 |maybe_subbounty| -> DispatchResult {
@@ -1137,7 +1137,7 @@ decl_module! {
                     _ => return Err(Error::<T>::UnexpectedStatus.into()),
                 }
 
-				// Move the subbounty state to Pending payout.
+                // Move the subbounty state to Pending payout.
                 subbounty.status = BountyStatus::PendingPayout {
                     curator: signer,
                     beneficiary: beneficiary.clone(),
@@ -1150,15 +1150,15 @@ decl_module! {
             Self::deposit_event(Event::<T>::SubBountyAwarded(bounty_id, subbounty_id, beneficiary));
         }
 
-		/// Claim the payout from an awarded subbounty after payout delay.
+        /// Claim the payout from an awarded subbounty after payout delay.
         ///
         /// The dispatch origin for this call must be the beneficiary
-		/// of this subbounty.
-		///
-		/// Bounty must be active, for this subbounty call to work.
-		///
-		/// - `bounty_id`: ID pair Bounty ID.
-		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
+        /// of this subbounty.
+        ///
+        /// Bounty must be active, for this subbounty call to work.
+        ///
+        /// - `bounty_id`: ID pair Bounty ID.
+        /// - `subbounty_id`: ID pair SubBounty ID to cancel.
         #[weight = 10_000]
         fn claim_subbounty(origin,
             #[compact] bounty_id: BountyIndex,
@@ -1167,9 +1167,9 @@ decl_module! {
             let _ = ensure_signed(origin)?;
 
             // Ensure parent bounty is Active
-			Self::ensure_bounty_active(bounty_id)?;
+            Self::ensure_bounty_active(bounty_id)?;
 
-			// Ensure subbounty is in expected state
+            // Ensure subbounty is in expected state
             SubBounties::<T>::try_mutate_exists(bounty_id,
                 subbounty_id,
                 |maybe_subbounty| -> DispatchResult {
@@ -1226,24 +1226,24 @@ decl_module! {
                     Err(Error::<T>::UnexpectedStatus.into())
                 }
             })?;
-		}
+        }
 
-		/// Cancel a proposed or active subbounty. All the funds gets
-		/// unreserved to bounty account. the curator deposit will
-		/// be unreserved if possible.
+        /// Cancel a proposed or active subbounty. All the funds gets
+        /// unreserved to bounty account. the curator deposit will
+        /// be unreserved if possible.
         ///
         /// Only `T::RejectOrigin` or `curator` is able to cancel a bounty.
-		///
-		/// Bounty must be active, for this subbounty call to work.
-		///
-		/// - `bounty_id`: ID pair Bounty ID.
-		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
+        ///
+        /// Bounty must be active, for this subbounty call to work.
+        ///
+        /// - `bounty_id`: ID pair Bounty ID.
+        /// - `subbounty_id`: ID pair SubBounty ID to cancel.
         #[weight = 10_000]
         fn close_subbounty(origin,
             #[compact] bounty_id: BountyIndex,
             #[compact] subbounty_id: BountyIndex,
         ) -> DispatchResultWithPostInfo {
-			// TODO :: Have to recheck this requirement
+            // TODO :: Have to recheck this requirement
             let _signer = ensure_signed(origin)?;
 
             // Ensure parent bounty is Active
@@ -1254,16 +1254,16 @@ decl_module! {
             Ok(Some(<T as Config>::WeightInfo::close_bounty_active()).into())
         }
 
-		/// Extend the expiry time of an active subbounty.
-		///
+        /// Extend the expiry time of an active subbounty.
+        ///
         /// The dispatch origin for this call must be the curator or
-		/// subcurator of this subbounty.
-		///
-		/// Bounty must be active, for this subbounty call to work.
-		///
-		/// - `bounty_id`: ID pair Bounty ID.
-		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
-		/// - `remark`: reason for extending( reserved & not used),
+        /// subcurator of this subbounty.
+        ///
+        /// Bounty must be active, for this subbounty call to work.
+        ///
+        /// - `bounty_id`: ID pair Bounty ID.
+        /// - `subbounty_id`: ID pair SubBounty ID to cancel.
+        /// - `remark`: reason for extending( reserved & not used),
         #[weight = 10_000]
         fn extend_subbounty_expiry(origin,
             #[compact] bounty_id: BountyIndex,
