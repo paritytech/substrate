@@ -133,6 +133,9 @@ pub trait Config: frame_system::Config + pallet_treasury::Config {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// Maximum number of subbounty that can be added to active bounty.
+	type MaxSubBountyCount: Get<u32>;
 }
 
 /// An index of a bounty. Just a `u32`.
@@ -310,6 +313,8 @@ decl_error! {
 		InsufficientBountyBalance,
 		/// Subbounty active
 		SubBountyActive,
+		/// Number of subbounty recached MaxSubBountyCount
+		SubBountyMaxReached,
 	}
 }
 
@@ -791,6 +796,9 @@ decl_module! {
 		/// Subbouty gets added successfully & fund gets reserved, if bounty has enough fund.
 		/// else call get failed.
 		///
+		/// Upperbount to maximum number of subbounties that can be added is
+		/// managed via runtime trait config 'MaxSubBountyCount'.
+		///
 		/// Payment: `TipReportDepositBase` will be reserved from the origin account, as well as
 		/// `DataDepositPerByte` for each byte in `reason`. It will be unreserved upon approval,
 		/// or slashed when rejected.
@@ -820,8 +828,15 @@ decl_module! {
 						ensure!(signer == *curator, Error::<T>::RequireCurator);
 
 						// Verify the arguments
-						ensure!(description.len() <= T::MaximumReasonLength::get() as usize, Error::<T>::ReasonTooBig);
-						ensure!(value >= T::BountyValueMinimum::get(), Error::<T>::InvalidValue);
+						ensure!(description.len() <= T::MaximumReasonLength::get() as usize,
+							Error::<T>::ReasonTooBig,
+						);
+						ensure!(value >= T::BountyValueMinimum::get(),
+							Error::<T>::InvalidValue,
+						);
+						ensure!(bounty.subbountycount <= T::MaxSubBountyCount::get() as u32,
+							Error::<T>::SubBountyMaxReached,
+						);
 
 						// reserve deposit for new bounty
 						let bond = T::BountyDepositBase::get()

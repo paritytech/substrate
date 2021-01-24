@@ -130,6 +130,7 @@ parameter_types! {
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: u64 = 1;
 	pub const MaximumReasonLength: u32 = 16384;
+	pub const MaxSubBountyCount: u32 = 100;
 }
 impl Config for Test {
 	type Event = Event;
@@ -140,6 +141,7 @@ impl Config for Test {
 	type BountyValueMinimum = BountyValueMinimum;
 	type DataDepositPerByte = DataDepositPerByte;
 	type MaximumReasonLength = MaximumReasonLength;
+	type MaxSubBountyCount = MaxSubBountyCount;
 	type WeightInfo = ();
 }
 type System = frame_system::Module<Test>;
