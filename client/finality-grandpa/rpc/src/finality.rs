@@ -22,18 +22,16 @@ use sc_finality_grandpa::FinalityProofProvider;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 #[derive(Serialize, Deserialize)]
-pub struct EncodedFinalityProofs(pub sp_core::Bytes);
+pub struct EncodedFinalityProof(pub sp_core::Bytes);
 
 /// Local trait mainly to allow mocking in tests.
 pub trait RpcFinalityProofProvider<Block: BlockT> {
-	/// Return finality proofs for the given authorities set id, if it is provided, otherwise the
-	/// current one will be used.
+	/// Prove finality for the given block number by returning a Justification for the last block of
+	/// the authority set.
 	fn rpc_prove_finality(
 		&self,
-		begin: Block::Hash,
-		end: Block::Hash,
-		authorities_set_id: u64,
-	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error>;
+		block: NumberFor<Block>,
+	) -> Result<Option<EncodedFinalityProof>, sc_finality_grandpa::FinalityProofError>;
 }
 
 impl<B, Block> RpcFinalityProofProvider<Block> for FinalityProofProvider<B, Block>
@@ -44,11 +42,9 @@ where
 {
 	fn rpc_prove_finality(
 		&self,
-		begin: Block::Hash,
-		end: Block::Hash,
-		authorities_set_id: u64,
-	) -> Result<Option<EncodedFinalityProofs>, sp_blockchain::Error> {
-		self.prove_finality(begin, end, authorities_set_id)
-			.map(|x| x.map(|y| EncodedFinalityProofs(y.into())))
+		block: NumberFor<Block>,
+	) -> Result<Option<EncodedFinalityProof>, sc_finality_grandpa::FinalityProofError> {
+		self.prove_finality(block)
+			.map(|x| x.map(|y| EncodedFinalityProof(y.into())))
 	}
 }
