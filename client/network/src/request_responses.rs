@@ -156,8 +156,8 @@ pub enum Event {
 ///
 /// Uniquely identifies an inbound or outbound request among all handled protocols. Note however
 /// that uniqueness is only guaranteed between two inbound and likewise between two outbound
-/// requests. There is no guarantee that in a set of both inbound and outbound
-/// [`ProtocolRequestId`]s all ids are unique.
+/// requests. There is no uniqueness guarantee in a set of both inbound and outbound
+/// [`ProtocolRequestId`]s.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct ProtocolRequestId {
 	protocol: Cow<'static, str>,
@@ -1001,14 +1001,16 @@ mod tests {
 		});
 	}
 
-	/// [`RequestId`] is a monotonically increasing integer, starting at `1`. A [`RequestId`] is
-	/// unique for a single [`RequestResponse`] behaviour, but not across multiple
+	/// A [`RequestId`] is a unique identifier among either all inbound or all outbound requests for
+	/// a single [`RequestResponse`] behaviour. It is not guaranteed to be unique across multiple
 	/// [`RequestResponse`] behaviours. Thus when handling [`RequestId`] in the context of multiple
 	/// [`RequestResponse`] behaviours, one needs to couple the protocol name with the [`RequestId`]
 	/// to get a unique request identifier.
 	///
 	/// This test ensures that two requests on different protocols can be handled concurrently
 	/// without a [`RequestId`] collision.
+	///
+	/// See [`ProtocolRequestId`] for additional information.
 	#[test]
 	fn request_id_collision() {
 		let protocol_name_1 = "/test/req-resp-1/1";
@@ -1080,7 +1082,7 @@ mod tests {
 			}.boxed().into()
 		).unwrap();
 
-		// Handle both requests send by swarm 1 to swarm 2 in the background.
+		// Handle both requests sent by swarm 1 to swarm 2 in the background.
 		//
 		// Make sure both requests overlap, by answering the first only after receiving the
 		// second.
