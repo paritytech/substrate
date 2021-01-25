@@ -86,7 +86,7 @@ use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error};
 
 use frame_support::traits::{
 	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{AllowDeath},
-	ReservableCurrency, BalanceStatus as Status};
+	ReservableCurrency, BalanceStatus};
 
 use sp_runtime::{Permill, RuntimeDebug, DispatchResult, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, BadOrigin
