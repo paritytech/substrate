@@ -103,7 +103,3 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
-
-// pub type System = frame_system::Module<Test>;
-// pub type Balances = pallet_balances::Module<Test>;
-// pub type Indices = Module<Test>;
