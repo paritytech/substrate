@@ -30,7 +30,7 @@ use frame_support::traits::StorageMapShim;
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use crate::{
 	self as pallet_balances,
-	Module, Config, decl_tests, tests::CallWithDispatchInfo
+	Module, Config, decl_tests,
 };
 use pallet_transaction_payment::CurrencyAdapter;
 
@@ -62,7 +62,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = CallWithDispatchInfo;
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;

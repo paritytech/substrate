@@ -19,20 +19,6 @@
 
 #![cfg(test)]
 
-#[derive(Debug, Clone, Eq, PartialEq, codec::Encode, codec::Decode)]
-pub struct CallWithDispatchInfo;
-impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
-	type Origin = ();
-	type Config = ();
-	type Info = frame_support::weights::DispatchInfo;
-	type PostInfo = frame_support::weights::PostDispatchInfo;
-
-	fn dispatch(self, _origin: Self::Origin)
-		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-			panic!("Do not use dummy implementation for dispatch.");
-	}
-}
-
 #[macro_export]
 macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
@@ -49,12 +35,12 @@ macro_rules! decl_tests {
 		use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier};
 		use frame_system::RawOrigin;
 		use frame_system as system;
-		use pallet_balances as balances;
 
 		const ID_1: LockIdentifier = *b"1       ";
 		const ID_2: LockIdentifier = *b"2       ";
 
-		pub const CALL: &<$test as frame_system::Config>::Call = &$crate::tests::CallWithDispatchInfo;
+		pub const CALL: &<$test as frame_system::Config>::Call =
+			&Call::Balances(pallet_balances::Call::transfer(0, 0));
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
