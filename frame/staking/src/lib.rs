@@ -1319,43 +1319,23 @@ decl_module! {
 				set_check_offchain_execution_status, compute_save_and_submit, submit_queued,
 				OFFCHAIN_REPEAT,
 			};
+			// ensure that we don't run OCW in any case more at least with 5 blocks delay.
+			let threshold: T::BlockNumber = OFFCHAIN_REPEAT.into();
 
 			let election_status = Self::era_election_status();
 			if election_status.is_open_at(now) {
 				// If era election status is open at the current block, mine the solution, save it
 				// and submit it.
-
-				// ensure that we don't run OCW in any case more at least with 5 blocks delay.
-				let threshold: T::BlockNumber = OFFCHAIN_REPEAT.into();
-				match set_check_offchain_execution_status::<T>(now, threshold) {
-					Ok(_) => {
-						match compute_save_and_submit::<T>() {
-							Ok(_) =>
-								log!(info, "💸 Executed offchain worker thread without errors."),
-							Err(why) =>
-								log!(error, "💸 Error in election offchain worker: {:?}", why),
-						}
-					},
-					Err(why) =>
-						log!(debug, "💸 skipping offchain worker in open election window due to [{:?}]", why),
-				}
+				let initial_output = set_check_offchain_execution_status::<T>(now, threshold)
+					.and_then(|_| compute_save_and_submit::<T>());
+				log!(debug, "initial OCW output at {:?} = {:?}", now, initial_output);
 			} else if election_status.is_open() && Self::queued_elected().is_none() {
 				// If the election window is open, and we don't have a queued solution, if you have
 				// one stored in the OCW DB, the submit it. We again check to never run the OCW more
 				// than every 5 blocks.
-				let threshold: T::BlockNumber = OFFCHAIN_REPEAT.into();
-				match set_check_offchain_execution_status::<T>(now, threshold) {
-					Ok(_) => {
-						match submit_queued::<T>() {
-							Ok(_) =>
-								log!(info, "resubmitting a saved solution succeeded at {:?}", now),
-							Err(why) =>
-								log!(error, "resubmitting a saved solution failed at {:?} because of {:?}", now, why),
-						}
-					},
-					Err(why) =>
-						log!(debug, "💸 skipping offchain worker in open election window due to [{:?}]", why),
-				}
+				let resubmit_output = set_check_offchain_execution_status::<T>(now, threshold)
+					.and_then(|_| submit_queued::<T>());
+				log!(debug, "resubmit OCW output at {:?} = {:?}", now, resubmit_output);
 			}
 		}
 
