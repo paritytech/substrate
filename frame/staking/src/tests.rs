@@ -4039,35 +4039,36 @@ mod offchain_election {
 		ext.execute_with(|| {
 			use offchain_election::OFFCHAIN_HEAD_DB;
 			use sp_runtime::offchain::storage::StorageValueRef;
+			use crate::offchain_election::{OffchainElectionError, OFFCHAIN_REPEAT};
 			let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 
 			run_to_block(12);
 
 			// first run -- ok
 			assert_eq!(
-				offchain_election::set_check_offchain_execution_status::<Test>(12),
+				offchain_election::set_check_offchain_execution_status::<Test>(12, OFFCHAIN_REPEAT.into()),
 				Ok(()),
 			);
 			assert_eq!(storage.get::<BlockNumber>().unwrap().unwrap(), 12);
 
 			// re-execute after the next. not allowed.
 			assert_eq!(
-				offchain_election::set_check_offchain_execution_status::<Test>(13),
-				Err("recently executed."),
+				offchain_election::set_check_offchain_execution_status::<Test>(13, OFFCHAIN_REPEAT.into()),
+				Err(OffchainElectionError::TooRecent),
 			);
 
 			// a fork like situation -- re-execute 10, 11, 12. But it won't go through.
 			assert_eq!(
-				offchain_election::set_check_offchain_execution_status::<Test>(10),
-				Err("fork."),
+				offchain_election::set_check_offchain_execution_status::<Test>(10, OFFCHAIN_REPEAT.into()),
+				Err(OffchainElectionError::Fork),
 			);
 			assert_eq!(
-				offchain_election::set_check_offchain_execution_status::<Test>(11),
-				Err("fork."),
+				offchain_election::set_check_offchain_execution_status::<Test>(11, OFFCHAIN_REPEAT.into()),
+				Err(OffchainElectionError::Fork),
 			);
 			assert_eq!(
-				offchain_election::set_check_offchain_execution_status::<Test>(12),
-				Err("recently executed."),
+				offchain_election::set_check_offchain_execution_status::<Test>(12, OFFCHAIN_REPEAT.into()),
+				Err(OffchainElectionError::TooRecent),
 			);
 		})
 	}

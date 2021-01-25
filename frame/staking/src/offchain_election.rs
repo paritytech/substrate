@@ -35,12 +35,11 @@ use frame_system::offchain::SubmitTransaction;
 
 /// Error types related to the offchain election machinery.
 #[derive(RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq))]
 pub enum OffchainElectionError {
 	/// election returned None. This means less candidate that minimum number of needed
 	/// validators were present. The chain is in trouble and not much that we can do about it.
 	ElectionFailed,
-	/// Submission to the transaction pool failed.
-	PoolSubmissionFailed,
 	/// The snapshot data is not available.
 	SnapshotUnavailable,
 	/// Error from npos-election crate. This usually relates to compact operation.
@@ -49,6 +48,20 @@ pub enum OffchainElectionError {
 	InvalidWinner,
 	/// A nominator is not available in the snapshot.
 	NominatorSnapshotCorrupt,
+	/// Failed to write some data to the offchain worker storage.
+	DBWriteFailed,
+	/// An offchain thread was not executed because fork was detected (executed with a block
+	/// number less than the last record one).
+	Fork,
+	/// An offchain thread was not executed because the last executed one is too recent (less than
+	/// `OFFCHAIN_REPEAT`).
+	TooRecent,
+	/// An unreachable state was reached. Should never happen.
+	Unreachable,
+	/// Submission to the transaction pool failed.
+	PoolSubmissionFailed,
+	/// No solution is stored in the offchain DB.
+	SolutionUnavailable,
 }
 
 impl From<sp_npos_elections::Error> for OffchainElectionError {
@@ -73,33 +86,32 @@ pub(crate) const DEFAULT_LONGEVITY: u64 = 25;
 /// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
 pub(crate) fn set_check_offchain_execution_status<T: Config>(
 	now: T::BlockNumber,
-) -> Result<(), &'static str> {
+	threshold: T::BlockNumber,
+) -> Result<(), OffchainElectionError> {
 	let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
-	let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
 
-	let mutate_stat =
-		storage.mutate::<_, &'static str, _>(|maybe_head: Option<Option<T::BlockNumber>>| {
-			match maybe_head {
-				Some(Some(head)) if now < head => Err("fork."),
-				Some(Some(head)) if now >= head && now <= head + threshold => {
-					Err("recently executed.")
-				}
-				Some(Some(head)) if now > head + threshold => {
-					// we can run again now. Write the new head.
-					Ok(now)
-				}
-				_ => {
-					// value doesn't exists. Probably this node just booted up. Write, and run
-					Ok(now)
-				}
+	let mutate_stat = storage.mutate(|maybe_head: Option<Option<T::BlockNumber>>| {
+		match maybe_head {
+			Some(Some(head)) if now < head => Err(OffchainElectionError::Fork),
+			Some(Some(head)) if now >= head && now <= head + threshold => {
+				Err(OffchainElectionError::TooRecent)
 			}
-		});
+			Some(Some(head)) if now > head + threshold => {
+				// we can allow again now. Write the new head.
+				Ok(now)
+			}
+			_ => {
+				// value doesn't exists. Probably this node just booted up. Write, and allow.
+				Ok(now)
+			}
+		}
+	});
 
 	match mutate_stat {
 		// all good
 		Ok(Ok(_)) => Ok(()),
 		// failed to write.
-		Ok(Err(_)) => Err("failed to write to offchain db."),
+		Ok(Err(_)) => Err(OffchainElectionError::DBWriteFailed),
 		// fork etc.
 		Err(why) => Err(why),
 	}
@@ -107,24 +119,50 @@ pub(crate) fn set_check_offchain_execution_status<T: Config>(
 
 pub(crate) const OFFCHAIN_QUEUED_CALL: &[u8] = b"parity/staking-election/call";
 
-pub(crate) fn save_solution<T: Config>(call: &Call<T>) -> Result<(), OffchainElectionError> {
+pub(crate) fn save_solution<T: Config>(call: Call<T>) -> Result<(), OffchainElectionError> {
 	let storage = StorageValueRef::persistent(&OFFCHAIN_QUEUED_CALL);
-	// TODO: probably we should do this with a mutate to ensure atomicity.
-	storage.set(call);
+	let set_outcome = storage.mutate::<_, OffchainElectionError, _>(|maybe_call| {
+		match maybe_call {
+			// under any case, write the new value. This means that we don't need to clear the
+			// solution. Each era, it will be overwritten.
+			_ => Ok(call),
+		}
+	});
+
+	match set_outcome {
+		Ok(Ok(_)) => Ok(()),
+		// failed to write.
+		Ok(Err(_)) => Err(OffchainElectionError::DBWriteFailed),
+		_ => {
+			// Defensive only: should not happen. Inner mutate closure always returns ok.
+			Err(OffchainElectionError::Unreachable)
+		}
+	}
 }
 
 pub(crate) fn get_solution<T: Config>() -> Option<Call<T>> {
-	let storage = StorageValueRef::persistent(&OFFCHAIN_QUEUED_CALL);
-	storage.get().flatten()
+	StorageValueRef::persistent(&OFFCHAIN_QUEUED_CALL).get().flatten()
 }
 
-pub(crate) fn submit_soluton<T: Config>(call: Call<T>) -> Result<(), OffchainElectionError>{
-	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.clone().into())
+pub(crate) fn submit_queued<T: Config>() -> Result<(), OffchainElectionError> {
+	let saved = get_solution().ok_or(OffchainElectionError::SolutionUnavailable)?;
+	submit_solution::<T>(saved)
+}
+
+pub(crate) fn submit_solution<T: Config>(call: Call<T>) -> Result<(), OffchainElectionError> {
+	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
+pub(crate) fn compute_save_and_submit<T: Config>() -> Result<(), OffchainElectionError> {
+	let call = compute_offchain_election::<T>()?;
+	save_solution::<T>(call.clone())?;
+	submit_solution::<T>(call)
+}
+
 /// The internal logic of the offchain worker of this module. This runs the phragmen election,
-/// compacts and reduces the solution, computes the score returns a call that can be submitted back to the chain.
+/// compacts and reduces the solution, computes the score returns a call that can be submitted back
+/// to the chain.
 pub(crate) fn compute_offchain_election<T: Config>() -> Result<Call<T>, OffchainElectionError> {
 	let iters = get_balancing_iters::<T>();
 	// compute raw solution. Note that we use `OffchainAccuracy`.
@@ -159,12 +197,6 @@ pub(crate) fn compute_offchain_election<T: Config>() -> Result<Call<T>, Offchain
 		current_era,
 		size,
 	))
-}
-
-pub(crate) fn compute_save_and_submit<T: Config>() -> Result<(), OffchainElectionError> {
-	let call = compute_offchain_election::<T>()?;
-	save_solution::<T>(&call)?;
-	submit_soluton::<T>(call)
 }
 
 /// Get a random number of iterations to run the balancing.
