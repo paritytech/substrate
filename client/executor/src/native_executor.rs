@@ -573,7 +573,7 @@ impl RuntimeInstanceSpawn {
 						instance: &mut instance,
 					};
 
-					sc_executor_common::inline_spawn::process_task::<(), _>(
+					sc_executor_common::inline_spawn::process_task(
 						task,
 						async_ext,
 						handle,
@@ -694,7 +694,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 				};
 
 				let runtime_spawn = Box::new(self.nested_instance());
-				sc_executor_common::inline_spawn::process_task_inline::<(), _>(
+				sc_executor_common::inline_spawn::process_task_inline(
 					task.task,
 					task.ext,
 					handle,

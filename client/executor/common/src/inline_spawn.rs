@@ -32,7 +32,6 @@ use sp_std::collections::btree_map::BTreeMap;
 use sp_std::sync::Arc;
 use sp_std::boxed::Box;
 use sp_std::vec::Vec;
-use sp_std::marker::PhantomData;
 #[cfg(feature = "std")]
 use crate::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
 #[cfg(feature = "std")]
@@ -56,19 +55,19 @@ macro_rules! log_error {
 	);
 }
 
+/// Technical trait to use instead of boolean parameter.
+///
 /// Indicate if this run as a local
 /// function without runtime boundaries.
 /// If it does, it is safe to assume
 /// that a wasm pointer can be call directly.
-pub trait HostLocalFunction: Copy + 'static {
+trait HostLocalFunction: Copy + 'static {
 	/// Associated boolean constant indicating if
 	/// a struct is being use in the hosting context.
 	///
 	/// It defaults to false.
 	const HOST_LOCAL: bool = false;
 }
-
-impl HostLocalFunction for () { }
 
 /// `HostLocalFunction` implementation that
 /// indicate we are using hosted runtime.
@@ -79,11 +78,12 @@ impl HostLocalFunction for HostLocal {
 	const HOST_LOCAL: bool = true;
 }
 
+impl HostLocalFunction for () { }
+
 /// Helper inner struct to implement `RuntimeSpawn` extension.
-pub struct RuntimeInstanceSpawn<HostLocalFunction = ()> {
+pub struct RuntimeInstanceSpawn {
 	tasks: BTreeMap<u64, PendingTask>,
 	counter: u64,
-	_ph: PhantomData<HostLocalFunction>,
 }
 
 #[cfg(feature = "std")]
@@ -244,6 +244,38 @@ impl<'a> LazyInstanciate<'a> for InlineInstantiateRef<'a> {
 /// Run a given task inline.
 pub fn process_task_inline<
 	'a,
+	#[cfg(feature = "std")]
+	I: LazyInstanciate<'a> + 'a,
+>(
+	task: Task,
+	ext: Box<dyn AsyncExternalities>,
+	handle: u64,
+	runtime_ext: Box<dyn RuntimeSpawn>,
+	#[cfg(feature = "std")]
+	instance_ref: I,
+) -> WorkerResult {
+	#[cfg(feature = "std")] {
+		process_task_inline_inner::<(), I>(
+			task,
+			ext,
+			handle,
+			runtime_ext,
+			instance_ref,
+		)
+	}
+	#[cfg(not(feature = "std"))] {
+		process_task_inline_inner::<()>(
+			task,
+			ext,
+			handle,
+			runtime_ext,
+		)
+	}
+}
+
+/// Run a given task inline.
+fn process_task_inline_inner<
+	'a,
 	HostLocal: HostLocalFunction,
 	#[cfg(feature = "std")]
 	I: LazyInstanciate<'a> + 'a,
@@ -255,6 +287,7 @@ pub fn process_task_inline<
 	#[cfg(feature = "std")]
 	instance_ref: I,
 ) -> WorkerResult {
+
 	let async_ext = match new_inline_only_externalities(ext) {
 		Ok(val) => val,
 		Err(e) => {
@@ -280,17 +313,44 @@ pub fn process_task_inline<
 
 	#[cfg(feature = "std")]
 	{
-		process_task::<HostLocal, _>(task, async_ext, handle, instance_ref)
+		process_task_inner::<HostLocal, _>(task, async_ext, handle, instance_ref)
 	}
 	#[cfg(not(feature = "std"))]
 	{
-		process_task::<HostLocal>(task, async_ext, handle)
+		process_task_inner::<HostLocal>(task, async_ext, handle)
 	}
 }
 
-
 /// Run a given task.
 pub fn process_task<
+	'a,
+	#[cfg(feature = "std")]
+	I: LazyInstanciate<'a> + 'a,
+>(
+	task: Task,
+	async_ext: sp_tasks::AsyncExternalities,
+	handle: u64,
+	#[cfg(feature = "std")]
+	instance_ref: I,
+) -> WorkerResult {
+	#[cfg(feature = "std")] {
+		process_task_inner::<(),_>(
+			task,
+			async_ext,
+			handle,
+			instance_ref,
+		)
+	}
+	#[cfg(not(feature = "std"))] {
+		process_task_inner::<()>(
+			task,
+			async_ext,
+			handle,
+		)
+	}
+}
+	
+fn process_task_inner<
 	'a,
 	HostLocal: HostLocalFunction,
 	#[cfg(feature = "std")]
@@ -371,17 +431,16 @@ pub fn process_task<
 	}
 }
 
-impl<HostLocal> RuntimeInstanceSpawn<HostLocal> {
+impl RuntimeInstanceSpawn {
 	fn nested_instance(&self) -> Self {
 		RuntimeInstanceSpawn {
 			tasks: Default::default(),
 			counter: 0,
-			_ph: PhantomData,
 		}
 	}
 }
 
-impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
+impl RuntimeInstanceSpawn {
 	/// Instantiate an inline instance spawn without
 	/// a wasm module.
 	/// This can be use if we are sure native only will
@@ -390,7 +449,6 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 		RuntimeInstanceSpawn {
 			tasks: BTreeMap::new(),
 			counter: 0,
-			_ph: PhantomData,
 		}
 	}
 
@@ -400,7 +458,7 @@ impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
 	}
 }
 
-impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawn<HostLocal> {
+impl RuntimeInstanceSpawn {
 	fn spawn_call_inner(
 		&mut self,
 		task: Task,
@@ -497,7 +555,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 						module: &*module,
 					};
 
-					process_task_inline::<HostLocal, _>(task.task, task.ext, handle, nested, instance_ref)
+					process_task_inline(task.task, task.ext, handle, nested, instance_ref)
 				}
 			},
 			// handle has been removed due to dismiss or
@@ -520,117 +578,114 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 	}
 }
 
-/// Inline instance spawn, this run all workers lazilly when `join` is called.
-///
-/// Warning to use only with environment that do not use threads (mainly wasm)
-/// and thus allows the unsafe `Send` declaration.
-pub struct RuntimeInstanceSpawnForceSend<HostLocal>(
-	Rc<RefCell<RuntimeInstanceSpawn<HostLocal>>>,
-	#[cfg(feature = "std")]
-	Rc<RefCell<LocalWasm>>,
-);
-
-unsafe impl<HostLocal> Send for RuntimeInstanceSpawnForceSend<HostLocal> { }
-
-impl<HostLocal> RuntimeInstanceSpawnForceSend<HostLocal> {
-	fn nested_instance(&self) -> Self {
-		#[cfg(feature = "std")]
-		let local_wasm = LocalWasm {
-			module: self.1.borrow().module.clone(),
-			instance: None,
-		};
-		RuntimeInstanceSpawnForceSend(
-			Rc::new(RefCell::new(self.0.borrow().nested_instance())),
-			#[cfg(feature = "std")]
-			Rc::new(RefCell::new(local_wasm)),
-		)
-	}
-}
-
-impl<HostLocal: HostLocalFunction> RuntimeSpawn for RuntimeInstanceSpawnForceSend<HostLocal> {
-	fn spawn_call_native(
-		&self,
-		func: fn(Vec<u8>) -> Vec<u8>,
-		data: Vec<u8>,
-		declaration: WorkerDeclaration,
-		calling_ext: &mut dyn Externalities,
-	) -> u64 {
-		self.0.borrow_mut().spawn_call_native(func, data, declaration, calling_ext)
-	}
-
-	fn spawn_call(
-		&self,
-		dispatcher_ref: u32,
-		func: u32,
-		data: Vec<u8>,
-		declaration: WorkerDeclaration,
-		calling_ext: &mut dyn Externalities,
-	) -> u64 {
-		self.0.borrow_mut().spawn_call(dispatcher_ref, func, data, declaration, calling_ext)
-	}
-
-	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
-		let nested = Box::new(self.nested_instance());
-		let worker_result = match self.0.borrow_mut().tasks.remove(&handle) {
-			Some(task) => {
-				#[cfg(feature = "std")]
-				{
-					let LocalWasm { instance, module } = &mut *self.1.borrow_mut();
-					let instance_ref = InlineInstantiateRef {
-						instance,
-						module: &*module,
-					};
-
-					process_task_inline::<HostLocal, _>(task.task, task.ext, handle, nested, instance_ref)
-				}
-				#[cfg(not(feature = "std"))]
-				process_task_inline::<HostLocal>(task.task, task.ext, handle, nested)
-			},
-			// handle has been removed due to dismiss or
-			// invalid externality condition.
-			None => WorkerResult::Invalid,
-		};
-
-		calling_ext.resolve_worker_result(worker_result)
-	}
-
-	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
-		calling_ext.dismiss_worker(handle);
-		self.0.borrow_mut().dismiss(handle)
-	}
-
-	fn set_capacity(&self, _capacity: u32) {
-		// No capacity, only inline, skip useless lock.
-	}
-}
-
-impl<HostLocal: HostLocalFunction> RuntimeInstanceSpawnForceSend<HostLocal> {
-	/// Instantial a new inline `RuntimeSpawn`.
-	///
-	/// Warning this is implementing `Send` when it should not and
-	/// should never be use in environment supporting threads.
-	pub fn new() -> Self {
-		RuntimeInstanceSpawnForceSend(
-			Rc::new(RefCell::new(RuntimeInstanceSpawn::new())),
-			#[cfg(feature = "std")]
-			Rc::new(RefCell::new(LocalWasm {
-				module: None,
-				instance: None,
-			})),
-		)
-	}
-}
-
 /// Variant to use when the calls do not use the runtime interface.
 /// For instance doing a proof verification in wasm.
 pub mod hosted_runtime {
 	use super::*;
 	use sp_core::traits::RuntimeSpawnExt;
 	use sp_externalities::ExternalitiesExt;
+	/// Inline instance spawn, this run all workers lazilly when `join` is called.
+	///
+	///
+	/// This should only be use with hosted runtime.
+	///
+	/// Warning to use only with environment that do not use threads (mainly wasm)
+	/// and thus allows the unsafe `Send` declaration.
+	pub struct RuntimeInstanceHostLocal(
+		Rc<RefCell<RuntimeInstanceSpawn>>,
+	);
+
+	unsafe impl Send for RuntimeInstanceHostLocal { }
+
+	impl RuntimeInstanceHostLocal {
+		fn nested_instance(&self) -> Self {
+			RuntimeInstanceHostLocal(
+				Rc::new(RefCell::new(self.0.borrow().nested_instance())),
+			)
+		}
+	}
+
+	impl RuntimeSpawn for RuntimeInstanceHostLocal {
+		fn spawn_call_native(
+			&self,
+			func: fn(Vec<u8>) -> Vec<u8>,
+			data: Vec<u8>,
+			declaration: WorkerDeclaration,
+			calling_ext: &mut dyn Externalities,
+		) -> u64 {
+			self.0.borrow_mut().spawn_call_native(func, data, declaration, calling_ext)
+		}
+
+		fn spawn_call(
+			&self,
+			dispatcher_ref: u32,
+			func: u32,
+			data: Vec<u8>,
+			declaration: WorkerDeclaration,
+			calling_ext: &mut dyn Externalities,
+		) -> u64 {
+			self.0.borrow_mut().spawn_call(dispatcher_ref, func, data, declaration, calling_ext)
+		}
+
+		fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
+			let nested = Box::new(self.nested_instance());
+			let worker_result = match self.0.borrow_mut().tasks.remove(&handle) {
+				Some(task) => {
+					// hosted in std does not make sense, but we can
+					// be use in native mode without wasm.
+					#[cfg(feature = "std")]
+					{
+						let mut instance = None;
+						let module = None;
+						let instance_ref = InlineInstantiateRef {
+							instance: &mut instance,
+							module: &module,
+						};
+
+						process_task_inline_inner::<HostLocal, _>(
+							task.task,
+							task.ext,
+							handle,
+							nested,
+							instance_ref,
+						)
+					}
+					#[cfg(not(feature = "std"))]
+					process_task_inline_inner::<HostLocal>(task.task, task.ext, handle, nested)
+				},
+				// handle has been removed due to dismiss or
+				// invalid externality condition.
+				None => WorkerResult::Invalid,
+			};
+
+			calling_ext.resolve_worker_result(worker_result)
+		}
+
+		fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
+			calling_ext.dismiss_worker(handle);
+			self.0.borrow_mut().dismiss(handle)
+		}
+
+		fn set_capacity(&self, _capacity: u32) {
+			// No capacity, only inline, skip useless lock.
+		}
+	}
+
+	impl RuntimeInstanceHostLocal {
+		/// Instantial a new inline `RuntimeSpawn`.
+		///
+		/// Warning this is implementing `Send` when it should not and
+		/// should never be use in environment supporting threads.
+		pub fn new() -> Self {
+			RuntimeInstanceHostLocal(
+				Rc::new(RefCell::new(RuntimeInstanceSpawn::new())),
+			)
+		}
+	}
 
 	/// Alias to an inline implementation that can be use when runtime interface
 	/// is skipped.
-	pub type HostRuntimeInstanceSpawn = RuntimeInstanceSpawnForceSend<HostLocal>;
+	pub type HostRuntimeInstanceSpawn = RuntimeInstanceHostLocal;
 
 	/// Hosted runtime variant of sp_io `RuntimeTasks` `set_capacity`.
 	///
