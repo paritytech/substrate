@@ -101,10 +101,10 @@ where
 	fn compute_fee_per_block(
 		free_balance: &BalanceOf<T>,
 		contract: &AliveContractInfo<T>,
-		_code_size_share: u32,
+		code_size_share: u32,
 	) -> BalanceOf<T> {
 		let uncovered_by_balance = T::DepositPerStorageByte::get()
-			.saturating_mul(contract.storage_size.into())
+			.saturating_mul(contract.storage_size.saturating_add(code_size_share).into())
 			.saturating_add(
 				T::DepositPerStorageItem::get()
 					.saturating_mul(contract.pair_count.into())

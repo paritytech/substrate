@@ -603,7 +603,7 @@ fn deploying_wasm_contract_should_work() {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: Call::Contracts(
 					pallet_contracts::Call::instantiate_with_code::<Runtime>(
-						1 * DOLLARS + subsistence,
+						1000 * DOLLARS + subsistence,
 						500_000_000,
 						transfer_code,
 						Vec::new(),
