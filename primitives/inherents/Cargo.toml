@@ -31,5 +31,5 @@ std = [
 	"codec/std",
 	"sp-core/std",
 	"thiserror",
-	"sp-runtime"
+	"sp-runtime",
 ]

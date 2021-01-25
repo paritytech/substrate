@@ -80,7 +80,9 @@ impl TimestampInherentData for InherentData {
 
 /// Provide duration since unix epoch in millisecond for timestamp inherent.
 #[cfg(feature = "std")]
-pub struct InherentDataProvider;
+pub struct InherentDataProvider {
+	max_drift: std::time::Duration,
+}
 
 #[cfg(feature = "std")]
 impl sp_inherents::InherentDataProvider for InherentDataProvider {
@@ -100,12 +102,52 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 			})
 	}
 
-	fn try_decode_error(
+	fn try_handle_error(
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> Option<Box<dyn std::error::Error + Send + Sync>> {
-		InherentError::try_from(&INHERENT_IDENTIFIER, error).map(|e| Box::new(e) as Box<_>)
+	) -> Option<std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send>>> {
+		if *identifier != INHERENT_IDENTIFIER {
+			return None
+		}
+
+		use futures::FutureExt;
+
+		match InherentError::try_from(&INHERENT_IDENTIFIER, error) {
+			Some(InherentError::ValidAtTimestamp(valid)) => {
+				let max_drift = self.max_drift;
+				let fut = async move {
+					use wasm_timer::SystemTime;
+
+					let timestamp_now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+					let valid = std::time::Duration::from_millis(valid);
+					// halt import until timestamp is valid.
+					// reject when too far ahead.
+					if valid > timestamp_now + max_drift {
+						return Err(Box::<dyn std::error::Error + Send + Sync>::from(String::from("Too far in future")))
+					}
+
+					let diff = valid.checked_sub(timestamp_now).unwrap_or_default();
+					log::info!(
+						target: "timestamp",
+						"halting for block {} milliseconds in the future",
+						diff.as_millis(),
+					);
+
+					futures_timer::Delay::new(diff).await;
+
+					Ok(())
+				};
+				Some(fut.boxed())
+			},
+			Some(InherentError::Other(o)) => {
+				let fut = async move {
+					Err(Box::from(String::from(o)) as Box<_>)
+				};
+				Some(fut.boxed())
+			},
+			None => None
+		}
 	}
 }
 

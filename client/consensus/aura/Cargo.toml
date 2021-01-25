@@ -40,6 +40,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 # We enable it only for web-wasm check
 # See https://docs.rs/getrandom/0.2.1/getrandom/#webassembly-support
 getrandom = { version = "0.2", features = ["js"], optional = true }
+async-trait = "0.1.42"
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }

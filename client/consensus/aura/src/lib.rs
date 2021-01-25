@@ -73,7 +73,7 @@ use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
 	CheckedHeader, SlotInfo, StorageChanges, check_equivocation,
-	BackoffAuthoringBlocksStrategy, InherentDataProviderExt,
+	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, Slot,
 };
 
 use sp_api::ApiExt;
@@ -334,7 +334,7 @@ where
 	fn proposing_remaining_duration(
 		&self,
 		head: &B::Header,
-		slot_info: &SlotInfo,
+		slot_info: &SlotInfo<B>,
 	) -> Option<std::time::Duration> {
 		let slot_remaining = self.slot_remaining_duration(slot_info);
 
@@ -492,7 +492,7 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 	P: Send + Sync + 'static,
 	CAW: Send + Sync + 'static,
 {
-	fn check_inherents<B: BlockT>(
+	async fn check_inherents<B: BlockT>(
 		&self,
 		block: B,
 		block_id: BlockId<B>,
@@ -535,7 +535,7 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 						info!(
 							target: "aura",
 							"halting for block {} seconds in the future",
-							diff
+							diff,
 						);
 						telemetry!(CONSENSUS_INFO; "aura.halting_for_future_block";
 							"diff" => ?diff
@@ -554,7 +554,7 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 	}
 }
 
-#[forbid(deprecated)]
+#[async_trait::async_trait]
 impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 	C: ProvideRuntimeApi<B> +
 		Send +
@@ -569,7 +569,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 	P::Signature: Encode + Decode,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 {
-	fn verify(
+	async fn verify(
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
@@ -619,7 +619,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 							BlockId::Hash(parent_hash),
 							inherent_data,
 							timestamp_now,
-						).map_err(|e| e.to_string())?;
+						).await.map_err(|e| e.to_string())?;
 					}
 
 					let (_, inner_body) = block.deconstruct();
@@ -835,7 +835,7 @@ pub fn import_queue<B, I, C, P, S, CAW, IDP>(
 	P::Signature: Encode + Decode,
 	S: sp_core::traits::SpawnNamed,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
-	IDP: CreateInherentDataProviders<B,>
+	IDP: CreateInherentDataProviders<B, Slot>
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;

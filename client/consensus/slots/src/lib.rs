@@ -32,7 +32,7 @@ pub use slots::SlotInfo;
 use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
-use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
+use std::{fmt::{Debug, self}, ops::Deref, pin::Pin, sync::Arc, time::{Instant, Duration}};
 use codec::{Decode, Encode};
 use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
@@ -49,6 +49,23 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header, HashFor, NumberFor}
 };
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+
+#[derive(Debug, Encode, Decode, PartialEq, Eq, PartialOrd, Clone, Copy)]
+pub struct Slot(pub u64);
+
+impl Deref for Slot {
+	type Target = u64;
+
+	fn deref(&self) -> &u64 {
+		&self.0
+	}
+}
+
+impl fmt::Display for Slot {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
@@ -117,7 +134,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn epoch_data(
 		&self,
 		header: &B::Header,
-		slot_number: u64,
+		slot_number: Slot,
 	) -> Result<Self::EpochData, sp_consensus::Error>;
 
 	/// Returns the number of authorities given the epoch data.
@@ -128,7 +145,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn claim_slot(
 		&self,
 		header: &B::Header,
-		slot_number: u64,
+		slot_number: Slot,
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim>;
 
@@ -137,14 +154,14 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn notify_slot(
 		&self,
 		_header: &B::Header,
-		_slot_number: u64,
+		_slot_number: Slot,
 		_epoch_data: &Self::EpochData,
 	) {}
 
 	/// Return the pre digest data to include in a block authored with the given claim.
 	fn pre_digest_data(
 		&self,
-		slot_number: u64,
+		slot_number: Slot,
 		claim: &Self::Claim,
 	) -> Vec<sp_runtime::DigestItem<B::Hash>>;
 
@@ -172,7 +189,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	///
 	/// An example strategy that back offs if the finalized head is lagging too much behind the tip
 	/// is implemented by [`BackoffAuthoringOnFinalizedHeadLagging`].
-	fn should_backoff(&self, _slot_number: u64, _chain_head: &B::Header) -> bool {
+	fn should_backoff(&self, _slot_number: Slot, _chain_head: &B::Header) -> bool {
 		false
 	}
 
@@ -277,14 +294,14 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		debug!(
 			target: self.logging_target(),
 			"Starting authorship at slot {}; timestamp = {}",
-			slot_number,
+			slot_number.0,
 			timestamp.as_secs(),
 		);
 
 		telemetry!(
 			CONSENSUS_DEBUG;
 			"slots.starting_authorship";
-			"slot_num" => slot_number,
+			"slot_num" => slot_number.0,
 			"timestamp" => timestamp.as_secs(),
 		);
 
@@ -300,7 +317,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			telemetry!(
 				CONSENSUS_WARN;
 				"slots.unable_authoring_block";
-				"slot" => slot_number,
+				"slot" => slot_number.0,
 				"err" => ?err,
 			);
 
@@ -327,7 +344,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					info!(
 						target: logging_target,
 						"⌛️ Discarding proposal for slot {}; block production took too long",
-						slot_number,
+						slot_number.0,
 					);
 					// If the node was compiled with debug, tell the user to use release optimizations.
 					#[cfg(build_type="debug")]
@@ -338,7 +355,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					telemetry!(
 						CONSENSUS_INFO;
 						"slots.discarding_proposal_took_too_long";
-						"slot" => slot_number,
+						"slot" => slot_number.0,
 					);
 
 					Err(sp_consensus::Error::ClientImport("Timeout in the Slots proposer".into()))
@@ -416,12 +433,12 @@ pub trait InherentDataProviderExt {
 	/// This timestamp should be the duration since the UNIX epoch.
 	fn timestamp(&self) -> Duration;
 	/// The current slot that will be found in the [`InherentData`].
-	fn slot(&self) -> u64;
+	fn slot(&self) -> Slot;
 }
 
 pub struct SlotsInherentDataProviders<P> {
 	timestamp: Duration,
-	slot: u64,
+	slot: Slot,
 	wrapped: P,
 }
 
@@ -447,7 +464,7 @@ impl<P> InherentDataProviderExt for SlotsInherentDataProviders<P> {
 		self.timestamp
 	}
 
-	fn slot(&self) -> u64 {
+	fn slot(&self) -> Slot {
 		self.slot
 	}
 }
@@ -615,7 +632,7 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 /// an exponential backoff of at most `2^7 * slot_duration`, if no slots were skipped
 /// this method will return `None.`
 pub fn slot_lenience_exponential<Block: BlockT>(
-	parent_slot: u64,
+	parent_slot: Slot,
 	slot_info: &SlotInfo<Block>,
 ) -> Option<Duration> {
 	// never give more than 2^this times the lenience.
@@ -630,7 +647,7 @@ pub fn slot_lenience_exponential<Block: BlockT>(
 	// exponential back-off.
 	// in normal cases we only attempt to issue blocks up to the end of the slot.
 	// when the chain has been stalled for a few slots, we give more lenience.
-	let skipped_slots = slot_info.number.saturating_sub(parent_slot + 1);
+	let skipped_slots = slot_info.number.saturating_sub(parent_slot.0 + 1);
 
 	if skipped_slots == 0 {
 		None
@@ -675,9 +692,9 @@ pub trait BackoffAuthoringBlocksStrategy<N> {
 	fn should_backoff(
 		&self,
 		chain_head_number: N,
-		chain_head_slot: u64,
+		chain_head_slot: Slot,
 		finalized_number: N,
-		slow_now: u64,
+		slow_now: Slot,
 		logging_target: &str,
 	) -> bool;
 }
@@ -722,9 +739,9 @@ where
 	fn should_backoff(
 		&self,
 		chain_head_number: N,
-		chain_head_slot: u64,
+		chain_head_slot: Slot,
 		finalized_number: N,
-		slot_now: u64,
+		slot_now: Slot,
 		logging_target: &str,
 	) -> bool {
 		// This should not happen, but we want to keep the previous behaviour if it does.
@@ -742,7 +759,7 @@ where
 
 		// If interval is nonzero we backoff if the current slot isn't far enough ahead of the chain
 		// head.
-		if slot_now <= chain_head_slot + interval {
+		if slot_now.0 <= chain_head_slot.0 + interval {
 			info!(
 				target: logging_target,
 				"Backing off claiming new slot for block authorship: finality is lagging.",
@@ -758,9 +775,9 @@ impl<N> BackoffAuthoringBlocksStrategy<N> for () {
 	fn should_backoff(
 		&self,
 		_chain_head_number: N,
-		_chain_head_slot: u64,
+		_chain_head_slot: Slot,
 		_finalized_number: N,
-		_slot_now: u64,
+		_slot_now: Slot,
 		_logging_target: &str,
 	) -> bool {
 		false
