@@ -192,7 +192,7 @@ where
 
 impl<'a, H, N, B> Externalities for Ext<'a, H, N, B>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
 	B: Backend<H>,
 	N: crate::changes_trie::BlockNumber,

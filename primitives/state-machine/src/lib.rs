@@ -321,7 +321,7 @@ mod execution {
 	}
 
 	impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + Clone + 'static,
 		B: Backend<H>,
@@ -576,7 +576,7 @@ mod execution {
 	) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 	where
 		B: Backend<H>,
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + Clone + 'static,
 		N: crate::changes_trie::BlockNumber,
@@ -615,7 +615,7 @@ mod execution {
 	) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 	where
 		S: trie_backend_essence::TrieBackendStorage<H>,
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + 'static + Clone,
 		N: crate::changes_trie::BlockNumber,
@@ -654,7 +654,7 @@ mod execution {
 		runtime_code: &RuntimeCode,
 	) -> Result<Vec<u8>, Box<dyn Error>>
 	where
-		H: Hasher + 'static,
+		H: Hasher,
 		Exec: CodeExecutor + Clone + 'static,
 		H::Out: Ord + 'static + codec::Codec,
 		N: crate::changes_trie::BlockNumber,
@@ -683,7 +683,7 @@ mod execution {
 		runtime_code: &RuntimeCode,
 	) -> Result<Vec<u8>, Box<dyn Error>>
 	where
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + Clone + 'static,
 		N: crate::changes_trie::BlockNumber,
@@ -714,7 +714,7 @@ mod execution {
 	) -> Result<StorageProof, Box<dyn Error>>
 	where
 		B: Backend<H>,
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + Codec,
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
@@ -734,7 +734,7 @@ mod execution {
 	) -> Result<StorageProof, Box<dyn Error>>
 	where
 		B: Backend<H>,
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + Codec,
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
@@ -751,7 +751,7 @@ mod execution {
 	) -> Result<StorageProof, Box<dyn Error>>
 	where
 		S: trie_backend_essence::TrieBackendStorage<H>,
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + Codec,
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
@@ -773,7 +773,7 @@ mod execution {
 	) -> Result<StorageProof, Box<dyn Error>>
 	where
 		S: trie_backend_essence::TrieBackendStorage<H>,
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + Codec,
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
@@ -794,7 +794,7 @@ mod execution {
 		keys: I,
 	) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, Box<dyn Error>>
 	where
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + Codec,
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
@@ -816,7 +816,7 @@ mod execution {
 		keys: I,
 	) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, Box<dyn Error>>
 	where
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + Codec,
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
@@ -840,7 +840,7 @@ mod execution {
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Box<dyn Error>>
 	where
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + Codec,
 	{
 		proving_backend.storage(key).map_err(|e| Box::new(e) as Box<dyn Error>)
@@ -853,7 +853,7 @@ mod execution {
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Box<dyn Error>>
 	where
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + Codec,
 	{
 		proving_backend.child_storage(child_info, key)

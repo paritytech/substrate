@@ -52,7 +52,7 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 	), String>
 	where
 		B: Backend<H>,
-		H: Hasher + 'static,
+		H: Hasher + 'a,
 		H::Out: Encode,
 		Number: BlockNumber,
 {
@@ -203,7 +203,7 @@ fn prepare_digest_input<'a, H, Number>(
 		Vec<Number>,
 	), String>
 	where
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: 'a + Encode,
 		Number: BlockNumber,
 {

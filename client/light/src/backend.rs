@@ -53,7 +53,7 @@ use hash_db::Hasher;
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
 
 /// Light client backend.
-pub struct Backend<S, H: Hasher + 'static> {
+pub struct Backend<S, H: Hasher> {
 	blockchain: Arc<Blockchain<S>>,
 	genesis_state: RwLock<Option<InMemoryBackend<H>>>,
 	import_lock: RwLock<()>,
@@ -73,7 +73,7 @@ pub struct ImportOperation<Block: BlockT, S> {
 }
 
 /// Either in-memory genesis state, or locally-unavailable state.
-pub enum GenesisOrUnavailableState<H: Hasher + 'static> {
+pub enum GenesisOrUnavailableState<H: Hasher> {
 	/// Genesis state - storage values are stored in-memory.
 	Genesis(InMemoryBackend<H>),
 	/// We know that state exists, but all calls will fail with error, because it
@@ -377,7 +377,7 @@ impl<H: Hasher> std::fmt::Debug for GenesisOrUnavailableState<H> {
 	}
 }
 
-impl<H: Hasher + 'static> StateBackend<H> for GenesisOrUnavailableState<H>
+impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	where
 		H::Out: Ord + codec::Codec,
 {

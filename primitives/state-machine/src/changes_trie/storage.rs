@@ -176,7 +176,7 @@ impl<H: Hasher, Number: BlockNumber> RootsStorage<H, Number> for InMemoryStorage
 	}
 }
 
-impl<H: Hasher + 'static, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, Number> {
+impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, Number> {
 	fn as_roots_storage(&self) -> &dyn RootsStorage<H, Number> {
 		self
 	}
@@ -203,24 +203,11 @@ impl<'a, H: Hasher, Number: BlockNumber> TrieBackendAdapter<'a, H, Number> {
 impl<'a, H, Number> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number>
 	where
 		Number: BlockNumber,
-		H: Hasher + 'static,
+		H: Hasher,
 {
 	type Overlay = MemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.storage.get(key, prefix)
-	}
-}
-
-impl<'a, H, Number> Clone for TrieBackendAdapter<'a, H, Number>
-	where
-		Number: BlockNumber,
-		H: Hasher,
-{
-	fn clone(&self) -> Self {
-		TrieBackendAdapter {
-			storage: self.storage,
-			_hasher: std::marker::PhantomData,
-		}
 	}
 }

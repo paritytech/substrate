@@ -227,7 +227,7 @@ pub fn check_execution_proof<Header, E, H>(
 	where
 		Header: HeaderT,
 		E: CodeExecutor + Clone + 'static,
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + codec::Codec + 'static,
 {
 	check_execution_proof_with_make_header::<Header, E, H, _>(
@@ -258,7 +258,7 @@ pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader>(
 ) -> ClientResult<Vec<u8>>
 	where
 		E: CodeExecutor + Clone + 'static,
-		H: Hasher + 'static,
+		H: Hasher,
 		Header: HeaderT,
 		H::Out: Ord + codec::Codec + 'static,
 		MakeNextHeader: Fn(&Header) -> Header,
