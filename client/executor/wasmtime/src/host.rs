@@ -65,7 +65,7 @@ impl HostState {
 	pub fn new(allocator: FreeingBumpHeapAllocator, instance: Rc<InstanceWrapper>) -> Self {
 		HostState {
 			inner: Rc::new(Inner {
-				sandbox_store: RefCell::new(sandbox::Store::new()),
+				sandbox_store: RefCell::new(sandbox::Store::new(sandbox::SandboxBackend::Wasmer)),
 				allocator: RefCell::new(allocator),
 				instance,
 			})
@@ -315,8 +315,9 @@ impl Sandbox for HostState {
 			SupervisorFuncRef(func_ref)
 		};
 
+		let store = &*self.inner.sandbox_store.borrow();
 		let guest_env = match sandbox::GuestEnvironment::decode(
-			&*self.inner.sandbox_store.borrow(),
+			store,
 			raw_env_def,
 		) {
 			Ok(guest_env) => guest_env,
@@ -327,10 +328,10 @@ impl Sandbox for HostState {
 
 		let instance_idx_or_err_code =
 			match sandbox::instantiate::<_, _, Holder>(
-				SandboxBackend::Wasmer,
-				dispatch_thunk, 
-				wasm, 
-				guest_env, 
+				store,
+				dispatch_thunk,
+				wasm,
+				guest_env,
 				state
 			)
 				.map(|i| i.register(&mut *self.inner.sandbox_store.borrow_mut()))

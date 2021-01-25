@@ -63,7 +63,7 @@ impl FunctionExecutor {
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			inner: Rc::new(Inner {
-				sandbox_store: RefCell::new(sandbox::Store::new()),
+				sandbox_store: RefCell::new(sandbox::Store::new(sandbox::SandboxBackend::Wasmi)),
 				allocator: RefCell::new(sp_allocator::FreeingBumpHeapAllocator::new(heap_base)),
 				memory: m,
 				table: t,

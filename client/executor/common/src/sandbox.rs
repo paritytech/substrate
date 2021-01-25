@@ -22,7 +22,7 @@
 //! a compiled execution engine.
 
 use crate::error::{Result, Error};
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, convert::TryInto, rc::Rc, todo};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
 
@@ -38,7 +38,7 @@ use wasmtime::Val;
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 
 // use wasmer::{imports, wat2wasm, Instance, Module, Store, Value};
-use wasmer_compiler_singlepass::Singlepass;
+use wasmer_compiler_singlepass::{Singlepass, SinglepassCompiler};
 
 /// Index of a function inside the supervisor.
 ///
@@ -99,15 +99,6 @@ struct Imports {
 impl Imports {
 	fn func_by_name(&self, module_name: &str, func_name: &str) -> Option<GuestFuncIndex> {
 		self.func_map.get(&(module_name.as_bytes().to_owned(), func_name.as_bytes().to_owned())).cloned()
-	}
-
-	fn memory_by_name(&self, module_name: &str, memory_name: &str) -> Option<MemoryRef> {
-		let key = (
-			module_name.as_bytes().to_vec(),
-			memory_name.as_bytes().to_vec(),
-		);
-		
-		self.memories_map.get(&key).cloned()
 	}
 }
 
@@ -616,8 +607,8 @@ impl GuestEnvironment {
 		store: &Store<FR>,
 		raw_env_def: &[u8],
 	) -> std::result::Result<Self, InstantiationError> {
-		let (imports, guest_to_supervisor_mapping) =
-			decode_environment_definition(raw_env_def, &store.memories)?;
+		let (imports, guest_to_supervisor_mapping) = todo!();
+			//decode_environment_definition(raw_env_def, &store.memories)?;
 		Ok(Self {
 			imports,
 			guest_to_supervisor_mapping,
@@ -675,8 +666,7 @@ pub enum SandboxBackend {
 ///
 /// Returns uninitialized sandboxed module instance or an instantiation error.
 pub fn instantiate<'a, FR, FE, SCH>(
-	// supervisor_externals: &mut FE,
-	sandbox_backend: SandboxBackend,
+	store: &Store<FR>,
 	dispatch_thunk: FR,
 	wasm: &[u8],
 	guest_env: GuestEnvironment,
@@ -688,8 +678,8 @@ where
 	SCH: SandboxCapabiliesHolder<SupervisorFuncRef = FR, SC = FE>,
 {
 
-	let sandbox_instance = match sandbox_backend {
-		SandboxBackend::Wasmi => {
+	let sandbox_instance = match &store.backend_context {
+		BackendContext::Wasmi => {
 			let wasmi_module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
 			let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
 				.map_err(|_| InstantiationError::Instantiation)?;
@@ -721,7 +711,7 @@ where
 			sandbox_instance
 		}
 
-		SandboxBackend::Wasmtime => {
+		BackendContext::Wasmtime => {
 			let mut config = wasmtime::Config::new();
 			config.cranelift_opt_level(wasmtime::OptLevel::None);
 			config.strategy(wasmtime::Strategy::Cranelift).map_err(|_| InstantiationError::ModuleDecoding)?;
@@ -846,12 +836,12 @@ where
 			})
 		}
 
-		SandboxBackend::Wasmer => {
-			let compiler = Singlepass::default();
-			let store = wasmer::Store::new(&wasmer::JIT::new(&compiler).engine());
-wasmer::im
+		BackendContext::Wasmer(context) => {
+			// let compiler = Singlepass::default();
+			// let store = wasmer::Store::new(&wasmer::JIT::new(&compiler).engine());
+
 			println!("Decoding module...");
-			let module = wasmer::Module::new(&store, wasm).map_err(|error| {
+			let module = wasmer::Module::new(&context.store, wasm).map_err(|error| {
 				println!("{:?}", error);
 				InstantiationError::ModuleDecoding
 			})?;
@@ -877,15 +867,12 @@ wasmer::im
 					wasmer::ExternType::Memory(memory_type) => {
 						println!("Importing memory '{}' :: '{}' {}", import.module(), import.name(), memory_type.to_string());
 						let exports = exports_map.entry(import.module().to_string()).or_insert(wasmer::Exports::new());
+						let memory = store
+							.new_memory(memory_type.minimum.0, memory_type.maximum.map(|m| m.0).unwrap_or(sandbox_primitives::MEM_UNLIMITED))
+							.and_then(|index| store.memory(index))
+							.map_err(|_| InstantiationError::ModuleDecoding)?;
 
-						// let memory = guest_env.imports.memory_by_name(import.module(), import.name());
-
-						if let Ok(memory) = wasmer::Memory::new(&store, *memory_type) {
-							exports.insert(import.name(), wasmer::Extern::Memory(memory));
-						} else {
-							println!("Failed to import memory '{}' :: '{}'", import.module(), import.name());
-							continue;
-						}
+						exports.insert(import.name(), wasmer::Extern::Memory(memory.as_wasmer().unwrap()));
 					}
 
 					wasmer::ExternType::Function(func_ty) => {
@@ -903,7 +890,7 @@ wasmer::im
 							.func_by_guest_index(guest_func_index).expect("missing guest to host mapping");
 
 						let dispatch_thunk = dispatch_thunk.clone();
-						let function = wasmer::Function::new(&store, func_ty, move |params| {
+						let function = wasmer::Function::new(&context.store, func_ty, move |params| {
 							SCH::with_sandbox_capabilities(|supervisor_externals| {
 								// Serialize arguments into a byte vector.
 								let invoke_args_data = params
@@ -1019,21 +1006,77 @@ wasmer::im
 	Ok(UnregisteredInstance { sandbox_instance })
 }
 
+#[derive(Clone, Debug)]
+pub enum Memory {
+	Wasmi(MemoryRef),
+	// Wasmtime(todo),
+	Wasmer(wasmer::Memory),
+}
+
+impl Memory {
+	pub fn as_wasmi(&self) -> Option<MemoryRef> {
+		match self {
+			Memory::Wasmi(memory) => Some(memory.clone()),
+			_ => None,
+		}
+	}
+
+	pub fn as_wasmer(&self) -> Option<wasmer::Memory> {
+		match self {
+			Memory::Wasmer(memory) => Some(memory.clone()),
+			_ => None,
+		}
+	}
+}
+
+struct WasmerBackend {
+	compiler: Singlepass,
+	store: wasmer::Store,
+}
+
+enum BackendContext {
+	Wasmi,
+	Wasmtime,
+	Wasmer(WasmerBackend),
+}
+
+impl BackendContext {
+	pub fn new(backend: SandboxBackend) -> BackendContext {
+		match backend {
+			SandboxBackend::Wasmi => BackendContext::Wasmi,
+			SandboxBackend::Wasmtime => todo!(),
+
+			SandboxBackend::Wasmer => {
+				let compiler = Singlepass::default();
+
+				BackendContext::Wasmer(
+					WasmerBackend {
+						store: wasmer::Store::new(&wasmer::JIT::new(&compiler).engine()),
+						compiler,
+					}
+				)
+			}
+		}
+	}
+}
+
 /// This struct keeps track of all sandboxed components.
 ///
 /// This is generic over a supervisor function reference type.
 pub struct Store<FR> {
 	// Memories and instances are `Some` until torn down.
 	instances: Vec<Option<Rc<SandboxInstance<FR>>>>,
-	memories: Vec<Option<MemoryRef>>,
+	memories: Vec<Option<Memory>>,
+	backend_context: BackendContext,
 }
 
 impl<FR> Store<FR> {
 	/// Create a new empty sandbox store.
-	pub fn new() -> Self {
+	pub fn new(backend: SandboxBackend) -> Self {
 		Store {
 			instances: Vec::new(),
 			memories: Vec::new(),
+			backend_context: BackendContext::new(backend),
 		}
 	}
 
@@ -1046,17 +1089,31 @@ impl<FR> Store<FR> {
 	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32> {
 		let maximum = match maximum {
 			sandbox_primitives::MEM_UNLIMITED => None,
-			specified_limit => Some(Pages(specified_limit as usize)),
+			specified_limit => Some(specified_limit),
 		};
 
-		let mem =
-			MemoryInstance::alloc(
-				Pages(initial as usize),
-				maximum,
-			)?;
+		let memory = match &self.backend_context {
+			BackendContext::Wasmi => {
+				Memory::Wasmi(MemoryInstance::alloc(
+					Pages(initial as usize),
+					maximum.map(|m| Pages(m as usize)),
+				)?)
+			}
+
+			BackendContext::Wasmer(context) => {
+				let ty = wasmer::MemoryType::new(initial, maximum, false);
+
+				Memory::Wasmer(
+					wasmer::Memory::new(&context.store, ty)
+						.map_err(|_| Error::InvalidMemoryReference)?
+				)
+			}
+
+			BackendContext::Wasmtime => todo!(),
+		};
 
 		let mem_idx = self.memories.len();
-		self.memories.push(Some(mem));
+		self.memories.push(Some(memory));
 		Ok(mem_idx as u32)
 	}
 
@@ -1080,7 +1137,7 @@ impl<FR> Store<FR> {
 	///
 	/// Returns `Err` If `memory_idx` isn't a valid index of an memory or
 	/// if memory has been torn down.
-	pub fn memory(&self, memory_idx: u32) -> Result<MemoryRef> {
+	pub fn memory(&self, memory_idx: u32) -> Result<Memory> {
 		self.memories
 			.get(memory_idx as usize)
 			.cloned()
