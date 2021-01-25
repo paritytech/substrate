@@ -197,6 +197,14 @@ pub fn instantiate(
 	})
 }
 
+/// Helper method for `instantiate` function using a module arc reference.
+#[cfg(feature = "std")]
+pub fn instantiate_inline(
+	module: &Option<Arc<dyn WasmModule>>,
+) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
+	instantiate(module.as_ref().map(AsRef::as_ref))
+}
+
 /// Technical only trait to factor code.
 /// It access the instance lazilly from a module.
 #[cfg(feature = "std")]
@@ -210,15 +218,7 @@ pub trait LazyInstanciate<'a> {
 	fn instantiate(self) -> Option<&'a AssertUnwindSafe<Box<dyn WasmInstance>>>;
 }
 
-/// Helper method to instantiate from a module arc reference.
-#[cfg(feature = "std")]
-pub fn instantiate_inline(
-	module: &Option<Arc<dyn WasmModule>>,
-) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
-	instantiate(module.as_ref().map(AsRef::as_ref))
-}
-
-/// Lazy instantiaty for wasm instance.
+/// Lazy instantiate for wasm instance.
 #[cfg(feature = "std")]
 pub struct InlineInstantiateRef<'a> {
 	/// Thread safe reference counted to the module.
@@ -307,7 +307,7 @@ pub fn process_task<
 
 			#[cfg(feature = "std")]
 			if HostLocal::HOST_LOCAL {
-				panic!("HOST_LOCAL is only expected for a wasm call");
+				panic!("HOST_LOCAL is only expected for a wasm no_std call");
 			} else {
 				let instance = if let Some(instance) = instance_ref.instantiate() {
 					instance
