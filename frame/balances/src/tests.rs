@@ -34,7 +34,6 @@ macro_rules! decl_tests {
 		};
 		use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier};
 		use frame_system::RawOrigin;
-		use frame_system as system;
 
 		const ID_1: LockIdentifier = *b"1       ";
 		const ID_2: LockIdentifier = *b"2       ";
