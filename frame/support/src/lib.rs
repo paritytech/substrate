@@ -1388,8 +1388,9 @@ pub mod pallet_prelude {
 /// ### Macro expansion
 ///
 /// For each storage item the macro generates a struct named
-/// `_GeneratedPrefixForStorage$NameOfStorage`, implements `StorageInstance` on it using the 
-/// pallet and storage name. It then uses it as the first generic of the aliased type.
+/// `_GeneratedPrefixForStorage$NameOfStorage`, and implements [`StorageInstance`](traits::StorageInstance)
+/// on it using the pallet and storage name. It then uses it as the first generic of the aliased
+/// type.
 ///
 ///
 /// The macro implements the function `storage_metadata` on `Pallet` implementing the metadata for
@@ -1909,7 +1910,8 @@ pub mod pallet_prelude {
 /// 	```
 /// 5. **migrate Config**: move trait into the module with
 /// 	* all const in decl_module to `#[pallet::constant]`
-/// 6. **migrate decl_module**: write:
+/// 	* add bound `IsType<<Self as frame_system::Config>::Event>` to `type Event`
+/// 7. **migrate decl_module**: write:
 /// 	```ignore
 /// 	#[pallet::hooks]
 /// 	impl<T: Config> Hooks for Pallet<T> {
@@ -1996,8 +1998,9 @@ pub mod pallet_prelude {
 ///
 /// ## Checking upgrade guidelines:
 ///
-/// * compare metadata. This checks for:
-/// 	* call, names, signature, doc
+/// * compare metadata. Use [subsee](https://github.com/ascjones/subsee) to fetch the metadata
+/// and do a diff of the resulting json before and after migration. This checks for:
+/// 	* call, names, signature, docs
 /// 	* event names, docs
 /// 	* error names, docs
 /// 	* storage names, hasher, prefixes, default value
