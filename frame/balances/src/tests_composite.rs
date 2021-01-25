@@ -25,7 +25,7 @@ use sp_runtime::{
 };
 use sp_core::H256;
 use sp_io;
-use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
+use frame_support::parameter_types;
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use pallet_transaction_payment::CurrencyAdapter;
 use crate::{
@@ -91,7 +91,7 @@ impl Config for Test {
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = system::Module<Test>;
+	type AccountStore = frame_system::Pallet<Test>;
 	type MaxLocks = ();
 	type WeightInfo = ();
 }

@@ -135,7 +135,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
+		pallet_balances::GenesisConfig::<Test> {
 			balances: if self.monied {
 				vec![
 					(1, 10 * self.existential_deposit),
@@ -168,9 +168,9 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::System(System::Event::NewAccount(1)),
-					Event::Balances(RawEvent::Endowed(1, 100)),
-					Event::Balances(RawEvent::BalanceSet(1, 100, 0)),
+					Event::frame_system(frame_system::Event::NewAccount(1)),
+					Event::pallet_balances(RawEvent::Endowed(1, 100)),
+					Event::pallet_balances(RawEvent::BalanceSet(1, 100, 0)),
 				]
 			);
 
@@ -184,8 +184,8 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::Balances(RawEvent::DustLost(1, 1)),
-					Event::System(System::Event::KilledAccount(1))
+					Event::pallet_balances(RawEvent::DustLost(1, 1)),
+					Event::frame_system(frame_system::Event::KilledAccount(1))
 				]
 			);
 		});
