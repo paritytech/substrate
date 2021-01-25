@@ -37,7 +37,7 @@ use sp_consensus_babe::{AuthorityId, AuthorityPair, SlotNumber};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_staking::SessionIndex;
 use pallet_staking::EraIndex;
-use pallet_session::{historical as pallet_session_historical};
+use pallet_session::historical as pallet_session_historical;
 
 type DummyValidatorId = u64;
 
