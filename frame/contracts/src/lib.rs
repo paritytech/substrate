@@ -552,7 +552,7 @@ decl_module! {
 			let result = Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
 				ctx.call(dest, value, gas_meter, data)
 			});
-			gas_meter.into_dispatch_result(result)
+			gas_meter.into_dispatch_result(result, T::WeightInfo::call())
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring
@@ -593,7 +593,8 @@ decl_module! {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let schedule = <Module<T>>::current_schedule();
-			ensure!(code.len() as u32 <= schedule.limits.code_size, Error::<T>::CodeTooLarge);
+			let code_len = code.len() as u32;
+			ensure!(code_len <= schedule.limits.code_size, Error::<T>::CodeTooLarge);
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let result = Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
 				let executable = PrefabWasmModule::from_code(code, &schedule)?;
@@ -602,7 +603,10 @@ decl_module! {
 				executable.store();
 				Ok(result)
 			});
-			gas_meter.into_dispatch_result(result)
+			gas_meter.into_dispatch_result(
+				result,
+				T::WeightInfo::instantiate_with_code(code_len / 1024, salt.len() as u32 / 1024)
+			)
 		}
 
 		/// Instantiates a contract from a previously deployed wasm binary.
@@ -631,7 +635,10 @@ decl_module! {
 				executable.store();
 				Ok(result)
 			});
-			gas_meter.into_dispatch_result(result)
+			gas_meter.into_dispatch_result(
+				result,
+				T::WeightInfo::instantiate(salt.len() as u32 / 1024)
+			)
 		}
 
 		/// Allows block producers to claim a small reward for evicting a contract. If a block

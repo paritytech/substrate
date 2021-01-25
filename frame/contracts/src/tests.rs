@@ -360,12 +360,12 @@ where
 
 // Perform a call to a plain account.
 // The actual transfer fails because we can only call contracts.
-// Then we check that no gas was used because the base costs for calling are either charged
-// as part of the `call` extrinsic or by `seal_call`.
+// Then we check that at least the base costs where charged (no runtime gas costs.)
 #[test]
 fn calling_plain_account_fails() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 100_000_000);
+		let base_cost = <<Test as crate::Config>::WeightInfo as crate::WeightInfo>::call();
 
 		assert_eq!(
 			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, Vec::new()),
@@ -373,7 +373,7 @@ fn calling_plain_account_fails() {
 				DispatchErrorWithPostInfo {
 					error: Error::<Test>::NotCallable.into(),
 					post_info: PostDispatchInfo {
-						actual_weight: Some(0),
+						actual_weight: Some(base_cost),
 						pays_fee: Default::default(),
 					},
 				}
