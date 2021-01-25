@@ -112,6 +112,8 @@ mod extensions;
 pub mod weights;
 #[cfg(test)]
 mod tests;
+#[cfg(feature = "std")]
+pub mod mocking;
 
 
 pub use extensions::{
