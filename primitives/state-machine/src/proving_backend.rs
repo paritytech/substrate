@@ -33,7 +33,7 @@ use crate::{Error, ExecutionError, Backend, DBValue};
 use sp_core::storage::ChildInfo;
 
 /// Patricia trie-based backend specialized in get value proofs.
-pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> {
+pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	pub(crate) backend: &'a TrieBackendEssence<S, H>,
 	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
 }
@@ -115,28 +115,17 @@ pub type ProofRecorder<H> = Arc<RwLock<HashMap<<H as Hasher>::Out, Option<DBValu
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: Hasher + 'static> (
+pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> (
 	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
 );
 
-impl<'a, S: TrieBackendStorage<H>, H: Hasher> Clone for ProvingBackend<'a, S, H> {
-	fn clone(&self) -> Self {
-		ProvingBackend(self.0.clone())
-	}
-}
-
 /// Trie backend storage with its proof recorder.
-pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> {
+pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	backend: &'a S,
 	proof_recorder: ProofRecorder<H>,
 }
 
-pub struct OwnedProofRecorderBackend<S: TrieBackendStorage<H>, H: Hasher> {
-	backend: S,
-	proof_recorder: ProofRecorder<H>,
-}
-
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> ProvingBackend<'a, S, H>
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	where H::Out: Codec
 {
 	/// Create new proving backend.
@@ -170,7 +159,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> ProvingBackend<'a, S, H>
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'static + Hasher> TrieBackendStorage<H>
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 	for ProofRecorderBackend<'a, S, H>
 {
 	type Overlay = S::Overlay;
@@ -185,43 +174,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'static + Hasher> TrieBackendStorage<
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher + 'static> TrieBackendStorage<H>
-	for OwnedProofRecorderBackend<S, H>
-{
-	type Overlay = S::Overlay;
-
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		if let Some(v) = self.proof_recorder.read().get(key) {
-			return Ok(v.clone());
-		}
-		let backend_value =  self.backend.get(key, prefix)?;
-		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
-		Ok(backend_value)
-	}
-}
-
-impl<'a, S: TrieBackendStorage<H>, H: Hasher> Clone
-	for ProofRecorderBackend<'a, S, H>
-{
-	fn clone(&self) -> Self {
-		ProofRecorderBackend {
-			backend: self.backend,
-			proof_recorder: self.proof_recorder.clone(),
-		}
-	}
-}
-
-impl<S: TrieBackendStorage<H>, H: Hasher> Clone for OwnedProofRecorderBackend<S, H>
-{
-	fn clone(&self) -> Self {
-		OwnedProofRecorderBackend {
-			backend: self.backend.clone(),
-			proof_recorder: self.proof_recorder.clone(),
-		}
-	}
-}
-
-impl<'a, S: TrieBackendStorage<H>, H: Hasher> std::fmt::Debug
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug
 	for ProvingBackend<'a, S, H>
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -231,8 +184,8 @@ impl<'a, S: TrieBackendStorage<H>, H: Hasher> std::fmt::Debug
 
 impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	where
-		S: TrieBackendStorage<H>,
-		H: Hasher,
+		S: 'a + TrieBackendStorage<H>,
+		H: 'a + Hasher,
 		H::Out: Ord + Codec,
 {
 	type Error = String;
@@ -332,7 +285,7 @@ pub fn create_proof_check_backend<H>(
 	proof: StorageProof,
 ) -> Result<TrieBackend<MemoryDB<H>, H>, Box<dyn Error>>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: Codec,
 {
 	let db = proof.into_memory_db();

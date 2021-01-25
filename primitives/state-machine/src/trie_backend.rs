@@ -34,12 +34,6 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	pub (crate) essence: TrieBackendEssence<S, H>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> Clone for TrieBackend<S, H> {
-	fn clone(&self) -> Self {
-		TrieBackend { essence: self.essence.clone() }
-	}
-}
-
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
@@ -82,7 +76,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> sp_std::fmt::Debug for TrieBackend<S, 
 
 impl<S, H> Backend<H> for TrieBackend<S, H> where
 	S: TrieBackendStorage<H>,
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: Ord + Codec,
 {
 	type Error = crate::DefaultError;

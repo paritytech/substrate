@@ -221,7 +221,7 @@ impl Externalities for AsyncExternalities {
 	) -> Box<dyn AsyncExternalitiesTrait> {
 		self.state.get_worker_externalities(worker_id, declaration)
 	}
-	
+
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		self.state.resolve_worker_result(state_update)
 	}

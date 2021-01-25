@@ -222,7 +222,7 @@ pub trait RuntimeSpawn: Send {
 		declaration: WorkerDeclaration,
 		ext: &mut dyn Externalities,
 	) -> u64;
-	
+
 	/// Join the result of previously created runtime instance invocation.
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>>;
 
@@ -254,7 +254,7 @@ sp_externalities::decl_extension! {
 /// to exists in no_std but without actual
 /// `Clone` feature.
 /// This could be remove when/if dyn_cloneable crate
-/// become no_std (not much work, TODO make a PR for it).
+/// become no_std.
 #[cfg(not(feature = "std"))]
 pub trait Clone { }
 
@@ -267,8 +267,6 @@ pub type DismissHandle = Box<dyn DismissHandleTrait>;
 pub type BoxFuture = futures::future::BoxFuture<'static, ()>;
 
 /// Something that can spawn futures (blocking and non-blocking) with an assigned name.
-/// TODO not having dyn_clonable make it not really usable in no_std, but trait exists
-/// so we can query extension for it.
 #[cfg_attr(feature = "std", dyn_clonable::clonable)]
 pub trait SpawnNamed: SpawnLimiter + Clone + Send + Sync {
 	/// Spawn the given blocking future.

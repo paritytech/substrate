@@ -222,8 +222,8 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Return possible task ids of tasks that will not be in synch with the thread to allow
 	/// early kill.
-	/// TODO remove the task id (not directly use here, but is part of the mechanism)? would
-	/// think good to have.
+	/// FIXME: returned `TaskID` is only relevant for future feature of #7687 to invaldate
+	/// workers that will not be in sync.
 	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()>;
 
 	/// Commit the last transaction started by `storage_start_transaction`.
@@ -233,6 +233,8 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Return possible task ids of tasks that will not be in synch with the thread to allow
 	/// early kill.
+	/// FIXME: returned `TaskID` is only relevant for future feature of #7687 to invaldate
+	/// workers that will not be in sync.
 	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()>;
 
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -297,7 +299,6 @@ pub trait Externalities: ExtensionStore {
 
 	/// Worker result have been dissmiss, inner externality state and constraint
 	/// needs to be lifted.
-	/// TODO consider making it a worker result variant and only have 'resolve_worker_result'.
 	fn dismiss_worker(&mut self, id: TaskId);
 }
 
@@ -361,7 +362,7 @@ pub enum WorkerResult {
 	RuntimePanic,
 	/// Technical panic when runing the worker.
 	/// This propagate panic in caller, and also
-	/// indicate the process should be stop. 
+	/// indicate the process should be stop.
 	HardPanic,
 }
 
@@ -396,8 +397,9 @@ impl StateDelta {
 pub struct AccessLog;
 
 /// A unique identifier type for a child worker.
-/// This is not unique between nested worker (their
-/// unique id would an array of the nested task id).
+/// This is not unique between nested worker (unique
+/// id with nested support would be an array of u64, but
+/// not needed).
 pub type TaskId = u64;
 
 /// Differents workers execution mode.

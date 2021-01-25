@@ -53,17 +53,6 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	empty: H::Out,
 }
 
-// TODO use the derive macro to avoid this boilerplate (rewrite due to H not being clone)
-impl<S: TrieBackendStorage<H>, H: Hasher> Clone for TrieBackendEssence<S, H> {
-	fn clone(&self) -> Self {
-		TrieBackendEssence {
-			storage: self.storage.clone(),
-			root: self.root.clone(),
-			empty: self.empty.clone(),
-		}
-	}
-}
-
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: Encode {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
@@ -355,7 +344,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue
 }
 
 /// Key-value pairs storage that is used by trie backend essence.
-pub trait TrieBackendStorage<H: Hasher>: Send + Sync + Clone {
+pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 	/// Type of in-memory overlay.
 	type Overlay: hash_db::HashDB<H, DBValue> + Default + Consolidate;
 
@@ -365,7 +354,7 @@ pub trait TrieBackendStorage<H: Hasher>: Send + Sync + Clone {
 
 // This implementation is used by normal storage trie clients.
 #[cfg(feature = "std")]
-impl<H: Hasher + 'static> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
+impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	type Overlay = PrefixedMemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
@@ -374,7 +363,7 @@ impl<H: Hasher + 'static> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 }
 
 // This implementation is used by test storage trie clients.
-impl<H: Hasher + 'static> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
+impl<H: Hasher> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
 	type Overlay = PrefixedMemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
@@ -382,7 +371,7 @@ impl<H: Hasher + 'static> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
 	}
 }
 
-impl<H: Hasher + 'static> TrieBackendStorage<H> for MemoryDB<H> {
+impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 	type Overlay = MemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {

@@ -29,7 +29,7 @@ use sp_core::storage::{ChildInfo, Storage};
 /// Create a new empty instance of in-memory backend.
 pub fn new_in_mem<H>() -> TrieBackend<MemoryDB<H>, H>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: Codec + Ord,
 {
 	let db = MemoryDB::default();
@@ -38,7 +38,7 @@ where
 
 impl<H> TrieBackend<MemoryDB<H>, H>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: Codec + Ord,
 {
 	/// Copy the state, with applied updates
@@ -91,18 +91,18 @@ where
 	}
 }
 
-/*impl<H: Hasher> Clone for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher> Clone for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
 	fn clone(&self) -> Self {
 		TrieBackend::new(self.backend_storage().clone(), self.root().clone())
 	}
-}*/
+}
 
 impl<H> Default for TrieBackend<MemoryDB<H>, H>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: Codec + Ord,
 {
 	fn default() -> Self {
@@ -113,7 +113,7 @@ where
 impl<H> From<HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>>
 	for TrieBackend<MemoryDB<H>, H>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: Codec + Ord,
 {
 	fn from(inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>) -> Self {
@@ -127,7 +127,7 @@ where
 
 impl<H> From<Storage> for TrieBackend<MemoryDB<H>, H>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: Codec + Ord,
 {
 	fn from(inners: Storage) -> Self {
@@ -140,7 +140,7 @@ where
 
 impl<H> From<BTreeMap<StorageKey, StorageValue>> for TrieBackend<MemoryDB<H>, H>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: Codec + Ord,
 {
 	fn from(inner: BTreeMap<StorageKey, StorageValue>) -> Self {
@@ -153,7 +153,7 @@ where
 impl<H> From<Vec<(Option<ChildInfo>, StorageCollection)>>
 	for TrieBackend<MemoryDB<H>, H>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: Codec + Ord,
 {
 	fn from(

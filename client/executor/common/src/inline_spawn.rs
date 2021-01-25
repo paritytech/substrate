@@ -218,7 +218,7 @@ pub trait LazyInstanciate<'a> {
 	fn instantiate(self) -> Option<&'a AssertUnwindSafe<Box<dyn WasmInstance>>>;
 }
 
-/// Lazy instantiate for wasm instance.
+/// Lazy instantiate for non owned wasm instance.
 #[cfg(feature = "std")]
 pub struct InlineInstantiateRef<'a> {
 	/// Thread safe reference counted to the module.
@@ -349,7 +349,7 @@ pub fn process_task<
 		)
 	}
 }
-	
+
 fn process_task_inner<
 	'a,
 	HostLocal: HostLocalFunction,
