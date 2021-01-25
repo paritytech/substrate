@@ -951,3 +951,132 @@ fn genesis_funding_works() {
 		assert_eq!(Treasury::pot(), initial_funding - Balances::minimum_balance());
 	});
 }
+
+#[test]
+fn add_subbounty_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
+
+		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
+
+		assert_eq!(Bounties::bounties(0).unwrap(), Bounty {
+			proposer: 0,
+			fee: 4,
+			curator_deposit: 0,
+			value: 50,
+			bond: 85,
+			status: BountyStatus::CuratorProposed {
+				curator: 4,
+			},
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
+		});
+
+		Balances::make_free_balance_be(&4, 10);
+
+		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
+
+		assert_eq!(Bounties::bounties(0).unwrap(), Bounty {
+			proposer: 0,
+			fee: 4,
+			curator_deposit: 2,
+			value: 50,
+			bond: 85,
+			status: BountyStatus::Active {
+				curator: 4,
+				update_due: 22,
+			},
+			subbountycount: 0u32.into(),
+			activesubbounty: Default::default(),
+		});
+
+		assert_eq!(Balances::free_balance(&4), 8);
+		assert_eq!(Balances::reserved_balance(&4), 2);
+
+		assert_noop!(
+			Bounties::add_subbounty(Origin::signed(0), 0, 50, b"12345-p1".to_vec()),
+			Error::<Test>::RequireCurator,
+		);
+
+		assert_noop!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 50, b"12345-p1".to_vec()),
+			Error::<Test>::InsufficientProposersBalance,
+		);
+
+		println!("FB-{:#?}/RB-{:#?}",
+			Balances::free_balance(&4),
+			Balances::reserved_balance(&4),
+		);
+
+		Balances::make_free_balance_be(&4, 101);
+
+		println!("FB-{:#?}/RB-{:#?}",
+			Balances::free_balance(&4),
+			Balances::reserved_balance(&4),
+		);
+
+		assert_noop!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 50, b"12345-p1".to_vec()),
+			Error::<Test>::InsufficientBountyBalance,
+		);
+
+		println!("FB-{:#?}/RB-{:#?}",
+			Balances::free_balance(&4),
+			Balances::reserved_balance(&4),
+		);
+
+		assert_ok!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec())
+		);
+
+		assert_eq!(last_event(), RawEvent::SubBountyApproved(0,1));
+
+		println!("FB-{:#?}/RB-{:#?}",
+			Balances::free_balance(&4),
+			Balances::reserved_balance(&4),
+		);
+
+		assert_eq!(Bounties::bounties(0).unwrap(), Bounty {
+			proposer: 0,
+			value: 50,
+			fee: 4,
+			curator_deposit: 2,
+			bond: 85,
+			status: BountyStatus::Active {
+				curator: 4,
+				update_due: 22,
+			},
+			subbountycount: 1,
+			activesubbounty: [
+				1,
+			].to_vec(),
+		});
+
+		assert_eq!(Bounties::subbounties(0,1).unwrap(), SubBounty {
+			proposer: 4,
+			value: 10,
+			fee: 0,
+			curator_deposit: 0,
+			bond: 88,
+			status: BountyStatus::Approved,
+		});
+
+		assert_eq!(
+			Bounties::subbounty_descriptions(0,1).unwrap(),
+			b"12345-p1".to_vec(),
+		);
+
+		assert_eq!(Bounties::subbounty_approvals(),
+			[(0,1)].to_vec()
+		);
+
+	});
+}

@@ -824,14 +824,16 @@ decl_module! {
 						// reserve deposit for new subbounty
 						let bond = T::BountyDepositBase::get()
 							+ T::DataDepositPerByte::get() * (description.len() as u32).into();
-						T::Currency::reserve(&signer, bond)
-							.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
+						let balance = T::Currency::free_balance(&signer);
+						ensure!(bond < balance, Error::<T>::InsufficientProposersBalance);
 
 						// Makesure Parent bounty have enough balance to fund Subbounty
 						let bounty_account = Self::bounty_account_id(bounty_id);
 						let balance = T::Currency::free_balance(&bounty_account);
 						ensure!(value < balance, Error::<T>::InsufficientBountyBalance);
-						// Reserve the fund for subbounty
+
+						// Reserve the fund for subbounty from proposer & bounty account
+						let _ = T::Currency::reserve(&signer, bond);
 						let _ = T::Currency::reserve(&bounty_account, value);
 
 						bounty.subbountycount += 1;
@@ -841,12 +843,15 @@ decl_module! {
 							},
 							Err(i) => bounty.activesubbounty.insert(i, bounty.subbountycount),
 						}
-						Self::create_subbounty(&signer,
+
+						let _ = Self::create_subbounty(&signer,
 							bounty_id,
 							bounty.subbountycount,
 							description,
 							value
-						)?;
+						);
+
+						SubBountyApprovals::append((bounty_id, bounty.subbountycount));
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}
@@ -1487,17 +1492,22 @@ impl<T: Config> pallet_treasury::SpendFunds<T> for Module<T> {
 		// Process the Subbounties approval.
 		let subbounties_len = SubBountyApprovals::mutate(|v| {
 			let subbounties_approval_len = v.len() as u32;
-			v.iter().for_each(|(bounty_id, subbounty_id)| {
-				let _ = SubBounties::<T>::try_mutate_exists(bounty_id, subbounty_id,
-					|maybe_subbounty| -> DispatchResult {
-						let mut subbounty = maybe_subbounty.as_mut().unwrap();
-						subbounty.status = BountyStatus::Funded;
-						// return the proposer deposit.
-						let _ = T::Currency::unreserve(&subbounty.proposer, subbounty.bond);
-						Self::deposit_event(RawEvent::SubBountyBecameActive(*bounty_id,*subbounty_id));
-						Ok(())
+			v.retain(|(bounty_id, subbounty_id)| {
+				SubBounties::<T>::mutate(bounty_id, subbounty_id,
+					|maybe_subbounty|
+					{
+						if let Some(subbounty) = maybe_subbounty
+						{
+							subbounty.status = BountyStatus::Funded;
+							// return the proposer deposit.
+							let _ = T::Currency::unreserve(&subbounty.proposer, subbounty.bond);
+							Self::deposit_event(RawEvent::SubBountyBecameActive(*bounty_id,*subbounty_id));
+							false
+						} else {
+							false
+						}
 					}
-				);
+				)
 			});
 			subbounties_approval_len
 		});
