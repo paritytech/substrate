@@ -29,7 +29,8 @@ use sp_std::{any::{Any, TypeId}, vec::Vec, boxed::Box};
 
 use sp_storage::{ChildInfo, TrackedStorageKey};
 
-pub use scope_limited::{set_and_run_with_externalities, with_externalities};
+pub use scope_limited::{set_and_run_with_externalities, with_externalities,
+	with_externalities_and_extension, externalities_and_extension};
 pub use extensions::{Extension, Extensions, ExtensionStore};
 
 mod extensions;
@@ -46,6 +47,10 @@ pub enum Error {
 	ExtensionIsNotRegistered(TypeId),
 	/// Failed to update storage,
 	StorageUpdateFailed(&'static str),
+	/// Extension store is locked due to an
+	/// extension accessing externalities in
+	/// a mutable manner.
+	ExtensionLocked,
 }
 
 /// The Substrate externalities.
@@ -496,5 +501,220 @@ impl ExternalitiesExt for &mut dyn Externalities {
 
 	fn deregister_extension<T: Extension>(&mut self) -> Result<(), Error> {
 		self.deregister_extension_by_type_id(TypeId::of::<T>())
+	}
+}
+
+/// Externalities with partially locked extension store.
+///
+/// It forbid access to a mutably borrowed extension as if the extension
+/// was behind a refcell.
+/// Note that we do an unsafe inner unsafe access and therefore
+/// also lock `register_extension` and `deregister_extension`.
+pub struct ExternalitiesLockedExtension<'a> {
+	externalities: &'a mut dyn Externalities,
+	locked: TypeId,
+}
+
+impl<'a> ExtensionStore for ExternalitiesLockedExtension<'a> {
+	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
+		if self.locked == type_id {
+			panic!("Reentrant mutable access to extension.");
+		}
+		self.externalities.extension_by_type_id(type_id)
+	}
+
+	fn register_extension_with_type_id(
+		&mut self,
+		_type_id: TypeId,
+		_extension: Box<dyn Extension>,
+	) -> Result<(), Error> {
+		Err(Error::ExtensionLocked)
+	}
+
+	fn deregister_extension_by_type_id(&mut self, _type_id: TypeId) -> Result<(), Error> {
+		Err(Error::ExtensionLocked)
+	}
+}
+
+impl<'a> Externalities for ExternalitiesLockedExtension<'a> {
+	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
+		self.externalities.set_offchain_storage(key, value)
+	}
+
+	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.externalities.storage(key)
+	}
+
+	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.externalities.storage_hash(key)
+	}
+
+	fn child_storage_hash(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		self.externalities.child_storage_hash(child_info, key)
+	}
+
+	fn child_storage(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		self.externalities.child_storage(child_info, key)
+	}
+
+	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
+		self.externalities.set_storage(key, value)
+	}
+
+	fn set_child_storage(
+		&mut self,
+		child_info: &ChildInfo,
+		key: Vec<u8>,
+		value: Vec<u8>,
+	) {
+		self.externalities.set_child_storage(child_info, key, value)
+	}
+
+	fn clear_storage(&mut self, key: &[u8]) {
+		self.externalities.clear_storage(key)
+	}
+
+	fn clear_child_storage(
+		&mut self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) {
+		self.externalities.clear_child_storage(child_info, key)
+	}
+
+	fn exists_storage(&self, key: &[u8]) -> bool {
+		self.externalities.exists_storage(key)
+	}
+
+	fn exists_child_storage(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> bool {
+		self.externalities.exists_child_storage(child_info, key)
+	}
+
+	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.externalities.next_storage_key(key)
+	}
+
+	fn next_child_storage_key(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
+		self.externalities.next_child_storage_key(child_info, key)
+	}
+
+	fn kill_child_storage(&mut self, child_info: &ChildInfo, limit: Option<u32>) -> bool {
+		self.externalities.kill_child_storage(child_info, limit)
+	}
+
+	fn clear_prefix(&mut self, prefix: &[u8]) {
+		self.externalities.clear_prefix(prefix)
+	}
+
+	fn clear_child_prefix(
+		&mut self,
+		child_info: &ChildInfo,
+		prefix: &[u8],
+	) {
+		self.externalities.clear_child_prefix(child_info, prefix)
+	}
+
+	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
+		self.externalities.place_storage(key, value)
+	}
+
+	fn place_child_storage(
+		&mut self,
+		child_info: &ChildInfo,
+		key: Vec<u8>,
+		value: Option<Vec<u8>>,
+	) {
+		self.externalities.place_child_storage(child_info, key, value)
+	}
+
+	fn storage_root(&mut self) -> Vec<u8> {
+		self.externalities.storage_root()
+	}
+
+	fn child_storage_root(
+		&mut self,
+		child_info: &ChildInfo,
+	) -> Vec<u8> {
+		self.externalities.child_storage_root(child_info)
+	}
+
+	fn storage_append(
+		&mut self,
+		key: Vec<u8>,
+		value: Vec<u8>,
+	) {
+		self.externalities.storage_append(key, value)
+	}
+
+	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
+		self.externalities.storage_changes_root(parent)
+	}
+
+	fn storage_start_transaction(&mut self) {
+		self.externalities.storage_start_transaction()
+	}
+
+	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
+		self.externalities.storage_rollback_transaction()
+	}
+
+	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
+		self.externalities.storage_commit_transaction()
+	}
+
+	fn wipe(&mut self) {
+		self.externalities.wipe()
+	}
+
+	fn commit(&mut self) {
+		self.externalities.commit()
+	}
+
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		self.externalities.read_write_count()
+	}
+
+	fn reset_read_write_count(&mut self) {
+		self.externalities.reset_read_write_count()
+	}
+
+	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
+		self.externalities.get_whitelist()
+	}
+
+	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
+		self.externalities.set_whitelist(new)
+	}
+
+	fn get_worker_externalities(
+		&mut self,
+		worker_id: u64,
+		declaration: WorkerDeclaration,
+	) -> Box<dyn AsyncExternalities> {
+		self.externalities.get_worker_externalities(worker_id, declaration)
+	}
+
+	fn resolve_worker_result(&mut self, result: WorkerResult) -> Option<Vec<u8>> {
+		self.externalities.resolve_worker_result(result)
+	}
+
+	fn dismiss_worker(&mut self, id: TaskId) {
+		self.externalities.dismiss_worker(id)
 	}
 }

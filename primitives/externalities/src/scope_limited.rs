@@ -36,3 +36,38 @@ pub fn set_and_run_with_externalities<F, R>(ext: &mut dyn Externalities, f: F) -
 pub fn with_externalities<F: FnOnce(&mut dyn Externalities) -> R, R>(f: F) -> Option<R> {
 	ext::with(f)
 }
+
+/// Execute the given closure with the currently set externalities and a given registered
+/// extensions.
+///
+/// Returns `None` if no externalities are set or extension is not registered.
+/// Returns `Some(_)` with the result of the closure.
+pub fn with_externalities_and_extension<T, F, R>(f: F) -> Option<R>
+	where
+		T: sp_std::any::Any + crate::Extension,
+		F: FnOnce(&mut dyn Externalities, &mut T) -> R,
+{
+	ext::with(|ext| externalities_and_extension(ext, f)).flatten()
+}
+
+/// Execute the given closure for a given externalities and a given registered
+/// extensions.
+///
+/// Returns `None` if no externalities are set or extension is not registered.
+/// Returns `Some(_)` with the result of the closure.
+pub fn externalities_and_extension<T, F, R>(mut ext: &mut dyn Externalities, f: F) -> Option<R>
+	where
+		T: sp_std::any::Any + crate::Extension,
+		F: FnOnce(&mut dyn Externalities, &mut T) -> R,
+{
+	use crate::ExternalitiesExt;
+	let ext_unsafe = ext as *mut dyn Externalities;
+	let extension = ext.extension::<T>()?;
+	let mut externalities = crate::ExternalitiesLockedExtension {
+		externalities: unsafe { &mut *ext_unsafe },
+		locked: sp_std::any::TypeId::of::<T>(),
+	};
+	let result = f(&mut externalities, extension);
+	core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
+	Some(result)
+}

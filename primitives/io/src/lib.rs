@@ -188,16 +188,14 @@ pub trait Storage {
 		let to_drop_tasks = self.storage_rollback_transaction()
 			.expect("No open transaction that can be rolled back.");
 		if to_drop_tasks.len() > 0 {
-			let ext_unsafe = *self as *mut dyn Externalities;
-			if let Some(runtime_spawn) = self.extension::<RuntimeSpawnExt>() {
-				// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
-				// a given id, to make this safer.
-				let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-				for task in to_drop_tasks.into_iter() {
-					runtime_spawn.dismiss(task, ext_unsafe)
+			sp_externalities::externalities_and_extension::<RuntimeSpawnExt, _, _>(
+				*self,
+				|ext, runtime_spawn| {
+					for task in to_drop_tasks.into_iter() {
+						runtime_spawn.dismiss(task, ext)
+					}
 				}
-				core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
-			}
+			);
 		}
 	}
 
@@ -212,16 +210,14 @@ pub trait Storage {
 		let to_drop_tasks = self.storage_commit_transaction()
 			.expect("No open transaction that can be committed.");
 		if to_drop_tasks.len() > 0 {
-			let ext_unsafe = *self as *mut dyn Externalities;
-			if let Some(runtime_spawn) = self.extension::<RuntimeSpawnExt>() {
-				// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
-				// a given id, to make this safer.
-				let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-				for task in to_drop_tasks.into_iter() {
-					runtime_spawn.dismiss(task, ext_unsafe)
+			sp_externalities::externalities_and_extension::<RuntimeSpawnExt, _, _>(
+				*self,
+				|ext, runtime_spawn| {
+					for task in to_drop_tasks.into_iter() {
+						runtime_spawn.dismiss(task, ext)
+					}
 				}
-				core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
-			}
+			);
 		}
 	}
 }
@@ -1322,30 +1318,18 @@ pub trait RuntimeTasks {
 		payload: Vec<u8>,
 		declaration: Crossing<WorkerDeclaration>,
 	) -> u64 {
-		let ext_unsafe = *self as *mut dyn Externalities;
-		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
-			.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		// Unsafe usage here means that `spawn_call` shall never attempt to access
-		// or deregister this `RuntimeSpawnExt` from the unchecked ext2.
-		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-		// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
-		// a given id, to make this safer.
-		let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, declaration.into_inner(), ext_unsafe);
-		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
-		result
+		sp_externalities::externalities_and_extension::<RuntimeSpawnExt, _, _>(*self, |ext, spawn| {
+			spawn.spawn_call(dispatcher_ref, entry, payload, declaration.into_inner(), ext)
+		}).expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)")
 	}
 
 	/// Host function for joining a task.
 	///
 	/// This should not be used directly. Use `join` of `sp_tasks::spawn` result instead.
 	fn join(&mut self, handle: u64) -> Option<Vec<u8>> {
-		let ext_unsafe = *self as *mut dyn Externalities;
-		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
-			.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-		let result = runtime_spawn.join(handle, ext_unsafe);
-		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
-		result
+		sp_externalities::externalities_and_extension::<RuntimeSpawnExt, _, _>(*self, |ext, spawn| {
+			spawn.join(handle, ext)
+		}).expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)")
 	}
 
 	/// Host function to dismiss a task.
@@ -1356,15 +1340,9 @@ pub trait RuntimeTasks {
 	///
 	/// This should not be used directly. Use `kill` of `sp_tasks::spawn` result instead.
 	fn dismiss(&mut self, handle: u64) {
-		let ext_unsafe = *self as *mut dyn Externalities;
-		let runtime_spawn = self.extension::<RuntimeSpawnExt>()
-			.expect("Cannot kill without dynamic runtime dispatcher (RuntimeSpawnExt)");
-		// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
-		// a given id, to make this safer.
-		let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-
-		runtime_spawn.dismiss(handle, ext_unsafe);
-		std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
+		sp_externalities::externalities_and_extension::<RuntimeSpawnExt, _, _>(*self, |ext, spawn| {
+			spawn.dismiss(handle, ext)
+		}).expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)")
 	}
 }
 

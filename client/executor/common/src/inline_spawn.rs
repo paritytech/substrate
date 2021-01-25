@@ -567,7 +567,6 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 	}
 
 	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
-		// TODO consider Dismiss(handle) as variant of worker result?
 		calling_ext.dismiss_worker(handle);
 
 		self.0.lock().dismiss(handle)
@@ -583,7 +582,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 pub mod hosted_runtime {
 	use super::*;
 	use sp_core::traits::RuntimeSpawnExt;
-	use sp_externalities::ExternalitiesExt;
+
 	/// Inline instance spawn, this run all workers lazilly when `join` is called.
 	///
 	///
@@ -704,45 +703,22 @@ pub mod hosted_runtime {
 		payload: Vec<u8>,
 		declaration: Crossing<WorkerDeclaration>,
 	) -> u64 {
-		sp_externalities::with_externalities(|mut ext| {
-			let ext_unsafe = ext as *mut dyn Externalities;
-			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
-				.expect("Inline runtime extension improperly set.");
-			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
-			// a given id, to make this safer.
-			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-			let result = runtime_spawn.spawn_call(dispatcher_ref, entry, payload, declaration.into_inner(), ext_unsafe);
-			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
-			result
+		sp_externalities::with_externalities_and_extension::<RuntimeSpawnExt, _, _>(|ext, runtime_spawn| {
+			runtime_spawn.spawn_call(dispatcher_ref, entry, payload, declaration.into_inner(), ext)
 		}).unwrap()
 	}
 
 	/// Hosted runtime variant of sp_io `RuntimeTasks` `spawn`.
 	pub fn host_runtime_tasks_join(handle: u64) -> Option<Vec<u8>> {
-		sp_externalities::with_externalities(|mut ext| {
-			let ext_unsafe = ext as *mut dyn Externalities;
-			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
-				.expect("Inline runtime extension improperly set.");
-			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
-			// a given id, to make this safer.
-			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-			let result = runtime_spawn.join(handle, ext_unsafe);
-			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
-			result
+		sp_externalities::with_externalities_and_extension::<RuntimeSpawnExt, _, _>(|ext, runtime_spawn| {
+			runtime_spawn.join(handle, ext)
 		}).unwrap()
 	}
 
 	/// Hosted runtime variant of sp_io `RuntimeTasks` `spawn`.
 	pub fn host_runtime_tasks_dismiss(handle: u64) {
-		sp_externalities::with_externalities(|mut ext| {
-			let ext_unsafe = ext as *mut dyn Externalities;
-			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
-				.expect("Inline runtime extension improperly set.");
-			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
-			// a given id, to make this safer.
-			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-			runtime_spawn.dismiss(handle, ext_unsafe);
-			core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::AcqRel);
+		sp_externalities::with_externalities_and_extension::<RuntimeSpawnExt, _, _>(|ext, runtime_spawn| {
+			runtime_spawn.dismiss(handle, ext)
 		}).unwrap()
 	}
 }
