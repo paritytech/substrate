@@ -32,6 +32,7 @@ use sp_runtime::{
 	Perbill, ModuleId,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
+	DispatchError,
 };
 
 impl_outer_origin! {
@@ -826,7 +827,18 @@ fn expire_and_unassign() {
 		System::set_block_number(22);
 		<Treasury as OnInitialize<u64>>::on_initialize(22);
 
-		assert_noop!(Bounties::unassign_curator(Origin::signed(0), 0), Error::<Test>::Premature);
+		// assert_noop!(Bounties::unassign_curator(Origin::signed(0), 0), Error::<Test>::Premature);
+		let unwrapped_error = Bounties::unassign_curator(Origin::signed(0), 0).unwrap_err();
+		matches!(
+			unwrapped_error,
+			DispatchError::Module {
+				index: 0,
+				error: 8,
+				message: Some(
+					"Premature",
+				),
+			}
+		);
 
 		System::set_block_number(23);
 		<Treasury as OnInitialize<u64>>::on_initialize(23);
@@ -904,7 +916,18 @@ fn extend_expiry() {
 		System::set_block_number(25);
 		<Treasury as OnInitialize<u64>>::on_initialize(25);
 
-		assert_noop!(Bounties::unassign_curator(Origin::signed(0), 0), Error::<Test>::Premature);
+		// assert_noop!(Bounties::unassign_curator(Origin::signed(0), 0), Error::<Test>::Premature);
+		let unwrapped_error = Bounties::unassign_curator(Origin::signed(0), 0).unwrap_err();
+		matches!(
+			unwrapped_error,
+			DispatchError::Module {
+				index: 0,
+				error: 8,
+				message: Some(
+					"Premature",
+				),
+			}
+		);
 		assert_ok!(Bounties::unassign_curator(Origin::signed(4), 0));
 
 		assert_eq!(Balances::free_balance(4), 10); // not slashed

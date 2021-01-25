@@ -229,21 +229,22 @@ decl_storage! {
 		=> Option<Bounty<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
 		/// The description of each bounty.
-		pub BountyDescriptions get(fn bounty_descriptions): map hasher(twox_64_concat) BountyIndex => Option<Vec<u8>>;
+		pub BountyDescriptions get(fn bounty_descriptions):
+			map hasher(twox_64_concat) BountyIndex => Option<Vec<u8>>;
 
 		/// Bounty indices that have been approved but not yet funded.
 		pub BountyApprovals get(fn bounty_approvals): Vec<BountyIndex>;
 
 		/// SubBounties that have been made.
 		pub SubBounties get(fn subbounties):
-		double_map hasher(twox_64_concat) BountyIndex,
-		hasher(twox_64_concat) BountyIndex =>
-		Option<SubBounty<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
+			double_map hasher(twox_64_concat) BountyIndex,
+			hasher(twox_64_concat) BountyIndex =>
+			Option<SubBounty<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
 		/// The SubBounties description of each subbounty.
 		pub SubBountyDescriptions get(fn subbounty_descriptions):
-		double_map hasher(twox_64_concat) BountyIndex,
-		hasher(twox_64_concat) BountyIndex => Option<Vec<u8>>;
+			double_map hasher(twox_64_concat) BountyIndex,
+			hasher(twox_64_concat) BountyIndex => Option<Vec<u8>>;
 
 		/// SubBounty indices that have been approved but not yet funded.
 		pub SubBountyApprovals get(fn subbounty_approvals): Vec<(BountyIndex, BountyIndex)>;
@@ -424,12 +425,6 @@ decl_module! {
 				bounty.status = BountyStatus::CuratorProposed { curator };
 				bounty.fee = fee;
 
-				// Reserve the fee for Curator
-				let bounty_account = Self::bounty_account_id(bounty_id);
-				let balance = T::Currency::free_balance(&bounty_account);
-				let fee = bounty.fee.min(balance); // just to be safe
-				T::Currency::reserve(&bounty_account, fee)?;
-
 				Ok(())
 			})?;
 		}
@@ -456,7 +451,7 @@ decl_module! {
 		fn unassign_curator(
 			origin,
 			#[compact] bounty_id: BountyIndex,
-		) {
+		) -> DispatchResult {
 			let maybe_sender = ensure_signed(origin.clone())
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
@@ -481,6 +476,9 @@ decl_module! {
 						ensure!(maybe_sender.map_or(true, |sender| sender == *curator), BadOrigin);
 					},
 					BountyStatus::Active { ref curator, ref update_due } => {
+						// Unreserve the fee for Curator which got reserved during "accept_curator()"
+						let bounty_account = Self::bounty_account_id(bounty_id);
+						T::Currency::unreserve(&bounty_account, bounty.fee);
 						// The bounty is active.
 						match maybe_sender {
 							// If the `RejectOrigin` is calling this function, slash the curator.
@@ -515,15 +513,17 @@ decl_module! {
 						// we slash the curator.
 						ensure!(maybe_sender.is_none(), BadOrigin);
 						slash_curator(curator, &mut bounty.curator_deposit);
+						// Unreserve the fee for Curator which got reserved during "accept_curator()"
+						let bounty_account = Self::bounty_account_id(bounty_id);
+						T::Currency::unreserve(&bounty_account, bounty.fee);
 						// Continue to change bounty status below...
 					},
 				};
-				// Unreserve the fee for Curator which got reserved during "propose_curator()"
-				let bounty_account = Self::bounty_account_id(bounty_id);
-				T::Currency::unreserve(&bounty_account, bounty.fee);
+
 				bounty.status = BountyStatus::Funded;
 				Ok(())
 			})?;
+			Ok(())
 		}
 		/// Accept the curator role for a bounty.
 		/// A deposit will be reserved from curator and refund upon successful payout.
@@ -549,6 +549,12 @@ decl_module! {
 						T::Currency::reserve(curator, deposit)?;
 						bounty.curator_deposit = deposit;
 
+						// Reserve the fee for Curator
+						let bounty_account = Self::bounty_account_id(bounty_id);
+						let balance = T::Currency::free_balance(&bounty_account);
+						let fee = bounty.fee.min(balance); // just to be safe
+						T::Currency::reserve(&bounty_account, fee)?;
+
 						// Update the Curator info to Subbounties list
 						if bounty.activesubbounty.len() > 0 {
 							bounty.activesubbounty
@@ -563,10 +569,8 @@ decl_module! {
 								});
 							});
 						}
-
 						let update_due = system::Module::<T>::block_number() + T::BountyUpdatePeriod::get();
 						bounty.status = BountyStatus::Active { curator: curator.clone(), update_due };
-
 						Ok(())
 					},
 					_ => Err(Error::<T>::UnexpectedStatus.into()),
@@ -640,7 +644,7 @@ decl_module! {
 						&bounty_account,
 						&curator,
 						bounty.fee,
-						Status::Free,
+						BalanceStatus::Free,
 					);
 					// Make beneficiary payment
 					let balance = T::Currency::free_balance(&bounty_account);
@@ -701,14 +705,9 @@ decl_module! {
 						// We ask for them to wait until it is funded before they can cancel.
 						return Err(Error::<T>::UnexpectedStatus.into())
 					},
-					BountyStatus::Funded => {
-						// Nothing extra to do besides the removal of the bounty below.
-					},
+					BountyStatus::Funded |
 					BountyStatus::CuratorProposed { .. } => {
-						// Unreserve the fee for Curator which got reserved during "propose_curator()"
-						let bounty_account = Self::bounty_account_id(bounty_id);
-						T::Currency::unreserve(&bounty_account, bounty.fee);
-						// Then execute removal of the bounty below.
+						// Nothing extra to do besides the removal of the bounty below.
 					},
 					BountyStatus::Active { curator, .. } => {
 						// Cancelled by council, refund deposit of the working curator.
@@ -848,6 +847,7 @@ decl_module! {
 						let bounty_account = Self::bounty_account_id(bounty_id);
 						let balance = T::Currency::free_balance(&bounty_account);
 						ensure!(value < balance, Error::<T>::InsufficientBountyBalance);
+						// Reserve the fund for subbounty
 						let _ = T::Currency::reserve(&bounty_account, value);
 
 						bounty.subbountycount += 1;
@@ -1210,7 +1210,7 @@ decl_module! {
 							&bounty_account,
 							&subcurator,
 							subbounty.fee,
-							Status::Free,
+							BalanceStatus::Free,
 						);
 					}
 					// Make payout to beneficiary
@@ -1219,7 +1219,7 @@ decl_module! {
 						&bounty_account,
 						beneficiary,
 						payout,
-						Status::Free,
+						BalanceStatus::Free,
 					);
 					Self::deposit_event(Event::<T>::SubBountyClaimed(bounty_id,
 						subbounty_id,
