@@ -327,7 +327,7 @@ mod dismiss_handle {
 
 	struct DismissHandlesInner {
 		/// threads handle with associated pthread.
-		running: BTreeMap<u64, DismissHandle>,
+		running: BTreeMap<u64, Option<DismissHandle>>,
 		/// worker mapping with their thread ids.
 		workers: BTreeMap<u64, u64>,
 	}
@@ -343,10 +343,15 @@ mod dismiss_handle {
 
 	impl DismissHandles {
 		pub(super) fn new_thread_id(&self, counter: &Arc<AtomicU64>) -> u64 {
-			counter.fetch_add(1, Ordering::Relaxed)
+			let thread_id = counter.fetch_add(1, Ordering::Relaxed);
+			self.0.lock().running.insert(thread_id, None);
+			thread_id
 		}
 		pub(super) fn register_new_thread(&self, handle: DismissHandle, thread_id: u64) {
-			self.0.lock().running.insert(thread_id, handle);
+			self.0.lock().running.insert(thread_id, Some(handle));
+		}
+		pub(super) fn drop_new_thread(&self, thread_id: u64) {
+			self.0.lock().running.remove(&thread_id);
 		}
 		pub(super) fn register_worker(&self, worker: u64, thread_id: u64) {
 			self.0.lock().workers.insert(worker, thread_id);
@@ -360,8 +365,8 @@ mod dismiss_handle {
 		pub(super) fn dismiss_thread(&self, worker: u64) {
 			let mut lock = self.0.lock();
 			if let Some(handle_id) = lock.workers.remove(&worker) {
-				if let Some(mut handle) = lock.running.remove(&handle_id) {
-					handle.dismiss();
+				if let Some(handle) = lock.running.remove(&handle_id) {
+					handle.map(|mut handle| handle.dismiss());
 				}
 			}
 		}
@@ -379,7 +384,9 @@ mod dismiss_handle {
 		pub(super) fn new_thread_id(&self, _counter: &Arc<AtomicU64>) -> u64 {
 			0
 		}
-		pub(super) fn register_new_thread(&self, _handle: Option<DismissHandle>, _thread_id: u64) {
+		pub(super) fn register_new_thread(&self, _handle: DismissHandle, _thread_id: u64) {
+		}
+		pub(super) fn drop_new_thread(&self, _thread_id: u64) {
 		}
 		pub(super) fn register_worker(&self, _worker: u64, _thread_id: u64) {
 		}
@@ -483,12 +490,6 @@ impl RuntimeInstanceSpawn {
 		}
 	}
 
-	// TODO variant of insert that collect
-	// AsyncExternalitiesPostExecution and keep a hierarchy of the called
-	// task (use case is processing tx in tx pool and try to order them depending on
-	// result). -> thus the parameter allows choosing your execution order.
-	// Kind of simulate where you can chain multiple call on the same ext?
-	// (will also need a variant of process_task that do not resolve result).
 	fn insert(
 		&self,
 		handle: u64,
@@ -520,6 +521,7 @@ impl RuntimeInstanceSpawn {
 		));
 	}
 
+	// Spawn a new worker loop listening on the task queue.
 	fn spawn_new(&self) -> bool {
 		let module = self.module.clone();
 		let scheduler = self.scheduler.clone();
@@ -610,6 +612,7 @@ impl RuntimeInstanceSpawn {
 			self.dismiss_handles.register_new_thread(thread_handle, thread_id);
 			true
 		} else {
+			self.dismiss_handles.drop_new_thread(thread_id);
 			false
 		}
 	}
@@ -621,7 +624,6 @@ impl RuntimeInstanceSpawn {
 		future: BoxFuture,
 	) -> Option<DismissHandle> {
 		self.scheduler.spawn_with_handle(name, future)
-			.map(|th| th)
 	}
 
 	#[cfg(not(feature = "abort-future"))]
