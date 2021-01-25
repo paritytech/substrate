@@ -99,11 +99,6 @@ struct LocalWasm {
 pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U, Error>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	// TODO here externalities is used as environmental and inherently is
-	// making the `AssertUnwindSafe` assertion, that is not true.
-	// Worst case is probably locked mutex, so not that harmfull.
-	// The thread scenario adds a bit over it but there was already
-	// locked backend.
 	sp_externalities::set_and_run_with_externalities(
 		ext,
 		move || {
