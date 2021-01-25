@@ -182,7 +182,7 @@ pub(crate) fn compute_offchain_election<T: Config>() -> Result<Call<T>, Offchain
 
 	crate::log!(
 		info,
-		"💸 prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
+		"💸 [OCW] prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
 		iters,
 		score,
 	);
