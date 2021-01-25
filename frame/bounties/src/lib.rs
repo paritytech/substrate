@@ -451,7 +451,7 @@ decl_module! {
 		fn unassign_curator(
 			origin,
 			#[compact] bounty_id: BountyIndex,
-		) -> DispatchResult {
+		) {
 			let maybe_sender = ensure_signed(origin.clone())
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
@@ -523,7 +523,6 @@ decl_module! {
 				bounty.status = BountyStatus::Funded;
 				Ok(())
 			})?;
-			Ok(())
 		}
 		/// Accept the curator role for a bounty.
 		/// A deposit will be reserved from curator and refund upon successful payout.
