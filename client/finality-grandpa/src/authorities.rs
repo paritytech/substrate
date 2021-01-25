@@ -114,6 +114,11 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 	pub fn clone_inner(&self) -> AuthoritySet<H, N> {
 		self.inner.read().clone()
 	}
+
+	/// Clone the inner `AuthoritySetChanges`.
+	pub fn authority_set_changes(&self) -> AuthoritySetChanges<N> {
+		self.inner.read().authority_set_changes.clone()
+	}
 }
 
 impl<H, N> From<AuthoritySet<H, N>> for SharedAuthoritySet<H, N> {
@@ -152,12 +157,16 @@ pub struct AuthoritySet<H, N> {
 	/// is lower than the last finalized block (as signaled in the forced
 	/// change) must be applied beforehand.
 	pending_forced_changes: Vec<PendingChange<H, N>>,
+	/// Track at which blocks the set id changed. This is useful when we need to prove finality for a
+	/// given block since we can figure out what set the block belongs to and when the set
+	/// started/ended.
+	authority_set_changes: AuthoritySetChanges<N>,
 }
 
 impl<H, N> AuthoritySet<H, N>
 where
 	H: PartialEq,
-	N: Ord,
+	N: Ord + Clone,
 {
 	// authority sets must be non-empty and all weights must be greater than 0
 	fn invalid_authority_list(authorities: &AuthorityList) -> bool {
@@ -175,6 +184,7 @@ where
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		})
 	}
 
@@ -184,6 +194,7 @@ where
 		set_id: u64,
 		pending_standard_changes: ForkTree<H, N, PendingChange<H, N>>,
 		pending_forced_changes: Vec<PendingChange<H, N>>,
+		authority_set_changes: AuthoritySetChanges<N>,
 	) -> Option<Self> {
 		if Self::invalid_authority_list(&authorities) {
 			return None;
@@ -194,6 +205,7 @@ where
 			set_id,
 			pending_standard_changes,
 			pending_forced_changes,
+			authority_set_changes,
 		})
 	}
 
@@ -454,6 +466,9 @@ where
 					"block" => ?change.canon_height
 				);
 
+				let mut authority_set_changes = self.authority_set_changes.clone();
+				authority_set_changes.append(self.set_id, median_last_finalized.clone());
+
 				new_set = Some((
 					median_last_finalized,
 					AuthoritySet {
@@ -461,6 +476,7 @@ where
 						set_id: self.set_id + 1,
 						pending_standard_changes: ForkTree::new(), // new set, new changes.
 						pending_forced_changes: Vec::new(),
+						authority_set_changes,
 					},
 				));
 
@@ -531,6 +547,9 @@ where
 					telemetry!(CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
 						"block" => ?change.canon_height
 					);
+
+					// Store the set_id together with the last block_number for the set
+					self.authority_set_changes.append(self.set_id, finalized_number.clone());
 
 					self.current_authorities = change.next_authorities;
 					self.set_id += 1;
@@ -631,6 +650,45 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 	}
 }
 
+// Tracks historical authority set changes. We store the block numbers for the first block of each
+// authority set, once they have been finalized.
+#[derive(Debug, Encode, Decode, Clone, PartialEq)]
+pub struct AuthoritySetChanges<N>(pub Vec<(u64, N)>);
+
+impl<N: Ord + Clone> AuthoritySetChanges<N> {
+	pub(crate) fn empty() -> Self {
+		Self(Default::default())
+	}
+
+	pub(crate) fn append(&mut self, set_id: u64, block_number: N) {
+		self.0.push((set_id, block_number));
+	}
+
+	pub(crate) fn get_set_id(&self, block_number: N) -> Option<(u64, N)> {
+		let idx = self.0
+			.binary_search_by_key(&block_number, |(_, n)| n.clone())
+			.unwrap_or_else(|b| b);
+		if idx < self.0.len() {
+			let (set_id, block_number) = self.0[idx].clone();
+			// To make sure we have the right set we need to check that the one before it also exists.
+			if idx > 0 {
+				let (prev_set_id, _) = self.0[idx - 1usize];
+				if set_id != prev_set_id + 1u64 {
+					// Without the preceding set_id we don't have a well-defined start.
+					return None;
+				}
+			} else if set_id != 0 {
+				// If this is the first index, yet not the first set id then it's not well-defined
+				// that we are in the right set id.
+				return None;
+			}
+			Some((set_id, block_number))
+		} else {
+			None
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -657,6 +715,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let change = |height| {
@@ -704,6 +763,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let change_a = PendingChange {
@@ -772,6 +832,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
@@ -820,6 +881,7 @@ mod tests {
 			authorities.pending_changes().collect::<Vec<_>>(),
 			vec![&change_a],
 		);
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges::empty());
 
 		// finalizing "hash_d" will enact the change signaled at "hash_a"
 		let status = authorities.apply_standard_changes(
@@ -838,6 +900,7 @@ mod tests {
 		assert_eq!(authorities.current_authorities, set_a);
 		assert_eq!(authorities.set_id, 1);
 		assert_eq!(authorities.pending_changes().count(), 0);
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15)]));
 	}
 
 	#[test]
@@ -847,6 +910,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
@@ -889,6 +953,7 @@ mod tests {
 			authorities.apply_standard_changes("hash_d", 40, &is_descendent_of, false),
 			Err(Error::ForkTree(fork_tree::Error::UnfinalizedAncestor))
 		));
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges::empty());
 
 		let status = authorities.apply_standard_changes(
 			"hash_b",
@@ -902,6 +967,7 @@ mod tests {
 
 		assert_eq!(authorities.current_authorities, set_a);
 		assert_eq!(authorities.set_id, 1);
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15)]));
 
 		// after finalizing `change_a` it should be possible to finalize `change_c`
 		let status = authorities.apply_standard_changes(
@@ -916,6 +982,7 @@ mod tests {
 
 		assert_eq!(authorities.current_authorities, set_c);
 		assert_eq!(authorities.set_id, 2);
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15), (1, 40)]));
 	}
 
 	#[test]
@@ -925,6 +992,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
@@ -991,6 +1059,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
@@ -1074,6 +1143,7 @@ mod tests {
 					set_id: 1,
 					pending_standard_changes: ForkTree::new(),
 					pending_forced_changes: Vec::new(),
+					authority_set_changes: AuthoritySetChanges(vec![(0, 42)]),
 				},
 			)
 		);
@@ -1087,6 +1157,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
@@ -1125,6 +1196,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		// effective at #15
@@ -1179,22 +1251,26 @@ mod tests {
 			authorities.apply_forced_changes("hash_d45", 45, &static_is_descendent_of(true), false),
 			Err(Error::ForcedAuthoritySetChangeDependencyUnsatisfied(15))
 		));
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges::empty());
 
 		// we apply the first pending standard change at #15
 		authorities
 			.apply_standard_changes("hash_a15", 15, &static_is_descendent_of(true), false)
 			.unwrap();
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15)]));
 
 		// but the forced change still depends on the next standard change
 		assert!(matches!(
 			authorities.apply_forced_changes("hash_d", 45, &static_is_descendent_of(true), false),
 			Err(Error::ForcedAuthoritySetChangeDependencyUnsatisfied(20))
 		));
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15)]));
 
 		// we apply the pending standard change at #20
 		authorities
 			.apply_standard_changes("hash_b", 20, &static_is_descendent_of(true), false)
 			.unwrap();
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15), (1, 20)]));
 
 		// afterwards the forced change at #45 can already be applied since it signals
 		// that finality stalled at #31, and the next pending standard change is effective
@@ -1211,9 +1287,11 @@ mod tests {
 					set_id: 3,
 					pending_standard_changes: ForkTree::new(),
 					pending_forced_changes: Vec::new(),
+					authority_set_changes: AuthoritySetChanges(vec![(0, 15), (1, 20), (2, 31)]),
 				}
 			),
 		);
+		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15), (1, 20)]));
 	}
 
 	#[test]
@@ -1225,6 +1303,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let new_set = current_authorities.clone();
@@ -1343,7 +1422,13 @@ mod tests {
 		// empty authority lists are invalid
 		assert_eq!(AuthoritySet::<(), ()>::genesis(vec![]), None);
 		assert_eq!(
-			AuthoritySet::<(), ()>::new(vec![], 0, ForkTree::new(), Vec::new()),
+			AuthoritySet::<(), ()>::new(
+				vec![],
+				0,
+				ForkTree::new(),
+				Vec::new(),
+				AuthoritySetChanges::empty(),
+			),
 			None,
 		);
 
@@ -1362,7 +1447,8 @@ mod tests {
 				invalid_authorities_weight.clone(),
 				0,
 				ForkTree::new(),
-				Vec::new()
+				Vec::new(),
+				AuthoritySetChanges::empty(),
 			),
 			None,
 		);
@@ -1417,6 +1503,7 @@ mod tests {
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+			authority_set_changes: AuthoritySetChanges::empty(),
 		};
 
 		let new_set = current_authorities.clone();
@@ -1511,5 +1598,33 @@ mod tests {
 				.canon_hash,
 			"D"
 		);
+	}
+
+	#[test]
+	fn authority_set_changes_for_complete_data() {
+		let mut authority_set_changes = AuthoritySetChanges::empty();
+		authority_set_changes.append(0, 41);
+		authority_set_changes.append(1, 81);
+		authority_set_changes.append(2, 121);
+
+		assert_eq!(authority_set_changes.get_set_id(20), Some((0, 41)));
+		assert_eq!(authority_set_changes.get_set_id(40), Some((0, 41)));
+		assert_eq!(authority_set_changes.get_set_id(41), Some((0, 41)));
+		assert_eq!(authority_set_changes.get_set_id(42), Some((1, 81)));
+		assert_eq!(authority_set_changes.get_set_id(141), None);
+	}
+
+	#[test]
+	fn authority_set_changes_for_incomplete_data() {
+		let mut authority_set_changes = AuthoritySetChanges::empty();
+		authority_set_changes.append(2, 41);
+		authority_set_changes.append(3, 81);
+		authority_set_changes.append(4, 121);
+
+		assert_eq!(authority_set_changes.get_set_id(20), None);
+		assert_eq!(authority_set_changes.get_set_id(40), None);
+		assert_eq!(authority_set_changes.get_set_id(41), None);
+		assert_eq!(authority_set_changes.get_set_id(42), Some((3, 81)));
+		assert_eq!(authority_set_changes.get_set_id(141), None);
 	}
 }

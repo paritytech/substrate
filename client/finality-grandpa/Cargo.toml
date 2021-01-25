@@ -45,6 +45,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 sc-block-builder = { version = "0.8.0", path = "../block-builder" }
 finality-grandpa = { version = "0.12.3", features = ["derive-codec"] }
 pin-project = "0.4.6"
+linked-hash-map = "0.5.2"
 
 [dev-dependencies]
 assert_matches = "1.3.0"
