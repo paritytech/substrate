@@ -122,9 +122,9 @@ pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Resul
 /// where no threads are use.
 /// This will NOT catch panic.
 ///
-/// This explains that any panic from a worker using thread have to panic
-/// the parent thread on join (not if dismissed since inline processing
-/// is lazy).
+/// This means that any panic from a worker (using thread and std) have
+/// to panic on 'join' (dismissed case work because inline processing
+/// only run on 'join').
 #[cfg(not(feature = "std"))]
 fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U, ()>
 	where F: FnOnce() -> U
@@ -197,7 +197,7 @@ pub fn instantiate(
 	})
 }
 
-/// Technical trait to factor code.
+/// Technical only trait to factor code.
 /// It access the instance lazilly from a module.
 #[cfg(feature = "std")]
 pub trait LazyInstanciate<'a> {
@@ -210,18 +210,28 @@ pub trait LazyInstanciate<'a> {
 	fn instantiate(self) -> Option<&'a AssertUnwindSafe<Box<dyn WasmInstance>>>;
 }
 
+/// Helper method to instantiate from a module arc reference.
+#[cfg(feature = "std")]
+pub fn instantiate_inline(
+	module: &Option<Arc<dyn WasmModule>>,
+) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
+	instantiate(module.as_ref().map(AsRef::as_ref))
+}
+
 /// Lazy instantiaty for wasm instance.
 #[cfg(feature = "std")]
 pub struct InlineInstantiateRef<'a> {
-	module: &'a Option<Arc<dyn WasmModule>>,
-	instance: &'a mut Option<AssertUnwindSafe<Box<dyn WasmInstance>>>,
+	/// Thread safe reference counted to the module.
+	pub module: &'a Option<Arc<dyn WasmModule>>,
+	/// Thread safe reference to the instance.
+	pub instance: &'a mut Option<AssertUnwindSafe<Box<dyn WasmInstance>>>,
 }
 
 #[cfg(feature = "std")]
 impl<'a> LazyInstanciate<'a> for InlineInstantiateRef<'a> {
 	fn instantiate(self) -> Option<&'a AssertUnwindSafe<Box<dyn WasmInstance>>> {
 		if self.instance.is_none() {
-			*self.instance = if let Some(instance) = instantiate(self.module.as_ref().map(AsRef::as_ref)) {
+			*self.instance = if let Some(instance) = instantiate_inline(self.module) {
 				Some(instance)
 			} else {
 				return None

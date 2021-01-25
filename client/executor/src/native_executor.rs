@@ -42,7 +42,8 @@ use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule};
 use sp_externalities::{ExternalitiesExt as _, WorkerResult};
 use sp_tasks::{new_async_externalities, WorkerDeclaration};
-use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task, PendingTask as InlineTask};
+use sc_executor_common::inline_spawn::{WasmTask, NativeTask, Task,
+	PendingTask as InlineTask, InlineInstantiateRef, instantiate_inline};
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -54,12 +55,6 @@ pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Resul
 	where F: UnwindSafe + FnOnce() -> U
 {
 	Ok(sc_executor_common::inline_spawn::with_externalities_safe(ext, f)?)
-}
-
-fn instantiate_inline(
-	module: &Option<Arc<dyn WasmModule>>,
-) -> Option<AssertUnwindSafe<Box<dyn WasmInstance>>> {
-	sc_executor_common::inline_spawn::instantiate(module.as_ref().map(AsRef::as_ref))
 }
 
 /// Delegate for dispatching a CodeExecutor call.
@@ -182,24 +177,6 @@ impl<'a, 'b> sc_executor_common::inline_spawn::LazyInstanciate<'a> for InlineIns
 		}
 
 		self.guard.as_ref()
-	}
-}
-
-struct InlineInstantiateRef<'a> {
-	module: &'a Option<Arc<dyn WasmModule>>,
-	instance: &'a mut Option<AssertUnwindSafe<Box<dyn WasmInstance>>>,
-}
-
-impl<'a> sc_executor_common::inline_spawn::LazyInstanciate<'a> for InlineInstantiateRef<'a> {
-	fn instantiate(self) -> Option<&'a AssertUnwindSafe<Box<dyn WasmInstance>>> {
-		if self.instance.is_none() {
-			*self.instance = if let Some(instance) = instantiate_inline(self.module) {
-				Some(instance)
-			} else {
-				return None
-			}
-		};
-		self.instance.as_ref()
 	}
 }
 
