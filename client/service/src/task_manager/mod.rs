@@ -189,10 +189,9 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 		&self,
 		name: &'static str,
 		future: BoxFuture<'static, ()>,
-	) -> Option<sp_core::traits::RemoteHandle> {
+	) -> Option<sp_core::traits::DismissHandle> {
 		// This is not using pool, and no way to abort task either.
-		self.spawn_with_handle(name, future);
-		None
+		self.spawn_with_handle(name, future)
 	}
 }
 

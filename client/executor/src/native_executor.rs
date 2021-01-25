@@ -34,7 +34,7 @@ use sp_core::{
 	NativeOrEncoded,
 	traits::{
 		CodeExecutor, Externalities, AsyncExternalities, RuntimeCode, MissingHostFunctions,
-		RuntimeSpawnExt, RuntimeSpawn, RemoteHandle, BoxFuture, SpawnLimiter,
+		RuntimeSpawnExt, RuntimeSpawn, DismissHandle, BoxFuture, SpawnLimiter,
 	},
 };
 use log::trace;
@@ -350,7 +350,7 @@ mod dismiss_handle {
 
 	struct DismissHandlesInner {
 		/// threads handle with associated pthread.
-		running: BTreeMap<u64, RemoteHandle>,
+		running: BTreeMap<u64, DismissHandle>,
 		/// worker mapping with their thread ids.
 		workers: BTreeMap<u64, u64>,
 	}
@@ -368,7 +368,7 @@ mod dismiss_handle {
 		pub(super) fn new_thread_id(&self, counter: &Arc<AtomicU64>) -> u64 {
 			counter.fetch_add(1, Ordering::Relaxed)
 		}
-		pub(super) fn register_new_thread(&self, handle: RemoteHandle, thread_id: u64) {
+		pub(super) fn register_new_thread(&self, handle: DismissHandle, thread_id: u64) {
 			self.0.lock().running.insert(thread_id, handle);
 		}
 		pub(super) fn register_worker(&self, worker: u64, thread_id: u64) {
@@ -402,7 +402,7 @@ mod dismiss_handle {
 		pub(super) fn new_thread_id(&self, _counter: &Arc<AtomicU64>) -> u64 {
 			0
 		}
-		pub(super) fn register_new_thread(&self, _handle: Option<RemoteHandle>, _thread_id: u64) {
+		pub(super) fn register_new_thread(&self, _handle: Option<DismissHandle>, _thread_id: u64) {
 		}
 		pub(super) fn register_worker(&self, _worker: u64, _thread_id: u64) {
 		}
@@ -642,7 +642,7 @@ impl RuntimeInstanceSpawn {
 		&self,
 		name: &'static str,
 		future: BoxFuture,
-	) -> Option<RemoteHandle> {
+	) -> Option<DismissHandle> {
 		self.scheduler.spawn_with_handle(name, future)
 			.map(|th| th)
 	}
@@ -652,7 +652,7 @@ impl RuntimeInstanceSpawn {
 		&self,
 		name: &'static str,
 		future: BoxFuture,
-	) -> Option<Option<RemoteHandle>> {
+	) -> Option<Option<DismissHandle>> {
 		self.scheduler.spawn(name, future);
 		None
 	}
