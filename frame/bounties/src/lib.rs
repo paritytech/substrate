@@ -92,7 +92,8 @@ use sp_runtime::{Permill, RuntimeDebug, DispatchResult, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, BadOrigin
 }};
 
-use frame_support::dispatch::DispatchResultWithPostInfo;
+use frame_support::{dispatch::{DispatchError, DispatchResultWithPostInfo}};
+
 use frame_support::traits::{EnsureOrigin};
 
 use frame_support::weights::{Weight};
@@ -148,8 +149,6 @@ pub struct SubBounty<AccountId, Balance, BlockNumber> {
 	proposer: AccountId,
 	/// The (total) amount that should be paid if the bounty is rewarded.
 	value: Balance,
-	/// Parent bounty curator or master_curator
-	curator: AccountId,
 	/// The curator fee. Included in value.
 	fee: Balance,
 	/// The deposit of curator.
@@ -225,8 +224,8 @@ decl_storage! {
 
 		/// Bounties that have been made.
 		pub Bounties get(fn bounties):
-		map hasher(twox_64_concat) BountyIndex
-		=> Option<Bounty<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
+			map hasher(twox_64_concat) BountyIndex
+			=> Option<Bounty<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
 		/// The description of each bounty.
 		pub BountyDescriptions get(fn bounty_descriptions):
@@ -554,20 +553,6 @@ decl_module! {
 						let fee = bounty.fee.min(balance); // just to be safe
 						T::Currency::reserve(&bounty_account, fee)?;
 
-						// Update the Curator info to Subbounties list
-						if bounty.activesubbounty.len() > 0 {
-							bounty.activesubbounty
-							.iter()
-							.for_each(|subbounty_id| {
-								let _ = SubBounties::<T>::try_mutate_exists(bounty_id,
-									subbounty_id,
-									|maybe_subbounty| -> DispatchResult {
-									let mut subbounty = maybe_subbounty.as_mut().unwrap();
-									subbounty.curator = curator.clone();
-									Ok(())
-								});
-							});
-						}
 						let update_due = system::Module::<T>::block_number() + T::BountyUpdatePeriod::get();
 						bounty.status = BountyStatus::Active { curator: curator.clone(), update_due };
 						Ok(())
@@ -894,8 +879,8 @@ decl_module! {
 			let signer = ensure_signed(origin)?;
 			let subcurator = T::Lookup::lookup(subcurator)?;
 
-			// Ensure parent bounty is Active
-			Self::ensure_bounty_active(bounty_id)?;
+			// Ensure parent bounty is Active & get status of curator
+			let master_curator = Self::ensure_bounty_active(bounty_id)?;
 
 			// Mutate the Subbounty instance
 			SubBounties::<T>::try_mutate_exists(bounty_id,
@@ -907,8 +892,7 @@ decl_module! {
 					.ok_or(Error::<T>::InvalidIndex)?;
 
 				// Ensure sure caller is curator
-				let master_curator = &subbounty.curator;
-				ensure!( signer == *master_curator, Error::<T>::RequireCurator);
+				ensure!( signer == master_curator, Error::<T>::RequireCurator);
 
 				// Ensure subbounty is in expected state
 				match subbounty.status {
@@ -917,7 +901,7 @@ decl_module! {
 				};
 
 				// if curator self assign as subcurator, fee is 0
-				if *master_curator != subcurator {
+				if master_curator != subcurator {
 					ensure!(fee < subbounty.value, Error::<T>::InvalidFee);
 					subbounty.fee = fee;
 				} else {
@@ -950,8 +934,8 @@ decl_module! {
 		) {
 			let signer = ensure_signed(origin)?;
 
-			// Ensure parent bounty is Active
-			Self::ensure_bounty_active(bounty_id)?;
+			// Ensure parent bounty is Active & get status of curator
+			let master_curator = Self::ensure_bounty_active(bounty_id)?;
 
 			// Mutate Subbounty
 			SubBounties::<T>::try_mutate_exists(bounty_id, subbounty_id,
@@ -961,8 +945,6 @@ decl_module! {
 					.as_mut()
 					.ok_or(Error::<T>::InvalidIndex)?;
 
-				let master_curator = &subbounty.curator;
-
 				// Ensure subbounty is in expected state
 				match subbounty.status {
 					BountyStatus::CuratorProposed { ref curator } => {
@@ -970,7 +952,7 @@ decl_module! {
 						ensure!(signer == *subcurator, Error::<T>::RequireCurator);
 						// TODO :: Have to recheck this condition
 						// Deposit the bond if subcurator is not equal to curator
-						if *master_curator != *subcurator {
+						if master_curator != *subcurator {
 							let deposit = T::BountyCuratorDeposit::get() * subbounty.fee;
 							T::Currency::reserve(subcurator, deposit)?;
 							subbounty.curator_deposit = deposit;
@@ -1026,8 +1008,8 @@ decl_module! {
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
-			// Ensure parent bounty is Active
-			Self::ensure_bounty_active(bounty_id)?;
+			// Ensure parent bounty is Active & get status of curator
+			let master_curator = Self::ensure_bounty_active(bounty_id)?;
 
 			// Ensure subbounty is in expected state
 			SubBounties::<T>::try_mutate_exists(bounty_id,
@@ -1037,8 +1019,6 @@ decl_module! {
 				let mut subbounty = maybe_subbounty
 					.as_mut()
 					.ok_or(Error::<T>::InvalidIndex)?;
-
-				let master_curator = &subbounty.curator;
 
 				let slash_curator = |arg_curator: &T::AccountId, curator_deposit: &mut BalanceOf<T>| {
 					let imbalance = T::Currency::slash_reserved(arg_curator, *curator_deposit).0;
@@ -1056,7 +1036,7 @@ decl_module! {
 						// A curator has been proposed, but not accepted yet.
 						// Either `RejectOrigin`, curator or the proposed subcurator can unassign the subcurator.
 						ensure!(maybe_sender
-							.map_or(true, |sender| sender == *subcurator || sender == *master_curator),
+							.map_or(true, |sender| sender == *subcurator || sender == master_curator),
 							BadOrigin
 						);
 					},
@@ -1072,7 +1052,7 @@ decl_module! {
 							Some(sender) => {
 								// If the sender is curator, and the subcurator is inactive,
 								// slash the subcurator.
-								if sender == *master_curator {
+								if sender == master_curator {
 									let block_number = system::Module::<T>::block_number();
 									if *update_due < block_number {
 										slash_curator(subcurator, &mut subbounty.curator_deposit);
@@ -1106,7 +1086,6 @@ decl_module! {
 				Ok(())
 			})?;
 		}
-
 		/// Award subbounty to a beneficiary account.
 		/// The beneficiary will be able to claim the
 		/// funds after a delay.
@@ -1129,7 +1108,7 @@ decl_module! {
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			// Ensure parent bounty is Active
-			Self::ensure_bounty_active(bounty_id)?;
+			let _ = Self::ensure_bounty_active(bounty_id)?;
 
 			// Ensure subbounty is in expected state
 			SubBounties::<T>::try_mutate_exists(bounty_id,
@@ -1181,7 +1160,7 @@ decl_module! {
 			let _ = ensure_signed(origin)?;
 
 			// Ensure parent bounty is Active
-			Self::ensure_bounty_active(bounty_id)?;
+			let master_curator = Self::ensure_bounty_active(bounty_id)?;
 
 			// Ensure subbounty is in expected state
 			SubBounties::<T>::try_mutate_exists(bounty_id,
@@ -1192,8 +1171,6 @@ decl_module! {
 					.as_mut()
 					.ok_or(Error::<T>::InvalidIndex)?;
 
-				let master_curator = &subbounty.curator;
-
 				if let BountyStatus::PendingPayout { ref curator, ref beneficiary, ref unlock_at } = subbounty.status {
 					let subcurator = curator;
 
@@ -1203,8 +1180,10 @@ decl_module! {
 
 					// Make curator fee payment & unreserve the deposit
 					// if subcurator != curator
-					if *subcurator != *master_curator {
-						let _ = T::Currency::unreserve(&subcurator, subbounty.curator_deposit);
+					if *subcurator != master_curator {
+						let _ = T::Currency::unreserve(&subcurator,
+							subbounty.curator_deposit
+						);
 						let _ = T::Currency::repatriate_reserved(
 							&bounty_account,
 							&subcurator,
@@ -1229,11 +1208,15 @@ decl_module! {
 					// Remove the subbounty description
 					SubBountyDescriptions::remove(bounty_id, subbounty_id);
 					// Remove the subbounty from bounty active subbouty list
-					Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-						let bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
-						bounty.activesubbounty.retain(|h| h != &subbounty_id);
-						Ok(())
-					})?;
+					Bounties::<T>::try_mutate_exists(bounty_id,
+						|maybe_bounty| -> DispatchResult
+						{
+							let bounty = maybe_bounty
+								.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+							bounty.activesubbounty.retain(|h| h != &subbounty_id);
+							Ok(())
+						}
+					)?;
 					*maybe_subbounty = None;
 					Ok(())
 				} else {
@@ -1241,7 +1224,6 @@ decl_module! {
 				}
 			})?;
 		}
-
 		/// Cancel a proposed or active subbounty. All the funds gets
 		/// unreserved to bounty account. the curator deposit will
 		/// be unreserved if possible.
@@ -1351,10 +1333,10 @@ impl<T: Config> Module<T> {
 
 	fn ensure_bounty_active(
 		bounty_id: BountyIndex,
-	) -> DispatchResult {
+	) -> Result<T::AccountId, DispatchError> {
 		let bounty = Self::bounties(&bounty_id).ok_or(Error::<T>::InvalidIndex)?;
-		if let BountyStatus::Active { curator: _ , .. } = bounty.status {
-			Ok(())
+		if let BountyStatus::Active { curator, .. } = bounty.status {
+			Ok(curator.clone())
 		} else {
 			Err(Error::<T>::UnexpectedStatus.into())
 		}
@@ -1375,7 +1357,6 @@ impl<T: Config> Module<T> {
 			proposer: proposer.clone(),
 			value,
 			fee: 0u32.into(),
-			curator: proposer.clone(),
 			curator_deposit: 0u32.into(),
 			bond,
 			status: BountyStatus::Approved,
@@ -1440,17 +1421,22 @@ impl<T: Config> Module<T> {
 		_remark: Vec<u8>
 	) -> DispatchResult {
 
+		let master_curator = Self::ensure_bounty_active(bounty_id)?;
 		SubBounties::<T>::try_mutate_exists(bounty_id, subbounty_id,
 			|maybe_subbounty| -> DispatchResult {
-
 			let subbounty = maybe_subbounty
 				.as_mut()
 				.ok_or(Error::<T>::InvalidIndex)?;
 
+			// update the status info to subbounty
 			match subbounty.status {
 				BountyStatus::Active { ref curator, ref mut update_due } => {
-					ensure!(*curator == *signer || subbounty.curator == *signer, Error::<T>::RequireCurator);
-					*update_due = (system::Module::<T>::block_number() + T::BountyUpdatePeriod::get()).max(*update_due);
+					ensure!(
+						*curator == *signer || master_curator == *signer,
+						Error::<T>::RequireCurator
+					);
+					*update_due = (system::Module::<T>::block_number() +
+						T::BountyUpdatePeriod::get()).max(*update_due);
 				},
 				_ => return Err(Error::<T>::UnexpectedStatus.into()),
 			}
