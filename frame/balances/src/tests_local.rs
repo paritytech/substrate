@@ -33,7 +33,6 @@ use crate::{
 	Module, Config, decl_tests,
 };
 use pallet_transaction_payment::CurrencyAdapter;
-use std::any::TypeId;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -170,8 +169,8 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 				events(),
 				[
 					Event::frame_system(system::Event::NewAccount(1)),
-					Event::pallet_balances(balances::Event::Endowed(1, 100)),
-					Event::pallet_balances(balances::Event::BalanceSet(1, 100, 0)),
+					Event::pallet_balances(BalancesEvent::Endowed(1, 100)),
+					Event::pallet_balances(BalancesEvent::BalanceSet(1, 100, 0)),
 				]
 			);
 
@@ -185,7 +184,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::pallet_balances(balances::Event::DustLost(1, 1)),
+					Event::pallet_balances(BalancesEvent::DustLost(1, 1)),
 					Event::frame_system(system::Event::KilledAccount(1))
 				]
 			);

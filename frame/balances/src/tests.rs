@@ -34,6 +34,7 @@ macro_rules! decl_tests {
 		};
 		use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier};
 		use frame_system::RawOrigin;
+		use crate::Event as BalancesEvent;
 
 		const ID_1: LockIdentifier = *b"1       ";
 		const ID_2: LockIdentifier = *b"2       ";
@@ -469,7 +470,7 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
 				assert_eq!(
 					last_event(),
-					Event::pallet_balances(balances::Event::ReserveRepatriated(1, 2, 41, Status::Free)),
+					Event::pallet_balances(BalancesEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
@@ -688,7 +689,7 @@ macro_rules! decl_tests {
 
 					assert_eq!(
 						last_event(),
-						Event::pallet_balances(balances::Event::Reserved(1, 10)),
+						Event::pallet_balances(BalancesEvent::Reserved(1, 10)),
 					);
 
 					System::set_block_number(3);
@@ -696,7 +697,7 @@ macro_rules! decl_tests {
 
 					assert_eq!(
 						last_event(),
-						Event::pallet_balances(balances::Event::Unreserved(1, 5)),
+						Event::pallet_balances(BalancesEvent::Unreserved(1, 5)),
 					);
 
 					System::set_block_number(4);
@@ -705,7 +706,7 @@ macro_rules! decl_tests {
 					// should only unreserve 5
 					assert_eq!(
 						last_event(),
-						Event::pallet_balances(balances::Event::Unreserved(1, 5)),
+						Event::pallet_balances(BalancesEvent::Unreserved(1, 5)),
 					);
 				});
 		}
@@ -722,8 +723,8 @@ macro_rules! decl_tests {
 						events(),
 						[
 							Event::frame_system(system::Event::NewAccount(1)),
-							Event::frame_system(balances::Event::Endowed(1, 100)),
-							Event::frame_system(balances::Event::BalanceSet(1, 100, 0)),
+							Event::pallet_beealances(BalancesEvent::Endowed(1, 100)),
+							Event::pallet_balances(BalancesEvent::BalanceSet(1, 100, 0)),
 						]
 					);
 
@@ -732,7 +733,7 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::pallet_balances(balances::Event::DustLost(1, 99)),
+							Event::pallet_balances(BalancesEvent::DustLost(1, 99)),
 							Event::frame_system(system::Event::KilledAccount(1))
 						]
 					);
@@ -751,8 +752,8 @@ macro_rules! decl_tests {
 						events(),
 						[
 							Event::frame_system(system::Event::NewAccount(1)),
-							Event::pallet_balances(balances::Event::Endowed(1, 100)),
-							Event::pallet_balances(balances::Event::BalanceSet(1, 100, 0)),
+							Event::pallet_balances(BalancesEvent::Endowed(1, 100)),
+							Event::pallet_balances(BalancesEvent::BalanceSet(1, 100, 0)),
 						]
 					);
 
