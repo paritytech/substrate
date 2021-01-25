@@ -23,6 +23,7 @@ use crate::{
 };
 use codec::Decode;
 use frame_support::{traits::Get, weights::Weight, IterableStorageMap};
+use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
 	build_support_map, evaluate_support, reduce, Assignment, ElectionResult, ElectionScore,
 	ExtendedBalance,
@@ -30,11 +31,10 @@ use sp_npos_elections::{
 use sp_runtime::{
 	offchain::storage::StorageValueRef, traits::TrailingZeroInput, PerThing, RuntimeDebug,
 };
-use sp_std::{convert::TryInto, prelude::*};
-use frame_system::offchain::SubmitTransaction;
+use sp_std::{convert::TryInto, prelude::*, fmt::Debug};
 
 /// Error types related to the offchain election machinery.
-#[derive(RuntimeDebug)]
+#[derive(Debug)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq))]
 pub enum OffchainElectionError {
 	/// election returned None. This means less candidate that minimum number of needed
@@ -117,8 +117,10 @@ pub(crate) fn set_check_offchain_execution_status<T: Config>(
 	}
 }
 
+/// Storage path for the solution `call`.
 pub(crate) const OFFCHAIN_QUEUED_CALL: &[u8] = b"parity/staking-election/call";
 
+/// Save a given call OCW storage.
 pub(crate) fn save_solution<T: Config>(call: Call<T>) -> Result<(), OffchainElectionError> {
 	let storage = StorageValueRef::persistent(&OFFCHAIN_QUEUED_CALL);
 	let set_outcome = storage.mutate::<_, OffchainElectionError, _>(|maybe_call| {
@@ -140,20 +142,24 @@ pub(crate) fn save_solution<T: Config>(call: Call<T>) -> Result<(), OffchainElec
 	}
 }
 
+/// Get a saved OCW solution, if it exists.
 pub(crate) fn get_solution<T: Config>() -> Option<Call<T>> {
 	StorageValueRef::persistent(&OFFCHAIN_QUEUED_CALL).get().flatten()
 }
 
+/// Submit a saved OCW solution, if one exists.
 pub(crate) fn submit_queued<T: Config>() -> Result<(), OffchainElectionError> {
 	let saved = get_solution().ok_or(OffchainElectionError::SolutionUnavailable)?;
 	submit_solution::<T>(saved)
 }
 
+/// Submit a given solution as an unsigned transaction.
 pub(crate) fn submit_solution<T: Config>(call: Call<T>) -> Result<(), OffchainElectionError> {
 	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
+/// Compute the solution, save it, and submit it.
 pub(crate) fn compute_save_and_submit<T: Config>() -> Result<(), OffchainElectionError> {
 	let call = compute_offchain_election::<T>()?;
 	save_solution::<T>(call.clone())?;
