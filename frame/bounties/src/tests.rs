@@ -1080,3 +1080,70 @@ fn add_subbounty_works() {
 
 	});
 }
+
+#[test]
+fn assign_subcurator_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
+
+		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
+
+		Balances::make_free_balance_be(&4, 10);
+
+		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
+
+		Balances::make_free_balance_be(&4, 101);
+
+		assert_ok!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec())
+		);
+
+		assert_eq!(last_event(), RawEvent::SubBountyApproved(0,1));
+
+		System::set_block_number(4);
+		<Treasury as OnInitialize<u64>>::on_initialize(4);
+
+		System::set_block_number(6);
+		<Treasury as OnInitialize<u64>>::on_initialize(6);
+
+		assert_ok!(
+			Bounties::propose_subcurator(Origin::signed(4),0,1,4,2)
+		);
+
+		assert_eq!(Bounties::subbounties(0,1).unwrap(), SubBounty {
+			proposer: 4,
+			value: 10,
+			fee: 0,
+			curator_deposit: 0,
+			bond: 88,
+			status: BountyStatus::CuratorProposed {
+				curator: 4,
+			},
+		});
+
+		assert_ok!(
+			Bounties::accept_subcurator(Origin::signed(4),0,1)
+		);
+
+		assert_eq!(Bounties::subbounties(0,1).unwrap(), SubBounty {
+				proposer: 4,
+				value: 10,
+				fee: 0,
+				curator_deposit: 0,
+				bond: 88,
+				status: BountyStatus::Active {
+					curator: 4,
+					update_due: 26,
+				},
+			}
+		);
+	});
+}

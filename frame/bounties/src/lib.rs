@@ -280,6 +280,8 @@ decl_event!(
 		SubBountyRejected(BountyIndex, BountyIndex, Balance),
 		/// A Subbounty is cancelled. \[index, subbounty index,\]
 		SubBountyCanceled(BountyIndex, BountyIndex),
+		/// A subbounty proposal is funded. \[index, subbounty index\]
+		SubBountyFunded(BountyIndex, BountyIndex),
 		/// A subbounty proposal is funded and became active. \[index, subbounty index\]
 		SubBountyBecameActive(BountyIndex, BountyIndex),
 		/// A Subbounty expiry is extended. \[index, subbounty index,\]
@@ -1501,7 +1503,7 @@ impl<T: Config> pallet_treasury::SpendFunds<T> for Module<T> {
 							subbounty.status = BountyStatus::Funded;
 							// return the proposer deposit.
 							let _ = T::Currency::unreserve(&subbounty.proposer, subbounty.bond);
-							Self::deposit_event(RawEvent::SubBountyBecameActive(*bounty_id,*subbounty_id));
+							Self::deposit_event(RawEvent::SubBountyFunded(*bounty_id,*subbounty_id));
 							false
 						} else {
 							false
