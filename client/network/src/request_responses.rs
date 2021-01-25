@@ -611,12 +611,20 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}
+
+						// A response to an inbound request has been sent.
 						RequestResponseEvent::ResponseSent { request_id, peer } => {
 							let arrival_time = self.pending_responses_arrival_time.remove(
 								&(protocol.clone(), request_id).into(),
 							)
 								.map(|t| t.elapsed())
-								.expect("To find request arrival time for answered request.");
+								.expect(
+									"Time is added for each inbound request on arrival and only \
+									 removed on success (`ResponseSent`) or failure \
+									 (`InboundFailure`). One can not receive a success event for a \
+									 request that either never arrived, or that has previously \
+									 failed; qed.",
+								);
 
 							let out = Event::InboundRequest {
 								peer,
