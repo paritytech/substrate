@@ -25,7 +25,7 @@ use sp_runtime::{
 };
 use sp_core::H256;
 use sp_io;
-use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
+use frame_support::parameter_types;
 use frame_support::traits::StorageMapShim;
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use crate::{
@@ -168,9 +168,9 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::system(system::Event::NewAccount(1)),
-					Event::balances(RawEvent::Endowed(1, 100)),
-					Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+					Event::System(System::Event::NewAccount(1)),
+					Event::Balances(RawEvent::Endowed(1, 100)),
+					Event::Balances(RawEvent::BalanceSet(1, 100, 0)),
 				]
 			);
 
@@ -184,8 +184,8 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::balances(RawEvent::DustLost(1, 1)),
-					Event::system(system::Event::KilledAccount(1))
+					Event::Balances(RawEvent::DustLost(1, 1)),
+					Event::System(System::Event::KilledAccount(1))
 				]
 			);
 		});
