@@ -313,8 +313,8 @@ decl_error! {
 		InsufficientBountyBalance,
 		/// Subbounty active
 		SubBountyActive,
-		/// Number of subbounty recached MaxSubBountyCount
-		SubBountyMaxReached,
+		/// Max Number of subbounty threahold crossed MaxSubBountyCount
+		SubBountyMaxOverflow,
 	}
 }
 
@@ -835,10 +835,10 @@ decl_module! {
 							Error::<T>::InvalidValue,
 						);
 						ensure!(bounty.subbountycount <= T::MaxSubBountyCount::get() as u32,
-							Error::<T>::SubBountyMaxReached,
+							Error::<T>::SubBountyMaxOverflow,
 						);
 
-						// reserve deposit for new bounty
+						// reserve deposit for new subbounty
 						let bond = T::BountyDepositBase::get()
 							+ T::DataDepositPerByte::get() * (description.len() as u32).into();
 						T::Currency::reserve(&signer, bond)
