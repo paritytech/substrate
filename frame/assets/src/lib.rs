@@ -113,7 +113,7 @@
 mod benchmarking;
 pub mod weights;
 
-use sp_std::{fmt::Debug};
+use sp_std::{fmt::Debug, prelude::*};
 use sp_runtime::{RuntimeDebug, traits::{
 	Member, AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd
 }};
@@ -151,6 +151,16 @@ pub trait Config: frame_system::Config {
 	/// supports.
 	type AssetDepositPerZombie: Get<BalanceOf<Self>>;
 
+	/// The maximum length of a name or symbol stored on-chain.
+	type StringLimit: Get<u32>;
+
+	/// The basic amount of funds that must be reserved when adding metadata to your asset.
+	type MetadataDepositBase: Get<BalanceOf<Self>>;
+
+	/// The additional funds that must be reserved for the number of bytes you store in your
+	/// metadata.
+	type MetadataDepositPerByte: Get<BalanceOf<Self>>;
+
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -184,6 +194,8 @@ pub struct AssetDetails<
 	zombies: u32,
 	/// The total number of accounts.
 	accounts: u32,
+	/// Whether the asset is frozen for permissionless transfers.
+	is_frozen: bool,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
@@ -196,6 +208,20 @@ pub struct AssetBalance<
 	is_frozen: bool,
 	/// Whether the account is a zombie. If not, then it has a reference.
 	is_zombie: bool,
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
+pub struct AssetMetadata<DepositBalance> {
+	/// The balance deposited for this metadata.
+	///
+	/// This pays for the data stored in this struct.
+	deposit: DepositBalance,
+	/// The user friendly name of this asset. Limited in length by `StringLimit`.
+	name: Vec<u8>,
+	/// The ticker symbol for this asset. Limited in length by `StringLimit`.
+	symbol: Vec<u8>,
+	/// The number of decimals this asset uses to represent one unit.
+	decimals: u8,
 }
 
 decl_storage! {
@@ -212,6 +238,9 @@ decl_storage! {
 			hasher(blake2_128_concat) T::AssetId,
 			hasher(blake2_128_concat) T::AccountId
 			=> AssetBalance<T::Balance>;
+
+		/// Metadata of an asset.
+		Metadata: map hasher(blake2_128_concat) T::AssetId => AssetMetadata<BalanceOf<T>>;
 	}
 }
 
@@ -239,12 +268,18 @@ decl_event! {
 		Frozen(AssetId, AccountId),
 		/// Some account `who` was thawed. \[asset_id, who\]
 		Thawed(AssetId, AccountId),
+		/// Some asset `asset_id` was frozen. \[asset_id\]
+		AssetFrozen(AssetId),
+		/// Some asset `asset_id` was thawed. \[asset_id\]
+		AssetThawed(AssetId),
 		/// An asset class was destroyed.
 		Destroyed(AssetId),
 		/// Some asset class was force-created. \[asset_id, owner\]
 		ForceCreated(AssetId, AccountId),
 		/// The maximum amount of zombies allowed has changed. \[asset_id, max_zombies\]
 		MaxZombiesChanged(AssetId, u32),
+		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals\]
+		MetadataSet(AssetId, Vec<u8>, Vec<u8>, u8),
 	}
 }
 
@@ -276,6 +311,8 @@ decl_error! {
 		Overflow,
 		/// Some internal state is broken.
 		BadState,
+		/// Invalid metadata given.
+		BadMetadata,
 	}
 }
 
@@ -337,6 +374,7 @@ decl_module! {
 				min_balance,
 				zombies: Zero::zero(),
 				accounts: Zero::zero(),
+				is_frozen: false,
 			});
 			Self::deposit_event(RawEvent::Created(id, owner, admin));
 		}
@@ -386,6 +424,7 @@ decl_module! {
 				min_balance,
 				zombies: Zero::zero(),
 				accounts: Zero::zero(),
+				is_frozen: false,
 			});
 			Self::deposit_event(RawEvent::ForceCreated(id, owner));
 		}
@@ -412,7 +451,9 @@ decl_module! {
 				ensure!(details.owner == origin, Error::<T>::NoPermission);
 				ensure!(details.accounts == details.zombies, Error::<T>::RefsLeft);
 				ensure!(details.zombies <= zombies_witness, Error::<T>::BadWitness);
-				T::Currency::unreserve(&details.owner, details.deposit);
+
+				let metadata = Metadata::<T>::take(&id);
+				T::Currency::unreserve(&details.owner, details.deposit.saturating_add(metadata.deposit));
 
 				*maybe_details = None;
 				Account::<T>::remove_prefix(&id);
@@ -442,7 +483,9 @@ decl_module! {
 				let details = maybe_details.take().ok_or(Error::<T>::Unknown)?;
 				ensure!(details.accounts == details.zombies, Error::<T>::RefsLeft);
 				ensure!(details.zombies <= zombies_witness, Error::<T>::BadWitness);
-				T::Currency::unreserve(&details.owner, details.deposit);
+
+				let metadata = Metadata::<T>::take(&id);
+				T::Currency::unreserve(&details.owner, details.deposit.saturating_add(metadata.deposit));
 
 				*maybe_details = None;
 				Account::<T>::remove_prefix(&id);
@@ -580,6 +623,7 @@ decl_module! {
 			let dest = T::Lookup::lookup(target)?;
 			Asset::<T>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+				ensure!(!details.is_frozen, Error::<T>::Frozen);
 
 				if dest == origin {
 					return Ok(())
@@ -739,6 +783,54 @@ decl_module! {
 			Self::deposit_event(Event::<T>::Thawed(id, who));
 		}
 
+		/// Disallow further unprivileged transfers for the asset class.
+		///
+		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be frozen.
+		///
+		/// Emits `Frozen`.
+		///
+		/// Weight: `O(1)`
+		#[weight = T::WeightInfo::freeze_asset()]
+		fn freeze_asset(origin, #[compact] id: T::AssetId) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+
+			Asset::<T>::try_mutate(id, |maybe_details| {
+				let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+				ensure!(&origin == &d.freezer, Error::<T>::NoPermission);
+
+				d.is_frozen = true;
+
+				Self::deposit_event(Event::<T>::AssetFrozen(id));
+				Ok(())
+			})
+		}
+
+		/// Allow unprivileged transfers for the asset again.
+		///
+		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be frozen.
+		///
+		/// Emits `Thawed`.
+		///
+		/// Weight: `O(1)`
+		#[weight = T::WeightInfo::thaw_asset()]
+		fn thaw_asset(origin, #[compact] id: T::AssetId) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+
+			Asset::<T>::try_mutate(id, |maybe_details| {
+				let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+				ensure!(&origin == &d.admin, Error::<T>::NoPermission);
+
+				d.is_frozen = false;
+
+				Self::deposit_event(Event::<T>::AssetThawed(id));
+				Ok(())
+			})
+		}
+
 		/// Change the Owner of an asset.
 		///
 		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
@@ -809,6 +901,20 @@ decl_module! {
 			})
 		}
 
+		/// Set the maximum number of zombie accounts for an asset.
+		///
+		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
+		///
+		/// Funds of sender are reserved according to the formula:
+		/// `AssetDepositBase + AssetDepositPerZombie * max_zombies` taking into account
+		/// any already reserved funds.
+		///
+		/// - `id`: The identifier of the asset to update zombie count.
+		/// - `max_zombies`: The new number of zombies allowed for this asset.
+		///
+		/// Emits `MaxZombiesChanged`.
+		///
+		/// Weight: `O(1)`
 		#[weight = T::WeightInfo::set_max_zombies()]
 		fn set_max_zombies(origin,
 			#[compact] id: T::AssetId,
@@ -834,6 +940,76 @@ decl_module! {
 				details.max_zombies = max_zombies;
 
 				Self::deposit_event(RawEvent::MaxZombiesChanged(id, max_zombies));
+				Ok(())
+			})
+		}
+
+		/// Set the metadata for an asset.
+		///
+		/// NOTE: There is no `unset_metadata` call. Simply pass an empty name, symbol,
+		/// and 0 decimals to this function to remove the metadata of an asset and
+		/// return your deposit.
+		///
+		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
+		///
+		/// Funds of sender are reserved according to the formula:
+		/// `MetadataDepositBase + MetadataDepositPerByte * (name.len + symbol.len)` taking into
+		/// account any already reserved funds.
+		///
+		/// - `id`: The identifier of the asset to update.
+		/// - `name`: The user friendly name of this asset. Limited in length by `StringLimit`.
+		/// - `symbol`: The exchange symbol for this asset. Limited in length by `StringLimit`.
+		/// - `decimals`: The number of decimals this asset uses to represent one unit.
+		///
+		/// Emits `MaxZombiesChanged`.
+		///
+		/// Weight: `O(1)`
+		#[weight = T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32)]
+		fn set_metadata(origin,
+			#[compact] id: T::AssetId,
+			name: Vec<u8>,
+			symbol: Vec<u8>,
+			decimals: u8,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+
+			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
+			ensure!(symbol.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
+
+			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+			ensure!(&origin == &d.owner, Error::<T>::NoPermission);
+
+			Metadata::<T>::try_mutate_exists(id, |metadata| {
+				let bytes_used = name.len() + symbol.len();
+				let old_deposit = match metadata {
+					Some(m) => m.deposit,
+					None => Default::default()
+				};
+
+				// Metadata is being removed
+				if bytes_used.is_zero() && decimals.is_zero() {
+					T::Currency::unreserve(&origin, old_deposit);
+					*metadata = None;
+				} else {
+					let new_deposit = T::MetadataDepositPerByte::get()
+						.saturating_mul(((name.len() + symbol.len()) as u32).into())
+						.saturating_add(T::MetadataDepositBase::get());
+
+					if new_deposit > old_deposit {
+						T::Currency::reserve(&origin, new_deposit - old_deposit)?;
+					} else {
+						T::Currency::unreserve(&origin, old_deposit - new_deposit);
+					}
+
+					*metadata = Some(AssetMetadata {
+						deposit: new_deposit,
+						name: name.clone(),
+						symbol: symbol.clone(),
+						decimals,
+					})
+				}
+
+				Self::deposit_event(RawEvent::MetadataSet(id, name, symbol, decimals));
 				Ok(())
 			})
 		}
@@ -912,6 +1088,7 @@ mod tests {
 	use frame_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, impl_outer_event};
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use pallet_balances::Error as BalancesError;
 
 	mod pallet_assets {
 		pub use crate::Event;
@@ -976,6 +1153,9 @@ mod tests {
 	parameter_types! {
 		pub const AssetDepositBase: u64 = 1;
 		pub const AssetDepositPerZombie: u64 = 1;
+		pub const StringLimit: u32 = 50;
+		pub const MetadataDepositBase: u64 = 1;
+		pub const MetadataDepositPerByte: u64 = 1;
 	}
 
 	impl Config for Test {
@@ -986,6 +1166,9 @@ mod tests {
 		type ForceOrigin = frame_system::EnsureRoot<u64>;
 		type AssetDepositBase = AssetDepositBase;
 		type AssetDepositPerZombie = AssetDepositPerZombie;
+		type StringLimit = StringLimit;
+		type MetadataDepositBase = MetadataDepositBase;
+		type MetadataDepositPerByte = MetadataDepositPerByte;
 		type WeightInfo = ();
 	}
 	type System = frame_system::Module<Test>;
@@ -1013,15 +1196,41 @@ mod tests {
 			Balances::make_free_balance_be(&1, 100);
 			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
 			assert_eq!(Balances::reserved_balance(&1), 11);
+			assert!(Asset::<Test>::contains_key(0));
+
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0], vec![0], 12));
+			assert_eq!(Balances::reserved_balance(&1), 14);
+			assert!(Metadata::<Test>::contains_key(0));
+
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 20, 100));
+			assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
 
 			assert_ok!(Assets::destroy(Origin::signed(1), 0, 100));
 			assert_eq!(Balances::reserved_balance(&1), 0);
 
+			assert!(!Asset::<Test>::contains_key(0));
+			assert!(!Metadata::<Test>::contains_key(0));
+			assert_eq!(Account::<Test>::iter_prefix(0).count(), 0);
+
 			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
 			assert_eq!(Balances::reserved_balance(&1), 11);
+			assert!(Asset::<Test>::contains_key(0));
+
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0], vec![0], 12));
+			assert_eq!(Balances::reserved_balance(&1), 14);
+			assert!(Metadata::<Test>::contains_key(0));
+
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 20, 100));
+			assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
 
 			assert_ok!(Assets::force_destroy(Origin::root(), 0, 100));
 			assert_eq!(Balances::reserved_balance(&1), 0);
+
+			assert!(!Asset::<Test>::contains_key(0));
+			assert!(!Metadata::<Test>::contains_key(0));
+			assert_eq!(Account::<Test>::iter_prefix(0).count(), 0);
 		});
 	}
 
@@ -1172,7 +1381,7 @@ mod tests {
 	}
 
 	#[test]
-	fn transferring_frozen_balance_should_not_work() {
+	fn transferring_frozen_user_should_not_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
@@ -1180,6 +1389,19 @@ mod tests {
 			assert_ok!(Assets::freeze(Origin::signed(1), 0, 1));
 			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
 			assert_ok!(Assets::thaw(Origin::signed(1), 0, 1));
+			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+		});
+	}
+
+	#[test]
+	fn transferring_frozen_asset_should_not_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_eq!(Assets::balance(0, 1), 100);
+			assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
+			assert_ok!(Assets::thaw_asset(Origin::signed(1), 0));
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
 		});
 	}
@@ -1304,6 +1526,55 @@ mod tests {
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 2), 0);
 			assert_noop!(Assets::burn(Origin::signed(1), 0, 2, u64::max_value()), Error::<Test>::BalanceZero);
+		});
+	}
+
+	#[test]
+	fn set_metadata_should_work() {
+		new_test_ext().execute_with(|| {
+			// Cannot add metadata to unknown asset
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 10], 12),
+				Error::<Test>::Unknown,
+			);
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			// Cannot add metadata to unowned asset
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(2), 0, vec![0u8; 10], vec![0u8; 10], 12),
+				Error::<Test>::NoPermission,
+			);
+
+			// Cannot add oversized metadata
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 100], vec![0u8; 10], 12),
+				Error::<Test>::BadMetadata,
+			);
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 100], 12),
+				Error::<Test>::BadMetadata,
+			);
+
+			// Successfully add metadata and take deposit
+			Balances::make_free_balance_be(&1, 30);
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 10], 12));
+			assert_eq!(Balances::free_balance(&1), 9);
+
+			// Update deposit
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 5], 12));
+			assert_eq!(Balances::free_balance(&1), 14);
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 15], 12));
+			assert_eq!(Balances::free_balance(&1), 4);
+
+			// Cannot over-reserve
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 20], vec![0u8; 20], 12),
+				BalancesError::<Test, _>::InsufficientBalance,
+			);
+
+			// Clear Metadata
+			assert!(Metadata::<Test>::contains_key(0));
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![], vec![], 0));
+			assert!(!Metadata::<Test>::contains_key(0));
 		});
 	}
 }

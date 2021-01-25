@@ -7,9 +7,9 @@ scrape_configs:
       - targets: ['validator-a:9615']
         labels:
           network: dev
-      - targets: ['sentry-a:9615']
+      - targets: ['validator-b:9615']
         labels:
           network: dev
-      - targets: ['validator-b:9615']
+      - targets: ['light-c:9615']
         labels:
           network: dev

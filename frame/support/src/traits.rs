@@ -1263,16 +1263,16 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 	///
 	/// This resets any previous value of prime.
 	fn set_members_sorted(new_members: &[AccountId], old_members: &[AccountId]) {
-		let (incoming, outgoing) = Self::compute_members_diff(new_members, old_members);
+		let (incoming, outgoing) = Self::compute_members_diff_sorted(new_members, old_members);
 		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
 	}
 
 	/// Compute diff between new and old members; they **must already be sorted**.
 	///
 	/// Returns incoming and outgoing members.
-	fn compute_members_diff(
+	fn compute_members_diff_sorted(
 		new_members: &[AccountId],
-		old_members: &[AccountId]
+		old_members: &[AccountId],
 	) -> (Vec<AccountId>, Vec<AccountId>) {
 		let mut old_iter = old_members.iter();
 		let mut new_iter = new_members.iter();
@@ -1306,6 +1306,11 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 
 	/// Set the prime member.
 	fn set_prime(_prime: Option<AccountId>) {}
+
+	/// Get the current prime.
+	fn get_prime() -> Option<AccountId> {
+		None
+	}
 }
 
 impl<T: Clone + Ord> ChangeMembers<T> for () {

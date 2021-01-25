@@ -25,7 +25,6 @@ use std::{
 use codec::{Encode, Decode};
 use sp_core::{
 	convert_hash, NativeOrEncoded, traits::{CodeExecutor, SpawnNamed},
-	offchain::storage::OffchainOverlayedChanges,
 };
 use sp_runtime::{
 	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HashFor},
@@ -113,7 +112,6 @@ impl<Block, B, Local> CallExecutor<Block> for
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		offchain_changes: &RefCell<OffchainOverlayedChanges>,
 		_: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
@@ -140,7 +138,6 @@ impl<Block, B, Local> CallExecutor<Block> for
 				method,
 				call_data,
 				changes,
-				offchain_changes,
 				None,
 				initialize_block,
 				ExecutionManager::NativeWhenPossible,
