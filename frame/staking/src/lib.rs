@@ -1332,7 +1332,7 @@ decl_module! {
 						.and_then(|_| compute_save_and_submit::<T>());
 					log!(debug, "initial OCW output at {:?} = {:?}", now, initial_output);
 				},
-				ElectionStatus::Open(opened) if opened > now => {
+				ElectionStatus::Open(opened) if now > opened => {
 					// If the election window is open, and we don't have a queued solution, if you have
 					// one stored in the OCW DB, the submit it. We again check to never run the OCW more
 					// than every 5 blocks.
