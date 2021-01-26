@@ -1323,19 +1323,24 @@ decl_module! {
 			let threshold: T::BlockNumber = OFFCHAIN_REPEAT.into();
 
 			let election_status = Self::era_election_status();
-			if election_status.is_open_at(now) {
-				// If era election status is open at the current block, mine the solution, save it
-				// and submit it.
-				let initial_output = set_check_offchain_execution_status::<T>(now, threshold)
-					.and_then(|_| compute_save_and_submit::<T>());
-				log!(debug, "initial OCW output at {:?} = {:?}", now, initial_output);
-			} else if election_status.is_open() && Self::queued_elected().is_none() {
-				// If the election window is open, and we don't have a queued solution, if you have
-				// one stored in the OCW DB, the submit it. We again check to never run the OCW more
-				// than every 5 blocks.
-				let resubmit_output = set_check_offchain_execution_status::<T>(now, threshold)
-					.and_then(|_| submit_queued::<T>());
-				log!(debug, "resubmit OCW output at {:?} = {:?}", now, resubmit_output);
+			log!(trace, "Running OCW at {:?}, election status = {:?}", now, election_status);
+			match Self::era_election_status() {
+				ElectionStatus::Open(opened) if opened == now => {
+					// If era election status is open at the current block, mine the solution, save it
+					// and submit it.
+					let initial_output = set_check_offchain_execution_status::<T>(now, threshold)
+						.and_then(|_| compute_save_and_submit::<T>());
+					log!(debug, "initial OCW output at {:?} = {:?}", now, initial_output);
+				},
+				ElectionStatus::Open(opened) if opened > now => {
+					// If the election window is open, and we don't have a queued solution, if you have
+					// one stored in the OCW DB, the submit it. We again check to never run the OCW more
+					// than every 5 blocks.
+					let resubmit_output = set_check_offchain_execution_status::<T>(now, threshold)
+						.and_then(|_| submit_queued::<T>());
+					log!(debug, "resubmit OCW output at {:?} = {:?}", now, resubmit_output);
+				},
+				_ => {}
 			}
 		}
 
