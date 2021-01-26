@@ -617,8 +617,6 @@ impl Default for Releases {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	// PRIVATE MUTABLES
-
 	/// Get the free balance of an account.
 	pub fn free_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
 		Self::account(who.borrow()).free
