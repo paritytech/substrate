@@ -1316,7 +1316,7 @@ decl_module! {
 		/// Offchain worker logic.
 		fn offchain_worker(now: T::BlockNumber) {
 			use offchain_election::{
-				set_check_offchain_execution_status, restore_or_compute_then_submit,
+				set_check_offchain_execution_status, compute_save_and_submit, submit_queued,
 				OFFCHAIN_REPEAT,
 			};
 			// ensure that we don't run OCW in any case more at least with 5 blocks delay.
@@ -1325,12 +1325,20 @@ decl_module! {
 			let election_status = Self::era_election_status();
 			log!(trace, "Running OCW at {:?}, election status = {:?}", now, election_status);
 			match Self::era_election_status() {
-				ElectionStatus::Open(opened) if opened >= now => {
+				ElectionStatus::Open(opened) if opened == now => {
 					// If era election status is open at the current block, mine the solution, save it
 					// and submit it.
-					let output = set_check_offchain_execution_status::<T>(now, threshold)
-						.and_then(|_| restore_or_compute_then_submit::<T>());
-					log!(debug, "OCW output at {:?} = {:?}", now, output);
+					let initial_output = set_check_offchain_execution_status::<T>(now, threshold)
+						.and_then(|_| compute_save_and_submit::<T>());
+					log!(debug, "initial OCW output at {:?} = {:?}", now, initial_output);
+				},
+				ElectionStatus::Open(opened) if opened > now => {
+					// If the election window is open, and we don't have a queued solution, if you have
+					// one stored in the OCW DB, the submit it. We again check to never run the OCW more
+					// than every 5 blocks.
+					let resubmit_output = set_check_offchain_execution_status::<T>(now, threshold)
+						.and_then(|_| submit_queued::<T>());
+					log!(debug, "resubmit OCW output at {:?} = {:?}", now, resubmit_output);
 				},
 				_ => {}
 			}

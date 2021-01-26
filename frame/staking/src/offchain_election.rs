@@ -62,8 +62,6 @@ pub enum OffchainElectionError {
 	PoolSubmissionFailed,
 	/// No solution is stored in the offchain DB.
 	SolutionUnavailable,
-	/// The stored solution belongs to an old era and cannot be used.
-	SolutionOld,
 }
 
 impl From<sp_npos_elections::Error> for OffchainElectionError {
@@ -145,11 +143,14 @@ pub(crate) fn save_solution<T: Config>(call: Call<T>) -> Result<(), OffchainElec
 }
 
 /// Get a saved OCW solution, if it exists.
-pub(crate) fn get_solution<T: Config>() -> Result<Call<T>, OffchainElectionError> {
-	StorageValueRef::persistent(&OFFCHAIN_QUEUED_CALL)
-		.get()
-		.flatten()
-		.ok_or(OffchainElectionError::SolutionUnavailable)
+pub(crate) fn get_solution<T: Config>() -> Option<Call<T>> {
+	StorageValueRef::persistent(&OFFCHAIN_QUEUED_CALL).get().flatten()
+}
+
+/// Submit a saved OCW solution, if one exists.
+pub(crate) fn submit_queued<T: Config>() -> Result<(), OffchainElectionError> {
+	let saved = get_solution().ok_or(OffchainElectionError::SolutionUnavailable)?;
+	submit_solution::<T>(saved)
 }
 
 /// Submit a given solution as an unsigned transaction.
@@ -158,28 +159,10 @@ pub(crate) fn submit_solution<T: Config>(call: Call<T>) -> Result<(), OffchainEl
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
-/// Ensure that the given solution call belongs to the current era. Returns `Ok(call)` if so to be
-/// used with `Result::and`.
-pub(crate) fn ensure_solution_is_recent<T: Config>(call: Call<T>) -> Result<Call<T>, OffchainElectionError> {
-	let current_era = <Module<T>>::current_era().unwrap_or_default();
-	match call {
-		Call::submit_election_solution_unsigned(_, _, _, era, _) if era == current_era => Ok(call),
-		_ => Err(OffchainElectionError::SolutionOld)
-	}
-}
-
-/// Compute a new solution and save it to the OCW storage.
-pub(crate) fn compute_and_save<T: Config>() -> Result<Call<T>, OffchainElectionError> {
+/// Compute the solution, save it, and submit it.
+pub(crate) fn compute_save_and_submit<T: Config>() -> Result<(), OffchainElectionError> {
 	let call = compute_offchain_election::<T>()?;
 	save_solution::<T>(call.clone())?;
-	Ok(call)
-}
-
-/// Compute the solution, save it, and submit it.
-pub(crate) fn restore_or_compute_then_submit<T: Config>() -> Result<(), OffchainElectionError> {
-	let call = get_solution::<T>()
-		.and_then(|call| ensure_solution_is_recent::<T>(call))
-		.or_else(|_| compute_and_save::<T>())?;
 	submit_solution::<T>(call)
 }
 
