@@ -721,7 +721,7 @@ mod tests {
 	use super::*;
 
 	use frame_support::{
-		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok, ord_parameter_types,
+		parameter_types, assert_ok, ord_parameter_types,
 		assert_noop, assert_err, Hashable,
 		traits::{OnInitialize, OnFinalize, Filter},
 		weights::constants::RocksDbWeight,
@@ -781,24 +781,20 @@ mod tests {
 		}
 	}
 
-	impl_outer_origin! {
-		pub enum Origin for Test where system = frame_system {}
-	}
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	impl_outer_dispatch! {
-		pub enum Call for Test where origin: Origin {
-			system::System,
-			logger::Logger,
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Logger: logger::{Module, Call, Event},
+			Scheduler: scheduler::{Module, Call, Storage, Event<T>},
 		}
-	}
-
-	impl_outer_event! {
-		pub enum Event for Test {
-			system<T>,
-			logger,
-			scheduler<T>,
-		}
-	}
+	);
 
 	// Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
 	pub struct BaseFilter;
@@ -808,8 +804,6 @@ mod tests {
 		}
 	}
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
@@ -829,18 +823,18 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
-	type SS58Prefix = ();
+		type SS58Prefix = ();
 	}
 	impl logger::Config for Test {
-		type Event = ();
+		type Event = Event;
 	}
 	parameter_types! {
 		pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
@@ -851,7 +845,7 @@ mod tests {
 	}
 
 	impl Config for Test {
-		type Event = ();
+		type Event = Event;
 		type Origin = Origin;
 		type PalletsOrigin = OriginCaller;
 		type Call = Call;
@@ -860,9 +854,6 @@ mod tests {
 		type MaxScheduledPerBlock = MaxScheduledPerBlock;
 		type WeightInfo = ();
 	}
-	type System = system::Module<Test>;
-	type Logger = logger::Module<Test>;
-	type Scheduler = Module<Test>;
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
