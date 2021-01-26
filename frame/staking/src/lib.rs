@@ -1366,8 +1366,8 @@ decl_module! {
 		/// Offchain worker logic.
 		fn offchain_worker(now: T::BlockNumber) {
 			use offchain_election::{
-				set_check_offchain_execution_status, compute_save_and_submit, submit_queued,
-				OFFCHAIN_REPEAT,
+				set_check_offchain_execution_status, compute_save_and_submit,
+				restore_or_compute_then_submit, OFFCHAIN_REPEAT,
 			};
 			// ensure that we don't run OCW in any case more at least with 5 blocks delay.
 			let threshold: T::BlockNumber = OFFCHAIN_REPEAT.into();
@@ -1376,19 +1376,21 @@ decl_module! {
 			log!(trace, "Running OCW at {:?}, election status = {:?}", now, election_status);
 			match Self::era_election_status() {
 				ElectionStatus::Open(opened) if opened == now => {
-					// If era election status is open at the current block, mine the solution, save it
-					// and submit it.
+					// If era election status is open at the current block, mine a new solution
+					// then save and submit it.
 					let initial_output = set_check_offchain_execution_status::<T>(now, threshold)
 						.and_then(|_| compute_save_and_submit::<T>());
 					log!(debug, "initial OCW output at {:?} = {:?}", now, initial_output);
 				},
 				ElectionStatus::Open(opened) if now > opened => {
-					// If the election window is open, and we don't have a queued solution, if you have
-					// one stored in the OCW DB, the submit it. We again check to never run the OCW more
-					// than every 5 blocks.
-					let resubmit_output = set_check_offchain_execution_status::<T>(now, threshold)
-						.and_then(|_| submit_queued::<T>());
-					log!(debug, "resubmit OCW output at {:?} = {:?}", now, resubmit_output);
+					if Self::queued_score().is_none() {
+						// If the election window is open, and we don't have a queued solution,
+						// constantly try to challenge it by either resubmitting a saved solution,
+						// or mining a new one (just in the case that the previous was skipped).
+						let resubmit_output = set_check_offchain_execution_status::<T>(now, threshold)
+							.and_then(|_| restore_or_compute_then_submit::<T>());
+						log!(debug, "resubmit OCW output at {:?} = {:?}", now, resubmit_output);
+					}
 				},
 				_ => {}
 			}
