@@ -1,6 +1,6 @@
 use crate as pallet_template;
 use sp_core::H256;
-use frame_support::{parameter_types};
+use frame_support::parameter_types;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
