@@ -3181,7 +3181,7 @@ mod offchain_election {
 					.into_iter()
 					.map(|r| r.event)
 					.filter_map(|e| {
-						if let MetaEvent::staking(inner) = e {
+						if let mock::Event::staking(inner) = e {
 							Some(inner)
 						} else {
 							None
@@ -3266,7 +3266,7 @@ mod offchain_election {
 						.into_iter()
 						.map(|r| r.event)
 						.filter_map(|e| {
-							if let MetaEvent::staking(inner) = e {
+							if let mock::Event::staking(inner) = e {
 								Some(inner)
 							} else {
 								None
@@ -3285,7 +3285,7 @@ mod offchain_election {
 						.into_iter()
 						.map(|r| r.event)
 						.filter_map(|e| {
-							if let MetaEvent::staking(inner) = e {
+							if let mock::Event::staking(inner) = e {
 								Some(inner)
 							} else {
 								None
@@ -3322,7 +3322,7 @@ mod offchain_election {
 						.into_iter()
 						.map(|r| r.event)
 						.filter_map(|e| {
-							if let MetaEvent::staking(inner) = e {
+							if let mock::Event::staking(inner) = e {
 								Some(inner)
 							} else {
 								None
@@ -3458,6 +3458,7 @@ mod offchain_election {
 			let call = extrinsic.call;
 			let inner = match call {
 				mock::Call::Staking(inner) => inner,
+				_ => unreachable!(),
 			};
 
 			assert_eq!(
@@ -3501,6 +3502,7 @@ mod offchain_election {
 			let call = extrinsic.call;
 			let inner = match call {
 				mock::Call::Staking(inner) => inner,
+				_ => unreachable!(),
 			};
 
 			assert_eq!(
@@ -3548,6 +3550,7 @@ mod offchain_election {
 			let call = extrinsic.call;
 			let inner = match call {
 				mock::Call::Staking(inner) => inner,
+				_ => unreachable!(),
 			};
 
 			// pass this call to ValidateUnsigned
