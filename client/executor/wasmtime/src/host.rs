@@ -315,9 +315,8 @@ impl Sandbox for HostState {
 			SupervisorFuncRef(func_ref)
 		};
 
-		let store = &*self.inner.sandbox_store.borrow();
 		let guest_env = match sandbox::GuestEnvironment::decode(
-			store,
+			&*self.inner.sandbox_store.borrow(),
 			raw_env_def,
 		) {
 			Ok(guest_env) => guest_env,
@@ -328,7 +327,7 @@ impl Sandbox for HostState {
 
 		let instance_idx_or_err_code =
 			match sandbox::instantiate::<_, _, Holder>(
-				store,
+				&mut *self.inner.sandbox_store.borrow_mut(),
 				dispatch_thunk,
 				wasm,
 				guest_env,

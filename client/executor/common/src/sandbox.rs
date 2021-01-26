@@ -22,7 +22,7 @@
 //! a compiled execution engine.
 
 use crate::error::{Result, Error};
-use std::{collections::HashMap, convert::TryInto, rc::Rc, todo};
+use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc, todo};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
 
@@ -867,9 +867,13 @@ where
 					wasmer::ExternType::Memory(memory_type) => {
 						println!("Importing memory '{}' :: '{}' {}", import.module(), import.name(), memory_type.to_string());
 						let exports = exports_map.entry(import.module().to_string()).or_insert(wasmer::Exports::new());
-						let memory = store
-							.new_memory(memory_type.minimum.0, memory_type.maximum.map(|m| m.0).unwrap_or(sandbox_primitives::MEM_UNLIMITED))
-							.and_then(|index| store.memory(index))
+						let (_memory_index, memory) = store
+							.allocate_memory(
+								memory_type.minimum.0,
+								memory_type.maximum
+									.map(|m| m.0)
+									.unwrap_or(sandbox_primitives::MEM_UNLIMITED)
+							)
 							.map_err(|_| InstantiationError::ModuleDecoding)?;
 
 						exports.insert(import.name(), wasmer::Extern::Memory(memory.as_wasmer().unwrap()));
@@ -1066,27 +1070,12 @@ impl BackendContext {
 pub struct Store<FR> {
 	// Memories and instances are `Some` until torn down.
 	instances: Vec<Option<Rc<SandboxInstance<FR>>>>,
-	memories: Vec<Option<Memory>>,
+	memories: RefCell<Vec<Option<Memory>>>,
 	backend_context: BackendContext,
 }
 
 impl<FR> Store<FR> {
-	/// Create a new empty sandbox store.
-	pub fn new(backend: SandboxBackend) -> Self {
-		Store {
-			instances: Vec::new(),
-			memories: Vec::new(),
-			backend_context: BackendContext::new(backend),
-		}
-	}
-
-	/// Create a new memory instance and return it's index.
-	///
-	/// # Errors
-	///
-	/// Returns `Err` if the memory couldn't be created.
-	/// Typically happens if `initial` is more than `maximum`.
-	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32> {
+	fn allocate_memory(&self, initial: u32, maximum: u32) -> Result<(u32, Memory)> {
 		let maximum = match maximum {
 			sandbox_primitives::MEM_UNLIMITED => None,
 			specified_limit => Some(specified_limit),
@@ -1112,9 +1101,32 @@ impl<FR> Store<FR> {
 			BackendContext::Wasmtime => todo!(),
 		};
 
-		let mem_idx = self.memories.len();
-		self.memories.push(Some(memory));
-		Ok(mem_idx as u32)
+		let mut memories = self.memories.borrow_mut();
+		let mem_idx = memories.len();
+		memories.push(Some(memory.clone()));
+
+		Ok((mem_idx as u32, memory))
+	}
+}
+
+impl<FR> Store<FR> {
+	/// Create a new empty sandbox store.
+	pub fn new(backend: SandboxBackend) -> Self {
+		Store {
+			instances: Vec::new(),
+			memories: RefCell::new(Vec::new()),
+			backend_context: BackendContext::new(backend),
+		}
+	}
+
+	/// Create a new memory instance and return it's index.
+	///
+	/// # Errors
+	///
+	/// Returns `Err` if the memory couldn't be created.
+	/// Typically happens if `initial` is more than `maximum`.
+	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32> {
+		self.allocate_memory(initial, maximum).map(|(index, _)| index)
 	}
 
 	/// Returns `SandboxInstance` by `instance_idx`.
@@ -1139,6 +1151,7 @@ impl<FR> Store<FR> {
 	/// if memory has been torn down.
 	pub fn memory(&self, memory_idx: u32) -> Result<Memory> {
 		self.memories
+			.borrow()
 			.get(memory_idx as usize)
 			.cloned()
 			.ok_or_else(|| "Trying to access a non-existent sandboxed memory")?
@@ -1152,7 +1165,7 @@ impl<FR> Store<FR> {
 	/// Returns `Err` if `memory_idx` isn't a valid index of an memory or
 	/// if it has been torn down.
 	pub fn memory_teardown(&mut self, memory_idx: u32) -> Result<()> {
-		match self.memories.get_mut(memory_idx as usize) {
+		match self.memories.borrow_mut().get_mut(memory_idx as usize) {
 			None => Err("Trying to teardown a non-existent sandboxed memory".into()),
 			Some(None) => Err("Double teardown of a sandboxed memory".into()),
 			Some(memory) => {
