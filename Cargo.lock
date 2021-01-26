@@ -95,6 +95,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ambassador"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61874b33258f18ca7923047c12887078ccfe95c2811b03c1a09e309c19b7e50b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "ansi_term"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8360,6 +8371,7 @@ dependencies = [
 name = "sp-externalities"
 version = "0.8.1"
 dependencies = [
+ "ambassador",
  "environmental",
  "parity-scale-codec",
  "sp-std",
@@ -8688,6 +8700,7 @@ dependencies = [
 name = "sp-tasks"
 version = "2.0.0"
 dependencies = [
+ "ambassador",
  "derive_more",
  "log",
  "parity-scale-codec",

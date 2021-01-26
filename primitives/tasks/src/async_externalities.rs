@@ -30,16 +30,27 @@ use sp_core::{
 use sp_externalities::{
 	Externalities, Extensions, ExternalitiesExt as _, TaskId, WorkerResult,
 	WorkerDeclaration, AsyncExternalities as AsyncExternalitiesTrait,
-	AsyncExternalitiesPostExecution,
+	AsyncExternalitiesPostExecution, ambassador_impl_Externalities_body_single_struct,
 };
 
-/// Simple state-less externalities for use in async context.
-///
-/// Will panic if anything is accessing the storage.
-pub struct AsyncExternalities {
-	extensions: Extensions,
-	state: Box<dyn AsyncExternalitiesTrait>,
+// Module to expose AsyncExternalities without alias to delegate macro.
+mod async_ext_def {
+	use ambassador::Delegate;
+	use super::*;
+	use sp_externalities::AsyncExternalities;
+
+	/// Simple state-less externalities for use in async context.
+	///
+	/// Will panic if anything is accessing the storage.
+	#[derive(Delegate)]
+	#[delegate(Externalities, target = "state")]
+	pub struct AsyncExternalitiesImpl {
+		pub(super) extensions: Extensions,
+		pub(super) state: Box<dyn AsyncExternalities>,
+	}
 }
+
+pub use async_ext_def::AsyncExternalitiesImpl as AsyncExternalities;
 
 /// New Async externalities.
 #[cfg(feature = "std")]
@@ -81,156 +92,6 @@ impl AsyncExternalities {
 			.map_err(|_| "Failed to register task executor extension.")?;
 
 		Ok(self)
-	}
-}
-
-type StorageKey = Vec<u8>;
-
-type StorageValue = Vec<u8>;
-
-impl Externalities for AsyncExternalities {
-	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
-		self.state.set_offchain_storage(key, value)
-	}
-
-	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
-		self.state.storage(key)
-	}
-
-	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.state.storage_hash(key)
-	}
-
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<StorageValue> {
-		self.state.child_storage(child_info, key)
-	}
-
-	fn child_storage_hash(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
-		self.state.child_storage_hash(child_info, key)
-	}
-
-	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		self.state.next_storage_key(key)
-	}
-
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<StorageKey> {
-		self.state.next_child_storage_key(child_info, key)
-	}
-
-	fn place_storage(&mut self, key: StorageKey, maybe_value: Option<StorageValue>) {
-		self.state.place_storage(key, maybe_value)
-	}
-
-	fn place_child_storage(
-		&mut self,
-		child_info: &ChildInfo,
-		key: StorageKey,
-		value: Option<StorageValue>,
-	) {
-		self.state.place_child_storage(child_info, key, value)
-	}
-
-	fn kill_child_storage(
-		&mut self,
-		child_info: &ChildInfo,
-		limit: Option<u32>,
-	) -> bool {
-		self.state.kill_child_storage(child_info, limit)
-	}
-
-	fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.state.clear_prefix(prefix)
-	}
-
-	fn clear_child_prefix(
-		&mut self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-	) {
-		self.state.clear_child_prefix(child_info, prefix)
-	}
-
-	fn storage_append(
-		&mut self,
-		key: Vec<u8>,
-		value: Vec<u8>,
-	) {
-		self.state.storage_append(key, value)
-	}
-
-	fn storage_root(&mut self) -> Vec<u8> {
-		self.state.storage_root()
-	}
-
-	fn child_storage_root(
-		&mut self,
-		child_info: &ChildInfo,
-	) -> Vec<u8> {
-		self.state.child_storage_root(child_info)
-	}
-
-	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		self.state.storage_changes_root(parent)
-	}
-
-	fn storage_start_transaction(&mut self) {
-		self.state.storage_start_transaction()
-	}
-
-	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
-		self.state.storage_rollback_transaction()
-	}
-
-	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
-		self.state.storage_commit_transaction()
-	}
-
-	fn wipe(&mut self) {}
-
-	fn commit(&mut self) {}
-
-	fn read_write_count(&self) -> (u32, u32, u32, u32) {
-		unimplemented!("read_write_count is not supported in AsyncExternalities")
-	}
-
-	fn reset_read_write_count(&mut self) {
-		unimplemented!("reset_read_write_count is not supported in AsyncExternalities")
-	}
-
-	fn get_whitelist(&self) -> Vec<TrackedStorageKey> {
-		unimplemented!("get_whitelist is not supported in AsyncExternalities")
-	}
-
-	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
-		unimplemented!("set_whitelist is not supported in AsyncExternalities")
-	}
-
-	fn get_worker_externalities(
-		&mut self,
-		worker_id: u64,
-		declaration: WorkerDeclaration,
-	) -> Box<dyn AsyncExternalitiesTrait> {
-		self.state.get_worker_externalities(worker_id, declaration)
-	}
-
-	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
-		self.state.resolve_worker_result(state_update)
-	}
-
-	fn dismiss_worker(&mut self, id: TaskId) {
-		self.state.dismiss_worker(id)
 	}
 }
 
