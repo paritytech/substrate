@@ -421,12 +421,12 @@ fn process_task_inner<
 			},
 		},
 		Ok(Err(error)) => {
-			log_error!("Wasm instance error in : {:?}", error);
-			WorkerResult::HardPanic
+			log_error!("Runtime panic error in task: {:?}", error);
+			WorkerResult::RuntimePanic
 		},
 		Err(error) => {
-			log_error!("Runtime panic error in inlined task: {:?}", error);
-			WorkerResult::RuntimePanic
+			log_error!("Wasm instance error in : {:?}", error);
+			WorkerResult::HardPanic
 		}
 	}
 }

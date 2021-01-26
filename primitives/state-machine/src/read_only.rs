@@ -235,7 +235,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 				panic!("Runtime panic from a worker.")
 			},
 			WorkerResult::HardPanic => {
-				panic!("Hard panic runing a worker.")
+				panic!("Panic running a worker.")
 			},
 		}
 	}

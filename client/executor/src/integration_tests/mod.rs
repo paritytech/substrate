@@ -750,7 +750,7 @@ macro_rules! does_panic {
 			).unwrap_err();
 
 			dbg!(&error_result);
-			assert!(format!("{}", error_result).contains("Runtime panicked"));
+			assert!(format!("{}", error_result).contains("Runtime panic"));
 		}
 	};
 }
