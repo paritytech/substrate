@@ -123,12 +123,12 @@ pub struct IncomingRequest {
 	///
 	/// 2. Sending an `Err(())` via `pending_response`, optionally including reputation changes for
 	/// the given peer.
-	pub pending_response: oneshot::Sender<Response>,
+	pub pending_response: oneshot::Sender<OutgoingResponse>,
 }
 
 /// Response for an incoming request to be send by a request protocol handler.
 #[derive(Debug)]
-pub struct Response {
+pub struct OutgoingResponse {
 	/// The payload of the response.
 	///
 	/// `Err(())` if none is available e.g. due an error while handling the request.
@@ -228,7 +228,7 @@ struct RequestProcessingOutcome {
 	request_id: RequestId,
 	protocol: Cow<'static, str>,
 	inner_channel: ResponseChannel<Result<Vec<u8>, ()>>,
-	response: Response,
+	response: OutgoingResponse,
 }
 
 impl RequestResponsesBehaviour {
@@ -437,7 +437,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 					request_id,
 					protocol: protocol_name,
 					inner_channel,
-					response: Response {
+					response: OutgoingResponse {
 						result,
 						reputation_changes,
 					},
@@ -893,9 +893,9 @@ mod tests {
 				pool.spawner().spawn_obj(async move {
 					while let Some(rq) = rx.next().await {
 						assert_eq!(rq.payload, b"this is a request");
-						let _ = rq.pending_response.send(super::Response {
+						let _ = rq.pending_response.send(super::OutgoingResponse {
 							result: Ok(b"this is a response".to_vec()),
-							reputation_changes: None,
+							reputation_changes: Vec::new(),
 						});
 					}
 				}.boxed().into()).unwrap();
@@ -979,9 +979,9 @@ mod tests {
 				pool.spawner().spawn_obj(async move {
 					while let Some(rq) = rx.next().await {
 						assert_eq!(rq.payload, b"this is a request");
-						let _ = rq.pending_response.send(super::Response {
+						let _ = rq.pending_response.send(super::OutgoingResponse {
 							result: Ok(b"this response exceeds the limit".to_vec()),
-							reputation_changes: None,
+							reputation_changes: Vec::new(),
 						});
 					}
 				}.boxed().into()).unwrap();
@@ -1148,11 +1148,17 @@ mod tests {
 
 			protocol_1_request.unwrap()
 				.pending_response
-				.send(b"this is a response".to_vec())
+				.send(OutgoingResponse {
+					result: Ok(b"this is a response".to_vec()),
+					reputation_changes: Vec::new(),
+				})
 				.unwrap();
 			protocol_2_request.unwrap()
 				.pending_response
-				.send(b"this is a response".to_vec())
+				.send(OutgoingResponse {
+					result: Ok(b"this is a response".to_vec()),
+					reputation_changes: Vec::new(),
+				})
 				.unwrap();
 		}.boxed().into()).unwrap();
 
