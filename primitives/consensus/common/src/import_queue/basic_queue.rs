@@ -148,7 +148,7 @@ mod worker_messages {
 
 /// The process of importing blocks.
 ///
-/// This polls the `block_import` for new blocks to import and than awaits on importing these blocks.
+/// This polls the `block_import_receiver` for new blocks to import and than awaits on importing these blocks.
 /// After each block is imported, this async function yields once to give other futures the possibility
 /// to be run.
 ///
