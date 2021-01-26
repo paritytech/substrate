@@ -261,6 +261,14 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 			execute_storage_change(key, value.as_ref().map(|v| &**v)),
 		Extrinsic::ChangesTrieConfigUpdate(ref new_config) =>
 			execute_changes_trie_config_update(new_config.clone()),
+		Extrinsic::OffchainIndexSet(key, value) => {
+			sp_io::offchain_index::set(&key, &value);
+			Ok(Ok(()))
+		},
+		Extrinsic::OffchainIndexClear(key) => {
+			sp_io::offchain_index::clear(&key);
+			Ok(Ok(()))
+		}
 	}
 }
 
