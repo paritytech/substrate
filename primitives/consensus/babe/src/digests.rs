@@ -73,13 +73,13 @@ pub struct SecondaryVRFPreDigest {
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
 pub enum PreDigest {
 	/// A primary VRF-based slot assignment.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	Primary(PrimaryPreDigest),
 	/// A secondary deterministic slot assignment.
-	#[codec(index = "2")]
+	#[codec(index = 2)]
 	SecondaryPlain(SecondaryPlainPreDigest),
 	/// A secondary deterministic slot assignment with VRF outputs.
-	#[codec(index = "3")]
+	#[codec(index = 3)]
 	SecondaryVRF(SecondaryVRFPreDigest),
 }
 
@@ -137,7 +137,7 @@ pub struct NextEpochDescriptor {
 #[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
 pub enum NextConfigDescriptor {
 	/// Version 1.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	V1 {
 		/// Value of `c` in `BabeEpochConfiguration`.
 		c: (u64, u64),

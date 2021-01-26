@@ -30,7 +30,7 @@ pub struct Vote {
 }
 
 impl Encode for Vote {
-	fn encode_to<T: Output>(&self, output: &mut T) {
+	fn encode_to<T: Output + ?Sized>(&self, output: &mut T) {
 		output.push_byte(u8::from(self.conviction) | if self.aye { 0b1000_0000 } else { 0 });
 	}
 }

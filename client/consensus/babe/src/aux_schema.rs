@@ -44,7 +44,7 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 		T: Decode,
 {
 	let corrupt = |e: codec::Error| {
-		ClientError::Backend(format!("BABE DB is corrupted. Decode error: {}", e.what()))
+		ClientError::Backend(format!("BABE DB is corrupted. Decode error: {}", e))
 	};
 	match backend.get_aux(key)? {
 		None => Ok(None),
