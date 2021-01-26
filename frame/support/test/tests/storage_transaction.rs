@@ -195,7 +195,8 @@ fn transactional_annotation() {
 	#[transactional]
 	fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
 		set_value(v)?;
-		Err("nah")
+		Err("nah")?;
+		Ok(v)
 	}
 
 	TestExternalities::default().execute_with(|| {
