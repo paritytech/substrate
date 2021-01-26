@@ -983,13 +983,15 @@ pub mod pallet {
 	}
 
 	#[pallet::storage]
+	/// Details of an asset.
 	pub(super) type Asset<T: Config> = StorageMap<_, Blake2_128Concat, T::AssetId, AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>>;
 	#[pallet::storage]
+	/// The number of units of assets held by any given account.
 	pub(super) type Account<T: Config> = StorageDoubleMap<_, Blake2_128Concat, T::AssetId, Blake2_128Concat, T::AccountId, AssetBalance<T::Balance>, ValueQuery>;
 	#[pallet::storage]
+	/// Metadata of an asset.
 	pub(super) type Metadata<T: Config> = StorageMap<_, Blake2_128Concat, T::AssetId, AssetMetadata<BalanceOf<T>>, ValueQuery>;
 }
-
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct AssetDetails<
