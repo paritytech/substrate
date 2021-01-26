@@ -155,11 +155,11 @@ pub mod pallet {
 			#[pallet::compact] foo: u32,
 		) -> DispatchResultWithPostInfo {
 			Self::deposit_event(Event::Something(0));
-			if foo != 0 {
-				Ok(().into())
-			} else {
-				Err(Error::<T>::InsufficientProposersBalance.into())
+			if foo == 0 {
+				Err(Error::<T>::InsufficientProposersBalance)?;
 			}
+
+			Ok(().into())
 		}
 	}
 
