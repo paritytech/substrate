@@ -183,7 +183,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 
 		pending_response.send(Response {
 			result: Ok(data),
-			reputation_changes: None,
+			reputation_changes: Vec::new(),
 		}).map_err(|_| HandleRequestError::SendResponse)
 	}
 
