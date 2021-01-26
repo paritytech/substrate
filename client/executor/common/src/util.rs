@@ -18,7 +18,7 @@
 
 //! A set of utilities for resetting a wasm instance to its initial state.
 
-use crate::error::{self, Error};
+use sp_tasks::error::{self, Error};
 use std::mem;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 

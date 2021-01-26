@@ -51,7 +51,7 @@ tracing-subscriber = "0.2.15"
 paste = "0.1.6"
 
 [features]
-default = [ "std", "abort-future" ]
+default = [ "std" ]
 # This crate does not have `no_std` support, we just require this for tests
 std = [
 ]
@@ -61,8 +61,4 @@ wasmtime = [
 ]
 wasmi-errno = [
 	"wasmi/errno"
-]
-# Do try to abort future.
-# This is behind a feature for not being very useful.
-abort-future = [
 ]

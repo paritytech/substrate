@@ -1173,9 +1173,9 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 
 	use sp_externalities::ExternalitiesExt;
 	use sp_core::traits::{RuntimeSpawn, RuntimeSpawnExt};
-	use sc_executor_common::inline_spawn::hosted_runtime::RuntimeInstanceHostLocal;
+	use sp_tasks::inline_spawn::hosted_runtime::RuntimeInstanceHostLocal;
 	#[cfg(not(feature = "std"))]
-	use sc_executor_common::inline_spawn::hosted_runtime::{
+	use sp_tasks::inline_spawn::hosted_runtime::{
 		host_runtime_tasks_set_capacity, host_runtime_tasks_spawn,
 		host_runtime_tasks_join, host_runtime_tasks_dismiss,
 	};

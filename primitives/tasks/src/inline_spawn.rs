@@ -22,7 +22,7 @@
 //! As a minimal implementation it can run in no_std (with alloc), but do not
 //! actually spawn threads, all execution is done inline in the parent thread.
 
-use sp_tasks::{new_inline_only_externalities, Crossing};
+use crate::{new_inline_only_externalities, Crossing};
 use sp_core::traits::RuntimeSpawn;
 use sp_externalities::{WorkerResult, WorkerDeclaration, Externalities, AsyncExternalities,
 	AsyncExternalitiesPostExecution};
@@ -328,7 +328,7 @@ pub fn process_task<
 	I: LazyInstanciate<'a> + 'a,
 >(
 	task: Task,
-	async_ext: sp_tasks::AsyncExternalities,
+	async_ext: crate::AsyncExternalities,
 	handle: u64,
 	#[cfg(feature = "std")]
 	instance_ref: I,
@@ -357,7 +357,7 @@ fn process_task_inner<
 	I: LazyInstanciate<'a> + 'a,
 >(
 	task: Task,
-	mut async_ext: sp_tasks::AsyncExternalities,
+	mut async_ext: crate::AsyncExternalities,
 	handle: u64,
 	#[cfg(feature = "std")]
 	instance_ref: I,
@@ -500,12 +500,46 @@ impl RuntimeInstanceSpawn {
 	}
 }
 
-/// Inline instance spawn, to use with nodes that can manage threads.
+/// Unbounded inline instance spawn, to use with nodes that can manage threads.
+/// TODO unused could remove.
 #[cfg(feature = "std")]
 pub struct RuntimeInstanceSpawnSend(
 	Arc<Mutex<RuntimeInstanceSpawn>>,
 	Arc<Mutex<LocalWasm>>,
 );
+
+#[cfg(feature = "std")]
+impl RuntimeInstanceSpawnSend {
+	/// Create a new unbounded
+	/// runtime spawn instance.
+	pub fn new(module: Arc<dyn WasmModule>) -> RuntimeInstanceSpawnSend {
+		let instance_spawn = RuntimeInstanceSpawn::new();
+		let wasm = LocalWasm {
+			module: Some(module),
+			instance: None,
+		};
+
+		RuntimeInstanceSpawnSend(
+			Arc::new(Mutex::new(instance_spawn)),
+			Arc::new(Mutex::new(wasm)),
+		)
+	}
+	
+	/// Create a new native only unbounded
+	/// runtime spawn instance.
+	pub fn new_native() -> RuntimeInstanceSpawnSend {
+		let instance_spawn = RuntimeInstanceSpawn::new();
+		let no_wasm = LocalWasm {
+			module: None,
+			instance: None,
+		};
+
+		RuntimeInstanceSpawnSend(
+			Arc::new(Mutex::new(instance_spawn)),
+			Arc::new(Mutex::new(no_wasm)),
+		)
+	}
+}
 
 #[cfg(feature = "std")]
 impl RuntimeInstanceSpawnSend {
@@ -568,7 +602,6 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 
 	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
 		calling_ext.dismiss_worker(handle);
-
 		self.0.lock().dismiss(handle)
 	}
 

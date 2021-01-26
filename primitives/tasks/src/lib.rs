@@ -57,12 +57,22 @@
 //! network consensus based on how much resources nodes have.
 //!
 
+#![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+pub mod error;
+#[cfg(feature = "std")]
+pub mod wasm_runtime;
+#[cfg(feature = "std")]
+pub mod pool_spawn;
+pub mod inline_spawn;
 mod async_externalities;
 
 #[cfg(feature = "std")]
 pub use async_externalities::new_async_externalities;
+#[cfg(feature = "std")]
+pub use crate::pool_spawn::with_externalities_safe;
 pub use async_externalities::{new_inline_only_externalities, AsyncExternalities};
 pub use sp_state_machine::async_ext::AsyncExt;
 pub use sp_externalities::{WorkerResult, WorkerDeclaration};
@@ -107,7 +117,7 @@ mod inner {
 	pub fn spawn(
 		entry_point: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		declaration: WorkerDeclaration, // TODO consider splitting spawn
+		declaration: WorkerDeclaration,
 	) -> DataJoinHandle {
 		let handle = sp_externalities::with_externalities(|mut ext|{
 			let ext_unsafe = ext as *mut dyn Externalities;
@@ -176,3 +186,74 @@ mod inner {
 }
 
 pub use inner::spawn;
+
+#[cfg(test)]
+mod tests {
+
+	use super::*;
+	use sp_core::traits::RuntimeSpawnExt;
+	use crate::pool_spawn::RuntimeInstanceSpawn;
+	use sp_core::testing::TaskExecutor;
+
+	fn async_runner(mut data: Vec<u8>) -> Vec<u8> {
+		data.sort();
+		data
+	}
+
+	fn async_panicker(_data: Vec<u8>) -> Vec<u8> {
+		panic!("panic in async panicker!")
+	}
+
+	fn test_externalities() -> sp_io::TestExternalities {
+		let executor = TaskExecutor::new();
+		let mut ext = sp_io::TestExternalities::default();
+		ext.register_extension::<RuntimeSpawnExt>(RuntimeSpawnExt(
+				Box::new(RuntimeInstanceSpawn::new(None, Box::new(executor), 100))
+		));
+		ext
+	}
+
+	#[test]
+	fn basic() {
+		test_externalities().execute_with(|| {
+			let a1 = spawn(async_runner, vec![5, 2, 1], WorkerDeclaration::Stateless).join();
+			assert_eq!(a1, Some(vec![1, 2, 5]));
+		})
+	}
+
+	#[test]
+	fn panicking() {
+		let res = test_externalities().execute_with_safe(||{
+			spawn(async_panicker, vec![5, 2, 1], WorkerDeclaration::Stateless).join();
+		});
+
+		assert!(res.unwrap_err().contains("Closure panicked"));
+	}
+
+	#[test]
+	fn many_joins() {
+		test_externalities().execute_with_safe(|| {
+			// converges to 1 only after 1000+ steps
+			let mut running_val = 9780657630u64;
+			let mut data = vec![];
+			let handles = (0..1024).map(
+				|_| {
+					running_val = if running_val % 2 == 0 {
+						running_val / 2
+					} else {
+						3 * running_val + 1
+					};
+					data.push(running_val as u8);
+					(spawn(async_runner, data.clone(), WorkerDeclaration::Stateless), data.clone())
+				}
+			).collect::<Vec<_>>();
+
+			for (handle, mut data) in handles {
+				let result = handle.join();
+				data.sort();
+
+				assert_eq!(result, Some(data));
+			}
+		}).expect("Failed to run with externalities");
+	}
+}

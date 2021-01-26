@@ -21,7 +21,7 @@
 //! Sandboxing is baked by wasmi at the moment. In future, however, we would like to add/switch to
 //! a compiled execution engine.
 
-use crate::error::{Result, Error};
+use sp_tasks::error::{Result, Error};
 use std::{collections::HashMap, rc::Rc};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;

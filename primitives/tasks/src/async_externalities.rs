@@ -58,6 +58,9 @@ pub fn new_async_externalities(
 	Ok(res)
 }
 
+/// New Async externalities.
+/// This variant do not add task executor extension
+/// and can run inline only.
 pub fn new_inline_only_externalities(
 	async_ext: Box<dyn AsyncExternalitiesTrait>,
 ) -> Result<AsyncExternalities, &'static str> {
