@@ -147,7 +147,7 @@ impl Sandbox for FunctionExecutor {
 			.memory(memory_id).map_err(|e| e.to_string())?;
 
 		match MemoryInstance::transfer(
-			&sandboxed_memory,
+			todo!(), // &sandboxed_memory,
 			offset as usize,
 			&self.inner.memory,
 			buf_ptr.into(),
@@ -174,7 +174,7 @@ impl Sandbox for FunctionExecutor {
 		match MemoryInstance::transfer(
 			&self.inner.memory,
 			val_ptr.into(),
-			&sandboxed_memory,
+			todo!(), //&sandboxed_memory,
 			offset as usize,
 			val_len as usize,
 		) {
@@ -281,23 +281,23 @@ impl Sandbox for FunctionExecutor {
 
 		println!("Instantiating sandbox from wasmi");
 
-		let result = EXECUTOR.set(self, || sandbox::instantiate::<_, _, Holder>(
-			SandboxBackend::Wasmi,
-			dispatch_thunk, 
-			wasm, 
-			guest_env, 
-			state
-		));
+		// let result = EXECUTOR.set(self, || sandbox::instantiate::<_, _, Holder>(
+		// 	SandboxBackend::Wasmi,
+		// 	dispatch_thunk, 
+		// 	wasm, 
+		// 	guest_env, 
+		// 	state
+		// ));
 
-		let instance_idx_or_err_code =
-			match result
-				.map(|i| i.register(&mut *self.inner.sandbox_store.borrow_mut()))
-			{
-				Ok(instance_idx) => instance_idx,
-				Err(sandbox::InstantiationError::StartTrapped) =>
-					sandbox_primitives::ERR_EXECUTION,
-				Err(_) => sandbox_primitives::ERR_MODULE,
-			};
+		let instance_idx_or_err_code: u32 = todo!();
+			// match result
+			// 	.map(|i| i.register(&mut *self.inner.sandbox_store.borrow_mut()))
+			// {
+			// 	Ok(instance_idx) => instance_idx,
+			// 	Err(sandbox::InstantiationError::StartTrapped) =>
+			// 		sandbox_primitives::ERR_EXECUTION,
+			// 	Err(_) => sandbox_primitives::ERR_MODULE,
+			// };
 
 		Ok(instance_idx_or_err_code as u32)
 	}
