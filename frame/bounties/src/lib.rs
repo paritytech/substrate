@@ -78,6 +78,8 @@ mod tests;
 mod benchmarking;
 pub mod weights;
 
+use sp_std::if_std;
+
 use sp_std::{
 	prelude::*,
 };
@@ -819,7 +821,7 @@ decl_module! {
 						ensure!(value >= T::BountyValueMinimum::get(),
 							Error::<T>::InvalidValue,
 						);
-						ensure!(bounty.subbountycount <= T::MaxSubBountyCount::get() as u32,
+						ensure!(bounty.subbountycount < T::MaxSubBountyCount::get() as u32,
 							Error::<T>::SubBountyMaxOverflow,
 						);
 
@@ -832,7 +834,10 @@ decl_module! {
 						// Makesure Parent bounty have enough balance to fund Subbounty
 						let bounty_account = Self::bounty_account_id(bounty_id);
 						let balance = T::Currency::free_balance(&bounty_account);
-						ensure!(value < balance, Error::<T>::InsufficientBountyBalance);
+						if_std! {
+							println!("Bounty balance-{:#?}", balance);
+						}
+						ensure!(value <= balance, Error::<T>::InsufficientBountyBalance);
 
 						// Reserve the fund for subbounty from proposer & bounty account
 						let _ = T::Currency::reserve(&signer, bond);

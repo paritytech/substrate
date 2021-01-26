@@ -131,7 +131,7 @@ parameter_types! {
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: u64 = 1;
 	pub const MaximumReasonLength: u32 = 16384;
-	pub const MaxSubBountyCount: u32 = 100;
+	pub const MaxSubBountyCount: u32 = 3;
 }
 impl Config for Test {
 	type Event = Event;
@@ -1129,6 +1129,14 @@ fn assign_subcurator_works() {
 			},
 		});
 
+		assert_eq!(Balances::free_balance(4), 101);
+		assert_eq!(Balances::reserved_balance(4), 2);
+
+		assert_noop!(
+			Bounties::accept_subcurator(Origin::signed(3),0,1),
+			Error::<Test>::RequireCurator,
+		);
+
 		assert_ok!(
 			Bounties::accept_subcurator(Origin::signed(4),0,1)
 		);
@@ -1145,5 +1153,189 @@ fn assign_subcurator_works() {
 				},
 			}
 		);
+
+		// no deposit for subcurator who is also curator of parnet bounty
+		assert_eq!(Balances::free_balance(4), 101);
+		assert_eq!(Balances::reserved_balance(4), 2);
+
+	});
+}
+
+#[test]
+fn cfg_max_subbounty_count_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 34, b"12345".to_vec()));
+
+		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
+
+		Balances::make_free_balance_be(&4, 10);
+
+		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
+
+		Balances::make_free_balance_be(&4, 301);
+
+		assert_eq!(Balances::free_balance(4), 301);
+		assert_eq!(Balances::reserved_balance(4), 2);
+
+		assert_ok!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-sb01".to_vec())
+		);
+
+		assert_eq!(last_event(), RawEvent::SubBountyApproved(0,1));
+
+		assert_eq!(Balances::free_balance(4), 211);
+		assert_eq!(Balances::reserved_balance(4), 92);
+
+		assert_ok!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-sb02".to_vec())
+		);
+
+		assert_eq!(last_event(), RawEvent::SubBountyApproved(0,2));
+
+		assert_eq!(Balances::free_balance(4), 121);
+		assert_eq!(Balances::reserved_balance(4), 182);
+
+		assert_ok!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-sb03".to_vec())
+		);
+
+		assert_eq!(last_event(), RawEvent::SubBountyApproved(0,3));
+
+		assert_eq!(Balances::free_balance(4), 31);
+		assert_eq!(Balances::reserved_balance(4), 272);
+
+		assert_noop!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-sb04".to_vec()),
+			Error::<Test>::SubBountyMaxOverflow,
+		);
+
+		assert_eq!(Balances::free_balance(4), 31);
+		assert_eq!(Balances::reserved_balance(4), 272);
+
+		System::set_block_number(4);
+		<Treasury as OnInitialize<u64>>::on_initialize(4);
+
+		System::set_block_number(6);
+		<Treasury as OnInitialize<u64>>::on_initialize(6);
+
+		assert_noop!(
+			Bounties::propose_subcurator(Origin::signed(4),0,0,5,2),
+			Error::<Test>::InvalidIndex,
+		);
+
+		assert_ok!(
+			Bounties::propose_subcurator(Origin::signed(4),0,1,5,2)
+		);
+
+		assert_eq!(Bounties::subbounties(0,1).unwrap().status,
+			BountyStatus::CuratorProposed {
+				curator: 5,
+			},
+		);
+
+		assert_ok!(
+			Bounties::propose_subcurator(Origin::signed(4),0,2,6,2)
+		);
+
+		assert_eq!(Bounties::subbounties(0,2).unwrap().status,
+			BountyStatus::CuratorProposed {
+				curator: 6,
+			},
+		);
+
+		assert_ok!(
+			Bounties::propose_subcurator(Origin::signed(4),0,3,7,2)
+		);
+
+		assert_eq!(Bounties::subbounties(0,3).unwrap().status,
+			BountyStatus::CuratorProposed {
+				curator: 7,
+			},
+		);
+
+		// Test for curator balance, ensure all balances are reverted
+		assert_eq!(Balances::free_balance(4), 301);
+		assert_eq!(Balances::reserved_balance(4), 2);
+
+		// ===Test accept_subcurator() for invalid curator===
+		assert_noop!(
+			Bounties::accept_subcurator(Origin::signed(3),0,1),
+			Error::<Test>::RequireCurator,
+		);
+
+		// ===Test accept_subcurator() for invalid curator deposit balance===
+		assert_noop!(
+			Bounties::accept_subcurator(Origin::signed(5),0,1),
+			pallet_balances::Error::<Test, _>::InsufficientBalance,
+		);
+
+		// ===Acc-5 accepts role of subcurator===
+		Balances::make_free_balance_be(&5, 10);
+
+		assert_eq!(Balances::free_balance(5), 10);
+		assert_eq!(Balances::reserved_balance(5), 0);
+
+		assert_ok!(
+			Bounties::accept_subcurator(Origin::signed(5),0,1)
+		);
+
+		assert_eq!(Bounties::subbounties(0,1).unwrap().status,
+			BountyStatus::Active {
+				curator: 5,
+				update_due: 26,
+			},
+		);
+
+		assert_eq!(Balances::free_balance(5), 9);
+		assert_eq!(Balances::reserved_balance(5), 1);
+
+		// ===Acc-6 accepts role of subcurator===
+		Balances::make_free_balance_be(&6, 10);
+
+		assert_eq!(Balances::free_balance(6), 10);
+		assert_eq!(Balances::reserved_balance(6), 0);
+
+		assert_ok!(
+			Bounties::accept_subcurator(Origin::signed(6),0,2)
+		);
+
+		assert_eq!(Bounties::subbounties(0,2).unwrap().status,
+			BountyStatus::Active {
+				curator: 6,
+				update_due: 26,
+			},
+		);
+
+		assert_eq!(Balances::free_balance(6), 9);
+		assert_eq!(Balances::reserved_balance(6), 1);
+
+		// ===Acc-7 accepts role of subcurator===
+		Balances::make_free_balance_be(&7, 10);
+
+		assert_eq!(Balances::free_balance(7), 10);
+		assert_eq!(Balances::reserved_balance(7), 0);
+
+		assert_ok!(
+			Bounties::accept_subcurator(Origin::signed(7),0,3)
+		);
+
+		assert_eq!(Bounties::subbounties(0,3).unwrap().status,
+			BountyStatus::Active {
+				curator: 7,
+				update_due: 26,
+			},
+		);
+		
+		assert_eq!(Balances::free_balance(7), 9);
+		assert_eq!(Balances::reserved_balance(7), 1);
+
 	});
 }
