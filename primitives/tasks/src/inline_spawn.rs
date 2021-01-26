@@ -374,23 +374,33 @@ fn process_task_inner<
 				} else {
 					return WorkerResult::HardPanic;
 				};
-				with_externalities_safe(
+				match with_externalities_safe(
 					&mut async_ext,
 					|| instance.call(
 						InvokeMethod::TableWithWrapper { dispatcher_ref, func },
 						&data[..],
 					)
-				)
+				) {
+					Ok(Ok(result)) => result,
+					Ok(Err(error)) | Err(error) => {
+						log_error!("Runtime panic error in wasm task: {:?}", error);
+						return WorkerResult::RuntimePanic;
+					},
+				}
 			}
 			#[cfg(not(feature = "std"))]
 			if HostLocal::HOST_LOCAL {
 				let f: fn(Vec<u8>) -> Vec<u8> = unsafe { sp_std::mem::transmute(func) };
-				with_externalities_safe(
+				match with_externalities_safe(
 					&mut async_ext,
-					|| -> Result<_, ()> {
-						Ok(f(data))
+					|| f(data),
+				) {
+					Ok(result) => result,
+					Err(error) => {
+						log_error!("Runtime panic error in wasm task: {:?}", error);
+						return WorkerResult::RuntimePanic;
 					},
-				)
+				}
 			} else {
 				panic!("No no_std wasm runner");
 			}
@@ -400,34 +410,38 @@ fn process_task_inner<
 				&mut async_ext,
 				|| func(data),
 			) {
-				Ok(result) => Ok(Ok(result)),
-				Err(error) => Err(error),
+				Ok(result) => result,
+				#[cfg(not(feature = "std"))]
+				Err(error) => {
+					log_error!("Runtime panic error in wasm task: {:?}", error);
+					return WorkerResult::RuntimePanic;
+				},
+				#[cfg(feature = "std")]
+				Err(Error::RuntimePanicked(error)) => {
+					log_error!("Runtime panic error in wasm task: {:?}", error);
+					return WorkerResult::RuntimePanic;
+				},
+				#[cfg(feature = "std")]
+				Err(error) => {
+					log_error!("Wasm instance error in : {:?}", error);
+					return WorkerResult::HardPanic;
+				},
 			}
 		},
 	};
-	match result {
-		Ok(Ok(result)) => match async_ext.extract_state() {
-			AsyncExternalitiesPostExecution::Invalid => {
-				WorkerResult::Invalid
-			},
-			AsyncExternalitiesPostExecution::NeedResolve => {
-				WorkerResult::CallAt(result, async_ext.extract_delta(), handle)
-			},
-			AsyncExternalitiesPostExecution::Valid => {
-				WorkerResult::Valid(result, async_ext.extract_delta())
-			},
-			AsyncExternalitiesPostExecution::Optimistic(access) => {
-				WorkerResult::Optimistic(result, async_ext.extract_delta(), handle, access)
-			},
+	match async_ext.extract_state() {
+		AsyncExternalitiesPostExecution::Invalid => {
+			WorkerResult::Invalid
 		},
-		Ok(Err(error)) => {
-			log_error!("Runtime panic error in task: {:?}", error);
-			WorkerResult::RuntimePanic
+		AsyncExternalitiesPostExecution::NeedResolve => {
+			WorkerResult::CallAt(result, async_ext.extract_delta(), handle)
 		},
-		Err(error) => {
-			log_error!("Wasm instance error in : {:?}", error);
-			WorkerResult::HardPanic
-		}
+		AsyncExternalitiesPostExecution::Valid => {
+			WorkerResult::Valid(result, async_ext.extract_delta())
+		},
+		AsyncExternalitiesPostExecution::Optimistic(access) => {
+			WorkerResult::Optimistic(result, async_ext.extract_delta(), handle, access)
+		},
 	}
 }
 
