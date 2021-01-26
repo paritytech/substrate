@@ -114,15 +114,18 @@ mod benchmarking;
 pub mod weights;
 
 use sp_std::{fmt::Debug, prelude::*};
-use sp_runtime::{RuntimeDebug, traits::{
-	/* Member, */ AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd
-}};
+use sp_runtime::{
+	RuntimeDebug,
+	traits::{
+		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd,
+	}
+};
 use codec::{Encode, Decode, HasCompact};
-use frame_support::{/* Parameter, decl_module, decl_event, decl_storage, decl_error ,*/ ensure,
-	traits::{Currency, ReservableCurrency, /* EnsureOrigin, Get,*/  BalanceStatus::Reserved},
+use frame_support::{
+	ensure,
+	traits::{Currency, ReservableCurrency, BalanceStatus::Reserved},
 	dispatch::DispatchError,
 };
-// use frame_system::ensure_signed;
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -946,10 +949,6 @@ pub mod pallet {
 		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals\]
 		MetadataSet(T::AssetId, Vec<u8>, Vec<u8>, u8),
 	}
-
-
-	#[deprecated(note="use `Event` instead")]
-	pub type RawEvent<T> /* TODO_PUT_EVENT_GENERICS */ = Event<T> /* TODO_PUT_EVENT_GENERICS */;
 
 	#[pallet::error]
 	pub enum Error<T> {
