@@ -29,9 +29,9 @@
 //! * Asset Freezing
 //! * Asset Destruction (Burning)
 //!
-//! To use it in your runtime, you need to implement the assets [`Config`](./trait.Config.html).
+//! To use it in your runtime, you need to implement the assets [`Config`].
 //!
-//! The supported dispatchable functions are documented in the [`Call`](./enum.Call.html) enum.
+//! The supported dispatchable functions are documented in the [`Call`] enum.
 //!
 //! ### Terminology
 //!
