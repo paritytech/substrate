@@ -19,13 +19,13 @@
 
 #![cfg(test)]
 
+use crate as treasury;
 use super::*;
 use std::cell::RefCell;
 use frame_support::{
-	assert_noop, assert_ok, impl_outer_origin, impl_outer_event, parameter_types,
-	traits::{OnInitialize}
+	assert_noop, assert_ok, parameter_types,
+	traits::OnInitialize,
 };
-use frame_system::{self as system};
 
 use sp_core::H256;
 use sp_runtime::{
@@ -34,25 +34,21 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-mod treasury {
-	// Re-export needed for `impl_outer_event!`.
-	pub use super::super::*;
-}
-
-impl_outer_event! {
-	pub enum Event for Test {
-		system<T>,
-		pallet_balances<T>,
-		treasury<T>,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Treasury: treasury::{Module, Call, Storage, Config, Event<T>},
 	}
-}
+);
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -66,7 +62,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u128; // u64 is not enough to hold bytes used to generate bounty account
@@ -75,7 +71,7 @@ impl frame_system::Config for Test {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -122,9 +118,6 @@ impl Config for Test {
 	type WeightInfo = ();
 	type SpendFunds = ();
 }
-type System = frame_system::Module<Test>;
-type Balances = pallet_balances::Module<Test>;
-type Treasury = Module<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -132,7 +125,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100), (1, 98), (2, 1)],
 	}.assimilate_storage(&mut t).unwrap();
-	GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+	treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
 	t.into()
 }
 
@@ -358,7 +351,7 @@ fn genesis_funding_works() {
 		// Total issuance will be 200 with treasury account initialized with 100.
 		balances: vec![(0, 100), (Treasury::account_id(), initial_funding)],
 	}.assimilate_storage(&mut t).unwrap();
-	GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+	treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {

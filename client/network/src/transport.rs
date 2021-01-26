@@ -60,7 +60,7 @@ pub fn build_transport(
 	};
 	#[cfg(not(target_os = "unknown"))]
 	let transport = transport.or_transport(if !memory_only {
-		let desktop_trans = tcp::TcpConfig::new();
+		let desktop_trans = tcp::TcpConfig::new().nodelay(true);
 		let desktop_trans = websocket::WsConfig::new(desktop_trans.clone())
 			.or_transport(desktop_trans);
 		OptionalTransport::some(if let Ok(dns) = dns::DnsConfig::new(desktop_trans.clone()) {

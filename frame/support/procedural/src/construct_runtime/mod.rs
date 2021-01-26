@@ -62,6 +62,7 @@ impl Module {
 fn complete_modules(decl: impl Iterator<Item = ModuleDeclaration>) -> syn::Result<Vec<Module>> {
 	let mut indices = HashMap::new();
 	let mut last_index: Option<u8> = None;
+	let mut names = HashMap::new();
 
 	decl
 		.map(|module| {
@@ -85,6 +86,14 @@ fn complete_modules(decl: impl Iterator<Item = ModuleDeclaration>) -> syn::Resul
 				);
 				let mut err = syn::Error::new(used_module.span(), &msg);
 				err.combine(syn::Error::new(module.name.span(), msg));
+				return Err(err);
+			}
+
+			if let Some(used_module) = names.insert(module.name.clone(), module.name.span()) {
+				let msg = "Two modules with the same name!";
+
+				let mut err = syn::Error::new(used_module, &msg);
+				err.combine(syn::Error::new(module.name.span(), &msg));
 				return Err(err);
 			}
 

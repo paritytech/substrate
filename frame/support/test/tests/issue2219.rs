@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use frame_support::sp_runtime::generic;
-use frame_support::sp_runtime::traits::{BlakeTwo256, Block as _, Verify};
+use frame_support::sp_runtime::traits::{BlakeTwo256, Verify};
 use frame_support::codec::{Encode, Decode};
 use sp_core::{H256, sr25519};
 use serde::{Serialize, Deserialize};

@@ -475,13 +475,11 @@ fn offchain_index(wasm_method: WasmExecutionMethod) {
 		&mut ext.ext(),
 	).unwrap();
 
-	use sp_core::offchain::storage::OffchainOverlayedChange;
-	assert_eq!(
-		ext.ext()
-			.get_offchain_storage_changes()
-			.get(sp_core::offchain::STORAGE_PREFIX, b"k"),
-		Some(OffchainOverlayedChange::SetValue(b"v".to_vec()))
-	);
+	use sp_core::offchain::OffchainOverlayedChange;
+	let data = ext.overlayed_changes().clone().offchain_drain_committed().find(|(k, _v)| {
+		k == &(sp_core::offchain::STORAGE_PREFIX.to_vec(), b"k".to_vec())
+	});
+	assert_eq!(data.map(|data| data.1), Some(OffchainOverlayedChange::SetValue(b"v".to_vec())));
 }
 
 test_wasm_execution!(offchain_local_storage_should_work);

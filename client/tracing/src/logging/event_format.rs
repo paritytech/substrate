@@ -16,92 +16,56 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::fmt::{self, Write};
 use ansi_term::Colour;
-use tracing::{span::Attributes, Event, Id, Level, Subscriber};
+use regex::Regex;
+use std::fmt::{self, Write};
+use tracing::{Event, Level, Subscriber};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
+	field::RecordFields,
 	fmt::{
 		time::{FormatTime, SystemTime},
 		FmtContext, FormatEvent, FormatFields,
 	},
 	layer::Context,
-	registry::LookupSpan,
-	Layer,
+	registry::{LookupSpan, SpanRef},
 };
-use regex::Regex;
 
-/// Span name used for the logging prefix. See macro `sc_cli::prefix_logs_with!`
-pub const PREFIX_LOG_SPAN: &str = "substrate-log-prefix";
-
-/// A writer that may write to `inner_writer` with colors.
-///
-/// This is used by [`EventFormat`] to kill colors when `enable_color` is `false`.
-///
-/// It is required to call [`MaybeColorWriter::write`] after all writes are done,
-/// because the content of these writes is buffered and will only be written to the
-/// `inner_writer` at that point.
-struct MaybeColorWriter<'a> {
-	enable_color: bool,
-	buffer: String,
-	inner_writer: &'a mut dyn fmt::Write,
-}
-
-impl<'a> fmt::Write for MaybeColorWriter<'a> {
-	fn write_str(&mut self, buf: &str) -> fmt::Result {
-		self.buffer.push_str(buf);
-		Ok(())
-	}
-}
-
-impl<'a> MaybeColorWriter<'a> {
-	/// Creates a new instance.
-	fn new(enable_color: bool, inner_writer: &'a mut dyn fmt::Write) -> Self {
-		Self {
-			enable_color,
-			inner_writer,
-			buffer: String::new(),
-		}
-	}
-
-	/// Write the buffered content to the `inner_writer`.
-	fn write(&mut self) -> fmt::Result {
-		lazy_static::lazy_static! {
-			static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
-		}
-
-		if !self.enable_color {
-			let replaced = RE.replace_all(&self.buffer, "");
-			self.inner_writer.write_str(&replaced)
-		} else {
-			self.inner_writer.write_str(&self.buffer)
-		}
-	}
-}
-
+/// A pre-configured event formatter.
 pub struct EventFormat<T = SystemTime> {
+	/// Use the given timer for log message timestamps.
 	pub timer: T,
+	/// Sets whether or not an event's target is displayed.
 	pub display_target: bool,
+	/// Sets whether or not an event's level is displayed.
 	pub display_level: bool,
+	/// Sets whether or not the name of the current thread is displayed when formatting events.
 	pub display_thread_name: bool,
+	/// Enable ANSI terminal colors for formatted output.
 	pub enable_color: bool,
 }
 
-// NOTE: the following code took inspiration from tracing-subscriber
-//
-//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L449
-impl<S, N, T> FormatEvent<S, N> for EventFormat<T>
+impl<T> EventFormat<T>
 where
-	S: Subscriber + for<'a> LookupSpan<'a>,
-	N: for<'a> FormatFields<'a> + 'static,
 	T: FormatTime,
 {
-	fn format_event(
+	// NOTE: the following code took inspiration from tracing-subscriber
+	//
+	//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L449
+	pub(crate) fn format_event_custom<'b, S, N>(
 		&self,
-		ctx: &FmtContext<S, N>,
+		ctx: CustomFmtContext<'b, S, N>,
 		writer: &mut dyn fmt::Write,
 		event: &Event,
-	) -> fmt::Result {
+	) -> fmt::Result
+	where
+		S: Subscriber + for<'a> LookupSpan<'a>,
+		N: for<'a> FormatFields<'a> + 'static,
+	{
+		if event.metadata().target() == sc_telemetry::TELEMETRY_LOG_SPAN {
+			return Ok(());
+		}
+
 		let writer = &mut MaybeColorWriter::new(self.enable_color, writer);
 		let normalized_meta = event.normalized_metadata();
 		let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());
@@ -134,8 +98,8 @@ where
 			let parents = span.parents();
 			for span in std::iter::once(span).chain(parents) {
 				let exts = span.extensions();
-				if let Some(node_name) = exts.get::<NodeName>() {
-					write!(writer, "{}", node_name.as_str())?;
+				if let Some(prefix) = exts.get::<super::layers::Prefix>() {
+					write!(writer, "{}", prefix.as_str())?;
 					break;
 				}
 			}
@@ -148,62 +112,22 @@ where
 	}
 }
 
-pub struct NodeNameLayer;
-
-impl<S> Layer<S> for NodeNameLayer
+// NOTE: the following code took inspiration from tracing-subscriber
+//
+//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/format/mod.rs#L449
+impl<S, N, T> FormatEvent<S, N> for EventFormat<T>
 where
 	S: Subscriber + for<'a> LookupSpan<'a>,
+	N: for<'a> FormatFields<'a> + 'static,
+	T: FormatTime,
 {
-	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
-		let span = ctx
-			.span(id)
-			.expect("new_span has been called for this span; qed");
-
-		if span.name() != PREFIX_LOG_SPAN {
-			return;
-		}
-
-		let mut extensions = span.extensions_mut();
-
-		if extensions.get_mut::<NodeName>().is_none() {
-			let mut s = String::new();
-			let mut v = NodeNameVisitor(&mut s);
-			attrs.record(&mut v);
-
-			if !s.is_empty() {
-				let fmt_fields = NodeName(s);
-				extensions.insert(fmt_fields);
-			}
-		}
-	}
-}
-
-struct NodeNameVisitor<'a, W: std::fmt::Write>(&'a mut W);
-
-macro_rules! write_node_name {
-	($method:ident, $type:ty, $format:expr) => {
-		fn $method(&mut self, field: &tracing::field::Field, value: $type) {
-			if field.name() == "name" {
-				write!(self.0, $format, value).expect("no way to return the err; qed");
-			}
-		}
-	};
-}
-
-impl<'a, W: std::fmt::Write> tracing::field::Visit for NodeNameVisitor<'a, W> {
-	write_node_name!(record_debug, &dyn std::fmt::Debug, "[{:?}] ");
-	write_node_name!(record_str, &str, "[{}] ");
-	write_node_name!(record_i64, i64, "[{}] ");
-	write_node_name!(record_u64, u64, "[{}] ");
-	write_node_name!(record_bool, bool, "[{}] ");
-}
-
-#[derive(Debug)]
-struct NodeName(String);
-
-impl NodeName {
-	fn as_str(&self) -> &str {
-		self.0.as_str()
+	fn format_event(
+		&self,
+		ctx: &FmtContext<S, N>,
+		writer: &mut dyn fmt::Write,
+		event: &Event,
+	) -> fmt::Result {
+		self.format_event_custom(CustomFmtContext::FmtContext(ctx), writer, event)
 	}
 }
 
@@ -314,5 +238,97 @@ mod time {
 		}
 		writer.write_char(' ')?;
 		Ok(())
+	}
+}
+
+// NOTE: `FmtContext`'s fields are private. This enum allows us to make a `format_event` function
+//       that works with `FmtContext` or `Context` with `FormatFields`
+#[allow(dead_code)]
+pub(crate) enum CustomFmtContext<'a, S, N> {
+	FmtContext(&'a FmtContext<'a, S, N>),
+	ContextWithFormatFields(&'a Context<'a, S>, &'a N),
+}
+
+impl<'a, S, N> FormatFields<'a> for CustomFmtContext<'a, S, N>
+where
+	S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+	N: for<'writer> FormatFields<'writer> + 'static,
+{
+	fn format_fields<R: RecordFields>(
+		&self,
+		writer: &'a mut dyn fmt::Write,
+		fields: R,
+	) -> fmt::Result {
+		match self {
+			CustomFmtContext::FmtContext(fmt_ctx) => fmt_ctx.format_fields(writer, fields),
+			CustomFmtContext::ContextWithFormatFields(_ctx, fmt_fields) => {
+				fmt_fields.format_fields(writer, fields)
+			}
+		}
+	}
+}
+
+// NOTE: the following code has been duplicated from tracing-subscriber
+//
+//       https://github.com/tokio-rs/tracing/blob/2f59b32/tracing-subscriber/src/fmt/fmt_layer.rs#L788
+impl<'a, S, N> CustomFmtContext<'a, S, N>
+where
+	S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+	N: for<'writer> FormatFields<'writer> + 'static,
+{
+	#[inline]
+	pub fn lookup_current(&self) -> Option<SpanRef<'_, S>>
+	where
+		S: for<'lookup> LookupSpan<'lookup>,
+	{
+		match self {
+			CustomFmtContext::FmtContext(fmt_ctx) => fmt_ctx.lookup_current(),
+			CustomFmtContext::ContextWithFormatFields(ctx, _) => ctx.lookup_current(),
+		}
+	}
+}
+
+/// A writer that may write to `inner_writer` with colors.
+///
+/// This is used by [`EventFormat`] to kill colors when `enable_color` is `false`.
+///
+/// It is required to call [`MaybeColorWriter::write`] after all writes are done,
+/// because the content of these writes is buffered and will only be written to the
+/// `inner_writer` at that point.
+struct MaybeColorWriter<'a> {
+	enable_color: bool,
+	buffer: String,
+	inner_writer: &'a mut dyn fmt::Write,
+}
+
+impl<'a> fmt::Write for MaybeColorWriter<'a> {
+	fn write_str(&mut self, buf: &str) -> fmt::Result {
+		self.buffer.push_str(buf);
+		Ok(())
+	}
+}
+
+impl<'a> MaybeColorWriter<'a> {
+	/// Creates a new instance.
+	fn new(enable_color: bool, inner_writer: &'a mut dyn fmt::Write) -> Self {
+		Self {
+			enable_color,
+			inner_writer,
+			buffer: String::new(),
+		}
+	}
+
+	/// Write the buffered content to the `inner_writer`.
+	fn write(&mut self) -> fmt::Result {
+		lazy_static::lazy_static! {
+			static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
+		}
+
+		if !self.enable_color {
+			let replaced = RE.replace_all(&self.buffer, "");
+			self.inner_writer.write_str(&replaced)
+		} else {
+			self.inner_writer.write_str(&self.buffer)
+		}
 	}
 }
