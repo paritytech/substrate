@@ -44,7 +44,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Event documentation should end with an array that provides descriptive names for event
 		/// parameters. [something, who]
-		SomethingStored(u32,T::AccountId),
+		SomethingStored(u32, T::AccountId),
 	}
 	
 	// Errors inform users that something went wrong.
