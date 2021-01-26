@@ -293,7 +293,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 
 /// Result of [`import_many_blocks`].
 struct ImportManyBlocksResult<B: BlockT> {
-	/// The number of imported blocks successfully.
+	/// The number of blocks imported successfully.
 	imported: usize,
 	/// The total number of blocks processed.
 	block_count: usize,
