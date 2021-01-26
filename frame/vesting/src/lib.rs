@@ -389,10 +389,9 @@ impl<T: Config> VestingSchedule<T::AccountId> for Module<T> where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate as pallet_vesting;
 
-	use frame_support::{
-		assert_ok, assert_noop, impl_outer_origin, parameter_types,
-	};
+	use frame_support::{assert_ok, assert_noop, parameter_types};
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header,
@@ -400,12 +399,21 @@ mod tests {
 	};
 	use frame_system::RawOrigin;
 
-	impl_outer_origin! {
-		pub enum Origin for Test where system = frame_system {}
-	}
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+			Vesting: pallet_vesting::{Module, Call, Storage, Event<T>, Config<T>},
+		}
+	);
+
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
@@ -420,15 +428,15 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = ();
+		type Call = Call;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -441,7 +449,7 @@ mod tests {
 	impl pallet_balances::Config for Test {
 		type Balance = u64;
 		type DustRemoval = ();
-		type Event = ();
+		type Event = Event;
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type MaxLocks = MaxLocks;
@@ -452,16 +460,12 @@ mod tests {
 		pub static ExistentialDeposit: u64 = 0;
 	}
 	impl Config for Test {
-		type Event = ();
+		type Event = Event;
 		type Currency = Balances;
 		type BlockNumberToBalance = Identity;
 		type MinVestedTransfer = MinVestedTransfer;
 		type WeightInfo = ();
 	}
-	type System = frame_system::Module<Test>;
-	type Balances = pallet_balances::Module<Test>;
-	type Vesting = Module<Test>;
-
 
 	pub struct ExtBuilder {
 		existential_deposit: u64,
@@ -490,7 +494,7 @@ mod tests {
 					(12, 10 * self.existential_deposit)
 				],
 			}.assimilate_storage(&mut t).unwrap();
-			GenesisConfig::<Test> {
+			pallet_vesting::GenesisConfig::<Test> {
 				vesting: vec![
 					(1, 0, 10, 5 * self.existential_deposit),
 					(2, 10, 20, 0),
