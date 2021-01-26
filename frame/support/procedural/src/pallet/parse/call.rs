@@ -57,7 +57,7 @@ pub struct CallVariantDef {
 }
 
 /// Attributes for functions in call impl block.
-/// Parse for `#[pallet::weight = expr]`
+/// Parse for `#[pallet::weight(expr)]`
 pub struct FunctionAttr {
 	weight: syn::Expr,
 }
@@ -175,7 +175,7 @@ impl CallDef {
 
 				if call_var_attrs.len() != 1 {
 					let msg = if call_var_attrs.is_empty() {
-						"Invalid pallet::call, require weight attribute i.e. `#[pallet::weight = $expr]`"
+						"Invalid pallet::call, requires weight attribute i.e. `#[pallet::weight($expr)]`"
 					} else {
 						"Invalid pallet::call, too many weight attributes given"
 					};
