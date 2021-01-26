@@ -19,9 +19,9 @@
 //!
 //! The Balances pallet provides functionality for handling accounts and balances.
 //!
-//! - [`balances::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Pallet`](./struct.Pallet.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Pallet`]
 //!
 //! ## Overview
 //!
@@ -70,17 +70,15 @@
 //! The Balances pallet provides implementations for the following traits. If these traits provide the functionality
 //! that you need, then you can avoid coupling with the Balances pallet.
 //!
-//! - [`Currency`](../frame_support/traits/trait.Currency.html): Functions for dealing with a
+//! - [`Currency`](frame_support::traits::Currency): Functions for dealing with a
 //! fungible assets system.
-//! - [`ReservableCurrency`](../frame_support/traits/trait.ReservableCurrency.html):
+//! - [`ReservableCurrency`](frame_support::traits::ReservableCurrency):
 //! Functions for dealing with assets that can be reserved from an account.
-//! - [`LockableCurrency`](../frame_support/traits/trait.LockableCurrency.html): Functions for
+//! - [`LockableCurrency`](frame_support::traits::LockableCurrency): Functions for
 //! dealing with accounts that allow liquidity restrictions.
-//! - [`Imbalance`](../frame_support/traits/trait.Imbalance.html): Functions for handling
+//! - [`Imbalance`](frame_support::traits::Imbalance): Functions for handling
 //! imbalances between total issuance in the system and account balances. Must be used when a function
 //! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-//! - [`IsDeadAccount`](../frame_support/traits/trait.IsDeadAccount.html): Determiner to say whether a
-//! given account is unused.
 //!
 //! ## Interface
 //!
@@ -141,7 +139,7 @@
 //!
 //! ## Genesis config
 //!
-//! The Balances pallet depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+//! The Balances pallet depends on the [`GenesisConfig`].
 //!
 //! ## Assumptions
 //!
