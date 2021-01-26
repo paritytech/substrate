@@ -717,18 +717,18 @@ impl BackendContext {
 pub struct Store<FR> {
 	// Memories and instances are `Some` until torn down.
 	instances: Vec<Option<Rc<SandboxInstance<FR>>>>,
-	memories: RefCell<Vec<Option<Memory>>>,
+	memories: Vec<Option<Memory>>,
 	backend_context: BackendContext,
 }
 
 impl<FR> Store<FR> {
-	fn allocate_memory(&self, initial: u32, maximum: u32) -> Result<(u32, Memory)> {
+	fn allocate_memory(memories: &mut Vec<Option<Memory>>, backend_context: &BackendContext, initial: u32, maximum: u32) -> Result<(u32, Memory)> {
 		let maximum = match maximum {
 			sandbox_primitives::MEM_UNLIMITED => None,
 			specified_limit => Some(specified_limit),
 		};
 
-		let memory = match &self.backend_context {
+		let memory = match &backend_context {
 			BackendContext::Wasmi => {
 				Memory::Wasmi(MemoryInstance::alloc(
 					Pages(initial as usize),
@@ -748,7 +748,6 @@ impl<FR> Store<FR> {
 			BackendContext::Wasmtime => todo!(),
 		};
 
-		let mut memories = self.memories.borrow_mut();
 		let mem_idx = memories.len();
 		memories.push(Some(memory.clone()));
 
@@ -761,7 +760,7 @@ impl<FR> Store<FR> {
 	pub fn new(backend: SandboxBackend) -> Self {
 		Store {
 			instances: Vec::new(),
-			memories: RefCell::new(Vec::new()),
+			memories: Vec::new(),
 			backend_context: BackendContext::new(backend),
 		}
 	}
@@ -773,7 +772,9 @@ impl<FR> Store<FR> {
 	/// Returns `Err` if the memory couldn't be created.
 	/// Typically happens if `initial` is more than `maximum`.
 	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32> {
-		self.allocate_memory(initial, maximum).map(|(index, _)| index)
+		let memories = &mut self.memories;
+		let backend_context = &self.backend_context;
+		Self::allocate_memory(memories, backend_context, initial, maximum).map(|(index, _)| index)
 	}
 
 	/// Returns `SandboxInstance` by `instance_idx`.
@@ -798,7 +799,7 @@ impl<FR> Store<FR> {
 	/// if memory has been torn down.
 	pub fn memory(&self, memory_idx: u32) -> Result<Memory> {
 		self.memories
-			.borrow()
+			// .borrow()
 			.get(memory_idx as usize)
 			.cloned()
 			.ok_or_else(|| "Trying to access a non-existent sandboxed memory")?
@@ -812,7 +813,7 @@ impl<FR> Store<FR> {
 	/// Returns `Err` if `memory_idx` isn't a valid index of an memory or
 	/// if it has been torn down.
 	pub fn memory_teardown(&mut self, memory_idx: u32) -> Result<()> {
-		match self.memories.borrow_mut().get_mut(memory_idx as usize) {
+		match self.memories.get_mut(memory_idx as usize) {
 			None => Err("Trying to teardown a non-existent sandboxed memory".into()),
 			Some(None) => Err("Double teardown of a sandboxed memory".into()),
 			Some(memory) => {
@@ -865,7 +866,10 @@ impl<FR> Store<FR> {
 		FE: SandboxCapabilities<SupervisorFuncRef = FR> + 'a,
 		SCH: SandboxCapabiliesHolder<SupervisorFuncRef = FR, SC = FE>,
 	{
-		let sandbox_instance = match &self.backend_context {
+		let memories = &mut self.memories;
+		let backend_context = &self.backend_context;
+
+		let sandbox_instance = match backend_context {
 			BackendContext::Wasmi => {
 				let wasmi_module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
 				let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
@@ -1054,8 +1058,9 @@ impl<FR> Store<FR> {
 						wasmer::ExternType::Memory(memory_type) => {
 							println!("Importing memory '{}' :: '{}' {}", import.module(), import.name(), memory_type.to_string());
 							let exports = exports_map.entry(import.module().to_string()).or_insert(wasmer::Exports::new());
-							let (_memory_index, memory) = self
-								.allocate_memory(
+							let (_memory_index, memory) = Self::allocate_memory(
+									memories,
+									backend_context,
 									memory_type.minimum.0,
 									memory_type.maximum
 										.map(|m| m.0)
