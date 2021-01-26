@@ -75,7 +75,7 @@ impl Config for Test {
 
 type Example = Module<Test>;
 
-use sc_executor::RuntimeInstanceSpawn;
+use sp_tasks::pool_spawn::RuntimeInstanceSpawn;
 use sp_core::Pair;
 use sp_core::traits::RuntimeSpawnExt;
 use sp_core::offchain::{
