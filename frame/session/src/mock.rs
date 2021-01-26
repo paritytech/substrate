@@ -96,7 +96,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-
 thread_local! {
 	pub static VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
 	pub static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
