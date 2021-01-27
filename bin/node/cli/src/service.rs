@@ -111,7 +111,6 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 
 		let finality_proof_provider = grandpa::FinalityProofProvider::new_for_service(
 			backend.clone(),
-			client.clone(),
 			Some(shared_authority_set.clone()),
 		);
 
