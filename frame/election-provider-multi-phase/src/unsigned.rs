@@ -53,6 +53,24 @@ impl From<sp_npos_elections::Error> for MinerError {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Mine a new solution, and submit it back to the chain as an unsigned transaction.
+	pub(crate) fn mine_and_submit() -> Result<(), MinerError> {
+		let balancing = Self::get_balancing_iters();
+		let (raw_solution, witness) = Self::mine_solution(balancing)?;
+
+		// ensure that this will pass the pre-dispatch checks
+		Self::unsigned_pre_dispatch_checks(&raw_solution).map_err(|e| {
+			log!(warn, "pre-disaptch-checks failed for mined solution: {:?}", e);
+			MinerError::PreDispatchChecksFailed
+		})?;
+
+		// submit the raw solution to the pool.
+		let call = Call::submit_unsigned(raw_solution, witness).into();
+
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
+			.map_err(|_| MinerError::PoolSubmissionFailed)
+	}
+
 	/// Mine a new npos solution.
 	pub fn mine_solution(
 		iters: usize,
@@ -69,14 +87,6 @@ impl<T: Config> Pallet<T> {
 		)
 		.map_err(Into::into)
 		.and_then(Self::prepare_election_result)
-		.and_then(|(raw_solution, size)| {
-			Self::unsigned_pre_dispatch_checks(&raw_solution)
-				.map_err(|e| {
-				log!(warn, "pre-disaptch-checks failed for mined solution: {:?}", e);
-				MinerError::PreDispatchChecksFailed
-			})?;
-			Ok((raw_solution, size))
-		})
 	}
 
 	/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
@@ -322,18 +332,6 @@ impl<T: Config> Pallet<T> {
 			// fork etc.
 			Err(why) => Err(why),
 		}
-	}
-
-	/// Mine a new solution, and submit it back to the chain as an unsigned transaction.
-	pub(crate) fn mine_and_submit() -> Result<(), MinerError> {
-		let balancing = Self::get_balancing_iters();
-		let (raw_solution, witness) = Self::mine_solution(balancing)?;
-
-		// submit the raw solution to the pool.
-		let call = Call::submit_unsigned(raw_solution, witness).into();
-
-		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
-			.map_err(|_| MinerError::PoolSubmissionFailed)
 	}
 
 	/// Do the basics checks that MUST happen during the validation and pre-dispatch of an unsigned
@@ -684,13 +682,14 @@ mod tests {
 
 	#[test]
 	fn miner_will_not_submit_if_not_enough_winners() {
-		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
+		let (mut ext, _) = ExtBuilder::default().desired_targets(8).build_offchainify(0);
+		ext.execute_with(|| {
 			roll_to(25);
 			assert!(TwoPhase::current_phase().is_unsigned());
 
 			// mine seq_phragmen solution with 2 iters.
 			assert_eq!(
-				TwoPhase::mine_solution(2).unwrap_err(),
+				TwoPhase::mine_and_submit().unwrap_err(),
 				MinerError::PreDispatchChecksFailed,
 			);
 		})
