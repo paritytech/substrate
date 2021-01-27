@@ -23,7 +23,7 @@ use frame_support::{
 	dispatch::{UnfilteredDispatchable, Parameter},
 	storage::unhashed,
 };
-use sp_runtime::{traits::Block as _, DispatchError};
+use sp_runtime::DispatchError;
 use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
 
 pub struct SomeType1;
@@ -155,11 +155,11 @@ pub mod pallet {
 			#[pallet::compact] foo: u32,
 		) -> DispatchResultWithPostInfo {
 			Self::deposit_event(Event::Something(0));
-			if foo != 0 {
-				Ok(().into())
-			} else {
-				Err(Error::<T>::InsufficientProposersBalance.into())
+			if foo == 0 {
+				Err(Error::<T>::InsufficientProposersBalance)?;
 			}
+
+			Ok(().into())
 		}
 	}
 

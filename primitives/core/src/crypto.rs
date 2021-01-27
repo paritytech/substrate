@@ -504,6 +504,8 @@ ss58_address_format!(
 		(29, "cord", "Dhiway CORD network, standard account (*25519).")	
 	PhalaAccount =>
 		(30, "phala", "Phala Network, standard account (*25519).")
+	LitentryAccount =>
+		(31, "litentry", "Litentry Network, standard account (*25519).")
 	RobonomicsAccount =>
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>

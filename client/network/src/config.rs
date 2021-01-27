@@ -23,7 +23,11 @@
 
 pub use crate::chain::Client;
 pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
-pub use crate::request_responses::{IncomingRequest, ProtocolConfig as RequestResponseConfig};
+pub use crate::request_responses::{
+	IncomingRequest,
+	OutgoingResponse,
+	ProtocolConfig as RequestResponseConfig,
+};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -402,8 +406,8 @@ pub struct NetworkConfiguration {
 	/// presence of potentially adversarial nodes.
 	pub kademlia_disjoint_query_paths: bool,
 
-	/// Size of Yamux window receive window of all substreams. `None` for the default (256kiB).
-	/// Any value inferior to 256kiB is invalid.
+	/// Size of Yamux receive window of all substreams. `None` for the default (256kiB).
+	/// Any value less than 256kiB is invalid.
 	///
 	/// # Context
 	///
@@ -528,6 +532,8 @@ pub struct NonDefaultSetConfig {
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
 	/// >           by the networking code.
 	pub notifications_protocol: Cow<'static, str>,
+	/// Maximum allowed size of single notifications.
+	pub max_notification_size: u64,
 	/// Base configuration.
 	pub set_config: SetConfig,
 }
