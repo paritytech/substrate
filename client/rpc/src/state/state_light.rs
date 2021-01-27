@@ -477,7 +477,8 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn trace_block(
 		&self,
-		_block: Block::Hash, _targets: Option<String>
+		_block: Block::Hash,
+		_targets: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::BlockTrace> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}

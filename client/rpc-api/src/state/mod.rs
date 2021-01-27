@@ -140,6 +140,8 @@ pub trait StateApi<Hash> {
 	/// Re-execute a block and return a trace of all storage changes
 	#[rpc(name = "state_traceBlock")]
 	fn trace_block(
-		&self, block: Hash, targets: Option<String>
+		&self,
+		block: Hash,
+		targets: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::BlockTrace>;
 }

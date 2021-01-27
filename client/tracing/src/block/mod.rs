@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2021 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,9 +16,7 @@
 
 //! Utilities for tracing block execution
 
-use std::collections::HashMap;
-use std::sync::{Arc};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{collections::HashMap, sync::{Arc, atomic::{AtomicU64, Ordering}}};
 
 use parking_lot::Mutex;
 use tracing::{Dispatch, dispatcher, Subscriber};
@@ -182,7 +180,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.ok_or("Block not found".to_string())?;
 		let mut header = self.client.header(id)
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
-			.ok_or("Block not found".to_string())?;
+			.ok_or("Header not found".to_string())?;
 		let parent_hash = header.parent_hash().clone();
 		let parent_id = BlockId::Hash(parent_hash.clone());
 		// Pop digest else RuntimePanic due to: 'Number of digest items must match that calculated.'
@@ -198,7 +196,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		if let Err(e) = dispatcher::with_default(&dispatch, || {
 			let span = tracing::info_span!(
 				target: TRACE_TARGET,
-				"trace_block"
+				"trace_block",
 			);
 			let _enter = span.enter();
 			self.client.runtime_api().execute_block(&parent_id, block)

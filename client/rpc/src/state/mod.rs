@@ -171,7 +171,8 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	/// Trace storage changes for block
 	fn trace_block(
 		&self,
-		block: Block::Hash, targets: Option<String>
+		block: Block::Hash,
+		targets: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::BlockTrace>;
 }
 

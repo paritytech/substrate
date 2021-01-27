@@ -31,7 +31,6 @@
 pub mod logging;
 pub mod block;
 
-// use rustc_hash::{FxHasher};
 use std::fmt;
 use std::time::{Duration, Instant};
 use parking_lot::Mutex;
