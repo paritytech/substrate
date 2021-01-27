@@ -644,7 +644,6 @@ mod tests {
 	#[test]
 	fn miner_will_not_submit_if_not_enough_winners() {
 		let (mut ext, _) = ExtBuilder::default().desired_targets(8).build_offchainify(0);
-
 		ext.execute_with(|| {
 			roll_to(25);
 			assert!(TwoPhase::current_phase().is_unsigned());
