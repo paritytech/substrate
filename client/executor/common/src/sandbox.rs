@@ -93,7 +93,7 @@ struct Imports {
 	func_map: HashMap<(Vec<u8>, Vec<u8>), GuestFuncIndex>,
 
 	/// Maps qualified field name to its memory reference
-	memories_map: HashMap<(Vec<u8>, Vec<u8>), MemoryRef>,
+	memories_map: HashMap<(Vec<u8>, Vec<u8>), Memory>,
 }
 
 impl Imports {
@@ -134,6 +134,7 @@ impl ImportResolver for Imports {
 		);
 		let mem = self.memories_map
 			.get(&key)
+			.and_then(|m| m.as_wasmi())
 			.ok_or_else(|| {
 				wasmi::Error::Instantiation(format!(
 					"Export {}:{} not found",
@@ -551,7 +552,7 @@ pub enum InstantiationError {
 
 fn decode_environment_definition(
 	raw_env_def: &[u8],
-	memories: &[Option<MemoryRef>],
+	memories: &[Option<Memory>],
 ) -> std::result::Result<(Imports, GuestToSupervisorFunctionMapping), InstantiationError> {
 	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..])
 		.map_err(|_| InstantiationError::EnvironmentDefinitionCorrupted)?;
@@ -607,8 +608,7 @@ impl GuestEnvironment {
 		store: &Store<FR>,
 		raw_env_def: &[u8],
 	) -> std::result::Result<Self, InstantiationError> {
-		let (imports, guest_to_supervisor_mapping) = todo!();
-			//decode_environment_definition(raw_env_def, &store.memories)?;
+		let (imports, guest_to_supervisor_mapping) = decode_environment_definition(raw_env_def, &store.memories)?;
 		Ok(Self {
 			imports,
 			guest_to_supervisor_mapping,

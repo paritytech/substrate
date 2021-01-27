@@ -146,16 +146,25 @@ impl Sandbox for FunctionExecutor {
 			.borrow()
 			.memory(memory_id).map_err(|e| e.to_string())?;
 
-		match MemoryInstance::transfer(
-			todo!(), // &sandboxed_memory,
-			offset as usize,
-			&self.inner.memory,
-			buf_ptr.into(),
-			buf_len as usize,
-		) {
-			Ok(()) => Ok(sandbox_primitives::ERR_OK),
-			Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+		match sandboxed_memory {
+			sandbox::Memory::Wasmi(sandboxed_memory) => {
+				match MemoryInstance::transfer(
+					&sandboxed_memory,
+					offset as usize,
+					&self.inner.memory,
+					buf_ptr.into(),
+					buf_len as usize,
+				) {
+					Ok(()) => Ok(sandbox_primitives::ERR_OK),
+					Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				}
+			}
+
+			sandbox::Memory::Wasmer(sandboxed_memory) => {
+				todo!()
+			}
 		}
+
 	}
 
 	fn memory_set(
@@ -171,15 +180,23 @@ impl Sandbox for FunctionExecutor {
 			.borrow()
 			.memory(memory_id).map_err(|e| e.to_string())?;
 
-		match MemoryInstance::transfer(
-			&self.inner.memory,
-			val_ptr.into(),
-			todo!(), //&sandboxed_memory,
-			offset as usize,
-			val_len as usize,
-		) {
-			Ok(()) => Ok(sandbox_primitives::ERR_OK),
-			Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+		match sandboxed_memory {
+			sandbox::Memory::Wasmi(sandboxed_memory) => {
+				match MemoryInstance::transfer(
+					&self.inner.memory,
+					val_ptr.into(),
+					&sandboxed_memory,
+					offset as usize,
+					val_len as usize,
+				) {
+					Ok(()) => Ok(sandbox_primitives::ERR_OK),
+					Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				}
+			}
+
+			sandbox::Memory::Wasmer(sandboxed_memory) => {
+				todo!()
+			}
 		}
 	}
 
@@ -281,23 +298,23 @@ impl Sandbox for FunctionExecutor {
 
 		println!("Instantiating sandbox from wasmi");
 
-		// let result = EXECUTOR.set(self, || sandbox::instantiate::<_, _, Holder>(
-		// 	SandboxBackend::Wasmi,
-		// 	dispatch_thunk, 
-		// 	wasm, 
-		// 	guest_env, 
-		// 	state
-		// ));
+		let store = &mut *self.inner.sandbox_store.borrow_mut();
+		let result = EXECUTOR.set(self, || store.instantiate::<_, Holder>(
+			dispatch_thunk,
+			wasm,
+			guest_env,
+			state
+		));
 
-		let instance_idx_or_err_code: u32 = todo!();
-			// match result
-			// 	.map(|i| i.register(&mut *self.inner.sandbox_store.borrow_mut()))
-			// {
-			// 	Ok(instance_idx) => instance_idx,
-			// 	Err(sandbox::InstantiationError::StartTrapped) =>
-			// 		sandbox_primitives::ERR_EXECUTION,
-			// 	Err(_) => sandbox_primitives::ERR_MODULE,
-			// };
+		let instance_idx_or_err_code: u32 =
+			match result
+				.map(|i| i.register(store))
+			{
+				Ok(instance_idx) => instance_idx,
+				Err(sandbox::InstantiationError::StartTrapped) =>
+					sandbox_primitives::ERR_EXECUTION,
+				Err(_) => sandbox_primitives::ERR_MODULE,
+			};
 
 		Ok(instance_idx_or_err_code as u32)
 	}
