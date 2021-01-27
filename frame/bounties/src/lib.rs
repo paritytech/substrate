@@ -479,9 +479,6 @@ decl_module! {
 						ensure!(maybe_sender.map_or(true, |sender| sender == *curator), BadOrigin);
 					},
 					BountyStatus::Active { ref curator, ref update_due } => {
-						// Unreserve the fee for Curator which got reserved during "accept_curator()"
-						let bounty_account = Self::bounty_account_id(bounty_id);
-						T::Currency::unreserve(&bounty_account, bounty.fee);
 						// The bounty is active.
 						match maybe_sender {
 							// If the `RejectOrigin` is calling this function, slash the curator.
@@ -509,6 +506,11 @@ decl_module! {
 								}
 							},
 						}
+
+						// Unreserve the fee for Curator which got reserved during "accept_curator()"
+						let bounty_account = Self::bounty_account_id(bounty_id);
+						T::Currency::unreserve(&bounty_account, bounty.fee);
+
 					},
 					BountyStatus::PendingPayout { ref curator, .. } => {
 						// The bounty is pending payout, so only council can unassign a curator.
@@ -1062,9 +1064,9 @@ decl_module! {
 								// Continue to change bounty status below...
 							},
 							Some(sender) => {
-								// If the sender is master curator, and the subcurator is inactive,
-								// slash the subcurator.
-								if sender == master_curator {
+								// If the sender is not master curator or the subcurator,
+								// wait for update_due block number & slash the subcurator.
+								if sender != *subcurator && sender != master_curator {
 									let block_number = system::Module::<T>::block_number();
 									if *update_due < block_number {
 										slash_curator(subcurator, &mut subbounty.curator_deposit);
@@ -1073,8 +1075,13 @@ decl_module! {
 										// Curator has more time to give an update.
 										return Err(Error::<T>::Premature.into())
 									}
+								} else if sender == master_curator {
+									// looks like subcurator is inactive, slash the deposit.
+									slash_curator(subcurator, &mut subbounty.curator_deposit);
+									// Continue to change bounty status below...
 								} else {
-									// Else this is the subcurator, willingly giving up their role.
+									// Else this is the subcurator or master curator,
+									// willingly giving up their role.
 									// Give back their deposit.
 									let _ = T::Currency::unreserve(&subcurator, subbounty.curator_deposit);
 									// Continue to change bounty status below...
@@ -1087,12 +1094,11 @@ decl_module! {
 						// TODO :: Have to review the condition again
 						// The bounty is pending payout, so only Root or Master curator can unassign.
 						// By doing so, they are claiming the subcurator is acting maliciously, so
-						// we slash the subcurator.
+						// We slash the subcurator.
 						ensure!(maybe_sender
 							.map_or(true, |sender| sender == master_curator),
 							BadOrigin
 						);
-
 						slash_curator(subcurator, &mut subbounty.curator_deposit);
 						// Continue to change bounty status below...
 					},
