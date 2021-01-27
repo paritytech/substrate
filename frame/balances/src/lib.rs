@@ -361,7 +361,7 @@ impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
 		}
 	}
 	/// The total balance in this account including any that is reserved and ignoring any frozen.
-	fn total(&self) -> Balance {
+	pub fn total(&self) -> Balance {
 		self.free.saturating_add(self.reserved)
 	}
 }
