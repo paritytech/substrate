@@ -19,7 +19,8 @@
 
 use crate::instance_wrapper::InstanceWrapper;
 use crate::util;
-use std::{cell::RefCell, rc::Rc};
+use core::slice;
+use std::{cell::RefCell, rc::Rc, vec::Splice};
 use log::trace;
 use codec::{Encode, Decode};
 use sp_allocator::FreeingBumpHeapAllocator;
@@ -165,27 +166,61 @@ impl Sandbox for HostState {
 			.borrow()
 			.memory(memory_id)
 			.map_err(|e| e.to_string())?;
-		todo!();
-		// sandboxed_memory.with_direct_access(|sandboxed_memory| {
-		// 	let len = buf_len as usize;
-		// 	let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len())
-		// 	{
-		// 		Some(range) => range,
-		// 		None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-		// 	};
-		// 	let supervisor_mem_size = self.inner.instance.memory_size() as usize;
-		// 	let dst_range = match util::checked_range(buf_ptr.into(), len, supervisor_mem_size) {
-		// 		Some(range) => range,
-		// 		None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-		// 	};
-		// 	self.inner.instance
-		// 		.write_memory_from(
-		// 			Pointer::new(dst_range.start as u32),
-		// 			&sandboxed_memory[src_range],
-		// 		)
-		// 		.expect("ranges are checked above; write can't fail; qed");
-		// 	Ok(sandbox_primitives::ERR_OK)
-		// })
+
+		match sandboxed_memory {
+			sandbox::Memory::Wasmi(sandboxed_memory) => {
+				sandboxed_memory.with_direct_access(|sandboxed_memory| {
+					let len = buf_len as usize;
+
+					let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len()) {
+						Some(range) => range,
+						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					};
+
+					let supervisor_mem_size = self.inner.instance.memory_size() as usize;
+					let dst_range = match util::checked_range(buf_ptr.into(), len, supervisor_mem_size) {
+						Some(range) => range,
+						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					};
+
+					self.inner.instance
+						.write_memory_from(
+							Pointer::new(dst_range.start as u32),
+							&sandboxed_memory[src_range],
+						)
+						.expect("ranges are checked above; write can't fail; qed");
+
+					Ok(sandbox_primitives::ERR_OK)
+				})
+			},
+
+			sandbox::Memory::Wasmer(sandboxed_memory) => {
+				let len = buf_len as usize;
+
+				let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.data_size() as usize) {
+					Some(range) => range,
+					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				};
+
+				let supervisor_mem_size = self.inner.instance.memory_size() as usize;
+				let dst_range = match util::checked_range(buf_ptr.into(), len, supervisor_mem_size) {
+					Some(range) => range,
+					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				};
+
+				// TODO Proof of safety
+				let source = unsafe { slice::from_raw_parts(sandboxed_memory.data_ptr(), sandboxed_memory.data_size() as usize) };
+
+				self.inner.instance
+					.write_memory_from(
+						Pointer::new(dst_range.start as u32),
+						&source[src_range],
+					)
+					.expect("ranges are checked above; write can't fail; qed");
+
+				Ok(sandbox_primitives::ERR_OK)
+			}
+		}
 	}
 
 	fn memory_set(
@@ -200,27 +235,61 @@ impl Sandbox for HostState {
 			.borrow()
 			.memory(memory_id)
 			.map_err(|e| e.to_string())?;
-		todo!();
-		// sandboxed_memory.with_direct_access_mut(|sandboxed_memory| {
-		// 	let len = val_len as usize;
-		// 	let supervisor_mem_size = self.inner.instance.memory_size() as usize;
-		// 	let src_range = match util::checked_range(val_ptr.into(), len, supervisor_mem_size) {
-		// 		Some(range) => range,
-		// 		None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-		// 	};
-		// 	let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.len())
-		// 	{
-		// 		Some(range) => range,
-		// 		None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-		// 	};
-		// 	self.inner.instance
-		// 		.read_memory_into(
-		// 			Pointer::new(src_range.start as u32),
-		// 			&mut sandboxed_memory[dst_range],
-		// 		)
-		// 		.expect("ranges are checked above; read can't fail; qed");
-		// 	Ok(sandbox_primitives::ERR_OK)
-		// })
+
+		match sandboxed_memory {
+			sandbox::Memory::Wasmi(sandboxed_memory) => {
+				sandboxed_memory.with_direct_access_mut(|sandboxed_memory| {
+					let len = val_len as usize;
+					let supervisor_mem_size = self.inner.instance.memory_size() as usize;
+
+					let src_range = match util::checked_range(val_ptr.into(), len, supervisor_mem_size) {
+						Some(range) => range,
+						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					};
+
+					let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.len()) {
+						Some(range) => range,
+						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					};
+
+					self.inner.instance
+						.read_memory_into(
+							Pointer::new(src_range.start as u32),
+							&mut sandboxed_memory[dst_range],
+						)
+						.expect("ranges are checked above; read can't fail; qed");
+
+					Ok(sandbox_primitives::ERR_OK)
+				})
+			}
+
+			sandbox::Memory::Wasmer(sandboxed_memory) => {
+				let len = val_len as usize;
+				let supervisor_mem_size = self.inner.instance.memory_size() as usize;
+
+				let src_range = match util::checked_range(val_ptr.into(), len, supervisor_mem_size) {
+					Some(range) => range,
+					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				};
+
+				let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.data_size() as usize) {
+					Some(range) => range,
+					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				};
+
+				// TODO Proof of safety
+				let dest = unsafe { slice::from_raw_parts_mut(sandboxed_memory.data_ptr(), sandboxed_memory.data_size() as usize) };
+
+				self.inner.instance
+					.read_memory_into(
+						Pointer::new(src_range.start as u32),
+						&mut dest[dst_range],
+					)
+					.expect("ranges are checked above; read can't fail; qed");
+
+				Ok(sandbox_primitives::ERR_OK)
+			}
+		}
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> sp_wasm_interface::Result<()> {
@@ -335,7 +404,7 @@ impl Sandbox for HostState {
 				guest_env,
 				state
 			)
-				.map(|i| i.register(&mut *self.inner.sandbox_store.borrow_mut()))
+				.map(|i| i.register(store))
 			{
 				Ok(instance_idx) => instance_idx,
 				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
