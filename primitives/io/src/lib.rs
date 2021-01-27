@@ -1336,6 +1336,13 @@ impl Validation for &'static [u8] {
 	}
 }
 
+#[cfg(feature = "std")]
+impl<V: Validation + Send + Sync> Validation for std::sync::Arc<V> {
+	fn validation_code(&self) -> Vec<u8> {
+		self.deref().validation_code()
+	}
+}
+
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(not(feature = "std"))]
 struct WasmAllocator;
