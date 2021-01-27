@@ -1062,7 +1062,7 @@ decl_module! {
 								// Continue to change bounty status below...
 							},
 							Some(sender) => {
-								// If the sender is curator, and the subcurator is inactive,
+								// If the sender is master curator, and the subcurator is inactive,
 								// slash the subcurator.
 								if sender == master_curator {
 									let block_number = system::Module::<T>::block_number();
@@ -1085,10 +1085,14 @@ decl_module! {
 					BountyStatus::PendingPayout { ref curator, .. } => {
 						let ref subcurator = curator;
 						// TODO :: Have to review the condition again
-						// The bounty is pending payout, so only council can unassign a subcurator.
+						// The bounty is pending payout, so only Root or Master curator can unassign.
 						// By doing so, they are claiming the subcurator is acting maliciously, so
 						// we slash the subcurator.
-						ensure!(maybe_sender.is_none(), BadOrigin);
+						ensure!(maybe_sender
+							.map_or(true, |sender| sender == master_curator),
+							BadOrigin
+						);
+
 						slash_curator(subcurator, &mut subbounty.curator_deposit);
 						// Continue to change bounty status below...
 					},
@@ -1248,7 +1252,7 @@ decl_module! {
 		/// unreserved to bounty account. the curator deposit will
 		/// be unreserved if possible.
 		///
-		/// Only `T::RejectOrigin` or `curator` is able to cancel a bounty.
+		/// Only `T::RejectOrigin` or `master curator` is able to cancel a bounty.
 		///
 		/// Bounty must be active, for this subbounty call to work.
 		///
@@ -1259,11 +1263,15 @@ decl_module! {
 			#[compact] bounty_id: BountyIndex,
 			#[compact] subbounty_id: BountyIndex,
 		) -> DispatchResultWithPostInfo {
-			// TODO :: Have to recheck this requirement
-			let _signer = ensure_signed(origin)?;
+			let maybe_sender = ensure_signed(origin.clone())
+				.map(Some)
+				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
 			// Ensure parent bounty is Active
-			Self::ensure_bounty_active(bounty_id)?;
+			let master_curator = Self::ensure_bounty_active(bounty_id)?;
+
+			// Either `RejectOrigin` or the master curator can close subbounty.
+			ensure!(maybe_sender.map_or(true, |sender| sender == master_curator), BadOrigin);
 
 			Self::impl_close_subbounty(bounty_id, subbounty_id)?;
 
