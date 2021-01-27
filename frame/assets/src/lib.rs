@@ -1084,30 +1084,28 @@ impl<T: Config> Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate as pallet_assets;
 
-	use frame_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, impl_outer_event};
+	use frame_support::{assert_ok, assert_noop, parameter_types};
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 	use pallet_balances::Error as BalancesError;
 
-	mod pallet_assets {
-		pub use crate::Event;
-	}
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	impl_outer_event! {
-		pub enum Event for Test {
-			frame_system<T>,
-			pallet_balances<T>,
-			pallet_assets<T>,
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+			Assets: pallet_assets::{Module, Call, Storage, Event<T>},
 		}
-	}
+	);
 
-	impl_outer_origin! {
-		pub enum Origin for Test where system = frame_system {}
-	}
-
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 	}
@@ -1118,7 +1116,7 @@ mod tests {
 		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
-		type Call = ();
+		type Call = Call;
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
@@ -1128,7 +1126,7 @@ mod tests {
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -1171,9 +1169,6 @@ mod tests {
 		type MetadataDepositPerByte = MetadataDepositPerByte;
 		type WeightInfo = ();
 	}
-	type System = frame_system::Module<Test>;
-	type Balances = pallet_balances::Module<Test>;
-	type Assets = Module<Test>;
 
 	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()

@@ -18,10 +18,7 @@
 //! Test utilities
 
 use super::*;
-use frame_support::{
-	impl_outer_origin, impl_outer_dispatch, impl_outer_event, parameter_types,
-	weights::Weight,
-};
+use frame_support::{parameter_types, weights::Weight};
 use sp_core::H256;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use sp_io;
@@ -76,34 +73,20 @@ pub mod logger {
 	}
 }
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-mod test_events {
-	pub use crate::Event;
-}
-
-impl_outer_event! {
-	pub enum TestEvent for Test {
-		frame_system<T>,
-		sudo<T>,
-		logger<T>,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
+		Logger: logger::{Module, Call, Storage, Event<T>},
 	}
-}
-
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		sudo::Sudo,
-		logger::Logger,
-	}
-}
-
-// For testing the pallet, we construct most of a mock runtime. This means
-// first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of pallets we want to use.
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
+);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -131,10 +114,10 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = TestEvent;
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -144,19 +127,14 @@ impl frame_system::Config for Test {
 
 // Implement the logger module's `Config` on the Test runtime.
 impl logger::Config for Test {
-	type Event = TestEvent;
+	type Event = Event;
 }
 
 // Implement the sudo module's `Config` on the Test runtime.
 impl Config for Test {
-	type Event = TestEvent;
+	type Event = Event;
 	type Call = Call;
 }
-
-// Assign back to type variables in order to make dispatched calls of these modules later.
-pub type Sudo = Module<Test>;
-pub type Logger = logger::Module<Test>;
-pub type System = frame_system::Module<Test>;
 
 // New types for dispatchable functions.
 pub type SudoCall = sudo::Call<Test>;
@@ -165,7 +143,7 @@ pub type LoggerCall = logger::Call<Test>;
 // Build test environment by setting the root `key` for the Genesis.
 pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	GenesisConfig::<Test>{
+	sudo::GenesisConfig::<Test>{
 		key: root_key,
 	}.assimilate_storage(&mut t).unwrap();
 	t.into()
