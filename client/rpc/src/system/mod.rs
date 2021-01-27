@@ -34,6 +34,7 @@ pub use sc_rpc_api::system::*;
 pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole, SyncState};
 pub use self::gen_client::Client as SystemClient;
 
+/// Early exit for RPCs that require `--rpc-methods=Unsafe` to be enabled
 macro_rules! bail_if_unsafe {
 	($value: expr) => {
 		if let Err(err) = $value.check_if_safe() {

@@ -25,6 +25,7 @@ mod state_light;
 mod tests;
 
 use std::sync::Arc;
+use futures::{FutureExt, TryFutureExt};
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use rpc::{Result as RpcResult, futures::{Future, future::result}};
 
@@ -357,7 +358,16 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		self.backend.unsubscribe_runtime_version(meta, id)
 	}
 
+	/// Re-execute the given block with the tracing targets given in `targets`
+	/// and capture all state changes.
+	///
+	/// Note: requires the node to run with `--rpc-methods=Unsafe`.
 	fn trace_block(&self, block: Block::Hash, targets: Option<String>) -> FutureResult<sp_rpc::tracing::BlockTrace> {
+		if let Err(err) = self.deny_unsafe.check_if_safe() {
+			// TODO: there has to be a more elegant way to do this.
+			return Box::new(async move { Err(err.into()) }.boxed().compat());
+		}
+
 		self.backend.trace_block(block, targets)
 	}
 }
