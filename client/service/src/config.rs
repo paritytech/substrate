@@ -216,6 +216,20 @@ impl Configuration {
 		// Don't initialise telemetry if `telemetry_endpoints` == Some([])
 		self.telemetry_endpoints.as_ref().filter(|x| !x.is_empty())
 	}
+
+	/// Returns the network protocol id from the chain spec, or the default.
+	pub fn protocol_id(&self) -> sc_network::config::ProtocolId {
+		let protocol_id_full = match self.chain_spec.protocol_id() {
+			Some(pid) => pid,
+			None => {
+				log::warn!("Using default protocol ID {:?} because none is configured in the \
+					chain specs", crate::DEFAULT_PROTOCOL_ID
+				);
+				crate::DEFAULT_PROTOCOL_ID
+			}
+		};
+		sc_network::config::ProtocolId::from(protocol_id_full)
+	}
 }
 
 /// Available RPC methods.
