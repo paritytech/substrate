@@ -1323,14 +1323,20 @@ decl_module! {
 			let threshold: T::BlockNumber = OFFCHAIN_REPEAT.into();
 
 			let election_status = Self::era_election_status();
-			log!(trace, "Running OCW at {:?}, election status = {:?}", now, election_status);
+
+			log!(
+				trace,
+				"Running OCW at {:?}, election status = {:?}",
+				now,
+				election_status,
+			);
 			match Self::era_election_status() {
 				ElectionStatus::Open(opened) if opened == now => {
 					// If era election status is open at the current block, mine a new solution
 					// then save and submit it.
 					let initial_output = set_check_offchain_execution_status::<T>(now, threshold)
 						.and_then(|_| compute_save_and_submit::<T>());
-					log!(debug, "initial OCW output at {:?} = {:?}", now, initial_output);
+					log!(info, "initial OCW output at {:?} = {:?}", now, initial_output);
 				},
 				ElectionStatus::Open(opened) if now > opened => {
 					if Self::queued_score().is_none() {
@@ -1339,7 +1345,7 @@ decl_module! {
 						// or mining a new one (just in the case that the previous was skipped).
 						let resubmit_output = set_check_offchain_execution_status::<T>(now, threshold)
 							.and_then(|_| restore_or_compute_then_submit::<T>());
-						log!(debug, "resubmit OCW output at {:?} = {:?}", now, resubmit_output);
+						log!(info, "resubmit OCW output at {:?} = {:?}", now, resubmit_output);
 					}
 				},
 				_ => {}
