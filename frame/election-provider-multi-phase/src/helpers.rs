@@ -17,11 +17,7 @@
 
 //! Some helper functions/macros for this crate.
 
-use super::{
-	Config, VoteWeight, CompactVoterIndexOf, CompactTargetIndexOf, CompactAccuracyOf,
-	OnChainAccuracyOf, ExtendedBalance,
-};
-use sp_runtime::InnerOf;
+use super::{Config, VoteWeight, CompactVoterIndexOf, CompactTargetIndexOf};
 use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, boxed::Box, prelude::*};
 
 #[macro_export]
@@ -39,11 +35,7 @@ macro_rules! log {
 /// This can be used to efficiently build index getter closures.
 pub fn generate_voter_cache<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-) -> BTreeMap<T::AccountId, usize>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+) -> BTreeMap<T::AccountId, usize> {
 	let mut cache: BTreeMap<T::AccountId, usize> = BTreeMap::new();
 	snapshot.iter().enumerate().for_each(|(i, (x, _, _))| {
 		let _existed = cache.insert(x.clone(), i);
@@ -64,11 +56,7 @@ where
 /// The snapshot must be the same is the one used to create `cache`.
 pub fn voter_index_fn<T: Config>(
 	cache: &BTreeMap<T::AccountId, usize>,
-) -> Box<dyn Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+) -> Box<dyn Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_> {
 	Box::new(move |who| {
 		cache.get(who).and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
 	})
@@ -81,11 +69,7 @@ where
 /// The snapshot must be the same is the one used to create `cache`.
 pub fn voter_index_fn_usize<T: Config>(
 	cache: &BTreeMap<T::AccountId, usize>,
-) -> Box<dyn Fn(&T::AccountId) -> Option<usize> + '_>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+) -> Box<dyn Fn(&T::AccountId) -> Option<usize> + '_> {
 	Box::new(move |who| cache.get(who).cloned())
 }
 
@@ -97,11 +81,7 @@ where
 /// Not meant to be used in production.
 pub fn voter_index_fn_linear<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-) -> Box<dyn Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+) -> Box<dyn Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_> {
 	Box::new(move |who| {
 		snapshot
 			.iter()
@@ -115,11 +95,7 @@ where
 /// The returning index type is the same as the one defined in [`T::CompactSolution::Target`].
 pub fn target_index_fn_linear<T: Config>(
 	snapshot: &Vec<T::AccountId>,
-) -> Box<dyn Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>> + '_>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+) -> Box<dyn Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>> + '_> {
 	Box::new(move |who| {
 		snapshot
 			.iter()
@@ -132,11 +108,7 @@ where
 /// account using a linearly indexible snapshot.
 pub fn voter_at_fn<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-) -> Box<dyn Fn(CompactVoterIndexOf<T>) -> Option<T::AccountId> + '_>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+) -> Box<dyn Fn(CompactVoterIndexOf<T>) -> Option<T::AccountId> + '_> {
 	Box::new(move |i| {
 		<CompactVoterIndexOf<T> as TryInto<usize>>::try_into(i)
 			.ok()
@@ -148,11 +120,7 @@ where
 /// account using a linearly indexible snapshot.
 pub fn target_at_fn<T: Config>(
 	snapshot: &Vec<T::AccountId>,
-) -> Box<dyn Fn(CompactTargetIndexOf<T>) -> Option<T::AccountId> + '_>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+) -> Box<dyn Fn(CompactTargetIndexOf<T>) -> Option<T::AccountId> + '_> {
 	Box::new(move |i| {
 		<CompactTargetIndexOf<T> as TryInto<usize>>::try_into(i)
 			.ok()
@@ -165,11 +133,7 @@ where
 /// This is not optimized and uses a linear search.
 pub fn stake_of_fn_linear<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-) -> Box<dyn Fn(&T::AccountId) -> VoteWeight + '_>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+) -> Box<dyn Fn(&T::AccountId) -> VoteWeight + '_> {
 	Box::new(move |who| {
 		snapshot.iter().find(|(x, _, _)| x == who).map(|(_, x, _)| *x).unwrap_or_default()
 	})
@@ -184,11 +148,7 @@ where
 pub fn stake_of_fn<'a, T: Config>(
 	snapshot: &'a Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 	cache: &'a BTreeMap<T::AccountId, usize>,
-) -> Box<dyn Fn(&T::AccountId) -> VoteWeight + 'a>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+) -> Box<dyn Fn(&T::AccountId) -> VoteWeight + 'a> {
 	Box::new(move |who| {
 		if let Some(index) = cache.get(who) {
 			snapshot.get(*index).map(|(_, x, _)| x).cloned().unwrap_or_default()

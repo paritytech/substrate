@@ -38,7 +38,7 @@ use sp_npos_elections::{
 };
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, Block as BlockT, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	PerU16,
 };
 use std::sync::Arc;

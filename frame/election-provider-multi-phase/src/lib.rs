@@ -173,6 +173,10 @@
 //!
 //! **Score based on (byte) size**: We should always prioritize small solutions over bigger ones, if
 //! there is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
+//!
+//! **Offchain resubmit**: Essentially port https://github.com/paritytech/substrate/pull/7976 to
+//! this pallet as well. The `OFFCHAIN_REPEAT` also needs to become an adjustable parameter of the
+//! pallet.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -187,14 +191,14 @@ use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use sp_election_providers::{ElectionDataProvider, ElectionProvider, onchain};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, is_score_better, CompactSolution, ElectionScore,
-	EvaluateSupport, ExtendedBalance, PerThing128, Supports, VoteWeight,
+	EvaluateSupport, PerThing128, Supports, VoteWeight,
 };
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchError, InnerOf, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
+	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::prelude::*;
 use sp_arithmetic::{
@@ -229,15 +233,8 @@ pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::Accuracy;
 pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
 
 /// Wrapper type that implements the configurations needed for the on-chain backup.
-struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>)
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>;
-impl<T: Config> onchain::Config for OnChainConfig<T>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
+impl<T: Config> onchain::Config for OnChainConfig<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type Accuracy = T::OnChainAccuracy;
@@ -498,11 +495,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>>
-	where
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<Self>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<Self>>>,
-	{
+	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 		type Event: From<Event<Self>>
 			+ Into<<Self as frame_system::Config>::Event>
 			+ IsType<<Self as frame_system::Config>::Event>;
@@ -559,11 +552,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
-	where
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-	{
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let next_election = T::DataProvider::next_election_prediction(now).max(now);
 
@@ -609,7 +598,7 @@ pub mod pallet {
 		fn offchain_worker(n: T::BlockNumber) {
 			// We only run the OCW in the fist block of the unsigned phase.
 			if Self::current_phase().is_unsigned_open_at(n) {
-				match Self::set_check_offchain_execution_status(n) {
+				match Self::try_acquire_offchain_lock(n) {
 					Ok(_) => match Self::mine_and_submit() {
 						Ok(_) => {
 							log!(info, "successfully submitted a solution via OCW at block {:?}", n)
@@ -633,15 +622,25 @@ pub mod pallet {
 			let max_vote: usize = <CompactOf<T> as CompactSolution>::LIMIT;
 
 			// 1. Maximum sum of [ChainAccuracy; 16] must fit into `UpperOf<ChainAccuracy>`..
-			let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracyOf<T>>> =
-				(0..max_vote).map(|_| <OnChainAccuracyOf<T>>::one().deconstruct().into()).collect();
+			let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracyOf<T>>> = (0..max_vote)
+				.map(|_| {
+					<UpperOf<OnChainAccuracyOf<T>>>::from(
+						<OnChainAccuracyOf<T>>::one().deconstruct(),
+					)
+				})
+				.collect();
 			let _: UpperOf<OnChainAccuracyOf<T>> = maximum_chain_accuracy
 				.iter()
 				.fold(Zero::zero(), |acc, x| acc.checked_add(x).unwrap());
 
 			// 2. Maximum sum of [CompactAccuracy; 16] must fit into `UpperOf<OffchainAccuracy>`.
-			let maximum_chain_accuracy: Vec<UpperOf<CompactAccuracyOf<T>>> =
-				(0..max_vote).map(|_| <CompactAccuracyOf<T>>::one().deconstruct().into()).collect();
+			let maximum_chain_accuracy: Vec<UpperOf<CompactAccuracyOf<T>>> = (0..max_vote)
+				.map(|_| {
+					<UpperOf<CompactAccuracyOf<T>>>::from(
+						<CompactAccuracyOf<T>>::one().deconstruct(),
+					)
+				})
+				.collect();
 			let _: UpperOf<CompactAccuracyOf<T>> = maximum_chain_accuracy
 				.iter()
 				.fold(Zero::zero(), |acc, x| acc.checked_add(x).unwrap());
@@ -649,11 +648,7 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T>
-	where
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-	{
+	impl<T: Config> Pallet<T> {
 		/// Submit a solution for the unsigned phase.
 		///
 		/// The dispatch origin fo this call must be __none__.
@@ -709,11 +704,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::metadata(<T as frame_system::Config>::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config>
-	where
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-	{
+	pub enum Event<T: Config> {
 		/// A solution was stored with the given compute.
 		///
 		/// If the solution is signed, this means that it hasn't yet been processed. If the
@@ -755,11 +746,7 @@ pub mod pallet {
 	pub struct Origin<T>(PhantomData<T>);
 
 	#[pallet::validate_unsigned]
-	impl<T: Config> ValidateUnsigned for Pallet<T>
-	where
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-	{
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::submit_unsigned(solution, _) = call {
@@ -781,7 +768,9 @@ pub mod pallet {
 				ValidTransaction::with_tag_prefix("OffchainElection")
 					// The higher the score[0], the better a solution is.
 					.priority(
-						T::MinerTxPriority::get().saturating_add(solution.score[0].saturated_into()),
+						T::MinerTxPriority::get().saturating_add(
+							solution.score[0].saturated_into()
+						),
 					)
 					// used to deduplicate unsigned solutions: each validator should produce one
 					// solution per round at most, and solutions are not propagate.
@@ -858,11 +847,7 @@ pub mod pallet {
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
-impl<T: Config> Pallet<T>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+impl<T: Config> Pallet<T> {
 	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
 	///
 	/// This is decoupled for easy weight calculation.
@@ -1019,10 +1004,7 @@ where
 	}
 
 	/// On-chain fallback of election.
-	fn onchain_fallback() -> Result<Supports<T::AccountId>, ElectionError>
-	where
-		ExtendedBalance: From<<T::OnChainAccuracy as PerThing>::Inner>,
-	{
+	fn onchain_fallback() -> Result<Supports<T::AccountId>, ElectionError> {
 		<onchain::OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<
 			T::AccountId,
 			T::BlockNumber,
@@ -1054,11 +1036,7 @@ where
 	}
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type Error = ElectionError;
 	type DataProvider = T::DataProvider;
 

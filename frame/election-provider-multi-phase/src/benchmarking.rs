@@ -25,9 +25,8 @@ use frame_support::{assert_ok, traits::OnInitialize};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_election_providers::Assignment;
-use sp_npos_elections::ExtendedBalance;
-use sp_runtime::InnerOf;
 use sp_arithmetic::traits::One;
+use sp_runtime::InnerOf;
 use sp_std::convert::TryInto;
 
 const SEED: u32 = 0;
@@ -39,12 +38,7 @@ fn solution_with_size<T: Config>(
 	size: SolutionSize,
 	active_voters_count: u32,
 	desired_targets: u32,
-) -> RawSolution<CompactOf<T>>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-	<InnerOf<CompactAccuracyOf<T>> as sp_std::convert::TryFrom<usize>>::Error: sp_std::fmt::Debug,
-{
+) -> RawSolution<CompactOf<T>> {
 	assert!(size.targets >= desired_targets, "must have enough targets");
 	assert!(
 		size.targets >= (<CompactOf<T>>::LIMIT * 2) as u32,
@@ -129,7 +123,7 @@ where
 		.iter()
 		.map(|(voter, _stake, votes)| {
 			let percent_per_edge: InnerOf<CompactAccuracyOf<T>> =
-				(100 / votes.len()).try_into().unwrap();
+				(100 / votes.len()).try_into().unwrap_or_else(|_| panic!("failed to convert"));
 			Assignment {
 				who: voter.clone(),
 				distribution: votes
@@ -148,12 +142,6 @@ where
 }
 
 benchmarks! {
-	where_clause {
-		where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		<InnerOf<CompactAccuracyOf<T>> as sp_std::convert::TryFrom<usize>>::Error: sp_std::fmt::Debug,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-	}
-
 	on_initialize_nothing {
 		assert!(<TwoPhase<T>>::current_phase().is_off());
 	}: {

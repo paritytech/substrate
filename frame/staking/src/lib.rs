@@ -3381,7 +3381,10 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 		targets: Vec<T::AccountId>,
 	) {
 		targets.into_iter().for_each(|v| {
-			<Validators<T>>::insert(v, ValidatorPrefs { commission: Perbill::zero() });
+			<Validators<T>>::insert(
+				v,
+				ValidatorPrefs { commission: Perbill::zero(), blocked: false },
+			);
 		});
 
 		voters.into_iter().for_each(|(v, _s, t)| {

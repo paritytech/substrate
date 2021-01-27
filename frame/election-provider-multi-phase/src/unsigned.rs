@@ -21,7 +21,7 @@ use crate::*;
 use frame_support::dispatch::DispatchResult;
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
-	seq_phragmen, CompactSolution, ElectionResult, assignment_ratio_to_staked_normalized, reduce,
+	seq_phragmen, CompactSolution, ElectionResult, assignment_ratio_to_staked_normalized,
 	assignment_staked_to_ratio_normalized,
 };
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
@@ -32,15 +32,9 @@ pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-electio
 
 /// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
 /// within a window of 5 blocks.
-// TODO: this should go into config, and we should store the solution an repeat with this threshold
-// until we can submit it, or if the election happened. Okay for now though
 pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
 
-impl<T: Config> Pallet<T>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+impl<T: Config> Pallet<T> {
 	/// Mine a new npos solution.
 	pub fn mine_solution(
 		iters: usize,
@@ -279,9 +273,7 @@ where
 	/// don't run twice within a window of length [`OFFCHAIN_REPEAT`].
 	///
 	/// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
-	pub(crate) fn set_check_offchain_execution_status(
-		now: T::BlockNumber,
-	) -> Result<(), &'static str> {
+	pub(crate) fn try_acquire_offchain_lock(now: T::BlockNumber) -> Result<(), &'static str> {
 		let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 		let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
 
@@ -762,25 +754,25 @@ mod tests {
 			assert!(TwoPhase::current_phase().is_unsigned());
 
 			// first execution -- okay.
-			assert!(TwoPhase::set_check_offchain_execution_status(25).is_ok());
+			assert!(TwoPhase::try_acquire_offchain_lock(25).is_ok());
 
 			// next block: rejected.
-			assert!(TwoPhase::set_check_offchain_execution_status(26).is_err());
+			assert!(TwoPhase::try_acquire_offchain_lock(26).is_err());
 
 			// allowed after `OFFCHAIN_REPEAT`
-			assert!(TwoPhase::set_check_offchain_execution_status((26 + OFFCHAIN_REPEAT).into())
+			assert!(TwoPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT).into())
 				.is_ok());
 
 			// a fork like situation: re-execute last 3.
-			assert!(TwoPhase::set_check_offchain_execution_status(
+			assert!(TwoPhase::try_acquire_offchain_lock(
 				(26 + OFFCHAIN_REPEAT - 3).into()
 			)
 			.is_err());
-			assert!(TwoPhase::set_check_offchain_execution_status(
+			assert!(TwoPhase::try_acquire_offchain_lock(
 				(26 + OFFCHAIN_REPEAT - 2).into()
 			)
 			.is_err());
-			assert!(TwoPhase::set_check_offchain_execution_status(
+			assert!(TwoPhase::try_acquire_offchain_lock(
 				(26 + OFFCHAIN_REPEAT - 1).into()
 			)
 			.is_err());
