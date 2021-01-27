@@ -364,8 +364,7 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 	/// Note: requires the node to run with `--rpc-methods=Unsafe`.
 	fn trace_block(&self, block: Block::Hash, targets: Option<String>) -> FutureResult<sp_rpc::tracing::BlockTrace> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			// TODO: there has to be a more elegant way to do this.
-			return Box::new(async move { Err(err.into()) }.boxed().compat());
+			return Box::new(result(Err(err.into())))
 		}
 
 		self.backend.trace_block(block, targets)
