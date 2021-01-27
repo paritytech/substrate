@@ -49,7 +49,7 @@ pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 /// Information about a slot.
 pub struct SlotInfo<B: BlockT> {
 	/// The slot number.
-	pub number: u64,
+	pub number: crate::Slot,
 	/// Current timestamp.
 	pub timestamp: Duration,
 	/// The instant at which the slot ends.
@@ -64,7 +64,7 @@ pub struct SlotInfo<B: BlockT> {
 
 /// A stream that returns every time there is a new slot.
 pub(crate) struct Slots<Block, C, IDP> {
-	last_slot: u64,
+	last_slot: crate::Slot,
 	slot_duration: u64,
 	inner_delay: Option<Delay>,
 	inherent_data_providers: IDP,
@@ -80,7 +80,7 @@ impl<Block, C, IDP> Slots<Block, C, IDP> {
 		client: C,
 	) -> Self {
 		Slots {
-			last_slot: 0,
+			last_slot: crate::Slot(0),
 			slot_duration,
 			inner_delay: None,
 			inherent_data_providers,

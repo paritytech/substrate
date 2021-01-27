@@ -307,27 +307,28 @@ pub trait InherentDataProvider {
 	/// Convert the given encoded error to a string.
 	///
 	/// If the given error could not be decoded, `None` should be returned.
-	fn try_decode_error(
+	fn try_handle_error(
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> Option<Box<dyn std::error::Error + Send + Sync>>;
+	) -> Option<std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send>>>;
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(10)]
 impl InherentDataProvider for Tuple {
+	for_tuples!( where #( Tuple: Send + Send )* );
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		for_tuples!( #( Tuple.provide_inherent_data(inherent_data)?; )* );
 		Ok(())
 	}
 
-	fn try_decode_error(
+	fn try_handle_error(
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> Option<Box<dyn std::error::Error + Send + Sync>> {
+	) -> Option<std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send>>> {
 		for_tuples!( #(
-			if let Some(e) = Tuple.try_decode_error(identifier, error) { return Some(e) }
+			if let Some(e) = Tuple.try_handle_error(identifier, error) { return Some(e) }
 		)* );
 
 		None

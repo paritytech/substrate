@@ -9,7 +9,7 @@
 //
 // 	http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
+
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
@@ -353,7 +353,7 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 				block,
 				verifier,
 				metrics.clone(),
-			)
+			).await
 		};
 
 		if let Some(metrics) = metrics.as_ref() {
@@ -384,7 +384,6 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 
 /// A future that will always `yield` on the first call of `poll` but schedules the current task for
 /// re-execution.
-
 ///
 /// This is done by getting the waker and calling `wake_by_ref` followed by returning `Pending`.
 /// The next time the `poll` is called, it will return `Ready`.
