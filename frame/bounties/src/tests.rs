@@ -1363,6 +1363,8 @@ fn award_claim_subbounty_works() {
 		// 3, Sub-curator accepts & award bounties.
 		// 5, Ensure parent bounty is not closed after two subbounties are closed/claimed.
 		// 6. Award the parent pounty and master-curator fee.
+		// 7. Observe fund transaction moment between Treasury, Bounty, Subbounty,
+		//    Curator, Subcurator & beneficiary.
 
 		// ===Pre-steps :: Make the bounty or parent bounty===
 		System::set_block_number(1);
@@ -1641,7 +1643,9 @@ fn close_subbounty_at_state_approved_works() {
 		// TestProcedure
 		// 1, Create bounty & move to active state with enough fund & master-curator.
 		// 2, Master-curator adds two subbounties & moved to approved state.
-		// 3, call close_subbounty()
+		// 3, call close_subbounty() & observe for behaviour of Curator gets slashed.
+		// 4. Observe fund transaction moment between Treasury, Bounty, Subbounty,
+		//    Curator, Subcurator & beneficiary.
 
 		// ===Pre-steps :: Make the bounty or parent bounty===
 		System::set_block_number(1);
@@ -1750,5 +1754,559 @@ fn close_subbounty_at_state_approved_works() {
 		// Subcurator or proposer of subbounty is slashed & lost deposit of 90
 		assert_eq!(Balances::free_balance(4), 19);
 		assert_eq!(Balances::reserved_balance(4), 2);
+	});
+}
+
+#[test]
+fn close_subbounty_at_state_funded_subcurator_proposed_works() {
+	new_test_ext().execute_with(|| {
+
+		// TestProcedure
+		// 1, Create bounty & move to active state with enough fund & master-curator.
+		// 2, Master-curator adds two subbounties & moved to funded & subcurator proposed state.
+		// 3, Call close_subbounty(), observe for bounty deposits are unreserved & no slashing.
+		// 4. Observe fund transaction moment between Treasury, Bounty, Subbounty,
+		//    Curator, Subcurator & beneficiary.
+
+		// ===Pre-steps :: Make the bounty or parent bounty===
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+
+		// Bouty curator initial balance
+		Balances::make_free_balance_be(&4, 201);
+		assert_eq!(Balances::free_balance(4), 201);
+		assert_eq!(Balances::reserved_balance(4), 0);
+
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 25, b"12345".to_vec()));
+
+		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 39);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
+
+		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
+
+		// bounty & treasury account balance
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 39);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		// amount 4 is reserved for curator fee
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 21);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 4);
+
+		// ===Pre-steps :: Add two subbounty===
+		// Acc-4 is the master curator & make sure enough
+		assert_eq!(Balances::free_balance(4), 199);
+		assert_eq!(Balances::reserved_balance(4), 2);
+
+		assert_ok!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-sb01".to_vec())
+		);
+
+		assert_eq!(last_event(), RawEvent::SubBountyApproved(0,1));
+
+		assert_eq!(Balances::free_balance(4), 109);
+		assert_eq!(Balances::reserved_balance(4), 92);
+
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 11);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 14);
+
+		assert_eq!(
+			Bounties::subbounties(0,1).unwrap().status,
+			BountyStatus::Approved,
+		);
+
+		assert_ok!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-sb02".to_vec())
+		);
+
+		assert_eq!(last_event(), RawEvent::SubBountyApproved(0,2));
+
+		assert_eq!(Balances::free_balance(4), 19);
+		assert_eq!(Balances::reserved_balance(4), 182);
+
+		// reserved for two subbounties & master currator fee
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 1);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 24);
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 39);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		assert_eq!(
+			Bounties::subbounties(0,2).unwrap().status,
+			BountyStatus::Approved,
+		);
+
+		// Move the subbounties to "Funded State"
+		System::set_block_number(4);
+		<Treasury as OnInitialize<u64>>::on_initialize(4);
+
+		// Test for the last funded subbounty
+		assert_eq!(last_event(), RawEvent::SubBountyFunded(0,2));
+
+		// Ensure Proposer/Master-Curator bond fund is unreserved.
+		assert_eq!(Balances::free_balance(4), 199);
+		assert_eq!(Balances::reserved_balance(4), 2);
+
+		// propose subcurator for subbounty-1.
+		assert_ok!(
+			Bounties::propose_subcurator(Origin::signed(4),0,1,5,2)
+		);
+
+		assert_eq!(Bounties::subbounties(0,1).unwrap().status,
+			BountyStatus::CuratorProposed {
+				curator: 5,
+			},
+		);
+
+		// Ensure subbounty-2 is at "Approved" state.
+		assert_eq!(
+			Bounties::subbounties(0,2).unwrap().status,
+			BountyStatus::Funded,
+		);
+
+		// ===Call close_subbounty===
+
+		// Subbounty-1
+		// TODO :: Have to recheck, Unable to close subbounty by root.
+		// assert_ok!(Bounties::close_subbounty(Origin::root(), 0, 1));
+		assert_ok!(Bounties::close_subbounty(Origin::signed(4), 0, 1));
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 20);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		// As expected fund reserved for subbounty moved back to parent bounty
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 11);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 14);
+
+		// No slash on Master-Curator
+		assert_eq!(Balances::free_balance(4), 199);
+		assert_eq!(Balances::reserved_balance(4), 2);
+
+		// Subbounty-2
+		assert_ok!(Bounties::close_subbounty(Origin::signed(4), 0, 2));
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 20);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		// As expected fund reserved for subbounty moved back to parent bounty
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 21);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 4);
+
+		// No slash on Master-Curator
+		assert_eq!(Balances::free_balance(4), 199);
+		assert_eq!(Balances::reserved_balance(4), 2);
+	});
+}
+
+#[test]
+fn close_subbounty_at_state_active_pendingpayout() {
+	new_test_ext().execute_with(|| {
+
+		// TestProcedure
+		// 1, Create bounty & move to active state with enough fund & master-curator.
+		// 2, Master-curator adds two subbounties & move Subbounty-1 to active &
+		//    Subbounty-2 to PendingPayout state.
+		// 3, Call close_subbounty(), observe for Subbounty-1 subcurator deposit not
+		//    gets slashed and Subbounty-2 returs error.
+		// 4. Observe fund transaction moment between Treasury, Bounty, Subbounty,
+		//    Curator, Subcurator & beneficiary.
+
+		// ===Pre-steps :: Make the bounty or parent bounty===
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+
+		// Bouty curator initial balance
+		Balances::make_free_balance_be(&4, 201);
+		assert_eq!(Balances::free_balance(4), 201);
+		assert_eq!(Balances::reserved_balance(4), 0);
+
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 25, b"12345".to_vec()));
+
+		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 39);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
+
+		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
+
+		// bounty & treasury account balance
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 39);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		// amount 4 is reserved for curator fee
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 21);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 4);
+
+		// ===Pre-steps :: Add two subbounty===
+		// Acc-4 is the master curator & make sure enough
+		assert_eq!(Balances::free_balance(4), 199);
+		assert_eq!(Balances::reserved_balance(4), 2);
+
+		assert_ok!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-sb01".to_vec())
+		);
+
+		assert_eq!(last_event(), RawEvent::SubBountyApproved(0,1));
+
+		assert_eq!(Balances::free_balance(4), 109);
+		assert_eq!(Balances::reserved_balance(4), 92);
+
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 11);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 14);
+
+		assert_eq!(
+			Bounties::subbounties(0,1).unwrap().status,
+			BountyStatus::Approved,
+		);
+
+		assert_ok!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-sb02".to_vec())
+		);
+
+		assert_eq!(last_event(), RawEvent::SubBountyApproved(0,2));
+
+		assert_eq!(Balances::free_balance(4), 19);
+		assert_eq!(Balances::reserved_balance(4), 182);
+
+		// reserved for two subbounties & master currator fee
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 1);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 24);
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 39);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		assert_eq!(
+			Bounties::subbounties(0,2).unwrap().status,
+			BountyStatus::Approved,
+		);
+
+		// Move the subbounties to "Funded State"
+		System::set_block_number(4);
+		<Treasury as OnInitialize<u64>>::on_initialize(4);
+
+		// Test for the last funded subbounty
+		assert_eq!(last_event(), RawEvent::SubBountyFunded(0,2));
+
+		// Ensure Proposer/Master-Curator bond fund is unreserved.
+		assert_eq!(Balances::free_balance(4), 199);
+		assert_eq!(Balances::reserved_balance(4), 2);
+
+		// Move subbounty-1 to active state.
+		Balances::make_free_balance_be(&5, 10);
+		Balances::make_free_balance_be(&6, 10);
+
+		assert_ok!(
+			Bounties::propose_subcurator(Origin::signed(4),0,1,5,2)
+		);
+
+		assert_ok!(
+			Bounties::accept_subcurator(Origin::signed(5),0,1)
+		);
+
+		assert_eq!(Bounties::subbounties(0,1).unwrap().status,
+			BountyStatus::Active {
+				curator: 5,
+				update_due: 24,
+			},
+		);
+
+		// Ensure Subcurator deposit got reserved.
+		assert_eq!(Balances::free_balance(5), 9);
+		assert_eq!(Balances::reserved_balance(5), 1);
+
+		// Move subbounty-2 to pending payout state.
+		assert_ok!(
+			Bounties::propose_subcurator(Origin::signed(4),0,2,6,2)
+		);
+
+		assert_ok!(
+			Bounties::accept_subcurator(Origin::signed(6),0,2)
+		);
+
+		assert_ok!(Bounties::award_subbounty(Origin::signed(6),0,2,7));
+
+		assert_eq!(Bounties::subbounties(0,2).unwrap().status,
+			BountyStatus::PendingPayout {
+				curator: 6,
+				beneficiary: 7,
+				unlock_at: 7,
+			},
+		);
+
+		// Ensure Subcurator deposit got reserved.
+		assert_eq!(Balances::free_balance(6), 9);
+		assert_eq!(Balances::reserved_balance(6), 1);
+
+		// ===Call close_subbounty===
+
+		// Subbounty-1
+		// TODO :: Have to recheck, Unable to close subbounty by root.
+		// assert_ok!(Bounties::close_subbounty(Origin::root(), 0, 1));
+		assert_ok!(Bounties::close_subbounty(Origin::signed(4), 0, 1));
+
+		// Subcurator deposit got unreserved without slashing.
+		assert_eq!(Balances::free_balance(5), 10);
+		assert_eq!(Balances::reserved_balance(5), 0);
+
+		// As expected fund reserved for subbounty moved back to parent bounty
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 11);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 14);
+
+		// Subbounty-2
+		assert_noop!(
+			Bounties::close_subbounty(Origin::signed(4), 0, 2),
+			Error::<Test>::PendingPayout,
+		);
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 20);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		// As expected fund reserved for subbounty moved back to parent bounty
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 11);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 14);
+
+		// No slash on Master-Curator
+		assert_eq!(Balances::free_balance(4), 199);
+		assert_eq!(Balances::reserved_balance(4), 2);
+	});
+}
+
+#[test]
+fn close_subbounty_from_close_bounty_works() {
+	new_test_ext().execute_with(|| {
+
+		// TestProcedure
+		// 1, Create bounty & move to active state with enough fund & master-curator.
+		// 2, Master-curator adds two subbounties & move Subbounty-1 to active &
+		//    Subbounty-2 to PendingPayout state.
+		// 3, Call close_bounty(), observe for Subbounty-1 got closed with
+		//    subcurator deposit not gets slashed and Subbounty-2 returs error.
+		// 4, Check the state of parent bounty for Invalid index.
+		// 5, Claim on Subbounty-2 should work without any issue.
+		// 6. Observe fund transaction moment between Treasury, Bounty, Subbounty,
+		//    Curator, Subcurator & beneficiary.
+
+		// ===Pre-steps :: Make the bounty or parent bounty===
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+
+		// Bouty curator initial balance
+		Balances::make_free_balance_be(&4, 201);
+		assert_eq!(Balances::free_balance(4), 201);
+		assert_eq!(Balances::reserved_balance(4), 0);
+
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 25, b"12345".to_vec()));
+
+		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 101);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 39);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
+
+		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
+
+		// bounty & treasury account balance
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 39);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		// amount 4 is reserved for curator fee
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 21);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 4);
+
+		// ===Pre-steps :: Add two subbounty===
+		// Acc-4 is the master curator & make sure enough
+		assert_eq!(Balances::free_balance(4), 199);
+		assert_eq!(Balances::reserved_balance(4), 2);
+
+		assert_ok!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-sb01".to_vec())
+		);
+
+		assert_eq!(last_event(), RawEvent::SubBountyApproved(0,1));
+
+		assert_eq!(Balances::free_balance(4), 109);
+		assert_eq!(Balances::reserved_balance(4), 92);
+
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 11);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 14);
+
+		assert_eq!(
+			Bounties::subbounties(0,1).unwrap().status,
+			BountyStatus::Approved,
+		);
+
+		assert_ok!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-sb02".to_vec())
+		);
+
+		assert_eq!(last_event(), RawEvent::SubBountyApproved(0,2));
+
+		assert_eq!(Balances::free_balance(4), 19);
+		assert_eq!(Balances::reserved_balance(4), 182);
+
+		// reserved for two subbounties & master currator fee
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 1);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 24);
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 39);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
+		assert_eq!(
+			Bounties::subbounties(0,2).unwrap().status,
+			BountyStatus::Approved,
+		);
+
+		// Move the subbounties to "Funded State"
+		System::set_block_number(4);
+		<Treasury as OnInitialize<u64>>::on_initialize(4);
+
+		// Test for the last funded subbounty
+		assert_eq!(last_event(), RawEvent::SubBountyFunded(0,2));
+
+		// Ensure Proposer/Master-Curator bond fund is unreserved.
+		assert_eq!(Balances::free_balance(4), 199);
+		assert_eq!(Balances::reserved_balance(4), 2);
+
+		// Move subbounty-1 to active state.
+		Balances::make_free_balance_be(&5, 10);
+		Balances::make_free_balance_be(&6, 10);
+		Balances::make_free_balance_be(&7, 10);
+
+		assert_ok!(
+			Bounties::propose_subcurator(Origin::signed(4),0,1,5,2)
+		);
+
+		assert_ok!(
+			Bounties::accept_subcurator(Origin::signed(5),0,1)
+		);
+
+		assert_eq!(Bounties::subbounties(0,1).unwrap().status,
+			BountyStatus::Active {
+				curator: 5,
+				update_due: 24,
+			},
+		);
+
+		// Ensure Subcurator deposit got reserved.
+		assert_eq!(Balances::free_balance(5), 9);
+		assert_eq!(Balances::reserved_balance(5), 1);
+
+		// Move subbounty-2 to pending payout state.
+		assert_ok!(
+			Bounties::propose_subcurator(Origin::signed(4),0,2,6,2)
+		);
+
+		assert_ok!(
+			Bounties::accept_subcurator(Origin::signed(6),0,2)
+		);
+
+		assert_ok!(Bounties::award_subbounty(Origin::signed(6),0,2,7));
+
+		assert_eq!(Bounties::subbounties(0,2).unwrap().status,
+			BountyStatus::PendingPayout {
+				curator: 6,
+				beneficiary: 7,
+				unlock_at: 7,
+			},
+		);
+
+		// Ensure Subcurator deposit got reserved.
+		assert_eq!(Balances::free_balance(6), 9);
+		assert_eq!(Balances::reserved_balance(6), 1);
+
+		// ===Call close_bounty===
+		// close parent bounty
+		assert_ok!(Bounties::close_bounty(Origin::root(), 0));
+
+		// Subbounty-1
+		// Check for InvalidIndex error
+		assert_noop!(
+			Bounties::close_subbounty(Origin::signed(4), 0, 1),
+			Error::<Test>::InvalidIndex,
+		);
+
+		// Master curator deposit got unreserved without slashing.
+		assert_eq!(Balances::free_balance(4), 201);
+		assert_eq!(Balances::reserved_balance(4), 0);
+
+		// Subcurator deposit got unreserved without slashing.
+		assert_eq!(Balances::free_balance(5), 10);
+		assert_eq!(Balances::reserved_balance(5), 0);
+
+		// As expected fund is holded for subbounty-2 payout
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 0);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 10);
+
+		// Subbounty-2
+		// close_subbounty check for active state of parent bounty
+		// as expected call throws InvalidIndex error.
+		assert_noop!(
+			Bounties::close_subbounty(Origin::signed(4), 0, 2),
+			Error::<Test>::InvalidIndex,
+		);
+
+		// ensure subbounty-2 is still in pending payout state.
+		assert_eq!(Bounties::subbounties(0,2).unwrap().status,
+			BountyStatus::PendingPayout {
+				curator: 6,
+				beneficiary: 7,
+				unlock_at: 7,
+			},
+		);
+
+		// move it to mature state.
+		assert_noop!(
+			Bounties::claim_subbounty(Origin::signed(7),0,2),
+			Error::<Test>::Premature,
+		);
+
+		System::set_block_number(7);
+
+		// Claim the payout os Subbounty-2
+		assert_ok!(Bounties::claim_subbounty(Origin::signed(7),0,2));
+
+		// Ensure subcurator is paid with fee & unreserve the deposit
+		assert_eq!(Balances::free_balance(6), 12);
+		assert_eq!(Balances::reserved_balance(6), 0);
+
+		// Ensure beneficiary got paid
+		assert_eq!(Balances::free_balance(7), 18);
+		assert_eq!(Balances::reserved_balance(7), 0);
+
+		// No change in master curator balance
+		assert_eq!(Balances::free_balance(4), 201);
+		assert_eq!(Balances::reserved_balance(4), 0);
+
+		// graceful cleanup on parent bounty & treasury account
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 0);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 0);
+
+		assert_eq!(Balances::free_balance(Treasury::account_id()), 35);
+		assert_eq!(Balances::reserved_balance(Treasury::account_id()), 0);
+
 	});
 }

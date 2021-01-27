@@ -821,7 +821,7 @@ decl_module! {
 						ensure!(value >= T::BountyValueMinimum::get(),
 							Error::<T>::InvalidValue,
 						);
-						ensure!(bounty.subbountycount < T::MaxSubBountyCount::get() as u32,
+						ensure!((bounty.activesubbounty.len() as u32) < T::MaxSubBountyCount::get() as u32,
 							Error::<T>::SubBountyMaxOverflow,
 						);
 
@@ -1171,8 +1171,14 @@ decl_module! {
 		) {
 			let _ = ensure_signed(origin)?;
 
-			// Ensure parent bounty is Active
-			let master_curator = Self::ensure_bounty_active(bounty_id)?;
+			// TODO :: Have to recheck, ignoring the requirement of
+			// parent bounty should be active for claiming the subbounty.
+			// Since subbounty is executed & in waiting period of PendingPayout.
+			// We can gracefully execute this call, without having dependency on
+			// state of parent bounty, This enables to call close_subbounty()
+			// recursively from close_bounty() without any issue.
+			// // Ensure parent bounty is Active
+			// let master_curator = Self::ensure_bounty_active(bounty_id)?;
 
 			// Ensure subbounty is in expected state
 			SubBounties::<T>::try_mutate_exists(bounty_id,
@@ -1191,11 +1197,12 @@ decl_module! {
 					let bounty_account = Self::bounty_account_id(bounty_id);
 
 					// Make curator fee payment & unreserve the deposit
-					// if subcurator != curator
-					if *subcurator != master_curator {
+					if subbounty.curator_deposit != Zero::zero() {
 						let _ = T::Currency::unreserve(&subcurator,
 							subbounty.curator_deposit
 						);
+					}
+					if subbounty.fee != Zero::zero() {
 						let _ = T::Currency::repatriate_reserved(
 							&bounty_account,
 							&subcurator,
@@ -1203,6 +1210,7 @@ decl_module! {
 							BalanceStatus::Free,
 						);
 					}
+
 					// Make payout to beneficiary
 					let payout = subbounty.value.saturating_sub(subbounty.fee);
 					let _ = T::Currency::repatriate_reserved(
@@ -1223,9 +1231,9 @@ decl_module! {
 					Bounties::<T>::try_mutate_exists(bounty_id,
 						|maybe_bounty| -> DispatchResult
 						{
-							let bounty = maybe_bounty
-								.as_mut().ok_or(Error::<T>::InvalidIndex)?;
-							bounty.activesubbounty.retain(|h| h != &subbounty_id);
+							if let Some(bounty) = maybe_bounty.as_mut() {
+								bounty.activesubbounty.retain(|h| h != &subbounty_id);
+							}
 							Ok(())
 						}
 					)?;
