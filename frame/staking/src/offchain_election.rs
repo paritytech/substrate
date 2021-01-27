@@ -92,21 +92,22 @@ pub(crate) fn set_check_offchain_execution_status<T: Config>(
 ) -> Result<(), OffchainElectionError> {
 	let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 
-	let mutate_stat = storage.mutate(|maybe_head: Option<Option<T::BlockNumber>>| {
-		match maybe_head {
-			Some(Some(head)) if now < head => Err(OffchainElectionError::Fork),
-			Some(Some(head)) if now >= head && now <= head + threshold => {
-				Err(OffchainElectionError::TooRecent)
+	let mutate_stat =
+		storage.mutate(|maybe_head: Option<Option<T::BlockNumber>>| {
+			match maybe_head {
+				Some(Some(head)) if now < head => Err(OffchainElectionError::Fork),
+				Some(Some(head)) if now >= head && now <= head + threshold => {
+					Err(OffchainElectionError::TooRecent)
+				}
+				Some(Some(head)) if now > head + threshold => {
+					// we can allow again now. Write the new head.
+					Ok(now)
+				}
+				_ => {
+					// value doesn't exists. Probably this node just booted up. Write, and allow.
+					Ok(now)
+				}
 			}
-			Some(Some(head)) if now > head + threshold => {
-				// we can allow again now. Write the new head.
-				Ok(now)
-			}
-			_ => {
-				// value doesn't exists. Probably this node just booted up. Write, and allow.
-				Ok(now)
-			}
-		}
 	});
 
 	crate::log!(trace, "attempting to acquire the OCW lock at {:?} = {:?}", now, mutate_stat);
@@ -126,13 +127,8 @@ pub(crate) const OFFCHAIN_QUEUED_CALL: &[u8] = b"parity/staking-election/call";
 /// Save a given call OCW storage.
 pub(crate) fn save_solution<T: Config>(call: Call<T>) -> Result<(), OffchainElectionError> {
 	let storage = StorageValueRef::persistent(&OFFCHAIN_QUEUED_CALL);
-	let set_outcome = storage.mutate::<_, OffchainElectionError, _>(|maybe_call| {
-		match maybe_call {
-			// under any case, write the new value. This means that we don't need to clear the
-			// solution. Each era, it will be overwritten.
-			_ => Ok(call),
-		}
-	});
+	// in all cases, just write the new value regardless of the the old one, if any.
+	let set_outcome = storage.mutate::<_, OffchainElectionError, _>(|_| Ok(call));
 
 	match set_outcome {
 		Ok(Ok(_)) => Ok(()),
@@ -212,7 +208,7 @@ pub(crate) fn compute_offchain_election<T: Config>() -> Result<Call<T>, Offchain
 
 	crate::log!(
 		info,
-		"💸 [OCW] prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
+		"💸 prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
 		iters,
 		score,
 	);
@@ -333,7 +329,7 @@ pub fn maximum_compact_len<W: crate::WeightInfo>(
 /// Thus, we reside to stripping away some voters. This means only changing the `compact` struct.
 ///
 /// Note that the solution is already computed, and the winners are elected based on the merit of
-/// teh entire stake in the system. Nonetheless, some of the voters will be removed further down the
+/// the entire stake in the system. Nonetheless, some of the voters will be removed further down the
 /// line.
 ///
 /// Indeed, the score must be computed **after** this step. If this step reduces the score too much,
