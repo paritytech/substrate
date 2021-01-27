@@ -23,7 +23,11 @@
 
 pub use crate::chain::Client;
 pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
-pub use crate::request_responses::{IncomingRequest, ProtocolConfig as RequestResponseConfig};
+pub use crate::request_responses::{
+	IncomingRequest,
+	OutgoingResponse,
+	ProtocolConfig as RequestResponseConfig,
+};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in

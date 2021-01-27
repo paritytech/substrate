@@ -28,8 +28,8 @@ use crate::{
 	schema,
 	PeerId,
 };
-use crate::request_responses::{IncomingRequest, ProtocolConfig, Response};
-use futures::{channel::{mpsc, oneshot},  prelude::*};
+use crate::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
+use futures::{channel::mpsc,  prelude::*};
 use prost::Message;
 use sc_client_api::{
 	StorageProof,
@@ -82,14 +82,14 @@ impl<B: Block> LightClientRequestHandler<B> {
 
 			match self.handle_request(peer, payload) {
 				Ok(response_data) => {
-					let response = Response { result: Ok(response_data), reputation_changes: None };
+					let response = OutgoingResponse { result: Ok(response_data), reputation_changes: Vec::new() };
 					match pending_response.send(response) {
 						Ok(()) => debug!(
 							target: LOG_TARGET,
 							"Handled light client request from {}.",
 							peer,
 						),
-						Err(e) => debug!(
+						Err(_) => debug!(
 							target: LOG_TARGET,
 							"Failed to handle light client request from {}: {}",
 							peer, HandleRequestError::SendResponse,
@@ -105,12 +105,12 @@ impl<B: Block> LightClientRequestHandler<B> {
 
 					let reputation_changes = match e {
 						HandleRequestError::BadRequest(_) => {
-							Some(vec![ReputationChange::new(-(1 << 12), "bad request")])
+							vec![ReputationChange::new(-(1 << 12), "bad request")]
 						}
-						_ => None,
+						_ => Vec::new(),
 					};
 
-					let response = Response { result: Err(()), reputation_changes };
+					let response = OutgoingResponse { result: Err(()), reputation_changes };
 					if pending_response.send(response).is_err() {
 						debug!(
 							target: LOG_TARGET,
