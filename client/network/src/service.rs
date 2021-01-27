@@ -82,6 +82,7 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	borrow::Cow,
+	cmp,
 	collections::{HashMap, HashSet},
 	convert::TryFrom as _,
 	fs,
@@ -310,8 +311,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 						.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::max_value()));
 
 					// A "default" max is added to cover all the other protocols: ping, identify,
-					// kademlia.
-					let default_max = 1024 * 1024;
+					// kademlia, block announces, and transactions.
+					let default_max = cmp::max(
+						1024 * 1024,
+						usize::try_from(protocol::BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE)
+							.unwrap_or(usize::max_value())
+					);
+
 					iter::once(default_max)
 						.chain(requests_max).chain(responses_max).chain(notifs_max)
 						.max().expect("iterator known to always yield at least one element; qed")
