@@ -29,18 +29,12 @@ pub type InherentType = u64;
 pub trait AuraInherentData {
 	/// Get aura inherent data.
 	fn aura_inherent_data(&self) ->Result<InherentType, Error>;
-	/// Replace aura inherent data.
-	fn aura_replace_inherent_data(&mut self, new: InherentType);
 }
 
 impl AuraInherentData for InherentData {
 	fn aura_inherent_data(&self) ->Result<InherentType, Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
 			.and_then(|r| r.ok_or_else(|| "Aura inherent data not found".into()))
-	}
-
-	fn aura_replace_inherent_data(&mut self, new: InherentType) {
-		self.replace_data(INHERENT_IDENTIFIER, &new);
 	}
 }
 
@@ -68,13 +62,19 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 		inherent_data.put_data(INHERENT_IDENTIFIER, &self.slot_num)
 	}
 
-	fn try_decode_error(
+	fn try_handle_error(
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> Option<Box<dyn std::error::Error + Send + Sync>> {
+	) -> sp_inherents::TryHandleErrorResult {
 		use codec::Decode;
 
-		sp_inherents::Error::decode(&mut &error[..]).map(|e| Box::new(e) as Box<_>).ok()
+		if *identifier != INHERENT_IDENTIFIER {
+			return None;
+		}
+
+		let error = sp_inherents::Error::decode(&mut &error[..]).ok()?;
+
+		Some(Box::pin(async move { Err(Box::new(error) as Box<_>) }))
 	}
 }

@@ -21,8 +21,23 @@
 
 use codec::{Decode, Encode};
 
-/// A slot number.
-pub type SlotNumber = u64;
+/// Unit type wrapper that represents a slot.
+#[derive(Debug, Encode, Decode, PartialEq, Eq, PartialOrd, Clone, Copy)]
+pub struct Slot(pub u64);
+
+impl Deref for Slot {
+	type Target = u64;
+
+	fn deref(&self) -> &u64 {
+		&self.0
+	}
+}
+
+impl fmt::Display for Slot {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
 
 /// Represents an equivocation proof. An equivocation happens when a validator
 /// produces more than one block on the same slot. The proof of equivocation
@@ -32,8 +47,8 @@ pub type SlotNumber = u64;
 pub struct EquivocationProof<Header, Id> {
 	/// Returns the authority id of the equivocator.
 	pub offender: Id,
-	/// The slot number at which the equivocation happened.
-	pub slot_number: SlotNumber,
+	/// The slot at which the equivocation happened.
+	pub slot: Slot,
 	/// The first header involved in the equivocation.
 	pub first_header: Header,
 	/// The second header involved in the equivocation.

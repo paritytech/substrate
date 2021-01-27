@@ -290,6 +290,17 @@ where
 	}
 }
 
+/// Result of [`InherentDataProvider::try_handle_error`].
+#[cfg(feature = "std")]
+pub type TryHandleErrorResult =
+	Option<
+		std::pin::Pin<
+			Box<
+				dyn std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send
+			>
+		>
+	>;
+
 /// Something that provides inherent data.
 #[cfg(feature = "std")]
 pub trait InherentDataProvider {
@@ -311,7 +322,7 @@ pub trait InherentDataProvider {
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> Option<std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send>>>;
+	) -> TryHandleErrorResult;
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(10)]

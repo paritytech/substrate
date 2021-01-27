@@ -53,7 +53,7 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 pub fn check_equivocation<C, H, P>(
 	backend: &C,
 	slot_now: u64,
-	slot: u64,
+	slot: crate::Slot,
 	header: &H,
 	signer: &P,
 ) -> ClientResult<Option<EquivocationProof<H, P>>>

@@ -106,10 +106,10 @@ pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration> where
 }
 
 /// Get slot author for given block along with authorities.
-fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
+fn slot_author<P: Pair>(slot_num: Slot, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
 	if authorities.is_empty() { return None }
 
-	let idx = slot_num % (authorities.len() as u64);
+	let idx = *slot_num % (authorities.len() as u64);
 	assert!(
 		idx <= usize::max_value() as u64,
 		"It is impossible to have a vector with length beyond the address space; qed",
@@ -150,7 +150,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error, IDP>(
 	SO: SyncOracle + Send + Sync + Clone,
 	CAW: CanAuthorWith<B> + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
-	IDP: CreateInherentDataProviders,
+	IDP: CreateInherentDataProviders<B, ()>,
 	IDP::InherentDataProviders: InherentDataProviderExt,
 {
 	let worker = AuraWorker {
@@ -170,7 +170,6 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error, IDP>(
 		worker,
 		sync_oracle,
 		inherent_data_providers,
-		AuraSlotCompatible,
 		can_author_with,
 	))
 }
@@ -234,7 +233,7 @@ where
 	fn claim_slot(
 		&self,
 		_header: &B::Header,
-		slot_number: u64,
+		slot_number: Slot,
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot_number, epoch_data);
@@ -384,9 +383,11 @@ enum Error<B: BlockT> {
 	DataProvider(String),
 	Runtime(String),
 	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
-	SlotNumberMustIncrease(u64, u64),
+	SlotNumberMustIncrease(Slot, Slot),
 	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
 	ParentUnavailable(B::Hash, B::Hash),
+	#[display(fmt = "Unknown inherent error for identifier: {}", "String::from_utf8_lossy(_0)")]
+	UnknownInherentError(sp_inherents::InherentIdentifier),
 }
 
 impl<B: BlockT> std::convert::From<Error<B>> for String {
@@ -395,13 +396,13 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 	}
 }
 
-fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, Error<B>>
+fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<Slot, Error<B>>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Signature: Decode,
 		P::Public: Encode + Decode + PartialEq + Clone,
 {
 	if header.number().is_zero() {
-		return Ok(0);
+		return Ok(Slot(0));
 	}
 
 	let mut pre_digest: Option<u64> = None;
@@ -413,21 +414,20 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, Error<
 			(s, false) => pre_digest = s,
 		}
 	}
-	pre_digest.ok_or_else(|| aura_err(Error::NoDigestFound))
+	pre_digest.ok_or_else(|| aura_err(Error::NoDigestFound)).map(Slot)
 }
 
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header and the digest item containing the seal.
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
-//
 fn check_header<C, B: BlockT, P: Pair>(
 	client: &C,
-	slot_now: u64,
+	slot_now: Slot,
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
-) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, Error<B>> where
+) -> Result<CheckedHeader<B::Header, (Slot, DigestItemFor<B>)>, Error<B>> where
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P::Signature: Decode,
 	C: sc_client_api::backend::AuxStore,
@@ -481,26 +481,28 @@ fn check_header<C, B: BlockT, P: Pair>(
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, P, CAW> {
+pub struct AuraVerifier<C, P, CAW, IDP> {
 	client: Arc<C>,
 	phantom: PhantomData<P>,
-	inherent_data_providers: sp_inherents::InherentDataProviders,
+	inherent_data_providers: IDP,
 	can_author_with: CAW,
 }
 
-impl<C, P, CAW> AuraVerifier<C, P, CAW> where
+impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
 	P: Send + Sync + 'static,
 	CAW: Send + Sync + 'static,
+	IDP: Send,
 {
 	async fn check_inherents<B: BlockT>(
 		&self,
 		block: B,
 		block_id: BlockId<B>,
-		inherent_data: InherentData,
+		slot: Slot,
 		timestamp_now: u64,
 	) -> Result<(), Error<B>> where
 		C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
 		CAW: CanAuthorWith<B>,
+		IDP: CreateInherentDataProviders<B, Slot>,
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
@@ -514,6 +516,13 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 			return Ok(())
 		}
 
+		let inherent_data_providers = self.inherent_data_providers.create_inherent_data_providers(
+			parent_hash,
+			slot_num,
+		)?;
+
+		let inherent_data = inherent_data_providers.create_inherent_data()?;
+
 		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
 			block,
@@ -523,30 +532,9 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 		if !inherent_res.ok() {
 			inherent_res
 				.into_errors()
-				.try_for_each(|(i, e)| match TIError::try_from(&i, &e) {
-					Some(TIError::ValidAtTimestamp(timestamp)) => {
-						// halt import until timestamp is valid.
-						// reject when too far ahead.
-						if timestamp > timestamp_now + MAX_TIMESTAMP_DRIFT_SECS {
-							return Err(Error::TooFarInFuture);
-						}
-
-						let diff = timestamp.saturating_sub(timestamp_now);
-						info!(
-							target: "aura",
-							"halting for block {} seconds in the future",
-							diff,
-						);
-						telemetry!(CONSENSUS_INFO; "aura.halting_for_future_block";
-							"diff" => ?diff
-						);
-						thread::sleep(Duration::from_secs(diff));
-						Ok(())
-					},
-					Some(TIError::Other(e)) => Err(Error::Runtime(e.into())),
-					None => Err(Error::DataProvider(
-						self.inherent_data_providers.error_to_string(&i, &e)
-					)),
+				.try_for_each(|(i, e)| match inherent_data_providers.try_handle_error(i, e) {
+					Some(fut) => fut.await.map_err(Into::into),
+					None => Error::UnknownInherentError(i),
 				})
 		} else {
 			Ok(())
@@ -555,7 +543,7 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 }
 
 #[async_trait::async_trait]
-impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
+impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> where
 	C: ProvideRuntimeApi<B> +
 		Send +
 		Sync +
@@ -568,6 +556,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
+	IDP: CreateInherentDataProviders<B, Slot> + Send + Sync,
 {
 	async fn verify(
 		&mut self,
@@ -576,11 +565,6 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let mut inherent_data = self.inherent_data_providers
-			.create_inherent_data()
-			.map_err(|e| e.into_string())?;
-		let (timestamp_now, slot_now, _) = AuraSlotCompatible.extract_timestamp_and_slot(&inherent_data)
-			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
@@ -617,7 +601,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 						self.check_inherents(
 							block.clone(),
 							BlockId::Hash(parent_hash),
-							inherent_data,
+							slot_num,
 							timestamp_now,
 						).await.map_err(|e| e.to_string())?;
 					}
@@ -835,7 +819,7 @@ pub fn import_queue<B, I, C, P, S, CAW, IDP>(
 	P::Signature: Encode + Decode,
 	S: sp_core::traits::SpawnNamed,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
-	IDP: CreateInherentDataProviders<B, Slot>
+	IDP: CreateInherentDataProviders<B, Slot> + Sync + Send + 'static,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;

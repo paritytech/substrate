@@ -50,23 +50,6 @@ use sp_runtime::{
 };
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
-#[derive(Debug, Encode, Decode, PartialEq, Eq, PartialOrd, Clone, Copy)]
-pub struct Slot(pub u64);
-
-impl Deref for Slot {
-	type Target = u64;
-
-	fn deref(&self) -> &u64 {
-		&self.0
-	}
-}
-
-impl fmt::Display for Slot {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
-
 /// The changes that need to applied to the storage to create the state for a block.
 ///
 /// See [`sp_state_machine::StorageChanges`] for more information.
@@ -450,12 +433,12 @@ where
 		self.provide_inherent_data(inherent_data)
 	}
 
-	fn try_decode_error(
+	fn try_handle_error(
 		&self,
 		identifier: &sp_inherents::InherentIdentifier,
 		error: &[u8],
-	) -> Option<Box<dyn std::error::Error + Send + Sync>> {
-		self.wrapped.try_decode_error(identifier, error)
+	) -> sp_inherents::TryHandleErrorResult {
+		self.wrapped.try_handle_error(identifier, error)
 	}
 }
 
@@ -535,7 +518,7 @@ where
 pub enum CheckedHeader<H, S> {
 	/// A header which has slot in the future. this is the full header (not stripped)
 	/// and the slot in which it should be processed.
-	Deferred(H, u64),
+	Deferred(H, Slot),
 	/// A header which is fully checked, including signature. This is the pre-header
 	/// accompanied by the seal components.
 	///

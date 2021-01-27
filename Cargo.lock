@@ -7084,7 +7084,7 @@ name = "sc-finality-grandpa-warp-sync"
 version = "0.8.0"
 dependencies = [
  "derive_more",
- "futures 0.3.9",
+ "futures 0.3.12",
  "log",
  "num-traits",
  "parity-scale-codec",
@@ -7552,8 +7552,8 @@ dependencies = [
 name = "sc-telemetry"
 version = "2.0.1"
 dependencies = [
+ "chrono",
  "futures 0.3.12",
- "futures-timer 3.0.2",
  "libp2p",
  "log",
  "parking_lot 0.11.1",
