@@ -351,8 +351,7 @@ impl<B: BlockT> CacheChanges<B> {
 			.cloned()
 			.collect();
 
-		let mut retracted_vec;
-		let mut retracted = retracted;
+		let mut retracted = std::borrow::Cow::Borrowed(retracted);
 		if let Some(commit_hash) = &commit_hash {
 			if let Some(m) = cache.modifications.iter_mut().find(|m| &m.hash == commit_hash) {
 				if m.is_canon != is_best {
@@ -361,14 +360,12 @@ impl<B: BlockT> CacheChanges<B> {
 					if is_best {
 						enacted.push(commit_hash.clone());
 					} else {
-						retracted_vec = retracted.to_vec();
-						retracted_vec.push(commit_hash.clone());
-						retracted = retracted_vec.as_slice();
+						retracted.to_mut().push(commit_hash.clone());
 					}
 				}
 			}
 		}
-		cache.sync(&enacted, retracted);
+		cache.sync(&enacted, &retracted);
 		// Propagate cache only if committing on top of the latest canonical state
 		// blocks are ordered by number and only one block with a given number is marked as canonical
 		// (contributed to canonical state cache)
