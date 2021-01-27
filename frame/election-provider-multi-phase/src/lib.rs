@@ -44,7 +44,6 @@
 //! Each of the phases can be disabled by essentially setting their length to zero. If both phases
 //! have length zero, then the pallet essentially runs only the fallback strategy, denoted by
 //! [`Config::FallbackStrategy`].
-//!
 //! ### Signed Phase
 //!
 //!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
@@ -136,6 +135,24 @@
 //! Note that both accuracies are of great importance. The offchain solution should be as small as
 //! possible, reducing solutions size/weight. The on-chain solution can use more space for accuracy,
 //! but should still be fast to prevent massively large blocks in case of a fallback.
+//!
+//! ## Error types
+//!
+//! This pallet provides a verbose error system to ease future debugging and debugging. The
+//! overall hierarchy of errors is as follows:
+//!
+//! 1. [`pallet::Error`]: These are the errors that can be returned in the dispatchables of the
+//!    pallet, either signed or unsigned. Since decomposition with nested enums is not possible
+//!    here, they are prefixed with the logical sub-system to which they belong.
+//! 2. [`ElectionError`]: These are the errors that can be generated while the pallet is doing
+//!    something in automatic scenarios, such as `offchain_worker` or `on_initialize`. These errors
+//!    are helpful for logging and are thus nested as:
+//!    - [`ElectionError::Miner`]: wraps a [`unsigned::MinerError`].
+//!    - [`ElectionError::Feasibility`]: wraps a [`FeasibilityError`].
+//!    - [`ElectionError::OnChainFallback`]: wraps a [`sp_election_providers::onchain::Error`].
+//!
+//! Note that there could be an overlap between these sub-errors. For example, A
+//! `SnapshotUnavailable` can happen in both miner and feasibility check phase.
 //!
 //! ## Future Plans
 //!
@@ -374,23 +391,6 @@ pub struct ReadySolution<A> {
 	compute: ElectionCompute,
 }
 
-/// Size of the snapshot from which the solution was derived.
-///
-/// This is needed for proper weight calculation.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
-pub struct SolutionSize {
-	/// Number of all voters.
-	///
-	/// This must match the on-chain snapshot.
-	#[codec(compact)]
-	voters: u32,
-	/// Number of all targets.
-	///
-	/// This must match the on-chain snapshot.
-	#[codec(compact)]
-	targets: u32,
-}
-
 /// A snapshot of all the data that is needed for en entire round. They are provided by
 /// [`ElectionDataProvider`] and are kept around until the round is finished.
 ///
@@ -403,51 +403,39 @@ pub struct RoundSnapshot<A> {
 	pub targets: Vec<A>,
 }
 
-/// Some metadata related to snapshot.
+/// Encodes the length of a solution or a snapshot.
 ///
-/// In this pallet, there are cases where we want to read the whole snapshot (voters, targets,
-/// desired), and cases that we are interested in just the length of these values. The former favors
-/// the snapshot to be stored in one struct (as it is now) while the latter prefers them to be
-/// separate to enable the use of `decode_len`. This approach is a middle ground, storing the
-/// snapshot as one struct, whilst storing the lengths separately.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct RoundSnapshotMetadata {
+/// This is stored automatically on-chain, and it contains the **size of the entire snapshot**.
+/// This is also used in dispatchables as weight witness data and should **only contain the size of
+/// the presented solution**, not the entire snapshot.
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
+pub struct SolutionOrSnapshotSize {
 	/// The length of voters.
-	voters_len: u32,
+	#[codec(compact)]
+	voters: u32,
 	/// The length of targets.
-	targets_len: u32,
+	#[codec(compact)]
+	targets: u32,
 }
 
 /// Internal errors of the pallet.
 ///
 /// Note that this is different from [`pallet::Error`].
-#[derive(RuntimeDebug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ElectionError {
-	/// A feasibility error.
+	/// An error happened in the feasibility check sub-system.
 	Feasibility(FeasibilityError),
+	/// An error in the miner (offchain) sub-system.
+	Miner(unsigned::MinerError),
 	/// An error in the on-chain fallback.
 	OnChainFallback(onchain::Error),
-	/// No fallback is configured.
+	/// No fallback is configured. This is a special case.
 	NoFallbackConfigured,
-	/// An internal error in the NPoS elections crate.
-	NposElections(sp_npos_elections::Error),
-	/// Snapshot data was unavailable unexpectedly.
-	SnapshotUnAvailable,
-	/// Submitting a transaction to the pool failed.
-	PoolSubmissionFailed,
-	/// The pre-dispatch checks failed for the mined solution.
-	PreDispatchChecksFailed,
 }
 
 impl From<onchain::Error> for ElectionError {
 	fn from(e: onchain::Error) -> Self {
 		ElectionError::OnChainFallback(e)
-	}
-}
-
-impl From<sp_npos_elections::Error> for ElectionError {
-	fn from(e: sp_npos_elections::Error) -> Self {
-		ElectionError::NposElections(e)
 	}
 }
 
@@ -457,8 +445,14 @@ impl From<FeasibilityError> for ElectionError {
 	}
 }
 
+impl From<unsigned::MinerError> for ElectionError {
+	fn from(e: unsigned::MinerError) -> Self {
+		ElectionError::Miner(e)
+	}
+}
+
 /// Errors that can happen in the feasibility check.
-#[derive(RuntimeDebug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum FeasibilityError {
 	/// Wrong number of winners presented.
 	WrongWinnerCount,
@@ -599,12 +593,10 @@ pub mod pallet {
 			// We only run the OCW in the fist block of the unsigned phase.
 			if Self::current_phase().is_unsigned_open_at(n) {
 				match Self::try_acquire_offchain_lock(n) {
-					Ok(_) => match Self::mine_and_submit() {
-						Ok(_) => {
-							log!(info, "successfully submitted a solution via OCW at block {:?}", n)
-						}
-						Err(e) => log!(error, "error while submitting transaction in OCW: {:?}", e),
-					},
+					Ok(_) => {
+						let outcome = Self::mine_and_submit().map_err(ElectionError::from);
+						log!(info, "miner exeuction done: {:?}", outcome);
+					}
 					Err(why) => log!(warn, "denied offchain worker: {:?}", why),
 				}
 			}
@@ -672,7 +664,7 @@ pub mod pallet {
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
 			solution: RawSolution<CompactOf<T>>,
-			witness: SolutionSize,
+			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			let error_message = "Invalid unsigned submission must produce invalid block and \
@@ -682,12 +674,12 @@ pub mod pallet {
 			Self::unsigned_pre_dispatch_checks(&solution).expect(error_message);
 
 			// ensure witness was correct.
-			let RoundSnapshotMetadata { voters_len, targets_len } =
+			let SolutionOrSnapshotSize { voters, targets } =
 				Self::snapshot_metadata().expect(error_message);
 
 			// NOTE: we are asserting, not `ensure`ing -- we want to panic here.
-			assert!(voters_len as u32 == witness.voters, error_message);
-			assert!(targets_len as u32 == witness.targets, error_message);
+			assert!(voters as u32 == witness.voters, error_message);
+			assert!(targets as u32 == witness.targets, error_message);
 
 			let ready =
 				Self::feasibility_check(solution, ElectionCompute::Unsigned).expect(error_message);
@@ -727,24 +719,15 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Submission was too early.
-		EarlySubmission,
+		PreDispatchEarlySubmission,
 		/// Wrong number of winners presented.
-		WrongWinnerCount,
+		PreDispatchWrongWinnerCount,
 		/// Submission was too weak, score-wise.
-		WeakSubmission,
-		/// The queue was full, and the solution was not better than any of the existing ones.
-		QueueFull,
-		/// The origin failed to pay the deposit.
-		CannotPayDeposit,
-		/// witness data to dispatchable is invalid.
-		InvalidWitness,
-		/// The signed submission consumes too much weight
-		TooMuchWeight,
+		PreDispatchWeakSubmission,
 	}
 
 	#[pallet::origin]
 	pub struct Origin<T>(PhantomData<T>);
-
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
@@ -840,7 +823,7 @@ pub mod pallet {
 	/// Only exists when [`Snapshot`] is present.
 	#[pallet::storage]
 	#[pallet::getter(fn snapshot_metadata)]
-	pub type SnapshotMetadata<T: Config> = StorageValue<_, RoundSnapshotMetadata>;
+	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -887,9 +870,9 @@ impl<T: Config> Pallet<T> {
 		let voters = T::DataProvider::voters();
 		let desired_targets = T::DataProvider::desired_targets();
 
-		<SnapshotMetadata<T>>::put(RoundSnapshotMetadata {
-			voters_len: voters.len() as u32,
-			targets_len: targets.len() as u32,
+		<SnapshotMetadata<T>>::put(SolutionOrSnapshotSize {
+			voters: voters.len() as u32,
+			targets: targets.len() as u32,
 		});
 		<DesiredTargets<T>>::put(desired_targets);
 		<Snapshot<T>>::put(RoundSnapshot { voters, targets });

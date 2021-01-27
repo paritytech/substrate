@@ -127,9 +127,9 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	RawSolution { compact, score, round }
 }
 
-pub fn witness() -> SolutionSize {
+pub fn witness() -> SolutionOrSnapshotSize {
 	TwoPhase::snapshot()
-		.map(|snap| SolutionSize {
+		.map(|snap| SolutionOrSnapshotSize {
 			voters: snap.voters.len() as u32,
 			targets: snap.targets.len() as u32,
 		})

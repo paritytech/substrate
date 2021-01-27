@@ -34,14 +34,32 @@ pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-electio
 /// within a window of 5 blocks.
 pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum MinerError {
+	/// An internal error in the NPoS elections crate.
+	NposElections(sp_npos_elections::Error),
+	/// Snapshot data was unavailable unexpectedly.
+	SnapshotUnAvailable,
+	/// Submitting a transaction to the pool failed.
+	PoolSubmissionFailed,
+	/// The pre-dispatch checks failed for the mined solution.
+	PreDispatchChecksFailed,
+}
+
+impl From<sp_npos_elections::Error> for MinerError {
+	fn from(e: sp_npos_elections::Error) -> Self {
+		MinerError::NposElections(e)
+	}
+}
+
 impl<T: Config> Pallet<T> {
 	/// Mine a new npos solution.
 	pub fn mine_solution(
 		iters: usize,
-	) -> Result<(RawSolution<CompactOf<T>>, SolutionSize), ElectionError> {
+	) -> Result<(RawSolution<CompactOf<T>>, SolutionOrSnapshotSize), MinerError> {
 		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(ElectionError::SnapshotUnAvailable)?;
-		let desired_targets = Self::desired_targets().ok_or(ElectionError::SnapshotUnAvailable)?;
+			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
+		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 
 		seq_phragmen::<_, CompactAccuracyOf<T>>(
 			desired_targets as usize,
@@ -55,7 +73,7 @@ impl<T: Config> Pallet<T> {
 			Self::unsigned_pre_dispatch_checks(&raw_solution)
 				.map_err(|e| {
 				log!(warn, "pre-disaptch-checks failed for mined solution: {:?}", e);
-				ElectionError::PreDispatchChecksFailed
+				MinerError::PreDispatchChecksFailed
 			})?;
 			Ok((raw_solution, size))
 		})
@@ -67,14 +85,14 @@ impl<T: Config> Pallet<T> {
 	/// Will always reduce the solution as well.
 	pub fn prepare_election_result(
 		election_result: ElectionResult<T::AccountId, CompactAccuracyOf<T>>,
-	) -> Result<(RawSolution<CompactOf<T>>, SolutionSize), ElectionError> {
+	) -> Result<(RawSolution<CompactOf<T>>, SolutionOrSnapshotSize), MinerError> {
 		// NOTE: This code path is generally not optimized as it is run offchain. Could use some at
 		// some point though.
 
 		// storage items. Note: we have already read this from storage, they must be in cache.
 		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(ElectionError::SnapshotUnAvailable)?;
-		let desired_targets = Self::desired_targets().ok_or(ElectionError::SnapshotUnAvailable)?;
+			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
+		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 
 		// closures.
 		let cache = helpers::generate_voter_cache::<T>(&voters);
@@ -88,14 +106,15 @@ impl<T: Config> Pallet<T> {
 
 		// convert to staked and reduce.
 		let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)
-			.map_err::<ElectionError, _>(Into::into)?;
+			.map_err::<MinerError, _>(Into::into)?;
 		sp_npos_elections::reduce(&mut staked);
 
 		// convert back to ration and make compact.
 		let ratio = assignment_staked_to_ratio_normalized(staked)?;
 		let compact = <CompactOf<T>>::from_assignment(ratio, &voter_index, &target_index)?;
 
-		let size = SolutionSize { voters: voters.len() as u32, targets: targets.len() as u32 };
+		let size =
+			SolutionOrSnapshotSize { voters: voters.len() as u32, targets: targets.len() as u32 };
 		let maximum_allowed_voters = Self::maximum_voter_for_weight::<T::WeightInfo>(
 			desired_targets,
 			size,
@@ -154,7 +173,7 @@ impl<T: Config> Pallet<T> {
 		maximum_allowed_voters: u32,
 		mut compact: CompactOf<T>,
 		nominator_index: FN,
-	) -> Result<CompactOf<T>, ElectionError>
+	) -> Result<CompactOf<T>, MinerError>
 	where
 		for<'r> FN: Fn(&'r T::AccountId) -> Option<CompactVoterIndexOf<T>>,
 	{
@@ -162,7 +181,7 @@ impl<T: Config> Pallet<T> {
 			Some(to_remove) if to_remove > 0 => {
 				// grab all voters and sort them by least stake.
 				let RoundSnapshot { voters, .. } =
-					Self::snapshot().ok_or(ElectionError::SnapshotUnAvailable)?;
+					Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
 				let mut voters_sorted = voters
 					.into_iter()
 					.map(|(who, stake, _)| (who.clone(), stake))
@@ -175,7 +194,7 @@ impl<T: Config> Pallet<T> {
 				for (maybe_index, _stake) in
 					voters_sorted.iter().map(|(who, stake)| (nominator_index(&who), stake))
 				{
-					let index = maybe_index.ok_or(ElectionError::SnapshotUnAvailable)?;
+					let index = maybe_index.ok_or(MinerError::SnapshotUnAvailable)?;
 					if compact.remove_voter(index) {
 						removed += 1
 					}
@@ -199,7 +218,7 @@ impl<T: Config> Pallet<T> {
 	/// This only returns a value between zero and `size.nominators`.
 	pub fn maximum_voter_for_weight<W: WeightInfo>(
 		desired_winners: u32,
-		size: SolutionSize,
+		size: SolutionOrSnapshotSize,
 		max_weight: Weight,
 	) -> u32 {
 		if size.voters < 1 {
@@ -306,7 +325,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Mine a new solution, and submit it back to the chain as an unsigned transaction.
-	pub(crate) fn mine_and_submit() -> Result<(), ElectionError> {
+	pub(crate) fn mine_and_submit() -> Result<(), MinerError> {
 		let balancing = Self::get_balancing_iters();
 		let (raw_solution, witness) = Self::mine_solution(balancing)?;
 
@@ -314,7 +333,7 @@ impl<T: Config> Pallet<T> {
 		let call = Call::submit_unsigned(raw_solution, witness).into();
 
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
-			.map_err(|_| ElectionError::PoolSubmissionFailed)
+			.map_err(|_| MinerError::PoolSubmissionFailed)
 	}
 
 	/// Do the basics checks that MUST happen during the validation and pre-dispatch of an unsigned
@@ -328,13 +347,13 @@ impl<T: Config> Pallet<T> {
 		solution: &RawSolution<CompactOf<T>>,
 	) -> DispatchResult {
 		// ensure solution is timely. Don't panic yet. This is a cheap check.
-		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::EarlySubmission,);
+		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::PreDispatchEarlySubmission);
 
 		// ensure correct number of winners.
 		ensure!(
 			Self::desired_targets().unwrap_or_default()
 				== solution.compact.unique_targets().len() as u32,
-			Error::<T>::WrongWinnerCount,
+			Error::<T>::PreDispatchWrongWinnerCount,
 		);
 
 		// ensure score is being improved. Panic henceforth.
@@ -344,7 +363,7 @@ impl<T: Config> Pallet<T> {
 				q.score,
 				T::SolutionImprovementThreshold::get()
 			)),
-			Error::<T>::WeakSubmission,
+			Error::<T>::PreDispatchWeakSubmission,
 		);
 
 		Ok(())
@@ -380,7 +399,7 @@ mod max_weight {
 
 	#[test]
 	fn find_max_voter_binary_search_works() {
-		let w = SolutionSize { voters: 10, targets: 0 };
+		let w = SolutionOrSnapshotSize { voters: 10, targets: 0 };
 
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
@@ -404,7 +423,7 @@ mod max_weight {
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 11_000), 10);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 22_000), 10);
 
-		let w = SolutionSize { voters: 1, targets: 0 };
+		let w = SolutionOrSnapshotSize { voters: 1, targets: 0 };
 
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
@@ -418,7 +437,7 @@ mod max_weight {
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 1);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 1);
 
-		let w = SolutionSize { voters: 2, targets: 0 };
+		let w = SolutionOrSnapshotSize { voters: 2, targets: 0 };
 
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
@@ -576,7 +595,7 @@ mod tests {
 	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
 	                           deprive validator from their authoring reward.: \
 	                           DispatchError::Module { index: 0, error: 1, message: \
-	                           Some(\"WrongWinnerCount\") }")]
+	                           Some(\"PreDispatchWrongWinnerCount\") }")]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
@@ -672,7 +691,7 @@ mod tests {
 			// mine seq_phragmen solution with 2 iters.
 			assert_eq!(
 				TwoPhase::mine_solution(2).unwrap_err(),
-				ElectionError::PreDispatchChecksFailed,
+				MinerError::PreDispatchChecksFailed,
 			);
 		})
 	}
@@ -720,7 +739,7 @@ mod tests {
 				assert_eq!(solution.score[0], 12);
 				assert_noop!(
 					TwoPhase::unsigned_pre_dispatch_checks(&solution),
-					Error::<Runtime>::WeakSubmission,
+					Error::<Runtime>::PreDispatchWeakSubmission,
 				);
 				// submitting this will actually panic.
 
