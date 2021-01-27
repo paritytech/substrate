@@ -1149,6 +1149,7 @@ mod solution_type {
 	type TestAccuracy = Percent;
 
 	generate_solution_type!(pub struct TestSolutionCompact::<u32, u8, TestAccuracy>(16));
+
 	#[allow(dead_code)]
 	mod __private {
 		// This is just to make sure that that the compact can be generated in a scope without any

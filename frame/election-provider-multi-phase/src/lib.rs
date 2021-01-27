@@ -186,7 +186,8 @@
 //! of doing this would be to have the fallback be another
 //! [`sp_election_providers::ElectionProvider`]. In this case, this pallet can even have the
 //! on-chain election provider as fallback, or special _noop_ fallback that simply returns an error,
-//! thus replicating [`FallbackStrategy::Nothing`].
+//! thus replicating [`FallbackStrategy::Nothing`]. In this case, we won't need the additional
+//! config OnChainAccuracy either.
 //!
 //! **Score based on (byte) size**: We should always prioritize small solutions over bigger ones, if
 //! there is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
@@ -194,6 +195,11 @@
 //! **Offchain resubmit**: Essentially port https://github.com/paritytech/substrate/pull/7976 to
 //! this pallet as well. The `OFFCHAIN_REPEAT` also needs to become an adjustable parameter of the
 //! pallet.
+//!
+//! **Make the number of nominators configurable from the runtime**. Remove `sp_npos_elections`
+//! dependency from staking and the compact solution type. It should be generated at runtime, there
+//! it should be encoded how many votes each nominators have. Essentially translate
+//! https://github.com/paritytech/substrate/pull/7929 to this pallet.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

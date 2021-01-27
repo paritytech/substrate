@@ -1813,7 +1813,6 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
 		.minimum_validator_count(1)
 		.build()
 		.execute_with(|| {
-
 			// disable the nominator
 			assert_ok!(Staking::chill(Origin::signed(100)));
 			// make stakes equal.

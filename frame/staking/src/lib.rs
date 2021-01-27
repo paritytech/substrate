@@ -3115,7 +3115,7 @@ impl<T: Config> Module<T> {
 	///
 	/// Returns `Err(())` if less than [`MinimumValidatorCount`] validators have been elected, `Ok`
 	/// otherwise.
-	// TWO_PHASE_NOTE: the deadcode
+	// TWO_PHASE_NOTE: remove the dead code.
 	#[allow(dead_code)]
 	pub fn process_election(
 		flat_supports: sp_npos_elections::Supports<T::AccountId>,
