@@ -27,7 +27,7 @@ use crate::{
 use sp_arithmetic::{
 	helpers_128bit::multiply_by_rational,
 	traits::{Bounded, Zero},
-	InnerOf, Rational128,
+	Rational128,
 };
 use sp_std::prelude::*;
 
@@ -68,10 +68,7 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	balance: Option<(usize, ExtendedBalance)>,
-) -> Result<ElectionResult<AccountId, P>, crate::Error>
-where
-	ExtendedBalance: From<InnerOf<P>>,
-{
+) -> Result<ElectionResult<AccountId, P>, crate::Error> {
 	let (candidates, voters) = setup_inputs(initial_candidates, initial_voters);
 
 	let (candidates, mut voters) = seq_phragmen_core::<AccountId>(
@@ -96,26 +93,18 @@ where
 	// sort winners based on desirability.
 	winners.sort_by_key(|c_ptr| c_ptr.borrow().round);
 
-	let mut assignments = voters
-		.into_iter()
-		.filter_map(|v| v.into_assignment())
-		.collect::<Vec<_>>();
+	let mut assignments =
+		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
 	let _ = assignments
 		.iter_mut()
-		.map(|a| {
-			a.try_normalize()
-				.map_err(|e| crate::Error::ArithmeticError(e))
-		})
+		.map(|a| a.try_normalize().map_err(|e| crate::Error::ArithmeticError(e)))
 		.collect::<Result<(), _>>()?;
 	let winners = winners
 		.into_iter()
 		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
 		.collect();
 
-	Ok(ElectionResult {
-		winners,
-		assignments,
-	})
+	Ok(ElectionResult { winners, assignments })
 }
 
 /// Core implementation of seq-phragmen.

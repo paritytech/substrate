@@ -158,25 +158,15 @@ impl<
 }
 
 impl<
-		BlockNumber: Rem<Output = BlockNumber>
-			+ Sub<Output = BlockNumber>
-			+ Zero
-			+ PartialOrd
-			+ Saturating
-			+ Clone,
-		Period: Get<BlockNumber>,
-		Offset: Get<BlockNumber>,
-	> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset>
-{
-	fn average_session_length() -> BlockNumber {
-		Period::get()
-	}
-
+	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd + Saturating + Clone,
+	Period: Get<BlockNumber>,
+	Offset: Get<BlockNumber>,
+> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset> {
 	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber> {
 		let offset = Offset::get();
 		let period = Period::get();
 		Some(if now > offset {
-			let block_after_last_session = (now.clone() - offset.clone()) % period.clone();
+			let block_after_last_session = (now.clone() - offset) % period.clone();
 			if block_after_last_session > Zero::zero() {
 				now.saturating_add(period.saturating_sub(block_after_last_session))
 			} else {
@@ -197,6 +187,10 @@ impl<
 		// zero for now. However, this value of zero was not properly calculated, and so it would be
 		// reasonable to come back here and properly calculate the weight of this function.
 		0
+	}
+
+	fn average_session_length() -> BlockNumber {
+		Period::get()
 	}
 }
 
@@ -456,7 +450,7 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				frame_system::Module::<T>::inc_ref(&account);
+				assert!(frame_system::Module::<T>::inc_consumers(&account).is_ok());
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
@@ -510,6 +504,8 @@ decl_error! {
 		DuplicatedKey,
 		/// No keys are associated with this account.
 		NoKeys,
+		/// Key setting account is not live, so it's impossible to associate keys.
+		NoAccount,
 	}
 }
 
@@ -758,9 +754,11 @@ impl<T: Config> Module<T> {
 		let who = T::ValidatorIdOf::convert(account.clone())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
+		frame_system::Module::<T>::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
 		let old_keys = Self::inner_set_keys(&who, keys)?;
-		if old_keys.is_none() {
-			frame_system::Module::<T>::inc_ref(&account);
+		if old_keys.is_some() {
+			let _ = frame_system::Module::<T>::dec_consumers(&account);
+			// ^^^ Defensive only; Consumers were incremented just before, so should never fail.
 		}
 
 		Ok(())
@@ -808,7 +806,7 @@ impl<T: Config> Module<T> {
 			let key_data = old_keys.get_raw(*id);
 			Self::clear_key_owner(*id, key_data);
 		}
-		frame_system::Module::<T>::dec_ref(&account);
+		frame_system::Module::<T>::dec_consumers(&account);
 
 		Ok(())
 	}

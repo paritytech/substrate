@@ -35,7 +35,6 @@ sp-keyring = { version = "2.0.0", optional = true, path = "../../../primitives/k
 sp-session = { version = "2.0.0", default-features = false, path = "../../../primitives/session" }
 sp-transaction-pool = { version = "2.0.0", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "2.0.0", default-features = false, path = "../../../primitives/version" }
-sp-npos-elections = { version = "2.0.0", default-features = false, path = "../../../primitives/npos-elections" }
 
 # frame dependencies
 frame-executive = { version = "2.0.0", default-features = false, path = "../../../frame/executive" }
@@ -55,7 +54,7 @@ pallet-contracts = { version = "2.0.0", default-features = false, path = "../../
 pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "../../../frame/contracts/common/" }
 pallet-contracts-rpc-runtime-api = { version = "0.8.0", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
 pallet-democracy = { version = "2.0.0", default-features = false, path = "../../../frame/democracy" }
-pallet-elections-phragmen = { version = "2.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
+pallet-elections-phragmen = { version = "3.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
 pallet-grandpa = { version = "2.0.0", default-features = false, path = "../../../frame/grandpa" }
 pallet-im-online = { version = "2.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-indices = { version = "2.0.0", default-features = false, path = "../../../frame/indices" }
@@ -116,7 +115,6 @@ std = [
 	"pallet-im-online/std",
 	"pallet-indices/std",
 	"sp-inherents/std",
-	"sp-npos-elections/std",
 	"pallet-lottery/std",
 	"pallet-membership/std",
 	"pallet-mmr/std",

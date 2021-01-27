@@ -436,7 +436,7 @@ fn can_sync_small_non_best_forks() {
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 
-	net.peer(0).announce_block(small_hash, Vec::new());
+	net.peer(0).announce_block(small_hash, None);
 
 	// after announcing, peer 1 downloads the block.
 
@@ -452,7 +452,7 @@ fn can_sync_small_non_best_forks() {
 	net.block_until_sync();
 
 	let another_fork = net.peer(0).push_blocks_at(BlockId::Number(35), 2, true);
-	net.peer(0).announce_block(another_fork, Vec::new());
+	net.peer(0).announce_block(another_fork, None);
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if net.peer(1).client().header(&BlockId::Hash(another_fork)).unwrap().is_none() {
@@ -500,7 +500,7 @@ fn light_peer_imports_header_from_announce() {
 	sp_tracing::try_init_simple();
 
 	fn import_with_announce(net: &mut TestNet, hash: H256) {
-		net.peer(0).announce_block(hash, Vec::new());
+		net.peer(0).announce_block(hash, None);
 
 		block_on(futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
@@ -610,7 +610,7 @@ fn does_not_sync_announced_old_best_block() {
 	net.peer(0).push_blocks(18, true);
 	net.peer(1).push_blocks(20, true);
 
-	net.peer(0).announce_block(old_hash, Vec::new());
+	net.peer(0).announce_block(old_hash, None);
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		// poll once to import announcement
 		net.poll(cx);
@@ -618,7 +618,7 @@ fn does_not_sync_announced_old_best_block() {
 	}));
 	assert!(!net.peer(1).is_major_syncing());
 
-	net.peer(0).announce_block(old_hash_with_parent, Vec::new());
+	net.peer(0).announce_block(old_hash_with_parent, None);
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		// poll once to import announcement
 		net.poll(cx);
@@ -653,8 +653,8 @@ fn imports_stale_once() {
 
 	fn import_with_announce(net: &mut TestNet, hash: H256) {
 		// Announce twice
-		net.peer(0).announce_block(hash, Vec::new());
-		net.peer(0).announce_block(hash, Vec::new());
+		net.peer(0).announce_block(hash, None);
+		net.peer(0).announce_block(hash, None);
 
 		block_on(futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
@@ -839,6 +839,61 @@ fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
 
 	net.peer(0).network_service().new_best_block_imported(block_hash, 10_000);
 	while !net.peer(2).has_block(&block_hash) && !net.peer(1).has_block(&block_hash) {
+		net.block_until_idle();
+	}
+}
+
+/// Ensures that when we receive a block announcement with some data attached, that we propagate
+/// this data when reannouncing the block.
+#[test]
+fn block_announce_data_is_propagated() {
+	struct TestBlockAnnounceValidator;
+
+	impl BlockAnnounceValidator<Block> for TestBlockAnnounceValidator {
+		fn validate(
+			&mut self,
+			_: &Header,
+			data: &[u8],
+		) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+			let correct = data.get(0) == Some(&137);
+			async move {
+				if correct {
+					Ok(Validation::Success { is_new_best: true })
+				} else {
+					Ok(Validation::Failure { disconnect: false })
+				}
+			}.boxed()
+		}
+	}
+
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(1);
+
+	net.add_full_peer_with_config(FullPeerConfig {
+		block_announce_validator: Some(Box::new(TestBlockAnnounceValidator)),
+		..Default::default()
+	});
+
+	net.add_full_peer_with_config(FullPeerConfig {
+		block_announce_validator: Some(Box::new(TestBlockAnnounceValidator)),
+		connect_to_peers: Some(vec![1]),
+		..Default::default()
+	});
+
+	// Wait until peer 1 is connected to both nodes.
+	block_on(futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		if net.peer(1).num_peers() == 2 {
+			Poll::Ready(())
+		} else {
+			Poll::Pending
+		}
+	}));
+
+	let block_hash = net.peer(0).push_blocks_at_without_announcing(BlockId::Number(0), 1, true);
+	net.peer(0).announce_block(block_hash, Some(vec![137]));
+
+	while !net.peer(1).has_block(&block_hash) || !net.peer(2).has_block(&block_hash) {
 		net.block_until_idle();
 	}
 }

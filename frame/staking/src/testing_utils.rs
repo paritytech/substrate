@@ -92,6 +92,7 @@ pub fn create_validators<T: Config>(
 		let (stash, controller) = create_stash_controller::<T>(i, balance_factor, RewardDestination::Staked)?;
 		let validator_prefs = ValidatorPrefs {
 			commission: Perbill::from_percent(50),
+			.. Default::default()
 		};
 		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
 		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash);
@@ -134,6 +135,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 		let (v_stash, v_controller) = create_stash_controller::<T>(i, balance_factor, RewardDestination::Staked)?;
 		let validator_prefs = ValidatorPrefs {
 			commission: Perbill::from_percent(50),
+			.. Default::default()
 		};
 		Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
 		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());

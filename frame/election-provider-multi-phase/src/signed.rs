@@ -18,7 +18,7 @@
 //! The signed phase implementation.
 
 use super::*;
-use codec::Encode;
+use codec::{Encode, HasCompact};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, CompactSolution};
 use sp_runtime::Perbill;
@@ -47,11 +47,7 @@ pub(crate) type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 
-impl<T: Config> Pallet<T>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+impl<T: Config> Pallet<T> {
 	/// Finish the singed phase. Process the signed submissions from best to worse until a valid one
 	/// is found, rewarding the best one and slashing the invalid ones along the way.
 	///
@@ -69,11 +65,11 @@ where
 			let active_voters = solution.compact.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
-				let RoundSnapshotMetadata { voters_len, targets_len } =
+				let SolutionOrSnapshotSize { voters, targets } =
 					Self::snapshot_metadata().unwrap_or_default();
 				let desired_targets = Self::desired_targets().unwrap_or_default();
-				let v = voters_len as u32;
-				let t = targets_len as u32;
+				let v = voters;
+				let t = targets;
 				let a = active_voters;
 				let w = desired_targets;
 				T::WeightInfo::feasibility_check(v, t, a, w)
@@ -159,7 +155,7 @@ where
 		who: &T::AccountId,
 		queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
 		solution: RawSolution<CompactOf<T>>,
-		size: SolutionSize,
+		size: SolutionOrSnapshotSize,
 	) -> Option<usize> {
 		// from the last score, compare and see if the current one is better. If none, then the
 		// awarded index is 0.
@@ -219,7 +215,7 @@ where
 	/// The feasibility weight of the given raw solution.
 	pub fn feasibility_weight_of(
 		solution: &RawSolution<CompactOf<T>>,
-		size: SolutionSize,
+		size: SolutionOrSnapshotSize,
 	) -> Weight {
 		T::WeightInfo::feasibility_check(
 			size.voters,
@@ -236,7 +232,7 @@ where
 	/// 1. base deposit, fixed for all submissions.
 	/// 2. a per-byte deposit, for renting the state usage.
 	/// 3. a per-weight deposit, for the potential weight usage in an upcoming on_initialize
-	pub fn deposit_for(solution: &RawSolution<CompactOf<T>>, size: SolutionSize) -> BalanceOf<T> {
+	pub fn deposit_for(solution: &RawSolution<CompactOf<T>>, size: SolutionOrSnapshotSize) -> BalanceOf<T> {
 		let encoded_len: BalanceOf<T> = solution.using_encoded(|e| e.len() as u32).into();
 		let feasibility_weight = Self::feasibility_weight_of(solution, size);
 
@@ -256,15 +252,6 @@ where
 			Some(cap) => raw_reward.min(cap),
 			None => raw_reward,
 		}
-	}
-
-	/// Build the solution size from the snapshot metadata, if it exists. Else, returns `None`.
-	pub(crate) fn build_solution_size() -> Option<SolutionSize> {
-		let metadata = Self::snapshot_metadata()?;
-		Some(SolutionSize {
-			voters: metadata.voters_len as u32,
-			targets: metadata.targets_len as u32,
-		})
 	}
 }
 
@@ -314,7 +301,7 @@ mod tests {
 			// now try and cheat by passing a lower queue length
 			assert_noop!(
 				TwoPhase::submit(Origin::signed(99), solution, 0,),
-				Error::<Runtime>::InvalidWitness,
+				Error::<Runtime>::SignedInvalidWitness,
 			);
 		})
 	}
@@ -455,7 +442,7 @@ mod tests {
 
 			assert_noop!(
 				submit_with_witness(Origin::signed(99), solution),
-				Error::<Runtime>::QueueFull,
+				Error::<Runtime>::SignedQueueFull,
 			);
 		})
 	}
@@ -580,7 +567,7 @@ mod tests {
 			let solution = RawSolution { score: [5, 0, 0], ..Default::default() };
 			assert_noop!(
 				submit_with_witness(Origin::signed(99), solution),
-				Error::<Runtime>::QueueFull,
+				Error::<Runtime>::SignedQueueFull,
 			);
 		})
 	}
@@ -698,7 +685,7 @@ mod tests {
 			// space.
 			assert_noop!(
 				submit_with_witness(Origin::signed(99), solution),
-				Error::<Runtime>::TooMuchWeight,
+				Error::<Runtime>::SignedTooMuchWeight,
 			);
 		})
 	}

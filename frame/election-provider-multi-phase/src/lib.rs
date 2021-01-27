@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Two phase, offchain election provider pallet.
+//! # Multi phase, offchain election provider pallet.
 //!
-//! As the name suggests, this election-provider has two distinct phases (see [`Phase`]), signed and
-//! unsigned.
+//! Currently, this election-provider has two distinct phases (see [`Phase`]), **signed** and
+//! **unsigned**.
 //!
 //! ## Phases
 //!
@@ -35,14 +35,15 @@
 //! ```
 //!
 //! Note that the unsigned phase starts [`pallet::Config::UnsignedPhase`] blocks before the
-//! `next_election_prediction`, but only ends when a call to [`ElectionProvider::elect`] happens.
+//! `next_election_prediction`, but only ends when a call to [`ElectionProvider::elect`] happens. If
+//! no `elect` happens, the signed phase is extended.
 //!
 //! > Given this, it is rather important for the user of this pallet to ensure it always terminates
 //! election via `elect` before requesting a new one.
 //!
 //! Each of the phases can be disabled by essentially setting their length to zero. If both phases
-//! have length zero, then the pallet essentially runs only the on-chain backup.
-//!
+//! have length zero, then the pallet essentially runs only the fallback strategy, denoted by
+//! [`Config::FallbackStrategy`].
 //! ### Signed Phase
 //!
 //!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
@@ -102,6 +103,10 @@
 //! than the best queued one (see [`pallet::Config::SolutionImprovementThreshold`]) and will limit
 //! the weigh of the solution to [`pallet::Config::MinerMaxWeight`].
 //!
+//! The unsigned phase can be made passive depending on how the previous signed phase went, by
+//! setting the first inner value of [`Phase`] to `false`. For now, the signed phase is always
+//! active.
+//!
 //! ### Fallback
 //!
 //! If we reach the end of both phases (i.e. call to [`ElectionProvider::elect`] happens) and no
@@ -130,6 +135,24 @@
 //! Note that both accuracies are of great importance. The offchain solution should be as small as
 //! possible, reducing solutions size/weight. The on-chain solution can use more space for accuracy,
 //! but should still be fast to prevent massively large blocks in case of a fallback.
+//!
+//! ## Error types
+//!
+//! This pallet provides a verbose error system to ease future debugging and debugging. The
+//! overall hierarchy of errors is as follows:
+//!
+//! 1. [`pallet::Error`]: These are the errors that can be returned in the dispatchables of the
+//!    pallet, either signed or unsigned. Since decomposition with nested enums is not possible
+//!    here, they are prefixed with the logical sub-system to which they belong.
+//! 2. [`ElectionError`]: These are the errors that can be generated while the pallet is doing
+//!    something in automatic scenarios, such as `offchain_worker` or `on_initialize`. These errors
+//!    are helpful for logging and are thus nested as:
+//!    - [`ElectionError::Miner`]: wraps a [`unsigned::MinerError`].
+//!    - [`ElectionError::Feasibility`]: wraps a [`FeasibilityError`].
+//!    - [`ElectionError::OnChainFallback`]: wraps a [`sp_election_providers::onchain::Error`].
+//!
+//! Note that there could be an overlap between these sub-errors. For example, A
+//! `SnapshotUnavailable` can happen in both miner and feasibility check phase.
 //!
 //! ## Future Plans
 //!
@@ -163,32 +186,42 @@
 //! of doing this would be to have the fallback be another
 //! [`sp_election_providers::ElectionProvider`]. In this case, this pallet can even have the
 //! on-chain election provider as fallback, or special _noop_ fallback that simply returns an error,
-//! thus replicating [`FallbackStrategy::Nothing`].
+//! thus replicating [`FallbackStrategy::Nothing`]. In this case, we won't need the additional
+//! config OnChainAccuracy either.
 //!
-//! **Score based on size**: We should always prioritize small solutions over bigger ones, if there
-//! is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
+//! **Score based on (byte) size**: We should always prioritize small solutions over bigger ones, if
+//! there is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
+//!
+//! **Offchain resubmit**: Essentially port https://github.com/paritytech/substrate/pull/7976 to
+//! this pallet as well. The `OFFCHAIN_REPEAT` also needs to become an adjustable parameter of the
+//! pallet.
+//!
+//! **Make the number of nominators configurable from the runtime**. Remove `sp_npos_elections`
+//! dependency from staking and the compact solution type. It should be generated at runtime, there
+//! it should be encoded how many votes each nominators have. Essentially translate
+//! https://github.com/paritytech/substrate/pull/7929 to this pallet.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode, HasCompact};
+use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, ReservableCurrency, OnUnbalanced},
 	weights::Weight,
 };
-use frame_system::{ensure_none, ensure_signed, offchain::SendTransactionTypes};
+use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use sp_election_providers::{ElectionDataProvider, ElectionProvider, onchain};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, is_score_better, CompactSolution, ElectionScore,
-	EvaluateSupport, ExtendedBalance, PerThing128, Supports, VoteWeight,
+	EvaluateSupport, PerThing128, Supports, VoteWeight,
 };
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchError, InnerOf, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
+	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::prelude::*;
 use sp_arithmetic::{
@@ -204,12 +237,6 @@ mod mock;
 pub mod helpers;
 
 const LOG_TARGET: &'static str = "election-provider";
-
-// for the helper macros
-#[doc(hidden)]
-pub use sp_runtime::traits::UniqueSaturatedInto;
-#[doc(hidden)]
-pub use sp_std;
 
 pub mod unsigned;
 pub mod weights;
@@ -231,15 +258,9 @@ pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::Accuracy;
 /// The accuracy of the election, when computed on-chain. Equal to [`Config::OnChainAccuracy`].
 pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
 
-struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>)
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>;
-impl<T: Config> onchain::Config for OnChainConfig<T>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+/// Wrapper type that implements the configurations needed for the on-chain backup.
+struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
+impl<T: Config> onchain::Config for OnChainConfig<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type Accuracy = T::OnChainAccuracy;
@@ -310,7 +331,7 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 	}
 }
 
-/// A configuration for the module to indicate what should happen in the case of a fallback i.e.
+/// A configuration for the pallet to indicate what should happen in the case of a fallback i.e.
 /// reaching a call to `elect` with no good solution.
 #[cfg_attr(test, derive(Clone))]
 pub enum FallbackStrategy {
@@ -379,28 +400,10 @@ pub struct ReadySolution<A> {
 	compute: ElectionCompute,
 }
 
-/// Solution size of the election.
-///
-/// This is needed for proper weight calculation.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
-pub struct SolutionSize {
-	/// Number of all voters.
-	///
-	/// This must match the on-chain snapshot.
-	#[codec(compact)]
-	voters: u32,
-	/// Number of all targets.
-	///
-	/// This must match the on-chain snapshot.
-	#[codec(compact)]
-	targets: u32,
-}
-
 /// A snapshot of all the data that is needed for en entire round. They are provided by
-/// [`ElectionDataProvider`] at the beginning of the signed phase (or the unsigned phase, if signed
-/// phase is non-existent) and are kept around until the round is finished.
+/// [`ElectionDataProvider`] and are kept around until the round is finished.
 ///
-/// These are stored together because they are often times accessed together.
+/// These are stored together because they are often accessed together.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct RoundSnapshot<A> {
 	/// All of the voters.
@@ -409,51 +412,39 @@ pub struct RoundSnapshot<A> {
 	pub targets: Vec<A>,
 }
 
-/// Some metadata related to snapshot.
+/// Encodes the length of a solution or a snapshot.
 ///
-/// In this pallet, there are cases where we want to read the whole snapshot (voters, targets,
-/// desired), and cases that we are interested in just the length of these values. The former favors
-/// the snapshot to be stored in one struct (as it is now) while the latter prefers them to be
-/// separate to enable the use of `decode_len`. This approach is a middle ground, storing the
-/// snapshot as one struct, whilst storing the lengths separately.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct RoundSnapshotMetadata {
+/// This is stored automatically on-chain, and it contains the **size of the entire snapshot**.
+/// This is also used in dispatchables as weight witness data and should **only contain the size of
+/// the presented solution**, not the entire snapshot.
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
+pub struct SolutionOrSnapshotSize {
 	/// The length of voters.
-	voters_len: u32,
+	#[codec(compact)]
+	voters: u32,
 	/// The length of targets.
-	targets_len: u32,
+	#[codec(compact)]
+	targets: u32,
 }
 
 /// Internal errors of the pallet.
 ///
 /// Note that this is different from [`pallet::Error`].
-#[derive(RuntimeDebug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ElectionError {
-	/// A feasibility error.
+	/// An error happened in the feasibility check sub-system.
 	Feasibility(FeasibilityError),
+	/// An error in the miner (offchain) sub-system.
+	Miner(unsigned::MinerError),
 	/// An error in the on-chain fallback.
 	OnChainFallback(onchain::Error),
-	/// No fallback is configured
+	/// No fallback is configured. This is a special case.
 	NoFallbackConfigured,
-	/// An internal error in the NPoS elections crate.
-	NposElections(sp_npos_elections::Error),
-	/// Snapshot data was unavailable unexpectedly.
-	SnapshotUnAvailable,
-	/// Submitting a transaction to the pool failed.
-	///
-	/// This can only happen in the unsigned phase.
-	PoolSubmissionFailed,
 }
 
 impl From<onchain::Error> for ElectionError {
 	fn from(e: onchain::Error) -> Self {
 		ElectionError::OnChainFallback(e)
-	}
-}
-
-impl From<sp_npos_elections::Error> for ElectionError {
-	fn from(e: sp_npos_elections::Error) -> Self {
-		ElectionError::NposElections(e)
 	}
 }
 
@@ -463,14 +454,21 @@ impl From<FeasibilityError> for ElectionError {
 	}
 }
 
+impl From<unsigned::MinerError> for ElectionError {
+	fn from(e: unsigned::MinerError) -> Self {
+		ElectionError::Miner(e)
+	}
+}
+
 /// Errors that can happen in the feasibility check.
-#[derive(RuntimeDebug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum FeasibilityError {
 	/// Wrong number of winners presented.
 	WrongWinnerCount,
 	/// The snapshot is not available.
 	///
-	/// This must be an internal error of the chain.
+	/// Kinda defensive: The pallet should technically never attempt to do a feasibility check when
+	/// no snapshot is present.
 	SnapshotUnavailable,
 	/// Internal error from the election crate.
 	NposElection(sp_npos_elections::Error),
@@ -500,11 +498,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>>
-	where
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<Self>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<Self>>>,
-	{
+	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 		type Event: From<Event<Self>>
 			+ Into<<Self as frame_system::Config>::Event>
 			+ IsType<<Self as frame_system::Config>::Event>;
@@ -520,12 +514,12 @@ pub mod pallet {
 		type SignedPhase: Get<Self::BlockNumber>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
-		/// "better".
+		/// "better" (in any phase).
 		#[pallet::constant]
 		type SolutionImprovementThreshold: Get<Perbill>;
 
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
-		type UnsignedPriority: Get<TransactionPriority>;
+		type MinerTxPriority: Get<TransactionPriority>;
 		/// Maximum number of iteration of balancing that will be executed in the embedded miner of
 		/// the pallet.
 		type MinerMaxIterations: Get<u32>;
@@ -595,11 +589,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
-	where
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-	{
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let next_election = T::DataProvider::next_election_prediction(now).max(now);
 
@@ -620,15 +610,17 @@ pub mod pallet {
 				{
 					let (need_snapshot, enabled, additional) = if current_phase == Phase::Signed {
 						// followed by a signed phase: close the signed phase, no need for snapshot.
-						// TODO
+						// NOTE: SIGNED_PHASE
 						(false, true, Weight::zero())
 					} else {
-						// no signed phase
+						// no signed phase: create a new snapshot, definitely `enable` the unsigned
+						// phase.
 						(true, true, Weight::zero())
 					};
 
 					Self::on_initialize_open_unsigned(need_snapshot, enabled, now);
 					log!(info, "Starting unsigned phase({}) at #{:?}.", enabled, now);
+
 					let base_weight = if need_snapshot {
 						T::WeightInfo::on_initialize_open_unsigned_with_snapshot() }
 					else {
@@ -643,14 +635,12 @@ pub mod pallet {
 		fn offchain_worker(n: T::BlockNumber) {
 			// We only run the OCW in the fist block of the unsigned phase.
 			if Self::current_phase().is_unsigned_open_at(n) {
-				match Self::set_check_offchain_execution_status(n) {
-					Ok(_) => match Self::mine_and_submit() {
-						Ok(_) => {
-							log!(info, "successfully submitted a solution via OCW at block {:?}", n)
-						}
-						Err(e) => log!(error, "error while submitting transaction in OCW: {:?}", e),
-					},
-					Err(why) => log!(error, "Error in unsigned offchain worker: {:?}", why),
+				match Self::try_acquire_offchain_lock(n) {
+					Ok(_) => {
+						let outcome = Self::mine_and_submit().map_err(ElectionError::from);
+						log!(info, "miner exeuction done: {:?}", outcome);
+					}
+					Err(why) => log!(warn, "denied offchain worker: {:?}", why),
 				}
 			}
 		}
@@ -667,15 +657,25 @@ pub mod pallet {
 			let max_vote: usize = <CompactOf<T> as CompactSolution>::LIMIT;
 
 			// 1. Maximum sum of [ChainAccuracy; 16] must fit into `UpperOf<ChainAccuracy>`..
-			let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracyOf<T>>> =
-				(0..max_vote).map(|_| <OnChainAccuracyOf<T>>::one().deconstruct().into()).collect();
+			let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracyOf<T>>> = (0..max_vote)
+				.map(|_| {
+					<UpperOf<OnChainAccuracyOf<T>>>::from(
+						<OnChainAccuracyOf<T>>::one().deconstruct(),
+					)
+				})
+				.collect();
 			let _: UpperOf<OnChainAccuracyOf<T>> = maximum_chain_accuracy
 				.iter()
 				.fold(Zero::zero(), |acc, x| acc.checked_add(x).unwrap());
 
 			// 2. Maximum sum of [CompactAccuracy; 16] must fit into `UpperOf<OffchainAccuracy>`.
-			let maximum_chain_accuracy: Vec<UpperOf<CompactAccuracyOf<T>>> =
-				(0..max_vote).map(|_| <CompactAccuracyOf<T>>::one().deconstruct().into()).collect();
+			let maximum_chain_accuracy: Vec<UpperOf<CompactAccuracyOf<T>>> = (0..max_vote)
+				.map(|_| {
+					<UpperOf<CompactAccuracyOf<T>>>::from(
+						<CompactAccuracyOf<T>>::one().deconstruct(),
+					)
+				})
+				.collect();
 			let _: UpperOf<CompactAccuracyOf<T>> = maximum_chain_accuracy
 				.iter()
 				.fold(Zero::zero(), |acc, x| acc.checked_add(x).unwrap());
@@ -683,11 +683,7 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T>
-	where
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-	{
+	impl<T: Config> Pallet<T> {
 		/// Submit a solution for the signed phase.
 		///
 		/// The dispatch origin fo this call must be __signed__.
@@ -712,7 +708,7 @@ pub mod pallet {
 			// ensure witness data is correct.
 			ensure!(
 				witness_data >= <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
-				Error::<T>::InvalidWitness,
+				Error::<T>::SignedInvalidWitness,
 			);
 
 			// ensure solution is timely.
@@ -723,23 +719,23 @@ pub mod pallet {
 
 			// build size. Note: this is not needed for weight calc, thus not input.
 			// defensive-only: if phase is signed, snapshot will exist.
-			let size = Self::build_solution_size().unwrap_or_default();
+			let size = Self::snapshot_metadata().unwrap_or_default();
 
 			// NOTE: we compute this function once in `insert_submission` as well, could optimize.
 			ensure!(
 				Self::feasibility_weight_of(&solution, size) < T::SignedMaxWeight::get(),
-				Error::<T>::TooMuchWeight,
+				Error::<T>::SignedTooMuchWeight,
 			);
 
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
 			let index = Self::insert_submission(&who, &mut signed_submissions, solution, size)
-				.ok_or(Error::<T>::QueueFull)?;
+				.ok_or(Error::<T>::SignedQueueFull)?;
 
 			// collect deposit. Thereafter, the function cannot fail.
 			// Defensive -- index is valid.
 			let deposit = signed_submissions.get(index).map(|s| s.deposit).unwrap_or_default();
-			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::CannotPayDeposit)?;
+			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
 
 			// Remove the weakest, if needed.
 			if signed_submissions.len() as u32 > T::SignedMaxSubmissions::get() {
@@ -763,16 +759,16 @@ pub mod pallet {
 		///
 		/// The dispatch origin fo this call must be __none__.
 		///
-		/// This submission is checked on the fly, thus it is likely yo be more limited and smaller.
-		/// Moreover, this unsigned solution is only validated when submitted to the pool from the
-		/// local process. Effectively, this means that only active validators can submit this
-		/// transaction when authoring a block.
+		/// This submission is checked on the fly. Moreover, this unsigned solution is only
+		/// validated when submitted to the pool from the **local** node. Effectively, this means
+		/// that only active validators can submit this transaction when authoring a block (similar
+		/// to an inherent).
 		///
 		/// To prevent any incorrect solution (and thus wasted time/weight), this transaction will
-		/// panic if the solution submitted by the validator is invalid, effectively putting their
-		/// authoring reward at risk.
+		/// panic if the solution submitted by the validator is invalid in any way, effectively
+		/// putting their authoring reward at risk.
 		///
-		/// No deposit or reward is associated with this.
+		/// No deposit or reward is associated with this submission.
 		#[pallet::weight(T::WeightInfo::submit_unsigned(
 			witness.voters,
 			witness.targets,
@@ -782,23 +778,22 @@ pub mod pallet {
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
 			solution: RawSolution<CompactOf<T>>,
-			witness: SolutionSize,
+			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			let error_message = "Invalid unsigned submission must produce invalid block and \
 			                     deprive validator from their authoring reward.";
 
-			// check phase and score.
-			// NOTE: since we do this in pre-dispatch, we can just ignore it here.
+			// NOTE: since we do this in pre-dispatch, we _could_ just ignore it here.
 			Self::unsigned_pre_dispatch_checks(&solution).expect(error_message);
 
 			// ensure witness was correct.
-			let RoundSnapshotMetadata { voters_len, targets_len } =
+			let SolutionOrSnapshotSize { voters, targets } =
 				Self::snapshot_metadata().expect(error_message);
 
 			// NOTE: we are asserting, not `ensure`ing -- we want to panic here.
-			assert!(voters_len as u32 == witness.voters, error_message);
-			assert!(targets_len as u32 == witness.targets, error_message);
+			assert!(voters as u32 == witness.voters, error_message);
+			assert!(targets as u32 == witness.targets, error_message);
 
 			let ready =
 				Self::feasibility_check(solution, ElectionCompute::Unsigned).expect(error_message);
@@ -815,11 +810,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::metadata(<T as frame_system::Config>::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config>
-	where
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-	{
+	pub enum Event<T: Config> {
 		/// A solution was stored with the given compute.
 		///
 		/// If the solution is signed, this means that it hasn't yet been processed. If the
@@ -838,33 +829,29 @@ pub mod pallet {
 		UnsignedPhaseStarted(u32),
 	}
 
+	/// Error of the pallet that can be returned in response to dispatches.
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Submission was too early.
 		EarlySubmission,
 		/// Wrong number of winners presented.
-		WrongWinnerCount,
+		PreDispatchWrongWinnerCount,
 		/// Submission was too weak, score-wise.
-		WeakSubmission,
+		PreDispatchWeakSubmission,
 		/// The queue was full, and the solution was not better than any of the existing ones.
-		QueueFull,
+		SignedQueueFull,
 		/// The origin failed to pay the deposit.
-		CannotPayDeposit,
+		SignedCannotPayDeposit,
 		/// witness data to dispatchable is invalid.
-		InvalidWitness,
+		SignedInvalidWitness,
 		/// The signed submission consumes too much weight
-		TooMuchWeight,
+		SignedTooMuchWeight,
 	}
 
 	#[pallet::origin]
 	pub struct Origin<T>(PhantomData<T>);
-
 	#[pallet::validate_unsigned]
-	impl<T: Config> ValidateUnsigned for Pallet<T>
-	where
-		ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-	{
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::submit_unsigned(solution, _) = call {
@@ -886,15 +873,16 @@ pub mod pallet {
 				ValidTransaction::with_tag_prefix("OffchainElection")
 					// The higher the score[0], the better a solution is.
 					.priority(
-						T::UnsignedPriority::get()
-							.saturating_add(solution.score[0].saturated_into()),
+						T::MinerTxPriority::get().saturating_add(
+							solution.score[0].saturated_into()
+						),
 					)
 					// used to deduplicate unsigned solutions: each validator should produce one
 					// solution per round at most, and solutions are not propagate.
 					.and_provides(solution.round)
 					// transaction should stay in the pool for the duration of the unsigned phase.
 					.longevity(T::UnsignedPhase::get().saturated_into::<u64>())
-					// We don't propagate this. This can never the validated at a remote node.
+					// We don't propagate this. This can never be validated at a remote node.
 					.propagate(false)
 					.build()
 			} else {
@@ -921,7 +909,7 @@ pub mod pallet {
 	/// Internal counter for the number of rounds.
 	///
 	/// This is useful for de-duplication of transactions submitted to the pool, and general
-	/// diagnostics of the module.
+	/// diagnostics of the pallet.
 	///
 	/// This is merely incremented once per every time that an upstream `elect` is called.
 	#[pallet::storage]
@@ -933,7 +921,7 @@ pub mod pallet {
 	#[pallet::getter(fn current_phase)]
 	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, ValueQuery>;
 
-	/// Current best solution, signed or unsigned.
+	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
 	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolution<T::AccountId>>;
@@ -957,7 +945,7 @@ pub mod pallet {
 	/// Only exists when [`Snapshot`] is present.
 	#[pallet::storage]
 	#[pallet::getter(fn snapshot_metadata)]
-	pub type SnapshotMetadata<T: Config> = StorageValue<_, RoundSnapshotMetadata>;
+	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
 
 	/// Sorted (worse -> best) list of unchecked, signed solutions.
 	#[pallet::storage]
@@ -973,15 +961,11 @@ pub mod pallet {
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
-impl<T: Config> Pallet<T>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+impl<T: Config> Pallet<T> {
 	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
 	///
 	/// This is decoupled for easy weight calculation.
-	pub fn on_initialize_open_signed() {
+	pub(crate) fn on_initialize_open_signed() {
 		<CurrentPhase<T>>::put(Phase::Signed);
 		Self::create_snapshot();
 		Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
@@ -991,7 +975,7 @@ where
 	///
 	/// This is decoupled for easy weight calculation. Note that the default weight benchmark of
 	/// this function will assume an empty signed queue for `finalize_signed_phase`.
-	pub fn on_initialize_open_unsigned(
+	pub(crate) fn on_initialize_open_unsigned(
 		need_snapshot: bool,
 		enabled: bool,
 		now: T::BlockNumber,
@@ -1002,7 +986,6 @@ where
 			Self::create_snapshot();
 		}
 
-		// for now always start the unsigned phase.
 		<CurrentPhase<T>>::put(Phase::Unsigned((enabled, now)));
 		Self::deposit_event(Event::UnsignedPhaseStarted(Self::round()));
 	}
@@ -1012,29 +995,28 @@ where
 	/// 1. [`SnapshotMetadata`]
 	/// 2. [`RoundSnapshot`]
 	/// 3. [`DesiredTargets`]
-	pub fn create_snapshot() {
+	pub(crate) fn create_snapshot() {
 		// if any of them don't exist, create all of them. This is a bit conservative.
 		let targets = T::DataProvider::targets();
 		let voters = T::DataProvider::voters();
 		let desired_targets = T::DataProvider::desired_targets();
 
-		<SnapshotMetadata<T>>::put(RoundSnapshotMetadata {
-			voters_len: voters.len() as u32,
-			targets_len: targets.len() as u32,
+		<SnapshotMetadata<T>>::put(SolutionOrSnapshotSize {
+			voters: voters.len() as u32,
+			targets: targets.len() as u32,
 		});
 		<DesiredTargets<T>>::put(desired_targets);
 		<Snapshot<T>>::put(RoundSnapshot { voters, targets });
 	}
 
+	/// Kill everything created by [`Pallet::create_snapshot`].
+	pub(crate) fn kill_snapshot() {
+		<Snapshot<T>>::kill();
+		<SnapshotMetadata<T>>::kill();
+		<DesiredTargets<T>>::kill();
+	}
+
 	/// Checks the feasibility of a solution.
-	///
-	/// This checks the solution for the following:
-	///
-	/// 0. **all** of the used indices must be correct.
-	/// 1. present correct number of winners.
-	/// 2. any assignment is checked to match with [Snapshot::voters].
-	/// 3. for each assignment, the check of `ElectionDataProvider` is also examined.
-	/// 4. the claimed score is valid.
 	fn feasibility_check(
 		solution: RawSolution<CompactOf<T>>,
 		compute: ElectionCompute,
@@ -1052,7 +1034,7 @@ where
 
 		// NOTE: this is a bit of duplicate, but we keep it around for veracity. The unsigned path
 		// already checked this in `unsigned_per_dispatch_checks`. The signed path *could* check it
-		// upon arrival.
+		// upon arrival, thus we would then remove it here. Given overlay it is cheap anyhow
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount,);
 
 		// read the entire snapshot.
@@ -1071,8 +1053,7 @@ where
 			.map(|i| target_at(i).ok_or(FeasibilityError::InvalidWinner))
 			.collect::<Result<Vec<T::AccountId>, FeasibilityError>>()?;
 
-		// Then convert compact -> Assignment. This will fail if any of the indices are gibberish.
-		// that winner indices are already checked.
+		// Then convert compact -> assignment. This will fail if any of the indices are gibberish.
 		let assignments = compact
 			.into_assignment(voter_at, target_at)
 			.map_err::<FeasibilityError, _>(Into::into)?;
@@ -1107,6 +1088,7 @@ where
 		// This might fail if the normalization fails. Very unlikely. See `integrity_test`.
 		let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
 			.map_err::<FeasibilityError, _>(Into::into)?;
+
 		// This might fail if one of the voter edges is pointing to a non-winner, which is not
 		// really possible anymore because all the winners come from the same `compact`.
 		let supports = sp_npos_elections::to_supports(&winners, &staked_assignments)
@@ -1134,16 +1116,11 @@ where
 		// TODO: clean signed submissions: test case: call `elect` in the middle of the signed phase.
 
 		// kill snapshots
-		<Snapshot<T>>::kill();
-		<SnapshotMetadata<T>>::kill();
-		<DesiredTargets<T>>::kill();
+		Self::kill_snapshot();
 	}
 
 	/// On-chain fallback of election.
-	fn onchain_fallback() -> Result<Supports<T::AccountId>, ElectionError>
-	where
-		ExtendedBalance: From<<T::OnChainAccuracy as PerThing>::Inner>,
-	{
+	fn onchain_fallback() -> Result<Supports<T::AccountId>, ElectionError> {
 		<onchain::OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<
 			T::AccountId,
 			T::BlockNumber,
@@ -1175,17 +1152,12 @@ where
 	}
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type Error = ElectionError;
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		let outcome = Self::do_elect();
-		// cleanup.
 		Self::post_elect();
 		outcome
 	}
@@ -1256,7 +1228,7 @@ mod feasibility_check {
 
 			assert_noop!(
 				TwoPhase::feasibility_check(solution, COMPUTE),
-				FeasibilityError::WrongWinnerCount
+				FeasibilityError::WrongWinnerCount,
 			);
 		})
 	}

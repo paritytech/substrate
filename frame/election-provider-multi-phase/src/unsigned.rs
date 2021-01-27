@@ -20,28 +20,65 @@
 use crate::*;
 use frame_support::dispatch::DispatchResult;
 use frame_system::offchain::SubmitTransaction;
-use sp_npos_elections::{seq_phragmen, CompactSolution, ElectionResult};
+use sp_npos_elections::{
+	seq_phragmen, CompactSolution, ElectionResult, assignment_ratio_to_staked_normalized,
+	assignment_staked_to_ratio_normalized,
+};
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
 use sp_std::cmp::Ordering;
 
 /// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election/";
+
 /// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
 /// within a window of 5 blocks.
 pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
 
-impl<T: Config> Pallet<T>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-{
-	/// Min a new npos solution.
+#[derive(Debug, Eq, PartialEq)]
+pub enum MinerError {
+	/// An internal error in the NPoS elections crate.
+	NposElections(sp_npos_elections::Error),
+	/// Snapshot data was unavailable unexpectedly.
+	SnapshotUnAvailable,
+	/// Submitting a transaction to the pool failed.
+	PoolSubmissionFailed,
+	/// The pre-dispatch checks failed for the mined solution.
+	// TODO: maybe wrap a DispatchError here to be able to clarify which one failed?
+	PreDispatchChecksFailed,
+}
+
+impl From<sp_npos_elections::Error> for MinerError {
+	fn from(e: sp_npos_elections::Error) -> Self {
+		MinerError::NposElections(e)
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	/// Mine a new solution, and submit it back to the chain as an unsigned transaction.
+	pub(crate) fn mine_and_submit() -> Result<(), MinerError> {
+		let balancing = Self::get_balancing_iters();
+		let (raw_solution, witness) = Self::mine_solution(balancing)?;
+
+		// ensure that this will pass the pre-dispatch checks
+		Self::unsigned_pre_dispatch_checks(&raw_solution).map_err(|e| {
+			log!(warn, "pre-disaptch-checks failed for mined solution: {:?}", e);
+			MinerError::PreDispatchChecksFailed
+		})?;
+
+		// submit the raw solution to the pool.
+		let call = Call::submit_unsigned(raw_solution, witness).into();
+
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
+			.map_err(|_| MinerError::PoolSubmissionFailed)
+	}
+
+	/// Mine a new npos solution.
 	pub fn mine_solution(
 		iters: usize,
-	) -> Result<(RawSolution<CompactOf<T>>, SolutionSize), ElectionError> {
+	) -> Result<(RawSolution<CompactOf<T>>, SolutionOrSnapshotSize), MinerError> {
 		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(ElectionError::SnapshotUnAvailable)?;
-		let desired_targets = Self::desired_targets().ok_or(ElectionError::SnapshotUnAvailable)?;
+			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
+		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 
 		seq_phragmen::<_, CompactAccuracyOf<T>>(
 			desired_targets as usize,
@@ -50,13 +87,6 @@ where
 			Some((iters, 0)),
 		)
 		.map_err(Into::into)
-		.and_then(|election_result| {
-			if election_result.winners.len() as u32 == desired_targets {
-				Ok(election_result)
-			} else {
-				Err(ElectionError::Feasibility(FeasibilityError::WrongWinnerCount))
-			}
-		})
 		.and_then(Self::prepare_election_result)
 	}
 
@@ -66,11 +96,14 @@ where
 	/// Will always reduce the solution as well.
 	pub fn prepare_election_result(
 		election_result: ElectionResult<T::AccountId, CompactAccuracyOf<T>>,
-	) -> Result<(RawSolution<CompactOf<T>>, SolutionSize), ElectionError> {
+	) -> Result<(RawSolution<CompactOf<T>>, SolutionOrSnapshotSize), MinerError> {
+		// NOTE: This code path is generally not optimized as it is run offchain. Could use some at
+		// some point though.
+
 		// storage items. Note: we have already read this from storage, they must be in cache.
 		let RoundSnapshot { voters, targets } =
-			Self::snapshot().ok_or(ElectionError::SnapshotUnAvailable)?;
-		let desired_targets = Self::desired_targets().ok_or(ElectionError::SnapshotUnAvailable)?;
+			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
+		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 
 		// closures.
 		let cache = helpers::generate_voter_cache::<T>(&voters);
@@ -83,16 +116,16 @@ where
 		let ElectionResult { assignments, winners } = election_result;
 
 		// convert to staked and reduce.
-		let mut staked =
-			sp_npos_elections::assignment_ratio_to_staked_normalized(assignments, &stake_of)
-				.map_err::<ElectionError, _>(Into::into)?;
+		let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)
+			.map_err::<MinerError, _>(Into::into)?;
 		sp_npos_elections::reduce(&mut staked);
 
 		// convert back to ration and make compact.
-		let ratio = sp_npos_elections::assignment_staked_to_ratio_normalized(staked)?;
+		let ratio = assignment_staked_to_ratio_normalized(staked)?;
 		let compact = <CompactOf<T>>::from_assignment(ratio, &voter_index, &target_index)?;
 
-		let size = SolutionSize { voters: voters.len() as u32, targets: targets.len() as u32 };
+		let size =
+			SolutionOrSnapshotSize { voters: voters.len() as u32, targets: targets.len() as u32 };
 		let maximum_allowed_voters = Self::maximum_voter_for_weight::<T::WeightInfo>(
 			desired_targets,
 			size,
@@ -116,7 +149,8 @@ where
 
 	/// Get a random number of iterations to run the balancing in the OCW.
 	///
-	/// Uses the offchain seed to generate a random number, maxed with `T::MinerMaxIterations`.
+	/// Uses the offchain seed to generate a random number, maxed with
+	/// [`Config::MinerMaxIterations`].
 	pub fn get_balancing_iters() -> usize {
 		match T::MinerMaxIterations::get() {
 			0 => 0,
@@ -150,7 +184,7 @@ where
 		maximum_allowed_voters: u32,
 		mut compact: CompactOf<T>,
 		nominator_index: FN,
-	) -> Result<CompactOf<T>, ElectionError>
+	) -> Result<CompactOf<T>, MinerError>
 	where
 		for<'r> FN: Fn(&'r T::AccountId) -> Option<CompactVoterIndexOf<T>>,
 	{
@@ -158,7 +192,7 @@ where
 			Some(to_remove) if to_remove > 0 => {
 				// grab all voters and sort them by least stake.
 				let RoundSnapshot { voters, .. } =
-					Self::snapshot().ok_or(ElectionError::SnapshotUnAvailable)?;
+					Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
 				let mut voters_sorted = voters
 					.into_iter()
 					.map(|(who, stake, _)| (who.clone(), stake))
@@ -171,7 +205,7 @@ where
 				for (maybe_index, _stake) in
 					voters_sorted.iter().map(|(who, stake)| (nominator_index(&who), stake))
 				{
-					let index = maybe_index.ok_or(ElectionError::SnapshotUnAvailable)?;
+					let index = maybe_index.ok_or(MinerError::SnapshotUnAvailable)?;
 					if compact.remove_voter(index) {
 						removed += 1
 					}
@@ -195,7 +229,7 @@ where
 	/// This only returns a value between zero and `size.nominators`.
 	pub fn maximum_voter_for_weight<W: WeightInfo>(
 		desired_winners: u32,
-		size: SolutionSize,
+		size: SolutionOrSnapshotSize,
 		max_weight: Weight,
 	) -> u32 {
 		if size.voters < 1 {
@@ -271,9 +305,7 @@ where
 	/// don't run twice within a window of length [`OFFCHAIN_REPEAT`].
 	///
 	/// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
-	pub(crate) fn set_check_offchain_execution_status(
-		now: T::BlockNumber,
-	) -> Result<(), &'static str> {
+	pub(crate) fn try_acquire_offchain_lock(now: T::BlockNumber) -> Result<(), &'static str> {
 		let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 		let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
 
@@ -305,18 +337,13 @@ where
 		}
 	}
 
-	/// Mine a new solution, and submit it back to the chain as an unsigned transaction.
-	pub(crate) fn mine_and_submit() -> Result<(), ElectionError> {
-		let balancing = Self::get_balancing_iters();
-		let (raw_solution, witness) = Self::mine_solution(balancing)?;
-
-		// submit the raw solution to the pool.
-		let call = Call::submit_unsigned(raw_solution, witness).into();
-
-		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
-			.map_err(|_| ElectionError::PoolSubmissionFailed)
-	}
-
+	/// Do the basics checks that MUST happen during the validation and pre-dispatch of an unsigned
+	/// transaction.
+	///
+	/// Can optionally also be called during dispatch, if needed.
+	///
+	/// NOTE: Ideally, these tests should move more and more outside of this and more to the miner's
+	/// code, so that we do less and less storage reads here.
 	pub(crate) fn unsigned_pre_dispatch_checks(
 		solution: &RawSolution<CompactOf<T>>,
 	) -> DispatchResult {
@@ -327,7 +354,7 @@ where
 		ensure!(
 			Self::desired_targets().unwrap_or_default()
 				== solution.compact.unique_targets().len() as u32,
-			Error::<T>::WrongWinnerCount,
+			Error::<T>::PreDispatchWrongWinnerCount,
 		);
 
 		// ensure score is being improved. Panic henceforth.
@@ -337,7 +364,7 @@ where
 				q.score,
 				T::SolutionImprovementThreshold::get()
 			)),
-			Error::<T>::WeakSubmission
+			Error::<T>::PreDispatchWeakSubmission,
 		);
 
 		Ok(())
@@ -352,7 +379,7 @@ mod weight_trim {
 	fn find_max_voter_binary_search_works() {
 		<MockWeightInfo>::set(true);
 
-		let w = SolutionSize { voters: 10, targets: 0 };
+		let w = SolutionOrSnapshotSize { voters: 10, targets: 0 };
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 0), 0);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 1), 0);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 9), 0);
@@ -362,7 +389,7 @@ mod weight_trim {
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 20), 2);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 25), 3);
 
-		let w = SolutionSize { voters: 1, targets: 0 };
+		let w = SolutionOrSnapshotSize { voters: 1, targets: 0 };
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 0), 0);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 1), 0);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 9), 0);
@@ -372,7 +399,7 @@ mod weight_trim {
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 20), 1);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 25), 1);
 
-		let w = SolutionSize { voters: 2, targets: 0 };
+		let w = SolutionOrSnapshotSize { voters: 2, targets: 0 };
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 0), 0);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 1), 0);
 		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 9), 0);
@@ -436,6 +463,19 @@ mod tests {
 			)
 			.is_ok());
 			assert!(<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).is_ok());
+
+			// unsigned -- but not enabled.
+			<CurrentPhase<Runtime>>::put(Phase::Unsigned((false, 25)));
+			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(matches!(
+				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
+					.unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
+			));
+			assert!(matches!(
+				<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
+				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
+			));
 		})
 	}
 
@@ -494,7 +534,7 @@ mod tests {
 
 	#[test]
 	fn priority_is_set() {
-		ExtBuilder::default().unsigned_priority(20).desired_targets(0).build_and_execute(|| {
+		ExtBuilder::default().miner_tx_priority(20).desired_targets(0).build_and_execute(|| {
 			roll_to(25);
 			assert!(TwoPhase::current_phase().is_unsigned());
 
@@ -514,7 +554,7 @@ mod tests {
 	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
 	                           deprive validator from their authoring reward.: \
 	                           DispatchError::Module { index: 0, error: 1, message: \
-	                           Some(\"WrongWinnerCount\") }")]
+	                           Some(\"PreDispatchWrongWinnerCount\") }")]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
@@ -603,14 +643,16 @@ mod tests {
 
 	#[test]
 	fn miner_will_not_submit_if_not_enough_winners() {
-		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
+		let (mut ext, _) = ExtBuilder::default().desired_targets(8).build_offchainify(0);
+
+		ext.execute_with(|| {
 			roll_to(25);
 			assert!(TwoPhase::current_phase().is_unsigned());
 
-			// mine seq_phragmen solution with 2 iters.
+			// can't have 8 results.
 			assert_eq!(
-				TwoPhase::mine_solution(2).unwrap_err(),
-				ElectionError::Feasibility(FeasibilityError::WrongWinnerCount),
+				TwoPhase::mine_and_submit().unwrap_err(),
+				MinerError::PreDispatchChecksFailed,
 			);
 		})
 	}
@@ -658,7 +700,7 @@ mod tests {
 				assert_eq!(solution.score[0], 12);
 				assert_noop!(
 					TwoPhase::unsigned_pre_dispatch_checks(&solution),
-					Error::<Runtime>::WeakSubmission,
+					Error::<Runtime>::PreDispatchWeakSubmission,
 				);
 				// submitting this will actually panic.
 
@@ -692,25 +734,25 @@ mod tests {
 			assert!(TwoPhase::current_phase().is_unsigned());
 
 			// first execution -- okay.
-			assert!(TwoPhase::set_check_offchain_execution_status(25).is_ok());
+			assert!(TwoPhase::try_acquire_offchain_lock(25).is_ok());
 
 			// next block: rejected.
-			assert!(TwoPhase::set_check_offchain_execution_status(26).is_err());
+			assert!(TwoPhase::try_acquire_offchain_lock(26).is_err());
 
 			// allowed after `OFFCHAIN_REPEAT`
-			assert!(TwoPhase::set_check_offchain_execution_status((26 + OFFCHAIN_REPEAT).into())
+			assert!(TwoPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT).into())
 				.is_ok());
 
 			// a fork like situation: re-execute last 3.
-			assert!(TwoPhase::set_check_offchain_execution_status(
+			assert!(TwoPhase::try_acquire_offchain_lock(
 				(26 + OFFCHAIN_REPEAT - 3).into()
 			)
 			.is_err());
-			assert!(TwoPhase::set_check_offchain_execution_status(
+			assert!(TwoPhase::try_acquire_offchain_lock(
 				(26 + OFFCHAIN_REPEAT - 2).into()
 			)
 			.is_err());
-			assert!(TwoPhase::set_check_offchain_execution_status(
+			assert!(TwoPhase::try_acquire_offchain_lock(
 				(26 + OFFCHAIN_REPEAT - 1).into()
 			)
 			.is_err());

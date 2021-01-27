@@ -25,9 +25,8 @@ use frame_support::{assert_ok, traits::OnInitialize};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_election_providers::Assignment;
-use sp_npos_elections::ExtendedBalance;
-use sp_runtime::InnerOf;
 use sp_arithmetic::traits::One;
+use sp_runtime::InnerOf;
 use sp_std::convert::TryInto;
 
 const SEED: u32 = 0;
@@ -36,15 +35,10 @@ const SEED: u32 = 0;
 ///
 /// The snapshot is also created internally.
 fn solution_with_size<T: Config>(
-	size: SolutionSize,
+	size: SolutionOrSnapshotSize,
 	active_voters_count: u32,
 	desired_targets: u32,
-) -> RawSolution<CompactOf<T>>
-where
-	ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-	ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-	<InnerOf<CompactAccuracyOf<T>> as sp_std::convert::TryFrom<usize>>::Error: sp_std::fmt::Debug,
-{
+) -> RawSolution<CompactOf<T>> {
 	assert!(size.targets >= desired_targets, "must have enough targets");
 	assert!(
 		size.targets >= (<CompactOf<T>>::LIMIT * 2) as u32,
@@ -108,9 +102,9 @@ where
 	assert_eq!(all_voters.len() as u32, size.voters);
 	assert_eq!(winners.len() as u32, desired_targets);
 
-	<SnapshotMetadata<T>>::put(RoundSnapshotMetadata {
-		voters_len: all_voters.len() as u32,
-		targets_len: targets.len() as u32,
+	<SnapshotMetadata<T>>::put(SolutionOrSnapshotSize {
+		voters: all_voters.len() as u32,
+		targets: targets.len() as u32,
 	});
 	<DesiredTargets<T>>::put(desired_targets);
 	<Snapshot<T>>::put(RoundSnapshot { voters: all_voters.clone(), targets: targets.clone() });
@@ -129,7 +123,7 @@ where
 		.iter()
 		.map(|(voter, _stake, votes)| {
 			let percent_per_edge: InnerOf<CompactAccuracyOf<T>> =
-				(100 / votes.len()).try_into().unwrap();
+				(100 / votes.len()).try_into().unwrap_or_else(|_| panic!("failed to convert"));
 			Assignment {
 				who: voter.clone(),
 				distribution: votes
@@ -148,12 +142,6 @@ where
 }
 
 benchmarks! {
-	where_clause {
-		where ExtendedBalance: From<InnerOf<CompactAccuracyOf<T>>>,
-		<InnerOf<CompactAccuracyOf<T>> as sp_std::convert::TryFrom<usize>>::Error: sp_std::fmt::Debug,
-		ExtendedBalance: From<InnerOf<OnChainAccuracyOf<T>>>,
-	}
-
 	on_initialize_nothing {
 		assert!(<TwoPhase<T>>::current_phase().is_off());
 	}: {
@@ -277,7 +265,7 @@ benchmarks! {
 		// number of desired targets. Must be a subset of `t` component.
 		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
-		let witness = SolutionSize { voters: v, targets: t };
+		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(witness, a, d);
 
 		assert!(<TwoPhase<T>>::queued_solution().is_none());
@@ -299,7 +287,7 @@ benchmarks! {
 		// number of desired targets. Must be a subset of `t` component.
 		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
-		let size = SolutionSize { voters: v, targets: t };
+		let size = SolutionOrSnapshotSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(size, a, d);
 
 		assert_eq!(raw_solution.compact.voter_count() as u32, a);

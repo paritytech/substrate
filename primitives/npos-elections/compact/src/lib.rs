@@ -197,8 +197,7 @@ fn struct_def(
 			fn unique_targets(&self) -> Vec<Self::Target> {
 				// NOTE: this implementation returns the targets sorted, but we don't use it yet per
 				// se, nor is the API enforcing it.
-				let mut all_targets: Vec<Self::Target> =
-					Vec::with_capacity(self.average_edge_count());
+				let mut all_targets: Vec<Self::Target> = Vec::with_capacity(self.average_edge_count());
 				let mut maybe_insert_target = |t: Self::Target| {
 					match all_targets.binary_search(&t) {
 						Ok(_) => (),
@@ -363,6 +362,7 @@ fn imports() -> Result<TokenStream2> {
 		}
 	}
 }
+
 struct SolutionDef {
 	vis: syn::Visibility,
 	ident: syn::Ident,

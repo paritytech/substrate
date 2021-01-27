@@ -17,11 +17,8 @@
 
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
-use sp_arithmetic::InnerOf;
 use crate::{ElectionDataProvider, ElectionProvider};
-use sp_npos_elections::{
-	ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Supports, VoteWeight,
-};
+use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
 /// Errors of the on-chain election.
@@ -60,10 +57,7 @@ pub trait Config {
 	type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 }
 
-impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T>
-where
-	ExtendedBalance: From<InnerOf<T::Accuracy>>,
-{
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequentialPhragmen<T> {
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
@@ -78,21 +72,18 @@ where
 			stake_map.insert(v.clone(), *s);
 		});
 
-		let stake_of = Box::new(|w: &T::AccountId| -> VoteWeight {
+		let stake_of = |w: &T::AccountId| -> VoteWeight {
 			stake_map.get(w).cloned().unwrap_or_default()
-		});
+		};
 
-		let ElectionResult {
-			winners,
-			assignments,
-		} = sp_npos_elections::seq_phragmen::<_, T::Accuracy>(desired_targets, targets, voters, None)
-			.map_err(Error::from)?;
+		let ElectionResult { winners, assignments } =
+			seq_phragmen::<_, T::Accuracy>(desired_targets, targets, voters, None)
+				.map_err(Error::from)?;
 
-		let staked =
-			sp_npos_elections::assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
-		let winners = sp_npos_elections::to_without_backing(winners);
+		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
+		let winners = to_without_backing(winners);
 
-		sp_npos_elections::to_supports(&winners, &staked).map_err(Error::from)
+		to_supports(&winners, &staked).map_err(Error::from)
 	}
 }
 

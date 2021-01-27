@@ -52,44 +52,22 @@ fn float_phragmen_poc_works() {
 
 	assert_eq!(
 		support_map.get(&2).unwrap(),
-		&_Support {
-			own: 0.0,
-			total: 25.0,
-			others: vec![(10u64, 10.0), (30u64, 15.0)]
-		}
+		&_Support { own: 0.0, total: 25.0, others: vec![(10u64, 10.0), (30u64, 15.0)] }
 	);
 	assert_eq!(
 		support_map.get(&3).unwrap(),
-		&_Support {
-			own: 0.0,
-			total: 35.0,
-			others: vec![(20u64, 20.0), (30u64, 15.0)]
-		}
+		&_Support { own: 0.0, total: 35.0, others: vec![(20u64, 20.0), (30u64, 15.0)] }
 	);
 
-	equalize_float(
-		phragmen_result.assignments,
-		&mut support_map,
-		0.0,
-		2,
-		stake_of,
-	);
+	equalize_float(phragmen_result.assignments, &mut support_map, 0.0, 2, stake_of);
 
 	assert_eq!(
 		support_map.get(&2).unwrap(),
-		&_Support {
-			own: 0.0,
-			total: 30.0,
-			others: vec![(10u64, 10.0), (30u64, 20.0)]
-		}
+		&_Support { own: 0.0, total: 30.0, others: vec![(10u64, 10.0), (30u64, 20.0)] }
 	);
 	assert_eq!(
 		support_map.get(&3).unwrap(),
-		&_Support {
-			own: 0.0,
-			total: 30.0,
-			others: vec![(20u64, 20.0), (30u64, 10.0)]
-		}
+		&_Support { own: 0.0, total: 30.0, others: vec![(20u64, 20.0), (30u64, 10.0)] }
 	);
 }
 
@@ -1171,6 +1149,7 @@ mod solution_type {
 	type TestAccuracy = Percent;
 
 	generate_solution_type!(pub struct TestSolutionCompact::<u32, u8, TestAccuracy>(16));
+
 	#[allow(dead_code)]
 	mod __private {
 		// This is just to make sure that that the compact can be generated in a scope without any

@@ -494,12 +494,18 @@ ss58_address_format!(
 		(24, "zero", "ZERO mainnet, standard account (*25519).")
 	AlphavilleAccount =>
 		(25, "alphaville", "ZERO testnet, standard account (*25519).")
+	JupiterAccount =>
+		(26, "jupiter", "Jupiter testnet, standard account (*25519).")
+	PatractAccount =>
+		(27, "patract", "Patract mainnet, standard account (*25519).")
 	SubsocialAccount =>
 		(28, "subsocial", "Subsocial network, standard account (*25519).")
 	DhiwayAccount =>
 		(29, "cord", "Dhiway CORD network, standard account (*25519).")	
 	PhalaAccount =>
 		(30, "phala", "Phala Network, standard account (*25519).")
+	LitentryAccount =>
+		(31, "litentry", "Litentry Network, standard account (*25519).")
 	RobonomicsAccount =>
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>

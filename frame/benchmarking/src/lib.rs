@@ -68,10 +68,6 @@ pub use sp_storage::TrackedStorageKey;
 /// for arbitrary expresions to be evaluated in a benchmark (including for example,
 /// `on_initialize`).
 ///
-/// The macro allows for common parameters whose ranges and instancing expressions may be drawn upon
-/// (or not) by each arm. Syntax is available to allow for only the range to be drawn upon if
-/// desired, allowing an alternative instancing expression to be given.
-///
 /// Note that the ranges are *inclusive* on both sides. This is in contrast to ranges in Rust which
 /// are left-inclusive right-exclusive.
 ///
@@ -79,9 +75,6 @@ pub use sp_storage::TrackedStorageKey;
 /// which is run afterwards. All code blocks may draw upon the specific value of each parameter
 /// at any time. Local variables are shared between the two pre- and post- code blocks, but do not
 /// leak from the interior of any instancing expressions.
-///
-/// Any common parameters that are unused in an arm do not have their instancing expressions
-/// evaluated.
 ///
 /// Example:
 /// ```ignore
@@ -105,8 +98,7 @@ pub use sp_storage::TrackedStorageKey;
 ///   // third dispatchable: baz; this is a user dispatchable. It isn't dependent on length like the
 ///   // other two but has its own complexity `c` that needs setting up. It uses `caller` (in the
 ///   // pre-instancing block) within the code block. This is only allowed in the param instancers
-///   // of arms. Instancers of common params cannot optimistically draw upon hypothetical variables
-///   // that the arm's pre-instancing code block might have declared.
+///   // of arms.
 ///   baz1 {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c(&caller, c);
@@ -447,50 +439,6 @@ macro_rules! benchmark_backend {
 			}
 			{ $eval }
 			{ $( $rest )* }
-			$postcode
-		}
-	};
-	// mutation arm to look after defaulting to a common param
-	(
-		{ $( $instance:ident )? }
-		$name:ident
-		{ $( $where_clause:tt )* }
-		{ $( $parsed:tt )* }
-		{ $eval:block }
-		{
-			let $param:ident in ...;
-			$( $rest:tt )*
-		}
-		$postcode:block
-	) => {
-		$crate::benchmark_backend! {
-			{ $( $instance)? }
-			$name
-			{ $( $where_clause )* }
-			{ $( $parsed )* }
-			{ $eval }
-			$postcode
-		}
-	};
-	// mutation arm to look after defaulting only the range to common param
-	(
-		{ $( $instance:ident )? }
-		$name:ident
-		{ $( $where_clause:tt )* }
-		{ $( $parsed:tt )* }
-		{ $eval:block }
-		{
-			let $param:ident in _ .. _ => $param_instancer:expr ;
-			$( $rest:tt )*
-		}
-		$postcode:block
-	) => {
-		$crate::benchmark_backend! {
-			{ $( $instance)? }
-			$name
-			{ $( $where_clause )* }
-			{ $( $parsed )* }
-			{ $eval }
 			$postcode
 		}
 	};

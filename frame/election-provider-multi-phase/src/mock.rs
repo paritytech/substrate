@@ -38,7 +38,7 @@ use sp_npos_elections::{
 };
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, Block as BlockT, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	PerU16,
 };
 use std::sync::Arc;
@@ -93,11 +93,6 @@ pub fn roll_to_with_ocw(n: u64) {
 	}
 }
 
-/// Get the free and reserved balance of some account.
-pub fn balances(who: &AccountId) -> (Balance, Balance) {
-	(Balances::free_balance(who), Balances::reserved_balance(who))
-}
-
 /// Spit out a verifiable raw solution.
 ///
 /// This is a good example of what an offchain miner would do.
@@ -132,9 +127,9 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	RawSolution { compact, score, round }
 }
 
-pub fn witness() -> SolutionSize {
+pub fn witness() -> SolutionOrSnapshotSize {
 	TwoPhase::snapshot()
-		.map(|snap| SolutionSize {
+		.map(|snap| SolutionOrSnapshotSize {
 			voters: snap.voters.len() as u32,
 			targets: snap.targets.len() as u32,
 		})
@@ -210,7 +205,7 @@ parameter_types! {
 	pub static SignedRewardMax: Balance = 10;
 	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxIterations: u32 = 5;
-	pub static UnsignedPriority: u64 = 100;
+	pub static MinerTxPriority: u64 = 100;
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MockWeightInfo: bool = false;
@@ -299,7 +294,7 @@ impl crate::Config for Runtime {
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
-	type UnsignedPriority = UnsignedPriority;
+	type MinerTxPriority = MinerTxPriority;
 	type SignedRewardBase = SignedRewardBase;
 	type SignedRewardFactor = SignedRewardFactor;
 	type SignedRewardMax = SignedRewardMax;
@@ -348,8 +343,8 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 }
 
 impl ExtBuilder {
-	pub fn unsigned_priority(self, p: u64) -> Self {
-		<UnsignedPriority>::set(p);
+	pub fn miner_tx_priority(self, p: u64) -> Self {
+		<MinerTxPriority>::set(p);
 		self
 	}
 	pub fn solution_improvement_threshold(self, p: Perbill) -> Self {
@@ -440,4 +435,8 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(test)
 	}
+}
+
+pub(crate) fn balances(who: &u64) -> (u64, u64) {
+	(Balances::free_balance(who), Balances::reserved_balance(who))
 }

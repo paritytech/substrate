@@ -29,7 +29,7 @@ use sp_npos_elections::{
 	ExtendedBalance, CompactSolution,
 };
 use sp_runtime::{
-	offchain::storage::StorageValueRef, traits::TrailingZeroInput, PerThing, RuntimeDebug,
+	offchain::storage::StorageValueRef, traits::TrailingZeroInput, RuntimeDebug,
 };
 use sp_std::{convert::TryInto, prelude::*};
 
@@ -324,10 +324,7 @@ pub fn prepare_submission<T: Config>(
 ) -> Result<
 	(Vec<ValidatorIndex>, CompactAssignments, ElectionScore, ElectionSize),
 	OffchainElectionError,
->
-where
-	ExtendedBalance: From<<OffchainAccuracy as PerThing>::Inner>,
-{
+> {
 	// make sure that the snapshot is available.
 	let snapshot_validators =
 		<Module<T>>::snapshot_validators().ok_or(OffchainElectionError::SnapshotUnavailable)?;
@@ -520,6 +517,9 @@ mod test {
 		}
 		fn submit_solution_better(v: u32, n: u32, a: u32, w: u32) -> Weight {
 			(0 * v + 0 * n + 1000 * a + 0 * w) as Weight
+		}
+		fn kick(w: u32) -> Weight {
+			unimplemented!()
 		}
 	}
 

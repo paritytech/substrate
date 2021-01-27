@@ -159,7 +159,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
-use sp_std::prelude::*;
+use sp_std::{prelude::*, fmt::Debug};
 
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
@@ -196,6 +196,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	}
 }
 
+#[cfg(feature = "std")]
 impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
 	fn targets() -> Vec<AccountId> {
 		Default::default()
@@ -218,7 +219,7 @@ impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for ()
 /// implemented of this trait through [`ElectionProvider::DataProvider`].
 pub trait ElectionProvider<AccountId, BlockNumber> {
 	/// The error type that is returned by the provider.
-	type Error: sp_std::fmt::Debug;
+	type Error: Debug;
 
 	/// The data provider of the election.
 	type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
@@ -229,6 +230,7 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	fn elect() -> Result<Supports<AccountId>, Self::Error>;
 }
 
+#[cfg(feature = "std")]
 impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 	type Error = &'static str;
 	type DataProvider = ();

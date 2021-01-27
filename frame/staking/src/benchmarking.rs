@@ -21,6 +21,7 @@ use super::*;
 use crate::Module as Staking;
 use testing_utils::*;
 
+use sp_npos_elections::CompactSolution;
 use sp_runtime::traits::One;
 use frame_system::RawOrigin;
 pub use frame_benchmarking::{benchmarks, account, whitelisted_caller, whitelist_account};
@@ -62,6 +63,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	let (v_stash, v_controller) = create_stash_controller::<T>(0, 100, destination.clone())?;
 	let validator_prefs = ValidatorPrefs {
 		commission: Perbill::from_percent(50),
+		.. Default::default()
 	};
 	Staking::<T>::validate(RawOrigin::Signed(v_controller).into(), validator_prefs)?;
 	let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
@@ -195,6 +197,61 @@ benchmarks! {
 	}: _(RawOrigin::Signed(controller), prefs)
 	verify {
 		assert!(Validators::<T>::contains_key(stash));
+	}
+
+	kick {
+		// scenario: we want to kick `k` nominators from nominating us (we are a validator).
+		// we'll assume that `k` is under 128 for the purposes of determining the slope.
+		// each nominator should have `MAX_NOMINATIONS` validators nominated, and our validator
+		// should be somewhere in there.
+		let k in 1 .. 128;
+
+		// these are the other validators; there are `MAX_NOMINATIONS - 1` of them, so there are a
+		// total of `MAX_NOMINATIONS` validators in the system.
+		let rest_of_validators = create_validators::<T>(MAX_NOMINATIONS as u32 - 1, 100)?;
+
+		// this is the validator that will be kicking.
+		let (stash, controller) = create_stash_controller::<T>(MAX_NOMINATIONS as u32 - 1, 100, Default::default())?;
+		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash.clone());
+
+		// they start validating.
+		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), Default::default())?;
+
+		// we now create the nominators. there will be `k` of them; each will nominate all
+		// validators. we will then kick each of the `k` nominators from the main validator.
+		let mut nominator_stashes = Vec::with_capacity(k as usize);
+		for i in 0 .. k {
+			// create a nominator stash.
+			let (n_stash, n_controller) = create_stash_controller::<T>(MAX_NOMINATIONS as u32 + i, 100, Default::default())?;
+
+			// bake the nominations; we first clone them from the rest of the validators.
+			let mut nominations = rest_of_validators.clone();
+			// then insert "our" validator somewhere in there (we vary it) to avoid accidental
+			// optimisations/pessimisations.
+			nominations.insert(i as usize % (nominations.len() + 1), stash_lookup.clone());
+			// then we nominate.
+			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), nominations)?;
+
+			nominator_stashes.push(n_stash);
+		}
+
+		// all nominators now should be nominating our validator...
+		for n in nominator_stashes.iter() {
+			assert!(Nominators::<T>::get(n).unwrap().targets.contains(&stash));
+		}
+
+		// we need the unlookuped version of the nominator stash for the kick.
+		let kicks = nominator_stashes.iter()
+			.map(|n| T::Lookup::unlookup(n.clone()))
+			.collect::<Vec<_>>();
+
+		whitelist_account!(controller);
+	}: _(RawOrigin::Signed(controller), kicks)
+	verify {
+		// all nominators now should *not* be nominating our validator...
+		for n in nominator_stashes.iter() {
+			assert!(!Nominators::<T>::get(n).unwrap().targets.contains(&stash));
+		}
 	}
 
 	// Worst case scenario, MAX_NOMINATIONS
@@ -397,7 +454,7 @@ benchmarks! {
 		let s in 1 .. MAX_SPANS;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
 		add_slashing_spans::<T>(&stash, s);
-		T::Currency::make_free_balance_be(&stash, 0u32.into());
+		T::Currency::make_free_balance_be(&stash, T::Currency::minimum_balance());
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), stash.clone(), s)
 	verify {
@@ -813,6 +870,7 @@ mod tests {
 			assert_ok!(test_benchmark_withdraw_unbonded_update::<Test>());
 			assert_ok!(test_benchmark_withdraw_unbonded_kill::<Test>());
 			assert_ok!(test_benchmark_validate::<Test>());
+			assert_ok!(test_benchmark_kick::<Test>());
 			assert_ok!(test_benchmark_nominate::<Test>());
 			assert_ok!(test_benchmark_chill::<Test>());
 			assert_ok!(test_benchmark_set_payee::<Test>());

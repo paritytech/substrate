@@ -61,7 +61,7 @@
 //!
 //! The `Assignment` field of the election result is voter-major, i.e. it is from the perspective of
 //! the voter. The struct that represents the opposite is called a `Support`. This struct is usually
-//! accessed in a map-like manner, i.e. keyed vy voters, therefor it is stored as a mapping called
+//! accessed in a map-like manner, i.e. keyed by voters, therefor it is stored as a mapping called
 //! `SupportMap`.
 //!
 //! Moreover, the support is built from absolute backing values, not ratios like the example above.
@@ -75,7 +75,7 @@
 
 use sp_arithmetic::{
 	traits::{Bounded, UniqueSaturatedInto, Zero},
-	InnerOf, Normalizable, PerThing, Rational128, ThresholdOrd,
+	Normalizable, PerThing, Rational128, ThresholdOrd,
 };
 use sp_std::{
 	cell::RefCell,
@@ -87,6 +87,7 @@ use sp_std::{
 	prelude::*,
 	rc::Rc,
 };
+use sp_core::RuntimeDebug;
 
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
@@ -137,16 +138,16 @@ pub trait CompactSolution: Sized {
 	/// The maximum number of votes that are allowed.
 	const LIMIT: usize;
 
-	/// The voter type.
+	/// The voter type. Needs to be an index (convert to usize).
 	type Voter: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
 
-	/// The target type
+	/// The target type. Needs to be an index (convert to usize).
 	type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
 
 	/// The weight/accuracy type of each vote.
 	type Accuracy: PerThing128;
 
-	/// Build self from a `Vec<Assignment<A, Self::Accuracy>>`.
+	/// Build self from a `assignments: Vec<Assignment<A, Self::Accuracy>>`.
 	fn from_assignment<FV, FT, A>(
 		assignments: Vec<Assignment<A, Self::Accuracy>>,
 		voter_index: FV,
@@ -166,7 +167,7 @@ pub trait CompactSolution: Sized {
 
 	/// Get the length of all the voters that this type is encoding.
 	///
-	/// This is basically the same as the number of assignments.
+	/// This is basically the same as the number of assignments, or number of active voters.
 	fn voter_count(&self) -> usize;
 
 	/// Get the total count of edges.
@@ -193,7 +194,7 @@ pub trait CompactSolution: Sized {
 	/// This will only search until the first instance of `to_remove`, and return true. If
 	/// no instance is found (no-op), then it returns false.
 	///
-	/// In other words, if this return true, exactly one element must have been removed from
+	/// In other words, if this return true, exactly **one** element must have been removed from
 	/// `self.len()`.
 	fn remove_voter(&mut self, to_remove: Self::Voter) -> bool;
 
@@ -208,7 +209,6 @@ pub trait CompactSolution: Sized {
 	where
 		for<'r> FS: Fn(&'r A) -> VoteWeight,
 		A: IdentifierT,
-		ExtendedBalance: From<InnerOf<Self::Accuracy>>,
 	{
 		let ratio = self.into_assignment(voter_at, target_at)?;
 		let staked = helpers::assignment_ratio_to_staked_normalized(ratio, stake_of)?;
@@ -230,7 +230,7 @@ pub trait PerThing128: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance>
 impl<T: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance>> PerThing128 for T {}
 
 /// The errors that might occur in the this crate and compact.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum Error {
 	/// While going from compact to staked, the stake of all the edges has gone above the total and
 	/// the last stake cannot be assigned.
@@ -263,7 +263,7 @@ pub type WithApprovalOf<A> = (A, ExtendedBalance);
 pub type CandidatePtr<A> = Rc<RefCell<Candidate<A>>>;
 
 /// A candidate entity for the election.
-#[derive(Debug, Clone, Default)]
+#[derive(RuntimeDebug, Clone, Default)]
 pub struct Candidate<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -331,14 +331,14 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
 	/// site might compensate by calling `normalize()` on the returned `Assignment` as a
 	/// post-precessing.
-	pub fn into_assignment<P: PerThing>(self) -> Option<Assignment<AccountId, P>>
-	where
-		ExtendedBalance: From<InnerOf<P>>,
-	{
+	pub fn into_assignment<P: PerThing>(self) -> Option<Assignment<AccountId, P>> {
 		let who = self.who;
 		let budget = self.budget;
-		let distribution = self.edges.into_iter().filter_map(|e| {
-			let per_thing = P::from_rational_approximation(e.weight, budget);
+		let distribution = self
+			.edges
+			.into_iter()
+			.filter_map(|e| {
+				let per_thing = P::from_rational_approximation(e.weight, budget);
 			// trim zero edges.
 			if per_thing.is_zero() { None } else { Some((e.who, per_thing)) }
 		}).collect::<Vec<_>>();
@@ -404,7 +404,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 }
 
 /// Final result of the election.
-#[derive(Debug)]
+#[derive(RuntimeDebug)]
 pub struct ElectionResult<AccountId, P: PerThing> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
@@ -415,7 +415,7 @@ pub struct ElectionResult<AccountId, P: PerThing> {
 }
 
 /// A voter's stake assignment among a set of targets, represented as ratios.
-#[derive(Debug, Clone, Default)]
+#[derive(RuntimeDebug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct Assignment<AccountId, P: PerThing> {
 	/// Voter's identifier.
@@ -427,10 +427,11 @@ pub struct Assignment<AccountId, P: PerThing> {
 impl<AccountId: IdentifierT, P: PerThing128> Assignment<AccountId, P> {
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
-	/// It needs `stake` which is the total budget of the voter. If `fill` is set to true, it
-	/// _tries_ to ensure that all the potential rounding errors are compensated and the
-	/// distribution's sum is exactly equal to the total budget, by adding or subtracting the
-	/// remainder from the last distribution.
+	/// It needs `stake` which is the total budget of the voter.
+	///
+	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
+	/// site might compensate by calling `try_normalize()` on the returned `StakedAssignment` as a
+	/// post-precessing.
 	///
 	/// If an edge ratio is [`Bounded::min_value()`], it is dropped. This edge can never mean
 	/// anything useful.
@@ -484,7 +485,7 @@ impl<AccountId: IdentifierT, P: PerThing128> Assignment<AccountId, P> {
 
 /// A voter's stake assignment among a set of targets, represented as absolute values in the scale
 /// of [`ExtendedBalance`].
-#[derive(Debug, Clone, Default)]
+#[derive(RuntimeDebug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct StakedAssignment<AccountId> {
 	/// Voter's identifier
@@ -505,7 +506,6 @@ impl<AccountId> StakedAssignment<AccountId> {
 	/// can never be re-created and does not mean anything useful anymore.
 	pub fn into_assignment<P: PerThing>(self) -> Assignment<AccountId, P>
 	where
-		ExtendedBalance: From<InnerOf<P>>,
 		AccountId: IdentifierT,
 	{
 		let stake = self.total();
@@ -564,7 +564,7 @@ impl<AccountId> StakedAssignment<AccountId> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet they
 /// do not necessarily have to be the same.
-#[derive(Default, Debug, Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Default, RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Support<AccountId> {
 	/// Total support.
@@ -704,10 +704,7 @@ where
 /// greater or less than `that`.
 ///
 /// Note that the third component should be minimized.
-pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool
-where
-	ExtendedBalance: From<InnerOf<P>>,
-{
+pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool {
 	match this
 		.iter()
 		.zip(that.iter())
