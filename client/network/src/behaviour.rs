@@ -30,7 +30,9 @@ use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::identify::IdentifyInfo;
 use libp2p::kad::record;
-use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, toggle::Toggle};
+use libp2p::swarm::{
+	NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, toggle::Toggle
+};
 use log::debug;
 use prost::Message;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
