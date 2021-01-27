@@ -1489,13 +1489,17 @@ pub trait OnRuntimeUpgrade {
 	/// block local data are not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
-	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+	fn on_runtime_upgrade() -> crate::weights::Weight {
+		0
+	}
 
-	fn pre_checks() -> Result<(), ()> {
+	#[cfg(feature = "std")]
+	fn pre_migration() -> Result<(), &'static str> {
 		Ok(())
 	}
 
-	fn post_checks() -> Result<(), ()> {
+	#[cfg(feature = "std")]
+	fn post_migration() -> Result<(), &'static str> {
 		Ok(())
 	}
 }
