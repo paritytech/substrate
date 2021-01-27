@@ -137,7 +137,7 @@ pub trait StateApi<Hash> {
 		&self, metadata: Option<Self::Metadata>, id: SubscriptionId
 	) -> RpcResult<bool>;
 
-	/// Execute block and return all storage traces
+	/// Re-execute a block and return a trace of all storage changes
 	#[rpc(name = "state_traceBlock")]
 	fn trace_block(
 		&self, block: Hash, targets: Option<String>
