@@ -171,7 +171,7 @@ pub(crate) fn compute_and_save<T: Config>() -> Result<Call<T>, OffchainElectionE
 	Ok(call)
 }
 
-/// Compute the solution, save it, and submit it.
+/// Restore an old solution if exist, else compute a new one and save it, finally submit it.
 pub(crate) fn restore_or_compute_then_submit<T: Config>() -> Result<(), OffchainElectionError> {
 	let call = get_solution::<T>()
 		.ok_or(OffchainElectionError::SolutionUnavailable)
