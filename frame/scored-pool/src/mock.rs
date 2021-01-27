@@ -18,21 +18,31 @@
 //! Test utilities
 
 use super::*;
+use crate as pallet_scored_pool;
 
 use std::cell::RefCell;
-use frame_support::{impl_outer_origin, parameter_types, ord_parameter_types};
+use frame_support::{parameter_types, ord_parameter_types};
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
 use frame_system::EnsureSignedBy;
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		ScoredPool: pallet_scored_pool::{Module, Call, Storage, Config<T>, Event<T>},
+	}
+);
+
 parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
 	pub const Period: u64 = 4;
@@ -55,15 +65,15 @@ impl frame_system::Config for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = ();
+	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -74,7 +84,7 @@ impl frame_system::Config for Test {
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
-	type Event = ();
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -109,7 +119,7 @@ impl InitializeMembers<u64> for TestChangeMembers {
 }
 
 impl Config for Test {
-	type Event = ();
+	type Event = Event;
 	type KickOrigin = EnsureSignedBy<KickOrigin, u64>;
 	type MembershipInitialized = TestChangeMembers;
 	type MembershipChanged = TestChangeMembers;
@@ -119,9 +129,6 @@ impl Config for Test {
 	type Score = u64;
 	type ScoreOrigin = EnsureSignedBy<ScoreOrigin, u64>;
 }
-
-type System = frame_system::Module<Test>;
-type Balances = pallet_balances::Module<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -136,7 +143,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(99, 1),
 		],
 	}.assimilate_storage(&mut t).unwrap();
-	GenesisConfig::<Test>{
+	pallet_scored_pool::GenesisConfig::<Test>{
 		pool: vec![
 			(5, None),
 			(10, Some(1)),

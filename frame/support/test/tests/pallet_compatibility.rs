@@ -15,8 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_runtime::traits::Block as _;
-
 pub trait SomeAssociation {
 	type A: frame_support::dispatch::Parameter + Default;
 }
