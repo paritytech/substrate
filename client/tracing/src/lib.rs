@@ -49,77 +49,7 @@ use tracing_subscriber::{
 };
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
-use tracing_subscriber::reload::Handle;
-use once_cell::sync::OnceCell;
-use tracing_subscriber::filter::Directive;
 use std::collections::HashMap;
-
-const ZERO_DURATION: Duration = Duration::from_nanos(0);
-
-// The layered Subscriber as built up in `init_logger()`.
-// Used in the reload `Handle`.
-type SCSubscriber<
-	N = tracing_fmt::format::DefaultFields,
-	E = logging::EventFormat<ChronoLocal>,
-	W = fn() -> std::io::Stderr
-> = layer::Layered<tracing_fmt::Layer<Registry, N, E, W>, Registry>;
-
-// Handle to reload the tracing log filter
-static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, SCSubscriber>> = OnceCell::new();
-// Directives that are defaulted to when resetting the log filter
-static DEFAULT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
-// Current state of log filter
-static CURRENT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
-
-/// Initialize FILTER_RELOAD_HANDLE, only possible once
-pub fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
-	let _ = FILTER_RELOAD_HANDLE.set(handle);
-}
-
-/// Add log filter directive(s) to the defaults
-///
-/// The syntax is identical to the CLI `<target>=<level>`:
-///
-/// `sync=debug,state=trace`
-pub fn add_default_directives(directives: &str) {
-	DEFAULT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directives.to_owned());
-	add_directives(directives);
-}
-
-/// Add directives to current directives
-pub fn add_directives(directives: &str) {
-	CURRENT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directives.to_owned());
-}
-
-/// Reload the logging filter with the supplied directives added to the existing directives
-pub fn reload_filter() -> Result<(), String> {
-	let mut env_filter = EnvFilter::default();
-	if let Some(current_directives) = CURRENT_DIRECTIVES.get() {
-		// Use join and then split in case any directives added together
-		for directive in current_directives.lock().join(",").split(',').map(|d| d.parse()) {
-			match directive {
-				Ok(dir) => env_filter = env_filter.add_directive(dir),
-				Err(invalid_directive) => {
-					log::warn!(
-						target: "tracing",
-						"Unable to parse directive while setting log filter: {:?}",
-						invalid_directive,
-					);
-				}
-			}
-		}
-	}
-	env_filter = env_filter.add_directive(
-		"sc_tracing=trace"
-			.parse()
-			.expect("provided directive is valid"),
-	);
-	log::debug!(target: "tracing", "Reloading log filter with: {}", env_filter);
-	FILTER_RELOAD_HANDLE.get()
-		.ok_or("No reload handle present".to_string())?
-		.reload(env_filter)
-		.map_err(|e| format!("{}", e))
-}
 
 #[doc(hidden)]
 pub use tracing;
