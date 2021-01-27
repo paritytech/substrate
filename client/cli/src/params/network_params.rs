@@ -175,6 +175,7 @@ impl NetworkParams {
 			max_parallel_downloads: self.max_parallel_downloads,
 			allow_non_globals_in_dht,
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,
+			yamux_window_size: None,
 		}
 	}
 }

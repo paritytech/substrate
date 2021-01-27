@@ -26,7 +26,7 @@ use frame_support::{
 };
 use frame_system as system;
 use sp_runtime::{
-	traits::{IdentityLookup, Block as BlockT},
+	traits::IdentityLookup,
 	testing::{Header, UintAuthorityId},
 };
 
@@ -61,7 +61,7 @@ impl frame_system::Config for Test {
 	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnKilledAccount = (Balances,);
+	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 }

@@ -66,8 +66,8 @@ use codec::{Decode, Encode};
 use hash_db::Prefix;
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use sp_database::Transaction;
-use sp_core::ChangesTrieConfiguration;
-use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
+use sp_core::{Hasher, ChangesTrieConfiguration};
+use sp_core::offchain::OffchainOverlayedChange;
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::{generic::{DigestItem, BlockId}, Justification, Storage};
@@ -76,7 +76,7 @@ use sp_runtime::traits::{
 };
 use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, UsageInfo as StateUsageInfo,
-	StorageCollection, ChildStorageCollection,
+	StorageCollection, ChildStorageCollection, OffchainChangesCollection,
 	backend::Backend as StateBackend, StateMachineStats,
 };
 use crate::utils::{DatabaseType, Meta, meta_keys, read_db, read_meta};
@@ -264,10 +264,33 @@ pub struct DatabaseSettings {
 	pub state_cache_size: usize,
 	/// Ratio of cache size dedicated to child tries.
 	pub state_cache_child_ratio: Option<(usize, usize)>,
-	/// Pruning mode.
-	pub pruning: PruningMode,
+	/// State pruning mode.
+	pub state_pruning: PruningMode,
 	/// Where to find the database.
 	pub source: DatabaseSettingsSrc,
+	/// Block pruning mode.
+	pub keep_blocks: KeepBlocks,
+	/// Block body/Transaction storage scheme.
+	pub transaction_storage: TransactionStorageMode,
+}
+
+/// Block pruning settings.
+#[derive(Debug, Clone, Copy)]
+pub enum KeepBlocks {
+	/// Keep full block history.
+	All,
+	/// Keep N recent finalized blocks.
+	Some(u32),
+}
+
+/// Block body storage scheme.
+#[derive(Debug, Clone, Copy)]
+pub enum TransactionStorageMode {
+	/// Store block body as an encoded list of full transactions in the BODY column
+	BlockBody,
+	/// Store a list of hashes in the BODY column and each transaction individually
+	/// in the TRANSACTION column.
+	StorageChain,
 }
 
 /// Where to find the database..
@@ -334,6 +357,8 @@ pub(crate) mod columns {
 	/// Offchain workers local storage
 	pub const OFFCHAIN: u32 = 9;
 	pub const CACHE: u32 = 10;
+	/// Transactions
+	pub const TRANSACTION: u32 = 11;
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -372,10 +397,14 @@ pub struct BlockchainDb<Block: BlockT> {
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
+	transaction_storage: TransactionStorageMode,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
-	fn new(db: Arc<dyn Database<DbHash>>) -> ClientResult<Self> {
+	fn new(
+		db: Arc<dyn Database<DbHash>>,
+		transaction_storage: TransactionStorageMode
+	) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
@@ -384,6 +413,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			meta: Arc::new(RwLock::new(meta)),
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 			header_cache: Default::default(),
+			transaction_storage,
 		})
 	}
 
@@ -417,6 +447,20 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			.map(|header| header.and_then(|header|
 				header.digest().log(DigestItem::as_changes_trie_root)
 					.cloned()))
+	}
+
+	fn extrinsic(&self, hash: &Block::Hash) -> ClientResult<Option<Block::Extrinsic>> {
+		match self.db.get(columns::TRANSACTION, hash.as_ref()) {
+			Some(ex) => {
+				match Decode::decode(&mut &ex[..]) {
+					Ok(ex) => Ok(Some(ex)),
+					Err(err) => Err(sp_blockchain::Error::Backend(
+						format!("Error decoding extrinsic {}: {}", hash, err)
+					)),
+				}
+			},
+			None => Ok(None),
+		}
 	}
 }
 
@@ -476,11 +520,30 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
-			Some(body) => match Decode::decode(&mut &body[..]) {
-				Ok(body) => Ok(Some(body)),
-				Err(err) => return Err(sp_blockchain::Error::Backend(
-					format!("Error decoding body: {}", err)
-				)),
+			Some(body) => {
+				match self.transaction_storage {
+					TransactionStorageMode::BlockBody => match Decode::decode(&mut &body[..]) {
+						Ok(body) => Ok(Some(body)),
+						Err(err) => return Err(sp_blockchain::Error::Backend(
+							format!("Error decoding body: {}", err)
+						)),
+					},
+					TransactionStorageMode::StorageChain => {
+						match Vec::<Block::Hash>::decode(&mut &body[..]) {
+							Ok(hashes) => {
+								let extrinsics: ClientResult<Vec<Block::Extrinsic>> = hashes.into_iter().map(
+									|h| self.extrinsic(&h) .and_then(|maybe_ex| maybe_ex.ok_or_else(
+										|| sp_blockchain::Error::Backend(
+											format!("Missing transaction: {}", h))))
+								).collect();
+								Ok(Some(extrinsics?))
+							}
+							Err(err) => return Err(sp_blockchain::Error::Backend(
+								format!("Error decoding body list: {}", err)
+							)),
+						}
+					}
+				}
 			}
 			None => Ok(None),
 		}
@@ -604,7 +667,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	db_updates: PrefixedMemoryDB<HashFor<Block>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
-	offchain_storage_updates: OffchainOverlayedChanges,
+	offchain_storage_updates: OffchainChangesCollection,
 	changes_trie_updates: MemoryDB<HashFor<Block>>,
 	changes_trie_build_cache_update: Option<ChangesTrieCacheAction<Block::Hash, NumberFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
@@ -617,15 +680,13 @@ pub struct BlockImportOperation<Block: BlockT> {
 
 impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_offchain(&mut self, transaction: &mut Transaction<DbHash>) {
-		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain() {
-			let key: Vec<u8> = prefix
-				.into_iter()
-				.chain(sp_core::sp_std::iter::once(b'/'))
-				.chain(key.into_iter())
-				.collect();
+		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain(..) {
+			let key = crate::offchain::concatenate_prefix_and_key(&prefix, &key);
 			match value_operation {
-				OffchainOverlayedChange::SetValue(val) => transaction.set_from_vec(columns::OFFCHAIN, &key, val),
-				OffchainOverlayedChange::Remove => transaction.remove(columns::OFFCHAIN, &key),
+				OffchainOverlayedChange::SetValue(val) =>
+					transaction.set_from_vec(columns::OFFCHAIN, &key, val),
+				OffchainOverlayedChange::Remove =>
+					transaction.remove(columns::OFFCHAIN, &key),
 			}
 		}
 	}
@@ -737,7 +798,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 
 	fn update_offchain_storage(
 		&mut self,
-		offchain_update: OffchainOverlayedChanges,
+		offchain_update: OffchainChangesCollection,
 	) -> ClientResult<()> {
 		self.offchain_storage_updates = offchain_update;
 		Ok(())
@@ -855,6 +916,8 @@ pub struct Backend<Block: BlockT> {
 	shared_cache: SharedCache<Block>,
 	import_lock: Arc<RwLock<()>>,
 	is_archive: bool,
+	keep_blocks: KeepBlocks,
+	transaction_storage: TransactionStorageMode,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 }
@@ -871,13 +934,29 @@ impl<Block: BlockT> Backend<Block> {
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
+		Self::new_test_with_tx_storage(
+			keep_blocks,
+			canonicalization_delay,
+			TransactionStorageMode::BlockBody,
+		)
+	}
+
+	/// Create new memory-backed client backend for tests.
+	#[cfg(any(test, feature = "test-helpers"))]
+	fn new_test_with_tx_storage(
+		keep_blocks: u32,
+		canonicalization_delay: u64,
+		transaction_storage: TransactionStorageMode,
+	) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			pruning: PruningMode::keep_blocks(keep_blocks),
+			state_pruning: PruningMode::keep_blocks(keep_blocks),
 			source: DatabaseSettingsSrc::Custom(db),
+			keep_blocks: KeepBlocks::Some(keep_blocks),
+			transaction_storage,
 		};
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
@@ -888,12 +967,12 @@ impl<Block: BlockT> Backend<Block> {
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
 	) -> ClientResult<Self> {
-		let is_archive_pruning = config.pruning.is_archive();
-		let blockchain = BlockchainDb::new(db.clone())?;
+		let is_archive_pruning = config.state_pruning.is_archive();
+		let blockchain = BlockchainDb::new(db.clone(), config.transaction_storage.clone())?;
 		let meta = blockchain.meta.clone();
 		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e);
 		let state_db: StateDb<_, _> = StateDb::new(
-			config.pruning.clone(),
+			config.state_pruning.clone(),
 			!config.source.supports_ref_counting(),
 			&StateMetaDb(&*db),
 		).map_err(map_e)?;
@@ -933,6 +1012,8 @@ impl<Block: BlockT> Backend<Block> {
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: Arc::new(StateUsageStats::new()),
+			keep_blocks: config.keep_blocks.clone(),
+			transaction_storage: config.transaction_storage.clone(),
 		})
 	}
 
@@ -1140,7 +1221,21 @@ impl<Block: BlockT> Backend<Block> {
 
 			transaction.set_from_vec(columns::HEADER, &lookup_key, pending_block.header.encode());
 			if let Some(body) = &pending_block.body {
-				transaction.set_from_vec(columns::BODY, &lookup_key, body.encode());
+				match self.transaction_storage {
+					TransactionStorageMode::BlockBody => {
+						transaction.set_from_vec(columns::BODY, &lookup_key, body.encode());
+					},
+					TransactionStorageMode::StorageChain => {
+						let mut hashes = Vec::with_capacity(body.len());
+						for extrinsic in body {
+							let extrinsic = extrinsic.encode();
+							let hash = HashFor::<Block>::hash(&extrinsic);
+							transaction.set(columns::TRANSACTION, &hash.as_ref(), &extrinsic);
+							hashes.push(hash);
+						}
+						transaction.set_from_vec(columns::BODY, &lookup_key, hashes.encode());
+					},
+				}
 			}
 			if let Some(justification) = pending_block.justification {
 				transaction.set_from_vec(columns::JUSTIFICATION, &lookup_key, justification.encode());
@@ -1391,12 +1486,57 @@ impl<Block: BlockT> Backend<Block> {
 			}
 		}
 
+		self.prune_blocks(transaction, f_num)?;
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
 		match displaced {
 			x @ &mut None => *x = Some(new_displaced),
 			&mut Some(ref mut displaced) => displaced.merge(new_displaced),
 		}
 
+		Ok(())
+	}
+
+	fn prune_blocks(
+		&self,
+		transaction: &mut Transaction<DbHash>,
+		finalized: NumberFor<Block>,
+	) -> ClientResult<()> {
+		if let KeepBlocks::Some(keep_blocks) = self.keep_blocks {
+			// Always keep the last finalized block
+			let keep = std::cmp::max(keep_blocks, 1);
+			if finalized < keep.into() {
+				return Ok(())
+			}
+			let number = finalized.saturating_sub(keep.into());
+			match read_db(&*self.storage.db, columns::KEY_LOOKUP, columns::BODY, BlockId::<Block>::number(number))? {
+				Some(body) => {
+					debug!(target: "db", "Removing block #{}", number);
+					utils::remove_from_db(
+						transaction,
+						&*self.storage.db,
+						columns::KEY_LOOKUP,
+						columns::BODY,
+						BlockId::<Block>::number(number),
+					)?;
+					match self.transaction_storage {
+						TransactionStorageMode::BlockBody => {},
+						TransactionStorageMode::StorageChain => {
+							match Vec::<Block::Hash>::decode(&mut &body[..]) {
+								Ok(hashes) => {
+									for h in hashes {
+										transaction.remove(columns::TRANSACTION, h.as_ref());
+									}
+								}
+								Err(err) => return Err(sp_blockchain::Error::Backend(
+									format!("Error decoding body list: {}", err)
+								)),
+							}
+						}
+					}
+				}
+				None => return Ok(()),
+			}
+		}
 		Ok(())
 	}
 }
@@ -1805,6 +1945,17 @@ pub(crate) mod tests {
 		changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
 		extrinsics_root: H256,
 	) -> H256 {
+		insert_block(backend, number, parent_hash, changes, extrinsics_root, Vec::new())
+	}
+
+	pub fn insert_block(
+		backend: &Backend<Block>,
+		number: u64,
+		parent_hash: H256,
+		changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
+		extrinsics_root: H256,
+		body: Vec<ExtrinsicWrapper<u64>>,
+	) -> H256 {
 		use sp_runtime::testing::Digest;
 
 		let mut digest = Digest::default();
@@ -1830,7 +1981,7 @@ pub(crate) mod tests {
 		};
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, block_id).unwrap();
-		op.set_block_data(header, Some(Vec::new()), None, NewBlockState::Best).unwrap();
+		op.set_block_data(header, Some(body), None, NewBlockState::Best).unwrap();
 		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear)).unwrap();
 		backend.commit_operation(op).unwrap();
 
@@ -1882,8 +2033,10 @@ pub(crate) mod tests {
 		let backend = Backend::<Block>::new(DatabaseSettings {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			pruning: PruningMode::keep_blocks(1),
+			state_pruning: PruningMode::keep_blocks(1),
 			source: DatabaseSettingsSrc::Custom(backing),
+			keep_blocks: KeepBlocks::All,
+			transaction_storage: TransactionStorageMode::BlockBody,
 		}, 0).unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);
 		for i in 0..10 {
@@ -2426,5 +2579,34 @@ pub(crate) mod tests {
 			.unwrap().unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
+	}
+
+	#[test]
+	fn prune_blocks_on_finalize() {
+		for storage in &[TransactionStorageMode::BlockBody, TransactionStorageMode::StorageChain] {
+			let backend = Backend::<Block>::new_test_with_tx_storage(2, 0, *storage);
+			let mut blocks = Vec::new();
+			let mut prev_hash = Default::default();
+			for i in 0 .. 5 {
+				let hash = insert_block(&backend, i, prev_hash, None, Default::default(), vec![i.into()]);
+				blocks.push(hash);
+				prev_hash = hash;
+			}
+
+			{
+				let mut op = backend.begin_operation().unwrap();
+				backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
+				for i in 1 .. 5 {
+					op.mark_finalized(BlockId::Hash(blocks[i]), None).unwrap();
+				}
+				backend.commit_operation(op).unwrap();
+			}
+			let bc = backend.blockchain();
+			assert_eq!(None, bc.body(BlockId::hash(blocks[0])).unwrap());
+			assert_eq!(None, bc.body(BlockId::hash(blocks[1])).unwrap());
+			assert_eq!(None, bc.body(BlockId::hash(blocks[2])).unwrap());
+			assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
+			assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		}
 	}
 }

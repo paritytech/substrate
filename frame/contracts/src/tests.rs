@@ -245,7 +245,7 @@ parameter_types! {
 	pub const DepositPerStorageByte: u64 = 10_000;
 	pub const DepositPerStorageItem: u64 = 10_000;
 	pub RentFraction: Perbill = Perbill::from_rational_approximation(4u32, 10_000u32);
-	pub const SurchargeReward: u64 = 150;
+	pub const SurchargeReward: u64 = 500_000;
 	pub const MaxDepth: u32 = 100;
 	pub const MaxValueSize: u32 = 16_384;
 	pub const DeletionQueueDepth: u32 = 1024;
@@ -392,6 +392,7 @@ fn account_removal_does_not_remove_storage() {
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(1),
 				rent_allowance: 40,
+				rent_payed: 0,
 				last_write: None,
 			});
 			let _ = Balances::deposit_creating(&ALICE, 110);
@@ -406,6 +407,7 @@ fn account_removal_does_not_remove_storage() {
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(2),
 				rent_allowance: 40,
+				rent_payed: 0,
 				last_write: None,
 			});
 			let _ = Balances::deposit_creating(&BOB, 110);
@@ -473,7 +475,7 @@ fn instantiate_and_call_and_deposit_event() {
 			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::RawEvent::NewAccount(ALICE.clone())),
+					event: MetaEvent::system(frame_system::Event::NewAccount(ALICE.clone())),
 					topics: vec![],
 				},
 				EventRecord {
@@ -490,7 +492,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::RawEvent::NewAccount(addr.clone())),
+					event: MetaEvent::system(frame_system::Event::NewAccount(addr.clone())),
 					topics: vec![],
 				},
 				EventRecord {
@@ -651,7 +653,7 @@ fn test_set_rent_code_and_hash() {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::RawEvent::NewAccount(ALICE)),
+					event: MetaEvent::system(frame_system::Event::NewAccount(ALICE)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -1233,7 +1235,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::RawEvent::NewAccount(ALICE)),
+					event: MetaEvent::system(frame_system::Event::NewAccount(ALICE)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -1388,7 +1390,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::system(frame_system::RawEvent::NewAccount(CHARLIE)),
+								event: MetaEvent::system(frame_system::Event::NewAccount(CHARLIE)),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1398,7 +1400,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::system(frame_system::RawEvent::NewAccount(addr_django.clone())),
+								event: MetaEvent::system(frame_system::Event::NewAccount(addr_django.clone())),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1438,7 +1440,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				assert_eq!(System::events(), vec![
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::system(system::RawEvent::KilledAccount(addr_django.clone())),
+						event: MetaEvent::system(system::Event::KilledAccount(addr_django.clone())),
 						topics: vec![],
 					},
 					EventRecord {
@@ -2506,24 +2508,64 @@ fn not_deployed_if_endowment_too_low_for_first_rent() {
 		// blocks to rent
 		* 1;
 
-	ExtBuilder::default()
-		.existential_deposit(50)
-		.build()
-		.execute_with(|| {
-			// Create
-			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
-			assert_storage_noop!(assert_err_ignore_postinfo!(Contracts::instantiate(
-					Origin::signed(ALICE),
-					30_000,
-					GAS_LIMIT, code_hash.into(),
-					(BalanceOf::<Test>::from(first_rent) - BalanceOf::<Test>::from(1u32))
-						.encode(), // rent allowance
-					vec![],
-				),
-				Error::<Test>::NewContractNotFunded,
-			));
-			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
-			assert_matches!(ContractInfoOf::<Test>::get(&addr), None);
-		});
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		// Create
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
+		assert_storage_noop!(assert_err_ignore_postinfo!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				30_000,
+				GAS_LIMIT, code_hash.into(),
+				(BalanceOf::<Test>::from(first_rent) - BalanceOf::<Test>::from(1u32))
+					.encode(), // rent allowance
+				vec![],
+			),
+			Error::<Test>::NewContractNotFunded,
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+		assert_matches!(ContractInfoOf::<Test>::get(&addr), None);
+	});
+}
+
+#[test]
+fn surcharge_reward_is_capped() {
+	let (wasm, code_hash) = compile_module::<Test>("set_rent").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			30_000,
+			GAS_LIMIT, code_hash.into(),
+			<BalanceOf<Test>>::from(1_000u32).encode(), // rent allowance
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+		let contract = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
+		let balance = Balances::free_balance(&ALICE);
+		let reward = <Test as Config>::SurchargeReward::get();
+
+		// some rent should have payed due to instantation
+		assert_ne!(contract.rent_payed, 0);
+
+		// the reward should be parameterized sufficiently high to make this test useful
+		assert!(reward > contract.rent_payed);
+
+		// make contract eligible for eviction
+		initialize_block(40);
+
+		// this should have removed the contract
+		assert_ok!(Contracts::claim_surcharge(Origin::none(), addr.clone(), Some(ALICE)));
+
+		// this reward does not take into account the last rent payment collected during eviction
+		let capped_reward = reward.min(contract.rent_payed);
+
+		// this is smaller than the actual reward because it does not take into account the
+		// rent collected during eviction
+		assert!(Balances::free_balance(&ALICE) > balance + capped_reward);
+
+		// the full reward is not payed out because of the cap introduced by rent_payed
+		assert!(Balances::free_balance(&ALICE) < balance + reward);
+	});
 }
